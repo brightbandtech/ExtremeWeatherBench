@@ -20,6 +20,7 @@ COLUMNS = [
     "precip_6hrly",
 ]
 
+
 def process_gz_file(pth: Path) -> pd.DataFrame:
     """Read a GZ file and return a DataFrame."""
     usaf, wban, _ = pth.name.split("-")
@@ -40,6 +41,7 @@ def process_gz_file(pth: Path) -> pd.DataFrame:
     df["wban"] = wban
     df = df.drop(columns=["year", "month", "day", "hour"])
     return df
+
 
 if __name__ == "__main__":
     fns = list(glob.glob("data/isd-lite/2021/*.gz"))
