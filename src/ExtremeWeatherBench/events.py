@@ -11,9 +11,15 @@ class Event:
     """
     Event holds the metadata that extends to all cases of a given event type.
     """
+    event_type: str
+    
+    def __post_init__(self):
+        with open('/home/taylor/code/ExtremeWeatherBench/assets/data/events.yaml', 'r') as file:
+            events_data = yaml.safe_load(file)
+        self.events = [event for event in events_data if event['event_type'] == self.event_type]
 
 @dataclasses.dataclass
-class Case:
+class Case(Event):
     """
     Case holds the event and climatology datasets for a given case. 
     It also holds the metadata for the location and box length width in km. 
