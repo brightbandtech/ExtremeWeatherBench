@@ -13,7 +13,7 @@ from shapely.geometry import box
 import geopandas as gpd
 import regionmask
 
-def convert_longitude_to_360(longitude):
+def convert_longitude_to_360(longitude: float) -> float:
     return longitude % 360
 
 def convert_longitude_to_180(dataset: t.Union[xr.Dataset, xr.DataArray], longitude_name: str='longitude') -> xr.Dataset:
