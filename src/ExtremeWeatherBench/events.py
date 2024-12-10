@@ -1,25 +1,34 @@
 import yaml
 import xarray as xr
 import pandas as pd
-import numpy as np
 import dataclasses
-import ExtremeWeatherBench.utils as utils
+import utils as utils
 import typing as t
 
 @dataclasses.dataclass
-class Event:
+class _Event:
     """
     Event holds the metadata that extends to all cases of a given event type.
-    """
+    params:
     event_type: str
-    
+    """
+
     def __post_init__(self):
         with open('/home/taylor/code/ExtremeWeatherBench/assets/data/events.yaml', 'r') as file:
-            events_data = yaml.safe_load(file)
-        self.events = [event for event in events_data if event['event_type'] == self.event_type]
+            self.events_data = yaml.safe_load(file)['events']
+
+    def count_event_ids(self):
+        return len(self.events_data[self.event_type])
+
+    def create_events_dataframe(self):
+        events_list = self.events_data[self.event_type]
+        df = pd.DataFrame(events_list).set_index('id')
+        df['start_date'] = pd.to_datetime(df['start_date'])
+        df['end_date'] = pd.to_datetime(df['end_date'])
+        return df
 
 @dataclasses.dataclass
-class Case(Event):
+class Case:
     """
     Case holds the event and climatology datasets for a given case. 
     It also holds the metadata for the location and box length width in km. 
@@ -51,3 +60,32 @@ class Case(Event):
         interim_xarray_data_object = utils.clip_dataset_to_square(xarray_data_object, self.location_center, self.box_length_width_in_km)
         output_xarray_data_object = utils.remove_ocean_gridpoints(interim_xarray_data_object)
         return output_xarray_data_object
+
+@dataclasses.dataclass
+class HeatWave(_Event):
+    """
+    HeatWave holds the event datasets for extreme heat wave events. 
+    It also holds the metadata for the location and box length width in km. 
+    """
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.event_type = 'heat_wave'
+        self.count = self.count_event_ids()
+        self.events_df = self.create_events_dataframe()
+
+@dataclasses.dataclass
+class Freeze(_Event):
+    """
+    Freeze holds the event datasets for extreme freezing events. 
+    It also holds the metadata for the location and box length width in km. 
+    """
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.event_type = 'freeze'
+        self.count = self.count_event_ids()
+        self.events_df = self.create_events_dataframe()
+
+
+    
