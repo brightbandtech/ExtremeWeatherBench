@@ -1,0 +1,8 @@
+*.egg-info
+.DS_Store
+build
+dist
+__pycache__
+.pytest_cache
+src/ExtremeWeatherBench/__pycache__/
+src/ExtremeWeatherBench/__pycache__/*
