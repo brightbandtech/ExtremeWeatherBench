@@ -12,7 +12,6 @@ class Metric:
     The metric is defined by a function that takes
     forecast and observation data arrays and returns some kind of score.
     params:
-    - event: _Event class
     """
 
 
