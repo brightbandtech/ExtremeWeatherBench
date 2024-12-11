@@ -1,0 +1,13 @@
+---
+events:
+  heat_wave:
+    - id: 1
+      title: 2021 Western North America Heat Wave
+      start_date: 2021-06-24
+      end_date: 2021-07-02
+      location: 
+        latitude:  47.6062
+        longitude: 122.3321
+      bounding_box_km: 500
+      resources:
+        - url: https://en.wikipedia.org/wiki/2021_Western_North_America_heat_wave
