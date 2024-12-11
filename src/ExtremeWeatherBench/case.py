@@ -2,15 +2,18 @@ import dataclasses
 import utils
 import xarray as xr
 import typing as t
-import config as c
 
 @dataclasses.dataclass
 class Case:
     """
-    Case holds the event and climatology datasets for a given case. 
+    Case holds the event and climatology metadata for a given case.
     It also holds the metadata for the location and box length width in km. 
+    params:
+    location_center: dict: the latitude and longitude of the center of the location
+    box_length_width_in_km: int: the side length of the square in kilometers
+    analysis_variables: t.Union[None, t.List[str]] = None: variable names for the analysis dataset, optional
+    forecast_variables: t.Union[None, t.List[str]] = None: variable names for the forecast dataset, optional
     """
-    config: c.Config
     location_center: dict
     box_length_width_in_km: int
     analysis_variables: t.Union[None, t.List[str]] = None
