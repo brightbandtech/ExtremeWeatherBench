@@ -28,16 +28,17 @@ class _Event:
         return df
 
 @dataclasses.dataclass
-class Case:
+class _Case:
     """
     Case holds the event and climatology datasets for a given case. 
     It also holds the metadata for the location and box length width in km. 
     """
-    
     case_analysis_ds: xr.Dataset
     climatology_ds: xr.Dataset
     location_center: dict
     box_length_width_in_km: int
+    analysis_variables: t.Union[None, t.List[str]] = None
+    forecast_variables: t.Union[None, t.List[str]] = None 
 
     def __post_init__(self):
         self.convert_longitude()
@@ -66,6 +67,9 @@ class HeatWave(_Event):
     """
     HeatWave holds the event datasets for extreme heat wave events. 
     It also holds the metadata for the location and box length width in km. 
+    params:
+    analysis_variables: t.Union[None, t.List[str]] = None: variable names for the analysis dataset, optional
+    forecast_variables: t.Union[None, t.List[str]] = None: variable names for the forecast dataset, optional
     """
 
     def __post_init__(self):
@@ -73,6 +77,16 @@ class HeatWave(_Event):
         self.event_type = 'heat_wave'
         self.count = self.count_event_ids()
         self.events_df = self.create_events_dataframe()
+        self.analysis_variables = ['2m_temperature'] if self.analysis_variables is None else self.analysis_variables
+        self.forecast_variables = ['t2'] if self.forecast_variables is None else self.forecast_variables
+    
+    def get_case(self, case_id: int):
+        case_data = self.events_df.loc[case_id]
+        case_analysis_ds = utils.load_case_data(case_data['case_analysis'])
+        climatology_ds = utils.load_case_data(case_data['climatology'])
+        return _Case(case_analysis_ds, climatology_ds, case_data['location_center'], case_data['box_length_width_in_km'])
+    
+
 
 @dataclasses.dataclass
 class Freeze(_Event):
