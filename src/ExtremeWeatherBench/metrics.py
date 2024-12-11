@@ -3,6 +3,18 @@ import typing as t
 import utils
 import numpy as np
 import scores
+import dataclasses
+
+@dataclasses.dataclass
+class Metric:
+    """
+    A parent class for a metric to evaluate a forecast. 
+    The metric is defined by a function that takes
+    forecast and observation data arrays and returns some kind of score.
+    params:
+    - event: _Event class
+    """
+
 
 #Intensity heat metrics
 def threshold_weighted_rmse(da_fcst: xr.DataArray, da_obs: xr.DataArray, threshold: float, threshold_tolerance: float):
