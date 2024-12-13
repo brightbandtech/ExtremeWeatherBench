@@ -33,19 +33,6 @@ def generate_json_from_nc(u,so,fs,fs_out,json_dir):
         with fs_out.open(outf, 'wb') as f:
             f.write(ujson.dumps(h5chunks.translate()).encode());
 
-# seasonal aggregation functions for max, min, and mean
-def seasonal_subset_max(df):
-    df = df.where(df.index.month.isin([6,7,8]))
-    return df.max()
-
-def seasonal_subset_min(df):
-    df = df.where(df.index.month.isin([6,7,8]))
-    return df.min()
-
-def seasonal_subset_mean(df):
-    df = df.where(df.index.month.isin([6,7,8]))
-    return df.mean()
-
 def is_jja(month):
     return (month >= 6) & (month <= 8)
 
@@ -85,7 +72,6 @@ def clip_dataset_to_square(dataset: xr.Dataset, location_center: dict, length_km
     clipped_dataset = dataset.rio.write_crs('EPSG:4326').rio.clip(bbox.geometry, bbox.crs, drop=True)
     
     return clipped_dataset
-
 
 def convert_day_yearofday_to_time(dataset: xr.Dataset, year: int) -> xr.Dataset:
     """
@@ -129,4 +115,3 @@ def remove_ocean_gridpoints(dataset: xr.Dataset) -> xr.Dataset:
     dataset = dataset.where(land_mask, drop=True)
     
     return dataset
-
