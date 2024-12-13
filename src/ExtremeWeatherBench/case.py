@@ -1,25 +1,21 @@
 import dataclasses
-import utils
 import xarray as xr
 import typing as t
+from collections import namedtuple
+from . import utils
 
-@dataclasses.dataclass
 class Case:
     """
     Case holds the event and climatology metadata for a given case.
     It also holds the metadata for the location and box length width in km. 
-    params:
-    location_center: dict: the latitude and longitude of the center of the location
-    box_length_width_in_km: int: the side length of the square in kilometers
-    analysis_variables: t.Union[None, t.List[str]] = None: variable names for the analysis dataset, optional
-    forecast_variables: t.Union[None, t.List[str]] = None: variable names for the forecast dataset, optional
+    Attributes:
+        location_centroid: dict: the latitude and longitude of the center of the location
+        box_length_width_in_km: int: the side length of the square in kilometers
+        analysis_variables: t.Union[None, t.List[str]] = None: variable names for the analysis dataset, optional
+        forecast_variables: t.Union[None, t.List[str]] = None: variable names for the forecast dataset, optional
     """
-    location_center: dict
-    box_length_width_in_km: int
-    analysis_variables: t.Union[None, t.List[str]] = None
-    forecast_variables: t.Union[None, t.List[str]] = None 
 
-    def __post_init__(self):
+    def __init__(self):
         self.convert_longitude()
         self.process_data_to_spec()
         self.align_climatology_to_case_analysis_time()
@@ -37,6 +33,6 @@ class Case:
         self.climatology_ds = self.climatology_ds.sel(time=self.case_analysis_ds.time)
     
     def clip_and_remove_ocean(self, xarray_data_object: t.Union[xr.Dataset,xr.DataArray]):
-        interim_xarray_data_object = utils.clip_dataset_to_square(xarray_data_object, self.location_center, self.box_length_width_in_km)
+        interim_xarray_data_object = utils.clip_dataset_to_square(xarray_data_object, self.location_centroid, self.box_length_width_in_km)
         output_xarray_data_object = utils.remove_ocean_gridpoints(interim_xarray_data_object)
         return output_xarray_data_object
