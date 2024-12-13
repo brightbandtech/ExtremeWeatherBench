@@ -29,9 +29,6 @@ def _evaluate_event_loop(event: events._Event,
                          point_obs: Optional[pd.DataFrame], 
                          ):
     case_container = case.Case(event, individual_case)
-
-    case_container.generate_metrics()
-    
     for individual_case in event.case_df.itertuples():
         if point_obs is not None:
             raise NotImplementedError("Point observation data evaluation not yet implemented.")
