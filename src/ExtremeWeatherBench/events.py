@@ -2,22 +2,23 @@ import yaml
 import xarray as xr
 import pandas as pd
 import dataclasses
-import utils as utils
 import typing as t
-import metrics
-import case
+import os
 
-@dataclasses.dataclass
+from . import case
+from . import utils
+from . import metrics
+from collections import namedtuple
+
 class _Event:
     """
     Event holds the metadata that extends to all cases of a given event type.
-    params:
     """
-    analysis_variables: t.Union[None, t.List[str]] = None
-    forecast_variables: t.Union[None, t.List[str]] = None
- 
-    def __post_init__(self):
-        with open('/home/taylor/code/ExtremeWeatherBench/assets/data/events.yaml', 'r') as file:
+
+    def __init__(self):
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        events_file_path = os.path.join(base_dir, '../../assets/data/events.yaml')
+        with open(events_file_path, 'r') as file:
             self.events_data = yaml.safe_load(file)['events']
 
     def count_event_ids(self):
@@ -30,6 +31,8 @@ class _Event:
         df = pd.DataFrame(case_list).set_index('id')
         df['start_date'] = pd.to_datetime(df['start_date'])
         df['end_date'] = pd.to_datetime(df['end_date'])
+        Location = namedtuple('Location', ['latitude', 'longitude'])
+        df['location'] = df['location'].apply(lambda loc: Location(**loc))
         return df
     
     def metrics(self):
@@ -38,19 +41,16 @@ class _Event:
     def modify_metrics(self, key: str, value: t.Any):
         self._metrics[key] = value
     
-    def generate_case_files(self):
+    def generate_cases(self):
         if not hasattr(self, 'case_df'):
             raise RuntimeError("create_case_dataframe must be called before generate_case_files.")
+        case_dict = {}
         for case_id in self.case_df.index:
-            case.Case()
+            case_dict[case_id] = case.Case(case_id, self.event_type)
+            case.Case(case_id, self.event_type)
             #TODO: create a list/dict of case objects for each case_id
 
-        
-        
 
-
-
-@dataclasses.dataclass
 class HeatWave(_Event):
     """
     HeatWave holds the event datasets for extreme heat wave events. 
@@ -60,35 +60,31 @@ class HeatWave(_Event):
     forecast_variables: t.Union[None, t.List[str]] = None: variable names for the forecast dataset, optional
     """
    
-    def __post_init__(self):
-        super().__post_init__()
+    def __init__(self):
+        super().__init__()
         self.event_type = 'heat_wave'
         self.count = self.count_event_ids()
         self.case_df = self.create_case_dataframe()
-        self.analysis_variables = ['2m_temperature'] if self.analysis_variables is None else self.analysis_variables
-        self.forecast_variables = ['t2'] if self.forecast_variables is None else self.forecast_variables
-    
+        self.analysis_variables = ['2m_temperature']
+        self.forecast_variables = ['t2']
+
     def heatwave_metrics(self):
         self.metrics()
-        self.modify_metrics('threshold_weighted_rmse', metrics.threshold_weighted_rmse)
-        self.modify_metrics('mae_max_of_max_temperatures', metrics.mae_max_of_max_temperatures)
-        self.modify_metrics('mae_max_of_min_temperatures', metrics.mae_max_of_min_temperatures)
-        self.modify_metrics('onset_above_85th_percentile', metrics.onset_above_85th_percentile)
-        self.modify_metrics('mae_onset_and_end_above_85th_percentile', metrics.mae_onset_and_end_above_85th_percentile)
 
-
-@dataclasses.dataclass
 class Freeze(_Event):
     """
     Freeze holds the event datasets for extreme freezing events. 
     It also holds the metadata for the location and box length width in km. 
     """
 
-    def __post_init__(self):
-        super().__post_init__()
+    def __init__(self):
+        super().__init__()
         self.event_type = 'freeze'
         self.count = self.count_event_ids()
         self.case_df = self.create_case_dataframe()
+    
+    def freeze_metrics(self):
+        self.metrics()
 
 
     
