@@ -1,9 +1,13 @@
 import dataclasses
 import xarray as xr
 import typing as t
+import pandas as pd
 from collections import namedtuple
 from . import utils
+from . import events
+from . import config
 
+@dataclasses.dataclass
 class Case:
     """
     Case holds the event and climatology metadata for a given case.
@@ -14,13 +18,9 @@ class Case:
         analysis_variables: t.Union[None, t.List[str]] = None: variable names for the analysis dataset, optional
         forecast_variables: t.Union[None, t.List[str]] = None: variable names for the forecast dataset, optional
     """
+    event_type: events._Event
+    event_info: pd.core.frame.pandas
 
-    def __init__(self):
-        self.convert_longitude()
-        self.process_data_to_spec()
-        self.align_climatology_to_case_analysis_time()
-        #TODO: include obs data calls here from ISD
-        
     def convert_longitude(self):
         self.case_analysis_ds = utils.convert_longitude_to_180(self.case_analysis_ds)
         self.climatology_ds = utils.convert_longitude_to_180(self.climatology_ds)
@@ -36,3 +36,6 @@ class Case:
         interim_xarray_data_object = utils.clip_dataset_to_square(xarray_data_object, self.location_centroid, self.box_length_width_in_km)
         output_xarray_data_object = utils.remove_ocean_gridpoints(interim_xarray_data_object)
         return output_xarray_data_object
+
+@dataclasses.dataclass
+class IndividualCase(Case):
