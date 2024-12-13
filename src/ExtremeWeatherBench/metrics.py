@@ -1,20 +1,39 @@
 import xarray as xr
 import typing as t
-import utils
 import numpy as np
 import scores
 import dataclasses
 
+from . import utils
+
 @dataclasses.dataclass
-class Metric:
+class ERA5Metric:
     """
-    A parent class for a metric to evaluate a forecast. 
+    A parent class for a metric based on ERA5 to evaluate a forecast. 
+    Attributes:
+        forecast: xr.Dataset: the forecast dataset
+        observation: xr.Dataset: the ERA5 dataset of observations
+    """
+    forecast: xr.Dataset
+    observation: xr.Dataset
+
+    def compute(self):
+        """
+        Compute the metric.
+        """
+        raise NotImplementedError
+
+
+
+@dataclasses.dataclass
+class ObsMetric:
+    """
+    A parent class for a metric based on observations to evaluate a forecast. 
     The metric is defined by a function that takes
     forecast and observation data arrays and returns some kind of score.
-    params:
     """
-
-
+    forecast: xr.Dataset
+    observation: xr.Dataset
 #Intensity heat metrics
 def threshold_weighted_rmse(da_fcst: xr.DataArray, da_obs: xr.DataArray, threshold: float, threshold_tolerance: float):
     mse = scores.continuous.tw_squared_error(da_fcst, 
