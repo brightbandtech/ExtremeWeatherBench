@@ -4,9 +4,6 @@ import pandas as pd
 import dataclasses
 import typing as t
 import os
-
-from . import case
-from . import utils
 from . import metrics
 from collections import namedtuple
 
@@ -53,6 +50,9 @@ class HeatWave(_Event):
         self.count = self.count_event_ids()
         self.case_df = self.create_case_dataframe()
         self.analysis_variables = ['2m_temperature']
+        self.endpoint_extension_criteria: int = 48
+        #TODO add configuration passthrough to include new metrics
+        self.define_heatwave_metrics()
 
     def define_heatwave_metrics(self):
         self.metrics = [metrics.MaximumMAE,
@@ -73,7 +73,8 @@ class Freeze(_Event):
         self.count = self.count_event_ids()
         self.case_df = self.create_case_dataframe()
         self.analysis_variables = ['2m_temperature']
-    
+        self.define_freeze_metrics()
+        
     def define_freeze_metrics(self):
         self.metrics = [metrics.MaximumMAE,
                         metrics.DurationME,
