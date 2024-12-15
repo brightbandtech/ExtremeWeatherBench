@@ -28,16 +28,30 @@ def _evaluate_event_loop(event: events._Event,
                          gridded_obs: Optional[xr.Dataset],
                          point_obs: Optional[pd.DataFrame], 
                          ):
-    case_container = case.Case(event, individual_case)
+    gridded_obs_bool = False
+    point_obs_bool = False
     for individual_case in event.case_df.itertuples():
         if point_obs is not None:
             raise NotImplementedError("Point observation data evaluation not yet implemented.")
         if gridded_obs is not None:
-            
-            results = _evaluate_case_gridded(case, forecast_dataset, gridded_obs)
+            gridded_obs_bool = True
+            case_container = case.Case(event_type=event, 
+                                       case_info=individual_case, 
+                                       gridded_obs_ds=gridded_obs, 
+                                       point_obs_ds=point_obs, 
+                                       forecast_ds=forecast_dataset)
+            results = _evaluate_case(case_container, gridded_obs_bool, point_obs_bool)
 
-def _evaluate_case_gridded(case, forecast_dataset: xr.Dataset, gridded_obs: xr.Dataset):
-
+def _evaluate_case(case_container: case.Case, gridded_obs_bool: bool, point_obs_bool: bool):
+    """
+    Evaluate the forecast data against the observed data for a single case.
+    Attributes:
+        case_container: case.Case: the container object for the case
+    """
+    if gridded_obs_bool:
+        return case_container.compute_event_gridded_metrics()
+    elif point_obs_bool:
+        return case_container.compute_event_point_metrics()
 
 
 def _open_obs_datasets(eval_config: config.Config):

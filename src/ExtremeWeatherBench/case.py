@@ -1,6 +1,6 @@
 import dataclasses
 import xarray as xr
-import typing as t
+from typing import Optional
 import pandas as pd
 from collections import namedtuple
 from . import utils
@@ -19,23 +19,29 @@ class Case:
         forecast_variables: t.Union[None, t.List[str]] = None: variable names for the forecast dataset, optional
     """
     event_type: events._Event
-    event_info: pd.core.frame.pandas
+    case_info: pd.core.frame.pandas
+    gridded_obs_ds: Optional[xr.Dataset]
+    point_obs_ds: Optional[pd.DataFrame]
+    forecast_ds: xr.Dataset
 
-    def convert_longitude(self):
-        self.case_analysis_ds = utils.convert_longitude_to_180(self.case_analysis_ds)
-        self.climatology_ds = utils.convert_longitude_to_180(self.climatology_ds)
-
-    def process_data_to_spec(self):
-        self.case_analysis_ds = self.clip_and_remove_ocean(self.case_analysis_ds)
-        self.climatology_ds = self.clip_and_remove_ocean(self.climatology_ds)
+    def compute_event_gridded_metrics(self):
+        """
+        Process the metrics for the event.
+        """
+        gridded_metric_ds = xr.Dataset()
+        for metric in self.event_type.metrics:
+            metric.compute(observation=self.gridded_obs_ds,
+                           forecast=self.forecast_ds)
+            gridded_metric_ds = xr.merge([gridded_metric_ds, metric.metric_ds])
+        return gridded_metric_ds
     
-    def align_climatology_to_case_analysis_time(self):
-        self.climatology_ds = self.climatology_ds.sel(time=self.case_analysis_ds.time)
-    
-    def clip_and_remove_ocean(self, xarray_data_object: t.Union[xr.Dataset,xr.DataArray]):
-        interim_xarray_data_object = utils.clip_dataset_to_square(xarray_data_object, self.location_centroid, self.box_length_width_in_km)
-        output_xarray_data_object = utils.remove_ocean_gridpoints(interim_xarray_data_object)
-        return output_xarray_data_object
-
-@dataclasses.dataclass
-class IndividualCase(Case):
+    def compute_event_point_metrics(self):
+        """
+        Process the metrics for the event.
+        """
+        point_metric_ds = xr.Dataset()
+        for metric in self.event_type.metrics:
+            metric.compute(observation=self.point_obs_ds,
+                           forecast=self.forecast_ds)
+            point_metric_ds = xr.merge([point_metric_ds, metric.metric_ds])
+        return point_metric_ds
