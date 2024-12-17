@@ -1,4 +1,8 @@
 import dataclasses
+from typing import Literal
+
+from ExtremeWeatherBench.events import Freeze, HeatWave
+from ExtremeWeatherBench.metrics import DurationME, MaxMinMAE, MaximumMAE, OnsetME, RegionalRMSE
 
 @dataclasses.dataclass
 class Location:
@@ -10,35 +14,37 @@ class Location:
         pass
 
 
-class Event:
-    def __init__(self):
+@dataclasses.dataclass
+class MetricConfig:
+    metric_type: Literal["maximum_mae", "duration_me", "regional_rmse", "max_min_mae", "onset_me"]
+
+    def build(self) -> RegionalRMSE | MaximumMAE | DurationME | MaxMinMAE | OnsetME:
+        # TODO define a dict mapping ids to metric classes
         pass
-
-
-
-@dataclasses.dataclass
-class HeatWaveConfig:
-    id: int
-    title: str
-    start_date: str
-    end_date: str
-    location: Location
-    bounding_box_km: int
-
-    def build(self) -> Event:
-        Event()
-
-
-@dataclasses.dataclass
-class FreezeConfig:
-    id: int
-    title: str
-    start_date: str
-    end_date: str
-    location: Location
-    bounding_box_km: int
+    
 
 
 @dataclasses.dataclass
 class EventConfig:
-    events: list[HeatWaveConfig | FreezeConfig]
+    id: int
+    title: str
+    start_date: str
+    end_date: str
+    location: Location
+    bounding_box_km: int
+    event_type: Literal["freeze", "heat_wave"]
+    metrics: list[MetricConfig]
+
+    def build(self) -> Freeze | HeatWave:
+        # TODO define a mapping from event_type to event class
+        pass
+
+
+@dataclasses.dataclass
+class EventsConfig:
+    events: list[EventConfig]
+
+    def build(self) -> list[Freeze | HeatWave]:
+        events = [e.build() for e in self.events]
+        # TODO: do stuff with events
+        return events
