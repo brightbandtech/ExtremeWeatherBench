@@ -5,6 +5,7 @@ Utility functions for other files that can apply to multiple files in the librar
 import numpy as np
 import pandas as pd
 import ujson
+from collections import namedtuple
 from kerchunk.hdf import SingleHdf5ToZarr 
 import typing as t
 import xarray as xr
@@ -40,14 +41,14 @@ def is_6_hourly(hour):
     return (hour == 0) | (hour == 6) | (hour == 12) | (hour == 18)
 
 
-def clip_dataset_to_square(dataset: xr.Dataset, location_center: dict, length_km: float) -> xr.Dataset:
+def clip_dataset_to_bounding_box(dataset: xr.Dataset, location_center: namedtuple, length_km: float) -> xr.Dataset:
     """
-    Clip an xarray dataset to a square around a given location with a specified side length.
+    Clip an xarray dataset to a bounding_box around a given location with a specified side length.
 
     Parameters:
     dataset (xarray.Dataset): The input xarray dataset.
     location_center (dict): A dictionary with 'latitude' and 'longitude' keys.
-    length_km (float): The side length of the square in kilometers.
+    length_km (float): The side length of the bounding_box in kilometers.
 
     Returns:
     xarray.Dataset: The clipped xarray dataset.

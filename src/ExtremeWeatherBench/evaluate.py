@@ -3,14 +3,17 @@ import pandas as pd
 import logging
 import fsspec
 import numpy as np
+import os
 from typing import Optional
 from . import events
 from . import config
 from . import utils
 from . import case
 
+
 def evaluate(eval_config: config.Config, 
-             forecast_schema_config: Optional[config.ForecastSchemaConfig] = config.ForecastSchemaConfig()):
+             forecast_schema_config: Optional[config.ForecastSchemaConfig] = config.ForecastSchemaConfig(),
+             **kwargs):
     """
     Evaluate the forecast data against the observed data, looping
     through each case for each event type selected.
@@ -18,12 +21,21 @@ def evaluate(eval_config: config.Config,
         eval_config: config.Config: the configuration object for the evaluation
     """
     point_obs, gridded_obs = _open_obs_datasets(eval_config)
+
     forecast_dataset = _open_forecast_dataset(eval_config, forecast_schema_config)
+    if 'events_file_path' in kwargs:
+        events_file_path = kwargs['events_file_path']
+    else:
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        events_file_path = os.path.join(base_dir, '../../assets/data/events.yaml')
     for event in eval_config.event_types:
-        _evaluate_event_loop(event, forecast_dataset, gridded_obs, point_obs)
+        print(events_file_path)
+        cases = event.from_yaml(events_file_path)
+        print(cases)
+        # _evaluate_event_loop(event, forecast_dataset, gridded_obs, point_obs)
 
 
-def _evaluate_event_loop(event: events._Event, 
+def _evaluate_event_loop(event: events.Event, 
                          forecast_dataset: xr.Dataset,
                          gridded_obs: Optional[xr.Dataset],
                          point_obs: Optional[pd.DataFrame], 
@@ -35,14 +47,15 @@ def _evaluate_event_loop(event: events._Event,
             raise NotImplementedError("Point observation data evaluation not yet implemented.")
         if gridded_obs is not None:
             gridded_obs_bool = True
-            case_container = case.Case(event_type=event, 
+            case_container = case.Case(event=event, 
                                        case_info=individual_case, 
                                        gridded_obs_ds=gridded_obs, 
                                        point_obs_ds=point_obs, 
                                        forecast_ds=forecast_dataset)
+            case_container.compute_subset()
             results = _evaluate_case(case_container, gridded_obs_bool, point_obs_bool)
 
-def _evaluate_case(case_container: case.Case, gridded_obs_bool: bool, point_obs_bool: bool):
+def _evaluate_case(case_container: case.IndividualCase, gridded_obs_bool: bool, point_obs_bool: bool):
     """
     Evaluate the forecast data against the observed data for a single case.
     Attributes:
