@@ -1,6 +1,8 @@
 import dataclasses
 from typing import Literal
 
+import pandas as pd
+
 from ExtremeWeatherBench.events import Freeze, HeatWave
 from ExtremeWeatherBench.metrics import DurationME, MaxMinMAE, MaximumMAE, OnsetME, RegionalRMSE
 
@@ -34,6 +36,14 @@ class EventConfig:
     bounding_box_km: int
     event_type: Literal["freeze", "heat_wave"]
     metrics: list[MetricConfig]
+
+    def __post_init__(self):
+        # TODO: flesh out validation here
+        try:
+            pd.to_datetime(self.start_date)
+            pd.to_datetime(self.end_date)
+        except ValueError:
+            raise ValueError("start_date and end_date must be in YYYY-MM-DD format")
 
     def build(self) -> Freeze | HeatWave:
         # TODO define a mapping from event_type to event class
