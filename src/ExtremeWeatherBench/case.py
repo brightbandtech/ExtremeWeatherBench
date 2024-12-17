@@ -12,15 +12,6 @@ import dacite
 
 Location = namedtuple('Location', ['latitude', 'longitude'])
 
-import os
-import yaml
-import dacite
-import dataclasses
-import datetime
-from collections import namedtuple
-
-Location = namedtuple('Location', ['latitude', 'longitude'])
-
 @dataclasses.dataclass
 class IndividualCase:
     """
