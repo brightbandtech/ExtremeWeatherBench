@@ -5,7 +5,6 @@ from typing import List, Optional
 import pandas as pd
 import os
 import logging
-
 from . import events
 
 
@@ -27,7 +26,7 @@ class Config:
     forecast_path: str = 'assets/data/forecasts/'
     gridded_obs_path: str = "gs://gcp-public-data-arco-era5/ar/1959-2022-full_37-1h-0p25deg-chunk-1.zarr-v2" 
     point_obs_path: Optional[str] = None
-    event_types: List[events._Event] = dataclasses.field(default_factory=lambda: [events.HeatWave(), events.Freeze()])
+    event_types: List[events.Event] = dataclasses.field(default_factory=lambda: [events.HeatWave(), events.Freeze()])
     cache: bool = False
 
 
