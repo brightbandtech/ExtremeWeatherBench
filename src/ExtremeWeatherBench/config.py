@@ -3,8 +3,6 @@ import xarray as xr
 import dataclasses
 from typing import List, Optional
 import pandas as pd
-import os
-import logging
 from . import events
 
 
