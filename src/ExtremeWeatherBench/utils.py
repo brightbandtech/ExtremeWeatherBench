@@ -7,7 +7,7 @@ import pandas as pd
 import ujson
 from collections import namedtuple
 from kerchunk.hdf import SingleHdf5ToZarr 
-import typing as t
+from typing import Optional, Union
 import xarray as xr
 import rioxarray
 from shapely.geometry import box
@@ -18,7 +18,7 @@ from . import config
 def convert_longitude_to_360(longitude: float) -> float:
     return longitude % 360
 
-def convert_longitude_to_180(dataset: t.Union[xr.Dataset, xr.DataArray], longitude_name: str='longitude') -> xr.Dataset:
+def convert_longitude_to_180(dataset: Union[xr.Dataset, xr.DataArray], longitude_name: str='longitude') -> xr.Dataset:
     dataset.coords[longitude_name] = (dataset.coords[longitude_name] + 180) % 360 - 180
     dataset = dataset.sortby(longitude_name)
     return dataset
