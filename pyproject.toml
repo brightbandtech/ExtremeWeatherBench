@@ -6,9 +6,12 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "dacite>=1.8.1",
+    "geopandas>=1.0.1",
     "numpy>=2.2.0",
     "pandas>=2.2.3",
+    "regionmask>=0.13.0",
     "scikit-learn>=1.6.0",
+    "shapely>=2.0.6",
     "xarray>=2024.11.0",
 ]
 
