@@ -1,7 +1,7 @@
 [project]
 name = "extremeweatherbench"
 version = "0.1.0"
-description = "Add your description here"
+description = "Benchmarking weather and weather AI models using extreme events"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -16,3 +16,50 @@ dependencies = [
 dev = [
     "ipykernel>=6.29.5",
 ]
+
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["extremeweatherbench"]
+package-dir = {"" = "src"}
+include-package-data = true
+
+[tool.uv.sources]
+extremeweatherbench = { workspace = true }
+
+[tool.ruff]
+line-length = 88
+indent-width = 4
+lint.ignore = []
+
+[tool.ruff.format]
+# Like Black, use double quotes for strings.
+quote-style = "double"
+
+# Like Black, indent with spaces, rather than tabs.
+indent-style = "space"
+
+# Like Black, respect magic trailing commas.
+skip-magic-trailing-comma = false
+
+# Like Black, automatically detect the appropriate line ending.
+line-ending = "auto"
+
+# Enable auto-formatting of code examples in docstrings. Markdown,
+# reStructuredText code/literal blocks and doctests are all supported.
+#
+# This is currently disabled by default, but it is planned for this
+# to be opt-out in the future.
+docstring-code-format = true
+
+# Set the line length limit used when formatting code snippets in
+# docstrings.
+#
+# This only has an effect when the `docstring-code-format` setting is
+# enabled.
+docstring-code-line-length = "dynamic"
+
+[tool.mypy]
+disable_error_code = "import-untyped"
