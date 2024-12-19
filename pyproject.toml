@@ -1,0 +1,13 @@
+[project]
+name = "extremeweatherbench"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "dacite>=1.8.1",
+    "numpy>=2.2.0",
+    "pandas>=2.2.3",
+    "scikit-learn>=1.6.0",
+    "xarray>=2024.11.0",
+]
