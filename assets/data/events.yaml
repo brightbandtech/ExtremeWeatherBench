@@ -1,13 +1,34 @@
 ---
 events:
   heat_wave:
+  # these cases come from <url>
     - id: 1
       title: 2021 Western North America Heat Wave
       start_date: 2021-06-24
       end_date: 2021-07-02
       location: 
         latitude:  47.6062
-        longitude: 122.3321
+        longitude: -122.3321
+      # TODO include more options (grids, x/y, etc) for bounding box  
       bounding_box_km: 500
-      resources:
-        - url: https://en.wikipedia.org/wiki/2021_Western_North_America_heat_wave
+      cross_listed:
+    - id: 3
+      title: 2021 Western North America Heat Wave
+      start_date: 2021-06-24
+      end_date: 2021-07-02
+      location: 
+        latitude:  34.0522
+        longitude: -118.2437
+      bounding_box_km: 500
+      cross_listed:
+  freeze:
+    - id: 2
+      title: 2021 Texas Freeze
+      start_date: 2021-02-13
+      end_date: 2021-02-20
+      location: 
+        latitude:  29.4241
+        longitude: -98.4936
+      bounding_box_km: 500
+      cross_listed:
+
