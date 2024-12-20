@@ -3,9 +3,6 @@ import dataclasses
 import numpy as np
 import xarray as xr
 
-# TODO(taylor): once uv/ruff/pyproject.toml is set up, remove relative imports
-# from . import utils
-
 
 @dataclasses.dataclass
 class Metric:
