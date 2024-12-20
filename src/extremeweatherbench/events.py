@@ -6,7 +6,7 @@ import dacite
 import yaml
 
 # TODO(taylor): once uv/ruff/pyproject.toml is set up, remove relative imports
-from . import case, metrics
+from extremeweatherbench import case, metrics
 
 # TODO(taylor): Cache in a bucket in brightband-public project and link here.
 CLIMATOLOGY_LINK = "/home/taylor/data/era5_2m_temperature_85th_by_hour_dayofyear.zarr"
