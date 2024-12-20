@@ -1,55 +1,146 @@
-import xarray as xr
-import typing as t
-import utils
+import dataclasses
+
 import numpy as np
-import scores
+import xarray as xr
 
-#Intensity heat metrics
-def threshold_weighted_rmse(da_fcst: xr.DataArray, da_obs: xr.DataArray, threshold: float, threshold_tolerance: float):
-    mse = scores.continuous.tw_squared_error(da_fcst, 
-                                             da_obs, 
-                                             interval_where_one=(threshold, np.inf), 
-                                             interval_where_positive=(threshold-threshold_tolerance, np.inf)
-                                             )
-    rmse = np.sqrt(mse)
-    return rmse
+# TODO(taylor): once uv/ruff/pyproject.toml is set up, remove relative imports
+# from . import utils
 
-def mae_max_of_max_temperatures(da_fcst: xr.DataArray, da_obs: xr.DataArray):
-    mae = scores.continuous.mae(da_fcst.groupby('time.day').max().max(dim='time'),
-                                da_obs.groupby('time.day').max().max(dim='time'))
-    return mae
 
-def mae_max_of_min_temperatures(da_fcst: xr.DataArray, da_obs: xr.DataArray):
-    mae = scores.continuous.mae(da_fcst.groupby('time.day').min().max(dim='time'),
-                                da_obs.groupby('time.day').min().max(dim='time'))
-    return mae
+@dataclasses.dataclass
+class Metric:
+    """A base class defining the interface for ExtremeWeatherBench metrics."""
 
-#Duration heat metrics
-def onset_above_85th_percentile(da_fcst: xr.DataArray, da_obs: xr.DataArray, da_clim_85th: xr.DataArray):
-    def first_above_threshold(da, threshold):
-        above_threshold = da > threshold
-        first_time = above_threshold.argmin(dim='time')
-        return first_time
+    def compute(self, forecast: xr.Dataset, observation: xr.Dataset):
+        """Evaluate a specific metric given a forecast and observation dataset."""
+        raise NotImplementedError
 
-    fcst_first_above = first_above_threshold(da_fcst, da_clim_85th)
-    obs_first_above = first_above_threshold(da_obs, da_clim_85th)
-    
-    onset_me = (fcst_first_above - obs_first_above).astype(float)
-    onset_me_hours = onset_me * np.timedelta64(1, 'h')
-    return onset_me_hours
 
-def mae_onset_and_end_above_85th_percentile(da_fcst: xr.DataArray, da_obs: xr.DataArray, da_clim_85th: xr.DataArray):
-    def first_and_last_above_threshold(da, threshold):
-        above_threshold = da > threshold
-        first_time = above_threshold.argmax(dim='time')
-        last_time = len(da['time']) - above_threshold[::-1].argmax(dim='time') - 1
-        return first_time, last_time
+@dataclasses.dataclass
+class DurationME(Metric):
+    """Mean error in the duration of an event, in hours.
 
-    fcst_first_above, fcst_last_above = first_and_last_above_threshold(da_fcst, da_clim_85th)
-    obs_first_above, obs_last_above = first_and_last_above_threshold(da_obs, da_clim_85th)
-    
-    onset_mae = np.abs(fcst_first_above - obs_first_above).astype(float)
-    end_mae = np.abs(fcst_last_above - obs_last_above).astype(float)
-    
-    mean_absolute_error = ((onset_mae + end_mae) / 2) * np.timedelta64(1, 'h')
-    return mean_absolute_error
+    Attributes:
+        threshold: A numerical value for defining whether an event is occurring.
+        threshold_tolerance: A numerical tolerance value for defining whether an
+            event is occurring.
+    """
+
+    # NOTE(daniel): We probably need to define a field to which these thresholds
+    # are applied, right?
+    threshold: float
+    threshold_tolerance: float
+
+    def compute(self, forecast: xr.Dataset, observation: xr.Dataset):
+        raise NotImplementedError
+
+    # @property
+    # def type(self) -> str:
+    #     return "duration_me"
+    # NOTE(daniel): Why wouldn't we just make this just the to_string method?
+    # In fact, this can be in the base Metric class and we can just define another
+    # default, private attribute like "_event_type" that can be over-ridden by
+    # every specialized class to return here.
+    def __str__(self) -> str:
+        return "duration_me"
+
+
+@dataclasses.dataclass
+class RegionalRMSE(Metric):
+    """Root mean squared error of a regional forecast evalauted against observations."""
+
+    def compute(self, forecast: xr.Dataset, observation: xr.Dataset):
+        raise NotImplementedError
+
+    @property
+    def type(self) -> str:
+        return "regional_rmse"
+
+
+@dataclasses.dataclass
+class MaximumMAE(Metric):
+    """Mean absolute error of forecasted maximum values."""
+
+    def compute(self, forecast: xr.Dataset, observation: xr.Dataset):
+        # print(forecast)
+        # print(observation)
+
+        max_t2_times = (
+            merged_df.reset_index()
+            .groupby("init_time")
+            .apply(lambda x: x.loc[x["t2"].idxmax()])
+        )
+        max_t2_times["model"] = "PanguWeather"
+        max_t2_times = max_t2_times[
+            max_t2_times.index
+            < era5_dataset.case_analysis_ds["time"][
+                era5_dataset.case_analysis_ds["2m_temperature"]
+                .mean(["latitude", "longitude"])
+                .argmax()
+                .values
+            ].values
+        ]
+        max_t2_times["time_error"] = abs(
+            max_t2_times["time"]
+            - era5_dataset.case_analysis_ds["time"][
+                era5_dataset.case_analysis_ds["2m_temperature"]
+                .mean(["latitude", "longitude"])
+                .argmax()
+                .values
+            ].values
+        ) / np.timedelta64(1, "h")
+        max_t2_times["t2_mae"] = abs(
+            max_t2_times["t2"]
+            - era5_dataset.case_analysis_ds["2m_temperature"]
+            .mean(["latitude", "longitude"])
+            .max()
+            .values
+        )
+        merged_pivot = max_t2_times.pivot(
+            index="model", columns="init_time", values="t2_mae"
+        )
+        raise NotImplementedError
+
+    @property
+    def type(self) -> str:
+        return "maximum_mae"
+
+
+@dataclasses.dataclass
+class MaxMinMAE(Metric):
+    """Mean absolute error of the forecasted highest minimum value, rolled up by a
+    predefined time interval (e.g. daily).
+
+    Attributes:
+        # NOTE(daniel): May work better in the long run to define a custom TimeInterval
+        # class, say as tuple[datetime.datetime, datetime.datetime].
+        time_interval: A string defining the time interval to roll up the metric.
+    """
+
+    time_interval: str
+
+    def compute(self, forecast: xr.Dataset, observation: xr.Dataset):
+        raise NotImplementedError
+
+    @property
+    def type(self) -> str:
+        return "minmax_mae"
+
+
+@dataclasses.dataclass
+class OnsetME(Metric):
+    """Mean error of the onset of an event, in hours.
+
+    Attributes:
+        endpoint_extension_criteria: The number of hours beyond the event window
+            to potentially include in an analysis.
+    """
+
+    endpoint_extension_criteria: float
+
+    def compute(self, forecast: xr.Dataset, observation: xr.Dataset):
+        raise NotImplementedError
+
+    @property
+    def type(self) -> str:
+        return "maximum_mae"
