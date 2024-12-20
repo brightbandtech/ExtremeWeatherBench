@@ -1,7 +1,10 @@
 *.egg-info
 .DS_Store
-build
-dist
-__pycache__
+build/
+dist/
+__pycache__/
 .pytest_cache
+*.py[oc]
+wheels/
 .python-version
+.venv
