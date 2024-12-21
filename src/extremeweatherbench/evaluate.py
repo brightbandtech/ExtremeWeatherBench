@@ -1,16 +1,17 @@
 """Evaluation routines for use during ExtremeWeatherBench case studies / analyses."""
 
 # TODO(taylor): Incorporate logging diagnostics throughout evaluation stack.
-# import logging
+import logging
+import fsspec
 import os
 from typing import Optional
-
+import logging
 import pandas as pd
 import xarray as xr
 
 
 # TODO(taylor): once uv/ruff/pyproject.toml is set up, remove relative imports
-from extremeweatherbench import config, events, utils, case
+from extremeweatherbench import config, events, case, utils
 
 #: Default mapping for forecast dataset schema.
 DEFAULT_FORECAST_SCHEMA_CONFIG = config.ForecastSchemaConfig()
@@ -35,10 +36,10 @@ def evaluate(
         evaluation results for each case within the event type.
     """
 
-    point_obs, gridded_obs = utils._open_obs_datasets(
+    point_obs, gridded_obs = _open_obs_datasets(
         eval_config
     )  # TODO: more elegant design approach?
-    forecast_dataset = utils._open_forecast_dataset(eval_config, forecast_schema_config)
+    forecast_dataset = _open_forecast_dataset(eval_config, forecast_schema_config)
 
     # TODO: use importlib resources for this when uv/ruff/pyproject.toml is set up
     base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -105,3 +106,58 @@ def _evaluate_case(
         pass
     if gridded_obs is not None:
         pass
+
+
+# TODO simplify to one paradigm, don't use nc, zarr, AND json
+def _open_forecast_dataset(
+    eval_config: config.Config,
+    forecast_schema_config: Optional[config.ForecastSchemaConfig] = None,
+):
+    logging.info("Opening forecast dataset")
+    if eval_config.forecast_dir.startswith("s3://"):
+        fs = fsspec.filesystem("s3")
+    elif eval_config.forecast_dir.startswith(
+        "gcs://"
+    ) or eval_config.forecast_dir.startswith("gs://"):
+        fs = fsspec.filesystem("gcs")
+    else:
+        fs = fsspec.filesystem("file")
+
+    file_list = fs.ls(eval_config.forecast_dir)
+    file_types = set([file.split(".")[-1] for file in file_list])
+    if len(file_types) > 1:
+        raise ValueError("Multiple file types found in forecast path.")
+
+    if "zarr" in file_types and len(file_list) == 1:
+        forecast_dataset = xr.open_zarr(file_list, chunks="auto")
+    elif "zarr" in file_types and len(file_list) > 1:
+        raise ValueError(
+            "Multiple zarr files found in forecast path, please provide a single zarr file."
+        )
+
+    if "nc" in file_types:
+        raise NotImplementedError("NetCDF file reading not implemented.")
+
+    if "json" in file_types:
+        forecast_dataset = utils._open_kerchunk_zarr_reference_jsons(
+            file_list, forecast_schema_config
+        )
+
+    return forecast_dataset
+
+
+def _open_obs_datasets(eval_config: config.Config):
+    """Open the observation datasets specified for evaluation."""
+    point_obs = None
+    gridded_obs = None
+    if eval_config.point_obs_path is not None:
+        point_obs = pd.read_parquet(eval_config.point_obs_path, chunks="auto")
+    if eval_config.gridded_obs_path is not None:
+        gridded_obs = xr.open_zarr(
+            eval_config.gridded_obs_path,
+            chunks=None,
+            storage_options=dict(token="anon"),
+        )
+    if point_obs is None and gridded_obs is None:
+        raise ValueError("No grided or point observation data provided.")
+    return point_obs, gridded_obs

@@ -1,30 +1,44 @@
-"""
-Utility functions for other files that can apply to multiple files in the library
+"""Utility functions for the ExtremeWeatherBench package that don't fit into any
+other specialized package.
 """
 
-import pandas as pd
-import ujson
-from kerchunk.hdf import SingleHdf5ToZarr
-import typing as t
-import xarray as xr
-from shapely.geometry import box
+import logging
+from typing import Optional, Union
+from collections import namedtuple
+import fsspec
 import geopandas as gpd
+import numpy as np
+import pandas as pd
 import regionmask
+import ujson
+import xarray as xr
+from kerchunk.hdf import SingleHdf5ToZarr
+from shapely.geometry import box
+
+#: Struct packaging latitude/longitude location definitions.
+Location = namedtuple("Location", ["latitude", "longitude"])
 
 
-def convert_longitude_to_360(longitude):
+def convert_longitude_to_360(longitude: float) -> float:
+    """Convert a longitude from the range [-180, 180) to [0, 360)."""
+    # NOTE(daniel): I don't think this is actually correct :)
     return longitude % 360
 
 
 def convert_longitude_to_180(
-    dataset: t.Union[xr.Dataset, xr.DataArray], longitude_name: str = "longitude"
-) -> xr.Dataset:
+    dataset: Union[xr.Dataset, xr.DataArray], longitude_name: str = "longitude"
+) -> Union[xr.Dataset, xr.DataArray]:
+    """Coerce the longitude dimension of an xarray data structure to [-180, 180)."""
     dataset.coords[longitude_name] = (dataset.coords[longitude_name] + 180) % 360 - 180
     dataset = dataset.sortby(longitude_name)
     return dataset
 
 
 def generate_json_from_nc(u, so, fs, fs_out, json_dir):
+    """Generate a kerchunk JSON file from a NetCDF file.
+
+    TODO(taylor): Define function signature and docstring.
+    """
     with fs.open(u, **so) as infile:
         h5chunks = SingleHdf5ToZarr(infile, u, inline_threshold=300)
 
@@ -39,46 +53,37 @@ def generate_json_from_nc(u, so, fs, fs_out, json_dir):
             f.write(ujson.dumps(h5chunks.translate()).encode())
 
 
-# seasonal aggregation functions for max, min, and mean
-def seasonal_subset_max(df):
-    df = df.where(df.index.month.isin([6, 7, 8]))
-    return df.max()
-
-
-def seasonal_subset_min(df):
-    df = df.where(df.index.month.isin([6, 7, 8]))
-    return df.min()
-
-
-def seasonal_subset_mean(df):
-    df = df.where(df.index.month.isin([6, 7, 8]))
-    return df.mean()
-
-
-def is_jja(month):
+def is_jja(month: int):
+    """Check if a month is in the boreal summer season (June, July, August)."""
     return (month >= 6) & (month <= 8)
 
 
-def is_6_hourly(hour):
-    return (hour == 0) | (hour == 6) | (hour == 12) | (hour == 18)
+def is_6_hourly(hour: int):
+    """Check if an hour is evenly divisible by 6."""
+    # return (hour == 0) | (hour == 6) | (hour == 12) | (hour == 18)
+    return (hour % 6) == 0 and (hour >= 0) and (hour <= 18)
 
 
-def clip_dataset_to_square(
-    dataset: xr.Dataset, location_center: dict, length_km: float
+def clip_dataset_to_bounding_box(
+    # NOTE(daniel): given its use here, "case.Location" should be moved to this module
+    # or something else stand-alone; high likelihood of inadvertently introducing a
+    # circular import dependency here.
+    dataset: xr.Dataset,
+    location_center: Location,
+    length_km: float,
 ) -> xr.Dataset:
-    """
-    Clip an xarray dataset to a square around a given location with a specified side length.
+    """Clip an xarray dataset to a boxbox around a given location.
 
-    Parameters:
-    dataset (xarray.Dataset): The input xarray dataset.
-    location_center (dict): A dictionary with 'latitude' and 'longitude' keys.
-    length_km (float): The side length of the square in kilometers.
+    Args:
+        dataset: The input xarray dataset.
+        location_center: A Location object corresponding to the center of the bounding box.
+        length_km: The side length of the bounding box in kilometers.
 
     Returns:
-    xarray.Dataset: The clipped xarray dataset.
+        The clipped xarray dataset.
     """
-    lat_center = location_center["latitude"]
-    lon_center = location_center["longitude"]
+    lat_center = location_center.latitude
+    lon_center = location_center.longitude
 
     # Convert length from kilometers to degrees (approximation)
     length_deg = length_km / 111  # 1 degree is approximately 111 km
@@ -102,15 +107,15 @@ def clip_dataset_to_square(
 
 
 def convert_day_yearofday_to_time(dataset: xr.Dataset, year: int) -> xr.Dataset:
-    """
-    Convert dayofyear and hour coordinates to a new time coordinate.
+    """Convert dayofyear and hour coordinates in an xarray Dataset to a new time
+    coordinate.
 
-    Parameters:
-    dataset (xarray.Dataset): The input xarray dataset.
-    year (int): The year to use for the time coordinate.
+    Args:
+        dataset: The input xarray dataset.
+        year: The base year to use for the time coordinate.
 
     Returns:
-    xarray.Dataset: The dataset with a new time coordinate.
+        The dataset with a new time coordinate.
     """
     # Create a new time coordinate by combining dayofyear and hour
     time_dim = pd.date_range(
@@ -126,19 +131,68 @@ def convert_day_yearofday_to_time(dataset: xr.Dataset, year: int) -> xr.Dataset:
 
 
 def remove_ocean_gridpoints(dataset: xr.Dataset) -> xr.Dataset:
-    """
-    Subset a dataset to only include land gridpoints based on a land-sea mask.
+    """Subset a dataset to only include land gridpoints based on a land-sea mask.
 
-    Parameters:
-    dataset (xarray.Dataset): The input xarray dataset.
-    land_sea_mask (xarray.DataArray): A land-sea mask with land gridpoints set to 1 and sea gridpoints set to 0.
+    Args:
+        dataset: The input xarray dataset.
 
     Returns:
-    xarray.Dataset: The dataset with only land gridpoints.
+        The dataset masked to only land gridpoints.
     """
+    # TODO(taylor): Extend this so that the user may pass their own land-sea mask,
+    # best suited the dataset they're analyzing.
     land = regionmask.defined_regions.natural_earth_v5_0_0.land_110
     land_sea_mask = land.mask(dataset.longitude, dataset.latitude)
     land_mask = land_sea_mask == 0
     # Subset the dataset to only include land gridpoints
     dataset = dataset.where(land_mask, drop=True)
+
     return dataset
+
+
+def _open_kerchunk_zarr_reference_jsons(file_list, forecast_schema_config):
+    """Open a dataset from a list of kerchunk JSON files."""
+    xarray_datasets = []
+    for json_file in file_list:
+        fs_ = fsspec.filesystem(
+            "reference",
+            fo=json_file,
+            ref_storage_args={"skip_instance_cache": True},
+            remote_protocol="gcs",
+            remote_options={"anon": True},
+        )
+        m = fs_.get_mapper("")
+        ds = xr.open_dataset(
+            m, engine="zarr", backend_kwargs={"consolidated": False}, chunks="auto"
+        )
+        if "initialization_time" not in ds.attrs:
+            raise ValueError(
+                "Initialization time not found in dataset attributes. \
+                             Please add initialization_time to the dataset attributes."
+            )
+        else:
+            model_run_time = np.datetime64(
+                pd.to_datetime(ds.attrs["initialization_time"])
+            )
+        ds[forecast_schema_config.init_time] = model_run_time.astype("datetime64[ns]")
+        fhours = ds[forecast_schema_config.time] - model_run_time
+        fhours = fhours.values / np.timedelta64(1, "h")
+        ds[forecast_schema_config.fhour] = fhours
+        ds = ds.set_coords(forecast_schema_config.init_time)
+        ds = ds.expand_dims(forecast_schema_config.init_time)
+        for data_vars in ds.data_vars:
+            if forecast_schema_config.time in ds[data_vars].dims:
+                ds[data_vars] = ds[data_vars].swap_dims(
+                    {forecast_schema_config.time: forecast_schema_config.fhour}
+                )
+        ds = ds.transpose(
+            forecast_schema_config.init_time,
+            forecast_schema_config.time,
+            forecast_schema_config.fhour,
+            forecast_schema_config.latitude,
+            forecast_schema_config.longitude,
+            forecast_schema_config.level,
+        )
+        xarray_datasets.append(ds)
+
+    return xr.concat(xarray_datasets, dim=forecast_schema_config.init_time)
