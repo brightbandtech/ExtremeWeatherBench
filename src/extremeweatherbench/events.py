@@ -58,11 +58,11 @@ class HeatWave(Event):
     # in the "metrics" attribute of the (base) Event object.
     def build_metrics(self):
         self.metrics = [
-            metrics.MaximumMAE,
-            metrics.DurationME,
-            metrics.RegionalRMSE,
-            metrics.MaxMinMAE,
-            metrics.OnsetME,
+            metrics.MaximumMAE(),
+            metrics.DurationME(),
+            metrics.RegionalRMSE(),
+            metrics.MaxMinMAE(),
+            metrics.OnsetME(),
         ]
 
 
@@ -83,8 +83,8 @@ class Freeze(Event):
 
     def build_metrics(self):
         self.metrics = [
-            metrics.DurationME,
-            metrics.RegionalRMSE,
-            metrics.MaxMinMAE,
-            metrics.OnsetME,
+            metrics.DurationME(),
+            metrics.RegionalRMSE(),
+            metrics.MaxMinMAE(),
+            metrics.OnsetME(),
         ]

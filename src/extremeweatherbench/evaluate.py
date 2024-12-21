@@ -8,7 +8,7 @@ from typing import Optional
 import logging
 import pandas as pd
 import xarray as xr
-
+from importlib import resources
 
 # TODO(taylor): once uv/ruff/pyproject.toml is set up, remove relative imports
 from extremeweatherbench import config, events, case, utils
@@ -41,7 +41,6 @@ def evaluate(
     )  # TODO: more elegant design approach?
     forecast_dataset = _open_forecast_dataset(eval_config, forecast_schema_config)
 
-    # TODO: use importlib resources for this when uv/ruff/pyproject.toml is set up
     base_dir = os.path.dirname(os.path.abspath(__file__))
     events_file_path = os.path.join(base_dir, "../../assets/data/events.yaml")
     all_results = {}
@@ -82,13 +81,23 @@ def _evaluate_cases_loop(
     results = []
     for individual_case in event.cases:
         results.append(
-            _evaluate_case(individual_case, forecast_dataset, gridded_obs, point_obs)
+            _evaluate_case(
+                individual_case,
+                event.metrics,
+                forecast_dataset,
+                gridded_obs,
+                point_obs,
+            )
         )
     return results
 
 
 def _evaluate_case(
-    individual_case: case.IndividualCase, forecast_dataset, gridded_obs, point_obs
+    individual_case: case.IndividualCase,
+    metrics: list,
+    forecast_dataset,
+    gridded_obs,
+    point_obs,
 ) -> xr.Dataset:
     """Evalaute a single case given forecast data and observations.
 
@@ -105,7 +114,9 @@ def _evaluate_case(
     if point_obs is not None:
         pass
     if gridded_obs is not None:
-        pass
+        for metric in metrics:
+            result = metric.compute(forecast_dataset, gridded_obs)
+            return result
 
 
 # TODO simplify to one paradigm, don't use nc, zarr, AND json

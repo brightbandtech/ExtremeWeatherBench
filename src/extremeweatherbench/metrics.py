@@ -12,6 +12,10 @@ class Metric:
         """Evaluate a specific metric given a forecast and observation dataset."""
         raise NotImplementedError
 
+    def to_string(self) -> str:
+        """Return a string representation of the metric."""
+        raise NotImplementedError
+
 
 @dataclasses.dataclass
 class DurationME(Metric):
@@ -25,11 +29,10 @@ class DurationME(Metric):
 
     # NOTE(daniel): We probably need to define a field to which these thresholds
     # are applied, right?
-    threshold: float
-    threshold_tolerance: float
 
     def compute(self, forecast: xr.Dataset, observation: xr.Dataset):
-        raise NotImplementedError
+        print(forecast)
+        print(observation)
 
     # @property
     # def type(self) -> str:
@@ -38,8 +41,6 @@ class DurationME(Metric):
     # In fact, this can be in the base Metric class and we can just define another
     # default, private attribute like "_event_type" that can be over-ridden by
     # every specialized class to return here.
-    def __str__(self) -> str:
-        return "duration_me"
 
 
 @dataclasses.dataclass
@@ -47,11 +48,9 @@ class RegionalRMSE(Metric):
     """Root mean squared error of a regional forecast evalauted against observations."""
 
     def compute(self, forecast: xr.Dataset, observation: xr.Dataset):
-        raise NotImplementedError
-
-    @property
-    def type(self) -> str:
-        return "regional_rmse"
+        print(forecast)
+        print(observation)
+        return None
 
 
 @dataclasses.dataclass
@@ -59,9 +58,9 @@ class MaximumMAE(Metric):
     """Mean absolute error of forecasted maximum values."""
 
     def compute(self, forecast: xr.Dataset, observation: xr.Dataset):
-        # print(forecast)
-        # print(observation)
-
+        print(forecast)
+        print(observation)
+        return None
         max_t2_times = (
             merged_df.reset_index()
             .groupby("init_time")
@@ -98,10 +97,6 @@ class MaximumMAE(Metric):
         )
         raise NotImplementedError
 
-    @property
-    def type(self) -> str:
-        return "maximum_mae"
-
 
 @dataclasses.dataclass
 class MaxMinMAE(Metric):
@@ -114,14 +109,10 @@ class MaxMinMAE(Metric):
         time_interval: A string defining the time interval to roll up the metric.
     """
 
-    time_interval: str
-
     def compute(self, forecast: xr.Dataset, observation: xr.Dataset):
-        raise NotImplementedError
-
-    @property
-    def type(self) -> str:
-        return "minmax_mae"
+        print(forecast)
+        print(observation)
+        return None
 
 
 @dataclasses.dataclass
@@ -133,11 +124,7 @@ class OnsetME(Metric):
             to potentially include in an analysis.
     """
 
-    endpoint_extension_criteria: float
-
     def compute(self, forecast: xr.Dataset, observation: xr.Dataset):
-        raise NotImplementedError
-
-    @property
-    def type(self) -> str:
-        return "maximum_mae"
+        print(forecast)
+        print(observation)
+        return None
