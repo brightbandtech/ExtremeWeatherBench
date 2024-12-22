@@ -2,6 +2,12 @@ import dataclasses
 
 import numpy as np
 import xarray as xr
+from extremeweatherbench import utils
+
+# TODO: get permissions to upload this to bb bucket
+T2M_85TH_PERCENTILE_CLIMATOLOGY_PATH = (
+    "/home/taylor/data/era5_2m_temperature_85th_by_hour_dayofyear.zarr"
+)
 
 
 @dataclasses.dataclass
@@ -58,8 +64,18 @@ class MaximumMAE(Metric):
     """Mean absolute error of forecasted maximum values."""
 
     def compute(self, forecast: xr.Dataset, observation: xr.Dataset):
-        print(forecast)
-        print(observation)
+        era5_hourly_daily_85th_percentile = xr.open_zarr(
+            T2M_85TH_PERCENTILE_CLIMATOLOGY_PATH
+        )
+
+        era5_climatology = utils.convert_day_yearofday_to_time(
+            era5_hourly_daily_85th_percentile,
+            np.unique(observation.time.dt.year.values)[0],
+        )
+        era5_climatology = era5_climatology.rename_vars(
+            {"2m_temperature": "2m_temperature_85th_percentile"}
+        )
+
         return None
         max_t2_times = (
             merged_df.reset_index()
