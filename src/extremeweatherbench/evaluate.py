@@ -110,6 +110,9 @@ def _evaluate_case(
     Returns:
         An xarray Dataset containing the evaluation results for the case.
     """
+    # Each case has a unique region and event type which can be
+    # assessed here.
+
     # TODO(taylor): Implement the actual evaluation logic here.
     if point_obs is not None:
         pass

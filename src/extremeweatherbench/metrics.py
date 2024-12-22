@@ -67,7 +67,6 @@ class MaximumMAE(Metric):
         era5_hourly_daily_85th_percentile = xr.open_zarr(
             T2M_85TH_PERCENTILE_CLIMATOLOGY_PATH
         )
-
         era5_climatology = utils.convert_day_yearofday_to_time(
             era5_hourly_daily_85th_percentile,
             np.unique(observation.time.dt.year.values)[0],
@@ -75,7 +74,15 @@ class MaximumMAE(Metric):
         era5_climatology = era5_climatology.rename_vars(
             {"2m_temperature": "2m_temperature_85th_percentile"}
         )
-
+        merged_dataset = xr.merge(
+            [era5_climatology, observation],
+            join="inner",
+        )
+        merged_dataset = utils.convert_longitude_to_180(merged_dataset)
+        merged_dataset = utils.clip_dataset_to_bounding_box(
+            merged_dataset, location_center, box_length_width_in_km
+        )
+        merged_dataset = utils.remove_ocean_gridpoints(merged_dataset)
         return None
         max_t2_times = (
             merged_df.reset_index()
