@@ -2,6 +2,12 @@ import dataclasses
 
 import numpy as np
 import xarray as xr
+from extremeweatherbench import utils
+
+# TODO: get permissions to upload this to bb bucket
+T2M_85TH_PERCENTILE_CLIMATOLOGY_PATH = (
+    "/home/taylor/data/era5_2m_temperature_85th_by_hour_dayofyear.zarr"
+)
 
 
 @dataclasses.dataclass
@@ -10,6 +16,10 @@ class Metric:
 
     def compute(self, forecast: xr.Dataset, observation: xr.Dataset):
         """Evaluate a specific metric given a forecast and observation dataset."""
+        raise NotImplementedError
+
+    def to_string(self) -> str:
+        """Return a string representation of the metric."""
         raise NotImplementedError
 
 
@@ -25,11 +35,10 @@ class DurationME(Metric):
 
     # NOTE(daniel): We probably need to define a field to which these thresholds
     # are applied, right?
-    threshold: float
-    threshold_tolerance: float
 
     def compute(self, forecast: xr.Dataset, observation: xr.Dataset):
-        raise NotImplementedError
+        print(forecast)
+        print(observation)
 
     # @property
     # def type(self) -> str:
@@ -38,8 +47,6 @@ class DurationME(Metric):
     # In fact, this can be in the base Metric class and we can just define another
     # default, private attribute like "_event_type" that can be over-ridden by
     # every specialized class to return here.
-    def __str__(self) -> str:
-        return "duration_me"
 
 
 @dataclasses.dataclass
@@ -47,11 +54,9 @@ class RegionalRMSE(Metric):
     """Root mean squared error of a regional forecast evalauted against observations."""
 
     def compute(self, forecast: xr.Dataset, observation: xr.Dataset):
-        raise NotImplementedError
-
-    @property
-    def type(self) -> str:
-        return "regional_rmse"
+        print(forecast)
+        print(observation)
+        return None
 
 
 @dataclasses.dataclass
@@ -59,9 +64,26 @@ class MaximumMAE(Metric):
     """Mean absolute error of forecasted maximum values."""
 
     def compute(self, forecast: xr.Dataset, observation: xr.Dataset):
-        # print(forecast)
-        # print(observation)
-
+        era5_hourly_daily_85th_percentile = xr.open_zarr(
+            T2M_85TH_PERCENTILE_CLIMATOLOGY_PATH
+        )
+        era5_climatology = utils.convert_day_yearofday_to_time(
+            era5_hourly_daily_85th_percentile,
+            np.unique(observation.time.dt.year.values)[0],
+        )
+        era5_climatology = era5_climatology.rename_vars(
+            {"2m_temperature": "2m_temperature_85th_percentile"}
+        )
+        merged_dataset = xr.merge(
+            [era5_climatology, observation],
+            join="inner",
+        )
+        merged_dataset = utils.convert_longitude_to_180(merged_dataset)
+        merged_dataset = utils.clip_dataset_to_bounding_box(
+            merged_dataset, location_center, box_length_width_in_km
+        )
+        merged_dataset = utils.remove_ocean_gridpoints(merged_dataset)
+        return None
         max_t2_times = (
             merged_df.reset_index()
             .groupby("init_time")
@@ -98,10 +120,6 @@ class MaximumMAE(Metric):
         )
         raise NotImplementedError
 
-    @property
-    def type(self) -> str:
-        return "maximum_mae"
-
 
 @dataclasses.dataclass
 class MaxMinMAE(Metric):
@@ -114,14 +132,10 @@ class MaxMinMAE(Metric):
         time_interval: A string defining the time interval to roll up the metric.
     """
 
-    time_interval: str
-
     def compute(self, forecast: xr.Dataset, observation: xr.Dataset):
-        raise NotImplementedError
-
-    @property
-    def type(self) -> str:
-        return "minmax_mae"
+        print(forecast)
+        print(observation)
+        return None
 
 
 @dataclasses.dataclass
@@ -133,11 +147,7 @@ class OnsetME(Metric):
             to potentially include in an analysis.
     """
 
-    endpoint_extension_criteria: float
-
     def compute(self, forecast: xr.Dataset, observation: xr.Dataset):
-        raise NotImplementedError
-
-    @property
-    def type(self) -> str:
-        return "maximum_mae"
+        print(forecast)
+        print(observation)
+        return None
