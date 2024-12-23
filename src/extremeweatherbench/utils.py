@@ -3,9 +3,8 @@ other specialized package.
 """
 
 import logging
-from collections import namedtuple
 from typing import Optional, Union
-
+from collections import namedtuple
 import fsspec
 import geopandas as gpd
 import numpy as np
@@ -16,8 +15,8 @@ import xarray as xr
 from kerchunk.hdf import SingleHdf5ToZarr
 from shapely.geometry import box
 
-# TODO(taylor): once uv/ruff/pyproject.toml is set up, remove relative imports
-from . import case, config
+#: Struct packaging latitude/longitude location definitions.
+Location = namedtuple("Location", ["latitude", "longitude"])
 
 
 def convert_longitude_to_360(longitude: float) -> float:
@@ -70,7 +69,7 @@ def clip_dataset_to_bounding_box(
     # or something else stand-alone; high likelihood of inadvertently introducing a
     # circular import dependency here.
     dataset: xr.Dataset,
-    location_center: case.Location,
+    location_center: Location,
     length_km: float,
 ) -> xr.Dataset:
     """Clip an xarray dataset to a boxbox around a given location.
@@ -149,60 +148,6 @@ def remove_ocean_gridpoints(dataset: xr.Dataset) -> xr.Dataset:
     dataset = dataset.where(land_mask, drop=True)
 
     return dataset
-
-
-def _open_obs_datasets(eval_config: config.Config):
-    """Open the observation datasets specified for evaluation."""
-    point_obs = None
-    gridded_obs = None
-    if eval_config.point_obs_path is not None:
-        point_obs = pd.read_parquet(eval_config.point_obs_path, chunks="auto")
-    if eval_config.gridded_obs_path is not None:
-        gridded_obs = xr.open_zarr(eval_config.gridded_obs_path, chunks="auto")
-    if point_obs is None and gridded_obs is None:
-        raise ValueError("No grided or point observation data provided.")
-    return point_obs, gridded_obs
-
-
-# TODO simplify to one paradigm, don't use nc, zarr, AND json
-def _open_forecast_dataset(
-    eval_config: config.Config,
-    forecast_schema_config: Optional[config.ForecastSchemaConfig] = None,
-):
-    logging.info("Opening forecast dataset")
-    if eval_config.forecast_dir.startswith("s3://"):
-        fs = fsspec.filesystem("s3")
-    elif eval_config.forecast_dir.startswith(
-        "gcs://"
-    ) or eval_config.forecast_dir.startswith("gs://"):
-        fs = fsspec.filesystem("gcs")
-    else:
-        fs = fsspec.filesystem("file")
-
-    file_list = fs.ls(eval_config.forecast_dir)
-    file_types = set([file.split(".")[-1] for file in file_list])
-    if len(file_types) > 1:
-        raise ValueError("Multiple file types found in forecast path.")
-
-    if "zarr" in file_types and len(file_list) == 1:
-        forecast_dataset = xr.open_zarr(file_list, chunks="auto")
-    elif "zarr" in file_types and len(file_list) > 1:
-        raise ValueError(
-            "Multiple zarr files found in forecast path, please provide a single zarr file."
-        )
-
-    if "nc" in file_types:
-        logging.warning(
-            "NetCDF files are not recommended for large datasets. Consider converting to zarr."
-        )
-        forecast_dataset = xr.open_mfdataset(file_list, chunks="auto")
-
-    if "json" in file_types:
-        forecast_dataset = _open_kerchunk_zarr_reference_jsons(
-            file_list, forecast_schema_config
-        )
-
-    return forecast_dataset
 
 
 def _open_kerchunk_zarr_reference_jsons(file_list, forecast_schema_config):
