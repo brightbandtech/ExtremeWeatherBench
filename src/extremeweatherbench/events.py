@@ -4,8 +4,6 @@ import dataclasses
 
 import dacite
 import yaml
-
-# TODO(taylor): once uv/ruff/pyproject.toml is set up, remove relative imports
 from extremeweatherbench import case, metrics
 
 # TODO(taylor): Cache in a bucket in brightband-public project and link here.

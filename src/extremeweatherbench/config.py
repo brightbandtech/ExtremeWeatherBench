@@ -3,7 +3,6 @@
 import dataclasses
 from typing import List, Optional
 
-# TODO(taylor): once uv/ruff/pyproject.toml is set up, remove relative imports
 from extremeweatherbench import events
 
 DEFAULT_OUTPUT_DIR = "assets/data/outputs/"
