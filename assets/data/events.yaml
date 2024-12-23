@@ -55,3 +55,40 @@ events:
         longitude: -118.2437    
       bounding_box_km: 500
       cross_listed:
+    - id: 7
+      title: 2023 Australia
+      start_date: 2023-11-20
+      end_date: 2023-11-26
+      location: 
+        latitude:  -31.9505
+        longitude: 115.8605    
+      bounding_box_km: 500
+      cross_listed:
+    - id: 8
+      title: 2023 Ireland
+      start_date: 2023-09-04
+      end_date: 2023-09-10
+      location: 
+        latitude:  53.1424
+        longitude: -7.6921    
+      bounding_box_km: 500
+      cross_listed:
+    - id: 9
+      title: 2023 Italy
+      start_date: 2023-07-17
+      end_date: 2023-07-19
+      location: 
+        latitude:  41.9028
+        longitude: 12.4964    
+      bounding_box_km: 500
+      cross_listed:
+    - id: 10
+      title: 2023 SW Europe
+      start_date: 2023-08-19
+      end_date: 2023-08-25
+      location: 
+        latitude:  37.2982
+        longitude: -113.0263    
+      bounding_box_km: 500
+      cross_listed:
+  freeze:
