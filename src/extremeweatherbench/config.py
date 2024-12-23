@@ -3,13 +3,12 @@
 import dataclasses
 from typing import List, Optional
 
-# TODO(taylor): once uv/ruff/pyproject.toml is set up, remove relative imports
-from . import events
+from extremeweatherbench import events
 
 DEFAULT_OUTPUT_DIR = "assets/data/outputs/"
 DEFAULT_FORECAST_DIR = "assets/data/forecasts/"
 ARCO_ERA5_FULL_URI = (
-    "gs://gcp-public-data-arco-era5/ar/1959-2022-full_37-1h-0p25deg-chunk-1.zarr-v2"
+    "gs://gcp-public-data-arco-era5/ar/full_37-1h-0p25deg-chunk-1.zarr-v3"
 )
 
 
