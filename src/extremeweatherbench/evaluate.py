@@ -9,8 +9,6 @@ import logging
 import pandas as pd
 import xarray as xr
 from importlib import resources
-
-# TODO(taylor): once uv/ruff/pyproject.toml is set up, remove relative imports
 from extremeweatherbench import config, events, case, utils
 
 #: Default mapping for forecast dataset schema.
