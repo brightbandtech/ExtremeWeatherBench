@@ -1,34 +1,57 @@
 ---
 events:
   heat_wave:
-  # these cases come from <url>
     - id: 1
-      title: 2021 Western North America Heat Wave
+      title: 2021 Pacific Northwest
       start_date: 2021-06-24
       end_date: 2021-07-02
       location: 
         latitude:  47.6062
         longitude: -122.3321
-      # TODO include more options (grids, x/y, etc) for bounding box  
+      bounding_box_km: 500
+      cross_listed:
+    - id: 2
+      title: 2022 Upper Midwest
+      start_date: 2022-05-14
+      end_date: 2022-05-16
+      location: 
+        latitude:  41.8781
+        longitude: -87.6298    
       bounding_box_km: 500
       cross_listed:
     - id: 3
-      title: 2021 Western North America Heat Wave
-      start_date: 2021-06-24
-      end_date: 2021-07-02
+      title: 2022 California
+      start_date: 2022-06-13
+      end_date: 2022-06-14
       location: 
         latitude:  34.0522
-        longitude: -118.2437
+        longitude: -118.2437    
       bounding_box_km: 500
       cross_listed:
-  freeze:
-    - id: 2
-      title: 2021 Texas Freeze
-      start_date: 2021-02-13
-      end_date: 2021-02-20
+    - id: 4
+      title: 2022 Intermountain West
+      start_date: 2022-07-10
+      end_date: 2022-07-16
       location: 
-        latitude:  29.4241
-        longitude: -98.4936
+        latitude:  37.2982
+        longitude: -113.0263    
       bounding_box_km: 500
       cross_listed:
-
+    - id: 5
+      title: 2023 Pacific Northwest
+      start_date: 2023-05-13
+      end_date: 2023-05-15
+      location: 
+        latitude:  47.6062
+        longitude: -122.3321    
+      bounding_box_km: 500
+      cross_listed:
+    - id: 6
+      title: 2023 California
+      start_date: 2023-06-12
+      end_date: 2023-06-13
+      location: 
+        latitude:  34.0522
+        longitude: -118.2437    
+      bounding_box_km: 500
+      cross_listed:
