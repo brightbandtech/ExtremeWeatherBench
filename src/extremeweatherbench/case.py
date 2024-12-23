@@ -2,10 +2,7 @@
 
 import dataclasses
 import datetime
-from collections import namedtuple
-
-#: Struct packaging latitude/longitude location definitions.
-Location = namedtuple("Location", ["latitude", "longitude"])
+from extremeweatherbench.utils import Location
 
 
 @dataclasses.dataclass
