@@ -47,12 +47,12 @@ events:
       bounding_box_km: 500
       cross_listed:
     - id: 6
-      title: 2023 California
-      start_date: 2023-06-12
-      end_date: 2023-06-13
+      title: 2022 Mid-Atlantic
+      start_date: 2022-05-20
+      end_date: 2022-05-22
       location: 
-        latitude:  34.0522
-        longitude: -118.2437    
+        latitude:  39.2904
+        longitude: -76.6122    
       bounding_box_km: 500
       cross_listed:
     - id: 7
@@ -87,8 +87,17 @@ events:
       start_date: 2023-08-19
       end_date: 2023-08-25
       location: 
-        latitude:  37.2982
-        longitude: -113.0263    
+        latitude:  40.4637
+        longitude: -3.7492    
       bounding_box_km: 500
       cross_listed:
   freeze:
+    - id: 11
+      title: 2021 Texas
+      start_date: 2021-02-14
+      end_date: 2021-02-18
+      location: 
+        latitude:  30.2672
+        longitude: -97.7431
+      bounding_box_km: 500
+      cross_listed:
