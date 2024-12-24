@@ -91,8 +91,35 @@ events:
         longitude: -3.7492    
       bounding_box_km: 500
       cross_listed:
-  freeze:
     - id: 11
+      title: 2023 South America
+      start_date: 2023-08-10
+      end_date: 2023-08-14
+      location: 
+        latitude:  -34.6037
+        longitude: -58.3816    
+      bounding_box_km: 500
+      cross_listed:
+    - id: 12
+      title: 2023 China (Shanghai)
+      start_date: 2023-05-27
+      end_date: 2023-05-30
+      location: 
+        latitude:  31.2304
+        longitude: 121.4737    
+      bounding_box_km: 500
+      cross_listed:
+    - id: 13
+      title: 2023 China (Yunnan Province)
+      start_date: 2023-04-16
+      end_date: 2023-04-19
+      location: 
+        latitude:  25.0458
+        longitude: 102.7100    
+      bounding_box_km: 500
+      cross_listed:
+  freeze:
+    - id: 12
       title: 2021 Texas
       start_date: 2021-02-14
       end_date: 2021-02-18
