@@ -163,6 +163,24 @@ events:
         longitude: 121.0437    
       bounding_box_km: 500
       cross_listed:
+    - id: 19
+      title: 2022 Germany
+      start_date: 2022-12-25
+      end_date: 2022-12-31
+      location: 
+        latitude:  52.5200
+        longitude: 13.4050    
+      bounding_box_km: 500
+      cross_listed:
+    - id: 20
+      title: 2022 UK
+      start_date: 2022-08-10
+      end_date: 2022-08-15
+      location: 
+        latitude:  51.5074
+        longitude: -0.1278    
+      bounding_box_km: 500
+      cross_listed:
   freeze:
     - id: 12
       title: 2021 Texas
