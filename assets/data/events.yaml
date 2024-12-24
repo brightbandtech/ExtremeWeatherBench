@@ -173,12 +173,39 @@ events:
       bounding_box_km: 500
       cross_listed:
     - id: 20
-      title: 2022 UK
+      title: 2022 UK (August)
       start_date: 2022-08-10
       end_date: 2022-08-15
       location: 
         latitude:  51.5074
         longitude: -0.1278    
+      bounding_box_km: 500
+      cross_listed:
+    - id: 21
+      title: 2022 UK (July)
+      start_date: 2022-07-18
+      end_date: 2022-07-22
+      location: 
+        latitude:  51.5074
+        longitude: -0.1278    
+      bounding_box_km: 500
+      cross_listed:
+    - id: 22
+      title: 2022 France
+      start_date: 2022-06-16
+      end_date: 2022-06-20
+      location: 
+        latitude:  43.4832
+        longitude: -1.5586    
+      bounding_box_km: 500
+      cross_listed:
+    - id: 23
+      title: 2022 Japan
+      start_date: 2022-06-28
+      end_date: 2022-08-01
+      location: 
+        latitude:  35.6895
+        longitude: 139.6917    
       bounding_box_km: 500
       cross_listed:
   freeze:
