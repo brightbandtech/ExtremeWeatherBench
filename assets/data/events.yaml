@@ -118,6 +118,51 @@ events:
         longitude: 102.7100    
       bounding_box_km: 500
       cross_listed:
+    - id: 14
+      title: 2023 Algeria
+      start_date: 2023-07-18
+      end_date: 2023-07-24
+      location: 
+        latitude:  36.7372
+        longitude: 3.0869    
+      bounding_box_km: 500
+      cross_listed:
+    - id: 15
+      title: 2023 Iberian Peninsula
+      start_date: 2023-04-24
+      end_date: 2023-04-28
+      location: 
+        latitude:  37.3891
+        longitude: -5.9845    
+      bounding_box_km: 500
+      cross_listed:
+    - id: 16
+      title: 2023 Gibraltar
+      start_date: 2023-04-26
+      end_date: 2023-04-28
+      location: 
+        latitude:  36.1408
+        longitude: -5.3536    
+      bounding_box_km: 500
+      cross_listed:
+    - id: 17
+      title: 2023 India
+      start_date: 2023-04-16
+      end_date: 2023-04-22
+      location: 
+        latitude:  28.6139
+        longitude: 77.2090    
+      bounding_box_km: 500
+      cross_listed:
+    - id: 18
+      title: 2023 Philippines
+      start_date: 2023-04-21
+      end_date: 2023-05-12
+      location: 
+        latitude:  14.6760
+        longitude: 121.0437    
+      bounding_box_km: 500
+      cross_listed:
   freeze:
     - id: 12
       title: 2021 Texas
