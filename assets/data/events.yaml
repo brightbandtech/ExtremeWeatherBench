@@ -235,6 +235,42 @@ events:
         longitude: 115.8605    
       bounding_box_km: 500
       cross_listed:
+    - id: 27
+      title: 2021 Canada Plains
+      start_date: 2021-06-03
+      end_date: 2021-06-06
+      location: 
+        latitude: 49.0000
+        longitude: -97.5667    
+      bounding_box_km: 500
+      cross_listed:
+    - id: 28
+      title: 2021 New Zealand
+      start_date: 2021-01-25
+      end_date: 2021-01-28
+      location: 
+        latitude: -43.8983
+        longitude: 171.7310    
+      bounding_box_km: 500
+      cross_listed:
+    - id: 29
+      title: 2019 Australia
+      start_date: 2019-12-16
+      end_date: 2019-12-22
+      location: 
+        latitude: -31.7125
+        longitude: 128.8890    
+      bounding_box_km: 500
+      cross_listed:
+    - id: 30
+      title: 2020 Arctic
+      start_date: 2020-04-15
+      end_date: 2019-04-19
+      location: 
+        latitude: 90.0000
+        longitude: 135.0000    
+      bounding_box_km: 500
+      cross_listed:
 
   freeze:
     - id: 12
