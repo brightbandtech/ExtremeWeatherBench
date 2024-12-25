@@ -208,6 +208,34 @@ events:
         longitude: 139.6917    
       bounding_box_km: 500
       cross_listed:
+    - id: 24
+      title: 2022 India
+      start_date: 2022-04-26
+      end_date: 2022-05-01
+      location: 
+        latitude:  28.2769
+        longitude: 68.4376    
+      bounding_box_km: 500
+      cross_listed:
+    - id: 25
+      title: 2022 East Antarctica
+      start_date: 2022-03-15
+      end_date: 2022-03-19
+      location: 
+        latitude: -75.1000
+        longitude: 123.3500    
+      bounding_box_km: 500
+      cross_listed:
+    - id: 26
+      title: 2022 West Australia
+      start_date: 2022-01-18
+      end_date: 2022-01-23
+      location: 
+        latitude: -31.9505
+        longitude: 115.8605    
+      bounding_box_km: 500
+      cross_listed:
+
   freeze:
     - id: 12
       title: 2021 Texas
