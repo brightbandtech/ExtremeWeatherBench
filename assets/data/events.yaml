@@ -265,7 +265,7 @@ events:
     - id: 30
       title: 2020 Arctic
       start_date: 2020-04-15
-      end_date: 2019-04-19
+      end_date: 2020-04-19
       location: 
         latitude: 90.0000
         longitude: 135.0000    
