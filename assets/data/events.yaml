@@ -201,8 +201,8 @@ events:
       cross_listed:
     - id: 23
       title: 2022 Japan
-      start_date: 2022-06-28
-      end_date: 2022-08-01
+      start_date: 2022-06-21
+      end_date: 2022-07-04
       location: 
         latitude:  35.6895
         longitude: 139.6917    
