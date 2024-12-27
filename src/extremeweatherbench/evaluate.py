@@ -42,6 +42,7 @@ def evaluate(
     base_dir = os.path.dirname(os.path.abspath(__file__))
     events_file_path = os.path.join(base_dir, "../../assets/data/events.yaml")
     all_results = {}
+    
     for event in eval_config.event_types:
         event_runner = event(path=events_file_path)
         event_cases = 
