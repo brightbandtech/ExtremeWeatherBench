@@ -3,6 +3,7 @@
 import dataclasses
 import datetime
 from extremeweatherbench.utils import Location
+from typing import List, Optional
 
 
 @dataclasses.dataclass
@@ -23,10 +24,18 @@ class IndividualCase:
             center or  focus.
         bounding_box_km: int: The side length of a bounding box centered on location, in
             kilometers.
+        event_type: str: A string representing the type of extreme weather event.
+        cross_listed: Optional[List[str]]: A list of other event types that this case
+            study is cross-listed under.
     """
 
     id: int
     start_date: datetime.date
     end_date: datetime.date
-    location: Location
+    location: dict
     bounding_box_km: int
+    event_type: str
+    cross_listed: Optional[List[str]] = None
+
+    def __post_init__(self):
+        self.location = Location(**self.location)
