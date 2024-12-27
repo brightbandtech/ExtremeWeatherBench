@@ -16,6 +16,13 @@ class Event:
     events.
     """
 
+    path: str
+    cases
+
+    def __post_init__(self):
+        self.cases = []
+        self.metrics = []
+
     @classmethod
     def from_yaml(cls, path):
         with open(path, "r") as file:
