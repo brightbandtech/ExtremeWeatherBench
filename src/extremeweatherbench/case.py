@@ -30,6 +30,7 @@ class IndividualCase:
     """
 
     id: int
+    title: str
     start_date: datetime.date
     end_date: datetime.date
     location: dict
