@@ -60,8 +60,8 @@ def is_jja(month: int):
 
 def is_6_hourly(hour: int):
     """Check if an hour is evenly divisible by 6."""
-    # return (hour == 0) | (hour == 6) | (hour == 12) | (hour == 18)
-    return (hour % 6) == 0 and (hour >= 0) and (hour <= 18)
+    return (hour == 0) | (hour == 6) | (hour == 12) | (hour == 18)
+    # return (hour % 6) == 0 and (hour >= 0) and (hour <= 18)
 
 
 def clip_dataset_to_bounding_box(
