@@ -56,12 +56,12 @@ class RegionalRMSE(Metric):
 
     def compute(self, forecast: xr.Dataset, observation: xr.Dataset):
         rmse_values = []
+        print(forecast)
+        print(observation)
         for fhour in forecast.fhour:
             forecast_values = forecast.sel(fhour=fhour)
-            observation_values = observation.sel(fhour=fhour)
-            rmse = mean_squared_error(
-                observation_values, forecast_values, squared=False
-            )
+
+            rmse = mean_squared_error(observation, forecast_values, squared=False)
             rmse_values.append(rmse)
 
         rmse_dataarray = xr.DataArray(
