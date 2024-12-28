@@ -8,8 +8,9 @@ from typing import Optional
 import logging
 import pandas as pd
 import xarray as xr
-from importlib import resources
 from extremeweatherbench import config, events, case, utils
+import dacite
+import yaml
 
 #: Default mapping for forecast dataset schema.
 DEFAULT_FORECAST_SCHEMA_CONFIG = config.ForecastSchemaConfig()
@@ -42,10 +43,10 @@ def evaluate(
     base_dir = os.path.dirname(os.path.abspath(__file__))
     events_file_path = os.path.join(base_dir, "../../assets/data/events.yaml")
     all_results = {}
-
+    with open(events_file_path, "r") as file:
+        yaml_event_case = yaml.safe_load(file)
     for event in eval_config.event_types:
-        event_runner = event(path=events_file_path)
-        # cases = event.from_yaml(events_file_path)
+        cases = dacite.from_dict(data_class=event, data=yaml_event_case)
         if dry_run:  # temporary validation for the cases
             return cases
         else:
@@ -60,7 +61,7 @@ def evaluate(
 
 
 def _evaluate_cases_loop(
-    event: events.Event,
+    event: events.EventContainer,
     forecast_dataset: xr.Dataset,
     gridded_obs: Optional[xr.Dataset] = None,
     point_obs: Optional[pd.DataFrame] = None,
@@ -79,10 +80,10 @@ def _evaluate_cases_loop(
     """
     results = []
     for individual_case in event.cases:
+        case_event_type = individual_case.get_event_specific_case_type()
         results.append(
             _evaluate_case(
-                individual_case,
-                event.metrics,
+                case_event_type,
                 forecast_dataset,
                 gridded_obs,
                 point_obs,
@@ -93,12 +94,11 @@ def _evaluate_cases_loop(
 
 def _evaluate_case(
     individual_case: case.IndividualCase,
-    metrics: list,
-    forecast_dataset,
-    gridded_obs,
-    point_obs,
+    forecast_dataset: xr.Dataset,
+    gridded_obs: xr.Dataset,
+    point_obs: pd.DataFrame,
 ) -> xr.Dataset:
-    """Evalaute a single case given forecast data and observations.
+    """Evaluate a single case given forecast data and observations.
 
     Args:
         individual_case: A configuration object defining the case to evaluate.
@@ -111,14 +111,17 @@ def _evaluate_case(
     """
     # Each case has a unique region and event type which can be
     # assessed here.
-
-    # TODO(taylor): Implement the actual evaluation logic here.
+    forecast_dataset = individual_case.perform_subsetting_procedure(forecast_dataset)
     if point_obs is not None:
         pass
     if gridded_obs is not None:
-        for metric in metrics:
+        data_vars = {}
+        gridded_obs = individual_case.perform_subsetting_procedure(gridded_obs)
+        for metric in individual_case.metrics_list:
             result = metric.compute(forecast_dataset, gridded_obs)
-            return result
+            data_vars[metric.name] = result
+
+        return xr.Dataset(data_vars)
 
 
 # TODO simplify to one paradigm, don't use nc, zarr, AND json

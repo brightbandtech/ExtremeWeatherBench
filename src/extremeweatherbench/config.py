@@ -34,13 +34,11 @@ class Config:
             analysis. Defaults to "False".
     """
 
+    event_types: List[events.EventContainer]
     output_dir: str = DEFAULT_OUTPUT_DIR
     forecast_dir: str = DEFAULT_FORECAST_DIR
     gridded_obs_path: str = ARCO_ERA5_FULL_URI
     point_obs_path: Optional[str] = None
-    event_types: List[events.Event] = dataclasses.field(
-        default_factory=lambda: [events.HeatWave(), events.Freeze()]
-    )
     cache: bool = False
 
 
