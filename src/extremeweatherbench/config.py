@@ -51,8 +51,7 @@ class ForecastSchemaConfig:
     in a forecast dataset.
 
     Allows users to insert custom schemas for decoding forecast data. Defaults are
-    suggested based on the CIRA AI model schema (https://aiweather.cira.colostate.edu), which
-    uses a variant of standard WMO GRIB2 paramIds.
+    suggested based on the CF Conventions.
     """
 
     # TODO(daniel): Strongly suggest converting to use either CF Standard Names (https://cfconventions.org/Data/cf-standard-names/current/build/cf-standard-name-table.html)
