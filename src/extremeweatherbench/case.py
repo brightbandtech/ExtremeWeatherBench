@@ -4,8 +4,8 @@ Some code similarly structured to WeatherBench (Rasp et al.)."""
 import dataclasses
 import datetime
 from extremeweatherbench.utils import Location
-from typing import List, Optional, Dict, Type, Callable
-from extremeweatherbench import metrics, utils, config
+from typing import List, Optional, Dict, Type
+from extremeweatherbench import metrics, utils
 import xarray as xr
 
 
