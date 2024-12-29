@@ -3,7 +3,7 @@ Logic for the dataclasses here largely to handle the logic of parsing the events
 
 import dataclasses
 from typing import List
-from extremeweatherbench import case, metrics
+from extremeweatherbench import case
 
 # TODO(taylor): Cache in a bucket in brightband-public project and link here.
 CLIMATOLOGY_LINK = "/home/taylor/data/era5_2m_temperature_85th_by_hour_dayofyear.zarr"
