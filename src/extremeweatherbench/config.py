@@ -58,7 +58,7 @@ class ForecastSchemaConfig:
     # TODO(daniel): Strongly suggest converting to use either CF Standard Names (https://cfconventions.org/Data/cf-standard-names/current/build/cf-standard-name-table.html)
     # or WMO GRIB2 "Name" values (first column in https://codes.ecmwf.int/grib/param-db/)
     # as these are far less ambiguous.
-    t2: Optional[str] = "t2"
+    air_temperature: Optional[str] = "t2"
     u10: Optional[str] = "u10"
     v10: Optional[str] = "v10"
     msl: Optional[str] = "msl"
