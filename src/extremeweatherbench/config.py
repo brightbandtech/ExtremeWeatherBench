@@ -59,10 +59,10 @@ class ForecastSchemaConfig:
     # or WMO GRIB2 "Name" values (first column in https://codes.ecmwf.int/grib/param-db/)
     # as these are far less ambiguous.
     air_temperature: Optional[str] = "t2"
-    u10: Optional[str] = "u10"
-    v10: Optional[str] = "v10"
-    msl: Optional[str] = "msl"
-    q: Optional[str] = "q"
+    eastward_wind: Optional[str] = "u10"
+    northward_wind: Optional[str] = "v10"
+    air_pressure_at_mean_sea_level: Optional[str] = "msl"
+    specific_humidity: Optional[str] = "q"
     time: Optional[str] = "time"
     init_time: Optional[str] = "init_time"
     fhour: Optional[str] = "fhour"

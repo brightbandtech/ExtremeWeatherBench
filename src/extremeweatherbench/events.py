@@ -1,4 +1,5 @@
-"""Definitions for different type of extreme weather Events for analysis."""
+"""Definitions for different type of extreme weather Events for analysis.
+Logic for the dataclasses here largely to handle the logic of parsing the events."""
 
 import dataclasses
 from typing import List
