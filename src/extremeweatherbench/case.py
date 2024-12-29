@@ -69,7 +69,6 @@ class IndividualCase:
     bounding_box_km: int
     event_type: str
     cross_listed: Optional[List[str]] = None
-    data_vars: Optional[config.ForecastSchemaConfig] = None
 
     def __post_init__(self):
         if isinstance(self.location, dict):
@@ -91,7 +90,18 @@ class IndividualCase:
             dataset: xr.Dataset: The input dataset to subset.
 
         Returns:
-            xr.Dataset: The subsetted dataset.
+            xr.Dataset: The subset dataset.
+        """
+        raise NotImplementedError
+
+    def subset_data_vars(self, dataset):
+        """Subset the input dataset to only include the variables specified in data_vars.
+
+        Args:
+            dataset: xr.Dataset: The input dataset to subset.
+
+        Returns:
+            xr.Dataset: The subset dataset.
         """
         raise NotImplementedError
 
@@ -104,7 +114,7 @@ class IndividualHeatWaveCase(IndividualCase):
     provide additional metadata specific to heat wave events.
 
     Attributes:
-        heat_wave_type: str: A string representing the type of heat wave event.
+        metrics_list: A list of Metrics to be used in the evaluation
     """
 
     metrics_list: List[metrics.Metric] = dataclasses.field(
@@ -120,6 +130,20 @@ class IndividualHeatWaveCase(IndividualCase):
         )
         modified_ds = utils.remove_ocean_gridpoints(modified_ds)
         return modified_ds
+
+    def subset_data_vars(self, dataset: xr.Dataset) -> xr.Dataset:
+        """Subset the input dataset to only include the variables specified in data_vars.
+
+        Args:
+            dataset: xr.Dataset: The input dataset to subset.
+            data_vars: the variables within the ForecastSchemaConfig to subset.
+
+        Returns:
+            xr.Dataset: The subset dataset.
+        """
+        if self.data_vars is not None:
+            return dataset[self.data_vars.__dict__.values()]
+        return dataset
 
 
 @dataclasses.dataclass
@@ -144,3 +168,16 @@ class IndividualFreezeCase(IndividualCase):
             dataset, self.location, self.bounding_box_km
         )
         return modified_ds
+
+    def subset_data_vars(self, dataset: xr.Dataset) -> xr.Dataset:
+        """Subset the input dataset to only include the variables specified in data_vars.
+
+        Args:
+            dataset: xr.Dataset: The input dataset to subset.
+            data_vars: the variables within the ForecastSchemaConfig to subset.
+        Returns:
+            xr.Dataset: The subset dataset.
+        """
+        if self.data_vars is not None:
+            return dataset[self.data_vars.__dict__.values()]
+        return dataset
