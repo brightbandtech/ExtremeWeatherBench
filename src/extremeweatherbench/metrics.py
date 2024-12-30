@@ -54,6 +54,8 @@ class RegionalRMSE(Metric):
     """Root mean squared error of a regional forecast evalauted against observations."""
 
     def compute(self, forecast: xr.Dataset, observation: xr.Dataset):
+        print(forecast)
+        print(observation)
         return None
 
 
