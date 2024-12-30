@@ -35,11 +35,13 @@ def evaluate(
         evaluation results for each case within the event type.
     """
 
-    point_obs, gridded_obs = _open_obs_datasets(
-        eval_config
-    )  # TODO: more elegant design approach?
+    # TODO: aligning forecast and obs dataset using more robust method
+    point_obs, gridded_obs = _open_obs_datasets(eval_config)
     forecast_dataset = _open_forecast_dataset(eval_config, forecast_schema_config)
-
+    if gridded_obs:
+        gridded_obs = utils.map_era5_vars_to_forecast(
+            DEFAULT_FORECAST_SCHEMA_CONFIG, forecast_dataset, gridded_obs
+        )
     base_dir = os.path.dirname(os.path.abspath(__file__))
     events_file_path = os.path.join(base_dir, "../../assets/data/events.yaml")
     all_results = {}
@@ -117,8 +119,12 @@ def _evaluate_case(
     if gridded_obs is not None:
         data_vars = {}
         gridded_obs = individual_case.perform_subsetting_procedure(gridded_obs)
+        # Align gridded_obs and forecast_dataset by time
+        gridded_obs, forecast_dataset = xr.align(
+            gridded_obs, forecast_dataset, join="inner"
+        )
         for metric in individual_case.metrics_list:
-            result = metric.compute(forecast_dataset, gridded_obs)
+            result = metric().compute(forecast_dataset, gridded_obs)
             data_vars[metric.name] = result
 
         return xr.Dataset(data_vars)
@@ -158,7 +164,6 @@ def _open_forecast_dataset(
         forecast_dataset = utils._open_kerchunk_zarr_reference_jsons(
             file_list, forecast_schema_config
         )
-
     return forecast_dataset
 
 
@@ -166,9 +171,9 @@ def _open_obs_datasets(eval_config: config.Config):
     """Open the observation datasets specified for evaluation."""
     point_obs = None
     gridded_obs = None
-    if eval_config.point_obs_path is not None:
+    if eval_config.point_obs_path:
         point_obs = pd.read_parquet(eval_config.point_obs_path, chunks="auto")
-    if eval_config.gridded_obs_path is not None:
+    if eval_config.gridded_obs_path:
         gridded_obs = xr.open_zarr(
             eval_config.gridded_obs_path,
             chunks=None,
