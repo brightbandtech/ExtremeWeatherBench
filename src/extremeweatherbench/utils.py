@@ -4,7 +4,7 @@ other specialized package.
 
 import logging
 from typing import Optional, Union
-from collections import namedtuple
+from collections import namedtuple, defaultdict
 import fsspec
 import geopandas as gpd
 import numpy as np
@@ -17,6 +17,18 @@ from shapely.geometry import box
 
 #: Struct packaging latitude/longitude location definitions.
 Location = namedtuple("Location", ["latitude", "longitude"])
+
+ERA5_MAPPING = {
+    "air_temperature": "2m_temperature",
+    "eastward_wind": "10m_u_component_of_wind",
+    "northward_wind": "10m_v_component_of_wind",
+    "air_pressure_at_mean_sea_level": "mean_sea_level_pressure",
+    "specific_humidity": "specific_humidity",
+    "valid_time": "time",
+    "level": "level",
+    "latitude": "latitude",
+    "longitude": "longitude",
+}
 
 
 def convert_longitude_to_360(longitude: float) -> float:
@@ -175,20 +187,16 @@ def _open_kerchunk_zarr_reference_jsons(file_list, forecast_schema_config):
                 pd.to_datetime(ds.attrs["initialization_time"])
             )
         ds[forecast_schema_config.init_time] = model_run_time.astype("datetime64[ns]")
-        fhours = ds[forecast_schema_config.time] - model_run_time
-        fhours = fhours.values / np.timedelta64(1, "h")
-        ds[forecast_schema_config.fhour] = fhours
         ds = ds.set_coords(forecast_schema_config.init_time)
         ds = ds.expand_dims(forecast_schema_config.init_time)
-        for data_vars in ds.data_vars:
-            if forecast_schema_config.time in ds[data_vars].dims:
-                ds[data_vars] = ds[data_vars].swap_dims(
-                    {forecast_schema_config.time: forecast_schema_config.fhour}
-                )
+        for attr in dir(forecast_schema_config):
+            if not attr.startswith("__"):
+                attr_value = getattr(forecast_schema_config, attr)
+                if attr_value in ds.data_vars:
+                    ds = ds.rename({attr_value: attr})
         ds = ds.transpose(
             forecast_schema_config.init_time,
-            forecast_schema_config.time,
-            forecast_schema_config.fhour,
+            forecast_schema_config.valid_time,
             forecast_schema_config.latitude,
             forecast_schema_config.longitude,
             forecast_schema_config.level,
@@ -196,3 +204,14 @@ def _open_kerchunk_zarr_reference_jsons(file_list, forecast_schema_config):
         xarray_datasets.append(ds)
 
     return xr.concat(xarray_datasets, dim=forecast_schema_config.init_time)
+
+
+def map_era5_vars_to_forecast(forecast_schema_config, forecast_dataset, era5_dataset):
+    """Map ERA5 variable names to forecast variable names."""
+    era5_subset_list = []
+    for attr in dir(forecast_schema_config):
+        if not attr.startswith("__"):
+            if attr in forecast_dataset.data_vars:
+                era5_dataset = era5_dataset.rename({ERA5_MAPPING[attr]: attr})
+                era5_subset_list.append(attr)
+    return era5_dataset[era5_subset_list]

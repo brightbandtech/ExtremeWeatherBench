@@ -120,18 +120,21 @@ class IndividualHeatWaveCase(IndividualCase):
     metrics_list: List[metrics.Metric] = dataclasses.field(
         default_factory=lambda: [metrics.RegionalRMSE]
     )
+    data_vars: List[str] = dataclasses.field(
+        default_factory=lambda: ["air_temperature"]
+    )
 
     def perform_subsetting_procedure(self, dataset) -> xr.Dataset:
         modified_ds = dataset.sel(time=slice(self.start_date, self.end_date))
-        print(modified_ds)
-        modified_ds = utils.convert_longitude_to_180(dataset)
+        modified_ds = self._subset_data_vars(modified_ds)
+        modified_ds = utils.convert_longitude_to_180(modified_ds)
         modified_ds = utils.clip_dataset_to_bounding_box(
             modified_ds, self.location, self.bounding_box_km
         )
         modified_ds = utils.remove_ocean_gridpoints(modified_ds)
         return modified_ds
 
-    def subset_data_vars(self, dataset: xr.Dataset) -> xr.Dataset:
+    def _subset_data_vars(self, dataset: xr.Dataset) -> xr.Dataset:
         """Subset the input dataset to only include the variables specified in data_vars.
 
         Args:
@@ -142,7 +145,7 @@ class IndividualHeatWaveCase(IndividualCase):
             xr.Dataset: The subset dataset.
         """
         if self.data_vars is not None:
-            return dataset[self.data_vars.__dict__.values()]
+            return dataset[self.data_vars]
         return dataset
 
 
@@ -159,6 +162,9 @@ class IndividualFreezeCase(IndividualCase):
 
     metrics_list: List[metrics.Metric] = dataclasses.field(
         default_factory=lambda: [metrics.RegionalRMSE]
+    )
+    data_vars: List[str] = dataclasses.field(
+        default_factory=lambda: ["air_temperature", "eastward_wind", "northward_wind"]
     )
 
     def perform_subsetting_procedure(self, dataset) -> xr.Dataset:
@@ -179,5 +185,5 @@ class IndividualFreezeCase(IndividualCase):
             xr.Dataset: The subset dataset.
         """
         if self.data_vars is not None:
-            return dataset[self.data_vars.__dict__.values()]
+            return dataset[self.data_vars]
         return dataset
