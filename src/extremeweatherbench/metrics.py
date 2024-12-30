@@ -3,7 +3,6 @@ import dataclasses
 import numpy as np
 import xarray as xr
 from extremeweatherbench import utils
-from sklearn.metrics import mean_squared_error
 
 # TODO: get permissions to upload this to bb bucket
 T2M_85TH_PERCENTILE_CLIMATOLOGY_PATH = (
@@ -55,19 +54,7 @@ class RegionalRMSE(Metric):
     """Root mean squared error of a regional forecast evalauted against observations."""
 
     def compute(self, forecast: xr.Dataset, observation: xr.Dataset):
-        rmse_values = []
-        print(forecast)
-        print(observation)
-        for fhour in forecast.fhour:
-            forecast_values = forecast.sel(fhour=fhour)
-
-            rmse = mean_squared_error(observation, forecast_values, squared=False)
-            rmse_values.append(rmse)
-
-        rmse_dataarray = xr.DataArray(
-            rmse_values, coords=[forecast.fhour], dims=["fhour"], name="rmse"
-        )
-        return rmse_dataarray
+        return None
 
 
 @dataclasses.dataclass
