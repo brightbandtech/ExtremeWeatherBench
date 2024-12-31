@@ -2,7 +2,7 @@
 Logic for the dataclasses here largely to handle the logic of parsing the events."""
 
 import dataclasses
-from typing import List
+from typing import List, Optional
 from extremeweatherbench import case
 
 # TODO(taylor): Cache in a bucket in brightband-public project and link here.
@@ -17,10 +17,11 @@ class EventContainer:
     """
 
     cases: List[case.IndividualCase]
+    event_type: Optional[str] = None
 
     def subset_cases(self, subset) -> List[case.IndividualCase]:
         """Subset all IndividualCases inside EventContainer where _case_event_type is a specific type."""
-
+        assert self.event_type is not None, "Event type must be defined."
         return [
             case.get_case_event_dataclass(c.event_type)(**dataclasses.asdict(c))
             for c in self.cases
