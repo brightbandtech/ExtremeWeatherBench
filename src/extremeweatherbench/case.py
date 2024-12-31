@@ -7,35 +7,7 @@ from extremeweatherbench.utils import Location
 from typing import List, Optional, Dict, Type
 from extremeweatherbench import metrics, utils
 import xarray as xr
-
-
-@dataclasses.dataclass
-class CaseEventTypeMatcher:
-    """A container for defining a mapping between event types and their corresponding
-    case study classes.
-
-    Attributes:
-
-    """
-
-    mapping: Dict[str, Type] = dataclasses.field(default_factory=dict)
-
-    def __post_init__(self):
-        # Automatically populate the mapping with string -> child dataclass pairs
-        self.mapping = {
-            "heat_wave": IndividualHeatWaveCase,
-            "freeze": IndividualFreezeCase,
-        }
-
-    def get_dataclass(self, key: str):
-        """
-        Retrieve an instance of the corresponding dataclass based on the key.
-        kwargs will be passed to the constructor of the dataclass.
-        """
-        dataclass_type = self.mapping.get(key)
-        if dataclass_type is None:
-            raise ValueError(f"No mapping found for key '{key}'")
-        return dataclass_type
+from enum import StrEnum
 
 
 @dataclasses.dataclass
@@ -66,7 +38,7 @@ class IndividualCase:
     start_date: datetime.date
     end_date: datetime.date
     location: dict
-    bounding_box_km: int
+    bounding_box_km: float
     event_type: str
     cross_listed: Optional[List[str]] = None
 
@@ -74,13 +46,7 @@ class IndividualCase:
         if isinstance(self.location, dict):
             self.location = Location(**self.location)
 
-    def get_event_specific_case_type(self):
-        mapping = CaseEventTypeMatcher()
-        _case_event_type = mapping.get_dataclass(self.event_type)
-
-        return _case_event_type(**vars(self))
-
-    def perform_subsetting_procedure(self, dataset) -> xr.Dataset:
+    def perform_subsetting_procedure(self, dataset: xr.Dataset) -> xr.Dataset:
         """Perform any necessary subsetting procedures on the input dataset.
 
         This method is designed to be overridden by subclasses to provide custom
@@ -124,7 +90,7 @@ class IndividualHeatWaveCase(IndividualCase):
         default_factory=lambda: ["air_temperature"]
     )
 
-    def perform_subsetting_procedure(self, dataset) -> xr.Dataset:
+    def perform_subsetting_procedure(self, dataset: xr.Dataset) -> xr.Dataset:
         modified_ds = dataset.sel(time=slice(self.start_date, self.end_date))
         modified_ds = self._subset_data_vars(modified_ds)
         modified_ds = utils.convert_longitude_to_180(modified_ds)
@@ -187,3 +153,22 @@ class IndividualFreezeCase(IndividualCase):
         if self.data_vars is not None:
             return dataset[self.data_vars]
         return dataset
+
+
+@dataclasses.dataclass
+class CaseEventType(StrEnum):
+    HEAT_WAVE = "heat_wave"
+    FREEZE = "freeze"
+
+
+CASE_EVENT_TYPE_MATCHER: dict[CaseEventType, IndividualCase] = {
+    CaseEventType.HEAT_WAVE: IndividualHeatWaveCase,
+    CaseEventType.FREEZE: IndividualFreezeCase,
+}
+
+
+def get_case_event_dataclass(case_type: str) -> IndividualCase:
+    event_dataclass = CASE_EVENT_TYPE_MATCHER.get(case_type)
+    if event_dataclass is None:
+        raise ValueError(f"Unknown case event type {case_type}")
+    return event_dataclass
