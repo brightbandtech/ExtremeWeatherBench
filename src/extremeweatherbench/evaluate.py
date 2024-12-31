@@ -82,7 +82,7 @@ def _evaluate_cases_loop(
     """
     results = []
     for individual_case in event.cases:
-        case_event_type = individual_case.get_event_specific_case_type()
+        case_event_type = case.get_case_event_dataclass(individual_case.event_type)
         results.append(
             _evaluate_case(
                 case_event_type,
