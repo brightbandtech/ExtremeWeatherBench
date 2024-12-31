@@ -31,7 +31,8 @@ class HeatWave(EventContainer):
 
     def subset_heatwave_cases(self) -> List[case.IndividualHeatWaveCase]:
         """Subset all IndividualCases inside EventContainer where _case_event_type is IndividualHeatWaveCase."""
-        return [c for c in self.cases if "heat_wave" in c.event_type]
+
+        return [case.get_case_event_dataclass(c.event_type) for c in self.cases]
 
 
 @dataclasses.dataclass
@@ -46,4 +47,4 @@ class Freeze(EventContainer):
 
     def subset_freeze_cases(self) -> List[case.IndividualFreezeCase]:
         """Subset all IndividualCases inside EventContainer where _case_event_type is IndividualFreezeCase."""
-        return [c for c in self.cases if "freeze" in c.event_type]
+        return [case.get_case_event_dataclass(c.event_type) for c in self.cases]
