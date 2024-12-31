@@ -47,6 +47,7 @@ def evaluate(
     all_results = {}
     with open(events_file_path, "r") as file:
         yaml_event_case = yaml.safe_load(file)
+
     for event in eval_config.event_types:
         cases = dacite.from_dict(data_class=event, data=yaml_event_case)
         if dry_run:  # temporary validation for the cases
@@ -82,10 +83,9 @@ def _evaluate_cases_loop(
     """
     results = []
     for individual_case in event.cases:
-        case_event_type = case.get_case_event_dataclass(individual_case.event_type)
         results.append(
             _evaluate_case(
-                case_event_type,
+                individual_case,
                 forecast_dataset,
                 gridded_obs,
                 point_obs,
