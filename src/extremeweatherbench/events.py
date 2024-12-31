@@ -18,6 +18,18 @@ class EventContainer:
 
     cases: List[case.IndividualCase]
 
+    def subset_cases(self, subset) -> List[case.IndividualCase]:
+        """Subset all IndividualCases inside EventContainer where _case_event_type is a specific type."""
+
+        return [
+            case.get_case_event_dataclass(c.event_type)(**dataclasses.asdict(c))
+            for c in self.cases
+            if subset in c.event_type
+        ]
+
+    def __post_init__(self):
+        self.cases = self.subset_cases(self.event_type)
+
 
 @dataclasses.dataclass
 class HeatWave(EventContainer):
@@ -26,13 +38,7 @@ class HeatWave(EventContainer):
         cases: A list of cases that is defined by events.yaml
     """
 
-    def __post_init__(self):
-        self.cases = self.subset_heatwave_cases()
-
-    def subset_heatwave_cases(self) -> List[case.IndividualHeatWaveCase]:
-        """Subset all IndividualCases inside EventContainer where _case_event_type is IndividualHeatWaveCase."""
-
-        return [case.get_case_event_dataclass(c.event_type) for c in self.cases]
+    event_type: str = "heat_wave"
 
 
 @dataclasses.dataclass
@@ -42,9 +48,4 @@ class Freeze(EventContainer):
         cases: A list of cases that is defined by events.yaml
     """
 
-    def __post_init__(self):
-        self.cases = self.subset_freeze_cases()
-
-    def subset_freeze_cases(self) -> List[case.IndividualFreezeCase]:
-        """Subset all IndividualCases inside EventContainer where _case_event_type is IndividualFreezeCase."""
-        return [case.get_case_event_dataclass(c.event_type) for c in self.cases]
+    event_type: str = "freeze"
