@@ -189,11 +189,10 @@ def _open_kerchunk_zarr_reference_jsons(file_list, forecast_schema_config):
         ds[forecast_schema_config.init_time] = model_run_time.astype("datetime64[ns]")
         ds = ds.set_coords(forecast_schema_config.init_time)
         ds = ds.expand_dims(forecast_schema_config.init_time)
-        for attr in dir(forecast_schema_config):
-            if not attr.startswith("__"):
-                attr_value = getattr(forecast_schema_config, attr)
-                if attr_value in ds.data_vars:
-                    ds = ds.rename({attr_value: attr})
+        for variable in forecast_schema_config.__dict__:
+            attr_value = getattr(forecast_schema_config, variable)
+            if attr_value in ds.data_vars:
+                ds = ds.rename({attr_value: variable})
         ds = ds.transpose(
             forecast_schema_config.init_time,
             forecast_schema_config.valid_time,
@@ -209,9 +208,8 @@ def _open_kerchunk_zarr_reference_jsons(file_list, forecast_schema_config):
 def map_era5_vars_to_forecast(forecast_schema_config, forecast_dataset, era5_dataset):
     """Map ERA5 variable names to forecast variable names."""
     era5_subset_list = []
-    for attr in dir(forecast_schema_config):
-        if not attr.startswith("__"):
-            if attr in forecast_dataset.data_vars:
-                era5_dataset = era5_dataset.rename({ERA5_MAPPING[attr]: attr})
-                era5_subset_list.append(attr)
+    for variable in forecast_schema_config.__dict__:
+        if variable in forecast_dataset.data_vars:
+            era5_dataset = era5_dataset.rename({ERA5_MAPPING[variable]: variable})
+            era5_subset_list.append(variable)
     return era5_dataset[era5_subset_list]
