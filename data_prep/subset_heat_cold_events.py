@@ -15,15 +15,19 @@ from matplotlib import dates as mdates
 sns.set_theme(style="whitegrid", context="talk")
 
 
-def step_time(
+# TODO: Fix the logic for the climatology to handle year changes
+# (utils.convert_day_yearofday_to_time is not handling year changes)
+# TODO: clean up variable names to match CF conventions
+
+
+def subset_event_and_mask_climatology(
     era5: xr.Dataset,
     climatology: xr.Dataset,
     actual_start_date: pd.Timestamp,
     actual_end_date: pd.Timestamp,
     single_case: case.IndividualCase,
 ):
-    # TODO: clean up variable names to match CF conventions
-    # Recalculate the era5_event and mask with the new window
+    """Calculate the times where regional average of temperature exceeds the climatology."""
     era5_event = era5[["2m_temperature"]].sel(
         time=slice(actual_start_date, actual_end_date)
     )
@@ -55,6 +59,8 @@ def find_heatwave_events(
     single_case: case.IndividualCase,
     plot: bool = True,
 ):
+    """Find the start and end dates of heatwave events, stepping +- 6 hours until
+    < climatology timesteps are located."""
     start_date = pd.to_datetime(single_case.start_date)
     end_date = pd.to_datetime(single_case.end_date)
     location_center = single_case.location
@@ -64,7 +70,7 @@ def find_heatwave_events(
         climatology, np.unique(era5_event.time.dt.year.values)[0]
     ).rename_vars({"2m_temperature": "2m_temperature_85th_percentile"})
 
-    mask, merged_dataset = step_time(
+    mask, merged_dataset = subset_event_and_mask_climatology(
         era5, subset_climatology, start_date, end_date, single_case
     )
     before = True
@@ -86,15 +92,19 @@ def find_heatwave_events(
                 before = False
             else:
                 start_date -= pd.DateOffset(hours=6)
-                mask, merged_dataset, time_based_merged_dataset = step_time(
-                    era5, climatology, start_date, end_date, single_case
+                mask, merged_dataset, time_based_merged_dataset = (
+                    subset_event_and_mask_climatology(
+                        era5, climatology, start_date, end_date, single_case
+                    )
                 )
             if abs(event_end_duration) >= np.timedelta64(6, "h"):
                 after = False
             else:
                 end_date += pd.DateOffset(hours=6)
-                mask, merged_dataset, time_based_merged_dataset = step_time(
-                    era5, climatology, start_date, end_date, single_case
+                mask, merged_dataset, time_based_merged_dataset = (
+                    subset_event_and_mask_climatology(
+                        era5, climatology, start_date, end_date, single_case
+                    )
                 )
         except IndexError:
             print(f"No dates valid for {location_center}, {start_date}, {end_date}")
@@ -103,7 +113,7 @@ def find_heatwave_events(
     start_date -= pd.DateOffset(hours=42)
     end_date += pd.DateOffset(hours=42)
 
-    mask, merged_dataset, time_based_merged_dataset = step_time(
+    mask, merged_dataset, time_based_merged_dataset = subset_event_and_mask_climatology(
         era5, climatology, start_date, end_date, single_case
     )
     if plot:
@@ -120,6 +130,8 @@ def case_plot(
     time_based_merged_dataset: xr.Dataset,
     single_case: case.IndividualCase,
 ):
+    """Plot the max timestep of the heatwave event, the average regional temperature time series,
+    and the associated climatology."""
     fig, (ax1, ax2) = plt.subplots(
         2, 1, figsize=(6, 10), gridspec_kw={"height_ratios": [1, 1]}
     )
