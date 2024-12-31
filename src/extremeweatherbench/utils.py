@@ -18,6 +18,7 @@ from shapely.geometry import box
 #: Struct packaging latitude/longitude location definitions.
 Location = namedtuple("Location", ["latitude", "longitude"])
 
+#: Maps the ARCO ERA5 to CF conventions.
 ERA5_MAPPING = {
     "air_temperature": "2m_temperature",
     "eastward_wind": "10m_u_component_of_wind",
@@ -63,17 +64,6 @@ def generate_json_from_nc(u, so, fs, fs_out, json_dir):
         print(outf)
         with fs_out.open(outf, "wb") as f:
             f.write(ujson.dumps(h5chunks.translate()).encode())
-
-
-def is_jja(month: int):
-    """Check if a month is in the boreal summer season (June, July, August)."""
-    return (month >= 6) & (month <= 8)
-
-
-def is_6_hourly(hour: int):
-    """Check if an hour is evenly divisible by 6."""
-    return (hour == 0) | (hour == 6) | (hour == 12) | (hour == 18)
-    # return (hour % 6) == 0 and (hour >= 0) and (hour <= 18)
 
 
 def clip_dataset_to_bounding_box(
