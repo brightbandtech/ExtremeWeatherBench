@@ -155,7 +155,6 @@ class IndividualFreezeCase(IndividualCase):
         return dataset
 
 
-@dataclasses.dataclass
 class CaseEventType(StrEnum):
     HEAT_WAVE = "heat_wave"
     FREEZE = "freeze"
