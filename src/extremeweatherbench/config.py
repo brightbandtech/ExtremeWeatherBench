@@ -54,9 +54,6 @@ class ForecastSchemaConfig:
     suggested based on the CF Conventions.
     """
 
-    # TODO(daniel): Strongly suggest converting to use either CF Standard Names (https://cfconventions.org/Data/cf-standard-names/current/build/cf-standard-name-table.html)
-    # or WMO GRIB2 "Name" values (first column in https://codes.ecmwf.int/grib/param-db/)
-    # as these are far less ambiguous.
     air_temperature: Optional[str] = "t2"
     eastward_wind: Optional[str] = "u10"
     northward_wind: Optional[str] = "v10"
