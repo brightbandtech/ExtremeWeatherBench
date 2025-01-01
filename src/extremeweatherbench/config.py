@@ -34,13 +34,11 @@ class Config:
             analysis. Defaults to "False".
     """
 
+    event_types: List[events.EventContainer]
     output_dir: str = DEFAULT_OUTPUT_DIR
     forecast_dir: str = DEFAULT_FORECAST_DIR
     gridded_obs_path: str = ARCO_ERA5_FULL_URI
     point_obs_path: Optional[str] = None
-    event_types: List[events.Event] = dataclasses.field(
-        default_factory=lambda: [events.HeatWave(), events.Freeze()]
-    )
     cache: bool = False
 
 
@@ -53,19 +51,14 @@ class ForecastSchemaConfig:
     in a forecast dataset.
 
     Allows users to insert custom schemas for decoding forecast data. Defaults are
-    suggested based on the CIRA AI model schema (https://aiweather.cira.colostate.edu), which
-    uses a variant of standard WMO GRIB2 paramIds.
+    suggested based on the CF Conventions.
     """
 
-    # TODO(daniel): Strongly suggest converting to use either CF Standard Names (https://cfconventions.org/Data/cf-standard-names/current/build/cf-standard-name-table.html)
-    # or WMO GRIB2 "Name" values (first column in https://codes.ecmwf.int/grib/param-db/)
-    # as these are far less ambiguous.
-    t2: Optional[str] = "t2"
-    u10: Optional[str] = "u10"
-    v10: Optional[str] = "v10"
-    msl: Optional[str] = "msl"
-    q: Optional[str] = "q"
-    time: Optional[str] = "time"
+    air_temperature: Optional[str] = "t2"
+    eastward_wind: Optional[str] = "u10"
+    northward_wind: Optional[str] = "v10"
+    air_pressure_at_mean_sea_level: Optional[str] = "msl"
+    valid_time: Optional[str] = "time"
     init_time: Optional[str] = "init_time"
     fhour: Optional[str] = "fhour"
     level: Optional[str] = "level"

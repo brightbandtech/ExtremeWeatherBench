@@ -8,8 +8,9 @@ from typing import Optional
 import logging
 import pandas as pd
 import xarray as xr
-from importlib import resources
 from extremeweatherbench import config, events, case, utils
+import dacite
+import yaml
 
 #: Default mapping for forecast dataset schema.
 DEFAULT_FORECAST_SCHEMA_CONFIG = config.ForecastSchemaConfig()
@@ -34,17 +35,21 @@ def evaluate(
         evaluation results for each case within the event type.
     """
 
-    point_obs, gridded_obs = _open_obs_datasets(
-        eval_config
-    )  # TODO: more elegant design approach?
+    # TODO: aligning forecast and obs dataset using more robust method
+    point_obs, gridded_obs = _open_obs_datasets(eval_config)
     forecast_dataset = _open_forecast_dataset(eval_config, forecast_schema_config)
-
+    if gridded_obs:
+        gridded_obs = utils.map_era5_vars_to_forecast(
+            DEFAULT_FORECAST_SCHEMA_CONFIG, forecast_dataset, gridded_obs
+        )
     base_dir = os.path.dirname(os.path.abspath(__file__))
     events_file_path = os.path.join(base_dir, "../../assets/data/events.yaml")
     all_results = {}
+    with open(events_file_path, "r") as file:
+        yaml_event_case = yaml.safe_load(file)
+
     for event in eval_config.event_types:
-        cases = event.from_yaml(events_file_path)
-        cases.build_metrics()
+        cases = dacite.from_dict(data_class=event, data=yaml_event_case)
         if dry_run:  # temporary validation for the cases
             return cases
         else:
@@ -59,7 +64,7 @@ def evaluate(
 
 
 def _evaluate_cases_loop(
-    event: events.Event,
+    event: events.EventContainer,
     forecast_dataset: xr.Dataset,
     gridded_obs: Optional[xr.Dataset] = None,
     point_obs: Optional[pd.DataFrame] = None,
@@ -81,7 +86,6 @@ def _evaluate_cases_loop(
         results.append(
             _evaluate_case(
                 individual_case,
-                event.metrics,
                 forecast_dataset,
                 gridded_obs,
                 point_obs,
@@ -92,12 +96,11 @@ def _evaluate_cases_loop(
 
 def _evaluate_case(
     individual_case: case.IndividualCase,
-    metrics: list,
-    forecast_dataset,
-    gridded_obs,
-    point_obs,
+    forecast_dataset: xr.Dataset,
+    gridded_obs: xr.Dataset,
+    point_obs: pd.DataFrame,
 ) -> xr.Dataset:
-    """Evalaute a single case given forecast data and observations.
+    """Evaluate a single case given forecast data and observations.
 
     Args:
         individual_case: A configuration object defining the case to evaluate.
@@ -110,14 +113,21 @@ def _evaluate_case(
     """
     # Each case has a unique region and event type which can be
     # assessed here.
-
-    # TODO(taylor): Implement the actual evaluation logic here.
+    forecast_dataset = individual_case.perform_subsetting_procedure(forecast_dataset)
     if point_obs is not None:
         pass
     if gridded_obs is not None:
-        for metric in metrics:
-            result = metric.compute(forecast_dataset, gridded_obs)
-            return result
+        data_vars = {}
+        gridded_obs = individual_case.perform_subsetting_procedure(gridded_obs)
+        # Align gridded_obs and forecast_dataset by time
+        gridded_obs, forecast_dataset = xr.align(
+            gridded_obs, forecast_dataset, join="inner"
+        )
+        for metric in individual_case.metrics_list:
+            result = metric().compute(forecast_dataset, gridded_obs)
+            data_vars[metric.name] = result
+
+        return xr.Dataset(data_vars)
 
 
 # TODO simplify to one paradigm, don't use nc, zarr, AND json
@@ -154,7 +164,6 @@ def _open_forecast_dataset(
         forecast_dataset = utils._open_kerchunk_zarr_reference_jsons(
             file_list, forecast_schema_config
         )
-
     return forecast_dataset
 
 
@@ -162,9 +171,9 @@ def _open_obs_datasets(eval_config: config.Config):
     """Open the observation datasets specified for evaluation."""
     point_obs = None
     gridded_obs = None
-    if eval_config.point_obs_path is not None:
+    if eval_config.point_obs_path:
         point_obs = pd.read_parquet(eval_config.point_obs_path, chunks="auto")
-    if eval_config.gridded_obs_path is not None:
+    if eval_config.gridded_obs_path:
         gridded_obs = xr.open_zarr(
             eval_config.gridded_obs_path,
             chunks=None,
