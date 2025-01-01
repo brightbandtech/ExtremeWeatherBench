@@ -1,4 +1,4 @@
-# Pull Request Template
+# EWB Pull Request
 
 ## Description
 
