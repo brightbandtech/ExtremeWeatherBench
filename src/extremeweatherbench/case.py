@@ -155,7 +155,13 @@ class IndividualFreezeCase(IndividualCase):
         return dataset
 
 
+# maps the case event type to the corresponding dataclass
+# additional event types need to be added here and
+# CASE_EVENT_TYPE_MATCHER, which maps the metadata case event type
+# to the corresponding case dataclass.
 class CaseEventType(StrEnum):
+    """Enum class for the different types of extreme weather events."""
+
     HEAT_WAVE = "heat_wave"
     FREEZE = "freeze"
 
