@@ -105,17 +105,19 @@ class IndividualCase:
         valid_time_len = len(forecast_dataset.time)
 
         if valid_time_len == 0:
-            logger.warning(f"No forecast data available for case {self.id}, skipping")
+            logger.warning("No forecast data available for case %s, skipping", self.id)
             return False
         elif valid_time_len < (self.end_date - self.start_date).days:
             logger.warning(
-                f"Fewer valid times in forecast than days in case {self.id}, results likely unreliable"
+                "Fewer valid times in forecast than days in case %s, results likely unreliable",
+                self.id,
             )
         else:
-            logger.info(f"Forecast data available for case {self.id}")
-        logger.info(f"Lead time length for case {self.id}: {lead_time_len}")
+            logger.info("Forecast data available for case %s", self.id)
+        logger.info("Lead time length for case %s: %s", self.id, lead_time_len)
         logger.info(
-            f"Total time step count (valid times by forecasr hour) for case: {lead_time_len*valid_time_len}"
+            "Total time step count (valid times by forecasr hour) for case: %s",
+            lead_time_len * valid_time_len,
         )
         return True
 
