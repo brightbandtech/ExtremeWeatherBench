@@ -111,13 +111,15 @@ def _evaluate_case(
     Returns:
         An xarray Dataset containing the evaluation results for the case.
     """
-    # Each case has a unique region and event type which can be
-    # assessed here.
-    forecast_dataset = individual_case.perform_subsetting_procedure(forecast_dataset)
+    time_subset_forecast_ds = individual_case.subset_valid_times(forecast_dataset)
 
     # Check if forecast data is available for the case, if not, return None
     forecast_exist_bool = individual_case.check_for_forecast_data_availability(
-        forecast_dataset
+        time_subset_forecast_ds
+    )
+    # Each event type has a unique subsetting procedure
+    spatiotemporal_subset_ds = individual_case.perform_subsetting_procedure(
+        time_subset_forecast_ds
     )
     if not forecast_exist_bool:
         return None
@@ -125,13 +127,18 @@ def _evaluate_case(
         pass
     if gridded_obs is not None:
         data_vars = {}
-        gridded_obs = individual_case.perform_subsetting_procedure(gridded_obs)
+        time_subset_gridded_obs_ds = individual_case.subset_valid_times(gridded_obs)
+        gridded_obs = individual_case.perform_subsetting_procedure(
+            time_subset_gridded_obs_ds
+        )
         # Align gridded_obs and forecast_dataset by time
-        gridded_obs, forecast_dataset = xr.align(
-            gridded_obs, forecast_dataset, join="inner"
+        time_subset_gridded_obs_ds, spatiotemporal_subset_ds = xr.align(
+            time_subset_gridded_obs_ds, spatiotemporal_subset_ds, join="inner"
         )
         for metric in individual_case.metrics_list:
-            result = metric().compute(forecast_dataset, gridded_obs)
+            result = metric().compute(
+                spatiotemporal_subset_ds, time_subset_gridded_obs_ds
+            )
             data_vars[metric.name] = result
 
         return xr.Dataset(data_vars)
@@ -171,6 +178,7 @@ def _open_forecast_dataset(
         forecast_dataset = utils._open_kerchunk_zarr_reference_jsons(
             file_list, forecast_schema_config
         )
+    forecast_dataset = utils.convert_longitude_to_180(forecast_dataset)
     return forecast_dataset
 
 
@@ -186,6 +194,8 @@ def _open_obs_datasets(eval_config: config.Config):
             chunks=None,
             storage_options=dict(token="anon"),
         )
+        gridded_obs = utils.convert_longitude_to_180(gridded_obs)
+
     if point_obs is None and gridded_obs is None:
         raise ValueError("No grided or point observation data provided.")
     return point_obs, gridded_obs

@@ -74,6 +74,17 @@ class IndividualCase:
             return dataset[self.data_vars]
         return dataset
 
+    def subset_valid_times(self, dataset: xr.Dataset) -> xr.Dataset:
+        """Subset the input dataset to only include the valid times within the case period.
+        Args:
+            dataset: xr.Dataset: The input dataset to subset.
+
+        Returns:
+            xr.Dataset: The subset dataset.
+        """
+        time_subset_ds = dataset.sel(time=slice(self.start_date, self.end_date))
+        return time_subset_ds
+
     def check_for_forecast_data_availability(
         self,
         forecast_dataset: xr.Dataset,
@@ -87,13 +98,21 @@ class IndividualCase:
         Returns:
             True if the datasets have overlapping time periods, False otherwise.
         """
-        if len(forecast_dataset.time) == 0:
+        lead_time_len = len(forecast_dataset.init_time)
+        valid_time_len = len(forecast_dataset.time)
+        logging.info(f"Lead time length for case {self.id}: {lead_time_len}")
+        logging.info(
+            f"Total time step count (valid times by forecasr hour) for case: {lead_time_len*valid_time_len}"
+        )
+        if valid_time_len == 0:
             logging.warning(f"No forecast data available for case {self.id}, skipping")
             return False
-        elif len(forecast_dataset.time) < (self.end_date - self.start_date).days:
+        elif valid_time_len < (self.end_date - self.start_date).days:
             logging.warning(
-                f"Fewer valid times in forecast than days in case {self.id}, results may be unreliable"
+                f"Fewer valid times in forecast than days in case {self.id}, results likely unreliable"
             )
+        else:
+            logging.info(f"Forecast data available for case {self.id}")
         return True
 
 
@@ -116,9 +135,7 @@ class IndividualHeatWaveCase(IndividualCase):
     )
 
     def perform_subsetting_procedure(self, dataset: xr.Dataset) -> xr.Dataset:
-        modified_ds = dataset.sel(time=slice(self.start_date, self.end_date))
-        modified_ds = self._subset_data_vars(modified_ds)
-        modified_ds = utils.convert_longitude_to_180(modified_ds)
+        modified_ds = self._subset_data_vars(dataset)
         modified_ds = utils.clip_dataset_to_bounding_box(
             modified_ds, self.location, self.bounding_box_km
         )
@@ -145,8 +162,6 @@ class IndividualFreezeCase(IndividualCase):
     )
 
     def perform_subsetting_procedure(self, dataset) -> xr.Dataset:
-        modified_ds = dataset.sel(time=slice(self.start_date, self.end_date))
-        modified_ds = utils.convert_longitude_to_180(dataset)
         modified_ds = utils.clip_dataset_to_bounding_box(
             dataset, self.location, self.bounding_box_km
         )
