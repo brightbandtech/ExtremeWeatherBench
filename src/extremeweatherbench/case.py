@@ -109,11 +109,11 @@ class IndividualCase:
                 f"Fewer valid times in forecast than days in case {self.id}, results likely unreliable"
             )
         else:
-            logging.info(f"Lead time length for case {self.id}: {lead_time_len}")
-            logging.info(
-                f"Total time step count (valid times by forecasr hour) for case: {lead_time_len*valid_time_len}"
-            )
             logging.info(f"Forecast data available for case {self.id}")
+        logging.info(f"Lead time length for case {self.id}: {lead_time_len}")
+        logging.info(
+            f"Total time step count (valid times by forecasr hour) for case: {lead_time_len*valid_time_len}"
+        )
         return True
 
 
