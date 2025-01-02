@@ -72,9 +72,10 @@ class IndividualCase:
         Returns:
             xr.Dataset: The subset dataset.
         """
+        subset_dataset = dataset.copy()
         if self.data_vars is not None:
-            return dataset[self.data_vars]
-        return dataset
+            subset_dataset = subset_dataset[self.data_vars]
+        return subset_dataset
 
     def subset_valid_times(self, dataset: xr.Dataset) -> xr.Dataset:
         """Subset the input dataset to only include the valid times within the case period.
