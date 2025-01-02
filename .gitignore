@@ -8,3 +8,4 @@ __pycache__/
 wheels/
 .python-version
 .venv
+.ipynb_checkpoints/
