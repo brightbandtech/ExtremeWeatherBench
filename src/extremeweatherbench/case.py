@@ -77,7 +77,7 @@ class IndividualCase:
             subset_dataset = subset_dataset[self.data_vars]
         return subset_dataset
 
-    def subset_valid_times(self, dataset: xr.Dataset) -> xr.Dataset:
+    def _subset_valid_times(self, dataset: xr.Dataset) -> xr.Dataset:
         """Subset the input dataset to only include the valid times within the case period.
         Args:
             dataset: xr.Dataset: The input dataset to subset.
