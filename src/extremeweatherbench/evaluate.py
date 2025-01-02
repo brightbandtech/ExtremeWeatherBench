@@ -114,6 +114,13 @@ def _evaluate_case(
     # Each case has a unique region and event type which can be
     # assessed here.
     forecast_dataset = individual_case.perform_subsetting_procedure(forecast_dataset)
+
+    # Check if forecast data is available for the case, if not, return None
+    forecast_exist_bool = individual_case.check_for_forecast_data_availability(
+        forecast_dataset
+    )
+    if not forecast_exist_bool:
+        return None
     if point_obs is not None:
         pass
     if gridded_obs is not None:
