@@ -88,7 +88,7 @@ class IndividualCase:
         time_subset_ds = dataset.sel(time=slice(self.start_date, self.end_date))
         return time_subset_ds
 
-    def check_for_forecast_data_availability(
+    def _check_for_forecast_data_availability(
         self,
         forecast_dataset: xr.Dataset,
     ) -> bool:
