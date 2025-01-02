@@ -10,6 +10,8 @@ import xarray as xr
 from enum import StrEnum
 import logging
 
+logger = logging.getLogger(__name__)
+
 
 @dataclasses.dataclass
 class IndividualCase:
@@ -102,16 +104,16 @@ class IndividualCase:
         valid_time_len = len(forecast_dataset.time)
 
         if valid_time_len == 0:
-            logging.warning(f"No forecast data available for case {self.id}, skipping")
+            logger.warning(f"No forecast data available for case {self.id}, skipping")
             return False
         elif valid_time_len < (self.end_date - self.start_date).days:
-            logging.warning(
+            logger.warning(
                 f"Fewer valid times in forecast than days in case {self.id}, results likely unreliable"
             )
         else:
-            logging.info(f"Forecast data available for case {self.id}")
-        logging.info(f"Lead time length for case {self.id}: {lead_time_len}")
-        logging.info(
+            logger.info(f"Forecast data available for case {self.id}")
+        logger.info(f"Lead time length for case {self.id}: {lead_time_len}")
+        logger.info(
             f"Total time step count (valid times by forecasr hour) for case: {lead_time_len*valid_time_len}"
         )
         return True
