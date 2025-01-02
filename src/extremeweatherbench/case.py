@@ -90,6 +90,10 @@ class IndividualCase:
         if len(forecast_dataset.time) == 0:
             logging.warning(f"No forecast data available for case {self.id}, skipping")
             return False
+        elif len(forecast_dataset.time) < (self.end_date - self.start_date).days:
+            logging.warning(
+                f"Fewer valid times in forecast than days in case {self.id}, results may be unreliable"
+            )
         return True
 
 
