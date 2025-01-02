@@ -11,6 +11,7 @@ from enum import StrEnum
 import logging
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 @dataclasses.dataclass
