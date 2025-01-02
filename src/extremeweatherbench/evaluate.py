@@ -111,10 +111,10 @@ def _evaluate_case(
     Returns:
         An xarray Dataset containing the evaluation results for the case.
     """
-    time_subset_forecast_ds = individual_case.subset_valid_times(forecast_dataset)
+    time_subset_forecast_ds = individual_case._subset_valid_times(forecast_dataset)
 
     # Check if forecast data is available for the case, if not, return None
-    forecast_exists = individual_case.check_for_forecast_data_availability(
+    forecast_exists = individual_case._check_for_forecast_data_availability(
         time_subset_forecast_ds
     )
     # Each event type has a unique subsetting procedure
@@ -127,7 +127,7 @@ def _evaluate_case(
         pass
     if gridded_obs is not None:
         data_vars = {}
-        time_subset_gridded_obs_ds = individual_case.subset_valid_times(gridded_obs)
+        time_subset_gridded_obs_ds = individual_case._subset_valid_times(gridded_obs)
         gridded_obs = individual_case.perform_subsetting_procedure(
             time_subset_gridded_obs_ds
         )
