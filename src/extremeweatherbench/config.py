@@ -58,7 +58,7 @@ class ForecastSchemaConfig:
     eastward_wind: Optional[str] = "u10"
     northward_wind: Optional[str] = "v10"
     air_pressure_at_mean_sea_level: Optional[str] = "msl"
-    valid_time: Optional[str] = "time"
+    lead_time: Optional[str] = "time"
     init_time: Optional[str] = "init_time"
     fhour: Optional[str] = "fhour"
     level: Optional[str] = "level"
