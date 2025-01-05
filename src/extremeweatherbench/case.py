@@ -91,6 +91,7 @@ class IndividualHeatWaveCase(IndividualCase):
     )
 
     def perform_subsetting_procedure(self, dataset: xr.Dataset) -> xr.Dataset:
+        breakpoint()
         modified_ds = dataset.sel(time=slice(self.start_date, self.end_date))
         modified_ds = self._subset_data_vars(modified_ds)
         modified_ds = utils.convert_longitude_to_180(modified_ds)
