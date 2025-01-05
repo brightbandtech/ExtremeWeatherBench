@@ -202,16 +202,17 @@ def _open_mlwp_kerchunk_reference_jsons(
 ):
     """Open a dataset from a kerchunked json reference file for the OAR MLWP S3 bucket."""
     json_file = json_file[0]
-    fs_ = fsspec.filesystem(
-        "reference",
-        fo=json_file,
-        ref_storage_args={"skip_instance_cache": True},
-        remote_protocol=remote_protocol,
-        remote_options={"anon": True},
-    )
-    m = fs_.get_mapper("")
     ds = xr.open_dataset(
-        m, engine="zarr", backend_kwargs={"consolidated": False}, chunks="auto"
+        "reference://",
+        engine="zarr",
+        backend_kwargs={
+            "consolidated": False,
+            "storage_options": {
+                "fo": json_file,
+                "remote_protocol": "s3",
+                "remote_options": {"anon": True},
+            },
+        },
     )
     ds = ds.rename({"time": "lead_time"})
     ds["lead_time"] = range(0, 241, 6)
@@ -219,6 +220,15 @@ def _open_mlwp_kerchunk_reference_jsons(
         attr_value = getattr(forecast_schema_config, variable)
         if attr_value in ds.data_vars:
             ds = ds.rename({attr_value: variable})
+        # Step 1: Create a meshgrid of init_time and lead_time
+    init_time_grid, lead_time_grid = np.meshgrid(ds.init_time, ds.lead_time)
+
+    # Step 2: Flatten the meshgrid and convert lead_time to timedelta
+    valid_time = init_time_grid.flatten() + pd.to_timedelta(
+        lead_time_grid.flatten(), unit="h"
+    )
+
+    ds.coords["time"] = valid_time
     return ds
 
 
