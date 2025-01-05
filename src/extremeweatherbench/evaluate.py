@@ -161,7 +161,7 @@ def _open_forecast_dataset(
         raise NotImplementedError("NetCDF file reading not implemented.")
 
     if "json" in file_types:
-        forecast_dataset = utils._open_kerchunk_zarr_reference_jsons(
+        forecast_dataset = utils._open_mlwp_kerchunk_reference_jsons(
             file_list, forecast_schema_config
         )
     return forecast_dataset

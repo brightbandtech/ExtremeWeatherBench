@@ -152,7 +152,9 @@ def remove_ocean_gridpoints(dataset: xr.Dataset) -> xr.Dataset:
     return dataset
 
 
-def _open_kerchunk_zarr_reference_jsons(file_list, forecast_schema_config):
+def _open_kerchunk_zarr_reference_jsons(
+    file_list, forecast_schema_config, remote_protocol: str = "s3"
+):
     """Open a dataset from a list of kerchunk JSON files."""
     xarray_datasets = []
     for json_file in file_list:
@@ -160,7 +162,7 @@ def _open_kerchunk_zarr_reference_jsons(file_list, forecast_schema_config):
             "reference",
             fo=json_file,
             ref_storage_args={"skip_instance_cache": True},
-            remote_protocol="gcs",
+            remote_protocol=remote_protocol,
             remote_options={"anon": True},
         )
         m = fs_.get_mapper("")
@@ -193,6 +195,31 @@ def _open_kerchunk_zarr_reference_jsons(file_list, forecast_schema_config):
         xarray_datasets.append(ds)
 
     return xr.concat(xarray_datasets, dim=forecast_schema_config.init_time)
+
+
+def _open_mlwp_kerchunk_reference_jsons(
+    json_file, forecast_schema_config, remote_protocol: str = "s3"
+):
+    """Open a dataset from a kerchunked json reference file for the OAR MLWP S3 bucket."""
+    json_file = json_file[0]
+    fs_ = fsspec.filesystem(
+        "reference",
+        fo=json_file,
+        ref_storage_args={"skip_instance_cache": True},
+        remote_protocol=remote_protocol,
+        remote_options={"anon": True},
+    )
+    m = fs_.get_mapper("")
+    ds = xr.open_dataset(
+        m, engine="zarr", backend_kwargs={"consolidated": False}, chunks="auto"
+    )
+    ds = ds.rename({"time": "lead_time"})
+    ds["lead_time"] = range(0, 241, 6)
+    for variable in forecast_schema_config.__dict__:
+        attr_value = getattr(forecast_schema_config, variable)
+        if attr_value in ds.data_vars:
+            ds = ds.rename({attr_value: variable})
+    return ds
 
 
 def map_era5_vars_to_forecast(forecast_schema_config, forecast_dataset, era5_dataset):
