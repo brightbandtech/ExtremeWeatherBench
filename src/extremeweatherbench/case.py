@@ -4,10 +4,12 @@ Some code similarly structured to WeatherBench (Rasp et al.)."""
 import dataclasses
 import datetime
 from extremeweatherbench.utils import Location
-from typing import List, Optional, Dict, Type
+from typing import List, Optional
 from extremeweatherbench import metrics, utils
 import xarray as xr
 from enum import StrEnum
+import pandas as pd
+import numpy as np
 
 
 @dataclasses.dataclass
@@ -91,8 +93,8 @@ class IndividualHeatWaveCase(IndividualCase):
     )
 
     def perform_subsetting_procedure(self, dataset: xr.Dataset) -> xr.Dataset:
-        breakpoint()
-        modified_ds = dataset.sel(time=slice(self.start_date, self.end_date))
+        indices = derive_indices_from_init_time_and_lead_time(self, dataset)
+        modified_ds = dataset.isel(init_time=indices[0])
         modified_ds = self._subset_data_vars(modified_ds)
         modified_ds = utils.convert_longitude_to_180(modified_ds)
         modified_ds = utils.clip_dataset_to_bounding_box(
@@ -178,3 +180,20 @@ def get_case_event_dataclass(case_type: str) -> IndividualCase:
     if event_dataclass is None:
         raise ValueError(f"Unknown case event type {case_type}")
     return event_dataclass
+
+
+def derive_indices_from_init_time_and_lead_time(
+    individual_case: IndividualCase,
+    dataset: xr.Dataset,
+):
+    time_reshaped = dataset.time.values.reshape(
+        (dataset.init_time.shape[0], dataset.lead_time.shape[0])
+    )
+    output = dataset.time.where(
+        (dataset.time.time > pd.to_datetime(individual_case.start_date))
+        & (dataset.time.time < pd.to_datetime(individual_case.end_date)),
+        drop=True,
+    )
+    index_mask = np.isin(time_reshaped, output)
+    indices = np.where(index_mask)
+    return indices
