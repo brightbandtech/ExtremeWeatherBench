@@ -221,13 +221,11 @@ def _open_mlwp_kerchunk_reference_jsons(
         if attr_value in ds.data_vars:
             ds = ds.rename({attr_value: variable})
         # Step 1: Create a meshgrid of init_time and lead_time
-    init_time_grid, lead_time_grid = np.meshgrid(ds.init_time, ds.lead_time)
-
+    lead_time_grid, init_time_grid = np.meshgrid(ds.lead_time, ds.init_time)
     # Step 2: Flatten the meshgrid and convert lead_time to timedelta
     valid_time = init_time_grid.flatten() + pd.to_timedelta(
         lead_time_grid.flatten(), unit="h"
     )
-
     ds.coords["time"] = valid_time
     return ds
 

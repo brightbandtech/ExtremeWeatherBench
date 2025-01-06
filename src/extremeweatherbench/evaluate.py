@@ -111,40 +111,47 @@ def _evaluate_case(
     Returns:
         An xarray Dataset containing the evaluation results for the case.
     """
-    time_subset_forecast_ds = individual_case._subset_valid_times(forecast_dataset)
-
+    variable_subset_ds = individual_case._subset_data_vars(forecast_dataset)
+    time_subset_forecast_ds = individual_case._subset_valid_times(variable_subset_ds)
     # Check if forecast data is available for the case, if not, return None
     forecast_exists = individual_case._check_for_forecast_data_availability(
         time_subset_forecast_ds
     )
     if not forecast_exists:
         return None
-    # Each event type has a unique subsetting procedure
-    breakpoint()
-    spatiotemporal_subset_ds = individual_case.perform_subsetting_procedure(
-        time_subset_forecast_ds
-    )
-
-    if point_obs is not None:
-        pass
     if gridded_obs is not None:
         data_vars = {}
-        time_subset_gridded_obs_ds = individual_case._subset_valid_times(gridded_obs)
-        gridded_obs = individual_case.perform_subsetting_procedure(
+        variable_subset_gridded_obs = individual_case._subset_data_vars(gridded_obs)
+        time_subset_gridded_obs_ds = variable_subset_gridded_obs.sel(
+            time=slice(individual_case.start_date, individual_case.end_date)
+        )
+        time_subset_gridded_obs_ds = individual_case.perform_subsetting_procedure(
             time_subset_gridded_obs_ds
         )
         # Align gridded_obs and forecast_dataset by time
+        # TODO: test if doing ERA5 first might speed up the compute
         time_subset_gridded_obs_ds, spatiotemporal_subset_ds = xr.align(
-            time_subset_gridded_obs_ds, spatiotemporal_subset_ds, join="inner"
+            time_subset_gridded_obs_ds,
+            time_subset_forecast_ds[list(time_subset_forecast_ds.keys())],
+            join="inner",
         )
+        spatiotemporal_subset_ds = spatiotemporal_subset_ds.compute()
+        time_subset_gridded_obs_ds = time_subset_gridded_obs_ds.compute()
         for metric in individual_case.metrics_list:
             metric_instance = metric()
             result = metric_instance.compute(
                 spatiotemporal_subset_ds, time_subset_gridded_obs_ds
             )
             data_vars[metric_instance.name()] = result
-
+            breakpoint()
         return xr.Dataset(data_vars)
+    else:
+        # Each event type has a unique subsetting procedure
+        spatiotemporal_subset_ds = individual_case.perform_subsetting_procedure(
+            time_subset_forecast_ds
+        )
+    if point_obs is not None:
+        pass
 
 
 # TODO simplify to one paradigm, don't use nc, zarr, AND json
@@ -181,6 +188,7 @@ def _open_forecast_dataset(
         forecast_dataset = utils._open_mlwp_kerchunk_reference_jsons(
             file_list, forecast_schema_config
         )
+        forecast_dataset = utils.convert_longitude_to_180(forecast_dataset)
     return forecast_dataset
 
 
@@ -196,6 +204,7 @@ def _open_obs_datasets(eval_config: config.Config):
             chunks=None,
             storage_options=dict(token="anon"),
         )
+        gridded_obs = utils.convert_longitude_to_180(gridded_obs)
     if point_obs is None and gridded_obs is None:
         raise ValueError("No grided or point observation data provided.")
     return point_obs, gridded_obs
