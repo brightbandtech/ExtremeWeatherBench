@@ -117,12 +117,13 @@ def _evaluate_case(
     forecast_exists = individual_case._check_for_forecast_data_availability(
         time_subset_forecast_ds
     )
+    if not forecast_exists:
+        return None
     # Each event type has a unique subsetting procedure
     spatiotemporal_subset_ds = individual_case.perform_subsetting_procedure(
         time_subset_forecast_ds
     )
-    if not forecast_exists:
-        return None
+
     if point_obs is not None:
         pass
     if gridded_obs is not None:
