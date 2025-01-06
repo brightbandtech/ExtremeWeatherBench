@@ -62,8 +62,6 @@ class RegionalRMSE(Metric):
 
     def compute(self, forecast: xr.Dataset, observation: xr.Dataset):
         rmse_values = []
-        start_time = time.time()
-        print(f"Compute time taken: {time.time() - start_time:.4f} seconds")
         for init_time in forecast.init_time:
             logger.info("Computing RegionalRMSE for model run %s", init_time.values)
             init_forecast, subset_observation = self.align_datasets(
