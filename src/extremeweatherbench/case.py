@@ -145,7 +145,9 @@ class IndividualHeatWaveCase(IndividualCase):
     )
 
     def perform_subsetting_procedure(self, dataset: xr.Dataset) -> xr.Dataset:
-        modified_ds = self._subset_data_vars(dataset)
+        modified_ds = self._subset_valid_times(dataset)
+        modified_ds = self._subset_data_vars(modified_ds)
+        breakpoint()
         modified_ds = utils.clip_dataset_to_bounding_box(
             modified_ds, self.location, self.bounding_box_km
         )
@@ -172,6 +174,8 @@ class IndividualFreezeCase(IndividualCase):
     )
 
     def perform_subsetting_procedure(self, dataset) -> xr.Dataset:
+        modified_ds = self._subset_valid_times(dataset)
+        modified_ds = self._subset_data_vars(modified_ds)
         modified_ds = utils.clip_dataset_to_bounding_box(
             dataset, self.location, self.bounding_box_km
         )
