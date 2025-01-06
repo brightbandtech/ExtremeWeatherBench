@@ -83,14 +83,13 @@ def _evaluate_cases_loop(
     """
     results = {}
     for individual_case in event.cases:
-        results[individual_case.id](
-            _evaluate_case(
-                individual_case,
-                forecast_dataset,
-                gridded_obs,
-                point_obs,
-            )
+        results[individual_case.id] = _evaluate_case(
+            individual_case,
+            forecast_dataset,
+            gridded_obs,
+            point_obs,
         )
+
     return results
 
 
