@@ -10,6 +10,9 @@ import xarray as xr
 from enum import StrEnum
 import pandas as pd
 import numpy as np
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 @dataclasses.dataclass
@@ -62,7 +65,7 @@ class IndividualCase:
         """
         raise NotImplementedError
 
-    def subset_data_vars(self, dataset):
+    def _subset_data_vars(self, dataset: xr.Dataset) -> xr.Dataset:
         """Subset the input dataset to only include the variables specified in data_vars.
 
         Args:
@@ -71,7 +74,54 @@ class IndividualCase:
         Returns:
             xr.Dataset: The subset dataset.
         """
-        raise NotImplementedError
+        subset_dataset = dataset.copy()
+        if self.data_vars is not None:
+            subset_dataset = subset_dataset[self.data_vars]
+        return subset_dataset
+
+    def _subset_valid_times(self, dataset: xr.Dataset) -> xr.Dataset:
+        """Subset the input dataset to only include the valid times within the case period.
+        Args:
+            dataset: xr.Dataset: The input dataset to subset.
+
+        Returns:
+            xr.Dataset: The subset dataset.
+        """
+        time_subset_ds = dataset.sel(time=slice(self.start_date, self.end_date))
+        return time_subset_ds
+
+    def _check_for_forecast_data_availability(
+        self,
+        forecast_dataset: xr.Dataset,
+    ) -> bool:
+        """Check if the forecast and observation datasets have overlapping time periods.
+
+        Args:
+            forecast_dataset: The forecast dataset.
+            gridded_obs: The gridded observation dataset.
+
+        Returns:
+            True if the datasets have overlapping time periods, False otherwise.
+        """
+        lead_time_len = len(forecast_dataset.init_time)
+        valid_time_len = len(forecast_dataset.time)
+
+        if valid_time_len == 0:
+            logger.warning("No forecast data available for case %s, skipping", self.id)
+            return False
+        elif valid_time_len < (self.end_date - self.start_date).days:
+            logger.warning(
+                "Fewer valid times in forecast than days in case %s, results likely unreliable",
+                self.id,
+            )
+        else:
+            logger.info("Forecast data available for case %s", self.id)
+        logger.info("Lead time length for case %s: %s", self.id, lead_time_len)
+        logger.info(
+            "Total time step count (valid times by forecast hour) for case: %s",
+            lead_time_len * valid_time_len,
+        )
+        return True
 
 
 @dataclasses.dataclass
