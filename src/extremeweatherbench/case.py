@@ -88,8 +88,9 @@ class IndividualCase:
         Returns:
             xr.Dataset: The subset dataset.
         """
-        time_subset_ds = dataset.sel(time=slice(self.start_date, self.end_date))
-        return time_subset_ds
+        indices = derive_indices_from_init_time_and_lead_time(self, dataset)
+        modified_ds = dataset.isel(init_time=indices[0])
+        return modified_ds
 
     def _check_for_forecast_data_availability(
         self,
@@ -144,29 +145,12 @@ class IndividualHeatWaveCase(IndividualCase):
     )
 
     def perform_subsetting_procedure(self, dataset: xr.Dataset) -> xr.Dataset:
-        indices = derive_indices_from_init_time_and_lead_time(self, dataset)
-        modified_ds = dataset.isel(init_time=indices[0])
-        modified_ds = self._subset_data_vars(modified_ds)
-        modified_ds = utils.convert_longitude_to_180(modified_ds)
+        modified_ds = self._subset_data_vars(dataset)
         modified_ds = utils.clip_dataset_to_bounding_box(
             modified_ds, self.location, self.bounding_box_km
         )
         modified_ds = utils.remove_ocean_gridpoints(modified_ds)
         return modified_ds
-
-    def _subset_data_vars(self, dataset: xr.Dataset) -> xr.Dataset:
-        """Subset the input dataset to only include the variables specified in data_vars.
-
-        Args:
-            dataset: xr.Dataset: The input dataset to subset.
-            data_vars: the variables within the ForecastSchemaConfig to subset.
-
-        Returns:
-            xr.Dataset: The subset dataset.
-        """
-        if self.data_vars is not None:
-            return dataset[self.data_vars]
-        return dataset
 
 
 @dataclasses.dataclass
@@ -188,25 +172,10 @@ class IndividualFreezeCase(IndividualCase):
     )
 
     def perform_subsetting_procedure(self, dataset) -> xr.Dataset:
-        modified_ds = dataset.sel(time=slice(self.start_date, self.end_date))
-        modified_ds = utils.convert_longitude_to_180(dataset)
         modified_ds = utils.clip_dataset_to_bounding_box(
             dataset, self.location, self.bounding_box_km
         )
         return modified_ds
-
-    def subset_data_vars(self, dataset: xr.Dataset) -> xr.Dataset:
-        """Subset the input dataset to only include the variables specified in data_vars.
-
-        Args:
-            dataset: xr.Dataset: The input dataset to subset.
-            data_vars: the variables within the ForecastSchemaConfig to subset.
-        Returns:
-            xr.Dataset: The subset dataset.
-        """
-        if self.data_vars is not None:
-            return dataset[self.data_vars]
-        return dataset
 
 
 # maps the case event type to the corresponding dataclass
