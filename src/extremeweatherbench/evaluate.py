@@ -81,9 +81,9 @@ def _evaluate_cases_loop(
         A list of xarray Datasets containing the evaluation results for each case
         in the Event of interest.
     """
-    results = []
+    results = {}
     for individual_case in event.cases:
-        results.append(
+        results[individual_case.id](
             _evaluate_case(
                 individual_case,
                 forecast_dataset,
@@ -99,7 +99,7 @@ def _evaluate_case(
     forecast_dataset: xr.Dataset,
     gridded_obs: xr.Dataset,
     point_obs: pd.DataFrame,
-) -> xr.Dataset:
+) -> dict:
     """Evaluate a single case given forecast data and observations.
 
     Args:
@@ -143,8 +143,7 @@ def _evaluate_case(
                 spatiotemporal_subset_ds, time_subset_gridded_obs_ds
             )
             data_vars[metric_instance.name()] = result
-            breakpoint()
-        return xr.Dataset(data_vars)
+        return data_vars
     else:
         # Each event type has a unique subsetting procedure
         spatiotemporal_subset_ds = individual_case.perform_subsetting_procedure(
