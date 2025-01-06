@@ -3,6 +3,7 @@ import dataclasses
 import numpy as np
 import xarray as xr
 from extremeweatherbench import utils
+from scores.continuous import rmse
 
 # TODO: get permissions to upload this to bb bucket
 T2M_85TH_PERCENTILE_CLIMATOLOGY_PATH = (
@@ -54,9 +55,18 @@ class RegionalRMSE(Metric):
     """Root mean squared error of a regional forecast evalauted against observations."""
 
     def compute(self, forecast: xr.Dataset, observation: xr.Dataset):
-        print(forecast)
-        print(observation)
-        return None
+        rmse_values = []
+        for init_time in forecast.init_time:
+            forecast_values = forecast.sel(init_time=init_time).to_dataarray()
+            fhours = forecast_values.time - forecast_values.init_time
+            forecast_values = forecast_values.assign_coords(fhours=fhours)
+            observation_values = observation.to_dataarray()
+            output_rmse = rmse(observation_values, forecast_values)
+            rmse_values.append(output_rmse.compute())
+        rmse_dataarray = xr.DataArray(
+            rmse_values, coords=[forecast_values.fhours], dims=["fhours"], name="rmse"
+        )
+        return rmse_dataarray
 
 
 @dataclasses.dataclass
@@ -64,61 +74,19 @@ class MaximumMAE(Metric):
     """Mean absolute error of forecasted maximum values."""
 
     def compute(self, forecast: xr.Dataset, observation: xr.Dataset):
-        era5_hourly_daily_85th_percentile = xr.open_zarr(
-            T2M_85TH_PERCENTILE_CLIMATOLOGY_PATH
+        rmse_values = []
+        for init_time in forecast.init_time:
+            forecast_values = forecast.sel(init_time=init_time).to_dataarray()
+            fhours = forecast_values.time - forecast_values.init_time
+            forecast_values = forecast_values.assign_coords(fhours=fhours)
+            observation_values = observation.to_dataarray()
+            output_rmse = rmse(observation_values, forecast_values)
+            rmse_values.append(output_rmse.compute())
+        breakpoint()
+        rmse_dataarray = xr.DataArray(
+            rmse_values, coords=[forecast.fhours], dims=["fhours"], name="rmse"
         )
-        era5_climatology = utils.convert_day_yearofday_to_time(
-            era5_hourly_daily_85th_percentile,
-            np.unique(observation.time.dt.year.values)[0],
-        )
-        era5_climatology = era5_climatology.rename_vars(
-            {"2m_temperature": "2m_temperature_85th_percentile"}
-        )
-        merged_dataset = xr.merge(
-            [era5_climatology, observation],
-            join="inner",
-        )
-        merged_dataset = utils.convert_longitude_to_180(merged_dataset)
-        merged_dataset = utils.clip_dataset_to_bounding_box(
-            merged_dataset, location_center, box_length_width_in_km
-        )
-        merged_dataset = utils.remove_ocean_gridpoints(merged_dataset)
-        return None
-        max_t2_times = (
-            merged_df.reset_index()
-            .groupby("init_time")
-            .apply(lambda x: x.loc[x["t2"].idxmax()])
-        )
-        max_t2_times["model"] = "PanguWeather"
-        max_t2_times = max_t2_times[
-            max_t2_times.index
-            < era5_dataset.case_analysis_ds["time"][
-                era5_dataset.case_analysis_ds["2m_temperature"]
-                .mean(["latitude", "longitude"])
-                .argmax()
-                .values
-            ].values
-        ]
-        max_t2_times["time_error"] = abs(
-            max_t2_times["time"]
-            - era5_dataset.case_analysis_ds["time"][
-                era5_dataset.case_analysis_ds["2m_temperature"]
-                .mean(["latitude", "longitude"])
-                .argmax()
-                .values
-            ].values
-        ) / np.timedelta64(1, "h")
-        max_t2_times["t2_mae"] = abs(
-            max_t2_times["t2"]
-            - era5_dataset.case_analysis_ds["2m_temperature"]
-            .mean(["latitude", "longitude"])
-            .max()
-            .values
-        )
-        merged_pivot = max_t2_times.pivot(
-            index="model", columns="init_time", values="t2_mae"
-        )
-        raise NotImplementedError
+        return rmse_dataarray
 
 
 @dataclasses.dataclass

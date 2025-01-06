@@ -120,6 +120,7 @@ def _evaluate_case(
     if not forecast_exists:
         return None
     # Each event type has a unique subsetting procedure
+    breakpoint()
     spatiotemporal_subset_ds = individual_case.perform_subsetting_procedure(
         time_subset_forecast_ds
     )
