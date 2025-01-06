@@ -89,7 +89,7 @@ class IndividualCase:
             xr.Dataset: The subset dataset.
         """
         indices = derive_indices_from_init_time_and_lead_time(self, dataset)
-        modified_ds = dataset.isel(init_time=indices[0])
+        modified_ds = dataset.isel(init_time=np.unique(indices[0]))
         return modified_ds
 
     def _check_for_forecast_data_availability(
@@ -106,12 +106,11 @@ class IndividualCase:
             True if the datasets have overlapping time periods, False otherwise.
         """
         lead_time_len = len(forecast_dataset.init_time)
-        valid_time_len = len(forecast_dataset.time)
 
-        if valid_time_len == 0:
+        if lead_time_len == 0:
             logger.warning("No forecast data available for case %s, skipping", self.id)
             return False
-        elif valid_time_len < (self.end_date - self.start_date).days:
+        elif lead_time_len < (self.end_date - self.start_date).days:
             logger.warning(
                 "Fewer valid times in forecast than days in case %s, results likely unreliable",
                 self.id,
@@ -119,10 +118,6 @@ class IndividualCase:
         else:
             logger.info("Forecast data available for case %s", self.id)
         logger.info("Lead time length for case %s: %s", self.id, lead_time_len)
-        logger.info(
-            "Total time step count (valid times by forecast hour) for case: %s",
-            lead_time_len * valid_time_len,
-        )
         return True
 
 
@@ -145,7 +140,6 @@ class IndividualHeatWaveCase(IndividualCase):
     )
 
     def perform_subsetting_procedure(self, dataset: xr.Dataset) -> xr.Dataset:
-        breakpoint()
         modified_ds = utils.clip_dataset_to_bounding_box(
             dataset, self.location, self.bounding_box_km
         )
