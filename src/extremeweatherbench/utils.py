@@ -209,7 +209,7 @@ def _open_mlwp_kerchunk_reference_jsons(
             "consolidated": False,
             "storage_options": {
                 "fo": json_file,
-                "remote_protocol": "s3",
+                "remote_protocol": remote_protocol,
                 "remote_options": {"anon": True},
             },
         },
