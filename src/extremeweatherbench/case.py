@@ -4,7 +4,7 @@ Some code similarly structured to WeatherBench (Rasp et al.)."""
 import dataclasses
 import datetime
 from extremeweatherbench.utils import Location
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from extremeweatherbench import metrics, utils
 import xarray as xr
 from enum import StrEnum
@@ -78,6 +78,7 @@ class IndividualCase:
         subset_dataset = dataset.copy()
         if self.data_vars is not None:
             subset_dataset = subset_dataset[self.data_vars]
+        subset_dataset["time"] = dataset["time"]
         return subset_dataset
 
     def _subset_valid_times(self, dataset: xr.Dataset) -> xr.Dataset:
@@ -199,7 +200,7 @@ def get_case_event_dataclass(case_type: str) -> IndividualCase:
 def derive_indices_from_init_time_and_lead_time(
     individual_case: IndividualCase,
     dataset: xr.Dataset,
-):
+) -> Tuple[np.ndarray]:
     time_reshaped = dataset.time.values.reshape(
         (dataset.init_time.shape[0], dataset.lead_time.shape[0])
     )

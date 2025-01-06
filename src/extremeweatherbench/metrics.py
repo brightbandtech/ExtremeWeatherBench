@@ -2,8 +2,12 @@ import dataclasses
 
 import numpy as np
 import xarray as xr
-from extremeweatherbench import utils
 from scores.continuous import rmse
+import logging
+import time
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 # TODO: get permissions to upload this to bb bucket
 T2M_85TH_PERCENTILE_CLIMATOLOGY_PATH = (
@@ -23,6 +27,19 @@ class Metric:
         """Return a string representation of the metric."""
         raise NotImplementedError
 
+    def align_datasets(
+        self, forecast: xr.Dataset, observation: xr.Dataset, init_time: np.datetime64
+    ):
+        """Align the forecast and observation datasets."""
+        forecast = forecast.sel(init_time=init_time)
+        time = init_time.values + np.array(
+            forecast["lead_time"], dtype="timedelta64[h]"
+        )
+        forecast = forecast.assign_coords(time=("lead_time", time))
+        forecast = forecast.swap_dims({"lead_time": "time"})
+        forecast, observation = xr.align(forecast, observation, join="inner")
+        return forecast, observation
+
 
 @dataclasses.dataclass
 class DurationME(Metric):
@@ -34,20 +51,9 @@ class DurationME(Metric):
             event is occurring.
     """
 
-    # NOTE(daniel): We probably need to define a field to which these thresholds
-    # are applied, right?
-
     def compute(self, forecast: xr.Dataset, observation: xr.Dataset):
         print(forecast)
         print(observation)
-
-    # @property
-    # def type(self) -> str:
-    #     return "duration_me"
-    # NOTE(daniel): Why wouldn't we just make this just the to_string method?
-    # In fact, this can be in the base Metric class and we can just define another
-    # default, private attribute like "_event_type" that can be over-ridden by
-    # every specialized class to return here.
 
 
 @dataclasses.dataclass
@@ -56,17 +62,18 @@ class RegionalRMSE(Metric):
 
     def compute(self, forecast: xr.Dataset, observation: xr.Dataset):
         rmse_values = []
+        start_time = time.time()
+        print(f"Compute time taken: {time.time() - start_time:.4f} seconds")
         for init_time in forecast.init_time:
-            forecast_values = forecast.sel(init_time=init_time).to_dataarray()
-            fhours = forecast_values.time - forecast_values.init_time
-            forecast_values = forecast_values.assign_coords(fhours=fhours)
-            observation_values = observation.to_dataarray()
-            output_rmse = rmse(observation_values, forecast_values)
-            rmse_values.append(output_rmse.compute())
-        rmse_dataarray = xr.DataArray(
-            rmse_values, coords=[forecast_values.fhours], dims=["fhours"], name="rmse"
-        )
-        return rmse_dataarray
+            logger.info("Computing RegionalRMSE for model run %s", init_time.values)
+            init_forecast, subset_observation = self.align_datasets(
+                forecast, observation, init_time
+            )
+            output_rmse = rmse(init_forecast, subset_observation, preserve_dims="time")
+            rmse_values.append(output_rmse)
+        rmse_dataset = xr.concat(rmse_values, dim="time")
+        grouped_fhour_rmse_dataset = rmse_dataset.groupby("lead_time").mean()
+        return grouped_fhour_rmse_dataset
 
 
 @dataclasses.dataclass
@@ -74,19 +81,19 @@ class MaximumMAE(Metric):
     """Mean absolute error of forecasted maximum values."""
 
     def compute(self, forecast: xr.Dataset, observation: xr.Dataset):
-        rmse_values = []
+        maximummae_values = []
         for init_time in forecast.init_time:
-            forecast_values = forecast.sel(init_time=init_time).to_dataarray()
-            fhours = forecast_values.time - forecast_values.init_time
-            forecast_values = forecast_values.assign_coords(fhours=fhours)
-            observation_values = observation.to_dataarray()
-            output_rmse = rmse(observation_values, forecast_values)
-            rmse_values.append(output_rmse.compute())
-        breakpoint()
-        rmse_dataarray = xr.DataArray(
-            rmse_values, coords=[forecast.fhours], dims=["fhours"], name="rmse"
-        )
-        return rmse_dataarray
+            logger.info("Computing MaximumMAE for model run %s", init_time.values)
+            init_forecast, subset_observation = self.align_datasets(
+                forecast, observation, init_time
+            )
+            # output_rmse = rmse(observation_values, forecast_values)
+            maximummae_values.append(output_maximummae)
+        maximummae_dataset = xr.concat(maximummae_values, dim="time")
+        grouped_fhour_maximummae_dataset = maximummae_dataset.groupby(
+            "lead_time"
+        ).mean()
+        return grouped_fhour_maximummae_dataset
 
 
 @dataclasses.dataclass
