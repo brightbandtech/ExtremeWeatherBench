@@ -111,21 +111,36 @@ def _evaluate_case(
     Returns:
         An xarray Dataset containing the evaluation results for the case.
     """
-    # Each case has a unique region and event type which can be
-    # assessed here.
-    forecast_dataset = individual_case.perform_subsetting_procedure(forecast_dataset)
+    time_subset_forecast_ds = individual_case._subset_valid_times(forecast_dataset)
+
+    # Check if forecast data is available for the case, if not, return None
+    forecast_exists = individual_case._check_for_forecast_data_availability(
+        time_subset_forecast_ds
+    )
+    # Each event type has a unique subsetting procedure
+    spatiotemporal_subset_ds = individual_case.perform_subsetting_procedure(
+        time_subset_forecast_ds
+    )
+    if not forecast_exists:
+        return None
     if point_obs is not None:
         pass
     if gridded_obs is not None:
         data_vars = {}
-        gridded_obs = individual_case.perform_subsetting_procedure(gridded_obs)
+        time_subset_gridded_obs_ds = individual_case._subset_valid_times(gridded_obs)
+        gridded_obs = individual_case.perform_subsetting_procedure(
+            time_subset_gridded_obs_ds
+        )
         # Align gridded_obs and forecast_dataset by time
-        gridded_obs, forecast_dataset = xr.align(
-            gridded_obs, forecast_dataset, join="inner"
+        time_subset_gridded_obs_ds, spatiotemporal_subset_ds = xr.align(
+            time_subset_gridded_obs_ds, spatiotemporal_subset_ds, join="inner"
         )
         for metric in individual_case.metrics_list:
-            result = metric().compute(forecast_dataset, gridded_obs)
-            data_vars[metric.name] = result
+            metric_instance = metric()
+            result = metric_instance.compute(
+                spatiotemporal_subset_ds, time_subset_gridded_obs_ds
+            )
+            data_vars[metric_instance.name()] = result
 
         return xr.Dataset(data_vars)
 
