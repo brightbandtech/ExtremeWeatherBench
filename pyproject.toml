@@ -14,6 +14,7 @@ dependencies = [
     "kerchunk>=0.2.7",
     "numpy>=2.2.0",
     "pandas>=2.2.3",
+    "pytest>=8.3.4",
     "pyyaml>=6.0.2",
     "regionmask>=0.13.0",
     "rioxarray>=0.18.1",
