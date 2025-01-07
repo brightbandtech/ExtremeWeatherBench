@@ -4,7 +4,6 @@ import numpy as np
 import xarray as xr
 from scores.continuous import rmse
 import logging
-import time
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
