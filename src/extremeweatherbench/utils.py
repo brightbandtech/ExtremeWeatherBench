@@ -34,8 +34,7 @@ ERA5_MAPPING = {
 
 def convert_longitude_to_360(longitude: float) -> float:
     """Convert a longitude from the range [-180, 180) to [0, 360)."""
-    # NOTE(daniel): I don't think this is actually correct :)
-    return longitude % 360
+    return np.mod(longitude, 360)
 
 
 def convert_longitude_to_180(
