@@ -18,9 +18,9 @@ class Metric:
         """Evaluate a specific metric given a forecast and observation dataset."""
         raise NotImplementedError
 
-    def name(self) -> str:
-        """Return the class name without parentheses."""
-        return self.__class__.__name__
+    def to_string(self) -> str:
+        """Return a string representation of the metric."""
+        raise NotImplementedError
 
 
 @dataclasses.dataclass
