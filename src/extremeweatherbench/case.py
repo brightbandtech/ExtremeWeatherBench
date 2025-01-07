@@ -73,7 +73,7 @@ class IndividualCase:
         Returns:
             xr.Dataset: The subset dataset.
         """
-        subset_dataset = dataset.copy()
+        subset_dataset = dataset
         if self.data_vars is not None:
             subset_dataset = subset_dataset[self.data_vars]
         return subset_dataset
