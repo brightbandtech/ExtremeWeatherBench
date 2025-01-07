@@ -2,12 +2,7 @@ import dataclasses
 
 import numpy as np
 import xarray as xr
-from scores.continuous import rmse
-import logging
-import time
-
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+from extremeweatherbench import utils
 
 # TODO: get permissions to upload this to bb bucket
 T2M_85TH_PERCENTILE_CLIMATOLOGY_PATH = (
@@ -27,19 +22,6 @@ class Metric:
         """Return the class name without parentheses."""
         return self.__class__.__name__
 
-    def align_datasets(
-        self, forecast: xr.Dataset, observation: xr.Dataset, init_time: np.datetime64
-    ):
-        """Align the forecast and observation datasets."""
-        forecast = forecast.sel(init_time=init_time)
-        time = init_time.values + np.array(
-            forecast["lead_time"], dtype="timedelta64[h]"
-        )
-        forecast = forecast.assign_coords(time=("lead_time", time))
-        forecast = forecast.swap_dims({"lead_time": "time"})
-        forecast, observation = xr.align(forecast, observation, join="inner")
-        return forecast, observation
-
 
 @dataclasses.dataclass
 class DurationME(Metric):
@@ -51,9 +33,20 @@ class DurationME(Metric):
             event is occurring.
     """
 
+    # NOTE(daniel): We probably need to define a field to which these thresholds
+    # are applied, right?
+
     def compute(self, forecast: xr.Dataset, observation: xr.Dataset):
         print(forecast)
         print(observation)
+
+    # @property
+    # def type(self) -> str:
+    #     return "duration_me"
+    # NOTE(daniel): Why wouldn't we just make this just the to_string method?
+    # In fact, this can be in the base Metric class and we can just define another
+    # default, private attribute like "_event_type" that can be over-ridden by
+    # every specialized class to return here.
 
 
 @dataclasses.dataclass
@@ -61,19 +54,9 @@ class RegionalRMSE(Metric):
     """Root mean squared error of a regional forecast evalauted against observations."""
 
     def compute(self, forecast: xr.Dataset, observation: xr.Dataset):
-        rmse_values = []
-        start_time = time.time()
-        print(f"Compute time taken: {time.time() - start_time:.4f} seconds")
-        for init_time in forecast.init_time:
-            logger.info("Computing RegionalRMSE for model run %s", init_time.values)
-            init_forecast, subset_observation = self.align_datasets(
-                forecast, observation, init_time
-            )
-            output_rmse = rmse(init_forecast, subset_observation, preserve_dims="time")
-            rmse_values.append(output_rmse)
-        rmse_dataset = xr.concat(rmse_values, dim="time")
-        grouped_fhour_rmse_dataset = rmse_dataset.groupby("lead_time").mean()
-        return grouped_fhour_rmse_dataset
+        print(forecast)
+        print(observation)
+        return None
 
 
 @dataclasses.dataclass
@@ -81,19 +64,61 @@ class MaximumMAE(Metric):
     """Mean absolute error of forecasted maximum values."""
 
     def compute(self, forecast: xr.Dataset, observation: xr.Dataset):
-        maximummae_values = []
-        for init_time in forecast.init_time:
-            logger.info("Computing MaximumMAE for model run %s", init_time.values)
-            init_forecast, subset_observation = self.align_datasets(
-                forecast, observation, init_time
-            )
-            # output_rmse = rmse(observation_values, forecast_values)
-            maximummae_values.append(output_maximummae)
-        maximummae_dataset = xr.concat(maximummae_values, dim="time")
-        grouped_fhour_maximummae_dataset = maximummae_dataset.groupby(
-            "lead_time"
-        ).mean()
-        return grouped_fhour_maximummae_dataset
+        era5_hourly_daily_85th_percentile = xr.open_zarr(
+            T2M_85TH_PERCENTILE_CLIMATOLOGY_PATH
+        )
+        era5_climatology = utils.convert_day_yearofday_to_time(
+            era5_hourly_daily_85th_percentile,
+            np.unique(observation.time.dt.year.values)[0],
+        )
+        era5_climatology = era5_climatology.rename_vars(
+            {"2m_temperature": "2m_temperature_85th_percentile"}
+        )
+        merged_dataset = xr.merge(
+            [era5_climatology, observation],
+            join="inner",
+        )
+        merged_dataset = utils.convert_longitude_to_180(merged_dataset)
+        merged_dataset = utils.clip_dataset_to_bounding_box(
+            merged_dataset, location_center, box_length_width_in_km
+        )
+        merged_dataset = utils.remove_ocean_gridpoints(merged_dataset)
+        return None
+        max_t2_times = (
+            merged_df.reset_index()
+            .groupby("init_time")
+            .apply(lambda x: x.loc[x["t2"].idxmax()])
+        )
+        max_t2_times["model"] = "PanguWeather"
+        max_t2_times = max_t2_times[
+            max_t2_times.index
+            < era5_dataset.case_analysis_ds["time"][
+                era5_dataset.case_analysis_ds["2m_temperature"]
+                .mean(["latitude", "longitude"])
+                .argmax()
+                .values
+            ].values
+        ]
+        max_t2_times["time_error"] = abs(
+            max_t2_times["time"]
+            - era5_dataset.case_analysis_ds["time"][
+                era5_dataset.case_analysis_ds["2m_temperature"]
+                .mean(["latitude", "longitude"])
+                .argmax()
+                .values
+            ].values
+        ) / np.timedelta64(1, "h")
+        max_t2_times["t2_mae"] = abs(
+            max_t2_times["t2"]
+            - era5_dataset.case_analysis_ds["2m_temperature"]
+            .mean(["latitude", "longitude"])
+            .max()
+            .values
+        )
+        merged_pivot = max_t2_times.pivot(
+            index="model", columns="init_time", values="t2_mae"
+        )
+        raise NotImplementedError
 
 
 @dataclasses.dataclass
