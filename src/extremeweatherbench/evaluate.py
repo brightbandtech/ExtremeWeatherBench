@@ -141,6 +141,8 @@ def _evaluate_case(
             time_subset_forecast_ds[list(time_subset_forecast_ds.keys())],
             join="inner",
         )
+        spatiotemporal_subset_ds = spatiotemporal_subset_ds.compute()
+        time_subset_gridded_obs_ds = time_subset_gridded_obs_ds.compute()
         for metric in individual_case.metrics_list:
             metric_instance = metric()
             result = metric_instance.compute(
@@ -188,9 +190,13 @@ def _open_forecast_dataset(
     if "nc" in file_types:
         raise NotImplementedError("NetCDF file reading not implemented.")
 
-    if "json" or "parq" in file_types:
+    if "parq" in file_types or any("parq" in ft for ft in file_types):
         forecast_dataset = utils._open_mlwp_kerchunk_references(
-            file_list, forecast_schema_config
+            eval_config.forecast_dir, forecast_schema_config
+        )
+    if "json" in file_types:
+        forecast_dataset = utils._open_mlwp_kerchunk_references(
+            file_list[0], forecast_schema_config
         )
     return forecast_dataset
 
