@@ -95,13 +95,20 @@ class MaximumMAE(Metric):
             init_forecast, subset_observation = self.align_datasets(
                 forecast, observation, init_time
             )
-            # output_rmse = rmse(observation_values, forecast_values)
+            observation_max = self.subset_max(subset_observation)
+            forecast_max = self.subset_max(init_forecast)
+            output_maximummae = abs(forecast_max - observation_max)
             maximummae_values.append(output_maximummae)
         maximummae_dataset = xr.concat(maximummae_values, dim="time")
         grouped_fhour_maximummae_dataset = maximummae_dataset.groupby(
             "lead_time"
         ).mean()
         return grouped_fhour_maximummae_dataset
+
+    def subset_max(self, dataset: xr.Dataset):
+        """Subset the input dataset to only include the maximum values."""
+        subset_dataset = dataset.mean(["latitude", "longitude"]).max()
+        return subset_dataset
 
 
 @dataclasses.dataclass
