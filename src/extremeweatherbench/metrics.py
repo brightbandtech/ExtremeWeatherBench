@@ -30,7 +30,19 @@ class Metric:
         self, forecast: xr.Dataset, observation: xr.Dataset, init_time: np.datetime64
     ):
         """Align the forecast and observation datasets."""
-        forecast = forecast.sel(init_time=init_time)
+        try:
+            forecast = forecast.sel(init_time=init_time)
+        except ValueError:
+            init_time_duplicate_length = len(
+                forecast.where(forecast.init_time == init_time, drop=True).init_time
+            )
+            if init_time_duplicate_length > 1:
+                logger.warning(
+                    "init time %s has more than %d forecast associated with it, taking first only",
+                    init_time.values,
+                    init_time_duplicate_length,
+                )
+            forecast = forecast.sel(init_time=init_time.values).isel(init_time=0)
         time = init_time.values + np.array(
             forecast["lead_time"], dtype="timedelta64[h]"
         )
