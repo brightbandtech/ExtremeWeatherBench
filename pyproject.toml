@@ -26,6 +26,7 @@ dependencies = [
     "shapely>=2.0.6",
     "tqdm>=4.67.1",
     "ujson>=5.10.0",
+    "virtualizarr>=1.2.0",
     "xarray>=2024.11.0",
 ]
 

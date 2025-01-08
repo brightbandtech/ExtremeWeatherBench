@@ -280,16 +280,6 @@ cases:
     bounding_box_km: 500
     event_type: heat_wave
     cross_listed:
-  - id: 29
-    title: 2019 Australia
-    start_date: 2019-12-13
-    end_date: 2019-12-23
-    location: 
-      latitude: -31.7125
-      longitude: 128.8890    
-    bounding_box_km: 500
-    event_type: heat_wave
-    cross_listed:
   - id: 31
     title: 2021 Texas
     start_date: 2021-02-14
