@@ -86,7 +86,8 @@ def clip_dataset_to_bounding_box(
     """
     lat_center = location_center.latitude
     lon_center = location_center.longitude
-
+    if lon_center < 0:
+        lon_center = convert_longitude_to_360(lon_center)
     # Convert length from kilometers to degrees (approximation)
     length_deg = length_km / 111  # 1 degree is approximately 111 km
 
