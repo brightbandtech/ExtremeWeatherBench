@@ -197,23 +197,40 @@ def _open_kerchunk_zarr_reference_jsons(
     return xr.concat(xarray_datasets, dim=forecast_schema_config.init_time)
 
 
-def _open_mlwp_kerchunk_reference_jsons(
-    json_file, forecast_schema_config, remote_protocol: str = "s3"
+def _open_mlwp_kerchunk_references(
+    file, forecast_schema_config, remote_protocol: str = "s3"
 ):
-    """Open a dataset from a kerchunked json reference file for the OAR MLWP S3 bucket."""
-    json_file = json_file[0]
-    ds = xr.open_dataset(
-        "reference://",
-        engine="zarr",
-        backend_kwargs={
-            "consolidated": False,
-            "storage_options": {
-                "fo": json_file,
-                "remote_protocol": remote_protocol,
-                "remote_options": {"anon": True},
+    """Open a dataset from a kerchunked reference file for the OAR MLWP S3 bucket."""
+    file = file[0]
+    if "parq" in file:
+        storage_options = {
+            "remote_protocol": "s3",
+            "skip_instance_cache": True,
+            "remote_options": {"anon": True},
+            "target_protocol": "file",
+            "lazy": True,
+        }  # options passed to fsspec
+        open_dataset_options = {"chunks": {}}  # opens passed to xarray
+
+        ds = xr.open_dataset(
+            "/home/taylor/code/ExtremeWeatherBench/assets/data/forecasts/PANG_v100_combined_all.parq",
+            engine="kerchunk",
+            storage_options=storage_options,
+            open_dataset_options=open_dataset_options,
+        )
+    else:
+        ds = xr.open_dataset(
+            "reference://",
+            engine="zarr",
+            backend_kwargs={
+                "consolidated": False,
+                "storage_options": {
+                    "fo": file,
+                    "remote_protocol": remote_protocol,
+                    "remote_options": {"anon": True},
+                },
             },
-        },
-    )
+        )
     ds = ds.rename({"time": "lead_time"})
     ds["lead_time"] = range(0, 241, 6)
     for variable in forecast_schema_config.__dict__:

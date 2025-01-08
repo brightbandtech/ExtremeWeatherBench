@@ -169,7 +169,7 @@ def _open_forecast_dataset(
 
     file_list = fs.ls(eval_config.forecast_dir)
     file_types = set([file.split(".")[-1] for file in file_list])
-    if len(file_types) > 1:
+    if len(file_types) > 1 and "parq" not in eval_config.forecast_dir:
         raise ValueError("Multiple file types found in forecast path.")
 
     if "zarr" in file_types and len(file_list) == 1:
@@ -182,8 +182,8 @@ def _open_forecast_dataset(
     if "nc" in file_types:
         raise NotImplementedError("NetCDF file reading not implemented.")
 
-    if "json" in file_types:
-        forecast_dataset = utils._open_mlwp_kerchunk_reference_jsons(
+    if "json" or "parq" in file_types:
+        forecast_dataset = utils._open_mlwp_kerchunk_references(
             file_list, forecast_schema_config
         )
         forecast_dataset = utils.convert_longitude_to_180(forecast_dataset)
