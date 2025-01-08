@@ -281,12 +281,12 @@ cases:
     event_type: heat_wave
     cross_listed:
   - id: 29
-    title: 2019 Australia
-    start_date: 2019-12-13
-    end_date: 2019-12-23
+    title: 2020 Australia
+    start_date: 2020-11-26
+    end_date: 2020-11-30
     location: 
-      latitude: -31.7125
-      longitude: 128.8890    
+      latitude: -33.8245
+      longitude: 150.9448
     bounding_box_km: 500
     event_type: heat_wave
     cross_listed:
