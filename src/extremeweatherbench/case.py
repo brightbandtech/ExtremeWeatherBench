@@ -45,6 +45,7 @@ class IndividualCase:
     bounding_box_km: float
     event_type: str
     cross_listed: Optional[List[str]] = None
+    data_vars: Optional[List[str]] = None
 
     def __post_init__(self):
         if isinstance(self.location, dict):
