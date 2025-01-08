@@ -12,6 +12,9 @@ from extremeweatherbench import config, events, case, utils
 import dacite
 import yaml
 
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
 #: Default mapping for forecast dataset schema.
 DEFAULT_FORECAST_SCHEMA_CONFIG = config.ForecastSchemaConfig()
 
@@ -38,15 +41,18 @@ def evaluate(
     # TODO: aligning forecast and obs dataset using more robust method
     point_obs, gridded_obs = _open_obs_datasets(eval_config)
     forecast_dataset = _open_forecast_dataset(eval_config, forecast_schema_config)
+    logger.info("Forecast and obs datasets opened")
     if gridded_obs:
         gridded_obs = utils.map_era5_vars_to_forecast(
             DEFAULT_FORECAST_SCHEMA_CONFIG, forecast_dataset, gridded_obs
         )
+        logger.info("Gridded obs aligned to data var schema")
     base_dir = os.path.dirname(os.path.abspath(__file__))
     events_file_path = os.path.join(base_dir, "../../assets/data/events.yaml")
     all_results = {}
     with open(events_file_path, "r") as file:
         yaml_event_case = yaml.safe_load(file)
+        logger.info("Event yaml loaded at %s", events_file_path)
 
     for event in eval_config.event_types:
         cases = dacite.from_dict(data_class=event, data=yaml_event_case)
@@ -110,6 +116,7 @@ def _evaluate_case(
     Returns:
         An xarray Dataset containing the evaluation results for the case.
     """
+    logger.info("Evaluating case %s, %s", individual_case.id, individual_case.title)
     variable_subset_ds = individual_case._subset_data_vars(forecast_dataset)
     time_subset_forecast_ds = individual_case._subset_valid_times(variable_subset_ds)
     # Check if forecast data is available for the case, if not, return None
@@ -134,16 +141,15 @@ def _evaluate_case(
             time_subset_forecast_ds[list(time_subset_forecast_ds.keys())],
             join="inner",
         )
-        spatiotemporal_subset_ds = spatiotemporal_subset_ds.compute()
-        time_subset_gridded_obs_ds = time_subset_gridded_obs_ds.compute()
         for metric in individual_case.metrics_list:
             metric_instance = metric()
             result = metric_instance.compute(
                 spatiotemporal_subset_ds, time_subset_gridded_obs_ds
             )
-            data_vars[metric_instance.name()] = result
+            data_vars[metric_instance.name()] = result.compute()
         return data_vars
     else:
+        raise NotImplementedError("Point observation evaluation not implemented yet!")
         # Each event type has a unique subsetting procedure
         spatiotemporal_subset_ds = individual_case.perform_subsetting_procedure(
             time_subset_forecast_ds
@@ -186,7 +192,6 @@ def _open_forecast_dataset(
         forecast_dataset = utils._open_mlwp_kerchunk_references(
             file_list, forecast_schema_config
         )
-        forecast_dataset = utils.convert_longitude_to_180(forecast_dataset)
     return forecast_dataset
 
 
@@ -202,7 +207,6 @@ def _open_obs_datasets(eval_config: config.Config):
             chunks=None,
             storage_options=dict(token="anon"),
         )
-        gridded_obs = utils.convert_longitude_to_180(gridded_obs)
     if point_obs is None and gridded_obs is None:
         raise ValueError("No grided or point observation data provided.")
     return point_obs, gridded_obs
