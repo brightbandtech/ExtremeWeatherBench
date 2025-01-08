@@ -202,7 +202,6 @@ def _open_mlwp_kerchunk_references(
     file, forecast_schema_config, remote_protocol: str = "s3"
 ):
     """Open a dataset from a kerchunked reference file for the OAR MLWP S3 bucket."""
-    file = file[0]
     if "parq" in file:
         storage_options = {
             "remote_protocol": "s3",
@@ -214,7 +213,7 @@ def _open_mlwp_kerchunk_references(
         open_dataset_options = {"chunks": {}}  # opens passed to xarray
 
         ds = xr.open_dataset(
-            "/home/taylor/code/ExtremeWeatherBench/assets/data/forecasts/PANG_v100_combined_all.parq",
+            file,
             engine="kerchunk",
             storage_options=storage_options,
             open_dataset_options=open_dataset_options,
