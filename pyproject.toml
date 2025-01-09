@@ -26,6 +26,7 @@ dependencies = [
     "tqdm>=4.67.1",
     "ujson>=5.10.0",
     "xarray>=2024.11.0",
+    "zarr>=2.18.4",
 ]
 
 [dependency-groups]
