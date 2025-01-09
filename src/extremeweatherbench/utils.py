@@ -255,3 +255,26 @@ def map_era5_vars_to_forecast(forecast_schema_config, forecast_dataset, era5_dat
             era5_dataset = era5_dataset.rename({ERA5_MAPPING[variable]: variable})
             era5_subset_list.append(variable)
     return era5_dataset[era5_subset_list]
+
+
+def expand_lead_times_to_6_hourly(dataarray: xr.DataArray) -> xr.DataArray:
+    """Hacky way to make sure there are 41 timesteps of 0 to 240 hours in metrics output.
+    Depending on initialization time and lead time of MAE cases, there may be missing lead times."""
+    all_hours = np.arange(0, 241, 6)
+    final_data = []
+    final_times = []
+    current_idx = 0
+    for hour in all_hours:
+        if (
+            current_idx < len(dataarray.lead_time)
+            and dataarray.lead_time[current_idx] == hour
+        ):
+            final_data.append(dataarray.values[current_idx])
+            current_idx += 1
+        else:
+            final_data.append(None)
+        final_times.append(hour)
+    dataarray = xr.DataArray(
+        data=final_data, dims=["lead_time"], coords={"lead_time": final_times}
+    )
+    return dataarray
