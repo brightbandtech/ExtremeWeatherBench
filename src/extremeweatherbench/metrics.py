@@ -127,6 +127,9 @@ class MaximumMAE(Metric):
                         maximummae_values.append(maximummae_dataarray)
         maximummae_dataset = xr.concat(maximummae_values, dim="lead_time")
 
+        # Reverse the lead time so that the minimum lead time is first
+        maximummae_dataset = maximummae_dataset.isel(lead_time=slice(None, None, -1))
+
         return maximummae_dataset
 
     def subset_max(self, dataset: xr.Dataset):
