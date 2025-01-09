@@ -134,7 +134,7 @@ class IndividualHeatWaveCase(IndividualCase):
     """
 
     metrics_list: List[metrics.Metric] = dataclasses.field(
-        default_factory=lambda: [metrics.RegionalRMSE]
+        default_factory=lambda: [metrics.RegionalRMSE, metrics.MaximumMAE]
     )
     data_vars: List[str] = dataclasses.field(
         default_factory=lambda: ["air_temperature"]
