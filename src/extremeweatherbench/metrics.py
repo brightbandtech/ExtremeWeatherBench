@@ -4,6 +4,7 @@ import numpy as np
 import xarray as xr
 from scores.continuous import rmse
 import logging
+from extremeweatherbench import utils
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -102,10 +103,8 @@ class MaximumMAE(Metric):
                 else:
                     max_date = observation_spatial_mean[var].idxmax("time").values
                     max_value = observation_spatial_mean[var].sel(time=max_date).values
-                    init_forecast_spatial_mean, subset_observation_spatial_mean = (
-                        self.align_datasets(
-                            forecast_spatial_mean, observation_spatial_mean, init_time
-                        )
+                    init_forecast_spatial_mean, _ = self.align_datasets(
+                        forecast_spatial_mean, observation_spatial_mean, init_time
                     )
 
                     if max_date in init_forecast_spatial_mean.time.values:
@@ -125,17 +124,20 @@ class MaximumMAE(Metric):
                             coords={"lead_time": lead_time.values},
                         )
                         maximummae_values.append(maximummae_dataarray)
-        maximummae_dataset = xr.concat(maximummae_values, dim="lead_time")
+        maximummae_dataarray = xr.concat(maximummae_values, dim="lead_time")
 
         # Reverse the lead time so that the minimum lead time is first
-        maximummae_dataset = maximummae_dataset.isel(lead_time=slice(None, None, -1))
-
-        return maximummae_dataset
-
-    def subset_max(self, dataset: xr.Dataset):
-        """Subset the input dataset to only include the maximum values."""
-        subset_dataset = dataset.mean(["latitude", "longitude"]).max()
-        return subset_dataset
+        maximummae_dataarray = maximummae_dataarray.isel(
+            lead_time=slice(None, None, -1)
+        )
+        maximummae_dataarray = utils.expand_lead_times_to_6_hourly(maximummae_dataarray)
+        if (
+            max_date.astype("datetime64[Y]").astype(int) + 1970 == 2023
+            and any(observation["longitude"] > 100)
+            and any(observation["latitude"] < -30)
+        ):
+            breakpoint()
+        return maximummae_dataarray
 
 
 @dataclasses.dataclass
