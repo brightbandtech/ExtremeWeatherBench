@@ -100,6 +100,7 @@ class MaximumMAE(Metric):
             output_maximummae = abs(forecast_max - observation_max)
             maximummae_values.append(output_maximummae)
         maximummae_dataset = xr.concat(maximummae_values, dim="time")
+        breakpoint()
         grouped_fhour_maximummae_dataset = maximummae_dataset.groupby(
             "lead_time"
         ).mean()
