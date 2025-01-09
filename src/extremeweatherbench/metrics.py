@@ -90,21 +90,44 @@ class MaximumMAE(Metric):
 
     def compute(self, forecast: xr.Dataset, observation: xr.Dataset):
         maximummae_values = []
-        for init_time in forecast.init_time:
-            logger.info("Computing MaximumMAE for model run %s", init_time.values)
-            init_forecast, subset_observation = self.align_datasets(
-                forecast, observation, init_time
-            )
-            observation_max = self.subset_max(subset_observation)
-            forecast_max = self.subset_max(init_forecast)
-            output_maximummae = abs(forecast_max - observation_max)
-            maximummae_values.append(output_maximummae)
-        maximummae_dataset = xr.concat(maximummae_values, dim="time")
-        breakpoint()
-        grouped_fhour_maximummae_dataset = maximummae_dataset.groupby(
-            "lead_time"
-        ).mean()
-        return grouped_fhour_maximummae_dataset
+        observation_spatial_mean = observation.mean(["latitude", "longitude"])
+        observation_spatial_mean = observation_spatial_mean.where(
+            observation_spatial_mean.time.dt.hour % 6 == 0, drop=True
+        )
+        forecast_spatial_mean = forecast.mean(["latitude", "longitude"])
+        for init_time in forecast_spatial_mean.init_time:
+            for var in observation_spatial_mean.data_vars:
+                if var != "air_temperature":
+                    logger.warning("MaximumMAE only supports air_temperature")
+                else:
+                    max_date = observation_spatial_mean[var].idxmax("time").values
+                    max_value = observation_spatial_mean[var].sel(time=max_date).values
+                    init_forecast_spatial_mean, subset_observation_spatial_mean = (
+                        self.align_datasets(
+                            forecast_spatial_mean, observation_spatial_mean, init_time
+                        )
+                    )
+
+                    if max_date in init_forecast_spatial_mean.time.values:
+                        lead_time = init_forecast_spatial_mean.where(
+                            init_forecast_spatial_mean.time == max_date, drop=True
+                        ).lead_time
+                        maximummae_dataarray = xr.DataArray(
+                            data=[
+                                abs(
+                                    init_forecast_spatial_mean.max()[
+                                        "air_temperature"
+                                    ].values
+                                    - max_value
+                                )
+                            ],
+                            dims=["lead_time"],
+                            coords={"lead_time": lead_time.values},
+                        )
+                        maximummae_values.append(maximummae_dataarray)
+        maximummae_dataset = xr.concat(maximummae_values, dim="lead_time")
+
+        return maximummae_dataset
 
     def subset_max(self, dataset: xr.Dataset):
         """Subset the input dataset to only include the maximum values."""
