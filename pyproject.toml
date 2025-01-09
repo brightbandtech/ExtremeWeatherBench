@@ -28,6 +28,7 @@ dependencies = [
     "ujson>=5.10.0",
     "virtualizarr>=1.2.0",
     "xarray>=2024.11.0",
+    "zarr>=2.18.4",
 ]
 
 [dependency-groups]
