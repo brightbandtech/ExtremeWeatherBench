@@ -10,21 +10,6 @@ from .test_datasets import mock_forecast_dataset
 
 
 class TestGoodCases:
-    def test_check_for_forecast_data_availability(self, mock_forecast_dataset):
-        base_case = case.IndividualCase(
-            id=10,
-            title="Test Case",
-            start_date=pd.Timestamp("2020-01-01"),
-            end_date=pd.Timestamp("2020-01-14"),
-            location=Location(latitude=40, longitude=-100),
-            bounding_box_km=500,
-            event_type="heat_wave",
-        )
-        assert (
-            base_case._check_for_forecast_data_availability(mock_forecast_dataset)
-            is True
-        )
-
     def test_perform_subsetting_procedure_heatwave(self, mock_forecast_dataset):
         heatwave_case = case.IndividualHeatWaveCase(
             id=20,
@@ -68,7 +53,3 @@ class TestGoodCases:
         )
         with pytest.raises(NotImplementedError):
             base_case.perform_subsetting_procedure(mock_forecast_dataset)
-        assert (
-            base_case._check_for_forecast_data_availability(mock_forecast_dataset)
-            is True
-        )
