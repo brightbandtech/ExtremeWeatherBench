@@ -22,11 +22,13 @@ dependencies = [
     "rioxarray>=0.18.1",
     "s3fs>=2024.12.0",
     "scikit-learn>=1.6.0",
+    "scores>=2.0.0",
     "seaborn>=0.13.2",
     "shapely>=2.0.6",
     "tqdm>=4.67.1",
     "ujson>=5.10.0",
     "xarray>=2024.11.0",
+    "zarr>=2.18.4",
 ]
 
 [dependency-groups]
