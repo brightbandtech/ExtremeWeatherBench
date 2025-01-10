@@ -1,10 +1,8 @@
 import pytest
 import xarray as xr
 import pandas as pd
-import datetime
 from extremeweatherbench import config, events, case, evaluate
-from pathlib import Path
-from .test_datasets import mock_forecast_dataset
+from .test_datasets import mock_forecast_dataset  # noqa: F401
 
 
 @pytest.fixture
