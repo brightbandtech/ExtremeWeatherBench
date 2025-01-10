@@ -19,7 +19,7 @@ DEFAULT_FORECAST_SCHEMA_CONFIG = config.ForecastSchemaConfig()
 def evaluate(
     eval_config: config.Config,
     forecast_schema_config: config.ForecastSchemaConfig = DEFAULT_FORECAST_SCHEMA_CONFIG,
-    dry_run: bool = False,
+    no_computation: bool = False,
 ) -> dict[str, list[xr.Dataset]]:
     """Driver for evaluating a collection of Cases across a set of Events.
 
@@ -27,7 +27,7 @@ def evaluate(
         eval_config: A configuration object defining the evaluation run.
         forecast_schema_config: A mapping of the forecast variable naming schema to use
             when reading / decoding forecast data in the analysis.
-        dry_run: Flag to disable performing actual calculations (but still validate
+        no_computation: Flag to disable performing actual calculations (but still validate
             case configurations). Defaults to "False."
 
     Returns:
@@ -35,13 +35,6 @@ def evaluate(
         evaluation results for each case within the event type.
     """
 
-    # TODO: aligning forecast and obs dataset using more robust method
-    point_obs, gridded_obs = _open_obs_datasets(eval_config)
-    forecast_dataset = _open_forecast_dataset(eval_config, forecast_schema_config)
-    if gridded_obs:
-        gridded_obs = utils.map_era5_vars_to_forecast(
-            DEFAULT_FORECAST_SCHEMA_CONFIG, forecast_dataset, gridded_obs
-        )
     base_dir = os.path.dirname(os.path.abspath(__file__))
     events_file_path = os.path.join(base_dir, "../../assets/data/events.yaml")
     all_results = {}
@@ -49,10 +42,23 @@ def evaluate(
         yaml_event_case = yaml.safe_load(file)
 
     for event in eval_config.event_types:
-        cases = dacite.from_dict(data_class=event, data=yaml_event_case)
-        if dry_run:  # temporary validation for the cases
+        cases = dacite.from_dict(
+            data_class=event,
+            data=yaml_event_case,
+            config=dacite.Config(cast=[pd.Timestamp]),
+        )
+        if no_computation:  # temporary validation for the cases
             return cases
         else:
+            # TODO: aligning forecast and obs dataset using more robust method
+            point_obs, gridded_obs = _open_obs_datasets(eval_config)
+            forecast_dataset = _open_forecast_dataset(
+                eval_config, forecast_schema_config
+            )
+            if gridded_obs:
+                gridded_obs = utils.map_era5_vars_to_forecast(
+                    DEFAULT_FORECAST_SCHEMA_CONFIG, forecast_dataset, gridded_obs
+                )
             results = _evaluate_cases_loop(
                 cases, forecast_dataset, gridded_obs, point_obs
             )
@@ -147,7 +153,7 @@ def _evaluate_case(
 # TODO simplify to one paradigm, don't use nc, zarr, AND json
 def _open_forecast_dataset(
     eval_config: config.Config,
-    forecast_schema_config: Optional[config.ForecastSchemaConfig] = None,
+    forecast_schema_config: config.ForecastSchemaConfig = DEFAULT_FORECAST_SCHEMA_CONFIG,
 ):
     logging.info("Opening forecast dataset")
     if eval_config.forecast_dir.startswith("s3://"):
@@ -197,5 +203,5 @@ def _open_obs_datasets(eval_config: config.Config):
         gridded_obs = utils.convert_longitude_to_180(gridded_obs)
 
     if point_obs is None and gridded_obs is None:
-        raise ValueError("No grided or point observation data provided.")
+        raise ValueError("No gridded or point observation data provided.")
     return point_obs, gridded_obs
