@@ -4,10 +4,15 @@ Some code similarly structured to WeatherBench (Rasp et al.)."""
 import dataclasses
 import datetime
 from extremeweatherbench.utils import Location
-from typing import List, Optional, Dict, Type
+from typing import List, Optional
 from extremeweatherbench import metrics, utils
 import xarray as xr
 from enum import StrEnum
+import logging
+import pandas as pd
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 @dataclasses.dataclass
@@ -20,27 +25,25 @@ class IndividualCase:
 
     Attributes:
         id: A unique numerical identifier for the event.
-        start_date: A datetime.date object representing the start date of the case, for
-            use in subsetting data for analysis.
-        end_date: A datetime.date object representing the end date of the case, for use
-            in subsetting data for analysis.
+        start_date: The start date of the case, for use in subsetting data for analysis.
+        end_date: The end date of the case, for use in subsetting data for analysis.
         location: A Location object representing the latitude and longitude of the event
             center or  focus.
-        bounding_box_km: int: The side length of a bounding box centered on location, in
+        bounding_box_km: The side length of a bounding box centered on location, in
             kilometers.
-        event_type: str: A string representing the type of extreme weather event.
-        cross_listed: Optional[List[str]]: A list of other event types that this case
-            study is cross-listed under.
+        event_type: A string representing the type of extreme weather event.
+        cross_listed: A list of other event types that this case study is cross-listed under.
     """
 
     id: int
     title: str
-    start_date: datetime.date
-    end_date: datetime.date
+    start_date: pd.Timestamp
+    end_date: pd.Timestamp
     location: dict
     bounding_box_km: float
     event_type: str
     cross_listed: Optional[List[str]] = None
+    data_vars: Optional[List[str]] = None
 
     def __post_init__(self):
         if isinstance(self.location, dict):
@@ -60,7 +63,7 @@ class IndividualCase:
         """
         raise NotImplementedError
 
-    def subset_data_vars(self, dataset):
+    def _subset_data_vars(self, dataset: xr.Dataset) -> xr.Dataset:
         """Subset the input dataset to only include the variables specified in data_vars.
 
         Args:
@@ -69,7 +72,55 @@ class IndividualCase:
         Returns:
             xr.Dataset: The subset dataset.
         """
-        raise NotImplementedError
+        subset_dataset = dataset
+        if self.data_vars is not None:
+            subset_dataset = subset_dataset[self.data_vars]
+        return subset_dataset
+
+    def _subset_valid_times(self, dataset: xr.Dataset) -> xr.Dataset:
+        """Subset the input dataset to only include the valid times within the case period.
+        Args:
+            dataset: xr.Dataset: The input dataset to subset.
+
+        Returns:
+            xr.Dataset: The subset dataset.
+        """
+
+        time_subset_ds = dataset.sel(time=slice(self.start_date, self.end_date))
+        return time_subset_ds
+
+    def _check_for_forecast_data_availability(
+        self,
+        forecast_dataset: xr.Dataset,
+    ) -> bool:
+        """Check if the forecast and observation datasets have overlapping time periods.
+
+        Args:
+            forecast_dataset: The forecast dataset.
+            gridded_obs: The gridded observation dataset.
+
+        Returns:
+            True if the datasets have overlapping time periods, False otherwise.
+        """
+        lead_time_len = len(forecast_dataset.init_time)
+        valid_time_len = len(forecast_dataset.time)
+
+        if valid_time_len == 0:
+            logger.warning("No forecast data available for case %s, skipping", self.id)
+            return False
+        elif valid_time_len < (self.end_date - self.start_date).days:
+            logger.warning(
+                "Fewer valid times in forecast than days in case %s, results likely unreliable",
+                self.id,
+            )
+        else:
+            logger.info("Forecast data available for case %s", self.id)
+        logger.info("Lead time length for case %s: %s", self.id, lead_time_len)
+        logger.info(
+            "Total time step count (valid times by forecasr hour) for case: %s",
+            lead_time_len * valid_time_len,
+        )
+        return True
 
 
 @dataclasses.dataclass
@@ -91,28 +142,12 @@ class IndividualHeatWaveCase(IndividualCase):
     )
 
     def perform_subsetting_procedure(self, dataset: xr.Dataset) -> xr.Dataset:
-        modified_ds = dataset.sel(time=slice(self.start_date, self.end_date))
-        modified_ds = self._subset_data_vars(modified_ds)
-        modified_ds = utils.convert_longitude_to_180(modified_ds)
+        modified_ds = self._subset_data_vars(dataset)
         modified_ds = utils.clip_dataset_to_bounding_box(
             modified_ds, self.location, self.bounding_box_km
         )
         modified_ds = utils.remove_ocean_gridpoints(modified_ds)
         return modified_ds
-
-    def _subset_data_vars(self, dataset: xr.Dataset) -> xr.Dataset:
-        """Subset the input dataset to only include the variables specified in data_vars.
-
-        Args:
-            dataset: xr.Dataset: The input dataset to subset.
-            data_vars: the variables within the ForecastSchemaConfig to subset.
-
-        Returns:
-            xr.Dataset: The subset dataset.
-        """
-        if self.data_vars is not None:
-            return dataset[self.data_vars]
-        return dataset
 
 
 @dataclasses.dataclass
@@ -134,25 +169,10 @@ class IndividualFreezeCase(IndividualCase):
     )
 
     def perform_subsetting_procedure(self, dataset) -> xr.Dataset:
-        modified_ds = dataset.sel(time=slice(self.start_date, self.end_date))
-        modified_ds = utils.convert_longitude_to_180(dataset)
         modified_ds = utils.clip_dataset_to_bounding_box(
             dataset, self.location, self.bounding_box_km
         )
         return modified_ds
-
-    def subset_data_vars(self, dataset: xr.Dataset) -> xr.Dataset:
-        """Subset the input dataset to only include the variables specified in data_vars.
-
-        Args:
-            dataset: xr.Dataset: The input dataset to subset.
-            data_vars: the variables within the ForecastSchemaConfig to subset.
-        Returns:
-            xr.Dataset: The subset dataset.
-        """
-        if self.data_vars is not None:
-            return dataset[self.data_vars]
-        return dataset
 
 
 # maps the case event type to the corresponding dataclass
