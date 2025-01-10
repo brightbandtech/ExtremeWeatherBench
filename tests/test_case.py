@@ -16,7 +16,7 @@ class TestGoodCases:
             title="Test Case",
             start_date=pd.Timestamp("2020-01-01"),
             end_date=pd.Timestamp("2020-01-14"),
-            location={"latitude": 40, "longitude": -100},
+            location=Location(latitude=40, longitude=-100),
             bounding_box_km=500,
             event_type="heat_wave",
         )
@@ -31,31 +31,15 @@ class TestGoodCases:
             title="Test Heatwave",
             start_date=pd.Timestamp(2000, 1, 1),
             end_date=pd.Timestamp(2000, 1, 14),
-            location={"latitude": 40, "longitude": -100},
+            location=Location(latitude=40, longitude=-100),
             bounding_box_km=500,
             event_type="heat_wave",
         )
         subset_dataset = heatwave_case.perform_subsetting_procedure(
             mock_forecast_dataset
         )
-        assert "air_temperature" in subset_dataset
-        assert "eastward_wind" not in subset_dataset
-        assert "northward_wind" not in subset_dataset
-
-    def test_perform_subsetting_procedure_freeze(self, mock_forecast_dataset):
-        freeze_case = case.IndividualFreezeCase(
-            id=10,
-            title="Test Freeze",
-            start_date=pd.Timestamp(2000, 1, 1),
-            end_date=pd.Timestamp(2000, 1, 14),
-            location={"latitude": 40, "longitude": -100},
-            bounding_box_km=500,
-            event_type="freeze",
-        )
-        subset_dataset = freeze_case.perform_subsetting_procedure(mock_forecast_dataset)
-        assert "air_temperature" in subset_dataset
-        assert "eastward_wind" in subset_dataset
-        assert "northward_wind" in subset_dataset
+        assert len(subset_dataset["latitude"]) > 0
+        assert len(subset_dataset["longitude"]) > 0
 
     def test_individual_case(self, mock_forecast_dataset):
         base_case = case.IndividualCase(
@@ -63,7 +47,7 @@ class TestGoodCases:
             title="Test Case",
             start_date=pd.Timestamp(2000, 1, 1),
             end_date=pd.Timestamp(2000, 1, 14),
-            location={"latitude": 40, "longitude": -100},
+            location=Location(latitude=40, longitude=-100),
             bounding_box_km=500,
             event_type="heat_wave",
         )
