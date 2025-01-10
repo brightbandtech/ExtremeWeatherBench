@@ -207,7 +207,7 @@ def _open_mlwp_kerchunk_reference(
             "target_protocol": "file",
             "lazy": True,
         }  # options passed to fsspec
-        open_dataset_options = {"chunks": {}}  # opens passed to xarray
+        open_dataset_options: dict = {"chunks": {}}  # opens passed to xarray
 
         ds = xr.open_dataset(
             file,
