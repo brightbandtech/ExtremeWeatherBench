@@ -40,14 +40,25 @@ def evaluate(
     all_results = {}
     with open(events_file_path, "r") as file:
         yaml_event_case = yaml.safe_load(file)
-
+    for k, v in yaml_event_case.items():
+        if k == "cases":
+            for individual_case in v:
+                if "location" in individual_case:
+                    individual_case["location"]["longitude"] = (
+                        utils.convert_longitude_to_360(
+                            individual_case["location"]["longitude"]
+                        )
+                    )
+                    individual_case["location"] = utils.Location(
+                        **individual_case["location"]
+                    )
     for event in eval_config.event_types:
         cases = dacite.from_dict(
             data_class=event,
             data=yaml_event_case,
             config=dacite.Config(cast=[pd.Timestamp]),
         )
-        if dry_run:  # temporary validation for the cases
+        if dry_run:  # validation for some cases; returns first event type
             return cases
         else:
             point_obs, gridded_obs = _open_obs_datasets(eval_config)
