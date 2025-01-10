@@ -168,11 +168,6 @@ def _evaluate_case(
             )
             data_vars[metric_instance.name()] = result
         return data_vars
-    else:
-        # Each event type has a unique subsetting procedure
-        spatiotemporal_subset_ds = individual_case.perform_subsetting_procedure(
-            time_subset_forecast_ds
-        )
     if point_obs is not None:
         pass
 
