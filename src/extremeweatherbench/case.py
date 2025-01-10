@@ -85,8 +85,7 @@ class IndividualCase:
         Returns:
             xr.Dataset: The subset dataset.
         """
-        print(dataset)
-        print(dataset.time[0:100])
+
         time_subset_ds = dataset.sel(time=slice(self.start_date, self.end_date))
         return time_subset_ds
 
