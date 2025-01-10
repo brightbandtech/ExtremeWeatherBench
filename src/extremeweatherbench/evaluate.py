@@ -50,7 +50,6 @@ def evaluate(
         if no_computation:  # temporary validation for the cases
             return cases
         else:
-            # TODO: aligning forecast and obs dataset using more robust method
             point_obs, gridded_obs = _open_obs_datasets(eval_config)
             forecast_dataset = _open_forecast_dataset(
                 eval_config, forecast_schema_config
@@ -150,7 +149,6 @@ def _evaluate_case(
         return xr.Dataset(data_vars)
 
 
-# TODO simplify to one paradigm, don't use nc, zarr, AND json
 def _open_forecast_dataset(
     eval_config: config.Config,
     forecast_schema_config: config.ForecastSchemaConfig = DEFAULT_FORECAST_SCHEMA_CONFIG,
