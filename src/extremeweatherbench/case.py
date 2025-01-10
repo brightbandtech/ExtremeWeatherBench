@@ -69,7 +69,7 @@ class IndividualCase:
         Returns:
             xr.Dataset: The subset dataset.
         """
-        subset_dataset = dataset.copy()
+        subset_dataset = dataset
         if self.data_vars is not None:
             subset_dataset = subset_dataset[self.data_vars]
         subset_dataset["time"] = dataset["time"]
@@ -135,9 +135,6 @@ class IndividualHeatWaveCase(IndividualCase):
     )
 
     def perform_subsetting_procedure(self, dataset: xr.Dataset) -> xr.Dataset:
-        modified_ds = dataset.sel(time=slice(self.start_date, self.end_date))
-        modified_ds = self._subset_data_vars(modified_ds)
-        modified_ds = utils.convert_longitude_to_180(modified_ds)
         modified_ds = utils.clip_dataset_to_bounding_box(
             dataset, self.location, self.bounding_box_km
         )
