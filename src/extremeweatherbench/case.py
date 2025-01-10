@@ -26,27 +26,25 @@ class IndividualCase:
 
     Attributes:
         id: A unique numerical identifier for the event.
-        start_date: A datetime.date object representing the start date of the case, for
-            use in subsetting data for analysis.
-        end_date: A datetime.date object representing the end date of the case, for use
-            in subsetting data for analysis.
+        start_date: The start date of the case, for use in subsetting data for analysis.
+        end_date: The end date of the case, for use in subsetting data for analysis.
         location: A Location object representing the latitude and longitude of the event
             center or  focus.
-        bounding_box_km: int: The side length of a bounding box centered on location, in
+        bounding_box_km: The side length of a bounding box centered on location, in
             kilometers.
-        event_type: str: A string representing the type of extreme weather event.
-        cross_listed: Optional[List[str]]: A list of other event types that this case
-            study is cross-listed under.
+        event_type: A string representing the type of extreme weather event.
+        cross_listed: A list of other event types that this case study is cross-listed under.
     """
 
     id: int
     title: str
-    start_date: datetime.date
-    end_date: datetime.date
+    start_date: pd.Timestamp
+    end_date: pd.Timestamp
     location: dict
     bounding_box_km: float
     event_type: str
     cross_listed: Optional[List[str]] = None
+    data_vars: Optional[List[str]] = None
 
     def __post_init__(self):
         if isinstance(self.location, dict):
