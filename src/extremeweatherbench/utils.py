@@ -196,23 +196,39 @@ def _open_kerchunk_zarr_reference_jsons(
     return xr.concat(xarray_datasets, dim=forecast_schema_config.init_time)
 
 
-def _open_mlwp_kerchunk_reference_jsons(
-    json_file, forecast_schema_config, remote_protocol: str = "s3"
+def _open_mlwp_kerchunk_reference(
+    file, forecast_schema_config, remote_protocol: str = "s3"
 ):
-    """Open a dataset from a kerchunked json reference file for the OAR MLWP S3 bucket."""
-    json_file = json_file[0]
-    ds = xr.open_dataset(
-        "reference://",
-        engine="zarr",
-        backend_kwargs={
-            "consolidated": False,
-            "storage_options": {
-                "fo": json_file,
-                "remote_protocol": remote_protocol,
-                "remote_options": {"anon": True},
+    """Open a dataset from a kerchunked reference file for the OAR MLWP S3 bucket."""
+    if "parq" in file:
+        storage_options = {
+            "remote_protocol": "s3",
+            "skip_instance_cache": True,
+            "remote_options": {"anon": True},
+            "target_protocol": "file",
+            "lazy": True,
+        }  # options passed to fsspec
+        open_dataset_options = {"chunks": {}}  # opens passed to xarray
+
+        ds = xr.open_dataset(
+            file,
+            engine="kerchunk",
+            storage_options=storage_options,
+            open_dataset_options=open_dataset_options,
+        )
+    else:
+        ds = xr.open_dataset(
+            "reference://",
+            engine="zarr",
+            backend_kwargs={
+                "consolidated": False,
+                "storage_options": {
+                    "fo": file,
+                    "remote_protocol": remote_protocol,
+                    "remote_options": {"anon": True},
+                },
             },
-        },
-    )
+        )
     ds = ds.rename({"time": "lead_time"})
     ds["lead_time"] = range(0, 241, 6)
     for variable in forecast_schema_config.__dict__:
@@ -237,3 +253,26 @@ def map_era5_vars_to_forecast(forecast_schema_config, forecast_dataset, era5_dat
             era5_dataset = era5_dataset.rename({ERA5_MAPPING[variable]: variable})
             era5_subset_list.append(variable)
     return era5_dataset[era5_subset_list]
+
+
+def expand_lead_times_to_6_hourly(dataarray: xr.DataArray) -> xr.DataArray:
+    """Hacky way to make sure there are 41 timesteps of 0 to 240 hours in metrics output.
+    Depending on initialization time and lead time of MAE cases, there may be missing lead times."""
+    all_hours = np.arange(0, 241, 6)
+    final_data = []
+    final_times = []
+    current_idx = 0
+    for hour in all_hours:
+        if (
+            current_idx < len(dataarray.lead_time)
+            and dataarray.lead_time[current_idx] == hour
+        ):
+            final_data.append(dataarray.values[current_idx])
+            current_idx += 1
+        else:
+            final_data.append(None)
+        final_times.append(hour)
+    dataarray = xr.DataArray(
+        data=final_data, dims=["lead_time"], coords={"lead_time": final_times}
+    )
+    return dataarray
