@@ -190,7 +190,6 @@ def _open_forecast_dataset(
         forecast_dataset = utils._open_mlwp_kerchunk_reference_jsons(
             file_list, forecast_schema_config
         )
-        forecast_dataset = utils.convert_longitude_to_180(forecast_dataset)
     return forecast_dataset
 
 
@@ -206,7 +205,6 @@ def _open_obs_datasets(eval_config: config.Config):
             chunks=None,
             storage_options=dict(token="anon"),
         )
-        gridded_obs = utils.convert_longitude_to_180(gridded_obs)
     if point_obs is None and gridded_obs is None:
         raise ValueError("No gridded or point observation data provided.")
     return point_obs, gridded_obs

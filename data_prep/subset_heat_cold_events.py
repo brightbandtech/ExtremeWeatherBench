@@ -37,7 +37,6 @@ def subset_event_and_mask_climatology(
     ).rename_vars({"2m_temperature": "2m_temperature_85th_percentile"})
 
     merged_dataset = xr.merge([subset_climatology, era5_event], join="inner")
-    merged_dataset = utils.convert_longitude_to_180(merged_dataset)
     merged_dataset = utils.clip_dataset_to_bounding_box(
         merged_dataset,
         single_case.location_center,
