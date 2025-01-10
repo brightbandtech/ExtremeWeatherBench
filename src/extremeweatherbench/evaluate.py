@@ -3,7 +3,7 @@
 import logging
 import fsspec
 import os
-from typing import Optional
+from typing import Optional, Any
 import pandas as pd
 import xarray as xr
 from extremeweatherbench import config, events, case, utils
@@ -21,7 +21,7 @@ def evaluate(
     eval_config: config.Config,
     forecast_schema_config: config.ForecastSchemaConfig = DEFAULT_FORECAST_SCHEMA_CONFIG,
     dry_run: bool = False,
-) -> dict[str, list[xr.Dataset]]:
+) -> dict[str, list[Any]]:
     """Driver for evaluating a collection of Cases across a set of Events.
 
     Args:
@@ -86,7 +86,7 @@ def _evaluate_cases_loop(
     forecast_dataset: xr.Dataset,
     gridded_obs: Optional[xr.Dataset] = None,
     point_obs: Optional[pd.DataFrame] = None,
-) -> dict[xr.Dataset]:
+) -> dict[int, xr.Dataset]:
     """Sequentially loop over and evalute all cases for a specific event type.
 
     Args:
@@ -116,7 +116,7 @@ def _evaluate_case(
     forecast_dataset: xr.Dataset,
     gridded_obs: xr.Dataset,
     point_obs: pd.DataFrame,
-) -> dict:
+) -> Optional[dict[str, xr.Dataset]]:
     """Evaluate a single case given forecast data and observations.
 
     Args:
@@ -144,8 +144,8 @@ def _evaluate_case(
             individual_case.id,
         )
     logger.info("Forecast data available for case %s", individual_case.id)
+    data_vars = {}
     if gridded_obs is not None:
-        data_vars = {}
         variable_subset_gridded_obs = individual_case._subset_data_vars(gridded_obs)
         time_subset_gridded_obs_ds = variable_subset_gridded_obs.sel(
             time=slice(individual_case.start_date, individual_case.end_date)
@@ -167,9 +167,9 @@ def _evaluate_case(
                 spatiotemporal_subset_ds, time_subset_gridded_obs_ds
             )
             data_vars[metric_instance.name()] = result
-        return data_vars
     if point_obs is not None:
         pass
+    return data_vars
 
 
 def _open_forecast_dataset(
