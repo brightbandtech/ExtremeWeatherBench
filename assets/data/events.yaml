@@ -12,7 +12,7 @@ cases:
     cross_listed:
   - id: 2
     title: 2022 Upper Midwest
-    start_date: 2022-05-08
+    start_date: 2022-05-07
     end_date: 2022-05-17
     location: 
       latitude:  41.8781
@@ -52,7 +52,7 @@ cases:
     cross_listed:
   - id: 6
     title: 2022 Mid-Atlantic
-    start_date: 2022-05-18
+    start_date: 2022-05-17
     end_date: 2022-05-24
     location: 
       latitude:  39.2904
@@ -222,7 +222,7 @@ cases:
     cross_listed:
   - id: 23
     title: 2022 Japan
-    start_date: 2022-06-21
+    start_date: 2022-06-20
     end_date: 2022-07-05
     location: 
       latitude:  35.6895
@@ -242,7 +242,7 @@ cases:
     cross_listed:
   - id: 25
     title: 2022 East Antarctica
-    start_date: 2022-03-13
+    start_date: 2022-03-12
     end_date: 2022-03-26
     location: 
       latitude: -75.1000
@@ -252,7 +252,7 @@ cases:
     cross_listed:
   - id: 26
     title: 2022 West Australia
-    start_date: 2022-01-16
+    start_date: 2022-01-15
     end_date: 2022-01-25
     location: 
       latitude: -31.9505
@@ -262,7 +262,7 @@ cases:
     cross_listed:
   - id: 27
     title: 2021 Canada Plains
-    start_date: 2021-05-31
+    start_date: 2021-05-30
     end_date: 2021-06-09
     location: 
       latitude: 49.0000
@@ -272,7 +272,7 @@ cases:
     cross_listed:
   - id: 28
     title: 2021 New Zealand
-    start_date: 2021-01-23
+    start_date: 2021-01-22
     end_date: 2021-01-29
     location: 
       latitude: -43.8983
@@ -282,7 +282,7 @@ cases:
     cross_listed:
   - id: 29
     title: 2020 Australia
-    start_date: 2020-11-26
+    start_date: 2020-11-25
     end_date: 2020-11-30
     location: 
       latitude: -33.8245
