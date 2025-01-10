@@ -1,12 +1,9 @@
 import pytest
-import xarray as xr
-import numpy as np
 import extremeweatherbench.case as case
 import pandas as pd
-import datetime
-import rioxarray
+import rioxarray  # noqa: F401
 from extremeweatherbench.utils import Location
-from .test_datasets import mock_forecast_dataset
+from .test_datasets import mock_forecast_dataset  # noqa: F401
 
 
 class TestGoodCases:

@@ -1,11 +1,9 @@
 """Evaluation routines for use during ExtremeWeatherBench case studies / analyses."""
 
-# TODO(taylor): Incorporate logging diagnostics throughout evaluation stack.
 import logging
 import fsspec
 import os
 from typing import Optional
-import logging
 import pandas as pd
 import xarray as xr
 from extremeweatherbench import config, events, case, utils

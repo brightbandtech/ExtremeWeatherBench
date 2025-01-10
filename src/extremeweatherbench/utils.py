@@ -2,9 +2,8 @@
 other specialized package.
 """
 
-import logging
-from typing import Optional, Union
-from collections import namedtuple, defaultdict
+from typing import Union
+from collections import namedtuple
 import fsspec
 import geopandas as gpd
 import numpy as np
