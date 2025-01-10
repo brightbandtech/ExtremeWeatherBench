@@ -32,7 +32,7 @@ def mock_config():
 
 
 def test_evaluate_no_computation(mock_config):
-    result = evaluate.evaluate(mock_config, no_computation=True)
+    result = evaluate.evaluate(mock_config, dry_run=True)
     assert isinstance(result, events.EventContainer)
 
 
@@ -64,8 +64,8 @@ def test_open_obs_datasets_no_forecast_paths():
         evaluate._open_forecast_dataset(invalid_config)
 
 
-def test_evaluate_case(mock_forecast_dataset, mock_gridded_obs):
-    test_case = case.IndividualCase(
+def test_evaluate_base_case(mock_forecast_dataset, mock_gridded_obs):
+    base_case = case.IndividualCase(
         id=1,
         title="test_case",
         start_date=pd.Timestamp(2020, 1, 1),
@@ -74,7 +74,10 @@ def test_evaluate_case(mock_forecast_dataset, mock_gridded_obs):
         location={"latitude": 45.0, "longitude": -100.0},
         event_type="heat_wave",
     )
-    result = evaluate._evaluate_case(
-        test_case, mock_forecast_dataset, mock_gridded_obs, None
-    )
-    assert isinstance(result, xr.Dataset)
+    with pytest.raises(NotImplementedError):
+        evaluate._evaluate_case(
+            individual_case=base_case,
+            forecast_dataset=mock_forecast_dataset,
+            gridded_obs=mock_gridded_obs,
+            point_obs=None,
+        )

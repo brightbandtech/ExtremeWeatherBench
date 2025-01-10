@@ -3,7 +3,6 @@ Some code similarly structured to WeatherBench (Rasp et al.)."""
 
 import dataclasses
 
-from extremeweatherbench.utils import Location
 from typing import List, Optional, Tuple
 from extremeweatherbench import metrics, utils
 import xarray as xr
@@ -72,7 +71,7 @@ class IndividualCase:
         subset_dataset = dataset
         if self.data_vars is not None:
             subset_dataset = subset_dataset[self.data_vars]
-        subset_dataset["time"] = dataset["time"]
+            subset_dataset["time"] = dataset["time"]
         return subset_dataset
 
     def _subset_valid_times(self, dataset: xr.Dataset) -> xr.Dataset:
