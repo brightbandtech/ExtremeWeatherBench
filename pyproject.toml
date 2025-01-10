@@ -16,7 +16,6 @@ dependencies = [
     "kerchunk>=0.2.7",
     "numpy>=2.2.0",
     "pandas>=2.2.3",
-    "pytest>=8.3.4",
     "pyyaml>=6.0.2",
     "regionmask>=0.13.0",
     "rioxarray>=0.18.1",
@@ -29,6 +28,14 @@ dependencies = [
     "ujson>=5.10.0",
     "xarray>=2024.11.0",
     "zarr>=2.18.4",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.4",
+    "pytest-cov>=6.0.0",
+    "pytest-mock>=3.14.0",
+    "ruff>=0.9.0",
 ]
 
 [dependency-groups]
