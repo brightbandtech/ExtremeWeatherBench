@@ -145,11 +145,11 @@ class IndividualFreezeCase(IndividualCase):
 class CaseEventType(StrEnum):
     """Enum class for the different types of extreme weather events."""
 
-    HEAT_WAVE = "heat_wave"
-    FREEZE = "freeze"
+    HEAT_WAVE: str = "heat_wave"
+    FREEZE: str = "freeze"
 
 
-CASE_EVENT_TYPE_MATCHER: dict[CaseEventType, IndividualCase] = {
+CASE_EVENT_TYPE_MATCHER: dict[CaseEventType, type[IndividualCase]] = {
     CaseEventType.HEAT_WAVE: IndividualHeatWaveCase,
     CaseEventType.FREEZE: IndividualFreezeCase,
 }
