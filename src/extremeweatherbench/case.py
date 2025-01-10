@@ -86,34 +86,6 @@ class IndividualCase:
         modified_ds = dataset.isel(init_time=np.unique(indices[0]))
         return modified_ds
 
-    def _check_for_forecast_data_availability(
-        self,
-        forecast_dataset: xr.Dataset,
-    ) -> bool:
-        """Check if the forecast and observation datasets have overlapping time periods.
-
-        Args:
-            forecast_dataset: The forecast dataset.
-            gridded_obs: The gridded observation dataset.
-
-        Returns:
-            True if the datasets have overlapping time periods, False otherwise.
-        """
-        lead_time_len = len(forecast_dataset.init_time)
-
-        if lead_time_len == 0:
-            logger.warning("No forecast data available for case %s, skipping", self.id)
-            return False
-        elif lead_time_len < (self.end_date - self.start_date).days:
-            logger.warning(
-                "Fewer valid times in forecast than days in case %s, results likely unreliable",
-                self.id,
-            )
-        else:
-            logger.info("Forecast data available for case %s", self.id)
-        logger.info("Lead time length for case %s: %s", self.id, lead_time_len)
-        return True
-
 
 @dataclasses.dataclass
 class IndividualHeatWaveCase(IndividualCase):

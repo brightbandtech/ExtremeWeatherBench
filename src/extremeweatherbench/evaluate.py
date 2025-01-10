@@ -12,6 +12,9 @@ from extremeweatherbench import config, events, case, utils
 import dacite
 import yaml
 
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
 #: Default mapping for forecast dataset schema.
 DEFAULT_FORECAST_SCHEMA_CONFIG = config.ForecastSchemaConfig()
 
@@ -40,6 +43,7 @@ def evaluate(
     all_results = {}
     with open(events_file_path, "r") as file:
         yaml_event_case = yaml.safe_load(file)
+    logger.info("Event yaml loaded at %s", events_file_path)
     for k, v in yaml_event_case.items():
         if k == "cases":
             for individual_case in v:
@@ -84,7 +88,7 @@ def _evaluate_cases_loop(
     forecast_dataset: xr.Dataset,
     gridded_obs: Optional[xr.Dataset] = None,
     point_obs: Optional[pd.DataFrame] = None,
-) -> list[xr.Dataset]:
+) -> dict[xr.Dataset]:
     """Sequentially loop over and evalute all cases for a specific event type.
 
     Args:
@@ -126,14 +130,22 @@ def _evaluate_case(
     Returns:
         An xarray Dataset containing the evaluation results for the case.
     """
+    logger.info("Evaluating case %s, %s", individual_case.id, individual_case.title)
     variable_subset_ds = individual_case._subset_data_vars(forecast_dataset)
     time_subset_forecast_ds = individual_case._subset_valid_times(variable_subset_ds)
     # Check if forecast data is available for the case, if not, return None
-    forecast_exists = individual_case._check_for_forecast_data_availability(
-        time_subset_forecast_ds
-    )
-    if not forecast_exists:
+    lead_time_len = len(time_subset_forecast_ds.init_time)
+    if lead_time_len == 0:
+        logger.warning(
+            "No forecast data available for case %s, skipping", individual_case.id
+        )
         return None
+    elif lead_time_len < (individual_case.end_date - individual_case.start_date).days:
+        logger.warning(
+            "Fewer valid times in forecast than days in case %s, results likely unreliable",
+            individual_case.id,
+        )
+    logger.info("Forecast data available for case %s", individual_case.id)
     if gridded_obs is not None:
         data_vars = {}
         variable_subset_gridded_obs = individual_case._subset_data_vars(gridded_obs)
@@ -144,7 +156,6 @@ def _evaluate_case(
             time_subset_gridded_obs_ds
         )
         # Align gridded_obs and forecast_dataset by time
-        # TODO: test if doing ERA5 first might speed up the compute
         time_subset_gridded_obs_ds, spatiotemporal_subset_ds = xr.align(
             time_subset_gridded_obs_ds,
             time_subset_forecast_ds[list(time_subset_forecast_ds.keys())],
@@ -184,8 +195,13 @@ def _open_forecast_dataset(
 
     file_list = fs.ls(eval_config.forecast_dir)
     file_types = set([file.split(".")[-1] for file in file_list])
-    if len(file_types) > 1:
+    if len(file_types) > 1 and "parq" not in eval_config.forecast_dir:
         raise ValueError("Multiple file types found in forecast path.")
+
+    if "parq" in file_types or any("parq" in ft for ft in file_types):
+        forecast_dataset = utils._open_mlwp_kerchunk_references(
+            eval_config.forecast_dir, forecast_schema_config
+        )
 
     if "zarr" in file_types and len(file_list) == 1:
         forecast_dataset = xr.open_zarr(file_list, chunks="auto")
@@ -198,8 +214,8 @@ def _open_forecast_dataset(
         raise NotImplementedError("NetCDF file reading not implemented.")
 
     if "json" in file_types:
-        forecast_dataset = utils._open_mlwp_kerchunk_reference_jsons(
-            file_list, forecast_schema_config
+        forecast_dataset = utils._open_mlwp_kerchunk_reference(
+            file_list[0], forecast_schema_config
         )
     return forecast_dataset
 
