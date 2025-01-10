@@ -4,7 +4,7 @@ Some code similarly structured to WeatherBench (Rasp et al.)."""
 import dataclasses
 
 from extremeweatherbench.utils import Location
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from extremeweatherbench import metrics, utils
 import xarray as xr
 from enum import StrEnum
@@ -40,15 +40,11 @@ class IndividualCase:
     title: str
     start_date: pd.Timestamp
     end_date: pd.Timestamp
-    location: dict
+    location: utils.Location
     bounding_box_km: float
     event_type: str
     cross_listed: Optional[List[str]] = None
     data_vars: Optional[List[str]] = None
-
-    def __post_init__(self):
-        if isinstance(self.location, dict):
-            self.location = Location(**self.location)
 
     def perform_subsetting_procedure(self, dataset: xr.Dataset) -> xr.Dataset:
         """Perform any necessary subsetting procedures on the input dataset.
