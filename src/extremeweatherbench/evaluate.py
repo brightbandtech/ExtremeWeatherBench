@@ -19,7 +19,7 @@ DEFAULT_FORECAST_SCHEMA_CONFIG = config.ForecastSchemaConfig()
 def evaluate(
     eval_config: config.Config,
     forecast_schema_config: config.ForecastSchemaConfig = DEFAULT_FORECAST_SCHEMA_CONFIG,
-    no_computation: bool = False,
+    dry_run: bool = False,
 ) -> dict[str, list[xr.Dataset]]:
     """Driver for evaluating a collection of Cases across a set of Events.
 
@@ -27,7 +27,7 @@ def evaluate(
         eval_config: A configuration object defining the evaluation run.
         forecast_schema_config: A mapping of the forecast variable naming schema to use
             when reading / decoding forecast data in the analysis.
-        no_computation: Flag to disable performing actual calculations (but still validate
+        dry_run: Flag to disable performing actual calculations (but still validate
             case configurations). Defaults to "False."
 
     Returns:
@@ -47,7 +47,7 @@ def evaluate(
             data=yaml_event_case,
             config=dacite.Config(cast=[pd.Timestamp]),
         )
-        if no_computation:  # temporary validation for the cases
+        if dry_run:  # temporary validation for the cases
             return cases
         else:
             point_obs, gridded_obs = _open_obs_datasets(eval_config)
