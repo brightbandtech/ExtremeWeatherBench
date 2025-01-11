@@ -65,7 +65,8 @@ def evaluate(
             point_obs, gridded_obs = _open_obs_datasets(eval_config)
             forecast_dataset = _open_forecast_dataset(
                 eval_config, forecast_schema_config
-            )
+            ).compute()
+
             if gridded_obs:
                 gridded_obs = utils.map_era5_vars_to_forecast(
                     DEFAULT_FORECAST_SCHEMA_CONFIG, forecast_dataset, gridded_obs
@@ -127,6 +128,7 @@ def _evaluate_case(
     Returns:
         An xarray Dataset containing the evaluation results for the case.
     """
+
     logger.info("Evaluating case %s, %s", individual_case.id, individual_case.title)
     variable_subset_ds = individual_case._subset_data_vars(forecast_dataset)
     time_subset_forecast_ds = individual_case._subset_valid_times(variable_subset_ds)
@@ -158,14 +160,13 @@ def _evaluate_case(
             time_subset_forecast_ds[list(time_subset_forecast_ds.keys())],
             join="inner",
         )
-        spatiotemporal_subset_ds = spatiotemporal_subset_ds.compute()
-        time_subset_gridded_obs_ds = time_subset_gridded_obs_ds.compute()
-        for metric in individual_case.metrics_list:
-            metric_instance = metric()
-            result = metric_instance.compute(
-                spatiotemporal_subset_ds, time_subset_gridded_obs_ds
-            )
-            data_vars[metric_instance.name] = result
+        for data_var in individual_case.data_vars:
+            forecast_da = spatiotemporal_subset_ds[data_var].compute()
+            gridded_obs_da = time_subset_gridded_obs_ds[data_var].compute()
+            for metric in individual_case.metrics_list:
+                metric_instance = metric()
+                result = metric_instance.compute(forecast_da, gridded_obs_da)
+                data_vars[metric_instance.name] = result
     if point_obs is not None:
         pass
     return data_vars
@@ -189,22 +190,14 @@ def _open_forecast_dataset(
     file_types = set([file.split(".")[-1] for file in file_list])
     if len(file_types) > 1 and "parq" not in eval_config.forecast_dir:
         raise ValueError("Multiple file types found in forecast path.")
-
-    if "parq" in file_types or any("parq" in ft for ft in file_types):
-        forecast_dataset = utils._open_mlwp_kerchunk_reference(
-            eval_config.forecast_dir, forecast_schema_config
-        )
-
     if "zarr" in file_types and len(file_list) == 1:
         forecast_dataset = xr.open_zarr(file_list, chunks="auto")
     elif "zarr" in file_types and len(file_list) > 1:
         raise ValueError(
             "Multiple zarr files found in forecast path, please provide a single zarr file."
         )
-
     if "nc" in file_types:
         raise NotImplementedError("NetCDF file reading not implemented.")
-
     if "parq" in file_types or any("parq" in ft for ft in file_types):
         forecast_dataset = utils._open_mlwp_kerchunk_reference(
             eval_config.forecast_dir, forecast_schema_config

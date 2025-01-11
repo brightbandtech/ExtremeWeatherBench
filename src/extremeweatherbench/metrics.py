@@ -18,7 +18,7 @@ T2M_85TH_PERCENTILE_CLIMATOLOGY_PATH = "gs://brightband-scratch/taylor/climatolo
 class Metric:
     """A base class defining the interface for ExtremeWeatherBench metrics."""
 
-    def compute(self, forecast: xr.Dataset, observation: xr.Dataset):
+    def compute(self, forecast: xr.DataArray, observation: xr.DataArray):
         """Evaluate a specific metric given a forecast and observation dataset."""
         raise NotImplementedError
 
@@ -72,7 +72,7 @@ class DurationME(Metric):
             event is occurring.
     """
 
-    def compute(self, forecast: xr.Dataset, observation: xr.Dataset):
+    def compute(self, forecast: xr.DataArray, observation: xr.DataArray):
         print(forecast)
         print(observation)
 
@@ -81,7 +81,7 @@ class DurationME(Metric):
 class RegionalRMSE(Metric):
     """Root mean squared error of a regional forecast evalauted against observations."""
 
-    def compute(self, forecast: xr.Dataset, observation: xr.Dataset):
+    def compute(self, forecast: xr.DataArray, observation: xr.DataArray):
         rmse_values = []
         for init_time in forecast.init_time:
             init_forecast, subset_observation = self.align_datasets(
@@ -98,7 +98,7 @@ class RegionalRMSE(Metric):
 class MaximumMAE(Metric):
     """Mean absolute error of forecasted maximum values."""
 
-    def compute(self, forecast: xr.Dataset, observation: xr.Dataset):
+    def compute(self, forecast: xr.DataArray, observation: xr.DataArray):
         max_mae_values = []
         observation_spatial_mean = observation.mean(["latitude", "longitude"])
         observation_spatial_mean = observation_spatial_mean.where(
@@ -106,35 +106,25 @@ class MaximumMAE(Metric):
         )
         forecast_spatial_mean = forecast.mean(["latitude", "longitude"])
         for init_time in forecast_spatial_mean.init_time:
-            for var in observation_spatial_mean.data_vars:
-                if var != "air_temperature":
-                    pass
-                else:
-                    max_date = observation_spatial_mean[var].idxmax("time").values
-                    max_value = observation_spatial_mean[var].sel(time=max_date).values
-                    init_forecast_spatial_mean, _ = self.align_datasets(
-                        forecast_spatial_mean,
-                        observation_spatial_mean,
-                        pd.Timestamp(init_time.values).to_pydatetime(),
-                    )
+            if forecast.name == "air_temperature":
+                max_date = observation_spatial_mean.idxmax("time").values
+                max_value = observation_spatial_mean.sel(time=max_date).values
+                init_forecast_spatial_mean, _ = self.align_datasets(
+                    forecast_spatial_mean,
+                    observation_spatial_mean,
+                    pd.Timestamp(init_time.values).to_pydatetime(),
+                )
 
-                    if max_date in init_forecast_spatial_mean.time.values:
-                        lead_time = init_forecast_spatial_mean.where(
-                            init_forecast_spatial_mean.time == max_date, drop=True
-                        ).lead_time
-                        max_mae_dataarray = xr.DataArray(
-                            data=[
-                                abs(
-                                    init_forecast_spatial_mean.max()[
-                                        "air_temperature"
-                                    ].values
-                                    - max_value
-                                )
-                            ],
-                            dims=["lead_time"],
-                            coords={"lead_time": lead_time.values},
-                        )
-                        max_mae_values.append(max_mae_dataarray)
+                if max_date in init_forecast_spatial_mean.time.values:
+                    lead_time = init_forecast_spatial_mean.where(
+                        init_forecast_spatial_mean.time == max_date, drop=True
+                    ).lead_time
+                    max_mae_dataarray = xr.DataArray(
+                        data=[abs(init_forecast_spatial_mean.max().values - max_value)],
+                        dims=["lead_time"],
+                        coords={"lead_time": lead_time.values},
+                    )
+                    max_mae_values.append(max_mae_dataarray)
         # Reverse the lead time so that the minimum lead time is first
         max_mae_dataarray = max_mae_dataarray.isel(lead_time=slice(None, None, -1))
         max_mae_dataarray = utils.expand_lead_times_to_6_hourly(max_mae_dataarray)
@@ -153,7 +143,7 @@ class MaxMinMAE(Metric):
         time_interval: A string defining the time interval to roll up the metric.
     """
 
-    def compute(self, forecast: xr.Dataset, observation: xr.Dataset):
+    def compute(self, forecast: xr.DataArray, observation: xr.DataArray):
         print(forecast)
         print(observation)
         return None
@@ -168,7 +158,7 @@ class OnsetME(Metric):
             to potentially include in an analysis.
     """
 
-    def compute(self, forecast: xr.Dataset, observation: xr.Dataset):
+    def compute(self, forecast: xr.DataArray, observation: xr.DataArray):
         print(forecast)
         print(observation)
         return None
