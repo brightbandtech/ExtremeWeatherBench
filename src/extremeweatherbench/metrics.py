@@ -125,11 +125,11 @@ class MaximumMAE(Metric):
                         coords={"lead_time": lead_time.values},
                     )
                     max_mae_values.append(max_mae_dataarray)
+        max_mae_full_da = xr.concat(max_mae_values, dim="lead_time")
         # Reverse the lead time so that the minimum lead time is first
-        max_mae_dataarray = max_mae_dataarray.isel(lead_time=slice(None, None, -1))
-        max_mae_dataarray = utils.expand_lead_times_to_6_hourly(max_mae_dataarray)
-
-        return max_mae_dataarray
+        max_mae_full_da = max_mae_full_da.isel(lead_time=slice(None, None, -1))
+        max_mae_full_da = utils.expand_lead_times_to_6_hourly(max_mae_full_da)
+        return max_mae_full_da
 
 
 @dataclasses.dataclass
