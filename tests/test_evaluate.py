@@ -1,6 +1,5 @@
 import pytest
 import xarray as xr
-import pandas as pd
 from extremeweatherbench import config, events, case, evaluate
 import datetime
 
