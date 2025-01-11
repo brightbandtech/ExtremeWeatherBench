@@ -191,7 +191,7 @@ def _open_forecast_dataset(
         raise ValueError("Multiple file types found in forecast path.")
 
     if "parq" in file_types or any("parq" in ft for ft in file_types):
-        forecast_dataset = utils._open_mlwp_kerchunk_references(
+        forecast_dataset = utils._open_mlwp_kerchunk_reference(
             eval_config.forecast_dir, forecast_schema_config
         )
 
@@ -206,7 +206,7 @@ def _open_forecast_dataset(
         raise NotImplementedError("NetCDF file reading not implemented.")
 
     if "parq" in file_types or any("parq" in ft for ft in file_types):
-        forecast_dataset = utils._open_mlwp_kerchunk_references(
+        forecast_dataset = utils._open_mlwp_kerchunk_reference(
             eval_config.forecast_dir, forecast_schema_config
         )
     if "json" in file_types:
