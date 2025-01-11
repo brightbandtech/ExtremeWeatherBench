@@ -665,6 +665,7 @@ dependencies = [
     { name = "shapely" },
     { name = "tqdm" },
     { name = "ujson" },
+    { name = "virtualizarr" },
     { name = "xarray" },
     { name = "zarr" },
 ]
@@ -676,6 +677,10 @@ dev = [
     { name = "pytest-mock" },
     { name = "ruff" },
     { name = "types-pyyaml" },
+]
+forecast-download = [
+    { name = "kerchunk" },
+    { name = "virtualizarr" },
 ]
 
 [package.dev-dependencies]
@@ -695,6 +700,7 @@ requires-dist = [
     { name = "h5py", specifier = ">=3.12.1" },
     { name = "ipywidgets", specifier = ">=8.1.5" },
     { name = "kerchunk", specifier = ">=0.2.7" },
+    { name = "kerchunk", marker = "extra == 'forecast-download'", specifier = ">=0.2.7" },
     { name = "numpy", specifier = ">=2.2.0" },
     { name = "pandas", specifier = ">=2.2.3" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.3.4" },
@@ -712,6 +718,7 @@ requires-dist = [
     { name = "tqdm", specifier = ">=4.67.1" },
     { name = "types-pyyaml", marker = "extra == 'dev'", specifier = ">=6.0.12.20241230" },
     { name = "ujson", specifier = ">=5.10.0" },
+    { name = "virtualizarr", marker = "extra == 'forecast-download'", specifier = ">=1.2.0" },
     { name = "xarray", specifier = ">=2024.11.0" },
     { name = "zarr", specifier = ">=2.18.4" },
 ]
@@ -2413,12 +2420,41 @@ wheels = [
 ]
 
 [[package]]
+name = "universal-pathlib"
+version = "0.2.6"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "fsspec" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/eb/21/dd871495af3933e585261adce42678dcdf1168c9d6fa0a8f7b6565e54472/universal_pathlib-0.2.6.tar.gz", hash = "sha256:50817aaeaa9f4163cb1e76f5bdf84207fa05ce728b23fd779479b3462e5430ac", size = 175427 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e5/4d/2e577f6db7aa0f932d19f799c18f604b2b302c65f733419b900ec07dbade/universal_pathlib-0.2.6-py3-none-any.whl", hash = "sha256:700dec2b58ef34b87998513de6d2ae153b22f083197dfafb8544744edabd1b18", size = 50087 },
+]
+
+[[package]]
 name = "urllib3"
 version = "2.3.0"
 source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/aa/63/e53da845320b757bf29ef6a9062f5c669fe997973f966045cb019c3f4b66/urllib3-2.3.0.tar.gz", hash = "sha256:f8c5449b3cf0861679ce7e0503c7b44b5ec981bec0d1d3795a07f1ba96f0204d", size = 307268 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c8/19/4ec628951a74043532ca2cf5d97b7b14863931476d117c471e8e2b1eb39f/urllib3-2.3.0-py3-none-any.whl", hash = "sha256:1cee9ad369867bfdbbb48b7dd50374c0967a0bb7710050facf0dd6911440e3df", size = 128369 },
+]
+
+[[package]]
+name = "virtualizarr"
+version = "1.2.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numcodecs" },
+    { name = "numpy" },
+    { name = "packaging" },
+    { name = "ujson" },
+    { name = "universal-pathlib" },
+    { name = "xarray" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/8c/c1/dcc401a62173622a2fdad88c90563282449acc0b7a460c3e33c5edc9aac8/virtualizarr-1.2.0.tar.gz", hash = "sha256:0eb9aecf09fd347d1691b407ed3798f55f038a3044bd9ccd23bd9c49f90e036d", size = 129907 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/cd/ef/316b14edf592da78580ba4bd596174965d05f268401f1dec07c0e7d6ac0b/virtualizarr-1.2.0-py3-none-any.whl", hash = "sha256:b9a71766adf407655431e0cf6e5a1909407aa6e6e6bab2cbe1a7355d789d0629", size = 128921 },
 ]
 
 [[package]]

@@ -11,10 +11,10 @@ def mock_forecast_dataset():
     lead_time = range(0, 241, 6)
     data = np.random.rand(len(init_time), 180, 360, len(lead_time))
     latitudes = np.linspace(-90, 90, 180)
-    longitudes = np.linspace(-180, 179, 360)
+    longitudes = np.linspace(0, 359, 360)
     dataset = xr.Dataset(
         {
-            "t2": (
+            "air_temperature": (
                 ["init_time", "latitude", "longitude", "lead_time"],
                 data,
             ),

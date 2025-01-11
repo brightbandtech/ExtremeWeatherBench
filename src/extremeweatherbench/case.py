@@ -2,7 +2,7 @@
 Some code similarly structured to WeatherBench (Rasp et al.)."""
 
 import dataclasses
-
+import datetime
 from typing import List, Optional, Tuple
 from extremeweatherbench import metrics, utils
 import xarray as xr
@@ -10,7 +10,6 @@ from enum import StrEnum
 import pandas as pd
 import numpy as np
 import logging
-import datetime
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -43,8 +42,8 @@ class IndividualCase:
     location: utils.Location
     bounding_box_km: float
     event_type: str
-    cross_listed: Optional[List[str]] = None
     data_vars: Optional[List[str]] = None
+    cross_listed: Optional[List[str]] = None
 
     def perform_subsetting_procedure(self, dataset: xr.Dataset) -> xr.Dataset:
         """Perform any necessary subsetting procedures on the input dataset.
@@ -71,8 +70,11 @@ class IndividualCase:
         """
         subset_dataset = dataset
         if self.data_vars is not None:
+            print("TEST TEST TEST TEST")
+            print(self.data_vars)
+            print(subset_dataset.data_vars)
             subset_dataset = subset_dataset[self.data_vars]
-            subset_dataset["time"] = dataset["time"]
+        subset_dataset["time"] = dataset["time"]
         return subset_dataset
 
     def _subset_valid_times(self, dataset: xr.Dataset) -> xr.Dataset:
@@ -86,6 +88,34 @@ class IndividualCase:
         indices = derive_indices_from_init_time_and_lead_time(self, dataset)
         modified_ds = dataset.isel(init_time=np.unique(indices[0]))
         return modified_ds
+
+    def _check_for_forecast_data_availability(
+        self,
+        forecast_dataset: xr.Dataset,
+    ) -> bool:
+        """Check if the forecast and observation datasets have overlapping time periods.
+
+        Args:
+            forecast_dataset: The forecast dataset.
+            gridded_obs: The gridded observation dataset.
+
+        Returns:
+            True if the datasets have overlapping time periods, False otherwise.
+        """
+        lead_time_len = len(forecast_dataset.init_time)
+
+        if lead_time_len == 0:
+            logger.warning("No forecast data available for case %s, skipping", self.id)
+            return False
+        elif lead_time_len < (self.end_date - self.start_date).days:
+            logger.warning(
+                "Fewer valid times in forecast than days in case %s, results likely unreliable",
+                self.id,
+            )
+        else:
+            logger.info("Forecast data available for case %s", self.id)
+        logger.info("Lead time length for case %s: %s", self.id, lead_time_len)
+        return True
 
 
 @dataclasses.dataclass
@@ -105,6 +135,9 @@ class IndividualHeatWaveCase(IndividualCase):
     data_vars: List[str] = dataclasses.field(
         default_factory=lambda: ["air_temperature"]
     )
+
+    def __post_init__(self):
+        self.data_vars = ["air_temperature"]
 
     def perform_subsetting_procedure(self, dataset: xr.Dataset) -> xr.Dataset:
         modified_ds = utils.clip_dataset_to_bounding_box(
@@ -131,6 +164,9 @@ class IndividualFreezeCase(IndividualCase):
     data_vars: List[str] = dataclasses.field(
         default_factory=lambda: ["air_temperature", "eastward_wind", "northward_wind"]
     )
+
+    def __post_init__(self):
+        self.data_vars = ["air_temperature", "eastward_wind", "northward_wind"]
 
     def perform_subsetting_procedure(self, dataset) -> xr.Dataset:
         modified_ds = utils.clip_dataset_to_bounding_box(
