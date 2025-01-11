@@ -4,8 +4,9 @@ Logic for the dataclasses here largely to handle the logic of parsing the events
 import dataclasses
 from typing import List, Optional
 from extremeweatherbench import case
+import datetime
 
-# TODO(taylor): Cache in a bucket in brightband-public project and link here.
+# TODO(taylor): don't need link here
 CLIMATOLOGY_LINK = "/home/taylor/data/era5_2m_temperature_85th_by_hour_dayofyear.zarr"
 
 
@@ -22,11 +23,12 @@ class EventContainer:
     def subset_cases(self, subset) -> List[case.IndividualCase]:
         """Subset all IndividualCases inside EventContainer where _case_event_type is a specific type."""
         assert self.event_type is not None, "Event type must be defined."
-        return [
+        case_subset = [
             case.get_case_event_dataclass(c.event_type)(**dataclasses.asdict(c))
             for c in self.cases
             if subset in c.event_type
         ]
+        return case_subset
 
     def __post_init__(self):
         self.cases = self.subset_cases(self.event_type)
