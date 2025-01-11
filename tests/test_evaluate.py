@@ -1,38 +1,12 @@
 import pytest
 import xarray as xr
 import pandas as pd
-import datetime
 from extremeweatherbench import config, events, case, evaluate
-from pathlib import Path
-from .test_datasets import mock_forecast_dataset
-
-
-@pytest.fixture
-def mock_gridded_obs():
-    return xr.Dataset(
-        {
-            "2m_temperature": (["time", "latitude", "longitude"], [[[18.0]]]),
-            "tp": (["time", "latitude", "longitude"], [[[0.8]]]),
-        },
-        coords={
-            "time": pd.date_range("2020-01-01", periods=1),
-            "latitude": [45.0],
-            "longitude": [10.0],
-        },
-    )
-
-
-@pytest.fixture
-def mock_config():
-    return config.Config(
-        event_types=[events.HeatWave],
-        forecast_dir="test/forecast/path",
-        gridded_obs_path="test/obs/path",
-    )
+import datetime
 
 
 def test_evaluate_no_computation(mock_config):
-    result = evaluate.evaluate(mock_config, no_computation=True)
+    result = evaluate.evaluate(mock_config, dry_run=True)
     assert isinstance(result, events.EventContainer)
 
 
@@ -64,17 +38,42 @@ def test_open_obs_datasets_no_forecast_paths():
         evaluate._open_forecast_dataset(invalid_config)
 
 
-def test_evaluate_case(mock_forecast_dataset, mock_gridded_obs):
-    test_case = case.IndividualCase(
+def test_evaluate_base_case(mock_forecast_dataset, mock_gridded_obs_dataset):
+    base_case = case.IndividualCase(
         id=1,
         title="test_case",
-        start_date=pd.Timestamp(2020, 1, 1),
-        end_date=pd.Timestamp(2020, 1, 12),
+        start_date=datetime.datetime(2020, 1, 1),
+        end_date=datetime.datetime(2020, 1, 12),
         bounding_box_km=500,
         location={"latitude": 45.0, "longitude": -100.0},
         event_type="heat_wave",
     )
-    result = evaluate._evaluate_case(
-        test_case, mock_forecast_dataset, mock_gridded_obs, None
+    with pytest.raises(NotImplementedError):
+        evaluate._evaluate_case(
+            individual_case=base_case,
+            forecast_dataset=mock_forecast_dataset,
+            gridded_obs=mock_gridded_obs_dataset,
+            point_obs=None,
+        )
+
+
+def test_evaluate_full_workflow(
+    mocker, mock_config, mock_gridded_obs_dataset, mock_forecast_dataset
+):
+    mocker.patch(
+        "extremeweatherbench.evaluate._open_forecast_dataset",
+        return_value=mock_forecast_dataset,
     )
-    assert isinstance(result, xr.Dataset)
+    mocker.patch(
+        "extremeweatherbench.evaluate._open_obs_datasets",
+        return_value=(None, mock_gridded_obs_dataset),
+    )
+
+    result = evaluate.evaluate(mock_config, dry_run=False)
+
+    assert isinstance(result, dict)
+    assert "HeatWave" in result
+    assert isinstance(result["HeatWave"], dict)
+    assert all(
+        isinstance(ds, xr.Dataset) or ds is None for ds in result["HeatWave"].values()
+    )
