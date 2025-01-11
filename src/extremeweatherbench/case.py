@@ -10,6 +10,7 @@ from enum import StrEnum
 import pandas as pd
 import numpy as np
 import logging
+import datetime
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -37,8 +38,8 @@ class IndividualCase:
 
     id: int
     title: str
-    start_date: pd.Timestamp
-    end_date: pd.Timestamp
+    start_date: datetime.datetime
+    end_date: datetime.datetime
     location: utils.Location
     bounding_box_km: float
     event_type: str

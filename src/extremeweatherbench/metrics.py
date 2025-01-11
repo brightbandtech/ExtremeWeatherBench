@@ -5,6 +5,7 @@ import xarray as xr
 from scores.continuous import rmse
 import logging
 from extremeweatherbench import utils
+import datetime
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -20,6 +21,7 @@ class Metric:
         """Evaluate a specific metric given a forecast and observation dataset."""
         raise NotImplementedError
 
+    @property
     def name(self) -> str:
         """Return the class name without parentheses."""
         return self.__class__.__name__
