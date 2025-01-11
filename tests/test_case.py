@@ -1,9 +1,9 @@
 import pytest
 import extremeweatherbench.case as case
-import pandas as pd
 import rioxarray  # noqa: F401
 from extremeweatherbench.utils import Location
 from .test_datasets import mock_forecast_dataset  # noqa: F401
+import datetime
 
 
 class TestGoodCases:
@@ -11,8 +11,8 @@ class TestGoodCases:
         heatwave_case = case.IndividualHeatWaveCase(
             id=20,
             title="Test Heatwave",
-            start_date=pd.Timestamp(2000, 1, 1),
-            end_date=pd.Timestamp(2000, 1, 14),
+            start_date=datetime.datetime(2000, 1, 1),
+            end_date=datetime.datetime(2000, 1, 14),
             location=Location(latitude=40, longitude=-100),
             bounding_box_km=500,
             event_type="heat_wave",
@@ -27,8 +27,8 @@ class TestGoodCases:
         base_case = case.IndividualCase(
             id=10,
             title="Test Case",
-            start_date=pd.Timestamp(2000, 1, 1),
-            end_date=pd.Timestamp(2000, 1, 14),
+            start_date=datetime.datetime(2000, 1, 1),
+            end_date=datetime.datetime(2000, 1, 14),
             location=Location(latitude=40, longitude=-100),
             bounding_box_km=500,
             event_type="heat_wave",
@@ -36,8 +36,8 @@ class TestGoodCases:
         valid_case = {
             "id": 10,
             "title": "Test Case",
-            "start_date": pd.Timestamp(2000, 1, 1),
-            "end_date": pd.Timestamp(2000, 1, 14),
+            "start_date": datetime.datetime(2000, 1, 1),
+            "end_date": datetime.datetime(2000, 1, 14),
             "location": Location(latitude=40, longitude=-100),
             "bounding_box_km": 500,
             "event_type": "heat_wave",

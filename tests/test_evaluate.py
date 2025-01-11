@@ -3,6 +3,7 @@ import xarray as xr
 import pandas as pd
 from extremeweatherbench import config, events, case, evaluate
 from .test_datasets import mock_forecast_dataset  # noqa: F401
+import datetime
 
 
 @pytest.fixture
@@ -66,8 +67,8 @@ def test_evaluate_base_case(mock_forecast_dataset, mock_gridded_obs):
     base_case = case.IndividualCase(
         id=1,
         title="test_case",
-        start_date=pd.Timestamp(2020, 1, 1),
-        end_date=pd.Timestamp(2020, 1, 12),
+        start_date=datetime.datetime(2020, 1, 1),
+        end_date=datetime.datetime(2020, 1, 12),
         bounding_box_km=500,
         location={"latitude": 45.0, "longitude": -100.0},
         event_type="heat_wave",

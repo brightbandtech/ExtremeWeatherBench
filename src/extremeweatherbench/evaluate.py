@@ -9,6 +9,7 @@ import xarray as xr
 from extremeweatherbench import config, events, case, utils
 import dacite
 import yaml
+import datetime
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -58,7 +59,6 @@ def evaluate(
         cases = dacite.from_dict(
             data_class=event,
             data=yaml_event_case,
-            config=dacite.Config(cast=[pd.Timestamp]),
         )
         if dry_run:  # validation for some cases; returns first event type
             return cases
