@@ -70,9 +70,6 @@ class IndividualCase:
         """
         subset_dataset = dataset
         if self.data_vars is not None:
-            print("TEST TEST TEST TEST")
-            print(self.data_vars)
-            print(subset_dataset.data_vars)
             subset_dataset = subset_dataset[self.data_vars]
         subset_dataset["time"] = dataset["time"]
         return subset_dataset
