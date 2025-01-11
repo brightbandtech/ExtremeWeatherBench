@@ -255,10 +255,13 @@ def map_era5_vars_to_forecast(forecast_schema_config, forecast_dataset, era5_dat
     return era5_dataset[era5_subset_list]
 
 
-def expand_lead_times_to_6_hourly(dataarray: xr.DataArray) -> xr.DataArray:
-    """Hacky way to make sure there are 41 timesteps of 0 to 240 hours in metrics output.
-    Depending on initialization time and lead time of MAE cases, there may be missing lead times."""
-    all_hours = np.arange(0, 241, 6)
+def expand_lead_times_to_6_hourly(
+    dataarray: xr.DataArray, max_fcst_hour: int = 240, fcst_output_cadence: int = 6
+) -> xr.DataArray:
+    """Makes hours in metrics output for max_fcst_hour hours at a fcst_cadence-hourly rate.
+    Depending on initialization time and output cadence, there may be missing lead times
+    in final output of certain metrics."""
+    all_hours = np.arange(0, max_fcst_hour + 1, fcst_output_cadence)
     final_data = []
     final_times = []
     current_idx = 0
