@@ -676,6 +676,15 @@ dev = [
     { name = "pytest-cov" },
     { name = "pytest-mock" },
     { name = "ruff" },
+    { name = "types-pyyaml" },
+]
+forecast-download = [
+    { name = "kerchunk" },
+    { name = "virtualizarr" },
+]
+forecast-download = [
+    { name = "kerchunk" },
+    { name = "virtualizarr" },
 ]
 
 [package.dev-dependencies]
@@ -695,6 +704,7 @@ requires-dist = [
     { name = "h5py", specifier = ">=3.12.1" },
     { name = "ipywidgets", specifier = ">=8.1.5" },
     { name = "kerchunk", specifier = ">=0.2.7" },
+    { name = "kerchunk", marker = "extra == 'forecast-download'", specifier = ">=0.2.7" },
     { name = "numpy", specifier = ">=2.2.0" },
     { name = "pandas", specifier = ">=2.2.3" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.3.4" },
@@ -711,7 +721,7 @@ requires-dist = [
     { name = "shapely", specifier = ">=2.0.6" },
     { name = "tqdm", specifier = ">=4.67.1" },
     { name = "ujson", specifier = ">=5.10.0" },
-    { name = "virtualizarr", specifier = ">=1.2.0" },
+    { name = "virtualizarr", marker = "extra == 'forecast-download'", specifier = ">=1.2.0" },
     { name = "xarray", specifier = ">=2024.11.0" },
     { name = "zarr", specifier = ">=2.18.4" },
 ]
