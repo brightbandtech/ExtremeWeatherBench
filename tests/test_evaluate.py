@@ -2,7 +2,6 @@ import pytest
 import xarray as xr
 import pandas as pd
 from extremeweatherbench import config, events, case, evaluate
-from .test_datasets import mock_forecast_dataset  # noqa: F401
 import datetime
 
 
@@ -80,3 +79,23 @@ def test_evaluate_base_case(mock_forecast_dataset, mock_gridded_obs):
             gridded_obs=mock_gridded_obs,
             point_obs=None,
         )
+
+
+def test_evaluate_full_workflow(
+    mocker, mock_config, mock_gridded_obs, mock_forecast_dataset
+):
+    mocker.patch(
+        "extremeweatherbench.evaluate._open_forecast_dataset",
+        return_value=mock_forecast_dataset,
+    )
+    mocker.patch(
+        "extremeweatherbench.evaluate._open_obs_datasets",
+        return_value=(None, mock_gridded_obs),
+    )
+
+    result = evaluate.evaluate(mock_config, dry_run=False)
+
+    assert isinstance(result, dict)
+    assert "HeatWave" in result
+    assert isinstance(result["HeatWave"], list)
+    assert all(isinstance(ds, xr.Dataset) for ds in result["HeatWave"])

@@ -2,7 +2,6 @@ import pytest
 import extremeweatherbench.case as case
 import rioxarray  # noqa: F401
 from extremeweatherbench.utils import Location
-from .test_datasets import mock_forecast_dataset  # noqa: F401
 import datetime
 
 
