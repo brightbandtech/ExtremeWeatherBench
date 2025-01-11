@@ -80,7 +80,7 @@ class RegionalRMSE(Metric):
         rmse_values = []
         for init_time in forecast.init_time:
             init_forecast, subset_observation = self.align_datasets(
-                forecast, observation, pd.timestamp(init_time).to_datetime()
+                forecast, observation, pd.Timestamp(init_time.values).to_datetime()
             )
             output_rmse = rmse(init_forecast, subset_observation, preserve_dims="time")
             rmse_values.append(output_rmse)
@@ -110,7 +110,7 @@ class MaximumMAE(Metric):
                     init_forecast_spatial_mean, _ = self.align_datasets(
                         forecast_spatial_mean,
                         observation_spatial_mean,
-                        pd.timestamp(init_time).to_datetime(),
+                        pd.Timestamp(init_time.values).to_datetime(),
                     )
 
                     if max_date in init_forecast_spatial_mean.time.values:
