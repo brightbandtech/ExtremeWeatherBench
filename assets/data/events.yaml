@@ -300,3 +300,53 @@ cases:
     bounding_box_km: 500
     event_type: freeze
     cross_listed:
+  - id: 32
+    title: 2022 Arkansas
+    start_date: 2022-02-22
+    end_date: 2022-02-26
+    location: 
+      latitude:  34.7445
+      longitude: -92.2896
+    bounding_box_km: 500
+    event_type: freeze
+    cross_listed:
+  - id: 33
+    title: 2023 Germany
+    start_date: 2023-11-25
+    end_date: 2023-12-03
+    location: 
+      latitude: 48.1351
+      longitude: 11.5820
+    bounding_box_km: 500
+    event_type: freeze
+    cross_listed: snow
+  - id: 34
+    title: 2023 China
+    start_date: 2023-12-20
+    end_date: 2023-12-25
+    location: 
+      latitude: 31.2304
+      longitude: 121.4737
+    bounding_box_km: 500
+    event_type: freeze
+    cross_listed:
+  - id: 35
+    title: 2023 Afghanistan
+    start_date: 2023-01-10
+    end_date: 2023-01-17
+    location: 
+      latitude: 34.5553
+      longitude: 69.2075
+    bounding_box_km: 500
+    event_type: freeze
+    cross_listed: snow
+  - id: 36
+    title: 2022 Colorado
+    start_date: 2023-04-11
+    end_date: 2023-04-15
+    location: 
+      latitude: 39.7392
+      longitude: -104.9903
+    bounding_box_km: 500
+    event_type: freeze
+    cross_listed: snow, tornado, wind, hail
