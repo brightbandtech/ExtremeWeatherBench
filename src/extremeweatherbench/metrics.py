@@ -31,25 +31,30 @@ class Metric:
         self,
         forecast: xr.Dataset,
         observation: xr.Dataset,
-        init_time: datetime.datetime,
+        init_time_datetime: datetime.datetime,
     ):
         """Align the forecast and observation datasets."""
         try:
-            forecast = forecast.sel(init_time=init_time)
+            forecast = forecast.sel(init_time=init_time_datetime)
         # handles duplicate initialization times. please try to avoid this situation
         except ValueError:
             init_time_duplicate_length = len(
-                forecast.where(forecast.init_time == init_time, drop=True).init_time
+                forecast.where(
+                    forecast.init_time == init_time_datetime, drop=True
+                ).init_time
             )
             if init_time_duplicate_length > 1:
                 logger.warning(
                     "init time %s has more than %d forecast associated with it, taking first only",
-                    init_time.values,
+                    init_time_datetime,
                     init_time_duplicate_length,
                 )
-            forecast = forecast.sel(init_time=init_time.values).isel(init_time=0)
-        time = init_time.values + np.array(
-            forecast["lead_time"], dtype="timedelta64[h]"
+            forecast = forecast.sel(init_time=init_time_datetime).isel(init_time=0)
+        time = np.array(
+            [
+                init_time_datetime + pd.Timedelta(hours=int(t))
+                for t in forecast["lead_time"]
+            ]
         )
         forecast = forecast.assign_coords(time=("lead_time", time))
         forecast = forecast.swap_dims({"lead_time": "time"})
@@ -103,7 +108,7 @@ class MaximumMAE(Metric):
         for init_time in forecast_spatial_mean.init_time:
             for var in observation_spatial_mean.data_vars:
                 if var != "air_temperature":
-                    logger.warning("MaximumMAE only supports air_temperature")
+                    pass
                 else:
                     max_date = observation_spatial_mean[var].idxmax("time").values
                     max_value = observation_spatial_mean[var].sel(time=max_date).values
