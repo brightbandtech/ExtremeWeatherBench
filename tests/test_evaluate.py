@@ -59,6 +59,7 @@ def test_evaluate_base_case(mock_forecast_dataset, mock_gridded_obs_dataset):
 def test_evaluate_full_workflow(
     mocker, mock_config, mock_gridded_obs_dataset, mock_forecast_dataset
 ):
+    # The return func will have the forecast dataset's data vars names switched already
     mocker.patch(
         "extremeweatherbench.evaluate._open_forecast_dataset",
         return_value=mock_forecast_dataset,
@@ -68,8 +69,7 @@ def test_evaluate_full_workflow(
         return_value=(None, mock_gridded_obs_dataset),
     )
 
-    result = evaluate.evaluate(mock_config, dry_run=False)
-
+    result = evaluate.evaluate(mock_config)
     assert isinstance(result, dict)
     assert "HeatWave" in result
     assert isinstance(result["HeatWave"], dict)
