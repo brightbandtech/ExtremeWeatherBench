@@ -166,7 +166,7 @@ def _evaluate_case(
             result = metric_instance.compute(
                 spatiotemporal_subset_ds, time_subset_gridded_obs_ds
             )
-            data_vars[metric_instance.name()] = result
+            data_vars[metric_instance.name] = result
     if point_obs is not None:
         pass
     return data_vars
