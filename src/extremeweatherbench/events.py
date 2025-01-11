@@ -4,7 +4,6 @@ Logic for the dataclasses here largely to handle the logic of parsing the events
 import dataclasses
 from typing import List, Optional
 from extremeweatherbench import case
-import datetime
 
 # TODO(taylor): don't need link here
 CLIMATOLOGY_LINK = "/home/taylor/data/era5_2m_temperature_85th_by_hour_dayofyear.zarr"
