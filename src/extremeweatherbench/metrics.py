@@ -44,13 +44,11 @@ class Metric:
             if init_time_duplicate_length > 1:
                 logger.warning(
                     "init time %s has more than %d forecast associated with it, taking first only",
-                    init_time.values,
+                    init_time,
                     init_time_duplicate_length,
                 )
-            forecast = forecast.sel(init_time=init_time.values).isel(init_time=0)
-        time = init_time.values + np.array(
-            forecast["lead_time"], dtype="timedelta64[h]"
-        )
+            forecast = forecast.sel(init_time=init_time).isel(init_time=0)
+        time = init_time + np.array(forecast["lead_time"], dtype="timedelta64[h]")
         forecast = forecast.assign_coords(time=("lead_time", time))
         forecast = forecast.swap_dims({"lead_time": "time"})
         forecast, observation = xr.align(forecast, observation, join="inner")
@@ -80,7 +78,7 @@ class RegionalRMSE(Metric):
         rmse_values = []
         for init_time in forecast.init_time:
             init_forecast, subset_observation = self.align_datasets(
-                forecast, observation, pd.timestamp(init_time).to_datetime()
+                forecast, observation, pd.Timestamp(init_time).to_pydatetime()
             )
             output_rmse = rmse(init_forecast, subset_observation, preserve_dims="time")
             rmse_values.append(output_rmse)
@@ -110,7 +108,7 @@ class MaximumMAE(Metric):
                     init_forecast_spatial_mean, _ = self.align_datasets(
                         forecast_spatial_mean,
                         observation_spatial_mean,
-                        pd.timestamp(init_time).to_datetime(),
+                        pd.Timestamp(init_time).to_pydatetime(),
                     )
 
                     if max_date in init_forecast_spatial_mean.time.values:
