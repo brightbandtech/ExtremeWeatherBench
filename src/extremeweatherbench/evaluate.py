@@ -161,6 +161,7 @@ def _evaluate_case(
             join="inner",
         )
         for data_var in individual_case.data_vars:
+            case_results[data_var] = {}
             forecast_da = spatiotemporal_subset_ds[data_var].compute()
             gridded_obs_da = time_subset_gridded_obs_ds[data_var].compute()
             for metric in individual_case.metrics_list:
