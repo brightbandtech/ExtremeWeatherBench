@@ -14,7 +14,7 @@ def mock_forecast_dataset():
     longitudes = np.linspace(0, 359, 360)
     dataset = xr.Dataset(
         {
-            "t2": (
+            "air_temperature": (
                 ["init_time", "latitude", "longitude", "lead_time"],
                 data,
             ),

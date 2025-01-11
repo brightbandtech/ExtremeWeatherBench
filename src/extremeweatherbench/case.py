@@ -42,7 +42,7 @@ class IndividualCase:
     location: utils.Location
     bounding_box_km: float
     event_type: str
-    data_vars: Optional[List[str]]
+    data_vars: Optional[List[str]] = None
     cross_listed: Optional[List[str]] = None
 
     def perform_subsetting_procedure(self, dataset: xr.Dataset) -> xr.Dataset:
@@ -70,6 +70,9 @@ class IndividualCase:
         """
         subset_dataset = dataset
         if self.data_vars is not None:
+            print("TEST TEST TEST TEST")
+            print(self.data_vars)
+            print(subset_dataset.data_vars)
             subset_dataset = subset_dataset[self.data_vars]
         subset_dataset["time"] = dataset["time"]
         return subset_dataset
