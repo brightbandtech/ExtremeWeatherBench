@@ -42,8 +42,8 @@ class IndividualCase:
     location: utils.Location
     bounding_box_km: float
     event_type: str
+    data_vars: Optional[List[str]]
     cross_listed: Optional[List[str]] = None
-    data_vars: Optional[List[str]] = None
 
     def perform_subsetting_procedure(self, dataset: xr.Dataset) -> xr.Dataset:
         """Perform any necessary subsetting procedures on the input dataset.
@@ -133,6 +133,9 @@ class IndividualHeatWaveCase(IndividualCase):
         default_factory=lambda: ["air_temperature"]
     )
 
+    def __post_init__(self):
+        self.data_vars = ["air_temperature"]
+
     def perform_subsetting_procedure(self, dataset: xr.Dataset) -> xr.Dataset:
         modified_ds = utils.clip_dataset_to_bounding_box(
             dataset, self.location, self.bounding_box_km
@@ -158,6 +161,9 @@ class IndividualFreezeCase(IndividualCase):
     data_vars: List[str] = dataclasses.field(
         default_factory=lambda: ["air_temperature", "eastward_wind", "northward_wind"]
     )
+
+    def __post_init__(self):
+        self.data_vars = ["air_temperature", "eastward_wind", "northward_wind"]
 
     def perform_subsetting_procedure(self, dataset) -> xr.Dataset:
         modified_ds = utils.clip_dataset_to_bounding_box(
