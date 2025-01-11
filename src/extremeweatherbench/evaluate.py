@@ -145,7 +145,7 @@ def _evaluate_case(
             individual_case.id,
         )
     logger.info("Forecast data available for case %s", individual_case.id)
-    data_vars = {}
+    case_results = {}
     if gridded_obs is not None:
         variable_subset_gridded_obs = individual_case._subset_data_vars(gridded_obs)
         time_subset_gridded_obs_ds = variable_subset_gridded_obs.sel(
@@ -166,10 +166,10 @@ def _evaluate_case(
             for metric in individual_case.metrics_list:
                 metric_instance = metric()
                 result = metric_instance.compute(forecast_da, gridded_obs_da)
-                data_vars[metric_instance.name] = result
+                case_results[data_var][metric_instance.name] = result
     if point_obs is not None:
         pass
-    return data_vars
+    return case_results
 
 
 def _open_forecast_dataset(
