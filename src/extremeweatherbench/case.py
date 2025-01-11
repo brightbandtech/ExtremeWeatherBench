@@ -38,17 +38,13 @@ class IndividualCase:
 
     id: int
     title: str
-    start_date: pd.Timestamp
-    end_date: pd.Timestamp
-    location: dict
+    start_date: datetime.datetime
+    end_date: datetime.datetime
+    location: utils.Location
     bounding_box_km: float
     event_type: str
     cross_listed: Optional[List[str]] = None
     data_vars: Optional[List[str]] = None
-
-    def __post_init__(self):
-        if isinstance(self.location, dict):
-            self.location = Location(**self.location)
 
     def perform_subsetting_procedure(self, dataset: xr.Dataset) -> xr.Dataset:
         """Perform any necessary subsetting procedures on the input dataset.
@@ -73,7 +69,7 @@ class IndividualCase:
         Returns:
             xr.Dataset: The subset dataset.
         """
-        subset_dataset = dataset.copy()
+        subset_dataset = dataset
         if self.data_vars is not None:
             subset_dataset = subset_dataset[self.data_vars]
         subset_dataset["time"] = dataset["time"]
@@ -178,11 +174,11 @@ class IndividualFreezeCase(IndividualCase):
 class CaseEventType(StrEnum):
     """Enum class for the different types of extreme weather events."""
 
-    HEAT_WAVE = "heat_wave"
-    FREEZE = "freeze"
+    HEAT_WAVE: str = "heat_wave"
+    FREEZE: str = "freeze"
 
 
-CASE_EVENT_TYPE_MATCHER: dict[CaseEventType, IndividualCase] = {
+CASE_EVENT_TYPE_MATCHER: dict[CaseEventType, type[IndividualCase]] = {
     CaseEventType.HEAT_WAVE: IndividualHeatWaveCase,
     CaseEventType.FREEZE: IndividualFreezeCase,
 }

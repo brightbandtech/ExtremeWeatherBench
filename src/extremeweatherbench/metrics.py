@@ -1,18 +1,17 @@
 import dataclasses
 
 import numpy as np
+import pandas as pd
 import xarray as xr
 from scores.continuous import rmse
 import logging
 from extremeweatherbench import utils
+import datetime
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-# TODO: get permissions to upload this to bb bucket
-T2M_85TH_PERCENTILE_CLIMATOLOGY_PATH = (
-    "/home/taylor/data/era5_2m_temperature_85th_by_hour_dayofyear.zarr"
-)
+T2M_85TH_PERCENTILE_CLIMATOLOGY_PATH = "gs://brightband-scratch/taylor/climatology/era5_2m_temperature_85th_rolling_by_hour_dayofyear.zarr"
 
 
 @dataclasses.dataclass
@@ -23,16 +22,21 @@ class Metric:
         """Evaluate a specific metric given a forecast and observation dataset."""
         raise NotImplementedError
 
+    @property
     def name(self) -> str:
         """Return the class name without parentheses."""
         return self.__class__.__name__
 
     def align_datasets(
-        self, forecast: xr.Dataset, observation: xr.Dataset, init_time: np.datetime64
+        self,
+        forecast: xr.Dataset,
+        observation: xr.Dataset,
+        init_time: datetime.datetime,
     ):
         """Align the forecast and observation datasets."""
         try:
             forecast = forecast.sel(init_time=init_time)
+        # handles duplicate initialization times. please try to avoid this situation
         except ValueError:
             init_time_duplicate_length = len(
                 forecast.where(forecast.init_time == init_time, drop=True).init_time
@@ -76,7 +80,7 @@ class RegionalRMSE(Metric):
         rmse_values = []
         for init_time in forecast.init_time:
             init_forecast, subset_observation = self.align_datasets(
-                forecast, observation, init_time
+                forecast, observation, pd.timestamp(init_time).to_datetime()
             )
             output_rmse = rmse(init_forecast, subset_observation, preserve_dims="time")
             rmse_values.append(output_rmse)
@@ -90,7 +94,7 @@ class MaximumMAE(Metric):
     """Mean absolute error of forecasted maximum values."""
 
     def compute(self, forecast: xr.Dataset, observation: xr.Dataset):
-        maximummae_values = []
+        max_mae_values = []
         observation_spatial_mean = observation.mean(["latitude", "longitude"])
         observation_spatial_mean = observation_spatial_mean.where(
             observation_spatial_mean.time.dt.hour % 6 == 0, drop=True
@@ -104,14 +108,16 @@ class MaximumMAE(Metric):
                     max_date = observation_spatial_mean[var].idxmax("time").values
                     max_value = observation_spatial_mean[var].sel(time=max_date).values
                     init_forecast_spatial_mean, _ = self.align_datasets(
-                        forecast_spatial_mean, observation_spatial_mean, init_time
+                        forecast_spatial_mean,
+                        observation_spatial_mean,
+                        pd.timestamp(init_time).to_datetime(),
                     )
 
                     if max_date in init_forecast_spatial_mean.time.values:
                         lead_time = init_forecast_spatial_mean.where(
                             init_forecast_spatial_mean.time == max_date, drop=True
                         ).lead_time
-                        maximummae_dataarray = xr.DataArray(
+                        max_mae_dataarray = xr.DataArray(
                             data=[
                                 abs(
                                     init_forecast_spatial_mean.max()[
@@ -123,21 +129,12 @@ class MaximumMAE(Metric):
                             dims=["lead_time"],
                             coords={"lead_time": lead_time.values},
                         )
-                        maximummae_values.append(maximummae_dataarray)
-        maximummae_dataarray = xr.concat(maximummae_values, dim="lead_time")
-
+                        max_mae_values.append(max_mae_dataarray)
         # Reverse the lead time so that the minimum lead time is first
-        maximummae_dataarray = maximummae_dataarray.isel(
-            lead_time=slice(None, None, -1)
-        )
-        maximummae_dataarray = utils.expand_lead_times_to_6_hourly(maximummae_dataarray)
-        if (
-            max_date.astype("datetime64[Y]").astype(int) + 1970 == 2023
-            and any(observation["longitude"] > 100)
-            and any(observation["latitude"] < -30)
-        ):
-            breakpoint()
-        return maximummae_dataarray
+        max_mae_dataarray = max_mae_dataarray.isel(lead_time=slice(None, None, -1))
+        max_mae_dataarray = utils.expand_lead_times_to_6_hourly(max_mae_dataarray)
+
+        return max_mae_dataarray
 
 
 @dataclasses.dataclass
