@@ -21,6 +21,7 @@ def evaluate(
     eval_config: config.Config,
     forecast_schema_config: config.ForecastSchemaConfig = DEFAULT_FORECAST_SCHEMA_CONFIG,
     dry_run: bool = False,
+    dry_run_event_type: Optional[str] = "heat_wave",
 ) -> dict[str, list[Any]]:
     """Driver for evaluating a collection of Cases across a set of Events.
 
@@ -54,30 +55,34 @@ def evaluate(
                     individual_case["location"] = utils.Location(
                         **individual_case["location"]
                     )
+    if dry_run:
+        for event in eval_config.event_types:
+            # TODO: add property class in event, separate pr
+            if event.__name__ == dry_run_event_type:
+                cases = dacite.from_dict(
+                    data_class=event,
+                    data=yaml_event_case,
+                )
+                return cases
     for event in eval_config.event_types:
         cases = dacite.from_dict(
             data_class=event,
             data=yaml_event_case,
         )
-        if dry_run:  # validation for some cases; returns first event type
-            return cases
-        else:
-            point_obs, gridded_obs = _open_obs_datasets(eval_config)
-            forecast_dataset = _open_forecast_dataset(
-                eval_config, forecast_schema_config
-            ).compute()
+        point_obs, gridded_obs = _open_obs_datasets(eval_config)
+        forecast_dataset = _open_forecast_dataset(
+            eval_config, forecast_schema_config
+        ).compute()
 
-            if gridded_obs:
-                gridded_obs = utils.map_era5_vars_to_forecast(
-                    DEFAULT_FORECAST_SCHEMA_CONFIG, forecast_dataset, gridded_obs
-                )
-            results = _evaluate_cases_loop(
-                cases, forecast_dataset, gridded_obs, point_obs
+        if gridded_obs:
+            gridded_obs = utils.map_era5_vars_to_forecast(
+                DEFAULT_FORECAST_SCHEMA_CONFIG, forecast_dataset, gridded_obs
             )
-            # NOTE(daniel): This is a bit of a hack, but it's a quick way to get the
-            # event name for the dictionary key; can do something later, since we
-            # probably don't want to make Event objects hashable.
-            all_results[event.__name__] = results
+        results = _evaluate_cases_loop(cases, forecast_dataset, gridded_obs, point_obs)
+        # NOTE(daniel): This is a bit of a hack, but it's a quick way to get the
+        # event name for the dictionary key; can do something later, since we
+        # probably don't want to make Event objects hashable.
+        all_results[event.__name__] = results
     return all_results
 
 
