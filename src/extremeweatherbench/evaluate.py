@@ -70,9 +70,10 @@ def evaluate(
             data=yaml_event_case,
         )
         point_obs, gridded_obs = _open_obs_datasets(eval_config)
-        forecast_dataset = _open_forecast_dataset(
-            eval_config, forecast_schema_config
-        ).compute()
+        forecast_dataset = _open_forecast_dataset(eval_config, forecast_schema_config)
+
+        if "json" not in eval_config.forecast_dir:
+            forecast_dataset = forecast_dataset.compute()
 
         if gridded_obs:
             gridded_obs = utils.map_era5_vars_to_forecast(
