@@ -15,4 +15,4 @@ repos:
     hooks:
     -   id: mypy
         args: [--enable-incomplete-feature=Unpack, --ignore-missing-imports, --explicit-package-bases]
-        additional_dependencies: [tqdm-stubs, types-requests, types-ujson]
+        additional_dependencies: [tqdm-stubs, types-requests, types-ujson, types-pyyaml]
