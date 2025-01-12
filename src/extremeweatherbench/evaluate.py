@@ -22,7 +22,7 @@ def evaluate(
     forecast_schema_config: config.ForecastSchemaConfig = DEFAULT_FORECAST_SCHEMA_CONFIG,
     dry_run: bool = False,
     dry_run_event_type: Optional[str] = "HeatWave",
-) -> dict[str, list[Any]]:
+) -> dict[str, dict[Any]]:
     """Driver for evaluating a collection of Cases across a set of Events.
 
     Args:
@@ -150,7 +150,7 @@ def _evaluate_case(
             individual_case.id,
         )
     logger.info("Forecast data available for case %s", individual_case.id)
-    case_results = {}
+    case_results: dict[str, dict[Any]] = {}
     if gridded_obs is not None:
         variable_subset_gridded_obs = individual_case._subset_data_vars(gridded_obs)
         time_subset_gridded_obs_ds = variable_subset_gridded_obs.sel(
