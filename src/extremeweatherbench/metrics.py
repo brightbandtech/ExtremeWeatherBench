@@ -1,26 +1,65 @@
 import dataclasses
 
 import numpy as np
+import pandas as pd
 import xarray as xr
+from scores.continuous import rmse
+import logging
 from extremeweatherbench import utils
+import datetime
 
-# TODO: get permissions to upload this to bb bucket
-T2M_85TH_PERCENTILE_CLIMATOLOGY_PATH = (
-    "/home/taylor/data/era5_2m_temperature_85th_by_hour_dayofyear.zarr"
-)
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+T2M_85TH_PERCENTILE_CLIMATOLOGY_PATH = "gs://brightband-scratch/taylor/climatology/era5_2m_temperature_85th_rolling_by_hour_dayofyear.zarr"
 
 
 @dataclasses.dataclass
 class Metric:
     """A base class defining the interface for ExtremeWeatherBench metrics."""
 
-    def compute(self, forecast: xr.Dataset, observation: xr.Dataset):
+    def compute(self, forecast: xr.DataArray, observation: xr.DataArray):
         """Evaluate a specific metric given a forecast and observation dataset."""
         raise NotImplementedError
 
-    def to_string(self) -> str:
-        """Return a string representation of the metric."""
-        raise NotImplementedError
+    @property
+    def name(self) -> str:
+        """Return the class name without parentheses."""
+        return self.__class__.__name__
+
+    def align_datasets(
+        self,
+        forecast: xr.Dataset,
+        observation: xr.Dataset,
+        init_time_datetime: datetime.datetime,
+    ):
+        """Align the forecast and observation datasets."""
+        try:
+            forecast = forecast.sel(init_time=init_time_datetime)
+        # handles duplicate initialization times. please try to avoid this situation
+        except ValueError:
+            init_time_duplicate_length = len(
+                forecast.where(
+                    forecast.init_time == init_time_datetime, drop=True
+                ).init_time
+            )
+            if init_time_duplicate_length > 1:
+                logger.warning(
+                    "init time %s has more than %d forecast associated with it, taking first only",
+                    init_time_datetime,
+                    init_time_duplicate_length,
+                )
+            forecast = forecast.sel(init_time=init_time_datetime).isel(init_time=0)
+        time = np.array(
+            [
+                init_time_datetime + pd.Timedelta(hours=int(t))
+                for t in forecast["lead_time"]
+            ]
+        )
+        forecast = forecast.assign_coords(time=("lead_time", time))
+        forecast = forecast.swap_dims({"lead_time": "time"})
+        forecast, observation = xr.align(forecast, observation, join="inner")
+        return forecast, observation
 
 
 @dataclasses.dataclass
@@ -33,92 +72,64 @@ class DurationME(Metric):
             event is occurring.
     """
 
-    # NOTE(daniel): We probably need to define a field to which these thresholds
-    # are applied, right?
-
-    def compute(self, forecast: xr.Dataset, observation: xr.Dataset):
+    def compute(self, forecast: xr.DataArray, observation: xr.DataArray):
         print(forecast)
         print(observation)
-
-    # @property
-    # def type(self) -> str:
-    #     return "duration_me"
-    # NOTE(daniel): Why wouldn't we just make this just the to_string method?
-    # In fact, this can be in the base Metric class and we can just define another
-    # default, private attribute like "_event_type" that can be over-ridden by
-    # every specialized class to return here.
 
 
 @dataclasses.dataclass
 class RegionalRMSE(Metric):
     """Root mean squared error of a regional forecast evalauted against observations."""
 
-    def compute(self, forecast: xr.Dataset, observation: xr.Dataset):
-        print(forecast)
-        print(observation)
-        return None
+    def compute(self, forecast: xr.DataArray, observation: xr.DataArray):
+        rmse_values = []
+        for init_time in forecast.init_time:
+            init_forecast, subset_observation = self.align_datasets(
+                forecast, observation, pd.Timestamp(init_time.values).to_pydatetime()
+            )
+            output_rmse = rmse(init_forecast, subset_observation, preserve_dims="time")
+            rmse_values.append(output_rmse)
+        rmse_dataset = xr.concat(rmse_values, dim="time")
+        grouped_fhour_rmse_dataset = rmse_dataset.groupby("lead_time").mean()
+        return grouped_fhour_rmse_dataset
 
 
 @dataclasses.dataclass
 class MaximumMAE(Metric):
     """Mean absolute error of forecasted maximum values."""
 
-    def compute(self, forecast: xr.Dataset, observation: xr.Dataset):
-        era5_hourly_daily_85th_percentile = xr.open_zarr(
-            T2M_85TH_PERCENTILE_CLIMATOLOGY_PATH
+    def compute(self, forecast: xr.DataArray, observation: xr.DataArray):
+        max_mae_values = []
+        observation_spatial_mean = observation.mean(["latitude", "longitude"])
+        observation_spatial_mean = observation_spatial_mean.where(
+            observation_spatial_mean.time.dt.hour % 6 == 0, drop=True
         )
-        era5_climatology = utils.convert_day_yearofday_to_time(
-            era5_hourly_daily_85th_percentile,
-            np.unique(observation.time.dt.year.values)[0],
-        )
-        era5_climatology = era5_climatology.rename_vars(
-            {"2m_temperature": "2m_temperature_85th_percentile"}
-        )
-        merged_dataset = xr.merge(
-            [era5_climatology, observation],
-            join="inner",
-        )
-        merged_dataset = utils.convert_longitude_to_180(merged_dataset)
-        merged_dataset = utils.clip_dataset_to_bounding_box(
-            merged_dataset, location_center, box_length_width_in_km
-        )
-        merged_dataset = utils.remove_ocean_gridpoints(merged_dataset)
-        return None
-        max_t2_times = (
-            merged_df.reset_index()
-            .groupby("init_time")
-            .apply(lambda x: x.loc[x["t2"].idxmax()])
-        )
-        max_t2_times["model"] = "PanguWeather"
-        max_t2_times = max_t2_times[
-            max_t2_times.index
-            < era5_dataset.case_analysis_ds["time"][
-                era5_dataset.case_analysis_ds["2m_temperature"]
-                .mean(["latitude", "longitude"])
-                .argmax()
-                .values
-            ].values
-        ]
-        max_t2_times["time_error"] = abs(
-            max_t2_times["time"]
-            - era5_dataset.case_analysis_ds["time"][
-                era5_dataset.case_analysis_ds["2m_temperature"]
-                .mean(["latitude", "longitude"])
-                .argmax()
-                .values
-            ].values
-        ) / np.timedelta64(1, "h")
-        max_t2_times["t2_mae"] = abs(
-            max_t2_times["t2"]
-            - era5_dataset.case_analysis_ds["2m_temperature"]
-            .mean(["latitude", "longitude"])
-            .max()
-            .values
-        )
-        merged_pivot = max_t2_times.pivot(
-            index="model", columns="init_time", values="t2_mae"
-        )
-        raise NotImplementedError
+        forecast_spatial_mean = forecast.mean(["latitude", "longitude"])
+        for init_time in forecast_spatial_mean.init_time:
+            if forecast.name == "air_temperature":
+                max_date = observation_spatial_mean.idxmax("time").values
+                max_value = observation_spatial_mean.sel(time=max_date).values
+                init_forecast_spatial_mean, _ = self.align_datasets(
+                    forecast_spatial_mean,
+                    observation_spatial_mean,
+                    pd.Timestamp(init_time.values).to_pydatetime(),
+                )
+
+                if max_date in init_forecast_spatial_mean.time.values:
+                    lead_time = init_forecast_spatial_mean.where(
+                        init_forecast_spatial_mean.time == max_date, drop=True
+                    ).lead_time
+                    max_mae_dataarray = xr.DataArray(
+                        data=[abs(init_forecast_spatial_mean.max().values - max_value)],
+                        dims=["lead_time"],
+                        coords={"lead_time": lead_time.values},
+                    )
+                    max_mae_values.append(max_mae_dataarray)
+        max_mae_full_da = xr.concat(max_mae_values, dim="lead_time")
+        # Reverse the lead time so that the minimum lead time is first
+        max_mae_full_da = max_mae_full_da.isel(lead_time=slice(None, None, -1))
+        max_mae_full_da = utils.expand_lead_times_to_6_hourly(max_mae_full_da)
+        return max_mae_full_da
 
 
 @dataclasses.dataclass
@@ -132,7 +143,7 @@ class MaxMinMAE(Metric):
         time_interval: A string defining the time interval to roll up the metric.
     """
 
-    def compute(self, forecast: xr.Dataset, observation: xr.Dataset):
+    def compute(self, forecast: xr.DataArray, observation: xr.DataArray):
         print(forecast)
         print(observation)
         return None
@@ -147,7 +158,7 @@ class OnsetME(Metric):
             to potentially include in an analysis.
     """
 
-    def compute(self, forecast: xr.Dataset, observation: xr.Dataset):
+    def compute(self, forecast: xr.DataArray, observation: xr.DataArray):
         print(forecast)
         print(observation)
         return None

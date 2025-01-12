@@ -1,16 +1,17 @@
 """Evaluation routines for use during ExtremeWeatherBench case studies / analyses."""
 
-# TODO(taylor): Incorporate logging diagnostics throughout evaluation stack.
 import logging
 import fsspec
 import os
-from typing import Optional
-import logging
+from typing import Optional, Any
 import pandas as pd
 import xarray as xr
 from extremeweatherbench import config, events, case, utils
 import dacite
 import yaml
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 #: Default mapping for forecast dataset schema.
 DEFAULT_FORECAST_SCHEMA_CONFIG = config.ForecastSchemaConfig()
@@ -20,7 +21,8 @@ def evaluate(
     eval_config: config.Config,
     forecast_schema_config: config.ForecastSchemaConfig = DEFAULT_FORECAST_SCHEMA_CONFIG,
     dry_run: bool = False,
-) -> dict[str, list[xr.Dataset]]:
+    dry_run_event_type: Optional[str] = "HeatWave",
+) -> dict[str, dict[Any]]:
     """Driver for evaluating a collection of Cases across a set of Events.
 
     Args:
@@ -40,31 +42,47 @@ def evaluate(
     all_results = {}
     with open(events_file_path, "r") as file:
         yaml_event_case = yaml.safe_load(file)
-
+    logger.info("Event yaml loaded at %s", events_file_path)
+    for k, v in yaml_event_case.items():
+        if k == "cases":
+            for individual_case in v:
+                if "location" in individual_case:
+                    individual_case["location"]["longitude"] = (
+                        utils.convert_longitude_to_360(
+                            individual_case["location"]["longitude"]
+                        )
+                    )
+                    individual_case["location"] = utils.Location(
+                        **individual_case["location"]
+                    )
+    if dry_run:
+        for event in eval_config.event_types:
+            # TODO: add property class in event, separate pr
+            if event.__name__ == dry_run_event_type:
+                cases = dacite.from_dict(
+                    data_class=event,
+                    data=yaml_event_case,
+                )
+                return cases
     for event in eval_config.event_types:
         cases = dacite.from_dict(
             data_class=event,
             data=yaml_event_case,
-            config=dacite.Config(cast=[pd.Timestamp]),
         )
-        if dry_run:  # temporary validation for the cases
-            return cases
-        else:
-            point_obs, gridded_obs = _open_obs_datasets(eval_config)
-            forecast_dataset = _open_forecast_dataset(
-                eval_config, forecast_schema_config
+        point_obs, gridded_obs = _open_obs_datasets(eval_config)
+        forecast_dataset = _open_forecast_dataset(
+            eval_config, forecast_schema_config
+        ).compute()
+
+        if gridded_obs:
+            gridded_obs = utils.map_era5_vars_to_forecast(
+                DEFAULT_FORECAST_SCHEMA_CONFIG, forecast_dataset, gridded_obs
             )
-            if gridded_obs:
-                gridded_obs = utils.map_era5_vars_to_forecast(
-                    DEFAULT_FORECAST_SCHEMA_CONFIG, forecast_dataset, gridded_obs
-                )
-            results = _evaluate_cases_loop(
-                cases, forecast_dataset, gridded_obs, point_obs
-            )
-            # NOTE(daniel): This is a bit of a hack, but it's a quick way to get the
-            # event name for the dictionary key; can do something later, since we
-            # probably don't want to make Event objects hashable.
-            all_results[event.__name__] = results
+        results = _evaluate_cases_loop(cases, forecast_dataset, gridded_obs, point_obs)
+        # NOTE(daniel): This is a bit of a hack, but it's a quick way to get the
+        # event name for the dictionary key; can do something later, since we
+        # probably don't want to make Event objects hashable.
+        all_results[event.__name__] = results
     return all_results
 
 
@@ -73,7 +91,7 @@ def _evaluate_cases_loop(
     forecast_dataset: xr.Dataset,
     gridded_obs: Optional[xr.Dataset] = None,
     point_obs: Optional[pd.DataFrame] = None,
-) -> list[xr.Dataset]:
+) -> dict[int, xr.Dataset]:
     """Sequentially loop over and evalute all cases for a specific event type.
 
     Args:
@@ -86,16 +104,15 @@ def _evaluate_cases_loop(
         A list of xarray Datasets containing the evaluation results for each case
         in the Event of interest.
     """
-    results = []
+    results = {}
     for individual_case in event.cases:
-        results.append(
-            _evaluate_case(
-                individual_case,
-                forecast_dataset,
-                gridded_obs,
-                point_obs,
-            )
+        results[individual_case.id] = _evaluate_case(
+            individual_case,
+            forecast_dataset,
+            gridded_obs,
+            point_obs,
         )
+
     return results
 
 
@@ -104,7 +121,7 @@ def _evaluate_case(
     forecast_dataset: xr.Dataset,
     gridded_obs: xr.Dataset,
     point_obs: pd.DataFrame,
-) -> xr.Dataset:
+) -> Optional[dict[str, xr.Dataset]]:
     """Evaluate a single case given forecast data and observations.
 
     Args:
@@ -116,37 +133,49 @@ def _evaluate_case(
     Returns:
         An xarray Dataset containing the evaluation results for the case.
     """
-    time_subset_forecast_ds = individual_case._subset_valid_times(forecast_dataset)
 
+    logger.info("Evaluating case %s, %s", individual_case.id, individual_case.title)
+    variable_subset_ds = individual_case._subset_data_vars(forecast_dataset)
+    time_subset_forecast_ds = individual_case._subset_valid_times(variable_subset_ds)
     # Check if forecast data is available for the case, if not, return None
-    forecast_exists = individual_case._check_for_forecast_data_availability(
-        time_subset_forecast_ds
-    )
-    # Each event type has a unique subsetting procedure
-    spatiotemporal_subset_ds = individual_case.perform_subsetting_procedure(
-        time_subset_forecast_ds
-    )
-    if not forecast_exists:
+    lead_time_len = len(time_subset_forecast_ds.init_time)
+    if lead_time_len == 0:
+        logger.warning(
+            "No forecast data available for case %s, skipping", individual_case.id
+        )
         return None
-    if point_obs is not None:
-        pass
+    elif lead_time_len < (individual_case.end_date - individual_case.start_date).days:
+        logger.warning(
+            "Fewer valid times in forecast than days in case %s, results likely unreliable",
+            individual_case.id,
+        )
+    logger.info("Forecast data available for case %s", individual_case.id)
+    case_results: dict[str, dict[Any]] = {}
     if gridded_obs is not None:
-        data_vars = {}
-        time_subset_gridded_obs_ds = individual_case._subset_valid_times(gridded_obs)
-        gridded_obs = individual_case.perform_subsetting_procedure(
+        variable_subset_gridded_obs = individual_case._subset_data_vars(gridded_obs)
+        time_subset_gridded_obs_ds = variable_subset_gridded_obs.sel(
+            time=slice(individual_case.start_date, individual_case.end_date)
+        )
+        time_subset_gridded_obs_ds = individual_case.perform_subsetting_procedure(
             time_subset_gridded_obs_ds
         )
         # Align gridded_obs and forecast_dataset by time
         time_subset_gridded_obs_ds, spatiotemporal_subset_ds = xr.align(
-            time_subset_gridded_obs_ds, spatiotemporal_subset_ds, join="inner"
+            time_subset_gridded_obs_ds,
+            time_subset_forecast_ds[list(time_subset_forecast_ds.keys())],
+            join="inner",
         )
-        for metric in individual_case.metrics_list:
-            result = metric().compute(
-                spatiotemporal_subset_ds, time_subset_gridded_obs_ds
-            )
-            data_vars[metric.name] = result
-
-        return xr.Dataset(data_vars)
+        for data_var in individual_case.data_vars:
+            case_results[data_var] = {}
+            forecast_da = spatiotemporal_subset_ds[data_var].compute()
+            gridded_obs_da = time_subset_gridded_obs_ds[data_var].compute()
+            for metric in individual_case.metrics_list:
+                metric_instance = metric()
+                result = metric_instance.compute(forecast_da, gridded_obs_da)
+                case_results[data_var][metric_instance.name] = result
+    if point_obs is not None:
+        pass
+    return case_results
 
 
 def _open_forecast_dataset(
@@ -165,24 +194,24 @@ def _open_forecast_dataset(
 
     file_list = fs.ls(eval_config.forecast_dir)
     file_types = set([file.split(".")[-1] for file in file_list])
-    if len(file_types) > 1:
+    if len(file_types) > 1 and "parq" not in eval_config.forecast_dir:
         raise ValueError("Multiple file types found in forecast path.")
-
     if "zarr" in file_types and len(file_list) == 1:
         forecast_dataset = xr.open_zarr(file_list, chunks="auto")
     elif "zarr" in file_types and len(file_list) > 1:
         raise ValueError(
             "Multiple zarr files found in forecast path, please provide a single zarr file."
         )
-
     if "nc" in file_types:
         raise NotImplementedError("NetCDF file reading not implemented.")
-
-    if "json" in file_types:
-        forecast_dataset = utils._open_kerchunk_zarr_reference_jsons(
-            file_list, forecast_schema_config
+    if "parq" in file_types or any("parq" in ft for ft in file_types):
+        forecast_dataset = utils._open_mlwp_kerchunk_reference(
+            eval_config.forecast_dir, forecast_schema_config
         )
-    forecast_dataset = utils.convert_longitude_to_180(forecast_dataset)
+    if "json" in file_types:
+        forecast_dataset = utils._open_mlwp_kerchunk_reference(
+            file_list[0], forecast_schema_config
+        )
     return forecast_dataset
 
 
@@ -198,8 +227,6 @@ def _open_obs_datasets(eval_config: config.Config):
             chunks=None,
             storage_options=dict(token="anon"),
         )
-        gridded_obs = utils.convert_longitude_to_180(gridded_obs)
-
     if point_obs is None and gridded_obs is None:
         raise ValueError("No gridded or point observation data provided.")
     return point_obs, gridded_obs
