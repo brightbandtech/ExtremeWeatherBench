@@ -3,7 +3,7 @@ Some code similarly structured to WeatherBench (Rasp et al.)."""
 
 import dataclasses
 import datetime
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Type
 from extremeweatherbench import metrics, utils
 import xarray as xr
 from enum import StrEnum
@@ -126,7 +126,7 @@ class IndividualHeatWaveCase(IndividualCase):
         metrics_list: A list of Metrics to be used in the evaluation
     """
 
-    metrics_list: List[metrics.Metric] = dataclasses.field(
+    metrics_list: List[Type[metrics.Metric]] = dataclasses.field(
         default_factory=lambda: [
             metrics.MaxOfMinMAE,
             metrics.RegionalRMSE,
@@ -159,7 +159,7 @@ class IndividualFreezeCase(IndividualCase):
         freeze_type: str: A string representing the type of freeze event.
     """
 
-    metrics_list: List[metrics.Metric] = dataclasses.field(
+    metrics_list: List[Type[metrics.Metric]] = dataclasses.field(
         default_factory=lambda: [metrics.RegionalRMSE]
     )
     data_vars: List[str] = dataclasses.field(
@@ -183,8 +183,8 @@ class IndividualFreezeCase(IndividualCase):
 class CaseEventType(StrEnum):
     """Enum class for the different types of extreme weather events."""
 
-    HEAT_WAVE: str = "heat_wave"
-    FREEZE: str = "freeze"
+    HEAT_WAVE = "heat_wave"
+    FREEZE = "freeze"
 
 
 CASE_EVENT_TYPE_MATCHER: dict[CaseEventType, type[IndividualCase]] = {
@@ -193,7 +193,7 @@ CASE_EVENT_TYPE_MATCHER: dict[CaseEventType, type[IndividualCase]] = {
 }
 
 
-def get_case_event_dataclass(case_type: str) -> IndividualCase:
+def get_case_event_dataclass(case_type: str) -> Type[IndividualCase]:
     event_dataclass = CASE_EVENT_TYPE_MATCHER.get(CaseEventType(case_type))
     if event_dataclass is None:
         raise ValueError(f"Unknown case event type {case_type}")

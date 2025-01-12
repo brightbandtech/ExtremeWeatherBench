@@ -29,8 +29,8 @@ class Metric:
 
     def align_datasets(
         self,
-        forecast: xr.Dataset,
-        observation: xr.Dataset,
+        forecast: xr.DataArray,
+        observation: xr.DataArray,
         init_time_datetime: datetime.datetime,
     ):
         """Align the forecast and observation datasets."""
