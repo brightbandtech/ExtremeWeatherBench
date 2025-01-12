@@ -57,8 +57,7 @@ def evaluate(
                     )
     if dry_run:
         for event in eval_config.event_types:
-            # TODO: add property class in event, separate pr
-            if event.name == dry_run_event_type:
+            if event.__name__ == dry_run_event_type:
                 cases: dict = dacite.from_dict(
                     data_class=event,
                     data=yaml_event_case,
