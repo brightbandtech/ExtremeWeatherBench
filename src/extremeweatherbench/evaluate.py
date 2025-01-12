@@ -72,6 +72,8 @@ def evaluate(
         point_obs, gridded_obs = _open_obs_datasets(eval_config)
         forecast_dataset = _open_forecast_dataset(eval_config, forecast_schema_config)
 
+        # Manages some of the quirkiness of the parquets and avoids loading in memory overloads
+        # from the json kerchunk references
         if "json" not in eval_config.forecast_dir:
             forecast_dataset = forecast_dataset.compute()
 
