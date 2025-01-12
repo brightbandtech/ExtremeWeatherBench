@@ -22,7 +22,7 @@ def evaluate(
     forecast_schema_config: config.ForecastSchemaConfig = DEFAULT_FORECAST_SCHEMA_CONFIG,
     dry_run: bool = False,
     dry_run_event_type: Optional[str] = "HeatWave",
-) -> dict[str, dict[Any]]:
+) -> dict[int, dict[dict, Any]]:
     """Driver for evaluating a collection of Cases across a set of Events.
 
     Args:
@@ -58,8 +58,8 @@ def evaluate(
     if dry_run:
         for event in eval_config.event_types:
             # TODO: add property class in event, separate pr
-            if event.__name__ == dry_run_event_type:
-                cases = dacite.from_dict(
+            if event.name == dry_run_event_type:
+                cases: dict = dacite.from_dict(
                     data_class=event,
                     data=yaml_event_case,
                 )
@@ -85,12 +85,12 @@ def evaluate(
         # NOTE(daniel): This is a bit of a hack, but it's a quick way to get the
         # event name for the dictionary key; can do something later, since we
         # probably don't want to make Event objects hashable.
-        all_results[event.__name__] = results
+        all_results[event.name] = results
     return all_results
 
 
 def _evaluate_cases_loop(
-    event: events.EventContainer,
+    event: dict[Any, events.EventContainer],
     forecast_dataset: xr.Dataset,
     gridded_obs: Optional[xr.Dataset] = None,
     point_obs: Optional[pd.DataFrame] = None,
@@ -121,9 +121,9 @@ def _evaluate_cases_loop(
 
 def _evaluate_case(
     individual_case: case.IndividualCase,
-    forecast_dataset: xr.Dataset,
-    gridded_obs: xr.Dataset,
-    point_obs: pd.DataFrame,
+    forecast_dataset: Optional[xr.Dataset],
+    gridded_obs: Optional[xr.Dataset],
+    point_obs: Optional[pd.DataFrame],
 ) -> Optional[dict[str, xr.Dataset]]:
     """Evaluate a single case given forecast data and observations.
 
@@ -153,7 +153,7 @@ def _evaluate_case(
             individual_case.id,
         )
     logger.info("Forecast data available for case %s", individual_case.id)
-    case_results: dict[str, dict[Any]] = {}
+    case_results: dict[str, dict[str, Any]] = {}
     if gridded_obs is not None:
         variable_subset_gridded_obs = individual_case._subset_data_vars(gridded_obs)
         time_subset_gridded_obs_ds = variable_subset_gridded_obs.sel(
