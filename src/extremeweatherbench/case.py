@@ -190,7 +190,7 @@ CASE_EVENT_TYPE_MATCHER: dict[CaseEventType, type[IndividualCase]] = {
 
 
 def get_case_event_dataclass(case_type: str) -> IndividualCase:
-    event_dataclass = CASE_EVENT_TYPE_MATCHER.get(case_type)
+    event_dataclass = CASE_EVENT_TYPE_MATCHER.get(CaseEventType(case_type))
     if event_dataclass is None:
         raise ValueError(f"Unknown case event type {case_type}")
     return event_dataclass
