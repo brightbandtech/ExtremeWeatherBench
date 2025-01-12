@@ -5,7 +5,7 @@ import datetime
 
 
 def test_evaluate_no_computation(mock_config):
-    result = evaluate.evaluate(mock_config, dry_run=True)
+    result = evaluate.evaluate(mock_config, dry_run=True, dry_run_event_type="HeatWave")
     assert isinstance(result, events.EventContainer)
 
 
