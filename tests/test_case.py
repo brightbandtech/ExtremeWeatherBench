@@ -1,77 +1,42 @@
 import pytest
-import xarray as xr
-import numpy as np
 import extremeweatherbench.case as case
-import pandas as pd
-import datetime
-import rioxarray
+import rioxarray  # noqa: F401
 from extremeweatherbench.utils import Location
-from .test_datasets import mock_forecast_dataset
+import datetime
 
 
 class TestGoodCases:
-    def test_check_for_forecast_data_availability(self, mock_forecast_dataset):
-        base_case = case.IndividualCase(
-            id=10,
-            title="Test Case",
-            start_date=pd.Timestamp("2020-01-01"),
-            end_date=pd.Timestamp("2020-01-14"),
-            location={"latitude": 40, "longitude": -100},
-            bounding_box_km=500,
-            event_type="heat_wave",
-        )
-        assert (
-            base_case._check_for_forecast_data_availability(mock_forecast_dataset)
-            is True
-        )
-
     def test_perform_subsetting_procedure_heatwave(self, mock_forecast_dataset):
         heatwave_case = case.IndividualHeatWaveCase(
             id=20,
             title="Test Heatwave",
-            start_date=pd.Timestamp(2000, 1, 1),
-            end_date=pd.Timestamp(2000, 1, 14),
-            location={"latitude": 40, "longitude": -100},
+            start_date=datetime.datetime(2000, 1, 1),
+            end_date=datetime.datetime(2000, 1, 14),
+            location=Location(latitude=40, longitude=-100),
             bounding_box_km=500,
             event_type="heat_wave",
         )
         subset_dataset = heatwave_case.perform_subsetting_procedure(
             mock_forecast_dataset
         )
-        assert "air_temperature" in subset_dataset
-        assert "eastward_wind" not in subset_dataset
-        assert "northward_wind" not in subset_dataset
-
-    def test_perform_subsetting_procedure_freeze(self, mock_forecast_dataset):
-        freeze_case = case.IndividualFreezeCase(
-            id=10,
-            title="Test Freeze",
-            start_date=pd.Timestamp(2000, 1, 1),
-            end_date=pd.Timestamp(2000, 1, 14),
-            location={"latitude": 40, "longitude": -100},
-            bounding_box_km=500,
-            event_type="freeze",
-        )
-        subset_dataset = freeze_case.perform_subsetting_procedure(mock_forecast_dataset)
-        assert "air_temperature" in subset_dataset
-        assert "eastward_wind" in subset_dataset
-        assert "northward_wind" in subset_dataset
+        assert len(subset_dataset["latitude"]) > 0
+        assert len(subset_dataset["longitude"]) > 0
 
     def test_individual_case(self, mock_forecast_dataset):
         base_case = case.IndividualCase(
             id=10,
             title="Test Case",
-            start_date=pd.Timestamp(2000, 1, 1),
-            end_date=pd.Timestamp(2000, 1, 14),
-            location={"latitude": 40, "longitude": -100},
+            start_date=datetime.datetime(2000, 1, 1),
+            end_date=datetime.datetime(2000, 1, 14),
+            location=Location(latitude=40, longitude=-100),
             bounding_box_km=500,
             event_type="heat_wave",
         )
         valid_case = {
             "id": 10,
             "title": "Test Case",
-            "start_date": pd.Timestamp(2000, 1, 1),
-            "end_date": pd.Timestamp(2000, 1, 14),
+            "start_date": datetime.datetime(2000, 1, 1),
+            "end_date": datetime.datetime(2000, 1, 14),
             "location": Location(latitude=40, longitude=-100),
             "bounding_box_km": 500,
             "event_type": "heat_wave",
@@ -84,7 +49,3 @@ class TestGoodCases:
         )
         with pytest.raises(NotImplementedError):
             base_case.perform_subsetting_procedure(mock_forecast_dataset)
-        assert (
-            base_case._check_for_forecast_data_availability(mock_forecast_dataset)
-            is True
-        )

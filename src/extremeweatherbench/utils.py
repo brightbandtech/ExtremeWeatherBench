@@ -2,9 +2,8 @@
 other specialized package.
 """
 
-import logging
-from typing import Optional, Union
-from collections import namedtuple, defaultdict
+from typing import Union
+from collections import namedtuple
 import fsspec
 import geopandas as gpd
 import numpy as np
@@ -85,7 +84,8 @@ def clip_dataset_to_bounding_box(
     """
     lat_center = location_center.latitude
     lon_center = location_center.longitude
-
+    if lon_center < 0:
+        lon_center = convert_longitude_to_360(lon_center)
     # Convert length from kilometers to degrees (approximation)
     length_deg = length_km / 111  # 1 degree is approximately 111 km
 
@@ -151,7 +151,9 @@ def remove_ocean_gridpoints(dataset: xr.Dataset) -> xr.Dataset:
     return dataset
 
 
-def _open_kerchunk_zarr_reference_jsons(file_list, forecast_schema_config):
+def _open_kerchunk_zarr_reference_jsons(
+    file_list, forecast_schema_config, remote_protocol: str = "s3"
+):
     """Open a dataset from a list of kerchunk JSON files."""
     xarray_datasets = []
     for json_file in file_list:
@@ -159,7 +161,7 @@ def _open_kerchunk_zarr_reference_jsons(file_list, forecast_schema_config):
             "reference",
             fo=json_file,
             ref_storage_args={"skip_instance_cache": True},
-            remote_protocol="gcs",
+            remote_protocol=remote_protocol,
             remote_options={"anon": True},
         )
         m = fs_.get_mapper("")
@@ -194,6 +196,55 @@ def _open_kerchunk_zarr_reference_jsons(file_list, forecast_schema_config):
     return xr.concat(xarray_datasets, dim=forecast_schema_config.init_time)
 
 
+def _open_mlwp_kerchunk_reference(
+    file, forecast_schema_config, remote_protocol: str = "s3"
+):
+    """Open a dataset from a kerchunked reference file for the OAR MLWP S3 bucket."""
+    if "parq" in file:
+        storage_options = {
+            "remote_protocol": "s3",
+            "skip_instance_cache": True,
+            "remote_options": {"anon": True},
+            "target_protocol": "file",
+            "lazy": True,
+        }  # options passed to fsspec
+        open_dataset_options: dict = {"chunks": {}}  # opens passed to xarray
+
+        ds = xr.open_dataset(
+            file,
+            engine="kerchunk",
+            storage_options=storage_options,
+            open_dataset_options=open_dataset_options,
+        )
+    else:
+        ds = xr.open_dataset(
+            "reference://",
+            engine="zarr",
+            backend_kwargs={
+                "consolidated": False,
+                "storage_options": {
+                    "fo": file,
+                    "remote_protocol": remote_protocol,
+                    "remote_options": {"anon": True},
+                },
+            },
+        )
+    ds = ds.rename({"time": "lead_time"})
+    ds["lead_time"] = range(0, 241, 6)
+    for variable in forecast_schema_config.__dict__:
+        attr_value = getattr(forecast_schema_config, variable)
+        if attr_value in ds.data_vars:
+            ds = ds.rename({attr_value: variable})
+        # Step 1: Create a meshgrid of init_time and lead_time
+    lead_time_grid, init_time_grid = np.meshgrid(ds.lead_time, ds.init_time)
+    # Step 2: Flatten the meshgrid and convert lead_time to timedelta
+    valid_time = init_time_grid.flatten() + pd.to_timedelta(
+        lead_time_grid.flatten(), unit="h"
+    )
+    ds.coords["time"] = valid_time
+    return ds
+
+
 def map_era5_vars_to_forecast(forecast_schema_config, forecast_dataset, era5_dataset):
     """Map ERA5 variable names to forecast variable names."""
     era5_subset_list = []
@@ -202,3 +253,29 @@ def map_era5_vars_to_forecast(forecast_schema_config, forecast_dataset, era5_dat
             era5_dataset = era5_dataset.rename({ERA5_MAPPING[variable]: variable})
             era5_subset_list.append(variable)
     return era5_dataset[era5_subset_list]
+
+
+def expand_lead_times_to_6_hourly(
+    dataarray: xr.DataArray, max_fcst_hour: int = 240, fcst_output_cadence: int = 6
+) -> xr.DataArray:
+    """Makes hours in metrics output for max_fcst_hour hours at a fcst_cadence-hourly rate.
+    Depending on initialization time and output cadence, there may be missing lead times
+    in final output of certain metrics."""
+    all_hours = np.arange(0, max_fcst_hour + 1, fcst_output_cadence)
+    final_data = []
+    final_times = []
+    current_idx = 0
+    for hour in all_hours:
+        if (
+            current_idx < len(dataarray.lead_time)
+            and dataarray.lead_time[current_idx] == hour
+        ):
+            final_data.append(dataarray.values[current_idx])
+            current_idx += 1
+        else:
+            final_data.append(None)
+        final_times.append(hour)
+    dataarray = xr.DataArray(
+        data=final_data, dims=["lead_time"], coords={"lead_time": final_times}
+    )
+    return dataarray

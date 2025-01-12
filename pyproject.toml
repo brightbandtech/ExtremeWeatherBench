@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "cartopy>=0.24.1",
+    "cftime>=1.6.4.post1",
     "dacite>=1.8.1",
     "dask[complete]>=2024.12.1",
     "fastparquet>=2024.11.0",
@@ -26,6 +27,7 @@ dependencies = [
     "shapely>=2.0.6",
     "tqdm>=4.67.1",
     "ujson>=5.10.0",
+    "virtualizarr>=1.2.0",
     "xarray>=2024.11.0",
     "zarr>=2.18.4",
 ]
@@ -36,6 +38,11 @@ dev = [
     "pytest-cov>=6.0.0",
     "pytest-mock>=3.14.0",
     "ruff>=0.9.0",
+    "types-pyyaml>=6.0.12.20241230",
+]
+forecast-download = [
+    "kerchunk>=0.2.7",
+    "virtualizarr>=1.2.0",
 ]
 
 [dependency-groups]
