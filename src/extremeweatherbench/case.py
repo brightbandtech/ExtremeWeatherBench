@@ -3,13 +3,13 @@ Some code similarly structured to WeatherBench (Rasp et al.)."""
 
 import dataclasses
 import datetime
-from extremeweatherbench.utils import Location
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from extremeweatherbench import metrics, utils
 import xarray as xr
 from enum import StrEnum
-import logging
 import pandas as pd
+import numpy as np
+import logging
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -37,17 +37,13 @@ class IndividualCase:
 
     id: int
     title: str
-    start_date: pd.Timestamp
-    end_date: pd.Timestamp
-    location: dict
+    start_date: datetime.datetime
+    end_date: datetime.datetime
+    location: utils.Location
     bounding_box_km: float
     event_type: str
-    cross_listed: Optional[List[str]] = None
     data_vars: Optional[List[str]] = None
-
-    def __post_init__(self):
-        if isinstance(self.location, dict):
-            self.location = Location(**self.location)
+    cross_listed: Optional[List[str]] = None
 
     def perform_subsetting_procedure(self, dataset: xr.Dataset) -> xr.Dataset:
         """Perform any necessary subsetting procedures on the input dataset.
@@ -75,6 +71,7 @@ class IndividualCase:
         subset_dataset = dataset
         if self.data_vars is not None:
             subset_dataset = subset_dataset[self.data_vars]
+        subset_dataset["time"] = dataset["time"]
         return subset_dataset
 
     def _subset_valid_times(self, dataset: xr.Dataset) -> xr.Dataset:
@@ -85,9 +82,9 @@ class IndividualCase:
         Returns:
             xr.Dataset: The subset dataset.
         """
-
-        time_subset_ds = dataset.sel(time=slice(self.start_date, self.end_date))
-        return time_subset_ds
+        indices = derive_indices_from_init_time_and_lead_time(self, dataset)
+        modified_ds = dataset.isel(init_time=np.unique(indices[0]))
+        return modified_ds
 
     def _check_for_forecast_data_availability(
         self,
@@ -103,12 +100,11 @@ class IndividualCase:
             True if the datasets have overlapping time periods, False otherwise.
         """
         lead_time_len = len(forecast_dataset.init_time)
-        valid_time_len = len(forecast_dataset.time)
 
-        if valid_time_len == 0:
+        if lead_time_len == 0:
             logger.warning("No forecast data available for case %s, skipping", self.id)
             return False
-        elif valid_time_len < (self.end_date - self.start_date).days:
+        elif lead_time_len < (self.end_date - self.start_date).days:
             logger.warning(
                 "Fewer valid times in forecast than days in case %s, results likely unreliable",
                 self.id,
@@ -116,10 +112,6 @@ class IndividualCase:
         else:
             logger.info("Forecast data available for case %s", self.id)
         logger.info("Lead time length for case %s: %s", self.id, lead_time_len)
-        logger.info(
-            "Total time step count (valid times by forecasr hour) for case: %s",
-            lead_time_len * valid_time_len,
-        )
         return True
 
 
@@ -135,16 +127,18 @@ class IndividualHeatWaveCase(IndividualCase):
     """
 
     metrics_list: List[metrics.Metric] = dataclasses.field(
-        default_factory=lambda: [metrics.RegionalRMSE]
+        default_factory=lambda: [metrics.RegionalRMSE, metrics.MaximumMAE]
     )
     data_vars: List[str] = dataclasses.field(
         default_factory=lambda: ["air_temperature"]
     )
 
+    def __post_init__(self):
+        self.data_vars = ["air_temperature"]
+
     def perform_subsetting_procedure(self, dataset: xr.Dataset) -> xr.Dataset:
-        modified_ds = self._subset_data_vars(dataset)
         modified_ds = utils.clip_dataset_to_bounding_box(
-            modified_ds, self.location, self.bounding_box_km
+            dataset, self.location, self.bounding_box_km
         )
         modified_ds = utils.remove_ocean_gridpoints(modified_ds)
         return modified_ds
@@ -168,6 +162,9 @@ class IndividualFreezeCase(IndividualCase):
         default_factory=lambda: ["air_temperature", "eastward_wind", "northward_wind"]
     )
 
+    def __post_init__(self):
+        self.data_vars = ["air_temperature", "eastward_wind", "northward_wind"]
+
     def perform_subsetting_procedure(self, dataset) -> xr.Dataset:
         modified_ds = utils.clip_dataset_to_bounding_box(
             dataset, self.location, self.bounding_box_km
@@ -182,18 +179,35 @@ class IndividualFreezeCase(IndividualCase):
 class CaseEventType(StrEnum):
     """Enum class for the different types of extreme weather events."""
 
-    HEAT_WAVE = "heat_wave"
-    FREEZE = "freeze"
+    HEAT_WAVE: str = "heat_wave"
+    FREEZE: str = "freeze"
 
 
-CASE_EVENT_TYPE_MATCHER: dict[CaseEventType, IndividualCase] = {
+CASE_EVENT_TYPE_MATCHER: dict[CaseEventType, type[IndividualCase]] = {
     CaseEventType.HEAT_WAVE: IndividualHeatWaveCase,
     CaseEventType.FREEZE: IndividualFreezeCase,
 }
 
 
 def get_case_event_dataclass(case_type: str) -> IndividualCase:
-    event_dataclass = CASE_EVENT_TYPE_MATCHER.get(case_type)
+    event_dataclass = CASE_EVENT_TYPE_MATCHER.get(CaseEventType(case_type))
     if event_dataclass is None:
         raise ValueError(f"Unknown case event type {case_type}")
     return event_dataclass
+
+
+def derive_indices_from_init_time_and_lead_time(
+    individual_case: IndividualCase,
+    dataset: xr.Dataset,
+) -> Tuple[np.ndarray]:
+    time_reshaped = dataset.time.values.reshape(
+        (dataset.init_time.shape[0], dataset.lead_time.shape[0])
+    )
+    output = dataset.time.where(
+        (dataset.time.time > pd.to_datetime(individual_case.start_date))
+        & (dataset.time.time < pd.to_datetime(individual_case.end_date)),
+        drop=True,
+    )
+    index_mask = np.isin(time_reshaped, output)
+    indices = np.where(index_mask)
+    return indices

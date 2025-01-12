@@ -11,20 +11,16 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from cartopy.mpl.gridliner import LongitudeFormatter, LatitudeFormatter
 import seaborn as sns
 from matplotlib import dates as mdates
+import datetime
 
 sns.set_theme(style="whitegrid", context="talk")
-
-
-# TODO: Fix the logic for the climatology to handle year changes
-# (utils.convert_day_yearofday_to_time is not handling year changes)
-# TODO: clean up variable names to match CF conventions
 
 
 def subset_event_and_mask_climatology(
     era5: xr.Dataset,
     climatology: xr.Dataset,
-    actual_start_date: pd.Timestamp,
-    actual_end_date: pd.Timestamp,
+    actual_start_date: datetime.datetime,
+    actual_end_date: datetime.datetime,
     single_case: case.IndividualCase,
 ):
     """Calculate the times where regional average of temperature exceeds the climatology."""
@@ -37,7 +33,6 @@ def subset_event_and_mask_climatology(
     ).rename_vars({"2m_temperature": "2m_temperature_85th_percentile"})
 
     merged_dataset = xr.merge([subset_climatology, era5_event], join="inner")
-    merged_dataset = utils.convert_longitude_to_180(merged_dataset)
     merged_dataset = utils.clip_dataset_to_bounding_box(
         merged_dataset,
         single_case.location_center,
