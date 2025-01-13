@@ -37,12 +37,13 @@ def test_open_obs_datasets_no_forecast_paths():
         evaluate._open_forecast_dataset(invalid_config)
 
 
+# TODO: test for discordant datetimes not in line with forecast dataset
 def test_evaluate_base_case(mock_forecast_dataset, mock_gridded_obs_dataset):
     base_case = case.IndividualCase(
         id=1,
         title="test_case",
-        start_date=datetime.datetime(2020, 1, 1),
-        end_date=datetime.datetime(2020, 1, 12),
+        start_date=datetime.datetime(2021, 6, 20),
+        end_date=datetime.datetime(2021, 7, 3),
         bounding_box_km=500,
         location={"latitude": 45.0, "longitude": -100.0},
         event_type="heat_wave",
