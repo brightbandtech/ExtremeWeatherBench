@@ -46,10 +46,7 @@ def convert_longitude_to_180(
 
 
 def generate_json_from_nc(u, so, fs, fs_out, json_dir):
-    """Generate a kerchunk JSON file from a NetCDF file.
-
-    TODO(taylor): Define function signature and docstring.
-    """
+    """Generate a kerchunk JSON file from a NetCDF file."""
     with fs.open(u, **so) as infile:
         h5chunks = SingleHdf5ToZarr(infile, u, inline_threshold=300)
 
@@ -65,9 +62,6 @@ def generate_json_from_nc(u, so, fs, fs_out, json_dir):
 
 
 def clip_dataset_to_bounding_box(
-    # NOTE(daniel): given its use here, "case.Location" should be moved to this module
-    # or something else stand-alone; high likelihood of inadvertently introducing a
-    # circular import dependency here.
     dataset: xr.Dataset,
     location_center: Location,
     length_km: float,
@@ -140,8 +134,6 @@ def remove_ocean_gridpoints(dataset: xr.Dataset) -> xr.Dataset:
     Returns:
         The dataset masked to only land gridpoints.
     """
-    # TODO(taylor): Extend this so that the user may pass their own land-sea mask,
-    # best suited the dataset they're analyzing.
     land = regionmask.defined_regions.natural_earth_v5_0_0.land_110
     land_sea_mask = land.mask(dataset.longitude, dataset.latitude)
     land_mask = land_sea_mask == 0
