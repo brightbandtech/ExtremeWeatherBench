@@ -5,9 +5,6 @@ import dataclasses
 from typing import List, Optional
 from extremeweatherbench import case
 
-# TODO(taylor): don't need link here
-CLIMATOLOGY_LINK = "/home/taylor/data/era5_2m_temperature_85th_by_hour_dayofyear.zarr"
-
 
 @dataclasses.dataclass
 class EventContainer:
