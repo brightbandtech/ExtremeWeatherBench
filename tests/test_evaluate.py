@@ -75,8 +75,8 @@ def test_evaluate_full_workflow(
     result = evaluate.evaluate(mock_config)
 
     assert isinstance(result, dict)
-    # assert "HeatWave" in result
-    # assert isinstance(result["HeatWave"], dict)
-    # assert all(
-    #     isinstance(ds, xr.Dataset) or ds is None for ds in result["HeatWave"].values()
-    # )
+    assert "HeatWave" in result
+    assert isinstance(result["HeatWave"], dict)
+    assert all(
+        isinstance(ds, xr.Dataset) or ds is None for ds in result["HeatWave"].values()
+    )
