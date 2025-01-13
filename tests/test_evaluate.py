@@ -70,10 +70,15 @@ def test_evaluate_full_workflow(
         return_value=(None, mock_gridded_obs_dataset),
     )
     result = evaluate.evaluate(mock_config)
-
+    print(result["heat_wave"])
     assert isinstance(result, dict)
     assert "heat_wave" in result
     assert isinstance(result["heat_wave"], dict)
-    assert all(
-        isinstance(ds, xr.Dataset) or ds is None for ds in result["heat_wave"].values()
-    )
+    assert isinstance(result["heat_wave"][1], dict)
+    for _, v in result["heat_wave"].items():
+        if v is not None:
+            assert isinstance(v, dict)
+            for _, v2 in v.items():
+                assert isinstance(v2, dict)
+                for _, v3 in v2.items():
+                    assert isinstance(v3, xr.DataArray)
