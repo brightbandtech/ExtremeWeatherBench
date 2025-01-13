@@ -11,8 +11,6 @@ import datetime
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-T2M_85TH_PERCENTILE_CLIMATOLOGY_PATH = "gs://brightband-scratch/taylor/climatology/era5_2m_temperature_85th_rolling_by_hour_dayofyear.zarr"
-
 
 @dataclasses.dataclass
 class Metric:
