@@ -29,8 +29,8 @@ class Metric:
 
     def align_datasets(
         self,
-        forecast: xr.Dataset,
-        observation: xr.Dataset,
+        forecast: xr.DataArray,
+        observation: xr.DataArray,
         init_time_datetime: datetime.datetime,
     ):
         """Align the forecast and observation datasets."""
@@ -133,20 +133,65 @@ class MaximumMAE(Metric):
 
 
 @dataclasses.dataclass
-class MaxMinMAE(Metric):
-    """Mean absolute error of the forecasted highest minimum value, rolled up by a
-    predefined time interval (e.g. daily).
-
-    Attributes:
-        # NOTE(daniel): May work better in the long run to define a custom TimeInterval
-        # class, say as tuple[datetime.datetime, datetime.datetime].
-        time_interval: A string defining the time interval to roll up the metric.
-    """
+class MaxOfMinMAE(Metric):
+    """Mean absolute error of forecasted highest minimum temperature values."""
 
     def compute(self, forecast: xr.DataArray, observation: xr.DataArray):
-        print(forecast)
-        print(observation)
-        return None
+        max_mae_values = []
+        observation_spatial_mean = observation.mean(["latitude", "longitude"])
+        observation_spatial_mean = observation_spatial_mean.where(
+            observation_spatial_mean.time.dt.hour % 6 == 0, drop=True
+        )
+        forecast_spatial_mean = forecast.mean(["latitude", "longitude"])
+        for init_time in forecast_spatial_mean.init_time:
+            if forecast.name == "air_temperature":
+                # Keep only times at 00, 06, 12, and 18Z
+                # Group by dayofyear and check if each day has all 4 synoptic times
+                valid_days = (
+                    observation_spatial_mean.groupby("time.dayofyear").count("time")
+                    == 4
+                )
+                # Only keep days that have all 4 synoptic times
+                observation_spatial_mean = observation_spatial_mean.where(
+                    observation_spatial_mean.time.dt.dayofyear.isin(
+                        valid_days.where(valid_days).dropna(dim="dayofyear").dayofyear
+                    ),
+                    drop=True,
+                )
+                max_min_timestamp = observation_spatial_mean.where(
+                    (
+                        observation_spatial_mean
+                        == observation_spatial_mean.groupby("time.dayofyear")
+                        .min()
+                        .max()
+                    ),
+                    drop=True,
+                ).time
+                max_min_value = observation_spatial_mean.sel(
+                    time=max_min_timestamp
+                ).values
+                init_forecast_spatial_mean, _ = self.align_datasets(
+                    forecast_spatial_mean,
+                    observation_spatial_mean,
+                    pd.Timestamp(init_time.values).to_pydatetime(),
+                )
+                if max_min_timestamp.values in init_forecast_spatial_mean.time.values:
+                    lead_time = init_forecast_spatial_mean.where(
+                        init_forecast_spatial_mean.time == max_min_timestamp, drop=True
+                    ).lead_time
+                    max_mae_dataarray = xr.DataArray(
+                        data=abs(
+                            init_forecast_spatial_mean.max().values - max_min_value
+                        ),
+                        dims=["lead_time"],
+                        coords={"lead_time": lead_time.values},
+                    )
+                    max_mae_values.append(max_mae_dataarray)
+        max_mae_full_da = xr.concat(max_mae_values, dim="lead_time")
+        # Reverse the lead time so that the minimum lead time is first
+        max_mae_full_da = max_mae_full_da.isel(lead_time=slice(None, None, -1))
+        max_mae_full_da = utils.expand_lead_times_to_6_hourly(max_mae_full_da)
+        return max_mae_full_da
 
 
 @dataclasses.dataclass

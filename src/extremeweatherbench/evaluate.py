@@ -22,7 +22,7 @@ def evaluate(
     forecast_schema_config: config.ForecastSchemaConfig = DEFAULT_FORECAST_SCHEMA_CONFIG,
     dry_run: bool = False,
     dry_run_event_type: Optional[str] = "HeatWave",
-) -> dict[str, dict[Any]]:
+) -> dict[int, dict[dict[Any, Any], Any]]:
     """Driver for evaluating a collection of Cases across a set of Events.
 
     Args:
@@ -57,9 +57,8 @@ def evaluate(
                     )
     if dry_run:
         for event in eval_config.event_types:
-            # TODO: add property class in event, separate pr
             if event.__name__ == dry_run_event_type:
-                cases = dacite.from_dict(
+                cases: dict = dacite.from_dict(
                     data_class=event,
                     data=yaml_event_case,
                 )
@@ -70,24 +69,24 @@ def evaluate(
             data=yaml_event_case,
         )
         point_obs, gridded_obs = _open_obs_datasets(eval_config)
-        forecast_dataset = _open_forecast_dataset(
-            eval_config, forecast_schema_config
-        ).compute()
+        forecast_dataset = _open_forecast_dataset(eval_config, forecast_schema_config)
+
+        # Manages some of the quirkiness of the parquets and avoids loading in memory overloads
+        # from the json kerchunk references
+        if "json" not in eval_config.forecast_dir:
+            forecast_dataset = forecast_dataset.compute()
 
         if gridded_obs:
             gridded_obs = utils.map_era5_vars_to_forecast(
                 DEFAULT_FORECAST_SCHEMA_CONFIG, forecast_dataset, gridded_obs
             )
         results = _evaluate_cases_loop(cases, forecast_dataset, gridded_obs, point_obs)
-        # NOTE(daniel): This is a bit of a hack, but it's a quick way to get the
-        # event name for the dictionary key; can do something later, since we
-        # probably don't want to make Event objects hashable.
-        all_results[event.__name__] = results
+        all_results[event.event_type] = results
     return all_results
 
 
 def _evaluate_cases_loop(
-    event: events.EventContainer,
+    event: dict[Any, events.EventContainer],
     forecast_dataset: xr.Dataset,
     gridded_obs: Optional[xr.Dataset] = None,
     point_obs: Optional[pd.DataFrame] = None,
@@ -118,9 +117,9 @@ def _evaluate_cases_loop(
 
 def _evaluate_case(
     individual_case: case.IndividualCase,
-    forecast_dataset: xr.Dataset,
-    gridded_obs: xr.Dataset,
-    point_obs: pd.DataFrame,
+    forecast_dataset: Optional[xr.Dataset],
+    gridded_obs: Optional[xr.Dataset],
+    point_obs: Optional[pd.DataFrame],
 ) -> Optional[dict[str, xr.Dataset]]:
     """Evaluate a single case given forecast data and observations.
 
@@ -150,7 +149,7 @@ def _evaluate_case(
             individual_case.id,
         )
     logger.info("Forecast data available for case %s", individual_case.id)
-    case_results: dict[str, dict[Any]] = {}
+    case_results: dict[str, dict[str, Any]] = {}
     if gridded_obs is not None:
         variable_subset_gridded_obs = individual_case._subset_data_vars(gridded_obs)
         time_subset_gridded_obs_ds = variable_subset_gridded_obs.sel(
