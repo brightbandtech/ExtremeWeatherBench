@@ -19,11 +19,6 @@ class EventContainer:
     cases: List[case.IndividualCase]
     event_type: Optional[str] = None
 
-    @property
-    def name(self) -> str:
-        """Return the class name without parentheses."""
-        return self.__class__.__name__
-
     def subset_cases(self, subset) -> List[case.IndividualCase]:
         """Subset all IndividualCases inside EventContainer where _case_event_type is a specific type."""
         assert self.event_type is not None, "Event type must be defined."
