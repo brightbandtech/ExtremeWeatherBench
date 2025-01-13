@@ -5,7 +5,7 @@ import datetime
 
 
 def test_evaluate_no_computation(mock_config):
-    result = evaluate.evaluate(mock_config, dry_run=True)
+    result = evaluate.evaluate(mock_config, dry_run=True, dry_run_event_type="HeatWave")
     assert isinstance(result, events.EventContainer)
 
 
@@ -37,12 +37,13 @@ def test_open_obs_datasets_no_forecast_paths():
         evaluate._open_forecast_dataset(invalid_config)
 
 
+# TODO: test for discordant datetimes not in line with forecast dataset
 def test_evaluate_base_case(mock_forecast_dataset, mock_gridded_obs_dataset):
     base_case = case.IndividualCase(
         id=1,
         title="test_case",
-        start_date=datetime.datetime(2020, 1, 1),
-        end_date=datetime.datetime(2020, 1, 12),
+        start_date=datetime.datetime(2021, 6, 20),
+        end_date=datetime.datetime(2021, 7, 3),
         bounding_box_km=500,
         location={"latitude": 45.0, "longitude": -100.0},
         event_type="heat_wave",
@@ -68,11 +69,16 @@ def test_evaluate_full_workflow(
         "extremeweatherbench.evaluate._open_obs_datasets",
         return_value=(None, mock_gridded_obs_dataset),
     )
-
     result = evaluate.evaluate(mock_config)
+    print(result["heat_wave"])
     assert isinstance(result, dict)
-    assert "HeatWave" in result
-    assert isinstance(result["HeatWave"], dict)
-    assert all(
-        isinstance(ds, xr.Dataset) or ds is None for ds in result["HeatWave"].values()
-    )
+    assert "heat_wave" in result
+    assert isinstance(result["heat_wave"], dict)
+    assert isinstance(result["heat_wave"][1], dict)
+    for _, v in result["heat_wave"].items():
+        if v is not None:
+            assert isinstance(v, dict)
+            for _, v2 in v.items():
+                assert isinstance(v2, dict)
+                for _, v3 in v2.items():
+                    assert isinstance(v3, xr.DataArray)
