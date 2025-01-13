@@ -57,7 +57,7 @@ def mock_gridded_obs_dataset():
     time = pd.date_range("2021-06-20", freq="3h", periods=200)
     data = np.random.rand(len(time), 180, 360)
     latitudes = np.linspace(-90, 90, 180)
-    longitudes = np.linspace(-180, 179, 360)
+    longitudes = np.linspace(0, 359, 360)
     dataset = xr.Dataset(
         {
             "2m_temperature": (["time", "latitude", "longitude"], data),
