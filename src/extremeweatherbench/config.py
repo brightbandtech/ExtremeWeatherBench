@@ -42,9 +42,6 @@ class Config:
     cache: bool = False
 
 
-# TODO(daniel): Convert to just a dictionary mapping, since that's all this is. No need
-# for a dataclass here. Can also use a defaultdict that reflexively maps to keys added
-# to the mapping unless otherwise specified.
 @dataclasses.dataclass
 class ForecastSchemaConfig:
     """A mapping between standard variable names used across EWB, and their counterpart
