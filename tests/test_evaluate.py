@@ -37,7 +37,6 @@ def test_open_obs_datasets_no_forecast_paths():
         evaluate._open_forecast_dataset(invalid_config)
 
 
-# TODO: test for discordant datetimes not in line with forecast dataset
 def test_evaluate_base_case(mock_forecast_dataset, mock_gridded_obs_dataset):
     base_case = case.IndividualCase(
         id=1,
