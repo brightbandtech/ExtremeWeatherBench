@@ -22,7 +22,7 @@ def evaluate(
     forecast_schema_config: config.ForecastSchemaConfig = DEFAULT_FORECAST_SCHEMA_CONFIG,
     dry_run: bool = False,
     dry_run_event_type: Optional[str] = "HeatWave",
-) -> dict[int, dict[dict, Any]]:
+) -> dict[int, dict[dict[Any, Any], Any]]:
     """Driver for evaluating a collection of Cases across a set of Events.
 
     Args:
