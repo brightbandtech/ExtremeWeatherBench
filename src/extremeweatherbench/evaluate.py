@@ -181,6 +181,7 @@ def _open_forecast_dataset(
     eval_config: config.Config,
     forecast_schema_config: config.ForecastSchemaConfig = DEFAULT_FORECAST_SCHEMA_CONFIG,
 ):
+    """Open the forecast dataset specified for evaluation."""
     logging.info("Opening forecast dataset")
     if eval_config.forecast_dir.startswith("s3://"):
         fs = fsspec.filesystem("s3")

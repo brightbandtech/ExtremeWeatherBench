@@ -1,4 +1,4 @@
-"""Utiltiies for defining individual units of case studies for analysis.
+"""Classes for defining individual units of case studies for analysis.
 Some code similarly structured to WeatherBench (Rasp et al.)."""
 
 import dataclasses
