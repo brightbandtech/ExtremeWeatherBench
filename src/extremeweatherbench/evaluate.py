@@ -81,10 +81,7 @@ def evaluate(
                 DEFAULT_FORECAST_SCHEMA_CONFIG, forecast_dataset, gridded_obs
             )
         results = _evaluate_cases_loop(cases, forecast_dataset, gridded_obs, point_obs)
-        # NOTE(daniel): This is a bit of a hack, but it's a quick way to get the
-        # event name for the dictionary key; can do something later, since we
-        # probably don't want to make Event objects hashable.
-        all_results[event.name] = results
+        all_results[event.event_type] = results
     return all_results
 
 
