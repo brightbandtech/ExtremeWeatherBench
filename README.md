@@ -7,6 +7,14 @@ As AI weather models are growing in popularity, we need a standardized set of co
 * AMS 2025 talk (recording will go live shortly after AMS): https://ams.confex.com/ams/105ANNUAL/meetingapp.cgi/Paper/451220
 * EWB paper is in preparation and will be submitted by early Spring 2025
 
+# Installing EWB
+
+Currently, the easiest way to install EWB is using the ```pip``` command:
+
+```
+pip install git+https://github.com/brightbandtech/ExtremeWeatherBench.git
+```
+
 # How to Run EWB
 
 Running EWB on sample data (included) is straightforward. 
