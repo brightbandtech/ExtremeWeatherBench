@@ -16,7 +16,7 @@ ARCO_ERA5_FULL_URI = (
 class Config:
     """High-level configuration for an ExtremeWeatherBench analysis run.
 
-    The Config class defines datae ranges, output directories, and any custom
+    The Config class defines data ranges, output directories, and any custom
     behavior that should used when running an end-to-end ExtremeWeatherBench
     analysis. We prescribe sensible defaults for consistency, but these can be
     extended as desired by the user.
