@@ -128,7 +128,7 @@ class IndividualHeatWaveCase(IndividualCase):
 
     metrics_list: List[Type[metrics.Metric]] = dataclasses.field(
         default_factory=lambda: [
-            metrics.MaxOfMinMAE,
+            metrics.MaxOfMinTempMAE,
             metrics.RegionalRMSE,
             metrics.MaximumMAE,
         ]
