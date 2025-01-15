@@ -61,21 +61,6 @@ class Metric:
 
 
 @dataclasses.dataclass
-class DurationME(Metric):
-    """Mean error in the duration of an event, in hours.
-
-    Attributes:
-        threshold: A numerical value for defining whether an event is occurring.
-        threshold_tolerance: A numerical tolerance value for defining whether an
-            event is occurring.
-    """
-
-    def compute(self, forecast: xr.DataArray, observation: xr.DataArray):
-        print(forecast)
-        print(observation)
-
-
-@dataclasses.dataclass
 class RegionalRMSE(Metric):
     """Root mean squared error of a regional forecast evalauted against observations."""
 
@@ -131,7 +116,7 @@ class MaximumMAE(Metric):
 
 
 @dataclasses.dataclass
-class MaxOfMinMAE(Metric):
+class MaxOfMinTempMAE(Metric):
     """Mean absolute error of forecasted highest minimum temperature values."""
 
     def compute(self, forecast: xr.DataArray, observation: xr.DataArray):
@@ -185,6 +170,8 @@ class MaxOfMinMAE(Metric):
                         coords={"lead_time": lead_time.values},
                     )
                     max_mae_values.append(max_mae_dataarray)
+            else:
+                raise KeyError("Only air_temperature forecasts are supported.")
         max_mae_full_da = xr.concat(max_mae_values, dim="lead_time")
         # Reverse the lead time so that the minimum lead time is first
         max_mae_full_da = max_mae_full_da.isel(lead_time=slice(None, None, -1))
@@ -194,14 +181,15 @@ class MaxOfMinMAE(Metric):
 
 @dataclasses.dataclass
 class OnsetME(Metric):
-    """Mean error of the onset of an event, in hours.
-
-    Attributes:
-        endpoint_extension_criteria: The number of hours beyond the event window
-            to potentially include in an analysis.
-    """
+    """Mean error of the onset of an event, in hours."""
 
     def compute(self, forecast: xr.DataArray, observation: xr.DataArray):
-        print(forecast)
-        print(observation)
-        return None
+        raise NotImplementedError("Onset mean error not yet implemented.")
+
+
+@dataclasses.dataclass
+class DurationME(Metric):
+    """Mean error in the duration of an event, in hours."""
+
+    def compute(self, forecast: xr.DataArray, observation: xr.DataArray):
+        raise NotImplementedError("Duration mean error not yet implemented.")
