@@ -9,5 +9,5 @@ wheels/
 .python-version
 .venv
 .ipynb_checkpoints/
-.coverage
+.coverage*
 .mypy_cache
