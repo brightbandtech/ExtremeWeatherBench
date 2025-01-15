@@ -9,6 +9,14 @@ As AI weather models are growing in popularity, we need a standardized set of co
 * AMS 2025 talk (recording will go live shortly after AMS): https://ams.confex.com/ams/105ANNUAL/meetingapp.cgi/Paper/451220
 * EWB paper is in preparation and will be submitted by early Spring 2025
 
+# How do I suggest new data, metrics, or otherwise get involved?
+
+Extreme Weather Bench welcomes your involvement!  The success of a benchmark suite rests on community involvement and feedback. There are several ways to get involved:
+
+* Get involved in community discussion using the discussion board
+* Submit new code requests using the issues
+* Send us email at hello@brightband.com 
+
 # Installing EWB
 
 Currently, the easiest way to install EWB is using the ```pip``` command:
