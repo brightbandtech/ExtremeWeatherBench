@@ -94,6 +94,3 @@ docstring-code-format = true
 # This only has an effect when the `docstring-code-format` setting is
 # enabled.
 docstring-code-line-length = "dynamic"
-
-[tool.mypy]
-disable_error_code = "import-untyped"

@@ -90,7 +90,7 @@ def _evaluate_cases_loop(
     forecast_dataset: xr.Dataset,
     gridded_obs: Optional[xr.Dataset] = None,
     point_obs: Optional[pd.DataFrame] = None,
-) -> dict[int, xr.Dataset]:
+) -> dict[int, dict[dict[Any, Any], Any]]:
     """Sequentially loop over and evalute all cases for a specific event type.
 
     Args:
@@ -104,6 +104,7 @@ def _evaluate_cases_loop(
         in the Event of interest.
     """
     results = {}
+    print(event)
     for individual_case in event.cases:
         results[individual_case.id] = _evaluate_case(
             individual_case,
