@@ -22,7 +22,7 @@ def evaluate(
     forecast_schema_config: config.ForecastSchemaConfig = DEFAULT_FORECAST_SCHEMA_CONFIG,
     dry_run: bool = False,
     dry_run_event_type: Optional[str] = "HeatWave",
-) -> dict[int, dict[dict[Any, Any], Any]]:
+) -> dict[Any, dict[Any, Optional[dict[str, Any]]]]:
     """Driver for evaluating a collection of Cases across a set of Events.
 
     Args:
@@ -86,11 +86,11 @@ def evaluate(
 
 
 def _evaluate_cases_loop(
-    event: dict[Any, events.EventContainer],
+    event: events.EventContainer,
     forecast_dataset: xr.Dataset,
     gridded_obs: Optional[xr.Dataset] = None,
     point_obs: Optional[pd.DataFrame] = None,
-) -> dict[int, dict[dict[Any, Any], Any]]:
+) -> dict[Any, Optional[dict[str, Any]]]:
     """Sequentially loop over and evalute all cases for a specific event type.
 
     Args:
@@ -104,7 +104,6 @@ def _evaluate_cases_loop(
         in the Event of interest.
     """
     results = {}
-    print(event)
     for individual_case in event.cases:
         results[individual_case.id] = _evaluate_case(
             individual_case,
