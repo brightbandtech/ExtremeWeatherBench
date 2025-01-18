@@ -184,7 +184,7 @@ class OnsetME(Metric):
     """Mean error of the onset of an event, in hours."""
 
     def compute(self, forecast: xr.DataArray, observation: xr.DataArray):
-        raise NotImplementedError("Onset mean error not yet implemented.")
+        raise NotImplementedError("Onset mean error not implemented as of 0.1.0")
 
 
 @dataclasses.dataclass
@@ -192,4 +192,4 @@ class DurationME(Metric):
     """Mean error in the duration of an event, in hours."""
 
     def compute(self, forecast: xr.DataArray, observation: xr.DataArray):
-        raise NotImplementedError("Duration mean error not yet implemented.")
+        raise NotImplementedError("Duration mean error not implemented as of 0.1.0")
