@@ -9,14 +9,16 @@ from extremeweatherbench import config, events
 def mock_forecast_dataset():
     init_time = pd.date_range("2021-06-20", periods=5)
     lead_time = range(0, 241, 6)
-    data = np.random.rand(len(init_time), 180, 360, len(lead_time))
+    data = np.random.RandomState(21897820).standard_normal(
+        size=(len(init_time), 180, 360, len(lead_time)),
+    )
     latitudes = np.linspace(-90, 90, 180)
     longitudes = np.linspace(0, 359, 360)
     dataset = xr.Dataset(
         {
             "air_temperature": (
                 ["init_time", "latitude", "longitude", "lead_time"],
-                data,
+                20 + 5 * data,
             ),
             "eastward_wind": (
                 ["init_time", "latitude", "longitude", "lead_time"],
@@ -55,12 +57,31 @@ def mock_config():
 @pytest.fixture
 def mock_gridded_obs_dataset():
     time = pd.date_range("2021-06-20", freq="3h", periods=200)
-    data = np.random.rand(len(time), 180, 360)
+    data = np.random.RandomState(21897820).standard_normal(size=(len(time), 180, 360))
     latitudes = np.linspace(-90, 90, 180)
     longitudes = np.linspace(0, 359, 360)
     dataset = xr.Dataset(
         {
-            "2m_temperature": (["time", "latitude", "longitude"], data),
+            "2m_temperature": (["time", "latitude", "longitude"], 20 + 5 * data),
+            "tp": (["time", "latitude", "longitude"], data),
+            "10m_u_component_of_wind": (["time", "latitude", "longitude"], data),
+            "10m_v_component_of_wind": (["time", "latitude", "longitude"], data),
+        },
+        coords={"time": time, "latitude": latitudes, "longitude": longitudes},
+    )
+    return dataset
+
+
+@pytest.fixture
+def mock_gridded_obs_dataset_max_in_forecast():
+    time = pd.date_range("2021-06-20", freq="3h", periods=200)
+    data = np.random.RandomState(21897820).standard_normal(size=(len(time), 180, 360))
+    data[10, :, :] = 5
+    latitudes = np.linspace(-90, 90, 180)
+    longitudes = np.linspace(0, 359, 360)
+    dataset = xr.Dataset(
+        {
+            "2m_temperature": (["time", "latitude", "longitude"], 20 + 5 * data),
             "tp": (["time", "latitude", "longitude"], data),
             "10m_u_component_of_wind": (["time", "latitude", "longitude"], data),
             "10m_v_component_of_wind": (["time", "latitude", "longitude"], data),

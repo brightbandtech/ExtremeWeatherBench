@@ -108,10 +108,7 @@ class MaximumMAE(Metric):
                         coords={"lead_time": lead_time.values},
                     )
                     max_mae_values.append(max_mae_dataarray)
-        max_mae_full_da = xr.concat(max_mae_values, dim="lead_time")
-        # Reverse the lead time so that the minimum lead time is first
-        max_mae_full_da = max_mae_full_da.isel(lead_time=slice(None, None, -1))
-        max_mae_full_da = utils.expand_lead_times_to_6_hourly(max_mae_full_da)
+        max_mae_full_da = utils.process_dataarray_for_output(max_mae_values)
         return max_mae_full_da
 
 
@@ -120,14 +117,14 @@ class MaxOfMinTempMAE(Metric):
     """Mean absolute error of forecasted highest minimum temperature values."""
 
     def compute(self, forecast: xr.DataArray, observation: xr.DataArray):
-        max_mae_values = []
+        max_min_mae_values = []
         observation_spatial_mean = observation.mean(["latitude", "longitude"])
         observation_spatial_mean = observation_spatial_mean.where(
             observation_spatial_mean.time.dt.hour % 6 == 0, drop=True
         )
         forecast_spatial_mean = forecast.mean(["latitude", "longitude"])
         for init_time in forecast_spatial_mean.init_time:
-            if forecast.name == "air_temperature":
+            if forecast_spatial_mean.name == "air_temperature":
                 # Keep only times at 00, 06, 12, and 18Z
                 # Group by dayofyear and check if each day has all 4 synoptic times
                 valid_days = (
@@ -162,21 +159,18 @@ class MaxOfMinTempMAE(Metric):
                     lead_time = init_forecast_spatial_mean.where(
                         init_forecast_spatial_mean.time == max_min_timestamp, drop=True
                     ).lead_time
-                    max_mae_dataarray = xr.DataArray(
+                    max_min_mae_dataarray = xr.DataArray(
                         data=abs(
                             init_forecast_spatial_mean.max().values - max_min_value
                         ),
                         dims=["lead_time"],
                         coords={"lead_time": lead_time.values},
                     )
-                    max_mae_values.append(max_mae_dataarray)
+                    max_min_mae_values.append(max_min_mae_dataarray)
             else:
                 raise KeyError("Only air_temperature forecasts are supported.")
-        max_mae_full_da = xr.concat(max_mae_values, dim="lead_time")
-        # Reverse the lead time so that the minimum lead time is first
-        max_mae_full_da = max_mae_full_da.isel(lead_time=slice(None, None, -1))
-        max_mae_full_da = utils.expand_lead_times_to_6_hourly(max_mae_full_da)
-        return max_mae_full_da
+        max_min_mae_full_da = utils.process_dataarray_for_output(max_min_mae_values)
+        return max_min_mae_full_da
 
 
 @dataclasses.dataclass
