@@ -48,7 +48,7 @@ class Metric:
 
 @dataclasses.dataclass
 class RegionalRMSE(Metric):
-    """Root mean squared error of a regional forecast evalauted against observations."""
+    """Root mean squared error of a regional forecast evaluated against observations."""
 
     def compute(self, forecast: xr.DataArray, observation: xr.DataArray):
         rmse_values = []
