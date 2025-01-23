@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 import regionmask
 import ujson
+import rioxarray  # noqa: F401
 import xarray as xr
 from kerchunk.hdf import SingleHdf5ToZarr
 from shapely.geometry import box
