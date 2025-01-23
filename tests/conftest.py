@@ -89,3 +89,26 @@ def mock_gridded_obs_dataset_max_in_forecast():
         coords={"time": time, "latitude": latitudes, "longitude": longitudes},
     )
     return dataset
+
+
+@pytest.fixture
+def mock_forecast_dataarray(mock_forecast_dataset):
+    return dataset_to_dataarray(mock_forecast_dataset)
+
+
+@pytest.fixture
+def mock_gridded_obs_dataarray(mock_gridded_obs_dataset):
+    return dataset_to_dataarray(mock_gridded_obs_dataset)
+
+
+@pytest.fixture
+def mock_gridded_obs_dataarray_max_in_forecast(
+    mock_gridded_obs_dataset_max_in_forecast,
+):
+    return dataset_to_dataarray(mock_gridded_obs_dataset_max_in_forecast)
+
+
+def dataset_to_dataarray(dataset):
+    """Convert an xarray Dataset to a DataArray."""
+    mock_data_var = [data_var for data_var in dataset.data_vars][0]
+    return dataset[mock_data_var]
