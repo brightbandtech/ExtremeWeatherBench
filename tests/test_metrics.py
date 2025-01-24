@@ -27,14 +27,16 @@ class TestMetric:
         with pytest.raises(NotImplementedError):
             metric.compute(mock_forecast_dataarray, mock_gridded_obs_dataarray)
 
-    def test_align_datasets(self, mock_forecast_dataarray, mock_gridded_obs_dataarray):
+    def test_temporal_align_dataarrays(
+        self, mock_forecast_dataarray, mock_gridded_obs_dataarray
+    ):
         """Test that the conversion from init time to valid time (named as time) produces an aligned
         dataarray to ensure metrics are applied properly."""
         metric = metrics.Metric()
         init_time_datetime = pd.Timestamp(
             mock_forecast_dataarray.init_time[0].values
         ).to_pydatetime()
-        aligned_forecast, aligned_obs = metric.align_datasets(
+        aligned_forecast, aligned_obs = metric._temporal_align_dataarrays(
             mock_forecast_dataarray, mock_gridded_obs_dataarray, init_time_datetime
         )
 
@@ -71,47 +73,47 @@ class TestRegionalRMSE:
         to a reasonable (1e-7) precision."""
         output = np.array(
             [
-                7.06819423,
-                7.07986864,
-                7.08808892,
-                7.06857515,
-                7.07467895,
-                7.07154156,
-                7.05989394,
-                7.06687087,
-                7.0665981,
-                7.05737303,
-                7.08282287,
-                7.06380817,
-                7.07936601,
-                7.07125565,
-                7.06621689,
-                7.0641209,
-                7.06740009,
-                7.07123912,
-                7.07697865,
-                7.05404263,
-                7.07595125,
-                7.07550436,
-                7.05839933,
-                7.06479538,
-                7.08006438,
-                7.06520873,
-                7.07479995,
-                7.06371806,
-                7.08151001,
-                7.08536655,
-                7.06980819,
-                7.07308411,
-                7.08840835,
-                7.06256349,
-                7.07074064,
-                7.08574952,
-                7.08438375,
-                7.07106463,
-                7.06908532,
-                7.08782645,
-                7.07161996,
+                7.072156,
+                7.07325857,
+                7.05412501,
+                7.07429232,
+                7.06224259,
+                7.07307497,
+                7.06065033,
+                7.06143205,
+                7.06397257,
+                7.06501056,
+                7.07663102,
+                7.05498302,
+                7.07148515,
+                7.06898867,
+                7.0632514,
+                7.06386921,
+                7.06310243,
+                7.06324579,
+                7.06674583,
+                7.07391275,
+                7.08054948,
+                7.07530351,
+                7.06474977,
+                7.07237954,
+                7.07761042,
+                7.04927946,
+                7.06237319,
+                7.07482148,
+                7.06780911,
+                7.07967395,
+                7.06711688,
+                7.06797943,
+                7.06700641,
+                7.06965538,
+                7.06657121,
+                7.08633883,
+                7.07582586,
+                7.07056922,
+                7.069464,
+                7.09834288,
+                7.06137688,
             ]
         )
 
@@ -140,14 +142,14 @@ class TestMaximumMAE:
         assert "lead_time" in result.dims
 
     def test_maximum_mae_values(
-        self, mock_forecast_dataarray, mock_gridded_obs_dataarray_max_in_forecast
+        self, mock_subset_forecast_dataarray, mock_subset_gridded_obs_dataarray
     ):
         """Test if the numerical outputs of the metric are producing the correct results,
         to a reasonable (1e-7) precision."""
         # Instantiate the MaximumMAE metric
         metric = metrics.MaximumMAE()
         result = metric.compute(
-            mock_forecast_dataarray, mock_gridded_obs_dataarray_max_in_forecast
+            mock_subset_forecast_dataarray, mock_subset_gridded_obs_dataarray
         )
         assert all(
             [
@@ -155,52 +157,59 @@ class TestMaximumMAE:
                 for lead_time in [0, 24, 48, 72, 96, 168, 240]
             ]
         )
-        assert pytest.approx(result.sel({"lead_time": 6}), 1e-7) == 24.94948657
-        assert pytest.approx(result.sel({"lead_time": 30}), 1e-7) == 24.96504733
+        assert pytest.approx(result.sel({"lead_time": 18}), 1e-7) == 3.65477343
+        assert pytest.approx(result.sel({"lead_time": 42}), 1e-7) == 3.69339927
 
 
 class TestMaxOfMinTempMAE:
     """Tests the MaxOfMinTempMAE Metric child class, which computes highest minimum temperature MAE during a case."""
 
     def test_max_of_min_temp_mae_compute(
-        self, mock_forecast_dataarray, mock_gridded_obs_dataarray
+        self, mock_subset_forecast_dataarray, mock_subset_gridded_obs_dataarray
     ):
         """Test if compute returns the proper type and dimensions."""
         # Instantiate the MaxOfMinTempMAE metric
         metric = metrics.MaxOfMinTempMAE()
-        result = metric.compute(mock_forecast_dataarray, mock_gridded_obs_dataarray)
+        result = metric.compute(
+            mock_subset_forecast_dataarray, mock_subset_gridded_obs_dataarray
+        )
+
         # Check the result is an xarray DataArray
         assert isinstance(result, xr.DataArray)
         # Check the dimensions of the result
         assert "lead_time" in result.dims
 
     def test_max_of_min_temp_mae_wrong_data_var(
-        self, mock_forecast_dataarray, mock_gridded_obs_dataarray
+        self, mock_subset_forecast_dataarray, mock_subset_gridded_obs_dataarray
     ):
         """As this metric is meant to be only for surface temperature, make sure
         it fails if another variable is in its place."""
-        mock_forecast_dataarray = mock_forecast_dataarray.rename("bad_name")
+        mock_subset_forecast_dataarray = mock_subset_forecast_dataarray.rename(
+            "bad_name"
+        )
         metric = metrics.MaxOfMinTempMAE()
-        with pytest.raises(KeyError):
-            metric.compute(mock_forecast_dataarray, mock_gridded_obs_dataarray)
+        with pytest.raises(NotImplementedError):
+            metric.compute(
+                mock_subset_forecast_dataarray, mock_subset_gridded_obs_dataarray
+            )
 
     def test_max_of_min_temp_mae_values(
-        self, mock_forecast_dataarray, mock_gridded_obs_dataarray_max_in_forecast
+        self, mock_subset_forecast_dataarray, mock_subset_gridded_obs_dataarray
     ):
         """Test if the numerical outputs of the metric are producing the correct results,
         to a reasonable (1e-7) precision."""
         metric = metrics.MaxOfMinTempMAE()
         result = metric.compute(
-            mock_forecast_dataarray, mock_gridded_obs_dataarray_max_in_forecast
+            mock_subset_forecast_dataarray, mock_subset_gridded_obs_dataarray
         )
+
         assert all(
             [
                 pd.isna(result.sel({"lead_time": lead_time}))
-                for lead_time in [6, 12, 18, 30, 72, 96, 168, 240]
+                for lead_time in [0, 6, 12, 30, 168, 240]
             ]
         )
-        assert pytest.approx(result.sel({"lead_time": 0}), 1e-7) == 0.04544667
-        assert pytest.approx(result.sel({"lead_time": 24}), 1e-7) == 0.04979312
+        assert pytest.approx(result.sel({"lead_time": 18}), 1e-7) == 1.01522937
 
 
 class TestOnsetME:
