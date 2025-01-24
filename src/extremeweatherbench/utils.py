@@ -279,11 +279,6 @@ def process_dataarray_for_output(da_list: List[Optional[xr.DataArray]]):
 
     Args:
         dataarray: A list of xarray DataArrays.
-        data:  An xarray DataArray (likely unused in current implementation).
-        dims: Dimensions of the DataArray (likely unused in current implementation).
-        coords: Coordinates of the DataArray (likely unused in current implementation).
-        dim: Dimension name (likely unused in current implementation).
-        lead_time: Lead time coordinate name (likely unused in current implementation).
 
     Returns:
         An xarray DataArray with lead_time coordinate, expanded to 6-hourly intervals.
@@ -303,3 +298,16 @@ def process_dataarray_for_output(da_list: List[Optional[xr.DataArray]]):
         output_da = output_da.isel(lead_time=slice(None, None, -1))
     output_da = expand_lead_times_to_6_hourly(output_da)
     return output_da
+
+
+def center_forecast_on_time(da: xr.DataArray, time: pd.Timestamp, hours: int):
+    """Center a forecast DataArray on a given time with a given range in hours.
+    Args:
+        da: The forecast DataArray to center.
+        time: The time to center the forecast on.
+        hours: The number of hours to include in the centered forecast.
+    """
+    time_range = pd.date_range(
+        end=pd.to_datetime(time) + pd.Timedelta(hours=48), periods=97, freq="h"
+    )
+    return da.sel(time=slice(time_range[0], time_range[-1]))
