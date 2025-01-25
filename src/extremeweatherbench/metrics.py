@@ -190,12 +190,12 @@ class MaxOfMinTempMAE(Metric):
                         drop=True,
                     )
                     if len(lead_time) == 0:
-                        logger.warning(
+                        logger.debug(
                             (
                                 "No lead time found fulfilling criteria "
                                 "for max of min temperature for init time %s, skipping"
                             ),
-                            init_time.values[0],
+                            pd.Timestamp(init_time.values),
                         )
                     else:
                         # TODO: add temporal displacement error, which is
@@ -212,7 +212,6 @@ class MaxOfMinTempMAE(Metric):
                                 )
                             },
                         )
-
                         max_min_mae_values.append(max_min_mae_dataarray)
         else:
             raise NotImplementedError(
