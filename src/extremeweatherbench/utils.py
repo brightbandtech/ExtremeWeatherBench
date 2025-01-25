@@ -14,6 +14,7 @@ import rioxarray  # noqa: F401
 import xarray as xr
 from kerchunk.hdf import SingleHdf5ToZarr
 from shapely.geometry import box
+import datetime
 
 #: Struct packaging latitude/longitude location definitions.
 Location = namedtuple("Location", ["latitude", "longitude"])
@@ -311,3 +312,27 @@ def center_forecast_on_time(da: xr.DataArray, time: pd.Timestamp, hours: int):
         end=pd.to_datetime(time) + pd.Timedelta(hours=48), periods=97, freq="h"
     )
     return da.sel(time=slice(time_range[0], time_range[-1]))
+
+
+def temporal_align_dataarrays(
+    forecast: xr.DataArray,
+    observation: xr.DataArray,
+    init_time_datetime: datetime.datetime,
+) -> tuple[xr.DataArray, xr.DataArray]:
+    """Align the individual initialization time forecast and observation dataarrays.
+    Args:
+        forecast: The forecast dataarray to align.
+        observation: The observation dataarray to align.
+        init_time_datetime: The initialization time to subset the forecast dataarray by.
+    Returns:
+        A tuple containing the time-aligned forecast and observation dataarrays.
+    """
+
+    forecast = forecast.sel(init_time=init_time_datetime)
+    time = np.array(
+        [init_time_datetime + pd.Timedelta(hours=int(t)) for t in forecast["lead_time"]]
+    )
+    forecast = forecast.assign_coords(time=("lead_time", time))
+    forecast = forecast.swap_dims({"lead_time": "time"})
+    forecast, observation = xr.align(forecast, observation, join="inner")
+    return (forecast, observation)

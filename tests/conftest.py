@@ -111,6 +111,13 @@ def mock_subset_forecast_dataarray(mock_forecast_dataset):
 
 
 @pytest.fixture
+def mock_single_init_time_subset_forecast_dataarray(mock_forecast_dataset):
+    return dataset_to_dataarray(mock_forecast_dataset).sel(
+        latitude=slice(40, 45), longitude=slice(100, 105)
+    )
+
+
+@pytest.fixture
 def mock_gridded_obs_dataarray(mock_gridded_obs_dataset):
     return dataset_to_dataarray(mock_gridded_obs_dataset)
 

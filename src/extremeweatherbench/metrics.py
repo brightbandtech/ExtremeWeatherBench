@@ -6,7 +6,6 @@ import xarray as xr
 from scores.continuous import rmse
 import logging
 from extremeweatherbench import utils
-import datetime
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -24,33 +23,6 @@ class Metric:
     def name(self) -> str:
         """Return the class name without parentheses."""
         return self.__class__.__name__
-
-    def _temporal_align_dataarrays(
-        self,
-        forecast: xr.DataArray,
-        observation: xr.DataArray,
-        init_time_datetime: datetime.datetime,
-    ) -> tuple[xr.DataArray, xr.DataArray]:
-        """Align the individual initialization time forecast and observation dataarrays.
-        Args:
-            forecast: The forecast dataarray to align.
-            observation: The observation dataarray to align.
-            init_time_datetime: The initialization time to subset the forecast dataarray by.
-        Returns:
-            A tuple containing the time-aligned forecast and observation dataarrays.
-        """
-
-        forecast = forecast.sel(init_time=init_time_datetime)
-        time = np.array(
-            [
-                init_time_datetime + pd.Timedelta(hours=int(t))
-                for t in forecast["lead_time"]
-            ]
-        )
-        forecast = forecast.assign_coords(time=("lead_time", time))
-        forecast = forecast.swap_dims({"lead_time": "time"})
-        forecast, observation = xr.align(forecast, observation, join="inner")
-        return (forecast, observation)
 
     def _align_observations_temporal_resolution(
         self, forecast: xr.DataArray, observation: xr.DataArray
@@ -90,7 +62,7 @@ class RegionalRMSE(Metric):
     def compute(self, forecast: xr.DataArray, observation: xr.DataArray):
         rmse_values = []
         for init_time in forecast.init_time:
-            init_forecast, subset_observation = self._temporal_align_dataarrays(
+            init_forecast, subset_observation = utils.temporal_align_dataarrays(
                 forecast,
                 observation,
                 pd.Timestamp(init_time.values).to_pydatetime(),
@@ -117,7 +89,7 @@ class MaximumMAE(Metric):
             for init_time in forecast_spatial_mean.init_time:
                 max_datetime = observation_spatial_mean.idxmax("time").values
                 max_value = observation_spatial_mean.sel(time=max_datetime).values
-                init_forecast_spatial_mean, _ = self._temporal_align_dataarrays(
+                init_forecast_spatial_mean, _ = utils.temporal_align_dataarrays(
                     forecast_spatial_mean,
                     observation_spatial_mean,
                     pd.Timestamp(init_time.values).to_pydatetime(),
@@ -167,7 +139,7 @@ class MaxOfMinTempMAE(Metric):
             max_min_value = observation_spatial_mean.sel(time=max_min_timestamp).values
 
             for init_time in forecast_spatial_mean.init_time:
-                init_forecast_spatial_mean, _ = self._temporal_align_dataarrays(
+                init_forecast_spatial_mean, _ = utils.temporal_align_dataarrays(
                     forecast_spatial_mean,
                     observation_spatial_mean,
                     pd.Timestamp(init_time.values).to_pydatetime(),
