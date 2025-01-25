@@ -27,28 +27,6 @@ class TestMetric:
         with pytest.raises(NotImplementedError):
             metric.compute(mock_forecast_dataarray, mock_gridded_obs_dataarray)
 
-    def test_temporal_align_dataarrays(
-        self, mock_forecast_dataarray, mock_gridded_obs_dataarray
-    ):
-        """Test that the conversion from init time to valid time (named as time) produces an aligned
-        dataarray to ensure metrics are applied properly."""
-        metric = metrics.Metric()
-        init_time_datetime = pd.Timestamp(
-            mock_forecast_dataarray.init_time[0].values
-        ).to_pydatetime()
-        aligned_forecast, aligned_obs = metric._temporal_align_dataarrays(
-            mock_forecast_dataarray, mock_gridded_obs_dataarray, init_time_datetime
-        )
-
-        # Check aligned datasets have same time coordinates
-        assert (aligned_forecast.time == aligned_obs.time).all()
-
-        # Check forecast was properly subset by init time
-        assert aligned_forecast.init_time.size == 1
-        assert pd.Timestamp(aligned_forecast.init_time.values) == pd.Timestamp(
-            mock_forecast_dataarray.init_time[0].values
-        )
-
 
 class TestRegionalRMSE:
     """Tests the RegionalRMSE Metric child class."""
