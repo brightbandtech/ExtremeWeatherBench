@@ -2,7 +2,7 @@
 other specialized package.
 """
 
-from typing import Union
+from typing import Union, List, Optional
 from collections import namedtuple
 import fsspec
 import geopandas as gpd
@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 import regionmask
 import ujson
+import rioxarray  # noqa: F401
 import xarray as xr
 from kerchunk.hdf import SingleHdf5ToZarr
 from shapely.geometry import box
@@ -269,5 +270,36 @@ def expand_lead_times_to_6_hourly(
         final_times.append(hour)
     dataarray = xr.DataArray(
         data=final_data, dims=["lead_time"], coords={"lead_time": final_times}
-    )
+    ).astype(float)
     return dataarray
+
+
+def process_dataarray_for_output(da_list: List[Optional[xr.DataArray]]):
+    """Extract and format data from a list of DataArrays.
+
+    Args:
+        dataarray: A list of xarray DataArrays.
+        data:  An xarray DataArray (likely unused in current implementation).
+        dims: Dimensions of the DataArray (likely unused in current implementation).
+        coords: Coordinates of the DataArray (likely unused in current implementation).
+        dim: Dimension name (likely unused in current implementation).
+        lead_time: Lead time coordinate name (likely unused in current implementation).
+
+    Returns:
+        An xarray DataArray with lead_time coordinate, expanded to 6-hourly intervals.
+        Returns a DataArray with a single NaN value if the input dataarray is empty.
+    """
+
+    if len(da_list) == 0:
+        # create dummy nan dataarray in case no applicable forecast valid times exist
+        output_da = xr.DataArray(
+            data=[np.nan],
+            dims=["lead_time"],
+            coords={"lead_time": [0]},
+        )
+    else:
+        output_da = xr.concat(da_list, dim="lead_time")
+        # Reverse the lead time so that the minimum lead time is first
+        output_da = output_da.isel(lead_time=slice(None, None, -1))
+    output_da = expand_lead_times_to_6_hourly(output_da)
+    return output_da
