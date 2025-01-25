@@ -1,6 +1,5 @@
 import pytest
 import extremeweatherbench.case as case
-import rioxarray  # noqa: F401
 from extremeweatherbench.utils import Location
 import datetime
 
