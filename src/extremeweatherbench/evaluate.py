@@ -42,7 +42,7 @@ def evaluate(
     all_results = {}
     with open(events_file_path, "r") as file:
         yaml_event_case = yaml.safe_load(file)
-    logger.info("Event yaml loaded at %s", events_file_path)
+    logger.debug("Event yaml loaded at %s", events_file_path)
     for k, v in yaml_event_case.items():
         if k == "cases":
             for individual_case in v:
@@ -56,6 +56,9 @@ def evaluate(
                         **individual_case["location"]
                     )
     if dry_run:
+        logger.debug(
+            "Dry run invoked for %s, not running evaluation", dry_run_event_type
+        )
         for event in eval_config.event_types:
             if event.__name__ == dry_run_event_type:
                 cases: dict = dacite.from_dict(
@@ -63,25 +66,56 @@ def evaluate(
                     data=yaml_event_case,
                 )
                 return cases
+    logger.debug("Evaluation starting")
     for event in eval_config.event_types:
         cases = dacite.from_dict(
             data_class=event,
             data=yaml_event_case,
         )
+        logger.debug("Cases loaded for %s", event.event_type)
         point_obs, gridded_obs = _open_obs_datasets(eval_config)
         forecast_dataset = _open_forecast_dataset(eval_config, forecast_schema_config)
 
         # Manages some of the quirkiness of the parquets and avoids loading in memory overloads
         # from the json kerchunk references
         if "json" not in eval_config.forecast_dir:
+            logger.warning(
+                "json not detected for %s at %s, loading part of forecast dataset into memory",
+                event.event_type,
+                eval_config.forecast_dir,
+            )
             forecast_dataset = forecast_dataset.compute()
 
         if gridded_obs:
+            logger.info(
+                "gridded obs detected, mapping variables in gridded obs to forecast"
+            )
             gridded_obs = utils.map_era5_vars_to_forecast(
                 DEFAULT_FORECAST_SCHEMA_CONFIG, forecast_dataset, gridded_obs
             )
+        logger.debug("beginning evaluation loop for %s", event.event_type)
         results = _evaluate_cases_loop(cases, forecast_dataset, gridded_obs, point_obs)
         all_results[event.event_type] = results
+        logger.debug("evaluation loop complete for %s", event.event_type)
+    logger.info(
+        "\nVerification Summary:\n"
+        "- Processed %s event types\n"
+        "- Observation types verified against: %s\n"
+        "- Generated results for %s cases\n"
+        "Evaluation complete.",
+        len(eval_config.event_types),
+        ", ".join(
+            [
+                x
+                for x in [
+                    "point" if point_obs is not None else "",
+                    "gridded" if gridded_obs is not None else "",
+                ]
+                if x
+            ]
+        ),
+        sum(len(results) for results in all_results.values() if results is not None),
+    )
     return all_results
 
 
@@ -170,10 +204,13 @@ def _evaluate_case(
             gridded_obs_da = time_subset_gridded_obs_ds[data_var].compute()
             for metric in individual_case.metrics_list:
                 metric_instance = metric()
+                logging.debug(
+                    "metric %s computing for %s", metric_instance.name, data_var
+                )
                 result = metric_instance.compute(forecast_da, gridded_obs_da)
                 case_results[data_var][metric_instance.name] = result
     if point_obs is not None:
-        pass
+        raise NotImplementedError("Point obs evaluation not implemented as of 0.1.0")
     return case_results
 
 
@@ -182,7 +219,7 @@ def _open_forecast_dataset(
     forecast_schema_config: config.ForecastSchemaConfig = DEFAULT_FORECAST_SCHEMA_CONFIG,
 ):
     """Open the forecast dataset specified for evaluation."""
-    logging.info("Opening forecast dataset")
+    logging.debug("Opening forecast dataset")
     if eval_config.forecast_dir.startswith("s3://"):
         fs = fsspec.filesystem("s3")
     elif eval_config.forecast_dir.startswith(
@@ -220,7 +257,7 @@ def _open_obs_datasets(eval_config: config.Config):
     point_obs = None
     gridded_obs = None
     if eval_config.point_obs_path:
-        point_obs = pd.read_parquet(eval_config.point_obs_path, chunks="auto")
+        raise NotImplementedError("Point obs evaluation not implemented as of 0.1.0")
     if eval_config.gridded_obs_path:
         gridded_obs = xr.open_zarr(
             eval_config.gridded_obs_path,
