@@ -42,6 +42,24 @@ def mock_forecast_dataset():
         lead_time_grid.flatten(), unit="h"
     )
     dataset.coords["time"] = valid_time
+    # Set a specific value for a specific time and location to remove ambiguity
+    dataset["air_temperature"].loc[
+        dict(
+            init_time="2021-06-21 00:00",
+            lead_time=42,
+            latitude=slice(40, 45),
+            longitude=slice(100, 105),
+        )
+    ] = 24
+    # Set a specific value for a specific time and location to remove ambiguity
+    dataset["air_temperature"].loc[
+        dict(
+            init_time="2021-06-20 00:00",
+            lead_time=42,
+            latitude=slice(40, 45),
+            longitude=slice(100, 105),
+        )
+    ] = 23
     return dataset
 
 
@@ -69,6 +87,7 @@ def mock_gridded_obs_dataset():
         },
         coords={"time": time, "latitude": latitudes, "longitude": longitudes},
     )
+    # Set a specific value for a specific time and location to remove ambiguity
     dataset["2m_temperature"].loc[
         dict(
             time="2021-06-21 18:00",

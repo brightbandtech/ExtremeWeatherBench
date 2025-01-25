@@ -80,7 +80,7 @@ class TestRegionalRMSE:
                 7.06224259,
                 7.07307497,
                 7.06065033,
-                7.06143205,
+                7.06077196,
                 7.06397257,
                 7.06501056,
                 7.07663102,
@@ -157,8 +157,8 @@ class TestMaximumMAE:
                 for lead_time in [0, 24, 48, 72, 96, 168, 240]
             ]
         )
-        assert pytest.approx(result.sel({"lead_time": 18}), 1e-7) == 3.65477343
-        assert pytest.approx(result.sel({"lead_time": 42}), 1e-7) == 3.69339927
+        assert pytest.approx(result.sel({"lead_time": 18}), 1e-7) == 1.0
+        assert pytest.approx(result.sel({"lead_time": 42}), 1e-7) == 2.0
 
 
 class TestMaxOfMinTempMAE:
@@ -209,7 +209,7 @@ class TestMaxOfMinTempMAE:
                 for lead_time in [0, 6, 12, 30, 168, 240]
             ]
         )
-        assert pytest.approx(result.sel({"lead_time": 18}), 1e-7) == 1.01522937
+        assert pytest.approx(result.sel({"lead_time": 18}), 1e-7) == 0.76977804
 
 
 class TestOnsetME:
