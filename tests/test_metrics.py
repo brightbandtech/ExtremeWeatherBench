@@ -27,7 +27,6 @@ class TestMetric:
         with pytest.raises(NotImplementedError):
             metric.compute(mock_forecast_dataarray, mock_gridded_obs_dataarray)
 
-    # TODO: tomorrow fix this up to ge 100% test coverage for metrics
     """Tests the _align_observations_temporal_resolution method of the Metric base class."""
 
     def test_obs_finer_temporal_resolution(
