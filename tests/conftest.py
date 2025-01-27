@@ -129,6 +129,23 @@ def mock_subset_gridded_obs_dataarray(mock_gridded_obs_dataset):
     )
 
 
+@pytest.fixture
+def mock_results_dataarray_list():
+    results_da_list = [
+        xr.DataArray(
+            data=[5],
+            dims=["lead_time"],
+            coords={"lead_time": [0]},
+        ),
+        xr.DataArray(
+            data=[6],
+            dims=["lead_time"],
+            coords={"lead_time": [6]},
+        ),
+    ]
+    return results_da_list
+
+
 def dataset_to_dataarray(dataset):
     """Convert an xarray Dataset to a DataArray."""
     mock_data_var = [data_var for data_var in dataset.data_vars][0]

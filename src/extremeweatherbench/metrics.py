@@ -39,11 +39,12 @@ class Metric:
             The aligned observation dataarray.
         """
         obs_time_delta = pd.to_timedelta(np.diff(observation.time).mean())
-        forecast_time_delta = pd.Timedelta(
-            hours=float(forecast.lead_time[1] - forecast.lead_time[0])
+        forecast_time_delta = pd.to_timedelta(
+            np.diff(forecast.lead_time).mean(), unit="h"
         )
-        if obs_time_delta != forecast_time_delta:
-            if obs_time_delta < forecast_time_delta:
+
+        if forecast_time_delta != obs_time_delta:
+            if forecast_time_delta > obs_time_delta:
                 # Resample observations to match forecast resolution
                 observation = observation.resample(time=forecast_time_delta).first()
             else:
@@ -52,6 +53,7 @@ class Metric:
                     obs_time_delta,
                     forecast_time_delta,
                 )
+
         return observation
 
 
@@ -145,11 +147,16 @@ class MaxOfMinTempMAE(Metric):
                     pd.Timestamp(init_time.values).to_pydatetime(),
                 )
                 if max_min_timestamp in init_forecast_spatial_mean.time.values:
+                    filtered_forecast = self._truncate_incomplete_days(
+                        init_forecast_spatial_mean
+                    )
                     filtered_forecast = utils.center_forecast_on_time(
-                        init_forecast_spatial_mean,
+                        filtered_forecast,
                         time=pd.Timestamp(max_min_timestamp),
                         hours=48,
                     )
+                    # Ensure that the forecast has a full day of data for each day
+                    # after centering on the max of min timestamp
                     filtered_forecast = self._truncate_incomplete_days(
                         filtered_forecast
                     )
@@ -161,17 +168,9 @@ class MaxOfMinTempMAE(Metric):
                         == filtered_forecast.groupby("time.dayofyear").min().max(),
                         drop=True,
                     )
-                    if len(lead_time) == 0:
-                        logger.debug(
-                            (
-                                "No lead time found fulfilling criteria "
-                                "for max of min temperature for init time %s, skipping"
-                            ),
-                            pd.Timestamp(init_time.values),
-                        )
-                    else:
-                        # TODO: add temporal displacement error, which is
-                        # filtered_forecast_max_min.time.values[0] - max_min_timestamp
+                    # TODO: add temporal displacement error, which is
+                    # filtered_forecast_max_min.time.values[0] - max_min_timestamp
+                    if max_min_timestamp in filtered_forecast.time.values:
                         max_min_mae_dataarray = xr.DataArray(
                             data=abs(filtered_forecast_max_min - max_min_value),
                             dims=["lead_time"],
@@ -189,6 +188,7 @@ class MaxOfMinTempMAE(Metric):
             raise NotImplementedError(
                 "Only air_temperature is currently supported for MaxOfMinTempMAE."
             )
+
         max_min_mae_full_da = utils.process_dataarray_for_output(max_min_mae_values)
         return max_min_mae_full_da
 

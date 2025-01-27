@@ -2,6 +2,7 @@ import pytest
 from extremeweatherbench import utils
 import pandas as pd
 import numpy as np
+import xarray as xr
 
 
 @pytest.mark.parametrize(
@@ -96,3 +97,13 @@ def test_temporal_align_dataarrays(mock_forecast_dataarray, mock_gridded_obs_dat
     assert pd.Timestamp(aligned_forecast.init_time.values) == pd.Timestamp(
         mock_forecast_dataarray.init_time[0].values
     )
+
+
+def test_process_dataarray_for_output(mock_results_dataarray_list):
+    """Test to ensure the inputs to process_dataarray_for_output always result in a DataArray
+    regardless of length."""
+    test_output = utils.process_dataarray_for_output(mock_results_dataarray_list)
+    assert isinstance(test_output, xr.DataArray)
+
+    test_len_0_output = utils.process_dataarray_for_output([])
+    assert isinstance(test_len_0_output, xr.DataArray)

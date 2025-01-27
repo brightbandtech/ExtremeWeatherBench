@@ -275,7 +275,7 @@ def expand_lead_times_to_6_hourly(
     return dataarray
 
 
-def process_dataarray_for_output(da_list: List[Optional[xr.DataArray]]):
+def process_dataarray_for_output(da_list: List[Optional[xr.DataArray]]) -> xr.DataArray:
     """Extract and format data from a list of DataArrays.
 
     Args:
