@@ -27,6 +27,52 @@ class TestMetric:
         with pytest.raises(NotImplementedError):
             metric.compute(mock_forecast_dataarray, mock_gridded_obs_dataarray)
 
+    # TODO: tomorrow fix this up to ge 100% test coverage for metrics
+    """Tests the _align_observations_temporal_resolution method of the Metric base class."""
+
+    def test_obs_finer_temporal_resolution(
+        self, mock_forecast_dataarray, mock_gridded_obs_dataarray
+    ):
+        """Test when forecast and observation have same temporal resolution."""
+        metric = metrics.Metric()
+        aligned_obs = metric._align_observations_temporal_resolution(
+            mock_forecast_dataarray, mock_gridded_obs_dataarray
+        )
+        # Check that observation was modified
+        assert len(np.unique(np.diff(aligned_obs.time))) == 1
+        assert np.unique(np.diff(aligned_obs.time)).astype("timedelta64[h]").astype(
+            int
+        ) == np.unique(np.diff(mock_forecast_dataarray.lead_time))
+
+    def test_obs_finer_temporal_resolution_data(
+        self, mock_forecast_dataarray, mock_gridded_obs_dataarray
+    ):
+        """Test when observation has finer temporal resolution than forecast,
+        that the outputs are the correct values at the hour."""
+        metric = metrics.Metric()
+        aligned_obs = metric._align_observations_temporal_resolution(
+            mock_forecast_dataarray, mock_gridded_obs_dataarray
+        )
+
+        test_truncated_obs, test_aligned_obs = xr.align(
+            mock_gridded_obs_dataarray, aligned_obs, join="inner"
+        )
+        # Check that observation was modified
+        assert (test_aligned_obs == test_truncated_obs).all()
+
+    def test_obs_coarser_temporal_resolution(
+        self, mock_forecast_dataarray, mock_gridded_obs_dataarray
+    ):
+        """Test when observation has coarser temporal resolution than forecast,
+        that observations are unmodified."""
+        metric = metrics.Metric()
+        aligned_obs = metric._align_observations_temporal_resolution(
+            mock_forecast_dataarray,
+            mock_gridded_obs_dataarray.resample(time="12h").first(),
+        )
+        # Check that observation was modified
+        assert (aligned_obs == mock_gridded_obs_dataarray).all()
+
 
 class TestRegionalRMSE:
     """Tests the RegionalRMSE Metric child class."""
@@ -118,6 +164,20 @@ class TestMaximumMAE:
         assert isinstance(result, xr.DataArray)
         # Check the dimensions of the result
         assert "lead_time" in result.dims
+
+    def test_maximum_mae_wrong_data_var(
+        self, mock_subset_forecast_dataarray, mock_subset_gridded_obs_dataarray
+    ):
+        """As this metric is meant to be only for surface temperature, make sure
+        it fails if another variable is in its place."""
+        mock_subset_forecast_dataarray = mock_subset_forecast_dataarray.rename(
+            "bad_name"
+        )
+        metric = metrics.MaximumMAE()
+        with pytest.raises(NotImplementedError):
+            metric.compute(
+                mock_subset_forecast_dataarray, mock_subset_gridded_obs_dataarray
+            )
 
     def test_maximum_mae_values(
         self, mock_subset_forecast_dataarray, mock_subset_gridded_obs_dataarray
