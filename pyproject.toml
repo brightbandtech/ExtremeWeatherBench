@@ -34,6 +34,9 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+    "bs4>=0.0.2",
+    "geopy>=2.4.1",
+    "h5netcdf>=1.5.0",
     "mypy>=1.14.1",
     "pre-commit>=4.0.1",
     "pytest>=8.3.4",

@@ -62,6 +62,33 @@ def generate_json_from_nc(u, so, fs, fs_out, json_dir):
             f.write(ujson.dumps(h5chunks.translate()).encode())
 
 
+def get_bounding_corners(
+    location_center: Location, length_km: float, convert_to_360: bool = True
+) -> tuple:
+    """Find corners of bounding box given location center and box size in kilometers.
+
+    Args:
+        location_center: A Location object corresponding to the center of the bounding box.
+        length_km: The side length of the bounding box in kilometers.
+
+    Returns:
+        The bounding latitude and longitude corners (min_lat, max_lat, min_lon, max_lon).
+    """
+    lat_center = location_center.latitude
+    lon_center = location_center.longitude
+    if convert_to_360:
+        lon_center = convert_longitude_to_360(lon_center)
+    # Convert length from kilometers to degrees (approximation)
+    length_deg = length_km / 111  # 1 degree is approximately 111 km
+
+    # Create a bounding box
+    min_lat = lat_center - (length_deg / 2)
+    max_lat = lat_center + (length_deg / 2)
+    min_lon = lon_center - (length_deg / 2)
+    max_lon = lon_center + (length_deg / 2)
+    return (min_lat, max_lat, min_lon, max_lon)
+
+
 def clip_dataset_to_bounding_box(
     dataset: xr.Dataset,
     location_center: Location,
@@ -77,19 +104,9 @@ def clip_dataset_to_bounding_box(
     Returns:
         The clipped xarray dataset.
     """
-    lat_center = location_center.latitude
-    lon_center = location_center.longitude
-    if lon_center < 0:
-        lon_center = convert_longitude_to_360(lon_center)
-    # Convert length from kilometers to degrees (approximation)
-    length_deg = length_km / 111  # 1 degree is approximately 111 km
-
-    # Create a bounding box
-    min_lat = lat_center - (length_deg / 2)
-    max_lat = lat_center + (length_deg / 2)
-    min_lon = lon_center - (length_deg / 2)
-    max_lon = lon_center + (length_deg / 2)
-
+    min_lat, max_lat, min_lon, max_lon = get_bounding_corners(
+        location_center, length_km
+    )
     # Create a GeoDataFrame with the bounding box
     bbox = gpd.GeoDataFrame(
         {"geometry": [box(min_lon, min_lat, max_lon, max_lat)]},
