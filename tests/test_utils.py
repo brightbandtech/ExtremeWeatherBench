@@ -14,17 +14,16 @@ def test_convert_longitude_to_360_param(input, expected):
 
 
 def test_center_forecast_on_time(
-    mock_single_init_time_subset_forecast_dataarray, mock_subset_gridded_obs_dataarray
+    sample_subset_forecast_dataarray,
+    sample_subset_gridded_obs_dataarray,
 ):
     """Test that the center_forecast_on_time function properly centers the forecast on the given
     timestamp, including at edges of the forecast which produce truncated outputs."""
     hours = 48
     test_aligned_da = utils.temporal_align_dataarrays(
-        mock_single_init_time_subset_forecast_dataarray,
-        mock_subset_gridded_obs_dataarray,
-        pd.Timestamp(
-            mock_single_init_time_subset_forecast_dataarray.init_time[0].values
-        ),
+        sample_subset_forecast_dataarray,
+        sample_subset_gridded_obs_dataarray,
+        pd.Timestamp(sample_subset_forecast_dataarray.init_time[0].values),
     )[0]
 
     test_aligned_da_timestamps = test_aligned_da.time.values
@@ -79,14 +78,16 @@ def test_center_forecast_on_time(
             # e.g. at index 2 or -3
 
 
-def test_temporal_align_dataarrays(mock_forecast_dataarray, mock_gridded_obs_dataarray):
+def test_temporal_align_dataarrays(
+    sample_forecast_dataarray, sample_gridded_obs_dataarray
+):
     """Test that the conversion from init time to valid time (named as time) produces an aligned
     dataarray to ensure metrics are applied properly."""
     init_time_datetime = pd.Timestamp(
-        mock_forecast_dataarray.init_time[0].values
+        sample_forecast_dataarray.init_time[0].values
     ).to_pydatetime()
     aligned_forecast, aligned_obs = utils.temporal_align_dataarrays(
-        mock_forecast_dataarray, mock_gridded_obs_dataarray, init_time_datetime
+        sample_forecast_dataarray, sample_gridded_obs_dataarray, init_time_datetime
     )
 
     # Check aligned datasets have same time coordinates
@@ -95,15 +96,59 @@ def test_temporal_align_dataarrays(mock_forecast_dataarray, mock_gridded_obs_dat
     # Check forecast was properly subset by init time
     assert aligned_forecast.init_time.size == 1
     assert pd.Timestamp(aligned_forecast.init_time.values) == pd.Timestamp(
-        mock_forecast_dataarray.init_time[0].values
+        sample_forecast_dataarray.init_time[0].values
     )
 
 
-def test_process_dataarray_for_output(mock_results_dataarray_list):
+def test_process_dataarray_for_output(sample_results_dataarray_list):
     """Test to ensure the inputs to process_dataarray_for_output always result in a DataArray
     regardless of length."""
-    test_output = utils.process_dataarray_for_output(mock_results_dataarray_list)
+    test_output = utils.process_dataarray_for_output(sample_results_dataarray_list)
     assert isinstance(test_output, xr.DataArray)
 
     test_len_0_output = utils.process_dataarray_for_output([])
     assert isinstance(test_len_0_output, xr.DataArray)
+
+
+def test_obs_finer_temporal_resolution(
+    sample_forecast_dataarray, sample_gridded_obs_dataarray
+):
+    """Test when observation has finer temporal resolution."""
+    aligned_obs = utils.align_observations_temporal_resolution(
+        sample_forecast_dataarray, sample_gridded_obs_dataarray
+    )
+    # Check that observation was modified
+    assert len(np.unique(np.diff(aligned_obs.time))) == 1
+    assert np.unique(np.diff(aligned_obs.time)).astype("timedelta64[h]").astype(
+        int
+    ) == np.unique(np.diff(sample_forecast_dataarray.lead_time))
+
+
+def test_obs_finer_temporal_resolution_data(
+    sample_forecast_dataarray, sample_gridded_obs_dataarray
+):
+    """Test when observation has finer temporal resolution than forecast,
+    that the outputs are the correct values at the hour."""
+    aligned_obs = utils.align_observations_temporal_resolution(
+        sample_forecast_dataarray, sample_gridded_obs_dataarray
+    )
+
+    test_truncated_obs, test_aligned_obs = xr.align(
+        sample_gridded_obs_dataarray, aligned_obs, join="inner"
+    )
+    # Check that observation was modified
+    assert (test_aligned_obs == test_truncated_obs).all()
+
+
+def test_obs_coarser_temporal_resolution(
+    sample_forecast_dataarray, sample_gridded_obs_dataarray
+):
+    """Test when observation has coarser temporal resolution than forecast,
+    that observations are unmodified."""
+    sample_forecast_dataarray = sample_forecast_dataarray.isel(init_time=0)
+    aligned_obs = utils.align_observations_temporal_resolution(
+        sample_forecast_dataarray,
+        sample_gridded_obs_dataarray.resample(time="12h").first(),
+    )
+    # Check that observation was modified
+    assert (aligned_obs == sample_gridded_obs_dataarray).all()
