@@ -2,7 +2,7 @@
 other specialized package.
 """
 
-from typing import Union, List, Optional
+from typing import Union, List
 from collections import namedtuple
 import fsspec
 import geopandas as gpd
@@ -275,15 +275,14 @@ def expand_lead_times_to_6_hourly(
     return dataarray
 
 
-def process_dataarray_for_output(da_list: List[Optional[xr.DataArray]]) -> xr.DataArray:
+def process_dataarray_for_output(da_list: List[xr.DataArray]) -> xr.DataArray:
     """Extract and format data from a list of DataArrays.
 
     Args:
-        dataarray: A list of xarray DataArrays.
+        da_list: A list of xarray DataArrays.
 
     Returns:
-        An xarray DataArray with lead_time coordinate, expanded to 6-hourly intervals.
-        Returns a DataArray with a single NaN value if the input dataarray is empty.
+        A DataArray with a sorted lead_time coordinate, expanded to 6-hourly intervals.
     """
 
     if len(da_list) == 0:
@@ -303,13 +302,16 @@ def process_dataarray_for_output(da_list: List[Optional[xr.DataArray]]) -> xr.Da
 
 def center_forecast_on_time(da: xr.DataArray, time: pd.Timestamp, hours: int):
     """Center a forecast DataArray on a given time with a given range in hours.
+
     Args:
         da: The forecast DataArray to center.
         time: The time to center the forecast on.
         hours: The number of hours to include in the centered forecast.
     """
     time_range = pd.date_range(
-        end=pd.to_datetime(time) + pd.Timedelta(hours=48), periods=97, freq="h"
+        end=pd.to_datetime(time) + pd.Timedelta(hours=hours),
+        periods=hours * 2 + 1,
+        freq="h",
     )
     return da.sel(time=slice(time_range[0], time_range[-1]))
 
@@ -320,10 +322,12 @@ def temporal_align_dataarrays(
     init_time_datetime: datetime.datetime,
 ) -> tuple[xr.DataArray, xr.DataArray]:
     """Align the individual initialization time forecast and observation dataarrays.
+
     Args:
         forecast: The forecast dataarray to align.
         observation: The observation dataarray to align.
         init_time_datetime: The initialization time to subset the forecast dataarray by.
+
     Returns:
         A tuple containing the time-aligned forecast and observation dataarrays.
     """
@@ -336,3 +340,28 @@ def temporal_align_dataarrays(
     forecast = forecast.swap_dims({"lead_time": "time"})
     forecast, observation = xr.align(forecast, observation, join="inner")
     return (forecast, observation)
+
+
+def align_observations_temporal_resolution(
+    forecast: xr.DataArray, observation: xr.DataArray
+) -> xr.DataArray:
+    """Align observation dataarray on the forecast dataarray's temporal resolution.,
+
+    Metrics which need a singular timestep from gridded obs will fail if the forecasts
+    are not aligned with the observation timestamps (e.g. a 03z minimum temp in observations
+    when the forecast only has 00z and 06z timesteps).
+
+    Args:
+        forecast: The forecast data which will be aligned against.
+        observation: The observation data to align.
+
+    Returns:
+        The aligned observation dataarray.
+    """
+    obs_time_delta = pd.to_timedelta(np.diff(observation.time).mean())
+    forecast_time_delta = pd.to_timedelta(np.diff(forecast.lead_time).mean(), unit="h")
+
+    if forecast_time_delta > obs_time_delta:
+        observation = observation.resample(time=forecast_time_delta).first()
+
+    return observation
