@@ -49,7 +49,7 @@ class TestRegionalRMSE:
     ):
         """Test if the numerical outputs of the metric are producing the correct results,
         to a reasonable (1e-7) precision."""
-        output = np.load("data/arrays.npz")["RegionalRMSE"]
+        output = np.load("tests/data/arrays.npz")["RegionalRMSE"]
         metric = metrics.RegionalRMSE()
         result = metric.compute(sample_forecast_dataarray, sample_gridded_obs_dataarray)
 
