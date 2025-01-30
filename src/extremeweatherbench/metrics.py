@@ -24,38 +24,6 @@ class Metric:
         """Return the class name without parentheses."""
         return self.__class__.__name__
 
-    def _align_observations_temporal_resolution(
-        self, forecast: xr.DataArray, observation: xr.DataArray
-    ) -> xr.DataArray:
-        """Align the temporal resolution of the forecast and observation dataarrays,
-        in case the observations are at a higher temporal resolution than forecast data.
-        Metrics which need a singular timestep from gridded obs will fail if the forecasts
-        are not aligned with the observation timestamps (e.g. a 03z minimum temp in observations
-        when the forecast only has 00z and 06z timesteps).
-        Args:
-            forecast: The forecast dataarray to align.
-            observation: The observation dataarray to align.
-        Returns:
-            The aligned observation dataarray.
-        """
-        obs_time_delta = pd.to_timedelta(np.diff(observation.time).mean())
-        forecast_time_delta = pd.to_timedelta(
-            np.diff(forecast.lead_time).mean(), unit="h"
-        )
-
-        if forecast_time_delta != obs_time_delta:
-            if forecast_time_delta > obs_time_delta:
-                # Resample observations to match forecast resolution
-                observation = observation.resample(time=forecast_time_delta).first()
-            else:
-                logger.warning(
-                    "Observation time resolution (%s) is coarser than forecast time resolution (%s)",
-                    obs_time_delta,
-                    forecast_time_delta,
-                )
-
-        return observation
-
 
 @dataclasses.dataclass
 class RegionalRMSE(Metric):
@@ -78,117 +46,121 @@ class RegionalRMSE(Metric):
 
 @dataclasses.dataclass
 class MaximumMAE(Metric):
-    """Mean absolute error of forecasted maximum values."""
+    """Mean absolute error of forecasted maximum values.
+
+    Attributes:
+
+    time_deviation_tolerance: amount of time in hours to allow for forecast deviation from the observed maximum
+    temperature timestamp.
+    """
+
+    time_deviation_tolerance: int = 48
 
     def compute(self, forecast: xr.DataArray, observation: xr.DataArray):
-        if forecast.name == "air_temperature":
-            max_mae_values = []
-            observation_spatial_mean = observation.mean(["latitude", "longitude"])
-            forecast_spatial_mean = forecast.mean(["latitude", "longitude"])
-            observation_spatial_mean = self._align_observations_temporal_resolution(
-                forecast_spatial_mean, observation_spatial_mean
+        max_mae_values = []
+        observation_spatial_mean = observation.mean(["latitude", "longitude"])
+        forecast_spatial_mean = forecast.mean(["latitude", "longitude"])
+        observation_spatial_mean = utils.align_observations_temporal_resolution(
+            forecast_spatial_mean, observation_spatial_mean
+        )
+        for init_time in forecast_spatial_mean.init_time:
+            max_datetime = observation_spatial_mean.idxmax("time").values
+            max_value = observation_spatial_mean.sel(time=max_datetime).values
+            init_forecast_spatial_mean, _ = utils.temporal_align_dataarrays(
+                forecast_spatial_mean,
+                observation_spatial_mean,
+                pd.Timestamp(init_time.values).to_pydatetime(),
             )
-            for init_time in forecast_spatial_mean.init_time:
-                max_datetime = observation_spatial_mean.idxmax("time").values
-                max_value = observation_spatial_mean.sel(time=max_datetime).values
-                init_forecast_spatial_mean, _ = utils.temporal_align_dataarrays(
-                    forecast_spatial_mean,
-                    observation_spatial_mean,
-                    pd.Timestamp(init_time.values).to_pydatetime(),
-                )
 
-                if max_datetime in init_forecast_spatial_mean.time.values:
-                    # Subset to +-48 hours centered on the maximum temperature timestamp
-                    filtered_forecast = utils.center_forecast_on_time(
-                        init_forecast_spatial_mean,
-                        time=pd.Timestamp(max_datetime),
-                        hours=48,
-                    )
-                    lead_time = filtered_forecast.where(
-                        filtered_forecast.time == max_datetime, drop=True
-                    ).lead_time
-                    max_mae_dataarray = xr.DataArray(
-                        data=[abs(filtered_forecast.max().values - max_value)],
-                        dims=["lead_time"],
-                        coords={"lead_time": lead_time.values},
-                    )
-                    max_mae_values.append(max_mae_dataarray)
-        else:
-            raise NotImplementedError(
-                "Only air_temperature is currently supported for MaximumMAE."
-            )
+            if max_datetime in init_forecast_spatial_mean.time.values:
+                # Subset to +-48 hours centered on the maximum temperature timestamp
+                filtered_forecast = utils.center_forecast_on_time(
+                    init_forecast_spatial_mean,
+                    time=pd.Timestamp(max_datetime),
+                    hours=self.time_deviation_tolerance,
+                )
+                lead_time = filtered_forecast.where(
+                    filtered_forecast.time == max_datetime, drop=True
+                ).lead_time
+                max_mae_dataarray = xr.DataArray(
+                    data=[abs(filtered_forecast.max().values - max_value)],
+                    dims=["lead_time"],
+                    coords={"lead_time": lead_time.values},
+                )
+                max_mae_values.append(max_mae_dataarray)
+
         max_mae_full_da = utils.process_dataarray_for_output(max_mae_values)
         return max_mae_full_da
 
 
 @dataclasses.dataclass
 class MaxOfMinTempMAE(Metric):
-    """Mean absolute error of forecasted highest minimum temperature values."""
+    """Mean absolute error of forecasted highest minimum temperature values.
+
+    Attributes:
+
+    time_deviation_tolerance: amount of time in hours to allow for forecast deviation from the observed maximum
+    temperature timestamp.
+    """
+
+    time_deviation_tolerance: int = 48
 
     def compute(self, forecast: xr.DataArray, observation: xr.DataArray):
-        if forecast.name == "air_temperature":
-            max_min_mae_values = []
-            observation_spatial_mean = observation.mean(["latitude", "longitude"])
-            forecast_spatial_mean = forecast.mean(["latitude", "longitude"])
-            # Verify observation_spatial_mean's time resolution matches forecast_spatial_mean
-            observation_spatial_mean = self._align_observations_temporal_resolution(
-                forecast_spatial_mean, observation_spatial_mean
-            )
-            observation_spatial_mean = self._truncate_incomplete_days(
-                observation_spatial_mean
-            )
-            max_min_timestamp = self._return_max_min_timestamp(observation_spatial_mean)
-            max_min_value = observation_spatial_mean.sel(time=max_min_timestamp).values
+        max_min_mae_values = []
+        observation_spatial_mean = observation.mean(["latitude", "longitude"])
+        forecast_spatial_mean = forecast.mean(["latitude", "longitude"])
+        # Verify observation_spatial_mean's time resolution matches forecast_spatial_mean
+        observation_spatial_mean = utils.align_observations_temporal_resolution(
+            forecast_spatial_mean, observation_spatial_mean
+        )
+        observation_spatial_mean = self._truncate_incomplete_days(
+            observation_spatial_mean
+        )
+        max_min_timestamp = self._return_max_min_timestamp(observation_spatial_mean)
+        max_min_value = observation_spatial_mean.sel(time=max_min_timestamp).values
 
-            for init_time in forecast_spatial_mean.init_time:
-                init_forecast_spatial_mean, _ = utils.temporal_align_dataarrays(
-                    forecast_spatial_mean,
-                    observation_spatial_mean,
-                    pd.Timestamp(init_time.values).to_pydatetime(),
+        for init_time in forecast_spatial_mean.init_time:
+            init_forecast_spatial_mean, _ = utils.temporal_align_dataarrays(
+                forecast_spatial_mean,
+                observation_spatial_mean,
+                pd.Timestamp(init_time.values).to_pydatetime(),
+            )
+            if max_min_timestamp in init_forecast_spatial_mean.time.values:
+                filtered_forecast = self._truncate_incomplete_days(
+                    init_forecast_spatial_mean
                 )
-                if max_min_timestamp in init_forecast_spatial_mean.time.values:
-                    filtered_forecast = self._truncate_incomplete_days(
-                        init_forecast_spatial_mean
+                filtered_forecast = utils.center_forecast_on_time(
+                    filtered_forecast,
+                    time=pd.Timestamp(max_min_timestamp),
+                    hours=self.time_deviation_tolerance,
+                )
+                # Ensure that the forecast has a full day of data for each day
+                # after centering on the max of min timestamp
+                filtered_forecast = self._truncate_incomplete_days(filtered_forecast)
+                lead_time = filtered_forecast.where(
+                    filtered_forecast.time == max_min_timestamp, drop=True
+                ).lead_time
+                filtered_forecast_max_min = filtered_forecast.where(
+                    filtered_forecast
+                    == filtered_forecast.groupby("time.dayofyear").min().max(),
+                    drop=True,
+                )
+                # TODO: add temporal displacement error, which is
+                # filtered_forecast_max_min.time.values[0] - max_min_timestamp
+                if max_min_timestamp in filtered_forecast.time.values:
+                    max_min_mae_dataarray = xr.DataArray(
+                        data=abs(filtered_forecast_max_min - max_min_value),
+                        dims=["lead_time"],
+                        coords={"lead_time": lead_time.values},
+                        attrs={
+                            "description": (
+                                "Mean absolute error of forecasted highest minimum temperature values,"
+                                "where lead_time is the time from initialization until the highest minimum"
+                                "observed temperature."
+                            )
+                        },
                     )
-                    filtered_forecast = utils.center_forecast_on_time(
-                        filtered_forecast,
-                        time=pd.Timestamp(max_min_timestamp),
-                        hours=48,
-                    )
-                    # Ensure that the forecast has a full day of data for each day
-                    # after centering on the max of min timestamp
-                    filtered_forecast = self._truncate_incomplete_days(
-                        filtered_forecast
-                    )
-                    lead_time = filtered_forecast.where(
-                        filtered_forecast.time == max_min_timestamp, drop=True
-                    ).lead_time
-                    filtered_forecast_max_min = filtered_forecast.where(
-                        filtered_forecast
-                        == filtered_forecast.groupby("time.dayofyear").min().max(),
-                        drop=True,
-                    )
-                    # TODO: add temporal displacement error, which is
-                    # filtered_forecast_max_min.time.values[0] - max_min_timestamp
-                    if max_min_timestamp in filtered_forecast.time.values:
-                        max_min_mae_dataarray = xr.DataArray(
-                            data=abs(filtered_forecast_max_min - max_min_value),
-                            dims=["lead_time"],
-                            coords={"lead_time": lead_time.values},
-                            attrs={
-                                "description": (
-                                    "Mean absolute error of forecasted highest minimum temperature values,"
-                                    "where lead_time is the time from initialization until the highest minimum"
-                                    "observed temperature."
-                                )
-                            },
-                        )
-                        max_min_mae_values.append(max_min_mae_dataarray)
-        else:
-            raise NotImplementedError(
-                "Only air_temperature is currently supported for MaxOfMinTempMAE."
-            )
-
+                    max_min_mae_values.append(max_min_mae_dataarray)
         max_min_mae_full_da = utils.process_dataarray_for_output(max_min_mae_values)
         return max_min_mae_full_da
 
