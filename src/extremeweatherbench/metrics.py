@@ -1,6 +1,5 @@
 import dataclasses
 
-import numpy as np
 import pandas as pd
 import xarray as xr
 from scores.continuous import rmse
@@ -113,10 +112,10 @@ class MaxOfMinTempMAE(Metric):
         observation_spatial_mean = utils.align_observations_temporal_resolution(
             forecast_spatial_mean, observation_spatial_mean
         )
-        observation_spatial_mean = self._truncate_incomplete_days(
+        observation_spatial_mean = utils.truncate_incomplete_days(
             observation_spatial_mean
         )
-        max_min_timestamp = self._return_max_min_timestamp(observation_spatial_mean)
+        max_min_timestamp = utils.return_max_min_timestamp(observation_spatial_mean)
         max_min_value = observation_spatial_mean.sel(time=max_min_timestamp).values
 
         for init_time in forecast_spatial_mean.init_time:
@@ -126,7 +125,7 @@ class MaxOfMinTempMAE(Metric):
                 pd.Timestamp(init_time.values).to_pydatetime(),
             )
             if max_min_timestamp in init_forecast_spatial_mean.time.values:
-                filtered_forecast = self._truncate_incomplete_days(
+                filtered_forecast = utils.truncate_incomplete_days(
                     init_forecast_spatial_mean
                 )
                 filtered_forecast = utils.center_forecast_on_time(
@@ -136,7 +135,7 @@ class MaxOfMinTempMAE(Metric):
                 )
                 # Ensure that the forecast has a full day of data for each day
                 # after centering on the max of min timestamp
-                filtered_forecast = self._truncate_incomplete_days(filtered_forecast)
+                filtered_forecast = utils.truncate_incomplete_days(filtered_forecast)
                 lead_time = filtered_forecast.where(
                     filtered_forecast.time == max_min_timestamp, drop=True
                 ).lead_time
@@ -163,30 +162,6 @@ class MaxOfMinTempMAE(Metric):
                     max_min_mae_values.append(max_min_mae_dataarray)
         max_min_mae_full_da = utils.process_dataarray_for_output(max_min_mae_values)
         return max_min_mae_full_da
-
-    def _truncate_incomplete_days(self, da: xr.DataArray) -> xr.DataArray:
-        """Truncate a dataarray to only include full days of data."""
-        # Group by dayofyear and check if each day has a complete times
-        # Count how many unique hours exist per day in the data
-        hours_per_day = len(np.unique(da.time.dt.hour.values))
-        valid_days = da.groupby("time.dayofyear").count("time") == hours_per_day
-        # Only keep days that have a full set of timestamps
-        da = da.where(
-            da.time.dt.dayofyear.isin(
-                valid_days.where(valid_days).dropna(dim="dayofyear").dayofyear
-            ),
-            drop=True,
-        )
-        return da
-
-    def _return_max_min_timestamp(self, da: xr.DataArray) -> pd.Timestamp:
-        """Return the timestamp of the maximum minimum temperature in a DataArray."""
-        return pd.Timestamp(
-            da.where(
-                da == da.groupby("time.dayofyear").min().max(),
-                drop=True,
-            ).time.values[0]
-        )
 
 
 @dataclasses.dataclass

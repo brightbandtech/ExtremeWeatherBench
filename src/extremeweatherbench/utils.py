@@ -365,3 +365,29 @@ def align_observations_temporal_resolution(
         observation = observation.resample(time=forecast_time_delta).first()
 
     return observation
+
+
+def truncate_incomplete_days(da: xr.DataArray) -> xr.DataArray:
+    """Truncate a dataarray to only include full days of data."""
+    # Group by dayofyear and check if each day has a complete times
+    # Count how many unique hours exist per day in the data
+    hours_per_day = len(np.unique(da.time.dt.hour.values))
+    valid_days = da.groupby("time.dayofyear").count("time") == hours_per_day
+    # Only keep days that have a full set of timestamps
+    da = da.where(
+        da.time.dt.dayofyear.isin(
+            valid_days.where(valid_days).dropna(dim="dayofyear").dayofyear
+        ),
+        drop=True,
+    )
+    return da
+
+
+def return_max_min_timestamp(da: xr.DataArray) -> pd.Timestamp:
+    """Return the timestamp of the maximum minimum temperature in a DataArray."""
+    return pd.Timestamp(
+        da.where(
+            da == da.groupby("time.dayofyear").min().max(),
+            drop=True,
+        ).time.values[0]
+    )
