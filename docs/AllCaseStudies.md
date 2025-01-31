@@ -8,12 +8,12 @@ EWB is a community benchmark!  If you want to submit new categories or new case 
 
 | Main category     | Sub category          | Description                                         |
 |-------------------|-----------------------|-----------------------------------------------------|
-| Severe Weather    | Overall severe days   | Severe weather includes tornado outbreaks, major hail storms, and major wind storms  |
+| [Severe Convective Weather](ConvectiveWx.md)    | Overall severe days   | Severe weather includes tornado outbreaks, major hail storms, and major wind storms  |
 |                   | High-risk bust days   | Bust days for severe weather                        |
-| Heatwaves         | Land-based heat waves | Major heat waves worldwide that occurred over land  |
-| Tropical Cyclones |                       | Data and case studies related to hurricanes and tropical storms worldwide, broken out by basin       |
-| Flooding          | Atmospheric Rivers    | AR events worldwide. Other large-scale flooding will be in v2     |
-| Winter Weather    | Major freezes         | Large-scale freezing events that may or may not include other winter weather |
+| [Heatwaves](Heatwaves.md)         | Land-based heat waves | Major heat waves worldwide that occurred over land  |
+| [Tropical Cyclones](TropicalCyclones.md) |                       | Data and case studies related to hurricanes and tropical storms worldwide, broken out by basin       |
+| [Flooding](Flooding.md)          | Atmospheric Rivers    | AR events worldwide. Other large-scale flooding will be in v2     |
+| [Winter Weather](WinterWeather.md)    | Major freezes         | Large-scale freezing events that may or may not include other winter weather |
 
 # Planned future updates
 
@@ -22,7 +22,7 @@ We have the events identified for the following full set of categories and futur
 
  Main category     | Sub category         | Description                                            |
 |-------------------|---------------------|--------------------------------------------------------|
-| Severe Weather    | Overall severe days   | Severe weather includes tornado outbreaks, major hail storms, and major wind storms  |
+| Severe Convective Weather    | Overall severe days   | Severe weather includes tornado outbreaks, major hail storms, and major wind storms  |
 |                   | High-risk bust days   | Bust days for severe weather                         |
 |                   | **Derechos**          | Derecho events                                       |
 |                   | **Major wind events** | Major wind events excluding derechos but including cyclones  |
