@@ -1,1 +1,1 @@
-recursive-include assets *
+graft assets
