@@ -2,13 +2,13 @@
 
 import logging
 import fsspec
-import os
 from typing import Optional, Any
 import pandas as pd
 import xarray as xr
 from extremeweatherbench import config, events, case, utils
 import dacite
 import yaml
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -36,9 +36,8 @@ def evaluate(
         A dictionary mapping event types to lists of xarray Datasets containing the
         evaluation results for each case within the event type.
     """
-
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    events_file_path = os.path.join(base_dir, "../../assets/data/events.yaml")
+    base_dir = Path(__file__).resolve().parents[2]
+    events_file_path = base_dir / "assets" / "data" / "events.yaml"
     all_results = {}
     with open(events_file_path, "r") as file:
         yaml_event_case = yaml.safe_load(file)
