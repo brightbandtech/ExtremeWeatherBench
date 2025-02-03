@@ -36,7 +36,7 @@ def evaluate(
         A dictionary mapping event types to lists of xarray Datasets containing the
         evaluation results for each case within the event type.
     """
-    base_dir = Path(__file__).resolve()
+    base_dir = Path(__file__).resolve().parents[1]
     events_file_path = base_dir / "assets" / "data" / "events.yaml"
     all_results = {}
     with open(events_file_path, "r") as file:
