@@ -37,7 +37,7 @@ def test_open_obs_datasets_no_forecast_paths():
         evaluate._open_forecast_dataset(invalid_config)
 
 
-def test_evaluate_base_case(mock_forecast_dataset, mock_gridded_obs_dataset):
+def test_evaluate_base_case(sample_forecast_dataset, sample_gridded_obs_dataset):
     base_case = case.IndividualCase(
         id=1,
         title="test_case",
@@ -50,23 +50,23 @@ def test_evaluate_base_case(mock_forecast_dataset, mock_gridded_obs_dataset):
     with pytest.raises(NotImplementedError):
         evaluate._evaluate_case(
             individual_case=base_case,
-            forecast_dataset=mock_forecast_dataset,
-            gridded_obs=mock_gridded_obs_dataset,
+            forecast_dataset=sample_forecast_dataset,
+            gridded_obs=sample_gridded_obs_dataset,
             point_obs=None,
         )
 
 
 def test_evaluate_full_workflow(
-    mocker, mock_config, mock_gridded_obs_dataset, mock_forecast_dataset
+    mocker, mock_config, sample_gridded_obs_dataset, sample_forecast_dataset
 ):
     # The return func will have the forecast dataset's data vars names switched already
     mocker.patch(
         "extremeweatherbench.evaluate._open_forecast_dataset",
-        return_value=mock_forecast_dataset,
+        return_value=sample_forecast_dataset,
     )
     mocker.patch(
         "extremeweatherbench.evaluate._open_obs_datasets",
-        return_value=(None, mock_gridded_obs_dataset),
+        return_value=(None, sample_gridded_obs_dataset),
     )
     result = evaluate.evaluate(mock_config)
     print(result["heat_wave"])
