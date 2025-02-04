@@ -719,7 +719,7 @@ requires-dist = [
     { name = "geopandas", specifier = ">=1.0.1" },
     { name = "h5py", specifier = ">=3.12.1" },
     { name = "ipywidgets", specifier = ">=8.1.5" },
-    { name = "kerchunk", specifier = ">=0.2.7" },
+    { name = "kerchunk", specifier = "==0.2.7" },
     { name = "kerchunk", marker = "extra == 'forecast-download'", specifier = ">=0.2.7" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.14.1" },
     { name = "numpy", specifier = ">=2.2.0" },
