@@ -63,6 +63,7 @@ include-package-data = true
 
 [tool.setuptools.package-data]
 extremeweatherbench = ["assets/**/*"]
+extremeweatherbench = ["assets/data/**/.*"]
 "extremeweatherbench.data" = ["assets/data/**/*"]
 
 [tool.uv.sources]
