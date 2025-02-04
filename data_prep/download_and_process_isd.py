@@ -99,17 +99,27 @@ def parse_temperature_col(data):
     2. Convert to float in Celsius
     """
     if "TMP" in data.columns and data["TMP"].notnull().any():
-        data[["t", "t_qc"]] = data["TMP"].str.split(",", expand=True)
-        data["t"] = data["t"].where(data["t"] != "+9999", pd.NA)
-        data["t"] = data["t"].where(~data["t_qc"].isin(ERRONEOUS_FLAGS), pd.NA)
-        # Scaling factor: 10
-        data["t"] = data["t"].astype("Float32") / 10
-    if "DEW" in data.columns and data["DEW"].notnull().any():
-        data[["td", "td_qc"]] = data["DEW"].str.split(",", expand=True)
-        data["td"] = (
-            data["td"].where(data["td"] != "+9999", pd.NA).astype("Float32") / 10
+        temp_data = data.copy()
+        temp_data[["t", "t_qc"]] = temp_data["TMP"].str.split(",", expand=True)
+        temp_data.loc[:, "t"] = temp_data["t"].where(temp_data["t"] != "+9999", pd.NA)
+        temp_data.loc[:, "t"] = temp_data["t"].where(
+            ~temp_data["t_qc"].isin(ERRONEOUS_FLAGS), pd.NA
         )
-        data["td"] = data["td"].where(~data["td_qc"].isin(ERRONEOUS_FLAGS), pd.NA)
+        # Scaling factor: 10
+        temp_data.loc[:, "t"] = temp_data["t"].astype("Float32") / 10
+        data = temp_data
+    if "DEW" in data.columns and data["DEW"].notnull().any():
+        temp_data = data.copy()
+        temp_data[["td", "td_qc"]] = temp_data["DEW"].str.split(",", expand=True)
+        temp_data.loc[:, "td"] = temp_data["td"].where(
+            temp_data["td"] != "+9999", pd.NA
+        )
+        temp_data.loc[:, "td"] = temp_data["td"].where(
+            ~temp_data["td_qc"].isin(ERRONEOUS_FLAGS), pd.NA
+        )
+        # Scaling factor: 10
+        temp_data.loc[:, "td"] = temp_data["td"].astype("Float32") / 10
+        data = temp_data
     data = data.drop(columns=["TMP", "DEW", "t_qc", "td_qc"], errors="ignore")
     return data
 
@@ -846,11 +856,17 @@ def run_isd_generation(
 
     run_async()
 
-    for year in [n for n in os.listdir(output_dir) if "." not in n]:
-        second_step_output_dir = f"{output_dir}/ISD_second_stage/"
-        os.makedirs(second_step_output_dir, exist_ok=True)
-        second_step_output_dir = os.path.join(second_step_output_dir, str(year))
-        os.makedirs(second_step_output_dir, exist_ok=True)
+    second_step_output_dir = f"{output_dir}/ISD_second_stage/"
+    os.makedirs(second_step_output_dir, exist_ok=True)
+    third_step_output_dir = f"{output_dir}/ISD_third_stage/"
+    os.makedirs(third_step_output_dir, exist_ok=True)
+    results_dict = {}
+    for year in [n for n in os.listdir(output_dir) if "." not in n if "ISD" not in n]:
+        second_step_output_dir_year = os.path.join(second_step_output_dir, str(year))
+        os.makedirs(second_step_output_dir_year, exist_ok=True)
+
+        third_step_output_dir_year = os.path.join(third_step_output_dir, str(year))
+        os.makedirs(third_step_output_dir_year, exist_ok=True)
         output_dir_by_year = os.path.join(output_dir, str(year))
         input_list = [
             os.path.join(output_dir_by_year, f)
@@ -861,9 +877,9 @@ def run_isd_generation(
             tasks_fs = [
                 dask.delayed(pipeline)(
                     fpath,
-                    output_dir=second_step_output_dir,
+                    output_dir=second_step_output_dir_year,
                     year=int(year),
-                    overwrite=True,
+                    overwrite=False,
                 )
                 for fpath in input_list
             ]
@@ -872,34 +888,24 @@ def run_isd_generation(
             for fpath in input_list:
                 pipeline(
                     fpath,
-                    output_dir=second_step_output_dir,
+                    output_dir=second_step_output_dir_year,
                     year=int(year),
-                    overwrite=True,
+                    overwrite=False,
                 )
-
-    results = []
-    for year in [n for n in os.listdir(output_dir) if "." not in n]:
-        third_step_output_dir = f"{output_dir}/ISD_third_stage/"
-        os.makedirs(third_step_output_dir, exist_ok=True)
-        second_step_output_dir = os.path.join(second_step_output_dir, str(year))
-        third_step_output_dir = os.path.join(third_step_output_dir, str(year))
-        os.makedirs(third_step_output_dir, exist_ok=True)
         station_list = [
             item.rsplit(".", 1)[0]
-            for item in os.listdir(second_step_output_dir)
+            for item in os.listdir(second_step_output_dir_year)
             if item.endswith(".csv")
         ]
         meta = load_metadata(station_list)
-
+        logger.info("calculating similarity")
         similarity = calc_similarity(meta)
-        os.makedirs(third_step_output_dir, exist_ok=True)
         similarity_path = os.path.join(
-            third_step_output_dir, f"similarity_{25}km_{100}m.nc"
+            third_step_output_dir_year, f"similarity_{25}km_{100}m.nc"
         )
         similarity.astype("float32").to_netcdf(similarity_path)
         logger.info(f"Saved similarity to {similarity_path}")
-
-        data = load_raw_data(second_step_output_dir, meta.index.values)
+        data = load_raw_data(second_step_output_dir_year, meta.index.values)
         # some stations have no data, they have already been removed in load_raw_data
         meta = meta.loc[data["station"].values]
 
@@ -912,12 +918,7 @@ def run_isd_generation(
         )
         # Save all metadata information in the NetCDF file
         merged = assign_meta_coords(merged, meta)
-        results.append(merged)
-    results_dict = {}
-    for i, result in enumerate(results):
-        year = result["time.year"][0].item()
-        if year not in results_dict:
-            results_dict[year] = result
+        results_dict[merged["time.year"][0].item()] = merged
 
     dataset_list = []
     for case in yaml_event_case["cases"]:
@@ -965,9 +966,8 @@ def run_isd_generation(
 
 if __name__ == "__main__":
     datasets_df = run_isd_generation(
-        output_dir="/Users/taylor/data/test_ISD",
-        events_file_path="/Users/taylor/code/ExtremeWeatherBench/assets/data/events.yaml",
+        output_dir=".",
+        events_file_path=".",
         use_dask=True,
         n_workers=10,
     )
-    print(datasets_df)
