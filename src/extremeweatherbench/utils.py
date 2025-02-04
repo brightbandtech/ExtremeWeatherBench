@@ -14,6 +14,9 @@ import rioxarray  # noqa: F401
 import xarray as xr
 from kerchunk.hdf import SingleHdf5ToZarr
 from shapely.geometry import box
+from pathlib import Path
+from importlib import resources
+import yaml
 
 #: Struct packaging latitude/longitude location definitions.
 Location = namedtuple("Location", ["latitude", "longitude"])
@@ -303,3 +306,22 @@ def process_dataarray_for_output(da_list: List[Optional[xr.DataArray]]):
         output_da = output_da.isel(lead_time=slice(None, None, -1))
     output_da = expand_lead_times_to_6_hourly(output_da)
     return output_da
+
+
+def load_events_yaml():
+    """Load the events yaml file."""
+    import extremeweatherbench.data
+
+    events_yaml_file = resources.files(extremeweatherbench.data).joinpath("events.yaml")
+    with resources.as_file(events_yaml_file) as file:
+        yaml_event_case = read_event_yaml(file)
+
+    return yaml_event_case
+
+
+def read_event_yaml(input_pth: str | Path) -> dict:
+    """Read events yaml from data."""
+    input_pth = Path(input_pth)
+    with open(input_pth, "rb") as f:
+        yaml_event_case = yaml.safe_load(f)
+    return yaml_event_case
