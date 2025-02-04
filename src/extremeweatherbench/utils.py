@@ -15,6 +15,9 @@ import xarray as xr
 from kerchunk.hdf import SingleHdf5ToZarr
 from shapely.geometry import box
 import datetime
+from pathlib import Path
+from importlib import resources
+import yaml
 
 #: Struct packaging latitude/longitude location definitions.
 Location = namedtuple("Location", ["latitude", "longitude"])
@@ -391,3 +394,22 @@ def return_max_min_timestamp(da: xr.DataArray) -> pd.Timestamp:
             drop=True,
         ).time.values[0]
     )
+
+
+def load_events_yaml():
+    """Load the events yaml file."""
+    import extremeweatherbench.data
+
+    events_yaml_file = resources.files(extremeweatherbench.data).joinpath("events.yaml")
+    with resources.as_file(events_yaml_file) as file:
+        yaml_event_case = read_event_yaml(file)
+
+    return yaml_event_case
+
+
+def read_event_yaml(input_pth: str | Path) -> dict:
+    """Read events yaml from data."""
+    input_pth = Path(input_pth)
+    with open(input_pth, "rb") as f:
+        yaml_event_case = yaml.safe_load(f)
+    return yaml_event_case
