@@ -152,3 +152,19 @@ def test_obs_coarser_temporal_resolution(
     )
     # Check that observation was modified
     assert (aligned_obs == sample_gridded_obs_dataarray).all()
+
+
+@pytest.mark.parametrize(
+    "location_center, length_km, convert_to_360, expected",
+    [
+        (utils.Location(0, 0), 111, True, (-0.5, 0.5, 359.5, 0.5)),
+        (utils.Location(0, 0), 111, False, (-0.5, 0.5, -0.5, 0.5)),
+        (utils.Location(45, 45), 222, True, (44, 46, 44, 46)),
+        (utils.Location(-45, -45), 333, True, (-46.5, -43.5, 313.5, 316.5)),
+        (utils.Location(90, 180), 111, True, (89.5, 90.5, 179.5, 180.5)),
+        (utils.Location(-90, -180), 111, True, (-90.5, -89.5, 179.5, 180.5)),
+    ],
+)
+def test_get_bounding_corners(location_center, length_km, convert_to_360, expected):
+    result = utils.get_bounding_corners(location_center, length_km, convert_to_360)
+    assert result == expected
