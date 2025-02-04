@@ -87,6 +87,9 @@ def get_bounding_corners(
     max_lat = lat_center + (length_deg / 2)
     min_lon = lon_center - (length_deg / 2)
     max_lon = lon_center + (length_deg / 2)
+    if convert_to_360:
+        min_lon = convert_longitude_to_360(min_lon)
+        max_lon = convert_longitude_to_360(max_lon)
     return (min_lat, max_lat, min_lon, max_lon)
 
 
