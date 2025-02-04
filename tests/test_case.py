@@ -5,7 +5,7 @@ import datetime
 
 
 class TestGoodCases:
-    def test_perform_subsetting_procedure_heatwave(self, mock_forecast_dataset):
+    def test_perform_subsetting_procedure_heatwave(self, sample_forecast_dataset):
         heatwave_case = case.IndividualHeatWaveCase(
             id=20,
             title="Test Heatwave",
@@ -16,12 +16,12 @@ class TestGoodCases:
             event_type="heat_wave",
         )
         subset_dataset = heatwave_case.perform_subsetting_procedure(
-            mock_forecast_dataset
+            sample_forecast_dataset
         )
         assert len(subset_dataset["latitude"]) > 0
         assert len(subset_dataset["longitude"]) > 0
 
-    def test_individual_case(self, mock_forecast_dataset):
+    def test_individual_case(self, sample_forecast_dataset):
         base_case = case.IndividualCase(
             id=10,
             title="Test Case",
@@ -44,7 +44,8 @@ class TestGoodCases:
         }
         assert base_case.__dict__ == valid_case
         assert (
-            base_case._subset_data_vars(mock_forecast_dataset) is mock_forecast_dataset
+            base_case._subset_data_vars(sample_forecast_dataset)
+            is sample_forecast_dataset
         )
         with pytest.raises(NotImplementedError):
-            base_case.perform_subsetting_procedure(mock_forecast_dataset)
+            base_case.perform_subsetting_procedure(sample_forecast_dataset)
