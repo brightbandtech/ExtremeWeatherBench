@@ -59,3 +59,5 @@ cases = evaluate.evaluate(eval_config=heatwave_configuration, forecast_schema_co
 with open(f'cases_{model}.pkl', 'wb') as f:
     pickle.dump(cases, f)
 ```
+# EWB case studies and categories
+The [EWB overall categories and individual case studies](docs/AllCaseStudies.md) are documented at the link.  Documentation in general is available in the [docs/](docs/) directory.
