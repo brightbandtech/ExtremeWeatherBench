@@ -689,6 +689,10 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+data-prep = [
+    { name = "fsspec" },
+    { name = "virtualizarr" },
+]
 dev = [
     { name = "mypy" },
     { name = "pre-commit" },
@@ -715,6 +719,7 @@ requires-dist = [
     { name = "dacite", specifier = ">=1.8.1" },
     { name = "dask", extras = ["complete"], specifier = ">=2024.12.1" },
     { name = "fastparquet", specifier = ">=2024.11.0" },
+    { name = "fsspec", marker = "extra == 'data-prep'", specifier = ">=2024.12.0" },
     { name = "gcsfs", specifier = ">=2024.12.0" },
     { name = "geopandas", specifier = ">=1.0.1" },
     { name = "h5py", specifier = ">=3.12.1" },
@@ -741,6 +746,7 @@ requires-dist = [
     { name = "types-pyyaml", marker = "extra == 'dev'", specifier = ">=6.0.12.20241230" },
     { name = "ujson", specifier = ">=5.10.0" },
     { name = "virtualizarr", specifier = ">=1.2.0" },
+    { name = "virtualizarr", marker = "extra == 'data-prep'", specifier = ">=1.2.0" },
     { name = "virtualizarr", marker = "extra == 'forecast-download'", specifier = ">=1.2.0" },
     { name = "xarray", specifier = ">=2024.11.0" },
     { name = "zarr", specifier = ">=2.18.4" },
