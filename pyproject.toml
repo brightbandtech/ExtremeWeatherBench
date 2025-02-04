@@ -46,6 +46,10 @@ forecast-download = [
     "kerchunk>=0.2.7",
     "virtualizarr>=1.2.0",
 ]
+data-prep = [
+    "fsspec>=2024.12.0",
+    "virtualizarr>=1.2.0",
+]
 
 [dependency-groups]
 dev = [
