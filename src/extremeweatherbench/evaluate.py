@@ -184,6 +184,7 @@ def _evaluate_case(
         time_subset_gridded_obs_ds = variable_subset_gridded_obs.sel(
             time=slice(individual_case.start_date, individual_case.end_date)
         )
+        time_subset_gridded_obs_ds = time_subset_forecast_ds.compute()
         time_subset_gridded_obs_ds = individual_case.perform_subsetting_procedure(
             time_subset_gridded_obs_ds
         )

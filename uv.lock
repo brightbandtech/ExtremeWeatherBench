@@ -689,6 +689,9 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+derived = [
+    { name = "metpy" },
+]
 dev = [
     { name = "mypy" },
     { name = "pre-commit" },
@@ -721,6 +724,7 @@ requires-dist = [
     { name = "ipywidgets", specifier = ">=8.1.5" },
     { name = "kerchunk", specifier = "==0.2.7" },
     { name = "kerchunk", marker = "extra == 'forecast-download'", specifier = ">=0.2.7" },
+    { name = "metpy", marker = "extra == 'derived'", specifier = ">=1.6.3" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.14.1" },
     { name = "numpy", specifier = ">=2.2.0" },
     { name = "pandas", specifier = ">=2.2.3" },
@@ -796,6 +800,30 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/9d/db/3ef5bb276dae18d6ec2124224403d1d67bccdbefc17af4cc8f553e341ab1/filelock-3.16.1.tar.gz", hash = "sha256:c249fbfcd5db47e5e2d6d62198e565475ee65e4831e2561c8e313fa7eb961435", size = 18037 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b9/f8/feced7779d755758a52d1f6635d990b8d98dc0a29fa568bbe0625f18fdf3/filelock-3.16.1-py3-none-any.whl", hash = "sha256:2082e5703d51fbf98ea75855d9d5527e33d8ff23099bec374a134febee6946b0", size = 16163 },
+]
+
+[[package]]
+name = "flexcache"
+version = "0.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/55/b0/8a21e330561c65653d010ef112bf38f60890051d244ede197ddaa08e50c1/flexcache-0.3.tar.gz", hash = "sha256:18743bd5a0621bfe2cf8d519e4c3bfdf57a269c15d1ced3fb4b64e0ff4600656", size = 15816 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/27/cd/c883e1a7c447479d6e13985565080e3fea88ab5a107c21684c813dba1875/flexcache-0.3-py3-none-any.whl", hash = "sha256:d43c9fea82336af6e0115e308d9d33a185390b8346a017564611f1466dcd2e32", size = 13263 },
+]
+
+[[package]]
+name = "flexparser"
+version = "0.4"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/82/99/b4de7e39e8eaf8207ba1a8fa2241dd98b2ba72ae6e16960d8351736d8702/flexparser-0.4.tar.gz", hash = "sha256:266d98905595be2ccc5da964fe0a2c3526fbbffdc45b65b3146d75db992ef6b2", size = 31799 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/fe/5e/3be305568fe5f34448807976dc82fc151d76c3e0e03958f34770286278c1/flexparser-0.4-py3-none-any.whl", hash = "sha256:3738b456192dcb3e15620f324c447721023c0293f6af9955b481e91d00179846", size = 27625 },
 ]
 
 [[package]]
@@ -1384,6 +1412,26 @@ wheels = [
 ]
 
 [[package]]
+name = "metpy"
+version = "1.6.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "matplotlib" },
+    { name = "numpy" },
+    { name = "pandas" },
+    { name = "pint" },
+    { name = "pooch" },
+    { name = "pyproj" },
+    { name = "scipy" },
+    { name = "traitlets" },
+    { name = "xarray" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/5c/74/89ce17a0a0843ade228e4417c385f8eb5df488c0178888d7260ae50ea62a/metpy-1.6.3.tar.gz", hash = "sha256:23df14a9a67206fd1ffe6d5d3208587941d6abf9778c04dc7a3a1dc7a9a60766", size = 11207483 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/83/02/289311573657f4dd9832e04df2faa6989d2592036e2fb6990673251778c4/MetPy-1.6.3-py3-none-any.whl", hash = "sha256:9946436197394d63647aac4310191028707bd644d4a8e41ee310d6d77c0f71f8", size = 409916 },
+]
+
+[[package]]
 name = "msgpack"
 version = "1.1.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1683,6 +1731,21 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/e5/fb/a7960e838bc5df57a2ce23183bfd2290d97c33028b96bde332a9057834d3/pillow-11.1.0-cp313-cp313t-win32.whl", hash = "sha256:dda60aa465b861324e65a78c9f5cf0f4bc713e4309f83bc387be158b077963d9", size = 2295494 },
     { url = "https://files.pythonhosted.org/packages/d7/6c/6ec83ee2f6f0fda8d4cf89045c6be4b0373ebfc363ba8538f8c999f63fcd/pillow-11.1.0-cp313-cp313t-win_amd64.whl", hash = "sha256:ad5db5781c774ab9a9b2c4302bbf0c1014960a0a7be63278d13ae6fdf88126fe", size = 2631595 },
     { url = "https://files.pythonhosted.org/packages/cf/6c/41c21c6c8af92b9fea313aa47c75de49e2f9a467964ee33eb0135d47eb64/pillow-11.1.0-cp313-cp313t-win_arm64.whl", hash = "sha256:67cd427c68926108778a9005f2a04adbd5e67c442ed21d95389fe1d595458756", size = 2377651 },
+]
+
+[[package]]
+name = "pint"
+version = "0.24.4"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "flexcache" },
+    { name = "flexparser" },
+    { name = "platformdirs" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/20/bb/52b15ddf7b7706ed591134a895dbf6e41c8348171fb635e655e0a4bbb0ea/pint-0.24.4.tar.gz", hash = "sha256:35275439b574837a6cd3020a5a4a73645eb125ce4152a73a2f126bf164b91b80", size = 342225 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b7/16/bd2f5904557265882108dc2e04f18abc05ab0c2b7082ae9430091daf1d5c/Pint-0.24.4-py3-none-any.whl", hash = "sha256:aa54926c8772159fcf65f82cc0d34de6768c151b32ad1deb0331291c38fe7659", size = 302029 },
 ]
 
 [[package]]

@@ -46,6 +46,9 @@ forecast-download = [
     "kerchunk>=0.2.7",
     "virtualizarr>=1.2.0",
 ]
+derived = [
+    "metpy>=1.6.3",
+]
 
 [dependency-groups]
 dev = [

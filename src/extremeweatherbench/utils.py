@@ -5,7 +5,6 @@ other specialized package.
 from typing import Union, List
 from collections import namedtuple
 import fsspec
-import geopandas as gpd
 import numpy as np
 import pandas as pd
 import regionmask
@@ -13,7 +12,6 @@ import ujson
 import rioxarray  # noqa: F401
 import xarray as xr
 from kerchunk.hdf import SingleHdf5ToZarr
-from shapely.geometry import box
 import datetime
 from pathlib import Path
 from importlib import resources
@@ -24,9 +22,12 @@ Location = namedtuple("Location", ["latitude", "longitude"])
 
 #: Maps the ARCO ERA5 to CF conventions.
 ERA5_MAPPING = {
-    "air_temperature": "2m_temperature",
-    "eastward_wind": "10m_u_component_of_wind",
-    "northward_wind": "10m_v_component_of_wind",
+    "surface_air_temperature": "2m_temperature",
+    "air_temperature": "temperature",
+    "surface_eastward_wind": "10m_u_component_of_wind",
+    "surface_northward_wind": "10m_v_component_of_wind",
+    "eastward_wind": "u_component_of_wind",
+    "northward_wind": "v_component_of_wind",
     "air_pressure_at_mean_sea_level": "mean_sea_level_pressure",
     "specific_humidity": "specific_humidity",
     "valid_time": "time",
@@ -94,15 +95,16 @@ def clip_dataset_to_bounding_box(
     min_lon = lon_center - (length_deg / 2)
     max_lon = lon_center + (length_deg / 2)
 
-    # Create a GeoDataFrame with the bounding box
-    bbox = gpd.GeoDataFrame(
-        {"geometry": [box(min_lon, min_lat, max_lon, max_lat)]},
-    )
-    # Clip the dataset using the bounding box
-    clipped_dataset = dataset.rio.write_crs("EPSG:4326").rio.clip(
-        bbox.geometry, bbox.crs, drop=True
-    )
+    # Clip the dataset to the bounding box
+    if dataset["latitude"].values[0] > dataset["latitude"].values[-1]:
+        clipped_dataset = dataset.sel(
+            latitude=slice(max_lat, min_lat), longitude=slice(min_lon, max_lon)
+        )
 
+    else:
+        clipped_dataset = dataset.sel(
+            latitude=slice(min_lat, max_lat), longitude=slice(min_lon, max_lon)
+        )
     return clipped_dataset
 
 

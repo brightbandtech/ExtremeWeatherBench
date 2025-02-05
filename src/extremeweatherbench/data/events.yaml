@@ -9,7 +9,6 @@ cases:
       longitude: -122.3321
     bounding_box_km: 500
     event_type: heat_wave
-    cross_listed: !!seq []
   - id: 2
     title: 2022 Upper Midwest
     start_date: 2022-05-07 00:00:00
@@ -19,7 +18,6 @@ cases:
       longitude: -87.6298    
     bounding_box_km: 500
     event_type: heat_wave
-    cross_listed: !!seq []
   - id: 3
     title: 2022 California
     start_date: 2022-06-07 00:00:00
@@ -29,7 +27,6 @@ cases:
       longitude: -118.2437    
     bounding_box_km: 500
     event_type: heat_wave
-    cross_listed: !!seq []
   - id: 4
     title: 2022 Texas
     start_date: 2022-06-30 00:00:00
@@ -39,7 +36,6 @@ cases:
       longitude: -96.7970    
     bounding_box_km: 500
     event_type: heat_wave
-    cross_listed: !!seq []
   - id: 5
     title: 2023 Pacific Northwest
     start_date: 2023-05-10 00:00:00
@@ -49,7 +45,6 @@ cases:
       longitude: -122.3321    
     bounding_box_km: 500
     event_type: heat_wave
-    cross_listed: !!seq []
   - id: 6
     title: 2022 Mid-Atlantic
     start_date: 2022-05-17 00:00:00
@@ -59,7 +54,6 @@ cases:
       longitude: -76.6122    
     bounding_box_km: 500
     event_type: heat_wave
-    cross_listed: !!seq []
   - id: 7
     title: 2023 Australia
     start_date: 2023-11-18 00:00:00
@@ -69,7 +63,6 @@ cases:
       longitude: 115.8605    
     bounding_box_km: 500
     event_type: heat_wave
-    cross_listed: !!seq []
   - id: 8
     title: 2023 Ireland
     start_date: 2023-09-02 00:00:00
@@ -79,7 +72,6 @@ cases:
       longitude: -7.6921    
     bounding_box_km: 500
     event_type: heat_wave
-    cross_listed: !!seq []
   - id: 9
     title: 2023 Italy
     start_date: 2023-07-07 00:00:00
@@ -89,7 +81,6 @@ cases:
       longitude: 12.4964    
     bounding_box_km: 500
     event_type: heat_wave
-    cross_listed: !!seq []
   - id: 10
     title: 2023 SW Europe
     start_date: 2023-08-17 00:00:00
@@ -99,7 +90,6 @@ cases:
       longitude: -3.7492    
     bounding_box_km: 500
     event_type: heat_wave
-    cross_listed: !!seq []
   - id: 11
     title: 2023 South America
     start_date: 2023-07-29 00:00:00
@@ -109,7 +99,6 @@ cases:
       longitude: -58.3816    
     bounding_box_km: 500
     event_type: heat_wave
-    cross_listed: !!seq []
   - id: 12
     title: 2023 China (Shanghai)
     start_date: 2023-05-24 00:00:00
@@ -119,7 +108,6 @@ cases:
       longitude: 121.4737    
     bounding_box_km: 500
     event_type: heat_wave
-    cross_listed: !!seq []
   - id: 13
     title: 2023 China (Yunnan Province)
     start_date: 2023-04-14 00:00:00
@@ -129,7 +117,6 @@ cases:
       longitude: 102.7100    
     bounding_box_km: 500
     event_type: heat_wave
-    cross_listed: !!seq []
   - id: 14
     title: 2023 Algeria
     start_date: 2023-07-05 00:00:00
@@ -139,7 +126,6 @@ cases:
       longitude: 3.0869    
     bounding_box_km: 500
     event_type: heat_wave
-    cross_listed: !!seq []
   - id: 15
     title: 2023 Iberian Peninsula
     start_date: 2023-04-22 00:00:00
@@ -149,7 +135,6 @@ cases:
       longitude: -7.6110 
     bounding_box_km: 500
     event_type: heat_wave
-    cross_listed: !!seq []
   - id: 16
     title: 2023 Gibraltar
     start_date: 2023-04-22 00:00:00
@@ -159,7 +144,6 @@ cases:
       longitude: -5.3536    
     bounding_box_km: 500
     event_type: heat_wave
-    cross_listed: !!seq []
   - id: 17
     title: 2023 India
     start_date: 2023-02-15 00:00:00
@@ -169,7 +153,6 @@ cases:
       longitude: 77.2090    
     bounding_box_km: 500
     event_type: heat_wave
-    cross_listed: !!seq []
   - id: 18
     title: 2021 Western Russia
     start_date: 2021-06-18 00:00:00
@@ -179,7 +162,6 @@ cases:
       longitude: 37.6173    
     bounding_box_km: 500
     event_type: heat_wave
-    cross_listed: !!seq []
   - id: 19
     title: 2022 Germany
     start_date: 2022-12-23 00:00:00
@@ -189,7 +171,6 @@ cases:
       longitude: 13.4050    
     bounding_box_km: 500
     event_type: heat_wave
-    cross_listed: !!seq []
   - id: 20
     title: 2022 UK (August)
     start_date: 2022-08-08 00:00:00
@@ -199,7 +180,6 @@ cases:
       longitude: -0.1278    
     bounding_box_km: 500
     event_type: heat_wave
-    cross_listed: !!seq []
   - id: 21
     title: 2022 UK (July)
     start_date: 2022-07-15 00:00:00
@@ -209,7 +189,6 @@ cases:
       longitude: -0.1278    
     bounding_box_km: 500
     event_type: heat_wave
-    cross_listed: !!seq []
   - id: 22
     title: 2022 France
     start_date: 2022-06-09 00:00:00
@@ -219,7 +198,6 @@ cases:
       longitude: -1.5586    
     bounding_box_km: 500
     event_type: heat_wave
-    cross_listed: !!seq []
   - id: 23
     title: 2022 Japan
     start_date: 2022-06-20 00:00:00
@@ -229,7 +207,6 @@ cases:
       longitude: 139.6917    
     bounding_box_km: 500
     event_type: heat_wave
-    cross_listed: !!seq []
   - id: 24
     title: 2022 India
     start_date: 2022-04-24 00:00:00
@@ -239,7 +216,6 @@ cases:
       longitude: 68.4376    
     bounding_box_km: 500
     event_type: heat_wave
-    cross_listed: !!seq []
   - id: 25
     title: 2022 East Antarctica
     start_date: 2022-03-12 00:00:00
@@ -249,7 +225,6 @@ cases:
       longitude: 123.3500    
     bounding_box_km: 500
     event_type: heat_wave
-    cross_listed: !!seq []
   - id: 26
     title: 2022 West Australia
     start_date: 2022-01-15 00:00:00
@@ -259,7 +234,6 @@ cases:
       longitude: 115.8605    
     bounding_box_km: 500
     event_type: heat_wave
-    cross_listed: !!seq []
   - id: 27
     title: 2021 Canada Plains
     start_date: 2021-05-30 00:00:00
@@ -269,7 +243,6 @@ cases:
       longitude: -97.5667    
     bounding_box_km: 500
     event_type: heat_wave
-    cross_listed: !!seq []
   - id: 28
     title: 2021 New Zealand
     start_date: 2021-01-22 00:00:00
@@ -279,7 +252,6 @@ cases:
       longitude: 171.7310    
     bounding_box_km: 500
     event_type: heat_wave
-    cross_listed: !!seq []
   - id: 29
     title: 2020 Australia
     start_date: 2020-11-25 00:00:00
@@ -289,7 +261,6 @@ cases:
       longitude: 150.9448
     bounding_box_km: 500
     event_type: heat_wave
-    cross_listed: !!seq []
   - id: 31
     title: 2021 Texas
     start_date: 2021-02-14 00:00:00
@@ -299,7 +270,6 @@ cases:
       longitude: -97.7431
     bounding_box_km: 500
     event_type: freeze
-    cross_listed: !!seq []
   - id: 32
     title: 2022 Arkansas
     start_date: 2022-02-22 00:00:00
@@ -309,7 +279,6 @@ cases:
       longitude: -92.2896
     bounding_box_km: 500
     event_type: freeze
-    cross_listed: !!seq []
   - id: 33
     title: 2023 Germany
     start_date: 2023-11-25 00:00:00
@@ -329,7 +298,6 @@ cases:
       longitude: 121.4737
     bounding_box_km: 500
     event_type: freeze
-    cross_listed: !!seq []
   - id: 35
     title: 2023 Afghanistan
     start_date: 2023-01-10 00:00:00
@@ -349,4 +317,86 @@ cases:
       longitude: -104.9903
     bounding_box_km: 500
     event_type: freeze
-    cross_listed: !!seq  [snow, tornado, wind, hail]
+  - id: 37
+    title: July 2024 South Dakota
+    start_date: 2024-07-13 00:00:00
+    end_date: 2024-07-14 00:00:00
+    location: 
+      latitude: 44.3677
+      longitude: -100.3516
+    bounding_box_km: 500
+    event_type: severe
+  - id: 38
+    title: July 2024 Chicago
+    start_date: 2024-07-14 00:00:00
+    end_date: 2024-07-16 00:00:00
+    location: 
+      latitude: 41.8781
+      longitude: -87.6298
+    bounding_box_km: 500
+    event_type: severe
+  - id: 39
+    title: July 2024 New York
+    start_date: 2024-07-16 00:00:00
+    end_date: 2024-07-17 00:00:00
+    location: 
+      latitude: 42.6526
+      longitude: -73.7562
+    bounding_box_km: 500
+    event_type: severe
+  - id: 40
+    title: May 2024 Wisconsin
+    start_date: 2024-05-18 00:00:00
+    end_date: 2024-05-19 00:00:00
+    location: 
+      latitude: 44.6243
+      longitude: -89.7373
+    bounding_box_km: 500
+    event_type: severe
+  - id: 41
+    title: May 2024 Kansas
+    start_date: 2024-05-19 00:00:00
+    end_date: 2024-05-20 00:00:00
+    location: 
+      latitude: 38.5266
+      longitude: -96.7265
+    bounding_box_km: 500
+    event_type: severe
+  - id: 42
+    title: May 2024 Iowa + Nebraska
+    start_date: 2024-05-20 00:00:00
+    end_date: 2024-05-21 00:00:00
+    location: 
+      latitude: 41.2565
+      longitude: -95.9345
+    bounding_box_km: 500
+    event_type: severe
+  - id: 43
+    title: May 2024 Iowa + Wisconsin
+    start_date: 2024-05-21 00:00:00
+    end_date: 2024-05-22 00:00:00
+    location: 
+      latitude: 42.5067
+      longitude: -90.6349
+    bounding_box_km: 500
+    event_type: severe
+  - id: 44
+    title: May 2024 Texas
+    start_date: 2024-05-22 00:00:00
+    end_date: 2024-05-23 00:00:00
+    location: 
+      latitude: 32.7767
+      longitude: -96.7970
+    bounding_box_km: 500
+    event_type: severe
+  - id: 45
+    title: May 2024 Iowa + Nebraska 2
+    start_date: 2024-05-23 00:00:00
+    end_date: 2024-05-24 00:00:00
+    location: 
+      latitude: 41.2565
+      longitude: -95.9345
+    bounding_box_km: 500
+    event_type: severe
+
+
