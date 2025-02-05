@@ -53,7 +53,7 @@ package-dir = {"" = "src"}
 include-package-data = true
 
 [tool.setuptools.package-data]
-extremeweatherbench = ["assets/**/*", "assets/data/**/.*"]
+extremeweatherbench = ["data/**/*", "data/**/.*"]
 
 [tool.uv.sources]
 extremeweatherbench = { workspace = true }
