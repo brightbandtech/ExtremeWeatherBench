@@ -26,8 +26,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = []
-forecast-download = []
 data-prep = [
     "fsspec>=2024.12.0",
     "virtualizarr>=1.2.0",
