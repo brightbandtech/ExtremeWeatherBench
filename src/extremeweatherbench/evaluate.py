@@ -38,6 +38,7 @@ def evaluate(
 
     all_results = {}
     yaml_event_case = utils.load_events_yaml()
+    # TODO: #58 move loop to function or better paradigm
     for k, v in yaml_event_case.items():
         if k == "cases":
             for individual_case in v:
@@ -70,26 +71,17 @@ def evaluate(
         logger.debug("Cases loaded for %s", event.event_type)
         point_obs, gridded_obs = _open_obs_datasets(eval_config)
         forecast_dataset = _open_forecast_dataset(eval_config, forecast_schema_config)
-
-        # Manages some of the quirkiness of the parquets and avoids loading in memory overloads
-        # from the json kerchunk references
-        if "json" not in eval_config.forecast_dir:
-            logger.warning(
-                "json not detected for %s at %s, loading part of forecast dataset into memory",
-                event.event_type,
-                eval_config.forecast_dir,
-            )
-            forecast_dataset = forecast_dataset.compute()
-
-        if gridded_obs:
+        if gridded_obs is not None:
             logger.info(
                 "gridded obs detected, mapping variables in gridded obs to forecast"
             )
             gridded_obs = utils.map_era5_vars_to_forecast(
-                DEFAULT_FORECAST_SCHEMA_CONFIG, forecast_dataset, gridded_obs
+                forecast_schema_config, forecast_dataset, gridded_obs
             )
         logger.debug("beginning evaluation loop for %s", event.event_type)
-        results = _evaluate_cases_loop(cases, forecast_dataset, gridded_obs, point_obs)
+        results = _evaluate_cases_loop(
+            cases, forecast_dataset, gridded_obs, point_obs, eval_config
+        )
         all_results[event.event_type] = results
         logger.debug("evaluation loop complete for %s", event.event_type)
     logger.info(
@@ -119,6 +111,7 @@ def _evaluate_cases_loop(
     forecast_dataset: xr.Dataset,
     gridded_obs: Optional[xr.Dataset] = None,
     point_obs: Optional[pd.DataFrame] = None,
+    eval_config: config.Config = None,
 ) -> dict[Any, Optional[dict[str, Any]]]:
     """Sequentially loop over and evalute all cases for a specific event type.
 
@@ -135,10 +128,7 @@ def _evaluate_cases_loop(
     results = {}
     for individual_case in event.cases:
         results[individual_case.id] = _evaluate_case(
-            individual_case,
-            forecast_dataset,
-            gridded_obs,
-            point_obs,
+            individual_case, forecast_dataset, gridded_obs, point_obs, eval_config
         )
 
     return results
@@ -149,6 +139,7 @@ def _evaluate_case(
     forecast_dataset: Optional[xr.Dataset],
     gridded_obs: Optional[xr.Dataset],
     point_obs: Optional[pd.DataFrame],
+    eval_config: config.Config,
 ) -> Optional[dict[str, xr.Dataset]]:
     """Evaluate a single case given forecast data and observations.
 
@@ -164,6 +155,7 @@ def _evaluate_case(
 
     logger.info("Evaluating case %s, %s", individual_case.id, individual_case.title)
     variable_subset_ds = individual_case._subset_data_vars(forecast_dataset)
+    variable_subset_ds = utils.create_flattened_time_coord(variable_subset_ds)
     time_subset_forecast_ds = individual_case._subset_valid_times(variable_subset_ds)
     # Check if forecast data is available for the case, if not, return None
     lead_time_len = len(time_subset_forecast_ds.init_time)
@@ -179,33 +171,54 @@ def _evaluate_case(
         )
     logger.info("Forecast data available for case %s", individual_case.id)
     case_results: dict[str, dict[str, Any]] = {}
-    if gridded_obs is not None:
-        variable_subset_gridded_obs = individual_case._subset_data_vars(gridded_obs)
-        time_subset_gridded_obs_ds = variable_subset_gridded_obs.sel(
-            time=slice(individual_case.start_date, individual_case.end_date)
-        )
-        time_subset_gridded_obs_ds = individual_case.perform_subsetting_procedure(
-            time_subset_gridded_obs_ds
-        )
-        # Align gridded_obs and forecast_dataset by time
-        time_subset_gridded_obs_ds, spatiotemporal_subset_ds = xr.align(
-            time_subset_gridded_obs_ds,
-            time_subset_forecast_ds[list(time_subset_forecast_ds.keys())],
-            join="inner",
+    spatiotemporal_subset_forecast_ds = individual_case.perform_subsetting_procedure(
+        time_subset_forecast_ds
+    )
+    # if gridded_obs is not None:
+    #     variable_subset_gridded_obs = individual_case._subset_data_vars(gridded_obs)
+    #     time_subset_gridded_obs_ds = variable_subset_gridded_obs.sel(
+    #         time=slice(individual_case.start_date, individual_case.end_date)
+    #     )
+    #     time_subset_gridded_obs_ds = individual_case.perform_subsetting_procedure(
+    #         time_subset_gridded_obs_ds
+    #     )
+    #     # Align gridded_obs and forecast_dataset by time
+    #     time_subset_gridded_obs_ds, spatiotemporal_subset_ds = xr.align(
+    #         time_subset_gridded_obs_ds,
+    #         time_subset_forecast_ds[list(time_subset_forecast_ds.keys())],
+    #         join="inner",
+    #     )
+    #     for data_var in individual_case.data_vars:
+    #         case_results[data_var] = {}
+    #         forecast_da = spatiotemporal_subset_ds[data_var].compute()
+    #         gridded_obs_da = time_subset_gridded_obs_ds[data_var].compute()
+    #         for metric in individual_case.metrics_list:
+    #             metric_instance = metric()
+    #             logging.debug(
+    #                 "metric %s computing for %s", metric_instance.name, data_var
+    #             )
+    #             result = metric_instance.compute(forecast_da, gridded_obs_da)
+    #             case_results[data_var][metric_instance.name] = result
+    if point_obs is not None:
+        case_subset_point_obs = point_obs.loc[point_obs["id"] == individual_case.id]
+        point_subset_ds = utils.pick_points(
+            spatiotemporal_subset_forecast_ds.compute(),
+            case_subset_point_obs.drop_duplicates(subset=["latitude", "longitude"]),
+            config=eval_config,
+            tree_name=individual_case.id,
         )
         for data_var in individual_case.data_vars:
             case_results[data_var] = {}
-            forecast_da = spatiotemporal_subset_ds[data_var].compute()
-            gridded_obs_da = time_subset_gridded_obs_ds[data_var].compute()
+            forecast_da = point_subset_ds[data_var]
+            breakpoint()
+            point_obs_da = case_subset_point_obs[data_var]
             for metric in individual_case.metrics_list:
                 metric_instance = metric()
                 logging.debug(
                     "metric %s computing for %s", metric_instance.name, data_var
                 )
-                result = metric_instance.compute(forecast_da, gridded_obs_da)
+                result = metric_instance.compute(forecast_da, point_obs_da)
                 case_results[data_var][metric_instance.name] = result
-    if point_obs is not None:
-        raise NotImplementedError("Point obs evaluation not implemented as of 0.1.0")
     return case_results
 
 
@@ -213,6 +226,7 @@ def _open_forecast_dataset(
     eval_config: config.Config,
     forecast_schema_config: config.ForecastSchemaConfig = DEFAULT_FORECAST_SCHEMA_CONFIG,
 ):
+    # TODO: #57 make all this much faster and ...better code
     """Open the forecast dataset specified for evaluation."""
     logging.debug("Opening forecast dataset")
     if eval_config.forecast_dir.startswith("s3://"):
@@ -252,7 +266,9 @@ def _open_obs_datasets(eval_config: config.Config):
     point_obs = None
     gridded_obs = None
     if eval_config.point_obs_path:
-        raise NotImplementedError("Point obs evaluation not implemented as of 0.1.0")
+        point_obs = pd.read_parquet(
+            eval_config.point_obs_path, storage_options={"token": "anon"}
+        )
     if eval_config.gridded_obs_path:
         gridded_obs = xr.open_zarr(
             eval_config.gridded_obs_path,
