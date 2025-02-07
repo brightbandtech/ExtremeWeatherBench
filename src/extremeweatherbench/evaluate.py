@@ -68,8 +68,8 @@ def evaluate(
             data=yaml_event_case,
         )
         logger.debug("Cases loaded for %s", event.event_type)
-        point_obs, gridded_obs = _open_obs_datasets(eval_config)
-        forecast_dataset = _open_forecast_dataset(eval_config, forecast_schema_config)
+        point_obs, gridded_obs = open_obs_datasets(eval_config)
+        forecast_dataset = open_forecast_dataset(eval_config, forecast_schema_config)
 
         # Manages some of the quirkiness of the parquets and avoids loading in memory overloads
         # from the json kerchunk references
@@ -209,45 +209,43 @@ def _evaluate_case(
     return case_results
 
 
-def _open_forecast_dataset(
+def open_forecast_dataset(
     eval_config: config.Config,
     forecast_schema_config: config.ForecastSchemaConfig = DEFAULT_FORECAST_SCHEMA_CONFIG,
 ):
     """Open the forecast dataset specified for evaluation."""
     logging.debug("Opening forecast dataset")
-    if eval_config.forecast_dir.startswith("s3://"):
-        fs = fsspec.filesystem("s3")
-    elif eval_config.forecast_dir.startswith(
-        "gcs://"
-    ) or eval_config.forecast_dir.startswith("gs://"):
-        fs = fsspec.filesystem("gcs")
-    else:
-        fs = fsspec.filesystem("file")
-
+    filesystem = [
+        eval_config.forecast_dir.split("://")[0]
+        if "://" in eval_config.forecast_dir
+        else "file"
+    ]
+    fs = fsspec.filesystem(filesystem)
     file_list = fs.ls(eval_config.forecast_dir)
     file_types = set([file.split(".")[-1] for file in file_list])
-    if len(file_types) > 1 and "parq" not in eval_config.forecast_dir:
-        raise ValueError("Multiple file types found in forecast path.")
-    if "zarr" in file_types and len(file_list) == 1:
-        forecast_dataset = xr.open_zarr(file_list, chunks="auto")
-    elif "zarr" in file_types and len(file_list) > 1:
-        raise ValueError(
-            "Multiple zarr files found in forecast path, please provide a single zarr file."
-        )
-    if "nc" in file_types:
-        raise NotImplementedError("NetCDF file reading not implemented.")
-    if "parq" in file_types or any("parq" in ft for ft in file_types):
-        forecast_dataset = utils._open_mlwp_kerchunk_reference(
-            eval_config.forecast_dir, forecast_schema_config
-        )
-    if "json" in file_types:
-        forecast_dataset = utils._open_mlwp_kerchunk_reference(
-            file_list[0], forecast_schema_config
-        )
+
+    if len(file_types) > 1:
+        if "parq" not in eval_config.forecast_dir:
+            raise TypeError("Multiple file types found in forecast path.")
+        else:
+            forecast_dataset = utils._open_mlwp_kerchunk_reference(
+                eval_config.forecast_dir, forecast_schema_config
+            )
+    elif len(file_types) == 1:
+        if "zarr" in file_types:
+            forecast_dataset = xr.open_zarr(file_list, chunks="auto")
+        elif "json" in file_types:
+            forecast_dataset = utils._open_mlwp_kerchunk_reference(
+                file_list[0], forecast_schema_config
+            )
+        else:
+            raise TypeError("Unknown file type found in forecast path.")
+    else:
+        raise FileNotFoundError("No files found in forecast path.")
     return forecast_dataset
 
 
-def _open_obs_datasets(eval_config: config.Config):
+def open_obs_datasets(eval_config: config.Config):
     """Open the observation datasets specified for evaluation."""
     point_obs = None
     gridded_obs = None
@@ -260,5 +258,5 @@ def _open_obs_datasets(eval_config: config.Config):
             storage_options=dict(token="anon"),
         )
     if point_obs is None and gridded_obs is None:
-        raise ValueError("No gridded or point observation data provided.")
+        raise FileNotFoundError("No gridded or point observation data provided.")
     return point_obs, gridded_obs
