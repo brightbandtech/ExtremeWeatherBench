@@ -33,6 +33,10 @@ ERA5_MAPPING = {
     "longitude": "longitude",
 }
 
+ISD_MAPPING = {
+    "surface_temperature": "air_temperature",
+}
+
 
 def convert_longitude_to_360(longitude: float) -> float:
     """Convert a longitude from the range [-180, 180) to [0, 360)."""
