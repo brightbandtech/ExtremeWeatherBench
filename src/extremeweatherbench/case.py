@@ -29,7 +29,7 @@ class IndividualCase:
         end_date: The end date of the case, for use in subsetting data for analysis.
         location: A Location object representing the latitude and longitude of the event
             center or  focus.
-        bounding_box_km: The side length of a bounding box centered on location, in
+        bounding_box_degrees: The side length of a bounding box centered on location, in
             kilometers.
         event_type: A string representing the type of extreme weather event.
         cross_listed: A list of other event types that this case study is cross-listed under.
@@ -40,7 +40,7 @@ class IndividualCase:
     start_date: datetime.datetime
     end_date: datetime.datetime
     location: utils.Location
-    bounding_box_km: float
+    bounding_box_degrees: float
     event_type: str
     data_vars: Optional[List[str]] = None
     cross_listed: Optional[List[str]] = None
@@ -142,7 +142,7 @@ class IndividualHeatWaveCase(IndividualCase):
 
     def perform_subsetting_procedure(self, dataset: xr.Dataset) -> xr.Dataset:
         modified_ds = utils.clip_dataset_to_bounding_box_degrees(
-            dataset, self.location, self.bounding_box_km
+            dataset, self.location, self.bounding_box_degrees
         )
         modified_ds = utils.remove_ocean_gridpoints(modified_ds)
         return modified_ds
@@ -171,7 +171,7 @@ class IndividualFreezeCase(IndividualCase):
 
     def perform_subsetting_procedure(self, dataset) -> xr.Dataset:
         modified_ds = utils.clip_dataset_to_bounding_box_degrees(
-            dataset, self.location, self.bounding_box_km
+            dataset, self.location, self.bounding_box_degrees
         )
         return modified_ds
 

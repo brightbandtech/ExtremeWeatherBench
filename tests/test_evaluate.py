@@ -43,7 +43,7 @@ def test_evaluate_base_case(sample_forecast_dataset, sample_gridded_obs_dataset)
         title="test_case",
         start_date=datetime.datetime(2021, 6, 20),
         end_date=datetime.datetime(2021, 7, 3),
-        bounding_box_km=500,
+        bounding_box_degrees=500,
         location={"latitude": 45.0, "longitude": -100.0},
         event_type="heat_wave",
     )
