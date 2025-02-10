@@ -81,7 +81,10 @@ class IndividualCase:
         Returns:
             xr.Dataset: The subset dataset.
         """
-        indices = derive_indices_from_init_time_and_lead_time(self, dataset)
+        # TODO move to utils
+        indices = derive_indices_from_init_time_and_lead_time(
+            dataset, self.start_date, self.end_date
+        )
         modified_ds = dataset.isel(init_time=np.unique(indices[0]))
         return modified_ds
 
@@ -140,9 +143,11 @@ class IndividualHeatWaveCase(IndividualCase):
         self.data_vars = ["air_temperature"]
 
     def perform_subsetting_procedure(self, dataset: xr.Dataset) -> xr.Dataset:
+        logger.info("clipping to bounding box")
         modified_ds = utils.clip_dataset_to_bounding_box_degrees(
             dataset, self.location, self.bounding_box_degrees
-        )
+        ).compute()
+        logger.info("removing ocean gridpoints")
         modified_ds = utils.remove_ocean_gridpoints(modified_ds)
         return modified_ds
 
@@ -171,7 +176,7 @@ class IndividualFreezeCase(IndividualCase):
     def perform_subsetting_procedure(self, dataset) -> xr.Dataset:
         modified_ds = utils.clip_dataset_to_bounding_box_degrees(
             dataset, self.location, self.bounding_box_degrees
-        )
+        ).compute()
         return modified_ds
 
 
@@ -200,8 +205,9 @@ def get_case_event_dataclass(case_type: str) -> Type[IndividualCase]:
 
 
 def derive_indices_from_init_time_and_lead_time(
-    individual_case: IndividualCase,
     dataset: xr.Dataset,
+    start_date: datetime.datetime,
+    end_date: datetime.datetime,
 ) -> Tuple[np.ndarray]:
     lead_time_grid, init_time_grid = np.meshgrid(dataset.lead_time, dataset.init_time)
     valid_times = (
@@ -212,8 +218,8 @@ def derive_indices_from_init_time_and_lead_time(
         (dataset.init_time.shape[0], dataset.lead_time.shape[0])
     )
     indices = np.where(
-        (valid_times_reshaped > pd.to_datetime(individual_case.start_date))
-        & (valid_times_reshaped < pd.to_datetime(individual_case.end_date))
+        (valid_times_reshaped > pd.to_datetime(start_date))
+        & (valid_times_reshaped < pd.to_datetime(end_date))
     )
 
     return indices

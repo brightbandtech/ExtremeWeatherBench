@@ -199,18 +199,20 @@ def _evaluate_case(
     #             result = metric_instance.compute(forecast_da, gridded_obs_da)
     #             case_results[data_var][metric_instance.name] = result
     if point_obs is not None:
+        logger.info("entering point obs")
         case_subset_point_obs = point_obs.loc[point_obs["id"] == individual_case.id]
         point_subset_ds = utils.pick_points(
-            spatiotemporal_subset_forecast_ds.compute(),
+            spatiotemporal_subset_forecast_ds,
             case_subset_point_obs.drop_duplicates(subset=["latitude", "longitude"]),
             config=eval_config,
             tree_name=individual_case.id,
         )
+        logger.info("finished pick points")
         for data_var in individual_case.data_vars:
             case_results[data_var] = {}
             forecast_da = point_subset_ds[data_var]
-            breakpoint()
             point_obs_da = case_subset_point_obs[data_var]
+            logger.info(point_obs_da)
             for metric in individual_case.metrics_list:
                 metric_instance = metric()
                 logging.debug(
@@ -218,6 +220,7 @@ def _evaluate_case(
                 )
                 result = metric_instance.compute(forecast_da, point_obs_da)
                 case_results[data_var][metric_instance.name] = result
+                logger.info(result)
     return case_results
 
 

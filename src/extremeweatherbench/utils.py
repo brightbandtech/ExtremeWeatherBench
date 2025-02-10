@@ -145,7 +145,7 @@ def remove_ocean_gridpoints(dataset: xr.Dataset) -> xr.Dataset:
     land_sea_mask = land.mask(dataset.longitude, dataset.latitude)
     land_mask = land_sea_mask == 0
     # Subset the dataset to only include land gridpoints
-    dataset = dataset.where(land_mask, drop=True)
+    dataset = dataset.where(land_mask)
 
     return dataset
 
@@ -234,13 +234,7 @@ def _open_mlwp_kerchunk_reference(
         attr_value = getattr(forecast_schema_config, variable)
         if attr_value in ds.data_vars:
             ds = ds.rename({attr_value: variable})
-        # Step 1: Create a meshgrid of init_time and lead_time
-    lead_time_grid, init_time_grid = np.meshgrid(ds.lead_time, ds.init_time)
-    # Step 2: Flatten the meshgrid and convert lead_time to timedelta
-    valid_time = init_time_grid.flatten() + pd.to_timedelta(
-        lead_time_grid.flatten(), unit="h"
-    )
-    ds.coords["time"] = valid_time
+    ds = ds.compute()
     return ds
 
 
