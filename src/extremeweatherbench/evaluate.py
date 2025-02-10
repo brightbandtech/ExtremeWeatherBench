@@ -2,13 +2,12 @@
 
 import logging
 import fsspec
-import os
 from typing import Optional, Any
 import pandas as pd
 import xarray as xr
 from extremeweatherbench import config, events, case, utils
 import dacite
-import yaml
+
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -37,12 +36,8 @@ def evaluate(
         evaluation results for each case within the event type.
     """
 
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    events_file_path = os.path.join(base_dir, "../../assets/data/events.yaml")
     all_results = {}
-    with open(events_file_path, "r") as file:
-        yaml_event_case = yaml.safe_load(file)
-    logger.debug("Event yaml loaded at %s", events_file_path)
+    yaml_event_case = utils.load_events_yaml()
     for k, v in yaml_event_case.items():
         if k == "cases":
             for individual_case in v:
