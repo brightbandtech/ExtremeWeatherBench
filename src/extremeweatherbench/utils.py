@@ -5,15 +5,12 @@ other specialized package.
 from typing import Union, List
 from collections import namedtuple
 import fsspec
-import geopandas as gpd
 import numpy as np
 import pandas as pd
 import regionmask
 import ujson
-import rioxarray  # noqa: F401
 import xarray as xr
 from kerchunk.hdf import SingleHdf5ToZarr
-from shapely.geometry import box
 import datetime
 from pathlib import Path
 from importlib import resources
@@ -66,43 +63,47 @@ def generate_json_from_nc(u, so, fs, fs_out, json_dir):
             f.write(ujson.dumps(h5chunks.translate()).encode())
 
 
-def clip_dataset_to_bounding_box(
-    dataset: xr.Dataset,
-    location_center: Location,
-    length_km: float,
+def clip_dataset_to_bounding_box_degrees(
+    dataset: xr.Dataset, location_center: Location, box_degrees: Union[tuple, float]
 ) -> xr.Dataset:
-    """Clip an xarray dataset to a boxbox around a given location.
+    """Clip an xarray dataset to a box around a given location in degrees latitude & longitude.
 
     Args:
         dataset: The input xarray dataset.
         location_center: A Location object corresponding to the center of the bounding box.
-        length_km: The side length of the bounding box in kilometers.
+        box_degrees: The side length(s) of the bounding box in degrees, as a tuple (lat,lon) or single value.
 
     Returns:
         The clipped xarray dataset.
     """
+
     lat_center = location_center.latitude
     lon_center = location_center.longitude
     if lon_center < 0:
         lon_center = convert_longitude_to_360(lon_center)
-    # Convert length from kilometers to degrees (approximation)
-    length_deg = length_km / 111  # 1 degree is approximately 111 km
-
-    # Create a bounding box
-    min_lat = lat_center - (length_deg / 2)
-    max_lat = lat_center + (length_deg / 2)
-    min_lon = lon_center - (length_deg / 2)
-    max_lon = lon_center + (length_deg / 2)
-
-    # Create a GeoDataFrame with the bounding box
-    bbox = gpd.GeoDataFrame(
-        {"geometry": [box(min_lon, min_lat, max_lon, max_lat)]},
-    )
-    # Clip the dataset using the bounding box
-    clipped_dataset = dataset.rio.write_crs("EPSG:4326").rio.clip(
-        bbox.geometry, bbox.crs, drop=True
-    )
-
+    if isinstance(box_degrees, tuple):
+        box_degrees_lat, box_degrees_lon = box_degrees
+    else:
+        box_degrees_lat = box_degrees
+        box_degrees_lon = box_degrees
+    min_lat = lat_center - box_degrees_lat / 2
+    max_lat = lat_center + box_degrees_lat / 2
+    min_lon = lon_center - box_degrees_lon / 2
+    max_lon = lon_center + box_degrees_lon / 2
+    if min_lon < 0:
+        min_lon = convert_longitude_to_360(min_lon)
+    if min_lon > max_lon:
+        # Ensure max_lon is always the larger value and account for cyclic nature of lon
+        min_lon, max_lon = max_lon, min_lon
+        clipped_dataset = dataset.sel(
+            latitude=(dataset.latitude > min_lat) & (dataset.latitude <= max_lat),
+            longitude=(dataset.longitude < min_lon) | (dataset.longitude >= max_lon),
+        )
+    else:
+        clipped_dataset = dataset.sel(
+            latitude=(dataset.latitude > min_lat) & (dataset.latitude <= max_lat),
+            longitude=(dataset.longitude > min_lon) & (dataset.longitude <= max_lon),
+        )
     return clipped_dataset
 
 
