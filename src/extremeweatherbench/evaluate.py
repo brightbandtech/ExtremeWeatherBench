@@ -1,24 +1,20 @@
 """Evaluation routines for use during ExtremeWeatherBench case studies / analyses."""
 
 import logging
-import fsspec
 from typing import Optional, Any
 import pandas as pd
 import xarray as xr
-from extremeweatherbench import config, events, case, utils
+from extremeweatherbench import config, events, case, utils, data_loader
 import dacite
 
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-#: Default mapping for forecast dataset schema.
-DEFAULT_FORECAST_SCHEMA_CONFIG = config.ForecastSchemaConfig()
-
 
 def evaluate(
     eval_config: config.Config,
-    forecast_schema_config: config.ForecastSchemaConfig = DEFAULT_FORECAST_SCHEMA_CONFIG,
+    forecast_schema_config: config.ForecastSchemaConfig,
     dry_run: bool = False,
     dry_run_event_type: Optional[str] = "HeatWave",
 ) -> dict[Any, dict[Any, Optional[dict[str, Any]]]]:
@@ -69,7 +65,9 @@ def evaluate(
         )
         logger.debug("Cases loaded for %s", event.event_type)
         point_obs, gridded_obs = open_obs_datasets(eval_config)
-        forecast_dataset = open_forecast_dataset(eval_config, forecast_schema_config)
+        forecast_dataset = data_loader.open_forecast_dataset(
+            eval_config, forecast_schema_config
+        )
 
         # Manages some of the quirkiness of the parquets and avoids loading in memory overloads
         # from the json kerchunk references
@@ -86,7 +84,7 @@ def evaluate(
                 "gridded obs detected, mapping variables in gridded obs to forecast"
             )
             gridded_obs = utils.map_era5_vars_to_forecast(
-                DEFAULT_FORECAST_SCHEMA_CONFIG, forecast_dataset, gridded_obs
+                forecast_schema_config, forecast_dataset, gridded_obs
             )
         logger.debug("beginning evaluation loop for %s", event.event_type)
         results = _evaluate_cases_loop(cases, forecast_dataset, gridded_obs, point_obs)
@@ -207,42 +205,6 @@ def _evaluate_case(
     if point_obs is not None:
         raise NotImplementedError("Point obs evaluation not implemented as of 0.1.0")
     return case_results
-
-
-def open_forecast_dataset(
-    eval_config: config.Config,
-    forecast_schema_config: config.ForecastSchemaConfig = DEFAULT_FORECAST_SCHEMA_CONFIG,
-):
-    """Open the forecast dataset specified for evaluation."""
-    logging.debug("Opening forecast dataset")
-    filesystem = [
-        eval_config.forecast_dir.split("://")[0]
-        if "://" in eval_config.forecast_dir
-        else "file"
-    ]
-    fs = fsspec.filesystem(filesystem)
-    file_list = fs.ls(eval_config.forecast_dir)
-    file_types = set([file.split(".")[-1] for file in file_list])
-
-    if len(file_types) > 1:
-        if "parq" not in eval_config.forecast_dir:
-            raise TypeError("Multiple file types found in forecast path.")
-        else:
-            forecast_dataset = utils._open_mlwp_kerchunk_reference(
-                eval_config.forecast_dir, forecast_schema_config
-            )
-    elif len(file_types) == 1:
-        if "zarr" in file_types:
-            forecast_dataset = xr.open_zarr(file_list, chunks="auto")
-        elif "json" in file_types:
-            forecast_dataset = utils._open_mlwp_kerchunk_reference(
-                file_list[0], forecast_schema_config
-            )
-        else:
-            raise TypeError("Unknown file type found in forecast path.")
-    else:
-        raise FileNotFoundError("No files found in forecast path.")
-    return forecast_dataset
 
 
 def open_obs_datasets(eval_config: config.Config):
