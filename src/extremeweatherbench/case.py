@@ -203,14 +203,17 @@ def derive_indices_from_init_time_and_lead_time(
     individual_case: IndividualCase,
     dataset: xr.Dataset,
 ) -> Tuple[np.ndarray]:
-    time_reshaped = dataset.time.values.reshape(
+    lead_time_grid, init_time_grid = np.meshgrid(dataset.lead_time, dataset.init_time)
+    valid_times = (
+        init_time_grid.flatten()
+        + pd.to_timedelta(lead_time_grid.flatten(), unit="h").to_numpy()
+    )
+    valid_times_reshaped = valid_times.reshape(
         (dataset.init_time.shape[0], dataset.lead_time.shape[0])
     )
-    output = dataset.time.where(
-        (dataset.time.time > pd.to_datetime(individual_case.start_date))
-        & (dataset.time.time < pd.to_datetime(individual_case.end_date)),
-        drop=True,
+    indices = np.where(
+        (valid_times_reshaped > pd.to_datetime(individual_case.start_date))
+        & (valid_times_reshaped < pd.to_datetime(individual_case.end_date))
     )
-    index_mask = np.isin(time_reshaped, output)
-    indices = np.where(index_mask)
+
     return indices
