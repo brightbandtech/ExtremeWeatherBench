@@ -824,7 +824,7 @@ def run_isd_generation(
                     )
     for case in yaml_event_case["cases"]:
         min_lat, max_lat, min_lon, max_lon = utils.get_bounding_corners(
-            case["location"], case["bounding_box_km"], convert_to_360=False
+            case["location"], case["bounding_box_degrees"], convert_to_360=False
         )
 
         # Filter stations within bounding box
@@ -925,7 +925,7 @@ def run_isd_generation(
         year = case["start_date"].year
         case_ds = results_dict[year]
         min_lat, max_lat, min_lon, max_lon = utils.get_bounding_corners(
-            case["location"], case["bounding_box_km"], convert_to_360=False
+            case["location"], case["bounding_box_degrees"], convert_to_360=False
         )
         station_indices = np.where(
             (case_ds["lat"] > min_lat)

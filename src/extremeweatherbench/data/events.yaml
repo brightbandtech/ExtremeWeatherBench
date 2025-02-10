@@ -7,7 +7,7 @@ cases:
     location: 
       latitude:  47.6062
       longitude: -122.3321
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: heat_wave
     cross_listed: !!seq []
   - id: 2
@@ -17,7 +17,7 @@ cases:
     location: 
       latitude:  41.8781
       longitude: -87.6298    
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: heat_wave
     cross_listed: !!seq []
   - id: 3
@@ -27,7 +27,7 @@ cases:
     location: 
       latitude:  34.0522
       longitude: -118.2437    
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: heat_wave
     cross_listed: !!seq []
   - id: 4
@@ -37,7 +37,7 @@ cases:
     location: 
       latitude:  32.7767
       longitude: -96.7970    
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: heat_wave
     cross_listed: !!seq []
   - id: 5
@@ -47,7 +47,7 @@ cases:
     location: 
       latitude:  47.6062
       longitude: -122.3321    
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: heat_wave
     cross_listed: !!seq []
   - id: 6
@@ -57,7 +57,7 @@ cases:
     location: 
       latitude:  39.2904
       longitude: -76.6122    
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: heat_wave
     cross_listed: !!seq []
   - id: 7
@@ -67,7 +67,7 @@ cases:
     location: 
       latitude:  -31.9505
       longitude: 115.8605    
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: heat_wave
     cross_listed: !!seq []
   - id: 8
@@ -77,7 +77,7 @@ cases:
     location: 
       latitude:  53.1424
       longitude: -7.6921    
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: heat_wave
     cross_listed: !!seq []
   - id: 9
@@ -87,7 +87,7 @@ cases:
     location: 
       latitude:  41.9028
       longitude: 12.4964    
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: heat_wave
     cross_listed: !!seq []
   - id: 10
@@ -97,7 +97,7 @@ cases:
     location: 
       latitude:  40.4637
       longitude: -3.7492    
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: heat_wave
     cross_listed: !!seq []
   - id: 11
@@ -107,7 +107,7 @@ cases:
     location: 
       latitude:  -34.6037
       longitude: -58.3816    
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: heat_wave
     cross_listed: !!seq []
   - id: 12
@@ -117,7 +117,7 @@ cases:
     location: 
       latitude:  31.2304
       longitude: 121.4737    
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: heat_wave
     cross_listed: !!seq []
   - id: 13
@@ -127,7 +127,7 @@ cases:
     location: 
       latitude:  25.0458
       longitude: 102.7100    
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: heat_wave
     cross_listed: !!seq []
   - id: 14
@@ -137,7 +137,7 @@ cases:
     location: 
       latitude:  36.7372
       longitude: 3.0869    
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: heat_wave
     cross_listed: !!seq []
   - id: 15
@@ -147,7 +147,7 @@ cases:
     location: 
       latitude:  41.1496
       longitude: -7.6110 
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: heat_wave
     cross_listed: !!seq []
   - id: 16
@@ -157,7 +157,7 @@ cases:
     location: 
       latitude:  36.1408
       longitude: -5.3536    
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: heat_wave
     cross_listed: !!seq []
   - id: 17
@@ -167,7 +167,7 @@ cases:
     location: 
       latitude:  28.6139
       longitude: 77.2090    
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: heat_wave
     cross_listed: !!seq []
   - id: 18
@@ -177,7 +177,7 @@ cases:
     location: 
       latitude:  55.7558
       longitude: 37.6173    
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: heat_wave
     cross_listed: !!seq []
   - id: 19
@@ -187,7 +187,7 @@ cases:
     location: 
       latitude:  52.5200
       longitude: 13.4050    
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: heat_wave
     cross_listed: !!seq []
   - id: 20
@@ -197,7 +197,7 @@ cases:
     location: 
       latitude:  51.5074
       longitude: -0.1278    
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: heat_wave
     cross_listed: !!seq []
   - id: 21
@@ -207,7 +207,7 @@ cases:
     location: 
       latitude:  51.5074
       longitude: -0.1278    
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: heat_wave
     cross_listed: !!seq []
   - id: 22
@@ -217,7 +217,7 @@ cases:
     location: 
       latitude:  43.4832
       longitude: -1.5586    
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: heat_wave
     cross_listed: !!seq []
   - id: 23
@@ -227,7 +227,7 @@ cases:
     location: 
       latitude:  35.6895
       longitude: 139.6917    
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: heat_wave
     cross_listed: !!seq []
   - id: 24
@@ -237,7 +237,7 @@ cases:
     location: 
       latitude:  28.2769
       longitude: 68.4376    
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: heat_wave
     cross_listed: !!seq []
   - id: 25
@@ -247,7 +247,7 @@ cases:
     location: 
       latitude: -75.1000
       longitude: 123.3500    
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: heat_wave
     cross_listed: !!seq []
   - id: 26
@@ -257,7 +257,7 @@ cases:
     location: 
       latitude: -31.9505
       longitude: 115.8605    
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: heat_wave
     cross_listed: !!seq []
   - id: 27
@@ -267,7 +267,7 @@ cases:
     location: 
       latitude: 49.0000
       longitude: -97.5667    
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: heat_wave
     cross_listed: !!seq []
   - id: 28
@@ -277,7 +277,7 @@ cases:
     location: 
       latitude: -43.8983
       longitude: 171.7310    
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: heat_wave
     cross_listed: !!seq []
   - id: 29
@@ -287,7 +287,7 @@ cases:
     location: 
       latitude: -33.8245
       longitude: 150.9448
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: heat_wave
     cross_listed: !!seq []
   - id: 31
@@ -297,7 +297,7 @@ cases:
     location: 
       latitude:  30.2672
       longitude: -97.7431
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: freeze
     cross_listed: !!seq []
   - id: 32
@@ -307,7 +307,7 @@ cases:
     location: 
       latitude:  34.7445
       longitude: -92.2896
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: freeze
     cross_listed: !!seq []
   - id: 33
@@ -317,7 +317,7 @@ cases:
     location: 
       latitude: 48.1351
       longitude: 11.5820
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: freeze
     cross_listed: !!seq [snow]
   - id: 34
@@ -327,7 +327,7 @@ cases:
     location: 
       latitude: 31.2304
       longitude: 121.4737
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: freeze
     cross_listed: !!seq []
   - id: 35
@@ -337,7 +337,7 @@ cases:
     location: 
       latitude: 34.5553
       longitude: 69.2075
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: freeze
     cross_listed: !!seq [snow]
   - id: 36
@@ -347,6 +347,6 @@ cases:
     location: 
       latitude: 39.7392
       longitude: -104.9903
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: freeze
     cross_listed: !!seq  [snow, tornado, wind, hail]
