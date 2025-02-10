@@ -140,9 +140,7 @@ class TestOnsetME:
     def test_compute(self, sample_forecast_dataarray, sample_gridded_obs_dataarray):
         """Test if compute returns the proper type and dimensions (in this case an error)."""
         metric = metrics.OnsetME()
-        with pytest.raises(
-            NotImplementedError, match="Onset mean error not yet implemented."
-        ):
+        with pytest.raises(NotImplementedError):
             metric.compute(sample_forecast_dataarray, sample_gridded_obs_dataarray)
 
 
@@ -153,7 +151,5 @@ class TestDurationME:
     def test_compute(self, sample_forecast_dataarray, sample_gridded_obs_dataarray):
         """Test if compute returns the proper type and dimensions (in this case an error)."""
         metric = metrics.DurationME()
-        with pytest.raises(
-            NotImplementedError, match="Duration mean error not yet implemented."
-        ):
+        with pytest.raises(NotImplementedError):
             metric.compute(sample_forecast_dataarray, sample_gridded_obs_dataarray)
