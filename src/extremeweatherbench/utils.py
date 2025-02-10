@@ -89,16 +89,17 @@ def clip_dataset_to_bounding_box_degrees(
     max_lon = lon_center + box_degrees_lon / 2
     if min_lon < 0:
         min_lon = convert_longitude_to_360(min_lon)
-
-    # Clip the dataset to the bounding box
-    if dataset["latitude"].values[0] > dataset["latitude"].values[-1]:
+    if min_lon > max_lon:
+        # Ensure max_lon is always the larger value and account for cyclic nature of lon
+        min_lon, max_lon = max_lon, min_lon
         clipped_dataset = dataset.sel(
-            latitude=slice(max_lat, min_lat), longitude=slice(min_lon, max_lon)
+            latitude=(dataset.latitude > min_lat) & (dataset.latitude <= max_lat),
+            longitude=(dataset.longitude < min_lon) | (dataset.longitude >= max_lon),
         )
-
     else:
         clipped_dataset = dataset.sel(
-            latitude=slice(min_lat, max_lat), longitude=slice(min_lon, max_lon)
+            latitude=(dataset.latitude > min_lat) & (dataset.latitude <= max_lat),
+            longitude=(dataset.longitude > min_lon) & (dataset.longitude <= max_lon),
         )
     return clipped_dataset
 
