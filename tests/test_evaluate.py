@@ -37,7 +37,9 @@ def test_open_obs_datasets_no_forecast_paths():
         evaluate._open_forecast_dataset(invalid_config)
 
 
-def test_evaluate_base_case(sample_forecast_dataset, sample_gridded_obs_dataset):
+def test_evaluate_base_case(
+    sample_forecast_dataset, mock_config, sample_gridded_obs_dataset
+):
     base_case = case.IndividualCase(
         id=1,
         title="test_case",
@@ -50,6 +52,7 @@ def test_evaluate_base_case(sample_forecast_dataset, sample_gridded_obs_dataset)
     with pytest.raises(NotImplementedError):
         evaluate._evaluate_case(
             individual_case=base_case,
+            eval_config=mock_config,
             forecast_dataset=sample_forecast_dataset,
             gridded_obs=sample_gridded_obs_dataset,
             point_obs=None,
@@ -69,7 +72,6 @@ def test_evaluate_full_workflow(
         return_value=(None, sample_gridded_obs_dataset),
     )
     result = evaluate.evaluate(mock_config)
-    print(result["heat_wave"])
     assert isinstance(result, dict)
     assert "heat_wave" in result
     assert isinstance(result["heat_wave"], dict)

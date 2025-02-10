@@ -155,7 +155,6 @@ def _evaluate_case(
 
     logger.info("Evaluating case %s, %s", individual_case.id, individual_case.title)
     variable_subset_ds = individual_case._subset_data_vars(forecast_dataset)
-    variable_subset_ds = utils.create_flattened_time_coord(variable_subset_ds)
     time_subset_forecast_ds = individual_case._subset_valid_times(variable_subset_ds)
     # Check if forecast data is available for the case, if not, return None
     lead_time_len = len(time_subset_forecast_ds.init_time)
