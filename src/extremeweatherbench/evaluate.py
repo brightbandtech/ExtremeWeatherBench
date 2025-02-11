@@ -155,7 +155,9 @@ def _evaluate_case(
 
     logger.info("Evaluating case %s, %s", individual_case.id, individual_case.title)
     variable_subset_ds = individual_case._subset_data_vars(forecast_dataset)
-    time_subset_forecast_ds = individual_case._subset_valid_times(variable_subset_ds)
+    time_subset_forecast_ds = (
+        individual_case._subset_valid_times(variable_subset_ds).compute()
+    )  # based on a (1,1,721,1440) chunk size this is where compute is more efficient
     # Check if forecast data is available for the case, if not, return None
     lead_time_len = len(time_subset_forecast_ds.init_time)
     if lead_time_len == 0:
@@ -201,9 +203,20 @@ def _evaluate_case(
     if point_obs is not None:
         logger.info("entering point obs")
         case_subset_point_obs = point_obs.loc[point_obs["id"] == individual_case.id]
+
+        case_subset_point_obs = case_subset_point_obs.set_index(["time", "name"])[
+            ~case_subset_point_obs.set_index(["time", "name"]).index.duplicated()
+        ].reset_index()
+        case_subset_point_obs = case_subset_point_obs.rename(columns=utils.ISD_MAPPING)
+        case_subset_point_obs["air_temperature"] = (
+            case_subset_point_obs["air_temperature"] + 273.15
+        )
+        case_subset_point_obs_ds = case_subset_point_obs.set_index(
+            ["time", "name"]
+        ).to_xarray()
         point_subset_ds = utils.pick_points(
             spatiotemporal_subset_forecast_ds,
-            case_subset_point_obs.drop_duplicates(subset=["latitude", "longitude"]),
+            case_subset_point_obs.drop_duplicates(subset=["name"]),
             config=eval_config,
             tree_name=individual_case.id,
         )
@@ -211,14 +224,19 @@ def _evaluate_case(
         for data_var in individual_case.data_vars:
             case_results[data_var] = {}
             forecast_da = point_subset_ds[data_var]
-            point_obs_da = case_subset_point_obs[data_var]
-            logger.info(point_obs_da)
+            case_subset_point_obs_da = case_subset_point_obs_ds[data_var].dropna(
+                dim="name"
+            )
+            print(case_subset_point_obs_da)
+            forecast_da.swap_dims({"point": "point_name"}).rename(
+                {"point_name": "name"}
+            )
             for metric in individual_case.metrics_list:
                 metric_instance = metric()
                 logging.debug(
                     "metric %s computing for %s", metric_instance.name, data_var
                 )
-                result = metric_instance.compute(forecast_da, point_obs_da)
+                result = metric_instance.compute(forecast_da, case_subset_point_obs_da)
                 case_results[data_var][metric_instance.name] = result
                 logger.info(result)
     return case_results

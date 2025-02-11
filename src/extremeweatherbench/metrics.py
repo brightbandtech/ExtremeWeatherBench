@@ -57,8 +57,10 @@ class MaximumMAE(Metric):
 
     def compute(self, forecast: xr.DataArray, observation: xr.DataArray):
         max_mae_values = []
-        observation_spatial_mean = observation.mean(["latitude", "longitude"])
-        forecast_spatial_mean = forecast.mean(["latitude", "longitude"])
+        if "latitude" in observation.dims and "longitude" in observation.dims:
+            observation_spatial_mean = observation.mean(["latitude", "longitude"])
+        if "latitude" in forecast.dims and "longitude" in forecast.dims:
+            forecast_spatial_mean = forecast.mean(["latitude", "longitude"])
         observation_spatial_mean = utils.align_observations_temporal_resolution(
             forecast_spatial_mean, observation_spatial_mean
         )
@@ -106,8 +108,13 @@ class MaxOfMinTempMAE(Metric):
 
     def compute(self, forecast: xr.DataArray, observation: xr.DataArray):
         max_min_mae_values = []
-        observation_spatial_mean = observation.mean(["latitude", "longitude"])
-        forecast_spatial_mean = forecast.mean(["latitude", "longitude"])
+        if "latitude" in observation.dims and "longitude" in observation.dims:
+            observation_spatial_mean = observation.mean(["latitude", "longitude"])
+        if "latitude" in forecast.dims and "longitude" in forecast.dims:
+            forecast_spatial_mean = forecast.mean(["latitude", "longitude"])
+        else:
+            forecast_spatial_mean = forecast
+            observation_spatial_mean = observation
         # Verify observation_spatial_mean's time resolution matches forecast_spatial_mean
         observation_spatial_mean = utils.align_observations_temporal_resolution(
             forecast_spatial_mean, observation_spatial_mean
