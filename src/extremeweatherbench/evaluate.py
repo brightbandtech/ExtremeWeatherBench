@@ -203,34 +203,70 @@ def _evaluate_case(
     if point_obs is not None:
         logger.info("entering point obs")
         case_subset_point_obs = point_obs.loc[point_obs["id"] == individual_case.id]
-
-        case_subset_point_obs = case_subset_point_obs.set_index(["time", "name"])[
-            ~case_subset_point_obs.set_index(["time", "name"]).index.duplicated()
-        ].reset_index()
         case_subset_point_obs = case_subset_point_obs.rename(columns=utils.ISD_MAPPING)
-        case_subset_point_obs["air_temperature"] = (
-            case_subset_point_obs["air_temperature"] + 273.15
+        case_subset_point_obs["longitude"] = utils.convert_longitude_to_360(
+            case_subset_point_obs["longitude"]
+        )
+        case_subset_point_obs["surface_air_temperature"] = (
+            case_subset_point_obs["surface_air_temperature"] + 273.15
         )
         case_subset_point_obs_ds = case_subset_point_obs.set_index(
-            ["time", "name"]
+            ["time", "station"]
         ).to_xarray()
-        point_subset_ds = utils.pick_points(
+        case_subset_point_obs_ds = case_subset_point_obs_ds.where(
+            (
+                case_subset_point_obs_ds.latitude
+                >= spatiotemporal_subset_forecast_ds["latitude"].min()
+            )
+            & (
+                case_subset_point_obs_ds.latitude
+                <= spatiotemporal_subset_forecast_ds["latitude"].max()
+            )
+            & (
+                case_subset_point_obs_ds.longitude
+                >= spatiotemporal_subset_forecast_ds["longitude"].min()
+            )
+            & (
+                case_subset_point_obs_ds.longitude
+                <= spatiotemporal_subset_forecast_ds["longitude"].max()
+            ),
+            drop=True,
+        )
+        case_subset_point_obs_ds = case_subset_point_obs_ds.set_coords(
+            ["latitude", "longitude", "name", "elev", "id", "call"]
+        )
+        # remove unnecessary time dimension from lat and lon
+        for coord in ["latitude", "longitude"]:
+            case_subset_point_obs_ds[coord] = case_subset_point_obs_ds[coord].isel(
+                time=1, drop=True
+            )
+        # Reshape dataset from (init_time, lead_time, point) to (init_time, lead_time, latitude, longitude)
+        case_subset_point_obs_ds = (
+            case_subset_point_obs_ds.set_index(station=["latitude", "longitude"])
+            .groupby("station")
+            .first()
+            .unstack("station")
+        )
+        point_forecast_subset_ds = utils.pick_points(
             spatiotemporal_subset_forecast_ds,
-            case_subset_point_obs.drop_duplicates(subset=["name"]),
+            case_subset_point_obs.drop_duplicates(subset=["name"])[
+                ["latitude", "longitude", "elev", "id", "name"]
+            ],
             config=eval_config,
             tree_name=individual_case.id,
+        )
+        # Reshape dataset from (init_time, lead_time, point) to (init_time, lead_time, latitude, longitude)
+        point_forecast_subset_ds = (
+            point_forecast_subset_ds.set_index(point=["latitude", "longitude"])
+            .groupby("point")
+            .first()
+            .unstack("point")
         )
         logger.info("finished pick points")
         for data_var in individual_case.data_vars:
             case_results[data_var] = {}
-            forecast_da = point_subset_ds[data_var]
-            case_subset_point_obs_da = case_subset_point_obs_ds[data_var].dropna(
-                dim="name"
-            )
-            print(case_subset_point_obs_da)
-            forecast_da.swap_dims({"point": "point_name"}).rename(
-                {"point_name": "name"}
-            )
+            forecast_da = point_forecast_subset_ds[data_var]
+            case_subset_point_obs_da = case_subset_point_obs_ds[data_var]
             for metric in individual_case.metrics_list:
                 metric_instance = metric()
                 logging.debug(
@@ -287,7 +323,7 @@ def _open_obs_datasets(eval_config: config.Config):
     gridded_obs = None
     if eval_config.point_obs_path:
         point_obs = pd.read_parquet(
-            eval_config.point_obs_path, storage_options={"token": "anon"}
+            eval_config.point_obs_path, storage_options=dict(token="anon")
         )
     if eval_config.gridded_obs_path:
         gridded_obs = xr.open_zarr(

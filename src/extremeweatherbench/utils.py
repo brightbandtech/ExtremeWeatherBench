@@ -22,9 +22,9 @@ Location = namedtuple("Location", ["latitude", "longitude"])
 
 #: Maps the ARCO ERA5 to CF conventions.
 ERA5_MAPPING = {
-    "air_temperature": "2m_temperature",
-    "eastward_wind": "10m_u_component_of_wind",
-    "northward_wind": "10m_v_component_of_wind",
+    "surface_air_temperature": "2m_temperature",
+    "surface_eastward_wind": "10m_u_component_of_wind",
+    "surface_northward_wind": "10m_v_component_of_wind",
     "air_pressure_at_mean_sea_level": "mean_sea_level_pressure",
     "specific_humidity": "specific_humidity",
     "valid_time": "time",
@@ -34,7 +34,7 @@ ERA5_MAPPING = {
 }
 
 ISD_MAPPING = {
-    "surface_temperature": "air_temperature",
+    "surface_temperature": "surface_air_temperature",
 }
 
 
@@ -619,7 +619,7 @@ def pick_points(
 
         a = pd.concat(
             [
-                a,
+                a.reset_index(drop=True),  # changed, need to submit pr to brian/herbie
                 df_grid.iloc[a.grid_index].add_suffix("_grid").reset_index(drop=True),
             ],
             axis=1,
@@ -638,9 +638,10 @@ def pick_points(
 
         # Get corresponding values from xarray
         # https://docs.xarray.dev/en/stable/user-guide/indexing.html#more-advanced-indexing
+        # modified to drop nan values in case of prior filtering procedures or nonexistent point coords
         ds_points = ds.sel(
-            x=a.x_grid.to_xarray(),
-            y=a.y_grid.to_xarray(),
+            x=a.x_grid.to_xarray().dropna("point").astype("int"),
+            y=a.y_grid.to_xarray().dropna("point").astype("int"),
         )
         ds_points.coords["point_grid_distance"] = a.point_grid_distance.to_xarray()
         ds_points["point_grid_distance"].attrs["long_name"] = (

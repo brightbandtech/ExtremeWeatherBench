@@ -2,6 +2,7 @@ import dataclasses
 
 import pandas as pd
 import xarray as xr
+import numpy as np
 from scores.continuous import rmse
 import logging
 from extremeweatherbench import utils
@@ -83,8 +84,11 @@ class MaximumMAE(Metric):
                 lead_time = filtered_forecast.where(
                     filtered_forecast.time == max_datetime, drop=True
                 ).lead_time
+
+                max_error = abs(filtered_forecast.max() - max_value)
+                max_error_array = np.full(lead_time.shape, max_error)
                 max_mae_dataarray = xr.DataArray(
-                    data=[abs(filtered_forecast.max().values - max_value)],
+                    data=max_error_array,
                     dims=["lead_time"],
                     coords={"lead_time": lead_time.values},
                 )
@@ -142,31 +146,42 @@ class MaxOfMinTempMAE(Metric):
                 )
                 # Ensure that the forecast has a full day of data for each day
                 # after centering on the max of min timestamp
-                filtered_forecast = utils.truncate_incomplete_days(filtered_forecast)
-                lead_time = filtered_forecast.where(
-                    filtered_forecast.time == max_min_timestamp, drop=True
-                ).lead_time
-                filtered_forecast_max_min = filtered_forecast.where(
-                    filtered_forecast
-                    == filtered_forecast.groupby("time.dayofyear").min().max(),
-                    drop=True,
-                )
-                # TODO: add temporal displacement error, which is
-                # filtered_forecast_max_min.time.values[0] - max_min_timestamp
-                if max_min_timestamp in filtered_forecast.time.values:
-                    max_min_mae_dataarray = xr.DataArray(
-                        data=abs(filtered_forecast_max_min - max_min_value),
-                        dims=["lead_time"],
-                        coords={"lead_time": lead_time.values},
-                        attrs={
-                            "description": (
-                                "Mean absolute error of forecasted highest minimum temperature values,"
-                                "where lead_time is the time from initialization until the highest minimum"
-                                "observed temperature."
-                            )
-                        },
+                if filtered_forecast.time.shape[0] == 0:
+                    logger.info(
+                        "Init time %s insufficient data for max of min temp",
+                        pd.to_datetime(init_time.values),
                     )
-                    max_min_mae_values.append(max_min_mae_dataarray)
+                else:
+                    filtered_forecast = utils.truncate_incomplete_days(
+                        filtered_forecast
+                    )
+                    lead_time = filtered_forecast.where(
+                        filtered_forecast.time == max_min_timestamp, drop=True
+                    ).lead_time
+                    filtered_forecast_max_min = filtered_forecast.where(
+                        filtered_forecast
+                        == filtered_forecast.groupby("time.dayofyear")
+                        .min()
+                        .max(),  # TODO check if "time" "dayofyear" as it is in point obs works here
+                        drop=True,
+                    )
+
+                    # TODO: add temporal displacement error, which is
+                    # filtered_forecast_max_min.time.values[0] - max_min_timestamp
+                    if max_min_timestamp in filtered_forecast.time.values:
+                        max_min_mae_dataarray = xr.DataArray(
+                            data=abs(filtered_forecast_max_min - max_min_value),
+                            dims=["lead_time"],
+                            coords={"lead_time": lead_time.values},
+                            attrs={
+                                "description": (
+                                    "Mean absolute error of forecasted highest minimum temperature values,"
+                                    "where lead_time is the time from initialization until the highest minimum"
+                                    "observed temperature."
+                                )
+                            },
+                        )
+                        max_min_mae_values.append(max_min_mae_dataarray)
         max_min_mae_full_da = utils.process_dataarray_for_output(max_min_mae_values)
         return max_min_mae_full_da
 

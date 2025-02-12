@@ -136,11 +136,11 @@ class IndividualHeatWaveCase(IndividualCase):
         ]
     )
     data_vars: List[str] = dataclasses.field(
-        default_factory=lambda: ["air_temperature"]
+        default_factory=lambda: ["surface_air_temperature"]
     )
 
     def __post_init__(self):
-        self.data_vars = ["air_temperature"]
+        self.data_vars = ["surface_air_temperature"]
 
     def perform_subsetting_procedure(self, dataset: xr.Dataset) -> xr.Dataset:
         logger.info("clipping to bounding box")
@@ -167,11 +167,19 @@ class IndividualFreezeCase(IndividualCase):
         default_factory=lambda: [metrics.RegionalRMSE]
     )
     data_vars: List[str] = dataclasses.field(
-        default_factory=lambda: ["air_temperature", "eastward_wind", "northward_wind"]
+        default_factory=lambda: [
+            "surface_air_temperature",
+            "surface_eastward_wind",
+            "surface_northward_wind",
+        ]
     )
 
     def __post_init__(self):
-        self.data_vars = ["air_temperature", "eastward_wind", "northward_wind"]
+        self.data_vars = [
+            "surface_air_temperature",
+            "surface_eastward_wind",
+            "surface_northward_wind",
+        ]
 
     def perform_subsetting_procedure(self, dataset) -> xr.Dataset:
         modified_ds = utils.clip_dataset_to_bounding_box_degrees(
