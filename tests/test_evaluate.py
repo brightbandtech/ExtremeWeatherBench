@@ -21,7 +21,10 @@ def test_open_forecast_dataset_invalid_path():
 
 def test_open_obs_datasets_no_obs_paths():
     invalid_config = config.Config(
-        event_types=[events.HeatWave], forecast_dir="test/path", gridded_obs_path=None
+        event_types=[events.HeatWave],
+        forecast_dir="test/path",
+        gridded_obs_path=None,
+        point_obs_path=None,
     )
     with pytest.raises(
         ValueError, match="No gridded or point observation data provided"
@@ -78,8 +81,10 @@ def test_evaluate_full_workflow(
     assert isinstance(result["heat_wave"][1], dict)
     for _, v in result["heat_wave"].items():
         if v is not None:
-            assert isinstance(v, dict)
+            assert isinstance(v, dict)  # gridded or point
             for _, v2 in v.items():
-                assert isinstance(v2, dict)
+                assert isinstance(v2, dict)  # data var
                 for _, v3 in v2.items():
-                    assert isinstance(v3, xr.DataArray)
+                    assert isinstance(v3, dict)  # metric name
+                    for _, v4 in v3.items():
+                        assert isinstance(v4, xr.DataArray)  # metric value

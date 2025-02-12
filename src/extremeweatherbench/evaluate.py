@@ -176,6 +176,7 @@ def _evaluate_case(
         time_subset_forecast_ds
     )
     if gridded_obs is not None:
+        case_results["gridded"] = {}
         variable_subset_gridded_obs = individual_case._subset_data_vars(gridded_obs)
         time_subset_gridded_obs_ds = variable_subset_gridded_obs.sel(
             time=slice(individual_case.start_date, individual_case.end_date)
@@ -190,7 +191,7 @@ def _evaluate_case(
             join="inner",
         )
         for data_var in individual_case.data_vars:
-            case_results[data_var] = {}
+            case_results["gridded"][data_var] = {}
             forecast_da = spatiotemporal_subset_ds[data_var].compute()
             gridded_obs_da = time_subset_gridded_obs_ds[data_var].compute()
             for metric in individual_case.metrics_list:
@@ -201,6 +202,7 @@ def _evaluate_case(
                 result = metric_instance.compute(forecast_da, gridded_obs_da)
                 case_results["gridded"][data_var][metric_instance.name] = result
     if point_obs is not None:
+        case_results["point"] = {}
         logger.info("entering point obs")
         case_subset_point_obs = point_obs.loc[point_obs["id"] == individual_case.id]
         case_subset_point_obs = case_subset_point_obs.rename(columns=utils.ISD_MAPPING)
@@ -264,7 +266,7 @@ def _evaluate_case(
         )
         logger.info("finished pick points")
         for data_var in individual_case.data_vars:
-            case_results[data_var] = {}
+            case_results["point"][data_var] = {}
             forecast_da = point_forecast_subset_ds[data_var]
             case_subset_point_obs_da = case_subset_point_obs_ds[data_var]
             for metric in individual_case.metrics_list:
