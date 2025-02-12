@@ -823,9 +823,17 @@ def run_isd_generation(
                         **individual_case["location"]
                     )
     for case in yaml_event_case["cases"]:
-        min_lat, max_lat, min_lon, max_lon = utils.get_bounding_corners(
-            case["location"], case["bounding_box_degrees"], convert_to_360=False
-        )
+        lat_center = case["location"].latitude
+        lon_center = case["location"].longitude
+        if isinstance(case["bounding_box_degrees"], tuple):
+            box_degrees_lat, box_degrees_lon = case["bounding_box_degrees"]
+        else:
+            box_degrees_lat = case["bounding_box_degrees"]
+            box_degrees_lon = case["bounding_box_degrees"]
+        min_lat = lat_center - box_degrees_lat / 2
+        max_lat = lat_center + box_degrees_lat / 2
+        min_lon = lon_center - box_degrees_lon / 2
+        max_lon = lon_center + box_degrees_lon / 2
 
         # Filter stations within bounding box
         stations_in_box = subset_stations_by_lat_lon_box(
