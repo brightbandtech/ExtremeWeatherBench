@@ -212,28 +212,29 @@ def _evaluate_case(
         case_subset_point_obs["surface_air_temperature"] = (
             case_subset_point_obs["surface_air_temperature"] + 273.15
         )
+        case_subset_point_obs = case_subset_point_obs[
+            (
+                case_subset_point_obs["latitude"]
+                >= spatiotemporal_subset_forecast_ds["latitude"].min().values
+            )
+            & (
+                case_subset_point_obs["latitude"]
+                <= spatiotemporal_subset_forecast_ds["latitude"].max().values
+            )
+            & (
+                case_subset_point_obs["longitude"]
+                >= spatiotemporal_subset_forecast_ds["longitude"].min().values
+            )
+            & (
+                case_subset_point_obs["longitude"]
+                <= spatiotemporal_subset_forecast_ds["longitude"].max().values
+            )
+        ]
+
         case_subset_point_obs_ds = case_subset_point_obs.set_index(
             ["time", "station"]
         ).to_xarray()
-        case_subset_point_obs_ds = case_subset_point_obs_ds.where(
-            (
-                case_subset_point_obs_ds.latitude
-                >= spatiotemporal_subset_forecast_ds["latitude"].min()
-            )
-            & (
-                case_subset_point_obs_ds.latitude
-                <= spatiotemporal_subset_forecast_ds["latitude"].max()
-            )
-            & (
-                case_subset_point_obs_ds.longitude
-                >= spatiotemporal_subset_forecast_ds["longitude"].min()
-            )
-            & (
-                case_subset_point_obs_ds.longitude
-                <= spatiotemporal_subset_forecast_ds["longitude"].max()
-            ),
-            drop=True,
-        )
+
         case_subset_point_obs_ds = case_subset_point_obs_ds.set_coords(
             ["latitude", "longitude", "name", "elev", "id", "call"]
         )
@@ -242,28 +243,37 @@ def _evaluate_case(
             case_subset_point_obs_ds[coord] = case_subset_point_obs_ds[coord].isel(
                 time=1, drop=True
             )
-        # Reshape dataset from (init_time, lead_time, point) to (init_time, lead_time, latitude, longitude)
-        case_subset_point_obs_ds = (
-            case_subset_point_obs_ds.set_index(station=["latitude", "longitude"])
-            .groupby("station")
-            .first()
-            .unstack("station")
-        )
+
         point_forecast_subset_ds = utils.pick_points(
             spatiotemporal_subset_forecast_ds,
-            case_subset_point_obs.drop_duplicates(subset=["name"])[
-                ["latitude", "longitude", "elev", "id", "name"]
-            ],
+            case_subset_point_obs.drop_duplicates(
+                subset=["latitude", "longitude", "station"]
+            )[["latitude", "longitude", "elev", "id", "name"]],
             config=eval_config,
             tree_name=individual_case.id,
+        ).rename({"point": "station"})
+
+        # swap the point observation data's lat/lon with the forecast data's lat/lon now that matching is complete
+        case_subset_point_obs_ds = case_subset_point_obs_ds.assign(
+            longitude=utils.swap_coords(
+                case_subset_point_obs_ds["longitude"],
+                point_forecast_subset_ds["longitude"],
+                point_forecast_subset_ds["point_longitude"],
+            ),
+            latitude=utils.swap_coords(
+                case_subset_point_obs_ds["latitude"],
+                point_forecast_subset_ds["latitude"],
+                point_forecast_subset_ds["point_latitude"],
+            ),
         )
-        # Reshape dataset from (init_time, lead_time, point) to (init_time, lead_time, latitude, longitude)
-        point_forecast_subset_ds = (
-            point_forecast_subset_ds.set_index(point=["latitude", "longitude"])
-            .groupby("point")
-            .first()
-            .unstack("point")
+
+        case_subset_point_obs_ds = utils.reshape_dataset_to_include_latlon(
+            case_subset_point_obs_ds, "station"
         )
+        point_forecast_subset_ds = utils.reshape_dataset_to_include_latlon(
+            point_forecast_subset_ds, "station"
+        )
+
         logger.info("finished pick points")
         for data_var in individual_case.data_vars:
             case_results["point"][data_var] = {}
@@ -276,7 +286,9 @@ def _evaluate_case(
                 )
                 result = metric_instance.compute(forecast_da, case_subset_point_obs_da)
                 case_results["point"][data_var][metric_instance.name] = result
-                logger.info(result)
+                logger.debug(
+                    "point, %s, %s, %s", data_var, metric_instance.name, result
+                )
     return case_results
 
 

@@ -686,3 +686,30 @@ def pick_points(
         return c
     else:
         raise ValueError("I didn't expect to be here.")
+
+
+def swap_coords(
+    coord_to_swap_from: xr.DataArray,
+    coord_to_swap_to: xr.DataArray,
+    coord_to_match_against: xr.DataArray,
+) -> xr.DataArray:
+    """Swap the coords of one DataArray with another based on a matching coordinate.
+    Args:
+        coord_to_swap_from: The coordinate to swap from.
+        coord_to_swap_to: The coordinate to swap to.
+        coord_to_match_against: The coordinate to match against.
+    Returns:
+        The swapped coordinate DataArray.
+    """
+    return xr.where(
+        coord_to_swap_from == coord_to_match_against,
+        coord_to_swap_to,
+        coord_to_match_against,
+    )
+
+
+def reshape_dataset_to_include_latlon(ds: xr.Dataset, dim: str) -> xr.Dataset:
+    """Reshape dataset from (init_time, lead_time, {dim}) to (init_time, lead_time, latitude, longitude)."""
+    return (
+        ds.set_index({dim: ["latitude", "longitude"]}).groupby(dim).first().unstack(dim)
+    )
