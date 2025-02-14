@@ -728,9 +728,9 @@ def derive_indices_from_init_time_and_lead_time(
     valid_times_reshaped = valid_times.reshape(
         (dataset.init_time.shape[0], dataset.lead_time.shape[0])
     )
-    indices = np.where(
+    valid_time_indices = np.where(
         (valid_times_reshaped > pd.to_datetime(start_date))
         & (valid_times_reshaped < pd.to_datetime(end_date))
     )
 
-    return indices
+    return valid_time_indices

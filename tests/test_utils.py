@@ -232,3 +232,171 @@ def test_clip_dataset_to_bounding_box_degrees():
     clipped_ds = utils.clip_dataset_to_bounding_box_degrees(
         ds, location_center, box_degrees
     )
+
+
+def test_swap_coords_basic():
+    # Create one-dimensional DataArrays
+    coord_from = xr.DataArray(np.array([1, 2, 3, 4]))
+    coord_to = xr.DataArray(np.array([10, 20, 30, 40]))
+    coord_match = xr.DataArray(np.array([1, 0, 3, 0]))
+    # Expected: where coord_from equals coord_match use coord_to value, else use coord_match value.
+    # Index 0: 1 == 1 -> 10
+    # Index 1: 2 != 0 -> 0
+    # Index 2: 3 == 3 -> 30
+    # Index 3: 4 != 0 -> 0
+    expected = np.array([10, 0, 30, 0])
+    result = utils.swap_coords(coord_from, coord_to, coord_match)
+    assert np.array_equal(result.values, expected)
+
+
+def test_swap_coords_multidimensional():
+    # Create two-dimensional DataArrays
+    coord_from = xr.DataArray(np.array([[1, 2], [3, 4]]))
+    coord_to = xr.DataArray(np.array([[100, 200], [300, 400]]))
+    coord_match = xr.DataArray(np.array([[1, 0], [4, 4]]))
+    # Expected:
+    # (0,0): 1 == 1 -> 100
+    # (0,1): 2 != 0 -> 0
+    # (1,0): 3 != 4 -> 4
+    # (1,1): 4 == 4 -> 400
+    expected = np.array([[100, 0], [4, 400]])
+    result = utils.swap_coords(coord_from, coord_to, coord_match)
+    assert np.array_equal(result.values, expected)
+
+
+def test_derive_indices_valid_range():
+    # Create a simple dataset with two init_time values and five lead_time values
+    init_times = pd.to_datetime(["2023-01-01 00:00", "2023-01-02 00:00"])
+    lead_times = np.array([0, 6, 12, 18, 24])
+    ds = xr.Dataset(
+        coords={
+            "init_time": init_times,
+            "lead_time": lead_times,
+        }
+    )
+
+    # Define a time window that should capture specific valid times.
+    # For the first init_time row, valid forecast times are:
+    # 2023-01-01 00:00, 06:00, 12:00, 18:00, 2023-01-02 00:00
+    # For the second init_time row, valid forecast times are:
+    # 2023-01-02 00:00, 06:00, 12:00, 18:00, 2023-01-03 00:00
+    # Set start and end so that only a subset falls in the window:
+    # window: (2023-01-01 03:00, 2023-01-02 15:00)
+    start_date = pd.Timestamp("2023-01-01 03:00")
+    end_date = pd.Timestamp("2023-01-02 15:00")
+
+    # Call function under test
+    indices = utils.derive_indices_from_init_time_and_lead_time(
+        ds, start_date, end_date
+    )
+
+    # indices is a tuple (row_indices, col_indices) from np.where:
+    # Expected valid times:
+    # For first row (init_time=2023-01-01 00:00): 06:00, 12:00, 18:00, 2023-01-02 00:00 => 4 values
+    # For second row (init_time=2023-01-02 00:00): 2023-01-02 00:00, 06:00, 12:00 => 3 values
+    expected_count = 4 + 3
+    assert indices[0].size == expected_count
+
+    # Check that the computed times fall within the expected range.
+    # Build the valid times grid for testing:
+    forecast_times = np.empty(
+        (len(init_times), len(lead_times)), dtype="datetime64[ns]"
+    )
+    for i, init in enumerate(init_times):
+        forecast_times[i, :] = init + pd.to_timedelta(lead_times, unit="h")
+    valid_times = forecast_times[indices]
+    assert all(valid_times > start_date)
+    assert all(valid_times < end_date)
+
+
+def test_derive_indices_no_matches():
+    # Create a dataset with one init_time and a few lead_time values
+    init_times = pd.to_datetime(["2023-01-01 00:00"])
+    lead_times = np.array([0, 6, 12])
+    ds = xr.Dataset(
+        coords={
+            "init_time": init_times,
+            "lead_time": lead_times,
+        }
+    )
+
+    # Define a time window that excludes all forecast times.
+    # Forecast times for this dataset are: 2023-01-01 00:00, 06:00, and 12:00.
+    # Use a window that does not cover any of these.
+    start_date = pd.Timestamp("2023-01-01 13:00")
+    end_date = pd.Timestamp("2023-01-01 14:00")
+
+    # Call function under test
+    indices = utils.derive_indices_from_init_time_and_lead_time(
+        ds, start_date, end_date
+    )
+
+    # Expect empty indices
+    assert indices[0].size == 0
+    assert indices[1].size == 0
+
+
+def test_reshape_dataset_to_include_latlon():
+    # Create a sample dataset with dims: init_time, lead_time, and a dummy dimension to be reshaped.
+
+    init_times = pd.date_range("2023-01-01", periods=2)
+    lead_times = [0, 6]
+    # Dummy index with two unique values; each dummy value has associated latitude and longitude.
+    dummy_vals = ["a", "b"]
+    lat_vals = [10.0, 20.0]
+    lon_vals = [100.0, 110.0]
+    # Create a data variable with shape (init_time, lead_time, dummy)
+    data = np.array(
+        [
+            [[1, 2], [3, 4]],
+            [[5, 6], [7, 8]],
+        ]
+    )
+    ds = xr.Dataset(
+        {"var": (("init_time", "lead_time", "dummy"), data)},
+        coords={
+            "init_time": init_times,
+            "lead_time": lead_times,
+            "dummy": dummy_vals,
+            "latitude": ("dummy", lat_vals),
+            "longitude": ("dummy", lon_vals),
+        },
+    )
+
+    reshaped_ds = utils.reshape_dataset_to_include_latlon(ds, "dummy")
+
+    # Check that the resulting dataset has the expected dimensions.
+    expected_dims = {"init_time", "lead_time", "latitude", "longitude"}
+    assert set(reshaped_ds.dims) == expected_dims
+
+    # Check that the latitude and longitude coordinates are as expected.
+    np.testing.assert_allclose(reshaped_ds.latitude.data, np.array(lat_vals))
+    np.testing.assert_allclose(reshaped_ds.longitude.data, np.array(lon_vals))
+
+    # Check that the variable 'var' has been reshaped correctly.
+    # The expected shape is (2, 2, 2, 2): for each combination of init_time and lead_time,
+    # there is a scalar value for each (latitude, longitude) pair.
+    expected_shape = (2, 2, 2, 2)
+    assert reshaped_ds["var"].shape == expected_shape
+
+    # Verify that values are correctly mapped.
+    # For dummy 'a' (lat 10, lon 100), the value should equal the corresponding value from the original dataset.
+    # For init_time index 0 and lead_time index 0, original value is 1.
+    val_a = ds["var"].sel(dummy="a").isel(init_time=0, lead_time=0).item()
+    val_from_reshaped_a = (
+        reshaped_ds["var"]
+        .sel(latitude=10.0, longitude=100.0)
+        .isel(init_time=0, lead_time=0)
+        .item()
+    )
+    assert val_a == val_from_reshaped_a
+
+    # For dummy 'b' (lat 20, lon 110), for example init_time index 1 and lead_time index 1, original value is 8.
+    val_b = ds["var"].sel(dummy="b").isel(init_time=1, lead_time=1).item()
+    val_from_reshaped_b = (
+        reshaped_ds["var"]
+        .sel(latitude=20.0, longitude=110.0)
+        .isel(init_time=1, lead_time=1)
+        .item()
+    )
+    assert val_b == val_from_reshaped_b
