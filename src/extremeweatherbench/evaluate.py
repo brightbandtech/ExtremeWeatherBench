@@ -101,7 +101,6 @@ def evaluate(
                 if x
             ]
         ),
-        # TODO: This does not work properly, needs to skip None values
         sum(len(results) for results in all_results.values() if results is not None),
     )
     return all_results
