@@ -2,6 +2,9 @@ import pytest
 import xarray as xr
 from extremeweatherbench import config, events, case, evaluate
 import datetime
+import numpy as np
+import pandas as pd
+from extremeweatherbench import evaluate, config, utils, events
 
 
 def test_evaluate_no_computation(mock_config):
@@ -88,3 +91,137 @@ def test_evaluate_full_workflow(
                     assert isinstance(v3, dict)  # metric name
                     for _, v4 in v3.items():
                         assert isinstance(v4, xr.DataArray)  # metric value
+
+
+# Dummy metric that returns a constant xarray.DataArray and has a name attribute.
+class DummyMetric:
+    name = "dummy_metric"
+
+    def __call__(self):
+        return self
+
+    def compute(self, forecast_da, obs_da):
+        return xr.DataArray(1)
+
+
+# DummyCase mimics an IndividualCase with minimal implementations.
+class DummyCase:
+    def __init__(self, id, title, start_date, end_date):
+        self.id = id
+        self.title = title
+        self.start_date = start_date
+        self.end_date = end_date
+        self.data_vars = ["var"]
+        self.metrics_list = [DummyMetric]
+
+    def _subset_data_vars(self, ds):
+        return ds
+
+    def _subset_valid_times(self, ds):
+        # Return an object with a compute() method that returns ds.
+        class DummyCompute:
+            def __init__(self, ds):
+                self.ds = ds
+
+            def compute(self):
+                return self.ds
+
+        return DummyCompute(ds)
+
+    def perform_subsetting_procedure(self, ds):
+        return ds
+
+
+# Test when no forecast data is available (i.e., empty "init_time").
+def test_evaluate_case_no_forecast_data():
+    start = datetime.datetime(2021, 6, 20)
+    end = datetime.datetime(2021, 6, 22)
+    dummy = DummyCase(1, "no_forecast", start, end)
+    # Create a forecast dataset with an empty 'init_time' coordinate.
+    forecast_ds = xr.Dataset(
+        {"var": xr.DataArray([], dims=["init_time"])}, coords={"init_time": []}
+    )
+    result = evaluate._evaluate_case(
+        dummy,
+        forecast_ds,
+        None,
+        None,
+        config.Config(event_types=[events.HeatWave], forecast_dir="dummy"),
+    )
+    assert result is None
+
+
+# Test evaluation when gridded observations are provided.
+def test_evaluate_case_gridded():
+    start = datetime.datetime(2021, 6, 20)
+    end = datetime.datetime(2021, 6, 23)
+    dummy = DummyCase(2, "gridded_test", start, end)
+    # Create a forecast dataset with 4 time points.
+    times = pd.date_range(start, periods=4)
+    forecast_ds = xr.Dataset(
+        {"var": xr.DataArray(np.arange(4), dims=["init_time"])},
+        coords={"init_time": times, "latitude": [45.0], "longitude": [260.0]},
+    )
+    # Create a gridded observation dataset with a 'time' coordinate.
+    obs_times = pd.date_range(start, end)
+    gridded_obs = xr.Dataset(
+        {"var": xr.DataArray(np.arange(len(obs_times)), dims=["time"])},
+        coords={"time": obs_times, "latitude": [45.0], "longitude": [260.0]},
+    )
+    result = evaluate._evaluate_case(
+        dummy,
+        forecast_ds,
+        gridded_obs,
+        None,
+        config.Config(event_types=[events.HeatWave], forecast_dir="dummy"),
+    )
+    assert "gridded" in result
+    assert "var" in result["gridded"]
+    assert "dummy_metric" in result["gridded"]["var"]
+    assert isinstance(result["gridded"]["var"]["dummy_metric"], xr.DataArray)
+
+
+# Test evaluation when point observations are provided.
+def test_evaluate_case_point(monkeypatch):
+    start = datetime.datetime(2021, 6, 20)
+    end = datetime.datetime(2021, 6, 23)
+    dummy = DummyCase(3, "point_test", start, end)
+    times = pd.date_range(start, periods=4)
+    forecast_ds = xr.Dataset(
+        {"var": xr.DataArray(np.arange(4), dims=["init_time"])},
+        coords={"init_time": times, "latitude": [45.0], "longitude": [260.0]},
+    )
+    # Create a minimal point observations DataFrame.
+    point_obs = pd.DataFrame(
+        {
+            "id": [3],
+            "latitude": [45.0],
+            "longitude": [260.0],
+            "station": ["A"],
+            "elev": [100],
+            "name": ["Station_A"],
+            "call": ["X"],
+            "time": [start],
+            "surface_air_temperature": [10],
+        }
+    )
+    # Monkey-patch utility functions used in point observation processing.
+    monkeypatch.setattr(utils, "swap_coords", lambda a, b, c: a)
+    monkeypatch.setattr(utils, "pick_points", lambda ds, df, config, tree_name: ds)
+    monkeypatch.setattr(
+        utils, "reshape_dataset_to_include_latlon", lambda ds, station: ds
+    )
+    # Ensure ISD_MAPPING exists.
+    if not hasattr(utils, "ISD_MAPPING"):
+        utils.ISD_MAPPING = {}
+    result = evaluate._evaluate_case(
+        dummy,
+        forecast_ds,
+        None,
+        point_obs,
+        config.Config(event_types=[events.HeatWave], forecast_dir="dummy"),
+    )
+    assert "point" in result
+    assert "var" in result["point"]
+    assert "dummy_metric" in result["point"]["var"]
+    assert isinstance(result["point"]["var"]["dummy_metric"], xr.DataArray)
