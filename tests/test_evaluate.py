@@ -1,10 +1,9 @@
 import pytest
 import xarray as xr
-from extremeweatherbench import config, events, case, evaluate
+from extremeweatherbench import config, events, case, evaluate, utils
 import datetime
 import numpy as np
 import pandas as pd
-from extremeweatherbench import evaluate, config, utils, events
 
 
 def test_evaluate_no_computation(mock_config):
