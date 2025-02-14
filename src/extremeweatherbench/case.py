@@ -82,7 +82,7 @@ class IndividualCase:
             xr.Dataset: The subset dataset.
         """
         # TODO move to utils
-        indices = derive_indices_from_init_time_and_lead_time(
+        indices = utils.derive_indices_from_init_time_and_lead_time(
             dataset, self.start_date, self.end_date
         )
         modified_ds = dataset.isel(init_time=np.unique(indices[0]))
@@ -210,24 +210,3 @@ def get_case_event_dataclass(case_type: str) -> Type[IndividualCase]:
     if event_dataclass is None:
         raise ValueError(f"Unknown case event type {case_type}")
     return event_dataclass
-
-
-def derive_indices_from_init_time_and_lead_time(
-    dataset: xr.Dataset,
-    start_date: datetime.datetime,
-    end_date: datetime.datetime,
-) -> Tuple[np.ndarray]:
-    lead_time_grid, init_time_grid = np.meshgrid(dataset.lead_time, dataset.init_time)
-    valid_times = (
-        init_time_grid.flatten()
-        + pd.to_timedelta(lead_time_grid.flatten(), unit="h").to_numpy()
-    )
-    valid_times_reshaped = valid_times.reshape(
-        (dataset.init_time.shape[0], dataset.lead_time.shape[0])
-    )
-    indices = np.where(
-        (valid_times_reshaped > pd.to_datetime(start_date))
-        & (valid_times_reshaped < pd.to_datetime(end_date))
-    )
-
-    return indices

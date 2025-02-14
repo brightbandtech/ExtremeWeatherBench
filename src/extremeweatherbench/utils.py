@@ -2,7 +2,7 @@
 other specialized package.
 """
 
-from typing import Union, List, Literal, Optional
+from typing import Union, List, Literal, Optional, Tuple
 from collections import namedtuple
 import fsspec
 import numpy as np
@@ -713,3 +713,24 @@ def reshape_dataset_to_include_latlon(ds: xr.Dataset, dim: str) -> xr.Dataset:
     return (
         ds.set_index({dim: ["latitude", "longitude"]}).groupby(dim).first().unstack(dim)
     )
+
+
+def derive_indices_from_init_time_and_lead_time(
+    dataset: xr.Dataset,
+    start_date: datetime.datetime,
+    end_date: datetime.datetime,
+) -> Tuple[np.ndarray]:
+    lead_time_grid, init_time_grid = np.meshgrid(dataset.lead_time, dataset.init_time)
+    valid_times = (
+        init_time_grid.flatten()
+        + pd.to_timedelta(lead_time_grid.flatten(), unit="h").to_numpy()
+    )
+    valid_times_reshaped = valid_times.reshape(
+        (dataset.init_time.shape[0], dataset.lead_time.shape[0])
+    )
+    indices = np.where(
+        (valid_times_reshaped > pd.to_datetime(start_date))
+        & (valid_times_reshaped < pd.to_datetime(end_date))
+    )
+
+    return indices
