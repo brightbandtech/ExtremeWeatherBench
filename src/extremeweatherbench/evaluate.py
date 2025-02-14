@@ -197,13 +197,15 @@ def _evaluate_case(
             for metric in individual_case.metrics_list:
                 metric_instance = metric()
                 logging.debug(
-                    "metric %s computing for %s", metric_instance.name, data_var
+                    "gridded metric %s computing for %s", metric_instance.name, data_var
                 )
                 result = metric_instance.compute(forecast_da, gridded_obs_da)
                 case_results["gridded"][data_var][metric_instance.name] = result
+                logger.debug(
+                    "gridded, %s, %s, %s", data_var, metric_instance.name, result
+                )
     if point_obs is not None:
         case_results["point"] = {}
-        logger.info("entering point obs")
         case_subset_point_obs = point_obs.loc[point_obs["id"] == individual_case.id]
         case_subset_point_obs = case_subset_point_obs.rename(columns=utils.ISD_MAPPING)
         case_subset_point_obs["longitude"] = utils.convert_longitude_to_360(
@@ -274,7 +276,6 @@ def _evaluate_case(
             point_forecast_subset_ds, "station"
         )
 
-        logger.info("finished pick points")
         for data_var in individual_case.data_vars:
             case_results["point"][data_var] = {}
             forecast_da = point_forecast_subset_ds[data_var]
@@ -282,7 +283,7 @@ def _evaluate_case(
             for metric in individual_case.metrics_list:
                 metric_instance = metric()
                 logging.debug(
-                    "metric %s computing for %s", metric_instance.name, data_var
+                    "point metric %s computing for %s", metric_instance.name, data_var
                 )
                 result = metric_instance.compute(forecast_da, case_subset_point_obs_da)
                 case_results["point"][data_var][metric_instance.name] = result
