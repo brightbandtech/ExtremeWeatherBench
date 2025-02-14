@@ -81,7 +81,6 @@ class IndividualCase:
         Returns:
             xr.Dataset: The subset dataset.
         """
-        # TODO move to utils
         indices = utils.derive_indices_from_init_time_and_lead_time(
             dataset, self.start_date, self.end_date
         )
@@ -135,6 +134,7 @@ class IndividualHeatWaveCase(IndividualCase):
             metrics.MaximumMAE,
         ]
     )
+    # TODO: remove default factory?; simplify to just data_vars
     data_vars: List[str] = dataclasses.field(
         default_factory=lambda: ["surface_air_temperature"]
     )

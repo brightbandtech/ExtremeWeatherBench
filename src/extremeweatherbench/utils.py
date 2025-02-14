@@ -505,7 +505,7 @@ def pick_points(
         print(
             f"🌳 BallTree grew in {(pd.Timestamp('now') - timer).total_seconds():.2} seconds."
         )
-        if save_pickle:
+        if config.cache_dir is not None:
             try:
                 Path(save_pickle).parent.mkdir(parents=True, exist_ok=True)
                 with open(save_pickle, "wb") as f:
