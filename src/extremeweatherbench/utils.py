@@ -505,7 +505,7 @@ def pick_points(
         print(
             f"🌳 BallTree grew in {(pd.Timestamp('now') - timer).total_seconds():.2} seconds."
         )
-        if config.cache_dir is not None:
+        if config.cache_dir is not None and save_pickle is not None:
             try:
                 Path(save_pickle).parent.mkdir(parents=True, exist_ok=True)
                 with open(save_pickle, "wb") as f:
@@ -734,3 +734,17 @@ def derive_indices_from_init_time_and_lead_time(
     )
 
     return valid_time_indices
+
+
+def unit_check(df: pd.DataFrame) -> pd.DataFrame:
+    """Base function to test for units in the point obs dataframe.
+    Potential to expand more comprehensively.
+
+    Arguments:
+        df: dataframe with point obs.
+
+
+    Returns a corrected dataframe."""
+    if "surface_air_temperature" in df.columns:
+        df["surface_air_temperature"] = df["surface_air_temperature"] + 273.15
+    return df

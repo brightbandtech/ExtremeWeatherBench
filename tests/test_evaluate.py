@@ -139,7 +139,8 @@ def test_evaluate_case_no_forecast_data():
     dummy = DummyCase(1, "no_forecast", start, end)
     # Create a forecast dataset with an empty 'init_time' coordinate.
     forecast_ds = xr.Dataset(
-        {"var": xr.DataArray([], dims=["init_time"])}, coords={"init_time": []}
+        {"var": xr.DataArray([], dims=["init_time"])},
+        coords={"init_time": []},
     )
     result = evaluate._evaluate_case(
         dummy,
@@ -188,7 +189,12 @@ def test_evaluate_case_point(monkeypatch):
     dummy = DummyCase(3, "point_test", start, end)
     times = pd.date_range(start, periods=4)
     forecast_ds = xr.Dataset(
-        {"var": xr.DataArray(np.arange(4), dims=["init_time"])},
+        {
+            "var": xr.DataArray(
+                np.arange(4).reshape(4, 1, 1),
+                dims=["init_time", "latitude", "longitude"],
+            )
+        },
         coords={"init_time": times, "latitude": [45.0], "longitude": [260.0]},
     )
     # Create a minimal point observations DataFrame.
@@ -202,15 +208,11 @@ def test_evaluate_case_point(monkeypatch):
             "name": ["Station_A"],
             "call": ["X"],
             "time": [start],
-            "surface_air_temperature": [10],
+            "var": [10],
         }
     )
     # Monkey-patch utility functions used in point observation processing.
     monkeypatch.setattr(utils, "swap_coords", lambda a, b, c: a)
-    monkeypatch.setattr(utils, "pick_points", lambda ds, df, config, tree_name: ds)
-    monkeypatch.setattr(
-        utils, "reshape_dataset_to_include_latlon", lambda ds, station: ds
-    )
     # Ensure ISD_MAPPING exists.
     if not hasattr(utils, "ISD_MAPPING"):
         utils.ISD_MAPPING = {}

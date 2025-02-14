@@ -211,9 +211,7 @@ def _evaluate_case(
         case_subset_point_obs["longitude"] = utils.convert_longitude_to_360(
             case_subset_point_obs["longitude"]
         )
-        case_subset_point_obs["surface_air_temperature"] = (
-            case_subset_point_obs["surface_air_temperature"] + 273.15
-        )
+        case_subset_point_obs = utils.unit_check(case_subset_point_obs)
         case_subset_point_obs = case_subset_point_obs[
             (
                 case_subset_point_obs["latitude"]
@@ -243,7 +241,7 @@ def _evaluate_case(
         # remove unnecessary time dimension from lat and lon
         for coord in ["latitude", "longitude"]:
             case_subset_point_obs_ds[coord] = case_subset_point_obs_ds[coord].isel(
-                time=1, drop=True
+                time=0, drop=True
             )
 
         point_forecast_subset_ds = utils.pick_points(
@@ -253,7 +251,8 @@ def _evaluate_case(
             )[["latitude", "longitude", "elev", "id", "name"]],
             config=eval_config,
             tree_name=individual_case.id,
-        ).rename({"point": "station"})
+        )
+        point_forecast_subset_ds = point_forecast_subset_ds.rename({"point": "station"})
 
         # swap the point observation data's lat/lon with the forecast data's lat/lon now that matching is complete
         case_subset_point_obs_ds = case_subset_point_obs_ds.assign(
