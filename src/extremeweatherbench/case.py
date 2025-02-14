@@ -3,11 +3,10 @@ Some code similarly structured to WeatherBench (Rasp et al.)."""
 
 import dataclasses
 import datetime
-from typing import List, Optional, Tuple, Type
+from typing import List, Optional, Type
 from extremeweatherbench import metrics, utils
 import xarray as xr
 from enum import StrEnum
-import pandas as pd
 import numpy as np
 import logging
 
