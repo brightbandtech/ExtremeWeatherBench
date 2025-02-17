@@ -80,7 +80,7 @@ def evaluate(
             )
         logger.debug("beginning evaluation loop for %s", event.event_type)
         results = _evaluate_cases_loop(
-            cases, forecast_dataset, gridded_obs, point_obs, eval_config
+            cases, forecast_dataset, eval_config, gridded_obs, point_obs
         )
         all_results[event.event_type] = results
         logger.debug("evaluation loop complete for %s", event.event_type)
@@ -110,9 +110,9 @@ def evaluate(
 def _evaluate_cases_loop(
     event: events.EventContainer,
     forecast_dataset: xr.Dataset,
+    eval_config: config.Config,
     gridded_obs: Optional[xr.Dataset] = None,
     point_obs: Optional[pd.DataFrame] = None,
-    eval_config: config.Config = None,
 ) -> dict[Any, Optional[dict[str, Any]]]:
     """Sequentially loop over and evalute all cases for a specific event type.
 
