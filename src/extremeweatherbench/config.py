@@ -5,9 +5,12 @@ from typing import List, Optional
 
 from extremeweatherbench import events
 
-DEFAULT_OUTPUT_DIR = "data/outputs/"
-DEFAULT_FORECAST_DIR = "data/forecasts/"
-DEFAULT_CACHE_DIR = "data/cache/"
+from pathlib import Path
+
+DATA_DIR = Path("./data")  # ... or generate a temp directory
+DEFAULT_OUTPUT_DIR = DATA_DIR / "outputs"
+DEFAULT_FORECAST_DIR = DATA_DIR / "forecasts"
+DEFAULT_CACHE_DIR = DATA_DIR / "cache"
 ARCO_ERA5_FULL_URI = (
     "gs://gcp-public-data-arco-era5/ar/full_37-1h-0p25deg-chunk-1.zarr-v3"
 )
