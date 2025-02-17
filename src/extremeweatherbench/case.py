@@ -144,7 +144,7 @@ class IndividualHeatWaveCase(IndividualCase):
     def perform_subsetting_procedure(self, dataset: xr.Dataset) -> xr.Dataset:
         modified_ds = utils.clip_dataset_to_bounding_box_degrees(
             dataset, self.location, self.bounding_box_degrees
-        ).compute()
+        )
         modified_ds = utils.remove_ocean_gridpoints(modified_ds)
         return modified_ds
 
