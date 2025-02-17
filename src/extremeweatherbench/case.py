@@ -133,7 +133,7 @@ class IndividualHeatWaveCase(IndividualCase):
             metrics.MaximumMAE,
         ]
     )
-    # TODO: remove default factory?; simplify to just data_vars
+    # TODO: #62 test and choose between removing default factory or simplifying to just data_vars in post_init
     data_vars: List[str] = dataclasses.field(
         default_factory=lambda: ["surface_air_temperature"]
     )
@@ -181,7 +181,7 @@ class IndividualFreezeCase(IndividualCase):
     def perform_subsetting_procedure(self, dataset) -> xr.Dataset:
         modified_ds = utils.clip_dataset_to_bounding_box_degrees(
             dataset, self.location, self.bounding_box_degrees
-        ).compute()
+        )
         return modified_ds
 
 

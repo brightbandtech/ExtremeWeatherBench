@@ -58,20 +58,20 @@ class ForecastSchemaConfig:
     based on the CF Conventions. Default values are based on the CIRA MLWP archive.
 
     Attributes:
-        surface_air_temperature: The name of the variable representing surface air
+        surface_air_temperature: variable name in the forecast data for surface air
             temperature.
-        surface_eastward_wind: The name of the variable representing eastward wind
+        surface_eastward_wind: variable name in the forecast data for eastward wind
             at 10m.
-        surface_northward_wind: The name of the variable representing northward wind
+        surface_northward_wind: variable name in the forecast data for northward wind
             at 10m.
-        air_pressure_at_mean_sea_level: The name of the variable representing air
+        air_pressure_at_mean_sea_level: variable name in the forecast data for air
             pressure at mean sea level.
-        lead_time: The name of the dimension representing lead time.
-        init_time: The name of the dimension representing initialization time.
-        fhour: The name of the dimension representing forecast hour.
-        level: The name of the dimension representing vertical level.
-        latitude: The name of the dimension representing latitude.
-        longitude: The name of the dimension representing longitude.
+        lead_time: coordinate name in the forecast data representing lead time.
+        init_time: coordinate name in the forecast data representing initialization time.
+        fhour: coordinate name in the forecast data representing forecast hour.
+        level: coordinate name in the forecast data representing vertical level.
+        latitude: coordinate name in the forecast data representing latitude.
+        longitude: coordinate name in the forecast data representing longitude.
     """
 
     surface_air_temperature: Optional[str] = "t2"

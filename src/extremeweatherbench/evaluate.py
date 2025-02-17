@@ -15,6 +15,15 @@ logger.setLevel(logging.INFO)
 #: Default mapping for forecast dataset schema.
 DEFAULT_FORECAST_SCHEMA_CONFIG = config.ForecastSchemaConfig()
 
+#: The default point observations are provided via Brightband's public GCS bucket.
+#  This editable default allows for quick access to the repository in case of
+#  existing credentials on the local machine.
+POINT_OBS_STORAGE_OPTIONS = dict(token="anon")
+
+#: Similarly to point obs, this allows for quick access to the Google repository
+#  for the ERA5 ARCO dataset.
+GRIDDED_OBS_STORAGE_OPTIONS = dict(token="anon")
+
 
 def evaluate(
     eval_config: config.Config,
@@ -38,7 +47,8 @@ def evaluate(
 
     all_results = {}
     yaml_event_case = utils.load_events_yaml()
-    # TODO: #58 move loop to function or better paradigm
+    # TODO: #58 move loop to function or better paradigm. Want to test to see if there's a more
+    # efficient and readable methodology to manage the conversion of location to a namedtuple.
     for k, v in yaml_event_case.items():
         if k == "cases":
             for individual_case in v:
@@ -101,7 +111,8 @@ def evaluate(
                 if x
             ]
         ),
-        # TODO: This does not work properly, needs to skip None values
+        # TODO: #63 loop does not work properly, it does not skip None's outputting the sum of all cases.
+        # Needs to skip None values
         sum(len(results) for results in all_results.values() if results is not None),
     )
     return all_results
@@ -213,24 +224,13 @@ def _evaluate_case(
             case_subset_point_obs["longitude"]
         )
         case_subset_point_obs = utils.unit_check(case_subset_point_obs)
-        case_subset_point_obs = case_subset_point_obs[
-            (
-                case_subset_point_obs["latitude"]
-                >= spatiotemporal_subset_forecast_ds["latitude"].min().values
-            )
-            & (
-                case_subset_point_obs["latitude"]
-                <= spatiotemporal_subset_forecast_ds["latitude"].max().values
-            )
-            & (
-                case_subset_point_obs["longitude"]
-                >= spatiotemporal_subset_forecast_ds["longitude"].min().values
-            )
-            & (
-                case_subset_point_obs["longitude"]
-                <= spatiotemporal_subset_forecast_ds["longitude"].max().values
-            )
-        ]
+        case_subset_point_obs = utils.location_subset_point_obs(
+            case_subset_point_obs,
+            spatiotemporal_subset_ds["latitude"].min().values,
+            spatiotemporal_subset_ds["latitude"].max().values,
+            spatiotemporal_subset_ds["longitude"].min().values,
+            spatiotemporal_subset_ds["longitude"].max().values,
+        )
 
         case_subset_point_obs_ds = case_subset_point_obs.set_index(
             ["time", "station"]
@@ -297,7 +297,7 @@ def _open_forecast_dataset(
     eval_config: config.Config,
     forecast_schema_config: config.ForecastSchemaConfig = DEFAULT_FORECAST_SCHEMA_CONFIG,
 ):
-    # TODO: #57 make all this much faster and ...better code
+    # TODO: #57 Transfer over to new data_loading module that handles each source (cloud, local) and is tested
     """Open the forecast dataset specified for evaluation."""
     logging.debug("Opening forecast dataset")
     if eval_config.forecast_dir.startswith("s3://"):
@@ -338,13 +338,13 @@ def _open_obs_datasets(eval_config: config.Config):
     gridded_obs = None
     if eval_config.point_obs_path:
         point_obs = pd.read_parquet(
-            eval_config.point_obs_path, storage_options=dict(token="anon")
+            eval_config.point_obs_path, storage_options=POINT_OBS_STORAGE_OPTIONS
         )
     if eval_config.gridded_obs_path:
         gridded_obs = xr.open_zarr(
             eval_config.gridded_obs_path,
             chunks=None,
-            storage_options=dict(token="anon"),
+            storage_options=GRIDDED_OBS_STORAGE_OPTIONS,
         )
     if point_obs is None and gridded_obs is None:
         raise ValueError("No gridded or point observation data provided.")

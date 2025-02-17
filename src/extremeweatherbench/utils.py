@@ -699,8 +699,7 @@ def swap_coords(
         coord_to_swap_to: The coordinate to swap to.
         coord_to_match_against: The coordinate to match against.
     Returns:
-        The swapped coordinate DataArray.
-    """
+        The swapped coordinate DataArray."""
     return xr.where(
         coord_to_swap_from == coord_to_match_against,
         coord_to_swap_to,
@@ -748,3 +747,25 @@ def unit_check(df: pd.DataFrame) -> pd.DataFrame:
     if "surface_air_temperature" in df.columns:
         df["surface_air_temperature"] = df["surface_air_temperature"] + 273.15
     return df
+
+
+def location_subset_point_obs(
+    df: pd.DataFrame, min_lat: float, max_lat: float, min_lon: float, max_lon: float
+):
+    """Subset a dataframe based upon maximum and minimum latitudes and longitudes.
+
+    Arguments:
+        df: dataframe with point obs.
+        min_lat: minimum latitude.
+        max_lat: maximum latitude.
+        min_lon: minimum longitude.
+        max_lon: maximum longitude.
+
+    Returns a subset dataframe."""
+    location_subset_df = df[
+        (df["latitude"] >= min_lat)
+        & (df["latitude"] <= max_lat)
+        & (df["longitude"] >= min_lon)
+        & (df["longitude"] <= max_lon)
+    ]
+    return location_subset_df
