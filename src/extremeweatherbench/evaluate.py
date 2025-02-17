@@ -226,10 +226,10 @@ def _evaluate_case(
         case_subset_point_obs = utils.unit_check(case_subset_point_obs)
         case_subset_point_obs = utils.location_subset_point_obs(
             case_subset_point_obs,
-            spatiotemporal_subset_ds["latitude"].min().values,
-            spatiotemporal_subset_ds["latitude"].max().values,
-            spatiotemporal_subset_ds["longitude"].min().values,
-            spatiotemporal_subset_ds["longitude"].max().values,
+            spatiotemporal_subset_forecast_ds["latitude"].min().values,
+            spatiotemporal_subset_forecast_ds["latitude"].max().values,
+            spatiotemporal_subset_forecast_ds["longitude"].min().values,
+            spatiotemporal_subset_forecast_ds["longitude"].max().values,
         )
 
         case_subset_point_obs_ds = case_subset_point_obs.set_index(
