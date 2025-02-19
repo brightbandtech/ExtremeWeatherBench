@@ -341,8 +341,20 @@ def temporal_align_dataarrays(
     Returns:
         A tuple containing the time-aligned forecast and observation dataarrays.
     """
-
-    forecast = forecast.sel(init_time=init_time_datetime)
+    if "init_time" in forecast.dims:
+        forecast = forecast.sel(init_time=init_time_datetime)
+    else:
+        # In the case of point obs where the only dim is station for both forecast and obs
+        forecast = (
+            forecast.groupby(["init_time", "lead_time", "station"])
+            .mean()
+            .sel(init_time=init_time_datetime)
+        )
+        observation = (
+            observation.groupby(["init_time", "time", "station"])
+            .first()
+            .sel(init_time=init_time_datetime)
+        )
     time = np.array(
         [init_time_datetime + pd.Timedelta(hours=int(t)) for t in forecast["lead_time"]]
     )

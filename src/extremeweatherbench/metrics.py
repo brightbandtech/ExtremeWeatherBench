@@ -31,19 +31,10 @@ class RegionalRMSE(Metric):
 
     def compute(self, forecast: xr.DataArray, observation: xr.DataArray):
         rmse_values = []
-        # TODO(aaTman): #65 put these if statements into a separate utility function; it's used now on each
-        # metric.
-        if "latitude" in observation.dims and "longitude" in observation.dims:
-            observation_spatial_mean = observation.mean(["latitude", "longitude"])
-        if "latitude" in forecast.dims and "longitude" in forecast.dims:
-            forecast_spatial_mean = forecast.mean(["latitude", "longitude"])
-        else:
-            forecast_spatial_mean = forecast.groupby(["lead_time", "init_time"]).mean()
-            observation_spatial_mean = observation.groupby(["time"]).mean()
-        for init_time in forecast_spatial_mean.init_time:
+        for init_time in forecast.init_time:
             init_forecast, subset_observation = utils.temporal_align_dataarrays(
-                forecast_spatial_mean,
-                observation_spatial_mean,
+                forecast,
+                observation,
                 pd.Timestamp(init_time.values).to_pydatetime(),
             )
             output_rmse = rmse(init_forecast, subset_observation, preserve_dims="time")
