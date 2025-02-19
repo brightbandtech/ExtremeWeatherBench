@@ -58,16 +58,26 @@ class MaximumMAE(Metric):
 
     def compute(self, forecast: xr.DataArray, observation: xr.DataArray):
         max_mae_values = []
-        if "latitude" in observation.dims and "longitude" in observation.dims:
+        obs_has_latlon = all(
+            dim in observation.dims for dim in ("latitude", "longitude")
+        )
+        forecast_has_latlon = all(
+            dim in forecast.dims for dim in ("latitude", "longitude")
+        )
+        if obs_has_latlon and forecast_has_latlon:
             observation_spatial_mean = observation.mean(["latitude", "longitude"])
-        if "latitude" in forecast.dims and "longitude" in forecast.dims:
             forecast_spatial_mean = forecast.mean(["latitude", "longitude"])
+            observation_spatial_mean = utils.align_observations_temporal_resolution(
+                forecast_spatial_mean, observation_spatial_mean
+            )
+        elif obs_has_latlon != forecast_has_latlon:
+            raise ValueError(
+                "Latitude and longitude dimensions must be present in forecast and obs dataarrays."
+            )
         else:
+            # if both forecast and observation do not have lat/lon dimensions, point obs
             forecast_spatial_mean = forecast.groupby(["lead_time", "init_time"]).mean()
             observation_spatial_mean = observation.groupby(["time"]).mean()
-        observation_spatial_mean = utils.align_observations_temporal_resolution(
-            forecast_spatial_mean, observation_spatial_mean
-        )
         for init_time in forecast_spatial_mean.init_time:
             max_datetime = observation_spatial_mean.idxmax("time").values
             max_value = observation_spatial_mean.sel(time=max_datetime).values
@@ -115,14 +125,29 @@ class MaxOfMinTempMAE(Metric):
 
     def compute(self, forecast: xr.DataArray, observation: xr.DataArray):
         max_min_mae_values = []
-        if "latitude" in observation.dims and "longitude" in observation.dims:
+        obs_has_latlon = all(
+            dim in observation.dims for dim in ("latitude", "longitude")
+        )
+        forecast_has_latlon = all(
+            dim in forecast.dims for dim in ("latitude", "longitude")
+        )
+        if obs_has_latlon and forecast_has_latlon:
             observation_spatial_mean = observation.mean(["latitude", "longitude"])
-        if "latitude" in forecast.dims and "longitude" in forecast.dims:
             forecast_spatial_mean = forecast.mean(["latitude", "longitude"])
+            observation_spatial_mean = utils.align_observations_temporal_resolution(
+                forecast_spatial_mean, observation_spatial_mean
+            )
+        elif obs_has_latlon != forecast_has_latlon:
+            raise ValueError(
+                "Latitude and longitude dimensions must be present in forecast and obs dataarrays."
+            )
         else:
+            # if both forecast and observation do not have lat/lon dimensions, point obs
             forecast_spatial_mean = forecast.groupby(["lead_time", "init_time"]).mean()
             observation_spatial_mean = observation.groupby(["time"]).mean()
-
+        observation_spatial_mean = utils.align_observations_temporal_resolution(
+            forecast_spatial_mean, observation_spatial_mean
+        )
         observation_spatial_mean = utils.truncate_incomplete_days(
             observation_spatial_mean
         )
