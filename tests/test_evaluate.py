@@ -132,97 +132,116 @@ class DummyCase:
 
 
 # Test when no forecast data is available (i.e., empty "init_time").
-def test_evaluate_case_no_forecast_data():
-    start = datetime.datetime(2021, 6, 20)
-    end = datetime.datetime(2021, 6, 22)
-    dummy = DummyCase(1, "no_forecast", start, end)
-    # Create a forecast dataset with an empty 'init_time' coordinate.
-    forecast_ds = xr.Dataset(
-        {"var": xr.DataArray([], dims=["init_time"])},
-        coords={"init_time": []},
-    )
-    result = evaluate._evaluate_case(
-        dummy,
-        forecast_ds,
-        None,
-        None,
-        config.Config(event_types=[events.HeatWave], forecast_dir="dummy"),
-    )
-    assert result is None
+def test_evaluate_case_no_forecast_data(
+    sample_empty_forecast_dataset, sample_individual_case
+):
+    with pytest.raises(ValueError):
+        evaluate._evaluate_case(
+            sample_individual_case,
+            sample_empty_forecast_dataset,
+            None,
+            None,
+            config.Config(event_types=[events.HeatWave], forecast_dir="dummy"),
+        )
 
 
 # Test evaluation when gridded observations are provided.
-def test_evaluate_case_gridded():
-    start = datetime.datetime(2021, 6, 20)
-    end = datetime.datetime(2021, 6, 23)
-    dummy = DummyCase(2, "gridded_test", start, end)
+def test_evaluate_case_gridded(sample_individual_case):
+    sample_individual_case_heatwave = case.IndividualHeatWaveCase(
+        **sample_individual_case.__dict__
+    )
+    start = sample_individual_case_heatwave.start_date
+    end = sample_individual_case_heatwave.end_date
     # Create a forecast dataset with 4 time points.
     times = pd.date_range(start, periods=4)
     forecast_ds = xr.Dataset(
-        {"var": xr.DataArray(np.arange(4), dims=["init_time"])},
-        coords={"init_time": times, "latitude": [45.0], "longitude": [260.0]},
+        {
+            "surface_air_temperature": xr.DataArray(
+                np.arange(16).reshape(4, 4, 1, 1),
+                dims=["init_time", "lead_time", "latitude", "longitude"],
+            )
+        },
+        coords={
+            "init_time": times,
+            "lead_time": np.arange(4),
+            "latitude": [45.0],
+            "longitude": [260.0],
+        },
     )
     # Create a gridded observation dataset with a 'time' coordinate.
     obs_times = pd.date_range(start, end)
     gridded_obs = xr.Dataset(
-        {"var": xr.DataArray(np.arange(len(obs_times)), dims=["time"])},
+        {
+            "surface_air_temperature": xr.DataArray(
+                np.arange(len(obs_times) * 1 * 1).reshape(len(obs_times), 1, 1),
+                dims=["time", "latitude", "longitude"],
+            )
+        },
         coords={"time": obs_times, "latitude": [45.0], "longitude": [260.0]},
     )
     result = evaluate._evaluate_case(
-        dummy,
+        sample_individual_case_heatwave,
         forecast_ds,
         gridded_obs,
         None,
         config.Config(event_types=[events.HeatWave], forecast_dir="dummy"),
     )
     assert "gridded" in result
-    assert "var" in result["gridded"]
-    assert "dummy_metric" in result["gridded"]["var"]
-    assert isinstance(result["gridded"]["var"]["dummy_metric"], xr.DataArray)
+    assert "surface_air_temperature" in result["gridded"]
+    assert "MaxOfMinTempMAE" in result["gridded"]["surface_air_temperature"]
+    assert isinstance(
+        result["gridded"]["surface_air_temperature"]["MaxOfMinTempMAE"], xr.DataArray
+    )
 
 
 # Test evaluation when point observations are provided.
-def test_evaluate_case_point(monkeypatch):
-    start = datetime.datetime(2021, 6, 20)
-    end = datetime.datetime(2021, 6, 23)
-    dummy = DummyCase(3, "point_test", start, end)
-    times = pd.date_range(start, periods=4)
-    forecast_ds = xr.Dataset(
-        {
-            "var": xr.DataArray(
-                np.arange(4).reshape(4, 1, 1),
-                dims=["init_time", "latitude", "longitude"],
-            )
-        },
-        coords={"init_time": times, "latitude": [45.0], "longitude": [260.0]},
+def test_evaluate_case_point(
+    mocker, monkeypatch, sample_individual_case, sample_forecast_dataset
+):
+    sample_individual_case_heatwave = case.IndividualHeatWaveCase(
+        **sample_individual_case.__dict__
     )
     # Create a minimal point observations DataFrame.
     point_obs = pd.DataFrame(
         {
-            "id": [3],
+            "id": [
+                1,
+            ],
             "latitude": [45.0],
             "longitude": [260.0],
             "station": ["A"],
             "elev": [100],
             "name": ["Station_A"],
             "call": ["X"],
-            "time": [start],
-            "var": [10],
+            "time": [sample_individual_case_heatwave.start_date],
+            "surface_air_temperature": [10],
         }
     )
-    # Monkey-patch utility functions used in point observation processing.
-    monkeypatch.setattr(utils, "swap_coords", lambda a, b, c: a)
+    mocker.patch(
+        "extremeweatherbench.metrics.MaximumMAE.compute",
+        return_value=xr.DataArray(42),
+    )
+    mocker.patch(
+        "extremeweatherbench.metrics.MaxOfMinTempMAE.compute",
+        return_value=xr.DataArray(42),
+    )
+    mocker.patch(
+        "extremeweatherbench.metrics.RegionalRMSE.compute",
+        return_value=xr.DataArray(42),
+    )
     # Ensure ISD_MAPPING exists.
     if not hasattr(utils, "ISD_MAPPING"):
         utils.ISD_MAPPING = {}
     result = evaluate._evaluate_case(
-        dummy,
-        forecast_ds,
+        sample_individual_case_heatwave,
+        sample_forecast_dataset,
         None,
         point_obs,
         config.Config(event_types=[events.HeatWave], forecast_dir="dummy"),
     )
     assert "point" in result
-    assert "var" in result["point"]
-    assert "dummy_metric" in result["point"]["var"]
-    assert isinstance(result["point"]["var"]["dummy_metric"], xr.DataArray)
+    assert "surface_air_temperature" in result["point"]
+    assert "RegionalRMSE" in result["point"]["surface_air_temperature"]
+    assert isinstance(
+        result["point"]["surface_air_temperature"]["RegionalRMSE"], xr.DataArray
+    )

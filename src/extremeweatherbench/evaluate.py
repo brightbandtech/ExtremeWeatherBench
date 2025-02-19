@@ -24,6 +24,18 @@ POINT_OBS_STORAGE_OPTIONS = dict(token="anon")
 #  for the ERA5 ARCO dataset.
 GRIDDED_OBS_STORAGE_OPTIONS = dict(token="anon")
 
+#: metadata variables for point obs
+POINT_OBS_METADATA_VARS = [
+    "time",
+    "station",
+    "call",
+    "name",
+    "latitude",
+    "longitude",
+    "elev",
+    "id",
+]
+
 
 def evaluate(
     eval_config: config.Config,
@@ -167,9 +179,8 @@ def _evaluate_case(
 
     logger.info("Evaluating case %s, %s", individual_case.id, individual_case.title)
     variable_subset_ds = individual_case._subset_data_vars(forecast_dataset)
-    time_subset_forecast_ds = (
-        individual_case._subset_valid_times(variable_subset_ds).compute()
-    )  # based on a (1,1,721,1440) chunk size this is where compute is more efficient
+    time_subset_forecast_ds = individual_case._subset_valid_times(variable_subset_ds)
+
     # Check if forecast data is available for the case, if not, return None
     lead_time_len = len(time_subset_forecast_ds.init_time)
     if lead_time_len == 0:
@@ -204,8 +215,8 @@ def _evaluate_case(
         )
         for data_var in individual_case.data_vars:
             case_results["gridded"][data_var] = {}
-            forecast_da = spatiotemporal_subset_ds[data_var].compute()
-            gridded_obs_da = time_subset_gridded_obs_ds[data_var].compute()
+            forecast_da = spatiotemporal_subset_ds[data_var]
+            gridded_obs_da = time_subset_gridded_obs_ds[data_var]
             for metric in individual_case.metrics_list:
                 metric_instance = metric()
                 logging.debug(
@@ -232,54 +243,27 @@ def _evaluate_case(
             spatiotemporal_subset_forecast_ds["longitude"].max().values,
         )
 
-        case_subset_point_obs_ds = case_subset_point_obs.set_index(
-            ["time", "station"]
-        ).to_xarray()
-
-        case_subset_point_obs_ds = case_subset_point_obs_ds.set_coords(
-            ["latitude", "longitude", "name", "elev", "id", "call"]
-        )
-        # remove unnecessary time dimension from lat and lon
-        for coord in ["latitude", "longitude"]:
-            case_subset_point_obs_ds[coord] = case_subset_point_obs_ds[coord].isel(
-                time=0, drop=True
-            )
-
-        point_forecast_subset_ds = utils.pick_points(
-            spatiotemporal_subset_forecast_ds,
-            case_subset_point_obs.drop_duplicates(
-                subset=["latitude", "longitude", "station"]
-            )[["latitude", "longitude", "elev", "id", "name"]],
-            config=eval_config,
-            tree_name=individual_case.id,
-        )
-        point_forecast_subset_ds = point_forecast_subset_ds.rename({"point": "station"})
-
-        # swap the point observation data's lat/lon with the forecast data's lat/lon now that matching is complete
-        case_subset_point_obs_ds = case_subset_point_obs_ds.assign(
-            longitude=utils.swap_coords(
-                case_subset_point_obs_ds["longitude"],
-                point_forecast_subset_ds["longitude"],
-                point_forecast_subset_ds["point_longitude"],
-            ),
-            latitude=utils.swap_coords(
-                case_subset_point_obs_ds["latitude"],
-                point_forecast_subset_ds["latitude"],
-                point_forecast_subset_ds["point_latitude"],
-            ),
-        )
-
-        case_subset_point_obs_ds = utils.reshape_dataset_to_include_latlon(
-            case_subset_point_obs_ds, "station"
-        )
-        point_forecast_subset_ds = utils.reshape_dataset_to_include_latlon(
-            point_forecast_subset_ds, "station"
-        )
-
         for data_var in individual_case.data_vars:
             case_results["point"][data_var] = {}
-            forecast_da = point_forecast_subset_ds[data_var]
-            case_subset_point_obs_da = case_subset_point_obs_ds[data_var]
+            forecast_da = spatiotemporal_subset_forecast_ds[data_var]
+            case_subset_point_obs_df = case_subset_point_obs[
+                POINT_OBS_METADATA_VARS + [data_var]
+            ]
+            case_subset_point_obs_df = case_subset_point_obs_df.set_index(
+                POINT_OBS_METADATA_VARS
+            )
+            forecast_da, case_subset_point_obs_da = utils.align_point_obs_from_gridded(
+                forecast_da, case_subset_point_obs_df
+            )
+
+            forecast_da = forecast_da.compute()
+            case_subset_point_obs_da = case_subset_point_obs_da.compute()
+            # TODO(aaTman): #64 define where and how loading to memory will occur.
+            # where diverging occurs between EWB and libraries like WBX is the
+            # philosophical core of what's being computed, in a way. Though having
+            # users define when they want to load into memory is important,
+            # there are clearly defined places in code, such as here, that loading to memory
+            # would minimize overhead from large graphs.
             for metric in individual_case.metrics_list:
                 metric_instance = metric()
                 logging.debug(

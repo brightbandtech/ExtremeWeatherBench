@@ -2,7 +2,8 @@ import pytest
 import xarray as xr
 import pandas as pd
 import numpy as np
-from extremeweatherbench import config, events
+from extremeweatherbench import config, events, case, utils
+import datetime
 
 
 def make_sample_gridded_obs_dataset():
@@ -28,6 +29,23 @@ def make_sample_gridded_obs_dataset():
         )
     ] = 25
     return dataset
+
+
+def make_sample_empty_dataset():
+    """Creates an xarray Dataset with an empty 'init_time' coordinate and dimension."""
+
+    # Define coordinates and dimensions
+    coords = {"init_time": [], "lead_time": []}  # Empty list for init_time
+    dims = ("init_time", "lead_time")
+
+    # Define data variables (example: you can add more)
+    # Define data variables (example: you can add more)
+    data_vars = {
+        "surface_air_temperature": (dims, np.empty((0, 0))),
+    }
+    # Create the xarray Dataset
+    ds = xr.Dataset(data_vars=data_vars, coords=coords)
+    return ds
 
 
 def make_sample_forecast_dataset():
@@ -100,12 +118,35 @@ def sample_forecast_dataset():
 
 
 @pytest.fixture
+def sample_individual_case():
+    start = datetime.datetime(2021, 6, 20)
+    end = datetime.datetime(2021, 6, 22)
+    sample = case.IndividualCase(
+        1,
+        start_date=start,
+        end_date=end,
+        title="dummy",
+        location=utils.Location(latitude=45.0, longitude=-100.0),
+        bounding_box_degrees=2,
+        event_type="heat_wave",
+        data_vars=["surface_air_temperature"],
+    )
+    return sample
+
+
+@pytest.fixture
 def mock_config():
     return config.Config(
         event_types=[events.HeatWave],
         forecast_dir="test/forecast/path",
         gridded_obs_path="test/obs/path",
     )
+
+
+@pytest.fixture
+def sample_empty_forecast_dataset():
+    sample_empty_forecast_dataset = make_sample_empty_dataset()
+    return sample_empty_forecast_dataset
 
 
 @pytest.fixture

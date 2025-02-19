@@ -303,7 +303,9 @@ def process_dataarray_for_output(da_list: List[xr.DataArray]) -> xr.DataArray:
     return output_da
 
 
-def center_forecast_on_time(da: xr.DataArray, time: pd.Timestamp, hours: int):
+def center_forecast_on_time(
+    da: xr.DataArray, time: pd.Timestamp, hours: int
+) -> xr.DataArray:
     """Center a forecast DataArray on a given time with a given range in hours.
 
     Args:
@@ -316,7 +318,12 @@ def center_forecast_on_time(da: xr.DataArray, time: pd.Timestamp, hours: int):
         periods=hours * 2 + 1,
         freq="h",
     )
-    return da.sel(time=slice(time_range[0], time_range[-1]))
+    subset_time_da = da.sel(time=slice(time_range[0], time_range[-1]))
+    return (
+        subset_time_da
+        if time in subset_time_da.time
+        else xr.DataArray(data=[], dims=["time"])
+    )
 
 
 def temporal_align_dataarrays(
@@ -714,11 +721,88 @@ def reshape_dataset_to_include_latlon(ds: xr.Dataset, dim: str) -> xr.Dataset:
     )
 
 
+def align_point_obs_from_gridded(
+    forecast_da: xr.DataArray, case_subset_point_obs_df: pd.DataFrame
+) -> Tuple[xr.DataArray, xr.DataArray]:
+    """Takes in a forecast dataarray and point observation dataframe, aligning them by
+    reducing dimensions.
+
+    Args:
+        forecast_da: The forecast dataarray.
+        case_subset_point_obs_df: The point observation dataframe.
+
+    Returns a tuple of aligned forecast and observation dataarrays."""
+
+    # Uses indexing in the dataframe to capture metadata columns for future use
+    point_obs_metadata = case_subset_point_obs_df.index.names
+
+    # Reset index to allow for easier modification
+    case_subset_point_obs_df = case_subset_point_obs_df.reset_index()
+    case_subset_point_obs_df.loc[:, "station"] = case_subset_point_obs_df[
+        "station"
+    ].astype("str")
+
+    # Set up multiindex to enable slicing along individual timesteps
+    case_subset_point_obs_df = case_subset_point_obs_df.set_index("time")
+    case_subset_point_obs_df = case_subset_point_obs_df.set_index(
+        "station", append=True
+    )
+    case_subset_point_obs_df = case_subset_point_obs_df.sort_index(
+        level="station"
+    ).swaplevel(0, 1)
+
+    aligned_forecast_ds = []
+    aligned_observation_ds = []
+
+    # Loop init and lead times to prevent indexing error from duplicate valid times
+    for init_time in forecast_da.init_time:
+        for lead_time in forecast_da.lead_time:
+            valid_time = pd.Timestamp(
+                init_time.values
+                + pd.to_timedelta(lead_time.values, unit="h").to_numpy()
+            )
+            if valid_time in case_subset_point_obs_df.index.levels[1]:
+                obs_timeslice = case_subset_point_obs_df.loc[
+                    pd.IndexSlice[:, valid_time], :
+                ].reset_index()
+                station_ids = obs_timeslice["station"]
+                lons = xr.DataArray(obs_timeslice["longitude"].values, dims="station")
+                lats = xr.DataArray(obs_timeslice["latitude"].values, dims="station")
+
+                grid_at_obs_da = forecast_da.sel(
+                    init_time=init_time, lead_time=lead_time
+                ).interp(latitude=lats, longitude=lons, method="nearest")
+                grid_at_obs_da = grid_at_obs_da.assign_coords(
+                    {"station": station_ids, "time": valid_time}
+                )
+                grid_at_obs_da["lead_time"] = lead_time
+                grid_at_obs_da["init_time"] = init_time
+
+                valid_time_subset_obs_ds = obs_timeslice.to_xarray().set_coords(
+                    point_obs_metadata
+                )[forecast_da.name]
+                valid_time_subset_obs_ds = valid_time_subset_obs_ds.swap_dims(
+                    {"index": "station"}
+                )
+                valid_time_subset_obs_ds["lead_time"] = lead_time
+                valid_time_subset_obs_ds["init_time"] = init_time
+
+                aligned_observation_ds.append(valid_time_subset_obs_ds)
+                aligned_forecast_ds.append(grid_at_obs_da)
+
+    # concat the dataarrays along the station dimension
+    interpolated_forecast = xr.concat(aligned_forecast_ds, dim="station")
+    interpolated_observation = xr.concat(aligned_observation_ds, dim="station")
+    return (interpolated_forecast, interpolated_observation)
+
+
 def derive_indices_from_init_time_and_lead_time(
     dataset: xr.Dataset,
     start_date: datetime.datetime,
     end_date: datetime.datetime,
 ) -> Tuple[np.ndarray]:
+    if len(dataset.lead_time) == 0 or len(dataset.init_time) == 0:
+        raise ValueError("No forecast data available for this case.")
     lead_time_grid, init_time_grid = np.meshgrid(dataset.lead_time, dataset.init_time)
     valid_times = (
         init_time_grid.flatten()
