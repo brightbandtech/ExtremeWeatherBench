@@ -101,9 +101,7 @@ def evaluate(
                 forecast_schema_config, forecast_dataset, gridded_obs
             )
         logger.debug("beginning evaluation loop for %s", event.event_type)
-        results = _evaluate_cases_loop(
-            cases, forecast_dataset, eval_config, gridded_obs, point_obs
-        )
+        results = _evaluate_cases_loop(cases, forecast_dataset, gridded_obs, point_obs)
         all_results[event.event_type] = results
         logger.debug("evaluation loop complete for %s", event.event_type)
     logger.info(
@@ -133,7 +131,6 @@ def evaluate(
 def _evaluate_cases_loop(
     event: events.EventContainer,
     forecast_dataset: xr.Dataset,
-    eval_config: config.Config,
     gridded_obs: Optional[xr.Dataset] = None,
     point_obs: Optional[pd.DataFrame] = None,
 ) -> dict[Any, Optional[dict[str, Any]]]:
@@ -152,7 +149,7 @@ def _evaluate_cases_loop(
     results = {}
     for individual_case in event.cases:
         results[individual_case.id] = _evaluate_case(
-            individual_case, forecast_dataset, gridded_obs, point_obs, eval_config
+            individual_case, forecast_dataset, gridded_obs, point_obs
         )
 
     return results
@@ -163,7 +160,6 @@ def _evaluate_case(
     forecast_dataset: Optional[xr.Dataset],
     gridded_obs: Optional[xr.Dataset],
     point_obs: Optional[pd.DataFrame],
-    eval_config: config.Config,
 ) -> Optional[dict[str, xr.Dataset]]:
     """Evaluate a single case given forecast data and observations.
 

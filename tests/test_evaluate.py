@@ -42,9 +42,7 @@ def test_open_obs_datasets_no_forecast_paths():
         evaluate._open_forecast_dataset(invalid_config)
 
 
-def test_evaluate_base_case(
-    sample_forecast_dataset, mock_config, sample_gridded_obs_dataset
-):
+def test_evaluate_base_case(sample_forecast_dataset, sample_gridded_obs_dataset):
     base_case = case.IndividualCase(
         id=1,
         title="test_case",
@@ -57,7 +55,6 @@ def test_evaluate_base_case(
     with pytest.raises(NotImplementedError):
         evaluate._evaluate_case(
             individual_case=base_case,
-            eval_config=mock_config,
             forecast_dataset=sample_forecast_dataset,
             gridded_obs=sample_gridded_obs_dataset,
             point_obs=None,
@@ -92,45 +89,6 @@ def test_evaluate_full_workflow(
                         assert isinstance(v4, xr.DataArray)  # metric value
 
 
-# Dummy metric that returns a constant xarray.DataArray and has a name attribute.
-class DummyMetric:
-    name = "dummy_metric"
-
-    def __call__(self):
-        return self
-
-    def compute(self, forecast_da, obs_da):
-        return xr.DataArray(1)
-
-
-# DummyCase mimics an IndividualCase with minimal implementations.
-class DummyCase:
-    def __init__(self, id, title, start_date, end_date):
-        self.id = id
-        self.title = title
-        self.start_date = start_date
-        self.end_date = end_date
-        self.data_vars = ["var"]
-        self.metrics_list = [DummyMetric]
-
-    def _subset_data_vars(self, ds):
-        return ds
-
-    def _subset_valid_times(self, ds):
-        # Return an object with a compute() method that returns ds.
-        class DummyCompute:
-            def __init__(self, ds):
-                self.ds = ds
-
-            def compute(self):
-                return self.ds
-
-        return DummyCompute(ds)
-
-    def perform_subsetting_procedure(self, ds):
-        return ds
-
-
 # Test when no forecast data is available (i.e., empty "init_time").
 def test_evaluate_case_no_forecast_data(
     sample_empty_forecast_dataset, sample_individual_case
@@ -141,7 +99,6 @@ def test_evaluate_case_no_forecast_data(
             sample_empty_forecast_dataset,
             None,
             None,
-            config.Config(event_types=[events.HeatWave], forecast_dir="dummy"),
         )
 
 
@@ -184,7 +141,6 @@ def test_evaluate_case_gridded(sample_individual_case):
         forecast_ds,
         gridded_obs,
         None,
-        config.Config(event_types=[events.HeatWave], forecast_dir="dummy"),
     )
     assert "gridded" in result
     assert "surface_air_temperature" in result["gridded"]
@@ -195,9 +151,7 @@ def test_evaluate_case_gridded(sample_individual_case):
 
 
 # Test evaluation when point observations are provided.
-def test_evaluate_case_point(
-    mocker, monkeypatch, sample_individual_case, sample_forecast_dataset
-):
+def test_evaluate_case_point(mocker, sample_individual_case, sample_forecast_dataset):
     sample_individual_case_heatwave = case.IndividualHeatWaveCase(
         **sample_individual_case.__dict__
     )
@@ -237,7 +191,6 @@ def test_evaluate_case_point(
         sample_forecast_dataset,
         None,
         point_obs,
-        config.Config(event_types=[events.HeatWave], forecast_dir="dummy"),
     )
     assert "point" in result
     assert "surface_air_temperature" in result["point"]
