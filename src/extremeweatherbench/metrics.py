@@ -171,7 +171,7 @@ class MaxOfMinTempMAE(Metric):
             # Ensure that the forecast has a full day of data for each day
             # after centering on the max of min timestamp
             if filtered_forecast.time.shape[0] == 0:
-                logger.info(
+                logger.debug(
                     "Init time %s insufficient data for max of min temp",
                     pd.to_datetime(init_time.values),
                 )

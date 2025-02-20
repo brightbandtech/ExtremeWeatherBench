@@ -219,6 +219,9 @@ def _open_mlwp_kerchunk_reference(
             storage_options=storage_options,
             open_dataset_options=open_dataset_options,
         )
+        # Kerchunk referenced parquets require compute() despite this call
+        # not loading to memory the first time.
+        ds = ds.compute()
     else:
         ds = xr.open_dataset(
             "reference://",
@@ -238,7 +241,6 @@ def _open_mlwp_kerchunk_reference(
         attr_value = getattr(forecast_schema_config, variable)
         if attr_value in ds.data_vars:
             ds = ds.rename({attr_value: variable})
-    ds = ds.compute()
     return ds
 
 
