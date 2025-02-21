@@ -15,6 +15,17 @@ logger.setLevel(logging.INFO)
 #: Default mapping for forecast dataset schema.
 DEFAULT_FORECAST_SCHEMA_CONFIG = config.ForecastSchemaConfig()
 
+#: metadata variables for point obs
+POINT_OBS_METADATA_VARS = [
+    "time",
+    "station",
+    "call",
+    "name",
+    "latitude",
+    "longitude",
+    "elev",
+    "id",
+]
 
 def evaluate(
     eval_config: config.Config,
@@ -179,6 +190,7 @@ def _evaluate_case(
         )
     logger.info("Forecast data available for case %s", individual_case.id)
     case_results: dict[str, dict[str, Any]] = {}
+
     if gridded_obs is not None:
         variable_subset_gridded_obs = individual_case._subset_data_vars(gridded_obs)
         time_subset_gridded_obs_ds = variable_subset_gridded_obs.sel(
@@ -197,6 +209,7 @@ def _evaluate_case(
             case_results[data_var] = {}
             forecast_da = spatiotemporal_subset_ds[data_var].compute()
             gridded_obs_da = time_subset_gridded_obs_ds[data_var].compute()
+
             for metric in individual_case.metrics_list:
                 metric_instance = metric()
                 logging.debug(
@@ -205,7 +218,32 @@ def _evaluate_case(
                 result = metric_instance.compute(forecast_da, gridded_obs_da)
                 case_results[data_var][metric_instance.name] = result
     if point_obs is not None:
-        raise NotImplementedError("Point obs evaluation not implemented as of 0.1.0")
+        case_results["point"] = {}
+        spatiotemporal_subset_forecast_ds = individual_case.perform_subsetting_procedure(
+            time_subset_forecast_ds
+        )
+        case_subset_point_obs = point_obs.loc[point_obs["id"] == individual_case.id]
+        case_subset_point_obs = case_subset_point_obs.rename(columns=utils.ISD_MAPPING)
+        case_subset_point_obs["longitude"] = utils.convert_longitude_to_360(
+            case_subset_point_obs["longitude"]
+        )
+        case_subset_point_obs = utils.unit_check(case_subset_point_obs)
+        case_subset_point_obs = utils.location_subset_point_obs(
+            case_subset_point_obs,
+            spatiotemporal_subset_forecast_ds["latitude"].min().values,
+            spatiotemporal_subset_forecast_ds["latitude"].max().values,
+            spatiotemporal_subset_forecast_ds["longitude"].min().values,
+            spatiotemporal_subset_forecast_ds["longitude"].max().values,
+        )
+        for data_var in individual_case.data_vars:
+            case_results["point"][data_var] = {}
+            forecast_da = spatiotemporal_subset_forecast_ds[data_var]
+            case_subset_point_obs_df = case_subset_point_obs[
+                POINT_OBS_METADATA_VARS + [data_var]
+            ]
+            case_subset_forecast_da, case_subset_point_obs_da = utils.align_point_obs_from_gridded(
+                    forecast_da, case_subset_point_obs_df, POINT_OBS_METADATA_VARS
+                )
     return case_results
 
 
