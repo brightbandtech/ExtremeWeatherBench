@@ -163,10 +163,14 @@ def _evaluate_case(
     """
 
     logger.info("Evaluating case %s, %s", individual_case.id, individual_case.title)
-    variable_subset_ds = individual_case._subset_data_vars(forecast_dataset)
-    time_subset_forecast_ds = individual_case._subset_valid_times(variable_subset_ds)
+
+    # core modifications to forecast data irrespective of observation type
+    forecast_subset_variable_ds = individual_case._subset_data_vars(forecast_dataset)
+    forecast_subset_variable_time_ds = individual_case._subset_valid_times(
+        forecast_subset_variable_ds
+    )
     # Check if forecast data is available for the case, if not, return None
-    lead_time_len = len(time_subset_forecast_ds.init_time)
+    lead_time_len = len(forecast_subset_variable_time_ds.init_time)
     if lead_time_len == 0:
         logger.warning(
             "No forecast data available for case %s, skipping", individual_case.id
@@ -179,19 +183,23 @@ def _evaluate_case(
         )
     logger.info("Forecast data available for case %s", individual_case.id)
     case_results: dict[str, dict[str, Any]] = {}
+
     if gridded_obs is not None:
         case_results["gridded"] = {}
-        subset_gridded_obs = _subset_gridded_obs(gridded_obs, individual_case)
-
+        spatiotemporal_subset_forecast_ds = _subset_gridded_obs(
+            gridded_obs, individual_case
+        )
         # Align gridded_obs and forecast_dataset by time
-        subset_gridded_obs, forecast_ds = xr.align(
-            subset_gridded_obs,
-            time_subset_forecast_ds[list(time_subset_forecast_ds.keys())],
+        subset_gridded_obs, aligned_forecast_subset_variable_time_ds = xr.align(
+            spatiotemporal_subset_forecast_ds,
+            forecast_subset_variable_time_ds[
+                list(forecast_subset_variable_time_ds.keys())
+            ],
             join="inner",
         )
         for data_var in individual_case.data_vars:
             case_results["gridded"][data_var] = {}
-            forecast_da = forecast_ds[data_var]
+            forecast_da = aligned_forecast_subset_variable_time_ds[data_var]
             gridded_obs_da = subset_gridded_obs[data_var]
             forecast_da = forecast_da.compute()
             gridded_obs_da = gridded_obs_da.compute()
@@ -205,6 +213,7 @@ def _evaluate_case(
                 logger.debug(
                     "gridded, %s, %s, %s", data_var, metric_instance.name, result
                 )
+
     if point_obs is not None:
         case_results["point"] = {}
         case_subset_point_obs = point_obs.loc[point_obs["id"] == individual_case.id]
@@ -220,35 +229,31 @@ def _evaluate_case(
             spatiotemporal_subset_forecast_ds["longitude"].min().values,
             spatiotemporal_subset_forecast_ds["longitude"].max().values,
         )
-
         for data_var in individual_case.data_vars:
             case_results["point"][data_var] = {}
             forecast_da = spatiotemporal_subset_forecast_ds[data_var]
             case_subset_point_obs_df = case_subset_point_obs[
                 utils.POINT_OBS_METADATA_VARS + [data_var]
             ]
-
             forecast_da, case_subset_point_obs_da = utils.align_point_obs_from_gridded(
                 forecast_da, case_subset_point_obs_df, utils.POINT_OBS_METADATA_VARS
             )  # rename forecast_da to something more readable/descriptive
 
-            forecast_da = forecast_da.compute()
-            case_subset_point_obs_da = case_subset_point_obs_da.compute()
-
-            forecast_da = (
-                forecast_da.groupby(
-                    ["init_time", "lead_time", "latitude", "longitude"]
-                ).mean()  # change to mean([["init_time", "lead_time", "latitude", "longitude"]])
-            )
-            case_subset_point_obs_da = case_subset_point_obs_da.groupby(
-                ["time", "latitude", "longitude"]
-            ).first()
             # TODO(aaTman): #64 define where and how loading to memory will occur.
             # where diverging occurs between EWB and libraries like WBX is the
             # philosophical core of what's being computed, in a way. Though having
             # users define when they want to load into memory is important,
             # there are clearly defined places in code, such as here, that loading to memory
             # would minimize overhead from large graphs.
+            forecast_da = forecast_da.compute()
+            case_subset_point_obs_da = case_subset_point_obs_da.compute()
+            # convert point obs to format that metrics accept
+            forecast_da = forecast_da.groupby(
+                ["init_time", "lead_time", "latitude", "longitude"]
+            ).mean()
+            case_subset_point_obs_da = case_subset_point_obs_da.groupby(
+                ["time", "latitude", "longitude"]
+            ).first()
             for metric in individual_case.metrics_list:
                 metric_instance = metric()
                 logging.debug(
@@ -259,7 +264,6 @@ def _evaluate_case(
                 logger.debug(
                     "point, %s, %s, %s", data_var, metric_instance.name, result
                 )
-        # intentionally not returning anything or producing outputs for point obs
     return case_results
 
 
