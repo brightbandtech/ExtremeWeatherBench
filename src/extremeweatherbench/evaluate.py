@@ -268,8 +268,6 @@ def _open_obs_datasets(eval_config: config.Config):
     """Open the observation datasets specified for evaluation."""
     point_obs = None
     gridded_obs = None
-    if eval_config.point_obs_path:
-        raise NotImplementedError("Point obs evaluation not implemented as of 0.1.0")
     if eval_config.gridded_obs_path:
         gridded_obs = xr.open_zarr(
             eval_config.gridded_obs_path,
