@@ -179,7 +179,6 @@ def _evaluate_case(
         )
     logger.info("Forecast data available for case %s", individual_case.id)
     case_results: dict[str, dict[str, Any]] = {}
-
     if gridded_obs is not None:
         variable_subset_gridded_obs = individual_case._subset_data_vars(gridded_obs)
         time_subset_gridded_obs_ds = variable_subset_gridded_obs.sel(
@@ -198,7 +197,6 @@ def _evaluate_case(
             case_results[data_var] = {}
             forecast_da = spatiotemporal_subset_ds[data_var].compute()
             gridded_obs_da = time_subset_gridded_obs_ds[data_var].compute()
-
             for metric in individual_case.metrics_list:
                 metric_instance = metric()
                 logging.debug(
@@ -207,7 +205,7 @@ def _evaluate_case(
                 result = metric_instance.compute(forecast_da, gridded_obs_da)
                 case_results[data_var][metric_instance.name] = result
     if point_obs is not None:
-        pass
+        raise NotImplementedError("Point obs evaluation not implemented as of 0.1.0")
     return case_results
 
 
