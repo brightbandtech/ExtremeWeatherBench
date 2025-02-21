@@ -12,7 +12,7 @@ class TestGoodCases:
             start_date=datetime.datetime(2000, 1, 1),
             end_date=datetime.datetime(2000, 1, 14),
             location=Location(latitude=40, longitude=-100),
-            bounding_box_km=500,
+            bounding_box_degrees=500,
             event_type="heat_wave",
         )
         subset_dataset = heatwave_case.perform_subsetting_procedure(
@@ -28,7 +28,7 @@ class TestGoodCases:
             start_date=datetime.datetime(2000, 1, 1),
             end_date=datetime.datetime(2000, 1, 14),
             location=Location(latitude=40, longitude=-100),
-            bounding_box_km=500,
+            bounding_box_degrees=500,
             event_type="heat_wave",
         )
         valid_case = {
@@ -37,7 +37,7 @@ class TestGoodCases:
             "start_date": datetime.datetime(2000, 1, 1),
             "end_date": datetime.datetime(2000, 1, 14),
             "location": Location(latitude=40, longitude=-100),
-            "bounding_box_km": 500,
+            "bounding_box_degrees": 500,
             "event_type": "heat_wave",
             "cross_listed": None,
             "data_vars": None,
