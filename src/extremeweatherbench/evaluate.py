@@ -2,7 +2,7 @@
 
 import logging
 import fsspec
-from typing import Optional, Any
+from typing import Optional, Any, Literal
 import pandas as pd
 import xarray as xr
 from extremeweatherbench import config, events, case, utils
@@ -14,6 +14,25 @@ logger.setLevel(logging.INFO)
 
 #: Default mapping for forecast dataset schema.
 DEFAULT_FORECAST_SCHEMA_CONFIG = config.ForecastSchemaConfig()
+
+
+class Evaluation:
+    """
+    Class for evaluating a collection of Cases across a set of Events.
+    """
+
+    def __init__(
+        self,
+        observation_type: Literal["gridded", "point"],
+        observation: xr.DataArray,
+        forecast: xr.DataArray,
+    ):
+        self.observation_type = observation_type
+        self.observation = observation
+        self.forecast = forecast
+
+    def compute(self):
+        pass
 
 
 def evaluate(
