@@ -80,4 +80,6 @@ def test_evaluate_full_workflow(
             for _, v2 in v.items():
                 assert isinstance(v2, dict)
                 for _, v3 in v2.items():
-                    assert isinstance(v3, xr.DataArray)
+                    assert isinstance(v3, dict)
+                    for _, v4 in v3.items():
+                        assert isinstance(v4, xr.DataArray)

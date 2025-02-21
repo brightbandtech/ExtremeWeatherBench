@@ -2,7 +2,7 @@
 
 import logging
 import fsspec
-from typing import Optional, Any, Literal
+from typing import Optional, Any
 import pandas as pd
 import xarray as xr
 from extremeweatherbench import config, events, case, utils
