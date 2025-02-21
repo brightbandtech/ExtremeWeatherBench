@@ -233,11 +233,11 @@ def test_clip_dataset_to_bounding_box_degrees():
         ds, location_center, box_degrees
     )
 
-def test_align_point_obs_from_gridded(sample_forecast_da, sample_point_obs_df):
-    point_obs_metadata_vars = ["elevation", "network"]
+def test_align_point_obs_from_gridded(sample_forecast_dataarray, sample_point_obs_df):
+    point_obs_metadata_vars = utils.POINT_OBS_METADATA_VARS
     
     forecast, obs = utils.align_point_obs_from_gridded(
-        sample_forecast_da, 
+        sample_forecast_dataarray, 
         sample_point_obs_df,
         point_obs_metadata_vars
     )

@@ -211,26 +211,11 @@ def _evaluate_case(
             time_subset_forecast_ds
         )
         case_subset_point_obs = point_obs.loc[point_obs["id"] == individual_case.id]
-        case_subset_point_obs = case_subset_point_obs.rename(columns=utils.ISD_MAPPING)
-        case_subset_point_obs["longitude"] = utils.convert_longitude_to_360(
-            case_subset_point_obs["longitude"]
-        )
-        case_subset_point_obs = utils.unit_check(case_subset_point_obs)
-        case_subset_point_obs = utils.location_subset_point_obs(
-            case_subset_point_obs,
-            spatiotemporal_subset_forecast_ds["latitude"].min().values,
-            spatiotemporal_subset_forecast_ds["latitude"].max().values,
-            spatiotemporal_subset_forecast_ds["longitude"].min().values,
-            spatiotemporal_subset_forecast_ds["longitude"].max().values,
-        )
         for data_var in individual_case.data_vars:
             case_results["point"][data_var] = {}
             forecast_da = spatiotemporal_subset_forecast_ds[data_var]
-            case_subset_point_obs_df = case_subset_point_obs[
-                utils.POINT_OBS_METADATA_VARS + [data_var]
-            ]
             case_subset_forecast_da, case_subset_point_obs_da = utils.align_point_obs_from_gridded(
-                    forecast_da, case_subset_point_obs_df, utils.POINT_OBS_METADATA_VARS
+                    forecast_da, case_subset_point_obs, data_var, utils.POINT_OBS_METADATA_VARS
                 )
     return case_results
 
