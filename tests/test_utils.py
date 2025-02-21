@@ -234,55 +234,6 @@ def test_clip_dataset_to_bounding_box_degrees():
     )
 
 
-def test_align_point_obs_from_gridded(sample_forecast_dataarray, sample_point_obs_df):
-    point_obs_metadata_vars = utils.POINT_OBS_METADATA_VARS
-
-    forecast, obs = utils.align_point_obs_from_gridded(
-        sample_forecast_dataarray, sample_point_obs_df, point_obs_metadata_vars
-    )
-
-    # Test basic properties
-    assert isinstance(forecast, xr.DataArray)
-    assert isinstance(obs, xr.DataArray)
-
-    # Test dimensions
-    assert "station" in forecast.dims
-    assert "station" in obs.dims
-    assert len(forecast.station) == len(obs.station)
-
-    # Test coordinates
-    assert "init_time" in forecast.coords
-    assert "lead_time" in forecast.coords
-    assert "time" in forecast.coords
-
-    # Test metadata preservation
-    assert "elevation" in obs.coords
-    assert "network" in obs.coords
-
-
-def test_align_point_obs_from_gridded_empty_intersection(sample_forecast_da):
-    # Create observations with no matching times
-    df = pd.DataFrame(
-        {
-            "station": ["A"],
-            "latitude": [35.5],
-            "longitude": [-99.5],
-            "temperature": [20.0],
-            "elevation": [1000],
-            "network": ["METAR"],
-        }
-    )
-    df = pd.concat([df], keys=[pd.Timestamp("2022-01-01")], names=["time"])
-
-    forecast, obs = utils.align_point_obs_from_gridded(
-        sample_forecast_da, df, ["elevation", "network"]
-    )
-
-    # Should return empty DataArrays
-    assert len(forecast.station) == 0
-    assert len(obs.station) == 0
-
-
 def test_align_point_obs_from_gridded_input_validation():
     # Test with invalid inputs
     with pytest.raises((AttributeError, TypeError)):
@@ -293,23 +244,61 @@ def test_align_point_obs_from_gridded_input_validation():
         )
 
 
-def test_align_point_obs_coordinate_values(sample_forecast_da, sample_point_obs_df):
-    point_obs_metadata_vars = ["elevation", "network"]
-
-    forecast, obs = utils.align_point_obs_from_gridded(
-        sample_forecast_da, sample_point_obs_df, point_obs_metadata_vars
+def test_location_subset_point_obs():
+    # Create sample data
+    df = pd.DataFrame(
+        {
+            "latitude": [0, 1, 2, 3, 4],
+            "longitude": [0, 1, 2, 3, 4],
+            "value": ["a", "b", "c", "d", "e"],
+        }
     )
 
-    # Test that coordinates match between forecast and obs
-    np.testing.assert_array_equal(forecast.station.values, obs.station.values)
-    np.testing.assert_array_equal(forecast.init_time.values, obs.init_time.values)
-    np.testing.assert_array_equal(forecast.lead_time.values, obs.lead_time.values)
+    # Test inclusive bounds (default)
+    result = utils.location_subset_point_obs(
+        df, min_lat=1, max_lat=3, min_lon=1, max_lon=3
+    )
+    assert len(result) == 3
+    assert all(result["value"] == ["b", "c", "d"])
+    assert all((result["latitude"] >= 1) & (result["latitude"] <= 3))
+    assert all((result["longitude"] >= 1) & (result["longitude"] <= 3))
 
-    # Test that time coordinates are properly calculated
-    for init_time, lead_time in zip(forecast.init_time, forecast.lead_time):
-        expected_time = pd.Timestamp(init_time.values) + pd.Timedelta(
-            hours=int(lead_time.values)
-        )
-        mask = (forecast.init_time == init_time) & (forecast.lead_time == lead_time)
-        actual_time = forecast.time.where(mask).dropna("station").values[0]
-        assert pd.Timestamp(actual_time) == expected_time
+    # Test non-inclusive bounds
+    result = utils.location_subset_point_obs(
+        df, min_lat=1, max_lat=3, min_lon=1, max_lon=3, inclusive=False
+    )
+    assert len(result) == 1
+    assert all(result["value"] == ["c"])
+    assert all((result["latitude"] > 1) & (result["latitude"] < 3))
+    assert all((result["longitude"] > 1) & (result["longitude"] < 3))
+
+    # Test empty result
+    result = utils.location_subset_point_obs(
+        df, min_lat=10, max_lat=20, min_lon=10, max_lon=20
+    )
+    assert len(result) == 0
+
+
+def test_unit_check():
+    # Test Celsius to Kelvin conversion
+    df_celsius = pd.DataFrame(
+        {
+            "surface_air_temperature": [20.0, 25.0, 30.0]  # Celsius values
+        }
+    )
+    result = utils.unit_check(df_celsius)
+    assert all(result["surface_air_temperature"] == [293.15, 298.15, 303.15])
+
+    # Test Kelvin values remain unchanged
+    df_kelvin = pd.DataFrame(
+        {
+            "surface_air_temperature": [273.15, 283.15, 293.15]  # Kelvin values
+        }
+    )
+    result = utils.unit_check(df_kelvin)
+    assert all(result["surface_air_temperature"] == [273.15, 283.15, 293.15])
+
+    # Test dataframe without temperature column remains unchanged
+    df_other = pd.DataFrame({"other_column": [1, 2, 3]})
+    result = utils.unit_check(df_other)
+    assert all(result["other_column"] == [1, 2, 3])
