@@ -427,7 +427,7 @@ def read_event_yaml(input_pth: str | Path) -> dict:
     return yaml_event_case
 
 def align_point_obs_from_gridded(
-    forecast_da: xr.DataArray, case_subset_point_obs_df: pd.DataFrame, point_obs_metadata_vars: List[str]
+    forecast_da: xr.DataArray, case_subset_point_obs_df: pd.DataFrame, data_var: str, point_obs_metadata_vars: List[str]
 ) -> Tuple[xr.DataArray, xr.DataArray]:
     """Takes in a forecast dataarray and point observation dataframe, aligning them by
     reducing dimensions.
@@ -435,9 +435,25 @@ def align_point_obs_from_gridded(
     Args:
         forecast_da: The forecast dataarray.
         case_subset_point_obs_df: The point observation dataframe.
+        data_var: The variable to subset (e.g. "surface_air_temperature")
+        point_obs_metadata_vars: The metadata variables to subset (e.g. ["elev", "name"])
 
     Returns a tuple of aligned forecast and observation dataarrays."""
-
+    case_subset_point_obs_df = case_subset_point_obs_df[
+        POINT_OBS_METADATA_VARS + [data_var]
+    ]
+    case_subset_point_obs_df = case_subset_point_obs_df.rename(columns=ISD_MAPPING)
+    case_subset_point_obs_df["longitude"] = convert_longitude_to_360(
+        case_subset_point_obs_df["longitude"]
+    )
+    case_subset_point_obs_df = unit_check(case_subset_point_obs_df)
+    case_subset_point_obs_df = location_subset_point_obs(
+        case_subset_point_obs_df,
+        forecast_da["latitude"].min().values,
+        forecast_da["latitude"].max().values,
+        forecast_da["longitude"].min().values,
+        forecast_da["longitude"].max().values,
+    )
     # Uses indexing in the dataframe to capture metadata columns for future use
     point_obs_metadata = case_subset_point_obs_df[point_obs_metadata_vars]
     
