@@ -15,18 +15,6 @@ logger.setLevel(logging.INFO)
 #: Default mapping for forecast dataset schema.
 DEFAULT_FORECAST_SCHEMA_CONFIG = config.ForecastSchemaConfig()
 
-#: metadata variables for point obs
-POINT_OBS_METADATA_VARS = [
-    "time",
-    "station",
-    "call",
-    "name",
-    "latitude",
-    "longitude",
-    "elev",
-    "id",
-]
-
 def evaluate(
     eval_config: config.Config,
     forecast_schema_config: config.ForecastSchemaConfig = DEFAULT_FORECAST_SCHEMA_CONFIG,
@@ -239,10 +227,10 @@ def _evaluate_case(
             case_results["point"][data_var] = {}
             forecast_da = spatiotemporal_subset_forecast_ds[data_var]
             case_subset_point_obs_df = case_subset_point_obs[
-                POINT_OBS_METADATA_VARS + [data_var]
+                utils.POINT_OBS_METADATA_VARS + [data_var]
             ]
             case_subset_forecast_da, case_subset_point_obs_da = utils.align_point_obs_from_gridded(
-                    forecast_da, case_subset_point_obs_df, POINT_OBS_METADATA_VARS
+                    forecast_da, case_subset_point_obs_df, utils.POINT_OBS_METADATA_VARS
                 )
     return case_results
 
