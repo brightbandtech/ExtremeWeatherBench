@@ -166,11 +166,11 @@ def _evaluate_case(
 
     # core modifications to forecast data irrespective of observation type
     forecast_subset_variable_ds = individual_case._subset_data_vars(forecast_dataset)
-    forecast_subset_variable_time_ds = individual_case._subset_valid_times(
+    time_subset_forecast_ds = individual_case._subset_valid_times(
         forecast_subset_variable_ds
     )
     # Check if forecast data is available for the case, if not, return None
-    lead_time_len = len(forecast_subset_variable_time_ds.init_time)
+    lead_time_len = len(time_subset_forecast_ds.init_time)
     if lead_time_len == 0:
         logger.warning(
             "No forecast data available for case %s, skipping", individual_case.id
@@ -183,28 +183,25 @@ def _evaluate_case(
         )
     logger.info("Forecast data available for case %s", individual_case.id)
     case_results: dict[str, dict[str, Any]] = {}
-
     if gridded_obs is not None:
         case_results["gridded"] = {}
         variable_subset_gridded_obs = individual_case._subset_data_vars(gridded_obs)
         time_subset_gridded_obs_ds = variable_subset_gridded_obs.sel(
             time=slice(individual_case.start_date, individual_case.end_date)
         )
-        spatiotemporal_subset_forecast_ds = (
-            individual_case.perform_subsetting_procedure(time_subset_gridded_obs_ds)
+        time_subset_gridded_obs_ds = individual_case.perform_subsetting_procedure(
+            time_subset_gridded_obs_ds
         )
         # Align gridded_obs and forecast_dataset by time
-        subset_gridded_obs, aligned_forecast_subset_variable_time_ds = xr.align(
-            spatiotemporal_subset_forecast_ds,
-            forecast_subset_variable_time_ds[
-                list(forecast_subset_variable_time_ds.keys())
-            ],
+        time_subset_gridded_obs_ds, spatiotemporal_subset_ds = xr.align(
+            time_subset_gridded_obs_ds,
+            time_subset_forecast_ds[list(time_subset_forecast_ds.keys())],
             join="inner",
         )
         for data_var in individual_case.data_vars:
             case_results["gridded"][data_var] = {}
-            forecast_da = aligned_forecast_subset_variable_time_ds[data_var]
-            gridded_obs_da = subset_gridded_obs[data_var]
+            forecast_da = spatiotemporal_subset_ds[data_var]
+            gridded_obs_da = time_subset_gridded_obs_ds[data_var]
             forecast_da = forecast_da.compute()
             gridded_obs_da = gridded_obs_da.compute()
             for metric in individual_case.metrics_list:
@@ -228,14 +225,14 @@ def _evaluate_case(
         case_subset_point_obs = utils.unit_check(case_subset_point_obs)
         case_subset_point_obs = utils.location_subset_point_obs(
             case_subset_point_obs,
-            spatiotemporal_subset_forecast_ds["latitude"].min().values,
-            spatiotemporal_subset_forecast_ds["latitude"].max().values,
-            spatiotemporal_subset_forecast_ds["longitude"].min().values,
-            spatiotemporal_subset_forecast_ds["longitude"].max().values,
+            time_subset_gridded_obs_ds["latitude"].min().values,
+            time_subset_gridded_obs_ds["latitude"].max().values,
+            time_subset_gridded_obs_ds["longitude"].min().values,
+            time_subset_gridded_obs_ds["longitude"].max().values,
         )
         for data_var in individual_case.data_vars:
             case_results["point"][data_var] = {}
-            forecast_da = spatiotemporal_subset_forecast_ds[data_var]
+            forecast_da = time_subset_gridded_obs_ds[data_var]
             case_subset_point_obs_df = case_subset_point_obs[
                 utils.POINT_OBS_METADATA_VARS + [data_var]
             ]
