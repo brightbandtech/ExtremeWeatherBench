@@ -186,8 +186,12 @@ def _evaluate_case(
 
     if gridded_obs is not None:
         case_results["gridded"] = {}
-        spatiotemporal_subset_forecast_ds = _subset_gridded_obs(
-            gridded_obs, individual_case
+        variable_subset_gridded_obs = individual_case._subset_data_vars(gridded_obs)
+        time_subset_gridded_obs_ds = variable_subset_gridded_obs.sel(
+            time=slice(individual_case.start_date, individual_case.end_date)
+        )
+        spatiotemporal_subset_forecast_ds = (
+            individual_case.perform_subsetting_procedure(time_subset_gridded_obs_ds)
         )
         # Align gridded_obs and forecast_dataset by time
         subset_gridded_obs, aligned_forecast_subset_variable_time_ds = xr.align(
@@ -318,16 +322,3 @@ def _open_obs_datasets(eval_config: config.Config):
     if point_obs is None and gridded_obs is None:
         raise ValueError("No gridded or point observation data provided.")
     return point_obs, gridded_obs
-
-
-def _subset_gridded_obs(
-    gridded_obs: xr.Dataset, individual_case: case.IndividualCase
-) -> xr.Dataset:
-    variable_subset_gridded_obs = individual_case._subset_data_vars(gridded_obs)
-    time_subset_gridded_obs_ds = variable_subset_gridded_obs.sel(
-        time=slice(individual_case.start_date, individual_case.end_date)
-    )
-    time_subset_gridded_obs_ds = individual_case.perform_subsetting_procedure(
-        time_subset_gridded_obs_ds
-    )
-    return time_subset_gridded_obs_ds
