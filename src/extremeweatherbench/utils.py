@@ -2,7 +2,7 @@
 other specialized package.
 """
 
-from typing import Union, List
+from typing import Union, List, Tuple
 from collections import namedtuple
 import fsspec
 import numpy as np
@@ -15,7 +15,7 @@ import datetime
 from pathlib import Path
 from importlib import resources
 import yaml
-
+import itertools
 #: Struct packaging latitude/longitude location definitions.
 Location = namedtuple("Location", ["latitude", "longitude"])
 
@@ -32,6 +32,17 @@ ERA5_MAPPING = {
     "longitude": "longitude",
 }
 
+#: metadata variables for point obs
+POINT_OBS_METADATA_VARS = [
+    "time",
+    "station",
+    "call",
+    "name",
+    "latitude",
+    "longitude",
+    "elev",
+    "id",
+]
 
 def convert_longitude_to_360(longitude: float) -> float:
     """Convert a longitude from the range [-180, 180) to [0, 360)."""
