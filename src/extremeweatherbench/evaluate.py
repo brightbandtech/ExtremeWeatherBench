@@ -232,6 +232,7 @@ def _evaluate_case(
                 utils.POINT_OBS_METADATA_VARS,
             )
         )
+        # intentionally not returning anything or producing outputs for point obs
     return case_results
 
 
