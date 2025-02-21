@@ -2,7 +2,7 @@
 
 import logging
 import fsspec
-from typing import Optional, Any
+from typing import Optional, Any, Literal
 import pandas as pd
 import xarray as xr
 from extremeweatherbench import config, events, case, utils
@@ -181,13 +181,7 @@ def _evaluate_case(
     case_results: dict[str, dict[str, Any]] = {}
     if gridded_obs is not None:
         case_results["gridded"] = {}
-        variable_subset_gridded_obs = individual_case._subset_data_vars(gridded_obs)
-        case_subset_gridded_obs_ds = variable_subset_gridded_obs.sel(
-            time=slice(individual_case.start_date, individual_case.end_date)
-        )
-        case_subset_gridded_obs_ds = individual_case.perform_subsetting_procedure(
-            case_subset_gridded_obs_ds
-        )
+        case_subset_gridded_obs_ds = _subset_gridded_obs(gridded_obs, individual_case)
         # Align gridded_obs and forecast_dataset by time
         case_subset_gridded_obs_ds, spatiotemporal_subset_forecast_ds = xr.align(
             case_subset_gridded_obs_ds,
@@ -199,18 +193,35 @@ def _evaluate_case(
         spatiotemporal_subset_forecast_ds = (
             individual_case.perform_subsetting_procedure(time_subset_forecast_ds)
         )
-        case_subset_point_obs = point_obs.loc[point_obs["id"] == individual_case.id]
+        case_subset_point_obs = point_obs.loc[
+            point_obs["id"] == individual_case.id
+        ]  # added in concurrent PR
     for data_var in individual_case.data_vars:
         if gridded_obs is not None:
             gridded_forecast_da = spatiotemporal_subset_forecast_ds[data_var].compute()
             gridded_obs_da = case_subset_gridded_obs_ds[data_var].compute()
         if point_obs is not None:
-            pass
+            case_subset_flattened_point_obs_da, case_subset_flattened_forecast_da = (
+                utils.align_point_obs_from_gridded(
+                    spatiotemporal_subset_forecast_ds,
+                    case_subset_point_obs,
+                    data_var,
+                    utils.POINT_OBS_METADATA_VARS,
+                )
+            )
+            case_subset_flattened_forecast_da = (
+                case_subset_flattened_forecast_da.compute()
+            )
+            case_subset_flattened_point_obs_da = (
+                case_subset_flattened_point_obs_da.compute()
+            )
         for metric in individual_case.metrics_list:
             metric_instance = metric()
             logging.debug("metric %s computing for %s", metric_instance.name, data_var)
-            result = metric_instance.compute(forecast_da, gridded_obs_da)
-            case_results[data_var][metric_instance.name] = result
+            gridded_result = metric_instance.compute(
+                gridded_forecast_da, gridded_obs_da
+            )
+            case_results["gridded"][data_var][metric_instance.name] = gridded_result
         case_results["point"][data_var] = {}
         forecast_da = spatiotemporal_subset_forecast_ds[data_var]
         case_subset_forecast_da, case_subset_point_obs_da = (
@@ -275,3 +286,16 @@ def _open_obs_datasets(eval_config: config.Config):
     if point_obs is None and gridded_obs is None:
         raise ValueError("No gridded or point observation data provided.")
     return point_obs, gridded_obs
+
+
+def _subset_gridded_obs(
+    gridded_obs: xr.Dataset, individual_case: case.IndividualCase
+) -> xr.Dataset:
+    variable_subset_gridded_obs = individual_case._subset_data_vars(gridded_obs)
+    time_subset_gridded_obs_ds = variable_subset_gridded_obs.sel(
+        time=slice(individual_case.start_date, individual_case.end_date)
+    )
+    time_subset_gridded_obs_ds = individual_case.perform_subsetting_procedure(
+        time_subset_gridded_obs_ds
+    )
+    return time_subset_gridded_obs_ds
