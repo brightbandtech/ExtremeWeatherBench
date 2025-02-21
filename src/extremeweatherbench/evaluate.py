@@ -180,32 +180,47 @@ def _evaluate_case(
     logger.info("Forecast data available for case %s", individual_case.id)
     case_results: dict[str, dict[str, Any]] = {}
     if gridded_obs is not None:
+        case_results["gridded"] = {}
         variable_subset_gridded_obs = individual_case._subset_data_vars(gridded_obs)
-        time_subset_gridded_obs_ds = variable_subset_gridded_obs.sel(
+        case_subset_gridded_obs_ds = variable_subset_gridded_obs.sel(
             time=slice(individual_case.start_date, individual_case.end_date)
         )
-        time_subset_gridded_obs_ds = individual_case.perform_subsetting_procedure(
-            time_subset_gridded_obs_ds
+        case_subset_gridded_obs_ds = individual_case.perform_subsetting_procedure(
+            case_subset_gridded_obs_ds
         )
         # Align gridded_obs and forecast_dataset by time
-        time_subset_gridded_obs_ds, spatiotemporal_subset_ds = xr.align(
-            time_subset_gridded_obs_ds,
+        case_subset_gridded_obs_ds, spatiotemporal_subset_forecast_ds = xr.align(
+            case_subset_gridded_obs_ds,
             time_subset_forecast_ds[list(time_subset_forecast_ds.keys())],
             join="inner",
         )
-        for data_var in individual_case.data_vars:
-            case_results[data_var] = {}
-            forecast_da = spatiotemporal_subset_ds[data_var].compute()
-            gridded_obs_da = time_subset_gridded_obs_ds[data_var].compute()
-            for metric in individual_case.metrics_list:
-                metric_instance = metric()
-                logging.debug(
-                    "metric %s computing for %s", metric_instance.name, data_var
-                )
-                result = metric_instance.compute(forecast_da, gridded_obs_da)
-                case_results[data_var][metric_instance.name] = result
     if point_obs is not None:
-        raise NotImplementedError("Point obs evaluation not implemented as of 0.1.0")
+        case_results["point"] = {}
+        spatiotemporal_subset_forecast_ds = (
+            individual_case.perform_subsetting_procedure(time_subset_forecast_ds)
+        )
+        case_subset_point_obs = point_obs.loc[point_obs["id"] == individual_case.id]
+    for data_var in individual_case.data_vars:
+        if gridded_obs is not None:
+            gridded_forecast_da = spatiotemporal_subset_forecast_ds[data_var].compute()
+            gridded_obs_da = case_subset_gridded_obs_ds[data_var].compute()
+        if point_obs is not None:
+            pass
+        for metric in individual_case.metrics_list:
+            metric_instance = metric()
+            logging.debug("metric %s computing for %s", metric_instance.name, data_var)
+            result = metric_instance.compute(forecast_da, gridded_obs_da)
+            case_results[data_var][metric_instance.name] = result
+        case_results["point"][data_var] = {}
+        forecast_da = spatiotemporal_subset_forecast_ds[data_var]
+        case_subset_forecast_da, case_subset_point_obs_da = (
+            utils.align_point_obs_from_gridded(
+                forecast_da,
+                case_subset_point_obs,
+                data_var,
+                utils.POINT_OBS_METADATA_VARS,
+            )
+        )
     return case_results
 
 
