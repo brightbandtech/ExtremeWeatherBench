@@ -16,6 +16,7 @@ from pathlib import Path
 from importlib import resources
 import yaml
 import itertools
+
 #: Struct packaging latitude/longitude location definitions.
 Location = namedtuple("Location", ["latitude", "longitude"])
 
@@ -32,6 +33,10 @@ ERA5_MAPPING = {
     "longitude": "longitude",
 }
 
+ISD_MAPPING = {
+    "surface_temperature": "surface_air_temperature",
+}
+
 #: metadata variables for point obs
 POINT_OBS_METADATA_VARS = [
     "time",
@@ -43,6 +48,7 @@ POINT_OBS_METADATA_VARS = [
     "elev",
     "id",
 ]
+
 
 def convert_longitude_to_360(longitude: float) -> float:
     """Convert a longitude from the range [-180, 180) to [0, 360)."""
@@ -426,6 +432,7 @@ def read_event_yaml(input_pth: str | Path) -> dict:
         yaml_event_case = yaml.safe_load(f)
     return yaml_event_case
 
+
 def unit_check(df: pd.DataFrame) -> pd.DataFrame:
     """Base function to test for units in the point obs dataframe.
     Potential to expand more comprehensively.
@@ -441,7 +448,12 @@ def unit_check(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def location_subset_point_obs(
-    df: pd.DataFrame, min_lat: float, max_lat: float, min_lon: float, max_lon: float, inclusive: bool = True
+    df: pd.DataFrame,
+    min_lat: float,
+    max_lat: float,
+    min_lon: float,
+    max_lon: float,
+    inclusive: bool = True,
 ):
     """Subset a dataframe based upon maximum and minimum latitudes and longitudes.
 
@@ -452,7 +464,7 @@ def location_subset_point_obs(
         min_lon: minimum longitude.
         max_lon: maximum longitude.
         inclusive: whether to include the edges of the bounding box.
-        
+
     Returns a subset dataframe."""
     if inclusive:
         location_subset_df = df[
@@ -470,8 +482,12 @@ def location_subset_point_obs(
         ]
     return location_subset_df
 
+
 def align_point_obs_from_gridded(
-    forecast_da: xr.DataArray, case_subset_point_obs_df: pd.DataFrame, data_var: str, point_obs_metadata_vars: List[str]
+    forecast_da: xr.DataArray,
+    case_subset_point_obs_df: pd.DataFrame,
+    data_var: str,
+    point_obs_metadata_vars: List[str],
 ) -> Tuple[xr.DataArray, xr.DataArray]:
     """Takes in a forecast dataarray and point observation dataframe, aligning them by
     reducing dimensions.
@@ -500,7 +516,7 @@ def align_point_obs_from_gridded(
     )
     # Uses indexing in the dataframe to capture metadata columns for future use
     point_obs_metadata = case_subset_point_obs_df[point_obs_metadata_vars]
-    
+
     # Reset index to allow for easier modification
     case_subset_point_obs_df = case_subset_point_obs_df.reset_index()
     case_subset_point_obs_df.loc[:, "station"] = case_subset_point_obs_df[
@@ -520,10 +536,11 @@ def align_point_obs_from_gridded(
     aligned_observation_list = []
 
     # Loop init and lead times to prevent indexing error from duplicate valid times
-    for init_time, lead_time in itertools.product(forecast_da.init_time, forecast_da.lead_time):
+    for init_time, lead_time in itertools.product(
+        forecast_da.init_time, forecast_da.lead_time
+    ):
         valid_time = pd.Timestamp(
-            init_time.values
-            + pd.to_timedelta(lead_time.values, unit="h").to_numpy()
+            init_time.values + pd.to_timedelta(lead_time.values, unit="h").to_numpy()
         )
         if valid_time in case_subset_point_obs_df.index.levels[1]:
             obs_timeslice = case_subset_point_obs_df.loc[

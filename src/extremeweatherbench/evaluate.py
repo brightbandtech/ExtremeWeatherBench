@@ -15,6 +15,7 @@ logger.setLevel(logging.INFO)
 #: Default mapping for forecast dataset schema.
 DEFAULT_FORECAST_SCHEMA_CONFIG = config.ForecastSchemaConfig()
 
+
 def evaluate(
     eval_config: config.Config,
     forecast_schema_config: config.ForecastSchemaConfig = DEFAULT_FORECAST_SCHEMA_CONFIG,
@@ -207,16 +208,21 @@ def _evaluate_case(
                 case_results[data_var][metric_instance.name] = result
     if point_obs is not None:
         case_results["point"] = {}
-        spatiotemporal_subset_forecast_ds = individual_case.perform_subsetting_procedure(
-            time_subset_forecast_ds
+        spatiotemporal_subset_forecast_ds = (
+            individual_case.perform_subsetting_procedure(time_subset_forecast_ds)
         )
         case_subset_point_obs = point_obs.loc[point_obs["id"] == individual_case.id]
         for data_var in individual_case.data_vars:
             case_results["point"][data_var] = {}
             forecast_da = spatiotemporal_subset_forecast_ds[data_var]
-            case_subset_forecast_da, case_subset_point_obs_da = utils.align_point_obs_from_gridded(
-                    forecast_da, case_subset_point_obs, data_var, utils.POINT_OBS_METADATA_VARS
+            case_subset_forecast_da, case_subset_point_obs_da = (
+                utils.align_point_obs_from_gridded(
+                    forecast_da,
+                    case_subset_point_obs,
+                    data_var,
+                    utils.POINT_OBS_METADATA_VARS,
                 )
+            )
     return case_results
 
 
