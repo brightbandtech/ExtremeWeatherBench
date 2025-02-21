@@ -426,6 +426,50 @@ def read_event_yaml(input_pth: str | Path) -> dict:
         yaml_event_case = yaml.safe_load(f)
     return yaml_event_case
 
+def unit_check(df: pd.DataFrame) -> pd.DataFrame:
+    """Base function to test for units in the point obs dataframe.
+    Potential to expand more comprehensively.
+
+    Arguments:
+        df: dataframe with point obs.
+
+
+    Returns a corrected dataframe."""
+    if "surface_air_temperature" in df.columns:
+        df["surface_air_temperature"] = df["surface_air_temperature"] + 273.15
+    return df
+
+
+def location_subset_point_obs(
+    df: pd.DataFrame, min_lat: float, max_lat: float, min_lon: float, max_lon: float, inclusive: bool = True
+):
+    """Subset a dataframe based upon maximum and minimum latitudes and longitudes.
+
+    Arguments:
+        df: dataframe with point obs.
+        min_lat: minimum latitude.
+        max_lat: maximum latitude.
+        min_lon: minimum longitude.
+        max_lon: maximum longitude.
+        inclusive: whether to include the edges of the bounding box.
+        
+    Returns a subset dataframe."""
+    if inclusive:
+        location_subset_df = df[
+            (df["latitude"] >= min_lat)
+            & (df["latitude"] <= max_lat)
+            & (df["longitude"] >= min_lon)
+            & (df["longitude"] <= max_lon)
+        ]
+    else:
+        location_subset_df = df[
+            (df["latitude"] > min_lat)
+            & (df["latitude"] < max_lat)
+            & (df["longitude"] > min_lon)
+            & (df["longitude"] < max_lon)
+        ]
+    return location_subset_df
+
 def align_point_obs_from_gridded(
     forecast_da: xr.DataArray, case_subset_point_obs_df: pd.DataFrame, data_var: str, point_obs_metadata_vars: List[str]
 ) -> Tuple[xr.DataArray, xr.DataArray]:
