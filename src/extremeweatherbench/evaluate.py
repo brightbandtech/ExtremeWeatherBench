@@ -181,57 +181,84 @@ def _evaluate_case(
     case_results: dict[str, dict[str, Any]] = {}
     if gridded_obs is not None:
         case_results["gridded"] = {}
-        case_subset_gridded_obs_ds = _subset_gridded_obs(gridded_obs, individual_case)
+        subset_gridded_obs = _subset_gridded_obs(gridded_obs, individual_case)
+
         # Align gridded_obs and forecast_dataset by time
-        case_subset_gridded_obs_ds, spatiotemporal_subset_forecast_ds = xr.align(
-            case_subset_gridded_obs_ds,
+        subset_gridded_obs, forecast_ds = xr.align(
+            subset_gridded_obs,
             time_subset_forecast_ds[list(time_subset_forecast_ds.keys())],
             join="inner",
         )
+        for data_var in individual_case.data_vars:
+            case_results["gridded"][data_var] = {}
+            forecast_da = forecast_ds[data_var]
+            gridded_obs_da = subset_gridded_obs[data_var]
+            forecast_da = forecast_da.compute()
+            gridded_obs_da = gridded_obs_da.compute()
+            for metric in individual_case.metrics_list:
+                metric_instance = metric()
+                logging.debug(
+                    "gridded metric %s computing for %s", metric_instance.name, data_var
+                )
+                result = metric_instance.compute(forecast_da, gridded_obs_da)
+                case_results["gridded"][data_var][metric_instance.name] = result
+                logger.debug(
+                    "gridded, %s, %s, %s", data_var, metric_instance.name, result
+                )
     if point_obs is not None:
         case_results["point"] = {}
-        spatiotemporal_subset_forecast_ds = (
-            individual_case.perform_subsetting_procedure(time_subset_forecast_ds)
+        case_subset_point_obs = point_obs.loc[point_obs["id"] == individual_case.id]
+        case_subset_point_obs = case_subset_point_obs.rename(columns=utils.ISD_MAPPING)
+        case_subset_point_obs["longitude"] = utils.convert_longitude_to_360(
+            case_subset_point_obs["longitude"]
         )
-        case_subset_point_obs = point_obs.loc[
-            point_obs["id"] == individual_case.id
-        ]  # added in concurrent PR
-    for data_var in individual_case.data_vars:
-        if gridded_obs is not None:
-            gridded_forecast_da = spatiotemporal_subset_forecast_ds[data_var].compute()
-            gridded_obs_da = case_subset_gridded_obs_ds[data_var].compute()
-        if point_obs is not None:
-            case_subset_flattened_point_obs_da, case_subset_flattened_forecast_da = (
-                utils.align_point_obs_from_gridded(
-                    spatiotemporal_subset_forecast_ds,
-                    case_subset_point_obs,
-                    data_var,
-                    utils.POINT_OBS_METADATA_VARS,
+        case_subset_point_obs = utils.unit_check(case_subset_point_obs)
+        case_subset_point_obs = utils.location_subset_point_obs(
+            case_subset_point_obs,
+            spatiotemporal_subset_forecast_ds["latitude"].min().values,
+            spatiotemporal_subset_forecast_ds["latitude"].max().values,
+            spatiotemporal_subset_forecast_ds["longitude"].min().values,
+            spatiotemporal_subset_forecast_ds["longitude"].max().values,
+        )
+
+        for data_var in individual_case.data_vars:
+            case_results["point"][data_var] = {}
+            forecast_da = spatiotemporal_subset_forecast_ds[data_var]
+            case_subset_point_obs_df = case_subset_point_obs[
+                utils.POINT_OBS_METADATA_VARS + [data_var]
+            ]
+
+            forecast_da, case_subset_point_obs_da = utils.align_point_obs_from_gridded(
+                forecast_da, case_subset_point_obs_df, utils.POINT_OBS_METADATA_VARS
+            )  # rename forecast_da to something more readable/descriptive
+
+            forecast_da = forecast_da.compute()
+            case_subset_point_obs_da = case_subset_point_obs_da.compute()
+
+            forecast_da = (
+                forecast_da.groupby(
+                    ["init_time", "lead_time", "latitude", "longitude"]
+                ).mean()  # change to mean([["init_time", "lead_time", "latitude", "longitude"]])
+            )
+            case_subset_point_obs_da = case_subset_point_obs_da.groupby(
+                ["time", "latitude", "longitude"]
+            ).first()
+            # TODO(aaTman): #64 define where and how loading to memory will occur.
+            # where diverging occurs between EWB and libraries like WBX is the
+            # philosophical core of what's being computed, in a way. Though having
+            # users define when they want to load into memory is important,
+            # there are clearly defined places in code, such as here, that loading to memory
+            # would minimize overhead from large graphs.
+            for metric in individual_case.metrics_list:
+                metric_instance = metric()
+                logging.debug(
+                    "point metric %s computing for %s", metric_instance.name, data_var
                 )
-            )
-            case_subset_flattened_forecast_da = (
-                case_subset_flattened_forecast_da.compute()
-            )
-            case_subset_flattened_point_obs_da = (
-                case_subset_flattened_point_obs_da.compute()
-            )
-        for metric in individual_case.metrics_list:
-            metric_instance = metric()
-            logging.debug("metric %s computing for %s", metric_instance.name, data_var)
-            gridded_result = metric_instance.compute(
-                gridded_forecast_da, gridded_obs_da
-            )
-            case_results["gridded"][data_var][metric_instance.name] = gridded_result
-        case_results["point"][data_var] = {}
-        forecast_da = spatiotemporal_subset_forecast_ds[data_var]
-        case_subset_forecast_da, case_subset_point_obs_da = (
-            utils.align_point_obs_from_gridded(
-                forecast_da,
-                case_subset_point_obs,
-                data_var,
-                utils.POINT_OBS_METADATA_VARS,
-            )
-        )
+                result = metric_instance.compute(forecast_da, case_subset_point_obs_da)
+                case_results["point"][data_var][metric_instance.name] = result
+                logger.debug(
+                    "point, %s, %s, %s", data_var, metric_instance.name, result
+                )
         # intentionally not returning anything or producing outputs for point obs
     return case_results
 
