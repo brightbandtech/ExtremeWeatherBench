@@ -173,7 +173,7 @@ def sample_point_obs_df():
         "station": ["A100", "B200"],
         "call": ["KWEW", "KBCE"],
         "name": ["WEST CENTRAL", "EAST CENTRAL"],
-        "latitude": [35.5, 35.8],
+        "latitude": [40.5, 41.8],
         "longitude": [-99.5, -99.8],
         "elev": [1000, 1100],
         "id": [1, 2],
