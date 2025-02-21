@@ -443,7 +443,12 @@ def unit_check(df: pd.DataFrame) -> pd.DataFrame:
 
     Returns a corrected dataframe."""
     if "surface_air_temperature" in df.columns:
-        df["surface_air_temperature"] = df["surface_air_temperature"] + 273.15
+        # Check if temperature appears to be in Kelvin (values mostly > 200)
+        if df["surface_air_temperature"].mean() > 200:
+            pass
+        else:
+            # Otherwise assume Celsius
+            df["surface_air_temperature"] = df["surface_air_temperature"] + 273.15
     return df
 
 
