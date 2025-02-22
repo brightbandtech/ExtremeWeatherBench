@@ -20,6 +20,11 @@ DEFAULT_FORECAST_SCHEMA_CONFIG = config.ForecastSchemaConfig()
 class CaseEvaluationInput:
     """
     A dataclass for storing the inputs of an evaluation.
+
+    Attributes:
+        observation_type: The type of observation to evaluate (gridded or point).
+        observation: The observation dataarray to evaluate.
+        forecast: The forecast dataarray to evaluate.
     """
 
     observation_type: Literal["gridded", "point"]
@@ -27,11 +32,12 @@ class CaseEvaluationInput:
     forecast: xr.DataArray
 
     def compute(self):
+        """Load the evaluation inputs into memory."""
         self.observation = self.observation.compute()
         self.forecast = self.forecast.compute()
 
 
-class CaseEvaluation:
+class CaseEvaluationData:
     """
     This class is designed to be used in conjunction with the `case.IndividualCase` class to build
     datasets for evaluation of individual Cases across a set of Events.
@@ -47,8 +53,8 @@ class CaseEvaluation:
         self,
         individual_case: case.IndividualCase,
         observation_type: Literal["gridded", "point"],
-        forecast: xr.DataArray,
-        observation: Optional[Union[xr.DataArray | pd.DataFrame]],
+        forecast: xr.Dataset,
+        observation: Optional[Union[xr.Dataset | pd.DataFrame]],
     ):
         self.observation_type = observation_type
         self.observation = observation
@@ -306,10 +312,10 @@ def _evaluate_case(
     """
     case_results: dict[str, dict[str, Any]] = {}
     logger.info("Evaluating case %s, %s", individual_case.id, individual_case.title)
-    gridded_obs_evaluation = CaseEvaluation(
+    gridded_obs_evaluation = CaseEvaluationData(
         "gridded", gridded_obs, forecast_dataset, individual_case
     )
-    point_obs_evaluation = CaseEvaluation(
+    point_obs_evaluation = CaseEvaluationData(
         "point", point_obs, forecast_dataset, individual_case
     )
 
