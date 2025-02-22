@@ -313,10 +313,10 @@ def _evaluate_case(
     case_results: dict[str, dict[str, Any]] = {}
     logger.info("Evaluating case %s, %s", individual_case.id, individual_case.title)
     gridded_obs_evaluation = CaseEvaluationData(
-        "gridded", gridded_obs, forecast_dataset, individual_case
+        individual_case, "gridded", gridded_obs, forecast_dataset
     )
     point_obs_evaluation = CaseEvaluationData(
-        "point", point_obs, forecast_dataset, individual_case
+        individual_case, "point", point_obs, forecast_dataset
     )
 
     gridded_case_eval = gridded_obs_evaluation.build_dataarray_subsets(compute=True)
@@ -327,12 +327,19 @@ def _evaluate_case(
             metric_instance = metric()
             logging.debug("metric %s computing", metric_instance.name)
             # TODO(aaTman): Create metric container object for gridded and point obs
-            result = [
-                metric_instance.compute(
-                    eval.forecast[data_var], eval.observation[data_var]
+            # in the meantime, forcing a check for Nones in gridded and point eval objects
+            if gridded_case_eval is None or point_case_eval is None:
+                logger.warning(
+                    "No data available for case %s, skipping", individual_case.id
                 )
-                for eval in [gridded_case_eval, point_case_eval]
-            ]
+                result = None
+            else:
+                result = [
+                    metric_instance.compute(
+                        eval.forecast[data_var], eval.observation[data_var]
+                    )
+                    for eval in [gridded_case_eval, point_case_eval]
+                ]
             case_results[data_var][metric_instance.name] = result
     return case_results
 
