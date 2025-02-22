@@ -2,12 +2,12 @@
 
 import logging
 import fsspec
-from typing import Optional, Any, Literal
+from typing import Optional, Any, Literal, Union
 import pandas as pd
 import xarray as xr
 from extremeweatherbench import config, events, case, utils
 import dacite
-
+import dataclasses
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -16,23 +16,147 @@ logger.setLevel(logging.INFO)
 DEFAULT_FORECAST_SCHEMA_CONFIG = config.ForecastSchemaConfig()
 
 
-class Evaluation:
+@dataclasses.dataclass
+class CaseEvaluationInput:
     """
-    Class for evaluating a collection of Cases across a set of Events.
+    A dataclass for storing the inputs of an evaluation.
+    """
+
+    observation_type: Literal["gridded", "point"]
+    observation: xr.DataArray
+    forecast: xr.DataArray
+
+    def compute(self):
+        self.observation = self.observation.compute()
+        self.forecast = self.forecast.compute()
+
+
+class CaseEvaluation:
+    """
+    This class is designed to be used in conjunction with the `case.IndividualCase` class to build
+    datasets for evaluation of individual Cases across a set of Events.
+
+    Attributes:
+        individual_case: The `case.IndividualCase` object to evaluate.
+        forecast: The forecast dataset to evaluate.
+        gridded_observation: The gridded observation dataset to evaluate.
+        point_observation: The point observation dataset to evaluate.
     """
 
     def __init__(
         self,
+        individual_case: case.IndividualCase,
         observation_type: Literal["gridded", "point"],
-        observation: xr.DataArray,
         forecast: xr.DataArray,
+        observation: Optional[Union[xr.DataArray | pd.DataFrame]],
     ):
         self.observation_type = observation_type
         self.observation = observation
         self.forecast = forecast
+        self.individual_case = individual_case
 
-    def compute(self):
-        pass
+    def build_dataarray_subsets(
+        self,
+        compute: bool = True,
+        point_obs_mapping: dict = utils.ISD_MAPPING,
+    ) -> Optional[CaseEvaluationInput]:
+        """Build the subsets of the gridded and point observations for a given data variable.
+        Computation occurs based on what observation datasets are provided in the Evaluation object.
+
+        Args:
+            data_var: The data variable to evaluate.
+            compute: Flag to disable performing actual calculations (but still validate
+                case configurations). Defaults to "False."
+
+        Returns:
+            A tuple of xarray DataArrays containing the gridded and point observation subsets.
+        """
+        forecast = self._check_forecast_data_availability()
+        if forecast is None:
+            return None
+        if self.observation is None:
+            return None
+        if self.observation_type == "gridded":
+            subset_gridded_obs_da = self.observation[self.individual_case.data_vars]
+            evaluation_result = self._subset_gridded_obs(subset_gridded_obs_da)
+        elif self.observation_type == "point":
+            renamed_observations = self.observation.rename(columns=point_obs_mapping)
+            subset_point_obs = renamed_observations[
+                utils.POINT_OBS_METADATA_VARS + [self.individual_case.data_vars]
+            ]
+            evaluation_result = self._subset_point_obs(subset_point_obs)
+        if compute:
+            evaluation_result.compute()
+        return evaluation_result
+
+    def _subset_gridded_obs(self, gridded_obs: xr.Dataset) -> CaseEvaluationInput:
+        time_subset_gridded_obs_ds = gridded_obs.sel(
+            time=slice(self.individual_case.start_date, self.individual_case.end_date)
+        )
+        time_subset_gridded_obs_ds = self.individual_case.perform_subsetting_procedure(
+            gridded_obs
+        )
+        # Align gridded_obs and forecast_dataset by time
+        subset_gridded_obs, forecast_ds = xr.align(
+            time_subset_gridded_obs_ds,
+            self.forecast,
+            join="inner",
+        )
+        return CaseEvaluationInput(
+            "gridded", observation=subset_gridded_obs, forecast=forecast_ds
+        )
+
+    def _subset_point_obs(self, point_obs: pd.DataFrame) -> CaseEvaluationInput:
+        subset_id_point_obs = point_obs.loc[point_obs["id"] == self.individual_case.id]
+        mapped_subset_id_point_obs = subset_id_point_obs.rename(
+            columns=utils.ISD_MAPPING
+        )
+        mapped_subset_id_point_obs["longitude"] = utils.convert_longitude_to_360(
+            mapped_subset_id_point_obs["longitude"]
+        )
+        mapped_subset_id_point_obs = utils.unit_check(mapped_subset_id_point_obs)
+        mapped_subset_id_point_obs = utils.location_subset_point_obs(
+            mapped_subset_id_point_obs,
+            self.forecast["latitude"].min().values,
+            self.forecast["latitude"].max().values,
+            self.forecast["longitude"].min().values,
+            self.forecast["longitude"].max().values,
+        )
+        point_forecast_da, subset_point_obs_da = utils.align_point_obs_from_gridded(
+            self.forecast, mapped_subset_id_point_obs, utils.POINT_OBS_METADATA_VARS
+        )  # rename forecast_da to something more readable/descriptive
+
+        point_forecast_da = (
+            point_forecast_da.groupby(
+                ["init_time", "lead_time", "latitude", "longitude"]
+            ).mean()  # change to mean([["init_time", "lead_time", "latitude", "longitude"]])
+        )
+        subset_point_obs_da = subset_point_obs_da.groupby(
+            ["time", "latitude", "longitude"]
+        ).first()
+        return CaseEvaluationInput(
+            "point", observation=subset_point_obs_da, forecast=point_forecast_da
+        )
+
+    def _check_forecast_data_availability(self):
+        forecast = self.individual_case._subset_valid_times(self.forecast)
+        lead_time_len = len(forecast.init_time)
+        if lead_time_len == 0:
+            logger.warning(
+                "No forecast data available for case %s, skipping",
+                self.individual_case.id,
+            )
+            return None
+        elif (
+            lead_time_len
+            < (self.individual_case.end_date - self.individual_case.start_date).days
+        ):
+            logger.warning(
+                "Fewer valid times in forecast than days in case %s, results likely unreliable",
+                self.individual_case.id,
+            )
+        logger.info("Forecast data available for case %s", self.individual_case.id)
+        return forecast
 
 
 def evaluate(
@@ -180,110 +304,30 @@ def _evaluate_case(
     Returns:
         An xarray Dataset containing the evaluation results for the case.
     """
-
-    logger.info("Evaluating case %s, %s", individual_case.id, individual_case.title)
-
-    # core modifications to forecast data irrespective of observation type
-    forecast_subset_variable_ds = individual_case._subset_data_vars(forecast_dataset)
-    time_subset_forecast_ds = individual_case._subset_valid_times(
-        forecast_subset_variable_ds
-    )
-    # Check if forecast data is available for the case, if not, return None
-    lead_time_len = len(time_subset_forecast_ds.init_time)
-    if lead_time_len == 0:
-        logger.warning(
-            "No forecast data available for case %s, skipping", individual_case.id
-        )
-        return None
-    elif lead_time_len < (individual_case.end_date - individual_case.start_date).days:
-        logger.warning(
-            "Fewer valid times in forecast than days in case %s, results likely unreliable",
-            individual_case.id,
-        )
-    logger.info("Forecast data available for case %s", individual_case.id)
     case_results: dict[str, dict[str, Any]] = {}
-    if gridded_obs is not None:
-        case_results["gridded"] = {}
-        variable_subset_gridded_obs = individual_case._subset_data_vars(gridded_obs)
-        time_subset_gridded_obs_ds = variable_subset_gridded_obs.sel(
-            time=slice(individual_case.start_date, individual_case.end_date)
-        )
-        time_subset_gridded_obs_ds = individual_case.perform_subsetting_procedure(
-            time_subset_gridded_obs_ds
-        )
-        # Align gridded_obs and forecast_dataset by time
-        time_subset_gridded_obs_ds, spatiotemporal_subset_ds = xr.align(
-            time_subset_gridded_obs_ds,
-            time_subset_forecast_ds[list(time_subset_forecast_ds.keys())],
-            join="inner",
-        )
-        for data_var in individual_case.data_vars:
-            case_results["gridded"][data_var] = {}
-            forecast_da = spatiotemporal_subset_ds[data_var]
-            gridded_obs_da = time_subset_gridded_obs_ds[data_var]
-            forecast_da = forecast_da.compute()
-            gridded_obs_da = gridded_obs_da.compute()
-            for metric in individual_case.metrics_list:
-                metric_instance = metric()
-                logging.debug(
-                    "gridded metric %s computing for %s", metric_instance.name, data_var
-                )
-                result = metric_instance.compute(forecast_da, gridded_obs_da)
-                case_results["gridded"][data_var][metric_instance.name] = result
-                logger.debug(
-                    "gridded, %s, %s, %s", data_var, metric_instance.name, result
-                )
+    logger.info("Evaluating case %s, %s", individual_case.id, individual_case.title)
+    gridded_obs_evaluation = CaseEvaluation(
+        "gridded", gridded_obs, forecast_dataset, individual_case
+    )
+    point_obs_evaluation = CaseEvaluation(
+        "point", point_obs, forecast_dataset, individual_case
+    )
 
-    if point_obs is not None:
-        case_results["point"] = {}
-        case_subset_point_obs = point_obs.loc[point_obs["id"] == individual_case.id]
-        case_subset_point_obs = case_subset_point_obs.rename(columns=utils.ISD_MAPPING)
-        case_subset_point_obs["longitude"] = utils.convert_longitude_to_360(
-            case_subset_point_obs["longitude"]
-        )
-        case_subset_point_obs = utils.unit_check(case_subset_point_obs)
-        case_subset_point_obs = utils.location_subset_point_obs(
-            case_subset_point_obs,
-            time_subset_gridded_obs_ds["latitude"].min().values,
-            time_subset_gridded_obs_ds["latitude"].max().values,
-            time_subset_gridded_obs_ds["longitude"].min().values,
-            time_subset_gridded_obs_ds["longitude"].max().values,
-        )
-        for data_var in individual_case.data_vars:
-            case_results["point"][data_var] = {}
-            forecast_da = time_subset_gridded_obs_ds[data_var]
-            case_subset_point_obs_df = case_subset_point_obs[
-                utils.POINT_OBS_METADATA_VARS + [data_var]
+    gridded_case_eval = gridded_obs_evaluation.build_dataarray_subsets(compute=True)
+    point_case_eval = point_obs_evaluation.build_dataarray_subsets(compute=True)
+    for data_var in individual_case.data_vars:
+        case_results[data_var] = {}
+        for metric in individual_case.metrics_list:
+            metric_instance = metric()
+            logging.debug("metric %s computing", metric_instance.name)
+            # TODO(aaTman): Create metric container object for gridded and point obs
+            result = [
+                metric_instance.compute(
+                    eval.forecast[data_var], eval.observation[data_var]
+                )
+                for eval in [gridded_case_eval, point_case_eval]
             ]
-            forecast_da, case_subset_point_obs_da = utils.align_point_obs_from_gridded(
-                forecast_da, case_subset_point_obs_df, utils.POINT_OBS_METADATA_VARS
-            )  # rename forecast_da to something more readable/descriptive
-
-            # TODO(aaTman): #64 define where and how loading to memory will occur.
-            # where diverging occurs between EWB and libraries like WBX is the
-            # philosophical core of what's being computed, in a way. Though having
-            # users define when they want to load into memory is important,
-            # there are clearly defined places in code, such as here, that loading to memory
-            # would minimize overhead from large graphs.
-            forecast_da = forecast_da.compute()
-            case_subset_point_obs_da = case_subset_point_obs_da.compute()
-            # convert point obs to format that metrics accept
-            forecast_da = forecast_da.groupby(
-                ["init_time", "lead_time", "latitude", "longitude"]
-            ).mean()
-            case_subset_point_obs_da = case_subset_point_obs_da.groupby(
-                ["time", "latitude", "longitude"]
-            ).first()
-            for metric in individual_case.metrics_list:
-                metric_instance = metric()
-                logging.debug(
-                    "point metric %s computing for %s", metric_instance.name, data_var
-                )
-                result = metric_instance.compute(forecast_da, case_subset_point_obs_da)
-                case_results["point"][data_var][metric_instance.name] = result
-                logger.debug(
-                    "point, %s, %s, %s", data_var, metric_instance.name, result
-                )
+            case_results[data_var][metric_instance.name] = result
     return case_results
 
 
