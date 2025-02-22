@@ -96,6 +96,7 @@ class CaseEvaluationData:
         return evaluation_result
 
     def _subset_gridded_obs(self, gridded_obs: xr.Dataset) -> CaseEvaluationInput:
+        """Subset the gridded observation dataarray for a given data variable."""
         time_subset_gridded_obs_ds = gridded_obs.sel(
             time=slice(self.individual_case.start_date, self.individual_case.end_date)
         )
@@ -113,6 +114,7 @@ class CaseEvaluationData:
         )
 
     def _subset_point_obs(self, point_obs: pd.DataFrame) -> CaseEvaluationInput:
+        """Subset the point observation dataarray for a given data variable."""
         subset_id_point_obs = point_obs.loc[point_obs["id"] == self.individual_case.id]
         mapped_subset_id_point_obs = subset_id_point_obs.rename(
             columns=utils.ISD_MAPPING
@@ -130,13 +132,11 @@ class CaseEvaluationData:
         )
         point_forecast_da, subset_point_obs_da = utils.align_point_obs_from_gridded(
             self.forecast, mapped_subset_id_point_obs, utils.POINT_OBS_METADATA_VARS
-        )  # rename forecast_da to something more readable/descriptive
-
-        point_forecast_da = (
-            point_forecast_da.groupby(
-                ["init_time", "lead_time", "latitude", "longitude"]
-            ).mean()  # change to mean([["init_time", "lead_time", "latitude", "longitude"]])
         )
+
+        point_forecast_da = point_forecast_da.groupby(
+            ["init_time", "lead_time", "latitude", "longitude"]
+        ).mean()
         subset_point_obs_da = subset_point_obs_da.groupby(
             ["time", "latitude", "longitude"]
         ).first()
