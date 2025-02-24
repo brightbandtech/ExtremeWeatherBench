@@ -757,6 +757,7 @@ dependencies = [
 [package.optional-dependencies]
 data-prep = [
     { name = "fsspec" },
+    { name = "geopy" },
     { name = "kerchunk", extra = ["dev"] },
 ]
 
@@ -782,6 +783,7 @@ requires-dist = [
     { name = "distributed", specifier = ">=2025.1.0" },
     { name = "fsspec", marker = "extra == 'data-prep'", specifier = ">=2024.12.0" },
     { name = "geopandas", specifier = ">=1.0.1" },
+    { name = "geopy", marker = "extra == 'data-prep'", specifier = ">=2.4.1" },
     { name = "joblib", specifier = ">=1.4.2" },
     { name = "kerchunk", extras = ["dev"], marker = "extra == 'data-prep'", git = "https://github.com/fsspec/kerchunk" },
     { name = "matplotlib", specifier = ">=3.10.0" },
