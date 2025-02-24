@@ -15,6 +15,10 @@ logger.setLevel(logging.INFO)
 #: Default mapping for forecast dataset schema.
 DEFAULT_FORECAST_SCHEMA_CONFIG = config.ForecastSchemaConfig()
 
+POINT_OBS_STORAGE_OPTIONS = dict(token="anon")
+
+GRIDDED_OBS_STORAGE_OPTIONS = dict(token="anon")
+
 
 @dataclasses.dataclass
 class CaseEvaluationInput:
@@ -386,11 +390,15 @@ def _open_obs_datasets(eval_config: config.Config):
     """Open the observation datasets specified for evaluation."""
     point_obs = None
     gridded_obs = None
+    if eval_config.point_obs_path:
+        point_obs = pd.read_parquet(
+            eval_config.point_obs_path, storage_options=POINT_OBS_STORAGE_OPTIONS
+        )
     if eval_config.gridded_obs_path:
         gridded_obs = xr.open_zarr(
             eval_config.gridded_obs_path,
             chunks=None,
-            storage_options=dict(token="anon"),
+            storage_options=GRIDDED_OBS_STORAGE_OPTIONS,
         )
     if point_obs is None and gridded_obs is None:
         raise ValueError("No gridded or point observation data provided.")
