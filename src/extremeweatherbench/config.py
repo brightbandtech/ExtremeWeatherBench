@@ -10,7 +10,7 @@ DEFAULT_FORECAST_DIR = "assets/data/forecasts/"
 ARCO_ERA5_FULL_URI = (
     "gs://gcp-public-data-arco-era5/ar/full_37-1h-0p25deg-chunk-1.zarr-v3"
 )
-ISD_POINT_OBS_URI = "gs://extremeweatherbench/isd_no_wr_qc.parquet"
+ISD_POINT_OBS_URI = "gs://extremeweatherbench/isd_minimal_qc.parquet"
 
 
 @dataclasses.dataclass
