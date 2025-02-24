@@ -40,15 +40,15 @@ def make_sample_forecast_dataset():
     longitudes = np.linspace(0, 359, 360)
     dataset = xr.Dataset(
         {
-            "air_temperature": (
+            "surface_air_temperature": (
                 ["init_time", "latitude", "longitude", "lead_time"],
                 20 + 5 * data,
             ),
-            "eastward_wind": (
+            "surface_eastward_wind": (
                 ["init_time", "latitude", "longitude", "lead_time"],
                 data,
             ),
-            "northward_wind": (
+            "surface_northward_wind": (
                 ["init_time", "latitude", "longitude", "lead_time"],
                 data,
             ),
@@ -61,7 +61,7 @@ def make_sample_forecast_dataset():
         },
     )
     # Set a specific value for a specific time and location to remove ambiguity
-    dataset["air_temperature"].loc[
+    dataset["surface_air_temperature"].loc[
         dict(
             init_time="2021-06-21 00:00",
             lead_time=42,
@@ -70,7 +70,7 @@ def make_sample_forecast_dataset():
         )
     ] = 24
     # Set a specific value for a specific time and location to remove ambiguity
-    dataset["air_temperature"].loc[
+    dataset["surface_air_temperature"].loc[
         dict(
             init_time="2021-06-20 00:00",
             lead_time=42,
