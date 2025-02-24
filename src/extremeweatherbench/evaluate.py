@@ -8,6 +8,7 @@ import xarray as xr
 from extremeweatherbench import config, events, case, utils
 import dacite
 import dataclasses
+import itertools
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -317,34 +318,33 @@ def _evaluate_case(
     case_results: dict[str, dict[str, Any]] = {}
     logger.info("Evaluating case %s, %s", individual_case.id, individual_case.title)
     gridded_obs_evaluation = CaseEvaluationData(
-        individual_case, "gridded", gridded_obs, forecast_dataset
+        individual_case, "gridded", observation=gridded_obs, forecast=forecast_dataset
     )
     point_obs_evaluation = CaseEvaluationData(
-        individual_case, "point", point_obs, forecast_dataset
+        individual_case, "point", observation=point_obs, forecast=forecast_dataset
     )
 
     gridded_case_eval = gridded_obs_evaluation.build_dataarray_subsets(compute=True)
     point_case_eval = point_obs_evaluation.build_dataarray_subsets(compute=True)
-    for data_var in individual_case.data_vars:
+    for data_var, metric in itertools.product(
+        individual_case.data_vars, individual_case.metrics_list
+    ):
         case_results[data_var] = {}
-        for metric in individual_case.metrics_list:
-            metric_instance = metric()
-            logging.debug("metric %s computing", metric_instance.name)
-            # TODO(aaTman): Create metric container object for gridded and point obs
-            # in the meantime, forcing a check for Nones in gridded and point eval objects
-            if gridded_case_eval is None or point_case_eval is None:
-                logger.warning(
-                    "No data available for case %s, skipping", individual_case.id
+        metric_instance = metric()
+        logging.debug("metric %s computing", metric_instance.name)
+        # TODO(aaTman): Create metric container object for gridded and point obs
+        # in the meantime, forcing a check for Nones in gridded and point eval objects
+        result = [
+            {
+                eval.observation_type: metric_instance.compute(
+                    eval.forecast[data_var], eval.observation[data_var]
                 )
-                result = None
-            else:
-                result = [
-                    metric_instance.compute(
-                        eval.forecast[data_var], eval.observation[data_var]
-                    )
-                    for eval in [gridded_case_eval, point_case_eval]
-                ]
-            case_results[data_var][metric_instance.name] = result
+            }
+            if eval is not None
+            else None
+            for eval in [gridded_case_eval, point_case_eval]
+        ]
+        case_results[data_var][metric_instance.name] = result[0]
     return case_results
 
 
