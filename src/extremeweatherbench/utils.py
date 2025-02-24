@@ -580,3 +580,26 @@ def align_point_obs_from_gridded(
     interpolated_forecast = xr.concat(aligned_forecast_list, dim="station")
     interpolated_observation = xr.concat(aligned_observation_list, dim="station")
     return (interpolated_forecast, interpolated_observation)
+
+
+def derive_indices_from_init_time_and_lead_time(
+    dataset: xr.Dataset,
+    start_date: datetime.datetime,
+    end_date: datetime.datetime,
+) -> Tuple[np.ndarray]:
+    if len(dataset.lead_time) == 0 or len(dataset.init_time) == 0:
+        raise ValueError("No forecast data available for this case.")
+    lead_time_grid, init_time_grid = np.meshgrid(dataset.lead_time, dataset.init_time)
+    valid_times = (
+        init_time_grid.flatten()
+        + pd.to_timedelta(lead_time_grid.flatten(), unit="h").to_numpy()
+    )
+    valid_times_reshaped = valid_times.reshape(
+        (dataset.init_time.shape[0], dataset.lead_time.shape[0])
+    )
+    valid_time_indices = np.where(
+        (valid_times_reshaped > pd.to_datetime(start_date))
+        & (valid_times_reshaped < pd.to_datetime(end_date))
+    )
+
+    return valid_time_indices
