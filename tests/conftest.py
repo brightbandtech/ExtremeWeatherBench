@@ -60,12 +60,6 @@ def make_sample_forecast_dataset():
             "lead_time": lead_time,
         },
     )
-    lead_time_grid, init_time_grid = np.meshgrid(dataset.lead_time, dataset.init_time)
-    # Step 2: Flatten the meshgrid and convert lead_time to timedelta
-    valid_time = init_time_grid.flatten() + pd.to_timedelta(
-        lead_time_grid.flatten(), unit="h"
-    )
-    dataset.coords["time"] = valid_time
     # Set a specific value for a specific time and location to remove ambiguity
     dataset["air_temperature"].loc[
         dict(
