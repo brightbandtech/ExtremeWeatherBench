@@ -81,8 +81,8 @@ class CaseEvaluationData:
         Returns:
             A tuple of xarray DataArrays containing the gridded and point observation subsets.
         """
-        forecast = self._check_forecast_data_availability()
-        if forecast is None:
+        self.forecast = self._check_forecast_data_availability()
+        if self.forecast is None:
             return None
         if self.observation is None:
             return None
@@ -92,9 +92,9 @@ class CaseEvaluationData:
         elif self.observation_type == "point":
             renamed_observations = self.observation.rename(columns=point_obs_mapping)
             subset_point_obs = renamed_observations[
-                utils.POINT_OBS_METADATA_VARS + [self.individual_case.data_vars]
+                utils.POINT_OBS_METADATA_VARS + self.individual_case.data_vars
             ]
-            evaluation_result = self._subset_point_obs(subset_point_obs)
+            evaluation_result = self._subset_point_obs(subset_point_obs, compute)
         if compute:
             evaluation_result.compute()
         return evaluation_result
@@ -104,20 +104,26 @@ class CaseEvaluationData:
         time_subset_gridded_obs_ds = gridded_obs.sel(
             time=slice(self.individual_case.start_date, self.individual_case.end_date)
         )
-        time_subset_gridded_obs_ds = self.individual_case.perform_subsetting_procedure(
-            gridded_obs
+        time_spatial_subset_gridded_obs_ds = (
+            self.individual_case.perform_subsetting_procedure(
+                time_subset_gridded_obs_ds
+            )
         )
         # Align gridded_obs and forecast_dataset by time
-        subset_gridded_obs, forecast_ds = xr.align(
-            time_subset_gridded_obs_ds,
+        time_spatial_subset_gridded_obs_ds, forecast_da = xr.align(
+            time_spatial_subset_gridded_obs_ds,
             self.forecast,
             join="inner",
         )
         return CaseEvaluationInput(
-            "gridded", observation=subset_gridded_obs, forecast=forecast_ds
+            "gridded",
+            observation=time_spatial_subset_gridded_obs_ds,
+            forecast=forecast_da,
         )
 
-    def _subset_point_obs(self, point_obs: pd.DataFrame) -> CaseEvaluationInput:
+    def _subset_point_obs(
+        self, point_obs: pd.DataFrame, compute: bool
+    ) -> CaseEvaluationInput:
         """Subset the point observation dataarray for a given data variable."""
         subset_id_point_obs = point_obs.loc[point_obs["id"] == self.individual_case.id]
         mapped_subset_id_point_obs = subset_id_point_obs.rename(
@@ -134,23 +140,35 @@ class CaseEvaluationData:
             self.forecast["longitude"].min().values,
             self.forecast["longitude"].max().values,
         )
-        point_forecast_da, subset_point_obs_da = utils.align_point_obs_from_gridded(
-            self.forecast, mapped_subset_id_point_obs, utils.POINT_OBS_METADATA_VARS
+        point_forecast_ds, subset_point_obs_ds = utils.align_point_obs_from_gridded(
+            self.forecast,
+            mapped_subset_id_point_obs,
+            self.individual_case.data_vars,
+            utils.POINT_OBS_METADATA_VARS,
         )
-
-        point_forecast_da = point_forecast_da.groupby(
+        # groupby function is not lazy, so we need to compute the datasets before grouping
+        # even with flox this method is slow without prior computation
+        if compute:
+            point_forecast_ds = point_forecast_ds.compute()
+            subset_point_obs_ds = subset_point_obs_ds.compute()
+        point_forecast_ds = point_forecast_ds.groupby(
             ["init_time", "lead_time", "latitude", "longitude"]
         ).mean()
-        subset_point_obs_da = subset_point_obs_da.groupby(
+        subset_point_obs_ds = subset_point_obs_ds.groupby(
             ["time", "latitude", "longitude"]
         ).first()
         return CaseEvaluationInput(
-            "point", observation=subset_point_obs_da, forecast=point_forecast_da
+            "point", observation=subset_point_obs_ds, forecast=point_forecast_ds
         )
 
     def _check_forecast_data_availability(self):
-        forecast = self.individual_case._subset_valid_times(self.forecast)
-        lead_time_len = len(forecast.init_time)
+        variable_subset_forecast_ds = self.individual_case._subset_data_vars(
+            self.forecast
+        )
+        time_variable_subset_forecast_ds = self.individual_case._subset_valid_times(
+            variable_subset_forecast_ds
+        )
+        lead_time_len = len(time_variable_subset_forecast_ds.init_time)
         if lead_time_len == 0:
             logger.warning(
                 "No forecast data available for case %s, skipping",
@@ -165,8 +183,13 @@ class CaseEvaluationData:
                 "Fewer valid times in forecast than days in case %s, results likely unreliable",
                 self.individual_case.id,
             )
-        logger.info("Forecast data available for case %s", self.individual_case.id)
-        return forecast
+        else:
+            logger.info(
+                "Forecast data available for case %s, %s obs",
+                self.individual_case.id,
+                self.observation_type,
+            )
+        return time_variable_subset_forecast_ds
 
 
 def evaluate(
@@ -225,13 +248,14 @@ def evaluate(
         forecast_dataset = data_loader.open_forecast_dataset(
             eval_config, forecast_schema_config
         )
-
         if gridded_obs:
             logger.info(
                 "gridded obs detected, mapping variables in gridded obs to forecast"
             )
             gridded_obs = utils.map_era5_vars_to_forecast(
-                DEFAULT_FORECAST_SCHEMA_CONFIG, forecast_dataset, gridded_obs
+                forecast_schema_config,
+                forecast_dataset=forecast_dataset,
+                era5_dataset=gridded_obs,
             )
         logger.debug("beginning evaluation loop for %s", event.event_type)
         results = _evaluate_cases_loop(cases, forecast_dataset, gridded_obs, point_obs)
@@ -316,7 +340,6 @@ def _evaluate_case(
     point_obs_evaluation = CaseEvaluationData(
         individual_case, "point", observation=point_obs, forecast=forecast_dataset
     )
-
     gridded_case_eval = gridded_obs_evaluation.build_dataarray_subsets(compute=True)
     point_case_eval = point_obs_evaluation.build_dataarray_subsets(compute=True)
     for data_var, metric in itertools.product(

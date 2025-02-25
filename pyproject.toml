@@ -9,6 +9,7 @@ dependencies = [
     "dacite>=1.8.1",
     "dask>=2025.1.0",
     "distributed>=2025.1.0",
+    "flox>=0.10.0",
     "geopandas>=1.0.1",
     "joblib>=1.4.2",
     "matplotlib>=3.10.0",
@@ -34,6 +35,7 @@ data-prep = [
 
 [dependency-groups]
 dev = [
+    "bokeh>=3.6.3",
     "deptry>=0.23.0",
     "ipykernel>=6.29.5",
     "ipywidgets>=8.1.5",
