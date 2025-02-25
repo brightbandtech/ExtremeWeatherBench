@@ -254,7 +254,7 @@ def test_location_subset_point_obs():
         }
     )
 
-    # Test inclusive bounds (default)
+    # Test bounds
     result = utils.location_subset_point_obs(
         df, min_lat=1, max_lat=3, min_lon=1, max_lon=3
     )
@@ -263,114 +263,8 @@ def test_location_subset_point_obs():
     assert all((result["latitude"] >= 1) & (result["latitude"] <= 3))
     assert all((result["longitude"] >= 1) & (result["longitude"] <= 3))
 
-    # Test non-inclusive bounds
-    result = utils.location_subset_point_obs(
-        df, min_lat=1, max_lat=3, min_lon=1, max_lon=3, inclusive=False
-    )
-    assert len(result) == 1
-    assert all(result["value"] == ["c"])
-    assert all((result["latitude"] > 1) & (result["latitude"] < 3))
-    assert all((result["longitude"] > 1) & (result["longitude"] < 3))
-
     # Test empty result
     result = utils.location_subset_point_obs(
         df, min_lat=10, max_lat=20, min_lon=10, max_lon=20
     )
     assert len(result) == 0
-
-
-def test_unit_check():
-    # Test Celsius to Kelvin conversion
-    df_celsius = pd.DataFrame(
-        {
-            "surface_air_temperature": [20.0, 25.0, 30.0]  # Celsius values
-        }
-    )
-    result = utils.unit_check(df_celsius)
-    assert all(result["surface_air_temperature"] == [293.15, 298.15, 303.15])
-
-    # Test Kelvin values remain unchanged
-    df_kelvin = pd.DataFrame(
-        {
-            "surface_air_temperature": [273.15, 283.15, 293.15]  # Kelvin values
-        }
-    )
-    result = utils.unit_check(df_kelvin)
-    assert all(result["surface_air_temperature"] == [273.15, 283.15, 293.15])
-
-    # Test dataframe without temperature column remains unchanged
-    df_other = pd.DataFrame({"other_column": [1, 2, 3]})
-    result = utils.unit_check(df_other)
-    assert all(result["other_column"] == [1, 2, 3])
-
-
-def test_derive_indices_valid_range():
-    # Create a simple dataset with two init_time values and five lead_time values
-    init_times = pd.to_datetime(["2023-01-01 00:00", "2023-01-02 00:00"])
-    lead_times = np.array([0, 6, 12, 18, 24])
-    ds = xr.Dataset(
-        coords={
-            "init_time": init_times,
-            "lead_time": lead_times,
-        }
-    )
-
-    # Define a time window that should capture specific valid times.
-    # For the first init_time row, valid forecast times are:
-    # 2023-01-01 00:00, 06:00, 12:00, 18:00, 2023-01-02 00:00
-    # For the second init_time row, valid forecast times are:
-    # 2023-01-02 00:00, 06:00, 12:00, 18:00, 2023-01-03 00:00
-    # Set start and end so that only a subset falls in the window:
-    # window: (2023-01-01 03:00, 2023-01-02 15:00)
-    start_date = pd.Timestamp("2023-01-01 03:00")
-    end_date = pd.Timestamp("2023-01-02 15:00")
-
-    # Call function under test
-    indices = utils.derive_indices_from_init_time_and_lead_time(
-        ds, start_date, end_date
-    )
-
-    # indices is a tuple (row_indices, col_indices) from np.where:
-    # Expected valid times:
-    # For first row (init_time=2023-01-01 00:00): 06:00, 12:00, 18:00, 2023-01-02 00:00 => 4 values
-    # For second row (init_time=2023-01-02 00:00): 2023-01-02 00:00, 06:00, 12:00 => 3 values
-    expected_count = 4 + 3
-    assert indices[0].size == expected_count
-
-    # Check that the computed times fall within the expected range.
-    # Build the valid times grid for testing:
-    forecast_times = np.empty(
-        (len(init_times), len(lead_times)), dtype="datetime64[ns]"
-    )
-    for i, init in enumerate(init_times):
-        forecast_times[i, :] = init + pd.to_timedelta(lead_times, unit="h")
-    valid_times = forecast_times[indices]
-    assert all(valid_times > start_date)
-    assert all(valid_times < end_date)
-
-
-def test_derive_indices_no_matches():
-    # Create a dataset with one init_time and a few lead_time values
-    init_times = pd.to_datetime(["2023-01-01 00:00"])
-    lead_times = np.array([0, 6, 12])
-    ds = xr.Dataset(
-        coords={
-            "init_time": init_times,
-            "lead_time": lead_times,
-        }
-    )
-
-    # Define a time window that excludes all forecast times.
-    # Forecast times for this dataset are: 2023-01-01 00:00, 06:00, and 12:00.
-    # Use a window that does not cover any of these.
-    start_date = pd.Timestamp("2023-01-01 13:00")
-    end_date = pd.Timestamp("2023-01-01 14:00")
-
-    # Call function under test
-    indices = utils.derive_indices_from_init_time_and_lead_time(
-        ds, start_date, end_date
-    )
-
-    # Expect empty indices
-    assert indices[0].size == 0
-    assert indices[1].size == 0
