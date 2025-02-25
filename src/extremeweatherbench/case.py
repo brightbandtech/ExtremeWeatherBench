@@ -84,7 +84,7 @@ class IndividualCase:
         indices = utils.derive_indices_from_init_time_and_lead_time(
             dataset, self.start_date, self.end_date
         )
-        modified_ds = dataset.isel(init_time=np.unique(indices[0]))
+        modified_ds = dataset.isel(init_time=np.unique(indices))
         return modified_ds
 
     def _check_for_forecast_data_availability(
