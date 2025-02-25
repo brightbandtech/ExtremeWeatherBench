@@ -33,7 +33,7 @@ def open_forecast_dataset(
             # the first one doesn't actually load to memory
             forecast_dataset = open_mlwp_kerchunk_reference(
                 eval_config.forecast_dir, forecast_schema_config
-            ).compute()
+            )
         elif "zarr" in eval_config.forecast_dir:
             forecast_dataset = xr.open_zarr(eval_config.forecast_dir, chunks="auto")
     elif len(file_types) == 1:
