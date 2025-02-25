@@ -469,9 +469,36 @@ def derive_indices_from_init_time_and_lead_time(
     dataset: xr.Dataset,
     start_date: datetime.datetime,
     end_date: datetime.datetime,
-) -> Tuple[np.ndarray]:
-    if len(dataset.lead_time) == 0 or len(dataset.init_time) == 0:
-        raise ValueError("No forecast data available for this case.")
+) -> np.ndarray:
+    """Derive the indices of valid times in a dataset when the dataset has init_time and lead_time coordinates.
+
+    Args:
+        dataset: The dataset to derive the indices from.
+        start_date: The start date to derive the indices from.
+        end_date: The end date to derive the indices from.
+
+    Returns:
+        The indices of valid times in the dataset.
+
+    Example:
+        >>> import xarray as xr
+        >>> import datetime
+        >>> import pandas as pd
+        >>> from extremeweatherbench.utils import (
+        ...     derive_indices_from_init_time_and_lead_time,
+        ... )
+        >>> ds = xr.Dataset(
+        ...     coords={
+        ...         "init_time": pd.date_range("2020-01-01", "2020-01-03"),
+        ...         "lead_time": [0, 24, 48],  # hours
+        ...     }
+        ... )
+        >>> start = datetime.datetime(2020, 1, 1)
+        >>> end = datetime.datetime(2020, 1, 4)
+        >>> indices = derive_indices_from_init_time_and_lead_time(ds, start, end)
+        >>> print(indices)
+        array([0, 0, 1, 1, 2])
+    """
     lead_time_grid, init_time_grid = np.meshgrid(dataset.lead_time, dataset.init_time)
     valid_times = (
         init_time_grid.flatten()
@@ -480,9 +507,13 @@ def derive_indices_from_init_time_and_lead_time(
     valid_times_reshaped = valid_times.reshape(
         (dataset.init_time.shape[0], dataset.lead_time.shape[0])
     )
-    valid_time_indices = np.where(
-        (valid_times_reshaped > pd.to_datetime(start_date))
-        & (valid_times_reshaped < pd.to_datetime(end_date))
+    valid_time_mask = (valid_times_reshaped > pd.to_datetime(start_date)) & (
+        valid_times_reshaped < pd.to_datetime(end_date)
     )
+    valid_time_indices = np.asarray(valid_time_mask).nonzero()
 
-    return valid_time_indices
+    # The first index will subset init_time based on the first valid_time_reshaped line above
+    # we don't need to subset lead_time but it might be useful in the future
+    init_time_subset_indices = valid_time_indices[0]
+
+    return init_time_subset_indices
