@@ -21,7 +21,10 @@ def test_open_forecast_dataset_invalid_path():
 
 def test_open_obs_datasets_no_obs_paths():
     invalid_config = config.Config(
-        event_types=[events.HeatWave], forecast_dir="test/path", gridded_obs_path=None
+        event_types=[events.HeatWave],
+        forecast_dir="test/path",
+        gridded_obs_path=None,
+        point_obs_path=None,
     )
     with pytest.raises(
         ValueError, match="No gridded or point observation data provided"
