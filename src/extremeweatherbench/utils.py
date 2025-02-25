@@ -163,7 +163,7 @@ def remove_ocean_gridpoints(dataset: xr.Dataset) -> xr.Dataset:
     land_sea_mask = land.mask(dataset.longitude, dataset.latitude)
     land_mask = land_sea_mask == 0
     # Subset the dataset to only include land gridpoints
-    dataset = dataset.where(land_mask, drop=True)
+    dataset = dataset.where(land_mask)
 
     return dataset
 
@@ -399,7 +399,7 @@ def location_subset_point_obs(
 def align_point_obs_from_gridded(
     forecast_da: xr.DataArray,
     case_subset_point_obs_df: pd.DataFrame,
-    data_var: str,
+    data_var: List[str],
     point_obs_metadata_vars: List[str],
 ) -> Tuple[xr.DataArray, xr.DataArray]:
     """Takes in a forecast dataarray and point observation dataframe, aligning them by
@@ -413,7 +413,7 @@ def align_point_obs_from_gridded(
 
     Returns a tuple of aligned forecast and observation dataarrays."""
     case_subset_point_obs_df = case_subset_point_obs_df[
-        POINT_OBS_METADATA_VARS + [data_var]
+        POINT_OBS_METADATA_VARS + data_var
     ]
     case_subset_point_obs_df = case_subset_point_obs_df.rename(columns=ISD_MAPPING)
     case_subset_point_obs_df["longitude"] = convert_longitude_to_360(
@@ -474,7 +474,7 @@ def align_point_obs_from_gridded(
 
             valid_time_subset_obs_da = obs_timeslice.to_xarray().set_coords(
                 point_obs_metadata
-            )[forecast_da.name]
+            )[data_var]
             valid_time_subset_obs_da = valid_time_subset_obs_da.swap_dims(
                 {"index": "station"}
             )
