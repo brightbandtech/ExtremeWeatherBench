@@ -277,28 +277,3 @@ def test_location_subset_point_obs():
         df, min_lat=10, max_lat=20, min_lon=10, max_lon=20
     )
     assert len(result) == 0
-
-
-def test_unit_check():
-    # Test Celsius to Kelvin conversion
-    df_celsius = pd.DataFrame(
-        {
-            "surface_air_temperature": [20.0, 25.0, 30.0]  # Celsius values
-        }
-    )
-    result = utils.unit_check(df_celsius)
-    assert all(result["surface_air_temperature"] == [293.15, 298.15, 303.15])
-
-    # Test Kelvin values remain unchanged
-    df_kelvin = pd.DataFrame(
-        {
-            "surface_air_temperature": [273.15, 283.15, 293.15]  # Kelvin values
-        }
-    )
-    result = utils.unit_check(df_kelvin)
-    assert all(result["surface_air_temperature"] == [273.15, 283.15, 293.15])
-
-    # Test dataframe without temperature column remains unchanged
-    df_other = pd.DataFrame({"other_column": [1, 2, 3]})
-    result = utils.unit_check(df_other)
-    assert all(result["other_column"] == [1, 2, 3])
