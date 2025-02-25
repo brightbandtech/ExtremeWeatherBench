@@ -347,7 +347,6 @@ def location_subset_point_obs(
     max_lat: float,
     min_lon: float,
     max_lon: float,
-    inclusive: bool = True,
 ):
     """Subset a dataframe based upon maximum and minimum latitudes and longitudes.
 
@@ -357,10 +356,8 @@ def location_subset_point_obs(
         max_lat: maximum latitude.
         min_lon: minimum longitude.
         max_lon: maximum longitude.
-        inclusive: whether to include the edges of the bounding box.
 
     Returns a subset dataframe."""
-
     location_subset_df = df[
         (df["latitude"] >= min_lat)
         & (df["latitude"] <= max_lat)
