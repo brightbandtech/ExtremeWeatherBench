@@ -302,3 +302,75 @@ def test_unit_check():
     df_other = pd.DataFrame({"other_column": [1, 2, 3]})
     result = utils.unit_check(df_other)
     assert all(result["other_column"] == [1, 2, 3])
+
+
+def test_derive_indices_valid_range():
+    # Create a simple dataset with two init_time values and five lead_time values
+    init_times = pd.to_datetime(["2023-01-01 00:00", "2023-01-02 00:00"])
+    lead_times = np.array([0, 6, 12, 18, 24])
+    ds = xr.Dataset(
+        coords={
+            "init_time": init_times,
+            "lead_time": lead_times,
+        }
+    )
+
+    # Define a time window that should capture specific valid times.
+    # For the first init_time row, valid forecast times are:
+    # 2023-01-01 00:00, 06:00, 12:00, 18:00, 2023-01-02 00:00
+    # For the second init_time row, valid forecast times are:
+    # 2023-01-02 00:00, 06:00, 12:00, 18:00, 2023-01-03 00:00
+    # Set start and end so that only a subset falls in the window:
+    # window: (2023-01-01 03:00, 2023-01-02 15:00)
+    start_date = pd.Timestamp("2023-01-01 03:00")
+    end_date = pd.Timestamp("2023-01-02 15:00")
+
+    # Call function under test
+    indices = utils.derive_indices_from_init_time_and_lead_time(
+        ds, start_date, end_date
+    )
+
+    # indices is a tuple (row_indices, col_indices) from np.where:
+    # Expected valid times:
+    # For first row (init_time=2023-01-01 00:00): 06:00, 12:00, 18:00, 2023-01-02 00:00 => 4 values
+    # For second row (init_time=2023-01-02 00:00): 2023-01-02 00:00, 06:00, 12:00 => 3 values
+    expected_count = 4 + 3
+    assert indices[0].size == expected_count
+
+    # Check that the computed times fall within the expected range.
+    # Build the valid times grid for testing:
+    forecast_times = np.empty(
+        (len(init_times), len(lead_times)), dtype="datetime64[ns]"
+    )
+    for i, init in enumerate(init_times):
+        forecast_times[i, :] = init + pd.to_timedelta(lead_times, unit="h")
+    valid_times = forecast_times[indices]
+    assert all(valid_times > start_date)
+    assert all(valid_times < end_date)
+
+
+def test_derive_indices_no_matches():
+    # Create a dataset with one init_time and a few lead_time values
+    init_times = pd.to_datetime(["2023-01-01 00:00"])
+    lead_times = np.array([0, 6, 12])
+    ds = xr.Dataset(
+        coords={
+            "init_time": init_times,
+            "lead_time": lead_times,
+        }
+    )
+
+    # Define a time window that excludes all forecast times.
+    # Forecast times for this dataset are: 2023-01-01 00:00, 06:00, and 12:00.
+    # Use a window that does not cover any of these.
+    start_date = pd.Timestamp("2023-01-01 13:00")
+    end_date = pd.Timestamp("2023-01-01 14:00")
+
+    # Call function under test
+    indices = utils.derive_indices_from_init_time_and_lead_time(
+        ds, start_date, end_date
+    )
+
+    # Expect empty indices
+    assert indices[0].size == 0
+    assert indices[1].size == 0
