@@ -226,16 +226,6 @@ def evaluate(
             eval_config, forecast_schema_config
         )
 
-        # Manages some of the quirkiness of the parquets and avoids loading in memory overloads
-        # from the json kerchunk references
-        if "json" not in eval_config.forecast_dir:
-            logger.warning(
-                "json not detected for %s at %s, loading part of forecast dataset into memory",
-                event.event_type,
-                eval_config.forecast_dir,
-            )
-            forecast_dataset = forecast_dataset.compute()
-
         if gridded_obs:
             logger.info(
                 "gridded obs detected, mapping variables in gridded obs to forecast"
