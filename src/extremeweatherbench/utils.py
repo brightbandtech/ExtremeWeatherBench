@@ -4,7 +4,6 @@ other specialized package.
 
 from typing import Union, List, Tuple
 from collections import namedtuple
-import fsspec
 import numpy as np
 import pandas as pd
 import regionmask
@@ -22,9 +21,12 @@ Location = namedtuple("Location", ["latitude", "longitude"])
 
 #: Maps the ARCO ERA5 to CF conventions.
 ERA5_MAPPING = {
-    "air_temperature": "2m_temperature",
-    "eastward_wind": "10m_u_component_of_wind",
-    "northward_wind": "10m_v_component_of_wind",
+    "surface_air_temperature": "2m_temperature",
+    "surface_eastward_wind": "10m_u_component_of_wind",
+    "surface_northward_wind": "10m_v_component_of_wind",
+    "air_temperature": "temperature",
+    "eastward_wind": "u_component_of_wind",
+    "northward_wind": "v_component_of_wind",
     "air_pressure_at_mean_sea_level": "mean_sea_level_pressure",
     "specific_humidity": "specific_humidity",
     "valid_time": "time",
@@ -161,103 +163,9 @@ def remove_ocean_gridpoints(dataset: xr.Dataset) -> xr.Dataset:
     land_sea_mask = land.mask(dataset.longitude, dataset.latitude)
     land_mask = land_sea_mask == 0
     # Subset the dataset to only include land gridpoints
-    dataset = dataset.where(land_mask, drop=True)
+    dataset = dataset.where(land_mask)
 
     return dataset
-
-
-def _open_kerchunk_zarr_reference_jsons(
-    file_list, forecast_schema_config, remote_protocol: str = "s3"
-):
-    """Open a dataset from a list of kerchunk JSON files."""
-    xarray_datasets = []
-    for json_file in file_list:
-        fs_ = fsspec.filesystem(
-            "reference",
-            fo=json_file,
-            ref_storage_args={"skip_instance_cache": True},
-            remote_protocol=remote_protocol,
-            remote_options={"anon": True},
-        )
-        m = fs_.get_mapper("")
-        ds = xr.open_dataset(
-            m, engine="zarr", backend_kwargs={"consolidated": False}, chunks="auto"
-        )
-        if "initialization_time" not in ds.attrs:
-            raise ValueError(
-                "Initialization time not found in dataset attributes. \
-                             Please add initialization_time to the dataset attributes."
-            )
-        else:
-            model_run_time = np.datetime64(
-                pd.to_datetime(ds.attrs["initialization_time"])
-            )
-        ds[forecast_schema_config.init_time] = model_run_time.astype("datetime64[ns]")
-        ds = ds.set_coords(forecast_schema_config.init_time)
-        ds = ds.expand_dims(forecast_schema_config.init_time)
-        for variable in forecast_schema_config.__dict__:
-            attr_value = getattr(forecast_schema_config, variable)
-            if attr_value in ds.data_vars:
-                ds = ds.rename({attr_value: variable})
-        ds = ds.transpose(
-            forecast_schema_config.init_time,
-            forecast_schema_config.valid_time,
-            forecast_schema_config.latitude,
-            forecast_schema_config.longitude,
-            forecast_schema_config.level,
-        )
-        xarray_datasets.append(ds)
-
-    return xr.concat(xarray_datasets, dim=forecast_schema_config.init_time)
-
-
-def _open_mlwp_kerchunk_reference(
-    file, forecast_schema_config, remote_protocol: str = "s3"
-):
-    """Open a dataset from a kerchunked reference file for the OAR MLWP S3 bucket."""
-    if "parq" in file:
-        storage_options = {
-            "remote_protocol": "s3",
-            "skip_instance_cache": True,
-            "remote_options": {"anon": True},
-            "target_protocol": "file",
-            "lazy": True,
-        }  # options passed to fsspec
-        open_dataset_options: dict = {"chunks": {}}  # opens passed to xarray
-
-        ds = xr.open_dataset(
-            file,
-            engine="kerchunk",
-            storage_options=storage_options,
-            open_dataset_options=open_dataset_options,
-        )
-    else:
-        ds = xr.open_dataset(
-            "reference://",
-            engine="zarr",
-            backend_kwargs={
-                "consolidated": False,
-                "storage_options": {
-                    "fo": file,
-                    "remote_protocol": remote_protocol,
-                    "remote_options": {"anon": True},
-                },
-            },
-        )
-    ds = ds.rename({"time": "lead_time"})
-    ds["lead_time"] = range(0, 241, 6)
-    for variable in forecast_schema_config.__dict__:
-        attr_value = getattr(forecast_schema_config, variable)
-        if attr_value in ds.data_vars:
-            ds = ds.rename({attr_value: variable})
-        # Step 1: Create a meshgrid of init_time and lead_time
-    lead_time_grid, init_time_grid = np.meshgrid(ds.lead_time, ds.init_time)
-    # Step 2: Flatten the meshgrid and convert lead_time to timedelta
-    valid_time = init_time_grid.flatten() + pd.to_timedelta(
-        lead_time_grid.flatten(), unit="h"
-    )
-    ds.coords["time"] = valid_time
-    return ds
 
 
 def map_era5_vars_to_forecast(forecast_schema_config, forecast_dataset, era5_dataset):
@@ -433,25 +341,6 @@ def read_event_yaml(input_pth: str | Path) -> dict:
     return yaml_event_case
 
 
-def unit_check(df: pd.DataFrame) -> pd.DataFrame:
-    """Base function to test for units in the point obs dataframe.
-    Potential to expand more comprehensively.
-
-    Arguments:
-        df: dataframe with point obs.
-
-
-    Returns a corrected dataframe."""
-    if "surface_air_temperature" in df.columns:
-        # Check if temperature appears to be in Kelvin (values mostly > 200)
-        if df["surface_air_temperature"].mean() > 200:
-            pass
-        else:
-            # Otherwise assume Celsius
-            df["surface_air_temperature"] = df["surface_air_temperature"] + 273.15
-    return df
-
-
 def location_subset_point_obs(
     df: pd.DataFrame,
     min_lat: float,
@@ -471,27 +360,20 @@ def location_subset_point_obs(
         inclusive: whether to include the edges of the bounding box.
 
     Returns a subset dataframe."""
-    if inclusive:
-        location_subset_df = df[
-            (df["latitude"] >= min_lat)
-            & (df["latitude"] <= max_lat)
-            & (df["longitude"] >= min_lon)
-            & (df["longitude"] <= max_lon)
-        ]
-    else:
-        location_subset_df = df[
-            (df["latitude"] > min_lat)
-            & (df["latitude"] < max_lat)
-            & (df["longitude"] > min_lon)
-            & (df["longitude"] < max_lon)
-        ]
+
+    location_subset_df = df[
+        (df["latitude"] >= min_lat)
+        & (df["latitude"] <= max_lat)
+        & (df["longitude"] >= min_lon)
+        & (df["longitude"] <= max_lon)
+    ]
     return location_subset_df
 
 
 def align_point_obs_from_gridded(
     forecast_da: xr.DataArray,
     case_subset_point_obs_df: pd.DataFrame,
-    data_var: str,
+    data_var: List[str],
     point_obs_metadata_vars: List[str],
 ) -> Tuple[xr.DataArray, xr.DataArray]:
     """Takes in a forecast dataarray and point observation dataframe, aligning them by
@@ -505,13 +387,12 @@ def align_point_obs_from_gridded(
 
     Returns a tuple of aligned forecast and observation dataarrays."""
     case_subset_point_obs_df = case_subset_point_obs_df[
-        POINT_OBS_METADATA_VARS + [data_var]
+        POINT_OBS_METADATA_VARS + data_var
     ]
     case_subset_point_obs_df = case_subset_point_obs_df.rename(columns=ISD_MAPPING)
     case_subset_point_obs_df["longitude"] = convert_longitude_to_360(
         case_subset_point_obs_df["longitude"]
     )
-    case_subset_point_obs_df = unit_check(case_subset_point_obs_df)
     case_subset_point_obs_df = location_subset_point_obs(
         case_subset_point_obs_df,
         forecast_da["latitude"].min().values,
@@ -529,13 +410,9 @@ def align_point_obs_from_gridded(
     ].astype("str")
 
     # Set up multiindex to enable slicing along individual timesteps
-    case_subset_point_obs_df = case_subset_point_obs_df.set_index("time")
     case_subset_point_obs_df = case_subset_point_obs_df.set_index(
-        "station", append=True
-    )
-    case_subset_point_obs_df = case_subset_point_obs_df.sort_index(
-        level="station"
-    ).swaplevel(0, 1)
+        ["station", "time"]
+    ).sort_index()
 
     aligned_forecast_list = []
     aligned_observation_list = []
@@ -547,34 +424,40 @@ def align_point_obs_from_gridded(
         valid_time = pd.Timestamp(
             init_time.values + pd.to_timedelta(lead_time.values, unit="h").to_numpy()
         )
-        if valid_time in case_subset_point_obs_df.index.levels[1]:
-            obs_timeslice = case_subset_point_obs_df.loc[
-                pd.IndexSlice[:, valid_time], :
-            ].reset_index()
-            station_ids = obs_timeslice["station"]
-            lons = xr.DataArray(obs_timeslice["longitude"].values, dims="station")
-            lats = xr.DataArray(obs_timeslice["latitude"].values, dims="station")
+        valid_time_index = pd.IndexSlice[:, valid_time]
+        obs_timeslice = (
+            case_subset_point_obs_df.loc[valid_time_index, :]
+            if valid_time in case_subset_point_obs_df.index.get_level_values(1)
+            else None
+        )
+        if obs_timeslice is None:
+            continue
+        obs_timeslice = obs_timeslice.reset_index()
 
-            grid_at_obs_da = forecast_da.sel(
-                init_time=init_time, lead_time=lead_time
-            ).interp(latitude=lats, longitude=lons, method="nearest")
-            grid_at_obs_da = grid_at_obs_da.assign_coords(
-                {"station": station_ids, "time": valid_time}
-            )
-            grid_at_obs_da["lead_time"] = lead_time
-            grid_at_obs_da["init_time"] = init_time
+        station_ids = obs_timeslice["station"]
+        lons = xr.DataArray(obs_timeslice["longitude"].values, dims="station")
+        lats = xr.DataArray(obs_timeslice["latitude"].values, dims="station")
 
-            valid_time_subset_obs_da = obs_timeslice.to_xarray().set_coords(
-                point_obs_metadata
-            )[forecast_da.name]
-            valid_time_subset_obs_da = valid_time_subset_obs_da.swap_dims(
-                {"index": "station"}
-            )
-            valid_time_subset_obs_da["lead_time"] = lead_time
-            valid_time_subset_obs_da["init_time"] = init_time
+        grid_at_obs_da = forecast_da.sel(
+            init_time=init_time, lead_time=lead_time
+        ).interp(latitude=lats, longitude=lons, method="nearest")
+        grid_at_obs_da = grid_at_obs_da.assign_coords(
+            {"station": station_ids, "time": valid_time}
+        )
+        grid_at_obs_da["lead_time"] = lead_time
+        grid_at_obs_da["init_time"] = init_time
 
-            aligned_observation_list.append(valid_time_subset_obs_da)
-            aligned_forecast_list.append(grid_at_obs_da)
+        valid_time_subset_obs_da = obs_timeslice.to_xarray().set_coords(
+            point_obs_metadata
+        )[data_var]
+        valid_time_subset_obs_da = valid_time_subset_obs_da.swap_dims(
+            {"index": "station"}
+        )
+        valid_time_subset_obs_da["lead_time"] = lead_time
+        valid_time_subset_obs_da["init_time"] = init_time
+
+        aligned_observation_list.append(valid_time_subset_obs_da)
+        aligned_forecast_list.append(grid_at_obs_da)
 
     # concat the dataarrays along the station dimension
     interpolated_forecast = xr.concat(aligned_forecast_list, dim="station")
