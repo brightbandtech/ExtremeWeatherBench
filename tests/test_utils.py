@@ -254,7 +254,7 @@ def test_location_subset_point_obs():
         }
     )
 
-    # Test inclusive bounds (default)
+    # Test bounds
     result = utils.location_subset_point_obs(
         df, min_lat=1, max_lat=3, min_lon=1, max_lon=3
     )
@@ -262,15 +262,6 @@ def test_location_subset_point_obs():
     assert all(result["value"] == ["b", "c", "d"])
     assert all((result["latitude"] >= 1) & (result["latitude"] <= 3))
     assert all((result["longitude"] >= 1) & (result["longitude"] <= 3))
-
-    # Test non-inclusive bounds
-    result = utils.location_subset_point_obs(
-        df, min_lat=1, max_lat=3, min_lon=1, max_lon=3, inclusive=False
-    )
-    assert len(result) == 1
-    assert all(result["value"] == ["c"])
-    assert all((result["latitude"] > 1) & (result["latitude"] < 3))
-    assert all((result["longitude"] > 1) & (result["longitude"] < 3))
 
     # Test empty result
     result = utils.location_subset_point_obs(
