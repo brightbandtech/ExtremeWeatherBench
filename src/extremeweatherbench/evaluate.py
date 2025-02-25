@@ -32,8 +32,8 @@ class CaseEvaluationInput:
     """
 
     observation_type: Literal["gridded", "point"]
-    observation: xr.DataArray
-    forecast: xr.DataArray
+    observation: Optional[xr.DataArray] = None
+    forecast: Optional[xr.DataArray] = None
 
     def compute(self):
         """Load the evaluation inputs into memory."""
@@ -69,7 +69,7 @@ class CaseEvaluationData:
         self,
         compute: bool = True,
         point_obs_mapping: dict = utils.ISD_MAPPING,
-    ) -> Optional[CaseEvaluationInput]:
+    ) -> CaseEvaluationInput:
         """Build the subsets of the gridded and point observations for a given data variable.
         Computation occurs based on what observation datasets are provided in the Evaluation object.
 
@@ -83,9 +83,17 @@ class CaseEvaluationData:
         """
         self.forecast = self._check_forecast_data_availability()
         if self.forecast is None:
-            return None
+            return CaseEvaluationInput(
+                observation_type=self.observation_type,
+                observation=None,
+                forecast=None,
+            )
         if self.observation is None:
-            return None
+            return CaseEvaluationInput(
+                observation_type=self.observation_type,
+                observation=None,
+                forecast=None,
+            )
         if self.observation_type == "gridded":
             subset_gridded_obs_da = self.observation[self.individual_case.data_vars]
             evaluation_result = self._subset_gridded_obs(subset_gridded_obs_da)
@@ -162,6 +170,8 @@ class CaseEvaluationData:
         )
 
     def _check_forecast_data_availability(self):
+        if len(self.forecast.lead_time) == 0 or len(self.forecast.init_time) == 0:
+            raise ValueError("No forecast data available, check forecast dataset.")
         variable_subset_forecast_ds = self.individual_case._subset_data_vars(
             self.forecast
         )
@@ -350,15 +360,13 @@ def _evaluate_case(
         logging.debug("metric %s computing", metric_instance.name)
         # TODO(aaTman): Create metric container object for gridded and point obs
         # in the meantime, forcing a check for Nones in gridded and point eval objects
-        result = [
-            {
-                eval.observation_type: metric_instance.compute(
+        result = {}
+        for eval in [gridded_case_eval, point_case_eval]:
+            if eval.observation is not None and eval.forecast is not None:
+                result[eval.observation_type] = metric_instance.compute(
                     eval.forecast[data_var], eval.observation[data_var]
                 )
-            }
-            if eval is not None
-            else None
-            for eval in [gridded_case_eval, point_case_eval]
-        ]
-        case_results[data_var][metric_instance.name] = result[0]
+            else:
+                result[eval.observation_type] = None
+        case_results[data_var][metric_instance.name] = result
     return case_results
