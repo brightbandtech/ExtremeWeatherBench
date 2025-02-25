@@ -158,6 +158,8 @@ class CaseEvaluationData:
         )
 
     def _check_forecast_data_availability(self):
+        if len(self.forecast.lead_time) == 0 or len(self.forecast.init_time) == 0:
+            raise ValueError("No forecast data available, check forecast dataset.")
         forecast = self.individual_case._subset_valid_times(self.forecast)
         lead_time_len = len(forecast.init_time)
         if lead_time_len == 0:
