@@ -362,10 +362,12 @@ def _evaluate_case(
         result = {}
         for eval in [gridded_case_eval, point_case_eval]:
             if eval.observation is not None and eval.forecast is not None:
-                result[eval.observation_type] = metric_instance.compute(
-                    eval.forecast[data_var], eval.observation[data_var]
+                result[eval.observation_type][metric_instance.name] = (
+                    metric_instance.compute(
+                        eval.forecast[data_var], eval.observation[data_var]
+                    )
                 )
             else:
-                result[eval.observation_type] = None
+                result[eval.observation_type][metric_instance.name] = None
         case_results[data_var][metric_instance.name] = result
     return case_results
