@@ -140,7 +140,6 @@ class CaseEvaluationData:
         mapped_subset_id_point_obs["longitude"] = utils.convert_longitude_to_360(
             mapped_subset_id_point_obs["longitude"]
         )
-        mapped_subset_id_point_obs = utils.unit_check(mapped_subset_id_point_obs)
         mapped_subset_id_point_obs = utils.location_subset_point_obs(
             mapped_subset_id_point_obs,
             self.forecast["latitude"].min().values,
