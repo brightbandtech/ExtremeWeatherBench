@@ -351,23 +351,28 @@ def _evaluate_case(
     )
     gridded_case_eval = gridded_obs_evaluation.build_dataarray_subsets(compute=True)
     point_case_eval = point_obs_evaluation.build_dataarray_subsets(compute=True)
-    for data_var, metric in itertools.product(
-        individual_case.data_vars, individual_case.metrics_list
+    for data_var, eval, metric in itertools.product(
+        individual_case.data_vars,
+        [gridded_case_eval, point_case_eval],
+        individual_case.metrics_list,
     ):
-        case_results[data_var] = {}
+        if data_var not in case_results:
+            case_results[data_var] = {}
+        if eval.observation_type not in case_results[data_var]:
+            case_results[data_var][eval.observation_type] = {}
+
         metric_instance = metric()
-        logging.debug("metric %s computing", metric_instance.name)
+
         # TODO(aaTman): Create metric container object for gridded and point obs
         # in the meantime, forcing a check for Nones in gridded and point eval objects
-        result = {}
-        for eval in [gridded_case_eval, point_case_eval]:
-            if eval.observation is not None and eval.forecast is not None:
-                result[eval.observation_type][metric_instance.name] = (
-                    metric_instance.compute(
-                        eval.forecast[data_var], eval.observation[data_var]
-                    )
+
+        if eval.observation is not None and eval.forecast is not None:
+            logging.info("metric %s computing", metric_instance.name)
+            case_results[data_var][eval.observation_type][metric_instance.name] = (
+                metric_instance.compute(
+                    eval.forecast[data_var], eval.observation[data_var]
                 )
-            else:
-                result[eval.observation_type][metric_instance.name] = None
-        case_results[data_var][metric_instance.name] = result
+            )
+        else:
+            case_results[data_var][eval.observation_type][metric_instance.name] = None
     return case_results
