@@ -1,0 +1,4 @@
+# Defining the exact version will make sure things don't break
+sphinx==8.2.3
+sphinx_rtd_theme==2.0.0
+sphinx-notfound-page==1.0.2
