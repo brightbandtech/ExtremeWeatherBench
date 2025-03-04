@@ -22,6 +22,9 @@ extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.autosummary",
     "sphinx.ext.intersphinx",
+    "sphinx.ext.viewcode",
+    "sphinx.ext.autodoc",
+    "myst_parser",
 ]
 
 intersphinx_mapping = {
@@ -38,11 +41,6 @@ html_theme = "alabaster"
 
 # -- Options for EPUB output
 epub_show_urls = "footnote"
-extensions = [
-    "sphinx.ext.viewcode",
-    "sphinx.ext.autodoc",
-    "sphinx.ext.autosummary",
-]
 
 autosummary_generate = True
 autodoc_inherit_docstrings = True
