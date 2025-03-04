@@ -41,7 +41,7 @@ def test_open_forecast_dataset_json(
 
     mock_json_dataset = sample_forecast_dataset
     mocker.patch(
-        "extremeweatherbench.data_loader.open_mlwp_kerchunk_reference",
+        "extremeweatherbench.data_loader.open_kerchunk_reference",
         return_value=mock_json_dataset,
     )
 
@@ -89,14 +89,14 @@ def test_open_forecast_dataset_invalid_file_type(
         data_loader.open_forecast_dataset(sample_config, default_forecast_config)
 
 
-def test_open_mlwp_kerchunk_reference(mocker, default_forecast_config):
+def test_open_kerchunk_reference(mocker, default_forecast_config):
     # Test with parquet file type
     mock_parquet_dataset = xr.Dataset({"random_var": ("time", range(0, 41))})
     with patch(
         "extremeweatherbench.data_loader.xr.open_dataset",
         return_value=mock_parquet_dataset,
     ):
-        forecast_dataset = data_loader.open_mlwp_kerchunk_reference(
+        forecast_dataset = data_loader.open_kerchunk_reference(
             "test.parq", default_forecast_config
         )
         assert "random_var" in forecast_dataset
@@ -107,7 +107,7 @@ def test_open_mlwp_kerchunk_reference(mocker, default_forecast_config):
         "extremeweatherbench.data_loader.xr.open_dataset",
         return_value=mock_zarr_dataset,
     ):
-        forecast_dataset = data_loader.open_mlwp_kerchunk_reference(
+        forecast_dataset = data_loader.open_kerchunk_reference(
             "test.json", default_forecast_config
         )
         assert "random_var" in forecast_dataset
