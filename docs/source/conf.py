@@ -36,9 +36,9 @@ intersphinx_disabled_domains = ["std"]
 templates_path = ["_templates"]
 
 # -- Options for HTML output
-
+html_static_path = ["_static"]
 html_theme = "alabaster"
-
+html_css_files = ["_static/custom.css"]
 # -- Options for EPUB output
 epub_show_urls = "footnote"
 
