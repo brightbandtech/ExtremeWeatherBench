@@ -57,7 +57,7 @@ def open_forecast_dataset(
     }
     filtered_mapping = {**filtered_mapping_data_vars, **filtered_mapping_coords}
     forecast_dataset = forecast_dataset.rename(filtered_mapping)
-    forecast_dataset = forecast_schema_config.conversions(forecast_dataset)
+    forecast_dataset = forecast_schema_config.convert_lead_time(forecast_dataset)
 
     return forecast_dataset
 

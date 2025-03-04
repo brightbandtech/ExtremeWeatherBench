@@ -93,8 +93,3 @@ class ForecastSchemaConfig:
         if var.dtype == np.dtype("timedelta64[ns]"):
             dataset["lead_time"] = (var / np.timedelta64(1, "h")).astype(int)
         return dataset
-
-    def conversions(self, dataset: xr.Dataset) -> xr.Dataset:
-        """Apply all conversions defined in the schema to the dataset."""
-        dataset = self.convert_lead_time(dataset)
-        return dataset
