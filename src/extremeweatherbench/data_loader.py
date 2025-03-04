@@ -31,7 +31,7 @@ def open_forecast_dataset(
         if "parq" in eval_config.forecast_dir:
             # kerchunked parq refs seem to consistently need two "compute" calls
             # the first one doesn't actually load to memory
-            forecast_dataset = open_mlwp_kerchunk_reference(
+            forecast_dataset = open_kerchunk_reference(
                 eval_config.forecast_dir, forecast_schema_config
             )
         elif "zarr" in eval_config.forecast_dir:
@@ -40,7 +40,7 @@ def open_forecast_dataset(
         if "zarr" in file_types:
             forecast_dataset = xr.open_zarr(file_list, chunks="auto")
         elif "json" in file_types:
-            forecast_dataset = open_mlwp_kerchunk_reference(
+            forecast_dataset = open_kerchunk_reference(
                 file_list[0], forecast_schema_config
             )
         else:
@@ -62,7 +62,7 @@ def open_forecast_dataset(
     return forecast_dataset
 
 
-def open_mlwp_kerchunk_reference(
+def open_kerchunk_reference(
     file,
     forecast_schema_config: config.ForecastSchemaConfig,
     remote_protocol: str = "s3",
