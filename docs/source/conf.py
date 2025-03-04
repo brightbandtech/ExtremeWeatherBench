@@ -1,3 +1,10 @@
+import os
+import sys
+
+sys.path.insert(
+    0, os.path.abspath("../../src/extremeweatherbench")
+)  # Source code dir relative to this file
+
 # -- Project information
 
 project = "ExtremeWeatherBench"
@@ -27,7 +34,7 @@ templates_path = ["_templates"]
 
 # -- Options for HTML output
 
-html_theme = "sphinx_rtd_theme"
+html_theme = "alabaster"
 
 # -- Options for EPUB output
 epub_show_urls = "footnote"
@@ -36,3 +43,9 @@ extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.autosummary",
 ]
+
+autosummary_generate = True
+autodoc_inherit_docstrings = True
+autodoc_typehints = "signature"
+autodoc_typehints_description_target = "documented"
+autodoc_typehints_format = "short"
