@@ -730,6 +730,7 @@ source = { editable = "." }
 dependencies = [
     { name = "cartopy" },
     { name = "dacite" },
+    { name = "gcsfs" },
     { name = "geopandas" },
     { name = "joblib" },
     { name = "matplotlib" },
@@ -745,6 +746,7 @@ dependencies = [
     { name = "tqdm" },
     { name = "ujson" },
     { name = "xarray" },
+    { name = "zarr" },
 ]
 
 [package.optional-dependencies]
@@ -774,6 +776,7 @@ requires-dist = [
     { name = "cartopy", specifier = ">=0.24.1" },
     { name = "dacite", specifier = ">=1.8.1" },
     { name = "fsspec", marker = "extra == 'data-prep'", specifier = ">=2024.12.0" },
+    { name = "gcsfs", specifier = ">=2024.12.0" },
     { name = "geopandas", specifier = ">=1.0.1" },
     { name = "geopy", marker = "extra == 'data-prep'", specifier = ">=2.4.1" },
     { name = "joblib", specifier = ">=1.4.2" },
@@ -791,6 +794,7 @@ requires-dist = [
     { name = "tqdm", specifier = ">=4.67.1" },
     { name = "ujson", specifier = ">=5.10.0" },
     { name = "xarray", specifier = ">=2024.11.0" },
+    { name = "zarr", specifier = ">=3.0.2" },
 ]
 
 [package.metadata.requires-dev]
