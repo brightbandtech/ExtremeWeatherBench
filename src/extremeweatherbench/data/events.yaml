@@ -7,7 +7,7 @@ cases:
     location: 
       latitude:  47.6062
       longitude: -122.3321
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: heat_wave
   - id: 2
     title: 2022 Upper Midwest
@@ -16,7 +16,7 @@ cases:
     location: 
       latitude:  41.8781
       longitude: -87.6298    
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: heat_wave
   - id: 3
     title: 2022 California
@@ -25,7 +25,7 @@ cases:
     location: 
       latitude:  34.0522
       longitude: -118.2437    
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: heat_wave
   - id: 4
     title: 2022 Texas
@@ -34,7 +34,7 @@ cases:
     location: 
       latitude:  32.7767
       longitude: -96.7970    
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: heat_wave
   - id: 5
     title: 2023 Pacific Northwest
@@ -43,7 +43,7 @@ cases:
     location: 
       latitude:  47.6062
       longitude: -122.3321    
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: heat_wave
   - id: 6
     title: 2022 Mid-Atlantic
@@ -52,7 +52,7 @@ cases:
     location: 
       latitude:  39.2904
       longitude: -76.6122    
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: heat_wave
   - id: 7
     title: 2023 Australia
@@ -61,7 +61,7 @@ cases:
     location: 
       latitude:  -31.9505
       longitude: 115.8605    
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: heat_wave
   - id: 8
     title: 2023 Ireland
@@ -70,7 +70,7 @@ cases:
     location: 
       latitude:  53.1424
       longitude: -7.6921    
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: heat_wave
   - id: 9
     title: 2023 Italy
@@ -79,7 +79,7 @@ cases:
     location: 
       latitude:  41.9028
       longitude: 12.4964    
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: heat_wave
   - id: 10
     title: 2023 SW Europe
@@ -88,7 +88,7 @@ cases:
     location: 
       latitude:  40.4637
       longitude: -3.7492    
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: heat_wave
   - id: 11
     title: 2023 South America
@@ -97,7 +97,7 @@ cases:
     location: 
       latitude:  -34.6037
       longitude: -58.3816    
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: heat_wave
   - id: 12
     title: 2023 China (Shanghai)
@@ -106,7 +106,7 @@ cases:
     location: 
       latitude:  31.2304
       longitude: 121.4737    
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: heat_wave
   - id: 13
     title: 2023 China (Yunnan Province)
@@ -115,7 +115,7 @@ cases:
     location: 
       latitude:  25.0458
       longitude: 102.7100    
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: heat_wave
   - id: 14
     title: 2023 Algeria
@@ -124,7 +124,7 @@ cases:
     location: 
       latitude:  36.7372
       longitude: 3.0869    
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: heat_wave
   - id: 15
     title: 2023 Iberian Peninsula
@@ -133,7 +133,7 @@ cases:
     location: 
       latitude:  41.1496
       longitude: -7.6110 
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: heat_wave
   - id: 16
     title: 2023 Gibraltar
@@ -142,7 +142,7 @@ cases:
     location: 
       latitude:  36.1408
       longitude: -5.3536    
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: heat_wave
   - id: 17
     title: 2023 India
@@ -151,7 +151,7 @@ cases:
     location: 
       latitude:  28.6139
       longitude: 77.2090    
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: heat_wave
   - id: 18
     title: 2021 Western Russia
@@ -160,7 +160,7 @@ cases:
     location: 
       latitude:  55.7558
       longitude: 37.6173    
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: heat_wave
   - id: 19
     title: 2022 Germany
@@ -169,7 +169,7 @@ cases:
     location: 
       latitude:  52.5200
       longitude: 13.4050    
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: heat_wave
   - id: 20
     title: 2022 UK (August)
@@ -178,7 +178,7 @@ cases:
     location: 
       latitude:  51.5074
       longitude: -0.1278    
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: heat_wave
   - id: 21
     title: 2022 UK (July)
@@ -187,7 +187,7 @@ cases:
     location: 
       latitude:  51.5074
       longitude: -0.1278    
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: heat_wave
   - id: 22
     title: 2022 France
@@ -196,7 +196,7 @@ cases:
     location: 
       latitude:  43.4832
       longitude: -1.5586    
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: heat_wave
   - id: 23
     title: 2022 Japan
@@ -205,7 +205,7 @@ cases:
     location: 
       latitude:  35.6895
       longitude: 139.6917    
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: heat_wave
   - id: 24
     title: 2022 India
@@ -214,7 +214,7 @@ cases:
     location: 
       latitude:  28.2769
       longitude: 68.4376    
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: heat_wave
   - id: 25
     title: 2022 East Antarctica
@@ -223,7 +223,7 @@ cases:
     location: 
       latitude: -75.1000
       longitude: 123.3500    
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: heat_wave
   - id: 26
     title: 2022 West Australia
@@ -232,7 +232,7 @@ cases:
     location: 
       latitude: -31.9505
       longitude: 115.8605    
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: heat_wave
   - id: 27
     title: 2021 Canada Plains
@@ -241,7 +241,7 @@ cases:
     location: 
       latitude: 49.0000
       longitude: -97.5667    
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: heat_wave
   - id: 28
     title: 2021 New Zealand
@@ -250,7 +250,7 @@ cases:
     location: 
       latitude: -43.8983
       longitude: 171.7310    
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: heat_wave
   - id: 29
     title: 2020 Australia
@@ -259,7 +259,7 @@ cases:
     location: 
       latitude: -33.8245
       longitude: 150.9448
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: heat_wave
   - id: 31
     title: 2021 Texas
@@ -268,7 +268,7 @@ cases:
     location: 
       latitude:  30.2672
       longitude: -97.7431
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: freeze
   - id: 32
     title: 2022 Arkansas
@@ -277,7 +277,7 @@ cases:
     location: 
       latitude:  34.7445
       longitude: -92.2896
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: freeze
   - id: 33
     title: 2023 Germany
@@ -286,7 +286,7 @@ cases:
     location: 
       latitude: 48.1351
       longitude: 11.5820
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: freeze
     cross_listed: !!seq [snow]
   - id: 34
@@ -296,7 +296,7 @@ cases:
     location: 
       latitude: 31.2304
       longitude: 121.4737
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: freeze
   - id: 35
     title: 2023 Afghanistan
@@ -305,7 +305,7 @@ cases:
     location: 
       latitude: 34.5553
       longitude: 69.2075
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: freeze
     cross_listed: !!seq [snow]
   - id: 36
@@ -315,7 +315,7 @@ cases:
     location: 
       latitude: 39.7392
       longitude: -104.9903
-    bounding_box_km: 500
+    bounding_box_degrees: 5
     event_type: freeze
   - id: 37
     title: July 2024 South Dakota

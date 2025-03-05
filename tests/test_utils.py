@@ -152,3 +152,119 @@ def test_obs_coarser_temporal_resolution(
     )
     # Check that observation was modified
     assert (aligned_obs == sample_gridded_obs_dataarray).all()
+
+
+def test_clip_dataset_to_bounding_box_degrees():
+    # Create a sample dataset
+    lat = np.linspace(-90, 90, 181)
+    lon = np.linspace(0, 359, 360)
+    data = np.random.rand(181, 360)
+    ds = xr.Dataset(
+        {"data": (["latitude", "longitude"], data)},
+        coords={"latitude": lat, "longitude": lon},
+    )
+
+    # Test case 1: Single value for box_degrees, latitude ascending
+    location_center = utils.Location(latitude=40, longitude=100)
+    box_degrees = 10
+    clipped_ds = utils.clip_dataset_to_bounding_box_degrees(
+        ds, location_center, box_degrees
+    )
+    assert np.all(clipped_ds.latitude >= 35)
+    assert np.all(clipped_ds.latitude <= 45)
+    assert np.all(clipped_ds.longitude >= 95)
+    assert np.all(clipped_ds.longitude <= 105)
+
+    # Test case 2: Tuple for box_degrees, latitude ascending
+    location_center = utils.Location(latitude=40, longitude=100)
+    box_degrees = (5, 10)
+    clipped_ds = utils.clip_dataset_to_bounding_box_degrees(
+        ds, location_center, box_degrees
+    )
+    assert np.all(clipped_ds.latitude >= 37.5)
+    assert np.all(clipped_ds.latitude <= 42.5)
+    assert np.all(clipped_ds.longitude >= 95)
+    assert np.all(clipped_ds.longitude <= 105)
+
+    # Test case 3: Negative longitude, latitude ascending
+    location_center = utils.Location(latitude=40, longitude=-100)
+    box_degrees = 10
+    clipped_ds = utils.clip_dataset_to_bounding_box_degrees(
+        ds, location_center, box_degrees
+    )
+    assert np.all(clipped_ds.latitude >= 35)
+    assert np.all(clipped_ds.latitude <= 45)
+    assert np.all(clipped_ds.longitude >= 255)  # -100 + 360 - 5 = 255
+    assert np.all(clipped_ds.longitude <= 265)  # -100 + 360 + 5 = 265
+
+    # Test case 4: Latitude descending
+    ds_desc = ds.reindex(latitude=ds.latitude[::-1])
+    location_center = utils.Location(latitude=40, longitude=100)
+    box_degrees = 10
+    clipped_ds = utils.clip_dataset_to_bounding_box_degrees(
+        ds_desc, location_center, box_degrees
+    )
+    assert np.all(clipped_ds.latitude >= 35)
+    assert np.all(clipped_ds.latitude <= 45)
+    assert np.all(clipped_ds.longitude >= 95)
+    assert np.all(clipped_ds.longitude <= 105)
+
+    # Test wrapping around prime meridian
+    location_center = utils.Location(latitude=0, longitude=0)
+    box_degrees = 10
+
+    clipped_ds = utils.clip_dataset_to_bounding_box_degrees(
+        ds, location_center, box_degrees
+    )
+
+    assert np.any(clipped_ds.longitude < 10)
+    assert np.any(clipped_ds.longitude > 350)
+
+    # Test case 5: Edge cases, ensuring no errors when clipping at boundaries
+    location_center = utils.Location(latitude=90, longitude=100)
+    box_degrees = 10
+    clipped_ds = utils.clip_dataset_to_bounding_box_degrees(
+        ds, location_center, box_degrees
+    )
+
+    location_center = utils.Location(latitude=-90, longitude=100)
+    box_degrees = 10
+    clipped_ds = utils.clip_dataset_to_bounding_box_degrees(
+        ds, location_center, box_degrees
+    )
+
+
+def test_align_point_obs_from_gridded_input_validation():
+    # Test with invalid inputs
+    with pytest.raises((AttributeError, TypeError)):
+        utils.align_point_obs_from_gridded(
+            None,  # invalid forecast
+            pd.DataFrame(),  # empty dataframe
+            [],  # empty metadata vars
+        )
+
+
+def test_location_subset_point_obs():
+    # Create sample data
+    df = pd.DataFrame(
+        {
+            "latitude": [0, 1, 2, 3, 4],
+            "longitude": [0, 1, 2, 3, 4],
+            "value": ["a", "b", "c", "d", "e"],
+        }
+    )
+
+    # Test bounds
+    result = utils.location_subset_point_obs(
+        df, min_lat=1, max_lat=3, min_lon=1, max_lon=3
+    )
+    assert len(result) == 3
+    assert all(result["value"] == ["b", "c", "d"])
+    assert all((result["latitude"] >= 1) & (result["latitude"] <= 3))
+    assert all((result["longitude"] >= 1) & (result["longitude"] <= 3))
+
+    # Test empty result
+    result = utils.location_subset_point_obs(
+        df, min_lat=10, max_lat=20, min_lon=10, max_lon=20
+    )
+    assert len(result) == 0
