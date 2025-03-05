@@ -28,13 +28,15 @@ def relative_humidity(
     if original_variable == "specific_humidity":
         return relative_humidity_from_specific_humidity(
             ds["level"].values * units.hPa,
-            ds["temperature"].sel(level=ds["level"].values * units.hPa) * units.degK,
+            ds["air_temperature"].sel(level=ds["level"].values * units.hPa)
+            * units.degK,
             ds["specific_humidity"].sel(level=ds["level"].values * units.hPa)
             * units("g/kg"),
         )
     elif original_variable == "dewpoint_temperature":
         return relative_humidity_from_dewpoint(
-            ds["temperature"].sel(level=ds["level"].values * units.hPa) * units.degK,
+            ds["air_temperature"].sel(level=ds["level"].values * units.hPa)
+            * units.degK,
             ds["dewpoint_temperature"].sel(level=ds["level"].values * units.hPa)
             * units.degK,
         )

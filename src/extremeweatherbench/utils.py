@@ -15,7 +15,6 @@ from pathlib import Path
 from importlib import resources
 import yaml
 import itertools
-from extremeweatherbench import derived
 
 #: Struct packaging latitude/longitude location definitions.
 Location = namedtuple("Location", ["latitude", "longitude"])
@@ -35,7 +34,6 @@ ERA5_MAPPING = {
     "level": "level",
     "latitude": "latitude",
     "longitude": "longitude",
-    "relative_humidity": derived.DerivedVariable.RELATIVE_HUMIDITY,
 }
 
 ISD_MAPPING = {
