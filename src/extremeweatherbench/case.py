@@ -193,7 +193,7 @@ class IndividualSevereDayCase(IndividualCase):
     """
 
     metrics_list: List[Type[metrics.Metric]] = dataclasses.field(
-        default_factory=lambda: [metrics.RegionalRMSE]
+        default_factory=lambda: [metrics.RegionalRMSE, metrics.FSS]
     )
     data_vars: List[str | derived.DerivedVariable] = dataclasses.field(
         default_factory=lambda: [

@@ -3,6 +3,7 @@ import dataclasses
 import pandas as pd
 import xarray as xr
 from scores.continuous import rmse
+from scores.spatial import fss_2d_single_field
 import logging
 from extremeweatherbench import utils
 
@@ -162,6 +163,32 @@ class MaxOfMinTempMAE(Metric):
                     max_min_mae_values.append(max_min_mae_dataarray)
         max_min_mae_full_da = utils.process_dataarray_for_output(max_min_mae_values)
         return max_min_mae_full_da
+
+
+@dataclasses.dataclass
+class FSS(Metric):
+    """Fraction Skill Score."""
+
+    threshold: float = 0.5
+    window_size: int = (2, 2)
+
+    def compute(self, forecast: xr.DataArray, observation: xr.DataArray):
+        fss_values = []
+        for init_time in forecast.init_time:
+            init_forecast, subset_observation = utils.temporal_align_dataarrays(
+                forecast,
+                observation,
+                pd.Timestamp(init_time.values).to_pydatetime(),
+            )
+            fss = fss_2d_single_field(
+                init_forecast,
+                subset_observation,
+                event_threshold=self.threshold,
+                window_size=self.window_size,
+            )
+            fss_values.append(fss)
+        fss_full_da = utils.process_dataarray_for_output(fss_values)
+        return fss_full_da
 
 
 @dataclasses.dataclass
