@@ -7,9 +7,7 @@ from collections import namedtuple
 import numpy as np
 import pandas as pd
 import regionmask
-import ujson
 import xarray as xr
-from kerchunk.hdf import SingleHdf5ToZarr
 import datetime
 from pathlib import Path
 from importlib import resources
@@ -61,22 +59,6 @@ def convert_longitude_to_180(
     dataset.coords[longitude_name] = (dataset.coords[longitude_name] + 180) % 360 - 180
     dataset = dataset.sortby(longitude_name)
     return dataset
-
-
-def generate_json_from_nc(u, so, fs, fs_out, json_dir):
-    """Generate a kerchunk JSON file from a NetCDF file."""
-    with fs.open(u, **so) as infile:
-        h5chunks = SingleHdf5ToZarr(infile, u, inline_threshold=300)
-
-        file_split = u.split(
-            "/"
-        )  # seperate file path to create a unique name for each json
-        model = file_split[1].split("_")[0]
-        date_string = file_split[-1].split("_")[3]
-        outf = f"{json_dir}{model}_{date_string}_.json"
-        print(outf)
-        with fs_out.open(outf, "wb") as f:
-            f.write(ujson.dumps(h5chunks.translate()).encode())
 
 
 def clip_dataset_to_bounding_box_degrees(
