@@ -325,7 +325,7 @@ cases:
       latitude: 44.3677
       longitude: -100.3516
     bounding_box_degrees: 5
-    event_type: severe
+    event_type: severe_day
   - id: 38
     title: July 2024 Chicago
     start_date: 2024-07-14 00:00:00
@@ -334,7 +334,7 @@ cases:
       latitude: 41.8781
       longitude: -87.6298
     bounding_box_degrees: 5
-    event_type: severe
+    event_type: severe_day
   - id: 39
     title: July 2024 New York
     start_date: 2024-07-16 00:00:00
@@ -343,7 +343,7 @@ cases:
       latitude: 42.6526
       longitude: -73.7562
     bounding_box_degrees: 5
-    event_type: severe
+    event_type: severe_day
   - id: 40
     title: May 2024 Wisconsin
     start_date: 2024-05-18 00:00:00
@@ -352,7 +352,7 @@ cases:
       latitude: 44.6243
       longitude: -89.7373
     bounding_box_degrees: 5
-    event_type: severe
+    event_type: severe_day
   - id: 41
     title: May 2024 Kansas
     start_date: 2024-05-19 00:00:00
@@ -361,7 +361,7 @@ cases:
       latitude: 38.5266
       longitude: -96.7265
     bounding_box_degrees: 5
-    event_type: severe
+    event_type: severe_day
   - id: 42
     title: May 2024 Iowa + Nebraska
     start_date: 2024-05-20 00:00:00
@@ -370,7 +370,7 @@ cases:
       latitude: 41.2565
       longitude: -95.9345
     bounding_box_degrees: 5
-    event_type: severe
+    event_type: severe_day
   - id: 43
     title: May 2024 Iowa + Wisconsin
     start_date: 2024-05-21 00:00:00
@@ -379,7 +379,7 @@ cases:
       latitude: 42.5067
       longitude: -90.6349
     bounding_box_degrees: 5
-    event_type: severe
+    event_type: severe_day
   - id: 44
     title: May 2024 Texas
     start_date: 2024-05-22 00:00:00
@@ -388,7 +388,7 @@ cases:
       latitude: 32.7767
       longitude: -96.7970
     bounding_box_degrees: 5
-    event_type: severe
+    event_type: severe_day
   - id: 45
     title: May 2024 Iowa + Nebraska 2
     start_date: 2024-05-23 00:00:00
@@ -397,4 +397,4 @@ cases:
       latitude: 41.2565
       longitude: -95.9345
     bounding_box_degrees: 5
-    event_type: severe
+    event_type: severe_day

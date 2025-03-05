@@ -71,6 +71,8 @@ class ForecastSchemaConfig:
     level: Optional[str] = "level"
     latitude: Optional[str] = "latitude"
     longitude: Optional[str] = "longitude"
+    relative_humidity: Optional[str] = "r"
+    specific_humidity: Optional[str] = "q"
 
     def to_mapping(self) -> dict:
         return {

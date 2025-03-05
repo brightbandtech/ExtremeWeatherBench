@@ -51,10 +51,10 @@ class Freeze(EventContainer):
 
 
 @dataclasses.dataclass
-class Severe(EventContainer):
+class SevereDay(EventContainer):
     """A container class to hold a list of cases of Severe events.
     Attributes:
         cases: A list of cases that is defined by events.yaml
     """
 
-    event_type: str = "severe"
+    event_type: str = "severe_day"
