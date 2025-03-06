@@ -1,4 +1,5 @@
 import pytest
+import xarray as xr
 from extremeweatherbench import config, events, case, evaluate
 import datetime
 
@@ -39,7 +40,7 @@ def test_open_obs_datasets_no_forecast_paths():
         evaluate._open_forecast_dataset(invalid_config)
 
 
-def test_evaluate_individualcase(sample_forecast_dataset, sample_gridded_obs_dataset):
+def test_evaluate_base_case(sample_forecast_dataset, sample_gridded_obs_dataset):
     base_case = case.IndividualCase(
         id=1,
         title="test_case",
@@ -50,7 +51,7 @@ def test_evaluate_individualcase(sample_forecast_dataset, sample_gridded_obs_dat
         event_type="heat_wave",
     )
     # Parent IndividualCase doesn't have data vars
-    with pytest.raises(KeyError):
+    with pytest.raises(NotImplementedError):
         evaluate._evaluate_case(
             individual_case=base_case,
             forecast_dataset=sample_forecast_dataset,
@@ -72,12 +73,15 @@ def test_evaluate_full_workflow(
         return_value=(None, sample_gridded_obs_dataset),
     )
     result = evaluate.evaluate(mock_config)
+    print(result["heat_wave"])
     assert isinstance(result, dict)
     assert "heat_wave" in result
+    assert isinstance(result["heat_wave"], dict)
+    assert isinstance(result["heat_wave"][1], dict)
     for _, v in result["heat_wave"].items():
         if v is not None:
             assert isinstance(v, dict)
             for _, v2 in v.items():
                 assert isinstance(v2, dict)
                 for _, v3 in v2.items():
-                    assert isinstance(v3, dict) or v3 is None
+                    assert isinstance(v3, xr.DataArray)

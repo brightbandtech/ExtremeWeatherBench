@@ -6,8 +6,8 @@ import datetime
 from typing import List, Optional, Tuple, Type
 from extremeweatherbench import metrics, utils
 import xarray as xr
-import pandas as pd
 from enum import StrEnum
+import pandas as pd
 import numpy as np
 import logging
 
@@ -71,6 +71,7 @@ class IndividualCase:
         subset_dataset = dataset
         if self.data_vars is not None:
             subset_dataset = subset_dataset[self.data_vars]
+        subset_dataset["time"] = dataset["time"]
         return subset_dataset
 
     def _subset_valid_times(self, dataset: xr.Dataset) -> xr.Dataset:

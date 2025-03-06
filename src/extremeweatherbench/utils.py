@@ -2,7 +2,7 @@
 other specialized package.
 """
 
-from typing import Union, List, Tuple
+from typing import Union, List
 from collections import namedtuple
 import fsspec
 import numpy as np
@@ -13,7 +13,6 @@ import datetime
 from pathlib import Path
 from importlib import resources
 import yaml
-import itertools
 
 #: Struct packaging latitude/longitude location definitions.
 Location = namedtuple("Location", ["latitude", "longitude"])
@@ -37,18 +36,6 @@ ERA5_MAPPING = {
 ISD_MAPPING = {
     "surface_temperature": "surface_air_temperature",
 }
-
-#: metadata variables for point obs
-POINT_OBS_METADATA_VARS = [
-    "time",
-    "station",
-    "call",
-    "name",
-    "latitude",
-    "longitude",
-    "elev",
-    "id",
-]
 
 
 def convert_longitude_to_360(longitude: float) -> float:
@@ -416,175 +403,3 @@ def read_event_yaml(input_pth: str | Path) -> dict:
     with open(input_pth, "rb") as f:
         yaml_event_case = yaml.safe_load(f)
     return yaml_event_case
-
-
-def unit_check(df: pd.DataFrame) -> pd.DataFrame:
-    """Base function to test for units in the point obs dataframe.
-    Potential to expand more comprehensively.
-
-    Arguments:
-        df: dataframe with point obs.
-
-
-    Returns a corrected dataframe."""
-    if "surface_air_temperature" in df.columns:
-        # Check if temperature appears to be in Kelvin (values mostly > 200)
-        if df["surface_air_temperature"].mean() > 200:
-            pass
-        else:
-            # Otherwise assume Celsius
-            df["surface_air_temperature"] = df["surface_air_temperature"] + 273.15
-    return df
-
-
-def location_subset_point_obs(
-    df: pd.DataFrame,
-    min_lat: float,
-    max_lat: float,
-    min_lon: float,
-    max_lon: float,
-    inclusive: bool = True,
-):
-    """Subset a dataframe based upon maximum and minimum latitudes and longitudes.
-
-    Arguments:
-        df: dataframe with point obs.
-        min_lat: minimum latitude.
-        max_lat: maximum latitude.
-        min_lon: minimum longitude.
-        max_lon: maximum longitude.
-        inclusive: whether to include the edges of the bounding box.
-
-    Returns a subset dataframe."""
-    if inclusive:
-        location_subset_df = df[
-            (df["latitude"] >= min_lat)
-            & (df["latitude"] <= max_lat)
-            & (df["longitude"] >= min_lon)
-            & (df["longitude"] <= max_lon)
-        ]
-    else:
-        location_subset_df = df[
-            (df["latitude"] > min_lat)
-            & (df["latitude"] < max_lat)
-            & (df["longitude"] > min_lon)
-            & (df["longitude"] < max_lon)
-        ]
-    return location_subset_df
-
-
-def align_point_obs_from_gridded(
-    forecast_da: xr.DataArray,
-    case_subset_point_obs_df: pd.DataFrame,
-    data_var: str,
-    point_obs_metadata_vars: List[str],
-) -> Tuple[xr.DataArray, xr.DataArray]:
-    """Takes in a forecast dataarray and point observation dataframe, aligning them by
-    reducing dimensions.
-
-    Args:
-        forecast_da: The forecast dataarray.
-        case_subset_point_obs_df: The point observation dataframe.
-        data_var: The variable to subset (e.g. "surface_air_temperature")
-        point_obs_metadata_vars: The metadata variables to subset (e.g. ["elev", "name"])
-
-    Returns a tuple of aligned forecast and observation dataarrays."""
-    case_subset_point_obs_df = case_subset_point_obs_df[
-        POINT_OBS_METADATA_VARS + [data_var]
-    ]
-    case_subset_point_obs_df = case_subset_point_obs_df.rename(columns=ISD_MAPPING)
-    case_subset_point_obs_df["longitude"] = convert_longitude_to_360(
-        case_subset_point_obs_df["longitude"]
-    )
-    case_subset_point_obs_df = unit_check(case_subset_point_obs_df)
-    case_subset_point_obs_df = location_subset_point_obs(
-        case_subset_point_obs_df,
-        forecast_da["latitude"].min().values,
-        forecast_da["latitude"].max().values,
-        forecast_da["longitude"].min().values,
-        forecast_da["longitude"].max().values,
-    )
-    # Uses indexing in the dataframe to capture metadata columns for future use
-    point_obs_metadata = case_subset_point_obs_df[point_obs_metadata_vars]
-
-    # Reset index to allow for easier modification
-    case_subset_point_obs_df = case_subset_point_obs_df.reset_index()
-    case_subset_point_obs_df.loc[:, "station"] = case_subset_point_obs_df[
-        "station"
-    ].astype("str")
-
-    # Set up multiindex to enable slicing along individual timesteps
-    case_subset_point_obs_df = case_subset_point_obs_df.set_index("time")
-    case_subset_point_obs_df = case_subset_point_obs_df.set_index(
-        "station", append=True
-    )
-    case_subset_point_obs_df = case_subset_point_obs_df.sort_index(
-        level="station"
-    ).swaplevel(0, 1)
-
-    aligned_forecast_list = []
-    aligned_observation_list = []
-
-    # Loop init and lead times to prevent indexing error from duplicate valid times
-    for init_time, lead_time in itertools.product(
-        forecast_da.init_time, forecast_da.lead_time
-    ):
-        valid_time = pd.Timestamp(
-            init_time.values + pd.to_timedelta(lead_time.values, unit="h").to_numpy()
-        )
-        if valid_time in case_subset_point_obs_df.index.levels[1]:
-            obs_timeslice = case_subset_point_obs_df.loc[
-                pd.IndexSlice[:, valid_time], :
-            ].reset_index()
-            station_ids = obs_timeslice["station"]
-            lons = xr.DataArray(obs_timeslice["longitude"].values, dims="station")
-            lats = xr.DataArray(obs_timeslice["latitude"].values, dims="station")
-
-            grid_at_obs_da = forecast_da.sel(
-                init_time=init_time, lead_time=lead_time
-            ).interp(latitude=lats, longitude=lons, method="nearest")
-            grid_at_obs_da = grid_at_obs_da.assign_coords(
-                {"station": station_ids, "time": valid_time}
-            )
-            grid_at_obs_da["lead_time"] = lead_time
-            grid_at_obs_da["init_time"] = init_time
-
-            valid_time_subset_obs_da = obs_timeslice.to_xarray().set_coords(
-                point_obs_metadata
-            )[forecast_da.name]
-            valid_time_subset_obs_da = valid_time_subset_obs_da.swap_dims(
-                {"index": "station"}
-            )
-            valid_time_subset_obs_da["lead_time"] = lead_time
-            valid_time_subset_obs_da["init_time"] = init_time
-
-            aligned_observation_list.append(valid_time_subset_obs_da)
-            aligned_forecast_list.append(grid_at_obs_da)
-
-    # concat the dataarrays along the station dimension
-    interpolated_forecast = xr.concat(aligned_forecast_list, dim="station")
-    interpolated_observation = xr.concat(aligned_observation_list, dim="station")
-    return (interpolated_forecast, interpolated_observation)
-
-
-def derive_indices_from_init_time_and_lead_time(
-    dataset: xr.Dataset,
-    start_date: datetime.datetime,
-    end_date: datetime.datetime,
-) -> Tuple[np.ndarray]:
-    if len(dataset.lead_time) == 0 or len(dataset.init_time) == 0:
-        raise ValueError("No forecast data available for this case.")
-    lead_time_grid, init_time_grid = np.meshgrid(dataset.lead_time, dataset.init_time)
-    valid_times = (
-        init_time_grid.flatten()
-        + pd.to_timedelta(lead_time_grid.flatten(), unit="h").to_numpy()
-    )
-    valid_times_reshaped = valid_times.reshape(
-        (dataset.init_time.shape[0], dataset.lead_time.shape[0])
-    )
-    valid_time_indices = np.where(
-        (valid_times_reshaped > pd.to_datetime(start_date))
-        & (valid_times_reshaped < pd.to_datetime(end_date))
-    )
-
-    return valid_time_indices
