@@ -19,9 +19,12 @@ Location = namedtuple("Location", ["latitude", "longitude"])
 
 #: Maps the ARCO ERA5 to CF conventions.
 ERA5_MAPPING = {
-    "air_temperature": "2m_temperature",
-    "eastward_wind": "10m_u_component_of_wind",
-    "northward_wind": "10m_v_component_of_wind",
+    "surface_air_temperature": "2m_temperature",
+    "surface_eastward_wind": "10m_u_component_of_wind",
+    "surface_northward_wind": "10m_v_component_of_wind",
+    "air_temperature": "temperature",
+    "eastward_wind": "u_component_of_wind",
+    "northward_wind": "v_component_of_wind",
     "air_pressure_at_mean_sea_level": "mean_sea_level_pressure",
     "specific_humidity": "specific_humidity",
     "valid_time": "time",
@@ -34,7 +37,6 @@ ISD_MAPPING = {
     "surface_temperature": "surface_air_temperature",
 }
 
-#: metadata variables for point obs
 POINT_OBS_METADATA_VARS = [
     "time",
     "station",
