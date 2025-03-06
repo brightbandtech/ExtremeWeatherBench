@@ -56,9 +56,12 @@ class ForecastSchemaConfig:
     suggested based on the CF Conventions.
     """
 
-    air_temperature: Optional[str] = "t2"
-    eastward_wind: Optional[str] = "u10"
-    northward_wind: Optional[str] = "v10"
+    surface_air_temperature: Optional[str] = "t2m"
+    surface_eastward_wind: Optional[str] = "u10"
+    surface_northward_wind: Optional[str] = "v10"
+    air_temperature: Optional[str] = "t"
+    eastward_wind: Optional[str] = "u"
+    northward_wind: Optional[str] = "v"
     air_pressure_at_mean_sea_level: Optional[str] = "msl"
     lead_time: Optional[str] = "time"
     init_time: Optional[str] = "init_time"
