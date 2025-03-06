@@ -3,9 +3,10 @@ Some code similarly structured to WeatherBench (Rasp et al.)."""
 
 import dataclasses
 import datetime
-from typing import List, Optional, Type
+from typing import List, Optional, Tuple, Type
 from extremeweatherbench import metrics, utils
 import xarray as xr
+import pandas as pd
 from enum import StrEnum
 import numpy as np
 import logging
@@ -80,9 +81,7 @@ class IndividualCase:
         Returns:
             xr.Dataset: The subset dataset.
         """
-        indices = utils.derive_indices_from_init_time_and_lead_time(
-            dataset, self.start_date, self.end_date
-        )
+        indices = derive_indices_from_init_time_and_lead_time(self, dataset)
         modified_ds = dataset.isel(init_time=np.unique(indices[0]))
         return modified_ds
 
@@ -206,3 +205,20 @@ def get_case_event_dataclass(case_type: str) -> Type[IndividualCase]:
     if event_dataclass is None:
         raise ValueError(f"Unknown case event type {case_type}")
     return event_dataclass
+
+
+def derive_indices_from_init_time_and_lead_time(
+    individual_case: IndividualCase,
+    dataset: xr.Dataset,
+) -> Tuple[np.ndarray]:
+    time_reshaped = dataset.time.values.reshape(
+        (dataset.init_time.shape[0], dataset.lead_time.shape[0])
+    )
+    output = dataset.time.where(
+        (dataset.time.time > pd.to_datetime(individual_case.start_date))
+        & (dataset.time.time < pd.to_datetime(individual_case.end_date)),
+        drop=True,
+    )
+    index_mask = np.isin(time_reshaped, output)
+    indices = np.where(index_mask)
+    return indices
