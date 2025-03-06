@@ -50,7 +50,6 @@ def test_evaluate_base_case(sample_forecast_dataset, sample_gridded_obs_dataset)
         location={"latitude": 45.0, "longitude": -100.0},
         event_type="heat_wave",
     )
-    # Parent IndividualCase doesn't have data vars
     with pytest.raises(NotImplementedError):
         evaluate._evaluate_case(
             individual_case=base_case,
