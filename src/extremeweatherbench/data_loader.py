@@ -18,7 +18,7 @@ def open_forecast_dataset(
         filesystem = eval_config.forecast_dir.split("://")[0]
     else:
         filesystem = "file"
-    fs = fsspec.filesystem(filesystem)
+    fs = fsspec.filesystem(filesystem, anon=True)
     file_list = fs.ls(eval_config.forecast_dir)
     file_types = set([file.split(".")[-1] for file in file_list])
 

@@ -20,6 +20,7 @@ Location = namedtuple("Location", ["latitude", "longitude"])
 #: Maps the ARCO ERA5 to CF conventions.
 ERA5_MAPPING = {
     "surface_air_temperature": "2m_temperature",
+    "surface_dewpoint_temperature": "2m_dewpoint_temperature",
     "surface_eastward_wind": "10m_u_component_of_wind",
     "surface_northward_wind": "10m_v_component_of_wind",
     "air_temperature": "temperature",
@@ -350,16 +351,16 @@ def location_subset_point_obs(
 
 
 def align_point_obs_from_gridded(
-    forecast_ds: xr.Dataset,
+    forecast_da: xr.DataArray,
     case_subset_point_obs_df: pd.DataFrame,
     data_var: List[str],
     point_obs_metadata_vars: List[str],
-) -> Tuple[xr.Dataset, xr.Dataset]:
+) -> Tuple[xr.DataArray, xr.DataArray]:
     """Takes in a forecast dataarray and point observation dataframe, aligning them by
     reducing dimensions.
 
     Args:
-        forecast_ds: The forecast dataset.
+        forecast_da: The forecast dataarray.
         case_subset_point_obs_df: The point observation dataframe.
         data_var: The variable to subset (e.g. "surface_air_temperature")
         point_obs_metadata_vars: The metadata variables to subset (e.g. ["elev", "name"])
@@ -374,10 +375,10 @@ def align_point_obs_from_gridded(
     )
     case_subset_point_obs_df = location_subset_point_obs(
         case_subset_point_obs_df,
-        forecast_ds["latitude"].min().values,
-        forecast_ds["latitude"].max().values,
-        forecast_ds["longitude"].min().values,
-        forecast_ds["longitude"].max().values,
+        forecast_da["latitude"].min().values,
+        forecast_da["latitude"].max().values,
+        forecast_da["longitude"].min().values,
+        forecast_da["longitude"].max().values,
     )
     # Uses indexing in the dataframe to capture metadata columns for future use
     point_obs_metadata = case_subset_point_obs_df[point_obs_metadata_vars]
@@ -398,7 +399,7 @@ def align_point_obs_from_gridded(
 
     # Loop init and lead times to prevent indexing error from duplicate valid times
     for init_time, lead_time in itertools.product(
-        forecast_ds.init_time, forecast_ds.lead_time
+        forecast_da.init_time, forecast_da.lead_time
     ):
         valid_time = pd.Timestamp(
             init_time.values + pd.to_timedelta(lead_time.values, unit="h").to_numpy()
@@ -417,25 +418,26 @@ def align_point_obs_from_gridded(
         lons = xr.DataArray(obs_timeslice["longitude"].values, dims="station")
         lats = xr.DataArray(obs_timeslice["latitude"].values, dims="station")
 
-        forecast_at_obs_ds = forecast_ds.sel(
+        grid_at_obs_da = forecast_da.sel(
             init_time=init_time, lead_time=lead_time
         ).interp(latitude=lats, longitude=lons, method="nearest")
-        forecast_at_obs_ds = forecast_at_obs_ds.assign_coords(
+        grid_at_obs_da = grid_at_obs_da.assign_coords(
             {"station": station_ids, "time": valid_time}
         )
-        forecast_at_obs_ds.coords["lead_time"] = lead_time
-        forecast_at_obs_ds.coords["init_time"] = init_time
-        valid_time_subset_obs_ds = obs_timeslice.to_xarray().set_coords(
+        grid_at_obs_da["lead_time"] = lead_time
+        grid_at_obs_da["init_time"] = init_time
+
+        valid_time_subset_obs_da = obs_timeslice.to_xarray().set_coords(
             point_obs_metadata
         )[data_var]
-        valid_time_subset_obs_ds = valid_time_subset_obs_ds.swap_dims(
+        valid_time_subset_obs_da = valid_time_subset_obs_da.swap_dims(
             {"index": "station"}
         )
-        valid_time_subset_obs_ds.coords["lead_time"] = lead_time
-        valid_time_subset_obs_ds.coords["init_time"] = init_time
+        valid_time_subset_obs_da["lead_time"] = lead_time
+        valid_time_subset_obs_da["init_time"] = init_time
 
-        aligned_observation_list.append(valid_time_subset_obs_ds)
-        aligned_forecast_list.append(forecast_at_obs_ds)
+        aligned_observation_list.append(valid_time_subset_obs_da)
+        aligned_forecast_list.append(grid_at_obs_da)
     # concat the dataarrays along the station dimension
     interpolated_forecast = xr.concat(aligned_forecast_list, dim="station")
     interpolated_observation = xr.concat(aligned_observation_list, dim="station")
