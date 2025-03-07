@@ -164,6 +164,8 @@ def _evaluate_case(
 
     logger.info("Evaluating case %s, %s", individual_case.id, individual_case.title)
     variable_subset_ds = individual_case._subset_data_vars(forecast_dataset)
+    if len(variable_subset_ds.lead_time) == 0 or len(variable_subset_ds.init_time) == 0:
+        raise ValueError("No forecast data available, check forecast dataset.")
     time_subset_forecast_ds = individual_case._subset_valid_times(variable_subset_ds)
     # Check if forecast data is available for the case, if not, return None
     lead_time_len = len(time_subset_forecast_ds.init_time)
@@ -251,8 +253,6 @@ def _open_obs_datasets(eval_config: config.Config):
     """Open the observation datasets specified for evaluation."""
     point_obs = None
     gridded_obs = None
-    if eval_config.point_obs_path:
-        raise NotImplementedError("Point obs evaluation not implemented as of 0.1.0")
     if eval_config.gridded_obs_path:
         gridded_obs = xr.open_zarr(
             eval_config.gridded_obs_path,
