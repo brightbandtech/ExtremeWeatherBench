@@ -247,16 +247,22 @@ def evaluate(
                 )
                 return cases
     logger.debug("Evaluation starting")
+    point_obs, gridded_obs = data_loader.open_obs_datasets(eval_config)
+    forecast_dataset = data_loader.open_forecast_dataset(
+        eval_config, forecast_schema_config
+    )
+    logger.debug("Forecast and observation datasets loaded")
+    logger.debug(
+        "Observation data: Point %s, Gridded %s",
+        point_obs is not None,
+        gridded_obs is not None,
+    )
     for event in eval_config.event_types:
         cases = dacite.from_dict(
             data_class=event,
             data=yaml_event_case,
         )
         logger.debug("Cases loaded for %s", event.event_type)
-        point_obs, gridded_obs = data_loader.open_obs_datasets(eval_config)
-        forecast_dataset = data_loader.open_forecast_dataset(
-            eval_config, forecast_schema_config
-        )
         if gridded_obs:
             logger.info(
                 "gridded obs detected, mapping variables in gridded obs to forecast"
