@@ -198,7 +198,7 @@ class IndividualSevereDayCase(IndividualCase):
     data_vars: List[str | derived.DerivedVariable] = dataclasses.field(
         default_factory=lambda: [
             "surface_air_temperature",
-            derived.DerivedVariable.CRAVEN_SIGSVR,
+            # TODO(aaTman): add derived.DerivedVariable.CRAVEN_SIGSVR,
         ]
     )
 

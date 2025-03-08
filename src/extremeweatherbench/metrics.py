@@ -1,5 +1,6 @@
 import dataclasses
 
+from typing import Tuple
 import pandas as pd
 import xarray as xr
 from scores.continuous import rmse
@@ -167,10 +168,10 @@ class MaxOfMinTempMAE(Metric):
 
 @dataclasses.dataclass
 class FSS(Metric):
-    """Fraction Skill Score."""
+    """Fractions Skill Score."""
 
     threshold: float = 0.5
-    window_size: int = (2, 2)
+    window_size: Tuple[float, float] = (2, 2)
 
     def compute(self, forecast: xr.DataArray, observation: xr.DataArray):
         fss_values = []
