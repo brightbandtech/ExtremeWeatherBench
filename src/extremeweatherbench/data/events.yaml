@@ -398,3 +398,219 @@ cases:
       longitude: -95.9345
     bounding_box_degrees: 5
     event_type: severe_day
+  - id: 46
+    title: April 2024 Oklahoma
+    start_date: 2024-04-25 12:00:00
+    end_date: 2024-04-29 12:00:00
+    location:
+      latitude: 35.4219
+      longitude: -96.6398
+    bounding_box_degrees: 5
+  - id: 47
+    title: April 2024 Midwest
+    start_date: 2024-04-02 12:00:00
+    end_date: 2024-04-03 12:00:00
+    location:
+      latitude: 37.8526
+      longitude: -86.2816
+    bounding_box_degrees: 5
+  - id: 48
+    title: April 2024 Great Plains + Midwest
+    start_date: 2024-04-01 12:00:00
+    end_date: 2024-04-02 12:00:00
+    location:
+      latitude: 36.9311
+      longitude: -94.6208
+    bounding_box_degrees: 5
+  - id: 49
+    title: March 2024 Midwest
+    start_date: 2024-03-14 12:00:00
+    end_date: 2024-03-15 12:00:00
+    location:
+      latitude: 39.7684
+      longitude: -86.1581
+    bounding_box_degrees: 8
+  - id: 50
+    title: February 2024 Midwest
+    start_date: 2024-02-27 12:00:00
+    end_date: 2024-02-28 12:00:00
+    location:
+      latitude: 39.7684
+      longitude: -86.1581
+    bounding_box_degrees: 8
+  - id: 51
+    title: January 2024 Southeast
+    start_date: 2024-01-08 12:00:00
+    end_date: 2024-01-10 12:00:00
+    location:
+      latitude: 33.4709
+      longitude: -81.9748
+    bounding_box_degrees: 8
+  - id: 52
+    title: December 2023 South
+    start_date: 2023-12-09 12:00:00
+    end_date: 2023-12-10 12:00:00
+    location:
+      latitude: 34.3668
+      longitude: -89.5192
+    bounding_box_degrees: 5
+  - id: 53
+    title: August 2023 East Coast
+    start_date: 2023-08-07 12:00:00
+    end_date: 2023-08-08 12:00:00
+    location:
+      latitude: 36.5838
+      longitude: -79.3947
+    bounding_box_degrees: 5
+  - id: 54
+    title: August 2023 Minnesota
+    start_date: 2023-08-11 12:00:00
+    end_date: 2023-08-12 12:00:00
+    location:
+      latitude: 43.5000
+      longitude: -93.5000
+    bounding_box_degrees: 5
+  - id: 55
+    title: July 2023 Midwest
+    start_date: 2023-07-02 12:00:00
+    end_date: 2023-07-03 12:00:00
+    location:
+      latitude: 38.1887
+      longitude: -82.5943
+    bounding_box_degrees: 8
+  - id: 56
+    title: July 2023 Midwest 2
+    start_date: 2023-07-01 12:00:00
+    end_date: 2023-07-02 12:00:00
+    location:
+      latitude: 37.1422
+      longitude: -88.7342
+    bounding_box_degrees: 6
+  - id: 57
+    title: June 2023 Midwest
+    start_date: 2023-06-30 12:00:00
+    end_date: 2023-07-01 12:00:00
+    location:
+      latitude: 38.5767
+      longitude: -92.1735
+    bounding_box_degrees: 6
+  - id: 58
+    title: June 2023 Front Range
+    start_date: 2023-06-21 12:00:00
+    end_date: 2023-06-22 12:00:00
+    location:
+      latitude: 39.7684
+      longitude: -104.9903
+    bounding_box_degrees: 6
+  - id: 59
+    title: June 2023 Texas
+    start_date: 2023-06-21 12:00:00
+    end_date: 2023-06-22 12:00:00
+    location:
+      latitude: 32.7767
+      longitude: -99.7970
+    bounding_box_degrees: 5
+  - id: 60
+    title: June 2023 Great Plains
+    start_date: 2023-06-23 12:00:00
+    end_date: 2023-06-24 12:00:00
+    location:
+      latitude: 43.0000
+      longitude: -103.5000
+    bounding_box_degrees: 5
+  - id: 61
+    title: June 2023 Iowa + Minnesota
+    start_date: 2023-06-24 12:00:00
+    end_date: 2023-06-25 12:00:00
+    location:
+      latitude: 43.5000
+      longitude: -93.5000
+    bounding_box_degrees: 5
+  - id: 62
+    title: June 2023 South + Midwest
+    start_date: 2023-06-25 12:00:00
+    end_date: 2023-06-26 12:00:00
+    location:
+      latitude: 36.6000
+      longitude: -88.2700
+    bounding_box_degrees: 8
+  - id: 63
+    title: June 2023 East Coast
+    start_date: 2023-06-26 12:00:00
+    end_date: 2023-06-27 12:00:00
+    location:
+      latitude: 37.5407
+      longitude: -78.8743
+    bounding_box_degrees: 6
+  - id: 64
+    title: June 2023 Midwest + Great Plains
+    start_date: 2023-06-29 12:00:00
+    end_date: 2023-06-30 12:00:00
+    location:
+      latitude: 39.0000
+      longitude: -89.0000
+    bounding_box_degrees: 5
+  - id: 65
+    title: June 2023 Southeast
+    start_date: 2023-06-14 12:00:00
+    end_date: 2023-06-15 12:00:00
+    location:
+      latitude: 32.4500
+      longitude: -88.4700
+    bounding_box_degrees: 6
+  - id: 66
+    title: June 2023 OK + TX + South
+    start_date: 2023-06-15 12:00:00
+    end_date: 2023-06-16 12:00:00
+    location:
+      latitude: 32.5000
+      longitude: -94.0000
+    bounding_box_degrees: 5
+  - id: 67
+    title: June 2023 South
+    start_date: 2023-06-16 12:00:00
+    end_date: 2023-06-17 12:00:00
+    location:
+      latitude: 32.5000
+      longitude: -88.5000
+    bounding_box_degrees: 5
+  - id: 68
+    title: June 2023 Mid-Atlantic
+    start_date: 2023-06-16 12:00:00
+    end_date: 2023-06-17 12:00:00
+    location:
+      latitude: 38.9072
+      longitude: -77.0369
+    bounding_box_degrees: 5
+  - id: 69
+    title: June 2023 Great Plains + South
+    start_date: 2023-06-17 12:00:00
+    end_date: 2023-06-18 12:00:00
+    location:
+      latitude: 35.4676
+      longitude: -95.3700
+    bounding_box_degrees: 6
+  - id: 70
+    title: May 2023 Great Plains
+    start_date: 2023-05-10 12:00:00
+    end_date: 2023-05-11 12:00:00
+    location:
+      latitude: 39.0000
+      longitude: -102.0500
+    bounding_box_degrees: 6
+  - id: 71
+    title: May 2023 Great Plains + South
+    start_date: 2023-05-11 12:00:00
+    end_date: 2023-05-12 12:00:00
+    location:
+      latitude: 35.4822
+      longitude: -97.5350
+    bounding_box_degrees: 8
+  - id: 72
+    title: May 2023 Nebraska
+    start_date: 2023-05-12 12:00:00
+    end_date: 2023-05-13 12:00:00
+    location:
+      latitude: 40.0000
+      longitude: -96.0000
+    bounding_box_degrees: 5
