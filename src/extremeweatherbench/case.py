@@ -4,7 +4,7 @@ Some code similarly structured to WeatherBench (Rasp et al.)."""
 import dataclasses
 import datetime
 from typing import List, Optional, Type
-from extremeweatherbench import metrics, utils, derived
+from extremeweatherbench import metrics, utils
 import xarray as xr
 from enum import StrEnum
 import numpy as np
@@ -184,24 +184,6 @@ class IndividualFreezeCase(IndividualCase):
         return modified_ds
 
 
-@dataclasses.dataclass
-class IndividualSevereDayCase(IndividualCase):
-    """Container for metadata defining a single or individual case of a severe day event.
-
-    An IndividualSevereDayCase is a subclass of IndividualCase that is designed to
-    provide additional metadata specific to severe day events.
-    """
-
-    metrics_list: List[Type[metrics.Metric]] = dataclasses.field(
-        default_factory=lambda: [metrics.RegionalRMSE, metrics.FSS]
-    )
-    data_vars: List[str] = dataclasses.field(
-        default_factory=lambda: [
-            "surface_air_temperature",
-        ]
-    )
-
-
 # maps the case event type to the corresponding dataclass
 # additional event types need to be added here and
 # CASE_EVENT_TYPE_MATCHER, which maps the metadata case event type
@@ -217,7 +199,6 @@ class CaseEventType(StrEnum):
 CASE_EVENT_TYPE_MATCHER: dict[CaseEventType, type[IndividualCase]] = {
     CaseEventType.HEAT_WAVE: IndividualHeatWaveCase,
     CaseEventType.FREEZE: IndividualFreezeCase,
-    CaseEventType.SEVERE_DAY: IndividualSevereDayCase,
 }
 
 
