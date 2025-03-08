@@ -193,7 +193,6 @@ class CaseEventType(StrEnum):
 
     HEAT_WAVE = "heat_wave"
     FREEZE = "freeze"
-    SEVERE_DAY = "severe_day"
 
 
 CASE_EVENT_TYPE_MATCHER: dict[CaseEventType, type[IndividualCase]] = {
