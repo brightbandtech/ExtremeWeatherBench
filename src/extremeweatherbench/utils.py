@@ -37,7 +37,6 @@ ISD_MAPPING = {
     "surface_temperature": "surface_air_temperature",
 }
 
-#: metadata variables for point obs
 POINT_OBS_METADATA_VARS = [
     "time",
     "station",
@@ -350,16 +349,16 @@ def location_subset_point_obs(
 
 
 def align_point_obs_from_gridded(
-    forecast_da: xr.DataArray,
+    forecast_ds: xr.Dataset,
     case_subset_point_obs_df: pd.DataFrame,
     data_var: List[str],
     point_obs_metadata_vars: List[str],
-) -> Tuple[xr.DataArray, xr.DataArray]:
+) -> Tuple[xr.Dataset, xr.Dataset]:
     """Takes in a forecast dataarray and point observation dataframe, aligning them by
     reducing dimensions.
 
     Args:
-        forecast_da: The forecast dataarray.
+        forecast_ds: The forecast dataset.
         case_subset_point_obs_df: The point observation dataframe.
         data_var: The variable to subset (e.g. "surface_air_temperature")
         point_obs_metadata_vars: The metadata variables to subset (e.g. ["elev", "name"])
@@ -374,10 +373,10 @@ def align_point_obs_from_gridded(
     )
     case_subset_point_obs_df = location_subset_point_obs(
         case_subset_point_obs_df,
-        forecast_da["latitude"].min().values,
-        forecast_da["latitude"].max().values,
-        forecast_da["longitude"].min().values,
-        forecast_da["longitude"].max().values,
+        forecast_ds["latitude"].min().values,
+        forecast_ds["latitude"].max().values,
+        forecast_ds["longitude"].min().values,
+        forecast_ds["longitude"].max().values,
     )
     # Uses indexing in the dataframe to capture metadata columns for future use
     point_obs_metadata = case_subset_point_obs_df[point_obs_metadata_vars]
@@ -398,7 +397,7 @@ def align_point_obs_from_gridded(
 
     # Loop init and lead times to prevent indexing error from duplicate valid times
     for init_time, lead_time in itertools.product(
-        forecast_da.init_time, forecast_da.lead_time
+        forecast_ds.init_time, forecast_ds.lead_time
     ):
         valid_time = pd.Timestamp(
             init_time.values + pd.to_timedelta(lead_time.values, unit="h").to_numpy()
@@ -417,27 +416,25 @@ def align_point_obs_from_gridded(
         lons = xr.DataArray(obs_timeslice["longitude"].values, dims="station")
         lats = xr.DataArray(obs_timeslice["latitude"].values, dims="station")
 
-        grid_at_obs_da = forecast_da.sel(
+        forecast_at_obs_ds = forecast_ds.sel(
             init_time=init_time, lead_time=lead_time
         ).interp(latitude=lats, longitude=lons, method="nearest")
-        grid_at_obs_da = grid_at_obs_da.assign_coords(
+        forecast_at_obs_ds = forecast_at_obs_ds.assign_coords(
             {"station": station_ids, "time": valid_time}
         )
-        grid_at_obs_da["lead_time"] = lead_time
-        grid_at_obs_da["init_time"] = init_time
-
-        valid_time_subset_obs_da = obs_timeslice.to_xarray().set_coords(
+        forecast_at_obs_ds.coords["lead_time"] = lead_time
+        forecast_at_obs_ds.coords["init_time"] = init_time
+        valid_time_subset_obs_ds = obs_timeslice.to_xarray().set_coords(
             point_obs_metadata
         )[data_var]
-        valid_time_subset_obs_da = valid_time_subset_obs_da.swap_dims(
+        valid_time_subset_obs_ds = valid_time_subset_obs_ds.swap_dims(
             {"index": "station"}
         )
-        valid_time_subset_obs_da["lead_time"] = lead_time
-        valid_time_subset_obs_da["init_time"] = init_time
+        valid_time_subset_obs_ds.coords["lead_time"] = lead_time
+        valid_time_subset_obs_ds.coords["init_time"] = init_time
 
-        aligned_observation_list.append(valid_time_subset_obs_da)
-        aligned_forecast_list.append(grid_at_obs_da)
-
+        aligned_observation_list.append(valid_time_subset_obs_ds)
+        aligned_forecast_list.append(forecast_at_obs_ds)
     # concat the dataarrays along the station dimension
     interpolated_forecast = xr.concat(aligned_forecast_list, dim="station")
     interpolated_observation = xr.concat(aligned_observation_list, dim="station")
