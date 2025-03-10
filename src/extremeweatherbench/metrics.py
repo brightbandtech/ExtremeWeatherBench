@@ -5,23 +5,33 @@ import xarray as xr
 from scores.continuous import rmse
 import logging
 from extremeweatherbench import utils
+import abc
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
-@dataclasses.dataclass
-class Metric:
+class Metric(abc.ABC):
     """A base class defining the interface for ExtremeWeatherBench metrics."""
 
+    @abc.abstractmethod
     def compute(self, forecast: xr.DataArray, observation: xr.DataArray):
         """Evaluate a specific metric given a forecast and observation dataset."""
-        raise NotImplementedError
 
     @property
     def name(self) -> str:
         """Return the class name without parentheses."""
         return self.__class__.__name__
+
+
+class CategoricalMetric(Metric):
+    """A base class defining the interface for ExtremeWeatherBench categorical metrics."""
+
+    @abc.abstractmethod
+    def threshold(
+        self, forecast: xr.DataArray, observation: xr.DataArray, threshold: float
+    ):
+        """Return a binary threshold for the forecast and observation datasets."""
 
 
 @dataclasses.dataclass
