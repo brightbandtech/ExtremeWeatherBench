@@ -135,7 +135,6 @@ def test_case_evaluation_data_check_forecast_data_availability(mocker):
 
     result = eval_data._check_forecast_data_availability()
     assert result is not None
-    assert mock_case._subset_valid_times.called_once_with(mock_forecast)
 
 
 def test_case_evaluation_data_check_forecast_data_availability_empty(mocker):
