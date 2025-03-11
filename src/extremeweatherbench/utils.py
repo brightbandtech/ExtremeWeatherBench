@@ -424,12 +424,9 @@ def align_point_obs_from_gridded(
             init_time.values + pd.to_timedelta(lead_time.values, unit="h").to_numpy()
         )
         valid_time_index = pd.IndexSlice[:, valid_time]
-        obs_timeslice = (
-            case_subset_point_obs_df.loc[valid_time_index, :]
-            if valid_time in case_subset_point_obs_df.index.get_level_values(1)
-            else None
-        )
-        if obs_timeslice is None:
+        if valid_time in case_subset_point_obs_df.index.get_level_values(1):
+            obs_timeslice = case_subset_point_obs_df.loc[valid_time_index, :]
+        else:
             continue
         obs_timeslice = obs_timeslice.reset_index()
 
