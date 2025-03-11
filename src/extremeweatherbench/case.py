@@ -75,6 +75,7 @@ class IndividualCase:
 
     def _subset_valid_times(self, dataset: xr.Dataset) -> xr.Dataset:
         """Subset the input dataset to only include init times with valid times within the case period.
+
         Args:
             dataset: xr.Dataset: The input dataset to subset.
 
@@ -84,8 +85,7 @@ class IndividualCase:
         indices = utils.derive_indices_from_init_time_and_lead_time(
             dataset, self.start_date, self.end_date
         )
-        modified_ds = dataset.isel(init_time=np.unique(indices))
-        return modified_ds
+        return dataset.isel(init_time=np.unique(indices))
 
     def _check_for_forecast_data_availability(
         self,

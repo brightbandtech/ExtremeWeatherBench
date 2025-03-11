@@ -51,7 +51,7 @@ def test_evaluate_base_case(sample_forecast_dataset, sample_gridded_obs_dataset)
         event_type="heat_wave",
     )
     with pytest.raises(NotImplementedError):
-        evaluate._evaluate_case(
+        evaluate._maybe_evaluate_individual_case(
             individual_case=base_case,
             forecast_dataset=sample_forecast_dataset,
             gridded_obs=sample_gridded_obs_dataset,
