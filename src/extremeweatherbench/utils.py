@@ -348,11 +348,10 @@ def location_subset_point_obs(
 
     Returns a subset dataframe."""
     location_subset_mask = (
-        df[lat_name]
-        >= min_lat & df[lat_name]
-        <= max_lat & df[lon_name]
-        >= min_lon & df[lon_name]
-        <= max_lon
+        (df[lat_name] >= min_lat)
+        & (df[lat_name] <= max_lat)
+        & (df[lon_name] >= min_lon)
+        & (df[lon_name] <= max_lon)
     )
     return df[location_subset_mask]
 
