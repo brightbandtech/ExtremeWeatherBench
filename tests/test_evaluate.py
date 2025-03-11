@@ -51,9 +51,8 @@ def test_evaluate_individualcase(sample_forecast_dataset, sample_gridded_obs_dat
         location={"latitude": 45.0, "longitude": -100.0},
         event_type="heat_wave",
     )
-    # Parent IndividualCase doesn't have data vars
-    with pytest.raises(KeyError):
-        evaluate._evaluate_case(
+    with pytest.raises(NotImplementedError):
+        evaluate._maybe_evaluate_individual_case(
             individual_case=base_case,
             forecast_dataset=sample_forecast_dataset,
             gridded_obs=sample_gridded_obs_dataset,

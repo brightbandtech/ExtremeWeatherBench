@@ -253,7 +253,9 @@ def evaluate(
                 DEFAULT_FORECAST_SCHEMA_CONFIG, forecast_dataset, gridded_obs
             )
         logger.debug("beginning evaluation loop for %s", event.event_type)
-        results = _evaluate_cases_loop(cases, forecast_dataset, gridded_obs, point_obs)
+        results = _maybe_evaluate_individual_cases_loop(
+            cases, forecast_dataset, gridded_obs, point_obs
+        )
         all_results[event.event_type] = results
         logger.debug("evaluation loop complete for %s", event.event_type)
     logger.info(
@@ -278,7 +280,7 @@ def evaluate(
     return all_results
 
 
-def _evaluate_cases_loop(
+def _maybe_evaluate_individual_cases_loop(
     event: events.EventContainer,
     forecast_dataset: xr.Dataset,
     gridded_obs: Optional[xr.Dataset] = None,
@@ -298,7 +300,7 @@ def _evaluate_cases_loop(
     """
     results = {}
     for individual_case in event.cases:
-        results[individual_case.id] = _evaluate_case(
+        results[individual_case.id] = _maybe_evaluate_individual_case(
             individual_case,
             forecast_dataset,
             gridded_obs,
@@ -308,7 +310,7 @@ def _evaluate_cases_loop(
     return results
 
 
-def _evaluate_case(
+def _maybe_evaluate_individual_case(
     individual_case: case.IndividualCase,
     forecast_dataset: Optional[xr.Dataset],
     gridded_obs: Optional[xr.Dataset],
@@ -324,6 +326,9 @@ def _evaluate_case(
 
     Returns:
         An xarray Dataset containing the evaluation results for the case.
+
+    Raises:
+        ValueError: If no forecast data is available.
     """
     case_results: dict[str, dict[str, Any]] = {}
     logger.info("Evaluating case %s, %s", individual_case.id, individual_case.title)
