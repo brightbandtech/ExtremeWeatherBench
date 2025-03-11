@@ -13,6 +13,10 @@ from pathlib import Path
 from importlib import resources
 import yaml
 import itertools
+import logging
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 #: Struct packaging latitude/longitude location definitions.
 Location = namedtuple("Location", ["latitude", "longitude"])
@@ -33,10 +37,12 @@ ERA5_MAPPING = {
     "longitude": "longitude",
 }
 
+#: Maps ISD variable names to forecast variable names.
 ISD_MAPPING = {
     "surface_temperature": "surface_air_temperature",
 }
 
+#: metadata variables existing in precomputed ISD point obs.
 POINT_OBS_METADATA_VARS = [
     "time",
     "station",
@@ -144,9 +150,7 @@ def remove_ocean_gridpoints(dataset: xr.Dataset) -> xr.Dataset:
     land_sea_mask = land.mask(dataset.longitude, dataset.latitude)
     land_mask = land_sea_mask == 0
     # Subset the dataset to only include land gridpoints
-    dataset = dataset.where(land_mask)
-
-    return dataset
+    return dataset.where(land_mask)
 
 
 def map_era5_vars_to_forecast(forecast_schema_config, forecast_dataset, era5_dataset):
@@ -328,6 +332,8 @@ def location_subset_point_obs(
     max_lat: float,
     min_lon: float,
     max_lon: float,
+    lat_name: str = "latitude",
+    lon_name: str = "longitude",
 ):
     """Subset a dataframe based upon maximum and minimum latitudes and longitudes.
 
@@ -337,15 +343,17 @@ def location_subset_point_obs(
         max_lat: maximum latitude.
         min_lon: minimum longitude.
         max_lon: maximum longitude.
+        lat_name: name of latitude column.
+        lon_name: name of longitude column.
 
     Returns a subset dataframe."""
-    location_subset_df = df[
-        (df["latitude"] >= min_lat)
-        & (df["latitude"] <= max_lat)
-        & (df["longitude"] >= min_lon)
-        & (df["longitude"] <= max_lon)
-    ]
-    return location_subset_df
+    location_subset_mask = (
+        (df[lat_name] >= min_lat)
+        & (df[lat_name] <= max_lat)
+        & (df[lon_name] >= min_lon)
+        & (df[lon_name] <= max_lon)
+    )
+    return df[location_subset_mask]
 
 
 def align_point_obs_from_gridded(
@@ -363,7 +371,8 @@ def align_point_obs_from_gridded(
         data_var: The variable to subset (e.g. "surface_air_temperature")
         point_obs_metadata_vars: The metadata variables to subset (e.g. ["elev", "name"])
 
-    Returns a tuple of aligned forecast and observation dataarrays."""
+    Returns a tuple of aligned forecast and observation dataarrays.
+    """
     case_subset_point_obs_df = case_subset_point_obs_df[
         POINT_OBS_METADATA_VARS + data_var
     ]
@@ -389,12 +398,24 @@ def align_point_obs_from_gridded(
 
     # Set up multiindex to enable slicing along individual timesteps
     case_subset_point_obs_df = case_subset_point_obs_df.set_index(
-        ["station", "time"]
+        [
+            "station",
+            "time",
+        ]
     ).sort_index()
 
     aligned_forecast_list = []
     aligned_observation_list = []
 
+    logger.debug(
+        "number of init times: %s \n number of lead times: %s",
+        len(forecast_ds.init_time),
+        len(forecast_ds.lead_time),
+    )
+    logger.debug(
+        "total pairs to analyze: %s",
+        len(forecast_ds.init_time) * len(forecast_ds.lead_time),
+    )
     # Loop init and lead times to prevent indexing error from duplicate valid times
     for init_time, lead_time in itertools.product(
         forecast_ds.init_time, forecast_ds.lead_time
@@ -403,12 +424,9 @@ def align_point_obs_from_gridded(
             init_time.values + pd.to_timedelta(lead_time.values, unit="h").to_numpy()
         )
         valid_time_index = pd.IndexSlice[:, valid_time]
-        obs_timeslice = (
-            case_subset_point_obs_df.loc[valid_time_index, :]
-            if valid_time in case_subset_point_obs_df.index.get_level_values(1)
-            else None
-        )
-        if obs_timeslice is None:
+        if valid_time in case_subset_point_obs_df.index.get_level_values(1):
+            obs_timeslice = case_subset_point_obs_df.loc[valid_time_index, :]
+        else:
             continue
         obs_timeslice = obs_timeslice.reset_index()
 
@@ -420,7 +438,10 @@ def align_point_obs_from_gridded(
             init_time=init_time, lead_time=lead_time
         ).interp(latitude=lats, longitude=lons, method="nearest")
         forecast_at_obs_ds = forecast_at_obs_ds.assign_coords(
-            {"station": station_ids, "time": valid_time}
+            {
+                "station": station_ids,
+                "time": valid_time,
+            }
         )
         forecast_at_obs_ds.coords["lead_time"] = lead_time
         forecast_at_obs_ds.coords["init_time"] = init_time
@@ -481,7 +502,10 @@ def derive_indices_from_init_time_and_lead_time(
         + pd.to_timedelta(lead_time_grid.flatten(), unit="h").to_numpy()
     )
     valid_times_reshaped = valid_times.reshape(
-        (dataset.init_time.shape[0], dataset.lead_time.shape[0])
+        (
+            dataset.init_time.shape[0],
+            dataset.lead_time.shape[0],
+        )
     )
     valid_time_mask = (valid_times_reshaped > pd.to_datetime(start_date)) & (
         valid_times_reshaped < pd.to_datetime(end_date)
