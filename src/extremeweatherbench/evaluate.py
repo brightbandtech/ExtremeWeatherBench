@@ -89,7 +89,9 @@ def evaluate(
                 DEFAULT_FORECAST_SCHEMA_CONFIG, forecast_dataset, gridded_obs
             )
         logger.debug("beginning evaluation loop for %s", event.event_type)
-        results = _evaluate_cases_loop(cases, forecast_dataset, gridded_obs, point_obs)
+        results = _maybe_evaluate_individual_cases_loop(
+            cases, forecast_dataset, gridded_obs, point_obs
+        )
         all_results[event.event_type] = results
         logger.debug("evaluation loop complete for %s", event.event_type)
     logger.info(
@@ -114,7 +116,7 @@ def evaluate(
     return all_results
 
 
-def _evaluate_cases_loop(
+def _maybe_evaluate_individual_cases_loop(
     event: events.EventContainer,
     forecast_dataset: xr.Dataset,
     gridded_obs: Optional[xr.Dataset] = None,
@@ -134,7 +136,7 @@ def _evaluate_cases_loop(
     """
     results = {}
     for individual_case in event.cases:
-        results[individual_case.id] = _evaluate_case(
+        results[individual_case.id] = _maybe_evaluate_individual_case(
             individual_case,
             forecast_dataset,
             gridded_obs,
@@ -144,7 +146,7 @@ def _evaluate_cases_loop(
     return results
 
 
-def _evaluate_case(
+def _maybe_evaluate_individual_case(
     individual_case: case.IndividualCase,
     forecast_dataset: Optional[xr.Dataset],
     gridded_obs: Optional[xr.Dataset],
@@ -160,6 +162,9 @@ def _evaluate_case(
 
     Returns:
         An xarray Dataset containing the evaluation results for the case.
+
+    Raises:
+        ValueError: If no forecast data is available.
     """
 
     logger.info("Evaluating case %s, %s", individual_case.id, individual_case.title)
@@ -168,13 +173,13 @@ def _evaluate_case(
         raise ValueError("No forecast data available, check forecast dataset.")
     time_subset_forecast_ds = individual_case._subset_valid_times(variable_subset_ds)
     # Check if forecast data is available for the case, if not, return None
-    lead_time_len = len(time_subset_forecast_ds.init_time)
-    if lead_time_len == 0:
+    init_time_len = len(time_subset_forecast_ds.init_time)
+    if init_time_len == 0:
         logger.warning(
             "No forecast data available for case %s, skipping", individual_case.id
         )
         return None
-    elif lead_time_len < (individual_case.end_date - individual_case.start_date).days:
+    elif init_time_len < (individual_case.end_date - individual_case.start_date).days:
         logger.warning(
             "Fewer valid times in forecast than days in case %s, results likely unreliable",
             individual_case.id,
