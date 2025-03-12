@@ -793,6 +793,7 @@ data-prep = [
 ]
 multiprocessing = [
     { name = "dask", extra = ["complete"] },
+    { name = "distributed" },
 ]
 
 [package.dev-dependencies]
@@ -815,6 +816,7 @@ requires-dist = [
     { name = "cartopy", specifier = ">=0.24.1" },
     { name = "dacite", specifier = ">=1.8.1" },
     { name = "dask", extras = ["complete"], marker = "extra == 'multiprocessing'", specifier = ">=2025.1.0" },
+    { name = "distributed", marker = "extra == 'multiprocessing'", specifier = ">=2025.1.0" },
     { name = "fsspec", marker = "extra == 'data-prep'", specifier = ">=2024.12.0" },
     { name = "gcsfs", specifier = ">=2024.12.0" },
     { name = "geopandas", specifier = ">=1.0.1" },
