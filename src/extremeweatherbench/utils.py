@@ -401,7 +401,6 @@ def align_point_obs_from_gridded(
     case_subset_point_obs_df: pd.DataFrame,
     data_var: List[str],
     point_obs_metadata_vars: List[str],
-    compute: bool = True,
 ) -> Tuple[xr.Dataset, xr.Dataset]:
     """Takes in a forecast dataarray and point observation dataframe, aligning them by
     reducing dimensions.
