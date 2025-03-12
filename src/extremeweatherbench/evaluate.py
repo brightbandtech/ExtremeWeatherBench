@@ -72,32 +72,35 @@ def build_dataarray_subsets(
     Returns:
         A tuple of xarray DataArrays containing the gridded and point observation subsets.
     """
-    forecast = _check_forecast_data_availability(case_evaluation_data)
-    if forecast is None:
+    case_evaluation_data.forecast = _check_and_subset_forecast_availability(
+        case_evaluation_data
+    )
+    if (
+        case_evaluation_data.forecast is None
+        or case_evaluation_data.observation is None
+    ):
         return CaseEvaluationInput(
             observation_type=case_evaluation_data.observation_type,
             observation=None,
             forecast=None,
         )
-    if case_evaluation_data.observation is None:
-        return CaseEvaluationInput(
-            observation_type=case_evaluation_data.observation_type,
-            observation=None,
-            forecast=None,
-        )
-    if case_evaluation_data.observation_type == "gridded":
-        evaluation_result = _subset_gridded_obs(case_evaluation_data)
-    elif case_evaluation_data.observation_type == "point":
-        evaluation_result = _subset_point_obs(case_evaluation_data)
-    if compute:
-        evaluation_result.load_data()
-    return evaluation_result
+    else:
+        if case_evaluation_data.observation_type == "gridded":
+            evaluation_result = _subset_gridded_obs(case_evaluation_data)
+        elif case_evaluation_data.observation_type == "point":
+            evaluation_result = _subset_point_obs(case_evaluation_data)
+        if compute:
+            evaluation_result.load_data()
+        return evaluation_result
 
 
 def _subset_gridded_obs(
     case_evaluation_data: CaseEvaluationData,
 ) -> CaseEvaluationInput:
     """Subset the gridded observation dataarray for a given data variable."""
+
+    if case_evaluation_data.observation is None:
+        raise ValueError("Gridded observation cannot be None")
     var_subset_gridded_obs_ds = case_evaluation_data.observation[
         case_evaluation_data.individual_case.data_vars
     ]
@@ -127,6 +130,8 @@ def _subset_point_obs(
     case_evaluation_data: CaseEvaluationData,
 ) -> CaseEvaluationInput:
     """Subset the point observation dataarray for a given data variable."""
+    if case_evaluation_data.observation is None:
+        raise ValueError("Point observation cannot be None")
     renamed_observations = case_evaluation_data.observation.rename(
         columns=utils.ISD_MAPPING
     )
@@ -166,7 +171,7 @@ def _subset_point_obs(
     )
 
 
-def _check_forecast_data_availability(
+def _check_and_subset_forecast_availability(
     case_evaluation_data: CaseEvaluationData,
 ) -> Optional[xr.DataArray]:
     if (

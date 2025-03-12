@@ -114,8 +114,8 @@ def test_case_evaluation_data_init(mocker):
     assert eval_data.observation == mock_obs
 
 
-def test_check_forecast_data_availability(mocker):
-    """Test _check_forecast_data_availability function."""
+def test_check_and_subset_forecast_availability(mocker):
+    """Test _check_and_subset_forecast_availability function."""
     mock_case = mocker.MagicMock(spec=case.IndividualCase)
     mock_case.id = "99"
     mock_case._subset_valid_times.return_value = mocker.MagicMock(spec=xr.Dataset)
@@ -132,12 +132,12 @@ def test_check_forecast_data_availability(mocker):
     mock_self.individual_case = mock_case
     mock_self.forecast = mock_forecast
 
-    result = evaluate._check_forecast_data_availability(mock_self)
+    result = evaluate._check_and_subset_forecast_availability(mock_self)
     assert result is not None
 
 
-def test_check_forecast_data_availability_empty(mocker):
-    """Test _check_forecast_data_availability function with empty forecast."""
+def test_check_and_subset_forecast_availability_empty(mocker):
+    """Test _check_and_subset_forecast_availability function with empty forecast."""
     mock_case = mocker.MagicMock(spec=case.IndividualCase)
     mock_case.id = "test_case"
     mock_case._subset_valid_times.return_value = mocker.MagicMock(spec=xr.Dataset)
@@ -154,7 +154,7 @@ def test_check_forecast_data_availability_empty(mocker):
     mock_self.individual_case = mock_case
     mock_self.forecast = mock_forecast
 
-    result = evaluate._check_forecast_data_availability(mock_self)
+    result = evaluate._check_and_subset_forecast_availability(mock_self)
     assert result is None
 
 
@@ -173,9 +173,9 @@ def test_build_dataarray_subsets_no_forecast(mocker):
         observation=None,
     )
 
-    # Mock _check_forecast_data_availability to return None
+    # Mock _check_and_subset_forecast_availability to return None
     mocker.patch(
-        "extremeweatherbench.evaluate._check_forecast_data_availability",
+        "extremeweatherbench.evaluate._check_and_subset_forecast_availability",
         return_value=None,
     )
 
@@ -206,9 +206,9 @@ def test_build_dataarray_subsets_gridded(
         observation=sample_gridded_obs_dataset,
     )
 
-    # Mock _check_forecast_data_availability to return the forecast dataset
+    # Mock _check_and_subset_forecast_availability to return the forecast dataset
     mocker.patch(
-        "extremeweatherbench.evaluate._check_forecast_data_availability",
+        "extremeweatherbench.evaluate._check_and_subset_forecast_availability",
         return_value=sample_forecast_dataset,
     )
 
@@ -244,9 +244,9 @@ def test_build_dataarray_subsets_point(
         observation=sample_point_obs_df,
     )
 
-    # Mock _check_forecast_data_availability to return the forecast dataset
+    # Mock _check_and_subset_forecast_availability to return the forecast dataset
     mocker.patch(
-        "extremeweatherbench.evaluate._check_forecast_data_availability",
+        "extremeweatherbench.evaluate._check_and_subset_forecast_availability",
         return_value=sample_forecast_dataset,
     )
 
