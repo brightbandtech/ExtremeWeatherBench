@@ -63,6 +63,7 @@ class CaseEvaluationData:
 def build_dataarray_subsets(
     case_evaluation_data: CaseEvaluationData,
     compute: bool = True,
+    existing_forecast: Optional[xr.Dataset] = None,
 ) -> CaseEvaluationInput:
     """Build the subsets of the gridded and point observations for a given data variable.
     Computation occurs based on what observation datasets are provided in the Evaluation object.
@@ -71,13 +72,21 @@ def build_dataarray_subsets(
         data_var: The data variable to evaluate.
         compute: Flag to disable performing actual calculations (but still validate
             case configurations). Defaults to "False."
-
+        existing_forecast: If a forecast dataset is already loaded, this can be passed
+            in to avoid recomputing the forecast data into memory.
     Returns:
         A tuple of xarray DataArrays containing the gridded and point observation subsets.
     """
-    case_evaluation_data.forecast = _check_and_subset_forecast_availability(
-        case_evaluation_data
-    )
+    if existing_forecast is not None:
+        logger.debug(
+            "Using existing forecast dataset for %s",
+            case_evaluation_data.observation_type,
+        )
+        case_evaluation_data.forecast = existing_forecast
+    else:
+        case_evaluation_data.forecast = _check_and_subset_forecast_availability(
+            case_evaluation_data
+        )
     if (
         case_evaluation_data.forecast is None
         or case_evaluation_data.observation is None
