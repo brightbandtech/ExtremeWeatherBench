@@ -60,7 +60,7 @@ class CaseEvaluationData:
     observation: Optional[Union[xr.Dataset | pd.DataFrame]] = None
 
 
-def build_dataarray_subsets(
+def build_dataset_subsets(
     case_evaluation_data: CaseEvaluationData,
     compute: bool = True,
     existing_forecast: Optional[xr.Dataset] = None,
@@ -401,11 +401,15 @@ def _maybe_evaluate_individual_case(
         forecast=forecast_dataset,
     )
 
-    gridded_case_eval = build_dataarray_subsets(gridded_obs_evaluation, compute=True)
-    point_case_eval = build_dataarray_subsets(
+    gridded_case_eval = build_dataset_subsets(gridded_obs_evaluation, compute=True)
+    point_case_eval = build_dataset_subsets(
         point_obs_evaluation,
         compute=True,
-        existing_forecast=gridded_case_eval.forecast,
+        existing_forecast=(
+            gridded_case_eval.forecast
+            if gridded_case_eval.forecast is not None
+            else None
+        ),
     )
     for data_var, metric in itertools.product(
         individual_case.data_vars, individual_case.metrics_list
