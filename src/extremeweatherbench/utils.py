@@ -153,6 +153,55 @@ def remove_ocean_gridpoints(dataset: xr.Dataset) -> xr.Dataset:
     return dataset.where(land_mask)
 
 
+def _open_mlwp_kerchunk_reference(
+    file, forecast_schema_config, remote_protocol: str = "s3"
+):
+    """Open a dataset from a kerchunked reference file for the OAR MLWP S3 bucket."""
+    if "parq" in file:
+        storage_options = {
+            "remote_protocol": "s3",
+            "skip_instance_cache": True,
+            "remote_options": {"anon": True},
+            "target_protocol": "file",
+            "lazy": True,
+        }  # options passed to fsspec
+        open_dataset_options: dict = {"chunks": {}}  # opens passed to xarray
+
+        ds = xr.open_dataset(
+            file,
+            engine="kerchunk",
+            storage_options=storage_options,
+            open_dataset_options=open_dataset_options,
+        )
+    else:
+        ds = xr.open_dataset(
+            "reference://",
+            engine="zarr",
+            backend_kwargs={
+                "consolidated": False,
+                "storage_options": {
+                    "fo": file,
+                    "remote_protocol": remote_protocol,
+                    "remote_options": {"anon": True},
+                },
+            },
+        )
+    ds = ds.rename({"time": "lead_time"})
+    ds["lead_time"] = range(0, 241, 6)
+    for variable in forecast_schema_config.__dict__:
+        attr_value = getattr(forecast_schema_config, variable)
+        if attr_value in ds.data_vars:
+            ds = ds.rename({attr_value: variable})
+        # Step 1: Create a meshgrid of init_time and lead_time
+    lead_time_grid, init_time_grid = np.meshgrid(ds.lead_time, ds.init_time)
+    # Step 2: Flatten the meshgrid and convert lead_time to timedelta
+    valid_time = init_time_grid.flatten() + pd.to_timedelta(
+        lead_time_grid.flatten(), unit="h"
+    )
+    ds.coords["time"] = valid_time
+    return ds
+
+
 def map_era5_vars_to_forecast(forecast_schema_config, forecast_dataset, era5_dataset):
     """Map ERA5 variable names to forecast variable names."""
     era5_subset_list = []
