@@ -29,9 +29,13 @@ dependencies = [
 
 [project.optional-dependencies]
 data-prep = ["fsspec>=2024.12.0"]
+multiprocessing = [
+    "dask[complete]>=2025.1.0",
+]
 
 [dependency-groups]
 dev = [
+    "bokeh>=3.6.3",
     "deptry>=0.23.0",
     "ipykernel>=6.29.5",
     "ipywidgets>=8.1.5",
