@@ -179,6 +179,60 @@ def test_check_and_subset_forecast_availability_empty(mocker):
     assert result is None
 
 
+def test_build_dataset_subsets_with_existing_forecast(
+    mocker, sample_gridded_obs_dataset, sample_forecast_dataset
+):
+    """Test build_dataset_subsets with an existing forecast dataset."""
+    # Create a mock case
+    mock_case = mocker.MagicMock(spec=case.IndividualCase)
+    mock_case.id = "test_case"
+    mock_case.data_vars = "2m_temperature"
+    mock_case.start_date = datetime.datetime(2021, 6, 20)
+    mock_case.end_date = datetime.datetime(2021, 6, 25)
+
+    # Create a mock existing forecast dataset
+    existing_forecast = sample_forecast_dataset.copy(deep=True)
+
+    # Create the case evaluation data
+    case_eval_data = evaluate.CaseEvaluationData(
+        individual_case=mock_case,
+        observation_type="gridded",
+        forecast=sample_forecast_dataset,  # This should be replaced by existing_forecast
+        observation=sample_gridded_obs_dataset,
+    )
+
+    # Mock _subset_gridded_obs to return a CaseEvaluationInput
+    mock_result = evaluate.CaseEvaluationInput(
+        observation_type="gridded",
+        observation=sample_gridded_obs_dataset["2m_temperature"],
+        forecast=existing_forecast["surface_air_temperature"],
+    )
+    mocker.patch(
+        "extremeweatherbench.evaluate._subset_gridded_obs", return_value=mock_result
+    )
+
+    # Spy on _check_and_subset_forecast_availability to verify it's not called
+    check_forecast_spy = mocker.patch(
+        "extremeweatherbench.evaluate._check_and_subset_forecast_availability"
+    )
+
+    # Call the function with existing_forecast
+    result = evaluate.build_dataset_subsets(
+        case_eval_data, compute=False, existing_forecast=existing_forecast
+    )
+
+    # Verify that _check_and_subset_forecast_availability was not called
+    check_forecast_spy.assert_not_called()
+
+    # Verify that the forecast in case_eval_data was replaced with existing_forecast
+    assert case_eval_data.forecast is existing_forecast
+
+    # Verify the result
+    assert result.observation_type == "gridded"
+    assert result.observation is not None
+    assert result.forecast is not None
+
+
 def test_build_dataarray_subsets_no_forecast(mocker):
     """Test build_dataarray_subsets with no forecast data."""
     mock_case = mocker.MagicMock(spec=case.IndividualCase)
@@ -200,7 +254,7 @@ def test_build_dataarray_subsets_no_forecast(mocker):
         return_value=None,
     )
 
-    result = evaluate.build_dataarray_subsets(case_eval_data)
+    result = evaluate.build_dataset_subsets(case_eval_data)
 
     assert result.observation_type == "gridded"
     assert result.observation is None
@@ -243,7 +297,7 @@ def test_build_dataarray_subsets_gridded(
         "extremeweatherbench.evaluate._subset_gridded_obs", return_value=mock_result
     )
 
-    result = evaluate.build_dataarray_subsets(case_eval_data, compute=False)
+    result = evaluate.build_dataset_subsets(case_eval_data, compute=False)
 
     assert result.observation_type == "gridded"
     assert result.observation is not None
@@ -285,7 +339,7 @@ def test_build_dataarray_subsets_point(
         "extremeweatherbench.evaluate._subset_point_obs", return_value=mock_result
     )
 
-    result = evaluate.build_dataarray_subsets(case_eval_data, compute=False)
+    result = evaluate.build_dataset_subsets(case_eval_data, compute=False)
 
     assert result.observation_type == "point"
     assert result.observation is not None
