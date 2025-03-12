@@ -9,10 +9,20 @@ DATA_DIR = Path("./data")
 DEFAULT_OUTPUT_DIR = DATA_DIR / "outputs"
 DEFAULT_FORECAST_DIR = DATA_DIR / "forecasts"
 DEFAULT_CACHE_DIR = DATA_DIR / "cache"
+
+#: Storage/access options for gridded observation datasets.
 ARCO_ERA5_FULL_URI = (
     "gs://gcp-public-data-arco-era5/ar/full_37-1h-0p25deg-chunk-1.zarr-v3"
 )
+
+#: Storage/access options for point observation datasets.
 ISD_POINT_OBS_URI = "gs://extremeweatherbench/isd_minimal_qc.parquet"
+
+#: Storage/access options for point observation datasets.
+POINT_OBS_STORAGE_OPTIONS = dict(token="anon")
+
+#: Storage/access options for gridded observation datasets.
+GRIDDED_OBS_STORAGE_OPTIONS = dict(token="anon")
 
 
 @dataclasses.dataclass
@@ -45,6 +55,12 @@ class Config:
     cache_dir: Optional[Path] = DEFAULT_CACHE_DIR
     gridded_obs_path: str = ARCO_ERA5_FULL_URI
     point_obs_path: str = ISD_POINT_OBS_URI
+    gridded_obs_storage_options: dict = dataclasses.field(
+        default_factory=lambda: GRIDDED_OBS_STORAGE_OPTIONS
+    )
+    point_obs_storage_options: dict = dataclasses.field(
+        default_factory=lambda: POINT_OBS_STORAGE_OPTIONS
+    )
 
 
 @dataclasses.dataclass
@@ -56,9 +72,12 @@ class ForecastSchemaConfig:
     suggested based on the CF Conventions.
     """
 
-    air_temperature: Optional[str] = "t2"
-    eastward_wind: Optional[str] = "u10"
-    northward_wind: Optional[str] = "v10"
+    surface_air_temperature: Optional[str] = "t2m"
+    surface_eastward_wind: Optional[str] = "u10"
+    surface_northward_wind: Optional[str] = "v10"
+    air_temperature: Optional[str] = "t"
+    eastward_wind: Optional[str] = "u"
+    northward_wind: Optional[str] = "v"
     air_pressure_at_mean_sea_level: Optional[str] = "msl"
     lead_time: Optional[str] = "time"
     init_time: Optional[str] = "init_time"
