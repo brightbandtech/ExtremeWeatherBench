@@ -60,7 +60,7 @@ class CaseEvaluationData:
     observation: Optional[Union[xr.Dataset | pd.DataFrame]] = None
 
 
-def build_dataarray_subsets(
+def build_dataset_subsets(
     case_evaluation_data: CaseEvaluationData,
     compute: bool = True,
     existing_forecast: Optional[xr.Dataset] = None,
@@ -160,14 +160,6 @@ def _subset_point_obs(
     mapped_var_id_subset_point_obs["longitude"] = utils.convert_longitude_to_360(
         mapped_var_id_subset_point_obs["longitude"]
     )
-    mapped_var_id_subset_point_obs = utils.location_subset_point_obs(
-        mapped_var_id_subset_point_obs,
-        case_evaluation_data.forecast["latitude"].min().values,
-        case_evaluation_data.forecast["latitude"].max().values,
-        case_evaluation_data.forecast["longitude"].min().values,
-        case_evaluation_data.forecast["longitude"].max().values,
-    )
-
     # this saves a significant amount of time if done prior to alignment with point obs
     if compute:
         logger.debug("Computing forecast dataset in point obs subsetting")
@@ -178,17 +170,28 @@ def _subset_point_obs(
         case_subset_point_obs_df=mapped_var_id_subset_point_obs,
         data_var=case_evaluation_data.individual_case.data_vars,
         point_obs_metadata_vars=utils.POINT_OBS_METADATA_VARS,
-        compute=compute,
+    )
+    point_forecast_df = point_forecast_ds.to_dataframe()
+    subset_point_obs_df = subset_point_obs_ds.to_dataframe()
+
+    # pandas groupby is significantly faster than xarray groupby, so we use that here
+    point_forecast_recompiled_ds = (
+        point_forecast_df.reset_index()
+        .groupby(["init_time", "lead_time", "latitude", "longitude"])
+        .first()
+        .to_xarray()
     )
 
-    point_forecast_ds = point_forecast_ds.groupby(
-        ["init_time", "lead_time", "latitude", "longitude"]
-    ).mean()
-    subset_point_obs_ds = subset_point_obs_ds.groupby(
-        ["time", "latitude", "longitude"]
-    ).first()
+    subset_point_obs_recompiled_ds = (
+        subset_point_obs_df.reset_index()
+        .groupby(["time", "latitude", "longitude"])
+        .first()
+        .to_xarray()
+    )
     return CaseEvaluationInput(
-        "point", observation=subset_point_obs_ds, forecast=point_forecast_ds
+        "point",
+        observation=subset_point_obs_recompiled_ds,
+        forecast=point_forecast_recompiled_ds,
     )
 
 
@@ -401,8 +404,16 @@ def _maybe_evaluate_individual_case(
         forecast=forecast_dataset,
     )
 
-    gridded_case_eval = build_dataarray_subsets(gridded_obs_evaluation, compute=True)
-    point_case_eval = build_dataarray_subsets(point_obs_evaluation, compute=True)
+    gridded_case_eval = build_dataset_subsets(gridded_obs_evaluation, compute=True)
+    point_case_eval = build_dataset_subsets(
+        point_obs_evaluation,
+        compute=True,
+        existing_forecast=(
+            gridded_case_eval.forecast
+            if gridded_case_eval.forecast is not None
+            else None
+        ),
+    )
     for data_var, metric in itertools.product(
         individual_case.data_vars, individual_case.metrics_list
     ):
