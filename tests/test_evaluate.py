@@ -118,22 +118,43 @@ def test_check_and_subset_forecast_availability(mocker):
     """Test _check_and_subset_forecast_availability function."""
     mock_case = mocker.MagicMock(spec=case.IndividualCase)
     mock_case.id = "99"
-    mock_case._subset_valid_times.return_value = mocker.MagicMock(spec=xr.Dataset)
-    mock_case._subset_valid_times.return_value.init_time = range(10)
+    mock_case.data_vars = ["surface_air_temperature"]
     mock_case.start_date = datetime.datetime(2021, 6, 20)
     mock_case.end_date = datetime.datetime(2021, 6, 25)
 
+    # Setup the return value for _subset_valid_times
+    time_subset_mock = mocker.MagicMock(spec=xr.Dataset)
+    mock_case._subset_valid_times.return_value = time_subset_mock
+
+    # Setup the return value for perform_subsetting_procedure
+    spatial_subset_mock = mocker.MagicMock(spec=xr.Dataset)
+    mock_case.perform_subsetting_procedure.return_value = spatial_subset_mock
+
+    # Create a mock for the data variable subset
+    var_subset_mock = mocker.MagicMock(spec=xr.Dataset)
+    var_subset_mock.init_time = range(10)
+    spatial_subset_mock.__getitem__.return_value = var_subset_mock
+
+    # Create the forecast mock
     mock_forecast = mocker.MagicMock(spec=xr.Dataset)
     mock_forecast.lead_time = range(5)
     mock_forecast.init_time = range(5)
 
-    # Create a mock self object with the required attributes
-    mock_self = mocker.MagicMock()
-    mock_self.individual_case = mock_case
-    mock_self.forecast = mock_forecast
+    # Create the case evaluation data
+    case_eval_data = evaluate.CaseEvaluationData(
+        individual_case=mock_case,
+        observation_type="gridded",
+        forecast=mock_forecast,
+        observation=mocker.MagicMock(spec=xr.Dataset),
+    )
 
-    result = evaluate._check_and_subset_forecast_availability(mock_self)
-    assert result is not None
+    result = evaluate._check_and_subset_forecast_availability(case_eval_data)
+
+    # Verify the function calls and result
+    mock_case._subset_valid_times.assert_called_once_with(mock_forecast)
+    mock_case.perform_subsetting_procedure.assert_called_once_with(time_subset_mock)
+    spatial_subset_mock.__getitem__.assert_called_once_with(mock_case.data_vars)
+    assert result is var_subset_mock
 
 
 def test_check_and_subset_forecast_availability_empty(mocker):

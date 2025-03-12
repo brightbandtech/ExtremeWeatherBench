@@ -34,6 +34,9 @@ class CaseEvaluationInput:
 
     def load_data(self):
         """Load the evaluation inputs into memory."""
+        logger.debug("Loading evaluation inputs into memory")
+        logger.debug("Observation: %s", self.observation)
+        logger.debug("Forecast: %s", self.forecast)
         self.observation = self.observation.compute()
         self.forecast = self.forecast.compute()
 
@@ -88,7 +91,8 @@ def build_dataarray_subsets(
         if case_evaluation_data.observation_type == "gridded":
             evaluation_result = _subset_gridded_obs(case_evaluation_data)
         elif case_evaluation_data.observation_type == "point":
-            evaluation_result = _subset_point_obs(case_evaluation_data)
+            # point obs needs to be computed if compute is True due to complex subsetting operations
+            evaluation_result = _subset_point_obs(case_evaluation_data, compute=compute)
         if compute:
             evaluation_result.load_data()
         return evaluation_result
@@ -127,7 +131,7 @@ def _subset_gridded_obs(
 
 
 def _subset_point_obs(
-    case_evaluation_data: CaseEvaluationData,
+    case_evaluation_data: CaseEvaluationData, compute: bool = True
 ) -> CaseEvaluationInput:
     """Subset the point observation dataarray for a given data variable."""
     if case_evaluation_data.observation is None:
@@ -154,20 +158,28 @@ def _subset_point_obs(
         case_evaluation_data.forecast["longitude"].min().values,
         case_evaluation_data.forecast["longitude"].max().values,
     )
-    point_forecast_da, subset_point_obs_da = utils.align_point_obs_from_gridded(
+
+    # this saves a significant amount of time if done prior to alignment with point obs
+    if compute:
+        logger.debug("Computing forecast dataset in point obs subsetting")
+        case_evaluation_data.forecast = case_evaluation_data.forecast.compute()
+
+    point_forecast_ds, subset_point_obs_ds = utils.align_point_obs_from_gridded(
         forecast_ds=case_evaluation_data.forecast,
         case_subset_point_obs_df=mapped_var_id_subset_point_obs,
         data_var=case_evaluation_data.individual_case.data_vars,
         point_obs_metadata_vars=utils.POINT_OBS_METADATA_VARS,
+        compute=compute,
     )
-    point_forecast_da = point_forecast_da.groupby(
+
+    point_forecast_ds = point_forecast_ds.groupby(
         ["init_time", "lead_time", "latitude", "longitude"]
     ).mean()
-    subset_point_obs_da = subset_point_obs_da.groupby(
+    subset_point_obs_ds = subset_point_obs_ds.groupby(
         ["time", "latitude", "longitude"]
     ).first()
     return CaseEvaluationInput(
-        "point", observation=subset_point_obs_da, forecast=point_forecast_da
+        "point", observation=subset_point_obs_ds, forecast=point_forecast_ds
     )
 
 
@@ -179,9 +191,18 @@ def _check_and_subset_forecast_availability(
         or len(case_evaluation_data.forecast.init_time) == 0
     ):
         raise ValueError("No forecast data available, check forecast dataset.")
-    forecast = case_evaluation_data.individual_case._subset_valid_times(
+
+    # subset the forecast to the valid times of the case
+    forecast_time_subset = case_evaluation_data.individual_case._subset_valid_times(
         case_evaluation_data.forecast
     )
+    forecast_spatial_subset = (
+        case_evaluation_data.individual_case.perform_subsetting_procedure(
+            forecast_time_subset
+        )
+    )
+    # subset the forecast to the data variables for the event type/metric
+    forecast = forecast_spatial_subset[case_evaluation_data.individual_case.data_vars]
     lead_time_len = len(forecast.init_time)
     if lead_time_len == 0:
         logger.warning(
@@ -203,6 +224,7 @@ def _check_and_subset_forecast_availability(
     logger.info(
         "Forecast data available for case %s", case_evaluation_data.individual_case.id
     )
+
     return forecast
 
 
@@ -269,7 +291,6 @@ def evaluate(
                 event.event_type,
                 eval_config.forecast_dir,
             )
-            forecast_dataset = forecast_dataset.compute()
 
         if gridded_obs:
             logger.info(
