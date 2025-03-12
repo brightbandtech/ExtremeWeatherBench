@@ -159,11 +159,8 @@ def _open_mlwp_kerchunk_reference(
     """Open a dataset from a kerchunked reference file for the OAR MLWP S3 bucket."""
     if "parq" in file:
         storage_options = {
-            "remote_protocol": "s3",
-            "skip_instance_cache": True,
+            "remote_protocol": remote_protocol,
             "remote_options": {"anon": True},
-            "target_protocol": "file",
-            "lazy": True,
         }  # options passed to fsspec
         open_dataset_options: dict = {"chunks": {}}  # opens passed to xarray
 
@@ -173,6 +170,7 @@ def _open_mlwp_kerchunk_reference(
             storage_options=storage_options,
             open_dataset_options=open_dataset_options,
         )
+        ds = ds.compute()
     else:
         ds = xr.open_dataset(
             "reference://",
@@ -192,13 +190,6 @@ def _open_mlwp_kerchunk_reference(
         attr_value = getattr(forecast_schema_config, variable)
         if attr_value in ds.data_vars:
             ds = ds.rename({attr_value: variable})
-        # Step 1: Create a meshgrid of init_time and lead_time
-    lead_time_grid, init_time_grid = np.meshgrid(ds.lead_time, ds.init_time)
-    # Step 2: Flatten the meshgrid and convert lead_time to timedelta
-    valid_time = init_time_grid.flatten() + pd.to_timedelta(
-        lead_time_grid.flatten(), unit="h"
-    )
-    ds.coords["time"] = valid_time
     return ds
 
 
@@ -410,6 +401,7 @@ def align_point_obs_from_gridded(
     case_subset_point_obs_df: pd.DataFrame,
     data_var: List[str],
     point_obs_metadata_vars: List[str],
+    compute: bool = True,
 ) -> Tuple[xr.Dataset, xr.Dataset]:
     """Takes in a forecast dataarray and point observation dataframe, aligning them by
     reducing dimensions.
@@ -422,6 +414,7 @@ def align_point_obs_from_gridded(
 
     Returns a tuple of aligned forecast and observation dataarrays.
     """
+
     case_subset_point_obs_df = case_subset_point_obs_df[
         POINT_OBS_METADATA_VARS + data_var
     ]
