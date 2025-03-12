@@ -40,15 +40,15 @@ def make_sample_forecast_dataset():
     longitudes = np.linspace(0, 359, 360)
     dataset = xr.Dataset(
         {
-            "air_temperature": (
+            "surface_air_temperature": (
                 ["init_time", "latitude", "longitude", "lead_time"],
                 20 + 5 * data,
             ),
-            "eastward_wind": (
+            "surface_eastward_wind": (
                 ["init_time", "latitude", "longitude", "lead_time"],
                 data,
             ),
-            "northward_wind": (
+            "surface_northward_wind": (
                 ["init_time", "latitude", "longitude", "lead_time"],
                 data,
             ),
@@ -60,14 +60,8 @@ def make_sample_forecast_dataset():
             "lead_time": lead_time,
         },
     )
-    lead_time_grid, init_time_grid = np.meshgrid(dataset.lead_time, dataset.init_time)
-    # Step 2: Flatten the meshgrid and convert lead_time to timedelta
-    valid_time = init_time_grid.flatten() + pd.to_timedelta(
-        lead_time_grid.flatten(), unit="h"
-    )
-    dataset.coords["time"] = valid_time
     # Set a specific value for a specific time and location to remove ambiguity
-    dataset["air_temperature"].loc[
+    dataset["surface_air_temperature"].loc[
         dict(
             init_time="2021-06-21 00:00",
             lead_time=42,
@@ -76,7 +70,7 @@ def make_sample_forecast_dataset():
         )
     ] = 24
     # Set a specific value for a specific time and location to remove ambiguity
-    dataset["air_temperature"].loc[
+    dataset["surface_air_temperature"].loc[
         dict(
             init_time="2021-06-20 00:00",
             lead_time=42,
@@ -163,3 +157,21 @@ def sample_results_dataarray_list():
         ),
     ]
     return results_da_list
+
+
+@pytest.fixture
+def sample_point_obs_df():
+    # Create sample point observations DataFrame
+    data = {
+        "time": pd.to_datetime(["2023-01-01 00:00", "2023-01-01 06:00"]),
+        "station": ["A100", "B200"],
+        "call": ["KWEW", "KBCE"],
+        "name": ["WEST CENTRAL", "EAST CENTRAL"],
+        "latitude": [40.5, 41.8],
+        "longitude": [-99.5, -99.8],
+        "elev": [1000, 1100],
+        "id": [1, 2],
+        "surface_air_temperature": [20.0, 21.0],
+    }
+    df = pd.DataFrame(data)
+    return df
