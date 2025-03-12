@@ -34,8 +34,8 @@ class CaseEvaluationInput:
     def load_data(self):
         """Load the evaluation inputs into memory."""
         logger.debug("Loading evaluation inputs into memory")
-        logger.debug("Observation: %s", self.observation)
-        logger.debug("Forecast: %s", self.forecast)
+        logger.debug("Observation shape: %s", self.observation.shape)
+        logger.debug("Forecast shape: %s", self.forecast.shape)
         self.observation = self.observation.compute()
         self.forecast = self.forecast.compute()
 
@@ -62,6 +62,7 @@ class CaseEvaluationData:
 def build_dataarray_subsets(
     case_evaluation_data: CaseEvaluationData,
     compute: bool = True,
+    existing_forecast: Optional[xr.Dataset] = None,
 ) -> CaseEvaluationInput:
     """Build the subsets of the gridded and point observations for a given data variable.
     Computation occurs based on what observation datasets are provided in the Evaluation object.
@@ -70,13 +71,21 @@ def build_dataarray_subsets(
         data_var: The data variable to evaluate.
         compute: Flag to disable performing actual calculations (but still validate
             case configurations). Defaults to "False."
-
+        existing_forecast: If a forecast dataset is already loaded, this can be passed
+            in to avoid recomputing the forecast data into memory.
     Returns:
         A tuple of xarray DataArrays containing the gridded and point observation subsets.
     """
-    case_evaluation_data.forecast = _check_and_subset_forecast_availability(
-        case_evaluation_data
-    )
+    if existing_forecast is not None:
+        logger.debug(
+            "Using existing forecast dataset for %s",
+            case_evaluation_data.observation_type,
+        )
+        case_evaluation_data.forecast = existing_forecast
+    else:
+        case_evaluation_data.forecast = _check_and_subset_forecast_availability(
+            case_evaluation_data
+        )
     if (
         case_evaluation_data.forecast is None
         or case_evaluation_data.observation is None
@@ -293,11 +302,9 @@ def evaluate(
             data_class=event,
             data=yaml_event_case,
         )
-        logger.debug("Cases loaded for %s", event.event_type)
-        if gridded_obs:
-            logger.info(
-                "gridded obs detected, mapping variables in gridded obs to forecast"
-            )
+
+        # map era5 vars by renaming and dropping extra vars
+        if gridded_obs is not None:
             gridded_obs = utils.map_era5_vars_to_forecast(
                 forecast_schema_config,
                 forecast_dataset=forecast_dataset,
@@ -399,7 +406,11 @@ def _maybe_evaluate_individual_case(
     )
 
     gridded_case_eval = build_dataarray_subsets(gridded_obs_evaluation, compute=True)
-    point_case_eval = build_dataarray_subsets(point_obs_evaluation, compute=True)
+    point_case_eval = build_dataarray_subsets(
+        point_obs_evaluation,
+        compute=True,
+        existing_forecast=gridded_case_eval.forecast,
+    )
     for data_var, metric in itertools.product(
         individual_case.data_vars, individual_case.metrics_list
     ):
