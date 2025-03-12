@@ -157,7 +157,6 @@ def _subset_point_obs(
     mapped_var_id_subset_point_obs["longitude"] = utils.convert_longitude_to_360(
         mapped_var_id_subset_point_obs["longitude"]
     )
-
     # this saves a significant amount of time if done prior to alignment with point obs
     if compute:
         logger.debug("Computing forecast dataset in point obs subsetting")
@@ -186,7 +185,6 @@ def _subset_point_obs(
         .first()
         .to_xarray()
     )
-
     return CaseEvaluationInput(
         "point",
         observation=subset_point_obs_recompiled_ds,
