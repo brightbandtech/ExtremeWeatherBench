@@ -1,8 +1,9 @@
 import fsspec
 import xarray as xr
-from extremeweatherbench import config
+from extremeweatherbench import config, utils
 import pandas as pd
 import logging
+import dataclasses
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -48,7 +49,11 @@ def open_forecast_dataset(
     else:
         raise FileNotFoundError("No files found in forecast path.")
 
-    mapping = forecast_schema_config.to_mapping()
+    mapping = {
+        getattr(forecast_schema_config, field.name): field.name
+        for field in dataclasses.fields(forecast_schema_config)
+    }
+
     filtered_mapping_data_vars = {
         old: new for old, new in mapping.items() if old in forecast_dataset.data_vars
     }
@@ -57,7 +62,7 @@ def open_forecast_dataset(
     }
     filtered_mapping = {**filtered_mapping_data_vars, **filtered_mapping_coords}
     forecast_dataset = forecast_dataset.rename(filtered_mapping)
-    forecast_dataset = forecast_schema_config.convert_lead_time(forecast_dataset)
+    forecast_dataset = utils.convert_dataset_lead_time_to_int(forecast_dataset)
 
     return forecast_dataset
 

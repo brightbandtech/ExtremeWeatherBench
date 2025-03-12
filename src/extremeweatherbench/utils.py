@@ -559,3 +559,20 @@ def derive_indices_from_init_time_and_lead_time(
     init_time_subset_indices = valid_time_indices[0]
 
     return init_time_subset_indices
+
+
+def convert_dataset_lead_time_to_int(dataset: xr.Dataset) -> xr.Dataset:
+    """Convert types of variables in an xarray Dataset based on the schema,
+    ensuring that, for example, the variable representing lead_time is of type int.
+
+    Args:
+        dataset: The input xarray Dataset that uses the schema's variable names.
+
+    Returns:
+        An xarray Dataset with adjusted types.
+    """
+
+    var = dataset["lead_time"]
+    if var.dtype == np.dtype("timedelta64[ns]"):
+        dataset["lead_time"] = (var / np.timedelta64(1, "h")).astype(int)
+    return dataset
