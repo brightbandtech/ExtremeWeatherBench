@@ -30,6 +30,7 @@ dependencies = [
 
 [project.optional-dependencies]
 data-prep = ["fsspec>=2024.12.0"]
+multiprocessing = ["dask[complete]>=2025.1.0", "distributed>=2025.1.0"]
 forecast-download = ["kerchunk>=0.2.7", "virtualizarr>=1.2.0"]
 derived = ["metpy>=1.6.3"]
 

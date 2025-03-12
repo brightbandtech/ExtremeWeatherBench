@@ -168,7 +168,7 @@ def sample_results_dataarray_list():
 def sample_point_obs_df():
     # Create sample point observations DataFrame
     data = {
-        "time": ["2023-01-01 00:00", "2023-01-01 06:00"],
+        "time": pd.to_datetime(["2023-01-01 00:00", "2023-01-01 06:00"]),
         "station": ["A100", "B200"],
         "call": ["KWEW", "KBCE"],
         "name": ["WEST CENTRAL", "EAST CENTRAL"],
