@@ -247,11 +247,7 @@ def test_align_point_obs_from_gridded_input_validation():
 def test_align_point_obs_from_gridded_basic(
     sample_forecast_dataset, sample_point_obs_df
 ):
-    """Test basic functionality of align_point_obs_from_gridded."""
-    # Convert times to datetime for easier manipulation
-    sample_point_obs_df["time"] = pd.to_datetime(sample_point_obs_df["time"])
-
-    # Adjust point obs to match forecast time
+    """Test basic functionality of align_point_obs_from_gridded."""  # Adjust point obs to match forecast time
     valid_time = pd.Timestamp(
         sample_forecast_dataset.init_time[0].values
     ) + pd.Timedelta(hours=6)
@@ -261,17 +257,10 @@ def test_align_point_obs_from_gridded_basic(
     sample_point_obs_df.iloc[1, sample_point_obs_df.columns.get_loc("time")] = (
         valid_time
     )
-
     # Convert longitude to 0-360 range to match forecast
     sample_point_obs_df["longitude"] = sample_point_obs_df["longitude"].apply(
         lambda x: x + 360 if x < 0 else x
     )
-
-    # Set latitude and longitude values that fall within the forecast grid
-    sample_point_obs_df["latitude"] = np.array([40.5, 41.8])
-    sample_point_obs_df["longitude"] = np.array(
-        [260.5, 260.2]
-    )  # ~-99.5, ~-99.8 in 0-360 space
 
     data_var = ["surface_air_temperature"]
     metadata_vars = ["latitude", "longitude", "station", "time"]
@@ -294,9 +283,6 @@ def test_align_point_obs_from_gridded_multiple_times(
     sample_forecast_dataarray, sample_point_obs_df
 ):
     """Test aligning point observations with multiple valid times."""
-    # Convert times to datetime for easier manipulation
-    sample_point_obs_df["time"] = pd.to_datetime(sample_point_obs_df["time"])
-
     # Create a larger dataframe with multiple times
     dfs = []
     for i in range(3):
@@ -336,9 +322,6 @@ def test_align_point_obs_from_gridded_missing_times(
     sample_forecast_dataarray, sample_point_obs_df
 ):
     """Test behavior when some observation times don't match forecast times."""
-    # Convert times to datetime for easier manipulation
-    sample_point_obs_df["time"] = pd.to_datetime(sample_point_obs_df["time"])
-
     # Create a dataframe with some matching times and some that don't match
     valid_time1 = pd.Timestamp(
         sample_forecast_dataarray.init_time[0].values
@@ -373,9 +356,6 @@ def test_align_point_obs_from_gridded_out_of_bounds(
     sample_forecast_dataarray, sample_point_obs_df
 ):
     """Test behavior when point observations are outside the forecast domain."""
-    # Convert times to datetime for easier manipulation
-    sample_point_obs_df["time"] = pd.to_datetime(sample_point_obs_df["time"])
-
     # Set timestamp to match forecast
     valid_time = pd.Timestamp(
         sample_forecast_dataarray.init_time[0].values

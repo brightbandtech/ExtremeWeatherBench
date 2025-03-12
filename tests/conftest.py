@@ -60,12 +60,6 @@ def make_sample_forecast_dataset():
             "lead_time": lead_time,
         },
     )
-    lead_time_grid, init_time_grid = np.meshgrid(dataset.lead_time, dataset.init_time)
-    # Step 2: Flatten the meshgrid and convert lead_time to timedelta
-    valid_time = init_time_grid.flatten() + pd.to_timedelta(
-        lead_time_grid.flatten(), unit="h"
-    )
-    dataset.coords["time"] = valid_time
     # Set a specific value for a specific time and location to remove ambiguity
     dataset["surface_air_temperature"].loc[
         dict(
@@ -169,7 +163,7 @@ def sample_results_dataarray_list():
 def sample_point_obs_df():
     # Create sample point observations DataFrame
     data = {
-        "time": ["2023-01-01 00:00", "2023-01-01 06:00"],
+        "time": pd.to_datetime(["2023-01-01 00:00", "2023-01-01 06:00"]),
         "station": ["A100", "B200"],
         "call": ["KWEW", "KBCE"],
         "name": ["WEST CENTRAL", "EAST CENTRAL"],
