@@ -34,8 +34,6 @@ class CaseEvaluationInput:
     def load_data(self):
         """Load the evaluation inputs into memory."""
         logger.debug("Loading evaluation inputs into memory")
-        logger.debug("Observation shape: %s", self.observation.shape)
-        logger.debug("Forecast shape: %s", self.forecast.shape)
         self.observation = self.observation.compute()
         self.forecast = self.forecast.compute()
 
