@@ -733,6 +733,7 @@ dependencies = [
     { name = "gcsfs" },
     { name = "geopandas" },
     { name = "joblib" },
+    { name = "kerchunk", extra = ["dev"] },
     { name = "matplotlib" },
     { name = "numpy" },
     { name = "pandas" },
@@ -745,15 +746,13 @@ dependencies = [
     { name = "seaborn" },
     { name = "tqdm" },
     { name = "ujson" },
-    { name = "xarray" },
+    { name = "xarray", extra = ["io"] },
     { name = "zarr" },
 ]
 
 [package.optional-dependencies]
 data-prep = [
     { name = "fsspec" },
-    { name = "geopy" },
-    { name = "kerchunk", extra = ["dev"] },
 ]
 
 [package.dev-dependencies]
@@ -778,9 +777,8 @@ requires-dist = [
     { name = "fsspec", marker = "extra == 'data-prep'", specifier = ">=2024.12.0" },
     { name = "gcsfs", specifier = ">=2024.12.0" },
     { name = "geopandas", specifier = ">=1.0.1" },
-    { name = "geopy", marker = "extra == 'data-prep'", specifier = ">=2.4.1" },
     { name = "joblib", specifier = ">=1.4.2" },
-    { name = "kerchunk", extras = ["dev"], marker = "extra == 'data-prep'", git = "https://github.com/fsspec/kerchunk" },
+    { name = "kerchunk", extras = ["dev"], git = "https://github.com/fsspec/kerchunk" },
     { name = "matplotlib", specifier = ">=3.10.0" },
     { name = "numpy", specifier = ">=2.2.0" },
     { name = "pandas", specifier = ">=2.2.3" },
@@ -793,7 +791,7 @@ requires-dist = [
     { name = "seaborn", specifier = ">=0.13.2" },
     { name = "tqdm", specifier = ">=4.67.1" },
     { name = "ujson", specifier = ">=5.10.0" },
-    { name = "xarray", specifier = ">=2024.11.0" },
+    { name = "xarray", extras = ["io"], specifier = ">=2024.11.0" },
     { name = "zarr", specifier = ">=3.0.2" },
 ]
 
@@ -2735,6 +2733,17 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/3f/d6/5ae0a721bd6cac85b30cff6b119dc6b5e73b735aacbfb43d3ed2680504d7/xarray-2024.11.0.tar.gz", hash = "sha256:1ccace44573ddb862e210ad3ec204210654d2c750bec11bbe7d842dfc298591f", size = 3247277 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/40/ed/1c4631ad5909487ea8907cd326d9855c2207d790e3936e77bda48173b8be/xarray-2024.11.0-py3-none-any.whl", hash = "sha256:6ee94f63ddcbdd0cf3909d1177f78cdac756640279c0e32ae36819a89cdaba37", size = 1231951 },
+]
+
+[package.optional-dependencies]
+io = [
+    { name = "cftime" },
+    { name = "fsspec" },
+    { name = "h5netcdf" },
+    { name = "netcdf4" },
+    { name = "pooch" },
+    { name = "scipy" },
+    { name = "zarr" },
 ]
 
 [[package]]
