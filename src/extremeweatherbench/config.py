@@ -2,8 +2,6 @@
 
 import dataclasses
 from typing import List, Optional
-import xarray as xr
-import numpy as np
 from extremeweatherbench import events
 from pathlib import Path
 
@@ -87,25 +85,3 @@ class ForecastSchemaConfig:
     level: Optional[str] = "level"
     latitude: Optional[str] = "latitude"
     longitude: Optional[str] = "longitude"
-
-    def to_mapping(self) -> dict:
-        return {
-            getattr(self, field.name): field.name for field in dataclasses.fields(self)
-        }
-
-    def convert_lead_time(self, dataset: xr.Dataset) -> xr.Dataset:
-        """
-        Convert types of variables in an xarray Dataset based on the schema,
-        ensuring that, for example, the variable representing lead_time is of type int.
-
-        Args:
-            dataset: The input xarray Dataset that uses the schema's variable names.
-
-        Returns:
-            An xarray Dataset with adjusted types.
-        """
-
-        var = dataset["lead_time"]
-        if var.dtype == np.dtype("timedelta64[ns]"):
-            dataset["lead_time"] = (var / np.timedelta64(1, "h")).astype(int)
-        return dataset
