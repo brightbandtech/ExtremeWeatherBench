@@ -393,7 +393,11 @@ def _maybe_evaluate_individual_case(
     )
 
     gridded_case_eval = build_dataarray_subsets(gridded_obs_evaluation, compute=True)
-    point_case_eval = build_dataarray_subsets(point_obs_evaluation, compute=True)
+    point_case_eval = build_dataarray_subsets(
+        point_obs_evaluation,
+        compute=True,
+        existing_forecast=gridded_case_eval.forecast,
+    )
     for data_var, metric in itertools.product(
         individual_case.data_vars, individual_case.metrics_list
     ):
