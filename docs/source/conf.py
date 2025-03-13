@@ -27,6 +27,7 @@ extensions = [
     "sphinx.ext.autodoc",
     "myst_parser",
     "autodoc2",
+    "myst_nb",
 ]
 autodoc2_packages = [
     "../../src/extremeweatherbench",
