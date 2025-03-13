@@ -1,5 +1,4 @@
 version = 1
-revision = 1
 requires-python = ">=3.12"
 resolution-markers = [
     "python_full_version < '3.13'",
@@ -838,7 +837,6 @@ requires-dist = [
     { name = "xarray", extras = ["io"], specifier = ">=2024.11.0" },
     { name = "zarr", specifier = ">=3.0.2" },
 ]
-provides-extras = ["data-prep"]
 
 [package.metadata.requires-dev]
 dev = [
