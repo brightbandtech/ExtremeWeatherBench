@@ -26,7 +26,13 @@ extensions = [
     "sphinx.ext.viewcode",
     "sphinx.ext.autodoc",
     "myst_parser",
+    "autodoc2",
 ]
+autodoc2_packages = [
+    "../../src/extremeweatherbench",
+]
+
+autodoc2_render_plugin = "myst"
 
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3/", None),
