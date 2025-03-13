@@ -63,4 +63,4 @@ with open(f'cases_{model}.pkl', 'wb') as f:
     pickle.dump(cases, f)
 ```
 # EWB case studies and categories
-The [EWB overall categories and individual case studies](case-studies/AllCaseStudies.md) are documented at the link.
+EWB case studies are fully documented [here](docs/AllCaseStudies.md).  
