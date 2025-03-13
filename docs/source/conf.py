@@ -27,13 +27,14 @@ extensions = [
     "sphinx.ext.autodoc",
     "myst_parser",
     "autodoc2",
-    "myst_nb",
-]
-autodoc2_packages = [
-    "../../src/extremeweatherbench",
+    "nbsphinx",
 ]
 
 autodoc2_render_plugin = "myst"
+
+autodoc2_packages = [
+    "../../src/extremeweatherbench",
+]
 
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3/", None),
@@ -45,7 +46,7 @@ templates_path = ["_templates"]
 
 # -- Options for HTML output
 html_static_path = ["_static"]
-html_theme = "alabaster"
+html_theme = "sphinx_book_theme"
 html_css_files = ["_static/custom.css"]
 # -- Options for EPUB output
 epub_show_urls = "footnote"
@@ -55,3 +56,5 @@ autodoc_inherit_docstrings = True
 autodoc_typehints = "signature"
 autodoc_typehints_description_target = "documented"
 autodoc_typehints_format = "short"
+
+nb_execution_mode = "off"

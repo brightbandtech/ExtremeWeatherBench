@@ -1,8 +1,9 @@
 # Defining the exact version will make sure things don't break
-sphinx==8.2.3
-sphinx_rtd_theme==3.0.2
-sphinx-notfound-page==1.1.0
-alabaster==1.0.0
-myst-parser==4.0.1
-sphinx-autodoc2==0.5.0
-myst-nb==1.2.0
+sphinx
+sphinx_rtd_theme
+sphinx-notfound-page
+sphinx-book-theme
+myst-parser
+sphinx-autodoc2
+myst-nb
+nbsphinx

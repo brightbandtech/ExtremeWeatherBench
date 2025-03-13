@@ -39,3 +39,17 @@ Alternatively, for developers, you can install the package in development mode:
 git clone https://github.com/brightband/ExtremeWeatherBench.git
 pip install -e .
 ```
+
+```{toctree}
+---
+maxdepth: 2
+---
+notebooks/quickstart
+api
+events/
+
+---
+hidden
+---
+api/extremeweatherbench.md
+```
