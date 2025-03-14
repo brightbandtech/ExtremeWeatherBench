@@ -1,22 +1,20 @@
-import dataclasses
-
 import pandas as pd
 import xarray as xr
 from scores.continuous import rmse
 import logging
 from extremeweatherbench import utils
+import abc
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
-@dataclasses.dataclass
-class Metric:
+class BaseMetric(abc.ABC):
     """A base class defining the interface for ExtremeWeatherBench metrics."""
 
+    @abc.abstractmethod
     def compute(self, forecast: xr.DataArray, observation: xr.DataArray):
         """Evaluate a specific metric given a forecast and observation dataset."""
-        raise NotImplementedError
 
     @property
     def name(self) -> str:
@@ -24,8 +22,19 @@ class Metric:
         return self.__class__.__name__
 
 
-@dataclasses.dataclass
-class RegionalRMSE(Metric):
+class CategoricalMetric(BaseMetric):
+    """A base class for categorical metrics."""
+
+    def __init__(self, threshold):
+        self.threshold = threshold
+
+    @property
+    def name(self) -> str:
+        """Return the class name without parentheses."""
+        return self.__class__.__name__
+
+
+class RegionalRMSE(BaseMetric):
     """Root mean squared error of a regional forecast evaluated against observations."""
 
     def compute(self, forecast: xr.DataArray, observation: xr.DataArray):
@@ -43,8 +52,7 @@ class RegionalRMSE(Metric):
         return grouped_fhour_rmse_dataset
 
 
-@dataclasses.dataclass
-class MaximumMAE(Metric):
+class MaximumMAE(BaseMetric):
     """Mean absolute error of forecasted maximum values.
 
     Attributes:
@@ -92,8 +100,7 @@ class MaximumMAE(Metric):
         return max_mae_full_da
 
 
-@dataclasses.dataclass
-class MaxOfMinTempMAE(Metric):
+class MaxOfMinTempMAE(BaseMetric):
     """Mean absolute error of forecasted highest minimum temperature values.
 
     Attributes:
@@ -164,16 +171,14 @@ class MaxOfMinTempMAE(Metric):
         return max_min_mae_full_da
 
 
-@dataclasses.dataclass
-class OnsetME(Metric):
+class OnsetME(BaseMetric):
     """Mean error of the onset of an event, in hours."""
 
     def compute(self, forecast: xr.DataArray, observation: xr.DataArray):
         raise NotImplementedError("Onset mean error not yet implemented.")
 
 
-@dataclasses.dataclass
-class DurationME(Metric):
+class DurationME(BaseMetric):
     """Mean error in the duration of an event, in hours."""
 
     def compute(self, forecast: xr.DataArray, observation: xr.DataArray):
