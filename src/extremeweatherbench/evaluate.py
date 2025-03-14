@@ -415,31 +415,38 @@ def _maybe_evaluate_individual_case(
         ),
     )
     case_result_df = pd.DataFrame()
+
+    # Process each data variable and metric combination
     for data_var, metric in itertools.product(
         individual_case.data_vars, individual_case.metrics_list
     ):
         metric_instance = metric()
-        logging.debug("metric %s computing", metric_instance.name)
+        logging.debug("Computing metric: %s", metric_instance.name)
 
-        obs_result_df = pd.DataFrame()
-        observation_type_list = [gridded_case_eval, point_case_eval]
-        for eval in observation_type_list:
-            if eval.observation is not None and eval.forecast is not None:
+        results = []
+        # Process both gridded and point observations
+        for eval_data in [gridded_case_eval, point_case_eval]:
+            if eval_data.observation is not None and eval_data.forecast is not None:
+                # Compute metric and format result
                 result = metric_instance.compute(
-                    eval.forecast[data_var], eval.observation[data_var]
+                    eval_data.forecast[data_var], eval_data.observation[data_var]
                 )
                 result.name = "value"
-                result = result.to_dataframe().reset_index()
-                result["variable"] = data_var
-                result["metric"] = metric_instance.name
-                result["observation_type"] = eval.observation_type
+                # Convert to DataFrame and add metadata
+                df = result.to_dataframe().reset_index()
+                df["variable"] = data_var
+                df["metric"] = metric_instance.name
+                df["observation_type"] = eval_data.observation_type
+                results.append(df)
 
-            else:
-                result = pd.DataFrame()
-            obs_result_df = pd.concat([obs_result_df, result])
-        case_result_df = pd.concat([case_result_df, obs_result_df])
+        # Combine results for this metric/variable combination
+        if results:
+            case_result_df = pd.concat([case_result_df] + results, ignore_index=True)
+
+    # Add case metadata
     case_result_df["case_id"] = individual_case.id
     case_result_df["event_type"] = individual_case.event_type
+
     return case_result_df
 
 
