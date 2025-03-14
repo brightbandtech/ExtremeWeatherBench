@@ -260,7 +260,7 @@ def evaluate(
         evaluation results for each case within the event type.
     """
 
-    all_results = {}
+    all_results_df = pd.DataFrame()
     yaml_event_case = utils.load_events_yaml()
     for k, v in yaml_event_case.items():
         if k == "cases":
@@ -315,7 +315,7 @@ def evaluate(
         results = _maybe_evaluate_individual_cases_loop(
             cases, forecast_dataset, gridded_obs, point_obs
         )
-        all_results[event.event_type] = results
+        all_results_df = pd.concat([all_results_df, results])
         logger.debug("evaluation loop complete for %s", event.event_type)
     logger.info(
         "\nVerification Summary:\n"
@@ -334,9 +334,9 @@ def evaluate(
                 if x
             ]
         ),
-        sum(len(results) for results in all_results.values() if results is not None),
+        all_results_df["case_id"].nunique(),
     )
-    return all_results
+    return all_results_df
 
 
 def _maybe_evaluate_individual_cases_loop(
@@ -344,7 +344,7 @@ def _maybe_evaluate_individual_cases_loop(
     forecast_dataset: xr.Dataset,
     gridded_obs: Optional[xr.Dataset] = None,
     point_obs: Optional[pd.DataFrame] = None,
-) -> dict[Any, Optional[dict[str, Any]]]:
+) -> pd.DataFrame:
     """Sequentially loop over and evalute all cases for a specific event type.
 
     Args:
@@ -357,16 +357,17 @@ def _maybe_evaluate_individual_cases_loop(
         A list of xarray Datasets containing the evaluation results for each case
         in the Event of interest.
     """
-    results = {}
+    results_df = pd.DataFrame()
     for individual_case in event.cases:
-        results[individual_case.id] = _maybe_evaluate_individual_case(
+        result = _maybe_evaluate_individual_case(
             individual_case,
             forecast_dataset,
             gridded_obs,
             point_obs,
         )
+        results_df = pd.concat([results_df, result])
 
-    return results
+    return results_df
 
 
 def _maybe_evaluate_individual_case(
@@ -374,7 +375,7 @@ def _maybe_evaluate_individual_case(
     forecast_dataset: Optional[xr.Dataset],
     gridded_obs: Optional[xr.Dataset],
     point_obs: Optional[pd.DataFrame],
-) -> Optional[dict[str, xr.Dataset]]:
+) -> pd.DataFrame:
     """Evaluate a single case given forecast data and observations.
 
     Args:
@@ -389,7 +390,6 @@ def _maybe_evaluate_individual_case(
     Raises:
         ValueError: If no forecast data is available.
     """
-    case_results: dict[str, dict[str, Any]] = {}
     logger.info("Evaluating case %s, %s", individual_case.id, individual_case.title)
     gridded_obs_evaluation = CaseEvaluationData(
         individual_case=individual_case,
@@ -414,24 +414,33 @@ def _maybe_evaluate_individual_case(
             else None
         ),
     )
+    case_result_df = pd.DataFrame()
     for data_var, metric in itertools.product(
         individual_case.data_vars, individual_case.metrics_list
     ):
-        case_results[data_var] = {}
         metric_instance = metric()
         logging.debug("metric %s computing", metric_instance.name)
-        # TODO(aaTman): Create metric container object for gridded and point obs
-        # in the meantime, forcing a check for Nones in gridded and point eval objects
-        result = {}
-        for eval in [gridded_case_eval, point_case_eval]:
+
+        obs_result_df = pd.DataFrame()
+        observation_type_list = [gridded_case_eval, point_case_eval]
+        for eval in observation_type_list:
             if eval.observation is not None and eval.forecast is not None:
-                result[eval.observation_type] = metric_instance.compute(
+                result = metric_instance.compute(
                     eval.forecast[data_var], eval.observation[data_var]
                 )
+                result.name = "value"
+                result = result.to_dataframe().reset_index()
+                result["variable"] = data_var
+                result["metric"] = metric_instance.name
+                result["observation_type"] = eval.observation_type
+
             else:
-                result[eval.observation_type] = None
-        case_results[data_var][metric_instance.name] = result
-    return case_results
+                result = pd.DataFrame()
+            obs_result_df = pd.concat([obs_result_df, result])
+        case_result_df = pd.concat([case_result_df, obs_result_df])
+    case_result_df["case_id"] = individual_case.id
+    case_result_df["event_type"] = individual_case.event_type
+    return case_result_df
 
 
 def _open_forecast_dataset(
