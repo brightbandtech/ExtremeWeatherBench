@@ -426,12 +426,15 @@ def test_evaluate_full_workflow(
         return_value=(None, sample_gridded_obs_dataset),
     )
     result = evaluate.evaluate(mock_config)
-    assert isinstance(result, dict)
-    assert "heat_wave" in result
-    for _, v in result["heat_wave"].items():
-        if v is not None:
-            assert isinstance(v, dict)
-            for _, v2 in v.items():
-                assert isinstance(v2, dict)
-                for _, v3 in v2.items():
-                    assert isinstance(v3, dict) or v3 is None
+    assert isinstance(result, pd.DataFrame)
+    # Check that the result DataFrame contains all the expected columns
+    expected_columns = [
+        "lead_time",
+        "value",
+        "variable",
+        "metric",
+        "observation_type",
+        "case_id",
+        "event_type",
+    ]
+    assert all(col in result.columns for col in expected_columns)
