@@ -94,12 +94,17 @@ def sample_forecast_dataset():
 
 
 @pytest.fixture
-def mock_config():
+def sample_config():
     return config.Config(
         event_types=[events.HeatWave],
         forecast_dir="test/forecast/path",
         gridded_obs_path="test/obs/path",
     )
+
+
+@pytest.fixture
+def default_forecast_config():
+    return config.ForecastSchemaConfig()
 
 
 @pytest.fixture
