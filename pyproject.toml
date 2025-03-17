@@ -3,7 +3,7 @@ name = "extremeweatherbench"
 version = "0.1.0"
 description = "Benchmarking weather and weather AI models using extreme events"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 dependencies = [
     "cartopy>=0.24.1",
     "dacite>=1.8.1",
@@ -25,14 +25,12 @@ dependencies = [
     "xarray[io]>=2024.11.0",
     "zarr>=3.0.2",
     "kerchunk[dev]",
+    "flox>=0.10.0",
 ]
 
 [project.optional-dependencies]
 data-prep = ["fsspec>=2024.12.0"]
-multiprocessing = [
-    "dask[complete]>=2025.1.0",
-    "distributed>=2025.1.0",
-]
+multiprocessing = ["dask[complete]>=2025.1.0", "distributed>=2025.1.0"]
 
 [dependency-groups]
 dev = [
