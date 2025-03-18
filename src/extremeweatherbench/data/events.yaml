@@ -263,8 +263,8 @@ cases:
     event_type: heat_wave
   - id: 31
     title: 2021 Texas
-    start_date: 2021-02-14 00:00:00
-    end_date: 2021-02-18 00:00:00
+    start_date: 2021-02-10 12:00:00
+    end_date: 2021-02-22 00:00:00
     location:
       latitude: 30.2672
       longitude: -97.7431
@@ -272,8 +272,8 @@ cases:
     event_type: freeze
   - id: 32
     title: 2022 Arkansas
-    start_date: 2022-02-22 00:00:00
-    end_date: 2022-02-26 00:00:00
+    start_date: 2022-02-17 18:00:00
+    end_date: 2022-03-01 06:00:00
     location:
       latitude: 34.7445
       longitude: -92.2896
@@ -281,8 +281,8 @@ cases:
     event_type: freeze
   - id: 33
     title: 2023 Germany
-    start_date: 2023-11-25 00:00:00
-    end_date: 2023-12-03 00:00:00
+    start_date: 2023-12-02 06:00:00
+    end_date: 2023-12-05 18:00:00
     location:
       latitude: 48.1351
       longitude: 11.5820
@@ -290,8 +290,8 @@ cases:
     event_type: freeze
   - id: 34
     title: 2023 China
-    start_date: 2023-12-20 00:00:00
-    end_date: 2023-12-25 00:00:00
+    start_date: 2023-12-15 06:00:00
+    end_date: 2023-12-26 18:00:00
     location:
       latitude: 31.2304
       longitude: 121.4737
@@ -299,8 +299,8 @@ cases:
     event_type: freeze
   - id: 35
     title: 2023 Afghanistan
-    start_date: 2023-01-10 00:00:00
-    end_date: 2023-01-17 00:00:00
+    start_date: 2023-01-11 06:00:00
+    end_date: 2023-01-28 00:00:00
     location:
       latitude: 34.5553
       longitude: 69.2075
@@ -308,8 +308,8 @@ cases:
     event_type: freeze
   - id: 36
     title: 2022 Colorado
-    start_date: 2022-04-11 00:00:00
-    end_date: 2022-04-15 00:00:00
+    start_date: 2022-04-06 00:00:00
+    end_date: 2022-04-16 00:00:00
     location:
       latitude: 39.7392
       longitude: -104.9903
@@ -794,8 +794,8 @@ cases:
     event_type: heat_wave
   - id: 90
     title: January 2024 Pacific Northwest
-    start_date: 2024-01-10 00:00:00
-    end_date: 2024-01-15 00:00:00
+    start_date: 2024-01-11 12:00:00
+    end_date: 2024-01-20 00:00:00
     location:
       latitude: 47.6062
       longitude: -122.3321
@@ -803,71 +803,62 @@ cases:
     event_type: freeze
   - id: 91
     title: April 2022 Nevada
-    start_date: 2022-04-11 00:00:00
-    end_date: 2022-04-13 00:00:00
+    start_date: 2022-04-11 18:00:00
+    end_date: 2022-04-16 12:00:00
     location:
       latitude: 40.8324
       longitude: -115.7631
     bounding_box_degrees: 5
     event_type: freeze
   - id: 92
-    title: February 2021 North Texas
-    start_date: 2021-02-13 00:00:00
-    end_date: 2021-02-18 00:00:00
-    location:
-      latitude: 35.2220
-      longitude: -101.8313
-    bounding_box_degrees: 5
-    event_type: freeze
-  - id: 93
     title: February/March 2021 New England
-    start_date: 2021-02-28 00:00:00
-    end_date: 2021-03-04 00:00:00
+    start_date: 2021-03-04 18:00:00
+    end_date: 2021-03-09 06:00:00
     location:
       latitude: 42.8509
       longitude: -72.5579
     bounding_box_degrees: 5
     event_type: freeze
-  - id: 94
+  - id: 93
     title: January 2024 Northern Europe
-    start_date: 2024-01-02 00:00:00
-    end_date: 2024-01-05 00:00:00
+    start_date: 2024-01-01 06:00:00
+    end_date: 2024-01-09 12:00:00
     location:
       latitude: 59.3293
       longitude: 18.0686
     bounding_box_degrees: 5
     event_type: freeze
-  - id: 95
+  - id: 94
     title: December 2022 Europe
-    start_date: 2022-12-20 00:00:00
-    end_date: 2022-12-25 00:00:00
+    start_date: 2022-12-10 06:00:00
+    end_date: 2022-12-20 00:00:00
     location:
       latitude: 52.5200
       longitude: 13.4050
     bounding_box_degrees: 5
     event_type: freeze
-  - id: 96
+  - id: 95
     title: April 2024 Europe
-    start_date: 2024-04-21 00:00:00
-    end_date: 2024-04-24 00:00:00
+    start_date: 2024-04-16 12:00:00
+    end_date: 2024-04-27 12:00:00
     location:
       latitude: 48.8566
       longitude: 2.3522
     bounding_box_degrees: 5
     event_type: freeze
-  - id: 97
-    title: January 2023 Japan
-    start_date: 2024-01-23 00:00:00
-    end_date: 2024-01-30 00:00:00
+  - id: 96
+    title: January 2023 North China
+    start_date: 2024-01-20 00:00:00
+    end_date: 2024-02-04 18:00:00
     location:
-      latitude: 37.9026
-      longitude: 139.0236
+      latitude: 42.5246
+      longitude: 122.3853
     bounding_box_degrees: 5
     event_type: freeze
-  - id: 98
+  - id: 97
     title: April 2024 Sweden
-    start_date: 2024-04-01 00:00:00
-    end_date: 2024-04-05 00:00:00
+    start_date: 2024-04-02 00:00:00
+    end_date: 2024-04-07 12:00:00
     location:
       latitude: 60.1282
       longitude: 18.6435
