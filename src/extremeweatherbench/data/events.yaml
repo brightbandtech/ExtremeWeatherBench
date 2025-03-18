@@ -845,6 +845,7 @@ cases:
       latitude: 52.5200
       longitude: 13.4050
     bounding_box_degrees: 5
+    event_type: freeze
   - id: 96
     title: April 2024 Europe
     start_date: 2024-04-21 00:00:00
