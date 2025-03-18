@@ -871,3 +871,4 @@ cases:
       latitude: 60.1282
       longitude: 18.6435
     bounding_box_degrees: 5
+    event_type: freeze
