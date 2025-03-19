@@ -345,8 +345,6 @@ def evaluate(
                 if x
             ]
         ),
-        # TODO(aaTman): #63 loop does not work properly, it does not skip None's outputting the sum of all cases.
-        # Needs to skip None values
         sum(len(results) for results in all_results.values() if results is not None),
     )
     return all_results
