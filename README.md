@@ -36,7 +36,7 @@ import pickle
 model = 'FOUR_v200_GFS'
 
 # Set up path to directory of file - zarr, json, or parquet
-forecast_dir = f'assets/data/forecasts/{model}_combined_all.parq'
+forecast_dir = f'gs://extremeweatherbench/{model}.parq'
 
 # Choose the event types you want to include
 event_list = [events.HeatWave,
