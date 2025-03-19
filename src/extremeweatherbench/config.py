@@ -51,7 +51,7 @@ class Config:
         remote_protocol: The storage protocol which the forecast data is stored on.
             Defaults to "s3".
         forecast_source: The source of the forecast data. If not CIRA, use None.
-        timestep_begin: The first timestep to include in the evaluation.
+        init_forecast_hour: The first forecast hour to include in the evaluation.
             Defaults to 0.
         temporal_resolution_hours: The resolution of the forecast data in hours.
             Defaults to 6.
@@ -71,7 +71,7 @@ class Config:
     point_obs_path: str = ISD_POINT_OBS_URI
     remote_protocol: str = "s3"
     forecast_source: Optional[str] = "cira"
-    timestep_begin: int = 0  # The first timestep to include in the evaluation.
+    init_forecast_hour: int = 0  # The first forecast hour (e.g. Graphcast starts at 6).
     temporal_resolution_hours: int = 6
     output_timesteps: int = 41
     gridded_obs_storage_options: dict = dataclasses.field(
