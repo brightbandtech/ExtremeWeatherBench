@@ -245,8 +245,8 @@ cases:
     event_type: heat_wave
   - id: 28
     title: 2021 New Zealand
-    start_date: 2021-01-22 00:00:00
-    end_date: 2021-01-29 00:00:00
+    start_date: 2021-01-12 18:00:00
+    end_date: 2021-01-17 18:00:00
     location:
       latitude: -43.8983
       longitude: 171.7310
