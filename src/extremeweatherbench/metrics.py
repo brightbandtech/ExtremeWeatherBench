@@ -1,10 +1,9 @@
 import dataclasses
 
-from typing import Tuple
 import pandas as pd
 import xarray as xr
 from scores.continuous import rmse
-from scores.spatial import fss_2d_single_field
+from scores.spatial import fss_2d
 import logging
 from extremeweatherbench import utils
 
@@ -24,6 +23,14 @@ class Metric:
     def name(self) -> str:
         """Return the class name without parentheses."""
         return self.__class__.__name__
+
+
+class CategoricalMetric(Metric):
+    """A base class defining the interface for ExtremeWeatherBench categorical metrics."""
+
+    def compute(self, forecast: xr.DataArray, observation: xr.DataArray):
+        """Evaluate a specific metric given a forecast and observation dataset."""
+        raise NotImplementedError
 
 
 @dataclasses.dataclass
@@ -167,29 +174,42 @@ class MaxOfMinTempMAE(Metric):
 
 
 @dataclasses.dataclass
-class FSS(Metric):
-    """Fractions Skill Score."""
+class FSS(CategoricalMetric):
+    """Fractions Skill Score metric via scores.spatial.fss_2d.
 
-    threshold: float = 0.5
-    window_size: Tuple[float, float] = (2, 2)
+    Attributes:
+        window_size: The size of the window in cartesian space to use for the FSS computation. Default is (3, 3).
+        threshold: The threshold to use for the FSS computation (note: dependent on input units). Default is 0.5.
+    """
 
-    def compute(self, forecast: xr.DataArray, observation: xr.DataArray):
-        fss_values = []
-        for init_time in forecast.init_time:
-            init_forecast, subset_observation = utils.temporal_align_dataarrays(
-                forecast,
-                observation,
-                pd.Timestamp(init_time.values).to_pydatetime(),
-            )
-            fss = fss_2d_single_field(
-                init_forecast,
-                subset_observation,
-                event_threshold=self.threshold,
-                window_size=self.window_size,
-            )
-            fss_values.append(fss)
-        fss_full_da = utils.process_dataarray_for_output(fss_values)
-        return fss_full_da
+    def __init__(self, window_size: tuple[int, int] = (3, 3), threshold: float = 0.5):
+        self.window_size = window_size
+        self.threshold = threshold
+        # Assume the only valid compute method available right now (NUMPY)
+
+    def compute_threshold_or_output(
+        self, forecast: xr.DataArray, observation: xr.DataArray
+    ) -> xr.DataArray:
+        """Compute the threshold for the forecast and observation datasets."""
+        # Check if the forecast and observation have been loaded to memory
+        if forecast.chunks or observation.chunks:
+            logger.info("Loading chunked data into memory for FSS computation")
+            forecast = forecast.compute()
+            observation = observation.compute()
+        output = fss_2d(
+            forecast,
+            observation,
+            event_threshold=self.threshold,
+            window_size=self.window_size,
+            spatial_dims=["latitude", "longitude"],
+            preserve_dims=["lead_time"],
+        )
+        return output
+
+    def compute(
+        self, forecast: xr.DataArray, observation: xr.DataArray
+    ) -> xr.DataArray:
+        return self.compute_threshold_or_output(forecast, observation)
 
 
 @dataclasses.dataclass
