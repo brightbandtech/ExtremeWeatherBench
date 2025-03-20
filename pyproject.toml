@@ -3,7 +3,7 @@ name = "extremeweatherbench"
 version = "0.1.0"
 description = "Benchmarking weather and weather AI models using extreme events"
 readme = "README.md"
-requires-python = "==3.11.11"
+requires-python = ">=3.11"
 dependencies = [
     "cartopy>=0.24.1",
     "dacite>=1.8.1",
@@ -26,6 +26,7 @@ dependencies = [
     "zarr>=3.0.2",
     "kerchunk[dev]",
     "setuptools>=75.8.2",
+    "flox>=0.10.0",
 ]
 
 [project.optional-dependencies]
