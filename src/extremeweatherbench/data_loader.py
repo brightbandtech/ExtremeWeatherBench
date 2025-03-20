@@ -95,9 +95,9 @@ def open_kerchunk_reference(
 
         # The evaluation configuration is used to set the lead time range and resolution.
         kerchunk_ds["lead_time"] = range(
-            eval_config.timestep_begin,
+            eval_config.init_forecast_hour,
             (
-                eval_config.timestep_begin
+                eval_config.init_forecast_hour
                 + eval_config.output_timesteps * eval_config.temporal_resolution_hours
             ),
             eval_config.temporal_resolution_hours,
