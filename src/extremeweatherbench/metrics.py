@@ -1,9 +1,8 @@
-import dataclasses
+"""Metrics, parent and base classes for use during ExtremeWeatherBench case studies / analyses."""
 
 import pandas as pd
 import xarray as xr
 from scores.continuous import rmse
-from scores.spatial import fss_2d
 import logging
 from extremeweatherbench import utils
 import abc
@@ -37,7 +36,6 @@ class CategoricalMetric(Metric):
         """Return a threshold(s) for the forecast and observation datasets."""
 
 
-@dataclasses.dataclass
 class RegionalRMSE(Metric):
     """Root mean squared error of a regional forecast evaluated against observations."""
 
@@ -56,7 +54,6 @@ class RegionalRMSE(Metric):
         return grouped_fhour_rmse_dataset
 
 
-@dataclasses.dataclass
 class MaximumMAE(Metric):
     """Mean absolute error of forecasted maximum values.
 
@@ -66,7 +63,8 @@ class MaximumMAE(Metric):
     temperature timestamp.
     """
 
-    time_deviation_tolerance: int = 48
+    def __init__(self, time_deviation_tolerance: int = 48):
+        self.time_deviation_tolerance = time_deviation_tolerance
 
     def compute(self, forecast: xr.DataArray, observation: xr.DataArray):
         max_mae_values = []
@@ -105,7 +103,6 @@ class MaximumMAE(Metric):
         return max_mae_full_da
 
 
-@dataclasses.dataclass
 class MaxOfMinTempMAE(Metric):
     """Mean absolute error of forecasted highest minimum temperature values.
 
@@ -177,7 +174,6 @@ class MaxOfMinTempMAE(Metric):
         return max_min_mae_full_da
 
 
-@dataclasses.dataclass
 class OnsetME(Metric):
     """Mean error of the onset of an event, in hours."""
 
@@ -185,47 +181,8 @@ class OnsetME(Metric):
         raise NotImplementedError("Onset mean error not yet implemented.")
 
 
-@dataclasses.dataclass
 class DurationME(Metric):
     """Mean error in the duration of an event, in hours."""
 
     def compute(self, forecast: xr.DataArray, observation: xr.DataArray):
         raise NotImplementedError("Duration mean error not yet implemented.")
-
-
-class FSS(CategoricalMetric):
-    """Fractions Skill Score metric via scores.spatial.fss_2d.
-
-    Attributes:
-        window_size: The size of the window in cartesian space to use for the FSS computation. Default is (3, 3).
-        threshold: The threshold to use for the FSS computation (note: dependent on input units). Default is 0.5.
-    """
-
-    def __init__(self, window_size: tuple[int, int] = (3, 3), threshold: float = 0.5):
-        self.window_size = window_size
-        self.threshold = threshold
-        # Assume the only valid compute method available right now (NUMPY)
-
-    def compute_threshold_or_output(
-        self, forecast: xr.DataArray, observation: xr.DataArray
-    ) -> xr.DataArray:
-        """Compute the threshold for the forecast and observation datasets."""
-        # Check if the forecast and observation have been loaded to memory
-        if forecast.chunks or observation.chunks:
-            logger.info("Loading chunked data into memory for FSS computation")
-            forecast = forecast.compute()
-            observation = observation.compute()
-        output = fss_2d(
-            forecast,
-            observation,
-            event_threshold=self.threshold,
-            window_size=self.window_size,
-            spatial_dims=["latitude", "longitude"],
-            preserve_dims=["lead_time"],
-        )
-        return output
-
-    def compute(
-        self, forecast: xr.DataArray, observation: xr.DataArray
-    ) -> xr.DataArray:
-        return self.compute_threshold_or_output(forecast, observation)
