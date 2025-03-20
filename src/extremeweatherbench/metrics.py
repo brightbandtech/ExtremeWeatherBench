@@ -194,7 +194,12 @@ class DurationME(Metric):
 
 
 class FSS(CategoricalMetric):
-    """Fractions Skill Score metric. This metric is set up"""
+    """Fractions Skill Score metric via scores.spatial.fss_2d.
+
+    Attributes:
+        window_size: The size of the window in cartesian space to use for the FSS computation. Default is (3, 3).
+        threshold: The threshold to use for the FSS computation (note: dependent on input units). Default is 0.5.
+    """
 
     def __init__(self, window_size: tuple[int, int] = (3, 3), threshold: float = 0.5):
         self.window_size = window_size
