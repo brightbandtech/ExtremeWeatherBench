@@ -404,25 +404,3 @@ def test_location_subset_point_obs():
         df, min_lat=10, max_lat=20, min_lon=10, max_lon=20
     )
     assert len(result) == 0
-
-
-def test_maybe_convert_dataset_lead_time_to_int():
-    # Test with timedelta lead_time
-    ds_timedelta = xr.Dataset(
-        coords={
-            "lead_time": pd.timedelta_range(start="0h", periods=5, freq="6h"),
-        }
-    )
-    result_timedelta = utils.maybe_convert_dataset_lead_time_to_int(ds_timedelta)
-    assert result_timedelta["lead_time"].dtype == np.dtype("int64")
-    assert all(result_timedelta["lead_time"].values == [0, 6, 12, 18, 24])
-
-    # Test with already integer lead_time
-    ds_int = xr.Dataset(
-        coords={
-            "lead_time": [0, 6, 12, 18, 24],
-        }
-    )
-    result_int = utils.maybe_convert_dataset_lead_time_to_int(ds_int)
-    assert result_int["lead_time"].dtype == np.dtype("int64")
-    assert all(result_int["lead_time"].values == [0, 6, 12, 18, 24])

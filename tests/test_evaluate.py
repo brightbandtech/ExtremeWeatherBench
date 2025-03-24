@@ -389,7 +389,7 @@ def test_evaluate_full_workflow(
 ):
     # The return func will have the forecast dataset's data vars names switched already
     mocker.patch(
-        "extremeweatherbench.data_loader.open_forecast_dataset",
+        "extremeweatherbench.data_loader.open_and_preprocess_forecast_dataset",
         return_value=sample_forecast_dataset,
     )
     mocker.patch(

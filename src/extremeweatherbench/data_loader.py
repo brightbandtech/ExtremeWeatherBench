@@ -1,15 +1,18 @@
-import xarray as xr
-from extremeweatherbench import config, utils
-import pandas as pd
-import logging
 import dataclasses
-from typing import Tuple, Optional
+import logging
+from typing import Optional, Tuple
+
+import numpy as np
+import pandas as pd
+import xarray as xr
+
+from extremeweatherbench import config
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
-def open_forecast_dataset(
+def open_and_preprocess_forecast_dataset(
     eval_config: config.Config,
     forecast_schema_config: config.ForecastSchemaConfig,
 ) -> xr.Dataset:
@@ -18,9 +21,24 @@ def open_forecast_dataset(
     If a URI is provided (e.g. s3://bucket/path/to/forecast), the filesystem
     will be inferred from the provided source (in this case, s3). Otherwise,
     the filesystem will assumed to be local.
+
+    Preprocessing examples:
+        A typical preprocess function handles metadata changes:
+
+        def _preprocess_cira_forecast_dataset(
+            ds: xr.Dataset
+        ) -> xr.Dataset:
+            ds = ds.rename({"time": "lead_time"})
+            return ds
+
+        The preprocess function is applied before variable renaming occurs, so it should
+        reference the original variable names in the forecast dataset, not the standardized
+        names defined in the ForecastSchemaConfig.
+
     Args:
         eval_config: The evaluation configuration.
         forecast_schema_config: The forecast schema configuration.
+        preprocess: A function that preprocesses the forecast dataset.
 
     Returns:
         The opened forecast dataset.
@@ -38,8 +56,9 @@ def open_forecast_dataset(
         raise TypeError(
             "Unknown file type found in forecast path, only json, parquet, and zarr are supported."
         )
+    forecast_ds = eval_config.forecast_preprocess(forecast_ds)
     forecast_ds = _rename_forecast_dataset(forecast_ds, forecast_schema_config)
-    forecast_ds = utils.maybe_convert_dataset_lead_time_to_int(forecast_ds)
+    forecast_ds = _maybe_convert_dataset_lead_time_to_int(eval_config, forecast_ds)
 
     return forecast_ds
 
@@ -89,22 +108,6 @@ def open_kerchunk_reference(
     else:
         raise TypeError(
             "Unknown kerchunk file type found in forecast path, only json and parquet are supported."
-        )
-    if eval_config.forecast_source == "cira":
-        kerchunk_ds = kerchunk_ds.rename({"time": "lead_time"})
-
-        # The evaluation configuration is used to set the lead time range and resolution.
-        kerchunk_ds["lead_time"] = range(
-            eval_config.init_forecast_hour,
-            (
-                eval_config.init_forecast_hour
-                + eval_config.output_timesteps * eval_config.temporal_resolution_hours
-            ),
-            eval_config.temporal_resolution_hours,
-        )
-    else:
-        raise NotImplementedError(
-            "Only CIRA data is currently supported for kerchunked reference files."
         )
     return kerchunk_ds
 
@@ -167,3 +170,64 @@ def _rename_forecast_dataset(
     forecast_ds = forecast_ds.rename(filtered_mapping)
 
     return forecast_ds
+
+
+def _preprocess_cira_forecast_dataset(
+    eval_config: config.Config, ds: xr.Dataset
+) -> xr.Dataset:
+    """An example preprocess function that renames the time coordinate to lead_time
+    and sets the lead time range and resolution.
+
+    Args:
+        eval_config: The evaluation configuration.
+        ds: The forecast dataset to rename.
+
+    Returns:
+        The renamed forecast dataset.
+    """
+    ds = ds.rename({"time": "lead_time"})
+
+    # The evaluation configuration is used to set the lead time range and resolution.
+    ds["lead_time"] = range(
+        eval_config.init_forecast_hour,
+        (
+            eval_config.init_forecast_hour
+            + eval_config.output_timesteps * eval_config.temporal_resolution_hours
+        ),
+        eval_config.temporal_resolution_hours,
+    )
+    return ds
+
+
+def _maybe_convert_dataset_lead_time_to_int(
+    eval_config: config.Config, dataset: xr.Dataset
+) -> xr.Dataset:
+    """Convert types of variables in an xarray Dataset based on the schema,
+    ensuring that, for example, the variable representing lead_time is of type int.
+
+    Args:
+        dataset: The input xarray Dataset that uses the schema's variable names.
+
+    Returns:
+        An xarray Dataset with adjusted types.
+    """
+
+    var = dataset["lead_time"]
+    if var.dtype == np.dtype("timedelta64[ns]"):
+        dataset["lead_time"] = (var / np.timedelta64(1, "h")).astype(int)
+    elif var.dtype == np.dtype("int64"):
+        logger.info("lead_time is already an int, skipping conversion")
+    else:
+        logger.warning(
+            "lead_time is not a timedelta64[ns] or int64, creating range based on"
+            "init_forecast_hour, output_timesteps, and temporal_resolution_hours"
+        )
+        dataset["lead_time"] = range(
+            eval_config.init_forecast_hour,
+            (
+                eval_config.init_forecast_hour
+                + eval_config.output_timesteps * eval_config.temporal_resolution_hours
+            ),
+            eval_config.temporal_resolution_hours,
+        )
+    return dataset

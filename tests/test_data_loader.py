@@ -3,32 +3,35 @@ import xarray as xr
 from extremeweatherbench import config, data_loader, events
 from unittest.mock import patch
 import numpy as np
+import pandas as pd
 
 
-def test_open_forecast_dataset_invalid_path(default_forecast_config):
+def test_open_and_preprocess_forecast_dataset_invalid_path(default_forecast_config):
     invalid_config = config.Config(
         event_types=[events.HeatWave],
         forecast_dir="invalid/path",
         gridded_obs_path="test/path",
     )
     with pytest.raises(TypeError):
-        data_loader.open_forecast_dataset(invalid_config, default_forecast_config)
+        data_loader.open_and_preprocess_forecast_dataset(
+            invalid_config, default_forecast_config
+        )
 
 
-def test_open_forecast_dataset_zarr(
+def test_open_and_preprocess_forecast_dataset_zarr(
     mocker, sample_config, default_forecast_config, sample_forecast_dataset
 ):
     # Mock xr.open_zarr to avoid actually opening a zarr file
     mock_zarr_dataset = sample_forecast_dataset
     mocker.patch("xarray.open_zarr", return_value=mock_zarr_dataset)
     sample_config.forecast_dir = "test/test.zarr"
-    forecast_dataset = data_loader.open_forecast_dataset(
+    forecast_dataset = data_loader.open_and_preprocess_forecast_dataset(
         sample_config, default_forecast_config
     )
     xr.testing.assert_equal(forecast_dataset, mock_zarr_dataset)
 
 
-def test_open_forecast_dataset_json(
+def test_open_and_preprocess_forecast_dataset_json(
     mocker, sample_config, default_forecast_config, sample_forecast_dataset
 ):
     mock_json_dataset = sample_forecast_dataset
@@ -38,27 +41,35 @@ def test_open_forecast_dataset_json(
     )
     sample_config.forecast_dir = "test/test.json"
 
-    forecast_dataset = data_loader.open_forecast_dataset(
+    forecast_dataset = data_loader.open_and_preprocess_forecast_dataset(
         sample_config, default_forecast_config
     )
     xr.testing.assert_equal(forecast_dataset, mock_json_dataset)
 
 
-def test_open_forecast_dataset_multiple_types(sample_config, default_forecast_config):
+def test_open_and_preprocess_forecast_dataset_multiple_types(
+    sample_config, default_forecast_config
+):
     # test for multiple other file types
     sample_config.forecast_dir = "test/other"
 
     with pytest.raises(TypeError):
-        data_loader.open_forecast_dataset(sample_config, default_forecast_config)
+        data_loader.open_and_preprocess_forecast_dataset(
+            sample_config, default_forecast_config
+        )
 
 
-def test_open_forecast_dataset_no_files(mocker, sample_config, default_forecast_config):
+def test_open_and_preprocess_forecast_dataset_no_files(
+    mocker, sample_config, default_forecast_config
+):
     sample_config.forecast_dir = "test/"
     with pytest.raises(TypeError):
-        data_loader.open_forecast_dataset(sample_config, default_forecast_config)
+        data_loader.open_and_preprocess_forecast_dataset(
+            sample_config, default_forecast_config
+        )
 
 
-def test_open_forecast_dataset_invalid_file_type(
+def test_open_and_preprocess_forecast_dataset_invalid_file_type(
     mocker, sample_config, default_forecast_config
 ):
     mock_fs = mocker.Mock()
@@ -66,7 +77,9 @@ def test_open_forecast_dataset_invalid_file_type(
     mocker.patch("fsspec.filesystem", return_value=mock_fs)
 
     with pytest.raises(TypeError, match="Unknown file type found in forecast path."):
-        data_loader.open_forecast_dataset(sample_config, default_forecast_config)
+        data_loader.open_and_preprocess_forecast_dataset(
+            sample_config, default_forecast_config
+        )
 
 
 def test_open_kerchunk_reference(sample_config):
@@ -204,3 +217,29 @@ def test_rename_forecast_dataset_partial_mapping(sample_forecast_dataset):
         renamed_ds["surface_northward_wind"].values, northward_wind_values
     )
     np.testing.assert_array_equal(renamed_ds["custom_var"].values, custom_var_values)
+
+
+def test_maybe_convert_dataset_lead_time_to_int(sample_config):
+    # Test with timedelta lead_time
+    ds_timedelta = xr.Dataset(
+        coords={
+            "lead_time": pd.timedelta_range(start="0h", periods=5, freq="6h"),
+        }
+    )
+    result_timedelta = data_loader._maybe_convert_dataset_lead_time_to_int(
+        sample_config, ds_timedelta
+    )
+    assert result_timedelta["lead_time"].dtype == np.dtype("int64")
+    assert all(result_timedelta["lead_time"].values == [0, 6, 12, 18, 24])
+
+    # Test with already integer lead_time
+    ds_int = xr.Dataset(
+        coords={
+            "lead_time": [0, 6, 12, 18, 24],
+        }
+    )
+    result_int = data_loader._maybe_convert_dataset_lead_time_to_int(
+        sample_config, ds_int
+    )
+    assert result_int["lead_time"].dtype == np.dtype("int64")
+    assert all(result_int["lead_time"].values == [0, 6, 12, 18, 24])

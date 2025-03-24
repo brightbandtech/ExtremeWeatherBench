@@ -284,7 +284,7 @@ def evaluate(
                 return cases
     logger.debug("Evaluation starting")
     point_obs, gridded_obs = data_loader.open_obs_datasets(eval_config)
-    forecast_dataset = data_loader.open_forecast_dataset(
+    forecast_dataset = data_loader.open_and_preprocess_forecast_dataset(
         eval_config, forecast_schema_config
     )
     logger.debug("Forecast and observation datasets loaded")
