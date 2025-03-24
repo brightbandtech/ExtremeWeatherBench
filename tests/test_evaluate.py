@@ -396,7 +396,7 @@ def test_evaluate_full_workflow(
         "extremeweatherbench.data_loader.open_obs_datasets",
         return_value=(None, sample_gridded_obs_dataset),
     )
-    result = evaluate.evaluate(mock_config)
+    result = evaluate.evaluate(sample_config)
     assert isinstance(result, pd.DataFrame)
     # Check that the result DataFrame contains all the expected columns
     expected_columns = [
