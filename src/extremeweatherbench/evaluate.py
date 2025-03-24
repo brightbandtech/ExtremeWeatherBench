@@ -1,11 +1,10 @@
 """Evaluation routines for use during ExtremeWeatherBench case studies / analyses."""
 
 import logging
-import fsspec
 from typing import Optional, Any, Literal, Union
 import pandas as pd
 import xarray as xr
-from extremeweatherbench import config, events, case, utils
+from extremeweatherbench import config, events, case, utils, data_loader
 import dacite
 import dataclasses
 import itertools
@@ -35,8 +34,6 @@ class CaseEvaluationInput:
     def load_data(self):
         """Load the evaluation inputs into memory."""
         logger.debug("Loading evaluation inputs into memory")
-        logger.debug("Observation: %s", self.observation)
-        logger.debug("Forecast: %s", self.forecast)
         self.observation = self.observation.compute()
         self.forecast = self.forecast.compute()
 
@@ -286,30 +283,28 @@ def evaluate(
                 )
                 return cases
     logger.debug("Evaluation starting")
+    point_obs, gridded_obs = data_loader.open_obs_datasets(eval_config)
+    forecast_dataset = data_loader.open_and_preprocess_forecast_dataset(
+        eval_config, forecast_schema_config
+    )
+    logger.debug("Forecast and observation datasets loaded")
+    logger.debug(
+        "Observation data: Point %s, Gridded %s",
+        point_obs is not None,
+        gridded_obs is not None,
+    )
     for event in eval_config.event_types:
         cases = dacite.from_dict(
             data_class=event,
             data=yaml_event_case,
         )
-        logger.debug("Cases loaded for %s", event.event_type)
-        point_obs, gridded_obs = _open_obs_datasets(eval_config)
-        forecast_dataset = _open_forecast_dataset(eval_config, forecast_schema_config)
 
-        # Manages some of the quirkiness of the parquets and avoids loading in memory overloads
-        # from the json kerchunk references
-        if "json" not in eval_config.forecast_dir:
-            logger.warning(
-                "json not detected for %s at %s, loading part of forecast dataset into memory",
-                event.event_type,
-                eval_config.forecast_dir,
-            )
-
-        if gridded_obs:
-            logger.info(
-                "gridded obs detected, mapping variables in gridded obs to forecast"
-            )
+        # map era5 vars by renaming and dropping extra vars
+        if gridded_obs is not None:
             gridded_obs = utils.map_era5_vars_to_forecast(
-                DEFAULT_FORECAST_SCHEMA_CONFIG, forecast_dataset, gridded_obs
+                forecast_schema_config,
+                forecast_dataset=forecast_dataset,
+                era5_dataset=gridded_obs,
             )
         logger.debug("beginning evaluation loop for %s", event.event_type)
         results = _maybe_evaluate_individual_cases_loop(
@@ -446,61 +441,3 @@ def _maybe_evaluate_individual_case(
     case_result_df["event_type"] = individual_case.event_type
 
     return case_result_df
-
-
-def _open_forecast_dataset(
-    eval_config: config.Config,
-    forecast_schema_config: config.ForecastSchemaConfig = DEFAULT_FORECAST_SCHEMA_CONFIG,
-):
-    """Open the forecast dataset specified for evaluation."""
-    logging.debug("Opening forecast dataset")
-    if eval_config.forecast_dir.startswith("s3://"):
-        fs = fsspec.filesystem("s3")
-    elif eval_config.forecast_dir.startswith(
-        "gcs://"
-    ) or eval_config.forecast_dir.startswith("gs://"):
-        fs = fsspec.filesystem("gcs")
-    else:
-        fs = fsspec.filesystem("file")
-
-    file_list = fs.ls(eval_config.forecast_dir)
-    file_types = set([file.split(".")[-1] for file in file_list])
-    if len(file_types) > 1 and "parq" not in eval_config.forecast_dir:
-        raise ValueError("Multiple file types found in forecast path.")
-    if "zarr" in file_types and len(file_list) == 1:
-        forecast_dataset = xr.open_zarr(file_list, chunks="auto")
-    elif "zarr" in file_types and len(file_list) > 1:
-        raise ValueError(
-            "Multiple zarr files found in forecast path, please provide a single zarr file."
-        )
-    if "nc" in file_types:
-        raise NotImplementedError("NetCDF file reading not implemented.")
-    if "parq" in file_types or any("parq" in ft for ft in file_types):
-        forecast_dataset = utils._open_mlwp_kerchunk_reference(
-            eval_config.forecast_dir, forecast_schema_config
-        )
-    if "json" in file_types:
-        forecast_dataset = utils._open_mlwp_kerchunk_reference(
-            file_list[0], forecast_schema_config
-        )
-    return forecast_dataset
-
-
-def _open_obs_datasets(eval_config: config.Config):
-    """Open the observation datasets specified for evaluation."""
-    point_obs = None
-    gridded_obs = None
-    if eval_config.point_obs_path:
-        point_obs = pd.read_parquet(
-            eval_config.point_obs_path,
-            storage_options=eval_config.point_obs_storage_options,
-        )
-    if eval_config.gridded_obs_path:
-        gridded_obs = xr.open_zarr(
-            eval_config.gridded_obs_path,
-            chunks=None,
-            storage_options=eval_config.gridded_obs_storage_options,
-        )
-    if point_obs is None and gridded_obs is None:
-        raise ValueError("No gridded or point observation data provided.")
-    return point_obs, gridded_obs
