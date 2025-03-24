@@ -439,9 +439,7 @@ def _maybe_evaluate_individual_case(
                 df["observation_type"] = eval_data.observation_type
                 results.append(df)
 
-        # Combine results for this metric/variable combination
-        if results:
-            case_result_df = pd.concat([case_result_df] + results, ignore_index=True)
+        case_result_df = pd.concat([case_result_df] + results, ignore_index=True)
 
     # Add case metadata
     case_result_df["case_id"] = individual_case.id
