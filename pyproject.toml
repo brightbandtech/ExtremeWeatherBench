@@ -27,6 +27,7 @@ dependencies = [
     "kerchunk[dev]",
     "setuptools>=75.8.2",
     "flox>=0.10.0",
+    "metpy>=1.6.3",
 ]
 
 [project.optional-dependencies]
