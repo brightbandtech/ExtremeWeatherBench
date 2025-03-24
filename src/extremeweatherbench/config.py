@@ -1,9 +1,12 @@
 """Module defining congifuration objects for driving ExtremeWeatherBench analyses."""
 
 import dataclasses
-from typing import List, Optional
-from extremeweatherbench import events
 from pathlib import Path
+from typing import Callable, List, Optional
+
+import xarray as xr
+
+from extremeweatherbench import events
 
 DATA_DIR = Path("./data")
 DEFAULT_OUTPUT_DIR = DATA_DIR / "outputs"
@@ -23,6 +26,11 @@ POINT_OBS_STORAGE_OPTIONS = dict(token="anon")
 
 #: Storage/access options for gridded observation datasets.
 GRIDDED_OBS_STORAGE_OPTIONS = dict(token="anon")
+
+
+def _default_preprocess(ds: xr.Dataset) -> xr.Dataset:
+    """Default forecast preprocess function that does nothing."""
+    return ds
 
 
 @dataclasses.dataclass
@@ -50,7 +58,8 @@ class Config:
             that be used for evaluation is stored.
         remote_protocol: The storage protocol which the forecast data is stored on.
             Defaults to "s3".
-        forecast_source: The source of the forecast data. If not CIRA, use None.
+        forecast_preprocess: A function that preprocesses the forecast dataset into a
+            format expected by the evaluation metrics.
         init_forecast_hour: The first forecast hour to include in the evaluation.
             Defaults to 0.
         temporal_resolution_hours: The resolution of the forecast data in hours.
@@ -70,7 +79,7 @@ class Config:
     gridded_obs_path: str = ARCO_ERA5_FULL_URI
     point_obs_path: str = ISD_POINT_OBS_URI
     remote_protocol: str = "s3"
-    forecast_source: Optional[str] = "cira"
+    forecast_preprocess: Callable[[xr.Dataset], xr.Dataset] = _default_preprocess
     init_forecast_hour: int = 0  # The first forecast hour (e.g. Graphcast starts at 6).
     temporal_resolution_hours: int = 6
     output_timesteps: int = 41
