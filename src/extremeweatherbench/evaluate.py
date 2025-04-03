@@ -1,7 +1,7 @@
 """Evaluation routines for use during ExtremeWeatherBench case studies / analyses."""
 
 import logging
-from typing import Optional, Any, Literal, Union
+from typing import Optional, Literal, Union
 import pandas as pd
 import xarray as xr
 from extremeweatherbench import config, events, case, utils, data_loader
@@ -240,17 +240,13 @@ def _check_and_subset_forecast_availability(
 def evaluate(
     eval_config: config.Config,
     forecast_schema_config: config.ForecastSchemaConfig = DEFAULT_FORECAST_SCHEMA_CONFIG,
-    dry_run: bool = False,
-    dry_run_event_type: Optional[str] = "HeatWave",
-) -> dict[Any, dict[Any, Optional[dict[str, Any]]]]:
+) -> pd.DataFrame:
     """Driver for evaluating a collection of Cases across a set of Events.
 
     Args:
         eval_config: A configuration object defining the evaluation run.
         forecast_schema_config: A mapping of the forecast variable naming schema to use
             when reading / decoding forecast data in the analysis.
-        dry_run: Flag to disable performing actual calculations (but still validate
-            case configurations). Defaults to "False."
 
     Returns:
         A dictionary mapping event types to lists of xarray Datasets containing the
@@ -259,29 +255,7 @@ def evaluate(
 
     all_results_df = pd.DataFrame()
     yaml_event_case = utils.load_events_yaml()
-    for k, v in yaml_event_case.items():
-        if k == "cases":
-            for individual_case in v:
-                if "location" in individual_case:
-                    individual_case["location"]["longitude"] = (
-                        utils.convert_longitude_to_360(
-                            individual_case["location"]["longitude"]
-                        )
-                    )
-                    individual_case["location"] = utils.Location(
-                        **individual_case["location"]
-                    )
-    if dry_run:
-        logger.debug(
-            "Dry run invoked for %s, not running evaluation", dry_run_event_type
-        )
-        for event in eval_config.event_types:
-            if event.__name__ == dry_run_event_type:
-                cases: dict = dacite.from_dict(
-                    data_class=event,
-                    data=yaml_event_case,
-                )
-                return cases
+
     logger.debug("Evaluation starting")
     point_obs, gridded_obs = data_loader.open_obs_datasets(eval_config)
     forecast_dataset = data_loader.open_and_preprocess_forecast_dataset(
@@ -441,3 +415,23 @@ def _maybe_evaluate_individual_case(
     case_result_df["event_type"] = individual_case.event_type
 
     return case_result_df
+
+
+def get_case_metadata(eval_config: config.Config) -> list[events.EventContainer]:
+    """Extract case metadata from a dictionary of case information.
+
+    Args:
+        eval_config: The configuration object defining the evaluation run.
+
+    Returns:
+        A list of EventContainer objects containing the case metadata.
+    """
+    yaml_event_case = utils.load_events_yaml()
+    case_metadata_output = []
+    for event in eval_config.event_types:
+        cases = dacite.from_dict(
+            data_class=event,
+            data=yaml_event_case,
+        )
+        case_metadata_output.append(cases)
+    return case_metadata_output
