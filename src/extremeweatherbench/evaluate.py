@@ -1,7 +1,7 @@
 """Evaluation routines for use during ExtremeWeatherBench case studies / analyses."""
 
 import logging
-from typing import Optional, Any, Literal, Union
+from typing import Optional, Literal, Union
 import pandas as pd
 import xarray as xr
 from extremeweatherbench import config, events, case, utils, data_loader
@@ -241,7 +241,7 @@ def evaluate(
     eval_config: config.Config,
     forecast_schema_config: config.ForecastSchemaConfig = DEFAULT_FORECAST_SCHEMA_CONFIG,
     only_case_metadata: bool = False,
-) -> dict[Any, dict[Any, Optional[dict[str, Any]]]]:
+) -> pd.DataFrame:
     """Driver for evaluating a collection of Cases across a set of Events.
 
     Args:
@@ -442,3 +442,36 @@ def _maybe_evaluate_individual_case(
     case_result_df["event_type"] = individual_case.event_type
 
     return case_result_df
+
+
+def get_case_metadata(eval_config: config.Config) -> list[case.IndividualCase]:
+    """Extract case metadata from a dictionary of case information.
+
+    Args:
+        eval_config: The configuration object defining the evaluation run.
+
+    Returns:
+        A list of IndividualCase objects containing the case metadata.
+    """
+    yaml_event_case = utils.load_events_yaml()
+    for k, v in yaml_event_case.items():
+        if k == "cases":
+            for individual_case in v:
+                if "location" in individual_case:
+                    individual_case["location"]["longitude"] = (
+                        utils.convert_longitude_to_360(
+                            individual_case["location"]["longitude"]
+                        )
+                    )
+                    individual_case["location"] = utils.Location(
+                        **individual_case["location"]
+                    )
+
+    for event in eval_config.event_types:
+        case_metadata_output = []
+        cases = dacite.from_dict(
+            data_class=event,
+            data=yaml_event_case,
+        )
+        case_metadata_output.append(cases.cases)
+    return case_metadata_output
