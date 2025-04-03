@@ -240,8 +240,7 @@ def _check_and_subset_forecast_availability(
 def evaluate(
     eval_config: config.Config,
     forecast_schema_config: config.ForecastSchemaConfig = DEFAULT_FORECAST_SCHEMA_CONFIG,
-    dry_run: bool = False,
-    dry_run_event_type: Optional[str] = "HeatWave",
+    only_case_metadata: bool = False,
 ) -> dict[Any, dict[Any, Optional[dict[str, Any]]]]:
     """Driver for evaluating a collection of Cases across a set of Events.
 
@@ -249,7 +248,7 @@ def evaluate(
         eval_config: A configuration object defining the evaluation run.
         forecast_schema_config: A mapping of the forecast variable naming schema to use
             when reading / decoding forecast data in the analysis.
-        dry_run: Flag to disable performing actual calculations (but still validate
+        only_case_metadata: Flag to disable performing actual calculations (but still validate
             case configurations). Defaults to "False."
 
     Returns:
@@ -271,17 +270,19 @@ def evaluate(
                     individual_case["location"] = utils.Location(
                         **individual_case["location"]
                     )
-    if dry_run:
+
+    if only_case_metadata:
         logger.debug(
-            "Dry run invoked for %s, not running evaluation", dry_run_event_type
+            "Only case metadata requested, skipping evaluation",
         )
         for event in eval_config.event_types:
-            if event.__name__ == dry_run_event_type:
-                cases: dict = dacite.from_dict(
-                    data_class=event,
-                    data=yaml_event_case,
-                )
-                return cases
+            case_metadata_output = []
+            cases = dacite.from_dict(
+                data_class=event,
+                data=yaml_event_case,
+            )
+            case_metadata_output.append(cases.cases)
+        return case_metadata_output
     logger.debug("Evaluation starting")
     point_obs, gridded_obs = data_loader.open_obs_datasets(eval_config)
     forecast_dataset = data_loader.open_and_preprocess_forecast_dataset(
