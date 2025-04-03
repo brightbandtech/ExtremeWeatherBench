@@ -1,16 +1,15 @@
 import pytest
-from extremeweatherbench import events, case, evaluate
+from extremeweatherbench import case, evaluate, events
 import datetime
 import xarray as xr
 import numpy as np
 import pandas as pd
 
 
-def test_evaluate_no_computation(sample_config):
-    result = evaluate.evaluate(
-        sample_config, dry_run=True, dry_run_event_type="HeatWave"
-    )
-    assert isinstance(result, events.EventContainer)
+def test_get_case_metadata(sample_config):
+    result = evaluate.get_case_metadata(sample_config)
+    assert isinstance(result, list)
+    assert isinstance(result[0], events.EventContainer)
 
 
 def test_evaluate_individualcase(sample_forecast_dataset, sample_gridded_obs_dataset):
