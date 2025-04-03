@@ -247,8 +247,6 @@ def evaluate(
         eval_config: A configuration object defining the evaluation run.
         forecast_schema_config: A mapping of the forecast variable naming schema to use
             when reading / decoding forecast data in the analysis.
-        only_case_metadata: Flag to disable performing actual calculations (but still validate
-            case configurations). Defaults to "False."
 
     Returns:
         A dictionary mapping event types to lists of xarray Datasets containing the
