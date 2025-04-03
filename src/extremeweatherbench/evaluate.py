@@ -240,7 +240,6 @@ def _check_and_subset_forecast_availability(
 def evaluate(
     eval_config: config.Config,
     forecast_schema_config: config.ForecastSchemaConfig = DEFAULT_FORECAST_SCHEMA_CONFIG,
-    only_case_metadata: bool = False,
 ) -> pd.DataFrame:
     """Driver for evaluating a collection of Cases across a set of Events.
 
@@ -258,31 +257,7 @@ def evaluate(
 
     all_results_df = pd.DataFrame()
     yaml_event_case = utils.load_events_yaml()
-    for k, v in yaml_event_case.items():
-        if k == "cases":
-            for individual_case in v:
-                if "location" in individual_case:
-                    individual_case["location"]["longitude"] = (
-                        utils.convert_longitude_to_360(
-                            individual_case["location"]["longitude"]
-                        )
-                    )
-                    individual_case["location"] = utils.Location(
-                        **individual_case["location"]
-                    )
 
-    if only_case_metadata:
-        logger.debug(
-            "Only case metadata requested, skipping evaluation",
-        )
-        for event in eval_config.event_types:
-            case_metadata_output = []
-            cases = dacite.from_dict(
-                data_class=event,
-                data=yaml_event_case,
-            )
-            case_metadata_output.append(cases.cases)
-        return case_metadata_output
     logger.debug("Evaluation starting")
     point_obs, gridded_obs = data_loader.open_obs_datasets(eval_config)
     forecast_dataset = data_loader.open_and_preprocess_forecast_dataset(
@@ -444,34 +419,21 @@ def _maybe_evaluate_individual_case(
     return case_result_df
 
 
-def get_case_metadata(eval_config: config.Config) -> list[case.IndividualCase]:
+def get_case_metadata(eval_config: config.Config) -> list[events.EventContainer]:
     """Extract case metadata from a dictionary of case information.
 
     Args:
         eval_config: The configuration object defining the evaluation run.
 
     Returns:
-        A list of IndividualCase objects containing the case metadata.
+        A list of EventContainer objects containing the case metadata.
     """
     yaml_event_case = utils.load_events_yaml()
-    for k, v in yaml_event_case.items():
-        if k == "cases":
-            for individual_case in v:
-                if "location" in individual_case:
-                    individual_case["location"]["longitude"] = (
-                        utils.convert_longitude_to_360(
-                            individual_case["location"]["longitude"]
-                        )
-                    )
-                    individual_case["location"] = utils.Location(
-                        **individual_case["location"]
-                    )
-
+    case_metadata_output = []
     for event in eval_config.event_types:
-        case_metadata_output = []
         cases = dacite.from_dict(
             data_class=event,
             data=yaml_event_case,
         )
-        case_metadata_output.append(cases.cases)
+        case_metadata_output.append(cases)
     return case_metadata_output
