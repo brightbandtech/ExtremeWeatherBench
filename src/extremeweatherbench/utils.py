@@ -363,6 +363,16 @@ def read_event_yaml(input_pth: str | Path) -> dict:
     input_pth = Path(input_pth)
     with open(input_pth, "rb") as f:
         yaml_event_case = yaml.safe_load(f)
+    for k, v in yaml_event_case.items():
+        if k == "cases":
+            for individual_case in v:
+                if "location" in individual_case:
+                    individual_case["location"]["longitude"] = convert_longitude_to_360(
+                        individual_case["location"]["longitude"]
+                    )
+                    individual_case["location"] = Location(
+                        **individual_case["location"]
+                    )
     return yaml_event_case
 
 
