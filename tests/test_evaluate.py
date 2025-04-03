@@ -8,7 +8,7 @@ import pandas as pd
 
 def test_evaluate_no_computation(sample_config):
     result = evaluate.evaluate(
-        sample_config, dry_run=True, dry_run_event_type="HeatWave"
+        sample_config, only_case_metadata=True, only_case_metadata_event_type="HeatWave"
     )
     assert isinstance(result, events.EventContainer)
 
