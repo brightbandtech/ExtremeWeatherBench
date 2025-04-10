@@ -1,16 +1,15 @@
 import pytest
-from extremeweatherbench import events, case, evaluate
+from extremeweatherbench import case, evaluate, events
 import datetime
 import xarray as xr
 import numpy as np
 import pandas as pd
 
 
-def test_evaluate_no_computation(sample_config):
-    result = evaluate.evaluate(
-        sample_config, dry_run=True, dry_run_event_type="HeatWave"
-    )
-    assert isinstance(result, events.EventContainer)
+def test_get_case_metadata(sample_config):
+    result = evaluate.get_case_metadata(sample_config)
+    assert isinstance(result, list)
+    assert isinstance(result[0], events.EventContainer)
 
 
 def test_evaluate_individualcase(sample_forecast_dataset, sample_gridded_obs_dataset):
@@ -389,7 +388,7 @@ def test_evaluate_full_workflow(
 ):
     # The return func will have the forecast dataset's data vars names switched already
     mocker.patch(
-        "extremeweatherbench.data_loader.open_forecast_dataset",
+        "extremeweatherbench.data_loader.open_and_preprocess_forecast_dataset",
         return_value=sample_forecast_dataset,
     )
     mocker.patch(
@@ -397,12 +396,15 @@ def test_evaluate_full_workflow(
         return_value=(None, sample_gridded_obs_dataset),
     )
     result = evaluate.evaluate(sample_config)
-    assert isinstance(result, dict)
-    assert "heat_wave" in result
-    for _, v in result["heat_wave"].items():
-        if v is not None:
-            assert isinstance(v, dict)
-            for _, v2 in v.items():
-                assert isinstance(v2, dict)
-                for _, v3 in v2.items():
-                    assert isinstance(v3, dict) or v3 is None
+    assert isinstance(result, pd.DataFrame)
+    # Check that the result DataFrame contains all the expected columns
+    expected_columns = [
+        "lead_time",
+        "value",
+        "variable",
+        "metric",
+        "observation_type",
+        "case_id",
+        "event_type",
+    ]
+    assert all(col in result.columns for col in expected_columns)

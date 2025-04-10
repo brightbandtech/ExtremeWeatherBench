@@ -1,7 +1,7 @@
 """Evaluation routines for use during ExtremeWeatherBench case studies / analyses."""
 
 import logging
-from typing import Optional, Any, Literal, Union
+from typing import Optional, Literal, Union
 import pandas as pd
 import xarray as xr
 from extremeweatherbench import config, events, case, utils, data_loader
@@ -240,51 +240,25 @@ def _check_and_subset_forecast_availability(
 def evaluate(
     eval_config: config.Config,
     forecast_schema_config: config.ForecastSchemaConfig = DEFAULT_FORECAST_SCHEMA_CONFIG,
-    dry_run: bool = False,
-    dry_run_event_type: Optional[str] = "HeatWave",
-) -> dict[Any, dict[Any, Optional[dict[str, Any]]]]:
+) -> pd.DataFrame:
     """Driver for evaluating a collection of Cases across a set of Events.
 
     Args:
         eval_config: A configuration object defining the evaluation run.
         forecast_schema_config: A mapping of the forecast variable naming schema to use
             when reading / decoding forecast data in the analysis.
-        dry_run: Flag to disable performing actual calculations (but still validate
-            case configurations). Defaults to "False."
 
     Returns:
         A dictionary mapping event types to lists of xarray Datasets containing the
         evaluation results for each case within the event type.
     """
 
-    all_results = {}
+    all_results_df = pd.DataFrame()
     yaml_event_case = utils.load_events_yaml()
-    for k, v in yaml_event_case.items():
-        if k == "cases":
-            for individual_case in v:
-                if "location" in individual_case:
-                    individual_case["location"]["longitude"] = (
-                        utils.convert_longitude_to_360(
-                            individual_case["location"]["longitude"]
-                        )
-                    )
-                    individual_case["location"] = utils.Location(
-                        **individual_case["location"]
-                    )
-    if dry_run:
-        logger.debug(
-            "Dry run invoked for %s, not running evaluation", dry_run_event_type
-        )
-        for event in eval_config.event_types:
-            if event.__name__ == dry_run_event_type:
-                cases: dict = dacite.from_dict(
-                    data_class=event,
-                    data=yaml_event_case,
-                )
-                return cases
+
     logger.debug("Evaluation starting")
     point_obs, gridded_obs = data_loader.open_obs_datasets(eval_config)
-    forecast_dataset = data_loader.open_forecast_dataset(
+    forecast_dataset = data_loader.open_and_preprocess_forecast_dataset(
         eval_config, forecast_schema_config
     )
     logger.debug("Forecast and observation datasets loaded")
@@ -310,7 +284,7 @@ def evaluate(
         results = _maybe_evaluate_individual_cases_loop(
             cases, forecast_dataset, gridded_obs, point_obs
         )
-        all_results[event.event_type] = results
+        all_results_df = pd.concat([all_results_df, results])
         logger.debug("evaluation loop complete for %s", event.event_type)
     logger.info(
         "\nVerification Summary:\n"
@@ -329,11 +303,9 @@ def evaluate(
                 if x
             ]
         ),
-        # TODO(aaTman): #63 loop does not work properly, it does not skip None's outputting the sum of all cases.
-        # Needs to skip None values
-        sum(len(results) for results in all_results.values() if results is not None),
+        all_results_df["case_id"].nunique(),
     )
-    return all_results
+    return all_results_df
 
 
 def _maybe_evaluate_individual_cases_loop(
@@ -341,7 +313,7 @@ def _maybe_evaluate_individual_cases_loop(
     forecast_dataset: xr.Dataset,
     gridded_obs: Optional[xr.Dataset] = None,
     point_obs: Optional[pd.DataFrame] = None,
-) -> dict[Any, Optional[dict[str, Any]]]:
+) -> pd.DataFrame:
     """Sequentially loop over and evalute all cases for a specific event type.
 
     Args:
@@ -354,16 +326,17 @@ def _maybe_evaluate_individual_cases_loop(
         A list of xarray Datasets containing the evaluation results for each case
         in the Event of interest.
     """
-    results = {}
+    results_df = pd.DataFrame()
     for individual_case in event.cases:
-        results[individual_case.id] = _maybe_evaluate_individual_case(
+        result = _maybe_evaluate_individual_case(
             individual_case,
             forecast_dataset,
             gridded_obs,
             point_obs,
         )
+        results_df = pd.concat([results_df, result])
 
-    return results
+    return results_df
 
 
 def _maybe_evaluate_individual_case(
@@ -371,7 +344,7 @@ def _maybe_evaluate_individual_case(
     forecast_dataset: Optional[xr.Dataset],
     gridded_obs: Optional[xr.Dataset],
     point_obs: Optional[pd.DataFrame],
-) -> Optional[dict[str, xr.Dataset]]:
+) -> pd.DataFrame:
     """Evaluate a single case given forecast data and observations.
 
     Args:
@@ -386,7 +359,6 @@ def _maybe_evaluate_individual_case(
     Raises:
         ValueError: If no forecast data is available.
     """
-    case_results: dict[str, dict[str, Any]] = {}
     logger.info("Evaluating case %s, %s", individual_case.id, individual_case.title)
     gridded_obs_evaluation = CaseEvaluationData(
         individual_case=individual_case,
@@ -411,21 +383,55 @@ def _maybe_evaluate_individual_case(
             else None
         ),
     )
+    case_result_df = pd.DataFrame()
+
+    # Process each data variable and metric combination
     for data_var, metric in itertools.product(
         individual_case.data_vars, individual_case.metrics_list
     ):
-        case_results[data_var] = {}
         metric_instance = metric()
-        logging.debug("metric %s computing", metric_instance.name)
-        # TODO(aaTman): Create metric container object for gridded and point obs
-        # in the meantime, forcing a check for Nones in gridded and point eval objects
-        result = {}
-        for eval in [gridded_case_eval, point_case_eval]:
-            if eval.observation is not None and eval.forecast is not None:
-                result[eval.observation_type] = metric_instance.compute(
-                    eval.forecast[data_var], eval.observation[data_var]
+        logging.debug("Computing metric: %s", metric_instance.name)
+
+        results = []
+        # Process both gridded and point observations
+        for eval_data in [gridded_case_eval, point_case_eval]:
+            if eval_data.observation is not None and eval_data.forecast is not None:
+                # Compute metric and format result
+                result = metric_instance.compute(
+                    eval_data.forecast[data_var], eval_data.observation[data_var]
                 )
-            else:
-                result[eval.observation_type] = None
-        case_results[data_var][metric_instance.name] = result
-    return case_results
+                result.name = "value"
+                # Convert to DataFrame and add metadata
+                df = result.to_dataframe().reset_index()
+                df["variable"] = data_var
+                df["metric"] = metric_instance.name
+                df["observation_type"] = eval_data.observation_type
+                results.append(df)
+
+        case_result_df = pd.concat([case_result_df] + results, ignore_index=True)
+
+    # Add case metadata
+    case_result_df["case_id"] = individual_case.id
+    case_result_df["event_type"] = individual_case.event_type
+
+    return case_result_df
+
+
+def get_case_metadata(eval_config: config.Config) -> list[events.EventContainer]:
+    """Extract case metadata from a dictionary of case information.
+
+    Args:
+        eval_config: The configuration object defining the evaluation run.
+
+    Returns:
+        A list of EventContainer objects containing the case metadata.
+    """
+    yaml_event_case = utils.load_events_yaml()
+    case_metadata_output = []
+    for event in eval_config.event_types:
+        cases = dacite.from_dict(
+            data_class=event,
+            data=yaml_event_case,
+        )
+        case_metadata_output.append(cases)
+    return case_metadata_output

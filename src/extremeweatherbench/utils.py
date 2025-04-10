@@ -364,6 +364,16 @@ def read_event_yaml(input_pth: str | Path) -> dict:
     input_pth = Path(input_pth)
     with open(input_pth, "rb") as f:
         yaml_event_case = yaml.safe_load(f)
+    for k, v in yaml_event_case.items():
+        if k == "cases":
+            for individual_case in v:
+                if "location" in individual_case:
+                    individual_case["location"]["longitude"] = convert_longitude_to_360(
+                        individual_case["location"]["longitude"]
+                    )
+                    individual_case["location"] = Location(
+                        **individual_case["location"]
+                    )
     return yaml_event_case
 
 
@@ -559,20 +569,3 @@ def derive_indices_from_init_time_and_lead_time(
     init_time_subset_indices = valid_time_indices[0]
 
     return init_time_subset_indices
-
-
-def convert_dataset_lead_time_to_int(dataset: xr.Dataset) -> xr.Dataset:
-    """Convert types of variables in an xarray Dataset based on the schema,
-    ensuring that, for example, the variable representing lead_time is of type int.
-
-    Args:
-        dataset: The input xarray Dataset that uses the schema's variable names.
-
-    Returns:
-        An xarray Dataset with adjusted types.
-    """
-
-    var = dataset["lead_time"]
-    if var.dtype == np.dtype("timedelta64[ns]"):
-        dataset["lead_time"] = (var / np.timedelta64(1, "h")).astype(int)
-    return dataset
