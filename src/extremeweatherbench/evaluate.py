@@ -145,9 +145,14 @@ def _subset_point_obs(
     renamed_observations = case_evaluation_data.observation.rename(
         columns=utils.ISD_MAPPING
     )
-    var_subset_point_obs = renamed_observations[
-        utils.POINT_OBS_METADATA_VARS + case_evaluation_data.individual_case.data_vars
-    ]
+
+    var_subset_point_obs = utils.maybe_filter_df_columns(
+        df=renamed_observations,
+        variables=[
+            utils.POINT_OBS_METADATA_VARS,
+            case_evaluation_data.individual_case.data_vars,
+        ],
+    )
     var_id_subset_point_obs = var_subset_point_obs.loc[
         var_subset_point_obs["id"] == case_evaluation_data.individual_case.id
     ]
@@ -261,6 +266,13 @@ def evaluate(
     forecast_dataset = data_loader.open_and_preprocess_forecast_dataset(
         eval_config, forecast_schema_config
     )
+    # map era5 vars by renaming and dropping extra vars
+    if gridded_obs is not None:
+        gridded_obs = utils.map_era5_vars_to_forecast(
+            forecast_schema_config,
+            forecast_dataset=forecast_dataset,
+            era5_dataset=gridded_obs,
+        )
     logger.debug("Forecast and observation datasets loaded")
     logger.debug(
         "Observation data: Point %s, Gridded %s",
@@ -273,13 +285,6 @@ def evaluate(
             data=yaml_event_case,
         )
 
-        # map era5 vars by renaming and dropping extra vars
-        if gridded_obs is not None:
-            gridded_obs = utils.map_era5_vars_to_forecast(
-                forecast_schema_config,
-                forecast_dataset=forecast_dataset,
-                era5_dataset=gridded_obs,
-            )
         logger.debug("beginning evaluation loop for %s", event.event_type)
         results = _maybe_evaluate_individual_cases_loop(
             cases, forecast_dataset, gridded_obs, point_obs
