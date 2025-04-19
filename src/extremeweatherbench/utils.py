@@ -37,23 +37,6 @@ ERA5_MAPPING = {
     "longitude": "longitude",
 }
 
-#: Maps ISD variable names to forecast variable names.
-ISD_MAPPING = {
-    "surface_temperature": "surface_air_temperature",
-}
-
-#: metadata variables existing in precomputed ISD point obs.
-POINT_OBS_METADATA_VARS = [
-    "time",
-    "station",
-    "call",
-    "name",
-    "latitude",
-    "longitude",
-    "elev",
-    "id",
-]
-
 
 def convert_longitude_to_360(longitude: float) -> float:
     """Convert a longitude from the range [-180, 180) to [0, 360)."""
@@ -410,7 +393,6 @@ def align_point_obs_from_gridded(
     forecast_ds: xr.Dataset,
     case_subset_point_obs_df: pd.DataFrame,
     data_var: List[str],
-    point_obs_metadata_vars: List[str],
 ) -> Tuple[xr.Dataset, xr.Dataset]:
     """Takes in a forecast dataarray and point observation dataframe, aligning them by
     reducing dimensions.
@@ -419,17 +401,12 @@ def align_point_obs_from_gridded(
         forecast_ds: The forecast dataset.
         case_subset_point_obs_df: The point observation dataframe.
         data_var: The variable to subset (e.g. "surface_air_temperature")
-        point_obs_metadata_vars: The metadata variables to subset (e.g. ["elev", "name"])
 
     Returns a tuple of aligned forecast and observation dataarrays.
     """
 
-    case_subset_point_obs_df = case_subset_point_obs_df[
-        POINT_OBS_METADATA_VARS + data_var
-    ]
-    case_subset_point_obs_df = case_subset_point_obs_df.rename(columns=ISD_MAPPING)
-    case_subset_point_obs_df["longitude"] = convert_longitude_to_360(
-        case_subset_point_obs_df["longitude"]
+    case_subset_point_obs_df.loc[:, "longitude"] = convert_longitude_to_360(
+        case_subset_point_obs_df.loc[:, "longitude"]
     )
     case_subset_point_obs_df = location_subset_point_obs(
         case_subset_point_obs_df,
@@ -438,19 +415,16 @@ def align_point_obs_from_gridded(
         forecast_ds["longitude"].min().values,
         forecast_ds["longitude"].max().values,
     )
-    # Uses indexing in the dataframe to capture metadata columns for future use
-    point_obs_metadata = case_subset_point_obs_df[point_obs_metadata_vars]
-
     # Reset index to allow for easier modification
     case_subset_point_obs_df = case_subset_point_obs_df.reset_index()
-    case_subset_point_obs_df.loc[:, "station"] = case_subset_point_obs_df[
-        "station"
+    case_subset_point_obs_df.loc[:, "station_id"] = case_subset_point_obs_df[
+        "station_id"
     ].astype("str")
 
     # Set up multiindex to enable slicing along individual timesteps
     case_subset_point_obs_df = case_subset_point_obs_df.set_index(
         [
-            "station",
+            "station_id",
             "time",
         ]
     ).sort_index()
@@ -481,35 +455,37 @@ def align_point_obs_from_gridded(
             continue
         obs_timeslice = obs_timeslice.reset_index()
 
-        station_ids = obs_timeslice["station"]
-        lons = xr.DataArray(obs_timeslice["longitude"].values, dims="station")
-        lats = xr.DataArray(obs_timeslice["latitude"].values, dims="station")
+        station_ids = obs_timeslice["station_id"]
+        lons = xr.DataArray(obs_timeslice["longitude"].values, dims="station_id")
+        lats = xr.DataArray(obs_timeslice["latitude"].values, dims="station_id")
 
         forecast_at_obs_ds = forecast_ds.sel(
             init_time=init_time, lead_time=lead_time
         ).interp(latitude=lats, longitude=lons, method="nearest")
         forecast_at_obs_ds = forecast_at_obs_ds.assign_coords(
             {
-                "station": station_ids,
+                "station_id": station_ids,
                 "time": valid_time,
             }
         )
         forecast_at_obs_ds.coords["lead_time"] = lead_time
         forecast_at_obs_ds.coords["init_time"] = init_time
+
+        # Uses the dataframe attrs to apply metadata columns
         valid_time_subset_obs_ds = obs_timeslice.to_xarray().set_coords(
-            point_obs_metadata
+            case_subset_point_obs_df.attrs["metadata_vars"]
         )[data_var]
         valid_time_subset_obs_ds = valid_time_subset_obs_ds.swap_dims(
-            {"index": "station"}
+            {"index": "station_id"}
         )
         valid_time_subset_obs_ds.coords["lead_time"] = lead_time
         valid_time_subset_obs_ds.coords["init_time"] = init_time
 
         aligned_observation_list.append(valid_time_subset_obs_ds)
         aligned_forecast_list.append(forecast_at_obs_ds)
-    # concat the dataarrays along the station dimension
-    interpolated_forecast = xr.concat(aligned_forecast_list, dim="station")
-    interpolated_observation = xr.concat(aligned_observation_list, dim="station")
+    # concat the dataarrays along the station_id dimension
+    interpolated_forecast = xr.concat(aligned_forecast_list, dim="station_id")
+    interpolated_observation = xr.concat(aligned_observation_list, dim="station_id")
     return (interpolated_forecast, interpolated_observation)
 
 

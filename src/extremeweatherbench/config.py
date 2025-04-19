@@ -18,8 +18,8 @@ ARCO_ERA5_FULL_URI = (
     "gs://gcp-public-data-arco-era5/ar/full_37-1h-0p25deg-chunk-1.zarr-v3"
 )
 
-#: Storage/access options for point observation datasets.
-ISD_POINT_OBS_URI = "gs://extremeweatherbench/isd_minimal_qc.parquet"
+#: Storage/access options for default point observation dataset.
+DEFAULT_POINT_OBS_URI = "gs://extremeweatherbench/ghcnh.parq"
 
 #: Storage/access options for point observation datasets.
 POINT_OBS_STORAGE_OPTIONS = dict(token="anon")
@@ -76,8 +76,8 @@ class Config:
     output_dir: Path = DEFAULT_OUTPUT_DIR
     forecast_dir: Path = DEFAULT_FORECAST_DIR
     cache_dir: Optional[Path] = DEFAULT_CACHE_DIR
-    gridded_obs_path: str = ARCO_ERA5_FULL_URI
-    point_obs_path: str = ISD_POINT_OBS_URI
+    gridded_obs_path: Optional[str] = ARCO_ERA5_FULL_URI
+    point_obs_path: Optional[str] = DEFAULT_POINT_OBS_URI
     remote_protocol: str = "s3"
     forecast_preprocess: Callable[[xr.Dataset], xr.Dataset] = _default_preprocess
     init_forecast_hour: int = 0  # The first forecast hour (e.g. Graphcast starts at 6).
@@ -113,3 +113,51 @@ class ForecastSchemaConfig:
     level: Optional[str] = "level"
     latitude: Optional[str] = "latitude"
     longitude: Optional[str] = "longitude"
+
+
+@dataclasses.dataclass
+class PointObservationSchemaConfig:
+    """A mapping between standard variable names used across EWB, and their counterpart
+    in a provided point observation dataset.
+
+    Allows users to insert custom schemas for decoding default or custom point observation data. Defaults are
+    suggested based on the CF Conventions.
+    """
+
+    air_pressure_at_mean_sea_level: Optional[str] = "air_pressure_at_mean_sea_level"
+    surface_air_pressure: Optional[str] = "surface_air_pressure"
+    surface_wind_speed: Optional[str] = "surface_wind_speed"
+    surface_wind_from_direction: Optional[str] = "surface_wind_from_direction"
+    surface_air_temperature: Optional[str] = "surface_air_temperature"
+    surface_dew_point_temperature: Optional[str] = "surface_dew_point"
+    surface_relative_humidity: Optional[str] = "surface_relative_humidity"
+    accumulated_1_hour_precipitation: Optional[str] = "accumulated_1_hour_precipitation"
+    time: Optional[str] = "time"
+    latitude: Optional[str] = "latitude"
+    longitude: Optional[str] = "longitude"
+    elevation: Optional[str] = "elevation"
+    station_id: Optional[str] = "station"
+    station_name: Optional[str] = "name"
+    case_id: Optional[str] = "id"
+    metadata_vars: List[str] = dataclasses.field(
+        default_factory=lambda: [
+            "station",
+            "id",
+            "latitude",
+            "longitude",
+            "time",
+        ]
+    )
+
+    def extend_metadata_vars(self, input_metadata_variables: List[str]):
+        """Set the metadata variables for the schema config."""
+        self.metadata_vars.extend(input_metadata_variables)
+
+    @property
+    def mapped_metadata_vars(self):
+        """Get the metadata variables from the schema config."""
+        return [
+            field.name
+            for field in dataclasses.fields(self)
+            if field.default in self.metadata_vars
+        ]
