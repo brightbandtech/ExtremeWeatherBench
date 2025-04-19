@@ -15,6 +15,9 @@ logger.setLevel(logging.INFO)
 #: Default mapping for forecast dataset schema.
 DEFAULT_FORECAST_SCHEMA_CONFIG = config.ForecastSchemaConfig()
 
+#: Default mapping for point observation dataset schema.
+DEFAULT_POINT_OBS_SCHEMA_CONFIG = config.PointObservationSchemaConfig()
+
 
 @dataclasses.dataclass
 class CaseEvaluationInput:
@@ -142,25 +145,13 @@ def _subset_point_obs(
     """Subset the point observation dataarray for a given data variable."""
     if case_evaluation_data.observation is None:
         raise ValueError("Point observation cannot be None")
-    renamed_observations = case_evaluation_data.observation.rename(
-        columns=utils.ISD_MAPPING
-    )
-
-    var_subset_point_obs = utils.maybe_filter_df_columns(
-        df=renamed_observations,
-        variables=[
-            utils.POINT_OBS_METADATA_VARS,
-            case_evaluation_data.individual_case.data_vars,
-        ],
-    )
-    var_id_subset_point_obs = var_subset_point_obs.loc[
-        var_subset_point_obs["id"] == case_evaluation_data.individual_case.id
+    var_id_subset_point_obs = case_evaluation_data.observation.loc[
+        case_evaluation_data.observation["case_id"]
+        == case_evaluation_data.individual_case.id
     ]
-    mapped_var_id_subset_point_obs = var_id_subset_point_obs.rename(
-        columns=utils.ISD_MAPPING
-    )
-    mapped_var_id_subset_point_obs["longitude"] = utils.convert_longitude_to_360(
-        mapped_var_id_subset_point_obs["longitude"]
+
+    var_id_subset_point_obs.loc[:, "longitude"] = utils.convert_longitude_to_360(
+        var_id_subset_point_obs.loc[:, "longitude"]
     )
     # this saves a significant amount of time if done prior to alignment with point obs
     if compute:
@@ -169,9 +160,8 @@ def _subset_point_obs(
 
     point_forecast_ds, subset_point_obs_ds = utils.align_point_obs_from_gridded(
         forecast_ds=case_evaluation_data.forecast,
-        case_subset_point_obs_df=mapped_var_id_subset_point_obs,
+        case_subset_point_obs_df=var_id_subset_point_obs,
         data_var=case_evaluation_data.individual_case.data_vars,
-        point_obs_metadata_vars=utils.POINT_OBS_METADATA_VARS,
     )
     point_forecast_df = point_forecast_ds.to_dataframe()
     subset_point_obs_df = subset_point_obs_ds.to_dataframe()
@@ -245,6 +235,7 @@ def _check_and_subset_forecast_availability(
 def evaluate(
     eval_config: config.Config,
     forecast_schema_config: config.ForecastSchemaConfig = DEFAULT_FORECAST_SCHEMA_CONFIG,
+    point_obs_schema_config: config.PointObservationSchemaConfig = DEFAULT_POINT_OBS_SCHEMA_CONFIG,
 ) -> pd.DataFrame:
     """Driver for evaluating a collection of Cases across a set of Events.
 
@@ -262,7 +253,9 @@ def evaluate(
     yaml_event_case = utils.load_events_yaml()
 
     logger.debug("Evaluation starting")
-    point_obs, gridded_obs = data_loader.open_obs_datasets(eval_config)
+    point_obs, gridded_obs = data_loader.open_obs_datasets(
+        eval_config, point_obs_schema_config
+    )
     forecast_dataset = data_loader.open_and_preprocess_forecast_dataset(
         eval_config, forecast_schema_config
     )
