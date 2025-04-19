@@ -344,7 +344,9 @@ def test_subset_gridded_obs(
     assert isinstance(result.forecast, xr.Dataset)
 
 
-def test_subset_point_obs(mocker, sample_point_obs_df, sample_forecast_dataset):
+def test_subset_point_obs(
+    mocker, sample_point_obs_df_with_attrs, sample_forecast_dataset
+):
     """Test _subset_point_obs function."""
     mock_case = mocker.MagicMock(spec=case.IndividualCase)
     mock_case.id = 1
@@ -354,25 +356,18 @@ def test_subset_point_obs(mocker, sample_point_obs_df, sample_forecast_dataset):
     valid_time = pd.Timestamp(
         sample_forecast_dataset.init_time[0].values
     ) + pd.Timedelta(hours=6)
-    sample_point_obs_df.iloc[0, sample_point_obs_df.columns.get_loc("time")] = (
-        valid_time
-    )
-    sample_point_obs_df.iloc[1, sample_point_obs_df.columns.get_loc("time")] = (
-        valid_time
-    )
-    # mocker.patch(
-    #     'point_forecast_da.groupby(["init_time", "lead_time", "latitude", "longitude"]).mean()',
-    #     return_value=sample_forecast_dataset,
-    # )
-    # mocker.patch(
-    #     'subset_point_obs_da.groupby(["time", "latitude", "longitude"]).first()',
-    #     return_value=sample_point_obs_df,
-    # )
+    sample_point_obs_df_with_attrs.iloc[
+        0, sample_point_obs_df_with_attrs.columns.get_loc("time")
+    ] = valid_time
+    sample_point_obs_df_with_attrs.iloc[
+        1, sample_point_obs_df_with_attrs.columns.get_loc("time")
+    ] = valid_time
+
     case_eval_data = evaluate.CaseEvaluationData(
         individual_case=mock_case,
         observation_type="point",
         forecast=sample_forecast_dataset,
-        observation=sample_point_obs_df,
+        observation=sample_point_obs_df_with_attrs,
     )
 
     result = evaluate._subset_point_obs(case_eval_data)
