@@ -172,8 +172,8 @@ def _rename_point_obs_dataset(
     filtered_mapping = {**filtered_mapping_columns}
 
     # Dataframes need "columns=" unlike xarray datasets
-    point_obs = point_obs.rename(columns=filtered_mapping)
-    return point_obs
+    renamed_point_obs = point_obs.rename(columns=filtered_mapping)
+    return renamed_point_obs
 
 
 def _rename_forecast_dataset(
