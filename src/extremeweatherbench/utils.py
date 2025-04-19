@@ -544,23 +544,3 @@ def derive_indices_from_init_time_and_lead_time(
     init_time_subset_indices = valid_time_indices[0]
 
     return init_time_subset_indices
-
-
-def maybe_filter_df_columns(
-    df: pd.DataFrame, variables: List[List[str]]
-) -> pd.DataFrame:
-    """Filter columns of a dataframe based on a list of variables.
-
-    Args:
-        df: The dataframe to filter.
-        variables: A list of lists of column names to filter.
-
-    Returns:
-        The filtered dataframe.
-    """
-    filtered_variable_list = []
-    for variable_list in variables:
-        for var in variable_list:
-            if var in df.columns:
-                filtered_variable_list.append(var)
-    return df[filtered_variable_list]
