@@ -243,6 +243,8 @@ def evaluate(
         eval_config: A configuration object defining the evaluation run.
         forecast_schema_config: A mapping of the forecast variable naming schema to use
             when reading / decoding forecast data in the analysis.
+        point_obs_schema_config: A mapping of the point observation variable naming schema to use
+            when reading / decoding point observation data in the analysis.
 
     Returns:
         A dictionary mapping event types to lists of xarray Datasets containing the

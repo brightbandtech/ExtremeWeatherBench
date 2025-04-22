@@ -120,8 +120,33 @@ class PointObservationSchemaConfig:
     """A mapping between standard variable names used across EWB, and their counterpart
     in a provided point observation dataset.
 
-    Allows users to insert custom schemas for decoding default or custom point observation data. Defaults are
-    suggested based on the CF Conventions.
+    Allows users to insert custom schemas for decoding default or custom point observation data.
+    Defaults are suggested based on the CF Conventions.
+    A successful configuration does not need to include all variables, only the required metadata variables
+    (station, id, latitude, longitude, time) and the data variables desired for evaluation if not already named
+    identically to the default values. Others will be ignored.
+
+    Attributes:
+        air_pressure_at_mean_sea_level: The variable name in the point observation dataset
+        for the mean sea level pressure. Defaults to "air_pressure_at_mean_sea_level".
+        surface_air_pressure: The surface air pressure. Defaults to "surface_air_pressure".
+        surface_wind_speed: The surface wind speed. Defaults to "surface_wind_speed".
+        surface_wind_from_direction: The surface wind from direction. Defaults to "surface_wind_from_direction".
+        surface_air_temperature: The surface air temperature. Defaults to "surface_air_temperature".
+        surface_dew_point_temperature: The surface dew point temperature. Defaults to "surface_dew_point_temperature".
+        surface_relative_humidity: The surface relative humidity. Defaults to "surface_relative_humidity".
+        accumulated_1_hour_precipitation: The accumulated 1 hour precipitation.
+        Defaults to "accumulated_1_hour_precipitation".
+        time: The time. Defaults to "time".
+        latitude: The latitude. Defaults to "latitude".
+        longitude: The longitude. Defaults to "longitude".
+        elevation: The elevation. Defaults to "elevation".
+        station_id: The station id. Defaults to "station".
+        station_name: The station name. Defaults to "name".
+        case_id: The case id in the event yaml file.
+        Defaults to "id".
+        metadata_vars: A list of metadata variables to include in the point observation dataset.
+        Default is ["station", "id", "latitude", "longitude", "time"]. All five required for successful configuration.
     """
 
     air_pressure_at_mean_sea_level: Optional[str] = "air_pressure_at_mean_sea_level"
@@ -150,12 +175,12 @@ class PointObservationSchemaConfig:
     )
 
     def extend_metadata_vars(self, input_metadata_variables: List[str]):
-        """Set the metadata variables for the schema config."""
+        """Extend the metadata variables for the schema config if more than the default are needed."""
         self.metadata_vars.extend(input_metadata_variables)
 
     @property
     def mapped_metadata_vars(self):
-        """Get the metadata variables from the schema config."""
+        """Returns the dataclass field names mapped to the given input variable names."""
         return [
             field.name
             for field in dataclasses.fields(self)
