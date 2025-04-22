@@ -120,6 +120,7 @@ def open_obs_datasets(
 
     Args:
         eval_config: The evaluation configuration.
+        point_obs_schema_config: The point observation schema configuration.
 
     Returns:
         The point observation dataset and the gridded observation dataset.
