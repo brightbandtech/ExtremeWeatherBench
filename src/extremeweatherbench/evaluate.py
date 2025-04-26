@@ -36,9 +36,11 @@ class CaseEvaluationInput:
 
     def load_data(self):
         """Load the evaluation inputs into memory."""
-        logger.debug("Loading evaluation inputs into memory")
-        self.observation = self.observation.compute()
-        self.forecast = self.forecast.compute()
+        logger.debug("Loading evaluation inputs into memory if not None")
+        if self.observation is not None:
+            self.observation = self.observation.compute()
+        if self.forecast is not None:
+            self.forecast = self.forecast.compute()
 
 
 @dataclasses.dataclass
@@ -157,34 +159,40 @@ def _subset_point_obs(
     if compute:
         logger.debug("Computing forecast dataset in point obs subsetting")
         case_evaluation_data.forecast = case_evaluation_data.forecast.compute()
-
     point_forecast_ds, subset_point_obs_ds = utils.align_point_obs_from_gridded(
         forecast_ds=case_evaluation_data.forecast,
         case_subset_point_obs_df=var_id_subset_point_obs,
         data_var=case_evaluation_data.individual_case.data_vars,
     )
-    point_forecast_df = point_forecast_ds.to_dataframe()
-    subset_point_obs_df = subset_point_obs_ds.to_dataframe()
+    if len(point_forecast_ds) == 0 or len(subset_point_obs_ds) == 0:
+        return CaseEvaluationInput(
+            "point",
+            observation=None,
+            forecast=None,
+        )
+    else:
+        point_forecast_df = point_forecast_ds.to_dataframe()
+        subset_point_obs_df = subset_point_obs_ds.to_dataframe()
 
-    # pandas groupby is significantly faster than xarray groupby, so we use that here
-    point_forecast_recompiled_ds = (
-        point_forecast_df.reset_index()
-        .groupby(["init_time", "lead_time", "latitude", "longitude"])
-        .first()
-        .to_xarray()
-    )
+        # pandas groupby is significantly faster than xarray groupby, so we use that here
+        point_forecast_recompiled_ds = (
+            point_forecast_df.reset_index()
+            .groupby(["init_time", "lead_time", "latitude", "longitude"])
+            .first()
+            .to_xarray()
+        )
 
-    subset_point_obs_recompiled_ds = (
-        subset_point_obs_df.reset_index()
-        .groupby(["time", "latitude", "longitude"])
-        .first()
-        .to_xarray()
-    )
-    return CaseEvaluationInput(
-        "point",
-        observation=subset_point_obs_recompiled_ds,
-        forecast=point_forecast_recompiled_ds,
-    )
+        subset_point_obs_recompiled_ds = (
+            subset_point_obs_df.reset_index()
+            .groupby(["time", "latitude", "longitude"])
+            .first()
+            .to_xarray()
+        )
+        return CaseEvaluationInput(
+            "point",
+            observation=subset_point_obs_recompiled_ds,
+            forecast=point_forecast_recompiled_ds,
+        )
 
 
 def _check_and_subset_forecast_availability(
