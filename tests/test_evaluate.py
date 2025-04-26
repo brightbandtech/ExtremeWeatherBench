@@ -178,7 +178,8 @@ def test_build_dataset_subsets_with_existing_forecast(
         forecast=existing_forecast["surface_air_temperature"],
     )
     mocker.patch(
-        "extremeweatherbench.evaluate._subset_gridded_obs", return_value=mock_result
+        "extremeweatherbench.evaluate._gridded_inputs_to_evaluation_input",
+        return_value=mock_result,
     )
 
     # Spy on _check_and_subset_forecast_availability to verify it's not called
@@ -264,7 +265,8 @@ def test_build_dataarray_subsets_gridded(
         forecast=sample_forecast_dataset["surface_air_temperature"],
     )
     mocker.patch(
-        "extremeweatherbench.evaluate._subset_gridded_obs", return_value=mock_result
+        "extremeweatherbench.evaluate._gridded_inputs_to_evaluation_input",
+        return_value=mock_result,
     )
 
     result = evaluate.build_dataset_subsets(case_eval_data, compute=False)
@@ -306,9 +308,9 @@ def test_build_dataarray_subsets_point(
         observation_type="point", observation=mock_obs, forecast=mock_forecast
     )
     mocker.patch(
-        "extremeweatherbench.evaluate._subset_point_obs", return_value=mock_result
+        "extremeweatherbench.evaluate._point_inputs_to_evaluation_input",
+        return_value=mock_result,
     )
-
     result = evaluate.build_dataset_subsets(case_eval_data, compute=False)
 
     assert result.observation_type == "point"
@@ -336,7 +338,7 @@ def test_subset_gridded_obs(
         observation=sample_gridded_obs_dataset,
     )
 
-    result = evaluate._subset_gridded_obs(case_eval_data)
+    result = evaluate._gridded_inputs_to_evaluation_input(case_eval_data)
 
     assert isinstance(result, evaluate.CaseEvaluationInput)
     assert result.observation_type == "gridded"
@@ -370,7 +372,7 @@ def test_subset_point_obs(
         observation=sample_point_obs_df_with_attrs,
     )
 
-    result = evaluate._subset_point_obs(case_eval_data)
+    result = evaluate._point_inputs_to_evaluation_input(case_eval_data)
 
     assert isinstance(result, evaluate.CaseEvaluationInput)
     assert result.observation_type == "point"
