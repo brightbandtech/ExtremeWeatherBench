@@ -400,11 +400,16 @@ def align_point_obs_from_gridded(
     Args:
         forecast_ds: The forecast dataset.
         case_subset_point_obs_df: The point observation dataframe.
-        data_var: The variable to subset (e.g. "surface_air_temperature")
+        data_var: The variable(s) to subset (e.g. "surface_air_temperature")
 
-    Returns a tuple of aligned forecast and observation dataarrays.
+    Returns a tuple of aligned forecast and observation dataarrays. Will return a tuple of
+    empty datasets if there is no valid data or overlap between the forecast and observation data.
     """
-
+    if case_subset_point_obs_df.empty:
+        logger.warning(
+            "Observation data is empty, returning empty xarray datasets for forecast and observation."
+        )
+        return (xr.Dataset(), xr.Dataset())
     case_subset_point_obs_df.loc[:, "longitude"] = convert_longitude_to_360(
         case_subset_point_obs_df.loc[:, "longitude"]
     )
@@ -472,9 +477,25 @@ def align_point_obs_from_gridded(
         forecast_at_obs_ds.coords["init_time"] = init_time
 
         # Uses the dataframe attrs to apply metadata columns
-        valid_time_subset_obs_ds = obs_timeslice.to_xarray().set_coords(
-            case_subset_point_obs_df.attrs["metadata_vars"]
-        )[data_var]
+        try:
+            valid_time_subset_obs_ds = obs_timeslice.to_xarray().set_coords(
+                case_subset_point_obs_df.attrs["metadata_vars"]
+            )[data_var]
+        except KeyError:
+            # Skip the problematic data variable and continue with other variables
+            data_var_without_missing_vars = []
+            for individual_data_var in data_var:
+                if individual_data_var in obs_timeslice:
+                    data_var_without_missing_vars.append(individual_data_var)
+                else:
+                    logger.warning(
+                        "Data variable %s not found in point observations, skipping this variable",
+                        individual_data_var,
+                    )
+            valid_time_subset_obs_ds = obs_timeslice.to_xarray().set_coords(
+                case_subset_point_obs_df.attrs["metadata_vars"]
+            )[data_var_without_missing_vars]
+
         valid_time_subset_obs_ds = valid_time_subset_obs_ds.swap_dims(
             {"index": "station_id"}
         )
@@ -484,9 +505,17 @@ def align_point_obs_from_gridded(
         aligned_observation_list.append(valid_time_subset_obs_ds)
         aligned_forecast_list.append(forecast_at_obs_ds)
     # concat the dataarrays along the station_id dimension
-    interpolated_forecast = xr.concat(aligned_forecast_list, dim="station_id")
-    interpolated_observation = xr.concat(aligned_observation_list, dim="station_id")
-    return (interpolated_forecast, interpolated_observation)
+    if len(aligned_forecast_list) == 0 or len(aligned_observation_list) == 0:
+        return (xr.Dataset(), xr.Dataset())
+    elif len(aligned_forecast_list) == 1 and len(aligned_observation_list) == 1:
+        return (
+            aligned_forecast_list[0].to_dataset(),
+            aligned_observation_list[0],
+        )
+    else:
+        interpolated_forecast = xr.concat(aligned_forecast_list, dim="station_id")
+        interpolated_observation = xr.concat(aligned_observation_list, dim="station_id")
+        return (interpolated_forecast, interpolated_observation)
 
 
 def derive_indices_from_init_time_and_lead_time(

@@ -403,3 +403,77 @@ def test_location_subset_point_obs():
         df, min_lat=10, max_lat=20, min_lon=10, max_lon=20
     )
     assert len(result) == 0
+
+
+def test_align_point_obs_from_gridded_empty_obs(
+    sample_forecast_dataarray, sample_point_obs_df_with_attrs
+):
+    """Test behavior when point observations are empty."""
+    # Create an empty DataFrame with the same columns as the sample
+    empty_df = pd.DataFrame(
+        columns=[
+            "station_id",
+            "station_name",
+            "latitude",
+            "longitude",
+            "elevation",
+            "surface_air_temperature",
+            "surface_air_pressure",
+            "air_pressure_at_mean_sea_level",
+            "accumulated_1_hour_precipitation",
+            "surface_wind_speed",
+            "surface_wind_from_direction",
+            "surface_dew_point_temperature",
+            "surface_relative_humidity",
+            "hour_dist",
+            "time",
+            "case_id",
+        ]
+    )
+    # Add metadata attributes to match the sample
+    empty_df.attrs = sample_point_obs_df_with_attrs.attrs
+
+    data_var = ["surface_air_temperature"]
+
+    # Test with empty observations
+    forecast, obs = utils.align_point_obs_from_gridded(
+        sample_forecast_dataarray, empty_df, data_var
+    )
+
+    # Should return empty datasets
+    assert isinstance(forecast, xr.Dataset)
+    assert isinstance(obs, xr.Dataset)
+    assert len(forecast.data_vars) == 0
+    assert len(obs.data_vars) == 0
+
+    # Set timestamp to match forecast
+
+
+def test_align_point_obs_from_gridded_vars_not_in_obs(
+    sample_forecast_dataarray, sample_point_obs_df_with_attrs
+):
+    """Test behavior when point observations have variables not in the forecast."""
+    # Create a dataframe with variables not in the forecast
+
+    data_var = [
+        "surface_air_temperature",
+        "surface_air_pressure",
+        "air_pressure_at_mean_sea_level",
+        "accumulated_1_hour_precipitation",
+        "surface_wind_speed",
+        "surface_wind_from_direction",
+        "surface_dew_point_temperature",
+    ]
+    # change the date to align with the forecast
+    sample_point_obs_df_with_attrs["time"] = pd.Timestamp(
+        sample_forecast_dataarray.init_time[0].values
+    ) + pd.Timedelta(hours=6)
+    forecast, obs = utils.align_point_obs_from_gridded(
+        sample_forecast_dataarray, sample_point_obs_df_with_attrs, data_var
+    )
+
+    # Should only include surface_air_temperature in obs
+    assert "surface_air_temperature" in obs.data_vars
+    assert "surface_air_temperature" in forecast.data_vars
+    assert len(obs.data_vars) == 1
+    assert len(forecast.data_vars) == 1
