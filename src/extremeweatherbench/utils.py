@@ -456,9 +456,10 @@ def align_point_obs_from_gridded(
         valid_time_index = pd.IndexSlice[:, valid_time]
         if valid_time in case_subset_point_obs_df.index.get_level_values(1):
             obs_timeslice = case_subset_point_obs_df.loc[valid_time_index, :]
+            obs_timeslice = obs_timeslice.reset_index()
         else:
+            logger.debug("No valid time found in point obs for %s", valid_time)
             continue
-        obs_timeslice = obs_timeslice.reset_index()
 
         station_ids = obs_timeslice["station_id"]
         lons = xr.DataArray(obs_timeslice["longitude"].values, dims="station_id")
@@ -507,14 +508,23 @@ def align_point_obs_from_gridded(
     # concat the dataarrays along the station_id dimension
     if len(aligned_forecast_list) == 0 or len(aligned_observation_list) == 0:
         return (xr.Dataset(), xr.Dataset())
-    elif len(aligned_forecast_list) == 1 and len(aligned_observation_list) == 1:
-        return (
-            aligned_forecast_list[0].to_dataset(),
-            aligned_observation_list[0],
-        )
     else:
-        interpolated_forecast = xr.concat(aligned_forecast_list, dim="station_id")
-        interpolated_observation = xr.concat(aligned_observation_list, dim="station_id")
+        # Convert to Dataset before concat to ensure we always get a Dataset back
+        # even if there's only one element in the list
+        interpolated_forecast = xr.concat(
+            [
+                ds.to_dataset() if isinstance(ds, xr.DataArray) else ds
+                for ds in aligned_forecast_list
+            ],
+            dim="station_id",
+        )
+        interpolated_observation = xr.concat(
+            [
+                ds.to_dataset() if isinstance(ds, xr.DataArray) else ds
+                for ds in aligned_observation_list
+            ],
+            dim="station_id",
+        )
         return (interpolated_forecast, interpolated_observation)
 
 

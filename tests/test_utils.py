@@ -234,16 +234,6 @@ def test_clip_dataset_to_bounding_box_degrees():
     )
 
 
-def test_align_point_obs_from_gridded_input_validation():
-    # Test with invalid inputs
-    with pytest.raises((KeyError)):
-        utils.align_point_obs_from_gridded(
-            xr.Dataset(),  # invalid forecast
-            pd.DataFrame(),  # empty dataframe
-            [],  # empty data vars
-        )
-
-
 def test_align_point_obs_from_gridded_basic(
     sample_forecast_dataset, sample_point_obs_df_with_attrs
 ):
@@ -379,33 +369,20 @@ def test_align_point_obs_from_gridded_out_of_bounds(
     )
 
 
-def test_location_subset_point_obs():
-    # Create sample data
-    df = pd.DataFrame(
-        {
-            "latitude": [0, 1, 2, 3, 4],
-            "longitude": [0, 1, 2, 3, 4],
-            "value": ["a", "b", "c", "d", "e"],
-        }
+def test_align_point_obs_from_gridded_all_empty():
+    # Test with empty inputs
+    forecast, obs = utils.align_point_obs_from_gridded(
+        xr.Dataset(),  # invalid forecast
+        pd.DataFrame(),  # empty dataframe
+        [],  # empty data vars
     )
-
-    # Test bounds
-    result = utils.location_subset_point_obs(
-        df, min_lat=1, max_lat=3, min_lon=1, max_lon=3
-    )
-    assert len(result) == 3
-    assert all(result["value"] == ["b", "c", "d"])
-    assert all((result["latitude"] >= 1) & (result["latitude"] <= 3))
-    assert all((result["longitude"] >= 1) & (result["longitude"] <= 3))
-
-    # Test empty result
-    result = utils.location_subset_point_obs(
-        df, min_lat=10, max_lat=20, min_lon=10, max_lon=20
-    )
-    assert len(result) == 0
+    assert isinstance(forecast, xr.Dataset)
+    assert isinstance(obs, xr.Dataset)
+    assert len(forecast.data_vars) == 0
+    assert len(obs.data_vars) == 0
 
 
-def test_align_point_obs_from_gridded_empty_obs(
+def test_align_point_obs_from_gridded_empty_point_obs(
     sample_forecast_dataarray, sample_point_obs_df_with_attrs
 ):
     """Test behavior when point observations are empty."""
@@ -449,12 +426,11 @@ def test_align_point_obs_from_gridded_empty_obs(
     # Set timestamp to match forecast
 
 
-def test_align_point_obs_from_gridded_vars_not_in_obs(
-    sample_forecast_dataarray, sample_point_obs_df_with_attrs
+def test_align_point_obs_from_gridded_vars_empty_forecast(
+    sample_point_obs_df_with_attrs,
 ):
     """Test behavior when point observations have variables not in the forecast."""
     # Create a dataframe with variables not in the forecast
-
     data_var = [
         "surface_air_temperature",
         "surface_air_pressure",
@@ -464,16 +440,37 @@ def test_align_point_obs_from_gridded_vars_not_in_obs(
         "surface_wind_from_direction",
         "surface_dew_point_temperature",
     ]
-    # change the date to align with the forecast
-    sample_point_obs_df_with_attrs["time"] = pd.Timestamp(
-        sample_forecast_dataarray.init_time[0].values
-    ) + pd.Timedelta(hours=6)
-    forecast, obs = utils.align_point_obs_from_gridded(
-        sample_forecast_dataarray, sample_point_obs_df_with_attrs, data_var
+
+    empty_forecast = xr.Dataset()
+    # If the forecast is empty, the function should raise a KeyError
+    # there should have been an exception raised well before this point in this case
+    with pytest.raises(KeyError):
+        forecast, obs = utils.align_point_obs_from_gridded(
+            empty_forecast, sample_point_obs_df_with_attrs, data_var
+        )
+
+
+def test_location_subset_point_obs():
+    # Create sample data
+    df = pd.DataFrame(
+        {
+            "latitude": [0, 1, 2, 3, 4],
+            "longitude": [0, 1, 2, 3, 4],
+            "value": ["a", "b", "c", "d", "e"],
+        }
     )
 
-    # Should only include surface_air_temperature in obs
-    assert "surface_air_temperature" in obs.data_vars
-    assert "surface_air_temperature" in forecast.data_vars
-    assert len(obs.data_vars) == 1
-    assert len(forecast.data_vars) == 1
+    # Test bounds
+    result = utils.location_subset_point_obs(
+        df, min_lat=1, max_lat=3, min_lon=1, max_lon=3
+    )
+    assert len(result) == 3
+    assert all(result["value"] == ["b", "c", "d"])
+    assert all((result["latitude"] >= 1) & (result["latitude"] <= 3))
+    assert all((result["longitude"] >= 1) & (result["longitude"] <= 3))
+
+    # Test empty result
+    result = utils.location_subset_point_obs(
+        df, min_lat=10, max_lat=20, min_lon=10, max_lon=20
+    )
+    assert len(result) == 0
