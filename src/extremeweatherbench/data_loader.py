@@ -114,11 +114,13 @@ def open_kerchunk_reference(
 
 def open_obs_datasets(
     eval_config: config.Config,
+    point_obs_schema_config: config.PointObservationSchemaConfig,
 ) -> Tuple[Optional[pd.DataFrame], Optional[xr.Dataset]]:
     """Open the observation datasets specified for evaluation.
 
     Args:
         eval_config: The evaluation configuration.
+        point_obs_schema_config: The point observation schema configuration.
 
     Returns:
         The point observation dataset and the gridded observation dataset.
@@ -126,9 +128,13 @@ def open_obs_datasets(
     point_obs = None
     gridded_obs = None
     if eval_config.point_obs_path:
-        point_obs = pd.read_parquet(
+        raw_point_obs = pd.read_parquet(
             eval_config.point_obs_path, storage_options=dict(token="anon")
         )
+        point_obs = _rename_point_obs_dataset(raw_point_obs, point_obs_schema_config)
+        point_obs.attrs = {
+            "metadata_vars": point_obs_schema_config.mapped_metadata_vars
+        }
     if eval_config.gridded_obs_path:
         gridded_obs = xr.open_zarr(
             eval_config.gridded_obs_path,
@@ -136,6 +142,39 @@ def open_obs_datasets(
             storage_options=dict(token="anon"),
         )
     return point_obs, gridded_obs
+
+
+def _rename_point_obs_dataset(
+    point_obs: pd.DataFrame,
+    point_obs_schema_config: config.PointObservationSchemaConfig,
+) -> pd.DataFrame:
+    """Rename the point observation dataset to the correct names expected by the evaluation routines.
+
+    Args:
+        point_obs: The point observation dataframe to rename.
+        point_obs_schema_config: The point observation schema configuration.
+
+    Returns:
+        The renamed point observation dataframe.
+    """
+    # Mapping here is used to rename the incoming data variables to the correct
+    # names expected by the evaluation routines.
+    mapping = {
+        getattr(point_obs_schema_config, field.name): field.name
+        for field in dataclasses.fields(point_obs_schema_config)
+        if field.type is not List[str]
+    }
+
+    # Application of the mapping to coords and data variables.
+    filtered_mapping_columns = {
+        old: new for old, new in mapping.items() if old in point_obs.columns
+    }
+    # Combine the mapping for coords and data variables and rename them in the forecast dataset.
+    filtered_mapping = {**filtered_mapping_columns}
+
+    # Dataframes need "columns=" unlike xarray datasets
+    renamed_point_obs = point_obs.rename(columns=filtered_mapping)
+    return renamed_point_obs
 
 
 def _rename_forecast_dataset(
@@ -231,34 +270,3 @@ def _maybe_convert_dataset_lead_time_to_int(
             eval_config.temporal_resolution_hours,
         )
     return dataset
-
-
-def _rename_point_obs_dataset(
-    point_obs: pd.DataFrame,
-    point_obs_schema_config: config.PointObservationSchemaConfig,
-) -> pd.DataFrame:
-    """Rename the point observation dataset to the correct names expected by the evaluation routines.
-    Args:
-        point_obs: The point observation dataframe to rename.
-        point_obs_schema_config: The point observation schema configuration.
-    Returns:
-        The renamed point observation dataframe.
-    """
-    # Mapping here is used to rename the incoming data variables to the correct
-    # names expected by the evaluation routines.
-    mapping = {
-        getattr(point_obs_schema_config, field.name): field.name
-        for field in dataclasses.fields(point_obs_schema_config)
-        if field.type is not List[str]
-    }
-
-    # Application of the mapping to coords and data variables.
-    filtered_mapping_columns = {
-        old: new for old, new in mapping.items() if old in point_obs.columns
-    }
-    # Combine the mapping for coords and data variables and rename them in the forecast dataset.
-    filtered_mapping = {**filtered_mapping_columns}
-
-    # Dataframes need "columns=" unlike xarray datasets
-    renamed_point_obs = point_obs.rename(columns=filtered_mapping)
-    return renamed_point_obs
