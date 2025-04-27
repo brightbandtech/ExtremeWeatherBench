@@ -37,23 +37,6 @@ ERA5_MAPPING = {
     "longitude": "longitude",
 }
 
-#: Maps ISD variable names to forecast variable names.
-ISD_MAPPING = {
-    "surface_temperature": "surface_air_temperature",
-}
-
-#: metadata variables existing in precomputed ISD point obs.
-POINT_OBS_METADATA_VARS = [
-    "time",
-    "station",
-    "call",
-    "name",
-    "latitude",
-    "longitude",
-    "elev",
-    "id",
-]
-
 
 def convert_longitude_to_360(longitude: float) -> float:
     """Convert a longitude from the range [-180, 180) to [0, 360)."""
@@ -406,30 +389,51 @@ def location_subset_point_obs(
     return df[location_subset_mask]
 
 
+def maybe_remove_missing_data_vars(data_var: List[str], df: pd.DataFrame):
+    """Remove data variables from the list if they are not found in the dataframe.
+
+    Args:
+        data_var: The list of data variables to subset.
+        df: The dataframe with accompanying variables to subset.
+
+    Returns:
+        The list of data variables without variables missing from the dataframe.
+    """
+    data_var_without_missing_vars = []
+    for individual_data_var in data_var:
+        if individual_data_var in df:
+            data_var_without_missing_vars.append(individual_data_var)
+        else:
+            logger.warning(
+                "Data variable %s not found in dataframe",
+                individual_data_var,
+            )
+    return data_var_without_missing_vars
+
+
 def align_point_obs_from_gridded(
     forecast_ds: xr.Dataset,
     case_subset_point_obs_df: pd.DataFrame,
     data_var: List[str],
-    point_obs_metadata_vars: List[str],
 ) -> Tuple[xr.Dataset, xr.Dataset]:
     """Takes in a forecast dataarray and point observation dataframe, aligning them by
-    reducing dimensions.
+    reducing dimensions. Metadata variables used are identical to those in PointObservationSchemaConfig.
 
     Args:
         forecast_ds: The forecast dataset.
         case_subset_point_obs_df: The point observation dataframe.
-        data_var: The variable to subset (e.g. "surface_air_temperature")
-        point_obs_metadata_vars: The metadata variables to subset (e.g. ["elev", "name"])
+        data_var: The variable(s) to subset (e.g. "surface_air_temperature")
 
-    Returns a tuple of aligned forecast and observation dataarrays.
+    Returns a tuple of aligned forecast and observation dataarrays. Will return a tuple of
+    empty datasets if there is no valid data or overlap between the forecast and observation data.
     """
-
-    case_subset_point_obs_df = case_subset_point_obs_df[
-        POINT_OBS_METADATA_VARS + data_var
-    ]
-    case_subset_point_obs_df = case_subset_point_obs_df.rename(columns=ISD_MAPPING)
-    case_subset_point_obs_df["longitude"] = convert_longitude_to_360(
-        case_subset_point_obs_df["longitude"]
+    if case_subset_point_obs_df.empty:
+        logger.warning(
+            "Observation data is empty, returning empty xarray datasets for forecast and observation."
+        )
+        return (xr.Dataset(), xr.Dataset())
+    case_subset_point_obs_df.loc[:, "longitude"] = convert_longitude_to_360(
+        case_subset_point_obs_df.loc[:, "longitude"]
     )
     case_subset_point_obs_df = location_subset_point_obs(
         case_subset_point_obs_df,
@@ -438,19 +442,16 @@ def align_point_obs_from_gridded(
         forecast_ds["longitude"].min().values,
         forecast_ds["longitude"].max().values,
     )
-    # Uses indexing in the dataframe to capture metadata columns for future use
-    point_obs_metadata = case_subset_point_obs_df[point_obs_metadata_vars]
-
     # Reset index to allow for easier modification
     case_subset_point_obs_df = case_subset_point_obs_df.reset_index()
-    case_subset_point_obs_df.loc[:, "station"] = case_subset_point_obs_df[
-        "station"
+    case_subset_point_obs_df.loc[:, "station_id"] = case_subset_point_obs_df[
+        "station_id"
     ].astype("str")
 
     # Set up multiindex to enable slicing along individual timesteps
     case_subset_point_obs_df = case_subset_point_obs_df.set_index(
         [
-            "station",
+            "station_id",
             "time",
         ]
     ).sort_index()
@@ -476,40 +477,55 @@ def align_point_obs_from_gridded(
         )
         valid_time_index = pd.IndexSlice[:, valid_time]
         if valid_time in case_subset_point_obs_df.index.get_level_values(1):
-            obs_timeslice = case_subset_point_obs_df.loc[valid_time_index, :]
+            obs_overlapping_valid_time = case_subset_point_obs_df.loc[
+                valid_time_index, :
+            ]
         else:
             continue
-        obs_timeslice = obs_timeslice.reset_index()
+        obs_overlapping_valid_time = obs_overlapping_valid_time.reset_index()
 
-        station_ids = obs_timeslice["station"]
-        lons = xr.DataArray(obs_timeslice["longitude"].values, dims="station")
-        lats = xr.DataArray(obs_timeslice["latitude"].values, dims="station")
+        station_ids = obs_overlapping_valid_time["station_id"]
+        lons = xr.DataArray(
+            obs_overlapping_valid_time["longitude"].values, dims="station_id"
+        )
+        lats = xr.DataArray(
+            obs_overlapping_valid_time["latitude"].values, dims="station_id"
+        )
 
         forecast_at_obs_ds = forecast_ds.sel(
             init_time=init_time, lead_time=lead_time
         ).interp(latitude=lats, longitude=lons, method="nearest")
         forecast_at_obs_ds = forecast_at_obs_ds.assign_coords(
             {
-                "station": station_ids,
+                "station_id": station_ids,
                 "time": valid_time,
             }
         )
         forecast_at_obs_ds.coords["lead_time"] = lead_time
         forecast_at_obs_ds.coords["init_time"] = init_time
-        valid_time_subset_obs_ds = obs_timeslice.to_xarray().set_coords(
-            point_obs_metadata
-        )[data_var]
-        valid_time_subset_obs_ds = valid_time_subset_obs_ds.swap_dims(
-            {"index": "station"}
+        # Uses the dataframe attrs to apply metadata columns
+        obs_overlapping_valid_time_ds = (
+            obs_overlapping_valid_time.to_xarray().set_coords(
+                case_subset_point_obs_df.attrs["metadata_vars"]
+            )
         )
-        valid_time_subset_obs_ds.coords["lead_time"] = lead_time
-        valid_time_subset_obs_ds.coords["init_time"] = init_time
 
-        aligned_observation_list.append(valid_time_subset_obs_ds)
+        # Subset the observation dataarray to only include the data variables of interest
+        # which is checked for missing variables
+        data_var = maybe_remove_missing_data_vars(data_var, case_subset_point_obs_df)
+        obs_overlapping_valid_time_ds = obs_overlapping_valid_time_ds[data_var]
+
+        obs_overlapping_valid_time_ds = obs_overlapping_valid_time_ds.swap_dims(
+            {"index": "station_id"}
+        )
+        obs_overlapping_valid_time_ds.coords["lead_time"] = lead_time
+        obs_overlapping_valid_time_ds.coords["init_time"] = init_time
+
+        aligned_observation_list.append(obs_overlapping_valid_time_ds)
         aligned_forecast_list.append(forecast_at_obs_ds)
     # concat the dataarrays along the station dimension
-    interpolated_forecast = xr.concat(aligned_forecast_list, dim="station")
-    interpolated_observation = xr.concat(aligned_observation_list, dim="station")
+    interpolated_forecast = xr.concat(aligned_forecast_list, dim="station_id")
+    interpolated_observation = xr.concat(aligned_observation_list, dim="station_id")
     return (interpolated_forecast, interpolated_observation)
 
 
