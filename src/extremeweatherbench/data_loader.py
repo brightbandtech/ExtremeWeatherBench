@@ -1,6 +1,6 @@
 import dataclasses
 import logging
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
 
 import numpy as np
 import pandas as pd
@@ -231,3 +231,34 @@ def _maybe_convert_dataset_lead_time_to_int(
             eval_config.temporal_resolution_hours,
         )
     return dataset
+
+
+def _rename_point_obs_dataset(
+    point_obs: pd.DataFrame,
+    point_obs_schema_config: config.PointObservationSchemaConfig,
+) -> pd.DataFrame:
+    """Rename the point observation dataset to the correct names expected by the evaluation routines.
+    Args:
+        point_obs: The point observation dataframe to rename.
+        point_obs_schema_config: The point observation schema configuration.
+    Returns:
+        The renamed point observation dataframe.
+    """
+    # Mapping here is used to rename the incoming data variables to the correct
+    # names expected by the evaluation routines.
+    mapping = {
+        getattr(point_obs_schema_config, field.name): field.name
+        for field in dataclasses.fields(point_obs_schema_config)
+        if field.type is not List[str]
+    }
+
+    # Application of the mapping to coords and data variables.
+    filtered_mapping_columns = {
+        old: new for old, new in mapping.items() if old in point_obs.columns
+    }
+    # Combine the mapping for coords and data variables and rename them in the forecast dataset.
+    filtered_mapping = {**filtered_mapping_columns}
+
+    # Dataframes need "columns=" unlike xarray datasets
+    renamed_point_obs = point_obs.rename(columns=filtered_mapping)
+    return renamed_point_obs
