@@ -147,54 +147,52 @@ def _subset_point_obs(
     """Subset the point observation dataarray for a given data variable."""
     if case_evaluation_data.observation is None:
         raise ValueError("Point observation cannot be None")
-    renamed_observations = case_evaluation_data.observation.rename(
-        columns=utils.ISD_MAPPING
-    )
-    var_subset_point_obs = renamed_observations[
-        utils.POINT_OBS_METADATA_VARS + case_evaluation_data.individual_case.data_vars
+    var_id_subset_point_obs = case_evaluation_data.observation.loc[
+        case_evaluation_data.observation["case_id"]
+        == case_evaluation_data.individual_case.id
     ]
-    var_id_subset_point_obs = var_subset_point_obs.loc[
-        var_subset_point_obs["id"] == case_evaluation_data.individual_case.id
-    ]
-    mapped_var_id_subset_point_obs = var_id_subset_point_obs.rename(
-        columns=utils.ISD_MAPPING
-    )
-    mapped_var_id_subset_point_obs["longitude"] = utils.convert_longitude_to_360(
-        mapped_var_id_subset_point_obs["longitude"]
+
+    var_id_subset_point_obs.loc[:, "longitude"] = utils.convert_longitude_to_360(
+        var_id_subset_point_obs.loc[:, "longitude"]
     )
     # this saves a significant amount of time if done prior to alignment with point obs
     if compute:
         logger.debug("Computing forecast dataset in point obs subsetting")
         case_evaluation_data.forecast = case_evaluation_data.forecast.compute()
-
     point_forecast_ds, subset_point_obs_ds = utils.align_point_obs_from_gridded(
         forecast_ds=case_evaluation_data.forecast,
-        case_subset_point_obs_df=mapped_var_id_subset_point_obs,
+        case_subset_point_obs_df=var_id_subset_point_obs,
         data_var=case_evaluation_data.individual_case.data_vars,
-        point_obs_metadata_vars=utils.POINT_OBS_METADATA_VARS,
     )
-    point_forecast_df = point_forecast_ds.to_dataframe()
-    subset_point_obs_df = subset_point_obs_ds.to_dataframe()
+    if len(point_forecast_ds) == 0 or len(subset_point_obs_ds) == 0:
+        return CaseEvaluationInput(
+            "point",
+            observation=None,
+            forecast=None,
+        )
+    else:
+        point_forecast_df = point_forecast_ds.to_dataframe()
+        subset_point_obs_df = subset_point_obs_ds.to_dataframe()
 
-    # pandas groupby is significantly faster than xarray groupby, so we use that here
-    point_forecast_recompiled_ds = (
-        point_forecast_df.reset_index()
-        .groupby(["init_time", "lead_time", "latitude", "longitude"])
-        .first()
-        .to_xarray()
-    )
+        # pandas groupby is significantly faster than xarray groupby, so we use that here
+        point_forecast_recompiled_ds = (
+            point_forecast_df.reset_index()
+            .groupby(["init_time", "lead_time", "latitude", "longitude"])
+            .first()
+            .to_xarray()
+        )
 
-    subset_point_obs_recompiled_ds = (
-        subset_point_obs_df.reset_index()
-        .groupby(["time", "latitude", "longitude"])
-        .first()
-        .to_xarray()
-    )
-    return CaseEvaluationInput(
-        "point",
-        observation=subset_point_obs_recompiled_ds,
-        forecast=point_forecast_recompiled_ds,
-    )
+        subset_point_obs_recompiled_ds = (
+            subset_point_obs_df.reset_index()
+            .groupby(["time", "latitude", "longitude"])
+            .first()
+            .to_xarray()
+        )
+        return CaseEvaluationInput(
+            "point",
+            observation=subset_point_obs_recompiled_ds,
+            forecast=point_forecast_recompiled_ds,
+        )
 
 
 def _check_and_subset_forecast_availability(
