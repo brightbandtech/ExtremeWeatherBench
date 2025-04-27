@@ -33,9 +33,11 @@ class CaseEvaluationInput:
 
     def load_data(self):
         """Load the evaluation inputs into memory."""
-        logger.debug("Loading evaluation inputs into memory")
-        self.observation = self.observation.compute()
-        self.forecast = self.forecast.compute()
+        logger.debug("Loading evaluation inputs into memory if not None")
+        if self.observation is not None:
+            self.observation = self.observation.compute()
+        if self.forecast is not None:
+            self.forecast = self.forecast.compute()
 
 
 @dataclasses.dataclass
