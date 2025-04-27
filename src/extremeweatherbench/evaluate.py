@@ -15,6 +15,9 @@ logger.setLevel(logging.INFO)
 #: Default mapping for forecast dataset schema.
 DEFAULT_FORECAST_SCHEMA_CONFIG = config.ForecastSchemaConfig()
 
+#: Default mapping for point observation dataset schema.
+DEFAULT_POINT_OBS_SCHEMA_CONFIG = config.PointObservationSchemaConfig()
+
 
 @dataclasses.dataclass
 class CaseEvaluationInput:
@@ -242,6 +245,7 @@ def _check_and_subset_forecast_availability(
 def evaluate(
     eval_config: config.Config,
     forecast_schema_config: config.ForecastSchemaConfig = DEFAULT_FORECAST_SCHEMA_CONFIG,
+    point_obs_schema_config: config.PointObservationSchemaConfig = DEFAULT_POINT_OBS_SCHEMA_CONFIG,
 ) -> pd.DataFrame:
     """Driver for evaluating a collection of Cases across a set of Events.
 
@@ -249,6 +253,8 @@ def evaluate(
         eval_config: A configuration object defining the evaluation run.
         forecast_schema_config: A mapping of the forecast variable naming schema to use
             when reading / decoding forecast data in the analysis.
+        point_obs_schema_config: A mapping of the point observation variable naming schema to use
+            when reading / decoding point observation data in the analysis.
 
     Returns:
         A dictionary mapping event types to lists of xarray Datasets containing the
@@ -259,7 +265,9 @@ def evaluate(
     yaml_event_case = utils.load_events_yaml()
 
     logger.debug("Evaluation starting")
-    point_obs, gridded_obs = data_loader.open_obs_datasets(eval_config)
+    point_obs, gridded_obs = data_loader.open_obs_datasets(
+        eval_config, point_obs_schema_config
+    )
     forecast_dataset = data_loader.open_and_preprocess_forecast_dataset(
         eval_config, forecast_schema_config
     )
