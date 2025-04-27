@@ -389,13 +389,35 @@ def location_subset_point_obs(
     return df[location_subset_mask]
 
 
+def maybe_remove_missing_data_vars(data_var: List[str], df: pd.DataFrame):
+    """Remove data variables from the list if they are not found in the dataframe.
+
+    Args:
+        data_var: The list of data variables to subset.
+        df: The dataframe with accompanying variables to subset.
+
+    Returns:
+        The list of data variables without variables missing from the dataframe.
+    """
+    data_var_without_missing_vars = []
+    for individual_data_var in data_var:
+        if individual_data_var in df:
+            data_var_without_missing_vars.append(individual_data_var)
+        else:
+            logger.warning(
+                "Data variable %s not found in dataframe",
+                individual_data_var,
+            )
+    return data_var_without_missing_vars
+
+
 def align_point_obs_from_gridded(
     forecast_ds: xr.Dataset,
     case_subset_point_obs_df: pd.DataFrame,
     data_var: List[str],
 ) -> Tuple[xr.Dataset, xr.Dataset]:
     """Takes in a forecast dataarray and point observation dataframe, aligning them by
-    reducing dimensions.
+    reducing dimensions. Metadata variables used are identical to those in PointObservationSchemaConfig.
 
     Args:
         forecast_ds: The forecast dataset.
@@ -455,15 +477,21 @@ def align_point_obs_from_gridded(
         )
         valid_time_index = pd.IndexSlice[:, valid_time]
         if valid_time in case_subset_point_obs_df.index.get_level_values(1):
-            obs_timeslice = case_subset_point_obs_df.loc[valid_time_index, :]
-            obs_timeslice = obs_timeslice.reset_index()
+            obs_overlapping_valid_time = case_subset_point_obs_df.loc[
+                valid_time_index, :
+            ]
         else:
             logger.debug("No valid time found in point obs for %s", valid_time)
             continue
+        obs_overlapping_valid_time = obs_overlapping_valid_time.reset_index()
 
-        station_ids = obs_timeslice["station_id"]
-        lons = xr.DataArray(obs_timeslice["longitude"].values, dims="station_id")
-        lats = xr.DataArray(obs_timeslice["latitude"].values, dims="station_id")
+        station_ids = obs_overlapping_valid_time["station_id"]
+        lons = xr.DataArray(
+            obs_overlapping_valid_time["longitude"].values, dims="station_id"
+        )
+        lats = xr.DataArray(
+            obs_overlapping_valid_time["latitude"].values, dims="station_id"
+        )
 
         forecast_at_obs_ds = forecast_ds.sel(
             init_time=init_time, lead_time=lead_time
@@ -476,34 +504,25 @@ def align_point_obs_from_gridded(
         )
         forecast_at_obs_ds.coords["lead_time"] = lead_time
         forecast_at_obs_ds.coords["init_time"] = init_time
-
         # Uses the dataframe attrs to apply metadata columns
-        try:
-            valid_time_subset_obs_ds = obs_timeslice.to_xarray().set_coords(
+        obs_overlapping_valid_time_ds = (
+            obs_overlapping_valid_time.to_xarray().set_coords(
                 case_subset_point_obs_df.attrs["metadata_vars"]
-            )[data_var]
-        except KeyError:
-            # Skip the problematic data variable and continue with other variables
-            data_var_without_missing_vars = []
-            for individual_data_var in data_var:
-                if individual_data_var in obs_timeslice:
-                    data_var_without_missing_vars.append(individual_data_var)
-                else:
-                    logger.warning(
-                        "Data variable %s not found in point observations, skipping this variable",
-                        individual_data_var,
-                    )
-            valid_time_subset_obs_ds = obs_timeslice.to_xarray().set_coords(
-                case_subset_point_obs_df.attrs["metadata_vars"]
-            )[data_var_without_missing_vars]
+            )
+        )
 
-        valid_time_subset_obs_ds = valid_time_subset_obs_ds.swap_dims(
+        # Subset the observation dataarray to only include the data variables of interest
+        # which is checked for missing variables
+        data_var = maybe_remove_missing_data_vars(data_var, case_subset_point_obs_df)
+        obs_overlapping_valid_time_ds = obs_overlapping_valid_time_ds[data_var]
+
+        obs_overlapping_valid_time_ds = obs_overlapping_valid_time_ds.swap_dims(
             {"index": "station_id"}
         )
-        valid_time_subset_obs_ds.coords["lead_time"] = lead_time
-        valid_time_subset_obs_ds.coords["init_time"] = init_time
+        obs_overlapping_valid_time_ds.coords["lead_time"] = lead_time
+        obs_overlapping_valid_time_ds.coords["init_time"] = init_time
 
-        aligned_observation_list.append(valid_time_subset_obs_ds)
+        aligned_observation_list.append(obs_overlapping_valid_time_ds)
         aligned_forecast_list.append(forecast_at_obs_ds)
     # concat the dataarrays along the station_id dimension
     if len(aligned_forecast_list) == 0 or len(aligned_observation_list) == 0:

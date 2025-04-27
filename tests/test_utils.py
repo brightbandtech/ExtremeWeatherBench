@@ -390,7 +390,7 @@ def test_align_point_obs_from_gridded_empty_point_obs(
     empty_df = pd.DataFrame(
         columns=[
             "station_id",
-            "station_name",
+            "station_long_name",
             "latitude",
             "longitude",
             "elevation",
