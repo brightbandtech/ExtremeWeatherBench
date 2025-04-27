@@ -203,7 +203,7 @@ def sample_point_obs_df():
 def sample_point_obs_df_with_attrs():
     sample_point_obs_schema_config = config.PointObservationSchemaConfig(
         case_id="id",
-        station_name="name",
+        station_long_name="name",
         station_id="call",
         elevation="elev",
     )

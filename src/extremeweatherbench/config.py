@@ -142,7 +142,7 @@ class PointObservationSchemaConfig:
         longitude: The longitude. Defaults to "longitude".
         elevation: The elevation. Defaults to "elevation".
         station_id: The station id. Defaults to "station".
-        station_name: The station name. Defaults to "name".
+        station_long_name: The station name. Defaults to "name".
         case_id: The case id in the event yaml file.
         Defaults to "id".
         metadata_vars: A list of metadata variables to include in the point observation dataset.
@@ -162,7 +162,7 @@ class PointObservationSchemaConfig:
     longitude: Optional[str] = "longitude"
     elevation: Optional[str] = "elevation"
     station_id: Optional[str] = "station"
-    station_name: Optional[str] = "name"
+    station_long_name: Optional[str] = "name"
     case_id: Optional[str] = "id"
     metadata_vars: List[str] = dataclasses.field(
         default_factory=lambda: [
