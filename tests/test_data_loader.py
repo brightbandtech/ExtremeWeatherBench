@@ -254,7 +254,7 @@ def test_point_observation_schema_config():
     assert default_config.latitude == "latitude"
     assert default_config.longitude == "longitude"
     assert default_config.station_id == "station"
-    assert default_config.station_name == "name"
+    assert default_config.station_long_name == "name"
     assert default_config.case_id == "id"
 
     # Test default metadata vars
@@ -291,7 +291,7 @@ def test_rename_point_obs_dataset(sample_point_obs_df):
         latitude="latitude",
         longitude="longitude",
         station_id="call",
-        station_name="name",
+        station_long_name="name",
         case_id="id",
         elevation="elev",
     )
@@ -313,7 +313,7 @@ def test_rename_point_obs_dataset(sample_point_obs_df):
     assert "latitude" in renamed_df.columns
     assert "longitude" in renamed_df.columns
     assert "station_id" in renamed_df.columns
-    assert "station_name" in renamed_df.columns
+    assert "station_long_name" in renamed_df.columns
     assert "case_id" in renamed_df.columns
 
     # Verify that original variable names are no longer present
@@ -331,7 +331,7 @@ def test_rename_point_obs_dataset(sample_point_obs_df):
     np.testing.assert_array_equal(renamed_df["time"].values, time_values)
     np.testing.assert_array_equal(renamed_df["latitude"].values, lat_values)
     np.testing.assert_array_equal(renamed_df["longitude"].values, lon_values)
-    np.testing.assert_array_equal(renamed_df["station_name"].values, name_values)
+    np.testing.assert_array_equal(renamed_df["station_long_name"].values, name_values)
     np.testing.assert_array_equal(renamed_df["case_id"].values, id_values)
 
 
@@ -363,12 +363,12 @@ def test_rename_point_obs_dataset_partial_mapping(sample_point_obs_df):
     assert "time" in renamed_df.columns
     assert "latitude" in renamed_df.columns
     assert "longitude" in renamed_df.columns
-    assert "station_name" in renamed_df.columns
+    assert "station_long_name" in renamed_df.columns
     assert "case_id" in renamed_df.columns
 
     # Verify that the data values remain unchanged
     np.testing.assert_array_equal(
         renamed_df["surface_air_temperature"].values, temp_values
     )
-    np.testing.assert_array_equal(renamed_df["station_name"].values, name_values)
+    np.testing.assert_array_equal(renamed_df["station_long_name"].values, name_values)
     np.testing.assert_array_equal(renamed_df["case_id"].values, id_values)
