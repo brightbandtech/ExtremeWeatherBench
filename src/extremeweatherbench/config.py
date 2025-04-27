@@ -162,7 +162,7 @@ class PointObservationSchemaConfig:
     longitude: Optional[str] = "longitude"
     elevation: Optional[str] = "elevation"
     station_id: Optional[str] = "station"
-    station_name: Optional[str] = "name"
+    station_long_name: Optional[str] = "name"
     case_id: Optional[str] = "id"
     metadata_vars: List[str] = dataclasses.field(
         default_factory=lambda: [
