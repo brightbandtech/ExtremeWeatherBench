@@ -169,11 +169,9 @@ def _rename_point_obs_dataset(
     filtered_mapping_columns = {
         old: new for old, new in mapping.items() if old in point_obs.columns
     }
-    # Combine the mapping for coords and data variables and rename them in the forecast dataset.
-    filtered_mapping = {**filtered_mapping_columns}
 
     # Dataframes need "columns=" unlike xarray datasets
-    renamed_point_obs = point_obs.rename(columns=filtered_mapping)
+    renamed_point_obs = point_obs.rename(columns=filtered_mapping_columns)
     return renamed_point_obs
 
 
