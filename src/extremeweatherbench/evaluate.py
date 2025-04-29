@@ -275,19 +275,19 @@ def evaluate(
         point_obs is not None,
         gridded_obs is not None,
     )
+    # map era5 vars by renaming and dropping extra vars
+    if gridded_obs is not None:
+        gridded_obs = utils.map_era5_vars_to_forecast(
+            forecast_schema_config,
+            forecast_dataset=forecast_dataset,
+            era5_dataset=gridded_obs,
+        )
     for event in eval_config.event_types:
         cases = dacite.from_dict(
             data_class=event,
             data=yaml_event_case,
         )
 
-        # map era5 vars by renaming and dropping extra vars
-        if gridded_obs is not None:
-            gridded_obs = utils.map_era5_vars_to_forecast(
-                forecast_schema_config,
-                forecast_dataset=forecast_dataset,
-                era5_dataset=gridded_obs,
-            )
         logger.debug("beginning evaluation loop for %s", event.event_type)
         results = _maybe_evaluate_individual_cases_loop(
             cases, forecast_dataset, gridded_obs, point_obs
