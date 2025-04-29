@@ -273,13 +273,6 @@ def evaluate(
     forecast_dataset = data_loader.open_and_preprocess_forecast_dataset(
         eval_config, forecast_schema_config
     )
-    # map era5 vars by renaming and dropping extra vars
-    if gridded_obs is not None:
-        gridded_obs = utils.map_era5_vars_to_forecast(
-            forecast_schema_config,
-            forecast_dataset=forecast_dataset,
-            era5_dataset=gridded_obs,
-        )
     logger.debug("Forecast and observation datasets loaded")
     logger.debug(
         "Observation data: Point %s, Gridded %s",
