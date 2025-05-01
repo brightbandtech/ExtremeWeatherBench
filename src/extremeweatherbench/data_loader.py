@@ -14,7 +14,6 @@ logger.setLevel(logging.INFO)
 
 def open_and_preprocess_forecast_dataset(
     eval_config: config.Config,
-    forecast_schema_config: config.ForecastSchemaConfig,
 ) -> xr.Dataset:
     """Open the forecast dataset specified for evaluation.
 
@@ -57,7 +56,9 @@ def open_and_preprocess_forecast_dataset(
             "Unknown file type found in forecast path, only json, parquet, and zarr are supported."
         )
     forecast_ds = eval_config.forecast_preprocess(forecast_ds)
-    forecast_ds = _rename_forecast_dataset(forecast_ds, forecast_schema_config)
+    forecast_ds = _rename_forecast_dataset(
+        forecast_ds, eval_config.forecast_schema_config
+    )
     forecast_ds = _maybe_convert_dataset_lead_time_to_int(eval_config, forecast_ds)
 
     return forecast_ds
@@ -114,7 +115,6 @@ def open_kerchunk_reference(
 
 def open_obs_datasets(
     eval_config: config.Config,
-    point_obs_schema_config: config.PointObservationSchemaConfig,
 ) -> Tuple[Optional[pd.DataFrame], Optional[xr.Dataset]]:
     """Open the observation datasets specified for evaluation.
 
@@ -131,9 +131,11 @@ def open_obs_datasets(
         raw_point_obs = pd.read_parquet(
             eval_config.point_obs_path, storage_options=dict(token="anon")
         )
-        point_obs = _rename_point_obs_dataset(raw_point_obs, point_obs_schema_config)
+        point_obs = _rename_point_obs_dataset(
+            raw_point_obs, eval_config.point_obs_schema_config
+        )
         point_obs.attrs = {
-            "metadata_vars": point_obs_schema_config.mapped_metadata_vars
+            "metadata_vars": eval_config.point_obs_schema_config.mapped_metadata_vars
         }
     if eval_config.gridded_obs_path:
         gridded_obs = xr.open_zarr(

@@ -8,6 +8,8 @@ from extremeweatherbench import config, events, case, utils, data_loader
 import dacite
 import dataclasses
 import itertools
+import click
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -242,8 +244,6 @@ def _check_and_subset_forecast_availability(
 
 def evaluate(
     eval_config: config.Config,
-    forecast_schema_config: config.ForecastSchemaConfig = DEFAULT_FORECAST_SCHEMA_CONFIG,
-    point_obs_schema_config: config.PointObservationSchemaConfig = DEFAULT_POINT_OBS_SCHEMA_CONFIG,
 ) -> pd.DataFrame:
     """Driver for evaluating a collection of Cases across a set of Events.
 
@@ -263,12 +263,8 @@ def evaluate(
     yaml_event_case = utils.load_events_yaml()
 
     logger.debug("Evaluation starting")
-    point_obs, gridded_obs = data_loader.open_obs_datasets(
-        eval_config, point_obs_schema_config
-    )
-    forecast_dataset = data_loader.open_and_preprocess_forecast_dataset(
-        eval_config, forecast_schema_config
-    )
+    point_obs, gridded_obs = data_loader.open_obs_datasets(eval_config)
+    forecast_dataset = data_loader.open_and_preprocess_forecast_dataset(eval_config)
     logger.debug("Forecast and observation datasets loaded")
     logger.debug(
         "Observation data: Point %s, Gridded %s",
@@ -278,7 +274,7 @@ def evaluate(
     # map era5 vars by renaming and dropping extra vars
     if gridded_obs is not None:
         gridded_obs = utils.map_era5_vars_to_forecast(
-            forecast_schema_config,
+            eval_config,
             forecast_dataset=forecast_dataset,
             era5_dataset=gridded_obs,
         )
@@ -443,3 +439,204 @@ def get_case_metadata(eval_config: config.Config) -> list[events.EventContainer]
         )
         case_metadata_output.append(cases)
     return case_metadata_output
+
+
+@click.command()
+@click.option(
+    "--config-file",
+    type=click.Path(exists=True),
+    help="Path to a YAML or JSON configuration file",
+)
+# Config class options
+@click.option(
+    "--event-types",
+    multiple=True,
+    help="List of event types to evaluate (e.g. HeatWave,Freeze)",
+)
+@click.option(
+    "--output-dir",
+    type=click.Path(),
+    default=str(config.DEFAULT_OUTPUT_DIR),
+    help="Directory for analysis outputs",
+)
+@click.option(
+    "--forecast-dir",
+    type=click.Path(),
+    default=str(config.DEFAULT_FORECAST_DIR),
+    help="Directory containing forecast data",
+)
+@click.option(
+    "--cache-dir",
+    type=click.Path(),
+    default=str(config.DEFAULT_CACHE_DIR),
+    help="Directory for caching intermediate data",
+)
+@click.option(
+    "--gridded-obs-path",
+    default=config.ARCO_ERA5_FULL_URI,
+    help="URI/path to gridded observation dataset",
+)
+@click.option(
+    "--point-obs-path",
+    default=config.ISD_POINT_OBS_URI,
+    help="URI/path to point observation dataset",
+)
+@click.option(
+    "--remote-protocol",
+    default="s3",
+    help="Storage protocol for forecast data",
+)
+@click.option(
+    "--init-forecast-hour",
+    type=int,
+    default=0,
+    help="First forecast hour to include",
+)
+@click.option(
+    "--temporal-resolution-hours",
+    type=int,
+    default=6,
+    help="Resolution of forecast data in hours",
+)
+@click.option(
+    "--output-timesteps",
+    type=int,
+    default=41,
+    help="Number of timesteps to include",
+)
+# ForecastSchemaConfig options
+@click.option("--forecast-surface-air-temperature", default="t2m")
+@click.option("--forecast-surface-eastward-wind", default="u10")
+@click.option("--forecast-surface-northward-wind", default="v10")
+@click.option("--forecast-air-temperature", default="t")
+@click.option("--forecast-eastward-wind", default="u")
+@click.option("--forecast-northward-wind", default="v")
+@click.option("--forecast-air-pressure-at-mean-sea-level", default="msl")
+@click.option("--forecast-lead-time", default="time")
+@click.option("--forecast-init-time", default="init_time")
+@click.option("--forecast-fhour", default="fhour")
+@click.option("--forecast-level", default="level")
+@click.option("--forecast-latitude", default="latitude")
+@click.option("--forecast-longitude", default="longitude")
+# PointObservationSchemaConfig options
+@click.option(
+    "--point-air-pressure-at-mean-sea-level", default="air_pressure_at_mean_sea_level"
+)
+@click.option("--point-surface-air-pressure", default="surface_air_pressure")
+@click.option("--point-surface-wind-speed", default="surface_wind_speed")
+@click.option(
+    "--point-surface-wind-from-direction", default="surface_wind_from_direction"
+)
+@click.option("--point-surface-air-temperature", default="surface_air_temperature")
+@click.option("--point-surface-dew-point-temperature", default="surface_dew_point")
+@click.option("--point-surface-relative-humidity", default="surface_relative_humidity")
+@click.option(
+    "--point-accumulated-1-hour-precipitation",
+    default="accumulated_1_hour_precipitation",
+)
+@click.option("--point-time", default="time")
+@click.option("--point-latitude", default="latitude")
+@click.option("--point-longitude", default="longitude")
+@click.option("--point-elevation", default="elevation")
+@click.option("--point-station-id", default="station")
+@click.option("--point-station-long-name", default="name")
+@click.option("--point-case-id", default="id")
+@click.option(
+    "--point-metadata-vars",
+    multiple=True,
+    default=["station", "id", "latitude", "longitude", "time"],
+)
+def cli_runner(config_file, **kwargs):
+    """ExtremeWeatherBench evaluation command line interface.
+
+    Accepts either a config file path or individual configuration options.
+
+    Example command with config file:
+    python -m extremeweatherbench.evaluate --config-file config.yaml
+    
+    Example command with individual options:
+    python -m extremeweatherbench.evaluate \
+    --event-types HeatWave Freeze \
+    --output-dir ./outputs \
+    --forecast-dir ./forecasts \
+    --forecast-surface-air-temperature t2m \
+    --point-surface-air-temperature temperature
+    """
+    if config_file:
+        # Load config from file
+        import yaml
+        import json
+
+        if config_file.endswith(".yaml") or config_file.endswith(".yml"):
+            with open(config_file) as f:
+                config_dict = yaml.safe_load(f)
+        elif config_file.endswith(".json"):
+            with open(config_file) as f:
+                config_dict = json.load(f)
+        else:
+            raise ValueError("Config file must be YAML or JSON")
+
+        eval_config = dacite.from_dict(data_class=config.Config, data=config_dict)
+        forecast_schema_config = dacite.from_dict(
+            data_class=config.ForecastSchemaConfig,
+            data=config_dict.get("forecast_schema_config", {}),
+        )
+        point_obs_schema_config = dacite.from_dict(
+            data_class=config.PointObservationSchemaConfig,
+            data=config_dict.get("point_observation_schema_config", {}),
+        )
+    else:
+        # Build configs from CLI options
+        from extremeweatherbench import events
+
+        # Convert event type strings to actual event classes
+        event_type_map = {
+            "HeatWave": events.HeatWave,
+            "Freeze": events.Freeze,
+            # Add other event types as they become available
+        }
+        event_types = [event_type_map[et] for et in kwargs.pop("event_types")]
+
+        # Extract schema configs
+        forecast_schema_dict = {
+            k.replace("forecast_", ""): v
+            for k, v in kwargs.items()
+            if k.startswith("forecast_")
+        }
+        point_obs_schema_dict = {
+            k.replace("point_", ""): v
+            for k, v in kwargs.items()
+            if k.startswith("point_")
+        }
+
+        # Remove schema options from kwargs
+        for k in list(kwargs.keys()):
+            if k.startswith(("forecast_", "point_")):
+                kwargs.pop(k)
+
+        # Create config objects
+        eval_config = config.Config(
+            event_types=event_types,
+            **{k: v for k, v in kwargs.items() if hasattr(config.Config, k)},
+        )
+        forecast_schema_config = config.ForecastSchemaConfig(**forecast_schema_dict)
+        point_obs_schema_config = config.PointObservationSchemaConfig(
+            **point_obs_schema_dict
+        )
+
+    # Run evaluation
+    results = evaluate(
+        eval_config=eval_config,
+        forecast_schema_config=forecast_schema_config,
+        point_obs_schema_config=point_obs_schema_config,
+    )
+
+    # Save results
+    output_path = Path(eval_config.output_dir) / "evaluation_results.csv"
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    results.to_csv(output_path)
+    click.echo(f"Results saved to {output_path}")
+
+
+if __name__ == "__main__":
+    cli_runner()
