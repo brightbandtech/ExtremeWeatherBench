@@ -186,7 +186,9 @@ class Config:
     point_obs_storage_options: dict = dataclasses.field(
         default_factory=lambda: POINT_OBS_STORAGE_OPTIONS
     )
-    forecast_schema_config: ForecastSchemaConfig = ForecastSchemaConfig()
-    point_observation_schema_config: PointObservationSchemaConfig = (
-        PointObservationSchemaConfig()
+    forecast_schema_config: ForecastSchemaConfig = dataclasses.field(
+        default_factory=ForecastSchemaConfig
+    )
+    point_observation_schema_config: PointObservationSchemaConfig = dataclasses.field(
+        default_factory=PointObservationSchemaConfig
     )
