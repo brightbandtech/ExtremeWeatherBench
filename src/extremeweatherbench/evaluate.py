@@ -274,7 +274,7 @@ def evaluate(
     # map era5 vars by renaming and dropping extra vars
     if gridded_obs is not None:
         gridded_obs = utils.map_era5_vars_to_forecast(
-            eval_config,
+            eval_config.forecast_schema_config,
             forecast_dataset=forecast_dataset,
             era5_dataset=gridded_obs,
         )
