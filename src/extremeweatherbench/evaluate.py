@@ -10,6 +10,8 @@ import dataclasses
 import itertools
 import click
 from pathlib import Path
+import yaml
+import json
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -574,11 +576,9 @@ def cli_runner(default, config_file, **kwargs):
     --forecast-schema-surface-air-temperature t2m \
     --point-schema-surface-air-temperature temperature
     """
+    # breakpoint()
     if config_file:
         # Load config from file
-        import yaml
-        import json
-
         if config_file.endswith(".yaml") or config_file.endswith(".yml"):
             with open(config_file) as f:
                 config_dict = yaml.safe_load(f)
@@ -587,6 +587,11 @@ def cli_runner(default, config_file, **kwargs):
                 config_dict = json.load(f)
         else:
             raise ValueError("Config file must be YAML or JSON")
+
+        # Convert string paths to Path objects
+        for path_field in ["output_dir", "forecast_dir", "cache_dir"]:
+            if path_field in config_dict:
+                config_dict[path_field] = Path(config_dict[path_field])
 
         eval_config = dacite.from_dict(data_class=config.Config, data=config_dict)
         forecast_schema_config = dacite.from_dict(
@@ -611,7 +616,6 @@ def cli_runner(default, config_file, **kwargs):
             # Add other event types as they become available
         }
         event_types = [event_type_map[et] for et in kwargs.pop("event_types")]
-
         # Extract schema configs
         forecast_schema_dict = {
             k.replace("forecast_schema_", ""): v
