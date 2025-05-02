@@ -481,6 +481,10 @@ def align_point_obs_from_gridded(
                 valid_time_index, :
             ]
         else:
+            logger.debug(
+                "No valid time found in point obs for %s",
+                valid_time.strftime("%Y-%m-%d %H:%M"),
+            )
             continue
         obs_overlapping_valid_time = obs_overlapping_valid_time.reset_index()
 
@@ -523,10 +527,27 @@ def align_point_obs_from_gridded(
 
         aligned_observation_list.append(obs_overlapping_valid_time_ds)
         aligned_forecast_list.append(forecast_at_obs_ds)
-    # concat the dataarrays along the station dimension
-    interpolated_forecast = xr.concat(aligned_forecast_list, dim="station_id")
-    interpolated_observation = xr.concat(aligned_observation_list, dim="station_id")
-    return (interpolated_forecast, interpolated_observation)
+    # concat the dataarrays along the station_id dimension
+    if len(aligned_forecast_list) == 0 or len(aligned_observation_list) == 0:
+        return (xr.Dataset(), xr.Dataset())
+    else:
+        # Convert to Dataset before concat to ensure we always get a Dataset back
+        # even if there's only one element in the list
+        interpolated_forecast = xr.concat(
+            [
+                ds.to_dataset() if isinstance(ds, xr.DataArray) else ds
+                for ds in aligned_forecast_list
+            ],
+            dim="station_id",
+        )
+        interpolated_observation = xr.concat(
+            [
+                ds.to_dataset() if isinstance(ds, xr.DataArray) else ds
+                for ds in aligned_observation_list
+            ],
+            dim="station_id",
+        )
+        return (interpolated_forecast, interpolated_observation)
 
 
 def derive_indices_from_init_time_and_lead_time(
