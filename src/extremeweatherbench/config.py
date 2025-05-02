@@ -42,7 +42,7 @@ class ForecastSchemaConfig:
     suggested based on the CF Conventions.
     """
 
-    surface_air_temperature: Optional[str] = "t2m"
+    surface_air_temperature: Optional[str] = "t2"
     surface_eastward_wind: Optional[str] = "u10"
     surface_northward_wind: Optional[str] = "v10"
     air_temperature: Optional[str] = "t"
@@ -187,8 +187,8 @@ class Config:
         default_factory=lambda: POINT_OBS_STORAGE_OPTIONS
     )
     forecast_schema_config: ForecastSchemaConfig = dataclasses.field(
-        default_factory=ForecastSchemaConfig
+        default_factory=lambda: ForecastSchemaConfig()
     )
-    point_observation_schema_config: PointObservationSchemaConfig = dataclasses.field(
-        default_factory=PointObservationSchemaConfig
+    point_obs_schema_config: PointObservationSchemaConfig = dataclasses.field(
+        default_factory=lambda: PointObservationSchemaConfig()
     )

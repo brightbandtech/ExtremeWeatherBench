@@ -140,7 +140,7 @@ def sample_config():
         forecast_dir="test/forecast/path",
         gridded_obs_path="test/obs/path",
         forecast_schema_config=config.ForecastSchemaConfig(),
-        point_observation_schema_config=config.PointObservationSchemaConfig(),
+        point_obs_schema_config=config.PointObservationSchemaConfig(),
     )
 
 
