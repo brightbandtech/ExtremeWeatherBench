@@ -481,7 +481,7 @@ def align_point_obs_from_gridded(
                 valid_time_index, :
             ]
         else:
-            logger.debug("No valid time found in point obs for %s", valid_time)
+            logger.debug("No valid time found in point obs for %s", valid_time.strftime("%Y-%m-%d %H:%M"))
             continue
         obs_overlapping_valid_time = obs_overlapping_valid_time.reset_index()
 
