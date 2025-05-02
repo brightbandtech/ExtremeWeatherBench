@@ -443,6 +443,11 @@ def get_case_metadata(eval_config: config.Config) -> list[events.EventContainer]
 
 @click.command()
 @click.option(
+    "--default",
+    is_flag=True,
+    help="Use default values for all configurations and use current directory as output",
+)
+@click.option(
     "--config-file",
     type=click.Path(exists=True),
     help="Path to a YAML or JSON configuration file",
@@ -505,48 +510,55 @@ def get_case_metadata(eval_config: config.Config) -> list[events.EventContainer]
     help="Number of timesteps to include",
 )
 # ForecastSchemaConfig options
-@click.option("--forecast-surface-air-temperature", default="t2m")
-@click.option("--forecast-surface-eastward-wind", default="u10")
-@click.option("--forecast-surface-northward-wind", default="v10")
-@click.option("--forecast-air-temperature", default="t")
-@click.option("--forecast-eastward-wind", default="u")
-@click.option("--forecast-northward-wind", default="v")
-@click.option("--forecast-air-pressure-at-mean-sea-level", default="msl")
-@click.option("--forecast-lead-time", default="time")
-@click.option("--forecast-init-time", default="init_time")
-@click.option("--forecast-fhour", default="fhour")
-@click.option("--forecast-level", default="level")
-@click.option("--forecast-latitude", default="latitude")
-@click.option("--forecast-longitude", default="longitude")
+@click.option("--forecast-schema-surface-air-temperature", default="t2m")
+@click.option("--forecast-schema-surface-eastward-wind", default="u10")
+@click.option("--forecast-schema-surface-northward-wind", default="v10")
+@click.option("--forecast-schema-air-temperature", default="t")
+@click.option("--forecast-schema-eastward-wind", default="u")
+@click.option("--forecast-schema-northward-wind", default="v")
+@click.option("--forecast-schema-air-pressure-at-mean-sea-level", default="msl")
+@click.option("--forecast-schema-lead-time", default="time")
+@click.option("--forecast-schema-init-time", default="init_time")
+@click.option("--forecast-schema-fhour", default="fhour")
+@click.option("--forecast-schema-level", default="level")
+@click.option("--forecast-schema-latitude", default="latitude")
+@click.option("--forecast-schema-longitude", default="longitude")
 # PointObservationSchemaConfig options
 @click.option(
-    "--point-air-pressure-at-mean-sea-level", default="air_pressure_at_mean_sea_level"
+    "--point-schema-air-pressure-at-mean-sea-level",
+    default="air_pressure_at_mean_sea_level",
 )
-@click.option("--point-surface-air-pressure", default="surface_air_pressure")
-@click.option("--point-surface-wind-speed", default="surface_wind_speed")
+@click.option("--point-schema-surface-air-pressure", default="surface_air_pressure")
+@click.option("--point-schema-surface-wind-speed", default="surface_wind_speed")
 @click.option(
-    "--point-surface-wind-from-direction", default="surface_wind_from_direction"
+    "--point-schema-surface-wind-from-direction", default="surface_wind_from_direction"
 )
-@click.option("--point-surface-air-temperature", default="surface_air_temperature")
-@click.option("--point-surface-dew-point-temperature", default="surface_dew_point")
-@click.option("--point-surface-relative-humidity", default="surface_relative_humidity")
 @click.option(
-    "--point-accumulated-1-hour-precipitation",
+    "--point-schema-surface-air-temperature", default="surface_air_temperature"
+)
+@click.option(
+    "--point-schema-surface-dew-point-temperature", default="surface_dew_point"
+)
+@click.option(
+    "--point-schema-surface-relative-humidity", default="surface_relative_humidity"
+)
+@click.option(
+    "--point-schema-accumulated-1-hour-precipitation",
     default="accumulated_1_hour_precipitation",
 )
-@click.option("--point-time", default="time")
-@click.option("--point-latitude", default="latitude")
-@click.option("--point-longitude", default="longitude")
-@click.option("--point-elevation", default="elevation")
-@click.option("--point-station-id", default="station")
-@click.option("--point-station-long-name", default="name")
-@click.option("--point-case-id", default="id")
+@click.option("--point-schema-time", default="time")
+@click.option("--point-schema-latitude", default="latitude")
+@click.option("--point-schema-longitude", default="longitude")
+@click.option("--point-schema-elevation", default="elevation")
+@click.option("--point-schema-station-id", default="station")
+@click.option("--point-schema-station-long-name", default="name")
+@click.option("--point-schema-case-id", default="id")
 @click.option(
-    "--point-metadata-vars",
+    "--point-schema-metadata-vars",
     multiple=True,
     default=["station", "id", "latitude", "longitude", "time"],
 )
-def cli_runner(config_file, **kwargs):
+def cli_runner(default, config_file, **kwargs):
     """ExtremeWeatherBench evaluation command line interface.
 
     Accepts either a config file path or individual configuration options.
@@ -559,8 +571,8 @@ def cli_runner(config_file, **kwargs):
     --event-types HeatWave Freeze \
     --output-dir ./outputs \
     --forecast-dir ./forecasts \
-    --forecast-surface-air-temperature t2m \
-    --point-surface-air-temperature temperature
+    --forecast-schema-surface-air-temperature t2m \
+    --point-schema-surface-air-temperature temperature
     """
     if config_file:
         # Load config from file
@@ -583,12 +595,15 @@ def cli_runner(config_file, **kwargs):
         )
         point_obs_schema_config = dacite.from_dict(
             data_class=config.PointObservationSchemaConfig,
-            data=config_dict.get("point_observation_schema_config", {}),
+            data=config_dict.get("point_obs_schema_config", {}),
+        )
+    elif default:
+        event_list = [events.HeatWave]
+        eval_config = config.Config(
+            event_types=event_list,
+            forecast_dir="gs://extremeweatherbench/FOUR_v200_GFS.parq",
         )
     else:
-        # Build configs from CLI options
-        from extremeweatherbench import events
-
         # Convert event type strings to actual event classes
         event_type_map = {
             "HeatWave": events.HeatWave,
@@ -599,36 +614,36 @@ def cli_runner(config_file, **kwargs):
 
         # Extract schema configs
         forecast_schema_dict = {
-            k.replace("forecast_", ""): v
+            k.replace("forecast_schema_", ""): v
             for k, v in kwargs.items()
-            if k.startswith("forecast_")
+            if k.startswith("forecast_schema_")
         }
         point_obs_schema_dict = {
-            k.replace("point_", ""): v
+            k.replace("point_schema_", ""): v
             for k, v in kwargs.items()
-            if k.startswith("point_")
+            if k.startswith("point_schema_")
         }
 
         # Remove schema options from kwargs
         for k in list(kwargs.keys()):
-            if k.startswith(("forecast_", "point_")):
+            if k.startswith(("forecast_schema_", "point_schema_")):
                 kwargs.pop(k)
 
+        forecast_schema_config = config.ForecastSchemaConfig(**forecast_schema_dict)
+        point_obs_schema_config = config.PointObservationSchemaConfig(
+            **point_obs_schema_dict
+        )
         # Create config objects
         eval_config = config.Config(
             event_types=event_types,
             **{k: v for k, v in kwargs.items() if hasattr(config.Config, k)},
         )
-        forecast_schema_config = config.ForecastSchemaConfig(**forecast_schema_dict)
-        point_obs_schema_config = config.PointObservationSchemaConfig(
-            **point_obs_schema_dict
-        )
+        eval_config.forecast_schema_config = forecast_schema_config
+        eval_config.point_obs_schema_config = point_obs_schema_config
 
     # Run evaluation
     results = evaluate(
         eval_config=eval_config,
-        forecast_schema_config=forecast_schema_config,
-        point_obs_schema_config=point_obs_schema_config,
     )
 
     # Save results
