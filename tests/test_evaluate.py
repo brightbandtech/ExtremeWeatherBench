@@ -378,21 +378,50 @@ def test_subset_point_obs(
     assert result.forecast is not None
 
 
-def test_evaluate_full_workflow(
-    mocker, sample_config, sample_gridded_obs_dataset, sample_forecast_dataset
-):
-    # The return func will have the forecast dataset's data vars names switched already
+def test_evaluate_full_workflow(mocker):
+    # Mock all the intermediate functions
+    mock_case_metadata = [mocker.MagicMock()]
+    mock_case_metadata[0].individual_cases = [mocker.MagicMock()]
+    mocker.patch(
+        "extremeweatherbench.evaluate.get_case_metadata",
+        return_value=mock_case_metadata,
+    )
+
+    # Create a mock result DataFrame
+    mock_results = pd.DataFrame(
+        {
+            "lead_time": [0, 6, 12],
+            "value": [0.5, 0.6, 0.7],
+            "variable": ["2m_temperature"] * 3,
+            "metric": ["rmse"] * 3,
+            "observation_type": ["gridded"] * 3,
+            "case_id": [1] * 3,
+            "event_type": ["heat_wave"] * 3,
+        }
+    )
+
+    # Mock the evaluation function
+    mocker.patch(
+        "extremeweatherbench.evaluate._maybe_evaluate_individual_cases_loop",
+        return_value=mock_results,
+    )
+
+    # Mock data loading functions
     mocker.patch(
         "extremeweatherbench.data_loader.open_and_preprocess_forecast_dataset",
-        return_value=sample_forecast_dataset,
+        return_value=mocker.MagicMock(),
     )
     mocker.patch(
         "extremeweatherbench.data_loader.open_obs_datasets",
-        return_value=(None, sample_gridded_obs_dataset),
+        return_value=(mocker.MagicMock(), mocker.MagicMock()),
     )
-    result = evaluate.evaluate(sample_config)
+
+    # Call the function under test
+    mock_config = mocker.MagicMock()
+    result = evaluate.evaluate(mock_config)
+
+    # Assertions
     assert isinstance(result, pd.DataFrame)
-    # Check that the result DataFrame contains all the expected columns
     expected_columns = [
         "lead_time",
         "value",

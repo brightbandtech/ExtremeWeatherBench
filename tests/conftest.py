@@ -139,6 +139,8 @@ def sample_config():
         event_types=[events.HeatWave],
         forecast_dir="test/forecast/path",
         gridded_obs_path="test/obs/path",
+        forecast_schema_config=config.ForecastSchemaConfig(),
+        point_observation_schema_config=config.PointObservationSchemaConfig(),
     )
 
 
