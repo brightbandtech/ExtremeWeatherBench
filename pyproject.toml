@@ -26,6 +26,7 @@ dependencies = [
     "zarr>=3.0.2",
     "kerchunk[dev]",
     "flox>=0.10.0",
+    "metpy>=1.7.0",
 ]
 
 [project.optional-dependencies]
