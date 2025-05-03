@@ -1,13 +1,8 @@
+from matplotlib import units
 import xarray as xr
 import logging
 import numpy as np
-from metpy.calc import (
-    dewpoint_from_relative_humidity,
-    mixed_layer_cape_cin,
-    relative_humidity_from_specific_humidity,
-    relative_humidity_from_dewpoint,
-)
-from metpy.units import units
+import metpy
 from typing import Callable
 from enum import StrEnum
 
@@ -26,20 +21,28 @@ def relative_humidity(
         rh: An xarray DataArray containing the relative humidity.
     """
     if original_variable == "specific_humidity":
-        return relative_humidity_from_specific_humidity(
+        return metpy.calc.relative_humidity_from_specific_humidity(
             ds["level"].values * units.hPa,
-            ds["air_temperature"].sel(level=ds["level"].values * units.hPa)
-            * units.degK,
-            ds["specific_humidity"].sel(level=ds["level"].values * units.hPa)
-            * units("g/kg"),
+            ds["air_temperature"].sel(level=ds["level"].values * metpy.units.hPa)
+            * metpy.units.degK,
+            ds["specific_humidity"].sel(level=ds["level"].values * metpy.units.hPa)
+            * metpy.units.g
+            / metpy.units.kg,
         )
     elif original_variable == "dewpoint_temperature":
-        return relative_humidity_from_dewpoint(
-            ds["air_temperature"].sel(level=ds["level"].values * units.hPa)
-            * units.degK,
-            ds["dewpoint_temperature"].sel(level=ds["level"].values * units.hPa)
-            * units.degK,
+        return metpy.calc.relative_humidity_from_dewpoint(
+            ds["air_temperature"].sel(level=ds["level"].values * metpy.units.hPa)
+            * metpy.units.degK,
+            ds["dewpoint_temperature"].sel(level=ds["level"].values * metpy.units.hPa)
+            * metpy.units.degK,
         )
+
+
+def _wrap_metpy_mixed_layer_cape_cin(pressure, temperature, dewpoint):
+    cape, cin = metpy.calc.thermo.mixed_layer_cape_cin(
+        pressure * units.hPa, (temperature - 273.15) * units.degC, dewpoint * units.degC
+    )
+    return cape.m, cin.m
 
 
 # Craven, J. P., and H. E. Brooks, 2004: Baseline climatology
@@ -68,14 +71,26 @@ def craven_sigsvr(ds: xr.Dataset) -> xr.DataArray:
         )
     elif "relative_humidity" in ds.variables:
         rh = ds["relative_humidity"].sel(level=pressure_levels) * units.dimensionless
-        dewpoint_temperature = dewpoint_from_relative_humidity(temperature, rh)
+        dewpoint_temperature = metpy.calc.dewpoint_from_relative_humidity(
+            temperature, rh
+        )
     elif "specific_humidity" in ds.variables:
         rh = relative_humidity(ds, original_variable="specific_humidity")
-        dewpoint_temperature = dewpoint_from_relative_humidity(temperature, rh)
+        dewpoint_temperature = metpy.calc.dewpoint_from_relative_humidity(
+            temperature, rh
+        )
     else:
         raise ValueError("No humidity variable found in dataset")
-
-    mlcape, _ = mixed_layer_cape_cin(pressure_levels, temperature, dewpoint_temperature)
+    mlcape, _ = xr.apply_ufunc(
+        _wrap_metpy_mixed_layer_cape_cin,
+        pressure_levels,
+        temperature,
+        dewpoint_temperature,
+        input_core_dims=[["level"], ["level"], ["level"]],
+        output_core_dims=[[], []],
+        vectorize=True,
+        output_dtypes=[float, float],
+    )
     sigsvr = mlcape * shear_0_6_km
     return sigsvr
 
