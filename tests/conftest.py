@@ -2,7 +2,7 @@ import pytest
 import xarray as xr
 import pandas as pd
 import numpy as np
-from extremeweatherbench import config, events
+from extremeweatherbench import config, events, data_loader
 
 
 def make_sample_gridded_obs_dataset():
@@ -28,6 +28,23 @@ def make_sample_gridded_obs_dataset():
         )
     ] = 25
     return dataset
+
+
+def make_sample_point_obs_df():
+    # Create sample point observations DataFrame
+    data = {
+        "time": pd.to_datetime(["2023-01-01 00:00", "2023-01-01 06:00"]),
+        "station": ["A100", "B200"],
+        "call": ["KWEW", "KBCE"],
+        "name": ["WEST CENTRAL", "EAST CENTRAL"],
+        "latitude": [40.5, 41.8],
+        "longitude": [-99.5, -99.8],
+        "elev": [1000, 1100],
+        "id": [1, 2],
+        "surface_air_temperature": [20.0, 21.0],
+    }
+    df = pd.DataFrame(data)
+    return df
 
 
 def make_sample_forecast_dataset():
@@ -81,6 +98,22 @@ def make_sample_forecast_dataset():
     return dataset
 
 
+def make_sample_results_dataarray_list():
+    results_da_list = [
+        xr.DataArray(
+            data=[5],
+            dims=["lead_time"],
+            coords={"lead_time": [0]},
+        ),
+        xr.DataArray(
+            data=[6],
+            dims=["lead_time"],
+            coords={"lead_time": [6]},
+        ),
+    ]
+    return results_da_list
+
+
 def dataset_to_dataarray(dataset):
     """Convert an xarray Dataset to a DataArray."""
     mock_data_var = [data_var for data_var in dataset.data_vars][0]
@@ -91,6 +124,13 @@ def dataset_to_dataarray(dataset):
 def sample_forecast_dataset():
     sample_forecast_dataset = make_sample_forecast_dataset()
     return sample_forecast_dataset
+
+
+@pytest.fixture
+def sample_schema_config_point_obs_df():
+    sample_schema_config_point_obs_df = make_sample_point_obs_df()
+
+    return sample_schema_config_point_obs_df
 
 
 @pytest.fixture
@@ -149,34 +189,29 @@ def sample_subset_gridded_obs_dataarray():
 
 @pytest.fixture
 def sample_results_dataarray_list():
-    results_da_list = [
-        xr.DataArray(
-            data=[5],
-            dims=["lead_time"],
-            coords={"lead_time": [0]},
-        ),
-        xr.DataArray(
-            data=[6],
-            dims=["lead_time"],
-            coords={"lead_time": [6]},
-        ),
-    ]
-    return results_da_list
+    sample_results_dataarray_list = make_sample_results_dataarray_list()
+    return sample_results_dataarray_list
 
 
 @pytest.fixture
 def sample_point_obs_df():
-    # Create sample point observations DataFrame
-    data = {
-        "time": ["2023-01-01 00:00", "2023-01-01 06:00"],
-        "station": ["A100", "B200"],
-        "call": ["KWEW", "KBCE"],
-        "name": ["WEST CENTRAL", "EAST CENTRAL"],
-        "latitude": [40.5, 41.8],
-        "longitude": [-99.5, -99.8],
-        "elev": [1000, 1100],
-        "id": [1, 2],
-        "surface_air_temperature": [20.0, 21.0],
+    sample_point_obs_df = make_sample_point_obs_df()
+    return sample_point_obs_df
+
+
+@pytest.fixture
+def sample_point_obs_df_with_attrs():
+    sample_point_obs_schema_config = config.PointObservationSchemaConfig(
+        case_id="id",
+        station_long_name="name",
+        station_id="call",
+        elevation="elev",
+    )
+    sample_point_obs_df = make_sample_point_obs_df()
+    sample_point_obs_df.attrs = {
+        "metadata_vars": sample_point_obs_schema_config.mapped_metadata_vars
     }
-    df = pd.DataFrame(data)
-    return df
+    sample_point_obs_df = data_loader._rename_point_obs_dataset(
+        sample_point_obs_df, sample_point_obs_schema_config
+    )
+    return sample_point_obs_df

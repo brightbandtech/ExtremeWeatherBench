@@ -234,73 +234,49 @@ def test_clip_dataset_to_bounding_box_degrees():
     )
 
 
-def test_align_point_obs_from_gridded_input_validation():
-    # Test with invalid inputs
-    with pytest.raises((AttributeError, TypeError)):
-        utils.align_point_obs_from_gridded(
-            None,  # invalid forecast
-            pd.DataFrame(),  # empty dataframe
-            [],  # empty metadata vars
-        )
-
-
 def test_align_point_obs_from_gridded_basic(
-    sample_forecast_dataset, sample_point_obs_df
+    sample_forecast_dataset, sample_point_obs_df_with_attrs
 ):
-    """Test basic functionality of align_point_obs_from_gridded."""
-    # Convert times to datetime for easier manipulation
-    sample_point_obs_df["time"] = pd.to_datetime(sample_point_obs_df["time"])
-
-    # Adjust point obs to match forecast time
+    """Test basic functionality of align_point_obs_from_gridded."""  # Adjust point obs to match forecast time
     valid_time = pd.Timestamp(
         sample_forecast_dataset.init_time[0].values
     ) + pd.Timedelta(hours=6)
-    sample_point_obs_df.iloc[0, sample_point_obs_df.columns.get_loc("time")] = (
-        valid_time
-    )
-    sample_point_obs_df.iloc[1, sample_point_obs_df.columns.get_loc("time")] = (
-        valid_time
-    )
-
+    sample_point_obs_df_with_attrs.iloc[
+        0, sample_point_obs_df_with_attrs.columns.get_loc("time")
+    ] = valid_time
+    sample_point_obs_df_with_attrs.iloc[
+        1, sample_point_obs_df_with_attrs.columns.get_loc("time")
+    ] = valid_time
     # Convert longitude to 0-360 range to match forecast
-    sample_point_obs_df["longitude"] = sample_point_obs_df["longitude"].apply(
-        lambda x: x + 360 if x < 0 else x
-    )
-
-    # Set latitude and longitude values that fall within the forecast grid
-    sample_point_obs_df["latitude"] = np.array([40.5, 41.8])
-    sample_point_obs_df["longitude"] = np.array(
-        [260.5, 260.2]
-    )  # ~-99.5, ~-99.8 in 0-360 space
+    sample_point_obs_df_with_attrs["longitude"] = sample_point_obs_df_with_attrs[
+        "longitude"
+    ].apply(lambda x: x + 360 if x < 0 else x)
 
     data_var = ["surface_air_temperature"]
-    metadata_vars = ["latitude", "longitude", "station", "time"]
     forecast, obs = utils.align_point_obs_from_gridded(
-        sample_forecast_dataset, sample_point_obs_df, data_var, metadata_vars
+        sample_forecast_dataset, sample_point_obs_df_with_attrs, data_var
     )
     # Check basic properties
     assert isinstance(forecast, xr.Dataset)
     assert isinstance(obs, xr.Dataset)
-    assert "station" in forecast.dims
-    assert "station" in obs.dims
-    assert len(forecast.station) == len(sample_point_obs_df)
-    assert len(obs.station) == len(sample_point_obs_df)
+    assert "station_id" in forecast.dims
+    assert "station_id" in obs.dims
+    assert len(forecast.station_id) == len(sample_point_obs_df_with_attrs)
+    assert len(obs.station_id) == len(sample_point_obs_df_with_attrs)
     assert all(
-        station in forecast.station.values for station in sample_point_obs_df["station"]
+        station in forecast.station_id.values
+        for station in sample_point_obs_df_with_attrs["station_id"]
     )
 
 
 def test_align_point_obs_from_gridded_multiple_times(
-    sample_forecast_dataarray, sample_point_obs_df
+    sample_forecast_dataarray, sample_point_obs_df_with_attrs
 ):
     """Test aligning point observations with multiple valid times."""
-    # Convert times to datetime for easier manipulation
-    sample_point_obs_df["time"] = pd.to_datetime(sample_point_obs_df["time"])
-
     # Create a larger dataframe with multiple times
     dfs = []
     for i in range(3):
-        df_copy = sample_point_obs_df.copy()
+        df_copy = sample_point_obs_df_with_attrs.copy()
         valid_time = pd.Timestamp(
             sample_forecast_dataarray.init_time[0].values
         ) + pd.Timedelta(hours=i * 6)
@@ -321,24 +297,20 @@ def test_align_point_obs_from_gridded_multiple_times(
     )  # ~-99.5, ~-99.8 in 0-360 space
 
     data_var = ["surface_air_temperature"]
-    metadata_vars = ["latitude", "longitude", "station", "time"]
 
     forecast, obs = utils.align_point_obs_from_gridded(
-        sample_forecast_dataarray, multi_time_df, data_var, metadata_vars
+        sample_forecast_dataarray, multi_time_df, data_var
     )
 
     # Check there are multiple stations and times
-    assert len(forecast.station) == len(multi_time_df)
+    assert len(forecast.station_id) == len(multi_time_df)
     assert len(np.unique(forecast.time.values)) == 3
 
 
 def test_align_point_obs_from_gridded_missing_times(
-    sample_forecast_dataarray, sample_point_obs_df
+    sample_forecast_dataarray, sample_point_obs_df_with_attrs
 ):
     """Test behavior when some observation times don't match forecast times."""
-    # Convert times to datetime for easier manipulation
-    sample_point_obs_df["time"] = pd.to_datetime(sample_point_obs_df["time"])
-
     # Create a dataframe with some matching times and some that don't match
     valid_time1 = pd.Timestamp(
         sample_forecast_dataarray.init_time[0].values
@@ -347,7 +319,7 @@ def test_align_point_obs_from_gridded_missing_times(
         sample_forecast_dataarray.init_time[0].values
     ) + pd.Timedelta(hours=7)  # Not in forecast
 
-    df = sample_point_obs_df.copy()
+    df = sample_point_obs_df_with_attrs.copy()
     df.iloc[0, df.columns.get_loc("time")] = valid_time1
     df.iloc[1, df.columns.get_loc("time")] = valid_time2
 
@@ -359,45 +331,123 @@ def test_align_point_obs_from_gridded_missing_times(
     df["longitude"] = np.array([260.5, 260.2])  # ~-99.5, ~-99.8 in 0-360 space
 
     data_var = ["surface_air_temperature"]
-    metadata_vars = ["latitude", "longitude", "station", "time"]
 
     forecast, obs = utils.align_point_obs_from_gridded(
-        sample_forecast_dataarray, df, data_var, metadata_vars
+        sample_forecast_dataarray, df, data_var
     )
 
     # Should only include the valid time that matches a forecast time
-    assert len(forecast.station) == 1
+    assert len(forecast.station_id) == 1
 
 
 def test_align_point_obs_from_gridded_out_of_bounds(
-    sample_forecast_dataarray, sample_point_obs_df
+    sample_forecast_dataarray, sample_point_obs_df_with_attrs
 ):
     """Test behavior when point observations are outside the forecast domain."""
-    # Convert times to datetime for easier manipulation
-    sample_point_obs_df["time"] = pd.to_datetime(sample_point_obs_df["time"])
-
     # Set timestamp to match forecast
     valid_time = pd.Timestamp(
         sample_forecast_dataarray.init_time[0].values
     ) + pd.Timedelta(hours=6)
-    sample_point_obs_df["time"] = valid_time
+    sample_point_obs_df_with_attrs["time"] = valid_time
 
     # Put one point within forecast domain and one outside
-    sample_point_obs_df["latitude"] = np.array(
+    sample_point_obs_df_with_attrs["latitude"] = np.array(
         [40.5, 95.0]
     )  # 95 is outside valid range
-    sample_point_obs_df["longitude"] = np.array([260.5, 260.2])
+    sample_point_obs_df_with_attrs["longitude"] = np.array([260.5, 260.2])
 
     data_var = ["surface_air_temperature"]
-    metadata_vars = ["latitude", "longitude", "station", "time"]
 
     forecast, obs = utils.align_point_obs_from_gridded(
-        sample_forecast_dataarray, sample_point_obs_df, data_var, metadata_vars
+        sample_forecast_dataarray, sample_point_obs_df_with_attrs, data_var
     )
 
     # Should only include the point within the domain
-    assert len(forecast.station) == 1
-    assert forecast.station.values[0] == sample_point_obs_df["station"][0]
+    assert len(forecast.station_id) == 1
+    assert (
+        forecast.station_id.values[0] == sample_point_obs_df_with_attrs["station_id"][0]
+    )
+
+
+def test_align_point_obs_from_gridded_all_empty():
+    # Test with empty inputs
+    forecast, obs = utils.align_point_obs_from_gridded(
+        xr.Dataset(),  # invalid forecast
+        pd.DataFrame(),  # empty dataframe
+        [],  # empty data vars
+    )
+    assert isinstance(forecast, xr.Dataset)
+    assert isinstance(obs, xr.Dataset)
+    assert len(forecast.data_vars) == 0
+    assert len(obs.data_vars) == 0
+
+
+def test_align_point_obs_from_gridded_empty_point_obs(
+    sample_forecast_dataarray, sample_point_obs_df_with_attrs
+):
+    """Test behavior when point observations are empty."""
+    # Create an empty DataFrame with the same columns as the sample
+    empty_df = pd.DataFrame(
+        columns=[
+            "station_id",
+            "station_long_name",
+            "latitude",
+            "longitude",
+            "elevation",
+            "surface_air_temperature",
+            "surface_air_pressure",
+            "air_pressure_at_mean_sea_level",
+            "accumulated_1_hour_precipitation",
+            "surface_wind_speed",
+            "surface_wind_from_direction",
+            "surface_dew_point_temperature",
+            "surface_relative_humidity",
+            "hour_dist",
+            "time",
+            "case_id",
+        ]
+    )
+    # Add metadata attributes to match the sample
+    empty_df.attrs = sample_point_obs_df_with_attrs.attrs
+
+    data_var = ["surface_air_temperature"]
+
+    # Test with empty observations
+    forecast, obs = utils.align_point_obs_from_gridded(
+        sample_forecast_dataarray, empty_df, data_var
+    )
+
+    # Should return empty datasets
+    assert isinstance(forecast, xr.Dataset)
+    assert isinstance(obs, xr.Dataset)
+    assert len(forecast.data_vars) == 0
+    assert len(obs.data_vars) == 0
+
+    # Set timestamp to match forecast
+
+
+def test_align_point_obs_from_gridded_vars_empty_forecast(
+    sample_point_obs_df_with_attrs,
+):
+    """Test behavior when point observations have variables not in the forecast."""
+    # Create a dataframe with variables not in the forecast
+    data_var = [
+        "surface_air_temperature",
+        "surface_air_pressure",
+        "air_pressure_at_mean_sea_level",
+        "accumulated_1_hour_precipitation",
+        "surface_wind_speed",
+        "surface_wind_from_direction",
+        "surface_dew_point_temperature",
+    ]
+
+    empty_forecast = xr.Dataset()
+    # If the forecast is empty, the function should raise a KeyError
+    # there should have been an exception raised well before this point in this case
+    with pytest.raises(KeyError):
+        forecast, obs = utils.align_point_obs_from_gridded(
+            empty_forecast, sample_point_obs_df_with_attrs, data_var
+        )
 
 
 def test_location_subset_point_obs():
