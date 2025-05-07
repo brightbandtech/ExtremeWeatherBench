@@ -243,3 +243,132 @@ def test_maybe_convert_dataset_lead_time_to_int(sample_config):
     )
     assert result_int["lead_time"].dtype == np.dtype("int64")
     assert all(result_int["lead_time"].values == [0, 6, 12, 18, 24])
+
+
+def test_point_observation_schema_config():
+    """Test the PointObservationSchemaConfig class functionality."""
+    # Test default configuration
+    default_config = config.PointObservationSchemaConfig()
+    assert default_config.surface_air_temperature == "surface_air_temperature"
+    assert default_config.time == "time"
+    assert default_config.latitude == "latitude"
+    assert default_config.longitude == "longitude"
+    assert default_config.station_id == "station"
+    assert default_config.station_long_name == "name"
+    assert default_config.case_id == "id"
+
+    # Test default metadata vars
+    assert "station" in default_config.metadata_vars
+    assert "id" in default_config.metadata_vars
+    assert "latitude" in default_config.metadata_vars
+    assert "longitude" in default_config.metadata_vars
+    assert "time" in default_config.metadata_vars
+
+    # Test extending metadata vars
+    new_vars = ["elevation", "surface_air_pressure"]
+    default_config.extend_metadata_vars(new_vars)
+    assert "elevation" in default_config.metadata_vars
+    assert "surface_air_pressure" in default_config.metadata_vars
+
+    # Test mapped_metadata_vars property
+    mapped_vars = default_config.mapped_metadata_vars
+    assert "station_id" in mapped_vars  # Maps to "station"
+    assert "case_id" in mapped_vars  # Maps to "id"
+    assert "latitude" in mapped_vars
+    assert "longitude" in mapped_vars
+    assert "time" in mapped_vars
+
+
+def test_rename_point_obs_dataset(sample_point_obs_df):
+    """Test that _rename_point_obs_dataset correctly renames variables according to the schema config."""
+    # Create a copy of the sample dataframe to avoid modifying the original
+    df = sample_point_obs_df.copy()
+
+    # Create a custom schema config for sample point obs df
+    schema_config = config.PointObservationSchemaConfig(
+        surface_air_temperature="surface_air_temperature",
+        time="time",
+        latitude="latitude",
+        longitude="longitude",
+        station_id="call",
+        station_long_name="name",
+        case_id="id",
+        elevation="elev",
+    )
+
+    # Store original values for later comparison
+    temp_values = df["surface_air_temperature"].values
+    time_values = df["time"].values
+    lat_values = df["latitude"].values
+    lon_values = df["longitude"].values
+    name_values = df["name"].values
+    id_values = df["id"].values
+
+    # Call the function being tested
+    renamed_df = data_loader._rename_point_obs_dataset(df, schema_config)
+
+    # Verify that variables were correctly renamed
+    assert "surface_air_temperature" in renamed_df.columns
+    assert "time" in renamed_df.columns
+    assert "latitude" in renamed_df.columns
+    assert "longitude" in renamed_df.columns
+    assert "station_id" in renamed_df.columns
+    assert "station_long_name" in renamed_df.columns
+    assert "case_id" in renamed_df.columns
+
+    # Verify that original variable names are no longer present
+    assert "temp" not in renamed_df.columns
+    assert "timestamp" not in renamed_df.columns
+    assert "lat" not in renamed_df.columns
+    assert "lon" not in renamed_df.columns
+    assert "station_code" not in renamed_df.columns
+    assert "event_id" not in renamed_df.columns
+
+    # Verify that the data values remain unchanged after renaming
+    np.testing.assert_array_equal(
+        renamed_df["surface_air_temperature"].values, temp_values
+    )
+    np.testing.assert_array_equal(renamed_df["time"].values, time_values)
+    np.testing.assert_array_equal(renamed_df["latitude"].values, lat_values)
+    np.testing.assert_array_equal(renamed_df["longitude"].values, lon_values)
+    np.testing.assert_array_equal(renamed_df["station_long_name"].values, name_values)
+    np.testing.assert_array_equal(renamed_df["case_id"].values, id_values)
+
+
+def test_rename_point_obs_dataset_partial_mapping(sample_point_obs_df):
+    """Test that _rename_point_obs_dataset correctly handles partial mappings."""
+    # Create a copy of the sample dataframe to avoid modifying the original
+    df = sample_point_obs_df.copy()
+
+    # Create a schema config where only some variables match
+    schema_config = config.PointObservationSchemaConfig(
+        surface_air_temperature="surface_air_temperature",
+        time="timestamp",  # Not in dataset
+        latitude="lat",  # Not in dataset
+        longitude="lon",  # Not in dataset
+    )
+
+    # Store original values for later comparison
+    temp_values = df["surface_air_temperature"].values
+    name_values = df["name"].values
+    id_values = df["id"].values
+
+    # Call the function being tested
+    renamed_df = data_loader._rename_point_obs_dataset(df, schema_config)
+
+    # Verify that matching variables were renamed
+    assert "surface_air_temperature" in renamed_df.columns
+
+    # Verify that non-matching variables were left unchanged
+    assert "time" in renamed_df.columns
+    assert "latitude" in renamed_df.columns
+    assert "longitude" in renamed_df.columns
+    assert "station_long_name" in renamed_df.columns
+    assert "case_id" in renamed_df.columns
+
+    # Verify that the data values remain unchanged
+    np.testing.assert_array_equal(
+        renamed_df["surface_air_temperature"].values, temp_values
+    )
+    np.testing.assert_array_equal(renamed_df["station_long_name"].values, name_values)
+    np.testing.assert_array_equal(renamed_df["case_id"].values, id_values)

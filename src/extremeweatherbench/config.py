@@ -18,8 +18,8 @@ ARCO_ERA5_FULL_URI = (
     "gs://gcp-public-data-arco-era5/ar/full_37-1h-0p25deg-chunk-1.zarr-v3"
 )
 
-#: Storage/access options for point observation datasets.
-ISD_POINT_OBS_URI = "gs://extremeweatherbench/isd_minimal_qc.parquet"
+#: Storage/access options for default point observation dataset.
+DEFAULT_POINT_OBS_URI = "gs://extremeweatherbench/ghcnh.parq"
 
 #: Storage/access options for point observation datasets.
 POINT_OBS_STORAGE_OPTIONS = dict(token="anon")
@@ -76,8 +76,8 @@ class Config:
     output_dir: Path = DEFAULT_OUTPUT_DIR
     forecast_dir: Path = DEFAULT_FORECAST_DIR
     cache_dir: Optional[Path] = DEFAULT_CACHE_DIR
-    gridded_obs_path: str = ARCO_ERA5_FULL_URI
-    point_obs_path: str = ISD_POINT_OBS_URI
+    gridded_obs_path: Optional[str] = ARCO_ERA5_FULL_URI
+    point_obs_path: Optional[str] = DEFAULT_POINT_OBS_URI
     remote_protocol: str = "s3"
     forecast_preprocess: Callable[[xr.Dataset], xr.Dataset] = _default_preprocess
     init_forecast_hour: int = 0  # The first forecast hour (e.g. Graphcast starts at 6).
@@ -142,7 +142,7 @@ class PointObservationSchemaConfig:
         longitude: The longitude. Defaults to "longitude".
         elevation: The elevation. Defaults to "elevation".
         station_id: The station id. Defaults to "station".
-        station_name: The station name. Defaults to "name".
+        station_long_name: The station name. Defaults to "name".
         case_id: The case id in the event yaml file.
         Defaults to "id".
         metadata_vars: A list of metadata variables to include in the point observation dataset.
