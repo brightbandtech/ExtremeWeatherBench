@@ -255,8 +255,8 @@ def _maybe_convert_dataset_lead_time_to_int(
     elif var.dtype == np.dtype("int64"):
         logger.info("lead_time is already an int, skipping conversion")
     else:
-        logger.warning(
-            "lead_time is not a timedelta64[ns] or int64, creating range based on"
+        logger.info(
+            "lead_time is not a timedelta64[ns] or int64, creating range based on "
             "init_forecast_hour, output_timesteps, and temporal_resolution_hours"
         )
         dataset["lead_time"] = range(
