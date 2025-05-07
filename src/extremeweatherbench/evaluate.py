@@ -100,16 +100,20 @@ def build_dataset_subsets(
         )
     else:
         if case_evaluation_data.observation_type == "gridded":
-            evaluation_result = _subset_gridded_obs(case_evaluation_data)
+            evaluation_result = _gridded_inputs_to_evaluation_input(
+                case_evaluation_data
+            )
         elif case_evaluation_data.observation_type == "point":
             # point obs needs to be computed if compute is True due to complex subsetting operations
-            evaluation_result = _subset_point_obs(case_evaluation_data, compute=compute)
+            evaluation_result = _point_inputs_to_evaluation_input(
+                case_evaluation_data, compute=compute
+            )
         if compute:
             evaluation_result.load_data()
         return evaluation_result
 
 
-def _subset_gridded_obs(
+def _gridded_inputs_to_evaluation_input(
     case_evaluation_data: CaseEvaluationData,
 ) -> CaseEvaluationInput:
     """Subset the gridded observation dataarray for a given data variable."""
@@ -141,7 +145,7 @@ def _subset_gridded_obs(
     )
 
 
-def _subset_point_obs(
+def _point_inputs_to_evaluation_input(
     case_evaluation_data: CaseEvaluationData, compute: bool = True
 ) -> CaseEvaluationInput:
     """Subset the point observation dataarray for a given data variable."""
