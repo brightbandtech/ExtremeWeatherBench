@@ -4,6 +4,7 @@ import click
 from pathlib import Path
 import yaml
 import json
+from dataclasses import replace
 
 
 EVENT_TYPE_MAP = {
@@ -185,6 +186,11 @@ def cli_runner(default, config_file, **kwargs):
             event_types=event_types,
             **{k: v for k, v in kwargs.items() if hasattr(config.Config, k)},
         )
+
+    # Replace config objects with kwargs if they exist
+    eval_config = replace(
+        eval_config, **{k: v for k, v in kwargs.items() if hasattr(config.Config, k)}
+    )
     # Run evaluation
     results = evaluate.evaluate(
         eval_config=eval_config,
