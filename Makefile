@@ -17,7 +17,7 @@ default:
 
 test:
 	# Example: test with default config and check output
-	$(CLI) --test
+	$(CLI) --config-file docs/examples/config.yaml
 	@if [ -f outputs/test/evaluation_results.csv ]; then \
 		echo "Test passed: Output file created."; \
 		rm -rf outputs/test/evaluation_results.csv; \
