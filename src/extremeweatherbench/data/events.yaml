@@ -261,7 +261,7 @@ cases:
       longitude: 150.9448
     bounding_box_degrees: 5
     event_type: heat_wave
-  - id: 31
+  - id: 30
     title: 2021 Texas
     start_date: 2021-02-10 12:00:00
     end_date: 2021-02-22 00:00:00
@@ -270,7 +270,7 @@ cases:
       longitude: -97.7431
     bounding_box_degrees: 5
     event_type: freeze
-  - id: 32
+  - id: 31
     title: 2022 Arkansas
     start_date: 2022-02-17 18:00:00
     end_date: 2022-03-01 06:00:00
@@ -279,7 +279,7 @@ cases:
       longitude: -92.2896
     bounding_box_degrees: 5
     event_type: freeze
-  - id: 33
+  - id: 32
     title: 2023 Germany
     start_date: 2023-12-02 06:00:00
     end_date: 2023-12-05 18:00:00
@@ -288,7 +288,7 @@ cases:
       longitude: 11.5820
     bounding_box_degrees: 5
     event_type: freeze
-  - id: 34
+  - id: 33
     title: 2023 China
     start_date: 2023-12-15 06:00:00
     end_date: 2023-12-26 18:00:00
@@ -297,7 +297,7 @@ cases:
       longitude: 121.4737
     bounding_box_degrees: 5
     event_type: freeze
-  - id: 35
+  - id: 34
     title: 2023 Afghanistan
     start_date: 2023-01-11 06:00:00
     end_date: 2023-01-28 00:00:00
@@ -306,7 +306,7 @@ cases:
       longitude: 69.2075
     bounding_box_degrees: 5
     event_type: freeze
-  - id: 36
+  - id: 35
     title: 2022 Colorado
     start_date: 2022-04-06 00:00:00
     end_date: 2022-04-16 00:00:00
@@ -315,7 +315,7 @@ cases:
       longitude: -104.9903
     bounding_box_degrees: 5
     event_type: freeze
-  - id: 37
+  - id: 36
     title: July 2024 South Dakota
     start_date: 2024-07-13 00:00:00
     end_date: 2024-07-14 00:00:00
@@ -324,7 +324,7 @@ cases:
       longitude: -100.3516
     bounding_box_degrees: 5
     event_type: severe_day
-  - id: 38
+  - id: 37
     title: July 2024 Chicago
     start_date: 2024-07-14 00:00:00
     end_date: 2024-07-16 00:00:00
@@ -333,7 +333,7 @@ cases:
       longitude: -87.6298
     bounding_box_degrees: 5
     event_type: severe_day
-  - id: 39
+  - id: 38
     title: July 2024 New York
     start_date: 2024-07-16 00:00:00
     end_date: 2024-07-17 00:00:00
@@ -342,7 +342,7 @@ cases:
       longitude: -73.7562
     bounding_box_degrees: 5
     event_type: severe_day
-  - id: 40
+  - id: 39
     title: May 2024 Wisconsin
     start_date: 2024-05-18 00:00:00
     end_date: 2024-05-19 00:00:00
@@ -351,7 +351,7 @@ cases:
       longitude: -89.7373
     bounding_box_degrees: 5
     event_type: severe_day
-  - id: 41
+  - id: 40
     title: May 2024 Kansas
     start_date: 2024-05-19 00:00:00
     end_date: 2024-05-20 00:00:00
@@ -360,7 +360,7 @@ cases:
       longitude: -96.7265
     bounding_box_degrees: 5
     event_type: severe_day
-  - id: 42
+  - id: 41
     title: May 2024 Iowa + Nebraska
     start_date: 2024-05-20 00:00:00
     end_date: 2024-05-21 00:00:00
@@ -369,7 +369,7 @@ cases:
       longitude: -95.9345
     bounding_box_degrees: 5
     event_type: severe_day
-  - id: 43
+  - id: 42
     title: May 2024 Iowa + Wisconsin
     start_date: 2024-05-21 00:00:00
     end_date: 2024-05-22 00:00:00
@@ -378,7 +378,7 @@ cases:
       longitude: -90.6349
     bounding_box_degrees: 5
     event_type: severe_day
-  - id: 44
+  - id: 43
     title: May 2024 Texas
     start_date: 2024-05-22 00:00:00
     end_date: 2024-05-23 00:00:00
@@ -387,7 +387,7 @@ cases:
       longitude: -96.7970
     bounding_box_degrees: 5
     event_type: severe_day
-  - id: 45
+  - id: 44
     title: May 2024 Iowa + Nebraska 2
     start_date: 2024-05-23 00:00:00
     end_date: 2024-05-24 00:00:00
@@ -396,7 +396,7 @@ cases:
       longitude: -95.9345
     bounding_box_degrees: 5
     event_type: severe_day
-  - id: 46
+  - id: 45
     title: April 2024 Oklahoma
     start_date: 2024-04-25 12:00:00
     end_date: 2024-04-29 12:00:00
@@ -405,7 +405,7 @@ cases:
       longitude: -96.6398
     bounding_box_degrees: 5
     event_type: severe_day
-  - id: 47
+  - id: 46
     title: April 2024 Midwest
     start_date: 2024-04-02 12:00:00
     end_date: 2024-04-03 12:00:00
@@ -414,7 +414,7 @@ cases:
       longitude: -86.2816
     bounding_box_degrees: 5
     event_type: severe_day
-  - id: 48
+  - id: 47
     title: April 2024 Great Plains + Midwest
     start_date: 2024-04-01 12:00:00
     end_date: 2024-04-02 12:00:00
@@ -423,7 +423,7 @@ cases:
       longitude: -94.6208
     bounding_box_degrees: 5
     event_type: severe_day
-  - id: 49
+  - id: 48
     title: March 2024 Midwest
     start_date: 2024-03-14 12:00:00
     end_date: 2024-03-15 12:00:00
@@ -432,7 +432,7 @@ cases:
       longitude: -86.1581
     bounding_box_degrees: 8
     event_type: severe_day
-  - id: 50
+  - id: 49
     title: February 2024 Midwest
     start_date: 2024-02-27 12:00:00
     end_date: 2024-02-28 12:00:00
@@ -441,7 +441,7 @@ cases:
       longitude: -86.1581
     bounding_box_degrees: 8
     event_type: severe_day
-  - id: 51
+  - id: 50
     title: January 2024 Southeast
     start_date: 2024-01-08 12:00:00
     end_date: 2024-01-10 12:00:00
@@ -450,7 +450,7 @@ cases:
       longitude: -81.9748
     bounding_box_degrees: 8
     event_type: severe_day
-  - id: 52
+  - id: 51
     title: December 2023 South
     start_date: 2023-12-09 12:00:00
     end_date: 2023-12-10 12:00:00
@@ -459,7 +459,7 @@ cases:
       longitude: -89.5192
     bounding_box_degrees: 5
     event_type: severe_day
-  - id: 53
+  - id: 52
     title: August 2023 East Coast
     start_date: 2023-08-07 12:00:00
     end_date: 2023-08-08 12:00:00
@@ -468,7 +468,7 @@ cases:
       longitude: -79.3947
     bounding_box_degrees: 5
     event_type: severe_day
-  - id: 54
+  - id: 53
     title: August 2023 Minnesota
     start_date: 2023-08-11 12:00:00
     end_date: 2023-08-12 12:00:00
@@ -477,7 +477,7 @@ cases:
       longitude: -93.5000
     bounding_box_degrees: 5
     event_type: severe_day
-  - id: 55
+  - id: 54
     title: July 2023 Midwest
     start_date: 2023-07-02 12:00:00
     end_date: 2023-07-03 12:00:00
@@ -486,7 +486,7 @@ cases:
       longitude: -82.5943
     bounding_box_degrees: 8
     event_type: severe_day
-  - id: 56
+  - id: 55
     title: July 2023 Midwest 2
     start_date: 2023-07-01 12:00:00
     end_date: 2023-07-02 12:00:00
@@ -495,7 +495,7 @@ cases:
       longitude: -88.7342
     bounding_box_degrees: 6
     event_type: severe_day
-  - id: 57
+  - id: 56
     title: June 2023 Midwest
     start_date: 2023-06-30 12:00:00
     end_date: 2023-07-01 12:00:00
@@ -504,7 +504,7 @@ cases:
       longitude: -92.1735
     bounding_box_degrees: 6
     event_type: severe_day
-  - id: 58
+  - id: 57
     title: June 2023 Front Range
     start_date: 2023-06-21 12:00:00
     end_date: 2023-06-22 12:00:00
@@ -513,7 +513,7 @@ cases:
       longitude: -104.9903
     bounding_box_degrees: 6
     event_type: severe_day
-  - id: 59
+  - id: 58
     title: June 2023 Texas
     start_date: 2023-06-21 12:00:00
     end_date: 2023-06-22 12:00:00
@@ -522,7 +522,7 @@ cases:
       longitude: -99.7970
     bounding_box_degrees: 5
     event_type: severe_day
-  - id: 60
+  - id: 59
     title: June 2023 Great Plains
     start_date: 2023-06-23 12:00:00
     end_date: 2023-06-24 12:00:00
@@ -531,7 +531,7 @@ cases:
       longitude: -103.5000
     bounding_box_degrees: 5
     event_type: severe_day
-  - id: 61
+  - id: 60
     title: June 2023 Iowa + Minnesota
     start_date: 2023-06-24 12:00:00
     end_date: 2023-06-25 12:00:00
@@ -540,7 +540,7 @@ cases:
       longitude: -93.5000
     bounding_box_degrees: 5
     event_type: severe_day
-  - id: 62
+  - id: 61
     title: June 2023 South + Midwest
     start_date: 2023-06-25 12:00:00
     end_date: 2023-06-26 12:00:00
@@ -549,7 +549,7 @@ cases:
       longitude: -88.2700
     bounding_box_degrees: 8
     event_type: severe_day
-  - id: 63
+  - id: 62
     title: June 2023 East Coast
     start_date: 2023-06-26 12:00:00
     end_date: 2023-06-27 12:00:00
@@ -558,7 +558,7 @@ cases:
       longitude: -78.8743
     bounding_box_degrees: 6
     event_type: severe_day
-  - id: 64
+  - id: 63
     title: June 2023 Midwest + Great Plains
     start_date: 2023-06-29 12:00:00
     end_date: 2023-06-30 12:00:00
@@ -567,7 +567,7 @@ cases:
       longitude: -89.0000
     bounding_box_degrees: 5
     event_type: severe_day
-  - id: 65
+  - id: 64
     title: June 2023 Southeast
     start_date: 2023-06-14 12:00:00
     end_date: 2023-06-15 12:00:00
@@ -576,7 +576,7 @@ cases:
       longitude: -88.4700
     bounding_box_degrees: 6
     event_type: severe_day
-  - id: 66
+  - id: 65
     title: June 2023 OK + TX + South
     start_date: 2023-06-15 12:00:00
     end_date: 2023-06-16 12:00:00
@@ -585,7 +585,7 @@ cases:
       longitude: -94.0000
     bounding_box_degrees: 5
     event_type: severe_day
-  - id: 67
+  - id: 66
     title: June 2023 South
     start_date: 2023-06-16 12:00:00
     end_date: 2023-06-17 12:00:00
@@ -594,7 +594,7 @@ cases:
       longitude: -88.5000
     bounding_box_degrees: 5
     event_type: severe_day
-  - id: 68
+  - id: 67
     title: June 2023 Mid-Atlantic
     start_date: 2023-06-16 12:00:00
     end_date: 2023-06-17 12:00:00
@@ -603,7 +603,7 @@ cases:
       longitude: -77.0369
     bounding_box_degrees: 5
     event_type: severe_day
-  - id: 69
+  - id: 68
     title: June 2023 Great Plains + South
     start_date: 2023-06-17 12:00:00
     end_date: 2023-06-18 12:00:00
@@ -612,7 +612,7 @@ cases:
       longitude: -95.3700
     bounding_box_degrees: 6
     event_type: severe_day
-  - id: 70
+  - id: 69
     title: May 2023 Great Plains
     start_date: 2023-05-10 12:00:00
     end_date: 2023-05-11 12:00:00
@@ -621,7 +621,7 @@ cases:
       longitude: -102.0500
     bounding_box_degrees: 6
     event_type: severe_day
-  - id: 71
+  - id: 70
     title: May 2023 Great Plains + South
     start_date: 2023-05-11 12:00:00
     end_date: 2023-05-12 12:00:00
@@ -630,7 +630,7 @@ cases:
       longitude: -97.5350
     bounding_box_degrees: 8
     event_type: severe_day
-  - id: 72
+  - id: 71
     title: May 2023 Nebraska
     start_date: 2023-05-12 12:00:00
     end_date: 2023-05-13 12:00:00
@@ -639,7 +639,7 @@ cases:
       longitude: -96.0000
     bounding_box_degrees: 5
     event_type: severe_day
-  - id: 73
+  - id: 72
     title: May 2024 Texas
     start_date: 2024-05-25 00:00:00
     end_date: 2024-05-28 00:00:00
@@ -648,7 +648,7 @@ cases:
       longitude: -97.4974
     bounding_box_degrees: 5
     event_type: heat_wave
-  - id: 74
+  - id: 73
     title: June 2024 Northeast US
     start_date: 2024-06-17 00:00:00
     end_date: 2024-06-22 00:00:00
@@ -657,7 +657,7 @@ cases:
       longitude: -73.2290
     bounding_box_degrees: 6
     event_type: heat_wave
-  - id: 75
+  - id: 74
     title: July 2024 Southwest US
     start_date: 2024-07-04 00:00:00
     end_date: 2024-07-08 00:00:00
@@ -666,7 +666,7 @@ cases:
       longitude: -116.2146
     bounding_box_degrees: 6
     event_type: heat_wave
-  - id: 76
+  - id: 75
     title: July 2024 Northeast US
     start_date: 2024-07-07 00:00:00
     end_date: 2024-07-10 00:00:00
@@ -675,7 +675,7 @@ cases:
       longitude: -74.0060
     bounding_box_degrees: 6
     event_type: heat_wave
-  - id: 77
+  - id: 76
     title: July 2024 Mid-Atlantic US
     start_date: 2024-07-15 00:00:00
     end_date: 2024-07-20 00:00:00
@@ -684,7 +684,7 @@ cases:
       longitude: -75.1652
     bounding_box_degrees: 6
     event_type: heat_wave
-  - id: 78
+  - id: 77
     title: August 2024 Midwest US
     start_date: 2024-08-25 00:00:00
     end_date: 2024-08-31 00:00:00
@@ -693,7 +693,7 @@ cases:
       longitude: -88.2073
     bounding_box_degrees: 5
     event_type: heat_wave
-  - id: 79
+  - id: 78
     title: July 2024 Antarctica
     start_date: 2024-07-01 00:00:00
     end_date: 2024-07-31 00:00:00
@@ -702,7 +702,7 @@ cases:
       longitude: 15.0000
     bounding_box_degrees: 5
     event_type: heat_wave
-  - id: 80
+  - id: 79
     title: August 2024 Canada
     start_date: 2024-08-09 00:00:00
     end_date: 2024-08-11 00:00:00
@@ -711,7 +711,7 @@ cases:
       longitude: -112.0000
     bounding_box_degrees: 5
     event_type: heat_wave
-  - id: 81
+  - id: 80
     title: August 2024 Australia
     start_date: 2024-08-22 00:00:00
     end_date: 2024-08-30 00:00:00
@@ -720,7 +720,7 @@ cases:
       longitude: 120.0000
     bounding_box_degrees: 5
     event_type: heat_wave
-  - id: 82
+  - id: 81
     title: July/August 2024 Japan
     start_date: 2024-07-25 00:00:00
     end_date: 2024-08-05 00:00:00
@@ -729,7 +729,7 @@ cases:
       longitude: 138.0000
     bounding_box_degrees: 6
     event_type: heat_wave
-  - id: 83
+  - id: 82
     title: June 2024 Saudi Arabia
     start_date: 2024-06-16 00:00:00
     end_date: 2024-06-18 00:00:00
@@ -738,7 +738,7 @@ cases:
       longitude: 45.0000
     bounding_box_degrees: 6
     event_type: heat_wave
-  - id: 84
+  - id: 83
     title: August 2024 Europe
     start_date: 2024-08-10 00:00:00
     end_date: 2024-08-15 00:00:00
@@ -747,7 +747,7 @@ cases:
       longitude: 10.8978
     bounding_box_degrees: 10
     event_type: heat_wave
-  - id: 85
+  - id: 84
     title: July 2024 Ukraine
     start_date: 2024-07-12 00:00:00
     end_date: 2024-07-16 00:00:00
@@ -756,7 +756,7 @@ cases:
       longitude: 30.5234
     bounding_box_degrees: 5
     event_type: heat_wave
-  - id: 86
+  - id: 85
     title: June 2024 Europe
     start_date: 2024-06-20 00:00:00
     end_date: 2024-06-30 00:00:00
@@ -765,7 +765,7 @@ cases:
       longitude: 4.9041
     bounding_box_degrees: 6
     event_type: heat_wave
-  - id: 87
+  - id: 86
     title: May 2024 Central Mexico
     start_date: 2024-05-23 00:00:00
     end_date: 2024-05-31 00:00:00
@@ -774,7 +774,7 @@ cases:
       longitude: -99.1332
     bounding_box_degrees: 5
     event_type: heat_wave
-  - id: 88
+  - id: 87
     title: May 2024 Pakistan/India
     start_date: 2024-05-23 00:00:00
     end_date: 2024-05-31 00:00:00
@@ -783,7 +783,7 @@ cases:
       longitude: 76.0000
     bounding_box_degrees: 5
     event_type: heat_wave
-  - id: 89
+  - id: 88
     title: August 2023 Chile
     start_date: 2023-08-01 00:00:00
     end_date: 2023-08-03 00:00:00
@@ -792,7 +792,7 @@ cases:
       longitude: -70.6693
     bounding_box_degrees: 5
     event_type: heat_wave
-  - id: 90
+  - id: 89
     title: January 2024 Pacific Northwest
     start_date: 2024-01-11 12:00:00
     end_date: 2024-01-20 00:00:00
@@ -801,7 +801,7 @@ cases:
       longitude: -122.3321
     bounding_box_degrees: 5
     event_type: freeze
-  - id: 91
+  - id: 90
     title: April 2022 Nevada
     start_date: 2022-04-11 18:00:00
     end_date: 2022-04-16 12:00:00
@@ -810,7 +810,7 @@ cases:
       longitude: -115.7631
     bounding_box_degrees: 5
     event_type: freeze
-  - id: 92
+  - id: 91
     title: February/March 2021 New England
     start_date: 2021-03-04 18:00:00
     end_date: 2021-03-09 06:00:00
@@ -819,7 +819,7 @@ cases:
       longitude: -72.5579
     bounding_box_degrees: 5
     event_type: freeze
-  - id: 93
+  - id: 92
     title: January 2024 Northern Europe
     start_date: 2024-01-01 06:00:00
     end_date: 2024-01-09 12:00:00
@@ -828,7 +828,7 @@ cases:
       longitude: 18.0686
     bounding_box_degrees: 5
     event_type: freeze
-  - id: 94
+  - id: 93
     title: December 2022 Europe
     start_date: 2022-12-10 06:00:00
     end_date: 2022-12-20 00:00:00
@@ -837,7 +837,7 @@ cases:
       longitude: 13.4050
     bounding_box_degrees: 5
     event_type: freeze
-  - id: 95
+  - id: 94
     title: April 2024 Europe
     start_date: 2024-04-16 12:00:00
     end_date: 2024-04-27 12:00:00
@@ -846,7 +846,7 @@ cases:
       longitude: 2.3522
     bounding_box_degrees: 5
     event_type: freeze
-  - id: 96
+  - id: 95
     title: January 2023 North China
     start_date: 2024-01-20 00:00:00
     end_date: 2024-02-04 18:00:00
@@ -855,7 +855,7 @@ cases:
       longitude: 122.3853
     bounding_box_degrees: 5
     event_type: freeze
-  - id: 97
+  - id: 96
     title: April 2024 Sweden
     start_date: 2024-04-02 00:00:00
     end_date: 2024-04-07 12:00:00
