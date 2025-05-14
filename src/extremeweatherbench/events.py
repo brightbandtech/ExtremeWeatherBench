@@ -48,11 +48,3 @@ class Freeze(EventContainer):
     """
 
     event_type: str = "freeze"
-
-
-# Convert event type strings to actual event classes
-EVENT_TYPE_MAP = {
-    "heatwave": HeatWave,
-    "freeze": Freeze,
-    # Add other event types as they become available
-}
