@@ -13,6 +13,11 @@ import json
     help="Use default values for all configurations and use current directory as output",
 )
 @click.option(
+    "--test",
+    is_flag=True,
+    help="Run a test of the CLI using lightweight data",
+)
+@click.option(
     "--config-file",
     type=click.Path(exists=True),
     help="Path to a YAML or JSON configuration file",
@@ -74,56 +79,7 @@ import json
     default=41,
     help="Number of timesteps to include",
 )
-# ForecastSchemaConfig options
-@click.option("--forecast-schema-surface-air-temperature", default="t2m")
-@click.option("--forecast-schema-surface-eastward-wind", default="u10")
-@click.option("--forecast-schema-surface-northward-wind", default="v10")
-@click.option("--forecast-schema-air-temperature", default="t")
-@click.option("--forecast-schema-eastward-wind", default="u")
-@click.option("--forecast-schema-northward-wind", default="v")
-@click.option("--forecast-schema-air-pressure-at-mean-sea-level", default="msl")
-@click.option("--forecast-schema-lead-time", default="time")
-@click.option("--forecast-schema-init-time", default="init_time")
-@click.option("--forecast-schema-fhour", default="fhour")
-@click.option("--forecast-schema-level", default="level")
-@click.option("--forecast-schema-latitude", default="latitude")
-@click.option("--forecast-schema-longitude", default="longitude")
-# PointObservationSchemaConfig options
-@click.option(
-    "--point-schema-air-pressure-at-mean-sea-level",
-    default="air_pressure_at_mean_sea_level",
-)
-@click.option("--point-schema-surface-air-pressure", default="surface_air_pressure")
-@click.option("--point-schema-surface-wind-speed", default="surface_wind_speed")
-@click.option(
-    "--point-schema-surface-wind-from-direction", default="surface_wind_from_direction"
-)
-@click.option(
-    "--point-schema-surface-air-temperature", default="surface_air_temperature"
-)
-@click.option(
-    "--point-schema-surface-dew-point-temperature", default="surface_dew_point"
-)
-@click.option(
-    "--point-schema-surface-relative-humidity", default="surface_relative_humidity"
-)
-@click.option(
-    "--point-schema-accumulated-1-hour-precipitation",
-    default="accumulated_1_hour_precipitation",
-)
-@click.option("--point-schema-time", default="time")
-@click.option("--point-schema-latitude", default="latitude")
-@click.option("--point-schema-longitude", default="longitude")
-@click.option("--point-schema-elevation", default="elevation")
-@click.option("--point-schema-station-id", default="station")
-@click.option("--point-schema-station-long-name", default="name")
-@click.option("--point-schema-case-id", default="id")
-@click.option(
-    "--point-schema-metadata-vars",
-    multiple=True,
-    default=["station", "id", "latitude", "longitude", "time"],
-)
-def cli_runner(default, config_file, **kwargs):
+def cli_runner(default, config_file, test, **kwargs):
     """ExtremeWeatherBench evaluation command line interface.
 
     Accepts either a config file path or individual configuration options.
@@ -136,10 +92,7 @@ def cli_runner(default, config_file, **kwargs):
     --event-types HeatWave Freeze \
     --output-dir ./outputs \
     --forecast-dir ./forecasts \
-    --forecast-schema-surface-air-temperature t2m \
-    --point-schema-surface-air-temperature temperature
     """
-    # breakpoint()
     if config_file:
         # Load config from file
         if config_file.endswith(".yaml") or config_file.endswith(".yml"):
@@ -171,6 +124,27 @@ def cli_runner(default, config_file, **kwargs):
             event_types=event_list,
             forecast_dir="gs://extremeweatherbench/FOUR_v200_GFS.parq",
         )
+        # Run evaluation
+        results = evaluate.evaluate(
+            eval_config=eval_config,
+        )
+    elif test:
+        event_list = [events.HeatWave]
+        eval_config = config.Config(
+            event_types=event_list,
+            forecast_dir="gs://weatherbench2/datasets/hres_t0/2016-2022-6h-1440x721.zarr",
+        )
+        # Run evaluation
+        results = evaluate.evaluate(
+            eval_config=eval_config,
+        )
+        eval_config.output_dir = Path("outputs/test")
+        # Save results
+        output_path = Path(eval_config.output_dir) / "evaluation_results.csv"
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        results.to_csv(output_path)
+        click.echo(f"Results saved to {output_path}")
+        return
     else:
         # Convert event type strings to actual event classes
         event_type_map = {
