@@ -73,9 +73,9 @@ class Config:
     """
 
     event_types: List[events.EventContainer]
-    output_dir: Path = DEFAULT_OUTPUT_DIR
-    forecast_dir: Path = DEFAULT_FORECAST_DIR
-    cache_dir: Optional[Path] = DEFAULT_CACHE_DIR
+    output_dir: str = DEFAULT_OUTPUT_DIR
+    forecast_dir: str = DEFAULT_FORECAST_DIR
+    cache_dir: Optional[str] = DEFAULT_CACHE_DIR
     gridded_obs_path: Optional[str] = ARCO_ERA5_FULL_URI
     point_obs_path: Optional[str] = DEFAULT_POINT_OBS_URI
     remote_protocol: str = "s3"

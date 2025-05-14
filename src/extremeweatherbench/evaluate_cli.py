@@ -1,4 +1,4 @@
-from extremeweatherbench import config, events, evaluate
+from extremeweatherbench import config, events, evaluate, utils, case
 import dacite
 import click
 from pathlib import Path
@@ -6,8 +6,27 @@ import yaml
 import json
 
 
-def event_type_constructor(loader, node):
-    fields = loader.construct_mapping(node)
+EVENT_TYPE_MAP = {
+    "heat_wave": events.HeatWave,
+    "freeze": events.Freeze,
+}
+
+
+def event_type_constructor(loader: yaml.SafeLoader, node: yaml.nodes.MappingNode):
+    # Extract fields from the mapping node
+    fields = {}
+    for key_node, value_node in node.value:
+        key = loader.construct_scalar(key_node)
+        # Handle different types of value nodes
+        if isinstance(value_node, yaml.nodes.ScalarNode):
+            value = loader.construct_scalar(value_node)
+        elif isinstance(value_node, yaml.nodes.SequenceNode):
+            value = loader.construct_sequence(value_node)
+        elif isinstance(value_node, yaml.nodes.MappingNode):
+            value = loader.construct_mapping(value_node)
+        else:
+            raise ValueError(f"Unexpected node type: {type(value_node)}")
+        fields[key] = value
     event_type = fields.pop("event_type")
     case_ids = fields.pop("case_ids")
     if isinstance(case_ids, int):
@@ -15,9 +34,15 @@ def event_type_constructor(loader, node):
     elif isinstance(case_ids, list):
         pass
     else:
-        raise ValueError("casemust be an integer or list")
+        raise ValueError("case_ids must be an integer or list")
+    yaml_event_case = utils.load_events_yaml()
 
-    return events.EventContainer(event_type=event_type, cases=case_ids)
+    cases = [case.IndividualCase(**yaml_event_case["cases"][i - 1]) for i in case_ids]
+    input_event_dict = {"cases": cases, "event_type": event_type}
+    output = dacite.from_dict(
+        data_class=EVENT_TYPE_MAP[event_type], data=input_event_dict
+    )
+    return output
 
 
 yaml.SafeLoader.add_constructor(
@@ -127,12 +152,6 @@ def cli_runner(default, config_file, **kwargs):
                 config_dict = json.load(f)
         else:
             raise ValueError("Config file must be YAML or JSON")
-
-        # Convert string paths to Path objects
-        for path_field in ["output_dir", "forecast_dir", "cache_dir"]:
-            if path_field in config_dict:
-                config_dict[path_field] = Path(config_dict[path_field])
-        breakpoint()
         eval_config = dacite.from_dict(data_class=config.Config, data=config_dict)
         forecast_schema_config = dacite.from_dict(
             data_class=config.ForecastSchemaConfig,
@@ -159,7 +178,7 @@ def cli_runner(default, config_file, **kwargs):
             )
 
         # Convert event types to event classes
-        event_types = [events.EVENT_TYPE_MAP[et] for et in kwargs.pop("event_types")]
+        event_types = [EVENT_TYPE_MAP[et] for et in kwargs.pop("event_types")]
 
         # Create config objects
         eval_config = config.Config(

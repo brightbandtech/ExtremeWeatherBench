@@ -280,11 +280,17 @@ def evaluate(
             forecast_dataset=forecast_dataset,
             era5_dataset=gridded_obs,
         )
+
     for event in eval_config.event_types:
-        cases = dacite.from_dict(
-            data_class=event,
-            data=yaml_event_case,
-        )
+        if len(event.cases) == 0:
+            # if entrypoint is not cli, events haven't been instantiated yet
+            cases = dacite.from_dict(
+                data_class=event,
+                data=yaml_event_case,
+            )
+        else:
+            # if entrypoint is cli, events are already instances of EventContainer
+            cases = event
 
         logger.debug("beginning evaluation loop for %s", event.event_type)
         results = _maybe_evaluate_individual_cases_loop(
