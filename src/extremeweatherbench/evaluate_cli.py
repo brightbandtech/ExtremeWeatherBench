@@ -6,16 +6,31 @@ import yaml
 import json
 
 
-@click.command()
+def event_type_constructor(loader, node):
+    fields = loader.construct_mapping(node)
+    event_type = fields.pop("event_type")
+    case_ids = fields.pop("case_ids")
+    if isinstance(case_ids, int):
+        case_ids = [case_ids]
+    elif isinstance(case_ids, list):
+        pass
+    else:
+        raise ValueError("casemust be an integer or list")
+
+    return events.EventContainer(event_type=event_type, cases=case_ids)
+
+
+yaml.SafeLoader.add_constructor(
+    "!event_types",
+    event_type_constructor,
+)
+
+
+@click.command(no_args_is_help=True)
 @click.option(
     "--default",
     is_flag=True,
     help="Use default values for all configurations and use current directory as output",
-)
-@click.option(
-    "--test",
-    is_flag=True,
-    help="Run a test of the CLI using lightweight data",
 )
 @click.option(
     "--config-file",
@@ -26,7 +41,7 @@ import json
 @click.option(
     "--event-types",
     multiple=True,
-    help="List of event types to evaluate (e.g. HeatWave,Freeze)",
+    help="List of event types to evaluate (e.g. heatwave, freeze)",
 )
 @click.option(
     "--output-dir",
@@ -53,13 +68,13 @@ import json
 )
 @click.option(
     "--point-obs-path",
-    default=config.ISD_POINT_OBS_URI,
+    default=config.DEFAULT_POINT_OBS_URI,
     help="URI/path to point observation dataset",
 )
 @click.option(
     "--remote-protocol",
     default="s3",
-    help="Storage protocol for forecast data",
+    help="Storage protocol for forecast data (where the forecast data is stored on a cloud service or locally)",
 )
 @click.option(
     "--init-forecast-hour",
@@ -79,19 +94,28 @@ import json
     default=41,
     help="Number of timesteps to include",
 )
-def cli_runner(default, config_file, test, **kwargs):
-    """ExtremeWeatherBench evaluation command line interface.
+def cli_runner(default, config_file, **kwargs):
+    """ExtremeWeatherBench command line interface.
 
-    Accepts either a config file path or individual configuration options.
+    Accepts either a default flag (--default), a config file path (--config-file), or individual configuration options.
+
+    If input forecast or point observation variables are not the ewb default metadata (likely the case for most users),
+    the variable names must be specified in the config file (e.g. surface_temperature is "2_meter_temperature"
+    in your forecast dataset).
+
+    Individual flags will override config file values.
+
+    The default flag uses a prebuilt parquet of CIRA MLWP data for FourCastNet, ERA5 for gridded observations,
+    and GHCN hourly data for point observations from the Brightband EWB GCS bucket.
 
     Example command with config file:
-    python -m extremeweatherbench.evaluate --config-file config.yaml
+    ewb --config-file config.yaml
 
     Example command with individual options:
-    python -m extremeweatherbench.evaluate \
-    --event-types HeatWave Freeze \
-    --output-dir ./outputs \
-    --forecast-dir ./forecasts \
+    ewb --event-types HeatWave Freeze --output-dir ./outputs --forecast-dir ./forecasts
+
+    Example command with schema configuration:
+    ewb --event-types HeatWave --forecast-schema-surface-air-temperature 2m_temperature
     """
     if config_file:
         # Load config from file
@@ -108,7 +132,7 @@ def cli_runner(default, config_file, test, **kwargs):
         for path_field in ["output_dir", "forecast_dir", "cache_dir"]:
             if path_field in config_dict:
                 config_dict[path_field] = Path(config_dict[path_field])
-
+        breakpoint()
         eval_config = dacite.from_dict(data_class=config.Config, data=config_dict)
         forecast_schema_config = dacite.from_dict(
             data_class=config.ForecastSchemaConfig,
@@ -118,70 +142,30 @@ def cli_runner(default, config_file, test, **kwargs):
             data_class=config.PointObservationSchemaConfig,
             data=config_dict.get("point_obs_schema_config", {}),
         )
+        eval_config.forecast_schema_config = forecast_schema_config
+        eval_config.point_obs_schema_config = point_obs_schema_config
+
     elif default:
-        event_list = [events.HeatWave]
+        event_list = [events.HeatWave, events.Freeze]
         eval_config = config.Config(
             event_types=event_list,
             forecast_dir="gs://extremeweatherbench/FOUR_v200_GFS.parq",
         )
-        # Run evaluation
-        results = evaluate.evaluate(
-            eval_config=eval_config,
-        )
-    elif test:
-        event_list = [events.HeatWave]
-        eval_config = config.Config(
-            event_types=event_list,
-            forecast_dir="gs://weatherbench2/datasets/hres_t0/2016-2022-6h-1440x721.zarr",
-        )
-        # Run evaluation
-        results = evaluate.evaluate(
-            eval_config=eval_config,
-        )
-        eval_config.output_dir = Path("outputs/test")
-        # Save results
-        output_path = Path(eval_config.output_dir) / "evaluation_results.csv"
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        results.to_csv(output_path)
-        click.echo(f"Results saved to {output_path}")
-        return
     else:
-        # Convert event type strings to actual event classes
-        event_type_map = {
-            "HeatWave": events.HeatWave,
-            "Freeze": events.Freeze,
-            # Add other event types as they become available
-        }
-        event_types = [event_type_map[et] for et in kwargs.pop("event_types")]
-        # Extract schema configs
-        forecast_schema_dict = {
-            k.replace("forecast_schema_", ""): v
-            for k, v in kwargs.items()
-            if k.startswith("forecast_schema_")
-        }
-        point_obs_schema_dict = {
-            k.replace("point_schema_", ""): v
-            for k, v in kwargs.items()
-            if k.startswith("point_schema_")
-        }
+        # Check if event_types is specified
+        if "event_types" not in kwargs:
+            raise ValueError(
+                "--event-types must be specified when not using --config-file or --default"
+            )
 
-        # Remove schema options from kwargs
-        for k in list(kwargs.keys()):
-            if k.startswith(("forecast_schema_", "point_schema_")):
-                kwargs.pop(k)
+        # Convert event types to event classes
+        event_types = [events.EVENT_TYPE_MAP[et] for et in kwargs.pop("event_types")]
 
-        forecast_schema_config = config.ForecastSchemaConfig(**forecast_schema_dict)
-        point_obs_schema_config = config.PointObservationSchemaConfig(
-            **point_obs_schema_dict
-        )
         # Create config objects
         eval_config = config.Config(
             event_types=event_types,
             **{k: v for k, v in kwargs.items() if hasattr(config.Config, k)},
         )
-        eval_config.forecast_schema_config = forecast_schema_config
-        eval_config.point_obs_schema_config = point_obs_schema_config
-
     # Run evaluation
     results = evaluate.evaluate(
         eval_config=eval_config,
