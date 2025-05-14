@@ -17,9 +17,10 @@ default:
 
 test:
 	# Example: test with default config and check output
-	$(CLI) --default
-	@if [ -f outputs/evaluation_results.csv ]; then \
+	$(CLI) --test
+	@if [ -f outputs/test/evaluation_results.csv ]; then \
 		echo "Test passed: Output file created."; \
+		rm -rf outputs/test/evaluation_results.csv; \
 	else \
 		echo "Test failed: Output file not found!"; \
 		exit 1; \
