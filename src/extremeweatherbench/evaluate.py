@@ -282,14 +282,15 @@ def evaluate(
         )
 
     for event in eval_config.event_types:
-        if len(event.cases) == 0:
-            # if entrypoint is not cli, events haven't been instantiated yet
+        # Check if event is a class (not instantiated) or an instance
+        if isinstance(event, type):
+            # if event is a class and hasn't been instantiated yet
             cases = dacite.from_dict(
                 data_class=event,
                 data=yaml_event_case,
             )
         else:
-            # if entrypoint is cli, events are already instances of EventContainer
+            # if event is already an instance of EventContainer
             cases = event
 
         logger.debug("beginning evaluation loop for %s", event.event_type)
