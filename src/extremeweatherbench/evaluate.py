@@ -9,8 +9,8 @@ import dacite
 import dataclasses
 import itertools
 
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
 
 
 @dataclasses.dataclass
