@@ -90,7 +90,7 @@ def test_cli_with_individual_options(runner, temp_config_dir):
             evaluate_cli.cli_runner,
             [
                 "--event-types",
-                "HeatWave",
+                "heat_wave",
                 "--output-dir",
                 str(temp_config_dir / "outputs"),
                 "--forecast-dir",
@@ -118,10 +118,9 @@ def test_cli_with_individual_options(runner, temp_config_dir):
 def test_cli_with_missing_required_options(runner):
     """Test CLI with missing required options."""
     result = runner.invoke(evaluate_cli.cli_runner, [])
-    assert result.exit_code != 0
 
-    # Triggers a failed forecast load as there isn't a valid forecast path
-    assert isinstance(result.exception, TypeError)
+    # Returns the help message
+    assert result.exit_code == 0
 
 
 def test_cli_with_invalid_event_type(runner):
@@ -142,7 +141,7 @@ def test_cli_with_invalid_paths(runner):
         evaluate_cli.cli_runner,
         [
             "--event-types",
-            "HeatWave",
+            "heat_wave",
             "--output-dir",
             "/nonexistent/path",
             "--forecast-dir",
@@ -182,10 +181,10 @@ def test_cli_with_override_options(runner, sample_yaml_config):
             "--config-file",
             str(sample_yaml_config),
             "--event-types",
-            "Freeze",
+            "freeze",
         ],
     )
     assert result.exit_code != 0
-
-    # Run should error out because there's a missing point obs file being used in the sample config
-    assert isinstance(result.exception, FileNotFoundError)
+    # Run should error out because the file path for point obs is invalid, when it should
+    # be either a zarr, parq, or json file
+    assert isinstance(result.exception, TypeError)
