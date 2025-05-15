@@ -72,29 +72,24 @@ yaml.SafeLoader.add_constructor(
 @click.option(
     "--output-dir",
     type=click.Path(),
-    default=str(config.DEFAULT_OUTPUT_DIR),
     help="Directory for analysis outputs",
 )
 @click.option(
     "--forecast-dir",
     type=click.Path(),
-    default=str(config.DEFAULT_FORECAST_DIR),
     help="Directory containing forecast data",
 )
 @click.option(
     "--cache-dir",
     type=click.Path(),
-    default=str(config.DEFAULT_CACHE_DIR),
     help="Directory for caching intermediate data",
 )
 @click.option(
     "--gridded-obs-path",
-    default=config.ARCO_ERA5_FULL_URI,
     help="URI/path to gridded observation dataset",
 )
 @click.option(
     "--point-obs-path",
-    default=config.DEFAULT_POINT_OBS_URI,
     help="URI/path to point observation dataset",
 )
 @click.option(
@@ -187,10 +182,24 @@ def cli_runner(default, config_file, **kwargs):
             **{k: v for k, v in kwargs.items() if hasattr(config.Config, k)},
         )
 
-    # Replace config objects with kwargs if they exist
-    eval_config = replace(
-        eval_config, **{k: v for k, v in kwargs.items() if hasattr(config.Config, k)}
-    )
+    # Update config with user-specified values from kwargs
+    # Only replace values that were explicitly provided by the user
+    if not config_file and not default:
+        # Filter out None values which indicate the user didn't specify that option
+        user_specified_kwargs = {k: v for k, v in kwargs.items() if v is not None}
+
+        # Create a new config with only the user-specified values
+        if user_specified_kwargs:
+            # Only update attributes that exist in Config and were specified by user
+            config_updates = {
+                k: v
+                for k, v in user_specified_kwargs.items()
+                if hasattr(config.Config, k)
+            }
+
+            # Use dataclasses.replace to update only specified fields
+            if config_updates:
+                eval_config = replace(eval_config, **config_updates)
     # Run evaluation
     results = evaluate.evaluate(
         eval_config=eval_config,
