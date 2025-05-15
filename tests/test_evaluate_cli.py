@@ -10,6 +10,8 @@ import yaml
 from click.testing import CliRunner
 
 from extremeweatherbench import evaluate_cli
+from extremeweatherbench.events import HeatWave
+from extremeweatherbench.utils import load_events_yaml
 
 
 @pytest.fixture
@@ -187,3 +189,72 @@ def test_cli_with_override_options(runner, sample_yaml_config):
     assert result.exit_code != 0
     # Run should error out because there's a missing point obs file being used in the sample config
     assert isinstance(result.exception, FileNotFoundError)
+
+
+def test_event_type_constructor_no_case_ids(runner, temp_config_dir):
+    """Test that when no case_ids are specified, all cases of the event_type are returned."""
+    config_path = temp_config_dir / "config.yaml"
+    config_content = """
+    event_types:
+      - !event_types
+        event_type: heat_wave
+    """
+    config_path.write_text(config_content)
+
+    with patch("extremeweatherbench.evaluate.evaluate") as mock_evaluate:
+        result = runner.invoke(
+            evaluate_cli.cli_runner, ["--config-file", str(config_path)]
+        )
+        assert result.exit_code == 0
+        mock_evaluate.assert_called_once()
+        # Verify that all heat_wave cases were included
+        config = mock_evaluate.call_args[1]["eval_config"]
+        heat_wave_events = [e for e in config.event_types if isinstance(e, HeatWave)]
+        assert len(heat_wave_events) == 1
+        # Get the number of heat_wave cases from the events.yaml
+        yaml_event_case = load_events_yaml()
+        expected_cases = len(
+            [c for c in yaml_event_case["cases"] if c["event_type"] == "heat_wave"]
+        )
+        assert len(heat_wave_events[0].cases) == expected_cases
+
+
+def test_event_type_constructor_with_case_ids(runner, temp_config_dir):
+    """Test that when case_ids are specified, only those cases are returned."""
+    config_path = temp_config_dir / "config.yaml"
+    config_content = """
+    event_types:
+      - !event_types
+        event_type: heat_wave
+        case_ids: [1, 2]
+    """
+    config_path.write_text(config_content)
+
+    with patch("extremeweatherbench.evaluate.evaluate") as mock_evaluate:
+        result = runner.invoke(
+            evaluate_cli.cli_runner, ["--config-file", str(config_path)]
+        )
+        assert result.exit_code == 0
+        mock_evaluate.assert_called_once()
+        # Verify that only the specified cases were included
+        config = mock_evaluate.call_args[1]["eval_config"]
+        heat_wave_events = [e for e in config.event_types if isinstance(e, HeatWave)]
+        assert len(heat_wave_events) == 1
+        assert len(heat_wave_events[0].cases) == 2
+
+
+def test_event_type_constructor_mismatched_case_ids(runner, temp_config_dir):
+    """Test that when case_ids don't match the event_type, a ValueError is raised."""
+    config_path = temp_config_dir / "config.yaml"
+    config_content = """
+    event_types:
+      - !event_types
+        event_type: heat_wave
+        case_ids: [1, 2, 35]  # Case 35 is not a heat_wave
+    """
+    config_path.write_text(config_content)
+
+    result = runner.invoke(evaluate_cli.cli_runner, ["--config-file", str(config_path)])
+    assert result.exit_code != 0
+    assert isinstance(result.exception, ValueError)
+    assert "doesn't match specified event_type" in str(result.exception)
