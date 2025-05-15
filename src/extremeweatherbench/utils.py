@@ -186,6 +186,7 @@ def map_era5_vars_to_forecast(forecast_schema_config, forecast_dataset, era5_dat
     return era5_dataset[era5_subset_list]
 
 
+# TODO: change name; this is not just for 6 hourly
 def expand_lead_times_to_6_hourly(
     dataarray: xr.DataArray, max_fcst_hour: int = 240, fcst_output_cadence: int = 6
 ) -> xr.DataArray:

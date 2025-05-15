@@ -27,6 +27,10 @@ class Metric(abc.ABC):
 class CategoricalMetric(Metric):
     """A base class defining the interface for ExtremeWeatherBench categorical metrics."""
 
+    def __init__(self, forecast_threshold: float, observation_threshold: float):
+        self.forecast_threshold = forecast_threshold
+        self.observation_threshold = observation_threshold
+
     @abc.abstractmethod
     def compute_threshold_or_output(
         self,
@@ -34,6 +38,26 @@ class CategoricalMetric(Metric):
         observation: xr.DataArray,
     ):
         """Return a threshold(s) for the forecast and observation datasets."""
+
+
+class IntersectionOverUnion(CategoricalMetric):
+    """Intersection over union of a categorical forecast evaluated against observations."""
+
+    def compute_threshold_or_output(
+        self,
+        forecast: xr.DataArray,
+        observation: xr.DataArray,
+    ):
+        # Create boolean masks for the forecast and observation
+        self.forecast = forecast.where(forecast >= self.forecast_threshold)
+        self.observation = observation.where(observation >= self.observation_threshold)
+        return self.forecast, self.observation
+
+    def compute(self, forecast: xr.DataArray, observation: xr.DataArray):
+        forecast, observation = self.compute_threshold_or_output(forecast, observation)
+        intersection = forecast * observation
+        union = forecast + observation
+        return intersection.sum() / union.sum()
 
 
 class RegionalRMSE(Metric):
