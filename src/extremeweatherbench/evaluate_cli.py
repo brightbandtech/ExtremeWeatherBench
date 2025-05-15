@@ -28,18 +28,34 @@ def event_type_constructor(loader: yaml.SafeLoader, node: yaml.nodes.MappingNode
         else:
             raise ValueError(f"Unexpected node type: {type(value_node)}")
         fields[key] = value
-    event_type = fields.pop("event_type")
-    case_ids = fields.pop("case_ids")
-    if isinstance(case_ids, int):
-        case_ids = [case_ids]
-    elif isinstance(case_ids, list):
-        pass
-    else:
-        raise ValueError("case_ids must be an integer or list")
     yaml_event_case = utils.load_events_yaml()
+    event_type = fields.pop("event_type")
+    if "case_ids" in fields:
+        case_ids = fields.pop("case_ids")
+        if isinstance(case_ids, int):
+            case_ids = [case_ids]
+        elif isinstance(case_ids, list):
+            pass
+        else:
+            raise ValueError("case_ids must be an integer or list")
 
-    cases = [case.IndividualCase(**yaml_event_case["cases"][i - 1]) for i in case_ids]
-    input_event_dict = {"cases": cases, "event_type": event_type}
+        # Validate that all case_ids match the event_type
+        for case_id in case_ids:
+            single_case = yaml_event_case["cases"][case_id - 1]
+            if single_case["event_type"] != event_type:
+                raise ValueError(
+                    (
+                        f"Case ID {case_id} has event_type {single_case['event_type']} which doesn't match "
+                        f"specified event_type {event_type}"
+                    )
+                )
+
+        cases = [
+            case.IndividualCase(**yaml_event_case["cases"][i - 1]) for i in case_ids
+        ]
+        input_event_dict = {"cases": cases, "event_type": event_type}
+    else:
+        input_event_dict = {"cases": yaml_event_case["cases"], "event_type": event_type}
     output = dacite.from_dict(
         data_class=EVENT_TYPE_MAP[event_type], data=input_event_dict
     )
