@@ -185,6 +185,5 @@ def test_cli_with_override_options(runner, sample_yaml_config):
         ],
     )
     assert result.exit_code != 0
-    # Run should error out because the file path for point obs is invalid, when it should
-    # be either a zarr, parq, or json file
-    assert isinstance(result.exception, TypeError)
+    # Run should error out because there's a missing point obs file being used in the sample config
+    assert isinstance(result.exception, FileNotFoundError)

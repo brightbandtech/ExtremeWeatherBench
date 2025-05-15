@@ -10,7 +10,7 @@ event_types:
       - 35
 
 output_dir: ./outputs/test
-forecast_dir: gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr/
+forecast_dir: gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr
 cache_dir: ./cache
 # uses default gridded and point obs paths
 remote_protocol: gcs
