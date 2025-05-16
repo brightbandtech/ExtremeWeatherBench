@@ -59,13 +59,13 @@ class BinaryContingencyTable(CategoricalMetric):
     ):
         """Return a binary contingency table for the forecast and observation datasets."""
         # Create boolean masks for the forecast and observation
-        self.binary_forecast = forecast.where(forecast >= self.forecast_threshold)
-        self.binary_observation = observation.where(
-            observation >= self.observation_threshold
+        self.binary_forecast = (forecast >= self.forecast_threshold).astype(float)
+        self.binary_observation = (observation >= self.observation_threshold).astype(
+            float
         )
         self.contingency_manager = cat.BinaryContingencyManager(
             self.binary_forecast, self.binary_observation
-        )
+        ).transform(preserve_dims=["time"])
 
     def compute_all_contingency_tables(self):
         """Return all contingency table metrics for the forecast and observation datasets."""
