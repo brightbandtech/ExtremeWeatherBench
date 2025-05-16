@@ -26,6 +26,7 @@ dependencies = [
     "zarr>=3.0.2",
     "kerchunk[dev]",
     "flox>=0.10.0",
+    "click>=8.1.8",
 ]
 
 [project.optional-dependencies]
@@ -59,6 +60,9 @@ include-package-data = true
 
 [tool.setuptools.package-data]
 extremeweatherbench = ["data/**/*", "data/**/.*"]
+
+[project.scripts]
+ewb = "extremeweatherbench.evaluate_cli:cli_runner"
 
 [tool.uv.sources]
 extremeweatherbench = { workspace = true }
