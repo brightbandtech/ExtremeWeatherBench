@@ -3,6 +3,7 @@
 import pandas as pd
 import xarray as xr
 from scores.continuous import rmse
+import scores.categorical as cat
 import logging
 from extremeweatherbench import utils
 import abc
@@ -24,6 +25,14 @@ class Metric(abc.ABC):
         return self.__class__.__name__
 
 
+class BinaryMetric(abc.ABC):
+    """A base class defining the interface for ExtremeWeatherBench binary metrics."""
+
+    @abc.abstractmethod
+    def compute(self, binary_operator: cat.BinaryContingencyManager):
+        """Evaluate a specific binary metric given a forecast and observation dataset."""
+
+
 class CategoricalMetric(Metric):
     """A base class defining the interface for ExtremeWeatherBench categorical metrics."""
 
@@ -32,7 +41,7 @@ class CategoricalMetric(Metric):
         self.observation_threshold = observation_threshold
 
     @abc.abstractmethod
-    def compute_threshold_or_output(
+    def compute_threshold_outputs(
         self,
         forecast: xr.DataArray,
         observation: xr.DataArray,
@@ -40,10 +49,82 @@ class CategoricalMetric(Metric):
         """Return a threshold(s) for the forecast and observation datasets."""
 
 
+class BinaryContingencyTable(CategoricalMetric):
+    """A binary contingency table for a categorical forecast evaluated against observations."""
+
+    def compute_threshold_outputs(
+        self,
+        forecast: xr.DataArray,
+        observation: xr.DataArray,
+    ):
+        """Return a binary contingency table for the forecast and observation datasets."""
+        # Create boolean masks for the forecast and observation
+        self.binary_forecast = forecast.where(forecast >= self.forecast_threshold)
+        self.binary_observation = observation.where(
+            observation >= self.observation_threshold
+        )
+        self.contingency_manager = cat.BinaryContingencyManager(
+            self.binary_forecast, self.binary_observation
+        )
+
+    def compute_all_contingency_tables(self):
+        """Return all contingency table metrics for the forecast and observation datasets."""
+
+        # Compute the contingency table
+        return self.binary_forecast, self.binary_observation
+
+
+class Accuracy(BinaryMetric):
+    """Accuracy of a binary forecast evaluated against observations."""
+
+    def compute(self, binary_operator: cat.BinaryContingencyManager):
+        """Return the accuracy of the binary forecast evaluated against observations."""
+        return binary_operator.accuracy()
+
+
+class FalseAlarmRate(BinaryMetric):
+    """False alarm rate of a binary forecast evaluated against observations."""
+
+    def compute(self, binary_operator: cat.BinaryContingencyManager):
+        """Return the false alarm rate of the binary forecast evaluated against observations."""
+        return binary_operator.false_alarm_rate()
+
+
+class CriticalSuccessIndex(BinaryMetric):
+    """Critical success index of a binary forecast evaluated against observations."""
+
+    def compute(self, binary_operator: cat.BinaryContingencyManager):
+        """Return the critical success index of the binary forecast evaluated against observations."""
+        return binary_operator.critical_success_index()
+
+
+class FalseAlarmRatio(BinaryMetric):
+    """False alarm ratio of a binary forecast evaluated against observations."""
+
+    def compute(self, binary_operator: cat.BinaryContingencyManager):
+        """Return the false alarm ratio of the binary forecast evaluated against observations."""
+        return binary_operator.false_alarm_ratio()
+
+
+class ProbabilityOfDetection(CategoricalMetric):
+    """Probability of detection of a categorical forecast evaluated against observations."""
+
+    def compute_threshold_outputs(
+        self,
+        forecast: xr.DataArray,
+        observation: xr.DataArray,
+    ):
+        """Return a probability of detection for the forecast and observation datasets."""
+        probability_of_detection = cat.probability_of_detection(
+            fcst=forecast, obs=observation, preserve_dims="time"
+        )
+        return probability_of_detection
+
+
 class IntersectionOverUnion(CategoricalMetric):
     """Intersection over union of a categorical forecast evaluated against observations."""
 
-    def compute_threshold_or_output(
+    def compute_threshold_outputs(
         self,
         forecast: xr.DataArray,
         observation: xr.DataArray,
