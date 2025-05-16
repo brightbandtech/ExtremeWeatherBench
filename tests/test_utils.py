@@ -1,8 +1,12 @@
+"""Tests for utility functions."""
+
 import pytest
-from extremeweatherbench import utils
+from pathlib import Path
+from extremeweatherbench.utils import maybe_convert_to_path
 import pandas as pd
 import numpy as np
 import xarray as xr
+from extremeweatherbench import utils
 
 
 @pytest.mark.parametrize(
@@ -474,3 +478,27 @@ def test_location_subset_point_obs():
         df, min_lat=10, max_lat=20, min_lon=10, max_lon=20
     )
     assert len(result) == 0
+
+
+def test_maybe_convert_to_path():
+    """Test the maybe_convert_to_path function with various inputs."""
+    # Test local filesystem paths
+    assert isinstance(maybe_convert_to_path("./data"), Path)
+    assert isinstance(maybe_convert_to_path("/absolute/path"), Path)
+    assert isinstance(maybe_convert_to_path("relative/path"), Path)
+    assert isinstance(maybe_convert_to_path("~/home/path"), Path)
+
+    # Test URLs and cloud storage paths (should remain strings)
+    assert isinstance(maybe_convert_to_path("http://example.com"), str)
+    assert isinstance(maybe_convert_to_path("https://example.com"), str)
+    assert isinstance(maybe_convert_to_path("s3://bucket/path"), str)
+    assert isinstance(maybe_convert_to_path("gs://bucket/path"), str)
+
+    # Test existing Path objects (should remain unchanged)
+    path_obj = Path("./data")
+    result = maybe_convert_to_path(path_obj)
+    assert isinstance(result, Path)
+    assert result == path_obj
+
+    # Test edge cases
+    assert isinstance(maybe_convert_to_path("file:///path"), Path)  # File URL
