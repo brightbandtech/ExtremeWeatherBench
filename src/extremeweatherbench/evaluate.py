@@ -12,12 +12,6 @@ import itertools
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-#: Default mapping for forecast dataset schema.
-DEFAULT_FORECAST_SCHEMA_CONFIG = config.ForecastSchemaConfig()
-
-#: Default mapping for point observation dataset schema.
-DEFAULT_POINT_OBS_SCHEMA_CONFIG = config.PointObservationSchemaConfig()
-
 
 @dataclasses.dataclass
 class CaseEvaluationInput:
