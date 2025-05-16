@@ -1,3 +1,4 @@
+from pathlib import Path
 import pytest
 from extremeweatherbench import utils
 import pandas as pd
@@ -474,3 +475,27 @@ def test_location_subset_point_obs():
         df, min_lat=10, max_lat=20, min_lon=10, max_lon=20
     )
     assert len(result) == 0
+
+
+def test_maybe_convert_to_path():
+    """Test the maybe_convert_to_path function with various inputs."""
+    # Test local filesystem paths
+    assert isinstance(utils.maybe_convert_to_path("./data"), Path)
+    assert isinstance(utils.maybe_convert_to_path("/absolute/path"), Path)
+    assert isinstance(utils.maybe_convert_to_path("relative/path"), Path)
+    assert isinstance(utils.maybe_convert_to_path("~/home/path"), Path)
+
+    # Test URLs and cloud storage paths (should remain strings)
+    assert isinstance(utils.maybe_convert_to_path("http://example.com"), str)
+    assert isinstance(utils.maybe_convert_to_path("https://example.com"), str)
+    assert isinstance(utils.maybe_convert_to_path("s3://bucket/path"), str)
+    assert isinstance(utils.maybe_convert_to_path("gs://bucket/path"), str)
+
+    # Test existing Path objects (should remain unchanged)
+    path_obj = Path("./data")
+    result = utils.maybe_convert_to_path(path_obj)
+    assert isinstance(result, Path)
+    assert result == path_obj
+
+    # Test edge cases
+    assert isinstance(utils.maybe_convert_to_path("file:///path"), Path)  # File URL
