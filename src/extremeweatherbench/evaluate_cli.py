@@ -164,7 +164,15 @@ def cli_runner(default, config_file, **kwargs):
                 config_dict = json.load(f)
         else:
             raise ValueError("Config file must be YAML or JSON")
-        eval_config = dacite.from_dict(data_class=config.Config, data=config_dict)
+
+        # Convert strings from local directories into Path objects
+        dacite_config = dacite.Config(
+            type_hooks={utils.PathOrStr: utils.maybe_convert_to_path}
+        )
+
+        eval_config = dacite.from_dict(
+            data_class=config.Config, data=config_dict, config=dacite_config
+        )
         forecast_schema_config = dacite.from_dict(
             data_class=config.ForecastSchemaConfig,
             data=config_dict.get("forecast_schema_config", {}),
