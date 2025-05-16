@@ -2,11 +2,11 @@
 
 import dataclasses
 from pathlib import Path
-from typing import Callable, List, Optional, Union
+from typing import Callable, List
 
 import xarray as xr
 
-from extremeweatherbench import events
+from extremeweatherbench import events, utils
 
 DATA_DIR = Path("./data")
 DEFAULT_OUTPUT_DIR = DATA_DIR / "outputs"
@@ -28,11 +28,6 @@ POINT_OBS_STORAGE_OPTIONS = dict(token="anon")
 GRIDDED_OBS_STORAGE_OPTIONS = dict(token="anon")
 
 
-def _default_preprocess(ds: xr.Dataset) -> xr.Dataset:
-    """Default forecast preprocess function that does nothing."""
-    return ds
-
-
 @dataclasses.dataclass
 class ForecastSchemaConfig:
     """A mapping between standard variable names used across EWB, and their counterpart
@@ -42,19 +37,19 @@ class ForecastSchemaConfig:
     suggested based on the CF Conventions.
     """
 
-    surface_air_temperature: Optional[str] = "t2"
-    surface_eastward_wind: Optional[str] = "u10"
-    surface_northward_wind: Optional[str] = "v10"
-    air_temperature: Optional[str] = "t"
-    eastward_wind: Optional[str] = "u"
-    northward_wind: Optional[str] = "v"
-    air_pressure_at_mean_sea_level: Optional[str] = "msl"
-    lead_time: Optional[str] = "time"
-    init_time: Optional[str] = "init_time"
-    fhour: Optional[str] = "fhour"
-    level: Optional[str] = "level"
-    latitude: Optional[str] = "latitude"
-    longitude: Optional[str] = "longitude"
+    surface_air_temperature: str = "t2"
+    surface_eastward_wind: str = "u10"
+    surface_northward_wind: str = "v10"
+    air_temperature: str = "t"
+    eastward_wind: str = "u"
+    northward_wind: str = "v"
+    air_pressure_at_mean_sea_level: str = "msl"
+    lead_time: str = "time"
+    init_time: str = "init_time"
+    fhour: str = "fhour"
+    level: str = "level"
+    latitude: str = "latitude"
+    longitude: str = "longitude"
 
 
 @dataclasses.dataclass
@@ -91,21 +86,21 @@ class PointObservationSchemaConfig:
         Default is ["station", "id", "latitude", "longitude", "time"]. All five required for successful configuration.
     """
 
-    air_pressure_at_mean_sea_level: Optional[str] = "air_pressure_at_mean_sea_level"
-    surface_air_pressure: Optional[str] = "surface_air_pressure"
-    surface_wind_speed: Optional[str] = "surface_wind_speed"
-    surface_wind_from_direction: Optional[str] = "surface_wind_from_direction"
-    surface_air_temperature: Optional[str] = "surface_air_temperature"
-    surface_dew_point_temperature: Optional[str] = "surface_dew_point"
-    surface_relative_humidity: Optional[str] = "surface_relative_humidity"
-    accumulated_1_hour_precipitation: Optional[str] = "accumulated_1_hour_precipitation"
-    time: Optional[str] = "time"
-    latitude: Optional[str] = "latitude"
-    longitude: Optional[str] = "longitude"
-    elevation: Optional[str] = "elevation"
-    station_id: Optional[str] = "station"
-    station_long_name: Optional[str] = "name"
-    case_id: Optional[str] = "id"
+    air_pressure_at_mean_sea_level: str = "air_pressure_at_mean_sea_level"
+    surface_air_pressure: str = "surface_air_pressure"
+    surface_wind_speed: str = "surface_wind_speed"
+    surface_wind_from_direction: str = "surface_wind_from_direction"
+    surface_air_temperature: str = "surface_air_temperature"
+    surface_dew_point_temperature: str = "surface_dew_point"
+    surface_relative_humidity: str = "surface_relative_humidity"
+    accumulated_1_hour_precipitation: str = "accumulated_1_hour_precipitation"
+    time: str = "time"
+    latitude: str = "latitude"
+    longitude: str = "longitude"
+    elevation: str = "elevation"
+    station_id: str = "station"
+    station_long_name: str = "name"
+    case_id: str = "id"
     metadata_vars: List[str] = dataclasses.field(
         default_factory=lambda: [
             "station",
@@ -170,14 +165,14 @@ class Config:
     """
 
     event_types: List[events.EventContainer]
-    output_dir: Union[str, Path] = DEFAULT_OUTPUT_DIR
-    forecast_dir: Union[str, Path] = DEFAULT_FORECAST_DIR
-    cache_dir: Union[str, Path] = DEFAULT_CACHE_DIR
-    gridded_obs_path: Union[str, Path] = ARCO_ERA5_FULL_URI
-    point_obs_path: Union[str, Path] = DEFAULT_POINT_OBS_URI
+    output_dir: utils.PathOrStr[str | Path] = DEFAULT_OUTPUT_DIR
+    forecast_dir: utils.PathOrStr[str | Path] = DEFAULT_FORECAST_DIR
+    cache_dir: utils.PathOrStr[str | Path] = DEFAULT_CACHE_DIR
+    gridded_obs_path: utils.PathOrStr[str | Path] = ARCO_ERA5_FULL_URI
+    point_obs_path: utils.PathOrStr[str | Path] = DEFAULT_POINT_OBS_URI
     remote_protocol: str = "s3"
-    forecast_preprocess: Callable[[xr.Dataset], xr.Dataset] = _default_preprocess
-    init_forecast_hour: int = 0  # The first forecast hour (e.g. Graphcast starts at 6).
+    forecast_preprocess: Callable[[xr.Dataset], xr.Dataset] = utils._default_preprocess
+    init_forecast_hour: int = 0
     temporal_resolution_hours: int = 6
     output_timesteps: int = 41
     gridded_obs_storage_options: dict = dataclasses.field(

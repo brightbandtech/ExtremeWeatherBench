@@ -2,7 +2,7 @@
 other specialized package.
 """
 
-from typing import Union, List, Tuple
+from typing import Union, List, Tuple, TypeVar
 from collections import namedtuple
 import numpy as np
 import pandas as pd
@@ -605,3 +605,35 @@ def derive_indices_from_init_time_and_lead_time(
     init_time_subset_indices = valid_time_indices[0]
 
     return init_time_subset_indices
+
+
+T = TypeVar("T", str, Path)
+
+
+class PathOrStr:
+    """A type that automatically converts string paths to Path objects if they are local filesystem paths.
+
+    This type will:
+    - Convert local filesystem paths to Path objects
+    - Leave URLs and cloud storage paths as strings
+    - Leave existing Path objects unchanged
+    """
+
+    def __class_getitem__(cls, item: type[T]) -> type[T]:
+        return item
+
+    @staticmethod
+    def __new__(cls, value: str | Path) -> str | Path:
+        if isinstance(value, str):
+            # Check if it's a local filesystem path (not a URL or cloud storage path)
+            if not any(
+                value.startswith(prefix)
+                for prefix in ["http://", "https://", "s3://", "gs://"]
+            ):
+                return Path(value)
+        return value
+
+
+def _default_preprocess(ds: xr.Dataset) -> xr.Dataset:
+    """Default forecast preprocess function that does nothing."""
+    return ds
