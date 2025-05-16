@@ -165,11 +165,11 @@ class Config:
     """
 
     event_types: List[events.EventContainer]
-    output_dir: utils.PathOrStr[str | Path] = DEFAULT_OUTPUT_DIR
-    forecast_dir: utils.PathOrStr[str | Path] = DEFAULT_FORECAST_DIR
-    cache_dir: utils.PathOrStr[str | Path] = DEFAULT_CACHE_DIR
-    gridded_obs_path: utils.PathOrStr[str | Path] = ARCO_ERA5_FULL_URI
-    point_obs_path: utils.PathOrStr[str | Path] = DEFAULT_POINT_OBS_URI
+    output_dir: str | Path = DEFAULT_OUTPUT_DIR
+    forecast_dir: str | Path = DEFAULT_FORECAST_DIR
+    cache_dir: str | Path = DEFAULT_CACHE_DIR
+    gridded_obs_path: str | Path = ARCO_ERA5_FULL_URI
+    point_obs_path: str | Path = DEFAULT_POINT_OBS_URI
     remote_protocol: str = "s3"
     forecast_preprocess: Callable[[xr.Dataset], xr.Dataset] = utils._default_preprocess
     init_forecast_hour: int = 0
