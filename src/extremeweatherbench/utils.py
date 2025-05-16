@@ -605,3 +605,30 @@ def derive_indices_from_init_time_and_lead_time(
     init_time_subset_indices = valid_time_indices[0]
 
     return init_time_subset_indices
+
+
+def maybe_convert_to_path(value: str | Path) -> str | Path:
+    """Convert a string to a Path object if it's a local filesystem path.
+
+    This function will:
+    - Convert local filesystem paths to Path objects
+    - Leave URLs and cloud storage paths as strings
+    - Leave existing Path objects unchanged
+    """
+    if isinstance(value, str):
+        # Check if it's a local filesystem path (not a URL or cloud storage path)
+        if not any(
+            value.startswith(prefix)
+            for prefix in ["http://", "https://", "s3://", "gs://"]
+        ):
+            return Path(value)
+    return value
+
+
+# Type alias for use in type hints
+PathOrStr = str | Path
+
+
+def _default_preprocess(ds: xr.Dataset) -> xr.Dataset:
+    """Default forecast preprocess function that does nothing."""
+    return ds

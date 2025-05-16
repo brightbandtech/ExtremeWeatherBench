@@ -12,12 +12,6 @@ import itertools
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-#: Default mapping for forecast dataset schema.
-DEFAULT_FORECAST_SCHEMA_CONFIG = config.ForecastSchemaConfig()
-
-#: Default mapping for point observation dataset schema.
-DEFAULT_POINT_OBS_SCHEMA_CONFIG = config.PointObservationSchemaConfig()
-
 
 @dataclasses.dataclass
 class CaseEvaluationInput:
@@ -246,8 +240,6 @@ def _check_and_subset_forecast_availability(
 
 def evaluate(
     eval_config: config.Config,
-    forecast_schema_config: config.ForecastSchemaConfig = DEFAULT_FORECAST_SCHEMA_CONFIG,
-    point_obs_schema_config: config.PointObservationSchemaConfig = DEFAULT_POINT_OBS_SCHEMA_CONFIG,
 ) -> pd.DataFrame:
     """Driver for evaluating a collection of Cases across a set of Events.
 
@@ -267,12 +259,8 @@ def evaluate(
     yaml_event_case = utils.load_events_yaml()
 
     logger.debug("Evaluation starting")
-    point_obs, gridded_obs = data_loader.open_obs_datasets(
-        eval_config, point_obs_schema_config
-    )
-    forecast_dataset = data_loader.open_and_preprocess_forecast_dataset(
-        eval_config, forecast_schema_config
-    )
+    point_obs, gridded_obs = data_loader.open_obs_datasets(eval_config)
+    forecast_dataset = data_loader.open_and_preprocess_forecast_dataset(eval_config)
     logger.debug("Forecast and observation datasets loaded")
     logger.debug(
         "Observation data: Point %s, Gridded %s",
@@ -282,7 +270,7 @@ def evaluate(
     # map era5 vars by renaming and dropping extra vars
     if gridded_obs is not None:
         gridded_obs = utils.map_era5_vars_to_forecast(
-            forecast_schema_config,
+            eval_config.forecast_schema_config,
             forecast_dataset=forecast_dataset,
             era5_dataset=gridded_obs,
         )
