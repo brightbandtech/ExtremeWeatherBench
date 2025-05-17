@@ -3,7 +3,7 @@ name = "extremeweatherbench"
 version = "0.1.0"
 description = "Benchmarking weather and weather AI models using extreme events"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 dependencies = [
     "cartopy>=0.24.1",
     "dacite>=1.8.1",
@@ -25,25 +25,12 @@ dependencies = [
     "xarray[io]>=2024.11.0",
     "zarr>=3.0.2",
     "kerchunk[dev]",
+    "flox>=0.10.0",
 ]
 
 [project.optional-dependencies]
 data-prep = ["fsspec>=2024.12.0"]
-multiprocessing = [
-    "dask[complete]>=2025.1.0",
-    "distributed>=2025.1.0",
-]
-docs = [
-    "alabaster==1.0.0",
-    "myst-nb==1.2.0",
-    "myst-parser==4.0.1",
-    "nbsphinx>=0.9.6",
-    "sphinx==8.2.3",
-    "sphinx-autodoc2==0.5.0",
-    "sphinx-book-theme==1.1.4",
-    "sphinx-notfound-page==1.1.0",
-    "sphinx-rtd-theme==3.0.2",
-]
+multiprocessing = ["dask[complete]>=2025.1.0", "distributed>=2025.1.0"]
 
 [dependency-groups]
 dev = [
@@ -51,6 +38,7 @@ dev = [
     "deptry>=0.23.0",
     "ipykernel>=6.29.5",
     "ipywidgets>=8.1.5",
+    "isort>=6.0.1",
     "mypy>=1.14.1",
     "pre-commit>=4.1.0",
     "pytest>=8.3.4",
@@ -107,3 +95,6 @@ docstring-code-format = true
 # This only has an effect when the `docstring-code-format` setting is
 # enabled.
 docstring-code-line-length = "dynamic"
+
+[tool.ruff.lint.isort]
+case-sensitive = true

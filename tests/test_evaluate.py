@@ -1,45 +1,15 @@
 import pytest
-from extremeweatherbench import config, events, case, evaluate
+from extremeweatherbench import case, evaluate, events
 import datetime
 import xarray as xr
 import numpy as np
 import pandas as pd
 
 
-def test_evaluate_no_computation(mock_config):
-    result = evaluate.evaluate(mock_config, dry_run=True, dry_run_event_type="HeatWave")
-    assert isinstance(result, events.EventContainer)
-
-
-def test_open_forecast_dataset_invalid_path():
-    invalid_config = config.Config(
-        event_types=[events.HeatWave],
-        forecast_dir="invalid/path",
-        gridded_obs_path="test/path",
-    )
-    with pytest.raises(FileNotFoundError):
-        evaluate._open_forecast_dataset(invalid_config)
-
-
-def test_open_obs_datasets_no_obs_paths():
-    invalid_config = config.Config(
-        event_types=[events.HeatWave],
-        forecast_dir="test/path",
-        gridded_obs_path=None,
-        point_obs_path=None,
-    )
-    with pytest.raises(
-        ValueError, match="No gridded or point observation data provided"
-    ):
-        evaluate._open_obs_datasets(invalid_config)
-
-
-def test_open_obs_datasets_no_forecast_paths():
-    invalid_config = config.Config(event_types=[events.HeatWave], forecast_dir=None)
-    with pytest.raises(
-        AttributeError, match="'NoneType' object has no attribute 'startswith'"
-    ):
-        evaluate._open_forecast_dataset(invalid_config)
+def test_get_case_metadata(sample_config):
+    result = evaluate.get_case_metadata(sample_config)
+    assert isinstance(result, list)
+    assert isinstance(result[0], events.EventContainer)
 
 
 def test_evaluate_individualcase(sample_forecast_dataset, sample_gridded_obs_dataset):
@@ -208,7 +178,8 @@ def test_build_dataset_subsets_with_existing_forecast(
         forecast=existing_forecast["surface_air_temperature"],
     )
     mocker.patch(
-        "extremeweatherbench.evaluate._subset_gridded_obs", return_value=mock_result
+        "extremeweatherbench.evaluate._gridded_inputs_to_evaluation_input",
+        return_value=mock_result,
     )
 
     # Spy on _check_and_subset_forecast_availability to verify it's not called
@@ -294,7 +265,8 @@ def test_build_dataarray_subsets_gridded(
         forecast=sample_forecast_dataset["surface_air_temperature"],
     )
     mocker.patch(
-        "extremeweatherbench.evaluate._subset_gridded_obs", return_value=mock_result
+        "extremeweatherbench.evaluate._gridded_inputs_to_evaluation_input",
+        return_value=mock_result,
     )
 
     result = evaluate.build_dataset_subsets(case_eval_data, compute=False)
@@ -336,9 +308,9 @@ def test_build_dataarray_subsets_point(
         observation_type="point", observation=mock_obs, forecast=mock_forecast
     )
     mocker.patch(
-        "extremeweatherbench.evaluate._subset_point_obs", return_value=mock_result
+        "extremeweatherbench.evaluate._point_inputs_to_evaluation_input",
+        return_value=mock_result,
     )
-
     result = evaluate.build_dataset_subsets(case_eval_data, compute=False)
 
     assert result.observation_type == "point"
@@ -366,7 +338,7 @@ def test_subset_gridded_obs(
         observation=sample_gridded_obs_dataset,
     )
 
-    result = evaluate._subset_gridded_obs(case_eval_data)
+    result = evaluate._gridded_inputs_to_evaluation_input(case_eval_data)
 
     assert isinstance(result, evaluate.CaseEvaluationInput)
     assert result.observation_type == "gridded"
@@ -374,7 +346,9 @@ def test_subset_gridded_obs(
     assert isinstance(result.forecast, xr.Dataset)
 
 
-def test_subset_point_obs(mocker, sample_point_obs_df, sample_forecast_dataset):
+def test_subset_point_obs(
+    mocker, sample_point_obs_df_with_attrs, sample_forecast_dataset
+):
     """Test _subset_point_obs function."""
     mock_case = mocker.MagicMock(spec=case.IndividualCase)
     mock_case.id = 1
@@ -384,28 +358,21 @@ def test_subset_point_obs(mocker, sample_point_obs_df, sample_forecast_dataset):
     valid_time = pd.Timestamp(
         sample_forecast_dataset.init_time[0].values
     ) + pd.Timedelta(hours=6)
-    sample_point_obs_df.iloc[0, sample_point_obs_df.columns.get_loc("time")] = (
-        valid_time
-    )
-    sample_point_obs_df.iloc[1, sample_point_obs_df.columns.get_loc("time")] = (
-        valid_time
-    )
-    # mocker.patch(
-    #     'point_forecast_da.groupby(["init_time", "lead_time", "latitude", "longitude"]).mean()',
-    #     return_value=sample_forecast_dataset,
-    # )
-    # mocker.patch(
-    #     'subset_point_obs_da.groupby(["time", "latitude", "longitude"]).first()',
-    #     return_value=sample_point_obs_df,
-    # )
+    sample_point_obs_df_with_attrs.iloc[
+        0, sample_point_obs_df_with_attrs.columns.get_loc("time")
+    ] = valid_time
+    sample_point_obs_df_with_attrs.iloc[
+        1, sample_point_obs_df_with_attrs.columns.get_loc("time")
+    ] = valid_time
+
     case_eval_data = evaluate.CaseEvaluationData(
         individual_case=mock_case,
         observation_type="point",
         forecast=sample_forecast_dataset,
-        observation=sample_point_obs_df,
+        observation=sample_point_obs_df_with_attrs,
     )
 
-    result = evaluate._subset_point_obs(case_eval_data)
+    result = evaluate._point_inputs_to_evaluation_input(case_eval_data)
 
     assert isinstance(result, evaluate.CaseEvaluationInput)
     assert result.observation_type == "point"
@@ -414,24 +381,27 @@ def test_subset_point_obs(mocker, sample_point_obs_df, sample_forecast_dataset):
 
 
 def test_evaluate_full_workflow(
-    mocker, mock_config, sample_gridded_obs_dataset, sample_forecast_dataset
+    mocker, sample_config, sample_gridded_obs_dataset, sample_forecast_dataset
 ):
     # The return func will have the forecast dataset's data vars names switched already
     mocker.patch(
-        "extremeweatherbench.evaluate._open_forecast_dataset",
+        "extremeweatherbench.data_loader.open_and_preprocess_forecast_dataset",
         return_value=sample_forecast_dataset,
     )
     mocker.patch(
-        "extremeweatherbench.evaluate._open_obs_datasets",
+        "extremeweatherbench.data_loader.open_obs_datasets",
         return_value=(None, sample_gridded_obs_dataset),
     )
-    result = evaluate.evaluate(mock_config)
-    assert isinstance(result, dict)
-    assert "heat_wave" in result
-    for _, v in result["heat_wave"].items():
-        if v is not None:
-            assert isinstance(v, dict)
-            for _, v2 in v.items():
-                assert isinstance(v2, dict)
-                for _, v3 in v2.items():
-                    assert isinstance(v3, dict) or v3 is None
+    result = evaluate.evaluate(sample_config)
+    assert isinstance(result, pd.DataFrame)
+    # Check that the result DataFrame contains all the expected columns
+    expected_columns = [
+        "lead_time",
+        "value",
+        "variable",
+        "metric",
+        "observation_type",
+        "case_id",
+        "event_type",
+    ]
+    assert all(col in result.columns for col in expected_columns)
