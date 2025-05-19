@@ -1,3 +1,66 @@
-site_name: MkLorum
+site_name: ExtremeWeatherBench
+site_url: https://extremeweatherbench.readthedocs.io/
+docs_dir: docs/source
+repo_url: https://github.com/brightbandtech/extremeweatherbench
+repo_name: brightbandtech/extremeweatherbench
+nav:
+  - Home: index.md
+  - Installation: installation.md
+  - Usage: usage.md
+  - Event Categories:
+      - All Case Studies: events/AllCaseStudies.md
+      - Atmospheric Rivers: events/AtmosphericRivers.md
+      - Severe Convection: events/ConvectiveWx.md
+      - Derechos: events/Derechos.md
+      - Flooding: events/Flooding.md
+      - Freezes: events/FreezeEvents.md
+      - Heatwaves: events/Heatwaves.md
+      - Other Floods: events/OtherFloods.md
+      - Tropical Cyclones: events/TropicalCyclones.md
+      - Tropical Cyclone Flooding: events/TCFloods.md
+      - Tropical Cyclone Tornadic Outbreaks: events/TCTornadoOutbreaks.md
+      - Wind Events: events/WindEvents.md
+      - Winter Weather: events/WinterWeather.md
+  - API Reference: $src/extremeweatherbench.*
+  - FAQ: faq.md
+  - Contributing: contributing.md
+  - License: license.md
 theme:
   name: material
+  custom_dir: docs/source/overrides
+  logo_dark_mode: _static/bb_light.svg
+  logo_light_mode: _static/bb_dark.svg
+  favicon: _static/bb.svg
+  palette:
+    # Palette toggle for automatic mode
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/weather-cloudy-clock
+        name: Switch to light mode
+
+    # Palette toggle for light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: bb-light
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to dark mode
+
+    # Palette toggle for dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: bb-dark
+      toggle:
+        icon: material/weather-night
+        name: Switch to system preference
+  font:
+    text: "DM Sans"
+    code: "DM Mono"
+  features:
+    - navigation.instant
+    - navigation.instant.prefetch
+
+extra_css:
+  - stylesheets/extra.css
+
+plugins:
+  - search
+  - mkapi
