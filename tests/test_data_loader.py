@@ -19,20 +19,18 @@ def test_open_and_preprocess_forecast_dataset_invalid_path(default_forecast_conf
 
 
 def test_open_and_preprocess_forecast_dataset_zarr(
-    mocker, sample_config, default_forecast_config, sample_forecast_dataset
+    mocker, sample_config, sample_forecast_dataset
 ):
     # Mock xr.open_zarr to avoid actually opening a zarr file
     mock_zarr_dataset = sample_forecast_dataset
     mocker.patch("xarray.open_zarr", return_value=mock_zarr_dataset)
     sample_config.forecast_dir = "test/test.zarr"
-    forecast_dataset = data_loader.open_and_preprocess_forecast_dataset(
-        sample_config, default_forecast_config
-    )
+    forecast_dataset = data_loader.open_and_preprocess_forecast_dataset(sample_config)
     xr.testing.assert_equal(forecast_dataset, mock_zarr_dataset)
 
 
 def test_open_and_preprocess_forecast_dataset_json(
-    mocker, sample_config, default_forecast_config, sample_forecast_dataset
+    mocker, sample_config, sample_forecast_dataset
 ):
     mock_json_dataset = sample_forecast_dataset
     mocker.patch(
@@ -41,9 +39,7 @@ def test_open_and_preprocess_forecast_dataset_json(
     )
     sample_config.forecast_dir = "test/test.json"
 
-    forecast_dataset = data_loader.open_and_preprocess_forecast_dataset(
-        sample_config, default_forecast_config
-    )
+    forecast_dataset = data_loader.open_and_preprocess_forecast_dataset(sample_config)
     xr.testing.assert_equal(forecast_dataset, mock_json_dataset)
 
 
@@ -59,27 +55,19 @@ def test_open_and_preprocess_forecast_dataset_multiple_types(
         )
 
 
-def test_open_and_preprocess_forecast_dataset_no_files(
-    mocker, sample_config, default_forecast_config
-):
+def test_open_and_preprocess_forecast_dataset_no_files(mocker, sample_config):
     sample_config.forecast_dir = "test/"
     with pytest.raises(TypeError):
-        data_loader.open_and_preprocess_forecast_dataset(
-            sample_config, default_forecast_config
-        )
+        data_loader.open_and_preprocess_forecast_dataset(sample_config)
 
 
-def test_open_and_preprocess_forecast_dataset_invalid_file_type(
-    mocker, sample_config, default_forecast_config
-):
+def test_open_and_preprocess_forecast_dataset_invalid_file_type(mocker, sample_config):
     mock_fs = mocker.Mock()
     mock_fs.ls.return_value = ["test.invalid"]  # Invalid file type
     mocker.patch("fsspec.filesystem", return_value=mock_fs)
 
     with pytest.raises(TypeError, match="Unknown file type found in forecast path."):
-        data_loader.open_and_preprocess_forecast_dataset(
-            sample_config, default_forecast_config
-        )
+        data_loader.open_and_preprocess_forecast_dataset(sample_config)
 
 
 def test_open_kerchunk_reference(sample_config):

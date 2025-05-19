@@ -2,11 +2,11 @@
 
 import dataclasses
 from pathlib import Path
-from typing import Callable, List, Optional
+from typing import Callable, List
 
 import xarray as xr
 
-from extremeweatherbench import events
+from extremeweatherbench import events, utils
 
 DATA_DIR = Path("./data")
 DEFAULT_OUTPUT_DIR = DATA_DIR / "outputs"
@@ -28,9 +28,101 @@ POINT_OBS_STORAGE_OPTIONS = dict(token="anon")
 GRIDDED_OBS_STORAGE_OPTIONS = dict(token="anon")
 
 
-def _default_preprocess(ds: xr.Dataset) -> xr.Dataset:
-    """Default forecast preprocess function that does nothing."""
-    return ds
+@dataclasses.dataclass
+class ForecastSchemaConfig:
+    """A mapping between standard variable names used across EWB, and their counterpart
+    in a forecast dataset.
+
+    Allows users to insert custom schemas for decoding forecast data. Defaults are
+    suggested based on the CF Conventions.
+    """
+
+    surface_air_temperature: str = "t2"
+    surface_eastward_wind: str = "u10"
+    surface_northward_wind: str = "v10"
+    air_temperature: str = "t"
+    eastward_wind: str = "u"
+    northward_wind: str = "v"
+    air_pressure_at_mean_sea_level: str = "msl"
+    lead_time: str = "time"
+    init_time: str = "init_time"
+    fhour: str = "fhour"
+    level: str = "level"
+    latitude: str = "latitude"
+    longitude: str = "longitude"
+
+
+@dataclasses.dataclass
+class PointObservationSchemaConfig:
+    """A mapping between standard variable names used across EWB, and their counterpart
+    in a provided point observation dataset.
+
+    Allows users to insert custom schemas for decoding default or custom point observation data.
+    Defaults are suggested based on the CF Conventions.
+    A successful configuration does not need to include all variables, only the required metadata variables
+    (station, id, latitude, longitude, time) and the data variables desired for evaluation if not already named
+    identically to the default values. Others will be ignored.
+
+    Attributes:
+        air_pressure_at_mean_sea_level: The variable name in the point observation dataset
+        for the mean sea level pressure. Defaults to "air_pressure_at_mean_sea_level".
+        surface_air_pressure: The surface air pressure. Defaults to "surface_air_pressure".
+        surface_wind_speed: The surface wind speed. Defaults to "surface_wind_speed".
+        surface_wind_from_direction: The surface wind from direction. Defaults to "surface_wind_from_direction".
+        surface_air_temperature: The surface air temperature. Defaults to "surface_air_temperature".
+        surface_dew_point_temperature: The surface dew point temperature. Defaults to "surface_dew_point_temperature".
+        surface_relative_humidity: The surface relative humidity. Defaults to "surface_relative_humidity".
+        accumulated_1_hour_precipitation: The accumulated 1 hour precipitation.
+        Defaults to "accumulated_1_hour_precipitation".
+        time: The time. Defaults to "time".
+        latitude: The latitude. Defaults to "latitude".
+        longitude: The longitude. Defaults to "longitude".
+        elevation: The elevation. Defaults to "elevation".
+        station_id: The station id. Defaults to "station".
+        station_long_name: The station name. Defaults to "name".
+        case_id: The case id in the event yaml file.
+        Defaults to "id".
+        metadata_vars: A list of metadata variables to include in the point observation dataset.
+        Default is ["station", "id", "latitude", "longitude", "time"]. All five required for successful configuration.
+    """
+
+    air_pressure_at_mean_sea_level: str = "air_pressure_at_mean_sea_level"
+    surface_air_pressure: str = "surface_air_pressure"
+    surface_wind_speed: str = "surface_wind_speed"
+    surface_wind_from_direction: str = "surface_wind_from_direction"
+    surface_air_temperature: str = "surface_air_temperature"
+    surface_dew_point_temperature: str = "surface_dew_point"
+    surface_relative_humidity: str = "surface_relative_humidity"
+    accumulated_1_hour_precipitation: str = "accumulated_1_hour_precipitation"
+    time: str = "time"
+    latitude: str = "latitude"
+    longitude: str = "longitude"
+    elevation: str = "elevation"
+    station_id: str = "station"
+    station_long_name: str = "name"
+    case_id: str = "id"
+    metadata_vars: List[str] = dataclasses.field(
+        default_factory=lambda: [
+            "station",
+            "id",
+            "latitude",
+            "longitude",
+            "time",
+        ]
+    )
+
+    def extend_metadata_vars(self, input_metadata_variables: List[str]):
+        """Extend the metadata variables for the schema config if more than the default are needed."""
+        self.metadata_vars.extend(input_metadata_variables)
+
+    @property
+    def mapped_metadata_vars(self):
+        """Returns the dataclass field names mapped to the given input variable names."""
+        return [
+            field.name
+            for field in dataclasses.fields(self)
+            if field.default in self.metadata_vars
+        ]
 
 
 @dataclasses.dataclass
@@ -73,14 +165,14 @@ class Config:
     """
 
     event_types: List[events.EventContainer]
-    output_dir: Path = DEFAULT_OUTPUT_DIR
-    forecast_dir: Path = DEFAULT_FORECAST_DIR
-    cache_dir: Optional[Path] = DEFAULT_CACHE_DIR
-    gridded_obs_path: Optional[str] = ARCO_ERA5_FULL_URI
-    point_obs_path: Optional[str] = DEFAULT_POINT_OBS_URI
+    output_dir: str | Path = DEFAULT_OUTPUT_DIR
+    forecast_dir: str | Path = DEFAULT_FORECAST_DIR
+    cache_dir: str | Path = DEFAULT_CACHE_DIR
+    gridded_obs_path: str | Path = ARCO_ERA5_FULL_URI
+    point_obs_path: str | Path = DEFAULT_POINT_OBS_URI
     remote_protocol: str = "s3"
-    forecast_preprocess: Callable[[xr.Dataset], xr.Dataset] = _default_preprocess
-    init_forecast_hour: int = 0  # The first forecast hour (e.g. Graphcast starts at 6).
+    forecast_preprocess: Callable[[xr.Dataset], xr.Dataset] = utils._default_preprocess
+    init_forecast_hour: int = 0
     temporal_resolution_hours: int = 6
     output_timesteps: int = 41
     gridded_obs_storage_options: dict = dataclasses.field(
@@ -89,100 +181,9 @@ class Config:
     point_obs_storage_options: dict = dataclasses.field(
         default_factory=lambda: POINT_OBS_STORAGE_OPTIONS
     )
-
-
-@dataclasses.dataclass
-class ForecastSchemaConfig:
-    """A mapping between standard variable names used across EWB, and their counterpart
-    in a forecast dataset.
-
-    Allows users to insert custom schemas for decoding forecast data. Defaults are
-    suggested based on the CF Conventions.
-    """
-
-    surface_air_temperature: Optional[str] = "t2m"
-    surface_eastward_wind: Optional[str] = "u10"
-    surface_northward_wind: Optional[str] = "v10"
-    air_temperature: Optional[str] = "t"
-    eastward_wind: Optional[str] = "u"
-    northward_wind: Optional[str] = "v"
-    air_pressure_at_mean_sea_level: Optional[str] = "msl"
-    lead_time: Optional[str] = "time"
-    init_time: Optional[str] = "init_time"
-    fhour: Optional[str] = "fhour"
-    level: Optional[str] = "level"
-    latitude: Optional[str] = "latitude"
-    longitude: Optional[str] = "longitude"
-
-
-@dataclasses.dataclass
-class PointObservationSchemaConfig:
-    """A mapping between standard variable names used across EWB, and their counterpart
-    in a provided point observation dataset.
-
-    Allows users to insert custom schemas for decoding default or custom point observation data.
-    Defaults are suggested based on the CF Conventions.
-    A successful configuration does not need to include all variables, only the required metadata variables
-    (station, id, latitude, longitude, time) and the data variables desired for evaluation if not already named
-    identically to the default values. Others will be ignored.
-
-    Attributes:
-        air_pressure_at_mean_sea_level: The variable name in the point observation dataset
-        for the mean sea level pressure. Defaults to "air_pressure_at_mean_sea_level".
-        surface_air_pressure: The surface air pressure. Defaults to "surface_air_pressure".
-        surface_wind_speed: The surface wind speed. Defaults to "surface_wind_speed".
-        surface_wind_from_direction: The surface wind from direction. Defaults to "surface_wind_from_direction".
-        surface_air_temperature: The surface air temperature. Defaults to "surface_air_temperature".
-        surface_dew_point_temperature: The surface dew point temperature. Defaults to "surface_dew_point_temperature".
-        surface_relative_humidity: The surface relative humidity. Defaults to "surface_relative_humidity".
-        accumulated_1_hour_precipitation: The accumulated 1 hour precipitation.
-        Defaults to "accumulated_1_hour_precipitation".
-        time: The time. Defaults to "time".
-        latitude: The latitude. Defaults to "latitude".
-        longitude: The longitude. Defaults to "longitude".
-        elevation: The elevation. Defaults to "elevation".
-        station_id: The station id. Defaults to "station".
-        station_long_name: The station name. Defaults to "name".
-        case_id: The case id in the event yaml file.
-        Defaults to "id".
-        metadata_vars: A list of metadata variables to include in the point observation dataset.
-        Default is ["station", "id", "latitude", "longitude", "time"]. All five required for successful configuration.
-    """
-
-    air_pressure_at_mean_sea_level: Optional[str] = "air_pressure_at_mean_sea_level"
-    surface_air_pressure: Optional[str] = "surface_air_pressure"
-    surface_wind_speed: Optional[str] = "surface_wind_speed"
-    surface_wind_from_direction: Optional[str] = "surface_wind_from_direction"
-    surface_air_temperature: Optional[str] = "surface_air_temperature"
-    surface_dew_point_temperature: Optional[str] = "surface_dew_point"
-    surface_relative_humidity: Optional[str] = "surface_relative_humidity"
-    accumulated_1_hour_precipitation: Optional[str] = "accumulated_1_hour_precipitation"
-    time: Optional[str] = "time"
-    latitude: Optional[str] = "latitude"
-    longitude: Optional[str] = "longitude"
-    elevation: Optional[str] = "elevation"
-    station_id: Optional[str] = "station"
-    station_long_name: Optional[str] = "name"
-    case_id: Optional[str] = "id"
-    metadata_vars: List[str] = dataclasses.field(
-        default_factory=lambda: [
-            "station",
-            "id",
-            "latitude",
-            "longitude",
-            "time",
-        ]
+    forecast_schema_config: ForecastSchemaConfig = dataclasses.field(
+        default_factory=lambda: ForecastSchemaConfig()
     )
-
-    def extend_metadata_vars(self, input_metadata_variables: List[str]):
-        """Extend the metadata variables for the schema config if more than the default are needed."""
-        self.metadata_vars.extend(input_metadata_variables)
-
-    @property
-    def mapped_metadata_vars(self):
-        """Returns the dataclass field names mapped to the given input variable names."""
-        return [
-            field.name
-            for field in dataclasses.fields(self)
-            if field.default in self.metadata_vars
-        ]
+    point_obs_schema_config: PointObservationSchemaConfig = dataclasses.field(
+        default_factory=lambda: PointObservationSchemaConfig()
+    )
