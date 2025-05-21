@@ -164,26 +164,26 @@ class Config:
             observation dataset.
     """
 
-    event_types: List[events.EventContainer]
+    event_types: List[str | events.EventContainer]
     output_dir: str | Path = DEFAULT_OUTPUT_DIR
     forecast_dir: str | Path = DEFAULT_FORECAST_DIR
     cache_dir: str | Path = DEFAULT_CACHE_DIR
-    gridded_obs_path: str | Path = ARCO_ERA5_FULL_URI
-    point_obs_path: str | Path = DEFAULT_POINT_OBS_URI
     remote_protocol: str = "s3"
     forecast_preprocess: Callable[[xr.Dataset], xr.Dataset] = utils._default_preprocess
     init_forecast_hour: int = 0
     temporal_resolution_hours: int = 6
     output_timesteps: int = 41
-    gridded_obs_storage_options: dict = dataclasses.field(
-        default_factory=lambda: GRIDDED_OBS_STORAGE_OPTIONS
-    )
-    point_obs_storage_options: dict = dataclasses.field(
-        default_factory=lambda: POINT_OBS_STORAGE_OPTIONS
-    )
     forecast_schema_config: ForecastSchemaConfig = dataclasses.field(
         default_factory=lambda: ForecastSchemaConfig()
     )
     point_obs_schema_config: PointObservationSchemaConfig = dataclasses.field(
         default_factory=lambda: PointObservationSchemaConfig()
     )
+
+    def __post_init__(self):
+        self.event_types = [
+            events.get_event_class(event_type)
+            if isinstance(event_type, str)
+            else event_type
+            for event_type in self.event_types
+        ]
