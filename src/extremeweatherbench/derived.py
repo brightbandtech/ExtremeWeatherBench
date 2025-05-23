@@ -5,7 +5,11 @@ import metpy
 from metpy.units import units
 from typing import Callable
 from enum import StrEnum
+import metpy.calc
+import metpy.constants
 
+
+np.set_printoptions(suppress=True)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
