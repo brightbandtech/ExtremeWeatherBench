@@ -283,9 +283,11 @@ def evaluate(
                 data_class=event,
                 data=yaml_event_case,
             )
-        else:
+        elif isinstance(event, events.EventContainer):
             # if event is already an instance of EventContainer
             cases = event
+        else:
+            raise ValueError(f"Unexpected event type: {type(event)}")
 
         logger.debug("beginning evaluation loop for %s", event.event_type)
         results = _maybe_evaluate_individual_cases_loop(
