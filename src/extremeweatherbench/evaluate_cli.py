@@ -25,13 +25,13 @@ def event_type_constructor(loader: yaml.SafeLoader, node: yaml.nodes.MappingNode
         elif isinstance(value_node, yaml.nodes.SequenceNode):
             if len(value_node.value) == 1:
                 value = value_node.value[0].value
-            else:
-                value = loader.construct_sequence(value_node)
+            elif len(value_node.value) > 1:
+                value = loader.construct_sequence(value_node)  # type: ignore
         elif isinstance(value_node, yaml.nodes.MappingNode):
             if len(value_node.value) == 1:
                 value = value_node.value[0].value
-            else:
-                value = loader.construct_mapping(value_node)
+            elif len(value_node.value) > 1:
+                value = loader.construct_mapping(value_node)  # type: ignore
         else:
             raise ValueError(f"Unexpected node type: {type(value_node)}")
         fields[key] = value
