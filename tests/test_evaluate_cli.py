@@ -250,7 +250,10 @@ def test_event_type_constructor_mismatched_case_ids(runner, temp_config_dir):
     event_types:
       - !event_types
         event_type: heat_wave
-        case_ids: [1, 2, 35]  # Case 35 is not a heat_wave
+        case_ids:
+          - 1
+          - 2
+          - 35  # Case 35 is not a heat_wave
     """
     config_path.write_text(config_content)
 
