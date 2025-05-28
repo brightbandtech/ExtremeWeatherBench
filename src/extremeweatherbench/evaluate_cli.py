@@ -5,6 +5,7 @@ from pathlib import Path
 import yaml
 import json
 from dataclasses import replace
+from typing import Any
 
 
 EVENT_TYPE_MAP = {
@@ -15,16 +16,14 @@ EVENT_TYPE_MAP = {
 
 def event_type_constructor(loader: yaml.SafeLoader, node: yaml.nodes.MappingNode):
     # Extract fields from the mapping node
-    fields = {}
+    fields: dict[str, Any] = {}
     for key_node, value_node in node.value:
         key = loader.construct_scalar(key_node)
         # Handle different types of value nodes
         if isinstance(value_node, yaml.nodes.ScalarNode):
             value = loader.construct_scalar(value_node)
         elif isinstance(value_node, yaml.nodes.SequenceNode):
-            value = loader.construct_sequence(value_node)
-        elif isinstance(value_node, yaml.nodes.MappingNode):
-            value = loader.construct_mapping(value_node)
+            value = value_node.value[0].value
         else:
             raise ValueError(f"Unexpected node type: {type(value_node)}")
         fields[key] = value
@@ -36,7 +35,10 @@ def event_type_constructor(loader: yaml.SafeLoader, node: yaml.nodes.MappingNode
             case_ids = [case_ids]
         elif isinstance(case_ids, list):
             pass
+        elif isinstance(case_ids, str):
+            case_ids = [int(case_ids)]
         else:
+            breakpoint()
             raise ValueError("case_ids must be an integer or list")
 
         # Validate that all case_ids match the event_type
