@@ -331,6 +331,17 @@ def return_max_min_timestamp(da: xr.DataArray) -> pd.Timestamp:
     )
 
 
+def load_moist_lapse_lookup():
+    """Load the moist lapse lookup table."""
+    import extremeweatherbench.data
+
+    moist_lapse_lookup_table = resources.files(extremeweatherbench.data).joinpath(
+        "moist_lapse_lookup.parq"
+    )
+    moist_lapse_lookup_df = pd.read_parquet(moist_lapse_lookup_table)
+    return moist_lapse_lookup_df
+
+
 def load_events_yaml():
     """Load the events yaml file."""
     import extremeweatherbench.data

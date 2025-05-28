@@ -1,117 +1,251 @@
+"""
+Derived variables for ExtremeWeatherBench's case evaluations.
+"""
+
 import xarray as xr
 import logging
 import numpy as np
-import metpy
-from metpy.units import units
-from typing import Callable
-from enum import StrEnum
-import metpy.calc
-import metpy.constants
-
+import extremeweatherbench.calc as calc
 
 np.set_printoptions(suppress=True)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
-def relative_humidity(
-    ds: xr.Dataset, original_variable: str = "specific_humidity"
+def craven_brooks_sig_svr(
+    ds: xr.Dataset,
+    pressure_var: str = "pressure",
+    temperature_var: str = "temperature",
+    temperature_dewpoint_var: str = "dewpoint",
+    depth: float = 100,
 ) -> xr.DataArray:
-    """Compute relative humidity from specific humidity.
+    """Calculates the Craven-Brooks Significant Severe (CBSS) parameter.
+
+    CBSS is the product of mixed layer CAPE, typically at 100 hPa mixed layer depth, and low level (0-6 km) shear.
+    Values over ~22,500 m3/s3 indicate higher likelihood of severe convection, hail, and tornadoes. More information
+    available at Craven, J. P., and H. E. Brooks, 2004: Baseline climatology of sounding derived parameters associated
+    with deep moist convection. Natl. Wea. Digest, 28, 13-24.
+
     Args:
-        ds: An xarray Dataset containing temperature and humidity (relative and/or specific).
-        from: The variable to compute relative humidity from.
+        ds: Dataset containing pressure, temperature, and dewpoint variables
+        pressure_var: Name of the pressure variable in the dataset
+        temperature_var: Name of the temperature variable in the dataset
+        temperature_dewpoint_var: Name of the dewpoint variable in the dataset
+        depth: Depth of the mixed layer in hPa
+
     Returns:
-        rh: An xarray DataArray containing the relative humidity.
+        sig_svr: ndarray of Significant Severe parameter values
     """
-    if original_variable == "specific_humidity":
-        return metpy.calc.relative_humidity_from_specific_humidity(
-            ds["level"].values * units.hPa,
-            ds["air_temperature"].sel(level=ds["level"].values * units.hPa)
-            * units.degK,
-            ds["specific_humidity"].sel(level=ds["level"].values * units.hPa)
-            * units.g
-            / units.kg,
-        )
-    elif original_variable == "dewpoint_temperature":
-        return metpy.calc.relative_humidity_from_dewpoint(
-            ds["air_temperature"].sel(level=ds["level"].values * units.hPa)
-            * units.degK,
-            ds["dewpoint_temperature"].sel(level=ds["level"].values * units.hPa)
-            * units.degK,
-        )
 
-
-def _wrap_metpy_mixed_layer_cape_cin(pressure, temperature, dewpoint):
-    cape, cin = metpy.calc.thermo.mixed_layer_cape_cin(
-        pressure * units.hPa,
-        (temperature - 273.15) * units.degC,
-        dewpoint * units.degC,
+    # CIN not needed for CBSS
+    cape, _ = mixed_layer_cape_cin(
+        ds, pressure_var, temperature_var, temperature_dewpoint_var, depth
     )
-    return cape.m, cin.m
+    shear = low_level_shear(ds)
+    cbss = cape * shear
+    return cbss
 
 
-# Craven, J. P., and H. E. Brooks, 2004: Baseline climatology
-# of sounding derived parameters associated with deep moist convection. Natl. Wea. Digest, 28, 13-24.
-def craven_sigsvr(ds: xr.Dataset) -> xr.DataArray:
-    """Compute the Craven Significant Severe Parameter. Values over ~22,500 m3/s3 indicate higher
-    likelihood of severe convection, hail, and tornadoes.
+def low_level_shear(ds: xr.Dataset) -> xr.DataArray:
+    """Calculates the low level (0-6 km) shear of a dataset (Lepore et al 2021).
+
     Args:
-        ds: An xarray Dataset containing winds, temperature, and humidity (relative and/or specific).
+        ds: Dataset containing eastward and northward (u and v) wind vectors
 
     Returns:
-        sigsvr: An xarray DataArray containing the Craven Significant Severe Parameter in m3/s3.
+        ll_shear: ndarray of low level shear values in m/s
     """
-    # Compute estimated 0-6 km shear from Lepore et al 2021
-    shear_0_6_km = np.sqrt(
+    ll_shear = np.sqrt(
         (ds["eastward_wind"].sel(level=500) - ds["surface_eastward_wind"]) ** 2
         + (ds["northward_wind"].sel(level=500) - ds["surface_northward_wind"]) ** 2
     )
-    pressure_levels = ds.isel(level=slice(None, None, -1)).assign(
-        pressure=lambda x: x["level"]
-    )["pressure"]
+    return ll_shear
 
-    temperature = ds["air_temperature"]
 
-    if "dewpoint_temperature" in ds.variables:
-        dewpoint_temperature = ds["dewpoint_temperature"]
-    elif "specific_humidity" in ds.variables:
-        dewpoint_temperature = metpy.calc.dewpoint_from_specific_humidity(
-            ds["level"] * units.hPa,
-            ds["specific_humidity"] * units.dimensionless,
-        )
-    else:
-        raise ValueError(
-            "Dewpoint temperature or specific humidity variable not found in dataset"
-        )
-    # Make sure all inputs have the same level coordinate by selecting with pressure_levels
-    mlcape, _ = xr.apply_ufunc(
-        _wrap_metpy_mixed_layer_cape_cin,
-        pressure_levels,
-        temperature.sel(level=pressure_levels),
-        dewpoint_temperature.sel(level=pressure_levels),
-        input_core_dims=[["level"], ["level"], ["level"]],
-        output_core_dims=[[], []],
-        vectorize=True,
-        output_dtypes=[float, float],
+def mixed_layer_cape_cin(
+    ds: xr.Dataset,
+    pressure_var: str = "pressure",
+    temperature_var: str = "temperature",
+    temperature_dewpoint_var: str = "dewpoint",
+    depth: float = 100,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Calculates the mixed layer CAPE and CIN of a dataset.
+
+    Uses a lookup table for the moist pseudoadiabats to calculate the convective available
+    potential energy and convective inhibition given a mixed layer with a prescribed depth,
+    e.g. 100 hPa.
+
+    Currently requires a dataset with the pressure levels as the last dimension and time,
+    latitude, and longitude as the first three dimensions (in any order). Temperature and dewpoint
+    must be in Celsius, pressure must be in hPa.
+
+    Args:
+        ds: Dataset containing pressure, temperature, and dewpoint variables
+        pressure_var: Name of the pressure variable in the dataset
+        temperature_var: Name of the temperature variable in the dataset
+        temperature_dewpoint_var: Name of the dewpoint variable in the dataset
+        depth: Depth of the mixed layer in hPa
+
+    Returns:
+        cape: ndarray of CAPE values in J/kg
+        cin: ndarray of CIN values in J/kg
+    """
+
+    pressure = ds["level"]
+    mixed_layer_mask = ds[pressure_var] < (pressure[0] - depth)
+
+    # Get the indices where the condition is True along the last dimension
+    valid_indices = np.any(
+        mixed_layer_mask, axis=tuple(range(mixed_layer_mask.ndim - 1))
     )
-    sigsvr = mlcape * shear_0_6_km
-    return sigsvr
 
+    (
+        calculated_parcel_start_pressure,
+        calculated_parcel_temp,
+        calculated_parcel_dewpoint,
+    ) = calc.mixed_parcel(
+        ds, pressure_var, temperature_var, temperature_dewpoint_var, depth
+    )
 
-class DerivedVariable(StrEnum):
-    """Enum class for the different types of derived variables."""
+    parcel_temp_reshaped = np.expand_dims(calculated_parcel_temp, axis=-1)
+    parcel_dewpoint_reshaped = np.expand_dims(calculated_parcel_dewpoint, axis=-1)
 
-    CRAVEN_SIGSVR = "craven_sigsvr"
-    RELATIVE_HUMIDITY = "relative_humidity"
+    # Extract valid pressure, temperature and dewpoint profiles
+    pressure_prof = ds[pressure_var][..., valid_indices]
+    temp_prof = ds[temperature_var][..., valid_indices]
+    dew_prof = ds[temperature_dewpoint_var][..., valid_indices]
 
+    # Concatenate the mixed parcel properties with the profiles
+    parcel_start_pressure_reshaped = np.full(
+        (*pressure_prof.shape[:-1], 1),
+        np.atleast_1d(calculated_parcel_start_pressure)[0],
+    )
 
-DERIVED_VARIABLE_MATCHER: dict[DerivedVariable, Callable] = {
-    DerivedVariable.CRAVEN_SIGSVR: craven_sigsvr,
-    DerivedVariable.RELATIVE_HUMIDITY: relative_humidity,
-}
+    # Now concatenate along the first dimension
+    pressure_prof = np.concatenate(
+        [parcel_start_pressure_reshaped, pressure_prof], axis=-1
+    )
+    temp_prof = np.concatenate([parcel_temp_reshaped, temp_prof], axis=-1)
+    dew_prof = np.concatenate([parcel_dewpoint_reshaped, dew_prof], axis=-1)
 
+    calculated_lcl_pressure, calculated_lcl_td = calc.lifting_condensation_level(
+        pressure_prof[..., 0], temp_prof[..., 0], dew_prof[..., 0]
+    )
 
-def get_derived_variable(variable: str) -> Callable:
-    """Get the derived variable from the derived variable matcher."""
-    return DERIVED_VARIABLE_MATCHER[DerivedVariable(variable)]
+    calculated_lcl_pressure = np.expand_dims(calculated_lcl_pressure, axis=-1)
+    calculated_lcl_td = np.expand_dims(calculated_lcl_td, axis=-1)
+
+    # Create profiles at or below LCL
+    at_or_below_lcl_pressure_mask = pressure_prof >= calculated_lcl_pressure
+    pressure_prof_at_or_below_lcl = np.empty_like(pressure_prof) * np.nan
+    pressure_prof_at_or_below_lcl[at_or_below_lcl_pressure_mask] = pressure_prof[
+        at_or_below_lcl_pressure_mask
+    ]
+    pressure_prof_at_or_below_lcl = pressure_prof_at_or_below_lcl[
+        ...,
+        np.any(
+            ~np.isnan(pressure_prof_at_or_below_lcl),
+            axis=tuple(range(0, pressure_prof_at_or_below_lcl.ndim - 1)),
+        ),
+    ]
+    pressure_prof_at_or_below_lcl = np.concatenate(
+        (pressure_prof_at_or_below_lcl, calculated_lcl_pressure), axis=-1
+    )
+
+    temp_prof_at_or_below_lcl = calc.dry_lapse(
+        pressure_prof_at_or_below_lcl,
+        np.expand_dims(temp_prof[..., 0] + 273.15, axis=-1),
+    )
+
+    # Create profiles above LCL
+    above_lcl_pressure_mask = pressure_prof < calculated_lcl_pressure
+    pressure_prof_above_lcl = np.empty_like(pressure_prof) * np.nan
+    pressure_prof_above_lcl[above_lcl_pressure_mask] = pressure_prof[
+        above_lcl_pressure_mask
+    ]
+    pressure_prof_above_lcl = pressure_prof_above_lcl[
+        ...,
+        np.any(
+            ~np.isnan(pressure_prof_above_lcl),
+            axis=tuple(range(0, pressure_prof_above_lcl.ndim - 1)),
+        ),
+    ]
+    pressure_prof_above_lcl = np.concatenate(
+        (calculated_lcl_pressure, pressure_prof_above_lcl), axis=-1
+    )
+
+    temp_above_lcl = (
+        calc.moist_lapse_lookup(
+            pressure_prof_above_lcl, temp_prof_at_or_below_lcl[..., -1] - 273.15
+        )
+        + 273.15
+    )
+
+    # Combine profiles at or below LCL and above LCL
+    combined_all_pressure_w_lcl, combined_all_temp_w_lcl = calc.combine_profiles(
+        pressure_prof_at_or_below_lcl[..., :-1],
+        calculated_lcl_pressure,
+        pressure_prof_above_lcl,
+        temp_prof_at_or_below_lcl[..., :-1],
+        calculated_lcl_td + 273.15,
+        temp_above_lcl,
+        axis=-1,
+    )
+
+    # Insert LCL level into profiles
+    calculated_new_temp = calc.insert_lcl_level(
+        pressure_prof, temp_prof, calculated_lcl_pressure
+    )
+    calculated_new_dewpoint = calc.insert_lcl_level(
+        pressure_prof, dew_prof, calculated_lcl_pressure
+    )
+
+    # Get unique values and indices for pressure array
+    orig_shape = combined_all_pressure_w_lcl.shape
+    reshaped_pressures = combined_all_pressure_w_lcl[..., ::-1].reshape(
+        -1, orig_shape[-1]
+    )
+    reshaped_temps = combined_all_temp_w_lcl[..., ::-1].reshape(-1, orig_shape[-1])
+
+    # Reshape array to 2D for unique operation, then reshape back
+    unique_pressures, unique_indices = np.unique(
+        reshaped_pressures, return_index=True, axis=-1
+    )
+    combined_all_pressure_w_lcl = unique_pressures.reshape(*orig_shape[:-1], -1)
+
+    # Use the same indices to select corresponding temperature values
+    unique_temps = reshaped_temps[..., unique_indices]
+    combined_all_temp_w_lcl = unique_temps.reshape(*orig_shape[:-1], -1)
+
+    # Sort profiles by pressure
+    sorted_indices = np.argsort(combined_all_pressure_w_lcl, axis=-1)
+    combined_all_pressure_w_lcl = np.take_along_axis(
+        combined_all_pressure_w_lcl, sorted_indices, axis=-1
+    )[..., :-1]
+    combined_all_temp_w_lcl = np.take_along_axis(
+        combined_all_temp_w_lcl, sorted_indices, axis=-1
+    )[..., :-1]
+
+    # Find indices where all values are NaN in the last dimension
+    nan_mask_pressure = np.all(np.isnan(combined_all_pressure_w_lcl), axis=(0, 1, 2))
+    nan_mask_temp = np.all(np.isnan(combined_all_temp_w_lcl), axis=(0, 1, 2))
+
+    # Combine masks - if either pressure or temp is all NaN, we want to drop that row
+    combined_nan_mask = np.logical_or(nan_mask_pressure, nan_mask_temp)
+
+    # Create new arrays without the all-NaN rows
+    combined_all_pressure_w_lcl = combined_all_pressure_w_lcl[..., ~combined_nan_mask][
+        ..., ::-1
+    ]
+    combined_all_temp_w_lcl = combined_all_temp_w_lcl[..., ~combined_nan_mask][
+        ..., ::-1
+    ]
+
+    # Finally, calculate CAPE and CIN
+    cape, cin = calc.mlcape_cin(
+        combined_all_pressure_w_lcl,
+        calculated_new_temp,
+        calculated_new_dewpoint,
+        combined_all_temp_w_lcl,
+    )
+    return cape, cin
