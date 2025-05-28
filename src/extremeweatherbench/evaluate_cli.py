@@ -144,17 +144,13 @@ def cli_runner(default, config_file, **kwargs):
 
     Individual flags will override config file values.
 
-    The default flag uses a prebuilt parquet of CIRA MLWP data for FourCastNet, ERA5 for gridded observations,
-    and GHCN hourly data for point observations from the Brightband EWB GCS bucket.
+    The default flag uses a prebuilt virtualizarr parquet of CIRA MLWP data for FourCastNet, ERA5 for gridded
+    observations, and GHCN hourly data for point observations from the Brightband EWB GCS bucket for HeatWave
+    and Freeze events.
 
-    Example command with config file:
-    ewb --config-file config.yaml
-
-    Example command with individual options:
-    ewb --event-types HeatWave Freeze --output-dir ./outputs --forecast-dir ./forecasts
-
-    Example command with schema configuration:
-    ewb --event-types HeatWave --forecast-schema-surface-air-temperature 2m_temperature
+    Examples:
+        $ ewb --config-file config.yaml
+        $ ewb --event-types HeatWave Freeze --output-dir ./outputs --forecast-dir ./forecasts
     """
     if config_file:
         # Load config from file
