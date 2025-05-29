@@ -120,25 +120,21 @@ yaml.SafeLoader.add_constructor(
 )
 @click.option(
     "--remote-protocol",
-    default="s3",
     help="Storage protocol for forecast data (where the forecast data is stored on a cloud service or locally)",
 )
 @click.option(
     "--init-forecast-hour",
     type=int,
-    default=0,
     help="First forecast hour to include",
 )
 @click.option(
     "--temporal-resolution-hours",
     type=int,
-    default=6,
     help="Resolution of forecast data in hours",
 )
 @click.option(
     "--output-timesteps",
     type=int,
-    default=41,
     help="Number of timesteps to include",
 )
 def cli_runner(default, config_file, **kwargs):
@@ -189,7 +185,6 @@ def cli_runner(default, config_file, **kwargs):
         )
         eval_config.forecast_schema_config = forecast_schema_config
         eval_config.point_obs_schema_config = point_obs_schema_config
-
     elif default:
         event_list = [events.HeatWave, events.Freeze]
         eval_config = config.Config(
@@ -202,34 +197,27 @@ def cli_runner(default, config_file, **kwargs):
             raise ValueError(
                 "--event-types must be specified when not using --config-file or --default"
             )
+        user_specified_kwargs = {k: v for k, v in kwargs.items() if v is not None}
 
+        if "forecast_dir" in user_specified_kwargs:
+            user_specified_kwargs["forecast_dir"] = utils.maybe_convert_to_path(
+                user_specified_kwargs["forecast_dir"]
+            )
+        if "cache_dir" in user_specified_kwargs:
+            user_specified_kwargs["cache_dir"] = utils.maybe_convert_to_path(
+                user_specified_kwargs["cache_dir"]
+            )
         # Convert event types to event classes
         event_types = [EVENT_TYPE_MAP[et] for et in kwargs.pop("event_types")]
 
         # Create config objects
         eval_config = config.Config(
             event_types=event_types,
-            **{k: v for k, v in kwargs.items() if hasattr(config.Config, k)},
         )
-
-    # Update config with user-specified values from kwargs
-    # Only replace values that were explicitly provided by the user
-    if not config_file and not default:
-        # Filter out None values which indicate the user didn't specify that option
-        user_specified_kwargs = {k: v for k, v in kwargs.items() if v is not None}
-
-        # Create a new config with only the user-specified values
-        if user_specified_kwargs:
-            # Only update attributes that exist in Config and were specified by user
-            config_updates = {
-                k: v
-                for k, v in user_specified_kwargs.items()
-                if hasattr(config.Config, k)
-            }
-
-            # Use dataclasses.replace to update only specified fields
-            if config_updates:
-                eval_config = replace(eval_config, **config_updates)
+        eval_config = replace(
+            eval_config,
+            **{k: v for k, v in kwargs.items() if v is not None},
+        )
     # Run evaluation
     results = evaluate.evaluate(
         eval_config=eval_config,

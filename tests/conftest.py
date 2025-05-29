@@ -3,6 +3,9 @@ import xarray as xr
 import pandas as pd
 import numpy as np
 from extremeweatherbench import config, events, data_loader
+from click.testing import CliRunner
+import tempfile
+from pathlib import Path
 
 
 def make_sample_gridded_obs_dataset():
@@ -217,3 +220,22 @@ def sample_point_obs_df_with_attrs():
         sample_point_obs_df, sample_point_obs_schema_config
     )
     return sample_point_obs_df
+
+
+@pytest.fixture
+def runner():
+    """Fixture for Click CLI runner."""
+    return CliRunner()
+
+
+@pytest.fixture
+def temp_config_dir():
+    """Fixture that creates a temporary directory for config files."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        yield Path(temp_dir)
+
+
+@pytest.fixture
+def sample_yaml_config():
+    """Fixture that returns the path to the sample YAML config file."""
+    return Path(__file__).parent / "data" / "sample_config.yaml"
