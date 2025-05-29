@@ -1,0 +1,34 @@
+event_types:
+  - !event_types
+    event_type: heat_wave
+    case_ids:
+      - 1
+      - 2
+      - 3
+      - 4
+      - 5
+  - !event_types
+    event_type: freeze
+    case_ids:
+      - 34
+      - 35
+
+output_dir: ./outputs/test
+forecast_dir: gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr
+cache_dir: ./cache
+
+remote_protocol: gcs
+init_forecast_hour: 0
+temporal_resolution_hours: 6
+output_timesteps: 41
+
+forecast_schema_config:
+  surface_air_temperature: 2m_temperature
+  surface_eastward_wind: 10m_u_component_of_wind
+  surface_northward_wind: 10m_v_component_of_wind
+  air_temperature: temperature
+  eastward_wind: u_component_of_wind
+  northward_wind: v_component_of_wind
+  air_pressure_at_mean_sea_level: mean_sea_level_pressure
+  lead_time: prediction_timedelta
+  init_time: time

@@ -274,11 +274,20 @@ def evaluate(
             forecast_dataset=forecast_dataset,
             era5_dataset=gridded_obs,
         )
+
     for event in eval_config.event_types:
-        cases = dacite.from_dict(
-            data_class=event,
-            data=yaml_event_case,
-        )
+        # Check if event is a class (not instantiated) or an instance
+        if isinstance(event, type):
+            # if event is a class and hasn't been instantiated yet
+            cases = dacite.from_dict(
+                data_class=event,
+                data=yaml_event_case,
+            )
+        elif isinstance(event, events.EventContainer):
+            # if event is already an instance of EventContainer
+            cases = event
+        else:
+            raise ValueError(f"Unexpected event type: {type(event)}")
 
         logger.debug("beginning evaluation loop for %s", event.event_type)
         results = _maybe_evaluate_individual_cases_loop(
