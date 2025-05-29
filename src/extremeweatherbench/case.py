@@ -4,7 +4,7 @@ Some code similarly structured to WeatherBench (Rasp et al.)."""
 import dataclasses
 import datetime
 from typing import List, Optional, Type
-from extremeweatherbench import metrics, utils
+from extremeweatherbench import metrics, utils, derived
 import xarray as xr
 from enum import StrEnum
 import numpy as np
@@ -113,6 +113,20 @@ class IndividualCase:
             logger.info("Forecast data available for case %s", self.id)
         logger.info("Lead time length for case %s: %s", self.id, lead_time_len)
         return True
+
+    def _calculate_derived_variables(self, dataset: xr.Dataset) -> xr.Dataset:
+        """Calculate any derived variables for the case.
+
+        Args:
+            dataset: xr.Dataset: The input dataset to calculate derived variables for.
+
+        Returns:
+            xr.Dataset: The dataset with the derived variables.
+        """
+        for var in self.data_vars:
+            if isinstance(var, derived.DerivedVariable):
+                dataset[var.name] = var.calculate(dataset)
+        return dataset
 
 
 @dataclasses.dataclass
