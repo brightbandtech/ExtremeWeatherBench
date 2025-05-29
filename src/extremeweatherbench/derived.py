@@ -15,16 +15,22 @@ logger.setLevel(logging.INFO)
 
 class DerivedVariable(abc.ABC):
     """A class to hold a derived variable for an event type.
+
+    Derived variables are not variables that exist in the original dataset, but can be
+    calculated from the original variables. Certain event types may require derived
+    outputs such as the Craven-Brooks Significant Severe parameter, a variable that is
+    calculated based on temperature, dewpoint, pressure coordinates, and bulk
+    0-6km wind shear.
+
     Attributes:
         name: The name of the derived variable.
-        description: The description of the derived variable.
-        formula: The formula for the derived variable.
+
+    Methods:
+        calculate: Calculate the derived variable for the given data.
     """
 
-    def __init__(self, name: str, description: str, formula: str):
+    def __init__(self, name: str):
         self.name = name
-        self.description = description
-        self.formula = formula
 
     @property
     def name(self) -> str:
@@ -32,10 +38,11 @@ class DerivedVariable(abc.ABC):
         return self._name
 
     @abc.abstractmethod
-    def calculate(self, data: xr.Dataset | xr.DataArray) -> xr.Dataset | xr.DataArray:
+    def calculate(self, data: xr.Dataset | xr.DataArray) -> xr.DataArray:
         """Calculate the derived variable for the given data.
+
         Args:
             data: The data to calculate the derived variable for.
         Returns:
-            The derived variable.
+            The derived variable as a DataArray.
         """
