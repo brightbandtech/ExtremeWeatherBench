@@ -24,7 +24,6 @@ Location = namedtuple("Location", ["latitude", "longitude"])
 #: Maps the ARCO ERA5 to CF conventions.
 ERA5_MAPPING = {
     "surface_air_temperature": "2m_temperature",
-    "surface_dewpoint_temperature": "2m_dewpoint_temperature",
     "surface_eastward_wind": "10m_u_component_of_wind",
     "surface_northward_wind": "10m_v_component_of_wind",
     "air_temperature": "temperature",
