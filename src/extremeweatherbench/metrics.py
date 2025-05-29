@@ -80,15 +80,6 @@ class FalseAlarmRate(Metric):
         return contingency_table.false_alarm_rate()
 
 
-class CriticalSuccessIndex(Metric):
-    """Critical success index of a binary forecast evaluated against observations."""
-
-    def compute(self, binary_operator: cat.BinaryContingencyManager):
-        """Return the critical success index of the binary forecast evaluated against observations."""
-        contingency_table = binary_operator.compute_threshold_outputs()
-        return contingency_table.critical_success_index()
-
-
 class FalseAlarmRatio(Metric):
     """False alarm ratio of a binary forecast evaluated against observations."""
 
