@@ -24,6 +24,7 @@ class IndividualCase:
 
     Attributes:
         id: A unique numerical identifier for the event.
+        title: A string representing the title of the case.
         start_date: The start date of the case, for use in subsetting data for analysis.
         end_date: The end date of the case, for use in subsetting data for analysis.
         location: A Location object representing the latitude and longitude of the event

@@ -46,8 +46,8 @@ class CaseEvaluationData:
     Attributes:
         individual_case: The `case.IndividualCase` object to evaluate.
         forecast: The forecast dataset to evaluate.
-        gridded_observation: The gridded observation dataset to evaluate.
-        point_observation: The point observation dataset to evaluate.
+        observation_type: The type of observation to evaluate (gridded or point).
+        observation: The observation dataarray or dataframe to evaluate.
     """
 
     individual_case: case.IndividualCase
@@ -142,7 +142,7 @@ def _gridded_inputs_to_evaluation_input(
 def _point_inputs_to_evaluation_input(
     case_evaluation_data: CaseEvaluationData, compute: bool = True
 ) -> CaseEvaluationInput:
-    """Subset the point observation dataarray for a given data variable."""
+    """Subset the point observation dataframe for a given data variable."""
     if case_evaluation_data.observation is None:
         raise ValueError("Point observation cannot be None")
     var_id_subset_point_obs = case_evaluation_data.observation.loc[
@@ -244,15 +244,13 @@ def evaluate(
     """Driver for evaluating a collection of Cases across a set of Events.
 
     Args:
-        eval_config: A configuration object defining the evaluation run.
-        forecast_schema_config: A mapping of the forecast variable naming schema to use
-            when reading / decoding forecast data in the analysis.
-        point_obs_schema_config: A mapping of the point observation variable naming schema to use
-            when reading / decoding point observation data in the analysis.
+        eval_config: The configuration object defining the evaluation run. In the evaluation
+        configuration, the user can specify the event types to evaluate, the metrics to compute,
+        and the observation types to evaluate against. Metadata associated with the input data is also
+        specified, in the case of variable names differing between the forecast and observation datasets.
 
     Returns:
-        A dictionary mapping event types to lists of xarray Datasets containing the
-        evaluation results for each case within the event type.
+        A pandas DataFrame containing the evaluation results for each case within the event type.
     """
 
     all_results_df = pd.DataFrame()
