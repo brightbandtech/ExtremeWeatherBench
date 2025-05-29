@@ -1,9 +1,9 @@
 from pathlib import Path
 import pytest
+from extremeweatherbench import utils
 import pandas as pd
 import numpy as np
 import xarray as xr
-from extremeweatherbench import utils
 
 
 @pytest.mark.parametrize(
