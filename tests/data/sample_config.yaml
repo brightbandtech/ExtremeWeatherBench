@@ -1,48 +1,34 @@
 event_types:
-  - event_type: heat_wave
-    cases: []
-output_dir: ./outputs
-forecast_dir: ./forecasts
+  - !event_types
+    event_type: heat_wave
+    case_ids:
+      - 1
+      - 2
+      - 3
+      - 4
+      - 5
+  - !event_types
+    event_type: freeze
+    case_ids:
+      - 34
+      - 35
+
+output_dir: ./outputs/test
+forecast_dir: gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr
 cache_dir: ./cache
-gridded_obs_path: gs://test-gridded-obs
-point_obs_path: gs://test-point-obs
-remote_protocol: s3
+
+remote_protocol: gcs
 init_forecast_hour: 0
 temporal_resolution_hours: 6
 output_timesteps: 41
+
 forecast_schema_config:
-  surface_air_temperature: t2m
-  surface_eastward_wind: u10
-  surface_northward_wind: v10
-  air_temperature: t
-  eastward_wind: u
-  northward_wind: v
-  air_pressure_at_mean_sea_level: msl
-  lead_time: time
-  init_time: init_time
-  fhour: fhour
-  level: level
-  latitude: latitude
-  longitude: longitude
-point_obs_schema_config:
-  air_pressure_at_mean_sea_level: air_pressure_at_mean_sea_level
-  surface_air_pressure: surface_air_pressure
-  surface_wind_speed: surface_wind_speed
-  surface_wind_from_direction: surface_wind_from_direction
-  surface_air_temperature: surface_air_temperature
-  surface_dew_point_temperature: surface_dew_point
-  surface_relative_humidity: surface_relative_humidity
-  accumulated_1_hour_precipitation: accumulated_1_hour_precipitation
-  time: time
-  latitude: latitude
-  longitude: longitude
-  elevation: elevation
-  station_id: station
-  station_long_name: name
-  case_id: id
-  metadata_vars:
-    - station
-    - id
-    - latitude
-    - longitude
-    - time
+  surface_air_temperature: 2m_temperature
+  surface_eastward_wind: 10m_u_component_of_wind
+  surface_northward_wind: 10m_v_component_of_wind
+  air_temperature: temperature
+  eastward_wind: u_component_of_wind
+  northward_wind: v_component_of_wind
+  air_pressure_at_mean_sea_level: mean_sea_level_pressure
+  lead_time: prediction_timedelta
+  init_time: time
