@@ -29,13 +29,13 @@ class DerivedVariable(abc.ABC):
         calculate: Calculate the derived variable for the given data.
     """
 
-    def __init__(self, name: str):
-        self.name = name
+    def __init__(self):
+        pass
 
     @property
     def name(self) -> str:
-        """The name of the derived variable."""
-        return self._name
+        """Return the class name without parentheses."""
+        return self.__class__.__name__
 
     @abc.abstractmethod
     def calculate(self, data: xr.Dataset | xr.DataArray) -> xr.DataArray:
