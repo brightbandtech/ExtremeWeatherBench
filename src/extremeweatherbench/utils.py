@@ -496,10 +496,9 @@ def align_point_obs_from_gridded(
             obs_overlapping_valid_time["latitude"].values, dims="station_id"
         )
 
-        grid_at_obs_ds = forecast_ds.sel(
+        forecast_at_obs_ds = forecast_ds.sel(
             init_time=init_time, lead_time=lead_time
         ).interp(latitude=lats, longitude=lons, method="nearest")
-        forecast_at_obs_ds = grid_at_obs_ds.to_dataset()
         forecast_at_obs_ds = forecast_at_obs_ds.assign_coords(
             {
                 "station_id": station_ids,
