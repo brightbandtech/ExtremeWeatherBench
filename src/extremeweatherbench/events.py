@@ -3,8 +3,10 @@ Logic for the dataclasses here largely to handle the logic of parsing the events
 
 import abc
 import dataclasses
-from typing import List, Dict, Type, Optional
-from extremeweatherbench import case, data_loader
+from typing import Dict, List, Optional, Type
+
+from extremeweatherbench import case
+from extremeweatherbench.observations import ObservationHandler
 
 # Registry to map event type strings to their corresponding classes
 EVENT_REGISTRY: Dict[str, Type["EventContainer"]] = {}
@@ -56,6 +58,11 @@ class EventContainer(abc.ABC):
         self.metrics = metrics
         self.variables = variables
 
+    def build(self):
+        """Build the event container."""
+        self.observation_handlers = self.get_observation_handlers()
+        self.cases = self.subset_cases(self.cases)
+
     def subset_cases(self, subset) -> List[case.IndividualCase]:
         """Subset all IndividualCases inside EventContainer where _case_event_type is a specific type."""
         assert self.event_type is not None, "Event type must be defined."
@@ -66,11 +73,10 @@ class EventContainer(abc.ABC):
         ]
         return case_subset
 
-    # TODO: Figure out how to turn observation_types into ObservationHandler objects
-    def get_observation_handlers(self) -> List[data_loader.ObservationHandler]:
+    def get_observation_handlers(self) -> List[ObservationHandler]:
         """Get the observation handlers for the event type."""
         return [
-            data_loader.get_observation_handler(self.observation_types)
+            ObservationHandler(observation_type, self.event_type)
             for observation_type in self.observation_types
         ]
 
