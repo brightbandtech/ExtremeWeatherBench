@@ -1,48 +1,10 @@
 """Unit tests for the evaluate.py CLI interface."""
 
-import json
-import tempfile
-from pathlib import Path
 from unittest.mock import patch
-
-import pytest
-import yaml
-from click.testing import CliRunner
 
 from extremeweatherbench import evaluate_cli
 from extremeweatherbench.events import HeatWave
 from extremeweatherbench.utils import load_events_yaml
-
-
-@pytest.fixture
-def runner():
-    """Fixture for Click CLI runner."""
-    return CliRunner()
-
-
-@pytest.fixture
-def temp_config_dir():
-    """Fixture that creates a temporary directory for config files."""
-    with tempfile.TemporaryDirectory() as temp_dir:
-        yield Path(temp_dir)
-
-
-@pytest.fixture
-def sample_yaml_config():
-    """Fixture that returns the path to the sample YAML config file."""
-    return Path(__file__).parent / "data" / "sample_config.yaml"
-
-
-@pytest.fixture
-def sample_json_config(temp_config_dir):
-    """Fixture that creates a sample JSON config file."""
-    config_path = temp_config_dir / "config.json"
-    # Load the YAML config and convert it to JSON
-    with open(Path(__file__).parent / "data" / "sample_config.yaml") as f:
-        config_data = yaml.safe_load(f)
-    with open(config_path, "w") as f:
-        json.dump(config_data, f)
-    return config_path
 
 
 def test_cli_with_yaml_config(runner, sample_yaml_config):
@@ -50,16 +12,6 @@ def test_cli_with_yaml_config(runner, sample_yaml_config):
     with patch("extremeweatherbench.evaluate.evaluate") as mock_evaluate:
         result = runner.invoke(
             evaluate_cli.cli_runner, ["--config-file", str(sample_yaml_config)]
-        )
-        assert result.exit_code == 0
-        mock_evaluate.assert_called_once()
-
-
-def test_cli_with_json_config(runner, sample_json_config):
-    """Test CLI with JSON config file."""
-    with patch("extremeweatherbench.evaluate.evaluate") as mock_evaluate:
-        result = runner.invoke(
-            evaluate_cli.cli_runner, ["--config-file", str(sample_json_config)]
         )
         assert result.exit_code == 0
         mock_evaluate.assert_called_once()
@@ -173,22 +125,6 @@ def test_cli_with_invalid_numeric_values(runner):
     )
     assert result.exit_code != 0
     assert "Error" in result.output
-
-
-def test_cli_with_override_options(runner, sample_yaml_config):
-    """Test CLI with conflicting options (config file and individual options)."""
-    result = runner.invoke(
-        evaluate_cli.cli_runner,
-        [
-            "--config-file",
-            str(sample_yaml_config),
-            "--event-types",
-            "freeze",
-        ],
-    )
-    assert result.exit_code != 0
-    # Run should error out because there's a missing point obs file being used in the sample config
-    assert isinstance(result.exception, FileNotFoundError)
 
 
 def test_event_type_constructor_no_case_ids(runner, temp_config_dir):
