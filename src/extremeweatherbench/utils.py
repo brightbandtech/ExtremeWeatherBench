@@ -412,7 +412,7 @@ def maybe_remove_missing_data_vars(data_var: List[str], df: pd.DataFrame):
 
 
 def align_point_obs_from_gridded(
-    forecast_da: xr.DataArray,
+    forecast_ds: xr.Dataset,
     case_subset_point_obs_df: pd.DataFrame,
     data_var: List[str],
 ) -> Tuple[xr.Dataset, xr.Dataset]:
@@ -420,7 +420,7 @@ def align_point_obs_from_gridded(
     reducing dimensions. Metadata variables used are identical to those in PointObservationSchemaConfig.
 
     Args:
-        forecast_da: The forecast dataarray.
+        forecast_ds: The forecast dataset.
         case_subset_point_obs_df: The point observation dataframe.
         data_var: The variable(s) to subset (e.g. "surface_air_temperature")
 
@@ -437,10 +437,10 @@ def align_point_obs_from_gridded(
     )
     case_subset_point_obs_df = location_subset_point_obs(
         case_subset_point_obs_df,
-        forecast_da["latitude"].min().values,
-        forecast_da["latitude"].max().values,
-        forecast_da["longitude"].min().values,
-        forecast_da["longitude"].max().values,
+        forecast_ds["latitude"].min().values,
+        forecast_ds["latitude"].max().values,
+        forecast_ds["longitude"].min().values,
+        forecast_ds["longitude"].max().values,
     )
     # Reset index to allow for easier modification
     case_subset_point_obs_df = case_subset_point_obs_df.reset_index()
@@ -470,7 +470,7 @@ def align_point_obs_from_gridded(
     )
     # Loop init and lead times to prevent indexing error from duplicate valid times
     for init_time, lead_time in itertools.product(
-        forecast_da.init_time, forecast_da.lead_time
+        forecast_ds.init_time, forecast_ds.lead_time
     ):
         valid_time = pd.Timestamp(
             init_time.values + pd.to_timedelta(lead_time.values, unit="h").to_numpy()
@@ -496,9 +496,10 @@ def align_point_obs_from_gridded(
             obs_overlapping_valid_time["latitude"].values, dims="station_id"
         )
 
-        grid_at_obs_da = forecast_da.sel(
+        grid_at_obs_ds = forecast_ds.sel(
             init_time=init_time, lead_time=lead_time
         ).interp(latitude=lats, longitude=lons, method="nearest")
+        forecast_at_obs_ds = grid_at_obs_ds.to_dataset()
         forecast_at_obs_ds = forecast_at_obs_ds.assign_coords(
             {
                 "station_id": station_ids,
