@@ -2,7 +2,7 @@
 Logic for the dataclasses here largely to handle the logic of parsing the events."""
 
 import dataclasses
-from typing import List, Optional
+from typing import List
 
 from extremeweatherbench import case
 
@@ -15,8 +15,8 @@ class EventContainer:
     """
 
     cases: List[case.IndividualCase]
-    event_type: Optional[str] = None
-    observation_types: List[str] | str
+    event_type: str
+    observation_types: List[str] = dataclasses.field(default_factory=list)
 
     def subset_cases(self, subset) -> List[case.IndividualCase]:
         """Subset all IndividualCases inside EventContainer where _case_event_type is a specific type."""
@@ -40,7 +40,9 @@ class HeatWave(EventContainer):
     """
 
     event_type: str = "heat_wave"
-    observation_types: List[str] = ["era5", "ghcn"]
+    observation_types: List[str] = dataclasses.field(
+        default_factory=lambda: ["era5", "ghcn"]
+    )
 
 
 @dataclasses.dataclass
@@ -51,4 +53,6 @@ class Freeze(EventContainer):
     """
 
     event_type: str = "freeze"
-    observation_types: List[str] = ["era5", "ghcn"]
+    observation_types: List[str] = dataclasses.field(
+        default_factory=lambda: ["era5", "ghcn"]
+    )
