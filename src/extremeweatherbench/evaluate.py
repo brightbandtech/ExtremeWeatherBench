@@ -1,18 +1,20 @@
 """Evaluation routines for use during ExtremeWeatherBench case studies / analyses."""
 
-import logging
-from typing import Optional, Literal, Union
-import pandas as pd
-import xarray as xr
-from extremeweatherbench import config, events, case, utils, data_loader
-import dacite
 import dataclasses
 import itertools
+import logging
+from typing import Literal, Optional, Union
+
+import dacite
+import pandas as pd
+import xarray as xr
+
+from extremeweatherbench import case, config, data_loader, events, utils
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-
+#TODO: fix this so the observation type is linked to observations.py in forthcoming PR
 @dataclasses.dataclass
 class CaseEvaluationInput:
     """
@@ -36,7 +38,7 @@ class CaseEvaluationInput:
         if self.forecast is not None:
             self.forecast = self.forecast.compute()
 
-
+#TODO: fix this to not hardcode the type of observation
 @dataclasses.dataclass
 class CaseEvaluationData:
     """
@@ -257,61 +259,25 @@ def evaluate(
 
     all_results_df = pd.DataFrame()
     yaml_event_case = utils.load_events_yaml()
-
-    logger.debug("Evaluation starting")
-    point_obs, gridded_obs = data_loader.open_obs_datasets(eval_config)
     forecast_dataset = data_loader.open_and_preprocess_forecast_dataset(eval_config)
-    logger.debug("Forecast and observation datasets loaded")
-    logger.debug(
-        "Observation data: Point %s, Gridded %s",
-        point_obs is not None,
-        gridded_obs is not None,
-    )
-    # map era5 vars by renaming and dropping extra vars
-    if gridded_obs is not None:
-        gridded_obs = utils.map_era5_vars_to_forecast(
-            eval_config.forecast_schema_config,
-            forecast_dataset=forecast_dataset,
-            era5_dataset=gridded_obs,
-        )
-
+    logger.debug("Evaluation starting")
     for event in eval_config.event_types:
-        # Check if event is a class (not instantiated) or an instance
-        if isinstance(event, type):
-            # if event is a class and hasn't been instantiated yet
-            cases = dacite.from_dict(
-                data_class=event,
-                data=yaml_event_case,
-            )
-        elif isinstance(event, events.EventContainer):
-            # if event is already an instance of EventContainer
-            cases = event
-        else:
-            raise ValueError(f"Unexpected event type: {type(event)}")
-
-        logger.debug("beginning evaluation loop for %s", event.event_type)
-        results = _maybe_evaluate_individual_cases_loop(
-            cases, forecast_dataset, gridded_obs, point_obs
+        breakpoint()
+        cases = dacite.from_dict(
+            data_class=event,
+            data=yaml_event_case,
         )
+        logger.debug("beginning evaluation loop for %s", event.event_type)
+        results = _maybe_evaluate_individual_cases_loop(cases, forecast_dataset)
+
         all_results_df = pd.concat([all_results_df, results])
         logger.debug("evaluation loop complete for %s", event.event_type)
     logger.info(
         "\nVerification Summary:\n"
         "- Processed %s event types\n"
-        "- Observation types verified against: %s\n"
         "- Generated results for %s cases\n"
         "Evaluation complete.",
         len(eval_config.event_types),
-        ", ".join(
-            [
-                x
-                for x in [
-                    "point" if point_obs is not None else "",
-                    "gridded" if gridded_obs is not None else "",
-                ]
-                if x
-            ]
-        ),
         all_results_df["case_id"].nunique(),
     )
     return all_results_df
@@ -320,10 +286,8 @@ def evaluate(
 def _maybe_evaluate_individual_cases_loop(
     event: events.EventContainer,
     forecast_dataset: xr.Dataset,
-    gridded_obs: Optional[xr.Dataset] = None,
-    point_obs: Optional[pd.DataFrame] = None,
 ) -> pd.DataFrame:
-    """Sequentially loop over and evalute all cases for a specific event type.
+    """Sequentially loop over and evaluate all cases for a specific event type.
 
     Args:
         event: The Event object containing the cases to evaluate.
@@ -337,12 +301,7 @@ def _maybe_evaluate_individual_cases_loop(
     """
     results_df = pd.DataFrame()
     for individual_case in event.cases:
-        result = _maybe_evaluate_individual_case(
-            individual_case,
-            forecast_dataset,
-            gridded_obs,
-            point_obs,
-        )
+        result = _maybe_evaluate_individual_case(individual_case, forecast_dataset)
         results_df = pd.concat([results_df, result])
 
     return results_df
@@ -351,8 +310,6 @@ def _maybe_evaluate_individual_cases_loop(
 def _maybe_evaluate_individual_case(
     individual_case: case.IndividualCase,
     forecast_dataset: Optional[xr.Dataset],
-    gridded_obs: Optional[xr.Dataset],
-    point_obs: Optional[pd.DataFrame],
 ) -> pd.DataFrame:
     """Evaluate a single case given forecast data and observations.
 
@@ -369,29 +326,8 @@ def _maybe_evaluate_individual_case(
         ValueError: If no forecast data is available.
     """
     logger.info("Evaluating case %s, %s", individual_case.id, individual_case.title)
-    gridded_obs_evaluation = CaseEvaluationData(
-        individual_case=individual_case,
-        observation_type="gridded",
-        observation=gridded_obs,
-        forecast=forecast_dataset,
-    )
-    point_obs_evaluation = CaseEvaluationData(
-        individual_case=individual_case,
-        observation_type="point",
-        observation=point_obs,
-        forecast=forecast_dataset,
-    )
 
-    gridded_case_eval = build_dataset_subsets(gridded_obs_evaluation, compute=True)
-    point_case_eval = build_dataset_subsets(
-        point_obs_evaluation,
-        compute=True,
-        existing_forecast=(
-            gridded_case_eval.forecast
-            if gridded_case_eval.forecast is not None
-            else None
-        ),
-    )
+    # TODO: add observation handling based on individual_case.observation_type
     case_result_df = pd.DataFrame()
 
     # Process each data variable and metric combination
@@ -403,7 +339,7 @@ def _maybe_evaluate_individual_case(
 
         results = []
         # Process both gridded and point observations
-        for eval_data in [gridded_case_eval, point_case_eval]:
+        for eval_data in #TODO: loop over either obs type or evaluation input here
             if eval_data.observation is not None and eval_data.forecast is not None:
                 # Compute metric and format result
                 result = metric_instance.compute(

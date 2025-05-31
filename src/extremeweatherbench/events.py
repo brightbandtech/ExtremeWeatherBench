@@ -68,66 +68,70 @@ class EventContainer(abc.ABC):
         return case_subset
 
 
-@dataclasses.dataclass
 class HeatWave(EventContainer):
     """A container class to hold a list of cases of heat wave events.
     Attributes:
         cases: A list of cases that is defined by events.yaml
     """
 
-    event_type: str = "heatwave"
+    def __init__(self, cases: List[case.IndividualCase]):
+        super().__init__(cases, "heatwave", ["heatwave"], ["heatwave"])
 
 
 register_event_type("heatwave", HeatWave)
 
 
-@dataclasses.dataclass
 class Freeze(EventContainer):
     """A container class to hold a list of cases of freeze events.
     Attributes:
         cases: A list of cases that is defined by events.yaml
     """
 
-    event_type: str = "freeze"
+    def __init__(self, cases: List[case.IndividualCase]):
+        super().__init__(cases, "freeze", ["freeze"], ["freeze"])
 
 
 register_event_type("freeze", Freeze)
 
 
-@dataclasses.dataclass
 class SevereConvection(EventContainer):
     """A container class to hold a list of cases of severe convection events.
     Attributes:
         cases: A list of cases that is defined by events.yaml
     """
 
-    event_type: str = "severe_convection"
+    def __init__(self, cases: List[case.IndividualCase]):
+        super().__init__(cases, "severe_day", ["severe_day"], ["severe_day"])
 
 
-register_event_type("severe_convection", SevereConvection)
+register_event_type("severe_day", SevereConvection)
 
 
-@dataclasses.dataclass
 class TropicalCyclone(EventContainer):
     """A container class to hold a list of cases of tropical cyclone events.
     Attributes:
         cases: A list of cases that is defined by events.yaml
     """
 
-    event_type: str = "tropical_cyclone"
+    def __init__(self, cases: List[case.IndividualCase]):
+        super().__init__(
+            cases, "tropical_cyclone", ["tropical_cyclone"], ["tropical_cyclone"]
+        )
 
 
 register_event_type("tropical_cyclone", TropicalCyclone)
 
 
-@dataclasses.dataclass
 class AtmosphericRiver(EventContainer):
     """A container class to hold a list of cases of atmospheric river events.
     Attributes:
         cases: A list of cases that is defined by events.yaml
     """
 
-    event_type: str = "atmospheric_river"
+    def __init__(self, cases: List[case.IndividualCase]):
+        super().__init__(
+            cases, "atmospheric_river", ["atmospheric_river"], ["atmospheric_river"]
+        )
 
 
 register_event_type("atmospheric_river", AtmosphericRiver)

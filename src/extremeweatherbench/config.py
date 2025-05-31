@@ -187,3 +187,5 @@ class Config:
             else event_type
             for event_type in self.event_types
         ]
+        if any(event_type is None for event_type in self.event_types):
+            raise ValueError("Invalid event type in config")
