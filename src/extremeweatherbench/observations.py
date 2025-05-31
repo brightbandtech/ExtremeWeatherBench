@@ -1,6 +1,6 @@
 import abc
 import logging
-from typing import List
+from typing import Dict, Type
 
 import pandas as pd
 import xarray as xr
@@ -66,7 +66,7 @@ class IBTrACSHandler(ObservationHandler):
     def observation_type(self) -> str:
         return "ibtracs"
 
-    def load_observations(self, cases: List[case.IndividualCase]) -> pd.DataFrame:
+    def load_observations(self) -> pd.DataFrame:
         """Load IBTrACS observations from GCS.
 
         Args:
@@ -81,10 +81,6 @@ class IBTrACSHandler(ObservationHandler):
 
         # Convert to pandas DataFrame
         df = ds.to_dataframe().reset_index()
-
-        # Filter to only include cases of interest
-        case_dates = [pd.Timestamp(c.start_date) for c in cases]
-        df = df[df.time.isin(case_dates)]
 
         return df
 
@@ -164,3 +160,33 @@ class StormReportHandler(ObservationHandler):
         df = pd.read_parquet(STORM_REPORT_URI, storage_options=dict(token="anon"))
 
         return df
+
+
+# Create a mapping of observation type strings to their handler classes
+OBSERVATION_HANDLERS: Dict[str, Type[ObservationHandler]] = {
+    "ghcn": GHCNHandler,
+    "era5": ERA5Handler,
+    "ibtracs": IBTrACSHandler,
+    "storm_report": StormReportHandler,
+}
+
+
+def create_observation_handler(
+    observation_type: str, event_type: str
+) -> ObservationHandler:
+    """Create an observation handler instance based on the observation type string.
+
+    Args:
+        observation_type: String identifier for the observation type (e.g. "ghcn")
+        event_type: The type of event this observation is for
+
+    Returns:
+        An instance of the appropriate ObservationHandler subclass
+
+    Raises:
+        ValueError: If the observation_type is not recognized
+    """
+    handler_class = OBSERVATION_HANDLERS.get(observation_type.lower())
+    if handler_class is None:
+        raise ValueError(f"Unknown observation type: {observation_type}")
+    return handler_class(observation_type, event_type)

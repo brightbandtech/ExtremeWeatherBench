@@ -179,11 +179,3 @@ class Config:
     point_obs_schema_config: PointObservationSchemaConfig = dataclasses.field(
         default_factory=lambda: PointObservationSchemaConfig()
     )
-
-    def __post_init__(self):
-        self.event_types = [
-            events.get_event_class(event_type)
-            if isinstance(event_type, str)
-            else event_type
-            for event_type in self.event_types
-        ]
