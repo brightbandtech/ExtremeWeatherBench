@@ -3,7 +3,6 @@ import dataclasses
 from typing import Dict, List, Optional, Type
 
 from extremeweatherbench import case
-from extremeweatherbench.observations import ObservationHandler
 
 # Registry to map event type strings to their corresponding classes
 EVENT_REGISTRY: Dict[str, Type["EventContainer"]] = {}
@@ -45,13 +44,11 @@ class EventContainer(abc.ABC):
         self,
         cases: List[case.IndividualCase],
         event_type: str,
-        observation_types: List[str],
         metrics: List[str],
         variables: List[str],
     ):
         self.cases = self.subset_cases(cases)
         self.event_type = event_type
-        self.observation_types = observation_types
         self.metrics = metrics
         self.variables = variables
 
@@ -70,13 +67,6 @@ class EventContainer(abc.ABC):
         ]
         return case_subset
 
-    def get_observation_handlers(self) -> List[ObservationHandler]:
-        """Get the observation handlers for the event type."""
-        return [
-            ObservationHandler(observation_type, self.event_type)
-            for observation_type in self.observation_types
-        ]
-
 
 @dataclasses.dataclass
 class HeatWave(EventContainer):
@@ -86,7 +76,6 @@ class HeatWave(EventContainer):
     """
 
     event_type: str = "heatwave"
-    observation_types = ["era5", "ghcn"]
 
 
 register_event_type("heatwave", HeatWave)
@@ -100,7 +89,6 @@ class Freeze(EventContainer):
     """
 
     event_type: str = "freeze"
-    observation_types = ["era5", "ghcn"]
 
 
 register_event_type("freeze", Freeze)
@@ -114,7 +102,6 @@ class SevereConvection(EventContainer):
     """
 
     event_type: str = "severe_convection"
-    observation_types = ["storm_report"]
 
 
 register_event_type("severe_convection", SevereConvection)
@@ -128,7 +115,6 @@ class TropicalCyclone(EventContainer):
     """
 
     event_type: str = "tropical_cyclone"
-    observation_types = ["ibtracs", "era5", "ghcn"]
 
 
 register_event_type("tropical_cyclone", TropicalCyclone)
@@ -142,7 +128,6 @@ class AtmosphericRiver(EventContainer):
     """
 
     event_type: str = "atmospheric_river"
-    observation_types = ["era5", "ghcn"]
 
 
 register_event_type("atmospheric_river", AtmosphericRiver)
