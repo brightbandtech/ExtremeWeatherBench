@@ -1,13 +1,15 @@
 """Evaluation routines for use during ExtremeWeatherBench case studies / analyses."""
 
-import logging
-from typing import Optional, Literal, Union
-import pandas as pd
-import xarray as xr
-from extremeweatherbench import config, events, case, utils, data_loader
-import dacite
 import dataclasses
 import itertools
+import logging
+from typing import Literal, Optional, Union
+
+import dacite
+import pandas as pd
+import xarray as xr
+
+from extremeweatherbench import case, config, data_loader, events, utils
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -257,52 +259,26 @@ def evaluate(
 
     all_results_df = pd.DataFrame()
     yaml_event_case = utils.load_events_yaml()
-
-    logger.debug("Evaluation starting")
-    point_obs, gridded_obs = data_loader.open_obs_datasets(eval_config)
     forecast_dataset = data_loader.open_and_preprocess_forecast_dataset(eval_config)
-    logger.debug("Forecast and observation datasets loaded")
-    logger.debug(
-        "Observation data: Point %s, Gridded %s",
-        point_obs is not None,
-        gridded_obs is not None,
-    )
-    # map era5 vars by renaming and dropping extra vars
-    if gridded_obs is not None:
-        gridded_obs = utils.map_era5_vars_to_forecast(
-            eval_config.forecast_schema_config,
-            forecast_dataset=forecast_dataset,
-            era5_dataset=gridded_obs,
-        )
+    logger.debug("Evaluation starting")
     for event in eval_config.event_types:
+        breakpoint()
         cases = dacite.from_dict(
             data_class=event,
             data=yaml_event_case,
         )
-
+        breakpoint()
         logger.debug("beginning evaluation loop for %s", event.event_type)
-        results = _maybe_evaluate_individual_cases_loop(
-            cases, forecast_dataset, gridded_obs, point_obs
-        )
+        results = _maybe_evaluate_individual_cases_loop(cases, forecast_dataset)
+
         all_results_df = pd.concat([all_results_df, results])
         logger.debug("evaluation loop complete for %s", event.event_type)
     logger.info(
         "\nVerification Summary:\n"
         "- Processed %s event types\n"
-        "- Observation types verified against: %s\n"
         "- Generated results for %s cases\n"
         "Evaluation complete.",
         len(eval_config.event_types),
-        ", ".join(
-            [
-                x
-                for x in [
-                    "point" if point_obs is not None else "",
-                    "gridded" if gridded_obs is not None else "",
-                ]
-                if x
-            ]
-        ),
         all_results_df["case_id"].nunique(),
     )
     return all_results_df
