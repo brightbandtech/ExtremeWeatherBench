@@ -78,3 +78,42 @@ class Freeze(EventContainer):
     observation_types: List[str] = dataclasses.field(
         default_factory=lambda: ["era5", "ghcn"]
     )
+
+
+@dataclasses.dataclass
+class SevereConvection(EventContainer):
+    """A container class to hold a list of cases of severe convection events.
+    Attributes:
+        cases: A list of cases that is defined by events.yaml
+    """
+
+    event_type: str = "severe_convection"
+    observation_types: List[str] = dataclasses.field(
+        default_factory=lambda: ["era5", "ghcn", "storm_report"]
+    )
+
+
+@dataclasses.dataclass
+class TropicalCyclone(EventContainer):
+    """A container class to hold a list of cases of tropical cyclone events.
+    Attributes:
+        cases: A list of cases that is defined by events.yaml
+    """
+
+    event_type: str = "tropical_cyclone"
+    observation_types: List[str] = dataclasses.field(
+        default_factory=lambda: ["era5", "ibtracs"]
+    )
+
+
+@dataclasses.dataclass
+class AtmosphericRiver(EventContainer):
+    """A container class to hold a list of cases of atmospheric river events.
+    Attributes:
+        cases: A list of cases that is defined by events.yaml
+    """
+
+    event_type: str = "atmospheric_river"
+    observation_types: List[str] = dataclasses.field(
+        default_factory=lambda: ["era5", "ghcn"]
+    )

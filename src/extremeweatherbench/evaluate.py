@@ -262,12 +262,12 @@ def evaluate(
     forecast_dataset = data_loader.open_and_preprocess_forecast_dataset(eval_config)
     logger.debug("Evaluation starting")
     for event in eval_config.event_types:
-        breakpoint()
+        if isinstance(event, str):
+            event = events.EventContainer(event_type=event)
         cases = dacite.from_dict(
             data_class=event,
             data=yaml_event_case,
         )
-        breakpoint()
         logger.debug("beginning evaluation loop for %s", event.event_type)
         results = _maybe_evaluate_individual_cases_loop(cases, forecast_dataset)
 
