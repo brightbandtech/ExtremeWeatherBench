@@ -4,10 +4,12 @@ Most functions are adapted from the MetPy library (https://github.com/Unidata/Me
 """
 
 import itertools
+
 import numpy as np
+import numpy.ma as ma
 import scipy.optimize as so
 import xarray as xr
-import numpy.ma as ma
+
 from extremeweatherbench.utils import load_moist_lapse_lookup
 
 gamma = 6.5  # K/km
@@ -268,6 +270,7 @@ def virtual_temperature(temperature, mixing_ratio):
     return temperature * ((mixing_ratio + epsilon) / (epsilon * (1 + mixing_ratio)))
 
 
+# TODO: update to metpy 1.7 with direct solution
 def lifting_condensation_level(pressure_prof, temp_prof, dew_prof):
     """
     Calculates the LCL pressure of a parcel.
@@ -288,13 +291,17 @@ def lifting_condensation_level(pressure_prof, temp_prof, dew_prof):
     nan_mask_list = [False]  # Use a mutable list to store the mask
     es = saturation_vapor_pressure(dew_prof)
     w = mixing_ratio(es, pressure_prof)
-    lcl_p = so.fixed_point(
-        _lcl_iter,
-        pressure_prof_pa,
-        args=(pressure_prof_pa, w, temp_prof_k, nan_mask_list),
-        xtol=1e-5,
-        maxiter=50,
-    )
+    try:
+        lcl_p = so.fixed_point(
+            _lcl_iter,
+            pressure_prof_pa,
+            args=(pressure_prof_pa, w, temp_prof_k, nan_mask_list),
+            xtol=1e-5,
+            maxiter=50,
+        )
+    except ValueError:
+        print("uh oh")
+        lcl_p = np.zeros_like(pressure_prof_pa) * np.nan
     lcl_p = np.where(nan_mask_list[0], np.nan, lcl_p) / 100  # convert to hPa
 
     calculated_lcl_p = np.atleast_1d(
@@ -355,18 +362,24 @@ def insert_lcl_level(pressure, temperature, lcl_pressure):
     for i, j, k in itertools.product(
         range(orig_shape[0]), range(orig_shape[1]), range(orig_shape[2])
     ):
-        # Get the LCL index for this x,y,z coordinate
-        lcl_idx = lcl_indices[3][
-            np.where(
-                (lcl_indices[0] == i) & (lcl_indices[1] == j) & (lcl_indices[2] == k)
-            )[0][0]
-        ]
-        # Insert the interpolated temperature
-        result[i, j, k] = np.insert(
-            calculated_new_temp[..., ::-1][i, j, k],
-            lcl_idx,
-            interp_temp[..., ::-1][i, j, k, lcl_idx],
-        )
+        if not np.isnan(calculated_new_temp[i, j, k]):
+            # Get the LCL index for this x,y,z coordinate
+            lcl_idx = lcl_indices[3][
+                np.where(
+                    (lcl_indices[0] == i)
+                    & (lcl_indices[1] == j)
+                    & (lcl_indices[2] == k)
+                )[0][0]
+            ]
+            # Insert the interpolated temperature
+            result[i, j, k] = np.insert(
+                calculated_new_temp[..., ::-1][i, j, k],
+                lcl_idx,
+                interp_temp[..., ::-1][i, j, k, lcl_idx],
+            )
+        else:
+            # in the case where there's missing data, the result will be nans
+            result[i, j, k] = np.zeros_like(calculated_new_temp[i, j, k]) * np.nan
 
     calculated_new_temp = result[..., ::-1]
     return calculated_new_temp
@@ -439,6 +452,34 @@ def combine_profiles(
     return calculated_new_pressure, calculated_prof_dewpoint
 
 
+def _basic_ds_checks_for_cape_cin(
+    ds: xr.Dataset,
+    pressure_var: str = "pressure",
+    temperature_var: str = "temperature",
+    temperature_dewpoint_var: str = "dewpoint",
+):
+    """
+    Checks the dataset for basic issues that could cause problems with the CAPE/CIN calculation.
+    """
+
+    # make sure the pressure level is descending. If not, sort it
+    if ds["level"][0] < ds["level"][-1]:
+        ds = ds.sortby("level", ascending=False)
+        ds[pressure_var] = ds[pressure_var].sortby("level", ascending=False)
+        ds[temperature_var] = ds[temperature_var].sortby("level", ascending=False)
+        ds[temperature_dewpoint_var] = ds[temperature_dewpoint_var].sortby(
+            "level", ascending=False
+        )
+    # Make sure level is the last dimension. If not, transpose it to the end.
+    if "level" in ds.dims and list(ds.dims).index("level") != len(ds.dims) - 1:
+        # Get all dimensions and move level to the end
+        dims = list(ds.dims)
+        dims.remove("level")
+        dims.append("level")
+        ds = ds.transpose(*dims)
+    return ds
+
+
 def mixed_parcel(
     ds: xr.Dataset,
     pressure_var: str = "pressure",
@@ -460,6 +501,9 @@ def mixed_parcel(
         calculated_parcel_temp: ndarray of the temperature of the mixed parcel
         calculated_parcel_dewpoint: ndarray of the dewpoint of the mixed parcel
     """
+    ds = _basic_ds_checks_for_cape_cin(
+        ds, pressure_var, temperature_var, temperature_dewpoint_var
+    )
     theta = potential_temperature(ds[temperature_var], ds[pressure_var])
     es = saturation_vapor_pressure(ds[temperature_dewpoint_var])
     mixing_ratio_g_g = mixing_ratio(es, ds[pressure_var])
