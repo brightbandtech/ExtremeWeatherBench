@@ -2,14 +2,36 @@
 Derived variables for ExtremeWeatherBench's case evaluations.
 """
 
-import xarray as xr
 import logging
+
 import numpy as np
-import extremeweatherbench.calc as calc
+import xarray as xr
+
+from extremeweatherbench import calc
 
 np.set_printoptions(suppress=True)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+
+def dewpoint_from_specific_humidity(
+    specific_humidity: xr.DataArray, pressure: xr.DataArray
+) -> xr.DataArray:
+    """Calculate dewpoint from specific humidity and pressure.
+
+    The pressure DataArray must be the same shape as the specific humidity DataArray.
+
+    Args:
+        specific_humidity: The specific humidity in kg/kg.
+        pressure: The pressure in hPa.
+
+    Returns:
+        The dewpoint DataArray.
+    """
+    mixing_ratio = specific_humidity / (1 - specific_humidity)
+    e = pressure * mixing_ratio / (calc.epsilon + mixing_ratio)
+
+    return calc.dewpoint_from_vapor_pressure(e)
 
 
 def craven_brooks_sig_svr(
