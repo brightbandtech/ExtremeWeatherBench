@@ -9,6 +9,8 @@ import numpy as np
 import numpy.ma as ma
 import scipy.optimize as so
 import xarray as xr
+from scipy.interpolate import interp1d
+from scipy.special import lambertw
 
 from extremeweatherbench.utils import load_moist_lapse_lookup
 
@@ -24,10 +26,16 @@ kappa = 0.28571428571428564
 g = 9.81  # m/s^2
 Lv = 2500840  # J/kg
 Cp_d = 1004.6662184201462  # J/kgK
+R = 8.314462618  # J/mol/K
+Mw = 18.015268  # g/mol
+Rv = (R / Mw) * 1000  # J/kg/K
+Cp_l = 4219.4  # J/g
+Cp_v = 1860.078011865639  # J/kg
+T0 = 273.15  # K
 
 
 def _interp_integrate(pressure, pressure_interp, layer_depth, vars, axis=0):
-    vars_interp = log_interpolate(pressure_interp, pressure, vars, axis=axis)
+    vars_interp = log_interpolate(pressure_interp, pressure, vars)
     integration = np.trapezoid(vars_interp, pressure_interp, axis=axis) / -layer_depth
     return integration
 
@@ -288,7 +296,7 @@ def lifting_condensation_level(pressure_prof, temp_prof, dew_prof):
     temp_prof_k = temp_prof + 273.15  # convert to K
     # Handle nans by creating a mask that gets set by our _lcl_iter function if it
     # ever encounters a nan, at which point pressure is set to p, stopping iteration.
-    nan_mask_list = [False]  # Use a mutable list to store the mask
+    nan_mask_list = np.isnan(pressure_prof)  # Use a mutable list to store the mask
     es = saturation_vapor_pressure(dew_prof)
     w = mixing_ratio(es, pressure_prof)
     try:
@@ -300,7 +308,6 @@ def lifting_condensation_level(pressure_prof, temp_prof, dew_prof):
             maxiter=50,
         )
     except ValueError:
-        print("uh oh")
         lcl_p = np.zeros_like(pressure_prof_pa) * np.nan
     lcl_p = np.where(nan_mask_list[0], np.nan, lcl_p) / 100  # convert to hPa
 
@@ -313,9 +320,138 @@ def lifting_condensation_level(pressure_prof, temp_prof, dew_prof):
     return calculated_lcl_p, calculated_lcl_td
 
 
-def insert_lcl_level(pressure, temperature, lcl_pressure):
+def moist_air_specific_heat_pressure(specific_humidity_prof):
+    """
+    Calculates the specific heat of moist air at constant pressure.
+
+    Args:
+        specific_humidity_prof: Specific humidity values in kg/kg
+
+    Returns:
+        Specific heat of moist air at constant pressure in J/kg/K
+    """
+    return Cp_d + specific_humidity_prof * (Cp_v - Cp_d)
+
+
+def moist_air_gas_constant(specific_humidity_prof):
+    """
+    Calculates the gas constant of moist air.
+
+    Args:
+        specific_humidity_prof: Specific humidity values in kg/kg
+
+    Returns:
+        Gas constant of moist air in J/kg/K
+    """
+    return Rd + specific_humidity_prof * (Rv - Rd)
+
+
+def new_lcl(pressure_prof, temp_prof, dew_prof):
+    """
+    Calculates the LCL pressure of a parcel.
+
+    Args:
+        pressure_prof: Pressure values in hPa
+        temp_prof: Temperature values in K
+        dew_prof: Dewpoint values in K
+        specific_humidity_prof: Specific humidity values in kg/kg
+
+    Returns:
+        LCL pressure values in hPa
+        LCL temperature values in C
+    """
+
+    e = saturation_vapor_pressure(dew_prof - 273.15)
+    es = saturation_vapor_pressure(temp_prof - 273.15)
+    relative_humidity = e / es
+    sat_mixing_ratio = saturation_mixing_ratio(
+        pressure_prof, temp_prof - 273.15
+    )  # convert to C for saturation mixing ratio
+    specific_humidity_prof = sat_mixing_ratio / (1 + sat_mixing_ratio)
+
+    moist_heat_ratio = moist_air_specific_heat_pressure(
+        specific_humidity_prof
+    ) / moist_air_gas_constant(specific_humidity_prof)
+    spec_heat_diff = Cp_l - Cp_v
+
+    a = moist_heat_ratio + spec_heat_diff / Rv
+    b = -(Lv + spec_heat_diff * T0) / (Rv * temp_prof)
+    c = b / a
+
+    w_minus1 = lambertw((relative_humidity ** (1 / a) * c * np.exp(c)), k=-1).real
+
+    t_lcl = c / w_minus1 * temp_prof
+    p_lcl = pressure_prof * (t_lcl / temp_prof) ** moist_heat_ratio
+
+    return p_lcl, t_lcl
+
+
+def insert_lcl_level_fast(pressure, temperature, lcl_pressure):
     """Inserts the LCL pressure height into a temperature profile.
 
+    Args:
+        pressure: Pressure values in hPa
+        temperature: Temperature values in C
+        lcl_pressure: LCL pressure values in hPa
+
+    Returns:
+        Temperature values with LCL pressure height inserted
+    """
+    pressure_flat = pressure.reshape(-1, pressure.shape[-1])
+    temperature_flat = temperature.reshape(-1, temperature.shape[-1])
+    lcl_pressure_flat = lcl_pressure.reshape(-1, lcl_pressure.shape[-1])
+    # Insert calculated_lcl_p into pressure_prof and sort
+    # First append the LCL pressure to get combined array
+    combined_pressure = np.append(pressure, lcl_pressure, axis=-1)
+    combined_pressure_flat = combined_pressure.reshape(-1, combined_pressure.shape[-1])
+    combined_pressure_flat = np.sort(combined_pressure_flat, axis=-1)
+    # Store the original indices of LCL pressure values
+    lcl_indices = np.where(combined_pressure_flat == lcl_pressure_flat)
+    interp_temp = np.array(
+        [
+            np.interp(
+                combined_pressure_flat[i],
+                pressure_flat[i][::-1],
+                temperature_flat[i][::-1],
+            )
+            for i in range(pressure_flat.shape[0])
+        ]
+    ).reshape(combined_pressure_flat.shape)
+
+    # Create a copy of temp_prof to modify
+    calculated_new_temp_flat = np.copy(temperature_flat)
+
+    # Insert the interpolated temperature at the LCL pressure point
+    # Reshape arrays to handle insertion along the pressure dim
+    orig_shape = calculated_new_temp_flat.shape
+    new_shape = (orig_shape[0], orig_shape[1] + 1)
+    result = np.zeros(new_shape) * np.nan
+    result[lcl_indices] = interp_temp[lcl_indices]
+    temperature_flat_w_nan = np.full(result.shape, np.nan)
+    temperature_flat_w_nan[:, : orig_shape[1]] = temperature_flat[..., ::-1]
+
+    # create a mask of the nans in the result with lcl_heights applied
+    nan_mask = np.isnan(result)
+    num_nans = np.sum(nan_mask, axis=1)
+
+    # This is the replacement for the loop.
+    # Create a 1D array representing column indices [0, 1, 2, ..., 33]
+    col_indices = np.arange(result.shape[1])
+
+    # Use broadcasting to compare each row's num_nans value against the column indices.
+    # num_nans[:, np.newaxis] reshapes (204525,) to (204525, 1)
+    # This comparison broadcasts to a (204525, 34) boolean mask.
+    source_selection_mask = col_indices < num_nans[:, np.newaxis]
+
+    values_to_assign = temperature_flat_w_nan[source_selection_mask]
+    result[nan_mask] = values_to_assign
+
+    return result.reshape(combined_pressure.shape)[..., ::-1]
+
+
+def insert_lcl_level(pressure, temperature, lcl_pressure):
+    """Inserts the LCL pressure height into a temperature profile.
+    Deprecated in favor of insert_lcl_level_fast.
     Args:
         pressure: Pressure values in hPa
         temperature: Temperature values in C
@@ -333,6 +469,7 @@ def insert_lcl_level(pressure, temperature, lcl_pressure):
     combined_pressure = np.take_along_axis(combined_pressure, sort_indices, axis=-1)
     # Store the original indices of LCL pressure values
     lcl_indices = np.where(combined_pressure == lcl_pressure)
+
     interp_temp = np.array(
         [
             np.interp(
@@ -356,36 +493,40 @@ def insert_lcl_level(pressure, temperature, lcl_pressure):
     new_shape = (orig_shape[0], orig_shape[1], orig_shape[2], orig_shape[3] + 1)
 
     # Create output array with new shape
-    result = np.zeros(new_shape)
-
-    # For each x,y,z coordinate, insert the interpolated temperature at the LCL pressure point
-    for i, j, k in itertools.product(
-        range(orig_shape[0]), range(orig_shape[1]), range(orig_shape[2])
-    ):
-        if not np.isnan(calculated_new_temp[i, j, k]):
-            # Get the LCL index for this x,y,z coordinate
-            lcl_idx = lcl_indices[3][
-                np.where(
-                    (lcl_indices[0] == i)
-                    & (lcl_indices[1] == j)
-                    & (lcl_indices[2] == k)
-                )[0][0]
-            ]
-            # Insert the interpolated temperature
-            result[i, j, k] = np.insert(
-                calculated_new_temp[..., ::-1][i, j, k],
-                lcl_idx,
-                interp_temp[..., ::-1][i, j, k, lcl_idx],
-            )
-        else:
-            # in the case where there's missing data, the result will be nans
-            result[i, j, k] = np.zeros_like(calculated_new_temp[i, j, k]) * np.nan
+    result = np.zeros(new_shape) * np.nan
+    if all(lcl_indices[3] == 0):
+        result = np.insert(
+            calculated_new_temp[..., ::-1], 0, interp_temp[..., ::-1][..., 0], axis=-1
+        )
+    else:
+        # For each x,y,z coordinate, insert the interpolated temperature at the LCL pressure point
+        for i, j, k in itertools.product(
+            range(orig_shape[0]), range(orig_shape[1]), range(orig_shape[2])
+        ):
+            if not np.isnan(calculated_new_temp[i, j, k]).all():
+                # Get the LCL index for this x,y,z coordinate
+                lcl_idx = lcl_indices[3][
+                    np.where(
+                        (lcl_indices[0] == i)
+                        & (lcl_indices[1] == j)
+                        & (lcl_indices[2] == k)
+                    )[0][0]
+                ]
+                # Insert the interpolated temperature
+                result[i, j, k] = np.insert(
+                    calculated_new_temp[..., ::-1][i, j, k],
+                    lcl_idx,
+                    interp_temp[..., ::-1][i, j, k, lcl_idx],
+                )
+            else:
+                # in the case where there's missing data, the result will be nans
+                result[i, j, k] = np.zeros_like(calculated_new_temp[i, j, k]) * np.nan
 
     calculated_new_temp = result[..., ::-1]
     return calculated_new_temp
 
 
-def log_interpolate(x, xp, var, axis=0):
+def log_interpolate(x, xp, var):
     """
     Interpolates data with logarithmic x-scale over a specified axis.
     Assumes all inputs are in descending order and need to be reversed.
@@ -399,27 +540,26 @@ def log_interpolate(x, xp, var, axis=0):
     Returns:
         Interpolated values
     """
+
     # Reverse and take log of x and xp
     x_log = np.log(x[::-1])
     xp_log = np.log(xp[::-1])
 
-    # Handle different axes by moving the interpolation axis to the first dimension
-    var_swapped = np.swapaxes(var, 0, axis)
+    # Create output array shape
+    out_shape = list(var.shape)
+    out_shape[-1] = len(x_log)
 
-    # Create output array
-    out_shape = list(var_swapped.shape)
-    out_shape[0] = len(x_log)
-    result = np.empty(out_shape)
+    # Reshape input to 2D array with interpolation axis last
+    var_2d = np.array(var).reshape(-1, var.shape[-1])
 
-    # Iterate over all other dimensions and apply interpolation
-    for idx in np.ndindex(var_swapped.shape[1:]):
-        # Get the slice along the interpolation axis
-        var_slice = var_swapped[(slice(None),) + idx]
-        # Interpolate and store the result
-        result[(slice(None),) + idx] = np.interp(x_log, xp_log, var_slice[::-1])
+    # Use scipy's interp1d for vectorized interpolation
+    f = interp1d(xp_log, var_2d[..., ::-1], axis=-1, bounds_error=False)
+    result_2d = f(x_log)
 
+    # Reshape back to original dimensions
+    result = result_2d.reshape(out_shape)
     # Swap back and reverse the result
-    return np.swapaxes(result, 0, axis)[::-1]
+    return result
 
 
 def combine_profiles(
@@ -452,12 +592,7 @@ def combine_profiles(
     return calculated_new_pressure, calculated_prof_dewpoint
 
 
-def _basic_ds_checks_for_cape_cin(
-    ds: xr.Dataset,
-    pressure_var: str = "pressure",
-    temperature_var: str = "temperature",
-    temperature_dewpoint_var: str = "dewpoint",
-):
+def _basic_ds_checks(ds: xr.Dataset):
     """
     Checks the dataset for basic issues that could cause problems with the CAPE/CIN calculation.
     """
@@ -465,11 +600,10 @@ def _basic_ds_checks_for_cape_cin(
     # make sure the pressure level is descending. If not, sort it
     if ds["level"][0] < ds["level"][-1]:
         ds = ds.sortby("level", ascending=False)
-        ds[pressure_var] = ds[pressure_var].sortby("level", ascending=False)
-        ds[temperature_var] = ds[temperature_var].sortby("level", ascending=False)
-        ds[temperature_dewpoint_var] = ds[temperature_dewpoint_var].sortby(
-            "level", ascending=False
-        )
+        for var in ds.data_vars:
+            if "level" in ds[var].dims:
+                ds[var] = ds[var].sortby("level", ascending=False)
+
     # Make sure level is the last dimension. If not, transpose it to the end.
     if "level" in ds.dims and list(ds.dims).index("level") != len(ds.dims) - 1:
         # Get all dimensions and move level to the end
@@ -477,6 +611,11 @@ def _basic_ds_checks_for_cape_cin(
         dims.remove("level")
         dims.append("level")
         ds = ds.transpose(*dims)
+
+    # Make sure the level is at least 50 hPa. If not, drop the levels below 50 hPa
+    # Calculations for CAPE (e.g. virtual temperature) are less relevant above the troposphere
+    if any(ds["level"] < 50):
+        ds = ds.sel(level=slice(ds["level"].max(), 50))
     return ds
 
 
@@ -486,6 +625,7 @@ def mixed_parcel(
     temperature_var: str = "temperature",
     temperature_dewpoint_var: str = "dewpoint",
     depth: float = 100,
+    temperature_units: str = "K",
 ):
     """Calculates the mixed parcel properties of a dataset.
 
@@ -501,10 +641,10 @@ def mixed_parcel(
         calculated_parcel_temp: ndarray of the temperature of the mixed parcel
         calculated_parcel_dewpoint: ndarray of the dewpoint of the mixed parcel
     """
-    ds = _basic_ds_checks_for_cape_cin(
-        ds, pressure_var, temperature_var, temperature_dewpoint_var
+
+    theta = potential_temperature(
+        ds[temperature_var], ds[pressure_var], units=temperature_units
     )
-    theta = potential_temperature(ds[temperature_var], ds[pressure_var])
     es = saturation_vapor_pressure(ds[temperature_dewpoint_var])
     mixing_ratio_g_g = mixing_ratio(es, ds[pressure_var])
     # because pressure is the same across the domain, we can use a single column
@@ -536,16 +676,15 @@ def mixed_parcel(
     calculated_parcel_temp_kelvin = (mean_theta) * exner_function(
         calculated_parcel_start_pressure
     )
-    calculated_parcel_temp = calculated_parcel_temp_kelvin - 273.15
-    calculated_parcel_dewpoint = dewpoint_from_vapor_pressure(
+    calculated_parcel_dewpoint_kelvin = dewpoint_from_vapor_pressure(
         vapor_pressure(calculated_parcel_start_pressure, mean_mixing_ratio)
     )
     vapor_pres = vapor_pressure(calculated_parcel_start_pressure, mean_mixing_ratio)
-    calculated_parcel_dewpoint = dewpoint_from_vapor_pressure(vapor_pres)
+    calculated_parcel_dewpoint_kelvin = dewpoint_from_vapor_pressure(vapor_pres)
     return (
         calculated_parcel_start_pressure,
-        calculated_parcel_temp,
-        calculated_parcel_dewpoint,
+        calculated_parcel_temp_kelvin,
+        calculated_parcel_dewpoint_kelvin,
     )
 
 
@@ -620,6 +759,7 @@ def find_intersections(x, y1, y2, direction="all"):
     """
     x = np.log(x)
     diff = y1 - y2
+
     # Determine the point just before the intersection of the lines
     # Will return multiple points for multiple intersections
     closest_idx = np.nonzero(np.diff(np.sign(diff)))
@@ -647,7 +787,6 @@ def find_intersections(x, y1, y2, direction="all"):
     # for the line through the a points. One could solve for y like x above, but this
     # causes weirder unit behavior and seems a little less good numerically.
     intersect_y = ((intersect_x - x0) / (x1 - x0)) * (y11 - y10) + y10
-
     # If there's no intersections, return
     if len(intersect_x) == 0:
         return intersect_x, intersect_y
@@ -690,9 +829,9 @@ def equilibrium_level(pressure, temperature, dewpoint, parcel_profile):
     x, y = find_intersections(
         pressure[1:], parcel_profile[1:], temperature[1:], direction="decreasing"
     )
-    lcl_pressure, _ = lifting_condensation_level(
-        pressure[0], temperature[0], dewpoint[0]
-    )
+    lcl_pressure, _ = new_lcl(
+        pressure[0], temperature[0] + 273.15, dewpoint[0] + 273.15
+    )  # new lcl function takes kelvin
     if len(x) > 0 and x[-1] < lcl_pressure:
         idx = x < lcl_pressure
         x, y = x[idx][-1], y[idx][-1]
@@ -713,11 +852,10 @@ def level_free_convection(pressure, temperature, dewpoint, parcel_profile):
         x: numpy array of LFC pressure values
     """
     x, y = find_intersections(
-        pressure[1:], parcel_profile[1:], temperature[1:], direction="increasing"
+        pressure, parcel_profile, temperature, direction="increasing"
     )
-
-    lcl_pressure, lcl_temperature_c = lifting_condensation_level(
-        pressure[0], parcel_profile[0], dewpoint[0]
+    lcl_pressure, lcl_temperature_c = new_lcl(
+        pressure[0], parcel_profile[0] + 273.15, dewpoint[0] + 273.15
     )
     if len(x) == 0:
         if np.all(pressure < lcl_pressure):
@@ -758,9 +896,9 @@ def mlcape_cin(pressure, temperature, dewpoint, parcel_profile):
         cin: numpy array of CIN values in J/kg
     """
     # Get the LCL pressure for each profile
-    pressure_lcl, _ = lifting_condensation_level(
-        pressure[..., 0], temperature[..., 0], dewpoint[..., 0]
-    )
+    pressure_lcl, _ = new_lcl(
+        pressure[..., 0], temperature[..., 0] + 273.15, dewpoint[..., 0] + 273.15
+    )  # new lcl function takes kelvin
     below_lcl = pressure > np.expand_dims(pressure_lcl, axis=-1)
     parcel_mixing_ratio = np.where(
         below_lcl,
@@ -770,14 +908,11 @@ def mlcape_cin(pressure, temperature, dewpoint, parcel_profile):
     # Convert the temperature/parcel profile to virtual temperature
     tv_td = virtual_temperature_from_dewpoint(pressure, temperature, dewpoint)
     tv_parcel_profile = virtual_temperature(parcel_profile.copy(), parcel_mixing_ratio)
-    tv_parcel_profile_c = tv_parcel_profile - 273.15
 
     pressure_flat = pressure.reshape(-1, pressure.shape[-1])
     temperature_flat = tv_td.reshape(-1, tv_td.shape[-1])
     dewpoint_flat = dewpoint.reshape(-1, dewpoint.shape[-1])
-    parcel_profile_flat_c = tv_parcel_profile_c.reshape(
-        -1, tv_parcel_profile_c.shape[-1]
-    )
+    parcel_profile_flat = tv_parcel_profile.reshape(-1, tv_parcel_profile.shape[-1])
     cape_flat = np.zeros(len(pressure_flat))
     cin_flat = np.zeros(len(pressure_flat))
     # Loop through each profile and calculate CAPE and CIN
@@ -786,12 +921,12 @@ def mlcape_cin(pressure, temperature, dewpoint, parcel_profile):
         pressure_individual = pressure_flat[individual_profile, :]
         temperature_individual = temperature_flat[individual_profile]
         dewpoint_individual = dewpoint_flat[individual_profile]
-        parcel_profile_individual_c = parcel_profile_flat_c[individual_profile]
+        parcel_profile_individual = parcel_profile_flat[individual_profile]
         lfc_pressure, _ = level_free_convection(
             pressure_individual,
             temperature_individual,
             dewpoint_individual,
-            parcel_profile_individual_c,
+            parcel_profile_individual,
         )
         if np.isnan(lfc_pressure):
             # return a cape and cin of 0
@@ -803,9 +938,9 @@ def mlcape_cin(pressure, temperature, dewpoint, parcel_profile):
             pressure_individual,
             temperature_individual,
             dewpoint_individual,
-            parcel_profile_individual_c,
+            parcel_profile_individual,
         )
-        y = parcel_profile_individual_c - temperature_individual
+        y = parcel_profile_individual - temperature_individual
 
         x_crossing, y_crossing = find_intersections(
             pressure_individual[1:], y[1:], np.zeros_like(y[1:]), direction="all"
@@ -830,7 +965,8 @@ def mlcape_cin(pressure, temperature, dewpoint, parcel_profile):
         cin = Rd * np.trapezoid(y_clipped, np.log(x_clipped))
         # Set CIN to 0 if it's returned as a positive value
         cin_flat[individual_profile] = 0 if cin > 0 else cin
-        cape_flat[individual_profile] = cape
+        # Set CAPE to 0 if it's returned as a negative value
+        cape_flat[individual_profile] = 0 if cape < 0 else cape
     cape = cape_flat.reshape(pressure.shape[:-1])
     cin = cin_flat.reshape(pressure.shape[:-1])
     return cape, cin
