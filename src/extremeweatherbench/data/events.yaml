@@ -864,3 +864,1693 @@ cases:
       longitude: 18.6435
     bounding_box_degrees: 5
     event_type: freeze
+  - id: 97
+    title: November 2024 West Coast US
+    start_date: 2024-11-20 00:00:00
+    end_date: 2024-11-22 00:00:00
+    location:
+      lat_min: 35.0000
+      lat_max: 50.0000
+      lon_min: 230.0000
+      lon_max: 245.0000
+    event_type: atmospheric_river
+  - id: 98
+    title: October 2024 British Columbia
+    start_date: 2024-10-18 00:00:00
+    end_date: 2024-10-20 00:00:00
+    location:
+      lat_min: 40.0000
+      lat_max: 55.0000
+      lon_min: 225.0000
+      lon_max: 245.0000
+    event_type: atmospheric_river
+  - id: 99
+    title: September 2024 SW Alaska and British Columbia
+    start_date: 2024-09-22 00:00:00
+    end_date: 2024-09-24 00:00:00
+    location:
+      lat_min: 45.0000
+      lat_max: 60.0000
+      lon_min: 220.0000
+      lon_max: 240.0000
+    event_type: atmospheric_river
+  - id: 100
+    title: November 2024 Western US & Canada Bomb Cyclone and AR
+    start_date: 2024-11-18 00:00:00
+    end_date: 2024-11-22 00:00:00
+    location:
+      lat_min: 32.0
+      lat_max: 50.0
+      lon_min: 230.0
+      lon_max: 245.0
+    event_type: atmospheric_river
+  - id: 101
+    title: October 2024 Alaska and BC Canada Atmospheric River
+    start_date: 2024-10-18 00:00:00
+    end_date: 2024-10-21 00:00:00
+    location:
+      lat_min: 50.0
+      lat_max: 65.0
+      lon_min: 210.0
+      lon_max: 240.0
+    event_type: atmospheric_river
+  - id: 102
+    title: September 2024 Alaska and BC Canada Atmospheric River
+    start_date: 2024-09-22 00:00:00
+    end_date: 2024-09-25 00:00:00
+    location:
+      lat_min: 50.0
+      lat_max: 65.0
+      lon_min: 210.0
+      lon_max: 240.0
+    event_type: atmospheric_river
+  - id: 103
+    title: October 2024 Bosnia
+    start_date: 2024-10-03 00:00:00
+    end_date: 2024-10-05 00:00:00
+    location:
+      lat_min: 42.0
+      lat_max: 46.0
+      lon_min: 16.0
+      lon_max: 20.0
+    event_type: atmospheric_river
+  - id: 104
+    title: April 2024 Eastern Australia
+    start_date: 2024-04-04 00:00:00
+    end_date: 2024-04-05 00:00:00
+    location:
+      lat_min: -38.0
+      lat_max: -25.0
+      lon_min: 140.0
+      lon_max: 155.0
+    event_type: atmospheric_river
+  - id: 105
+    title: April 2024 Persian Gulf
+    start_date: 2024-04-14 00:00:00
+    end_date: 2024-04-18 00:00:00
+    location:
+      lat_min: 24.0
+      lat_max: 30.0
+      lon_min: 48.0
+      lon_max: 58.0
+    event_type: atmospheric_river
+  - id: 106
+    title: February 2024 Pacific Northwest
+    start_date: 2024-02-28 00:00:00
+    end_date: 2024-03-04 00:00:00
+    location:
+      lat_min: 40.0
+      lat_max: 50.0
+      lon_min: 235.0
+      lon_max: 250.0
+    event_type: atmospheric_river
+  - id: 107
+    title: February 2024 California
+    start_date: 2024-02-18 00:00:00
+    end_date: 2024-02-21 00:00:00
+    location:
+      lat_min: 32.0
+      lat_max: 42.0
+      lon_min: 235.0
+      lon_max: 245.0
+    event_type: atmospheric_river
+  - id: 108
+    title: February 2024 California
+    start_date: 2024-02-03 00:00:00
+    end_date: 2024-02-06 00:00:00
+    location:
+      lat_min: 32.0
+      lat_max: 42.0
+      lon_min: 235.0
+      lon_max: 245.0
+    event_type: atmospheric_river
+  - id: 109
+    title: January 2024 Alaska to California
+    start_date: 2024-01-26 00:00:00
+    end_date: 2024-02-03 00:00:00
+    location:
+      lat_min: 32.0
+      lat_max: 65.0
+      lon_min: 210.0
+      lon_max: 245.0
+    event_type: atmospheric_river
+  - id: 110
+    title: January 2024 California and Arizona
+    start_date: 2024-01-22 00:00:00
+    end_date: 2024-01-23 00:00:00
+    location:
+      lat_min: 32.0
+      lat_max: 38.0
+      lon_min: 240.0
+      lon_max: 250.0
+    event_type: atmospheric_river
+  - id: 111
+    title: December 2023 East Coast Cyclone
+    start_date: 2023-12-17 00:00:00
+    end_date: 2023-12-19 00:00:00
+    location:
+      lat_min: 25.0
+      lat_max: 45.0
+      lon_min: 275.0
+      lon_max: 295.0
+    event_type: atmospheric_river
+  - id: 112
+    title: June 2023 Northwest Cloudband
+    start_date: 2023-06-25 00:00:00
+    end_date: 2023-06-28 00:00:00
+    location:
+      lat_min: -28.0
+      lat_max: -15.0
+      lon_min: 120.0
+      lon_max: 140.0
+    event_type: atmospheric_river
+  - id: 113
+    title: April 2023 Middle East
+    start_date: 2023-04-01 00:00:00
+    end_date: 2023-05-01 00:00:00
+    location:
+      lat_min: 20.0
+      lat_max: 40.0
+      lon_min: 30.0
+      lon_max: 60.0
+    event_type: atmospheric_river
+  - id: 114
+    title: March 2023 California and Arizona
+    start_date: 2023-03-20 00:00:00
+    end_date: 2023-03-23 00:00:00
+    location:
+      lat_min: 32.0
+      lat_max: 38.0
+      lon_min: 240.0
+      lon_max: 250.0
+    event_type: atmospheric_river
+  - id: 115
+    title: March 2023 California
+    start_date: 2023-03-09 00:00:00
+    end_date: 2023-03-16 00:00:00
+    location:
+      lat_min: 32.0
+      lat_max: 42.0
+      lon_min: 235.0
+      lon_max: 245.0
+    event_type: atmospheric_river
+  - id: 116
+    title: February 2023 Pacific Northwest
+    start_date: 2023-02-19 00:00:00
+    end_date: 2023-02-27 00:00:00
+    location:
+      lat_min: 40.0
+      lat_max: 50.0
+      lon_min: 235.0
+      lon_max: 250.0
+    event_type: atmospheric_river
+  - id: 117
+    title: December 2022 - January 2023 California
+    start_date: 2022-12-01 00:00:00
+    end_date: 2023-02-01 00:00:00
+    location:
+      lat_min: 32.0
+      lat_max: 42.0
+      lon_min: 235.0
+      lon_max: 245.0
+    event_type: atmospheric_river
+  - id: 118
+    title: December 2022 California
+    start_date: 2022-12-26 00:00:00
+    end_date: 2022-12-28 00:00:00
+    location:
+      lat_min: 32.0
+      lat_max: 42.0
+      lon_min: 235.0
+      lon_max: 245.0
+    event_type: atmospheric_river
+  - id: 119
+    title: December 2022 Oregon and California
+    start_date: 2022-12-09 00:00:00
+    end_date: 2022-12-13 00:00:00
+    location:
+      lat_min: 32.0
+      lat_max: 45.0
+      lon_min: 235.0
+      lon_max: 245.0
+    event_type: atmospheric_river
+  - id: 120
+    title: November 2022 - December 2022 California
+    start_date: 2022-11-29 00:00:00
+    end_date: 2022-12-06 00:00:00
+    location:
+      lat_min: 32.0
+      lat_max: 42.0
+      lon_min: 235.0
+      lon_max: 245.0
+    event_type: atmospheric_river
+  - id: 121
+    title: October 2022 Victoria
+    start_date: 2022-10-13 00:00:00
+    end_date: 2022-10-14 00:00:00
+    location:
+      lat_min: -39.0
+      lat_max: -34.0
+      lon_min: 140.0
+      lon_max: 150.0
+    event_type: atmospheric_river
+  - id: 122
+    title: October 2022 Victoria
+    start_date: 2022-10-30 00:00:00
+    end_date: 2022-10-31 00:00:00
+    location:
+      lat_min: -39.0
+      lat_max: -34.0
+      lon_min: 140.0
+      lon_max: 150.0
+    event_type: atmospheric_river
+  - id: 123
+    title: November 2022 California
+    start_date: 2022-11-07 00:00:00
+    end_date: 2022-11-09 00:00:00
+    location:
+      lat_min: 32.0
+      lat_max: 42.0
+      lon_min: 235.0
+      lon_max: 245.0
+    event_type: atmospheric_river
+  - id: 124
+    title: November 2022 Pacific Northwest
+    start_date: 2022-11-03 00:00:00
+    end_date: 2022-11-06 00:00:00
+    location:
+      lat_min: 40.0
+      lat_max: 50.0
+      lon_min: 235.0
+      lon_max: 250.0
+    event_type: atmospheric_river
+  - id: 125
+    title: August 2022 Japan
+    start_date: 2022-08-01 00:00:00
+    end_date: 2022-09-01 00:00:00
+    location:
+      lat_min: 35.0
+      lat_max: 45.0
+      lon_min: 130.0
+      lon_max: 145.0
+    event_type: atmospheric_river
+  - id: 126
+    title: June 2022 Pacific Northwest, Wyoming, and Montana
+    start_date: 2022-06-09 00:00:00
+    end_date: 2022-06-13 00:00:00
+    location:
+      lat_min: 40.0
+      lat_max: 50.0
+      lon_min: 235.0
+      lon_max: 255.0
+    event_type: atmospheric_river
+  - id: 127
+    title: March 2022 East Antarctica
+    start_date: 2022-03-15 00:00:00
+    end_date: 2022-03-20 00:00:00
+    location:
+      lat_min: -90.0
+      lat_max: -70.0
+      lon_min: 60.0
+      lon_max: 160.0
+    event_type: atmospheric_river
+  - id: 128
+    title: February 2022 Southeast QLD / Northern NSW
+    start_date: 2022-02-26 00:00:00
+    end_date: 2022-03-01 00:00:00
+    location:
+      lat_min: -30.0
+      lat_max: -25.0
+      lon_min: 150.0
+      lon_max: 155.0
+    event_type: atmospheric_river
+  - id: 129
+    title: February 2022 Pacific Northwest
+    start_date: 2022-02-26 00:00:00
+    end_date: 2022-03-03 00:00:00
+    location:
+      lat_min: 40.0
+      lat_max: 50.0
+      lon_min: 235.0
+      lon_max: 250.0
+    event_type: atmospheric_river
+  - id: 130
+    title: January 2022 Norway and Sweden
+    start_date: 2022-01-14 00:00:00
+    end_date: 2022-01-15 00:00:00
+    location:
+      lat_min: 58.0
+      lat_max: 65.0
+      lon_min: 5.0
+      lon_max: 20.0
+    event_type: atmospheric_river
+  - id: 131
+    title: January 2022 Colorado
+    start_date: 2022-01-04 00:00:00
+    end_date: 2022-01-08 00:00:00
+    location:
+      lat_min: 37.0
+      lat_max: 41.0
+      lon_min: 251.0
+      lon_max: 258.0
+    event_type: atmospheric_river
+  - id: 132
+    title: January 2022 Pacific Northwest
+    start_date: 2022-01-02 00:00:00
+    end_date: 2022-01-09 00:00:00
+    location:
+      lat_min: 40.0
+      lat_max: 50.0
+      lon_min: 235.0
+      lon_max: 250.0
+    event_type: atmospheric_river
+  - id: 133
+    title: December 2021 - January 2022 Western US
+    start_date: 2021-12-22 00:00:00
+    end_date: 2022-01-02 00:00:00
+    location:
+      lat_min: 32.0
+      lat_max: 50.0
+      lon_min: 235.0
+      lon_max: 255.0
+    event_type: atmospheric_river
+  - id: 134
+    title: December 2021 Pacific NW
+    start_date: 2021-12-10 00:00:00
+    end_date: 2021-12-15 00:00:00
+    location:
+      lat_min: 40.0
+      lat_max: 50.0
+      lon_min: 235.0
+      lon_max: 250.0
+    event_type: atmospheric_river
+  - id: 135
+    title: November 2021 Pacific Northwest
+    start_date: 2021-11-10 00:00:00
+    end_date: 2021-11-17 00:00:00
+    location:
+      lat_min: 40.0
+      lat_max: 50.0
+      lon_min: 235.0
+      lon_max: 250.0
+    event_type: atmospheric_river
+  - id: 136
+    title: October 2021 California
+    start_date: 2021-10-19 00:00:00
+    end_date: 2021-10-27 00:00:00
+    location:
+      lat_min: 32.0
+      lat_max: 42.0
+      lon_min: 235.0
+      lon_max: 245.0
+    event_type: atmospheric_river
+  - id: 137
+    title: September 2021 Pacific Northwest
+    start_date: 2021-09-16 00:00:00
+    end_date: 2021-09-20 00:00:00
+    location:
+      lat_min: 40.0
+      lat_max: 50.0
+      lon_min: 235.0
+      lon_max: 250.0
+    event_type: atmospheric_river
+  - id: 138
+    title: June 2021 Bloomington Indiana
+    start_date: 2021-06-18 00:00:00
+    end_date: 2021-06-20 00:00:00
+    location:
+      lat_min: 39.0
+      lat_max: 40.0
+      lon_min: 273.0
+      lon_max: 274.0
+    event_type: atmospheric_river
+  - id: 139
+    title: June 2021 Alaska Trans-Pacific
+    start_date: 2021-06-24 00:00:00
+    end_date: 2021-06-27 00:00:00
+    location:
+      lat_min: 55.0
+      lat_max: 70.0
+      lon_min: 190.0
+      lon_max: 230.0
+    event_type: atmospheric_river
+  - id: 140
+    title: March 2021 Sydney
+    start_date: 2021-03-17 00:00:00
+    end_date: 2021-03-25 00:00:00
+    location:
+      lat_min: -34.0
+      lat_max: -33.0
+      lon_min: 150.0
+      lon_max: 152.0
+    event_type: atmospheric_river
+  - id: 141
+    title: February 2021 Pacific Northwest
+    start_date: 2021-02-21 00:00:00
+    end_date: 2021-02-24 00:00:00
+    location:
+      lat_min: 40.0
+      lat_max: 50.0
+      lon_min: 235.0
+      lon_max: 250.0
+    event_type: atmospheric_river
+  - id: 142
+    title: January 2021 Pacific NW
+    start_date: 2021-01-11 00:00:00
+    end_date: 2021-01-14 00:00:00
+    location:
+      lat_min: 40.0
+      lat_max: 50.0
+      lon_min: 235.0
+      lon_max: 250.0
+    event_type: atmospheric_river
+  - id: 143
+    title: January 2021 Pacific Northwest
+    start_date: 2021-01-01 00:00:00
+    end_date: 2021-01-08 00:00:00
+    location:
+      lat_min: 40.0
+      lat_max: 50.0
+      lon_min: 235.0
+      lon_max: 250.0
+    event_type: atmospheric_river
+  - id: 144
+    title: December 2020 Pacific Northwest
+    start_date: 2020-12-17 00:00:00
+    end_date: 2020-12-23 00:00:00
+    location:
+      lat_min: 40.0
+      lat_max: 50.0
+      lon_min: 235.0
+      lon_max: 250.0
+    event_type: atmospheric_river
+  - id: 145
+    title: December 2020 Western US
+    start_date: 2020-12-11 00:00:00
+    end_date: 2020-12-18 00:00:00
+    location:
+      lat_min: 32.0
+      lat_max: 50.0
+      lon_min: 235.0
+      lon_max: 255.0
+    event_type: atmospheric_river
+  - id: 146
+    title: December 2020 Alaska
+    start_date: 2020-12-01 00:00:00
+    end_date: 2020-12-05 00:00:00
+    location:
+      lat_min: 55.0
+      lat_max: 65.0
+      lon_min: 200.0
+      lon_max: 230.0
+    event_type: atmospheric_river
+  - id: 147
+    title: November 2020 Western US
+    start_date: 2020-11-16 00:00:00
+    end_date: 2020-11-19 00:00:00
+    location:
+      lat_min: 32.0
+      lat_max: 50.0
+      lon_min: 235.0
+      lon_max: 255.0
+    event_type: atmospheric_river
+  - id: 148
+    title: October 2020 Western Alps
+    start_date: 2020-10-02 00:00:00
+    end_date: 2020-10-04 00:00:00
+    location:
+      lat_min: 44.0
+      lat_max: 47.0
+      lon_min: 5.0
+      lon_max: 9.0
+    event_type: atmospheric_river
+  - id: 149
+    title: September 2020 Pacific Northwest
+    start_date: 2020-09-23 00:00:00
+    end_date: 2020-09-28 00:00:00
+    location:
+      lat_min: 40.0
+      lat_max: 50.0
+      lon_min: 235.0
+      lon_max: 250.0
+    event_type: atmospheric_river
+  - id: 150
+    title: September 2020 Pacific Northwest
+    start_date: 2020-09-14 00:00:00
+    end_date: 2020-09-19 00:00:00
+    location:
+      lat_min: 40.0
+      lat_max: 50.0
+      lon_min: 235.0
+      lon_max: 250.0
+    event_type: atmospheric_river
+  - id: 151
+    title: May 2020 Western US
+    start_date: 2020-05-16 00:00:00
+    end_date: 2020-05-20 00:00:00
+    location:
+      lat_min: 32.0
+      lat_max: 50.0
+      lon_min: 235.0
+      lon_max: 255.0
+    event_type: atmospheric_river
+  - id: 152
+    title: March 2020 Southwestern US
+    start_date: 2020-03-09 00:00:00
+    end_date: 2020-03-14 00:00:00
+    location:
+      lat_min: 30.0
+      lat_max: 40.0
+      lon_min: 240.0
+      lon_max: 255.0
+    event_type: atmospheric_river
+  - id: 153
+    title: February 2020 Southwestern US
+    start_date: 2020-02-21 00:00:00
+    end_date: 2020-02-24 00:00:00
+    location:
+      lat_min: 30.0
+      lat_max: 40.0
+      lon_min: 240.0
+      lon_max: 255.0
+    event_type: atmospheric_river
+  - id: 154
+    title: February 2020 Western US
+    start_date: 2020-02-04 00:00:00
+    end_date: 2020-02-09 00:00:00
+    location:
+      lat_min: 32.0
+      lat_max: 50.0
+      lon_min: 235.0
+      lon_max: 255.0
+    event_type: atmospheric_river
+  - id: 155
+    title: January 2020 Pacific Northwest
+    start_date: 2020-01-26 00:00:00
+    end_date: 2020-02-03 00:00:00
+    location:
+      lat_min: 40.0
+      lat_max: 50.0
+      lon_min: 235.0
+      lon_max: 250.0
+    event_type: atmospheric_river
+  - id: 156
+    title: Milton
+    start_date: 2024-10-05 00:00:00
+    end_date: 2024-10-11 00:00:00
+    location:
+      lat_min: 10.0
+      lat_max: 35.0
+      lon_min: 270.0
+      lon_max: 300.0
+    event_type: tropical_cyclone
+  - id: 157
+    title: Helene
+    start_date: 2024-09-24 00:00:00
+    end_date: 2024-09-28 00:00:00
+    location:
+      lat_min: 15.0
+      lat_max: 40.0
+      lon_min: 280.0
+      lon_max: 330.0
+    event_type: tropical_cyclone
+  - id: 158
+    title: Francine
+    start_date: 2024-09-09 00:00:00
+    end_date: 2024-09-13 00:00:00
+    location:
+      lat_min: 15.0
+      lat_max: 30.0
+      lon_min: 275.0
+      lon_max: 290.0
+    event_type: tropical_cyclone
+  - id: 159
+    title: Debby
+    start_date: 2024-08-03 00:00:00
+    end_date: 2024-08-10 00:00:00
+    location:
+      lat_min: 10.0
+      lat_max: 30.0
+      lon_min: 290.0
+      lon_max: 320.0
+    event_type: tropical_cyclone
+  - id: 160
+    title: Beryl
+    start_date: 2024-06-28 00:00:00
+    end_date: 2024-07-10 00:00:00
+    location:
+      lat_min: 5.0
+      lat_max: 40.0
+      lon_min: 280.0
+      lon_max: 350.0
+    event_type: tropical_cyclone
+  - id: 161
+    title: John
+    start_date: 2024-09-22 00:00:00
+    end_date: 2024-09-28 00:00:00
+    location:
+      lat_min: 10.0
+      lat_max: 25.0
+      lon_min: 240.0
+      lon_max: 260.0
+    event_type: tropical_cyclone
+  - id: 162
+    title: Hone
+    start_date: 2024-08-22 00:00:00
+    end_date: 2024-09-09 00:00:00
+    location:
+      lat_min: 5.0
+      lat_max: 20.0
+      lon_min: 200.0
+      lon_max: 260.0
+    event_type: tropical_cyclone
+  - id: 163
+    title: Trami
+    start_date: 2024-10-19 00:00:00
+    end_date: 2024-11-01 00:00:00
+    location:
+      lat_min: 5.0
+      lat_max: 25.0
+      lon_min: 110.0
+      lon_max: 140.0
+    event_type: tropical_cyclone
+  - id: 164
+    title: Prapiroon (Butchoy)
+    start_date: 2024-07-19 00:00:00
+    end_date: 2024-07-25 00:00:00
+    location:
+      lat_min: 10.0
+      lat_max: 30.0
+      lon_min: 100.0
+      lon_max: 130.0
+    event_type: tropical_cyclone
+  - id: 165
+    title: Gaemi (Carina)
+    start_date: 2024-07-19 00:00:00
+    end_date: 2024-07-30 00:00:00
+    location:
+      lat_min: 10.0
+      lat_max: 35.0
+      lon_min: 110.0
+      lon_max: 150.0
+    event_type: tropical_cyclone
+  - id: 166
+    title: Shanshan
+    start_date: 2024-08-21 00:00:00
+    end_date: 2024-09-02 00:00:00
+    location:
+      lat_min: 15.0
+      lat_max: 35.0
+      lon_min: 130.0
+      lon_max: 160.0
+    event_type: tropical_cyclone
+  - id: 167
+    title: Yagi (Enteng)
+    start_date: 2024-08-31 00:00:00
+    end_date: 2024-09-09 00:00:00
+    location:
+      lat_min: 5.0
+      lat_max: 30.0
+      lon_min: 105.0
+      lon_max: 135.0
+    event_type: tropical_cyclone
+  - id: 168
+    title: Bebinca (Ferdie)
+    start_date: 2024-09-09 00:00:00
+    end_date: 2024-09-19 00:00:00
+    location:
+      lat_min: 10.0
+      lat_max: 30.0
+      lon_min: 105.0
+      lon_max: 135.0
+    event_type: tropical_cyclone
+  - id: 169
+    title: Soulik (Gener)
+    start_date: 2024-09-15 00:00:00
+    end_date: 2024-09-21 00:00:00
+    location:
+      lat_min: 15.0
+      lat_max: 35.0
+      lon_min: 120.0
+      lon_max: 150.0
+    event_type: tropical_cyclone
+  - id: 170
+    title: Krathon (Julian)
+    start_date: 2024-09-26 00:00:00
+    end_date: 2024-10-05 00:00:00
+    location:
+      lat_min: 5.0
+      lat_max: 25.0
+      lon_min: 120.0
+      lon_max: 150.0
+    event_type: tropical_cyclone
+  - id: 171
+    title: Asna
+    start_date: 2024-08-25 00:00:00
+    end_date: 2024-09-03 00:00:00
+    location:
+      lat_min: 5.0
+      lat_max: 20.0
+      lon_min: 60.0
+      lon_max: 90.0
+    event_type: tropical_cyclone
+  - id: 172
+    title: Kirrily
+    start_date: 2024-01-12 00:00:00
+    end_date: 2024-02-06 00:00:00
+    location:
+      lat_min: -25.0
+      lat_max: -10.0
+      lon_min: 140.0
+      lon_max: 155.0
+    event_type: tropical_cyclone
+  - id: 173
+    title: Belal
+    start_date: 2024-01-15 00:00:00
+    end_date: 2024-01-16 00:00:00
+    location:
+      lat_min: -25.0
+      lat_max: -15.0
+      lon_min: 50.0
+      lon_max: 65.0
+    event_type: tropical_cyclone
+  - id: 174
+    title: Alvaro
+    start_date: 2023-12-30 00:00:00
+    end_date: 2024-01-04 00:00:00
+    location:
+      lat_min: -25.0
+      lat_max: -15.0
+      lon_min: 40.0
+      lon_max: 55.0
+    event_type: tropical_cyclone
+  - id: 175
+    title: Franklin
+    start_date: 2023-08-20 00:00:00
+    end_date: 2023-09-02 00:00:00
+    location:
+      lat_min: 10.0
+      lat_max: 45.0
+      lon_min: 275.0
+      lon_max: 330.0
+    event_type: tropical_cyclone
+  - id: 176
+    title: Harold
+    start_date: 2023-08-21 00:00:00
+    end_date: 2023-08-24 00:00:00
+    location:
+      lat_min: 15.0
+      lat_max: 25.0
+      lon_min: 270.0
+      lon_max: 280.0
+    event_type: tropical_cyclone
+  - id: 177
+    title: Idalia
+    start_date: 2023-08-26 00:00:00
+    end_date: 2023-09-01 00:00:00
+    location:
+      lat_min: 15.0
+      lat_max: 35.0
+      lon_min: 275.0
+      lon_max: 295.0
+    event_type: tropical_cyclone
+  - id: 178
+    title: Lee
+    start_date: 2023-09-05 00:00:00
+    end_date: 2023-09-17 00:00:00
+    location:
+      lat_min: 10.0
+      lat_max: 50.0
+      lon_min: 280.0
+      lon_max: 330.0
+    event_type: tropical_cyclone
+  - id: 179
+    title: Ophelia
+    start_date: 2023-09-22 00:00:00
+    end_date: 2023-09-24 00:00:00
+    location:
+      lat_min: 25.0
+      lat_max: 40.0
+      lon_min: 275.0
+      lon_max: 290.0
+    event_type: tropical_cyclone
+  - id: 180
+    title: Tammy
+    start_date: 2023-10-18 00:00:00
+    end_date: 2023-10-29 00:00:00
+    location:
+      lat_min: 10.0
+      lat_max: 30.0
+      lon_min: 290.0
+      lon_max: 320.0
+    event_type: tropical_cyclone
+  - id: 181
+    title: Hilary
+    start_date: 2023-08-16 00:00:00
+    end_date: 2023-08-21 00:00:00
+    location:
+      lat_min: 10.0
+      lat_max: 35.0
+      lon_min: 240.0
+      lon_max: 260.0
+    event_type: tropical_cyclone
+  - id: 182
+    title: Lidia
+    start_date: 2023-10-03 00:00:00
+    end_date: 2023-10-12 00:00:00
+    location:
+      lat_min: 10.0
+      lat_max: 25.0
+      lon_min: 250.0
+      lon_max: 265.0
+    event_type: tropical_cyclone
+  - id: 183
+    title: Max
+    start_date: 2023-10-08 00:00:00
+    end_date: 2023-10-11 00:00:00
+    location:
+      lat_min: 10.0
+      lat_max: 20.0
+      lon_min: 255.0
+      lon_max: 265.0
+    event_type: tropical_cyclone
+  - id: 184
+    title: Norman
+    start_date: 2023-10-17 00:00:00
+    end_date: 2023-10-24 00:00:00
+    location:
+      lat_min: 10.0
+      lat_max: 25.0
+      lon_min: 250.0
+      lon_max: 265.0
+    event_type: tropical_cyclone
+  - id: 185
+    title: Otis
+    start_date: 2023-10-22 00:00:00
+    end_date: 2023-10-26 00:00:00
+    location:
+      lat_min: 15.0
+      lat_max: 20.0
+      lon_min: 265.0
+      lon_max: 275.0
+    event_type: tropical_cyclone
+  - id: 186
+    title: Mawar (Betty)
+    start_date: 2023-05-19 00:00:00
+    end_date: 2023-06-03 00:00:00
+    location:
+      lat_min: 5.0
+      lat_max: 30.0
+      lon_min: 130.0
+      lon_max: 180.0
+    event_type: tropical_cyclone
+  - id: 187
+    title: Talim (Dodong)
+    start_date: 2023-07-13 00:00:00
+    end_date: 2023-07-19 00:00:00
+    location:
+      lat_min: 10.0
+      lat_max: 25.0
+      lon_min: 105.0
+      lon_max: 130.0
+    event_type: tropical_cyclone
+  - id: 188
+    title: Doksuri (Egay)
+    start_date: 2023-07-20 00:00:00
+    end_date: 2023-07-31 00:00:00
+    location:
+      lat_min: 5.0
+      lat_max: 30.0
+      lon_min: 110.0
+      lon_max: 140.0
+    event_type: tropical_cyclone
+  - id: 189
+    title: Khanun (Falcon)
+    start_date: 2023-07-26 00:00:00
+    end_date: 2023-08-11 00:00:00
+    location:
+      lat_min: 15.0
+      lat_max: 35.0
+      lon_min: 120.0
+      lon_max: 150.0
+    event_type: tropical_cyclone
+  - id: 190
+    title: Lan
+    start_date: 2023-08-07 00:00:00
+    end_date: 2023-08-18 00:00:00
+    location:
+      lat_min: 15.0
+      lat_max: 35.0
+      lon_min: 125.0
+      lon_max: 150.0
+    event_type: tropical_cyclone
+  - id: 191
+    title: Saola (Goring)
+    start_date: 2023-08-22 00:00:00
+    end_date: 2023-09-04 00:00:00
+    location:
+      lat_min: 10.0
+      lat_max: 30.0
+      lon_min: 115.0
+      lon_max: 140.0
+    event_type: tropical_cyclone
+  - id: 192
+    title: Haikui (Hanna)
+    start_date: 2023-08-27 00:00:00
+    end_date: 2023-09-07 00:00:00
+    location:
+      lat_min: 10.0
+      lat_max: 30.0
+      lon_min: 110.0
+      lon_max: 140.0
+    event_type: tropical_cyclone
+  - id: 193
+    title: Koinu (Jenny)
+    start_date: 2023-09-28 00:00:00
+    end_date: 2023-10-10 00:00:00
+    location:
+      lat_min: 15.0
+      lat_max: 30.0
+      lon_min: 115.0
+      lon_max: 140.0
+    event_type: tropical_cyclone
+  - id: 194
+    title: Mocha
+    start_date: 2023-05-09 00:00:00
+    end_date: 2023-05-16 00:00:00
+    location:
+      lat_min: 5.0
+      lat_max: 25.0
+      lon_min: 80.0
+      lon_max: 95.0
+    event_type: tropical_cyclone
+  - id: 195
+    title: Biparjoy
+    start_date: 2023-06-06 00:00:00
+    end_date: 2023-06-20 00:00:00
+    location:
+      lat_min: 10.0
+      lat_max: 25.0
+      lon_min: 60.0
+      lon_max: 75.0
+    event_type: tropical_cyclone
+  - id: 196
+    title: Hamoon
+    start_date: 2023-10-21 00:00:00
+    end_date: 2023-10-26 00:00:00
+    location:
+      lat_min: 15.0
+      lat_max: 25.0
+      lon_min: 80.0
+      lon_max: 90.0
+    event_type: tropical_cyclone
+  - id: 197
+    title: Freddy
+    start_date: 2023-02-14 00:00:00
+    end_date: 2023-03-15 00:00:00
+    location:
+      lat_min: -25.0
+      lat_max: -10.0
+      lon_min: 40.0
+      lon_max: 80.0
+    event_type: tropical_cyclone
+  - id: 198
+    title: Jasper
+    start_date: 2023-12-04 00:00:00
+    end_date: 2023-12-14 00:00:00
+    location:
+      lat_min: -20.0
+      lat_max: -10.0
+      lon_min: 140.0
+      lon_max: 150.0
+    event_type: tropical_cyclone
+  - id: 199
+    title: Daniel - Europe
+    start_date: 2023-09-02 00:00:00
+    end_date: 2023-09-08 00:00:00
+    location:
+      lat_min: 30.0
+      lat_max: 45.0
+      lon_min: 10.0
+      lon_max: 30.0
+    event_type: tropical_cyclone
+  - id: 200
+    title: Alex
+    start_date: 2022-06-05 00:00:00
+    end_date: 2022-06-07 00:00:00
+    location:
+      lat_min: 20.0
+      lat_max: 35.0
+      lon_min: 275.0
+      lon_max: 290.0
+    event_type: tropical_cyclone
+  - id: 201
+    title: Fiona
+    start_date: 2022-09-14 00:00:00
+    end_date: 2022-09-24 00:00:00
+    location:
+      lat_min: 10.0
+      lat_max: 50.0
+      lon_min: 280.0
+      lon_max: 340.0
+    event_type: tropical_cyclone
+  - id: 202
+    title: Ian
+    start_date: 2022-09-23 00:00:00
+    end_date: 2022-10-01 00:00:00
+    location:
+      lat_min: 15.0
+      lat_max: 35.0
+      lon_min: 275.0
+      lon_max: 290.0
+    event_type: tropical_cyclone
+  - id: 203
+    title: Julia
+    start_date: 2022-10-07 00:00:00
+    end_date: 2022-10-10 00:00:00
+    location:
+      lat_min: 10.0
+      lat_max: 15.0
+      lon_min: 275.0
+      lon_max: 285.0
+    event_type: tropical_cyclone
+  - id: 204
+    title: Nicole
+    start_date: 2022-11-07 00:00:00
+    end_date: 2022-11-12 00:00:00
+    location:
+      lat_min: 20.0
+      lat_max: 35.0
+      lon_min: 275.0
+      lon_max: 290.0
+    event_type: tropical_cyclone
+  - id: 205
+    title: Agatha
+    start_date: 2022-05-28 00:00:00
+    end_date: 2022-06-01 00:00:00
+    location:
+      lat_min: 10.0
+      lat_max: 20.0
+      lon_min: 260.0
+      lon_max: 275.0
+    event_type: tropical_cyclone
+  - id: 206
+    title: Kay
+    start_date: 2022-09-04 00:00:00
+    end_date: 2022-09-10 00:00:00
+    location:
+      lat_min: 10.0
+      lat_max: 30.0
+      lon_min: 245.0
+      lon_max: 265.0
+    event_type: tropical_cyclone
+  - id: 207
+    title: Roslyn
+    start_date: 2022-10-20 00:00:00
+    end_date: 2022-10-24 00:00:00
+    location:
+      lat_min: 10.0
+      lat_max: 25.0
+      lon_min: 255.0
+      lon_max: 270.0
+    event_type: tropical_cyclone
+  - id: 208
+    title: Megi (Agaton)
+    start_date: 2022-04-08 00:00:00
+    end_date: 2022-04-13 00:00:00
+    location:
+      lat_min: 5.0
+      lat_max: 15.0
+      lon_min: 120.0
+      lon_max: 135.0
+    event_type: tropical_cyclone
+  - id: 209
+    title: Hinnamnor (Henry)
+    start_date: 2022-08-27 00:00:00
+    end_date: 2022-09-07 00:00:00
+    location:
+      lat_min: 15.0
+      lat_max: 40.0
+      lon_min: 120.0
+      lon_max: 160.0
+    event_type: tropical_cyclone
+  - id: 210
+    title: Muifa (Inday)
+    start_date: 2022-09-03 00:00:00
+    end_date: 2022-09-16 00:00:00
+    location:
+      lat_min: 15.0
+      lat_max: 35.0
+      lon_min: 110.0
+      lon_max: 140.0
+    event_type: tropical_cyclone
+  - id: 211
+    title: Nanmadol (Josie)
+    start_date: 2022-09-12 00:00:00
+    end_date: 2022-09-20 00:00:00
+    location:
+      lat_min: 15.0
+      lat_max: 40.0
+      lon_min: 125.0
+      lon_max: 150.0
+    event_type: tropical_cyclone
+  - id: 212
+    title: Noru (Karding)
+    start_date: 2022-09-21 00:00:00
+    end_date: 2022-09-30 00:00:00
+    location:
+      lat_min: 10.0
+      lat_max: 25.0
+      lon_min: 100.0
+      lon_max: 130.0
+    event_type: tropical_cyclone
+  - id: 213
+    title: Nalgae (Paeng)
+    start_date: 2022-10-26 00:00:00
+    end_date: 2022-11-04 00:00:00
+    location:
+      lat_min: 5.0
+      lat_max: 20.0
+      lon_min: 110.0
+      lon_max: 130.0
+    event_type: tropical_cyclone
+  - id: 214
+    title: Sitrang
+    start_date: 2022-10-22 00:00:00
+    end_date: 2022-10-26 00:00:00
+    location:
+      lat_min: 15.0
+      lat_max: 25.0
+      lon_min: 80.0
+      lon_max: 90.0
+    event_type: tropical_cyclone
+  - id: 215
+    title: Ana
+    start_date: 2022-01-20 00:00:00
+    end_date: 2022-01-26 00:00:00
+    location:
+      lat_min: -20.0
+      lat_max: -10.0
+      lon_min: 35.0
+      lon_max: 50.0
+    event_type: tropical_cyclone
+  - id: 216
+    title: Batsirai
+    start_date: 2022-01-24 00:00:00
+    end_date: 2022-02-09 00:00:00
+    location:
+      lat_min: -25.0
+      lat_max: -10.0
+      lon_min: 50.0
+      lon_max: 80.0
+    event_type: tropical_cyclone
+  - id: 217
+    title: Gombe
+    start_date: 2022-03-05 00:00:00
+    end_date: 2022-03-18 00:00:00
+    location:
+      lat_min: -20.0
+      lat_max: -10.0
+      lon_min: 35.0
+      lon_max: 60.0
+    event_type: tropical_cyclone
+  - id: 218
+    title: Seth
+    start_date: 2021-12-23 00:00:00
+    end_date: 2022-01-02 00:00:00
+    location:
+      lat_min: -30.0
+      lat_max: -15.0
+      lon_min: 145.0
+      lon_max: 160.0
+    event_type: tropical_cyclone
+  - id: 219
+    title: Blas
+    start_date: 2021-11-05 00:00:00
+    end_date: 2021-11-19 00:00:00
+    location:
+      lat_min: 30.0
+      lat_max: 45.0
+      lon_min: 350.0
+      lon_max: 10.0
+    event_type: tropical_cyclone
+  - id: 220
+    title: Apollo
+    start_date: 2021-10-23 00:00:00
+    end_date: 2021-11-03 00:00:00
+    location:
+      lat_min: 30.0
+      lat_max: 40.0
+      lon_min: 10.0
+      lon_max: 25.0
+    event_type: tropical_cyclone
+  - id: 221
+    title: Elsa
+    start_date: 2021-06-30 00:00:00
+    end_date: 2021-07-10 00:00:00
+    location:
+      lat_min: 10.0
+      lat_max: 40.0
+      lon_min: 270.0
+      lon_max: 310.0
+    event_type: tropical_cyclone
+  - id: 222
+    title: Fred
+    start_date: 2021-08-11 00:00:00
+    end_date: 2021-08-18 00:00:00
+    location:
+      lat_min: 15.0
+      lat_max: 35.0
+      lon_min: 275.0
+      lon_max: 290.0
+    event_type: tropical_cyclone
+  - id: 223
+    title: Grace
+    start_date: 2021-08-13 00:00:00
+    end_date: 2021-08-22 00:00:00
+    location:
+      lat_min: 10.0
+      lat_max: 25.0
+      lon_min: 270.0
+      lon_max: 290.0
+    event_type: tropical_cyclone
+  - id: 224
+    title: Henri
+    start_date: 2021-08-15 00:00:00
+    end_date: 2021-08-24 00:00:00
+    location:
+      lat_min: 25.0
+      lat_max: 45.0
+      lon_min: 280.0
+      lon_max: 300.0
+    event_type: tropical_cyclone
+  - id: 225
+    title: Ida
+    start_date: 2021-08-26 00:00:00
+    end_date: 2021-09-02 00:00:00
+    location:
+      lat_min: 15.0
+      lat_max: 45.0
+      lon_min: 270.0
+      lon_max: 295.0
+    event_type: tropical_cyclone
+  - id: 226
+    title: Larry
+    start_date: 2021-08-31 00:00:00
+    end_date: 2021-09-12 00:00:00
+    location:
+      lat_min: 10.0
+      lat_max: 50.0
+      lon_min: 280.0
+      lon_max: 340.0
+    event_type: tropical_cyclone
+  - id: 227
+    title: Nicolas
+    start_date: 2021-09-12 00:00:00
+    end_date: 2021-09-16 00:00:00
+    location:
+      lat_min: 20.0
+      lat_max: 30.0
+      lon_min: 265.0
+      lon_max: 275.0
+    event_type: tropical_cyclone
+  - id: 228
+    title: Claudette
+    start_date: 2021-06-19 00:00:00
+    end_date: 2021-06-24 00:00:00
+    location:
+      lat_min: 20.0
+      lat_max: 35.0
+      lon_min: 270.0
+      lon_max: 285.0
+    event_type: tropical_cyclone
+  - id: 229
+    title: Nora
+    start_date: 2021-08-25 00:00:00
+    end_date: 2021-08-31 00:00:00
+    location:
+      lat_min: 10.0
+      lat_max: 25.0
+      lon_min: 255.0
+      lon_max: 270.0
+    event_type: tropical_cyclone
+  - id: 230
+    title: Olaf
+    start_date: 2021-09-07 00:00:00
+    end_date: 2021-09-12 00:00:00
+    location:
+      lat_min: 10.0
+      lat_max: 20.0
+      lon_min: 240.0
+      lon_max: 255.0
+    event_type: tropical_cyclone
+  - id: 231
+    title: Pamela
+    start_date: 2021-10-10 00:00:00
+    end_date: 2021-10-14 00:00:00
+    location:
+      lat_min: 10.0
+      lat_max: 25.0
+      lon_min: 255.0
+      lon_max: 270.0
+    event_type: tropical_cyclone
+  - id: 232
+    title: Surigae (Bising)
+    start_date: 2021-04-12 00:00:00
+    end_date: 2021-04-25 00:00:00
+    location:
+      lat_min: 5.0
+      lat_max: 30.0
+      lon_min: 125.0
+      lon_max: 150.0
+    event_type: tropical_cyclone
+  - id: 233
+    title: In-fa (Fabian)
+    start_date: 2021-07-15 00:00:00
+    end_date: 2021-07-30 00:00:00
+    location:
+      lat_min: 10.0
+      lat_max: 20.0
+      lon_min: 110.0
+      lon_max: 130.0
+    event_type: tropical_cyclone
+  - id: 234
+    title: Kompasu (Maring)
+    start_date: 2021-10-07 00:00:00
+    end_date: 2021-10-15 00:00:00
+    location:
+      lat_min: 10.0
+      lat_max: 20.0
+      lon_min: 110.0
+      lon_max: 130.0
+    event_type: tropical_cyclone
+  - id: 235
+    title: Rai (Odette)
+    start_date: 2021-12-11 00:00:00
+    end_date: 2021-12-22 00:00:00
+    location:
+      lat_min: 5.0
+      lat_max: 15.0
+      lon_min: 110.0
+      lon_max: 140.0
+    event_type: tropical_cyclone
+  - id: 236
+    title: Tauktae
+    start_date: 2021-05-14 00:00:00
+    end_date: 2021-05-20 00:00:00
+    location:
+      lat_min: 5.0
+      lat_max: 25.0
+      lon_min: 60.0
+      lon_max: 75.0
+    event_type: tropical_cyclone
+  - id: 237
+    title: Yaas
+    start_date: 2021-05-23 00:00:00
+    end_date: 2021-05-29 00:00:00
+    location:
+      lat_min: 15.0
+      lat_max: 25.0
+      lon_min: 80.0
+      lon_max: 90.0
+    event_type: tropical_cyclone
+  - id: 238
+    title: Gulab and Shaheen
+    start_date: 2021-09-24 00:00:00
+    end_date: 2021-10-05 00:00:00
+    location:
+      lat_min: 15.0
+      lat_max: 25.0
+      lon_min: 60.0
+      lon_max: 85.0
+    event_type: tropical_cyclone
+  - id: 239
+    title: Eloise
+    start_date: 2021-01-14 00:00:00
+    end_date: 2021-01-26 00:00:00
+    location:
+      lat_min: -25.0
+      lat_max: -10.0
+      lon_min: 35.0
+      lon_max: 50.0
+    event_type: tropical_cyclone
+  - id: 240
+    title: Amanda and Cristobal
+    start_date: 2020-05-30 00:00:00
+    end_date: 2020-06-13 00:00:00
+    location:
+      lat_min: 10.0
+      lat_max: 35.0
+      lon_min: 260.0
+      lon_max: 290.0
+    event_type: tropical_cyclone
+  - id: 241
+    title: Hanna
+    start_date: 2020-07-26 00:00:00
+    end_date: 2020-07-27 00:00:00
+    location:
+      lat_min: 20.0
+      lat_max: 30.0
+      lon_min: 265.0
+      lon_max: 275.0
+    event_type: tropical_cyclone
+  - id: 242
+    title: Isaias
+    start_date: 2020-07-30 00:00:00
+    end_date: 2020-08-05 00:00:00
+    location:
+      lat_min: 15.0
+      lat_max: 45.0
+      lon_min: 270.0
+      lon_max: 300.0
+    event_type: tropical_cyclone
+  - id: 243
+    title: Laura
+    start_date: 2020-08-20 00:00:00
+    end_date: 2020-08-30 00:00:00
+    location:
+      lat_min: 15.0
+      lat_max: 35.0
+      lon_min: 260.0
+      lon_max: 285.0
+    event_type: tropical_cyclone
+  - id: 244
+    title: Nana
+    start_date: 2020-09-01 00:00:00
+    end_date: 2020-09-04 00:00:00
+    location:
+      lat_min: 10.0
+      lat_max: 20.0
+      lon_min: 270.0
+      lon_max: 285.0
+    event_type: tropical_cyclone
+  - id: 245
+    title: Paulette
+    start_date: 2020-09-07 00:00:00
+    end_date: 2020-09-23 00:00:00
+    location:
+      lat_min: 15.0
+      lat_max: 40.0
+      lon_min: 290.0
+      lon_max: 340.0
+    event_type: tropical_cyclone
+  - id: 246
+    title: Sally
+    start_date: 2020-09-11 00:00:00
+    end_date: 2020-09-18 00:00:00
+    location:
+      lat_min: 20.0
+      lat_max: 35.0
+      lon_min: 265.0
+      lon_max: 285.0
+    event_type: tropical_cyclone
+  - id: 247
+    title: Teddy
+    start_date: 2020-09-12 00:00:00
+    end_date: 2020-09-24 00:00:00
+    location:
+      lat_min: 15.0
+      lat_max: 50.0
+      lon_min: 280.0
+      lon_max: 330.0
+    event_type: tropical_cyclone
+  - id: 248
+    title: Delta
+    start_date: 2020-10-04 00:00:00
+    end_date: 2020-10-11 00:00:00
+    location:
+      lat_min: 15.0
+      lat_max: 35.0
+      lon_min: 265.0
+      lon_max: 285.0
+    event_type: tropical_cyclone
+  - id: 249
+    title: Zeta
+    start_date: 2020-10-24 00:00:00
+    end_date: 2020-10-30 00:00:00
+    location:
+      lat_min: 15.0
+      lat_max: 40.0
+      lon_min: 260.0
+      lon_max: 290.0
+    event_type: tropical_cyclone
+  - id: 250
+    title: Eta
+    start_date: 2020-10-31 00:00:00
+    end_date: 2020-11-14 00:00:00
+    location:
+      lat_min: 5.0
+      lat_max: 35.0
+      lon_min: 260.0
+      lon_max: 285.0
+    event_type: tropical_cyclone
+  - id: 251
+    title: Iota
+    start_date: 2020-11-13 00:00:00
+    end_date: 2020-11-19 00:00:00
+    location:
+      lat_min: 5.0
+      lat_max: 20.0
+      lon_min: 270.0
+      lon_max: 285.0
+    event_type: tropical_cyclone
+  - id: 252
+    title: Genevieve
+    start_date: 2020-08-16 00:00:00
+    end_date: 2020-08-22 00:00:00
+    location:
+      lat_min: 10.0
+      lat_max: 25.0
+      lon_min: 245.0
+      lon_max: 265.0
+    event_type: tropical_cyclone
+  - id: 253
+    title: Hagupit (Dindo)
+    start_date: 2020-07-30 00:00:00
+    end_date: 2020-08-06 00:00:00
+    location:
+      lat_min: 10.0
+      lat_max: 30.0
+      lon_min: 110.0
+      lon_max: 130.0
+    event_type: tropical_cyclone
+  - id: 254
+    title: Maysak (Julian)
+    start_date: 2020-08-27 00:00:00
+    end_date: 2020-09-04 00:00:00
+    location:
+      lat_min: 5.0
+      lat_max: 30.0
+      lon_min: 120.0
+      lon_max: 150.0
+    event_type: tropical_cyclone
+  - id: 255
+    title: Noul (Leon)
+    start_date: 2020-09-14 00:00:00
+    end_date: 2020-09-19 00:00:00
+    location:
+      lat_min: 10.0
+      lat_max: 20.0
+      lon_min: 105.0
+      lon_max: 125.0
+    event_type: tropical_cyclone
+  - id: 256
+    title: Linfa
+    start_date: 2020-10-06 00:00:00
+    end_date: 2020-10-13 00:00:00
+    location:
+      lat_min: 10.0
+      lat_max: 20.0
+      lon_min: 105.0
+      lon_max: 120.0
+    event_type: tropical_cyclone
+  - id: 257
+    title: Molave (Quinta)
+    start_date: 2020-10-22 00:00:00
+    end_date: 2020-10-30 00:00:00
+    location:
+      lat_min: 10.0
+      lat_max: 20.0
+      lon_min: 105.0
+      lon_max: 125.0
+    event_type: tropical_cyclone
+  - id: 258
+    title: Goni (Rolly)
+    start_date: 2020-10-26 00:00:00
+    end_date: 2020-11-07 00:00:00
+    location:
+      lat_min: 5.0
+      lat_max: 20.0
+      lon_min: 110.0
+      lon_max: 140.0
+    event_type: tropical_cyclone
+  - id: 259
+    title: Vamco (Ulysse)
+    start_date: 2020-11-08 00:00:00
+    end_date: 2020-11-17 00:00:00
+    location:
+      lat_min: 10.0
+      lat_max: 20.0
+      lon_min: 110.0
+      lon_max: 130.0
+    event_type: tropical_cyclone
+  - id: 260
+    title: Remal
+    start_date: 2020-05-24 00:00:00
+    end_date: 2020-05-29 00:00:00
+    location:
+      lat_min: 15.0
+      lat_max: 25.0
+      lon_min: 80.0
+      lon_max: 90.0
+    event_type: tropical_cyclone
+  - id: 261
+    title: Amphan
+    start_date: 2020-05-16 00:00:00
+    end_date: 2020-05-22 00:00:00
+    location:
+      lat_min: 5.0
+      lat_max: 25.0
+      lon_min: 80.0
+      lon_max: 95.0
+    event_type: tropical_cyclone
+  - id: 262
+    title: Nisarga
+    start_date: 2020-06-01 00:00:00
+    end_date: 2020-06-05 00:00:00
+    location:
+      lat_min: 10.0
+      lat_max: 20.0
+      lon_min: 70.0
+      lon_max: 80.0
+    event_type: tropical_cyclone
+  - id: 263
+    title: Damien
+    start_date: 2020-02-03 00:00:00
+    end_date: 2020-02-10 00:00:00
+    location:
+      lat_min: -25.0
+      lat_max: -10.0
+      lon_min: 110.0
+      lon_max: 125.0
+    event_type: tropical_cyclone
+  - id: 264
+    title: Harold
+    start_date: 2020-04-01 00:00:00
+    end_date: 2020-04-11 00:00:00
+    location:
+      lat_min: -25.0
+      lat_max: -10.0
+      lon_min: 155.0
+      lon_max: 180.0
+    event_type: tropical_cyclone
+  - id: 265
+    title: Ianos
+    start_date: 2020-09-16 00:00:00
+    end_date: 2020-09-19 00:00:00
+    location:
+      lat_min: 30.0
+      lat_max: 40.0
+      lon_min: 15.0
+      lon_max: 25.0
+    event_type: tropical_cyclone
