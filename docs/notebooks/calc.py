@@ -4,7 +4,6 @@ Most functions are adapted from the MetPy library (https://github.com/Unidata/Me
 """
 
 import itertools
-from importlib import resources
 
 import numpy as np
 import numpy.ma as ma
@@ -36,12 +35,14 @@ T0 = 273.15  # K
 
 def load_moist_lapse_lookup():
     """Load the moist lapse lookup table."""
-    import extremeweatherbench.data
+    import os
 
-    moist_lapse_lookup_table = resources.files(extremeweatherbench.data).joinpath(
-        "moist_lapse_lookup.parq"
-    )
-    moist_lapse_lookup_df = pd.read_parquet(moist_lapse_lookup_table)
+    # Get the directory of the current file
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+
+    # Construct the path to the lookup table
+    lookup_path = os.path.join(current_dir, "moist_lapse_lookup.parq")
+    moist_lapse_lookup_df = pd.read_parquet(lookup_path)
     return moist_lapse_lookup_df
 
 
