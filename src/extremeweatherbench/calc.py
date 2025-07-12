@@ -7,11 +7,12 @@ import itertools
 
 import numpy as np
 import numpy.ma as ma
-import pandas as pd
 import scipy.optimize as so
 import xarray as xr
 from scipy.interpolate import interp1d
 from scipy.special import lambertw
+
+from extremeweatherbench.utils import load_moist_lapse_lookup
 
 gamma = 6.5  # K/km
 p0 = 1000  # hPa
@@ -31,19 +32,6 @@ Rv = (R / Mw) * 1000  # J/kg/K
 Cp_l = 4219.4  # J/g
 Cp_v = 1860.078011865639  # J/kg
 T0 = 273.15  # K
-
-
-def load_moist_lapse_lookup():
-    """Load the moist lapse lookup table."""
-    import os
-
-    # Get the directory of the current file
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-
-    # Construct the path to the lookup table
-    lookup_path = os.path.join(current_dir, "moist_lapse_lookup.parq")
-    moist_lapse_lookup_df = pd.read_parquet(lookup_path)
-    return moist_lapse_lookup_df
 
 
 def _interp_integrate(pressure, pressure_interp, layer_depth, vars, axis=0):
