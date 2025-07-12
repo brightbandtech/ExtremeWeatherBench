@@ -883,6 +883,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "cartopy" },
+    { name = "click" },
     { name = "dacite" },
     { name = "flox" },
     { name = "gcsfs" },
@@ -934,6 +935,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "cartopy", specifier = ">=0.24.1" },
+    { name = "click", specifier = ">=8.1.8" },
     { name = "dacite", specifier = ">=1.8.1" },
     { name = "dask", extras = ["complete"], marker = "extra == 'multiprocessing'", specifier = ">=2025.1.0" },
     { name = "distributed", marker = "extra == 'multiprocessing'", specifier = ">=2025.1.0" },
