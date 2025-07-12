@@ -217,7 +217,6 @@ def mixed_layer_cape_cin(
         )
         + 273.15
     )
-
     # Combine profiles at or below LCL and above LCL
     combined_all_pressure_w_lcl, combined_all_temp_w_lcl = calc.combine_profiles(
         pressure_prof_at_or_below_lcl[..., :-1],

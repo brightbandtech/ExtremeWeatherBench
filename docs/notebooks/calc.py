@@ -86,13 +86,13 @@ def moist_lapse_lookup(target_pressure, target_temp, reference_pressure=None):
         reference_pressure = target_pressure_reshaped[:, 0]
     else:
         # round reference pressure to be able to get the index in the lookup table
-        reference_pressure = np.round(reference_pressure, 2).reshape(
-            -1, target_pressure.shape[-1]
-        )
+        reference_pressure = np.round(reference_pressure, 2)
 
     # TODO: doesn't work with > 1 dimension, fix this so it can
+    # Reshape reference pressure to 1D for indexing
+    reference_pressure_flat = reference_pressure.flatten()
     pressure_indices = moist_lapse_lookup_df.index.get_indexer(
-        reference_pressure, method="nearest"
+        reference_pressure_flat, method="nearest"
     )
     # Get the temperature at those pressure levels for each column
     temps_at_pressure = moist_lapse_lookup_df.iloc[pressure_indices]
