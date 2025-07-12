@@ -86,7 +86,11 @@ def moist_lapse_lookup(target_pressure, target_temp, reference_pressure=None):
         reference_pressure = target_pressure_reshaped[:, 0]
     else:
         # round reference pressure to be able to get the index in the lookup table
-        reference_pressure = np.round(reference_pressure, 2)
+        reference_pressure = np.round(reference_pressure, 2).reshape(
+            -1, target_pressure.shape[-1]
+        )
+
+    # TODO: doesn't work with > 1 dimension, fix this so it can
     pressure_indices = moist_lapse_lookup_df.index.get_indexer(
         reference_pressure, method="nearest"
     )
@@ -657,7 +661,8 @@ def mixed_parcel(
     theta = potential_temperature(
         ds[temperature_var], ds[pressure_var], units=temperature_units
     )
-    es = saturation_vapor_pressure(ds[temperature_dewpoint_var])
+    # convert temperature to celsius
+    es = saturation_vapor_pressure(ds[temperature_dewpoint_var] - 273.15)
     mixing_ratio_g_g = mixing_ratio(es, ds[pressure_var])
     # because pressure is the same across the domain, we can use a single column
     pressure = ds["level"]
@@ -688,11 +693,11 @@ def mixed_parcel(
     calculated_parcel_temp_kelvin = (mean_theta) * exner_function(
         calculated_parcel_start_pressure
     )
-    calculated_parcel_dewpoint_kelvin = dewpoint_from_vapor_pressure(
-        vapor_pressure(calculated_parcel_start_pressure, mean_mixing_ratio)
-    )
     vapor_pres = vapor_pressure(calculated_parcel_start_pressure, mean_mixing_ratio)
-    calculated_parcel_dewpoint_kelvin = dewpoint_from_vapor_pressure(vapor_pres)
+    calculated_parcel_dewpoint_kelvin = (
+        dewpoint_from_vapor_pressure(vapor_pres) + 273.15
+    )
+
     return (
         calculated_parcel_start_pressure,
         calculated_parcel_temp_kelvin,
