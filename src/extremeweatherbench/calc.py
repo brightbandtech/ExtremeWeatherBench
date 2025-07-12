@@ -7,12 +7,11 @@ import itertools
 
 import numpy as np
 import numpy.ma as ma
+import pandas as pd
 import scipy.optimize as so
 import xarray as xr
 from scipy.interpolate import interp1d
 from scipy.special import lambertw
-
-from extremeweatherbench.utils import load_moist_lapse_lookup
 
 gamma = 6.5  # K/km
 p0 = 1000  # hPa
@@ -32,6 +31,19 @@ Rv = (R / Mw) * 1000  # J/kg/K
 Cp_l = 4219.4  # J/g
 Cp_v = 1860.078011865639  # J/kg
 T0 = 273.15  # K
+
+
+def load_moist_lapse_lookup():
+    """Load the moist lapse lookup table."""
+    import os
+
+    # Get the directory of the current file
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+
+    # Construct the path to the lookup table
+    lookup_path = os.path.join(current_dir, "moist_lapse_lookup.parq")
+    moist_lapse_lookup_df = pd.read_parquet(lookup_path)
+    return moist_lapse_lookup_df
 
 
 def _interp_integrate(pressure, pressure_interp, layer_depth, vars, axis=0):
@@ -75,8 +87,12 @@ def moist_lapse_lookup(target_pressure, target_temp, reference_pressure=None):
     else:
         # round reference pressure to be able to get the index in the lookup table
         reference_pressure = np.round(reference_pressure, 2)
+
+    # TODO: doesn't work with > 1 dimension, fix this so it can
+    # Reshape reference pressure to 1D for indexing
+    reference_pressure_flat = reference_pressure.flatten()
     pressure_indices = moist_lapse_lookup_df.index.get_indexer(
-        reference_pressure, method="nearest"
+        reference_pressure_flat, method="nearest"
     )
     # Get the temperature at those pressure levels for each column
     temps_at_pressure = moist_lapse_lookup_df.iloc[pressure_indices]
@@ -645,7 +661,8 @@ def mixed_parcel(
     theta = potential_temperature(
         ds[temperature_var], ds[pressure_var], units=temperature_units
     )
-    es = saturation_vapor_pressure(ds[temperature_dewpoint_var])
+    # convert temperature to celsius
+    es = saturation_vapor_pressure(ds[temperature_dewpoint_var] - 273.15)
     mixing_ratio_g_g = mixing_ratio(es, ds[pressure_var])
     # because pressure is the same across the domain, we can use a single column
     pressure = ds["level"]
@@ -676,11 +693,11 @@ def mixed_parcel(
     calculated_parcel_temp_kelvin = (mean_theta) * exner_function(
         calculated_parcel_start_pressure
     )
-    calculated_parcel_dewpoint_kelvin = dewpoint_from_vapor_pressure(
-        vapor_pressure(calculated_parcel_start_pressure, mean_mixing_ratio)
-    )
     vapor_pres = vapor_pressure(calculated_parcel_start_pressure, mean_mixing_ratio)
-    calculated_parcel_dewpoint_kelvin = dewpoint_from_vapor_pressure(vapor_pres)
+    calculated_parcel_dewpoint_kelvin = (
+        dewpoint_from_vapor_pressure(vapor_pres) + 273.15
+    )
+
     return (
         calculated_parcel_start_pressure,
         calculated_parcel_temp_kelvin,

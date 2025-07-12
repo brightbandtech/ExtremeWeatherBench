@@ -7,7 +7,7 @@ import logging
 import numpy as np
 import xarray as xr
 
-from extremeweatherbench import calc
+from docs.notebooks import calc
 
 np.set_printoptions(suppress=True)
 logger = logging.getLogger(__name__)
@@ -136,7 +136,6 @@ def mixed_layer_cape_cin(
     ds = calc._basic_ds_checks(ds)
     pressure = ds["level"]
     mixed_layer_mask = ds[pressure_var] < (pressure[0] - depth)
-
     # Get the indices where the condition is True along the last dimension
     valid_indices = np.any(
         mixed_layer_mask, axis=tuple(range(mixed_layer_mask.ndim - 1))
@@ -149,7 +148,6 @@ def mixed_layer_cape_cin(
     ) = calc.mixed_parcel(
         ds, pressure_var, temperature_var, temperature_dewpoint_var, depth
     )
-
     parcel_temp_reshaped = np.expand_dims(calculated_parcel_temp, axis=-1)
     parcel_dewpoint_reshaped = np.expand_dims(calculated_parcel_dewpoint, axis=-1)
 
@@ -169,11 +167,9 @@ def mixed_layer_cape_cin(
     )
     temp_prof = np.concatenate([parcel_temp_reshaped, temp_prof], axis=-1)
     dew_prof = np.concatenate([parcel_dewpoint_reshaped, dew_prof], axis=-1)
-
     calculated_lcl_pressure, calculated_lcl_td = calc.new_lcl(
         pressure_prof[..., 0], temp_prof[..., 0], dew_prof[..., 0]
     )
-
     calculated_lcl_pressure = np.expand_dims(calculated_lcl_pressure, axis=-1)
     calculated_lcl_td = np.expand_dims(calculated_lcl_td, axis=-1)
 
@@ -215,11 +211,12 @@ def mixed_layer_cape_cin(
 
     temp_above_lcl = (
         calc.moist_lapse_lookup(
-            pressure_prof_above_lcl, temp_prof_at_or_below_lcl[..., -1] - 273.15
+            pressure_prof_above_lcl,
+            temp_prof_at_or_below_lcl[..., -1] - 273.15,
+            reference_pressure=calculated_lcl_pressure,
         )
         + 273.15
     )
-
     # Combine profiles at or below LCL and above LCL
     combined_all_pressure_w_lcl, combined_all_temp_w_lcl = calc.combine_profiles(
         pressure_prof_at_or_below_lcl[..., :-1],
@@ -266,10 +263,10 @@ def mixed_layer_cape_cin(
     sorted_indices = np.argsort(combined_all_pressure_w_lcl, axis=-1)
     combined_all_pressure_w_lcl = np.take_along_axis(
         combined_all_pressure_w_lcl, sorted_indices, axis=-1
-    )[..., :-1]
+    )
     combined_all_temp_w_lcl = np.take_along_axis(
         combined_all_temp_w_lcl, sorted_indices, axis=-1
-    )[..., :-1]
+    )
 
     # Find indices where all values are NaN in the last dimension
     nan_mask_pressure = np.all(np.isnan(combined_all_pressure_w_lcl), axis=(0, 1, 2))
@@ -287,6 +284,7 @@ def mixed_layer_cape_cin(
     ]
 
     # Finally, calculate CAPE and CIN
+    # Convert temps back to Celsius
     # TODO: sanity check combined_all_temp_w_lcl as the ml_profile. might be too hot
     cape, cin = calc.mlcape_cin(
         combined_all_pressure_w_lcl,
