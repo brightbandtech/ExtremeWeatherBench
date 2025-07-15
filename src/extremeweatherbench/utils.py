@@ -2,18 +2,22 @@
 other specialized package.
 """
 
-from typing import Union, List, Tuple
+import datetime
+import itertools
+import logging
 from collections import namedtuple
+from dataclasses import dataclass
+from importlib import resources
+from pathlib import Path
+from typing import List, Literal, Optional, Tuple, Union
+
 import numpy as np
 import pandas as pd
 import regionmask
+import requests
 import xarray as xr
-import datetime
-from pathlib import Path
-from importlib import resources
 import yaml
-import itertools
-import logging
+from scipy.ndimage import gaussian_filter
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -36,6 +40,12 @@ ERA5_MAPPING = {
     "latitude": "latitude",
     "longitude": "longitude",
 }
+
+
+@dataclass
+class XarrayDataArrayCoords:
+    latitude: xr.DataArray
+    longitude: xr.DataArray
 
 
 def convert_longitude_to_360(longitude: float) -> float:
@@ -632,3 +642,158 @@ PathOrStr = str | Path
 def _default_preprocess(ds: xr.Dataset) -> xr.Dataset:
     """Default forecast preprocess function that does nothing."""
     return ds
+
+
+# storm reports and PPH data
+def pull_and_clean_lsr_data_from_spc(date: pd.Timestamp) -> pd.DataFrame:
+    """Pull the latest LSR data for a given date. A "date" for LSRs is considered the
+    date starting at 12 UTC to the next day at 11:59 UTC.
+
+    Args:
+        date: A pandas Timestamp object.
+    Returns:
+        df: A pandas DataFrame containing the LSR data with columns lat, lon, report_type, time, and scale.
+    """
+    # Try the filtered URL first, if it fails, try without _filtered
+    url = f"https://www.spc.noaa.gov/climo/reports/{date.strftime('%y%m%d')}_rpts_filtered.csv"
+    # Check if the URL exists by attempting to open it
+    response = requests.head(url)
+    if date < pd.Timestamp("2004-02-29"):
+        raise ValueError("LSR data before 2004-02-29 is not available in CSV format")
+    if response.status_code == 404:
+        # If the filtered URL doesn't exist, use the non-filtered version
+        url = (
+            f"https://www.spc.noaa.gov/climo/reports/{date.strftime('%y%m%d')}_rpts.csv"
+        )
+    # Read the CSV file with all columns to identify report types
+    try:
+        df = pd.read_csv(
+            url,
+            delimiter=",",
+            engine="python",
+            names=[
+                "Time",
+                "Scale",
+                "Location",
+                "County",
+                "State",
+                "Lat",
+                "Lon",
+                "Comments",
+            ],
+        )
+    except Exception as e:
+        print(f"Error pulling LSR data for {date}: {e}")
+        return pd.DataFrame()
+    if len(df) == 3:
+        return pd.DataFrame()
+    # Initialize report_type column
+    df["report_type"] = None
+
+    # Find rows with headers and mark subsequent rows with appropriate report type
+    for i, row in df.iterrows():
+        row_increment = i + 1
+        if "F_Scale" in row.values:
+            df.loc[row_increment:, "report_type"] = "tor"
+        elif "Speed" in row.values:
+            df.loc[row_increment:, "report_type"] = "wind"
+        elif "Size" in row.values:
+            df.loc[row_increment:, "report_type"] = "hail"
+
+    # Keep only necessary columns
+    df = df[["Lat", "Lon", "report_type", "Time", "Scale"]]
+    # Remove rows that have 'Lat' in the 'Lat' column (these are header rows)
+    df = df[df["Lat"] != "Lat"]
+    time = pd.to_datetime(df["Time"], format="%H%M").dt.time
+    df["Time"] = pd.to_datetime(date.strftime("%Y-%m-%d") + " " + time.astype(str))
+    df = df.rename(columns={"Lat": "lat", "Lon": "lon", "Time": "time"})
+    return df
+
+
+def practically_perfect_hindcast(
+    df: pd.DataFrame,
+    resolution: float = 0.25,
+    report_type: Union[Literal["all"], list[Literal["tor", "hail", "wind"]]] = "all",
+    sigma: float = 1.5,
+    return_reports: bool = False,
+    output_coordinates: Optional[XarrayDataArrayCoords] = None,
+) -> Union[xr.DataArray, tuple[xr.DataArray, pd.DataFrame]]:
+    """Compute the Practically Perfect Hindcast (PPH) using storm report data using latitude/longitude grid spacing
+    instead of the NCEP 212 Eta Lambert Conformal projection; based on the method described in Hitchens et al 2013,
+    https://doi.org/10.1175/WAF-D-12-00113.1
+
+    Args:
+        date: A pandas Timestamp object.
+        resolution: The resolution of the grid to use. Default is 0.25 degrees.
+        report_type: The type of report to use. Default is all. Currently only supports all.
+        sigma: The sigma (standard deviation) of the gaussian filter to use. Default is 1.5.
+        return_reports: Whether to return the reports used to compute the PPH. Default is False.
+        output_resolution: The resolution of the output grid. Default is None (keep the same
+        resolution as the input grid).
+    Returns:
+        pph: An xarray DataArray containing the PPH around the storm report data.
+    """
+
+    if report_type == "all":
+        pass
+    else:
+        df = df[df["report_type"].isin(report_type)]
+
+    # Extract latitude and longitude from the dataframe
+    lats = df["lat"].astype(float)
+    lons = df["lon"].astype(float)
+
+    # Create a grid covering the continental US (or adjust as needed)
+    lat_min, lat_max = 24.0, 50.0  # Continental US approximate bounds
+    lon_min, lon_max = -125.0, -66.0  # Continental US approximate bounds
+
+    # Create the grid coordinates
+    grid_lats = np.arange(lat_min, lat_max + resolution, resolution)
+    grid_lons = np.arange(lon_min, lon_max + resolution, resolution)
+
+    # Initialize an empty grid
+    grid = np.zeros((len(grid_lats), len(grid_lons)))
+
+    # Mark grid cells that contain reports
+    for lat, lon in zip(lats, lons):
+        # Find the nearest grid indices
+        lat_idx = np.abs(grid_lats - lat).argmin()
+        lon_idx = np.abs(grid_lons - lon).argmin()
+        grid[lat_idx, lon_idx] = 1
+
+    # Create the xarray DataArray
+    pph = xr.DataArray(
+        grid,
+        dims=["latitude", "longitude"],
+        coords={"latitude": grid_lats, "longitude": grid_lons},
+        name="practically_perfect",
+    )
+
+    # Apply bilinear interpolation to smooth the field
+    # First, create a gaussian kernel for smoothing
+    smoothed_grid = gaussian_filter(grid, sigma=sigma)
+
+    # Replace the data in the DataArray
+    pph.data = smoothed_grid
+
+    # Find the bounds of non-zero data
+    nonzero_lats = np.where(pph.data.any(axis=1))[0]
+    nonzero_lons = np.where(pph.data.any(axis=0))[0]
+
+    # Get the min/max indices
+    lat_start, lat_end = nonzero_lats[0], nonzero_lats[-1]
+    lon_start, lon_end = nonzero_lons[0], nonzero_lons[-1]
+
+    pph = pph.isel(
+        latitude=slice(lat_start, lat_end + 1), longitude=slice(lon_start, lon_end + 1)
+    )
+    pph["longitude"] = convert_longitude_to_360(pph["longitude"])
+
+    pph = pph.interp(
+        latitude=output_coordinates.latitude,
+        longitude=output_coordinates.longitude,
+        method="linear",
+    )
+    if return_reports:
+        return (pph, df)
+    return pph
