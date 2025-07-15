@@ -712,11 +712,11 @@ def pull_and_clean_lsr_data_from_spc(date: pd.Timestamp) -> pd.DataFrame:
 
 def practically_perfect_hindcast(
     df: pd.DataFrame,
+    output_coordinates: XarrayDataArrayCoords,
     resolution: float = 0.25,
     report_type: Union[Literal["all"], list[Literal["tor", "hail", "wind"]]] = "all",
     sigma: float = 1.5,
     return_reports: bool = False,
-    output_coordinates: Optional[XarrayDataArrayCoords] = None,
 ) -> Union[xr.DataArray, tuple[xr.DataArray, pd.DataFrame]]:
     """Compute the Practically Perfect Hindcast (PPH) using storm report data using latitude/longitude grid spacing
     instead of the NCEP 212 Eta Lambert Conformal projection; based on the method described in Hitchens et al 2013,
