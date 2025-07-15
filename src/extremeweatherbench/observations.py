@@ -1,9 +1,9 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Optional, Union
 
 import numpy as np
-import pandas as pd
+import pandas as pd  # type: ignore
 import polars as pl
 import xarray as xr
 
@@ -11,6 +11,22 @@ from extremeweatherbench import case
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+
+# type hint for the data input to the observation classes
+ObservationDataInput = Union[
+    xr.Dataset, xr.DataArray, pl.LazyFrame, pd.DataFrame, np.ndarray
+]
+
+
+# temporary class to replace with modified IndividualCase in separate PR
+class IndividualCaseWithBounds(case.IndividualCase):
+    """IndividualCase with additional bounding box attributes."""
+
+    latitude_min: float
+    latitude_max: float
+    longitude_min: float
+    longitude_max: float
 
 
 class Observation(ABC):
@@ -30,6 +46,15 @@ class Observation(ABC):
 
     def __init__(self, case: case.IndividualCase):
         self.case = case
+        # Add bounding box attributes to the case
+        if not hasattr(self.case, "latitude_min"):
+            self.case.latitude_min = 0.0
+        if not hasattr(self.case, "latitude_max"):
+            self.case.latitude_max = 0.0
+        if not hasattr(self.case, "longitude_min"):
+            self.case.longitude_min = 0.0
+        if not hasattr(self.case, "longitude_max"):
+            self.case.longitude_max = 0.0
 
     @abstractmethod
     def _open_data_from_source(
@@ -47,7 +72,9 @@ class Observation(ABC):
         """
 
     @abstractmethod
-    def _subset_data_to_case(self, data, variables: Optional[list[str]] = None):
+    def _subset_data_to_case(
+        self, data: ObservationDataInput, variables: Optional[list[str]] = None
+    ) -> ObservationDataInput:
         """
         Subset the observation data to the case information provided in IndividualCase.
 
@@ -55,7 +82,8 @@ class Observation(ABC):
         where this method is used to subset.
 
         Args:
-            data: The observation data to subset.
+            data: The observation data to subset, which should be a xarray dataset, xarray dataarray, polars lazyframe,
+            pandas dataframe, or numpy array.
             variables: The variables to include in the observation. Some observations may not have variables, or
             only have a singular variable; thus, this is optional.
 
@@ -64,7 +92,7 @@ class Observation(ABC):
         """
 
     @abstractmethod
-    def _maybe_convert_to_dataset(self, data) -> xr.Dataset:
+    def _maybe_convert_to_dataset(self, data: ObservationDataInput) -> xr.Dataset:
         """
         Convert the observation data to an xarray dataset if it is not already.
 
@@ -128,20 +156,25 @@ class ERA5(Observation):
         )
         return data
 
-    def _subset_data_to_case(self, data, variables: list[str]):
+    def _subset_data_to_case(
+        self, data: ObservationDataInput, variables: Optional[list[str]] = None
+    ) -> ObservationDataInput:
         # TODO: fix case to automatically apply these; currently stand-in for now
-        self.case.latitude_min = (
+        self.case.latitude_min = (  # type: ignore
             self.case.location.latitude - self.case.bounding_box_degrees / 2
         )
-        self.case.latitude_max = (
+        self.case.latitude_max = (  # type: ignore
             self.case.location.latitude + self.case.bounding_box_degrees / 2
         )
-        self.case.longitude_min = np.mod(
+        self.case.longitude_min = np.mod(  # type: ignore
             self.case.location.longitude - self.case.bounding_box_degrees / 2, 360
         )
-        self.case.longitude_max = np.mod(
+        self.case.longitude_max = np.mod(  # type: ignore
             self.case.location.longitude + self.case.bounding_box_degrees / 2, 360
         )
+
+        if not isinstance(data, (xr.Dataset, xr.DataArray)):
+            raise ValueError(f"Expected xarray Dataset or DataArray, got {type(data)}")
 
         subset_data = data.sel(
             time=slice(self.case.start_date, self.case.end_date),
@@ -151,15 +184,18 @@ class ERA5(Observation):
         )
 
         # check that the variables are in the observation data
-        if any(var not in subset_data.data_vars for var in variables):
+        if variables is not None and any(
+            var not in subset_data.data_vars for var in variables
+        ):
             raise ValueError(f"Variables {variables} not found in observation data")
 
         # subset the variables
-        subset_data = subset_data[variables]
+        if variables is not None:
+            subset_data = subset_data[variables]
 
         return subset_data
 
-    def _maybe_convert_to_dataset(self, data):
+    def _maybe_convert_to_dataset(self, data: ObservationDataInput):
         if isinstance(data, xr.DataArray):
             data = data.to_dataset()
         return data
@@ -187,25 +223,30 @@ class GHCN(Observation):
         return observation_data
 
     def _subset_data_to_case(
-        self, observation_data: pl.LazyFrame, variables: list[str]
-    ):
+        self,
+        observation_data: ObservationDataInput,
+        variables: Optional[list[str]] = None,
+    ) -> ObservationDataInput:
         # Create filter expressions for LazyFrame
         time_min = self.case.start_date - pd.Timedelta(days=2)
         time_max = self.case.end_date + pd.Timedelta(days=2)
 
         # TODO: fix case to automatically apply these; currently stand-in for now
-        self.case.latitude_min = (
+        self.case.latitude_min = (  # type: ignore
             self.case.location.latitude - self.case.bounding_box_degrees / 2
         )
-        self.case.latitude_max = (
+        self.case.latitude_max = (  # type: ignore
             self.case.location.latitude + self.case.bounding_box_degrees / 2
         )
-        self.case.longitude_min = (
+        self.case.longitude_min = (  # type: ignore
             self.case.location.longitude - self.case.bounding_box_degrees / 2
         )
-        self.case.longitude_max = (
+        self.case.longitude_max = (  # type: ignore
             self.case.location.longitude + self.case.bounding_box_degrees / 2
         )
+
+        if not isinstance(observation_data, pl.LazyFrame):
+            raise ValueError(f"Expected polars LazyFrame, got {type(observation_data)}")
 
         # Apply filters using proper polars expressions
         subset_observation_data = observation_data.filter(
@@ -218,19 +259,25 @@ class GHCN(Observation):
         )
 
         # Add time, latitude, and longitude to the variables, polars doesn't do indexes
-        all_variables = variables + ["time", "latitude", "longitude"]
+        if variables is None:
+            all_variables = ["time", "latitude", "longitude"]
+        else:
+            all_variables = variables + ["time", "latitude", "longitude"]
 
         # check that the variables are in the observation data
         schema_fields = [field for field in subset_observation_data.collect_schema()]
-        if any(var not in schema_fields for var in all_variables):
+        if variables is not None and any(
+            var not in schema_fields for var in all_variables
+        ):
             raise ValueError(f"Variables {all_variables} not found in observation data")
 
         # subset the variables
-        subset_observation_data = subset_observation_data.select(all_variables)
+        if variables is not None:
+            subset_observation_data = subset_observation_data.select(all_variables)
 
         return subset_observation_data
 
-    def _maybe_convert_to_dataset(self, data):
+    def _maybe_convert_to_dataset(self, data: ObservationDataInput):
         if isinstance(data, pl.LazyFrame):
             data = data.collect().to_pandas()
             data = data.set_index(["time", "latitude", "longitude"])
@@ -268,24 +315,29 @@ class LSR(Observation):
         return observation_data
 
     def _subset_data_to_case(
-        self, observation_data: pd.DataFrame, variables: list[str]
-    ):
+        self,
+        observation_data: ObservationDataInput,
+        variables: Optional[list[str]] = None,
+    ) -> ObservationDataInput:
+        if not isinstance(observation_data, pd.DataFrame):
+            raise ValueError(f"Expected pandas DataFrame, got {type(observation_data)}")
+
         # latitude, longitude are strings by default, convert to float
         observation_data["lat"] = observation_data["lat"].astype(float)
         observation_data["lon"] = observation_data["lon"].astype(float)
         observation_data["time"] = pd.to_datetime(observation_data["time"])
 
         # TODO: fix case to automatically apply these; currently stand-in for now
-        self.case.latitude_min = (
+        self.case.latitude_min = (  # type: ignore
             self.case.location.latitude - self.case.bounding_box_degrees / 2
         )
-        self.case.latitude_max = (
+        self.case.latitude_max = (  # type: ignore
             self.case.location.latitude + self.case.bounding_box_degrees / 2
         )
-        self.case.longitude_min = np.mod(
+        self.case.longitude_min = np.mod(  # type: ignore
             self.case.location.longitude - self.case.bounding_box_degrees / 2, 360
         )
-        self.case.longitude_max = np.mod(
+        self.case.longitude_max = np.mod(  # type: ignore
             self.case.location.longitude + self.case.bounding_box_degrees / 2, 360
         )
 
@@ -306,7 +358,7 @@ class LSR(Observation):
 
         return subset_observation_data
 
-    def _maybe_convert_to_dataset(self, data):
+    def _maybe_convert_to_dataset(self, data: ObservationDataInput):
         if isinstance(data, pd.DataFrame):
             data = data.set_index(["valid_time", "latitude", "longitude"])
             try:
@@ -339,10 +391,17 @@ class IBTrACS(Observation):
         )
         return observation_data
 
-    def _subset_data_to_case(self, observation_data: xr.Dataset):
+    def _subset_data_to_case(
+        self,
+        observation_data: ObservationDataInput,
+        variables: Optional[list[str]] = None,
+    ) -> ObservationDataInput:
         raise NotImplementedError("IBTrACS data subset is not implemented yet")
 
-    def _maybe_convert_to_dataset(self, data):
+    def _maybe_convert_to_dataset(self, data: ObservationDataInput) -> xr.Dataset:
         if not isinstance(data, xr.Dataset):
-            data = data.to_dataset()
+            if hasattr(data, "to_dataset"):
+                data = data.to_dataset()
+            else:
+                raise ValueError(f"Cannot convert {type(data)} to xarray Dataset")
         return data
