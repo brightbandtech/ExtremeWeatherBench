@@ -18,18 +18,17 @@ class Observation(ABC):
     Abstract base class for all observation types.
 
     An Observation is data that acts as the "truth" for a case. It can be a gridded dataset,
-    a point observation dataset, or a reference dataset. Observations are not required to be the same
-    variable as the forecast dataset, but they must be in the same coordinate system for evaluation.
+    a point observation dataset, or any other reference dataset. Observations in EWB
+    are not required to be the same variable as the forecast dataset, but they must be in the
+    same coordinate system for evaluation.
 
     Attributes:
-        source: The source of the observation.
-        case: The case that the observation is associated with.
-        variables: The variables to include in the observation.
+        case: The case that the observation is associated with. The case metadata includes
+        event type, location information, start and end datetimes, internal id number, and case title.
+        This class utilizes location information, and datetimes to subset the observation data.
     """
 
-    def __init__(
-        self, case: case.IndividualCase
-    ):  # TODO: add Variable type to include here alongside str
+    def __init__(self, case: case.IndividualCase):
         self.case = case
 
     @abstractmethod
@@ -50,7 +49,10 @@ class Observation(ABC):
     @abstractmethod
     def _subset_data_to_case(self, data, variables: Optional[list[str]] = None):
         """
-        Subset the observation data to the case.
+        Subset the observation data to the case information provided in IndividualCase.
+
+        Time information, spatial bounds, and variables are captured in the case metadata
+        where this method is used to subset.
 
         Args:
             data: The observation data to subset.
@@ -58,13 +60,22 @@ class Observation(ABC):
             only have a singular variable; thus, this is optional.
 
         Returns:
-            The observation data with the variables subset to the case.
+            The observation data with the variables subset to the case metadata.
         """
 
     @abstractmethod
-    def _maybe_convert_to_dataset(self):
+    def _maybe_convert_to_dataset(self, data) -> xr.Dataset:
         """
         Convert the observation data to an xarray dataset if it is not already.
+
+        If this method is used prior to _subset_data_to_case, OOM errors are possible
+        prior to subsetting.
+
+        Args:
+            data: The observation data already run through _subset_data_to_case.
+
+        Returns:
+            The observation data as an xarray dataset.
         """
 
     def run_pipeline(
@@ -79,6 +90,8 @@ class Observation(ABC):
         Args:
             source: The source of the observation data, which can be a local path or a remote URL.
             storage_options: Optional storage options for the source if the source is a remote URL.
+            variables: The variables to include in the observation. Some observations may not have variables, or
+            only have a singular variable; thus, this is optional.
 
         Returns:
             The observation data with a type determined by the user.
@@ -88,12 +101,18 @@ class Observation(ABC):
         )
         data = self._subset_data_to_case(data, variables=variables)
         data = self._maybe_convert_to_dataset(data)
+        # TODO: add derived variable method call here
         return data
 
 
 class ERA5(Observation):
     """
     Observation class for ERA5 gridded data.
+
+    The easiest approach to using this class
+    is to use the ARCO ERA5 dataset provided by Google for a source. Otherwise, either a
+    different zarr source or modifying the _open_data_from_source method to open the data
+    using another method is required.
     """
 
     def __init__(self, case: case.IndividualCase):
@@ -110,10 +129,6 @@ class ERA5(Observation):
         return data
 
     def _subset_data_to_case(self, data, variables: list[str]):
-        """
-        Subset the observation data to the case.
-        """
-
         # TODO: fix case to automatically apply these; currently stand-in for now
         self.case.latitude_min = (
             self.case.location.latitude - self.case.bounding_box_degrees / 2
@@ -152,7 +167,11 @@ class ERA5(Observation):
 
 class GHCN(Observation):
     """
-    Observation class for GHCN gridded data.
+    Observation class for GHCN tabular data.
+
+    Data is processed using polars to maintain the lazy loading
+    paradigm in _open_data_from_source and to separate the subsetting
+    into _subset_data_to_case.
     """
 
     def __init__(self, case: case.IndividualCase):
@@ -161,16 +180,6 @@ class GHCN(Observation):
     def _open_data_from_source(
         self, source: str, storage_options: Optional[dict] = None
     ):
-        """
-        Open the observation data from the source.
-
-        Args:
-            source: The source of the observation data.
-            storage_options: Optional storage options for the source.
-
-        Returns:
-            The observation data as a polars LazyFrame.
-        """
         observation_data: pl.LazyFrame = pl.scan_parquet(
             source, storage_options=storage_options
         )
@@ -180,16 +189,6 @@ class GHCN(Observation):
     def _subset_data_to_case(
         self, observation_data: pl.LazyFrame, variables: list[str]
     ):
-        """
-        Subset the observation data to the case.
-
-        Args:
-            observation_data: The observation data to subset to the case.
-            variables: The variables to include in the observation.
-
-        Returns:
-            The subset observation data.
-        """
         # Create filter expressions for LazyFrame
         time_min = self.case.start_date - pd.Timedelta(days=2)
         time_max = self.case.end_date + pd.Timedelta(days=2)
@@ -232,15 +231,6 @@ class GHCN(Observation):
         return subset_observation_data
 
     def _maybe_convert_to_dataset(self, data):
-        """
-        Convert the observation data to an xarray dataset
-
-        Args:
-            data: The observation data to convert to an xarray dataset.
-
-        Returns:
-            The observation data as an xarray dataset.
-        """
         if isinstance(data, pl.LazyFrame):
             data = data.collect().to_pandas()
             data = data.set_index(["time", "latitude", "longitude"])
@@ -260,9 +250,9 @@ class GHCN(Observation):
 
 class LSR(Observation):
     """
-    Observation class for local storm report data.
+    Observation class for local storm report (LSR) tabular data.
 
-    Returns a dataset with LSRs and practically perfect hindcast gridded
+    run_pipeline() returns a dataset with LSRs and practically perfect hindcast gridded
     probability data. IndividualCase date ranges for LSRs should ideally be
     12 UTC to the next day at 12 UTC to match SPC methods.
     """
@@ -273,17 +263,6 @@ class LSR(Observation):
     def _open_data_from_source(
         self, source: str, storage_options: Optional[dict] = None
     ):
-        """
-        Open the observation data from the source.
-
-        Args:
-            source: The source of the observation data.
-            **kwargs: Additional keyword arguments to pass to the data loading function.
-
-        Returns:
-            The observation data.
-        """
-
         observation_data = pd.read_parquet(source, storage_options=storage_options)
 
         return observation_data
@@ -291,28 +270,24 @@ class LSR(Observation):
     def _subset_data_to_case(
         self, observation_data: pd.DataFrame, variables: list[str]
     ):
-        """
-        Subset the observation data to the case.
-
-        Args:
-            observation_data: The observation data to subset to the case.
-            variables: The variables to subset.
-
-        Returns:
-            The subset observation data.
-        """
-
         # latitude, longitude are strings by default, convert to float
         observation_data["lat"] = observation_data["lat"].astype(float)
         observation_data["lon"] = observation_data["lon"].astype(float)
         observation_data["time"] = pd.to_datetime(observation_data["time"])
 
-        central_conus_bbox = [24.0, 49.0, -109.0, -89.0]  # Mississippi River to Rockies
         # TODO: fix case to automatically apply these; currently stand-in for now
-        self.case.latitude_min = central_conus_bbox[0]
-        self.case.latitude_max = central_conus_bbox[1]
-        self.case.longitude_min = central_conus_bbox[2]
-        self.case.longitude_max = central_conus_bbox[3]
+        self.case.latitude_min = (
+            self.case.location.latitude - self.case.bounding_box_degrees / 2
+        )
+        self.case.latitude_max = (
+            self.case.location.latitude + self.case.bounding_box_degrees / 2
+        )
+        self.case.longitude_min = np.mod(
+            self.case.location.longitude - self.case.bounding_box_degrees / 2, 360
+        )
+        self.case.longitude_max = np.mod(
+            self.case.location.longitude + self.case.bounding_box_degrees / 2, 360
+        )
 
         filters = (
             (observation_data["time"] >= self.case.start_date)
@@ -328,18 +303,10 @@ class LSR(Observation):
         subset_observation_data = subset_observation_data.rename(
             columns={"lat": "latitude", "lon": "longitude", "time": "valid_time"}
         )
+
         return subset_observation_data
 
     def _maybe_convert_to_dataset(self, data):
-        """
-        Convert the observation data to an xarray dataset
-
-        Args:
-            data: The observation data to convert to an xarray dataset.
-
-        Returns:
-            The observation data as an xarray dataset.
-        """
         if isinstance(data, pd.DataFrame):
             data = data.set_index(["valid_time", "latitude", "longitude"])
             try:
@@ -366,16 +333,6 @@ class IBTrACS(Observation):
     def _open_data_from_source(
         self, source: str, storage_options: Optional[dict] = None
     ):
-        """
-        Open the IBTrACS data from the source.
-
-        Args:
-            source: The source of the IBTrACS data.
-            storage_options: Optional storage options for the source.
-
-        Returns:
-            The IBTrACS data as an xarray Dataset.
-        """
         # not using storage_options in this case due to NetCDF4Backend not supporting them
         observation_data: xr.Dataset = xr.open_dataset(
             source, engine="h5netcdf", chunks="auto"
@@ -383,58 +340,9 @@ class IBTrACS(Observation):
         return observation_data
 
     def _subset_data_to_case(self, observation_data: xr.Dataset):
-        """
-        Subset the observation data to the case.
-
-        Args:
-            observation_data: The observation data to subset.
-
-        Returns:
-            The subsetted observation data.
-        """
+        raise NotImplementedError("IBTrACS data subset is not implemented yet")
 
     def _maybe_convert_to_dataset(self, data):
-        """
-        Convert the observation data to an xarray dataset if it is not already.
-
-        Args:
-            data: The observation data to convert.
-
-        Returns:
-            The observation data as an xarray dataset.
-        """
         if not isinstance(data, xr.Dataset):
             data = data.to_dataset()
         return data
-
-    def harmonize_forecast_data(
-        self, forecast_data: xr.Dataset, forecast_variable: str
-    ):
-        """
-        Harmonize the forecast data to the observation data.
-
-        Args:
-            forecast_data: The forecast data to harmonize.
-            forecast_variable: The forecast variable to harmonize.
-
-        Returns:
-            The harmonized forecast data.
-        """
-        # Implementation to be added
-        pass
-
-    def run_pipeline(self, source: str, storage_options: Optional[dict] = None):
-        """
-        Run the observation pipeline.
-
-        Args:
-            source: The source of the observation data.
-            storage_options: Optional storage options for the source.
-
-        Returns:
-            The processed observation data.
-        """
-        observation_data = self._open_data_from_source(source, storage_options)
-        observation_data = self.subset_data_to_case(observation_data)
-        observation_data = self._maybe_convert_to_dataset(observation_data)
-        return observation_data
