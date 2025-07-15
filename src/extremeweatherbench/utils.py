@@ -9,7 +9,7 @@ from collections import namedtuple
 from dataclasses import dataclass
 from importlib import resources
 from pathlib import Path
-from typing import List, Literal, Optional, Tuple, Union
+from typing import List, Literal, Tuple, Union
 
 import numpy as np
 import pandas as pd
