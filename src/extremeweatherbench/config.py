@@ -19,7 +19,7 @@ ARCO_ERA5_FULL_URI = (
 )
 
 #: Storage/access options for default point observation dataset.
-DEFAULT_POINT_OBS_URI = "gs://extremeweatherbench/ghcnh.parq"
+DEFAULT_GHCN_URI = "gs://extremeweatherbench/datasets/ghcnh.parq"
 
 #: Storage/access options for point observation datasets.
 POINT_OBS_STORAGE_OPTIONS = dict(token="anon")
@@ -169,7 +169,7 @@ class Config:
     forecast_dir: str | Path = DEFAULT_FORECAST_DIR
     cache_dir: str | Path = DEFAULT_CACHE_DIR
     gridded_obs_path: str | Path = ARCO_ERA5_FULL_URI
-    point_obs_path: str | Path = DEFAULT_POINT_OBS_URI
+    point_obs_path: str | Path = DEFAULT_GHCN_URI
     remote_protocol: str = "s3"
     forecast_preprocess: Callable[[xr.Dataset], xr.Dataset] = utils._default_preprocess
     init_forecast_hour: int = 0
