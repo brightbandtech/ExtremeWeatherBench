@@ -1,39 +1,18 @@
-# ---
-# jupyter:
-#   jupytext:
-#     cell_metadata_filter: -all
-#     custom_cell_magics: kql
-#     text_representation:
-#       extension: .py
-#       format_name: percent
-#       format_version: '1.3'
-#       jupytext_version: 1.11.2
-#   kernelspec:
-#     display_name: Python 3 (ipykernel)
-#     language: python
-#     name: python3
-# ---
-
-# %%
 import logging
 from abc import ABC, abstractmethod
-from typing import Tuple
-from datetime import datetime
+from typing import Optional
 
-# %%
-import xarray as xr
-import polars as pl
+import numpy as np
 import pandas as pd
+import polars as pl
+import xarray as xr
 
-# %%
-from extremeweatherbench import case, utils, config
+from extremeweatherbench import case
 
-# %%
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
-# %%
 class Observation(ABC):
     """
     Abstract base class for all observation types.
@@ -49,150 +28,164 @@ class Observation(ABC):
     """
 
     def __init__(
-        self, source: str, case: case.IndividualCase, variables: list[str]
+        self, case: case.IndividualCase
     ):  # TODO: add Variable type to include here alongside str
-        self.source = source
         self.case = case
-        self.variables = variables
 
     @abstractmethod
-    def open_data_from_source(self):
+    def _open_data_from_source(
+        self, source: str, storage_options: Optional[dict] = None
+    ):
         """
-        Open the observation data from the source, opting to avoid loading the entire dataset into memory.
+        Open the observation data from the source, opting to avoid loading the entire dataset into memory if possible.
+
+        Args:
+            source: The source of the observation data, which can be a local path or a remote URL.
+            storage_options: Optional storage options for the source if the source is a remote URL.
+
+        Returns:
+            The observation data with a type determined by the user.
         """
-        pass
 
     @abstractmethod
-    def subset_data_to_case(self):
+    def _subset_data_to_case(self, data, variables: Optional[list[str]] = None):
         """
         Subset the observation data to the case.
+
+        Args:
+            data: The observation data to subset.
+            variables: The variables to include in the observation. Some observations may not have variables, or
+            only have a singular variable; thus, this is optional.
+
+        Returns:
+            The observation data with the variables subset to the case.
         """
-        pass
 
     @abstractmethod
-    def maybe_convert_to_dataset(self):
+    def _maybe_convert_to_dataset(self):
         """
         Convert the observation data to an xarray dataset if it is not already.
         """
-        pass
 
-    @abstractmethod
-    def harmonize_forecast_data(
-        self, forecast_data: xr.Dataset, forecast_variable: str
-    ) -> Tuple[xr.Dataset, xr.Dataset]:  # TODO: add Variable type
+    def run_pipeline(
+        self,
+        source: str,
+        storage_options: Optional[dict] = None,
+        variables: Optional[list[str]] = None,
+    ) -> xr.Dataset:
         """
-        Harmonize the forecast data to the observation data.
+        Shared method for running the observation pipeline.
 
         Args:
-            forecast_data: The forecast data to harmonize.
-            forecast_variable: The variable to harmonize. Can be a single variable or a derived variable.
+            source: The source of the observation data, which can be a local path or a remote URL.
+            storage_options: Optional storage options for the source if the source is a remote URL.
 
         Returns:
-            A tuple of the harmonized forecast data and the harmonized observation data.
+            The observation data with a type determined by the user.
         """
-        pass
-    
-    @abstractmethod
-    def run_pipeline(self) -> xr.Dataset:
-        """
-        Run the observation pipeline. 
-        
-        The simple pipeline is:
-        open_data_from_source()
-        subset_data_to_case()
-        maybe_convert_to_dataset()
-
-        But this method can be customized to include more steps.
-        """
-        self.open_data_from_source()
-        self.subset_data_to_case()
-        self.maybe_convert_to_dataset()
+        data = self._open_data_from_source(
+            source=source, storage_options=storage_options
+        )
+        data = self._subset_data_to_case(data, variables=variables)
+        data = self._maybe_convert_to_dataset(data)
+        return data
 
 
-# %%
 class ERA5(Observation):
     """
     Observation class for ERA5 gridded data.
     """
 
-    def __init__(self, source: str, case: case.IndividualCase, variables: list[str]):
-        super().__init__(source, case, variables)
+    def __init__(self, case: case.IndividualCase):
+        super().__init__(case)
 
-    def open_data_from_source(self):
-        self.observation_data = xr.open_zarr(
-            self.source,
+    def _open_data_from_source(
+        self, source: str, storage_options: Optional[dict] = None
+    ):
+        data = xr.open_zarr(
+            source,
             chunks=None,
             storage_options=dict(token="anon"),
         )
-        self.data_pattern = self.observation_data.dims
+        return data
 
-    def subset_data_to_case(self):
-        self.subset_observation_data = self.observation_data.sel(
+    def _subset_data_to_case(self, data, variables: list[str]):
+        """
+        Subset the observation data to the case.
+        """
+
+        # TODO: fix case to automatically apply these; currently stand-in for now
+        self.case.latitude_min = (
+            self.case.location.latitude - self.case.bounding_box_degrees / 2
+        )
+        self.case.latitude_max = (
+            self.case.location.latitude + self.case.bounding_box_degrees / 2
+        )
+        self.case.longitude_min = np.mod(
+            self.case.location.longitude - self.case.bounding_box_degrees / 2, 360
+        )
+        self.case.longitude_max = np.mod(
+            self.case.location.longitude + self.case.bounding_box_degrees / 2, 360
+        )
+
+        subset_data = data.sel(
             time=slice(self.case.start_date, self.case.end_date),
-            latitude=slice(self.case.latitude_min, self.case.latitude_max),
+            # latitudes are sliced from max to min
+            latitude=slice(self.case.latitude_max, self.case.latitude_min),
             longitude=slice(self.case.longitude_min, self.case.longitude_max),
         )
 
         # check that the variables are in the observation data
-        if any(var not in self.observation_data.data_vars for var in self.variables):
-            raise ValueError(
-                f"Variables {self.variables} not found in observation data"
-            )
+        if any(var not in subset_data.data_vars for var in variables):
+            raise ValueError(f"Variables {variables} not found in observation data")
 
         # subset the variables
-        self.subset_observation_data = self.subset_observation_data[self.variables]
+        subset_data = subset_data[variables]
 
-    def harmonize_forecast_data(
-        self, forecast_data: xr.Dataset, forecast_variable: str
-    ) -> Tuple[xr.Dataset, xr.Dataset]:
-        """
-        Harmonize the forecast data to the observation data.
-        """
-        # Check if observation data exists before proceeding
-        if not hasattr(self, "observation_data"):
-            logger.error("Observation data not loaded. Call open_data_from_source() first.")
-            raise ValueError("Observation data not loaded. Call open_data_from_source() first.")
+        return subset_data
 
-        harmonized_forecast, harmonized_obs = xr.align(
-            self.observation_data,
-            forecast_data,
-            join="inner",
-        )
-    
-    def maybe_convert_to_dataset(self):
-        if not isinstance(self.observation_data, xr.Dataset):
-            self.observation_data = self.observation_data.to_dataset()
-    
-    def run_pipeline(self):
-        self.open_data_from_source()
-        self.subset_data_to_case()
-        self.maybe_convert_to_dataset()
+    def _maybe_convert_to_dataset(self, data):
+        if isinstance(data, xr.DataArray):
+            data = data.to_dataset()
+        return data
 
 
-# %%
 class GHCN(Observation):
     """
     Observation class for GHCN gridded data.
     """
 
-    def __init__(self, source: str, case: case.IndividualCase, variables: list[str]):
-        super().__init__(source, case, variables)
+    def __init__(self, case: case.IndividualCase):
+        super().__init__(case)
 
-        # Add time, latitude, and longitude to the variables, polars doesn't do indexes
-        self.variables = self.variables + ["time", "latitude", "longitude"]
-    def open_data_from_source(self):
+    def _open_data_from_source(
+        self, source: str, storage_options: Optional[dict] = None
+    ):
+        """
+        Open the observation data from the source.
+
+        Args:
+            source: The source of the observation data.
+            storage_options: Optional storage options for the source.
+
+        Returns:
+            The observation data as a polars LazyFrame.
+        """
         observation_data: pl.LazyFrame = pl.scan_parquet(
-            self.source
+            source, storage_options=storage_options
         )
 
         return observation_data
-        
-    def subset_data_to_case(self, observation_data: pl.LazyFrame):
+
+    def _subset_data_to_case(
+        self, observation_data: pl.LazyFrame, variables: list[str]
+    ):
         """
         Subset the observation data to the case.
 
         Args:
             observation_data: The observation data to subset to the case.
+            variables: The variables to include in the observation.
 
         Returns:
             The subset observation data.
@@ -201,194 +194,247 @@ class GHCN(Observation):
         time_min = self.case.start_date - pd.Timedelta(days=2)
         time_max = self.case.end_date + pd.Timedelta(days=2)
 
-        #TODO: fix case to automatically apply these; currently stand-in for now
-        lat_min = self.case.location.latitude - self.case.bounding_box_degrees/2
-        lat_max = self.case.location.latitude + self.case.bounding_box_degrees/2
-        lon_min = self.case.location.longitude - self.case.bounding_box_degrees/2
-        lon_max = self.case.location.longitude + self.case.bounding_box_degrees/2
-        
+        # TODO: fix case to automatically apply these; currently stand-in for now
+        self.case.latitude_min = (
+            self.case.location.latitude - self.case.bounding_box_degrees / 2
+        )
+        self.case.latitude_max = (
+            self.case.location.latitude + self.case.bounding_box_degrees / 2
+        )
+        self.case.longitude_min = (
+            self.case.location.longitude - self.case.bounding_box_degrees / 2
+        )
+        self.case.longitude_max = (
+            self.case.location.longitude + self.case.bounding_box_degrees / 2
+        )
+
         # Apply filters using proper polars expressions
         subset_observation_data = observation_data.filter(
-            (pl.col("time") >= time_min) &
-            (pl.col("time") <= time_max) &
-            (pl.col("latitude") >= lat_min) &
-            (pl.col("latitude") <= lat_max) &
-            (pl.col("longitude") >= lon_min) &
-            (pl.col("longitude") <= lon_max)
+            (pl.col("time") >= time_min)
+            & (pl.col("time") <= time_max)
+            & (pl.col("latitude") >= self.case.latitude_min)
+            & (pl.col("latitude") <= self.case.latitude_max)
+            & (pl.col("longitude") >= self.case.longitude_min)
+            & (pl.col("longitude") <= self.case.longitude_max)
         )
+
+        # Add time, latitude, and longitude to the variables, polars doesn't do indexes
+        all_variables = variables + ["time", "latitude", "longitude"]
 
         # check that the variables are in the observation data
-        if any(var not in subset_observation_data.collect_schema() for var in self.variables):
-            raise ValueError(
-                f"Variables {self.variables} not found in observation data"
-            )
+        schema_fields = [field for field in subset_observation_data.collect_schema()]
+        if any(var not in schema_fields for var in all_variables):
+            raise ValueError(f"Variables {all_variables} not found in observation data")
 
         # subset the variables
-        subset_observation_data = subset_observation_data.select(self.variables)
+        subset_observation_data = subset_observation_data.select(all_variables)
 
         return subset_observation_data
-    
-    def harmonize_forecast_data(
-        self, observation_data: xr.Dataset, forecast_data: xr.Dataset, forecast_variable: str
-    ) -> Tuple[xr.Dataset, xr.Dataset]:
-        """
-        Harmonize the forecast data to the observation data.
-        """
-        # Check if observation data exists before proceeding
-        if not hasattr(self, "observation_data"):
-            logger.error("Observation data not loaded. Call open_data_from_source() first.")
-            raise ValueError("Observation data not loaded. Call open_data_from_source() first.")
 
-        harmonized_forecast, harmonized_obs = xr.align(
-            observation_data,
-            forecast_data,
-            join="inner",
-        )
-    
-    def maybe_convert_to_dataset(self, observation_data: pl.LazyFrame):
+    def _maybe_convert_to_dataset(self, data):
         """
         Convert the observation data to an xarray dataset
 
         Args:
-            observation_data: The observation data to convert to an xarray dataset.
+            data: The observation data to convert to an xarray dataset.
 
         Returns:
             The observation data as an xarray dataset.
         """
-        observation_data = observation_data.collect().to_pandas()
-        observation_data = observation_data.set_index(['time', 'latitude', 'longitude'])
-        observation_data = observation_data.to_xarray()
-        return observation_data
+        if isinstance(data, pl.LazyFrame):
+            data = data.collect().to_pandas()
+            data = data.set_index(["time", "latitude", "longitude"])
+            # GHCN data can have duplicate values right now, dropping here if it occurs
+            try:
+                data = data.to_xarray()
+            except ValueError as e:
+                if "non-unique" in str(e):
+                    logger.warning(
+                        "ValueError when converting to xarray due to duplicate indexes"
+                    )
+                data = data.drop_duplicates().to_xarray()
+            return data
+        else:
+            raise ValueError(f"Data is not a polars LazyFrame: {type(data)}")
 
-    def run_pipeline(self):
-        """
-        Run GHCN obs pipeline.
-        """
-        observation_data = self.open_data_from_source()
-        observation_data = self.subset_data_to_case(observation_data)
-        observation_data = self.maybe_convert_to_dataset(observation_data)
 
-        return observation_data
-
-
-# %%
 class LSR(Observation):
     """
-    Observation class for local storm report data. 
+    Observation class for local storm report data.
 
     Returns a dataset with LSRs and practically perfect hindcast gridded
-    probability data.
+    probability data. IndividualCase date ranges for LSRs should ideally be
+    12 UTC to the next day at 12 UTC to match SPC methods.
     """
 
-    def __init__(self, source: str, case: case.IndividualCase, variables: list[str]):
-        super().__init__(source, case, variables)
+    def __init__(self, case: case.IndividualCase):
+        super().__init__(case)
 
-    def open_data_from_source(self):
+    def _open_data_from_source(
+        self, source: str, storage_options: Optional[dict] = None
+    ):
         """
         Open the observation data from the source.
+
+        Args:
+            source: The source of the observation data.
+            **kwargs: Additional keyword arguments to pass to the data loading function.
+
+        Returns:
+            The observation data.
         """
-        observation_data: pl.LazyFrame = pd.read_csv(
-            self.source
-        )
+
+        observation_data = pd.read_parquet(source, storage_options=storage_options)
 
         return observation_data
-    
-    def subset_data_to_case(self, observation_data: pd.DataFrame):
+
+    def _subset_data_to_case(
+        self, observation_data: pd.DataFrame, variables: list[str]
+    ):
         """
         Subset the observation data to the case.
 
         Args:
             observation_data: The observation data to subset to the case.
+            variables: The variables to subset.
 
         Returns:
             The subset observation data.
         """
-        filters = [
-            (observation_data['time'] >= self.case.start_date) &
-            (observation_data['time'] <= self.case.end_date) &
-            (observation_data['latitude'] >= self.case.latitude_min) &
-            (observation_data['latitude'] <= self.case.latitude_max) &
-            (observation_data['longitude'] >= self.case.longitude_min) &
-            (observation_data['longitude'] <= self.case.longitude_max)
-        ]
+
+        # latitude, longitude are strings by default, convert to float
+        observation_data["lat"] = observation_data["lat"].astype(float)
+        observation_data["lon"] = observation_data["lon"].astype(float)
+        observation_data["time"] = pd.to_datetime(observation_data["time"])
+
+        central_conus_bbox = [24.0, 49.0, -109.0, -89.0]  # Mississippi River to Rockies
+        # TODO: fix case to automatically apply these; currently stand-in for now
+        self.case.latitude_min = central_conus_bbox[0]
+        self.case.latitude_max = central_conus_bbox[1]
+        self.case.longitude_min = central_conus_bbox[2]
+        self.case.longitude_max = central_conus_bbox[3]
+
+        filters = (
+            (observation_data["time"] >= self.case.start_date)
+            & (observation_data["time"] <= self.case.end_date)
+            & (observation_data["lat"] >= self.case.latitude_min)
+            & (observation_data["lat"] <= self.case.latitude_max)
+            & (observation_data["lon"] >= self.case.longitude_min)
+            & (observation_data["lon"] <= self.case.longitude_max)
+        )
 
         subset_observation_data = observation_data.loc[filters]
 
+        subset_observation_data = subset_observation_data.rename(
+            columns={"lat": "latitude", "lon": "longitude", "time": "valid_time"}
+        )
         return subset_observation_data
-    
-    def maybe_convert_to_dataset(self, observation_data: pd.DataFrame):
+
+    def _maybe_convert_to_dataset(self, data):
         """
         Convert the observation data to an xarray dataset
 
         Args:
-            observation_data: The observation data to convert to an xarray dataset.
+            data: The observation data to convert to an xarray dataset.
 
         Returns:
             The observation data as an xarray dataset.
         """
-        observation_data = observation_data.set_index(['time', 'latitude', 'longitude'])
-        observation_data = observation_data.to_xarray()
-        return observation_data
-    
-    def harmonize_forecast_data(self, forecast_data: xr.Dataset, forecast_variable: str):
-        """
-        Harmonize the forecast data to the observation data.
-        """
-        pass
-    
-    def run_pipeline(self):
-        """
-        Run the observation pipeline.
-        """
-        observation_data = self.open_data_from_source()
-        observation_data = self.subset_data_to_case(observation_data)
-        observation_data = self.maybe_convert_to_dataset(observation_data)
-        return observation_data
+        if isinstance(data, pd.DataFrame):
+            data = data.set_index(["valid_time", "latitude", "longitude"])
+            try:
+                data = data.to_xarray()
+            except ValueError as e:
+                if "non-unique" in str(e):
+                    logger.warning(
+                        "ValueError when converting to xarray due to duplicate indexes"
+                    )
+                data = data.drop_duplicates().to_xarray()
+            return data
+        else:
+            raise ValueError(f"Data is not a pandas DataFrame: {type(data)}")
 
 
-
-# %%
 class IBTrACS(Observation):
     """
     Observation class for IBTrACS data.
     """
 
-    def __init__(self, source: str, case: case.IndividualCase, variables: list[str]):
-        super().__init__(source, case, variables)
+    def __init__(self, case: case.IndividualCase):
+        super().__init__(case)
 
-    def open_data_from_source(self):
+    def _open_data_from_source(
+        self, source: str, storage_options: Optional[dict] = None
+    ):
+        """
+        Open the IBTrACS data from the source.
+
+        Args:
+            source: The source of the IBTrACS data.
+            storage_options: Optional storage options for the source.
+
+        Returns:
+            The IBTrACS data as an xarray Dataset.
+        """
+        # not using storage_options in this case due to NetCDF4Backend not supporting them
         observation_data: xr.Dataset = xr.open_dataset(
-            self.source,
-            engine="netcdf4", 
-            chunks='auto'
+            source, engine="h5netcdf", chunks="auto"
         )
         return observation_data
-    
-    def subset_data_to_case(self, observation_data: xr.Dataset):
+
+    def _subset_data_to_case(self, observation_data: xr.Dataset):
         """
         Subset the observation data to the case.
+
+        Args:
+            observation_data: The observation data to subset.
+
+        Returns:
+            The subsetted observation data.
         """
-        pass
-    
-    def maybe_convert_to_dataset(self, observation_data: xr.Dataset):
+
+    def _maybe_convert_to_dataset(self, data):
         """
-        Convert the observation data to a dataset if it is not already.
+        Convert the observation data to an xarray dataset if it is not already.
+
+        Args:
+            data: The observation data to convert.
+
+        Returns:
+            The observation data as an xarray dataset.
         """
-        if not isinstance(observation_data, xr.Dataset):
-            observation_data = observation_data.to_dataset()
-        return observation_data
-    
-    def harmonize_forecast_data(self, forecast_data: xr.Dataset, forecast_variable: str):
+        if not isinstance(data, xr.Dataset):
+            data = data.to_dataset()
+        return data
+
+    def harmonize_forecast_data(
+        self, forecast_data: xr.Dataset, forecast_variable: str
+    ):
         """
         Harmonize the forecast data to the observation data.
+
+        Args:
+            forecast_data: The forecast data to harmonize.
+            forecast_variable: The forecast variable to harmonize.
+
+        Returns:
+            The harmonized forecast data.
         """
+        # Implementation to be added
         pass
 
-    def run_pipeline(self):
+    def run_pipeline(self, source: str, storage_options: Optional[dict] = None):
         """
         Run the observation pipeline.
+
+        Args:
+            source: The source of the observation data.
+            storage_options: Optional storage options for the source.
+
+        Returns:
+            The processed observation data.
         """
-        observation_data = self.open_data_from_source()
+        observation_data = self._open_data_from_source(source, storage_options)
         observation_data = self.subset_data_to_case(observation_data)
-        observation_data = self.maybe_convert_to_dataset(observation_data)
+        observation_data = self._maybe_convert_to_dataset(observation_data)
         return observation_data
