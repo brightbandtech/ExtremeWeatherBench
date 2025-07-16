@@ -2,7 +2,8 @@
 Logic for the dataclasses here largely to handle the logic of parsing the events."""
 
 import dataclasses
-from typing import List, Optional
+from typing import List
+
 from extremeweatherbench import case
 
 
@@ -14,7 +15,7 @@ class EventContainer:
     """
 
     cases: List[case.IndividualCase]
-    event_type: Optional[str] = None
+    event_type: str
 
     def subset_cases(self, subset) -> List[case.IndividualCase]:
         """Subset all IndividualCases inside EventContainer where _case_event_type is a specific type."""

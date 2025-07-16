@@ -3,12 +3,15 @@ Some code similarly structured to WeatherBench (Rasp et al.)."""
 
 import dataclasses
 import datetime
-from typing import List, Optional, Type
-from extremeweatherbench import metrics, utils
-import xarray as xr
-from enum import StrEnum
-import numpy as np
 import logging
+from enum import StrEnum
+from typing import List, Optional, Type
+
+import numpy as np
+import regionmask
+import xarray as xr
+
+from extremeweatherbench import metrics, utils
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -26,10 +29,7 @@ class IndividualCase:
         id: A unique numerical identifier for the event.
         start_date: The start date of the case, for use in subsetting data for analysis.
         end_date: The end date of the case, for use in subsetting data for analysis.
-        location: A Location object representing the latitude and longitude of the event
-            center or  focus.
-        bounding_box_degrees: The side length of a bounding box centered on location, in
-            kilometers.
+        location: A Location dataclass representing the location of a case.
         event_type: A string representing the type of extreme weather event.
         cross_listed: A list of other event types that this case study is cross-listed under.
     """
@@ -38,17 +38,47 @@ class IndividualCase:
     title: str
     start_date: datetime.datetime
     end_date: datetime.datetime
-    location: utils.Location
-    bounding_box_degrees: float
+    location: utils.Region
     event_type: str
     data_vars: Optional[List[str]] = None
     cross_listed: Optional[List[str]] = None
+
+    def subset_region(self, dataset: xr.Dataset) -> xr.Dataset:
+        """Subset the input dataset to the region specified in the location.
+
+        Args:
+            dataset: xr.Dataset: The input dataset to subset.
+
+        Returns:
+            xr.Dataset: The subset dataset.
+        """
+        if isinstance(self.location, utils.CenteredRegion):
+            modified_ds = utils.clip_dataset_to_bounding_box_degrees(
+                dataset, self.location
+            )
+        elif isinstance(self.location, utils.BoundingBoxRegion):
+            modified_ds = dataset.sel(
+                latitude=slice(self.location.latitude_min, self.location.latitude_max),
+                longitude=slice(
+                    self.location.longitude_min, self.location.longitude_max
+                ),
+            )
+        elif isinstance(self.location, utils.ShapefileRegion):
+            shapefile_path = self.location.shapefile_path
+            mask = regionmask.from_geopandas(shapefile_path, names="region")
+            region_mask = mask.mask(dataset, lon_name="longitude", lat_name="latitude")
+            modified_ds = dataset.where(~np.isnan(region_mask))
+        else:
+            raise ValueError(f"Unsupported location type: {type(self.location)}")
+        return modified_ds
 
     def perform_subsetting_procedure(self, dataset: xr.Dataset) -> xr.Dataset:
         """Perform any necessary subsetting procedures on the input dataset.
 
         This method is designed to be overridden by subclasses to provide custom
         subsetting procedures for specific event types.
+
+        This method is deprecated and will be removed in a future version.
 
         Args:
             dataset: xr.Dataset: The input dataset to subset.
@@ -141,9 +171,27 @@ class IndividualHeatWaveCase(IndividualCase):
         self.data_vars = ["surface_air_temperature"]
 
     def perform_subsetting_procedure(self, dataset: xr.Dataset) -> xr.Dataset:
-        modified_ds = utils.clip_dataset_to_bounding_box_degrees(
-            dataset, self.location, self.bounding_box_degrees
-        )
+        if isinstance(self.location, utils.CenteredRegion):
+            modified_ds = utils.clip_dataset_to_bounding_box_degrees(
+                dataset, self.location
+            )
+        elif isinstance(self.location, utils.BoundingBoxRegion):
+            modified_ds = dataset.sel(
+                latitude=slice(self.location.latitude_min, self.location.latitude_max),
+                longitude=slice(
+                    self.location.longitude_min, self.location.longitude_max
+                ),
+            )
+        elif isinstance(self.location, utils.ShapefileRegion):
+            # Create a mask from the shapefile
+            shapefile_path = self.location.shapefile_path
+            mask = regionmask.from_geopandas(shapefile_path, names="region")
+            # Apply the mask to the dataset
+            region_mask = mask.mask(dataset, lon_name="longitude", lat_name="latitude")
+            # Select only points within the region (where mask value is not NaN)
+            modified_ds = dataset.where(~np.isnan(region_mask), drop=True)
+        else:
+            raise ValueError(f"Unsupported location type: {type(self.location)}")
         modified_ds = utils.remove_ocean_gridpoints(modified_ds)
         return modified_ds
 
@@ -177,10 +225,28 @@ class IndividualFreezeCase(IndividualCase):
             "surface_northward_wind",
         ]
 
-    def perform_subsetting_procedure(self, dataset) -> xr.Dataset:
-        modified_ds = utils.clip_dataset_to_bounding_box_degrees(
-            dataset, self.location, self.bounding_box_degrees
-        )
+    def perform_subsetting_procedure(self, dataset: xr.Dataset) -> xr.Dataset:
+        if isinstance(self.location, utils.CenteredRegion):
+            modified_ds = utils.clip_dataset_to_bounding_box_degrees(
+                dataset, self.location
+            )
+        elif isinstance(self.location, utils.BoundingBoxRegion):
+            modified_ds = dataset.sel(
+                latitude=slice(self.location.latitude_min, self.location.latitude_max),
+                longitude=slice(
+                    self.location.longitude_min, self.location.longitude_max
+                ),
+            )
+        elif isinstance(self.location, utils.ShapefileRegion):
+            # Create a mask from the shapefile
+            shapefile_path = self.location.shapefile_path
+            mask = regionmask.from_geopandas(shapefile_path, names="region")
+            # Apply the mask to the dataset
+            region_mask = mask.mask(dataset, lon_name="longitude", lat_name="latitude")
+            # Select only points within the region (where mask value is not NaN)
+            modified_ds = dataset.where(~np.isnan(region_mask), drop=True)
+        else:
+            raise ValueError(f"Unsupported location type: {type(self.location)}")
         return modified_ds
 
 

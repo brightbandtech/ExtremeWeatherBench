@@ -6,9 +6,10 @@ import dataclasses
 import datetime
 import itertools
 import logging
+from abc import ABC
 from importlib import resources
 from pathlib import Path
-from typing import List, Tuple, Union
+from typing import List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -20,78 +21,123 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
-@dataclasses.dataclass
-class Location:
-    """A class representing a geographical location.
+class Region(ABC):
+    """Abstract base class for different region representations."""
 
-    This class can be initialized in three different ways:
-    1. With a center point (latitude, longitude) and a bounding box
-    2. With explicit latitude and longitude bounds
-    3. With a shapefile path
+
+@dataclasses.dataclass
+class CenteredRegion(Region):
+    """A region defined by a center point and a bounding box.
 
     Attributes:
-        latitude: Center latitude or None if using bounds or shapefile
-        longitude: Center longitude or None if using bounds or shapefile
-        bounding_box_degrees: Size of bounding box in degrees or None if using bounds or shapefile
-        latitude_min: Minimum latitude bound or None if using center point or shapefile
-        latitude_max: Maximum latitude bound or None if using center point or shapefile
-        longitude_min: Minimum longitude bound or None if using center point or shapefile
-        longitude_max: Maximum longitude bound or None if using center point or shapefile
-        shapefile_path: Path to shapefile or None if using center point or bounds
+        latitude: Center latitude
+        longitude: Center longitude
+        bounding_box_degrees: Size of bounding box in degrees or tuple of (lat_degrees, lon_degrees)
     """
 
-    latitude: float = None
-    longitude: float = None
-    bounding_box_degrees: Union[float, Tuple[float, float]] = None
-    latitude_min: float = None
-    latitude_max: float = None
-    longitude_min: float = None
-    longitude_max: float = None
-    shapefile_path: Union[str, Path] = None
+    latitude: float
+    longitude: float
+    bounding_box_degrees: Union[float, Tuple[float, float]]
 
-    def __post_init__(self):
-        # Check which initialization method is being used
-        if self.shapefile_path is not None:
-            raise NotImplementedError(
-                "Shapefile initialization is not implemented yet."
-            )
-        elif (
-            self.latitude is not None
-            and self.longitude is not None
-            and self.bounding_box_degrees is not None
-        ):
-            self.bounding_box_degrees = self.bounding_box_degrees
 
-            # Calculate bounds for convenience
-            if isinstance(self.bounding_box_degrees, tuple):
-                lat_degrees, lon_degrees = self.bounding_box_degrees
-            else:
-                lat_degrees = lon_degrees = self.bounding_box_degrees
+@dataclasses.dataclass
+class BoundingBoxRegion(Region):
+    """A region defined by explicit latitude and longitude bounds.
 
-            self.latitude_min = self.latitude - lat_degrees / 2
-            self.latitude_max = self.latitude + lat_degrees / 2
-            self.longitude_min = self.longitude - lon_degrees / 2
-            self.longitude_max = self.longitude + lon_degrees / 2
-        elif all(
-            x is not None
-            for x in [
-                self.latitude_min,
-                self.latitude_max,
-                self.longitude_min,
-                self.longitude_max,
-            ]
-        ):
-            self.latitude_min = self.latitude_min
-            self.latitude_max = self.latitude_max
-            self.longitude_min = self.longitude_min
-            self.longitude_max = self.longitude_max
-        else:
-            raise ValueError(
-                "Location must be initialized with either: "
-                "1. latitude, longitude, and bounding_box_degrees; "
-                "2. latitude_min, latitude_max, longitude_min, and longitude_max; or "
-                "3. shapefile_path (soon to be implemented)"
-            )
+    Attributes:
+        latitude_min: Minimum latitude bound
+        latitude_max: Maximum latitude bound
+        longitude_min: Minimum longitude bound
+        longitude_max: Maximum longitude bound
+    """
+
+    latitude_min: float
+    latitude_max: float
+    longitude_min: float
+    longitude_max: float
+
+
+@dataclasses.dataclass
+class ShapefileRegion(Region):
+    """A region defined by a shapefile.
+
+    Attributes:
+        shapefile_path: Path to the shapefile
+    """
+
+    shapefile_path: Union[str, Path]
+
+
+def map_to_create_region(kwargs: dict) -> Region:
+    """Map a dictionary of keyword arguments to a Region object.
+
+    This is used to map the Region objects from the yaml file to the create_region function
+    with dacite.from_dict and type_hooks.
+
+    Args:
+        kwargs: A dictionary of keyword arguments to pass to the create_region function.
+
+    Returns:
+        A Region object.
+    """
+    return create_region(**kwargs)
+
+
+def create_region(
+    latitude: Optional[float] = None,
+    longitude: Optional[float] = None,
+    bounding_box_degrees: Optional[Union[float, Tuple[float, float]]] = None,
+    latitude_min: Optional[float] = None,
+    latitude_max: Optional[float] = None,
+    longitude_min: Optional[float] = None,
+    longitude_max: Optional[float] = None,
+    shapefile_path: Optional[Union[str, Path]] = None,
+) -> Region:
+    """Factory function to create the appropriate Region subclass based on provided parameters.
+
+    Args:
+        latitude: Center latitude
+        longitude: Center longitude
+        bounding_box_degrees: Size of bounding box in degrees
+        latitude_min: Minimum latitude bound
+        latitude_max: Maximum latitude bound
+        longitude_min: Minimum longitude bound
+        longitude_max: Maximum longitude bound
+        shapefile_path: Path to shapefile
+
+    Returns:
+        An instance of the appropriate Region subclass
+
+    Raises:
+        ValueError: If the provided parameters don't match any of the region types
+    """
+    if shapefile_path is not None:
+        return ShapefileRegion(shapefile_path=shapefile_path)
+    elif (
+        latitude is not None
+        and longitude is not None
+        and bounding_box_degrees is not None
+    ):
+        return CenteredRegion(
+            latitude=latitude,
+            longitude=longitude,
+            bounding_box_degrees=bounding_box_degrees,
+        )
+    elif all(
+        x is not None
+        for x in [latitude_min, latitude_max, longitude_min, longitude_max]
+    ):
+        return BoundingBoxRegion(
+            latitude_min=latitude_min,
+            latitude_max=latitude_max,
+            longitude_min=longitude_min,
+            longitude_max=longitude_max,
+        )
+    else:
+        raise ValueError(
+            "Invalid parameters. Must provide either (latitude, longitude, bounding_box_degrees) "
+            "or (latitude_min, latitude_max, longitude_min, longitude_max) or shapefile_path."
+        )
 
 
 #: Maps the ARCO ERA5 to CF conventions.
@@ -126,7 +172,7 @@ def convert_longitude_to_180(
 
 
 def clip_dataset_to_bounding_box_degrees(
-    dataset: xr.Dataset, location_center: Location, box_degrees: Union[tuple, float]
+    dataset: xr.Dataset, location: CenteredRegion
 ) -> xr.Dataset:
     """Clip an xarray dataset to a box around a given location in degrees latitude & longitude.
 
@@ -139,15 +185,15 @@ def clip_dataset_to_bounding_box_degrees(
         The clipped xarray dataset.
     """
 
-    lat_center = location_center.latitude
-    lon_center = location_center.longitude
+    lat_center = location.latitude
+    lon_center = location.longitude
     if lon_center < 0:
         lon_center = convert_longitude_to_360(lon_center)
-    if isinstance(box_degrees, tuple):
-        box_degrees_lat, box_degrees_lon = box_degrees
+    if isinstance(location.bounding_box_degrees, tuple):
+        box_degrees_lat, box_degrees_lon = location.bounding_box_degrees
     else:
-        box_degrees_lat = box_degrees
-        box_degrees_lon = box_degrees
+        box_degrees_lat = location.bounding_box_degrees
+        box_degrees_lon = location.bounding_box_degrees
     min_lat = lat_center - box_degrees_lat / 2
     max_lat = lat_center + box_degrees_lat / 2
     min_lon = lon_center - box_degrees_lon / 2
@@ -419,16 +465,6 @@ def read_event_yaml(input_pth: str | Path) -> dict:
     input_pth = Path(input_pth)
     with open(input_pth, "rb") as f:
         yaml_event_case = yaml.safe_load(f)
-    for k, v in yaml_event_case.items():
-        if k == "cases":
-            for individual_case in v:
-                if "location" in individual_case:
-                    individual_case["location"]["longitude"] = convert_longitude_to_360(
-                        individual_case["location"]["longitude"]
-                    )
-                    individual_case["location"] = Location(
-                        **individual_case["location"]
-                    )
     return yaml_event_case
 
 

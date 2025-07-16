@@ -1,13 +1,15 @@
 """Evaluation routines for use during ExtremeWeatherBench case studies / analyses."""
 
-import logging
-from typing import Optional, Literal, Union
-import pandas as pd
-import xarray as xr
-from extremeweatherbench import config, events, case, utils, data_loader
-import dacite
 import dataclasses
 import itertools
+import logging
+from typing import Literal, Optional, Union
+
+import dacite
+import pandas as pd
+import xarray as xr
+
+from extremeweatherbench import case, config, data_loader, events, utils
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -278,11 +280,21 @@ def evaluate(
     for event in eval_config.event_types:
         # Check if event is a class (not instantiated) or an instance
         if isinstance(event, type):
-            # if event is a class and hasn't been instantiated yet
+            # type hooks does not work for nested dataclasses it seems; PRs on dacite also do not
+            # seem to be merged yet nor fix the issue. location still results in a dict.
             cases = dacite.from_dict(
                 data_class=event,
                 data=yaml_event_case,
+                config=dacite.Config(
+                    type_hooks={utils.Region: utils.map_to_create_region},
+                ),
             )
+            # this loop is a workaround to get the location attribute of the case dataclass
+            # to be a Region object instead of a dict
+            for iter in range(len(cases.cases)):
+                cases.cases[iter].location = utils.map_to_create_region(
+                    cases.cases[iter].location
+                )
         elif isinstance(event, events.EventContainer):
             # if event is already an instance of EventContainer
             cases = event
