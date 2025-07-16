@@ -11,23 +11,21 @@ This script is used for parsing ISD files and converting them to hourly data
 5. Save the processed data to a new parquet file
 """
 
-import asyncio
-import logging
-import os
-from pathlib import Path
-
-import aiohttp
-import dask
-import numpy as np
 import pandas as pd
-import xarray as xr
 import yaml
+from extremeweatherbench import utils
+import logging
+import numpy as np
+from pathlib import Path
+import aiohttp
+import asyncio
 from distributed import Client
-from geopy.distance import great_circle as geodist
+import os
+import dask
 from tqdm import tqdm
 from tqdm.asyncio import tqdm as atqdm
-
-from extremeweatherbench import utils
+import xarray as xr
+from geopy.distance import great_circle as geodist
 
 # Quality code for erroneous values flagged by ISD
 # To collect as much data as possible and avoid some values flagged by unknown codes being excluded,
@@ -821,8 +819,8 @@ def run_isd_generation(
         if k == "cases":
             for individual_case in v:
                 if "location" in individual_case:
-                    individual_case["location"] = utils.create_region(
-                        individual_case["location"]
+                    individual_case["location"] = utils.Location(
+                        **individual_case["location"]
                     )
     for case in yaml_event_case["cases"]:
         min_lat, max_lat, min_lon, max_lon = utils.get_bounding_corners(
