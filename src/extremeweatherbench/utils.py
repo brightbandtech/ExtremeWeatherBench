@@ -2,24 +2,97 @@
 other specialized package.
 """
 
-from typing import Union, List, Tuple
-from collections import namedtuple
+import dataclasses
+import datetime
+import itertools
+import logging
+from importlib import resources
+from pathlib import Path
+from typing import List, Tuple, Union
+
 import numpy as np
 import pandas as pd
 import regionmask
 import xarray as xr
-import datetime
-from pathlib import Path
-from importlib import resources
 import yaml
-import itertools
-import logging
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-#: Struct packaging latitude/longitude location definitions.
-Location = namedtuple("Location", ["latitude", "longitude"])
+
+@dataclasses.dataclass
+class Location:
+    """A class representing a geographical location.
+
+    This class can be initialized in three different ways:
+    1. With a center point (latitude, longitude) and a bounding box
+    2. With explicit latitude and longitude bounds
+    3. With a shapefile path
+
+    Attributes:
+        latitude: Center latitude or None if using bounds or shapefile
+        longitude: Center longitude or None if using bounds or shapefile
+        bounding_box_degrees: Size of bounding box in degrees or None if using bounds or shapefile
+        latitude_min: Minimum latitude bound or None if using center point or shapefile
+        latitude_max: Maximum latitude bound or None if using center point or shapefile
+        longitude_min: Minimum longitude bound or None if using center point or shapefile
+        longitude_max: Maximum longitude bound or None if using center point or shapefile
+        shapefile_path: Path to shapefile or None if using center point or bounds
+    """
+
+    latitude: float = None
+    longitude: float = None
+    bounding_box_degrees: Union[float, Tuple[float, float]] = None
+    latitude_min: float = None
+    latitude_max: float = None
+    longitude_min: float = None
+    longitude_max: float = None
+    shapefile_path: Union[str, Path] = None
+
+    def __post_init__(self):
+        # Check which initialization method is being used
+        if self.shapefile_path is not None:
+            raise NotImplementedError(
+                "Shapefile initialization is not implemented yet."
+            )
+        elif (
+            self.latitude is not None
+            and self.longitude is not None
+            and self.bounding_box_degrees is not None
+        ):
+            self.bounding_box_degrees = self.bounding_box_degrees
+
+            # Calculate bounds for convenience
+            if isinstance(self.bounding_box_degrees, tuple):
+                lat_degrees, lon_degrees = self.bounding_box_degrees
+            else:
+                lat_degrees = lon_degrees = self.bounding_box_degrees
+
+            self.latitude_min = self.latitude - lat_degrees / 2
+            self.latitude_max = self.latitude + lat_degrees / 2
+            self.longitude_min = self.longitude - lon_degrees / 2
+            self.longitude_max = self.longitude + lon_degrees / 2
+        elif all(
+            x is not None
+            for x in [
+                self.latitude_min,
+                self.latitude_max,
+                self.longitude_min,
+                self.longitude_max,
+            ]
+        ):
+            self.latitude_min = self.latitude_min
+            self.latitude_max = self.latitude_max
+            self.longitude_min = self.longitude_min
+            self.longitude_max = self.longitude_max
+        else:
+            raise ValueError(
+                "Location must be initialized with either: "
+                "1. latitude, longitude, and bounding_box_degrees; "
+                "2. latitude_min, latitude_max, longitude_min, and longitude_max; or "
+                "3. shapefile_path (soon to be implemented)"
+            )
+
 
 #: Maps the ARCO ERA5 to CF conventions.
 ERA5_MAPPING = {
