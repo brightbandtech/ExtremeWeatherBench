@@ -425,7 +425,7 @@ def _maybe_evaluate_individual_case(
         case_result_df = pd.concat([case_result_df] + results, ignore_index=True)
 
     # Add case metadata
-    case_result_df["case_id"] = individual_case.case_id_number
+    case_result_df["case_id_number"] = individual_case.case_id_number
     case_result_df["event_type"] = individual_case.event_type
 
     return case_result_df
