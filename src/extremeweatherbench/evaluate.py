@@ -148,7 +148,7 @@ def _point_inputs_to_evaluation_input(
     if case_evaluation_data.observation is None:
         raise ValueError("Point observation cannot be None")
     var_id_subset_point_obs = case_evaluation_data.observation.loc[
-        case_evaluation_data.observation["case_id"]
+        case_evaluation_data.observation["case_id_number"]
         == case_evaluation_data.individual_case.case_id_number
     ]
 
@@ -315,7 +315,7 @@ def evaluate(
                 if x
             ]
         ),
-        all_results_df["case_id"].nunique(),
+        all_results_df["case_id_number"].nunique(),
     )
     return all_results_df
 
