@@ -403,7 +403,7 @@ def test_evaluate_full_workflow(
         "variable",
         "metric",
         "observation_type",
-        "case_id",
+        "case_id_number",
         "event_type",
     ]
     assert all(col in result.columns for col in expected_columns)
