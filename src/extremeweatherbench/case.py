@@ -43,6 +43,7 @@ class IndividualCase:
     data_vars: Optional[List[str]] = None
     cross_listed: Optional[List[str]] = None
 
+    # TODO: unit tests and fix shapefile region loader (shouldn't work right now, boilerplate code)
     def subset_region(self, dataset: xr.Dataset) -> xr.Dataset:
         """Subset the input dataset to the region specified in the location.
 
