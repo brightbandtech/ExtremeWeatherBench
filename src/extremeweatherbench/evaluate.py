@@ -148,7 +148,8 @@ def _point_inputs_to_evaluation_input(
     if case_evaluation_data.observation is None:
         raise ValueError("Point observation cannot be None")
     var_id_subset_point_obs = case_evaluation_data.observation.loc[
-        case_evaluation_data.observation["case_id_number"]
+        # TODO: change in GHCN to case_id_number; this will soon be deprecated as well
+        case_evaluation_data.observation["case_id"]
         == case_evaluation_data.individual_case.case_id_number
     ]
 
