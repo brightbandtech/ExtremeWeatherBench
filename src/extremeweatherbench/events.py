@@ -3,7 +3,6 @@ Logic for the dataclasses here largely to handle the logic of parsing the events
 
 import dataclasses
 from typing import List, Optional
-
 from extremeweatherbench import case
 
 
