@@ -3,12 +3,14 @@ Some code similarly structured to WeatherBench (Rasp et al.)."""
 
 import dataclasses
 import datetime
-from typing import List, Optional, Type
-from extremeweatherbench import metrics, utils
-import xarray as xr
-from enum import StrEnum
-import numpy as np
 import logging
+from enum import StrEnum
+from typing import List, Optional, Type
+
+import numpy as np
+import xarray as xr
+
+from extremeweatherbench import metrics, utils
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -23,7 +25,7 @@ class IndividualCase:
     simple YAML-based configuration file.
 
     Attributes:
-        id: A unique numerical identifier for the event.
+        case_id_number: A unique numerical identifier for the event.
         start_date: The start date of the case, for use in subsetting data for analysis.
         end_date: The end date of the case, for use in subsetting data for analysis.
         location: A Location object representing the latitude and longitude of the event
@@ -34,7 +36,7 @@ class IndividualCase:
         cross_listed: A list of other event types that this case study is cross-listed under.
     """
 
-    id: int
+    case_id_number: int
     title: str
     start_date: datetime.datetime
     end_date: datetime.datetime
