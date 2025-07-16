@@ -147,11 +147,25 @@ def _point_inputs_to_evaluation_input(
     """Subset the point observation dataarray for a given data variable."""
     if case_evaluation_data.observation is None:
         raise ValueError("Point observation cannot be None")
-    var_id_subset_point_obs = case_evaluation_data.observation.loc[
-        # TODO: change in GHCN to case_id_number; this will soon be deprecated as well
-        case_evaluation_data.observation["case_id"]
-        == case_evaluation_data.individual_case.case_id_number
-    ]
+
+    location_bounds = utils.get_location_bounds(
+        case_evaluation_data.individual_case.location, 10
+    )
+    filters = (
+        (
+            case_evaluation_data.observation["time"]
+            >= case_evaluation_data.individual_case.start_date
+        )
+        & (
+            case_evaluation_data.observation["time"]
+            <= case_evaluation_data.individual_case.end_date
+        )
+        & (case_evaluation_data.observation["latitude"] >= location_bounds[0])
+        & (case_evaluation_data.observation["latitude"] <= location_bounds[1])
+        & (case_evaluation_data.observation["longitude"] >= location_bounds[2])
+        & (case_evaluation_data.observation["longitude"] <= location_bounds[3])
+    )
+    var_id_subset_point_obs = case_evaluation_data.observation.loc[filters]
 
     var_id_subset_point_obs.loc[:, "longitude"] = utils.convert_longitude_to_360(
         var_id_subset_point_obs.loc[:, "longitude"]

@@ -2,18 +2,19 @@
 other specialized package.
 """
 
-from typing import Union, List, Tuple
+import datetime
+import itertools
+import logging
 from collections import namedtuple
+from importlib import resources
+from pathlib import Path
+from typing import List, Tuple, Union
+
 import numpy as np
 import pandas as pd
 import regionmask
 import xarray as xr
-import datetime
-from pathlib import Path
-from importlib import resources
 import yaml
-import itertools
-import logging
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -52,22 +53,20 @@ def convert_longitude_to_180(
     return dataset
 
 
-def clip_dataset_to_bounding_box_degrees(
-    dataset: xr.Dataset, location_center: Location, box_degrees: Union[tuple, float]
-) -> xr.Dataset:
-    """Clip an xarray dataset to a box around a given location in degrees latitude & longitude.
+def get_location_bounds(location: Location, box_degrees: Union[tuple, float]) -> tuple:
+    """Get the bounds of a location in degrees latitude and longitude.
+
+    If the longitude is negative, it will be converted to 360 degrees.
 
     Args:
-        dataset: The input xarray dataset.
-        location_center: A Location object corresponding to the center of the bounding box.
+        location: The location to get the bounds for.
         box_degrees: The side length(s) of the bounding box in degrees, as a tuple (lat,lon) or single value.
 
     Returns:
-        The clipped xarray dataset.
+        A tuple of the minimum and maximum latitude and longitude values.
     """
-
-    lat_center = location_center.latitude
-    lon_center = location_center.longitude
+    lat_center = location.latitude
+    lon_center = location.longitude
     if lon_center < 0:
         lon_center = convert_longitude_to_360(lon_center)
     if isinstance(box_degrees, tuple):
@@ -84,15 +83,31 @@ def clip_dataset_to_bounding_box_degrees(
     if min_lon > max_lon:
         # Ensure max_lon is always the larger value and account for cyclic nature of lon
         min_lon, max_lon = max_lon, min_lon
-        clipped_dataset = dataset.sel(
-            latitude=(dataset.latitude > min_lat) & (dataset.latitude <= max_lat),
-            longitude=(dataset.longitude < min_lon) | (dataset.longitude >= max_lon),
-        )
-    else:
-        clipped_dataset = dataset.sel(
-            latitude=(dataset.latitude > min_lat) & (dataset.latitude <= max_lat),
-            longitude=(dataset.longitude > min_lon) & (dataset.longitude <= max_lon),
-        )
+    return min_lat, max_lat, min_lon, max_lon
+
+
+def clip_dataset_to_bounding_box_degrees(
+    dataset: xr.Dataset, location_center: Location, box_degrees: Union[tuple, float]
+) -> xr.Dataset:
+    """Clip an xarray dataset to a box around a given location in degrees latitude & longitude.
+
+    Args:
+        dataset: The input xarray dataset.
+        location_center: A Location object corresponding to the center of the bounding box.
+        box_degrees: The side length(s) of the bounding box in degrees, as a tuple (lat,lon) or single value.
+
+    Returns:
+        The clipped xarray dataset.
+    """
+
+    min_lat, max_lat, min_lon, max_lon = get_location_bounds(
+        location_center, box_degrees
+    )
+
+    clipped_dataset = dataset.sel(
+        latitude=(dataset.latitude > min_lat) & (dataset.latitude <= max_lat),
+        longitude=(dataset.longitude > min_lon) & (dataset.longitude <= max_lon),
+    )
     return clipped_dataset
 
 
