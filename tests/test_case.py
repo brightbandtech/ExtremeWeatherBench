@@ -8,7 +8,7 @@ from extremeweatherbench import case, utils
 class TestGoodCases:
     def test_perform_subsetting_procedure_heatwave(self, sample_forecast_dataset):
         heatwave_case = case.IndividualHeatWaveCase(
-            id=20,
+            case_id_number=20,
             title="Test Heatwave",
             start_date=datetime.datetime(2000, 1, 1),
             end_date=datetime.datetime(2000, 1, 14),
@@ -25,7 +25,7 @@ class TestGoodCases:
 
     def test_individual_case(self, sample_forecast_dataset):
         base_case = case.IndividualCase(
-            id=10,
+            case_id_number=10,
             title="Test Case",
             start_date=datetime.datetime(2000, 1, 1),
             end_date=datetime.datetime(2000, 1, 14),
@@ -35,7 +35,7 @@ class TestGoodCases:
             event_type="heat_wave",
         )
         valid_case = {
-            "id": 10,
+            "case_id_number": 10,
             "title": "Test Case",
             "start_date": datetime.datetime(2000, 1, 1),
             "end_date": datetime.datetime(2000, 1, 14),
