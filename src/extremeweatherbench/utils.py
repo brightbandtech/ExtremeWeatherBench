@@ -11,6 +11,7 @@ from importlib import resources
 from pathlib import Path
 from typing import List, Optional, Tuple, Union
 
+import geopandas as gpd
 import numpy as np
 import pandas as pd
 import regionmask
@@ -61,11 +62,22 @@ class BoundingBoxRegion(Region):
 class ShapefileRegion(Region):
     """A region defined by a shapefile.
 
+    A geopandas object shapefile is read in and stored as an attribute
+    on instantiation.
+
     Attributes:
         shapefile_path: Path to the shapefile
     """
 
     shapefile_path: Union[str, Path]
+
+    def __post_init__(self):
+        self.shapefile_path = Path(self.shapefile_path)
+        try:
+            self.shapefile = gpd.read_file(self.shapefile_path)
+        except Exception as e:
+            logger.error(f"Error reading shapefile: {e}")
+            raise ValueError(f"Error reading shapefile: {e}")
 
 
 def map_to_create_region(kwargs: dict) -> Region:

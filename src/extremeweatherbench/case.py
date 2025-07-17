@@ -43,32 +43,45 @@ class IndividualCase:
     data_vars: Optional[List[str]] = None
     cross_listed: Optional[List[str]] = None
 
-    # TODO: unit tests and fix shapefile region loader (shouldn't work right now, boilerplate code)
-    def subset_region(self, dataset: xr.Dataset) -> xr.Dataset:
+    def subset_region(self, dataset: xr.Dataset, **kwargs) -> xr.Dataset:
         """Subset the input dataset to the region specified in the location.
 
         Args:
             dataset: xr.Dataset: The input dataset to subset.
+            **kwargs: Additional keyword arguments to pass for shapefile regions.
 
         Returns:
             xr.Dataset: The subset dataset.
         """
+        if "longitude_name" in kwargs:
+            longitude_name = kwargs["longitude_name"]
+        else:
+            longitude_name = "longitude"
+        if "latitude_name" in kwargs:
+            latitude_name = kwargs["latitude_name"]
+        else:
+            latitude_name = "latitude"
+
         if isinstance(self.location, utils.CenteredRegion):
             modified_ds = utils.clip_dataset_to_bounding_box_degrees(
                 dataset, self.location
             )
         elif isinstance(self.location, utils.BoundingBoxRegion):
             modified_ds = dataset.sel(
-                latitude=slice(self.location.latitude_min, self.location.latitude_max),
-                longitude=slice(
-                    self.location.longitude_min, self.location.longitude_max
-                ),
+                {
+                    latitude_name: slice(
+                        self.location.latitude_min, self.location.latitude_max
+                    ),
+                    longitude_name: slice(
+                        self.location.longitude_min, self.location.longitude_max
+                    ),
+                }
             )
         elif isinstance(self.location, utils.ShapefileRegion):
-            shapefile_path = self.location.shapefile_path
-            mask = regionmask.from_geopandas(shapefile_path, names="region")
-            region_mask = mask.mask(dataset, lon_name="longitude", lat_name="latitude")
-            modified_ds = dataset.where(~np.isnan(region_mask))
+            region_mask = regionmask.from_geopandas(self.location.shapefile)
+            modified_ds = region_mask.mask(
+                dataset.rename({longitude_name: "lon", latitude_name: "lat"})
+            )
         else:
             raise ValueError(f"Unsupported location type: {type(self.location)}")
         return modified_ds
