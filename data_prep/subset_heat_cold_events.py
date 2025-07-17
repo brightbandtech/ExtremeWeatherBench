@@ -1,17 +1,19 @@
 """Helper functions to identify the date ranges of heat waves and freeze events."""
 
-import xarray as xr
-import numpy as np
-import pandas as pd
-from extremeweatherbench import utils, case
+import datetime
+
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 import matplotlib.pyplot as plt
-from mpl_toolkits.axes_grid1 import make_axes_locatable
-from cartopy.mpl.gridliner import LongitudeFormatter, LatitudeFormatter
+import numpy as np
+import pandas as pd
 import seaborn as sns
+import xarray as xr
+from cartopy.mpl.gridliner import LatitudeFormatter, LongitudeFormatter
 from matplotlib import dates as mdates
-import datetime
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+
+from extremeweatherbench import case, utils
 
 sns.set_theme(style="whitegrid", context="talk")
 
@@ -168,7 +170,8 @@ def case_plot(
     gl.xlabel_style = {"size": 12, "color": "k"}
     gl.ylabel_style = {"size": 12, "color": "k"}
     ax1.set_title(
-        f"Event ID {case.id}: 2m Temperature, {merged_dataset['time'].sel(time=subset_timestep).dt.strftime('%Y-%m-%d %Hz').values[0]}",
+        f"Event ID {case.case_id_number}: 2m Temperature, "
+        f"{merged_dataset['time'].sel(time=subset_timestep).dt.strftime('%Y-%m-%d %Hz').values[0]}",
         fontsize=12,
     )
     # Add the location coordinate as a dot on the map
