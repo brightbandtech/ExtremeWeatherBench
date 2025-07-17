@@ -162,8 +162,15 @@ def _point_inputs_to_evaluation_input(
         )
         & (case_evaluation_data.observation["latitude"] >= location_bounds[0])
         & (case_evaluation_data.observation["latitude"] <= location_bounds[1])
-        & (case_evaluation_data.observation["longitude"] >= location_bounds[2])
-        & (case_evaluation_data.observation["longitude"] <= location_bounds[3])
+        # longitude is in 0-360, so we need to convert to -180 to 180 to match GHCN data
+        & (
+            case_evaluation_data.observation["longitude"]
+            >= (location_bounds[2] + 180) % 360 - 180
+        )
+        & (
+            case_evaluation_data.observation["longitude"]
+            <= (location_bounds[3] + 180) % 360 - 180
+        )
     )
     var_id_subset_point_obs = case_evaluation_data.observation.loc[filters]
 

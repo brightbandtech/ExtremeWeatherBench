@@ -100,11 +100,9 @@ class PointObservationSchemaConfig:
     elevation: str = "elevation"
     station_id: str = "station"
     station_long_name: str = "name"
-    case_id: str = "id"
     metadata_vars: List[str] = dataclasses.field(
         default_factory=lambda: [
             "station",
-            "id",
             "latitude",
             "longitude",
             "time",
