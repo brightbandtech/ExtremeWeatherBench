@@ -1,13 +1,15 @@
 """Evaluation routines for use during ExtremeWeatherBench case studies / analyses."""
 
-import logging
-from typing import Optional, Literal, Union
-import pandas as pd
-import xarray as xr
-from extremeweatherbench import config, events, case, utils, data_loader
-import dacite
 import dataclasses
 import itertools
+import logging
+from typing import Literal, Optional, Union
+
+import dacite
+import pandas as pd
+import xarray as xr
+
+from extremeweatherbench import case, config, data_loader, events, utils
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -147,7 +149,7 @@ def _point_inputs_to_evaluation_input(
         raise ValueError("Point observation cannot be None")
     var_id_subset_point_obs = case_evaluation_data.observation.loc[
         case_evaluation_data.observation["case_id"]
-        == case_evaluation_data.individual_case.id
+        == case_evaluation_data.individual_case.case_id_number
     ]
 
     var_id_subset_point_obs.loc[:, "longitude"] = utils.convert_longitude_to_360(
@@ -217,7 +219,7 @@ def _check_and_subset_forecast_availability(
     if lead_time_len == 0:
         logger.warning(
             "No forecast data available for case %s, skipping",
-            case_evaluation_data.individual_case.id,
+            case_evaluation_data.individual_case.case_id_number,
         )
         return None
     elif (
@@ -229,10 +231,11 @@ def _check_and_subset_forecast_availability(
     ):
         logger.warning(
             "Fewer valid times in forecast than days in case %s, results likely unreliable",
-            case_evaluation_data.individual_case.id,
+            case_evaluation_data.individual_case.case_id_number,
         )
     logger.info(
-        "Forecast data available for case %s", case_evaluation_data.individual_case.id
+        "Forecast data available for case %s",
+        case_evaluation_data.individual_case.case_id_number,
     )
 
     return forecast
@@ -368,7 +371,9 @@ def _maybe_evaluate_individual_case(
     Raises:
         ValueError: If no forecast data is available.
     """
-    logger.info("Evaluating case %s, %s", individual_case.id, individual_case.title)
+    logger.info(
+        "Evaluating case %s, %s", individual_case.case_id_number, individual_case.title
+    )
     gridded_obs_evaluation = CaseEvaluationData(
         individual_case=individual_case,
         observation_type="gridded",
@@ -420,7 +425,7 @@ def _maybe_evaluate_individual_case(
         case_result_df = pd.concat([case_result_df] + results, ignore_index=True)
 
     # Add case metadata
-    case_result_df["case_id"] = individual_case.id
+    case_result_df["case_id"] = individual_case.case_id_number
     case_result_df["event_type"] = individual_case.event_type
 
     return case_result_df
