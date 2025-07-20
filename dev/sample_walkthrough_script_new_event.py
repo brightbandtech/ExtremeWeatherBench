@@ -12,18 +12,21 @@ from extremeweatherbench import evaluate, events, metrics, observations
 
 # If a user wants to create their own event type, they'll need:
 # 1. A yaml file or equivalent dictionary in the script to capture case information
-# 2. Defined variables or DerivedVariable child classes to be defined, if not already existing in the repo
+# 2. Existing or new Defined variables or DerivedVariable child classes to be defined
 # 3. Existing or new Observation child classes
-# 4. Metric child classes if not already existing in the repo
+# 4. Existing or new Metric child classes
 # 5. A custom event type to wrap all of the above
 
 
-# Here's a sample workflow for Flooding:
-# Note: EventContainer needs to be updated and renamed, probably just to Event
-# Event should then be an ABC with abstract methods to codify requirements above
+# Scenario: A user wants to create an event type for Flooding, where they use SEEPS as a metric,
+# PRISM precipitation data as the observation source, and accumulated precip as the variable.
 
-# This can be either a dictionary or yaml file. It will be parsed using dacite
-# either way but a yaml needs yaml.safe_load() as an extra step.
+## Note: EventContainer needs to be updated and renamed, probably just to Event
+## Event should then be an ABC with abstract methods to codify requirements above
+
+# Case data can be either a dictionary or yaml file. It will be parsed using dacite
+# either way but a yaml uses yaml.safe_load().
+
 dummy_yaml_data = {
     case_id_number: ...,
     title: ...,
@@ -38,13 +41,16 @@ dummy_yaml_data = {
     event_type: "flood",
 }
 
-# This can be a list of variable strings and/or DerivedVariables, 
+# Variables can be a list of variable strings and/or DerivedVariables, 
 # which require one or more variables to be calculated. 
-# Keeping it simple here.
-variables = ['precipitable_water', 'accumulated_precipitation']
+# It is possible to have different observation and forecast variables.
+observation_variables = ['precipitable_water', 'accumulated_precipitation']
+forecast_variables = ['precipitable_water', 'accumulated_precipitation']
 
-# Here's code for what would be an Observation child class that
-# loads in PRISM data:
+# Map the observation and forecast variables to each other for metrics.
+metric_mapping = {obs_var: forecast_var for obs_var, forecast_var in zip(observation_variables, forecast_variables)}
+
+# Here's code for what would be an Observation child class that loads in PRISM data:
 class PRISMObs(Observation):
     def __init__():
         super().__init__(case: case.IndividualCase)
@@ -61,16 +67,18 @@ class PRISMObs(Observation):
         pass
 
     def _maybe_convert_to_dataset(self, data: observations.ObservationDataInput) -> xr.Dataset:
-        # this will convert the data to an xarray dataset
+        # this will convert the data to an xarray dataset if it's not already
+        # and return the dataset.
         pass
 
-# What if you need a new metric? Here's an example of what this would look like for SEEPS.
+# Here's an example of what setting up a new metric would look like for SEEPS.
 class SEEPS(metrics.Metric):
     def __init__():
         super().__init__(case: case.IndividualCase,
                          climatology: Optional[xr.Dataset] = None,
                          observations: list[Observation] | Observation,
-                         variables: list[str | DerivedVariable] | DerivedVariable | str,
+                         observation_variables: list[str | DerivedVariable] | DerivedVariable | str,
+                         forecast_variables: list[str | DerivedVariable] | DerivedVariable | str,
                          )
     
     def calculate_metric(self,
@@ -106,8 +114,7 @@ flood = Flood(cases=cases,
 
 events = events.EventOperator([flood])
 event_variables = events.evaluation_variables
-# Right now, evaluate.evaluate is hardcoded to load point and gridded obs. 
-# This will be deprecated in place of the new observation class structure.
+
 
 event_variable_mapping = {event_variables.accumulated_precipitation: "apcp",
                           event_variables.precipitable_water: "pt"}
@@ -131,7 +138,6 @@ ewb = evaluate.ExtremeWeatherBench(
     plot_dir=plot_dir,
 )
 
-
 ewb.run()
 
-ewb.results
+print(ewb.results)
