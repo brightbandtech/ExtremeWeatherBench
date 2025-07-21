@@ -72,13 +72,15 @@ class PRISMObs(Observation):
         pass
 
 # Here's an example of what setting up a new metric would look like for SEEPS.
+## Note: I would like to have a climatology option here but I'd consider it out of scope for V1.
+
 class SEEPS(metrics.Metric):
     def __init__():
         super().__init__(case: case.IndividualCase,
-                         climatology: Optional[xr.Dataset] = None,
                          observations: list[Observation] | Observation,
                          observation_variables: list[str | DerivedVariable] | DerivedVariable | str,
                          forecast_variables: list[str | DerivedVariable] | DerivedVariable | str,
+                         climatology: Optional[xr.Dataset] = None,
                          )
     
     def calculate_metric(self,
@@ -100,6 +102,9 @@ class Flood(EventContainer):
                          metrics: list[Metric] | Metric,
                          )
 
+# It seems unintuitive to me to use the Flood class (or an event class) to wrap the cases,
+# just to reference the same class again which instantiates the cases.
+# This might be worth revisiting if it's an easy fix when coding it up.
 dummy_cases = dacite.from_dict(data_class=Flood,
                                data=dummy_yaml_data)
     
