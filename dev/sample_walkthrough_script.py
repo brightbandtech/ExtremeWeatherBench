@@ -19,7 +19,7 @@ events = events.EventOperator([events.HeatWave])
 # zarrs, netcdfs, gribs, etc. (see virtualizarr)
 # this simplifies inputs, and we can provide sample scripts to give users to convert their
 # data to virtual datasets. Or, we can direct them to the virtualizarr docs.
-forecast_url = "gs://extremeweatherbench/virtualizarr_store/fcn_v3.parq"
+forecast_url = "gs://extremeweatherbench/virtualizarr_forecasts/fcn_v3.parq"
 
 # I think we need to simplify the config approach, here's what I would like for mapping variables,
 # for example:
@@ -61,11 +61,11 @@ ewb = evaluate.ExtremeWeatherBench(
 # One is ExtremeWeatherBench.run(), which will execute in the kernel the script is run as-is:
 ewb.run()
 
-# Or ExtremeWeatherBench.create_task_list(), which will return a list of tasks that users can
+# Or ExtremeWeatherBench.build_case_list(), which will return a list of cases that users can
 # run however they see fit parallel (joblib, dask, etc)
-ewb_tasks = ewb.create_task_list()
+ewb_cases = ewb.build_case_list()
 
-joblib.Parallel(n_jobs=-1)(joblib.delayed(task)() for task in ewb_tasks)
+joblib.Parallel(n_jobs=-1)(joblib.delayed(case)() for case in ewb_cases)
 
 # If a variable is missing from the dataset that the event requires, it will report a
 # warning in the logs and return nans for the metrics that require it,
