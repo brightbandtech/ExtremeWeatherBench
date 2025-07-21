@@ -61,7 +61,7 @@ class PRISMObs(Observation):
 
     def _subset_data_to_case(self, 
                              data: observations.ObservationDataInput,
-                             variables: list[str | DerivedVariable] | DerivedVariable | str,
+                             variables: list[str | DerivedVariable],
                              ) -> observations.ObservationDataInput:
         # this will subset the data to the case
         pass
