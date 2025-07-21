@@ -19,14 +19,17 @@ ObservationDataInput = Union[
 ]
 
 
-# temporary class to replace with modified IndividualCase in separate PR
-class IndividualCaseWithBounds(case.IndividualCase):
-    """IndividualCase with additional bounding box attributes."""
+# TODO: add a derived variable class to handle derived variables
+class DerivedVariable(ABC):
+    """
+    Abstract base class for derived variables.
+    """
 
-    latitude_min: float
-    latitude_max: float
-    longitude_min: float
-    longitude_max: float
+    @abstractmethod
+    def compute(self, data: xr.Dataset) -> xr.DataArray:
+        """
+        Compute the derived variable from the observation data.
+        """
 
 
 class Observation(ABC):
@@ -37,29 +40,12 @@ class Observation(ABC):
     a point observation dataset, or any other reference dataset. Observations in EWB
     are not required to be the same variable as the forecast dataset, but they must be in the
     same coordinate system for evaluation.
-
-    Attributes:
-        case: The case that the observation is associated with. The case metadata includes
-        event type, location information, start and end datetimes, internal id number, and case title.
-        This class utilizes location information, and datetimes to subset the observation data.
     """
-
-    def __init__(self, case: case.IndividualCase):
-        self.case = case
-        # Add bounding box attributes to the case
-        if not hasattr(self.case, "latitude_min"):
-            self.case.latitude_min = 0.0
-        if not hasattr(self.case, "latitude_max"):
-            self.case.latitude_max = 0.0
-        if not hasattr(self.case, "longitude_min"):
-            self.case.longitude_min = 0.0
-        if not hasattr(self.case, "longitude_max"):
-            self.case.longitude_max = 0.0
 
     @abstractmethod
     def _open_data_from_source(
         self, source: str, storage_options: Optional[dict] = None
-    ):
+    ) -> ObservationDataInput:
         """
         Open the observation data from the source, opting to avoid loading the entire dataset into memory if possible.
 
@@ -73,7 +59,10 @@ class Observation(ABC):
 
     @abstractmethod
     def _subset_data_to_case(
-        self, data: ObservationDataInput, variables: Optional[list[str]] = None
+        self,
+        data: ObservationDataInput,
+        case: case.IndividualCase,
+        variables: Optional[list[str]] = None,
     ) -> ObservationDataInput:
         """
         Subset the observation data to the case information provided in IndividualCase.
@@ -106,11 +95,31 @@ class Observation(ABC):
             The observation data as an xarray dataset.
         """
 
+    def _maybe_derive_variables(
+        self, data: xr.Dataset, variables: list[str | DerivedVariable]
+    ) -> xr.Dataset:
+        """
+        Derive variables from the observation data if any exist in variables.
+
+        Args:
+            data: The observation data already run through _subset_data_to_case.
+            variables: The variables to derive.
+
+        Returns:
+            The observation data with the derived variables.
+        """
+
+        for v in variables:
+            if isinstance(v, DerivedVariable):
+                derived_variable = v.compute(data)
+                data[v.name] = derived_variable
+        return data
+
     def run_pipeline(
         self,
         source: str,
+        case: case.CaseOperator,
         storage_options: Optional[dict] = None,
-        variables: Optional[list[str]] = None,
     ) -> xr.Dataset:
         """
         Shared method for running the observation pipeline.
@@ -124,12 +133,21 @@ class Observation(ABC):
         Returns:
             The observation data with a type determined by the user.
         """
-        data = self._open_data_from_source(
-            source=source, storage_options=storage_options
+
+        # Open data and process through pipeline steps
+        data = (
+            self._open_data_from_source(
+                source=source,
+                storage_options=storage_options,
+            )
+            .pipe(
+                self._subset_data_to_case,
+                case=case,
+                variables=[v for v in case.variables if isinstance(v, str)],
+            )
+            .pipe(self._maybe_convert_to_dataset)
+            .pipe(self._maybe_derive_variables, variables=case.variables)
         )
-        data = self._subset_data_to_case(data, variables=variables)
-        data = self._maybe_convert_to_dataset(data)
-        # TODO: add derived variable method call here
         return data
 
 
@@ -143,12 +161,9 @@ class ERA5(Observation):
     using another method is required.
     """
 
-    def __init__(self, case: case.IndividualCase):
-        super().__init__(case)
-
     def _open_data_from_source(
         self, source: str, storage_options: Optional[dict] = None
-    ):
+    ) -> ObservationDataInput:
         data = xr.open_zarr(
             source,
             chunks=None,
@@ -157,30 +172,29 @@ class ERA5(Observation):
         return data
 
     def _subset_data_to_case(
-        self, data: ObservationDataInput, variables: Optional[list[str]] = None
+        self,
+        data: ObservationDataInput,
+        case: case.IndividualCase,
+        variables: Optional[list[str]] = None,
     ) -> ObservationDataInput:
         # TODO: fix case to automatically apply these; currently stand-in for now
-        self.case.latitude_min = (  # type: ignore
-            self.case.location.latitude - self.case.bounding_box_degrees / 2
+        case.latitude_min = case.location.latitude - case.bounding_box_degrees / 2
+        case.latitude_max = case.location.latitude + case.bounding_box_degrees / 2
+        case.longitude_min = np.mod(
+            case.location.longitude - case.bounding_box_degrees / 2, 360
         )
-        self.case.latitude_max = (  # type: ignore
-            self.case.location.latitude + self.case.bounding_box_degrees / 2
-        )
-        self.case.longitude_min = np.mod(  # type: ignore
-            self.case.location.longitude - self.case.bounding_box_degrees / 2, 360
-        )
-        self.case.longitude_max = np.mod(  # type: ignore
-            self.case.location.longitude + self.case.bounding_box_degrees / 2, 360
+        case.longitude_max = np.mod(
+            case.location.longitude + case.bounding_box_degrees / 2, 360
         )
 
         if not isinstance(data, (xr.Dataset, xr.DataArray)):
             raise ValueError(f"Expected xarray Dataset or DataArray, got {type(data)}")
 
         subset_data = data.sel(
-            time=slice(self.case.start_date, self.case.end_date),
+            time=slice(case.start_date, case.end_date),
             # latitudes are sliced from max to min
-            latitude=slice(self.case.latitude_max, self.case.latitude_min),
-            longitude=slice(self.case.longitude_min, self.case.longitude_max),
+            latitude=slice(case.latitude_max, case.latitude_min),
+            longitude=slice(case.longitude_min, case.longitude_max),
         )
 
         # check that the variables are in the observation data
@@ -210,12 +224,9 @@ class GHCN(Observation):
     into _subset_data_to_case.
     """
 
-    def __init__(self, case: case.IndividualCase):
-        super().__init__(case)
-
     def _open_data_from_source(
         self, source: str, storage_options: Optional[dict] = None
-    ):
+    ) -> ObservationDataInput:
         observation_data: pl.LazyFrame = pl.scan_parquet(
             source, storage_options=storage_options
         )
@@ -225,25 +236,18 @@ class GHCN(Observation):
     def _subset_data_to_case(
         self,
         observation_data: ObservationDataInput,
+        case: case.IndividualCase,
         variables: Optional[list[str]] = None,
     ) -> ObservationDataInput:
         # Create filter expressions for LazyFrame
-        time_min = self.case.start_date - pd.Timedelta(days=2)
-        time_max = self.case.end_date + pd.Timedelta(days=2)
+        time_min = case.start_date - pd.Timedelta(days=2)
+        time_max = case.end_date + pd.Timedelta(days=2)
 
         # TODO: fix case to automatically apply these; currently stand-in for now
-        self.case.latitude_min = (  # type: ignore
-            self.case.location.latitude - self.case.bounding_box_degrees / 2
-        )
-        self.case.latitude_max = (  # type: ignore
-            self.case.location.latitude + self.case.bounding_box_degrees / 2
-        )
-        self.case.longitude_min = (  # type: ignore
-            self.case.location.longitude - self.case.bounding_box_degrees / 2
-        )
-        self.case.longitude_max = (  # type: ignore
-            self.case.location.longitude + self.case.bounding_box_degrees / 2
-        )
+        case.latitude_min = case.location.latitude - case.bounding_box_degrees / 2
+        case.latitude_max = case.location.latitude + case.bounding_box_degrees / 2
+        case.longitude_min = case.location.longitude - case.bounding_box_degrees / 2
+        case.longitude_max = case.location.longitude + case.bounding_box_degrees / 2
 
         if not isinstance(observation_data, pl.LazyFrame):
             raise ValueError(f"Expected polars LazyFrame, got {type(observation_data)}")
@@ -252,10 +256,10 @@ class GHCN(Observation):
         subset_observation_data = observation_data.filter(
             (pl.col("time") >= time_min)
             & (pl.col("time") <= time_max)
-            & (pl.col("latitude") >= self.case.latitude_min)
-            & (pl.col("latitude") <= self.case.latitude_max)
-            & (pl.col("longitude") >= self.case.longitude_min)
-            & (pl.col("longitude") <= self.case.longitude_max)
+            & (pl.col("latitude") >= case.latitude_min)
+            & (pl.col("latitude") <= case.latitude_max)
+            & (pl.col("longitude") >= case.longitude_min)
+            & (pl.col("longitude") <= case.longitude_max)
         )
 
         # Add time, latitude, and longitude to the variables, polars doesn't do indexes
@@ -304,12 +308,9 @@ class LSR(Observation):
     12 UTC to the next day at 12 UTC to match SPC methods.
     """
 
-    def __init__(self, case: case.IndividualCase):
-        super().__init__(case)
-
     def _open_data_from_source(
         self, source: str, storage_options: Optional[dict] = None
-    ):
+    ) -> ObservationDataInput:
         observation_data = pd.read_parquet(source, storage_options=storage_options)
 
         return observation_data
@@ -317,6 +318,7 @@ class LSR(Observation):
     def _subset_data_to_case(
         self,
         observation_data: ObservationDataInput,
+        case: case.IndividualCase,
         variables: Optional[list[str]] = None,
     ) -> ObservationDataInput:
         if not isinstance(observation_data, pd.DataFrame):
@@ -328,26 +330,22 @@ class LSR(Observation):
         observation_data["time"] = pd.to_datetime(observation_data["time"])
 
         # TODO: fix case to automatically apply these; currently stand-in for now
-        self.case.latitude_min = (  # type: ignore
-            self.case.location.latitude - self.case.bounding_box_degrees / 2
+        case.latitude_min = case.location.latitude - case.bounding_box_degrees / 2
+        case.latitude_max = case.location.latitude + case.bounding_box_degrees / 2
+        case.longitude_min = np.mod(
+            case.location.longitude - case.bounding_box_degrees / 2, 360
         )
-        self.case.latitude_max = (  # type: ignore
-            self.case.location.latitude + self.case.bounding_box_degrees / 2
-        )
-        self.case.longitude_min = np.mod(  # type: ignore
-            self.case.location.longitude - self.case.bounding_box_degrees / 2, 360
-        )
-        self.case.longitude_max = np.mod(  # type: ignore
-            self.case.location.longitude + self.case.bounding_box_degrees / 2, 360
+        case.longitude_max = np.mod(
+            case.location.longitude + case.bounding_box_degrees / 2, 360
         )
 
         filters = (
-            (observation_data["time"] >= self.case.start_date)
-            & (observation_data["time"] <= self.case.end_date)
-            & (observation_data["lat"] >= self.case.latitude_min)
-            & (observation_data["lat"] <= self.case.latitude_max)
-            & (observation_data["lon"] >= self.case.longitude_min)
-            & (observation_data["lon"] <= self.case.longitude_max)
+            (observation_data["time"] >= case.start_date)
+            & (observation_data["time"] <= case.end_date)
+            & (observation_data["lat"] >= case.latitude_min)
+            & (observation_data["lat"] <= case.latitude_max)
+            & (observation_data["lon"] >= case.longitude_min)
+            & (observation_data["lon"] <= case.longitude_max)
         )
 
         subset_observation_data = observation_data.loc[filters]
@@ -379,12 +377,9 @@ class IBTrACS(Observation):
     Observation class for IBTrACS data.
     """
 
-    def __init__(self, case: case.IndividualCase):
-        super().__init__(case)
-
     def _open_data_from_source(
         self, source: str, storage_options: Optional[dict] = None
-    ):
+    ) -> ObservationDataInput:
         # not using storage_options in this case due to NetCDF4Backend not supporting them
         observation_data: xr.Dataset = xr.open_dataset(
             source, engine="h5netcdf", chunks="auto"
@@ -394,6 +389,7 @@ class IBTrACS(Observation):
     def _subset_data_to_case(
         self,
         observation_data: ObservationDataInput,
+        case: case.IndividualCase,
         variables: Optional[list[str]] = None,
     ) -> ObservationDataInput:
         raise NotImplementedError("IBTrACS data subset is not implemented yet")
