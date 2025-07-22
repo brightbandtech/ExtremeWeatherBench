@@ -1,50 +1,46 @@
 """Definitions for different type of extreme weather Events for analysis.
 Logic for the dataclasses here largely to handle the logic of parsing the events."""
 
-import dataclasses
-from typing import List, Optional
-from extremeweatherbench import case
+from abc import ABC
+from typing import Any, List, Optional
+
+import dacite
+
+from extremeweatherbench import case, metrics, observations, variables
 
 
-@dataclasses.dataclass
-class EventContainer:
-    """A container class to hold a list of cases of varying event types.
+class EventType(ABC):
+    """A base class defining the interface for ExtremeWeatherBench event types.
+
+    An Event in ExtremeWeatherBench defines a specific weather event type, such as a heat wave,
+    severe convective weather, or atmospheric rivers. These events encapsulate a set of cases and
+    defined behavior for evaluating those cases. These cases will share common metrics, observations,
+    and variables while each having unique dates and locations.
+
     Attributes:
-        cases: A list of cases that is defined by events.yaml
+        case_metadata: A dictionary or yaml file with guiding metadata.
+        metrics: A list of Metrics that are used to evaluate the cases.
+        observations: A list of Observations that are used as targets for the metrics.
     """
 
-    cases: List[case.IndividualCase]
-    event_type: Optional[str] = None
+    def __init__(
+        self,
+        case_metadata: dict[str, Any],
+        metrics: List[metrics.Metric],
+        observations: List[observations.Observation],
+        variable_mapping: Optional[
+            dict[str | variables.DerivedVariable, str | variables.DerivedVariable]
+        ] = None,
+    ):
+        self.case_metadata = case_metadata
+        self.metrics = metrics
+        self.observations = observations
+        self.variable_mapping = variable_mapping
 
-    def subset_cases(self, subset) -> List[case.IndividualCase]:
-        """Subset all IndividualCases inside EventContainer where _case_event_type is a specific type."""
-        assert self.event_type is not None, "Event type must be defined."
-        case_subset = [
-            case.get_case_event_dataclass(c.event_type)(**dataclasses.asdict(c))
-            for c in self.cases
-            if subset in c.event_type
-        ]
-        return case_subset
-
-    def __post_init__(self):
-        self.cases = self.subset_cases(self.event_type)
-
-
-@dataclasses.dataclass
-class HeatWave(EventContainer):
-    """A container class to hold a list of cases of heat wave events.
-    Attributes:
-        cases: A list of cases that is defined by events.yaml
-    """
-
-    event_type: str = "heat_wave"
-
-
-@dataclasses.dataclass
-class Freeze(EventContainer):
-    """A container class to hold a list of cases of freeze events.
-    Attributes:
-        cases: A list of cases that is defined by events.yaml
-    """
-
-    event_type: str = "freeze"
+    @property
+    def build_cases(self) -> List[case.IndividualCase]:
+        """Build a list of IndividualCases from the case_metadata."""
+        cases = dacite.from_dict(
+            data_class=case.IndividualCase, data=self.case_metadata
+        )
+        return cases
