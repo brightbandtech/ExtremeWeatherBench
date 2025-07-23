@@ -83,7 +83,7 @@ class Observation(ABC):
         self,
         data: ObservationDataInput,
         case: case.IndividualCase,
-        variables: Optional[list[str]] = None,
+        variables: Optional[list[str | DerivedVariable]] = None,
     ) -> ObservationDataInput:
         """
         Subset the observation data to the case information provided in IndividualCase.
@@ -117,14 +117,19 @@ class Observation(ABC):
         """
 
     def _maybe_derive_variables(
-        self, data: xr.Dataset, variables: list[str | DerivedVariable]
+        self,
+        data: xr.Dataset,
+        variables: list[str | DerivedVariable],
+        case: case.IndividualCase,
     ) -> xr.Dataset:
         """
-        Derive variables from the observation data if any exist in variables.
+        Compute derived variables from the observation data.
 
         Args:
-            data: The observation data already run through _subset_data_to_case.
-            variables: The variables to derive.
+            data: The observation data.
+            variables: The variables to include in the observation. Some observations may not have variables, or
+            only have a singular variable; thus, this is optional.
+            case: The IndividualCase object containing case metadata.
 
         Returns:
             The observation data with the derived variables.
@@ -132,13 +137,17 @@ class Observation(ABC):
 
         for v in variables:
             # there should only be strings or derived variables in the list
-            if not isinstance(v, str):
-                if not issubclass(v, DerivedVariable):
-                    raise ValueError(f"Expected str or DerivedVariable, got {type(v)}")
-                derived_variable = v().compute(
+            if isinstance(v, str):
+                continue
+            elif isinstance(v, type) and issubclass(v, DerivedVariable):
+                derived_variable = v().compute(  # type: ignore[misc]
                     case=case, data=data, variables=variables
                 )
-                data[v().name] = derived_variable
+                data[v().name()] = derived_variable  # type: ignore[misc]
+            else:
+                raise ValueError(
+                    f"Expected str or DerivedVariable class, got {type(v)}"
+                )
         return data
 
     def run_pipeline(
@@ -151,28 +160,20 @@ class Observation(ABC):
         Shared method for running the observation pipeline.
 
         Args:
-            source: The source of the observation data, which can be a local path or a remote URL.
+            case: The IndividualCase object containing case metadata.
             storage_options: Optional storage options for the source if the source is a remote URL.
             variables: The variables to include in the observation. Some observations may not have variables, or
             only have a singular variable; thus, this is optional.
 
         Returns:
-            The observation data with a type determined by the user.
+            The observation data as an xarray Dataset.
         """
 
         # Open data and process through pipeline steps
-        data = (
-            self._open_data_from_source(
-                storage_options=storage_options,
-            )
-            .pipe(
-                self._subset_data_to_case,
-                case=case,
-                variables=variables,
-            )
-            .pipe(self._maybe_convert_to_dataset)
-            .pipe(self._maybe_derive_variables, variables=variables or [])
-        )
+        data = self._open_data_from_source(storage_options=storage_options)
+        data = self._subset_data_to_case(data, case=case, variables=variables)
+        data = self._maybe_convert_to_dataset(data)
+        data = self._maybe_derive_variables(data, variables=variables or [], case=case)
         return data
 
 
@@ -202,15 +203,15 @@ class ERA5(Observation):
         self,
         data: ObservationDataInput,
         case: case.IndividualCase,
-        variables: Optional[list[str]] = None,
+        variables: Optional[list[str | DerivedVariable]] = None,
     ) -> ObservationDataInput:
-        # TODO: fix case to automatically apply these; currently stand-in for now
-        case.latitude_min = case.location.latitude - case.bounding_box_degrees / 2
-        case.latitude_max = case.location.latitude + case.bounding_box_degrees / 2
-        case.longitude_min = np.mod(
+        # Calculate bounding box coordinates from case location and bounding box size
+        latitude_min = case.location.latitude - case.bounding_box_degrees / 2
+        latitude_max = case.location.latitude + case.bounding_box_degrees / 2
+        longitude_min = np.mod(
             case.location.longitude - case.bounding_box_degrees / 2, 360
         )
-        case.longitude_max = np.mod(
+        longitude_max = np.mod(
             case.location.longitude + case.bounding_box_degrees / 2, 360
         )
 
@@ -220,19 +221,24 @@ class ERA5(Observation):
         subset_data = data.sel(
             time=slice(case.start_date, case.end_date),
             # latitudes are sliced from max to min
-            latitude=slice(case.latitude_max, case.latitude_min),
-            longitude=slice(case.longitude_min, case.longitude_max),
+            latitude=slice(latitude_max, latitude_min),
+            longitude=slice(longitude_min, longitude_max),
         )
 
-        # check that the variables are in the observation data
-        if variables is not None and any(
-            var not in subset_data.data_vars for var in variables
-        ):
-            raise ValueError(f"Variables {variables} not found in observation data")
+        # Filter out DerivedVariable objects for variable checking
+        string_variables = [v for v in (variables or []) if isinstance(v, str)]
 
-        # subset the variables
-        if variables is not None:
-            subset_data = subset_data[variables]
+        # check that the variables are in the observation data
+        if string_variables and any(
+            var not in subset_data.data_vars for var in string_variables
+        ):
+            raise ValueError(
+                f"Variables {string_variables} not found in observation data"
+            )
+
+        # subset the variables (only string variables, DerivedVariable objects are handled later)
+        if string_variables:
+            subset_data = subset_data[string_variables]
 
         return subset_data
 
@@ -266,17 +272,17 @@ class GHCN(Observation):
         self,
         observation_data: ObservationDataInput,
         case: case.IndividualCase,
-        variables: Optional[list[str]] = None,
+        variables: Optional[list[str | DerivedVariable]] = None,
     ) -> ObservationDataInput:
         # Create filter expressions for LazyFrame
         time_min = case.start_date - pd.Timedelta(days=2)
         time_max = case.end_date + pd.Timedelta(days=2)
 
-        # TODO: fix case to automatically apply these; currently stand-in for now
-        case.latitude_min = case.location.latitude - case.bounding_box_degrees / 2
-        case.latitude_max = case.location.latitude + case.bounding_box_degrees / 2
-        case.longitude_min = case.location.longitude - case.bounding_box_degrees / 2
-        case.longitude_max = case.location.longitude + case.bounding_box_degrees / 2
+        # Calculate bounding box coordinates from case location and bounding box size
+        latitude_min = case.location.latitude - case.bounding_box_degrees / 2
+        latitude_max = case.location.latitude + case.bounding_box_degrees / 2
+        longitude_min = case.location.longitude - case.bounding_box_degrees / 2
+        longitude_max = case.location.longitude + case.bounding_box_degrees / 2
 
         if not isinstance(observation_data, pl.LazyFrame):
             raise ValueError(f"Expected polars LazyFrame, got {type(observation_data)}")
@@ -285,27 +291,28 @@ class GHCN(Observation):
         subset_observation_data = observation_data.filter(
             (pl.col("time") >= time_min)
             & (pl.col("time") <= time_max)
-            & (pl.col("latitude") >= case.latitude_min)
-            & (pl.col("latitude") <= case.latitude_max)
-            & (pl.col("longitude") >= case.longitude_min)
-            & (pl.col("longitude") <= case.longitude_max)
+            & (pl.col("latitude") >= latitude_min)
+            & (pl.col("latitude") <= latitude_max)
+            & (pl.col("longitude") >= longitude_min)
+            & (pl.col("longitude") <= longitude_max)
         )
 
+        # Filter out DerivedVariable objects for variable handling
+        string_variables = [v for v in (variables or []) if isinstance(v, str)]
+
         # Add time, latitude, and longitude to the variables, polars doesn't do indexes
-        if variables is None:
+        if string_variables is None:
             all_variables = ["time", "latitude", "longitude"]
         else:
-            all_variables = variables + ["time", "latitude", "longitude"]
+            all_variables = string_variables + ["time", "latitude", "longitude"]
 
         # check that the variables are in the observation data
         schema_fields = [field for field in subset_observation_data.collect_schema()]
-        if variables is not None and any(
-            var not in schema_fields for var in all_variables
-        ):
+        if all_variables and any(var not in schema_fields for var in all_variables):
             raise ValueError(f"Variables {all_variables} not found in observation data")
 
         # subset the variables
-        if variables is not None:
+        if all_variables:
             subset_observation_data = subset_observation_data.select(all_variables)
 
         return subset_observation_data
@@ -353,7 +360,7 @@ class LSR(Observation):
         self,
         observation_data: ObservationDataInput,
         case: case.IndividualCase,
-        variables: Optional[list[str]] = None,
+        variables: Optional[list[str | DerivedVariable]] = None,
     ) -> ObservationDataInput:
         if not isinstance(observation_data, pd.DataFrame):
             raise ValueError(f"Expected pandas DataFrame, got {type(observation_data)}")
@@ -363,24 +370,24 @@ class LSR(Observation):
         observation_data["lon"] = observation_data["lon"].astype(float)
         observation_data["time"] = pd.to_datetime(observation_data["time"])
 
-        # TODO: fix case to automatically apply these; currently stand-in for now
-        case.latitude_min = case.location.latitude - case.bounding_box_degrees / 2
-        case.latitude_max = case.location.latitude + case.bounding_box_degrees / 2
-        case.longitude_min = np.mod(
+        # Calculate bounding box coordinates from case location and bounding box size
+        latitude_min = case.location.latitude - case.bounding_box_degrees / 2
+        latitude_max = case.location.latitude + case.bounding_box_degrees / 2
+        longitude_min = np.mod(
             case.location.longitude - case.bounding_box_degrees / 2, 360
         )
-        case.longitude_max = np.mod(
+        longitude_max = np.mod(
             case.location.longitude + case.bounding_box_degrees / 2, 360
         )
 
         filters = (
             (observation_data["time"] >= case.start_date)
             & (observation_data["time"] <= case.end_date)
-            & (observation_data["lat"] >= case.latitude_min)
-            & (observation_data["lat"] <= case.latitude_max)
+            & (observation_data["lat"] >= latitude_min)
+            & (observation_data["lat"] <= latitude_max)
             # Convert longitude from 360 to 180 range for comparison
-            & (observation_data["lon"] >= (case.longitude_min + 180) % 360 - 180)
-            & (observation_data["lon"] <= (case.longitude_max + 180) % 360 - 180)
+            & (observation_data["lon"] >= (longitude_min + 180) % 360 - 180)
+            & (observation_data["lon"] <= (longitude_max + 180) % 360 - 180)
         )
 
         subset_observation_data = observation_data.loc[filters]
@@ -427,7 +434,7 @@ class IBTrACS(Observation):
         self,
         observation_data: ObservationDataInput,
         case: case.IndividualCase,
-        variables: Optional[list[str]] = None,
+        variables: Optional[list[str | DerivedVariable]] = None,
     ) -> ObservationDataInput:
         # Create filter expressions for LazyFrame
         year = case.start_date.year
@@ -440,18 +447,19 @@ class IBTrACS(Observation):
             (pl.col("NAME") == case.title.upper())
         )
 
-        all_variables = [
-            "SEASON",
-            "NUMBER",
-            "NAME",
-            "ISO_TIME",
-            "LAT",
-            "LON",
-            "WMO_WIND",
-            "USA_WIND",
-            "WMO_PRES",
-            "USA_PRES",
-        ]
+        # TODO: cascade these into the ibtracs dataframe
+        # all_variables = [
+        #     "SEASON",
+        #     "NUMBER",
+        #     "NAME",
+        #     "ISO_TIME",
+        #     "LAT",
+        #     "LON",
+        #     "WMO_WIND",
+        #     "USA_WIND",
+        #     "WMO_PRES",
+        #     "USA_PRES",
+        # ]
         # Get the season (year) from the case start date, cast as string as polars is interpreting the schema as strings
         season = str(year)
 
@@ -473,16 +481,21 @@ class IBTrACS(Observation):
             matching_numbers, on="NUMBER", how="inner"
         ).filter((pl.col("NAME") == case.title.upper()) & (pl.col("SEASON") == season))
 
+        # Filter out DerivedVariable objects for variable handling
+        string_variables = [v for v in (variables or []) if isinstance(v, str)]
+
         # check that the variables are in the observation data
         schema_fields = [field for field in subset_observation_data.collect_schema()]
-        if variables is not None and any(
-            var not in schema_fields for var in all_variables
+        if string_variables and any(
+            var not in schema_fields for var in string_variables
         ):
-            raise ValueError(f"Variables {all_variables} not found in observation data")
+            raise ValueError(
+                f"Variables {string_variables} not found in observation data"
+            )
 
         # subset the variables
-        if variables is not None:
-            subset_observation_data = subset_observation_data.select(all_variables)
+        if string_variables:
+            subset_observation_data = subset_observation_data.select(string_variables)
 
         return subset_observation_data
 
