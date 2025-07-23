@@ -73,6 +73,36 @@ class EventType(ABC):
         return evaluation_variables
 
 
+@dataclasses.dataclass
+class EventOperator:
+    events: List[EventType]
+    composed_metrics: List[metrics.Metric] = dataclasses.field(
+        default_factory=list, init=False, repr=True
+    )
+    composed_observations: List[observations.Observation] = dataclasses.field(
+        default_factory=list, init=False, repr=True
+    )
+    composed_variable_mappings: List[dict] = dataclasses.field(
+        default_factory=list, init=False, repr=True
+    )
+    composed_case_operators: List[case.CaseOperator] = dataclasses.field(
+        default_factory=list, init=False, repr=True
+    )
+
+    def __post_init__(self):
+        # Unravel attributes from composed event types
+        self.composed_metrics = []
+        self.composed_observations = []
+        self.composed_variable_mappings = []
+        self.composed_case_operators = []
+
+        # Collect attributes from each event type
+        for event in self.events:
+            self.composed_metrics.extend(event.metrics)
+            self.composed_observations.extend(event.evaluation_observations)
+            self.composed_case_operators.extend(event.build_case_operator())
+
+
 class HeatWave(EventType):
     def __init__(
         self,
@@ -141,33 +171,3 @@ class AtmosphericRiver(EventType):
             metrics=metrics,
             evaluation_observations=evaluation_observations,
         )
-
-
-@dataclasses.dataclass
-class EventOperator:
-    events: List[EventType]
-    composed_metrics: List[metrics.Metric] = dataclasses.field(
-        default_factory=list, init=False, repr=True
-    )
-    composed_observations: List[observations.Observation] = dataclasses.field(
-        default_factory=list, init=False, repr=True
-    )
-    composed_variable_mappings: List[dict] = dataclasses.field(
-        default_factory=list, init=False, repr=True
-    )
-    composed_case_operators: List[case.CaseOperator] = dataclasses.field(
-        default_factory=list, init=False, repr=True
-    )
-
-    def __post_init__(self):
-        # Unravel attributes from composed event types
-        self.composed_metrics = []
-        self.composed_observations = []
-        self.composed_variable_mappings = []
-        self.composed_case_operators = []
-
-        # Collect attributes from each event type
-        for event in self.events:
-            self.composed_metrics.extend(event.metrics)
-            self.composed_observations.extend(event.evaluation_observations)
-            self.composed_case_operators.extend(event.build_case_operator())
