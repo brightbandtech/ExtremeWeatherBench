@@ -74,6 +74,20 @@ class EventType(ABC):
 
 @dataclasses.dataclass
 class EventOperator:
+    """A class that composes multiple EventTypes into a single EventOperator.
+
+    This class is used to compose multiple EventTypes into a single EventOperator.
+    It is used to handle the logic of parsing the events when evaluating a series of cases
+    in ExtremeWeatherBench.
+
+    Attributes:
+        events: A list of EventTypes to compose.
+        composed_metrics: A list of metrics; derived from events.
+        composed_observations: A list of observations to compose; derived from events.
+        composed_variable_mappings: A list of variable mappings to compose; derived from events.
+        composed_case_operators: A list of case operators to compose; derived from events.
+    """
+
     events: List[EventType]
     composed_metrics: List[metrics.Metric] = dataclasses.field(
         default_factory=list, init=False, repr=True
@@ -103,6 +117,13 @@ class EventOperator:
 
 
 class HeatWave(EventType):
+    """An EventType child class that defines a heat wave event type.
+
+    A heat wave is defined as a period of at least 2 consecutive days with a daily minimum
+    temperature that is above the 85th percentile of the daily minimum temperature for that day
+    of the year.
+    """
+
     def __init__(
         self,
         case_metadata: dict[str, Any],
@@ -116,7 +137,10 @@ class HeatWave(EventType):
             metrics.OnsetME,
             metrics.DurationME,
         ],
-        evaluation_observations: List[observations.Observation] = [observations.ERA5],
+        evaluation_observations: List[observations.Observation] = [
+            observations.ERA5,
+            observations.GHCN,
+        ],
     ):
         super().__init__(
             event_type="heat_wave",
@@ -128,6 +152,13 @@ class HeatWave(EventType):
 
 
 class SevereConvection(EventType):
+    """An EventType child class that defines a severe convective event type.
+
+    A severe convective event is an outbreak which is characterized by a significant
+    number of tornado and hail reports. These events are also possibly characterized
+    as billion+ dollar disasters.
+    """
+
     def __init__(
         self,
         case_metadata: dict[str, Any],
@@ -153,6 +184,15 @@ class SevereConvection(EventType):
 
 
 class AtmosphericRiver(EventType):
+    """An EventType child class that defines an atmospheric river event type.
+
+    An atmospheric river is a persistent, narrow band of enhanced moisture that
+    extends from the tropics to the mid-latitudes. These events are characterized
+    by a large Integrated Vapor Transport (IVT) profile, a minimum size based upon
+    ERA5 resolution (0.25 degrees), a minimum value of the Laplacian of the IVT profile,
+    and some overlap with land (resulting in impacts to the built environment).
+    """
+
     def __init__(
         self,
         case_metadata: dict[str, Any],
