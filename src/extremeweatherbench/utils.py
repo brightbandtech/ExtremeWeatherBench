@@ -10,9 +10,9 @@ from importlib import resources
 from pathlib import Path
 from typing import List, Optional, Tuple, Union
 
-import geopandas as gpd
+import geopandas as gpd  # type: ignore[import-untyped]
 import numpy as np
-import pandas as pd
+import pandas as pd  # type: ignore[import-untyped]
 import regionmask
 import xarray as xr
 import yaml
@@ -138,6 +138,12 @@ def create_region(
         x is not None
         for x in [latitude_min, latitude_max, longitude_min, longitude_max]
     ):
+        # Type checkers can't infer that the values are not None after the all() check
+        # so we need to assert or cast them
+        assert latitude_min is not None
+        assert latitude_max is not None
+        assert longitude_min is not None
+        assert longitude_max is not None
         return BoundingBoxRegion(
             latitude_min=latitude_min,
             latitude_max=latitude_max,
@@ -557,10 +563,10 @@ def align_point_obs_from_gridded(
     )
     case_subset_point_obs_df = location_subset_point_obs(
         case_subset_point_obs_df,
-        forecast_ds["latitude"].min().values,
-        forecast_ds["latitude"].max().values,
-        forecast_ds["longitude"].min().values,
-        forecast_ds["longitude"].max().values,
+        float(forecast_ds["latitude"].min().values),
+        float(forecast_ds["latitude"].max().values),
+        float(forecast_ds["longitude"].min().values),
+        float(forecast_ds["longitude"].max().values),
     )
     # Reset index to allow for easier modification
     case_subset_point_obs_df = case_subset_point_obs_df.reset_index()
