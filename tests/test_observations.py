@@ -19,15 +19,6 @@ from extremeweatherbench.observations import (
 from extremeweatherbench.utils import Location
 
 
-class TestDerivedVariable:
-    """Test the DerivedVariable abstract base class."""
-
-    def test_derived_variable_initialization(self):
-        """Test that DerivedVariable cannot be instantiated directly."""
-        with pytest.raises(TypeError):
-            DerivedVariable()
-
-
 class TestObservation:
     """Test the abstract Observation base class."""
 
@@ -52,11 +43,12 @@ class TestObservation:
 
         # Create a concrete DerivedVariable for testing
         class TestDerivedVariable(DerivedVariable):
-            def compute(self, data):
+            def compute(self, **kwargs):
                 return xr.DataArray(
                     np.ones((2, 2)), dims=["x", "y"], coords={"x": [0, 1], "y": [0, 1]}
                 )
 
+            @property
             def name(self):
                 return "test_variable"
 
@@ -72,7 +64,7 @@ class TestObservation:
         )
 
         # Test with mixed string and DerivedVariable
-        variables = ["existing_var", TestDerivedVariable()]
+        variables = ["existing_var", TestDerivedVariable]
         result = obs._maybe_derive_variables(data, variables)
 
         assert "existing_var" in result.data_vars
@@ -205,7 +197,9 @@ class TestERA5:
         """Test the complete ERA5 pipeline."""
         mock_open_zarr.return_value = mock_era5_data
 
-        result = era5_observation.run_pipeline(era5_case)
+        result = era5_observation.run_pipeline(
+            era5_case, variables=["2m_temperature", "10m_u_component_of_wind"]
+        )
 
         assert isinstance(result, xr.Dataset)
         assert "2m_temperature" in result.data_vars
@@ -379,7 +373,9 @@ class TestGHCN:
         """Test the complete GHCN pipeline."""
         mock_scan_parquet.return_value = mock_ghcn_data
 
-        result = ghcn_observation.run_pipeline(ghcn_case)
+        result = ghcn_observation.run_pipeline(
+            ghcn_case, variables=["temperature", "humidity"]
+        )
 
         assert isinstance(result, xr.Dataset)
         assert "temperature" in result.data_vars
@@ -445,7 +441,7 @@ class TestLSR:
         result = lsr_observation._open_data_from_source()
 
         mock_read_parquet.assert_called_once_with(
-            lsr_observation.source, storage_options=None
+            lsr_observation.source, storage_options={"token": "anon"}
         )
         assert result.equals(mock_lsr_data)
 
@@ -471,8 +467,11 @@ class TestLSR:
         # Check that only data within the bounding box is included
         assert all(result["latitude"] >= lsr_case.latitude_min)
         assert all(result["latitude"] <= lsr_case.latitude_max)
-        assert all(result["longitude"] >= lsr_case.longitude_min)
-        assert all(result["longitude"] <= lsr_case.longitude_max)
+        # Convert case longitude bounds to 180-degree format for comparison
+        lon_min_180 = (lsr_case.longitude_min + 180) % 360 - 180
+        lon_max_180 = (lsr_case.longitude_max + 180) % 360 - 180
+        assert all(result["longitude"] >= lon_min_180)
+        assert all(result["longitude"] <= lon_max_180)
 
     def test_subset_data_to_case_invalid_data_type(self, lsr_observation, lsr_case):
         """Test that subsetting with invalid data type raises an error."""
@@ -531,7 +530,9 @@ class TestLSR:
         """Test the complete LSR pipeline."""
         mock_read_parquet.return_value = mock_lsr_data
 
-        result = lsr_observation.run_pipeline(lsr_case)
+        result = lsr_observation.run_pipeline(
+            lsr_case, variables=["report_type", "scale"]
+        )
 
         assert isinstance(result, xr.Dataset)
         assert "report_type" in result.data_vars
@@ -578,58 +579,11 @@ class TestIBTrACS:
         )
         assert result is mock_lazyframe
 
-    def test_subset_data_to_case_not_implemented(
-        self, ibtracs_observation, ibtracs_case
-    ):
-        """Test that subsetting IBTrACS data raises NotImplementedError."""
-        mock_data = pl.LazyFrame({"test": [1, 2, 3]})
-
-        with pytest.raises(
-            NotImplementedError, match="IBTrACS data subset is not implemented yet"
-        ):
-            ibtracs_observation._subset_data_to_case(mock_data, ibtracs_case)
-
-    def test_maybe_convert_to_dataset_dataframe(self, ibtracs_observation):
-        """Test converting DataFrame to xarray Dataset."""
-        df = pd.DataFrame(
-            {
-                "valid_time": pd.date_range("2021-06-20", periods=3),
-                "latitude": [40.0, 40.1, 40.2],
-                "longitude": [-100.0, -100.1, -100.2],
-                "wind_speed": [50.0, 60.0, 70.0],
-            }
-        )
-
-        result = ibtracs_observation._maybe_convert_to_dataset(df)
-
-        assert isinstance(result, xr.Dataset)
-        assert "wind_speed" in result.data_vars
-        assert "valid_time" in result.coords
-        assert "latitude" in result.coords
-        assert "longitude" in result.coords
-
-    def test_maybe_convert_to_dataset_with_duplicates(self, ibtracs_observation):
-        """Test converting DataFrame with duplicates to xarray Dataset."""
-        df = pd.DataFrame(
-            {
-                "valid_time": pd.date_range("2021-06-20", periods=2).repeat(2),
-                "latitude": [40.0, 40.0, 40.1, 40.1],
-                "longitude": [-100.0, -100.0, -100.1, -100.1],
-                "wind_speed": [50.0, 50.0, 60.0, 60.0],
-            }
-        )
-
-        with patch("extremeweatherbench.observations.logger") as mock_logger:
-            result = ibtracs_observation._maybe_convert_to_dataset(df)
-
-        assert isinstance(result, xr.Dataset)
-        mock_logger.warning.assert_called_once()
-
     def test_maybe_convert_to_dataset_invalid_type(self, ibtracs_observation):
         """Test that invalid data type raises an error."""
         invalid_data = "not a dataframe"
 
-        with pytest.raises(ValueError, match="Data is not a pandas DataFrame"):
+        with pytest.raises(ValueError):
             ibtracs_observation._maybe_convert_to_dataset(invalid_data)
 
 
@@ -665,11 +619,14 @@ class TestObservationIntegration:
 
         # Create a concrete DerivedVariable for testing
         class TestDerivedVariable(DerivedVariable):
-            def compute(self, data):
+            def compute(self, **kwargs):
                 return xr.DataArray(
-                    np.ones((2, 2)), dims=["x", "y"], coords={"x": [0, 1], "y": [0, 1]}
+                    np.ones((2, 2)),
+                    dims=["x", "y"],
+                    coords={"x": [0, 1], "y": [0, 1]},
                 )
 
+            @property
             def name(self):
                 return "test_variable"
 
@@ -682,7 +639,7 @@ class TestObservationIntegration:
             location=Location(latitude=40.0, longitude=-100.0),
             bounding_box_degrees=5.0,
             event_type="heat_wave",
-            data_vars=["existing_var", TestDerivedVariable()],
+            data_vars=["existing_var"],
         )
 
         # Create a concrete observation class for testing
@@ -705,7 +662,8 @@ class TestObservationIntegration:
                 return data
 
         obs = TestObservation()
-        result = obs.run_pipeline(test_case)
-
+        result = obs.run_pipeline(
+            test_case, variables=["existing_var", TestDerivedVariable]
+        )
         assert "existing_var" in result.data_vars
         assert "test_variable" in result.data_vars

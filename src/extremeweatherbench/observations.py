@@ -39,7 +39,7 @@ class DerivedVariable(ABC):
     """
 
     @abstractmethod
-    def compute(self, data: xr.Dataset) -> xr.DataArray:
+    def compute(self, **kwargs) -> xr.DataArray:
         """
         Compute the derived variable from the observation data.
         """
@@ -131,15 +131,21 @@ class Observation(ABC):
         """
 
         for v in variables:
-            if isinstance(v, DerivedVariable):
-                derived_variable = v.compute(data)
-                data[v.name()] = derived_variable
+            # there should only be strings or derived variables in the list
+            if not isinstance(v, str):
+                if not issubclass(v, DerivedVariable):
+                    raise ValueError(f"Expected str or DerivedVariable, got {type(v)}")
+                derived_variable = v().compute(
+                    case=case, data=data, variables=variables
+                )
+                data[v().name] = derived_variable
         return data
 
     def run_pipeline(
         self,
         case: case.IndividualCase,
         storage_options: Optional[dict] = None,
+        variables: Optional[list[str | DerivedVariable]] = None,
     ) -> xr.Dataset:
         """
         Shared method for running the observation pipeline.
@@ -162,12 +168,10 @@ class Observation(ABC):
             .pipe(
                 self._subset_data_to_case,
                 case=case,
-                variables=[v for v in case.data_vars if isinstance(v, str)]
-                if case.data_vars
-                else None,
+                variables=variables,
             )
             .pipe(self._maybe_convert_to_dataset)
-            .pipe(self._maybe_derive_variables, variables=case.data_vars or [])
+            .pipe(self._maybe_derive_variables, variables=variables or [])
         )
         return data
 
@@ -338,7 +342,10 @@ class LSR(Observation):
     def _open_data_from_source(
         self, storage_options: Optional[dict] = None
     ) -> ObservationDataInput:
-        observation_data = pd.read_parquet(self.source, storage_options=storage_options)
+        # force LSR to use anon token to prevent google reauth issues for users
+        observation_data = pd.read_parquet(
+            self.source, storage_options={"token": "anon"}
+        )
 
         return observation_data
 
@@ -371,8 +378,9 @@ class LSR(Observation):
             & (observation_data["time"] <= case.end_date)
             & (observation_data["lat"] >= case.latitude_min)
             & (observation_data["lat"] <= case.latitude_max)
-            & (observation_data["lon"] >= case.longitude_min)
-            & (observation_data["lon"] <= case.longitude_max)
+            # Convert longitude from 360 to 180 range for comparison
+            & (observation_data["lon"] >= (case.longitude_min + 180) % 360 - 180)
+            & (observation_data["lon"] <= (case.longitude_max + 180) % 360 - 180)
         )
 
         subset_observation_data = observation_data.loc[filters]
@@ -421,11 +429,67 @@ class IBTrACS(Observation):
         case: case.IndividualCase,
         variables: Optional[list[str]] = None,
     ) -> ObservationDataInput:
-        raise NotImplementedError("IBTrACS data subset is not implemented yet")
+        # Create filter expressions for LazyFrame
+        year = case.start_date.year
+
+        if not isinstance(observation_data, pl.LazyFrame):
+            raise ValueError(f"Expected polars LazyFrame, got {type(observation_data)}")
+
+        # Apply filters using proper polars expressions
+        subset_observation_data = observation_data.filter(
+            (pl.col("NAME") == case.title.upper())
+        )
+
+        all_variables = [
+            "SEASON",
+            "NUMBER",
+            "NAME",
+            "ISO_TIME",
+            "LAT",
+            "LON",
+            "WMO_WIND",
+            "USA_WIND",
+            "WMO_PRES",
+            "USA_PRES",
+        ]
+        # Get the season (year) from the case start date, cast as string as polars is interpreting the schema as strings
+        season = str(year)
+
+        # First filter by name to get the storm data
+        subset_observation_data = observation_data.filter(
+            (pl.col("NAME") == case.title.upper())
+        )
+
+        # Create a subquery to find all storm numbers in the same season
+        matching_numbers = (
+            subset_observation_data.filter(pl.col("SEASON") == season)
+            .select("NUMBER")
+            .unique()
+        )
+
+        # Apply the filter to get all data for storms with the same number in the same season
+        # This maintains the lazy evaluation
+        subset_observation_data = observation_data.join(
+            matching_numbers, on="NUMBER", how="inner"
+        ).filter((pl.col("NAME") == case.title.upper()) & (pl.col("SEASON") == season))
+
+        # check that the variables are in the observation data
+        schema_fields = [field for field in subset_observation_data.collect_schema()]
+        if variables is not None and any(
+            var not in schema_fields for var in all_variables
+        ):
+            raise ValueError(f"Variables {all_variables} not found in observation data")
+
+        # subset the variables
+        if variables is not None:
+            subset_observation_data = subset_observation_data.select(all_variables)
+
+        return subset_observation_data
 
     def _maybe_convert_to_dataset(self, data: ObservationDataInput):
-        if isinstance(data, pd.DataFrame):
-            data = data.set_index(["valid_time", "latitude", "longitude"])
+        if isinstance(data, pl.LazyFrame):
+            data = data.collect().to_pandas()
+            data = data.set_index(["ISO_TIME"])
             try:
                 data = data.to_xarray()
             except ValueError as e:
@@ -436,4 +500,4 @@ class IBTrACS(Observation):
                 data = data.drop_duplicates().to_xarray()
             return data
         else:
-            raise ValueError(f"Data is not a pandas DataFrame: {type(data)}")
+            raise ValueError(f"Data is not a polars LazyFrame: {type(data)}")
