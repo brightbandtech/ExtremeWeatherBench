@@ -12,12 +12,12 @@ from pathlib import Path
 from typing import List, Literal, Tuple, Union
 
 import numpy as np
-import pandas as pd
+import pandas as pd  # type: ignore[import-untyped]
 import regionmask
-import requests
+import requests  # type: ignore[import-untyped]
 import xarray as xr
 import yaml
-from scipy.ndimage import gaussian_filter
+from scipy.ndimage import gaussian_filter  # type: ignore[import-untyped]
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -447,10 +447,10 @@ def align_point_obs_from_gridded(
     )
     case_subset_point_obs_df = location_subset_point_obs(
         case_subset_point_obs_df,
-        forecast_ds["latitude"].min().values,
-        forecast_ds["latitude"].max().values,
-        forecast_ds["longitude"].min().values,
-        forecast_ds["longitude"].max().values,
+        float(forecast_ds["latitude"].min().values),
+        float(forecast_ds["latitude"].max().values),
+        float(forecast_ds["longitude"].min().values),
+        float(forecast_ds["longitude"].max().values),
     )
     # Reset index to allow for easier modification
     case_subset_point_obs_df = case_subset_point_obs_df.reset_index()
@@ -787,7 +787,7 @@ def practically_perfect_hindcast(
     pph = pph.isel(
         latitude=slice(lat_start, lat_end + 1), longitude=slice(lon_start, lon_end + 1)
     )
-    pph["longitude"] = convert_longitude_to_360(pph["longitude"])
+    pph["longitude"] = pph["longitude"].apply(convert_longitude_to_360)
 
     pph = pph.interp(
         latitude=output_coordinates.latitude,

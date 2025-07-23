@@ -78,7 +78,7 @@ class TestERA5:
     def era5_case(self):
         """Create a dummy case for ERA5 testing."""
         return IndividualCase(
-            id=1,
+            case_id_number=1,
             title="ERA5 Test Case",
             start_date=datetime.datetime(2021, 6, 20),
             end_date=datetime.datetime(2021, 6, 25),
@@ -213,7 +213,7 @@ class TestGHCN:
     def ghcn_case(self):
         """Create a dummy case for GHCN testing."""
         return IndividualCase(
-            id=2,
+            case_id_number=2,
             title="GHCN Test Case",
             start_date=datetime.datetime(2021, 6, 20),
             end_date=datetime.datetime(2021, 6, 25),
@@ -389,7 +389,7 @@ class TestLSR:
     def lsr_case(self):
         """Create a dummy case for LSR testing."""
         return IndividualCase(
-            id=3,
+            case_id_number=3,
             title="LSR Test Case",
             start_date=datetime.datetime(2021, 6, 20),
             end_date=datetime.datetime(2021, 6, 25),
@@ -546,7 +546,7 @@ class TestIBTrACS:
     def ibtracs_case(self):
         """Create a dummy case for IBTrACS testing."""
         return IndividualCase(
-            id=4,
+            case_id_number=4,
             title="IBTrACS Test Case",
             start_date=datetime.datetime(2021, 6, 20),
             end_date=datetime.datetime(2021, 6, 25),
@@ -632,7 +632,7 @@ class TestObservationIntegration:
 
         # Create a test case with derived variables
         test_case = IndividualCase(
-            id=1,
+            case_id_number=1,
             title="Test Case",
             start_date=datetime.datetime(2021, 6, 20),
             end_date=datetime.datetime(2021, 6, 25),
