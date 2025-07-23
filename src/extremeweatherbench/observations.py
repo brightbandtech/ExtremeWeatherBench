@@ -13,13 +13,26 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
+#: Storage/access options for gridded observation datasets.
+ARCO_ERA5_FULL_URI = (
+    "gs://gcp-public-data-arco-era5/ar/full_37-1h-0p25deg-chunk-1.zarr-v3"
+)
+
+#: Storage/access options for default point observation dataset.
+DEFAULT_GHCN_URI = "gs://extremeweatherbench/datasets/ghcnh.parq"
+
+#: Storage/access options for local storm report (LSR) tabular data.
+LSR_URI = "gs://extremeweatherbench/datasets/lsr_01012020_04302025.parq"
+
+IBTRACS_URI = "https://www.ncei.noaa.gov/data/international-best-track-archive-for-climate-stewardship-ibtracs/v04r01/access/csv/ibtracs.ALL.list.v04r01.csv"  # noqa: E501
+
 # type hint for the data input to the observation classes
 ObservationDataInput = Union[
     xr.Dataset, xr.DataArray, pl.LazyFrame, pd.DataFrame, np.ndarray
 ]
 
 
-# TODO: add a derived variable class to handle derived variables
+# TODO: add a derived variable class
 class DerivedVariable(ABC):
     """
     Abstract base class for derived variables.
@@ -29,6 +42,12 @@ class DerivedVariable(ABC):
     def compute(self, data: xr.Dataset) -> xr.DataArray:
         """
         Compute the derived variable from the observation data.
+        """
+
+    @abstractmethod
+    def name(self) -> str:
+        """
+        Get the name of the derived variable.
         """
 
 
@@ -42,9 +61,11 @@ class Observation(ABC):
     same coordinate system for evaluation.
     """
 
+    source: str
+
     @abstractmethod
     def _open_data_from_source(
-        self, source: str, storage_options: Optional[dict] = None
+        self, storage_options: Optional[dict] = None
     ) -> ObservationDataInput:
         """
         Open the observation data from the source, opting to avoid loading the entire dataset into memory if possible.
@@ -112,13 +133,12 @@ class Observation(ABC):
         for v in variables:
             if isinstance(v, DerivedVariable):
                 derived_variable = v.compute(data)
-                data[v.name] = derived_variable
+                data[v.name()] = derived_variable
         return data
 
     def run_pipeline(
         self,
-        source: str,
-        case: case.CaseOperator,
+        case: case.IndividualCase,
         storage_options: Optional[dict] = None,
     ) -> xr.Dataset:
         """
@@ -137,16 +157,17 @@ class Observation(ABC):
         # Open data and process through pipeline steps
         data = (
             self._open_data_from_source(
-                source=source,
                 storage_options=storage_options,
             )
             .pipe(
                 self._subset_data_to_case,
                 case=case,
-                variables=[v for v in case.variables if isinstance(v, str)],
+                variables=[v for v in case.data_vars if isinstance(v, str)]
+                if case.data_vars
+                else None,
             )
             .pipe(self._maybe_convert_to_dataset)
-            .pipe(self._maybe_derive_variables, variables=case.variables)
+            .pipe(self._maybe_derive_variables, variables=case.data_vars or [])
         )
         return data
 
@@ -161,11 +182,13 @@ class ERA5(Observation):
     using another method is required.
     """
 
+    source: str = ARCO_ERA5_FULL_URI
+
     def _open_data_from_source(
-        self, source: str, storage_options: Optional[dict] = None
+        self, storage_options: Optional[dict] = None
     ) -> ObservationDataInput:
         data = xr.open_zarr(
-            source,
+            self.source,
             chunks=None,
             storage_options=dict(token="anon"),
         )
@@ -224,11 +247,13 @@ class GHCN(Observation):
     into _subset_data_to_case.
     """
 
+    source: str = DEFAULT_GHCN_URI
+
     def _open_data_from_source(
-        self, source: str, storage_options: Optional[dict] = None
+        self, storage_options: Optional[dict] = None
     ) -> ObservationDataInput:
         observation_data: pl.LazyFrame = pl.scan_parquet(
-            source, storage_options=storage_options
+            self.source, storage_options=storage_options
         )
 
         return observation_data
@@ -308,10 +333,12 @@ class LSR(Observation):
     12 UTC to the next day at 12 UTC to match SPC methods.
     """
 
+    source: str = LSR_URI
+
     def _open_data_from_source(
-        self, source: str, storage_options: Optional[dict] = None
+        self, storage_options: Optional[dict] = None
     ) -> ObservationDataInput:
-        observation_data = pd.read_parquet(source, storage_options=storage_options)
+        observation_data = pd.read_parquet(self.source, storage_options=storage_options)
 
         return observation_data
 
@@ -377,12 +404,14 @@ class IBTrACS(Observation):
     Observation class for IBTrACS data.
     """
 
+    source: str = IBTRACS_URI
+
     def _open_data_from_source(
-        self, source: str, storage_options: Optional[dict] = None
+        self, storage_options: Optional[dict] = None
     ) -> ObservationDataInput:
         # not using storage_options in this case due to NetCDF4Backend not supporting them
-        observation_data: xr.Dataset = xr.open_dataset(
-            source, engine="h5netcdf", chunks="auto"
+        observation_data: pl.LazyFrame = pl.scan_csv(
+            self.source, storage_options=storage_options
         )
         return observation_data
 
@@ -394,10 +423,17 @@ class IBTrACS(Observation):
     ) -> ObservationDataInput:
         raise NotImplementedError("IBTrACS data subset is not implemented yet")
 
-    def _maybe_convert_to_dataset(self, data: ObservationDataInput) -> xr.Dataset:
-        if not isinstance(data, xr.Dataset):
-            if hasattr(data, "to_dataset"):
-                data = data.to_dataset()
-            else:
-                raise ValueError(f"Cannot convert {type(data)} to xarray Dataset")
-        return data
+    def _maybe_convert_to_dataset(self, data: ObservationDataInput):
+        if isinstance(data, pd.DataFrame):
+            data = data.set_index(["valid_time", "latitude", "longitude"])
+            try:
+                data = data.to_xarray()
+            except ValueError as e:
+                if "non-unique" in str(e):
+                    logger.warning(
+                        "ValueError when converting to xarray due to duplicate indexes"
+                    )
+                data = data.drop_duplicates().to_xarray()
+            return data
+        else:
+            raise ValueError(f"Data is not a pandas DataFrame: {type(data)}")
