@@ -6,7 +6,6 @@ import dataclasses
 import datetime
 import itertools
 import logging
-from abc import ABC
 from importlib import resources
 from pathlib import Path
 from typing import List, Optional, Tuple, Union
@@ -22,8 +21,8 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
-class Region(ABC):
-    """Abstract base class for different region representations."""
+class Region:
+    """Base class for different region representations."""
 
 
 @dataclasses.dataclass
