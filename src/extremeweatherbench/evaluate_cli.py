@@ -1,12 +1,13 @@
-from extremeweatherbench import config, events, evaluate, utils, case
-import dacite
-import click
-from pathlib import Path
-import yaml
 import json
 from dataclasses import replace
+from pathlib import Path
 from typing import Any
 
+import click
+import dacite
+import yaml
+
+from extremeweatherbench import case, config, evaluate, events, utils
 
 EVENT_TYPE_MAP = {
     "heat_wave": events.HeatWave,
@@ -67,7 +68,9 @@ def event_type_constructor(loader: yaml.SafeLoader, node: yaml.nodes.MappingNode
     else:
         input_event_dict = {"cases": yaml_event_case["cases"], "event_type": event_type}
     output = dacite.from_dict(
-        data_class=EVENT_TYPE_MAP[event_type], data=input_event_dict
+        data_class=EVENT_TYPE_MAP[event_type],
+        data=input_event_dict,
+        config=dacite.Config(type_hooks={utils.Region: utils.map_to_create_region}),
     )
     return output
 

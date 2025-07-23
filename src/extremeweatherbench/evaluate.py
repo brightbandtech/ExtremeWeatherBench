@@ -456,6 +456,7 @@ def get_case_metadata(eval_config: config.Config) -> list[events.EventContainer]
         cases = dacite.from_dict(
             data_class=event,
             data=yaml_event_case,
+            config=dacite.Config(type_hooks={utils.Region: utils.map_to_create_region}),
         )
         case_metadata_output.append(cases)
     return case_metadata_output
