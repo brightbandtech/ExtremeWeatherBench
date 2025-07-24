@@ -321,8 +321,8 @@ cases:
     location:
       latitude_min: 24.0
       latitude_max: 49.0
-      longitude_min: 251.0
-      longitude_max: 271.0
+      longitude_min: 245.0
+      longitude_max: 295.0
     event_type: severe_convection
   - case_id_number: 37
     title: July 2024 Chicago
@@ -331,8 +331,8 @@ cases:
     location:
       latitude_min: 24.0
       latitude_max: 49.0
-      longitude_min: 251.0
-      longitude_max: 271.0
+      longitude_min: 245.0
+      longitude_max: 295.0
     event_type: severe_convection
   - case_id_number: 38
     title: July 2024 New York
@@ -341,8 +341,8 @@ cases:
     location:
       latitude_min: 24.0
       latitude_max: 49.0
-      longitude_min: 271.0
-      longitude_max: 293.0
+      longitude_min: 245.0
+      longitude_max: 295.0
     event_type: severe_convection
   - case_id_number: 39
     title: May 2024 Wisconsin
@@ -350,9 +350,9 @@ cases:
     end_date: 2024-05-19 00:00:00
     location:
       latitude_min: 24.0
-      latitude_max: 49.0
-      longitude_min: 251.0
-      longitude_max: 271.0
+      latitude_max: 54.0
+      longitude_min: 245.0
+      longitude_max: 295.0
     event_type: severe_convection
   - case_id_number: 40
     title: May 2024 Kansas
@@ -360,9 +360,9 @@ cases:
     end_date: 2024-05-20 00:00:00
     location:
       latitude_min: 24.0
-      latitude_max: 49.0
-      longitude_min: 251.0
-      longitude_max: 271.0
+      latitude_max: 54.0
+      longitude_min: 245.0
+      longitude_max: 295.0
     event_type: severe_convection
   - case_id_number: 41
     title: May 2024 Iowa + Nebraska
@@ -370,9 +370,9 @@ cases:
     end_date: 2024-05-21 00:00:00
     location:
       latitude_min: 24.0
-      latitude_max: 49.0
-      longitude_min: 251.0
-      longitude_max: 271.0
+      latitude_max: 54.0
+      longitude_min: 245.0
+      longitude_max: 295.0
     event_type: severe_convection
   - case_id_number: 42
     title: May 2024 Iowa + Wisconsin
@@ -380,9 +380,9 @@ cases:
     end_date: 2024-05-22 00:00:00
     location:
       latitude_min: 24.0
-      latitude_max: 49.0
-      longitude_min: 251.0
-      longitude_max: 271.0
+      latitude_max: 54.0
+      longitude_min: 245.0
+      longitude_max: 295.0
     event_type: severe_convection
   - case_id_number: 43
     title: May 2024 Texas
@@ -390,9 +390,9 @@ cases:
     end_date: 2024-05-23 00:00:00
     location:
       latitude_min: 24.0
-      latitude_max: 49.0
-      longitude_min: 251.0
-      longitude_max: 271.0
+      latitude_max: 54.0
+      longitude_min: 245.0
+      longitude_max: 295.0
     event_type: severe_convection
   - case_id_number: 44
     title: May 2024 Iowa + Nebraska 2
@@ -400,9 +400,9 @@ cases:
     end_date: 2024-05-24 00:00:00
     location:
       latitude_min: 24.0
-      latitude_max: 49.0
-      longitude_min: 251.0
-      longitude_max: 271.0
+      latitude_max: 54.0
+      longitude_min: 245.0
+      longitude_max: 295.0
     event_type: severe_convection
   - case_id_number: 45
     title: April 2024 Oklahoma
@@ -410,9 +410,9 @@ cases:
     end_date: 2024-04-29 12:00:00
     location:
       latitude_min: 24.0
-      latitude_max: 49.0
-      longitude_min: 251.0
-      longitude_max: 271.0
+      latitude_max: 54.0
+      longitude_min: 245.0
+      longitude_max: 295.0
     event_type: severe_convection
   - case_id_number: 46
     title: April 2024 Midwest
@@ -420,9 +420,9 @@ cases:
     end_date: 2024-04-03 12:00:00
     location:
       latitude_min: 24.0
-      latitude_max: 49.0
-      longitude_min: 251.0
-      longitude_max: 271.0
+      latitude_max: 54.0
+      longitude_min: 245.0
+      longitude_max: 295.0
     event_type: severe_convection
   - case_id_number: 47
     title: April 2024 Great Plains + Midwest
@@ -430,9 +430,9 @@ cases:
     end_date: 2024-04-02 12:00:00
     location:
       latitude_min: 24.0
-      latitude_max: 49.0
-      longitude_min: 251.0
-      longitude_max: 271.0
+      latitude_max: 54.0
+      longitude_min: 245.0
+      longitude_max: 295.0
     event_type: severe_convection
   - case_id_number: 48
     title: March 2024 Midwest
@@ -440,9 +440,9 @@ cases:
     end_date: 2024-03-15 12:00:00
     location:
       latitude_min: 24.0
-      latitude_max: 49.0
-      longitude_min: 251.0
-      longitude_max: 271.0
+      latitude_max: 54.0
+      longitude_min: 245.0
+      longitude_max: 295.0
     event_type: severe_convection
   - case_id_number: 49
     title: February 2024 Midwest
@@ -450,9 +450,9 @@ cases:
     end_date: 2024-02-28 12:00:00
     location:
       latitude_min: 24.0
-      latitude_max: 49.0
-      longitude_min: 251.0
-      longitude_max: 271.0
+      latitude_max: 54.0
+      longitude_min: 245.0
+      longitude_max: 295.0
     event_type: severe_convection
   - case_id_number: 50
     title: January 2024 Southeast
@@ -460,9 +460,9 @@ cases:
     end_date: 2024-01-10 12:00:00
     location:
       latitude_min: 24.0
-      latitude_max: 49.0
-      longitude_min: 271.0
-      longitude_max: 293.0
+      latitude_max: 54.0
+      longitude_min: 245.0
+      longitude_max: 295.0
     event_type: severe_convection
   - case_id_number: 51
     title: December 2023 South
@@ -470,9 +470,9 @@ cases:
     end_date: 2023-12-10 12:00:00
     location:
       latitude_min: 24.0
-      latitude_max: 49.0
-      longitude_min: 271.0
-      longitude_max: 293.0
+      latitude_max: 54.0
+      longitude_min: 245.0
+      longitude_max: 295.0
     event_type: severe_convection
   - case_id_number: 52
     title: August 2023 East Coast
@@ -480,9 +480,9 @@ cases:
     end_date: 2023-08-08 12:00:00
     location:
       latitude_min: 24.0
-      latitude_max: 49.0
-      longitude_min: 271.0
-      longitude_max: 293.0
+      latitude_max: 54.0
+      longitude_min: 245.0
+      longitude_max: 295.0
     event_type: severe_convection
   - case_id_number: 53
     title: August 2023 Minnesota
@@ -490,9 +490,9 @@ cases:
     end_date: 2023-08-12 12:00:00
     location:
       latitude_min: 24.0
-      latitude_max: 49.0
-      longitude_min: 251.0
-      longitude_max: 271.0
+      latitude_max: 54.0
+      longitude_min: 245.0
+      longitude_max: 295.0
     event_type: severe_convection
   - case_id_number: 54
     title: July 2023 Midwest
@@ -500,9 +500,9 @@ cases:
     end_date: 2023-07-03 12:00:00
     location:
       latitude_min: 24.0
-      latitude_max: 49.0
-      longitude_min: 251.0
-      longitude_max: 271.0
+      latitude_max: 54.0
+      longitude_min: 245.0
+      longitude_max: 295.0
     event_type: severe_convection
   - case_id_number: 55
     title: July 2023 Midwest 2
@@ -510,9 +510,9 @@ cases:
     end_date: 2023-07-02 12:00:00
     location:
       latitude_min: 24.0
-      latitude_max: 49.0
-      longitude_min: 251.0
-      longitude_max: 271.0
+      latitude_max: 54.0
+      longitude_min: 245.0
+      longitude_max: 295.0
     event_type: severe_convection
   - case_id_number: 56
     title: June 2023 Midwest
@@ -520,9 +520,9 @@ cases:
     end_date: 2023-07-01 12:00:00
     location:
       latitude_min: 24.0
-      latitude_max: 49.0
-      longitude_min: 251.0
-      longitude_max: 271.0
+      latitude_max: 54.0
+      longitude_min: 245.0
+      longitude_max: 295.0
     event_type: severe_convection
   - case_id_number: 57
     title: June 2023 Front Range
@@ -530,9 +530,9 @@ cases:
     end_date: 2023-06-22 12:00:00
     location:
       latitude_min: 24.0
-      latitude_max: 49.0
-      longitude_min: 235.0
-      longitude_max: 251.0
+      latitude_max: 54.0
+      longitude_min: 245.0
+      longitude_max: 295.0
     event_type: severe_convection
   - case_id_number: 58
     title: June 2023 Texas
@@ -540,9 +540,9 @@ cases:
     end_date: 2023-06-22 12:00:00
     location:
       latitude_min: 24.0
-      latitude_max: 49.0
-      longitude_min: 251.0
-      longitude_max: 271.0
+      latitude_max: 54.0
+      longitude_min: 245.0
+      longitude_max: 295.0
     event_type: severe_convection
   - case_id_number: 59
     title: June 2023 Great Plains
@@ -550,9 +550,9 @@ cases:
     end_date: 2023-06-24 12:00:00
     location:
       latitude_min: 24.0
-      latitude_max: 49.0
-      longitude_min: 251.0
-      longitude_max: 271.0
+      latitude_max: 54.0
+      longitude_min: 245.0
+      longitude_max: 295.0
     event_type: severe_convection
   - case_id_number: 60
     title: June 2023 Iowa + Minnesota
@@ -560,9 +560,9 @@ cases:
     end_date: 2023-06-25 12:00:00
     location:
       latitude_min: 24.0
-      latitude_max: 49.0
-      longitude_min: 251.0
-      longitude_max: 271.0
+      latitude_max: 54.0
+      longitude_min: 245.0
+      longitude_max: 295.0
     event_type: severe_convection
   - case_id_number: 61
     title: June 2023 South + Midwest
@@ -570,9 +570,9 @@ cases:
     end_date: 2023-06-26 12:00:00
     location:
       latitude_min: 24.0
-      latitude_max: 49.0
-      longitude_min: 251.0
-      longitude_max: 271.0
+      latitude_max: 54.0
+      longitude_min: 245.0
+      longitude_max: 295.0
     event_type: severe_convection
   - case_id_number: 62
     title: June 2023 East Coast
@@ -580,9 +580,9 @@ cases:
     end_date: 2023-06-27 12:00:00
     location:
       latitude_min: 24.0
-      latitude_max: 49.0
-      longitude_min: 271.0
-      longitude_max: 293.0
+      latitude_max: 54.0
+      longitude_min: 245.0
+      longitude_max: 295.0
     event_type: severe_convection
   - case_id_number: 63
     title: June 2023 Midwest + Great Plains
@@ -590,9 +590,9 @@ cases:
     end_date: 2023-06-30 12:00:00
     location:
       latitude_min: 24.0
-      latitude_max: 49.0
-      longitude_min: 251.0
-      longitude_max: 271.0
+      latitude_max: 54.0
+      longitude_min: 245.0
+      longitude_max: 295.0
     event_type: severe_convection
   - case_id_number: 64
     title: June 2023 Southeast
@@ -600,9 +600,9 @@ cases:
     end_date: 2023-06-15 12:00:00
     location:
       latitude_min: 24.0
-      latitude_max: 49.0
-      longitude_min: 271.0
-      longitude_max: 293.0
+      latitude_max: 54.0
+      longitude_min: 245.0
+      longitude_max: 295.0
     event_type: severe_convection
   - case_id_number: 65
     title: June 2023 OK + TX + South
@@ -610,9 +610,9 @@ cases:
     end_date: 2023-06-16 12:00:00
     location:
       latitude_min: 24.0
-      latitude_max: 49.0
-      longitude_min: 271.0
-      longitude_max: 293.0
+      latitude_max: 54.0
+      longitude_min: 245.0
+      longitude_max: 295.0
     event_type: severe_convection
   - case_id_number: 66
     title: June 2023 South
@@ -620,9 +620,9 @@ cases:
     end_date: 2023-06-17 12:00:00
     location:
       latitude_min: 24.0
-      latitude_max: 49.0
-      longitude_min: 271.0
-      longitude_max: 293.0
+      latitude_max: 54.0
+      longitude_min: 245.0
+      longitude_max: 295.0
     event_type: severe_convection
   - case_id_number: 67
     title: June 2023 Mid-Atlantic
@@ -630,9 +630,9 @@ cases:
     end_date: 2023-06-17 12:00:00
     location:
       latitude_min: 24.0
-      latitude_max: 49.0
-      longitude_min: 271.0
-      longitude_max: 293.0
+      latitude_max: 54.0
+      longitude_min: 245.0
+      longitude_max: 295.0
     event_type: severe_convection
   - case_id_number: 68
     title: June 2023 Great Plains + South
@@ -640,9 +640,9 @@ cases:
     end_date: 2023-06-18 12:00:00
     location:
       latitude_min: 24.0
-      latitude_max: 49.0
-      longitude_min: 251.0
-      longitude_max: 271.0
+      latitude_max: 54.0
+      longitude_min: 245.0
+      longitude_max: 295.0
     event_type: severe_convection
   - case_id_number: 69
     title: May 2023 Great Plains
@@ -650,9 +650,9 @@ cases:
     end_date: 2023-05-11 12:00:00
     location:
       latitude_min: 24.0
-      latitude_max: 49.0
-      longitude_min: 251.0
-      longitude_max: 271.0
+      latitude_max: 54.0
+      longitude_min: 245.0
+      longitude_max: 295.0
     event_type: severe_convection
   - case_id_number: 70
     title: May 2023 Great Plains + South
@@ -660,9 +660,9 @@ cases:
     end_date: 2023-05-12 12:00:00
     location:
       latitude_min: 24.0
-      latitude_max: 49.0
-      longitude_min: 251.0
-      longitude_max: 271.0
+      latitude_max: 54.0
+      longitude_min: 245.0
+      longitude_max: 295.0
     event_type: severe_convection
   - case_id_number: 71
     title: May 2023 Nebraska
@@ -670,9 +670,9 @@ cases:
     end_date: 2023-05-13 12:00:00
     location:
       latitude_min: 24.0
-      latitude_max: 49.0
-      longitude_min: 251.0
-      longitude_max: 271.0
+      latitude_max: 54.0
+      longitude_min: 245.0
+      longitude_max: 295.0
     event_type: severe_convection
   - case_id_number: 72
     title: May 2024 Texas
