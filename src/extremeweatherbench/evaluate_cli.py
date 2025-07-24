@@ -7,7 +7,7 @@ import click
 import dacite
 import yaml
 
-from extremeweatherbench import case, config, evaluate, events, utils
+from extremeweatherbench import case, config, evaluate, events, regions, utils
 
 EVENT_TYPE_MAP = {
     "heat_wave": events.HeatWave,
@@ -61,16 +61,19 @@ def event_type_constructor(loader: yaml.SafeLoader, node: yaml.nodes.MappingNode
                     )
                 )
 
-        cases = [
-            case.IndividualCase(**yaml_event_case["cases"][i - 1]) for i in case_ids
-        ]
+        cases = []
+        for i in case_ids:
+            case_data = yaml_event_case["cases"][i - 1].copy()
+            # Convert location dict to Region object
+            case_data["location"] = regions.map_to_create_region(case_data["location"])
+            cases.append(case.IndividualCase(**case_data))
         input_event_dict = {"cases": cases, "event_type": event_type}
     else:
         input_event_dict = {"cases": yaml_event_case["cases"], "event_type": event_type}
     output = dacite.from_dict(
         data_class=EVENT_TYPE_MAP[event_type],
         data=input_event_dict,
-        config=dacite.Config(type_hooks={utils.Region: utils.map_to_create_region}),
+        config=dacite.Config(type_hooks={regions.Region: regions.map_to_create_region}),
     )
     return output
 

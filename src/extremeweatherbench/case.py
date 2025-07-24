@@ -11,7 +11,7 @@ import numpy as np
 import regionmask
 import xarray as xr
 
-from extremeweatherbench import metrics, utils
+from extremeweatherbench import metrics, regions, utils
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -38,7 +38,7 @@ class IndividualCase:
     title: str
     start_date: datetime.datetime
     end_date: datetime.datetime
-    location: utils.Region
+    location: regions.Region
     event_type: str
     data_vars: Optional[List[str]] = None
     cross_listed: Optional[List[str]] = None
@@ -62,11 +62,11 @@ class IndividualCase:
         else:
             latitude_name = "latitude"
 
-        if isinstance(self.location, utils.CenteredRegion):
-            modified_ds = utils.clip_dataset_to_bounding_box_degrees(
+        if isinstance(self.location, regions.CenteredRegion):
+            modified_ds = regions.clip_dataset_to_bounding_box_degrees(
                 dataset, self.location
             )
-        elif isinstance(self.location, utils.BoundingBoxRegion):
+        elif isinstance(self.location, regions.BoundingBoxRegion):
             modified_ds = dataset.sel(
                 {
                     latitude_name: slice(
@@ -77,7 +77,7 @@ class IndividualCase:
                     ),
                 }
             )
-        elif isinstance(self.location, utils.ShapefileRegion):
+        elif isinstance(self.location, regions.ShapefileRegion):
             region_mask = regionmask.from_geopandas(self.location.shapefile)
             modified_ds = region_mask.mask(
                 dataset.rename({longitude_name: "lon", latitude_name: "lat"})
@@ -189,18 +189,18 @@ class IndividualHeatWaveCase(IndividualCase):
         self.data_vars = ["surface_air_temperature"]
 
     def perform_subsetting_procedure(self, dataset: xr.Dataset) -> xr.Dataset:
-        if isinstance(self.location, utils.CenteredRegion):
-            modified_ds = utils.clip_dataset_to_bounding_box_degrees(
+        if isinstance(self.location, regions.CenteredRegion):
+            modified_ds = regions.clip_dataset_to_bounding_box_degrees(
                 dataset, self.location
             )
-        elif isinstance(self.location, utils.BoundingBoxRegion):
+        elif isinstance(self.location, regions.BoundingBoxRegion):
             modified_ds = dataset.sel(
                 latitude=slice(self.location.latitude_min, self.location.latitude_max),
                 longitude=slice(
                     self.location.longitude_min, self.location.longitude_max
                 ),
             )
-        elif isinstance(self.location, utils.ShapefileRegion):
+        elif isinstance(self.location, regions.ShapefileRegion):
             # Create a mask from the shapefile
             shapefile_path = self.location.shapefile_path
             mask = regionmask.from_geopandas(shapefile_path, names="region")
@@ -244,18 +244,18 @@ class IndividualFreezeCase(IndividualCase):
         ]
 
     def perform_subsetting_procedure(self, dataset: xr.Dataset) -> xr.Dataset:
-        if isinstance(self.location, utils.CenteredRegion):
-            modified_ds = utils.clip_dataset_to_bounding_box_degrees(
+        if isinstance(self.location, regions.CenteredRegion):
+            modified_ds = regions.clip_dataset_to_bounding_box_degrees(
                 dataset, self.location
             )
-        elif isinstance(self.location, utils.BoundingBoxRegion):
+        elif isinstance(self.location, regions.BoundingBoxRegion):
             modified_ds = dataset.sel(
                 latitude=slice(self.location.latitude_min, self.location.latitude_max),
                 longitude=slice(
                     self.location.longitude_min, self.location.longitude_max
                 ),
             )
-        elif isinstance(self.location, utils.ShapefileRegion):
+        elif isinstance(self.location, regions.ShapefileRegion):
             # Create a mask from the shapefile
             shapefile_path = self.location.shapefile_path
             mask = regionmask.from_geopandas(shapefile_path, names="region")
