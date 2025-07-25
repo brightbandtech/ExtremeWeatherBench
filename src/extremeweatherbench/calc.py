@@ -1,7 +1,7 @@
 import itertools
 from abc import ABC, abstractmethod
 from importlib import resources
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 import numpy as np
 import numpy.ma as ma
@@ -13,6 +13,24 @@ from scipy.special import lambertw
 
 from extremeweatherbench import case, regions, utils
 from extremeweatherbench.utils import extract_coordinates_from_sparse_coo
+
+GAMMA = 6.5  # K/km
+P0 = 1000  # hPa
+P0_STP = 1013.25  # hPa
+T0 = 288.0  # K
+RD = 287.04749097718457  # J/kg/K
+EPSILON = 0.6219569100577033
+SAT_PRESS_0C = 6.112  # hPa
+KAPPA = 0.28571428571428564
+G = 9.81  # m/s^2
+LV = 2500840  # J/kg
+CP_D = 1004.6662184201462  # J/kgK
+R = 8.314462618  # J/mol/K
+MW = 18.015268  # g/mol
+RV = (R / MW) * 1000  # J/kg/K
+CP_L = 4219.4  # J/g
+CP_V = 1860.078011865639  # J/kg
+T0 = 273.15  # K
 
 
 class DerivedVariable(ABC):
@@ -207,20 +225,14 @@ def dewpoint_from_specific_humidity(
         The dewpoint DataArray.
     """
     mixing_ratio = specific_humidity / (1 - specific_humidity)
-    e = pressure * mixing_ratio / (epsilon + mixing_ratio)
+    e = pressure * mixing_ratio / (EPSILON + mixing_ratio)
 
     return dewpoint_from_vapor_pressure(e)
 
 
 def craven_brooks_sig_svr(
     ds: xr.Dataset,
-    pressure_var: str = "pressure",
-    temperature_var: str = "temperature",
-    temperature_dewpoint_var: str = "dewpoint",
-    eastward_wind_var: str = "eastward_wind",
-    northward_wind_var: str = "northward_wind",
-    surface_eastward_wind_var: str = "surface_eastward_wind",
-    surface_northward_wind_var: str = "surface_northward_wind",
+    variable_mapping: dict[str, str],
     depth: float = 100,
 ) -> xr.DataArray:
     """Calculates the Craven-Brooks Significant Severe (CBSS) parameter.
@@ -232,30 +244,24 @@ def craven_brooks_sig_svr(
 
     Args:
         ds: Dataset containing pressure, temperature, and dewpoint variables
-        pressure_var: Name of the pressure variable in the dataset
-        temperature_var: Name of the temperature variable in the dataset
-        temperature_dewpoint_var: Name of the dewpoint variable in the dataset
+        variable_mapping: Mapping of variable names to their names in the dataset
         depth: Depth of the mixed layer in hPa
 
     Returns:
-        sig_svr: ndarray of Significant Severe parameter values
+        sig_svr: array of Significant Severe parameter values
     """
     # Check for prerequisites to ensure successful execution
     ds = _basic_ds_checks(ds)
+
     # CIN not needed for CBSS
     cape, _ = mixed_layer_cape_cin(
         ds,
-        pressure_var,
-        temperature_var,
-        temperature_dewpoint_var,
+        variable_mapping,
         depth,
     )
     shear = low_level_shear(
         ds,
-        eastward_wind_var,
-        northward_wind_var,
-        surface_eastward_wind_var,
-        surface_northward_wind_var,
+        variable_mapping,
     )
     cbss = cape * shear
     return cbss
@@ -263,10 +269,7 @@ def craven_brooks_sig_svr(
 
 def low_level_shear(
     ds: xr.Dataset,
-    eastward_wind_var: str = "eastward_wind",
-    northward_wind_var: str = "northward_wind",
-    surface_eastward_wind_var: str = "surface_eastward_wind",
-    surface_northward_wind_var: str = "surface_northward_wind",
+    variable_mapping: dict[str, str],
 ) -> xr.DataArray:
     """Calculates the low level (0-6 km) shear of a dataset (Lepore et al 2021).
 
@@ -274,20 +277,26 @@ def low_level_shear(
         ds: Dataset containing eastward and northward (u and v) wind vectors
 
     Returns:
-        ll_shear: ndarray of low level shear values in m/s
+        ll_shear: array of low level shear values in m/s
     """
     ll_shear = np.sqrt(
-        (ds[eastward_wind_var].sel(level=500) - ds[surface_eastward_wind_var]) ** 2
-        + (ds[northward_wind_var].sel(level=500) - ds[surface_northward_wind_var]) ** 2
+        (
+            ds[variable_mapping["eastward_wind"]].sel(level=500)
+            - ds[variable_mapping["surface_eastward_wind"]]
+        )
+        ** 2
+        + (
+            ds[variable_mapping["northward_wind"]].sel(level=500)
+            - ds[variable_mapping["surface_northward_wind"]]
+        )
+        ** 2
     )
     return ll_shear
 
 
 def mixed_layer_cape_cin(
     ds: xr.Dataset,
-    pressure_var: str = "pressure",
-    temperature_var: str = "temperature",
-    temperature_dewpoint_var: str = "dewpoint",
+    variable_mapping: dict[str, str],
     depth: float = 100,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Calculates the mixed layer CAPE and CIN of a dataset.
@@ -302,18 +311,16 @@ def mixed_layer_cape_cin(
 
     Args:
         ds: Dataset containing pressure, temperature, and dewpoint variables
-        pressure_var: Name of the pressure variable in the dataset
-        temperature_var: Name of the temperature variable in the dataset
-        temperature_dewpoint_var: Name of the dewpoint variable in the dataset
+        variable_mapping: Mapping of variable names to their names in the dataset
         depth: Depth of the mixed layer in hPa
 
     Returns:
-        cape: ndarray of CAPE values in J/kg
-        cin: ndarray of CIN values in J/kg
+        cape: array of CAPE values in J/kg
+        cin: array of CIN values in J/kg
     """
     ds = _basic_ds_checks(ds)
     pressure = ds["level"]
-    mixed_layer_mask = ds[pressure_var] < (pressure[0] - depth)
+    mixed_layer_mask = ds[variable_mapping["pressure"]] < (pressure[0] - depth)
     # Get the indices where the condition is True along the last dimension
     valid_indices = np.any(
         mixed_layer_mask, axis=tuple(range(mixed_layer_mask.ndim - 1))
@@ -323,14 +330,14 @@ def mixed_layer_cape_cin(
         calculated_parcel_start_pressure,
         calculated_parcel_temp,
         calculated_parcel_dewpoint,
-    ) = mixed_parcel(ds, pressure_var, temperature_var, temperature_dewpoint_var, depth)
+    ) = mixed_parcel(ds, variable_mapping, depth)
     parcel_temp_reshaped = np.expand_dims(calculated_parcel_temp, axis=-1)
     parcel_dewpoint_reshaped = np.expand_dims(calculated_parcel_dewpoint, axis=-1)
 
     # Extract valid pressure, temperature and dewpoint profiles
-    pressure_prof = ds[pressure_var][..., valid_indices]
-    temp_prof = ds[temperature_var][..., valid_indices]
-    dew_prof = ds[temperature_dewpoint_var][..., valid_indices]
+    pressure_prof = ds[variable_mapping["pressure"]][..., valid_indices]
+    temp_prof = ds[variable_mapping["temperature"]][..., valid_indices]
+    dew_prof = ds[variable_mapping["dewpoint"]][..., valid_indices]
     # Concatenate the mixed parcel properties with the profiles
     parcel_start_pressure_reshaped = np.full(
         (*pressure_prof.shape[:-1], 1),
@@ -471,50 +478,28 @@ def mixed_layer_cape_cin(
     return cape, cin
 
 
-gamma = 6.5  # K/km
-p0 = 1000  # hPa
-p0_stp = 1013.25  # hPa
-t0 = 288.0  # K
-Rd = 287.04749097718457  # J/kg/K
-depth = 100  # hPa
-epsilon = 0.6219569100577033
-sat_press_0c = 6.112  # hPa
-kappa = 0.28571428571428564
-g = 9.81  # m/s^2
-Lv = 2500840  # J/kg
-Cp_d = 1004.6662184201462  # J/kgK
-R = 8.314462618  # J/mol/K
-Mw = 18.015268  # g/mol
-Rv = (R / Mw) * 1000  # J/kg/K
-Cp_l = 4219.4  # J/g
-Cp_v = 1860.078011865639  # J/kg
-T0 = 273.15  # K
-
-
-def _interp_integrate(pressure, pressure_interp, layer_depth, vars, axis=0):
+def _interp_integrate(
+    pressure: xr.DataArray,
+    pressure_interp: xr.DataArray,
+    layer_depth: float,
+    vars: xr.DataArray,
+    axis: int = 0,
+) -> xr.DataArray:
+    """Helper function to interpolate and integrate a variable."""
     vars_interp = log_interpolate(pressure_interp, pressure, vars)
     integration = np.trapezoid(vars_interp, pressure_interp, axis=axis) / -layer_depth
     return integration
 
 
 def moist_lapse_lookup(target_pressure, target_temp, reference_pressure=None):
-    """
-    Find the column in test_df that matches the closest temperature and pressure.
+    """Find the column in test_df that matches the closest temperature and pressure.
 
-    Parameters:
-    -----------
-    target_temp : float or ndarray
-        Target temperature(s) in Celsius
-    target_pressure : float or ndarray
-        Target pressure(s) in hPa
-    reference_pressure: float or ndarray
-        Pressure(s) to start lifting from in hPa
-    table_path : str
-        Location of lookup table
+    Args:
+        target_pressure: Target pressure(s) in hPa
+        target_temp: Target temperature(s) in Celsius
+        reference_pressure: Pressure(s) to start lifting from in hPa
 
     Returns:
-    --------
-    ndarray
         Array of temperature profiles that best match the target conditions
     """
 
@@ -576,13 +561,13 @@ def mixing_ratio(partial_pressure, total_pressure):
     """Calculates the mixing ratio of a parcel.
 
     Args:
-        partial_press: Partial pressure values
-        total_press: Total pressure values
+        partial_pressure: Partial pressure values
+        total_pressure: Total pressure values
 
     Returns:
         Mixing ratio values in kg/kg
     """
-    return epsilon * partial_pressure / (total_pressure - partial_pressure)
+    return EPSILON * partial_pressure / (total_pressure - partial_pressure)
 
 
 def vapor_pressure(pressure, mixing_ratio):
@@ -595,7 +580,7 @@ def vapor_pressure(pressure, mixing_ratio):
     Returns:
         Vapor pressure values in provided pressure units
     """
-    return pressure * mixing_ratio / (epsilon + mixing_ratio)
+    return pressure * mixing_ratio / (EPSILON + mixing_ratio)
 
 
 def saturation_vapor_pressure(temperature):
@@ -607,7 +592,7 @@ def saturation_vapor_pressure(temperature):
     Returns:
         Saturation vapor pressure values in hPa
     """
-    return sat_press_0c * np.exp(17.67 * temperature / (temperature + 243.5))
+    return SAT_PRESS_0C * np.exp(17.67 * temperature / (temperature + 243.5))
 
 
 def exner_function(pressure):
@@ -619,7 +604,7 @@ def exner_function(pressure):
     Returns:
         Exner function values
     """
-    return (pressure / p0) ** kappa
+    return (pressure / P0) ** KAPPA
 
 
 def get_pressure_height(pressure):
@@ -633,11 +618,11 @@ def get_pressure_height(pressure):
         height: Height values in m
     """
     pressure = np.atleast_1d(pressure)
-    height = (t0 / gamma) * (1 - (pressure / p0) ** (Rd * gamma / g))
+    height = (T0 / GAMMA) * (1 - (pressure / P0) ** (RD * GAMMA / G))
     return pressure, height
 
 
-def potential_temperature(temperature, pressure, units="C"):
+def potential_temperature(temperature, pressure, units: Literal["C", "K"] = "C"):
     """Calculates the potential temperature of a parcel.
 
     Args:
@@ -645,7 +630,7 @@ def potential_temperature(temperature, pressure, units="C"):
         pressure: Pressure values in hPa
 
     Returns:
-        Potential temperature values in K
+        Potential temperature values in Kelvin
     """
     if units == "C":
         temperature = temperature + 273.15
@@ -664,9 +649,9 @@ def dewpoint_from_vapor_pressure(vapor_pressure):
         vapor_pressure: Vapor pressure values in hPa
 
     Returns:
-        Dewpoint values in C
+        Dewpoint values in Celsius
     """
-    val = np.log(vapor_pressure / sat_press_0c)
+    val = np.log(vapor_pressure / SAT_PRESS_0C)
     return 243.5 * val / (17.67 - val)
 
 
@@ -678,15 +663,15 @@ def dry_lapse(pressure, temperature):
     while the second dimension is broadcasted.
     Args:
         pressure: Pressure values in hPa
-        temperature: Temperature values in C
+        temperature: Temperature values in Celsius
 
     Returns:
-        Temperature values in C
+        Temperature values in Celsius
     """
     if pressure.ndim == 1:
-        return temperature * (pressure / pressure[0]) ** kappa
+        return temperature * (pressure / pressure[0]) ** KAPPA
     else:
-        return temperature * (pressure / pressure[..., 0:1]) ** kappa
+        return temperature * (pressure / pressure[..., 0:1]) ** KAPPA
 
 
 def saturation_mixing_ratio(pressure, temperature):
@@ -694,7 +679,7 @@ def saturation_mixing_ratio(pressure, temperature):
 
     Args:
         pressure: Pressure values in hPa
-        temperature: Temperature values in C
+        temperature: Temperature values in Celsius
 
     Returns:
         Saturation mixing ratio values in kg/kg
@@ -702,22 +687,16 @@ def saturation_mixing_ratio(pressure, temperature):
     return mixing_ratio(saturation_vapor_pressure(temperature), pressure)
 
 
-def _lcl_iter(pressure, pressure_0, mixing_ratio, temperature, nan_mask_list):
-    """Iterative function to calculate the LCL pressure."""
-    td = (
-        dewpoint_from_vapor_pressure(vapor_pressure(pressure / 100, mixing_ratio))
-        + 273.15
-    )
-    pressure_new = pressure_0 * (td / temperature) ** (1.0 / kappa)
-    nan_mask_list[0] = nan_mask_list[0] | np.isnan(pressure_new)
-
-    return np.where(np.isnan(pressure_new), pressure, pressure_new)
-
-
 def virtual_temperature_from_dewpoint(pressure, temperature, dewpoint):
-    """Calculate virtual temperature from dewpoint.
+    """Calculates the virtual temperature from dewpoint.
 
-    This function calculates virtual temperature from dewpoint, temperature, and pressure.
+    Args:
+        pressure: Pressure values in hPa
+        temperature: Temperature values in Celsius
+        dewpoint: Dewpoint values in Celsius
+
+    Returns:
+        Virtual temperature values in Celsius
     """
 
     # Convert dewpoint to mixing ratio
@@ -730,18 +709,17 @@ def virtual_temperature(temperature, mixing_ratio):
     """Calculates the virtual temperature of a parcel.
 
     Args:
-        temperature: Temperature values in K
+        temperature: Temperature values in Kelvin
         mixing_ratio: Mixing ratio values in kg/kg
 
     Returns:
-        Virtual temperature values in K
+        Virtual temperature values in Kelvin
     """
-    return temperature * ((mixing_ratio + epsilon) / (epsilon * (1 + mixing_ratio)))
+    return temperature * ((mixing_ratio + EPSILON) / (EPSILON * (1 + mixing_ratio)))
 
 
 def moist_air_specific_heat_pressure(specific_humidity_prof):
-    """
-    Calculates the specific heat of moist air at constant pressure.
+    """Calculates the specific heat of moist air at constant pressure.
 
     Args:
         specific_humidity_prof: Specific humidity values in kg/kg
@@ -749,12 +727,11 @@ def moist_air_specific_heat_pressure(specific_humidity_prof):
     Returns:
         Specific heat of moist air at constant pressure in J/kg/K
     """
-    return Cp_d + specific_humidity_prof * (Cp_v - Cp_d)
+    return CP_D + specific_humidity_prof * (CP_V - CP_D)
 
 
 def moist_air_gas_constant(specific_humidity_prof):
-    """
-    Calculates the gas constant of moist air.
+    """Calculates the gas constant of moist air.
 
     Args:
         specific_humidity_prof: Specific humidity values in kg/kg
@@ -762,22 +739,20 @@ def moist_air_gas_constant(specific_humidity_prof):
     Returns:
         Gas constant of moist air in J/kg/K
     """
-    return Rd + specific_humidity_prof * (Rv - Rd)
+    return RD + specific_humidity_prof * (RV - RD)
 
 
 def new_lcl(pressure_prof, temp_prof, dew_prof):
-    """
-    Calculates the LCL pressure of a parcel.
+    """Calculates the LCL pressure of a parcel.
 
     Args:
         pressure_prof: Pressure values in hPa
-        temp_prof: Temperature values in K
-        dew_prof: Dewpoint values in K
-        specific_humidity_prof: Specific humidity values in kg/kg
+        temp_prof: Temperature values in Celsius
+        dew_prof: Dewpoint values in Celsius
 
     Returns:
         LCL pressure values in hPa
-        LCL temperature values in C
+        LCL temperature values in Celsius
     """
 
     e = saturation_vapor_pressure(dew_prof - 273.15)
@@ -791,10 +766,10 @@ def new_lcl(pressure_prof, temp_prof, dew_prof):
     moist_heat_ratio = moist_air_specific_heat_pressure(
         specific_humidity_prof
     ) / moist_air_gas_constant(specific_humidity_prof)
-    spec_heat_diff = Cp_l - Cp_v
+    spec_heat_diff = CP_L - CP_V
 
-    a = moist_heat_ratio + spec_heat_diff / Rv
-    b = -(Lv + spec_heat_diff * T0) / (Rv * temp_prof)
+    a = moist_heat_ratio + spec_heat_diff / RV
+    b = -(LV + spec_heat_diff * T0) / (RV * temp_prof)
     c = b / a
 
     w_minus1 = lambertw((relative_humidity ** (1 / a) * c * np.exp(c)), k=-1).real
@@ -810,7 +785,7 @@ def insert_lcl_level_fast(pressure, temperature, lcl_pressure):
 
     Args:
         pressure: Pressure values in hPa
-        temperature: Temperature values in C
+        temperature: Temperature values in Celsius
         lcl_pressure: LCL pressure values in hPa
 
     Returns:
@@ -873,7 +848,7 @@ def insert_lcl_level(pressure, temperature, lcl_pressure):
     Deprecated in favor of insert_lcl_level_fast.
     Args:
         pressure: Pressure values in hPa
-        temperature: Temperature values in C
+        temperature: Temperature values in Celsius
         lcl_pressure: LCL pressure values in hPa
 
     Returns:
@@ -946,15 +921,13 @@ def insert_lcl_level(pressure, temperature, lcl_pressure):
 
 
 def log_interpolate(x, xp, var):
-    """
-    Interpolates data with logarithmic x-scale over a specified axis.
+    """Interpolates data with logarithmic x-scale over a specified axis.
     Assumes all inputs are in descending order and need to be reversed.
 
     Args:
         x: Desired interpolated values
         xp: x-coordinates of the data points
         var: Data to be interpolated
-        axis: Axis to interpolate over
 
     Returns:
         Interpolated values
@@ -982,14 +955,28 @@ def log_interpolate(x, xp, var):
 
 
 def combine_profiles(
-    calculated_press_lower,
-    calculated_lcl_p,
-    calculated_press_upper,
-    calculated_temp_lower,
-    calculated_lcl_td,
-    calculated_temp_upper,
-    axis=0,
+    calculated_press_lower: float,
+    calculated_lcl_p: float,
+    calculated_press_upper: float,
+    calculated_temp_lower: float,
+    calculated_lcl_td: float,
+    calculated_temp_upper: float,
+    axis: int = 0,
 ):
+    """Combines the lower, LCL, and upper pressure and temperature profiles.
+
+    Args:
+        calculated_press_lower: Lower pressure profile in hPa
+        calculated_lcl_p: LCL pressure profile in hPa
+        calculated_press_upper: Upper pressure profile in hPa
+        calculated_temp_lower: Lower temperature profile in Celsius
+        calculated_lcl_td: LCL temperature profile in Celsius
+        calculated_temp_upper: Upper temperature profile in Celsius
+        axis: Axis to concatenate over
+
+    Returns:
+        Tuple of concatenated pressure and temperature profiles in hPa and Celsius
+    """
     calculated_new_pressure = np.concatenate(
         (
             np.atleast_1d(calculated_press_lower),
@@ -1012,8 +999,11 @@ def combine_profiles(
 
 
 def _basic_ds_checks(ds: xr.Dataset):
-    """
-    Checks the dataset for basic issues that could cause problems with the CAPE/CIN calculation.
+    """Checks the dataset for basic issues that could cause problems with the CAPE/CIN calculation.
+    Args:
+        ds: Dataset to check
+    Returns:
+        Dataset with basic checks applied
     """
 
     # make sure the pressure level is descending. If not, sort it
@@ -1040,9 +1030,7 @@ def _basic_ds_checks(ds: xr.Dataset):
 
 def mixed_parcel(
     ds: xr.Dataset,
-    pressure_var: str = "pressure",
-    temperature_var: str = "temperature",
-    temperature_dewpoint_var: str = "dewpoint",
+    variable_mapping: dict[str, str],
     depth: float = 100,
     temperature_units: str = "K",
 ):
@@ -1050,23 +1038,23 @@ def mixed_parcel(
 
     Args:
         ds: Dataset containing pressure, temperature, and dewpoint variables
-        pressure_var: Name of the pressure variable in the dataset
-        temperature_var: Name of the temperature variable in the dataset
-        temperature_dewpoint_var: Name of the dewpoint variable in the dataset
+        variable_mapping: Mapping of variable names to their names in the dataset
         depth: Depth of the mixed layer in hPa
-
+        temperature_units: Units of the temperature variable
     Returns:
-        calculated_parcel_start_pressure: ndarray of the pressure at the start of the mixed layer
-        calculated_parcel_temp: ndarray of the temperature of the mixed parcel
-        calculated_parcel_dewpoint: ndarray of the dewpoint of the mixed parcel
+        calculated_parcel_start_pressure: Pressure at the start of the mixed layer in hPa
+        calculated_parcel_temp: Temperature of the mixed parcel in Kelvin
+        calculated_parcel_dewpoint: Dewpoint of the mixed parcel in Kelvin
     """
 
     theta = potential_temperature(
-        ds[temperature_var], ds[pressure_var], units=temperature_units
+        ds[variable_mapping["temperature"]],
+        ds[variable_mapping["pressure"]],
+        units=temperature_units,
     )
     # convert temperature to celsius
-    es = saturation_vapor_pressure(ds[temperature_dewpoint_var] - 273.15)
-    mixing_ratio_g_g = mixing_ratio(es, ds[pressure_var])
+    es = saturation_vapor_pressure(ds[variable_mapping["dewpoint"]] - 273.15)
+    mixing_ratio_g_g = mixing_ratio(es, ds[variable_mapping["pressure"]])
     # because pressure is the same across the domain, we can use a single column
     pressure = ds["level"]
     # begin mixed layer
@@ -1108,9 +1096,8 @@ def mixed_parcel(
     )
 
 
-def find_intersection(x, y1, y2):
-    """
-    Finds the intersection points of two y-arrays given a common x-array.
+def find_intersection(x: float, y1: float, y2: float):
+    """Finds the intersection points of two y-arrays given a common x-array.
 
     Args:
       x: A 1D numpy array representing the common x-values.
@@ -1137,23 +1124,18 @@ def find_intersection(x, y1, y2):
 # finished cleaning up parcel_profile_with_lcl...next is to reproduce find_intersections
 
 
-def _next_non_masked_element(a, idx):
+def _next_non_masked_element(a: float, idx: int):
     """Return the next non masked element of a masked array.
 
     If an array is masked, return the next non-masked element (if the given index is masked).
     If no other unmasked points are after the given masked point, returns none.
 
-    Parameters
-    ----------
-    a : array-like
-        1-dimensional array of numeric values
-    idx : integer
-        Index of requested element
+    Args:
+        a: 1-dimensional array of numeric values
+        idx: Index of requested element
 
-    Returns
-    -------
+    Returns:
         Index of next non-masked element and next non-masked element
-
     """
     try:
         next_idx = idx + a[idx:].mask.argmin()
@@ -1165,7 +1147,12 @@ def _next_non_masked_element(a, idx):
         return idx, a[idx]
 
 
-def find_intersections(x, y1, y2, direction="all"):
+def find_intersections(
+    x: float,
+    y1: float,
+    y2: float,
+    direction: Literal["increasing", "decreasing", "all"] = "all",
+):
     """Finds the intersection points of two y-arrays, given their x-arrays.
 
     Args:
@@ -1230,17 +1217,17 @@ def find_intersections(x, y1, y2, direction="all"):
 
 
 def equilibrium_level(pressure, temperature, dewpoint, parcel_profile):
-    """Finds the equilibrium level of the parcel profile.
+    """Finds the equilibrium level (EL) of the parcel profile.
 
     Args:
         pressure: numpy array of pressure values in hPa
-        temperature: numpy array of temperature values in C
-        dewpoint: numpy array of dewpoint values in C
-        parcel_profile: numpy array of parcel profile values in C
+        temperature: numpy array of temperature values in Celsius
+        dewpoint: numpy array of dewpoint values in Celsius
+        parcel_profile: numpy array of parcel profile values in Celsius
 
     Returns:
-        x: numpy array of EL pressure values
-        y: numpy array of EL temperature values in C
+        x: numpy array of EL pressure values in hPa
+        y: numpy array of EL temperature values in Celsius
     """
 
     if pressure.ndim == 1:
@@ -1260,14 +1247,19 @@ def equilibrium_level(pressure, temperature, dewpoint, parcel_profile):
         return np.nan, np.nan
 
 
-def level_free_convection(pressure, temperature, dewpoint, parcel_profile):
-    """
-    Finds the LFC of the parcel profile.
+def level_free_convection(
+    pressure: float,
+    temperature: float,
+    dewpoint: float,
+    parcel_profile: float,
+):
+    """Finds the level of free convection (LFC) of the parcel profile.
+
     Args:
         pressure: numpy array of pressure values in hPa
-        temperature: numpy array of temperature values in C
-        dewpoint: numpy array of dewpoint values in C
-        parcel_profile: numpy array of parcel profile values in C
+        temperature: numpy array of temperature values in Celsius
+        dewpoint: numpy array of dewpoint values in Celsius
+        parcel_profile: numpy array of parcel profile values in Celsius
     Returns:
         x: numpy array of LFC pressure values
     """
@@ -1307,9 +1299,9 @@ def mlcape_cin(pressure, temperature, dewpoint, parcel_profile):
 
     Args:
         pressure: numpy array of pressure values in hPa
-        temperature: numpy array of temperature values in C
-        dewpoint: numpy array of dewpoint values in C
-        parcel_profile: numpy array of parcel profile values in C
+        temperature: numpy array of temperature values in Celsius
+        dewpoint: numpy array of dewpoint values in Celsius
+        parcel_profile: numpy array of parcel profile values in Celsius
 
     Returns:
         cape: numpy array of CAPE values in J/kg
@@ -1378,11 +1370,11 @@ def mlcape_cin(pressure, temperature, dewpoint, parcel_profile):
         )
         x_clipped = x[cape_mask]
         y_clipped = y[cape_mask]
-        cape = Rd * np.trapezoid(y_clipped, np.log(x_clipped))
+        cape = RD * np.trapezoid(y_clipped, np.log(x_clipped))
         cin_mask = (x > lfc_pressure) | np.isclose(x, lfc_pressure)
         x_clipped = x[cin_mask]
         y_clipped = y[cin_mask]
-        cin = Rd * np.trapezoid(y_clipped, np.log(x_clipped))
+        cin = RD * np.trapezoid(y_clipped, np.log(x_clipped))
         # Set CIN to 0 if it's returned as a positive value
         cin_flat[individual_profile] = 0 if cin > 0 else cin
         # Set CAPE to 0 if it's returned as a negative value
@@ -1393,7 +1385,11 @@ def mlcape_cin(pressure, temperature, dewpoint, parcel_profile):
 
 
 def load_moist_lapse_lookup():
-    """Load the moist lapse lookup table."""
+    """Load the moist lapse lookup table.
+
+    Returns:
+        DataFrame of the moist lapse lookup table
+    """
     import extremeweatherbench.data
 
     moist_lapse_lookup_table = resources.files(extremeweatherbench.data).joinpath(
