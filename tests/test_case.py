@@ -2,8 +2,8 @@ import datetime
 
 import pytest
 
-import extremeweatherbench.case as case
-from extremeweatherbench.utils import Location
+from extremeweatherbench import case
+from extremeweatherbench.regions import create_region
 
 
 class TestGoodCases:
@@ -13,8 +13,7 @@ class TestGoodCases:
             title="Test Heatwave",
             start_date=datetime.datetime(2000, 1, 1),
             end_date=datetime.datetime(2000, 1, 14),
-            location=Location(latitude=40, longitude=-100),
-            bounding_box_degrees=500,
+            location=create_region(latitude=40, longitude=-100, bounding_box_degrees=5),
             event_type="heat_wave",
         )
         subset_dataset = heatwave_case.perform_subsetting_procedure(
@@ -29,8 +28,7 @@ class TestGoodCases:
             title="Test Case",
             start_date=datetime.datetime(2000, 1, 1),
             end_date=datetime.datetime(2000, 1, 14),
-            location=Location(latitude=40, longitude=-100),
-            bounding_box_degrees=500,
+            location=create_region(latitude=40, longitude=-100, bounding_box_degrees=5),
             event_type="heat_wave",
         )
         valid_case = {
@@ -38,8 +36,9 @@ class TestGoodCases:
             "title": "Test Case",
             "start_date": datetime.datetime(2000, 1, 1),
             "end_date": datetime.datetime(2000, 1, 14),
-            "location": Location(latitude=40, longitude=-100),
-            "bounding_box_degrees": 500,
+            "location": create_region(
+                latitude=40, longitude=-100, bounding_box_degrees=5
+            ),
             "event_type": "heat_wave",
             "cross_listed": None,
             "data_vars": None,
