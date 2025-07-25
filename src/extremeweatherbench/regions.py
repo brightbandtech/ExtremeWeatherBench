@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Optional, Tuple, Union
 
 import geopandas as gpd  # type: ignore[import-untyped]
+import numpy as np
 import regionmask
 import xarray as xr
 from shapely import Polygon
@@ -43,12 +44,13 @@ class Region:
         else:
             raise NotImplementedError(f"to_geopandas not implemented for {type(self)}")
 
-    def mask(self, dataset: xr.Dataset) -> xr.Dataset:
+    def mask(self, dataset: xr.Dataset, drop: bool = False) -> xr.Dataset:
         """Mask a dataset to the region."""
         mask = regionmask.mask_geopandas(
             self.to_geopandas(), dataset.longitude, dataset.latitude
         )
-        return dataset.where(mask)
+        mask = ~np.isnan(mask)
+        return dataset.where(mask, drop=drop)
 
 
 @dataclasses.dataclass
