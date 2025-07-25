@@ -1,13 +1,12 @@
-import dataclasses
 import itertools
 from abc import ABC, abstractmethod
 from importlib import resources
 from typing import List, Optional
 
 import numpy as np
+import numpy.ma as ma
 import pandas as pd
 import xarray as xr
-import xarray.ma as ma
 from scipy.interpolate import interp1d
 from scipy.ndimage import gaussian_filter
 from scipy.special import lambertw
@@ -113,12 +112,6 @@ class CravenSignificantSevereParameter(DerivedVariable):
             data[self.input_variables],
         )
         return cbss_ds
-
-
-@dataclasses.dataclass
-class LocationCoords:
-    latitude: xr.DataArray
-    longitude: xr.DataArray
 
 
 def practically_perfect_hindcast(
