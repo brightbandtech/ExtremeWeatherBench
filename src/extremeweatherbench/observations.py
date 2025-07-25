@@ -7,7 +7,7 @@ import pandas as pd  # type: ignore
 import polars as pl
 import xarray as xr
 
-from extremeweatherbench import case
+from extremeweatherbench import case, utils
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -65,7 +65,7 @@ class Observation(ABC):
 
     @abstractmethod
     def _open_data_from_source(
-        self, storage_options: Optional[dict] = None
+        self, storage_options: Optional[dict] = None, **kwargs
     ) -> ObservationDataInput:
         """
         Open the observation data from the source, opting to avoid loading the entire dataset into memory if possible.
@@ -83,7 +83,8 @@ class Observation(ABC):
         self,
         data: ObservationDataInput,
         case: case.IndividualCase,
-        variables: Optional[list[str | DerivedVariable]] = None,
+        variables: Optional[list[str]] = None,
+        **kwargs,
     ) -> ObservationDataInput:
         """
         Subset the observation data to the case information provided in IndividualCase.
@@ -102,7 +103,9 @@ class Observation(ABC):
         """
 
     @abstractmethod
-    def _maybe_convert_to_dataset(self, data: ObservationDataInput) -> xr.Dataset:
+    def _maybe_convert_to_dataset(
+        self, data: ObservationDataInput, **kwargs
+    ) -> xr.Dataset:
         """
         Convert the observation data to an xarray dataset if it is not already.
 
@@ -116,38 +119,43 @@ class Observation(ABC):
             The observation data as an xarray dataset.
         """
 
+    @abstractmethod
+    def _maybe_map_variable_names(
+        self,
+        data: ObservationDataInput,
+        variable_mapping: Optional[dict] = None,
+        **kwargs,
+    ) -> ObservationDataInput:
+        """
+        Map the variable names to the observation data, if required.
+        """
+
     def _maybe_derive_variables(
         self,
         data: xr.Dataset,
-        variables: list[str | DerivedVariable],
         case: case.IndividualCase,
+        variables: list[str | DerivedVariable],
+        **kwargs,
     ) -> xr.Dataset:
         """
-        Compute derived variables from the observation data.
+        Derive variables from the observation data if any exist in variables.
 
         Args:
-            data: The observation data.
-            variables: The variables to include in the observation. Some observations may not have variables, or
-            only have a singular variable; thus, this is optional.
-            case: The IndividualCase object containing case metadata.
+            data: The observation data already run through _subset_data_to_case.
+            variables: The variables to derive.
 
         Returns:
             The observation data with the derived variables.
         """
-
         for v in variables:
             # there should only be strings or derived variables in the list
-            if isinstance(v, str):
-                continue
-            elif isinstance(v, type) and issubclass(v, DerivedVariable):
-                derived_variable = v().compute(  # type: ignore[misc]
-                    case=case, data=data, variables=variables
+            if not isinstance(v, str):
+                if not issubclass(v, DerivedVariable):
+                    raise ValueError(f"Expected str or DerivedVariable, got {type(v)}")
+                derived_data = v().compute(
+                    data=data, single_case=case, variables=variables
                 )
-                data[v().name()] = derived_variable  # type: ignore[misc]
-            else:
-                raise ValueError(
-                    f"Expected str or DerivedVariable class, got {type(v)}"
-                )
+                return derived_data
         return data
 
     def run_pipeline(
@@ -155,25 +163,49 @@ class Observation(ABC):
         case: case.IndividualCase,
         storage_options: Optional[dict] = None,
         variables: Optional[list[str | DerivedVariable]] = None,
+        variable_mapping: dict = {},
+        **kwargs,
     ) -> xr.Dataset:
         """
         Shared method for running the observation pipeline.
 
         Args:
-            case: The IndividualCase object containing case metadata.
+            source: The source of the observation data, which can be a local path or a remote URL.
             storage_options: Optional storage options for the source if the source is a remote URL.
             variables: The variables to include in the observation. Some observations may not have variables, or
             only have a singular variable; thus, this is optional.
+            variable_mapping: A dictionary of variable names to map to the observation data.
+            **kwargs: Additional keyword arguments to pass in as needed.
 
         Returns:
-            The observation data as an xarray Dataset.
+            The observation data with a type determined by the user.
         """
 
         # Open data and process through pipeline steps
-        data = self._open_data_from_source(storage_options=storage_options)
-        data = self._subset_data_to_case(data, case=case, variables=variables)
-        data = self._maybe_convert_to_dataset(data)
-        data = self._maybe_derive_variables(data, variables=variables or [], case=case)
+        data = (
+            self._open_data_from_source(
+                storage_options=storage_options,
+                **kwargs,
+            )
+            .pipe(
+                self._maybe_map_variable_names,
+                variable_mapping=variable_mapping,
+                **kwargs,
+            )
+            .pipe(
+                self._subset_data_to_case,
+                case=case,
+                variables=variables,
+                **kwargs,
+            )
+            .pipe(self._maybe_convert_to_dataset, **kwargs)
+            .pipe(
+                self._maybe_derive_variables,
+                case=case,
+                variables=variables or [],
+                **kwargs,
+            )
+        )
         return data
 
 
@@ -190,12 +222,15 @@ class ERA5(Observation):
     source: str = ARCO_ERA5_FULL_URI
 
     def _open_data_from_source(
-        self, storage_options: Optional[dict] = None
+        self,
+        storage_options: Optional[dict] = None,
+        chunks: dict = {"time": 48, "latitude": 721, "longitude": 1440},
+        **kwargs,
     ) -> ObservationDataInput:
         data = xr.open_zarr(
             self.source,
+            storage_options=storage_options,
             chunks=None,
-            storage_options=dict(token="anon"),
         )
         return data
 
@@ -203,48 +238,57 @@ class ERA5(Observation):
         self,
         data: ObservationDataInput,
         case: case.IndividualCase,
-        variables: Optional[list[str | DerivedVariable]] = None,
+        variables: Optional[list[str]] = None,
+        **kwargs,
     ) -> ObservationDataInput:
-        # Calculate bounding box coordinates from case location and bounding box size
-        latitude_min = case.location.latitude - case.bounding_box_degrees / 2
-        latitude_max = case.location.latitude + case.bounding_box_degrees / 2
-        longitude_min = np.mod(
-            case.location.longitude - case.bounding_box_degrees / 2, 360
-        )
-        longitude_max = np.mod(
-            case.location.longitude + case.bounding_box_degrees / 2, 360
-        )
-
         if not isinstance(data, (xr.Dataset, xr.DataArray)):
             raise ValueError(f"Expected xarray Dataset or DataArray, got {type(data)}")
 
-        subset_data = data.sel(
-            time=slice(case.start_date, case.end_date),
-            # latitudes are sliced from max to min
-            latitude=slice(latitude_max, latitude_min),
-            longitude=slice(longitude_min, longitude_max),
-        )
-
-        # Filter out DerivedVariable objects for variable checking
-        string_variables = [v for v in (variables or []) if isinstance(v, str)]
+        # subset time first to avoid OOM masking issues
+        subset_time_data = data.sel(time=slice(case.start_date, case.end_date))
 
         # check that the variables are in the observation data
-        if string_variables and any(
-            var not in subset_data.data_vars for var in string_variables
+        if variables is not None and any(
+            var not in subset_time_data.data_vars for var in variables
         ):
+            raise ValueError(f"Variables {variables} not found in observation data")
+        # subset the variables
+        elif variables is not None:
+            subset_time_variable_data = subset_time_data[variables]
+        else:
             raise ValueError(
-                f"Variables {string_variables} not found in observation data"
+                "Variables not defined for ERA5. Please list at least one variable to select."
             )
+        # # calling chunk here to avoid loading subset_data into memory
+        chunks = kwargs.get("chunks", {"time": 48, "latitude": 721, "longitude": 1440})
+        subset_time_variable_data = subset_time_variable_data.chunk(chunks)
+        # mask the data to the case location
+        fully_subset_data = case.location.mask(subset_time_variable_data, drop=True)
 
-        # subset the variables (only string variables, DerivedVariable objects are handled later)
-        if string_variables:
-            subset_data = subset_data[string_variables]
+        return fully_subset_data
 
-        return subset_data
-
-    def _maybe_convert_to_dataset(self, data: ObservationDataInput):
+    def _maybe_convert_to_dataset(self, data: ObservationDataInput, **kwargs):
         if isinstance(data, xr.DataArray):
             data = data.to_dataset()
+        return data
+
+    def _maybe_map_variable_names(
+        self,
+        data: ObservationDataInput,
+        variable_mapping: Optional[dict] = None,
+        **kwargs,
+    ) -> ObservationDataInput:
+        """
+        Map the variable names to the observation data, if required.
+        """
+        if variable_mapping is None:
+            return data
+        # Filter the mapping to only include variables that exist in the dataset
+        filtered_mapping = {
+            v: k for k, v in variable_mapping.items() if v in data.data_vars
+        }
+        if filtered_mapping:
+            data = data.rename(filtered_mapping)
         return data
 
 
@@ -260,7 +304,7 @@ class GHCN(Observation):
     source: str = DEFAULT_GHCN_URI
 
     def _open_data_from_source(
-        self, storage_options: Optional[dict] = None
+        self, storage_options: Optional[dict] = None, **kwargs
     ) -> ObservationDataInput:
         observation_data: pl.LazyFrame = pl.scan_parquet(
             self.source, storage_options=storage_options
@@ -272,17 +316,12 @@ class GHCN(Observation):
         self,
         observation_data: ObservationDataInput,
         case: case.IndividualCase,
-        variables: Optional[list[str | DerivedVariable]] = None,
+        variables: Optional[list[str]] = None,
+        **kwargs,
     ) -> ObservationDataInput:
         # Create filter expressions for LazyFrame
         time_min = case.start_date - pd.Timedelta(days=2)
         time_max = case.end_date + pd.Timedelta(days=2)
-
-        # Calculate bounding box coordinates from case location and bounding box size
-        latitude_min = case.location.latitude - case.bounding_box_degrees / 2
-        latitude_max = case.location.latitude + case.bounding_box_degrees / 2
-        longitude_min = case.location.longitude - case.bounding_box_degrees / 2
-        longitude_max = case.location.longitude + case.bounding_box_degrees / 2
 
         if not isinstance(observation_data, pl.LazyFrame):
             raise ValueError(f"Expected polars LazyFrame, got {type(observation_data)}")
@@ -291,33 +330,32 @@ class GHCN(Observation):
         subset_observation_data = observation_data.filter(
             (pl.col("time") >= time_min)
             & (pl.col("time") <= time_max)
-            & (pl.col("latitude") >= latitude_min)
-            & (pl.col("latitude") <= latitude_max)
-            & (pl.col("longitude") >= longitude_min)
-            & (pl.col("longitude") <= longitude_max)
+            & (pl.col("latitude") >= case.location.latitude_min)
+            & (pl.col("latitude") <= case.location.latitude_max)
+            & (pl.col("longitude") >= case.location.longitude_min)
+            & (pl.col("longitude") <= case.location.longitude_max)
         )
 
-        # Filter out DerivedVariable objects for variable handling
-        string_variables = [v for v in (variables or []) if isinstance(v, str)]
-
         # Add time, latitude, and longitude to the variables, polars doesn't do indexes
-        if string_variables is None:
+        if variables is None:
             all_variables = ["time", "latitude", "longitude"]
         else:
-            all_variables = string_variables + ["time", "latitude", "longitude"]
+            all_variables = variables + ["time", "latitude", "longitude"]
 
         # check that the variables are in the observation data
         schema_fields = [field for field in subset_observation_data.collect_schema()]
-        if all_variables and any(var not in schema_fields for var in all_variables):
+        if variables is not None and any(
+            var not in schema_fields for var in all_variables
+        ):
             raise ValueError(f"Variables {all_variables} not found in observation data")
 
         # subset the variables
-        if all_variables:
+        if variables is not None:
             subset_observation_data = subset_observation_data.select(all_variables)
 
         return subset_observation_data
 
-    def _maybe_convert_to_dataset(self, data: ObservationDataInput):
+    def _maybe_convert_to_dataset(self, data: ObservationDataInput, **kwargs):
         if isinstance(data, pl.LazyFrame):
             data = data.collect().to_pandas()
             data = data.set_index(["time", "latitude", "longitude"])
@@ -334,6 +372,20 @@ class GHCN(Observation):
         else:
             raise ValueError(f"Data is not a polars LazyFrame: {type(data)}")
 
+    def _maybe_map_variable_names(
+        self, data: ObservationDataInput, variable_mapping: dict, **kwargs
+    ) -> ObservationDataInput:
+        """
+        Map the variable names to the observation data, if required.
+        """
+        # Filter the mapping to only include variables that exist in the dataset
+        filtered_mapping = {
+            v: k for k, v in variable_mapping.items() if v in data.columns
+        }
+        if filtered_mapping:
+            data = data.rename(filtered_mapping)
+        return data
+
 
 class LSR(Observation):
     """
@@ -347,7 +399,7 @@ class LSR(Observation):
     source: str = LSR_URI
 
     def _open_data_from_source(
-        self, storage_options: Optional[dict] = None
+        self, storage_options: Optional[dict] = None, **kwargs
     ) -> ObservationDataInput:
         # force LSR to use anon token to prevent google reauth issues for users
         observation_data = pd.read_parquet(
@@ -360,7 +412,8 @@ class LSR(Observation):
         self,
         observation_data: ObservationDataInput,
         case: case.IndividualCase,
-        variables: Optional[list[str | DerivedVariable]] = None,
+        variables: Optional[list[str]] = None,
+        **kwargs,
     ) -> ObservationDataInput:
         if not isinstance(observation_data, pd.DataFrame):
             raise ValueError(f"Expected pandas DataFrame, got {type(observation_data)}")
@@ -370,24 +423,19 @@ class LSR(Observation):
         observation_data["lon"] = observation_data["lon"].astype(float)
         observation_data["time"] = pd.to_datetime(observation_data["time"])
 
-        # Calculate bounding box coordinates from case location and bounding box size
-        latitude_min = case.location.latitude - case.bounding_box_degrees / 2
-        latitude_max = case.location.latitude + case.bounding_box_degrees / 2
-        longitude_min = np.mod(
-            case.location.longitude - case.bounding_box_degrees / 2, 360
-        )
-        longitude_max = np.mod(
-            case.location.longitude + case.bounding_box_degrees / 2, 360
-        )
-
         filters = (
             (observation_data["time"] >= case.start_date)
             & (observation_data["time"] <= case.end_date)
-            & (observation_data["lat"] >= latitude_min)
-            & (observation_data["lat"] <= latitude_max)
-            # Convert longitude from 360 to 180 range for comparison
-            & (observation_data["lon"] >= (longitude_min + 180) % 360 - 180)
-            & (observation_data["lon"] <= (longitude_max + 180) % 360 - 180)
+            & (observation_data["lat"] >= case.location.latitude_min)
+            & (observation_data["lat"] <= case.location.latitude_max)
+            & (
+                observation_data["lon"]
+                >= utils.convert_longitude_to_180(case.location.longitude_min)
+            )
+            & (
+                observation_data["lon"]
+                <= utils.convert_longitude_to_180(case.location.longitude_max)
+            )
         )
 
         subset_observation_data = observation_data.loc[filters]
@@ -398,20 +446,29 @@ class LSR(Observation):
 
         return subset_observation_data
 
-    def _maybe_convert_to_dataset(self, data: ObservationDataInput):
+    def _maybe_convert_to_dataset(self, data: ObservationDataInput, **kwargs):
         if isinstance(data, pd.DataFrame):
             data = data.set_index(["valid_time", "latitude", "longitude"])
-            try:
-                data = data.to_xarray()
-            except ValueError as e:
-                if "non-unique" in str(e):
-                    logger.warning(
-                        "ValueError when converting to xarray due to duplicate indexes"
-                    )
-                data = data.drop_duplicates().to_xarray()
+            data = xr.Dataset.from_dataframe(
+                data[~data.index.duplicated(keep="first")], sparse=True
+            )
             return data
         else:
             raise ValueError(f"Data is not a pandas DataFrame: {type(data)}")
+
+    def _maybe_map_variable_names(
+        self, data: ObservationDataInput, variable_mapping: dict, **kwargs
+    ) -> ObservationDataInput:
+        """
+        Map the variable names to the observation data, if required.
+        """
+        # Filter the mapping to only include variables that exist in the dataset
+        filtered_mapping = {
+            v: k for k, v in variable_mapping.items() if v in data.columns
+        }
+        if filtered_mapping:
+            data = data.rename(filtered_mapping)
+        return data
 
 
 class IBTrACS(Observation):
@@ -422,7 +479,7 @@ class IBTrACS(Observation):
     source: str = IBTRACS_URI
 
     def _open_data_from_source(
-        self, storage_options: Optional[dict] = None
+        self, storage_options: Optional[dict] = None, **kwargs
     ) -> ObservationDataInput:
         # not using storage_options in this case due to NetCDF4Backend not supporting them
         observation_data: pl.LazyFrame = pl.scan_csv(
@@ -434,7 +491,8 @@ class IBTrACS(Observation):
         self,
         observation_data: ObservationDataInput,
         case: case.IndividualCase,
-        variables: Optional[list[str | DerivedVariable]] = None,
+        variables: Optional[list[str]] = None,
+        **kwargs,
     ) -> ObservationDataInput:
         # Create filter expressions for LazyFrame
         year = case.start_date.year
@@ -447,19 +505,18 @@ class IBTrACS(Observation):
             (pl.col("NAME") == case.title.upper())
         )
 
-        # TODO: cascade these into the ibtracs dataframe
-        # all_variables = [
-        #     "SEASON",
-        #     "NUMBER",
-        #     "NAME",
-        #     "ISO_TIME",
-        #     "LAT",
-        #     "LON",
-        #     "WMO_WIND",
-        #     "USA_WIND",
-        #     "WMO_PRES",
-        #     "USA_PRES",
-        # ]
+        all_variables = [
+            "SEASON",
+            "NUMBER",
+            "NAME",
+            "ISO_TIME",
+            "LAT",
+            "LON",
+            "WMO_WIND",
+            "USA_WIND",
+            "WMO_PRES",
+            "USA_PRES",
+        ]
         # Get the season (year) from the case start date, cast as string as polars is interpreting the schema as strings
         season = str(year)
 
@@ -481,25 +538,20 @@ class IBTrACS(Observation):
             matching_numbers, on="NUMBER", how="inner"
         ).filter((pl.col("NAME") == case.title.upper()) & (pl.col("SEASON") == season))
 
-        # Filter out DerivedVariable objects for variable handling
-        string_variables = [v for v in (variables or []) if isinstance(v, str)]
-
         # check that the variables are in the observation data
         schema_fields = [field for field in subset_observation_data.collect_schema()]
-        if string_variables and any(
-            var not in schema_fields for var in string_variables
+        if variables is not None and any(
+            var not in schema_fields for var in all_variables
         ):
-            raise ValueError(
-                f"Variables {string_variables} not found in observation data"
-            )
+            raise ValueError(f"Variables {all_variables} not found in observation data")
 
         # subset the variables
-        if string_variables:
-            subset_observation_data = subset_observation_data.select(string_variables)
+        if variables is not None:
+            subset_observation_data = subset_observation_data.select(all_variables)
 
         return subset_observation_data
 
-    def _maybe_convert_to_dataset(self, data: ObservationDataInput):
+    def _maybe_convert_to_dataset(self, data: ObservationDataInput, **kwargs):
         if isinstance(data, pl.LazyFrame):
             data = data.collect().to_pandas()
             data = data.set_index(["ISO_TIME"])
@@ -514,3 +566,17 @@ class IBTrACS(Observation):
             return data
         else:
             raise ValueError(f"Data is not a polars LazyFrame: {type(data)}")
+
+    def _maybe_map_variable_names(
+        self, data: ObservationDataInput, variable_mapping: dict, **kwargs
+    ) -> ObservationDataInput:
+        """
+        Map the variable names to the observation data, if required.
+        """
+        # Filter the mapping to only include variables that exist in the dataset
+        filtered_mapping = {
+            v: k for k, v in variable_mapping.items() if v in data.columns
+        }
+        if filtered_mapping:
+            data = data.rename(filtered_mapping)
+        return data
