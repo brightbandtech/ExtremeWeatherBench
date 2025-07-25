@@ -8,11 +8,13 @@ import numpy.ma as ma
 import pandas as pd
 import xarray as xr
 from scipy.interpolate import interp1d
-from scipy.ndimage import gaussian_filter
+
+# from scipy.ndimage import gaussian_filter
 from scipy.special import lambertw
 
-from extremeweatherbench import case, regions, utils
-from extremeweatherbench.utils import extract_coordinates_from_sparse_coo
+from extremeweatherbench import case  # , utils, regions
+
+# from extremeweatherbench.utils import extract_coordinates_from_sparse_coo
 
 GAMMA = 6.5  # K/km
 P0 = 1000  # hPa
@@ -79,27 +81,27 @@ class DerivedVariable(ABC):
         """Compute the variable from the input variables."""
 
 
-class PracticallyPerfectHindcast(DerivedVariable):
-    """A derived variable that computes the practically perfect hindcast."""
+# class PracticallyPerfectHindcast(DerivedVariable):
+#     """A derived variable that computes the practically perfect hindcast."""
 
-    def __init__(self):
-        super().__init__(
-            name="practically_perfect_hindcast", input_variables=["report_type"]
-        )
+#     def __init__(self):
+#         super().__init__(
+#             name="practically_perfect_hindcast", input_variables=["report_type"]
+#         )
 
-    def compute(
-        self,
-        single_case: case.IndividualCase,
-        data: xr.Dataset,
-        variables: Optional[List[str]] = None,
-    ) -> xr.Dataset:
-        """Compute the practically perfect hindcast."""
-        pph = practically_perfect_hindcast(
-            data[self.input_variables],
-            output_bounds=single_case.location,
-            report_type=["tor", "hail"],
-        )
-        return pph
+#     def compute(
+#         self,
+#         single_case: case.IndividualCase,
+#         data: xr.Dataset,
+#         variables: Optional[List[str]] = None,
+#     ) -> xr.Dataset:
+#         """Compute the practically perfect hindcast."""
+#         pph = practically_perfect_hindcast(
+#             data[self.input_variables],
+#             output_bounds=single_case.location,
+#             report_type=["tor", "hail"],
+#         )
+#         return pph
 
 
 class CravenSignificantSevereParameter(DerivedVariable):
@@ -132,82 +134,82 @@ class CravenSignificantSevereParameter(DerivedVariable):
         return cbss_ds
 
 
-def practically_perfect_hindcast(
-    ds: xr.Dataset,
-    output_bounds: regions.Region,
-    resolution: float = 0.25,
-    # TODO: add report type back in
-    # report_type: Union[Literal["all"], list[Literal["tor", "hail", "wind"]]] = "all",
-    sigma: float = 1.5,
-) -> xr.Dataset:
-    """Compute the Practically Perfect Hindcast (PPH) using storm report data using latitude/longitude grid spacing
-    instead of the NCEP 212 Eta Lambert Conformal projection; based on the method described in Hitchens et al 2013,
-    https://doi.org/10.1175/WAF-D-12-00113.1
+# def practically_perfect_hindcast(
+#     ds: xr.Dataset,
+#     output_bounds: regions.Region,
+#     resolution: float = 0.25,
+#     # TODO: add report type back in
+#     # report_type: Union[Literal["all"], list[Literal["tor", "hail", "wind"]]] = "all",
+#     sigma: float = 1.5,
+# ) -> xr.Dataset:
+#     """Compute the Practically Perfect Hindcast (PPH) using storm report data using latitude/longitude grid spacing
+#     instead of the NCEP 212 Eta Lambert Conformal projection; based on the method described in Hitchens et al 2013,
+#     https://doi.org/10.1175/WAF-D-12-00113.1
 
-    Args:
-        ds: An xarray Dataset containing the storm report data as a sparse (COO) array.
-        output_bounds: The region to compute the PPH for.
-        resolution: The resolution of the grid in degrees to use. Default is 0.25 degrees.
-        sigma: The standard deviation of the gaussian filter to use. Default is 1.5.
-    Returns:
-        pph: An xarray Dataset containing the PPH and storm report data.
-    """
-    coords_df = extract_coordinates_from_sparse_coo(ds)
-    coords_df["longitude"] = utils.convert_longitude_to_360(coords_df["longitude"])
-    valid_lats = coords_df["latitude"].values
-    valid_lons = coords_df["longitude"].values
+#     Args:
+#         ds: An xarray Dataset containing the storm report data as a sparse (COO) array.
+#         output_bounds: The region to compute the PPH for.
+#         resolution: The resolution of the grid in degrees to use. Default is 0.25 degrees.
+#         sigma: The standard deviation of the gaussian filter to use. Default is 1.5.
+#     Returns:
+#         pph: An xarray Dataset containing the PPH and storm report data.
+#     """
+#     coords_df = extract_coordinates_from_sparse_coo(ds)
+#     coords_df["longitude"] = utils.convert_longitude_to_360(coords_df["longitude"])
+#     valid_lats = coords_df["latitude"].values
+#     valid_lons = coords_df["longitude"].values
 
-    # Create coordinates from region, not reports, fixed at 0.25 degree intervals
-    min_lat_fixed = (
-        np.ceil(output_bounds.latitude_min * 4) / 4
-    )  # Round up to nearest 0.25
-    max_lat_fixed = (
-        np.floor(output_bounds.latitude_max * 4) / 4
-    )  # Round down to nearest 0.25
-    min_lon_fixed = (
-        np.ceil(output_bounds.longitude_min * 4) / 4
-    )  # Round up to nearest 0.25
-    max_lon_fixed = (
-        np.floor(output_bounds.longitude_max * 4) / 4
-    )  # Round down to nearest 0.25
+#     # Create coordinates from region, not reports, fixed at 0.25 degree intervals
+#     min_lat_fixed = (
+#         np.ceil(output_bounds.latitude_min * 4) / 4
+#     )  # Round up to nearest 0.25
+#     max_lat_fixed = (
+#         np.floor(output_bounds.latitude_max * 4) / 4
+#     )  # Round down to nearest 0.25
+#     min_lon_fixed = (
+#         np.ceil(output_bounds.longitude_min * 4) / 4
+#     )  # Round up to nearest 0.25
+#     max_lon_fixed = (
+#         np.floor(output_bounds.longitude_max * 4) / 4
+#     )  # Round down to nearest 0.25
 
-    # Create the grid coordinates
-    grid_lats = np.arange(min_lat_fixed, max_lat_fixed + resolution, resolution)
-    grid_lons = np.arange(min_lon_fixed, max_lon_fixed + resolution, resolution)
+#     # Create the grid coordinates
+#     grid_lats = np.arange(min_lat_fixed, max_lat_fixed + resolution, resolution)
+#     grid_lons = np.arange(min_lon_fixed, max_lon_fixed + resolution, resolution)
 
-    # Initialize an empty grid
-    grid = np.zeros((len(grid_lats), len(grid_lons)))
+#     # Initialize an empty grid
+#     grid = np.zeros((len(grid_lats), len(grid_lons)))
 
-    # Mark grid cells that contain reports
-    for lat, lon in zip(valid_lats, valid_lons):
-        # Skip reports that are outside the grid bounds
-        if (
-            lat < min_lat_fixed
-            or lat > max_lat_fixed
-            or lon < min_lon_fixed
-            or lon > max_lon_fixed
-        ):
-            continue
-        # Find the nearest grid indices
-        lat_idx = np.abs(grid_lats - lat).argmin()
-        lon_idx = np.abs(grid_lons - lon).argmin()
-        grid[lat_idx, lon_idx] = 1
+#     # Mark grid cells that contain reports
+#     for lat, lon in zip(valid_lats, valid_lons):
+#         # Skip reports that are outside the grid bounds
+#         if (
+#             lat < min_lat_fixed
+#             or lat > max_lat_fixed
+#             or lon < min_lon_fixed
+#             or lon > max_lon_fixed
+#         ):
+#             continue
+#         # Find the nearest grid indices
+#         lat_idx = np.abs(grid_lats - lat).argmin()
+#         lon_idx = np.abs(grid_lons - lon).argmin()
+#         grid[lat_idx, lon_idx] = 1
 
-    pph_ds = xr.Dataset(
-        data_vars={"reports": (["latitude", "longitude"], grid)},
-        coords={"latitude": grid_lats, "longitude": grid_lons},
-    )
+#     pph_ds = xr.Dataset(
+#         data_vars={"reports": (["latitude", "longitude"], grid)},
+#         coords={"latitude": grid_lats, "longitude": grid_lons},
+#     )
 
-    # Apply bilinear interpolation to smooth the field
-    # First, create a gaussian kernel for smoothing
-    smoothed_grid = gaussian_filter(grid, sigma=sigma)
+#     # Apply bilinear interpolation to smooth the field
+#     # First, create a gaussian kernel for smoothing
+#     smoothed_grid = gaussian_filter(grid, sigma=sigma)
 
-    # Combine the data into a Dataset
-    pph_ds["practically_perfect"] = xr.DataArray(
-        smoothed_grid, dims=["latitude", "longitude"]
-    )
+#     # Combine the data into a Dataset
+#     pph_ds["practically_perfect"] = xr.DataArray(
+#         smoothed_grid, dims=["latitude", "longitude"]
+#     )
 
-    return pph_ds
+#     return pph_ds
 
 
 def dewpoint_from_specific_humidity(

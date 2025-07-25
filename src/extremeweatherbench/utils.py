@@ -9,7 +9,7 @@ from collections import namedtuple
 from dataclasses import dataclass
 from importlib import resources
 from pathlib import Path
-from typing import List, Literal, Tuple, Union
+from typing import List, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -17,7 +17,6 @@ import regionmask
 import requests
 import xarray as xr
 import yaml
-from scipy.ndimage import gaussian_filter
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -710,90 +709,69 @@ def pull_and_clean_lsr_data_from_spc(date: pd.Timestamp) -> pd.DataFrame:
     return df
 
 
-def practically_perfect_hindcast(
-    df: pd.DataFrame,
-    output_coordinates: XarrayDataArrayCoords,
-    resolution: float = 0.25,
-    report_type: Union[Literal["all"], list[Literal["tor", "hail", "wind"]]] = "all",
-    sigma: float = 1.5,
-    return_reports: bool = False,
-) -> Union[xr.DataArray, tuple[xr.DataArray, pd.DataFrame]]:
-    """Compute the Practically Perfect Hindcast (PPH) using storm report data using latitude/longitude grid spacing
-    instead of the NCEP 212 Eta Lambert Conformal projection; based on the method described in Hitchens et al 2013,
-    https://doi.org/10.1175/WAF-D-12-00113.1
+def extract_coordinates_from_sparse_coo(
+    dataset: xr.Dataset, data_var: str = "report_type"
+) -> pd.DataFrame:
+    """Extract latitude and longitude pairs from a sparse COO array without densifying.
 
     Args:
-        date: A pandas Timestamp object.
-        resolution: The resolution of the grid to use. Default is 0.25 degrees.
-        report_type: The type of report to use. Default is all. Currently only supports all.
-        sigma: The sigma (standard deviation) of the gaussian filter to use. Default is 1.5.
-        return_reports: Whether to return the reports used to compute the PPH. Default is False.
-        output_resolution: The resolution of the output grid. Default is None (keep the same
-        resolution as the input grid).
+        dataset: The dataset to extract the coordinates from.
+        data_var: The data variable to extract the coordinates from.
+
     Returns:
-        pph: An xarray DataArray containing the PPH around the storm report data.
+        A pandas DataFrame with the latitude and longitude pairs.
+
+    Example:
+        >>> import xarray as xr
+        >>> import pandas as pd
+        >>> from extremeweatherbench.utils import extract_coordinates_from_sparse_coo
+        >>> ds = xr.Dataset(
+        ...     coords={
+        ...         "valid_time": pd.date_range("2020-01-01", "2020-01-03"),
+        ...         "latitude": [30, 31, 32],
+        ...         "longitude": [100, 101, 102],
+        ...     },
+        ...     data_vars={
+        ...         "report_type": xr.DataArray(
+        ...             data=np.array([[0, 1, 0], [1, 0, 1], [0, 1, 0]]),
+        ...             coords=[
+        ...                 ("valid_time", [0, 1, 2]),
+        ...                 ("latitude", [30, 31, 32]),
+        ...                 ("longitude", [100, 101, 102]),
+        ...             ],
+        ...             dims=("valid_time", "latitude", "longitude"),
+        ...         )
+        ...     },
+        ... )
+        >>> coords_df = extract_coordinates_from_sparse_coo(ds, "report_type")
+        >>> print(coords_df)
+        latitude  longitude
+        0       30.0     100.0
+        1       31.0     101.0
+        2       32.0     102.0
     """
+    # Get the sparse COO array
+    sparse_array = dataset[data_var].data
+    try:
+        # Get the coordinates from the COO array
+        coords = sparse_array.coords
+    except AttributeError:
+        print(f"Warning: {data_var} is not a sparse COO array.")
 
-    if report_type == "all":
-        pass
-    else:
-        df = df[df["report_type"].isin(report_type)]
+    # For dimensions (valid_time, latitude, longitude):
+    # coords[0] = valid_time indices
+    # coords[1] = latitude indices
+    # coords[2] = longitude indices
 
-    # Extract latitude and longitude from the dataframe
-    lats = df["lat"].astype(float)
-    lons = df["lon"].astype(float)
+    # Extract latitude and longitude indices
+    lat_indices = coords[1]  # Second dimension
+    lon_indices = coords[2]  # Third dimension
 
-    # Create a grid covering the continental US (or adjust as needed)
-    lat_min, lat_max = 24.0, 50.0  # Continental US approximate bounds
-    lon_min, lon_max = -125.0, -66.0  # Continental US approximate bounds
+    # Map indices to actual coordinate values
+    lats = dataset.latitude.values[lat_indices]
+    lons = dataset.longitude.values[lon_indices]
 
-    # Create the grid coordinates
-    grid_lats = np.arange(lat_min, lat_max + resolution, resolution)
-    grid_lons = np.arange(lon_min, lon_max + resolution, resolution)
+    # Create DataFrame with unique coordinate pairs
+    coords_df = pd.DataFrame({"latitude": lats, "longitude": lons}).drop_duplicates()
 
-    # Initialize an empty grid
-    grid = np.zeros((len(grid_lats), len(grid_lons)))
-
-    # Mark grid cells that contain reports
-    for lat, lon in zip(lats, lons):
-        # Find the nearest grid indices
-        lat_idx = np.abs(grid_lats - lat).argmin()
-        lon_idx = np.abs(grid_lons - lon).argmin()
-        grid[lat_idx, lon_idx] = 1
-
-    # Create the xarray DataArray
-    pph = xr.DataArray(
-        grid,
-        dims=["latitude", "longitude"],
-        coords={"latitude": grid_lats, "longitude": grid_lons},
-        name="practically_perfect",
-    )
-
-    # Apply bilinear interpolation to smooth the field
-    # First, create a gaussian kernel for smoothing
-    smoothed_grid = gaussian_filter(grid, sigma=sigma)
-
-    # Replace the data in the DataArray
-    pph.data = smoothed_grid
-
-    # Find the bounds of non-zero data
-    nonzero_lats = np.where(pph.data.any(axis=1))[0]
-    nonzero_lons = np.where(pph.data.any(axis=0))[0]
-
-    # Get the min/max indices
-    lat_start, lat_end = nonzero_lats[0], nonzero_lats[-1]
-    lon_start, lon_end = nonzero_lons[0], nonzero_lons[-1]
-
-    pph = pph.isel(
-        latitude=slice(lat_start, lat_end + 1), longitude=slice(lon_start, lon_end + 1)
-    )
-    pph["longitude"] = convert_longitude_to_360(pph["longitude"])
-
-    pph = pph.interp(
-        latitude=output_coordinates.latitude,
-        longitude=output_coordinates.longitude,
-        method="linear",
-    )
-    if return_reports:
-        return (pph, df)
-    return pph
+    return coords_df
