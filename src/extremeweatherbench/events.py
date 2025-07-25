@@ -6,7 +6,23 @@ from typing import Any, List
 
 import dacite
 
-from extremeweatherbench import case, metrics, observations, variables
+from extremeweatherbench import calc, case, metrics, observations
+
+
+def maybe_expand_variable_lists(
+    variable_list: List[str | DerivedVariable],
+) -> List[str]:
+    """Build a list of core variables for the event, given the forecast and observation variables."""
+
+    def iterator(variables: List[str | DerivedVariable]) -> List[str]:
+        for variable in variables:
+            if isinstance(variable, str):
+                pass
+            elif issubclass(variable, DerivedVariable):
+                variables.extend([n for n in variable().input_variables])
+        return variables
+
+    return iterator(variable_list)
 
 
 class EventType(ABC):
@@ -18,6 +34,9 @@ class EventType(ABC):
     and variables while each having unique dates and locations.
 
     Attributes:
+        event_type: The type of event.
+        forecast_variables: A list of variables that are used to forecast the event.
+        observation_variables: A list of variables that are used to observe the event.
         case_metadata: A dictionary or yaml file with guiding metadata.
         metrics: A list of Metrics that are used to evaluate the cases.
         observations: A list of Observations that are used as targets for the metrics.
@@ -26,187 +45,159 @@ class EventType(ABC):
     def __init__(
         self,
         event_type: str,
-        evaluation_variables: List[str | variables.DerivedVariable],
+        forecast_variables: List[str | DerivedVariable],
+        observation_variables: List[str | DerivedVariable],
         case_metadata: dict[str, Any],
         metrics: List[metrics.Metric],
-        evaluation_observations: List[observations.Observation],
+        observations: List[Observation],
     ):
         self.event_type = event_type
-        self.evaluation_variables = evaluation_variables
+        self.forecast_variables = maybe_expand_variable_lists(forecast_variables)
+        self.observation_variables = maybe_expand_variable_lists(observation_variables)
         self.case_metadata = case_metadata
         self.metrics = metrics
-        self.evaluation_observations = evaluation_observations
+        self.observations = observations
 
-    def _build_base_case_metadata_collection(self) -> case.BaseCaseMetadataCollection:
+    def _build_base_case_metadata_collection(self) -> BaseCaseMetadataCollection:
         """Build a list of IndividualCases from the case_metadata."""
         cases = dacite.from_dict(
-            data_class=case.BaseCaseMetadataCollection, data=self.case_metadata
+            data_class=BaseCaseMetadataCollection,
+            data=self.case_metadata,
+            config=dacite.Config(
+                type_hooks={regions.Region: regions.map_to_create_region},
+            ),
         )
-        cases = case.BaseCaseMetadataCollection(
+        cases = BaseCaseMetadataCollection(
             cases=[c for c in cases.cases if c.event_type == self.event_type]
         )
         return cases
 
-    def build_case_operator(self) -> list[case.CaseOperator]:
+    def build_case_operator(self) -> list[CaseOperator]:
         """Build a CaseOperator from the event type."""
         case_metadata_collection = self._build_base_case_metadata_collection()
         case_operators = [
-            case.CaseOperator(
-                case=c,
+            CaseOperator(
+                case=case,
                 metrics=self.metrics,
-                observations=self.evaluation_observations,
+                observations=self.observations,
             )
-            for c in case_metadata_collection.cases
+            for case in case_metadata_collection.cases
         ]
         return case_operators
 
-    def _maybe_expand_variable_list(self) -> List[str]:
-        """Build a list of core variables for the event, given"""
-        evaluation_variables = []
-        for variable in self.evaluation_variables:
-            if isinstance(variable, str):
-                pass
-            elif isinstance(variable, variables.DerivedVariable):
-                # DerivedVariables include a list of input variables needed to construct themselves
-                evaluation_variables.append([n for n in variable.input_variables])
-        return evaluation_variables
+
+class HeatWave(EventType):
+    def __init__(
+        self,
+        case_metadata: dict[str, Any],
+        forecast_variables: List[str | DerivedVariable] = ["surface_air_temperature"],
+        observation_variables: List[str | DerivedVariable] = [
+            "surface_air_temperature"
+        ],
+        metrics: List[metrics.Metric] = [
+            MaximumMAE,
+            MaxMinMAE,
+            RegionalRMSE,
+            OnsetME,
+            DurationME,
+        ],
+        observations: List[observations.Observation] = [observations.ERA5],
+    ):
+        super().__init__(
+            event_type="heat_wave",
+            forecast_variables=forecast_variables,
+            observation_variables=observation_variables,
+            case_metadata=case_metadata,
+            metrics=metrics,
+            observations=observations,
+        )
+
+
+class SevereConvection(EventType):
+    def __init__(
+        self,
+        case_metadata: dict[str, Any],
+        forecast_variables: List[str | DerivedVariable] = [
+            CravenSignificantSevereParameter,
+        ],
+        observation_variables: List[str | DerivedVariable] = [
+            PracticallyPerfectHindcast,
+        ],
+        metrics: List[metrics.Metric] = [
+            CSI,
+            LeadTimeDetection,
+            RegionalHitsMisses,
+            HitsMisses,
+        ],
+        observations: List[observations.Observation] = [observations.LSR],
+    ):
+        super().__init__(
+            event_type="severe_convection",
+            forecast_variables=forecast_variables,
+            observation_variables=observation_variables,
+            case_metadata=case_metadata,
+            metrics=metrics,
+            observations=observations,
+        )
+
+
+class AtmosphericRiver(EventType):
+    def __init__(
+        self,
+        case_metadata: dict[str, Any],
+        forecast_variables: List[str | DerivedVariable] = [],
+        observation_variables: List[str | DerivedVariable] = [],
+        metrics: List[metrics.Metric] = [
+            CSI,
+            LeadTimeDetection,
+        ],
+        observations: List[observations.Observation] = [observations.ERA5],
+    ):
+        super().__init__(
+            event_type="atmospheric_river",
+            forecast_variables=forecast_variables,
+            observation_variables=observation_variables,
+            case_metadata=case_metadata,
+            metrics=metrics,
+            observations=observations,
+        )
 
 
 @dataclasses.dataclass
 class EventOperator:
-    """A class that composes multiple EventTypes into a single EventOperator.
-
-    This class is used to compose multiple EventTypes into a single EventOperator.
-    It is used to handle the logic of parsing the events when evaluating a series of cases
-    in ExtremeWeatherBench.
-
-    Attributes:
-        events: A list of EventTypes to compose.
-        composed_metrics: A list of metrics; derived from events.
-        composed_observations: A list of observations to compose; derived from events.
-        composed_variable_mappings: A list of variable mappings to compose; derived from events.
-        composed_case_operators: A list of case operators to compose; derived from events.
-    """
-
     events: List[EventType]
-    composed_metrics: List[metrics.Metric] = dataclasses.field(
+    pre_composed_metrics: dict[EventType, List[metrics.Metric]] = dataclasses.field(
         default_factory=list, init=False, repr=True
     )
-    composed_observations: List[observations.Observation] = dataclasses.field(
-        default_factory=list, init=False, repr=True
+    pre_composed_observations: dict[EventType, List[observations.Observation]] = (
+        dataclasses.field(default_factory=list, init=False, repr=True)
     )
-    composed_variable_mappings: List[dict] = dataclasses.field(
-        default_factory=list, init=False, repr=True
+    pre_composed_forecast_variables: dict[EventType, List[str | DerivedVariable]] = (
+        dataclasses.field(default_factory=list, init=False, repr=True)
     )
-    composed_case_operators: List[case.CaseOperator] = dataclasses.field(
+    pre_composed_observation_variables: dict[EventType, List[str | DerivedVariable]] = (
+        dataclasses.field(default_factory=list, init=False, repr=True)
+    )
+    pre_composed_case_operators: List[CaseOperator] = dataclasses.field(
         default_factory=list, init=False, repr=True
     )
 
     def __post_init__(self):
         # Unravel attributes from composed event types
-        self.composed_metrics = []
-        self.composed_observations = []
-        self.composed_variable_mappings = []
-        self.composed_case_operators = []
+        self.pre_composed_metrics = {}
+        self.pre_composed_observations = {}
+        self.pre_composed_forecast_variables = {}
+        self.pre_composed_observation_variables = {}
+        self.pre_composed_case_operators = []
 
         # Collect attributes from each event type
         for event in self.events:
-            self.composed_metrics.extend(event.metrics)
-            self.composed_observations.extend(event.evaluation_observations)
-            self.composed_case_operators.extend(event.build_case_operator())
-
-
-class HeatWave(EventType):
-    """An EventType child class that defines a heat wave event type.
-
-    A heat wave is defined as a period of at least 2 consecutive days with a daily minimum
-    temperature that is above the 85th percentile of the daily minimum temperature for that day
-    of the year.
-    """
-
-    def __init__(
-        self,
-        case_metadata: dict[str, Any],
-        evaluation_variables: List[str | variables.DerivedVariable] = [
-            "surface_air_temperature"
-        ],
-        metrics: List[metrics.Metric] = [
-            metrics.MaximumMAE,
-            metrics.MaxMinMAE,
-            metrics.RegionalRMSE,
-            metrics.OnsetME,
-            metrics.DurationME,
-        ],
-        evaluation_observations: List[observations.Observation] = [
-            observations.ERA5,
-            observations.GHCN,
-        ],
-    ):
-        super().__init__(
-            event_type="heat_wave",
-            evaluation_variables=evaluation_variables,
-            case_metadata=case_metadata,
-            metrics=metrics,
-            evaluation_observations=evaluation_observations,
-        )
-
-
-class SevereConvection(EventType):
-    """An EventType child class that defines a severe convective event type.
-
-    A severe convective event is an outbreak which is characterized by a significant
-    number of tornado and hail reports. These events are also possibly characterized
-    as billion+ dollar disasters.
-    """
-
-    def __init__(
-        self,
-        case_metadata: dict[str, Any],
-        evaluation_variables: List[str | variables.DerivedVariable] = [
-            variables.CravenSignificantSevereParameter,
-            variables.PracticallyPerfectHindcast,
-        ],
-        metrics: List[metrics.Metric] = [
-            metrics.CSI,
-            metrics.LeadTimeDetection,
-            metrics.RegionalHitsMisses,
-            metrics.HitsMisses,
-        ],
-        evaluation_observations: List[observations.Observation] = [observations.LSR],
-    ):
-        super().__init__(
-            event_type="severe_day",
-            case_metadata=case_metadata,
-            evaluation_variables=evaluation_variables,
-            metrics=metrics,
-            evaluation_observations=evaluation_observations,
-        )
-
-
-class AtmosphericRiver(EventType):
-    """An EventType child class that defines an atmospheric river event type.
-
-    An atmospheric river is a persistent, narrow band of enhanced moisture that
-    extends from the tropics to the mid-latitudes. These events are characterized
-    by a large Integrated Vapor Transport (IVT) profile, a minimum size based upon
-    ERA5 resolution (0.25 degrees), a minimum value of the Laplacian of the IVT profile,
-    and some overlap with land (resulting in impacts to the built environment).
-    """
-
-    def __init__(
-        self,
-        case_metadata: dict[str, Any],
-        evaluation_variables: List[str | variables.DerivedVariable] = [],
-        metrics: List[metrics.Metric] = [
-            metrics.CSI,
-            metrics.LeadTimeDetection,
-        ],
-        evaluation_observations: List[observations.Observation] = [observations.ERA5],
-    ):
-        super().__init__(
-            event_type="atmospheric_river",
-            evaluation_variables=evaluation_variables,
-            case_metadata=case_metadata,
-            metrics=metrics,
-            evaluation_observations=evaluation_observations,
-        )
+            self.pre_composed_metrics[event.event_type] = event.metrics
+            self.pre_composed_observations[event.event_type] = event.observations
+            self.pre_composed_forecast_variables[event.event_type] = (
+                event.forecast_variables
+            )
+            self.pre_composed_observation_variables[event.event_type] = (
+                event.observation_variables
+            )
+            self.pre_composed_case_operators.extend(event.build_case_operator())
