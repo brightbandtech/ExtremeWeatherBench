@@ -2589,3 +2589,252 @@ cases:
       longitude_min: 15.0
       longitude_max: 25.0
     event_type: tropical_cyclone
+  - case_id_number: 266
+    title: January 2020 Australia
+    start_date: 2020-01-20 00:00:00
+    end_date: 2020-01-21 00:00:00
+    location:
+      latitude_min: -40.0
+      latitude_max: -10.0
+      longitude_min: 110.0
+      longitude_max: 155.0
+    event_type: severe_convection
+  - case_id_number: 267
+    title: April 2020 Australia
+    start_date: 2020-04-03 00:00:00
+    end_date: 2020-04-04 00:00:00
+    location:
+      latitude_min: -40.0
+      latitude_max: -10.0
+      longitude_min: 110.0
+      longitude_max: 155.0
+    event_type: severe_convection
+  - case_id_number: 268
+    title: May 2020 Australia
+    start_date: 2020-05-31 00:00:00
+    end_date: 2020-06-01 00:00:00
+    location:
+      latitude_min: -40.0
+      latitude_max: -10.0
+      longitude_min: 110.0
+      longitude_max: 155.0
+    event_type: severe_convection
+  - case_id_number: 269
+    title: September 2020 Australia
+    start_date: 2020-09-05 00:00:00
+    end_date: 2020-09-06 00:00:00
+    location:
+      latitude_min: -40.0
+      latitude_max: -10.0
+      longitude_min: 110.0
+      longitude_max: 155.0
+  - case_id_number: 270
+    title: October 2020 Australia
+    start_date: 2020-10-31 00:00:00
+    end_date: 2020-11-01 00:00:00
+    location:
+      latitude_min: -40.0
+      latitude_max: -10.0
+      longitude_min: 110.0
+      longitude_max: 155.0
+    event_type: severe_convection
+  - case_id_number: 271
+    title: December 2020 Australia
+    start_date: 2020-12-05 00:00:00
+    end_date: 2020-12-06 00:00:00
+    location:
+      latitude_min: -40.0
+      latitude_max: -10.0
+      longitude_min: 110.0
+      longitude_max: 155.0
+    event_type: severe_convection
+  - case_id_number: 272
+    title: September 2021 Australia
+    start_date: 2021-09-30 00:00:00
+    end_date: 2021-10-01 00:00:00
+    location:
+      latitude_min: -40.0
+      latitude_max: -10.0
+      longitude_min: 110.0
+      longitude_max: 155.0
+    event_type: severe_convection
+  - case_id_number: 273
+    title: October 2021 Australia
+    start_date: 2021-10-14 00:00:00
+    end_date: 2021-10-15 00:00:00
+    location:
+      latitude_min: -40.0
+      latitude_max: -10.0
+      longitude_min: 110.0
+      longitude_max: 155.0
+    event_type: severe_convection
+  - case_id_number: 274
+    title: October 2021 Australia
+    start_date: 2021-10-18 00:00:00
+    end_date: 2021-10-19 00:00:00
+    location:
+      latitude_min: -40.0
+      latitude_max: -10.0
+      longitude_min: 110.0
+      longitude_max: 155.0
+    event_type: severe_convection
+  - case_id_number: 275
+    title: October 2021 Australia
+    start_date: 2021-10-19 00:00:00
+    end_date: 2021-10-20 00:00:00
+    location:
+      latitude_min: -40.0
+      latitude_max: -10.0
+      longitude_min: 110.0
+      longitude_max: 155.0
+    event_type: severe_convection
+  - case_id_number: 276
+    title: October 2021 Australia
+    start_date: 2021-10-28 00:00:00
+    end_date: 2021-10-29 00:00:00
+    location:
+      latitude_min: -40.0
+      latitude_max: -10.0
+      longitude_min: 110.0
+      longitude_max: 155.0
+    event_type: severe_convection
+  - case_id_number: 277
+    title: December 2021 Australia
+    start_date: 2021-12-03 00:00:00
+    end_date: 2021-12-04 00:00:00
+    location:
+      latitude_min: -40.0
+      latitude_max: -10.0
+      longitude_min: 110.0
+      longitude_max: 155.0
+    event_type: severe_convection
+  - case_id_number: 278
+    title: December 2021 Australia
+    start_date: 2021-12-09 00:00:00
+    end_date: 2021-12-10 00:00:00
+    location:
+      latitude_min: -40.0
+      latitude_max: -10.0
+      longitude_min: 110.0
+      longitude_max: 155.0
+    event_type: severe_convection
+  - case_id_number: 279
+    title: January 2022 Australia
+    start_date: 2022-01-15 00:00:00
+    end_date: 2022-01-16 00:00:00
+    location:
+      latitude_min: -40.0
+      latitude_max: -10.0
+      longitude_min: 110.0
+      longitude_max: 155.0
+    event_type: severe_convection
+  - case_id_number: 280
+    title: March 2022 Australia
+    start_date: 2022-03-04 00:00:00
+    end_date: 2022-03-05 00:00:00
+    location:
+      latitude_min: -40.0
+      latitude_max: -10.0
+      longitude_min: 110.0
+      longitude_max: 155.0
+    event_type: severe_convection
+  - case_id_number: 281
+    title: December 2022 Australia
+    start_date: 2022-12-08 00:00:00
+    end_date: 2022-12-09 00:00:00
+    location:
+      latitude_min: -40.0
+      latitude_max: -10.0
+      longitude_min: 110.0
+      longitude_max: 155.0
+    event_type: severe_convection
+  - case_id_number: 282
+    title: February 2023 Australia
+    start_date: 2023-02-14 00:00:00
+    end_date: 2023-02-15 00:00:00
+    location:
+      latitude_min: -40.0
+      latitude_max: -10.0
+      longitude_min: 110.0
+      longitude_max: 155.0
+    event_type: severe_convection
+  - case_id_number: 283
+    title: December 2023 Australia
+    start_date: 2023-12-12 00:00:00
+    end_date: 2023-12-13 00:00:00
+    location:
+      latitude_min: -40.0
+      latitude_max: -10.0
+      longitude_min: 110.0
+      longitude_max: 155.0
+    event_type: severe_convection
+  - case_id_number: 284
+    title: December 2023 Australia
+    start_date: 2023-12-25 00:00:00
+    end_date: 2023-12-26 00:00:00
+    location:
+      latitude_min: -40.0
+      latitude_max: -10.0
+      longitude_min: 110.0
+      longitude_max: 155.0
+    event_type: severe_convection
+  - case_id_number: 285
+    title: December 2023 Australia
+    start_date: 2023-12-26 00:00:00
+    end_date: 2023-12-27 00:00:00
+    location:
+      latitude_min: -40.0
+      latitude_max: -10.0
+      longitude_min: 110.0
+      longitude_max: 155.0
+    event_type: severe_convection
+  - case_id_number: 286
+    title: August 2024 Australia
+    start_date: 2024-08-25 00:00:00
+    end_date: 2024-08-26 00:00:00
+    location:
+      latitude_min: -40.0
+      latitude_max: -10.0
+      longitude_min: 110.0
+      longitude_max: 155.0
+    event_type: severe_convection
+  - case_id_number: 287
+    title: October 2024 Australia
+    start_date: 2024-10-09 00:00:00
+    end_date: 2024-10-10 00:00:00
+    location:
+      latitude_min: -40.0
+      latitude_max: -10.0
+      longitude_min: 110.0
+      longitude_max: 155.0
+    event_type: severe_convection
+  - case_id_number: 288
+    title: October 2024 Australia
+    start_date: 2024-10-17 00:00:00
+    end_date: 2024-10-18 00:00:00
+    location:
+      latitude_min: -40.0
+      latitude_max: -10.0
+      longitude_min: 110.0
+      longitude_max: 155.0
+    event_type: severe_convection
+  - case_id_number: 289
+    title: November 2024 Australia
+    start_date: 2024-11-01 00:00:00
+    end_date: 2024-11-02 00:00:00
+    location:
+      latitude_min: -40.0
+      latitude_max: -10.0
+      longitude_min: 110.0
+      longitude_max: 155.0
+    event_type: severe_convection
+  - case_id_number: 290
+    title: November 2024 Australia
+    start_date: 2024-11-13 00:00:00
+    end_date: 2024-11-14 00:00:00
+    location:
+      latitude_min: -40.0
+      latitude_max: -10.0
+      longitude_min: 110.0
+      longitude_max: 155.0
+    event_type: severe_convection
