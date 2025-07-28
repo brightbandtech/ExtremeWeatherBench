@@ -126,7 +126,7 @@ def _gridded_inputs_to_evaluation_input(
         )
     )
     completed_subset_gridded_obs_ds = (
-        case_evaluation_data.individual_case.perform_subsetting_procedure(
+        case_evaluation_data.individual_case.subset_region(
             time_var_subset_gridded_obs_ds
         )
     )
@@ -208,10 +208,8 @@ def _check_and_subset_forecast_availability(
     forecast_time_subset = case_evaluation_data.individual_case._subset_valid_times(
         case_evaluation_data.forecast
     )
-    forecast_spatial_subset = (
-        case_evaluation_data.individual_case.perform_subsetting_procedure(
-            forecast_time_subset
-        )
+    forecast_spatial_subset = case_evaluation_data.individual_case.subset_region(
+        forecast_time_subset
     )
     # subset the forecast to the data variables for the event type/metric
     forecast = forecast_spatial_subset[case_evaluation_data.individual_case.data_vars]

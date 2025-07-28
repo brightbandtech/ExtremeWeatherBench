@@ -261,7 +261,8 @@ def align_observations_temporal_resolution(
     forecast_time_delta = pd.to_timedelta(np.diff(forecast.lead_time).mean(), unit="h")
 
     if forecast_time_delta > obs_time_delta:
-        observation = observation.resample(time=forecast_time_delta).first()
+        # Use skipna=True to avoid flox ReprObject error with fill_value
+        observation = observation.resample(time=forecast_time_delta).first(skipna=True)
 
     return observation
 

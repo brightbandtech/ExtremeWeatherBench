@@ -6,10 +6,6 @@ import pytest
 import xarray as xr
 
 from extremeweatherbench import utils
-from extremeweatherbench.regions import (
-    clip_dataset_to_bounding_box_degrees,
-    create_region,
-)
 
 
 @pytest.mark.parametrize(
@@ -159,70 +155,6 @@ def test_obs_coarser_temporal_resolution(
     )
     # Check that observation was modified
     assert (aligned_obs == sample_gridded_obs_dataarray).all()
-
-
-def test_clip_dataset_to_bounding_box_degrees():
-    # Create a sample dataset
-    lat = np.linspace(-90, 90, 181)
-    lon = np.linspace(0, 359, 360)
-    data = np.random.rand(181, 360)
-    ds = xr.Dataset(
-        {"data": (["latitude", "longitude"], data)},
-        coords={"latitude": lat, "longitude": lon},
-    )
-
-    # Test case 1: Single value for box_degrees, latitude ascending
-    location_center = create_region(latitude=40, longitude=100, bounding_box_degrees=10)
-    clipped_ds = clip_dataset_to_bounding_box_degrees(ds, location_center)
-    assert np.all(clipped_ds.latitude >= 35)
-    assert np.all(clipped_ds.latitude <= 45)
-    assert np.all(clipped_ds.longitude >= 95)
-    assert np.all(clipped_ds.longitude <= 105)
-
-    # Test case 2: Tuple for box_degrees, latitude ascending
-    location_center = create_region(
-        latitude=40, longitude=100, bounding_box_degrees=(5, 10)
-    )
-    clipped_ds = clip_dataset_to_bounding_box_degrees(ds, location_center)
-    assert np.all(clipped_ds.latitude >= 37.5)
-    assert np.all(clipped_ds.latitude <= 42.5)
-    assert np.all(clipped_ds.longitude >= 95)
-    assert np.all(clipped_ds.longitude <= 105)
-
-    # Test case 3: Negative longitude, latitude ascending
-    location_center = create_region(
-        latitude=40, longitude=-100, bounding_box_degrees=10
-    )
-    clipped_ds = clip_dataset_to_bounding_box_degrees(ds, location_center)
-    assert np.all(clipped_ds.latitude >= 35)
-    assert np.all(clipped_ds.latitude <= 45)
-    assert np.all(clipped_ds.longitude >= 255)  # -100 + 360 - 5 = 255
-    assert np.all(clipped_ds.longitude <= 265)  # -100 + 360 + 5 = 265
-
-    # Test case 4: Latitude descending
-    ds_desc = ds.reindex(latitude=ds.latitude[::-1])
-    location_center = create_region(latitude=40, longitude=100, bounding_box_degrees=10)
-    clipped_ds = clip_dataset_to_bounding_box_degrees(ds_desc, location_center)
-    assert np.all(clipped_ds.latitude >= 35)
-    assert np.all(clipped_ds.latitude <= 45)
-    assert np.all(clipped_ds.longitude >= 95)
-    assert np.all(clipped_ds.longitude <= 105)
-
-    # Test wrapping around prime meridian
-    location_center = create_region(latitude=0, longitude=0, bounding_box_degrees=10)
-    clipped_ds = clip_dataset_to_bounding_box_degrees(ds, location_center)
-
-    assert np.any(clipped_ds.longitude < 10)
-    assert np.any(clipped_ds.longitude > 350)
-
-    # Test case 5: Edge cases, ensuring no errors when clipping at boundaries
-    location_center = create_region(latitude=90, longitude=100, bounding_box_degrees=10)
-    clipped_ds = clip_dataset_to_bounding_box_degrees(ds, location_center)
-
-    location_center = create_region(
-        latitude=-90, longitude=100, bounding_box_degrees=10
-    )
-    clipped_ds = clip_dataset_to_bounding_box_degrees(ds, location_center)
 
 
 def test_align_point_obs_from_gridded_basic(

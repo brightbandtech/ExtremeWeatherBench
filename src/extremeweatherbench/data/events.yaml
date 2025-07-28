@@ -2628,6 +2628,7 @@ cases:
       latitude_max: -10.0
       longitude_min: 110.0
       longitude_max: 155.0
+    event_type: severe_convection
   - case_id_number: 270
     title: October 2020 Australia
     start_date: 2020-10-31 00:00:00
