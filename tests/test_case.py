@@ -1,17 +1,19 @@
 import datetime
 
 from extremeweatherbench import case
-from extremeweatherbench.regions import Region
+from extremeweatherbench.regions import CenteredRegion
 
 
 class TestGoodCases:
+    region = CenteredRegion(latitude=40, longitude=-100, bounding_box_degrees=5)
+
     def test_subset_region_heatwave(self, sample_forecast_dataset):
         heatwave_case = case.IndividualHeatWaveCase(
             case_id_number=20,
             title="Test Heatwave",
             start_date=datetime.datetime(2000, 1, 1),
             end_date=datetime.datetime(2000, 1, 14),
-            location=Region.create(latitude=40, longitude=-100, bounding_box_degrees=5),
+            location=self.region,
             event_type="heat_wave",
         )
         subset_dataset = heatwave_case.subset_region(sample_forecast_dataset)
@@ -20,14 +22,13 @@ class TestGoodCases:
 
     def test_individual_case(self, sample_forecast_dataset):
         # Create a single region instance to use for both the case and expected dict
-        region = Region.create(latitude=40, longitude=-100, bounding_box_degrees=5)
 
         base_case = case.IndividualCase(
             case_id_number=10,
             title="Test Case",
             start_date=datetime.datetime(2000, 1, 1),
             end_date=datetime.datetime(2000, 1, 14),
-            location=region,
+            location=self.region,
             event_type="heat_wave",
         )
         valid_case = {
@@ -35,7 +36,7 @@ class TestGoodCases:
             "title": "Test Case",
             "start_date": datetime.datetime(2000, 1, 1),
             "end_date": datetime.datetime(2000, 1, 14),
-            "location": region,
+            "location": self.region,
             "event_type": "heat_wave",
             "data_vars": None,
             "cross_listed": None,

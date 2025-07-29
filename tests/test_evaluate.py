@@ -6,7 +6,7 @@ import pytest
 import xarray as xr
 
 from extremeweatherbench import case, evaluate, events
-from extremeweatherbench.regions import Region
+from extremeweatherbench.regions import CenteredRegion
 
 
 def test_get_case_metadata(sample_config):
@@ -21,7 +21,7 @@ def test_evaluate_individualcase(sample_forecast_dataset, sample_gridded_obs_dat
         title="test_case",
         start_date=datetime.datetime(2021, 6, 20),
         end_date=datetime.datetime(2021, 7, 3),
-        location=Region.create(latitude=45, longitude=-100, bounding_box_degrees=5),
+        location=CenteredRegion(latitude=45, longitude=-100, bounding_box_degrees=5),
         event_type="heat_wave",
         data_vars=["2m_temperature"],
     )

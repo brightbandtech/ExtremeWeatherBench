@@ -4,12 +4,13 @@ import dataclasses
 import logging
 from abc import ABC, abstractmethod
 from pathlib import Path
+from typing import Type
 
 import geopandas as gpd  # type: ignore[import-untyped]
 import numpy as np
 import regionmask
 import xarray as xr
-from shapely import Polygon
+from shapely import Polygon  # type: ignore[import-untyped]
 
 from extremeweatherbench import utils
 
@@ -22,55 +23,10 @@ class Region(ABC):
 
     @classmethod
     @abstractmethod
-    def create_region(cls, *args, **kwargs):
-        """Abstract factor method to create a region;
+    def create_region(cls, *args, **kwargs) -> "Region":
+        """Abstract factory method to create a region;
         subclasses must implement with their own, specialized arguments."""
         pass
-
-    @classmethod
-    def create(cls, **kwargs):
-        """Factory method to create a Region object based on the provided parameters.
-
-        Args:
-            **kwargs: Parameters to determine the type of region to create.
-
-        Returns:
-            A Region object of the appropriate type.
-
-        Raises:
-            ValueError: If the parameters don't match any known region type.
-        """
-        # Check for shapefile path first (highest priority)
-        if "shapefile_path" in kwargs:
-            return ShapefileRegion.create_region(kwargs["shapefile_path"])
-
-        # Check for CenteredRegion parameters
-        if all(
-            key in kwargs for key in ["latitude", "longitude", "bounding_box_degrees"]
-        ):
-            return CenteredRegion.create_region(
-                kwargs["latitude"], kwargs["longitude"], kwargs["bounding_box_degrees"]
-            )
-
-        # Check for BoundingBoxRegion parameters
-        if all(
-            key in kwargs
-            for key in [
-                "latitude_min",
-                "latitude_max",
-                "longitude_min",
-                "longitude_max",
-            ]
-        ):
-            return BoundingBoxRegion.create_region(
-                kwargs["latitude_min"],
-                kwargs["latitude_max"],
-                kwargs["longitude_min"],
-                kwargs["longitude_max"],
-            )
-
-        # If no valid combination is found, raise an error
-        raise ValueError("Invalid parameters for region creation")
 
     @property
     @abstractmethod
@@ -78,17 +34,13 @@ class Region(ABC):
         """Return representation of this Region as a GeoDataFrame"""
         pass
 
-    def mask(
-        self, dataset: xr.Dataset, drop: bool = False, drop_ocean: bool = False
-    ) -> xr.Dataset:
+    def mask(self, dataset: xr.Dataset, drop: bool = False) -> xr.Dataset:
         """Mask a dataset to the region."""
         mask = regionmask.mask_geopandas(
             self.geopandas, dataset.longitude, dataset.latitude
         )
-        mask = ~np.isnan(mask)
-        if drop_ocean:
-            mask = utils.remove_ocean_gridpoints(mask)
-        return dataset.where(mask, drop=drop)
+        mask_array = ~np.isnan(mask)
+        return dataset.where(mask_array, drop=drop)
 
 
 class CenteredRegion(Region):
@@ -280,8 +232,19 @@ def map_to_create_region(region_input: Region | dict) -> Region:
     """
     if isinstance(region_input, Region):
         return region_input
-    elif isinstance(region_input, dict):
-        return Region.create(**region_input)
+
+    region_type = region_input.get("type")
+    region_parameters = region_input.get("parameters")
+
+    if region_type not in REGION_TYPES:
+        raise KeyError(
+            f"Region type '{region_type}' not registered. Available types: {list(REGION_TYPES.keys())}"
+        )
+
+    region_class = REGION_TYPES[region_type]
+    if region_parameters is None:
+        region_parameters = {}
+    return region_class.create_region(**region_parameters)
 
 
 def _check_longitude_bounds(
@@ -299,3 +262,11 @@ def _check_longitude_bounds(
             longitude_min,
         )
     return longitude_min, longitude_max
+
+
+# Registry of region types that can be extended by users
+REGION_TYPES: dict[str, Type[Region]] = {
+    "centered_region": CenteredRegion,
+    "bounded_region": BoundingBoxRegion,
+    "shapefile_region": ShapefileRegion,
+}

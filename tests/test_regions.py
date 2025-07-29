@@ -374,7 +374,14 @@ class TestCreateRegion:
     def test_create_centered_region(self):
         """Test creating a CenteredRegion via factory function."""
         region = map_to_create_region(
-            {"latitude": 45.0, "longitude": -120.0, "bounding_box_degrees": 10.0}
+            {
+                "type": "centered_region",
+                "parameters": {
+                    "latitude": 45.0,
+                    "longitude": -120.0,
+                    "bounding_box_degrees": 10.0,
+                },
+            }
         )
         assert isinstance(region, CenteredRegion)
         assert region.latitude == 45.0
@@ -384,7 +391,14 @@ class TestCreateRegion:
     def test_create_centered_region_with_tuple(self):
         """Test creating a CenteredRegion with tuple bounding box."""
         region = map_to_create_region(
-            {"latitude": 45.0, "longitude": -120.0, "bounding_box_degrees": (5.0, 10.0)}
+            {
+                "type": "centered_region",
+                "parameters": {
+                    "latitude": 45.0,
+                    "longitude": -120.0,
+                    "bounding_box_degrees": (5.0, 10.0),
+                },
+            }
         )
         assert isinstance(region, CenteredRegion)
         assert region.bounding_box_degrees == (5.0, 10.0)
@@ -393,10 +407,13 @@ class TestCreateRegion:
         """Test creating a BoundingBoxRegion via factory function."""
         region = map_to_create_region(
             {
-                "latitude_min": 40.0,
-                "latitude_max": 50.0,
-                "longitude_min": -125.0,
-                "longitude_max": -115.0,
+                "type": "bounded_region",
+                "parameters": {
+                    "latitude_min": 40.0,
+                    "latitude_max": 50.0,
+                    "longitude_min": -125.0,
+                    "longitude_max": -115.0,
+                },
             }
         )
         assert isinstance(region, BoundingBoxRegion)
@@ -409,27 +426,52 @@ class TestCreateRegion:
         """Test creating a ShapefileRegion via factory function."""
         with patch("geopandas.read_file") as mock_read:
             mock_read.return_value = Mock()
-            region = map_to_create_region({"shapefile_path": "/path/to/shapefile.shp"})
+            region = map_to_create_region(
+                {
+                    "type": "shapefile_region",
+                    "parameters": {"shapefile_path": "/path/to/shapefile.shp"},
+                }
+            )
             assert isinstance(region, ShapefileRegion)
             assert region.shapefile_path == Path("/path/to/shapefile.shp")
 
     def test_create_region_invalid_parameters(self):
         """Test create_region with invalid parameter combinations."""
         # Missing required parameters for CenteredRegion
-        with pytest.raises(ValueError, match="Invalid parameters for region creation"):
-            map_to_create_region({"latitude": 45.0, "longitude": -120.0})
+        with pytest.raises(TypeError, match="missing 1 required positional argument"):
+            map_to_create_region(
+                {
+                    "type": "centered_region",
+                    "parameters": {"latitude": 45.0, "longitude": -120.0},
+                }
+            )
             # Missing bounding_box_degrees
 
         # Missing required parameters for BoundingBoxRegion
-        with pytest.raises(ValueError, match="Invalid parameters for region creation"):
+        with pytest.raises(TypeError, match="missing 1 required positional argument"):
             map_to_create_region(
-                {"latitude_min": 40.0, "latitude_max": 50.0, "longitude_min": -125.0}
+                {
+                    "type": "bounded_region",
+                    "parameters": {
+                        "latitude_min": 40.0,
+                        "latitude_max": 50.0,
+                        "longitude_min": -125.0,
+                    },
+                }
             )
             # Missing longitude_max
 
         # Mixed parameters that don't form a valid region
-        with pytest.raises(ValueError, match="Invalid parameters for region creation"):
-            map_to_create_region({"latitude": 45.0, "longitude_min": -125.0})
+        with pytest.raises(
+            TypeError,
+            match="got an unexpected keyword argument 'longitude_min'. Did you mean 'longitude'?",
+        ):
+            map_to_create_region(
+                {
+                    "type": "centered_region",
+                    "parameters": {"latitude": 45.0, "longitude_min": -125.0},
+                }
+            )
 
     def test_create_region_priority_order(self):
         """Test that shapefile_path takes priority over other parameters."""
@@ -437,10 +479,10 @@ class TestCreateRegion:
             mock_read.return_value = Mock()
             region = map_to_create_region(
                 {
-                    "latitude": 45.0,
-                    "longitude": -120.0,
-                    "bounding_box_degrees": 10.0,
-                    "shapefile_path": "/path/to/shapefile.shp",
+                    "type": "shapefile_region",
+                    "parameters": {
+                        "shapefile_path": "/path/to/shapefile.shp",
+                    },
                 }
             )
             # Should create ShapefileRegion, not CenteredRegion
@@ -453,9 +495,12 @@ class TestMapToCreateRegion:
     def test_map_to_create_region_centered(self):
         """Test mapping dictionary to CenteredRegion."""
         kwargs = {
-            "latitude": 45.0,
-            "longitude": -120.0,
-            "bounding_box_degrees": 10.0,
+            "type": "centered_region",
+            "parameters": {
+                "latitude": 45.0,
+                "longitude": -120.0,
+                "bounding_box_degrees": 10.0,
+            },
         }
         region = map_to_create_region(kwargs)
         assert isinstance(region, CenteredRegion)
@@ -466,10 +511,13 @@ class TestMapToCreateRegion:
     def test_map_to_create_region_bounding_box(self):
         """Test mapping dictionary to BoundingBoxRegion."""
         kwargs = {
-            "latitude_min": 40.0,
-            "latitude_max": 50.0,
-            "longitude_min": -125.0,
-            "longitude_max": -115.0,
+            "type": "bounded_region",
+            "parameters": {
+                "latitude_min": 40.0,
+                "latitude_max": 50.0,
+                "longitude_min": -125.0,
+                "longitude_max": -115.0,
+            },
         }
         region = map_to_create_region(kwargs)
         assert isinstance(region, BoundingBoxRegion)
@@ -480,7 +528,10 @@ class TestMapToCreateRegion:
         """Test mapping dictionary to ShapefileRegion."""
         with patch("geopandas.read_file") as mock_read:
             mock_read.return_value = Mock()
-            kwargs = {"shapefile_path": "/path/to/shapefile.shp"}
+            kwargs = {
+                "type": "shapefile_region",
+                "parameters": {"shapefile_path": "/path/to/shapefile.shp"},
+            }
             region = map_to_create_region(kwargs)
             assert isinstance(region, ShapefileRegion)
             assert region.shapefile_path == Path("/path/to/shapefile.shp")
@@ -549,9 +600,12 @@ class TestRegionIntegration:
 
         # Test data similar to what would come from YAML
         region_data = {
-            "latitude": 45.0,
-            "longitude": -120.0,
-            "bounding_box_degrees": 10.0,
+            "type": "centered_region",
+            "parameters": {
+                "latitude": 45.0,
+                "longitude": -120.0,
+                "bounding_box_degrees": 10.0,
+            },
         }
 
         # Test that map_to_create_region works correctly
