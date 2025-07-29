@@ -9,7 +9,7 @@ import dacite
 import pandas as pd
 import xarray as xr
 
-from extremeweatherbench import case, config, data_loader, events, utils
+from extremeweatherbench import case, config, data_loader, events, regions, utils
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -126,7 +126,7 @@ def _gridded_inputs_to_evaluation_input(
         )
     )
     completed_subset_gridded_obs_ds = (
-        case_evaluation_data.individual_case.perform_subsetting_procedure(
+        case_evaluation_data.individual_case.subset_region(
             time_var_subset_gridded_obs_ds
         )
     )
@@ -208,10 +208,8 @@ def _check_and_subset_forecast_availability(
     forecast_time_subset = case_evaluation_data.individual_case._subset_valid_times(
         case_evaluation_data.forecast
     )
-    forecast_spatial_subset = (
-        case_evaluation_data.individual_case.perform_subsetting_procedure(
-            forecast_time_subset
-        )
+    forecast_spatial_subset = case_evaluation_data.individual_case.subset_region(
+        forecast_time_subset
     )
     # subset the forecast to the data variables for the event type/metric
     forecast = forecast_spatial_subset[case_evaluation_data.individual_case.data_vars]
@@ -281,10 +279,14 @@ def evaluate(
     for event in eval_config.event_types:
         # Check if event is a class (not instantiated) or an instance
         if isinstance(event, type):
-            # if event is a class and hasn't been instantiated yet
+            # type hooks does not work for nested dataclasses it seems; PRs on dacite also do not
+            # seem to be merged yet nor fix the issue. location still results in a dict.
             cases = dacite.from_dict(
                 data_class=event,
                 data=yaml_event_case,
+                config=dacite.Config(
+                    type_hooks={regions.Region: regions.map_to_create_region},
+                ),
             )
         elif isinstance(event, events.EventContainer):
             # if event is already an instance of EventContainer
@@ -446,6 +448,9 @@ def get_case_metadata(eval_config: config.Config) -> list[events.EventContainer]
         cases = dacite.from_dict(
             data_class=event,
             data=yaml_event_case,
+            config=dacite.Config(
+                type_hooks={regions.Region: regions.map_to_create_region}
+            ),
         )
         case_metadata_output.append(cases)
     return case_metadata_output
