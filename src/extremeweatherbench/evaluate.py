@@ -288,12 +288,6 @@ def evaluate(
                     type_hooks={regions.Region: regions.map_to_create_region},
                 ),
             )
-            # this loop is a workaround to get the location attribute of the case dataclass
-            # to be a Region object instead of a dict
-            for iter in range(len(cases.cases)):
-                cases.cases[iter].location = regions.map_to_create_region(
-                    cases.cases[iter].location
-                )
         elif isinstance(event, events.EventContainer):
             # if event is already an instance of EventContainer
             cases = event
