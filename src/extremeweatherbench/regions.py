@@ -94,6 +94,9 @@ class Region(ABC):
 class CenteredRegion(Region):
     """A region defined by a center point and a bounding box.
 
+    bounding_box_degrees is the width (length) of one or all sides, not half size;
+    e.g., bounding_box_degrees=10.0 means a 10 degree by 10 degree box around the center point.
+
     Attributes:
         latitude: Center latitude
         longitude: Center longitude
@@ -119,6 +122,7 @@ class CenteredRegion(Region):
         cls, latitude: float, longitude: float, bounding_box_degrees: float | tuple
     ) -> "CenteredRegion":
         """Create a CenteredRegion with the given parameters."""
+
         return cls(
             latitude=latitude,
             longitude=longitude,
@@ -129,26 +133,6 @@ class CenteredRegion(Region):
     def geopandas(self) -> gpd.GeoDataFrame:
         """Return representation of this Region as a GeoDataFrame"""
         # Build the region coordinates
-        coords = self.build_region()
-
-        # Convert longitudes to 0-360 range
-        lon_min_360 = utils.convert_longitude_to_360(coords["longitude_min"])
-        lon_max_360 = utils.convert_longitude_to_360(coords["longitude_max"])
-
-        # Create polygon and geodataframe from bounding box coordinates
-        polygon = Polygon(
-            [
-                (lon_min_360, coords["latitude_min"]),
-                (lon_max_360, coords["latitude_min"]),
-                (lon_max_360, coords["latitude_max"]),
-                (lon_min_360, coords["latitude_max"]),
-                (lon_min_360, coords["latitude_min"]),
-            ]
-        )
-        return gpd.GeoDataFrame(geometry=[polygon], crs="EPSG:4326")
-
-    def build_region(self):
-        """Builds the corner coordinates of the region."""
         longitude = self.longitude
         if longitude < 0:
             longitude = utils.convert_longitude_to_360(longitude)
@@ -165,23 +149,21 @@ class CenteredRegion(Region):
             longitude_min = longitude - self.bounding_box_degrees / 2
             longitude_max = longitude + self.bounding_box_degrees / 2
 
-        if longitude_min < 0:
-            longitude_min = utils.convert_longitude_to_360(longitude_min)
-        if longitude_max < 0:
-            longitude_max = utils.convert_longitude_to_360(longitude_max)
-        if longitude_min > longitude_max:
-            # Ensure max_lon is always the larger value and account for cyclic nature of lon
-            longitude_min, longitude_max = (
-                longitude_max,
-                longitude_min,
-            )
+        longitude_min, longitude_max = _check_longitude_bounds(
+            longitude_min, longitude_max
+        )
 
-        return {
-            "latitude_min": latitude_min,
-            "latitude_max": latitude_max,
-            "longitude_min": longitude_min,
-            "longitude_max": longitude_max,
-        }
+        # Create polygon and geodataframe from bounding box coordinates
+        polygon = Polygon(
+            [
+                (longitude_min, latitude_min),
+                (longitude_max, latitude_min),
+                (longitude_max, latitude_max),
+                (longitude_min, latitude_max),
+                (longitude_min, latitude_min),
+            ]
+        )
+        return gpd.GeoDataFrame(geometry=[polygon], crs="EPSG:4326")
 
 
 class BoundingBoxRegion(Region):
@@ -234,32 +216,22 @@ class BoundingBoxRegion(Region):
     def geopandas(self) -> gpd.GeoDataFrame:
         """Return representation of this Region as a GeoDataFrame"""
         # Build the region coordinates
-        coords = self.build_region()
 
-        # Convert longitudes to 0-360 range
-        lon_min_360 = utils.convert_longitude_to_360(coords["longitude_min"])
-        lon_max_360 = utils.convert_longitude_to_360(coords["longitude_max"])
+        longitude_min, longitude_max = _check_longitude_bounds(
+            self.longitude_min, self.longitude_max
+        )
 
         # Create polygon and geodataframe from bounding box coordinates
         polygon = Polygon(
             [
-                (lon_min_360, coords["latitude_min"]),
-                (lon_max_360, coords["latitude_min"]),
-                (lon_max_360, coords["latitude_max"]),
-                (lon_min_360, coords["latitude_max"]),
-                (lon_min_360, coords["latitude_min"]),
+                (longitude_min, self.latitude_min),
+                (longitude_max, self.latitude_min),
+                (longitude_max, self.latitude_max),
+                (longitude_min, self.latitude_max),
+                (longitude_min, self.latitude_min),
             ]
         )
         return gpd.GeoDataFrame(geometry=[polygon], crs="EPSG:4326")
-
-    def build_region(self):
-        """Builds the corner coordinates of the region."""
-        return {
-            "latitude_min": self.latitude_min,
-            "latitude_max": self.latitude_max,
-            "longitude_min": self.longitude_min,
-            "longitude_max": self.longitude_max,
-        }
 
 
 @dataclasses.dataclass
@@ -287,10 +259,6 @@ class ShapefileRegion(Region):
     @property
     def geopandas(self) -> gpd.GeoDataFrame:
         """Return representation of this Region as a GeoDataFrame"""
-        return self.build_region()
-
-    def build_region(self):
-        """Return a geopandas dataframe from a shapefile."""
         try:
             return gpd.read_file(self.shapefile_path)
         except Exception as e:
@@ -314,3 +282,20 @@ def map_to_create_region(region_input: Region | dict) -> Region:
         return region_input
     elif isinstance(region_input, dict):
         return Region.create(**region_input)
+
+
+def _check_longitude_bounds(
+    longitude_min: float, longitude_max: float
+) -> tuple[float, float]:
+    """Check that the longitude bounds are valid."""
+    if longitude_min < 0:
+        longitude_min = utils.convert_longitude_to_360(longitude_min)
+    if longitude_max < 0:
+        longitude_max = utils.convert_longitude_to_360(longitude_max)
+    if longitude_min > longitude_max:
+        # Ensure max_lon is always the larger value
+        longitude_min, longitude_max = (
+            longitude_max,
+            longitude_min,
+        )
+    return longitude_min, longitude_max

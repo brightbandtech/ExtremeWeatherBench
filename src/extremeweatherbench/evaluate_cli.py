@@ -71,7 +71,7 @@ def event_type_constructor(loader: yaml.SafeLoader, node: yaml.nodes.MappingNode
     else:
         input_event_dict = {"cases": yaml_event_case["cases"], "event_type": event_type}
     output = dacite.from_dict(
-        data_class=EVENT_TYPE_MAP[event_type],
+        data_class=EVENT_TYPE_MAP.get(event_type, None),
         data=input_event_dict,
         config=dacite.Config(type_hooks={regions.Region: regions.map_to_create_region}),
     )
