@@ -10,7 +10,7 @@ from typing import List, Optional, Type
 import numpy as np
 import xarray as xr
 
-from extremeweatherbench import metrics, utils
+from extremeweatherbench import metrics, regions, utils
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -28,10 +28,7 @@ class IndividualCase:
         case_id_number: A unique numerical identifier for the event.
         start_date: The start date of the case, for use in subsetting data for analysis.
         end_date: The end date of the case, for use in subsetting data for analysis.
-        location: A Location object representing the latitude and longitude of the event
-            center or  focus.
-        bounding_box_degrees: The side length of a bounding box centered on location, in
-            kilometers.
+        location: A Location dataclass representing the location of a case.
         event_type: A string representing the type of extreme weather event.
         cross_listed: A list of other event types that this case study is cross-listed under.
     """
@@ -40,17 +37,13 @@ class IndividualCase:
     title: str
     start_date: datetime.datetime
     end_date: datetime.datetime
-    location: utils.Location
-    bounding_box_degrees: float
+    location: regions.Region
     event_type: str
     data_vars: Optional[List[str]] = None
     cross_listed: Optional[List[str]] = None
 
-    def perform_subsetting_procedure(self, dataset: xr.Dataset) -> xr.Dataset:
-        """Perform any necessary subsetting procedures on the input dataset.
-
-        This method is designed to be overridden by subclasses to provide custom
-        subsetting procedures for specific event types.
+    def subset_region(self, dataset: xr.Dataset) -> xr.Dataset:
+        """Subset the input dataset to the region specified in the location.
 
         Args:
             dataset: xr.Dataset: The input dataset to subset.
@@ -58,7 +51,7 @@ class IndividualCase:
         Returns:
             xr.Dataset: The subset dataset.
         """
-        raise NotImplementedError
+        return self.location.mask(dataset, drop=True)
 
     def _subset_data_vars(self, dataset: xr.Dataset) -> xr.Dataset:
         """Subset the input dataset to only include the variables specified in data_vars.
@@ -146,13 +139,6 @@ class IndividualHeatWaveCase(IndividualCase):
     def __post_init__(self):
         self.data_vars = ["surface_air_temperature"]
 
-    def perform_subsetting_procedure(self, dataset: xr.Dataset) -> xr.Dataset:
-        modified_ds = utils.clip_dataset_to_bounding_box_degrees(
-            dataset, self.location, self.bounding_box_degrees
-        )
-        modified_ds = utils.remove_ocean_gridpoints(modified_ds)
-        return modified_ds
-
 
 @dataclasses.dataclass
 class IndividualFreezeCase(IndividualCase):
@@ -182,12 +168,6 @@ class IndividualFreezeCase(IndividualCase):
             "surface_eastward_wind",
             "surface_northward_wind",
         ]
-
-    def perform_subsetting_procedure(self, dataset) -> xr.Dataset:
-        modified_ds = utils.clip_dataset_to_bounding_box_degrees(
-            dataset, self.location, self.bounding_box_degrees
-        )
-        return modified_ds
 
 
 # maps the case event type to the corresponding dataclass
