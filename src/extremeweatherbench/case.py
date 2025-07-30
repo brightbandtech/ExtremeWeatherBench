@@ -170,6 +170,54 @@ class IndividualFreezeCase(IndividualCase):
         ]
 
 
+@dataclasses.dataclass
+class IndividualSevereConvectionCase(IndividualCase):
+    """TEMPORARY Container for metadata defining a single or individual case of a severe convection event.
+
+    An IndividualSevereConvectionCase is a subclass of IndividualCase that is designed to
+    provide additional metadata specific to severe convection events.
+    """
+
+    metrics_list: List[Type[metrics.Metric]] = dataclasses.field(
+        default_factory=lambda: [metrics.RegionalRMSE]
+    )
+    data_vars: List[str] = dataclasses.field(
+        default_factory=lambda: ["surface_air_temperature"]
+    )
+
+
+@dataclasses.dataclass
+class IndividualAtmosphericRiverCase(IndividualCase):
+    """TEMPORARY Container for metadata defining a single or individual case of an atmospheric river event.
+
+    An IndividualAtmosphericRiverCase is a subclass of IndividualCase that is designed to
+    provide additional metadata specific to atmospheric river events.
+    """
+
+    metrics_list: List[Type[metrics.Metric]] = dataclasses.field(
+        default_factory=lambda: [metrics.RegionalRMSE]
+    )
+    data_vars: List[str] = dataclasses.field(
+        default_factory=lambda: ["surface_air_temperature"]
+    )
+
+
+@dataclasses.dataclass
+class IndividualTropicalCycloneCase(IndividualCase):
+    """TEMPORARY Container for metadata defining a single or individual case of a tropical cyclone event.
+
+    An IndividualTropicalCycloneCase is a subclass of IndividualCase that is designed to
+    provide additional metadata specific to tropical cyclone events.
+    """
+
+    metrics_list: List[Type[metrics.Metric]] = dataclasses.field(
+        default_factory=lambda: [metrics.RegionalRMSE]
+    )
+    data_vars: List[str] = dataclasses.field(
+        default_factory=lambda: ["surface_air_temperature"]
+    )
+
+
 # maps the case event type to the corresponding dataclass
 # additional event types need to be added here and
 # CASE_EVENT_TYPE_MATCHER, which maps the metadata case event type
@@ -179,11 +227,17 @@ class CaseEventType(StrEnum):
 
     HEAT_WAVE = "heat_wave"
     FREEZE = "freeze"
+    SEVERE_CONVECTION = "severe_convection"
+    ATMOSPHERIC_RIVER = "atmospheric_river"
+    TROPICAL_CYCLONE = "tropical_cyclone"
 
 
 CASE_EVENT_TYPE_MATCHER: dict[CaseEventType, type[IndividualCase]] = {
     CaseEventType.HEAT_WAVE: IndividualHeatWaveCase,
     CaseEventType.FREEZE: IndividualFreezeCase,
+    CaseEventType.SEVERE_CONVECTION: IndividualSevereConvectionCase,
+    CaseEventType.ATMOSPHERIC_RIVER: IndividualAtmosphericRiverCase,
+    CaseEventType.TROPICAL_CYCLONE: IndividualTropicalCycloneCase,
 }
 
 
