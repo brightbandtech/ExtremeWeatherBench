@@ -2,24 +2,22 @@
 other specialized package.
 """
 
-from typing import Union, List, Tuple
-from collections import namedtuple
-import numpy as np
-import pandas as pd
-import regionmask
-import xarray as xr
 import datetime
-from pathlib import Path
-from importlib import resources
-import yaml
 import itertools
 import logging
+from importlib import resources
+from pathlib import Path
+from typing import List, Tuple, Union
+
+import numpy as np
+import pandas as pd  # type: ignore[import-untyped]
+import regionmask
+import xarray as xr
+import yaml
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-#: Struct packaging latitude/longitude location definitions.
-Location = namedtuple("Location", ["latitude", "longitude"])
 
 #: Maps the ARCO ERA5 to CF conventions.
 ERA5_MAPPING = {
@@ -44,56 +42,20 @@ def convert_longitude_to_360(longitude: float) -> float:
 
 
 def convert_longitude_to_180(
-    dataset: Union[xr.Dataset, xr.DataArray], longitude_name: str = "longitude"
-) -> Union[xr.Dataset, xr.DataArray]:
-    """Coerce the longitude dimension of an xarray data structure to [-180, 180)."""
-    dataset.coords[longitude_name] = (dataset.coords[longitude_name] + 180) % 360 - 180
-    dataset = dataset.sortby(longitude_name)
-    return dataset
+    longitude: float | Union[xr.Dataset, xr.DataArray],
+    longitude_name: str = "longitude",
+) -> float | Union[xr.Dataset, xr.DataArray]:
+    """Convert a longitude from the range [0, 360) to [-180, 180).
 
-
-def clip_dataset_to_bounding_box_degrees(
-    dataset: xr.Dataset, location_center: Location, box_degrees: Union[tuple, float]
-) -> xr.Dataset:
-    """Clip an xarray dataset to a box around a given location in degrees latitude & longitude.
-
-    Args:
-        dataset: The input xarray dataset.
-        location_center: A Location object corresponding to the center of the bounding box.
-        box_degrees: The side length(s) of the bounding box in degrees, as a tuple (lat,lon) or single value.
-
-    Returns:
-        The clipped xarray dataset.
-    """
-
-    lat_center = location_center.latitude
-    lon_center = location_center.longitude
-    if lon_center < 0:
-        lon_center = convert_longitude_to_360(lon_center)
-    if isinstance(box_degrees, tuple):
-        box_degrees_lat, box_degrees_lon = box_degrees
+    Datasets are coerced to [-180, 180) and sorted by longitude."""
+    if isinstance(longitude, xr.Dataset) or isinstance(longitude, xr.DataArray):
+        longitude.coords[longitude_name] = (
+            longitude.coords[longitude_name] + 180
+        ) % 360 - 180
+        longitude = longitude.sortby(longitude_name)
+        return longitude
     else:
-        box_degrees_lat = box_degrees
-        box_degrees_lon = box_degrees
-    min_lat = lat_center - box_degrees_lat / 2
-    max_lat = lat_center + box_degrees_lat / 2
-    min_lon = lon_center - box_degrees_lon / 2
-    max_lon = lon_center + box_degrees_lon / 2
-    if min_lon < 0:
-        min_lon = convert_longitude_to_360(min_lon)
-    if min_lon > max_lon:
-        # Ensure max_lon is always the larger value and account for cyclic nature of lon
-        min_lon, max_lon = max_lon, min_lon
-        clipped_dataset = dataset.sel(
-            latitude=(dataset.latitude > min_lat) & (dataset.latitude <= max_lat),
-            longitude=(dataset.longitude < min_lon) | (dataset.longitude >= max_lon),
-        )
-    else:
-        clipped_dataset = dataset.sel(
-            latitude=(dataset.latitude > min_lat) & (dataset.latitude <= max_lat),
-            longitude=(dataset.longitude > min_lon) & (dataset.longitude <= max_lon),
-        )
-    return clipped_dataset
+        return np.mod(longitude - 180, 360) - 180
 
 
 def convert_day_yearofday_to_time(dataset: xr.Dataset, year: int) -> xr.Dataset:
@@ -299,7 +261,8 @@ def align_observations_temporal_resolution(
     forecast_time_delta = pd.to_timedelta(np.diff(forecast.lead_time).mean(), unit="h")
 
     if forecast_time_delta > obs_time_delta:
-        observation = observation.resample(time=forecast_time_delta).first()
+        # Use skipna=True to avoid flox ReprObject error with fill_value
+        observation = observation.resample(time=forecast_time_delta).first(skipna=True)
 
     return observation
 
@@ -346,16 +309,6 @@ def read_event_yaml(input_pth: str | Path) -> dict:
     input_pth = Path(input_pth)
     with open(input_pth, "rb") as f:
         yaml_event_case = yaml.safe_load(f)
-    for k, v in yaml_event_case.items():
-        if k == "cases":
-            for individual_case in v:
-                if "location" in individual_case:
-                    individual_case["location"]["longitude"] = convert_longitude_to_360(
-                        individual_case["location"]["longitude"]
-                    )
-                    individual_case["location"] = Location(
-                        **individual_case["location"]
-                    )
     return yaml_event_case
 
 
@@ -437,10 +390,10 @@ def align_point_obs_from_gridded(
     )
     case_subset_point_obs_df = location_subset_point_obs(
         case_subset_point_obs_df,
-        forecast_ds["latitude"].min().values,
-        forecast_ds["latitude"].max().values,
-        forecast_ds["longitude"].min().values,
-        forecast_ds["longitude"].max().values,
+        float(forecast_ds["latitude"].min().values),
+        float(forecast_ds["latitude"].max().values),
+        float(forecast_ds["longitude"].min().values),
+        float(forecast_ds["longitude"].max().values),
     )
     # Reset index to allow for easier modification
     case_subset_point_obs_df = case_subset_point_obs_df.reset_index()
