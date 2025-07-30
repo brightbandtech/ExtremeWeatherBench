@@ -7,14 +7,19 @@ import itertools
 import logging
 from importlib import resources
 from pathlib import Path
-from typing import List, Tuple, Union
+from typing import List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd  # type: ignore[import-untyped]
+import polars as pl
 import regionmask
 import requests  # type: ignore[import-untyped]
 import xarray as xr
 import yaml
+
+IncomingDataInput = Union[
+    xr.Dataset, xr.DataArray, pl.LazyFrame, pl.DataFrame, pd.DataFrame, np.ndarray
+]
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -652,3 +657,31 @@ def pull_and_clean_lsr_data_from_spc(date: pd.Timestamp) -> pd.DataFrame:
     df["Time"] = pd.to_datetime(date.strftime("%Y-%m-%d") + " " + time.astype(str))
     df = df.rename(columns={"Lat": "lat", "Lon": "lon", "Time": "time"})
     return df
+
+
+def maybe_map_variable_names(
+    data: IncomingDataInput, variable_mapping: Optional[dict] = None, **kwargs
+) -> IncomingDataInput:
+    """Map the variable names to the observation data, if required.
+
+    Args:
+        data: The incoming data in the form of an object that has a rename method for data variables/columns.
+        variable_mapping: The mapping of variable names to the incoming data, with the format {old_name: new_name}.
+
+    Returns:
+        A dataset with mapped variable names, if any exist, else the original data.
+    """
+    if variable_mapping is None:
+        return data
+    # Filter the mapping to only include variables that exist in the dataset
+    if isinstance(data, (xr.Dataset, xr.DataArray)):
+        subset_variable_mapping = {
+            v: k for v, k in variable_mapping.items() if v in data.data_vars
+        }
+    elif isinstance(data, (pl.LazyFrame, pl.DataFrame, pd.DataFrame)):
+        subset_variable_mapping = {
+            v: k for v, k in variable_mapping.items() if v in data.columns
+        }
+    if subset_variable_mapping:
+        data = data.rename(subset_variable_mapping)
+    return data
