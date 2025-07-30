@@ -2,7 +2,6 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Optional, Union
 
-import numpy as np
 import pandas as pd  # type: ignore
 import polars as pl
 import xarray as xr
@@ -27,9 +26,7 @@ LSR_URI = "gs://extremeweatherbench/datasets/lsr_01012020_04302025.parq"
 IBTRACS_URI = "https://www.ncei.noaa.gov/data/international-best-track-archive-for-climate-stewardship-ibtracs/v04r01/access/csv/ibtracs.ALL.list.v04r01.csv"  # noqa: E501
 
 # type hint for the data input to the observation classes
-ObservationDataInput = Union[
-    xr.Dataset, xr.DataArray, pl.LazyFrame, pd.DataFrame, np.ndarray
-]
+ObservationDataInput = Union[xr.Dataset, xr.DataArray, pl.LazyFrame, pd.DataFrame]
 
 
 # TODO: add a derived variable class
@@ -83,7 +80,7 @@ class Observation(ABC):
         self,
         data: ObservationDataInput,
         case: case.IndividualCase,
-        variables: Optional[list[str]] = None,
+        observation_variables: Optional[list[str]] = None,
         **kwargs,
     ) -> ObservationDataInput:
         """
@@ -95,8 +92,8 @@ class Observation(ABC):
         Args:
             data: The observation data to subset, which should be a xarray dataset, xarray dataarray, polars lazyframe,
             pandas dataframe, or numpy array.
-            variables: The variables to include in the observation. Some observations may not have variables, or
-            only have a singular variable; thus, this is optional.
+            observation_variables: The variables to include in the observation. Some observations may not have
+            variables, or only have a singular variable; thus, this is optional.
 
         Returns:
             The observation data with the variables subset to the case metadata.
@@ -119,51 +116,12 @@ class Observation(ABC):
             The observation data as an xarray dataset.
         """
 
-    @abstractmethod
-    def _maybe_map_variable_names(
-        self,
-        data: ObservationDataInput,
-        variable_mapping: Optional[dict] = None,
-        **kwargs,
-    ) -> ObservationDataInput:
-        """
-        Map the variable names to the observation data, if required.
-        """
-
-    def _maybe_derive_variables(
-        self,
-        data: xr.Dataset,
-        case: case.IndividualCase,
-        variables: list[str | DerivedVariable],
-        **kwargs,
-    ) -> xr.Dataset:
-        """
-        Derive variables from the observation data if any exist in variables.
-
-        Args:
-            data: The observation data already run through _subset_data_to_case.
-            variables: The variables to derive.
-
-        Returns:
-            The observation data with the derived variables.
-        """
-        for v in variables:
-            # there should only be strings or derived variables in the list
-            if not isinstance(v, str):
-                if not issubclass(v, DerivedVariable):
-                    raise ValueError(f"Expected str or DerivedVariable, got {type(v)}")
-                derived_data = v().compute(
-                    data=data, single_case=case, variables=variables
-                )
-                return derived_data
-        return data
-
     def run_pipeline(
         self,
         case: case.IndividualCase,
         storage_options: Optional[dict] = None,
-        variables: Optional[list[str | DerivedVariable]] = None,
-        variable_mapping: dict = {},
+        observation_variables: Optional[list[str | DerivedVariable]] = None,
+        observation_variable_mapping: dict = {},
         **kwargs,
     ) -> xr.Dataset:
         """
@@ -188,22 +146,19 @@ class Observation(ABC):
                 **kwargs,
             )
             .pipe(
-                self._maybe_map_variable_names,
-                variable_mapping=variable_mapping,
+                utils.maybe_map_variable_names,
+                variable_mapping=observation_variable_mapping,
                 **kwargs,
             )
             .pipe(
                 self._subset_data_to_case,
                 case=case,
-                variables=variables,
+                observation_variables=observation_variables,
                 **kwargs,
             )
             .pipe(self._maybe_convert_to_dataset, **kwargs)
             .pipe(
-                self._maybe_derive_variables,
-                case=case,
-                variables=variables or [],
-                **kwargs,
+                utils.maybe_derive_variables, case=case, variables=observation_variables
             )
         )
         return data
@@ -230,7 +185,7 @@ class ERA5(Observation):
         data = xr.open_zarr(
             self.source,
             storage_options=storage_options,
-            chunks=None,
+            chunks=chunks,
         )
         return data
 
@@ -238,7 +193,7 @@ class ERA5(Observation):
         self,
         data: ObservationDataInput,
         case: case.IndividualCase,
-        variables: Optional[list[str]] = None,
+        observation_variables: Optional[list[str]] = None,
         **kwargs,
     ) -> ObservationDataInput:
         if not isinstance(data, (xr.Dataset, xr.DataArray)):
@@ -248,13 +203,15 @@ class ERA5(Observation):
         subset_time_data = data.sel(time=slice(case.start_date, case.end_date))
 
         # check that the variables are in the observation data
-        if variables is not None and any(
-            var not in subset_time_data.data_vars for var in variables
+        if observation_variables is not None and any(
+            var not in subset_time_data.data_vars for var in observation_variables
         ):
-            raise ValueError(f"Variables {variables} not found in observation data")
+            raise ValueError(
+                f"Variables {observation_variables} not found in observation data"
+            )
         # subset the variables
-        elif variables is not None:
-            subset_time_variable_data = subset_time_data[variables]
+        elif observation_variables is not None:
+            subset_time_variable_data = subset_time_data[observation_variables]
         else:
             raise ValueError(
                 "Variables not defined for ERA5. Please list at least one variable to select."
@@ -270,25 +227,6 @@ class ERA5(Observation):
     def _maybe_convert_to_dataset(self, data: ObservationDataInput, **kwargs):
         if isinstance(data, xr.DataArray):
             data = data.to_dataset()
-        return data
-
-    def _maybe_map_variable_names(
-        self,
-        data: ObservationDataInput,
-        variable_mapping: Optional[dict] = None,
-        **kwargs,
-    ) -> ObservationDataInput:
-        """
-        Map the variable names to the observation data, if required.
-        """
-        if variable_mapping is None:
-            return data
-        # Filter the mapping to only include variables that exist in the dataset
-        filtered_mapping = {
-            v: k for k, v in variable_mapping.items() if v in data.data_vars
-        }
-        if filtered_mapping:
-            data = data.rename(filtered_mapping)
         return data
 
 
@@ -316,7 +254,7 @@ class GHCN(Observation):
         self,
         observation_data: ObservationDataInput,
         case: case.IndividualCase,
-        variables: Optional[list[str]] = None,
+        observation_variables: Optional[list[str]] = None,
         **kwargs,
     ) -> ObservationDataInput:
         # Create filter expressions for LazyFrame
@@ -337,20 +275,20 @@ class GHCN(Observation):
         )
 
         # Add time, latitude, and longitude to the variables, polars doesn't do indexes
-        if variables is None:
+        if observation_variables is None:
             all_variables = ["time", "latitude", "longitude"]
         else:
-            all_variables = variables + ["time", "latitude", "longitude"]
+            all_variables = observation_variables + ["time", "latitude", "longitude"]
 
         # check that the variables are in the observation data
         schema_fields = [field for field in subset_observation_data.collect_schema()]
-        if variables is not None and any(
+        if observation_variables is not None and any(
             var not in schema_fields for var in all_variables
         ):
             raise ValueError(f"Variables {all_variables} not found in observation data")
 
         # subset the variables
-        if variables is not None:
+        if observation_variables is not None:
             subset_observation_data = subset_observation_data.select(all_variables)
 
         return subset_observation_data
@@ -371,20 +309,6 @@ class GHCN(Observation):
             return data
         else:
             raise ValueError(f"Data is not a polars LazyFrame: {type(data)}")
-
-    def _maybe_map_variable_names(
-        self, data: ObservationDataInput, variable_mapping: dict, **kwargs
-    ) -> ObservationDataInput:
-        """
-        Map the variable names to the observation data, if required.
-        """
-        # Filter the mapping to only include variables that exist in the dataset
-        filtered_mapping = {
-            v: k for k, v in variable_mapping.items() if v in data.columns
-        }
-        if filtered_mapping:
-            data = data.rename(filtered_mapping)
-        return data
 
 
 class LSR(Observation):
@@ -455,20 +379,6 @@ class LSR(Observation):
             return data
         else:
             raise ValueError(f"Data is not a pandas DataFrame: {type(data)}")
-
-    def _maybe_map_variable_names(
-        self, data: ObservationDataInput, variable_mapping: dict, **kwargs
-    ) -> ObservationDataInput:
-        """
-        Map the variable names to the observation data, if required.
-        """
-        # Filter the mapping to only include variables that exist in the dataset
-        filtered_mapping = {
-            v: k for k, v in variable_mapping.items() if v in data.columns
-        }
-        if filtered_mapping:
-            data = data.rename(filtered_mapping)
-        return data
 
 
 class IBTrACS(Observation):
@@ -566,17 +476,3 @@ class IBTrACS(Observation):
             return data
         else:
             raise ValueError(f"Data is not a polars LazyFrame: {type(data)}")
-
-    def _maybe_map_variable_names(
-        self, data: ObservationDataInput, variable_mapping: dict, **kwargs
-    ) -> ObservationDataInput:
-        """
-        Map the variable names to the observation data, if required.
-        """
-        # Filter the mapping to only include variables that exist in the dataset
-        filtered_mapping = {
-            v: k for k, v in variable_mapping.items() if v in data.columns
-        }
-        if filtered_mapping:
-            data = data.rename(filtered_mapping)
-        return data
