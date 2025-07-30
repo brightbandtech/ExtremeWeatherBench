@@ -37,12 +37,6 @@ ERA5_MAPPING = {
 }
 
 
-@dataclass
-class XarrayDataArrayCoords:
-    latitude: xr.DataArray
-    longitude: xr.DataArray
-
-
 def convert_longitude_to_360(longitude: float) -> float:
     """Convert a longitude from the range [-180, 180) to [0, 360)."""
     return np.mod(longitude, 360)
@@ -658,92 +652,3 @@ def pull_and_clean_lsr_data_from_spc(date: pd.Timestamp) -> pd.DataFrame:
     df["Time"] = pd.to_datetime(date.strftime("%Y-%m-%d") + " " + time.astype(str))
     df = df.rename(columns={"Lat": "lat", "Lon": "lon", "Time": "time"})
     return df
-
-
-def practically_perfect_hindcast(
-    df: pd.DataFrame,
-    output_coordinates: XarrayDataArrayCoords,
-    resolution: float = 0.25,
-    report_type: Union[Literal["all"], list[Literal["tor", "hail", "wind"]]] = "all",
-    sigma: float = 1.5,
-    return_reports: bool = False,
-) -> Union[xr.DataArray, tuple[xr.DataArray, pd.DataFrame]]:
-    """Compute the Practically Perfect Hindcast (PPH) using storm report data using latitude/longitude grid spacing
-    instead of the NCEP 212 Eta Lambert Conformal projection; based on the method described in Hitchens et al 2013,
-    https://doi.org/10.1175/WAF-D-12-00113.1
-
-    Args:
-        date: A pandas Timestamp object.
-        resolution: The resolution of the grid to use. Default is 0.25 degrees.
-        report_type: The type of report to use. Default is all. Currently only supports all.
-        sigma: The sigma (standard deviation) of the gaussian filter to use. Default is 1.5.
-        return_reports: Whether to return the reports used to compute the PPH. Default is False.
-        output_resolution: The resolution of the output grid. Default is None (keep the same
-        resolution as the input grid).
-    Returns:
-        pph: An xarray DataArray containing the PPH around the storm report data.
-    """
-
-    if report_type == "all":
-        pass
-    else:
-        df = df[df["report_type"].isin(report_type)]
-
-    # Extract latitude and longitude from the dataframe
-    lats = df["lat"].astype(float)
-    lons = df["lon"].astype(float)
-
-    # Create a grid covering the continental US (or adjust as needed)
-    lat_min, lat_max = 24.0, 50.0  # Continental US approximate bounds
-    lon_min, lon_max = -125.0, -66.0  # Continental US approximate bounds
-
-    # Create the grid coordinates
-    grid_lats = np.arange(lat_min, lat_max + resolution, resolution)
-    grid_lons = np.arange(lon_min, lon_max + resolution, resolution)
-
-    # Initialize an empty grid
-    grid = np.zeros((len(grid_lats), len(grid_lons)))
-
-    # Mark grid cells that contain reports
-    for lat, lon in zip(lats, lons):
-        # Find the nearest grid indices
-        lat_idx = np.abs(grid_lats - lat).argmin()
-        lon_idx = np.abs(grid_lons - lon).argmin()
-        grid[lat_idx, lon_idx] = 1
-
-    # Create the xarray DataArray
-    pph = xr.DataArray(
-        grid,
-        dims=["latitude", "longitude"],
-        coords={"latitude": grid_lats, "longitude": grid_lons},
-        name="practically_perfect",
-    )
-
-    # Apply bilinear interpolation to smooth the field
-    # First, create a gaussian kernel for smoothing
-    smoothed_grid = gaussian_filter(grid, sigma=sigma)
-
-    # Replace the data in the DataArray
-    pph.data = smoothed_grid
-
-    # Find the bounds of non-zero data
-    nonzero_lats = np.where(pph.data.any(axis=1))[0]
-    nonzero_lons = np.where(pph.data.any(axis=0))[0]
-
-    # Get the min/max indices
-    lat_start, lat_end = nonzero_lats[0], nonzero_lats[-1]
-    lon_start, lon_end = nonzero_lons[0], nonzero_lons[-1]
-
-    pph = pph.isel(
-        latitude=slice(lat_start, lat_end + 1), longitude=slice(lon_start, lon_end + 1)
-    )
-    pph["longitude"] = pph["longitude"].apply(convert_longitude_to_360)
-
-    pph = pph.interp(
-        latitude=output_coordinates.latitude,
-        longitude=output_coordinates.longitude,
-        method="linear",
-    )
-    if return_reports:
-        return (pph, df)
-    return pph
