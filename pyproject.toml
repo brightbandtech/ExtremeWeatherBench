@@ -27,6 +27,8 @@ dependencies = [
     "kerchunk[dev]",
     "flox>=0.10.0",
     "click>=8.1.8",
+    "jupyter>=1.1.1",
+    "notebook>=7.4.4",
 ]
 
 [project.optional-dependencies]
