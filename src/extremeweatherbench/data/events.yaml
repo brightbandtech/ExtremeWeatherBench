@@ -898,11 +898,12 @@ cases:
     start_date: 2024-08-09 00:00:00
     end_date: 2024-08-11 00:00:00
     location:
-      type: centered_region
+      type: bounded_region
       parameters:
-        latitude: 67.0
-        longitude: 248.0
-        bounding_box_degrees: 5
+        latitude_min: 65.0
+        latitude_max: 72.0
+        longitude_min: 230.0
+        longitude_max: 270.0
     event_type: heat_wave
   - case_id_number: 80
     title: August 2024 Australia
