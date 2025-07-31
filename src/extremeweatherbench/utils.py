@@ -7,13 +7,19 @@ import itertools
 import logging
 from importlib import resources
 from pathlib import Path
-from typing import List, Tuple, Union
+from typing import List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd  # type: ignore[import-untyped]
+import polars as pl
 import regionmask
+import requests  # type: ignore[import-untyped]
 import xarray as xr
 import yaml
+
+IncomingDataInput = Union[
+    xr.Dataset, xr.DataArray, pl.LazyFrame, pl.DataFrame, pd.DataFrame, np.ndarray
+]
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -585,3 +591,97 @@ PathOrStr = str | Path
 def _default_preprocess(ds: xr.Dataset) -> xr.Dataset:
     """Default forecast preprocess function that does nothing."""
     return ds
+
+
+# storm reports and PPH data
+def pull_and_clean_lsr_data_from_spc(date: pd.Timestamp) -> pd.DataFrame:
+    """Pull the latest LSR data for a given date. A "date" for LSRs is considered the
+    date starting at 12 UTC to the next day at 11:59 UTC.
+
+    Args:
+        date: A pandas Timestamp object.
+    Returns:
+        df: A pandas DataFrame containing the LSR data with columns lat, lon, report_type, time, and scale.
+    """
+    # Try the filtered URL first, if it fails, try without _filtered
+    url = f"https://www.spc.noaa.gov/climo/reports/{date.strftime('%y%m%d')}_rpts_filtered.csv"
+    # Check if the URL exists by attempting to open it
+    response = requests.head(url)
+    if date < pd.Timestamp("2004-02-29"):
+        raise ValueError("LSR data before 2004-02-29 is not available in CSV format")
+    if response.status_code == 404:
+        # If the filtered URL doesn't exist, use the non-filtered version
+        url = (
+            f"https://www.spc.noaa.gov/climo/reports/{date.strftime('%y%m%d')}_rpts.csv"
+        )
+    # Read the CSV file with all columns to identify report types
+    try:
+        df = pd.read_csv(
+            url,
+            delimiter=",",
+            engine="python",
+            names=[
+                "Time",
+                "Scale",
+                "Location",
+                "County",
+                "State",
+                "Lat",
+                "Lon",
+                "Comments",
+            ],
+        )
+    except Exception as e:
+        print(f"Error pulling LSR data for {date}: {e}")
+        return pd.DataFrame()
+    if len(df) == 3:
+        return pd.DataFrame()
+    # Initialize report_type column
+    df["report_type"] = None
+
+    # Find rows with headers and mark subsequent rows with appropriate report type
+    for i, row in df.iterrows():
+        row_increment = i + 1
+        if "F_Scale" in row.values:
+            df.loc[row_increment:, "report_type"] = "tor"
+        elif "Speed" in row.values:
+            df.loc[row_increment:, "report_type"] = "wind"
+        elif "Size" in row.values:
+            df.loc[row_increment:, "report_type"] = "hail"
+
+    # Keep only necessary columns
+    df = df[["Lat", "Lon", "report_type", "Time", "Scale"]]
+    # Remove rows that have 'Lat' in the 'Lat' column (these are header rows)
+    df = df[df["Lat"] != "Lat"]
+    time = pd.to_datetime(df["Time"], format="%H%M").dt.time
+    df["Time"] = pd.to_datetime(date.strftime("%Y-%m-%d") + " " + time.astype(str))
+    df = df.rename(columns={"Lat": "lat", "Lon": "lon", "Time": "time"})
+    return df
+
+
+def maybe_map_variable_names(
+    data: IncomingDataInput, variable_mapping: Optional[dict] = None, **kwargs
+) -> IncomingDataInput:
+    """Map the variable names to the observation data, if required.
+
+    Args:
+        data: The incoming data in the form of an object that has a rename method for data variables/columns.
+        variable_mapping: The mapping of variable names to the incoming data, with the format {old_name: new_name}.
+
+    Returns:
+        A dataset with mapped variable names, if any exist, else the original data.
+    """
+    if variable_mapping is None:
+        return data
+    # Filter the mapping to only include variables that exist in the dataset
+    if isinstance(data, (xr.Dataset, xr.DataArray)):
+        subset_variable_mapping = {
+            v: k for v, k in variable_mapping.items() if v in data.data_vars
+        }
+    elif isinstance(data, (pl.LazyFrame, pl.DataFrame, pd.DataFrame)):
+        subset_variable_mapping = {
+            v: k for v, k in variable_mapping.items() if v in data.columns
+        }
+    if subset_variable_mapping:
+        data = data.rename(subset_variable_mapping)
+    return data

@@ -27,6 +27,7 @@ dependencies = [
     "kerchunk[dev]",
     "flox>=0.10.0",
     "click>=8.1.8",
+    "polars>=1.31.0",
 ]
 
 [project.optional-dependencies]
