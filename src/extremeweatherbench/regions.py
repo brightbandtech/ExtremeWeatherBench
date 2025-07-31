@@ -66,7 +66,7 @@ class CenteredRegion(Region):
         self, latitude: float, longitude: float, bounding_box_degrees: float | tuple
     ):
         self.latitude = latitude
-        self.longitude = longitude
+        self.longitude = utils.convert_longitude_to_360(longitude)
         self.bounding_box_degrees = bounding_box_degrees
 
     @classmethod
@@ -77,33 +77,24 @@ class CenteredRegion(Region):
 
         return cls(
             latitude=latitude,
-            longitude=longitude,
+            longitude=utils.convert_longitude_to_360(longitude),
             bounding_box_degrees=bounding_box_degrees,
         )
 
     @property
     def geopandas(self) -> gpd.GeoDataFrame:
         """Return representation of this Region as a GeoDataFrame"""
-        # Build the region coordinates
-        longitude = self.longitude
-        if longitude < 0:
-            longitude = utils.convert_longitude_to_360(longitude)
-
         if isinstance(self.bounding_box_degrees, tuple):
             bounding_box_degrees = tuple(self.bounding_box_degrees)
             latitude_min = self.latitude - bounding_box_degrees[0] / 2
             latitude_max = self.latitude + bounding_box_degrees[0] / 2
-            longitude_min = longitude - bounding_box_degrees[1] / 2
-            longitude_max = longitude + bounding_box_degrees[1] / 2
+            longitude_min = self.longitude - bounding_box_degrees[1] / 2
+            longitude_max = self.longitude + bounding_box_degrees[1] / 2
         else:
             latitude_min = self.latitude - self.bounding_box_degrees / 2
             latitude_max = self.latitude + self.bounding_box_degrees / 2
-            longitude_min = longitude - self.bounding_box_degrees / 2
-            longitude_max = longitude + self.bounding_box_degrees / 2
-
-        longitude_min, longitude_max = _check_longitude_bounds(
-            longitude_min, longitude_max
-        )
+            longitude_min = self.longitude - self.bounding_box_degrees / 2
+            longitude_max = self.longitude + self.bounding_box_degrees / 2
 
         # Create polygon and geodataframe from bounding box coordinates
         polygon = Polygon(
@@ -145,8 +136,8 @@ class BoundingBoxRegion(Region):
     ):
         self.latitude_min = latitude_min
         self.latitude_max = latitude_max
-        self.longitude_min = longitude_min
-        self.longitude_max = longitude_max
+        self.longitude_min = utils.convert_longitude_to_360(longitude_min)
+        self.longitude_max = utils.convert_longitude_to_360(longitude_max)
 
     @classmethod
     def create_region(
@@ -160,27 +151,22 @@ class BoundingBoxRegion(Region):
         return cls(
             latitude_min=latitude_min,
             latitude_max=latitude_max,
-            longitude_min=longitude_min,
-            longitude_max=longitude_max,
+            longitude_min=utils.convert_longitude_to_360(longitude_min),
+            longitude_max=utils.convert_longitude_to_360(longitude_max),
         )
 
     @property
     def geopandas(self) -> gpd.GeoDataFrame:
         """Return representation of this Region as a GeoDataFrame"""
-        # Build the region coordinates
-
-        longitude_min, longitude_max = _check_longitude_bounds(
-            self.longitude_min, self.longitude_max
-        )
 
         # Create polygon and geodataframe from bounding box coordinates
         polygon = Polygon(
             [
-                (longitude_min, self.latitude_min),
-                (longitude_max, self.latitude_min),
-                (longitude_max, self.latitude_max),
-                (longitude_min, self.latitude_max),
-                (longitude_min, self.latitude_min),
+                (self.longitude_min, self.latitude_min),
+                (self.longitude_max, self.latitude_min),
+                (self.longitude_max, self.latitude_max),
+                (self.longitude_min, self.latitude_max),
+                (self.longitude_min, self.latitude_min),
             ]
         )
         return gpd.GeoDataFrame(geometry=[polygon], crs="EPSG:4326")
@@ -245,23 +231,6 @@ def map_to_create_region(region_input: Region | dict) -> Region:
     if region_parameters is None:
         region_parameters = {}
     return region_class.create_region(**region_parameters)
-
-
-def _check_longitude_bounds(
-    longitude_min: float, longitude_max: float
-) -> tuple[float, float]:
-    """Check that the longitude bounds are valid."""
-    if longitude_min < 0:
-        longitude_min = utils.convert_longitude_to_360(longitude_min)
-    if longitude_max < 0:
-        longitude_max = utils.convert_longitude_to_360(longitude_max)
-    if longitude_min > longitude_max:
-        # Ensure max_lon is always the larger value
-        longitude_min, longitude_max = (
-            longitude_max,
-            longitude_min,
-        )
-    return longitude_min, longitude_max
 
 
 # Registry of region types that can be extended by users
