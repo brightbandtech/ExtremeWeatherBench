@@ -35,7 +35,7 @@ class TestRegionClasses:
             latitude=45.0, longitude=-120.0, bounding_box_degrees=10.0
         )
         assert region.latitude == 45.0
-        assert region.longitude == -120.0
+        assert region.longitude == 240.0
         assert region.bounding_box_degrees == 10.0
         assert isinstance(region, Region)
 
@@ -45,7 +45,7 @@ class TestRegionClasses:
             latitude=45.0, longitude=-120.0, bounding_box_degrees=(5.0, 10.0)
         )
         assert region.latitude == 45.0
-        assert region.longitude == -120.0
+        assert region.longitude == 240.0
         assert region.bounding_box_degrees == (5.0, 10.0)
 
     def test_bounding_box_region_creation(self):
@@ -58,8 +58,8 @@ class TestRegionClasses:
         )
         assert region.latitude_min == 40.0
         assert region.latitude_max == 50.0
-        assert region.longitude_min == -125.0
-        assert region.longitude_max == -115.0
+        assert region.longitude_min == 235.0
+        assert region.longitude_max == 245.0
         assert isinstance(region, Region)
 
     def test_shapefile_region_creation(self):
@@ -385,7 +385,7 @@ class TestCreateRegion:
         )
         assert isinstance(region, CenteredRegion)
         assert region.latitude == 45.0
-        assert region.longitude == -120.0
+        assert region.longitude == 240
         assert region.bounding_box_degrees == 10.0
 
     def test_create_centered_region_with_tuple(self):
@@ -419,8 +419,8 @@ class TestCreateRegion:
         assert isinstance(region, BoundingBoxRegion)
         assert region.latitude_min == 40.0
         assert region.latitude_max == 50.0
-        assert region.longitude_min == -125.0
-        assert region.longitude_max == -115.0
+        assert region.longitude_min == 235.0
+        assert region.longitude_max == 245.0
 
     def test_create_shapefile_region(self):
         """Test creating a ShapefileRegion via factory function."""
@@ -505,7 +505,7 @@ class TestMapToCreateRegion:
         region = map_to_create_region(kwargs)
         assert isinstance(region, CenteredRegion)
         assert region.latitude == 45.0
-        assert region.longitude == -120.0
+        assert region.longitude == 240
         assert region.bounding_box_degrees == 10.0
 
     def test_map_to_create_region_bounding_box(self):
@@ -613,7 +613,7 @@ class TestRegionIntegration:
 
         assert isinstance(region, CenteredRegion)
         assert region.latitude == 45.0
-        assert region.longitude == -120.0
+        assert region.longitude == 240.0
         assert region.bounding_box_degrees == 10.0
 
     def test_region_with_individual_case_integration(self):
