@@ -10,7 +10,7 @@ import geopandas as gpd  # type: ignore[import-untyped]
 import numpy as np
 import regionmask
 import xarray as xr
-from shapely import Polygon  # type: ignore[import-untyped]
+from shapely import MultiPolygon, Polygon  # type: ignore[import-untyped]
 
 from extremeweatherbench import utils
 
@@ -42,6 +42,16 @@ class Region(ABC):
         mask_array = ~np.isnan(mask)
         return dataset.where(mask_array, drop=drop)
 
+    @property
+    def _lon_as_180(self) -> float:
+        """Return the longitude in the -180 to 180 degree range."""
+        return utils.convert_longitude_to_180(self.longitude)
+
+    @property
+    def _lon_as_360(self) -> float:
+        """Return the longitude in the 0-360 degree range."""
+        return utils.convert_longitude_to_360(self.longitude)
+
 
 class CenteredRegion(Region):
     """A region defined by a center point and a bounding box.
@@ -66,7 +76,7 @@ class CenteredRegion(Region):
         self, latitude: float, longitude: float, bounding_box_degrees: float | tuple
     ):
         self.latitude = latitude
-        self.longitude = utils.convert_longitude_to_360(longitude)
+        self.longitude = longitude
         self.bounding_box_degrees = bounding_box_degrees
 
     @classmethod
@@ -77,7 +87,7 @@ class CenteredRegion(Region):
 
         return cls(
             latitude=latitude,
-            longitude=utils.convert_longitude_to_360(longitude),
+            longitude=longitude,
             bounding_box_degrees=bounding_box_degrees,
         )
 
@@ -96,17 +106,9 @@ class CenteredRegion(Region):
             longitude_min = self.longitude - self.bounding_box_degrees / 2
             longitude_max = self.longitude + self.bounding_box_degrees / 2
 
-        # Create polygon and geodataframe from bounding box coordinates
-        polygon = Polygon(
-            [
-                (longitude_min, latitude_min),
-                (longitude_max, latitude_min),
-                (longitude_max, latitude_max),
-                (longitude_min, latitude_max),
-                (longitude_min, latitude_min),
-            ]
+        return _create_geopandas_from_bounds(
+            longitude_min, longitude_max, latitude_min, latitude_max
         )
-        return gpd.GeoDataFrame(geometry=[polygon], crs="EPSG:4326")
 
 
 class BoundingBoxRegion(Region):
@@ -136,8 +138,8 @@ class BoundingBoxRegion(Region):
     ):
         self.latitude_min = latitude_min
         self.latitude_max = latitude_max
-        self.longitude_min = utils.convert_longitude_to_360(longitude_min)
-        self.longitude_max = utils.convert_longitude_to_360(longitude_max)
+        self.longitude_min = longitude_min
+        self.longitude_max = longitude_max
 
     @classmethod
     def create_region(
@@ -151,25 +153,16 @@ class BoundingBoxRegion(Region):
         return cls(
             latitude_min=latitude_min,
             latitude_max=latitude_max,
-            longitude_min=utils.convert_longitude_to_360(longitude_min),
-            longitude_max=utils.convert_longitude_to_360(longitude_max),
+            longitude_min=longitude_min,
+            longitude_max=longitude_max,
         )
 
     @property
     def geopandas(self) -> gpd.GeoDataFrame:
         """Return representation of this Region as a GeoDataFrame"""
-
-        # Create polygon and geodataframe from bounding box coordinates
-        polygon = Polygon(
-            [
-                (self.longitude_min, self.latitude_min),
-                (self.longitude_max, self.latitude_min),
-                (self.longitude_max, self.latitude_max),
-                (self.longitude_min, self.latitude_max),
-                (self.longitude_min, self.latitude_min),
-            ]
+        return _create_geopandas_from_bounds(
+            self.longitude_min, self.longitude_max, self.latitude_min, self.latitude_max
         )
-        return gpd.GeoDataFrame(geometry=[polygon], crs="EPSG:4326")
 
 
 @dataclasses.dataclass
@@ -239,3 +232,62 @@ REGION_TYPES: dict[str, Type[Region]] = {
     "bounded_region": BoundingBoxRegion,
     "shapefile_region": ShapefileRegion,
 }
+
+
+def _create_geopandas_from_bounds(
+    longitude_min: float,
+    longitude_max: float,
+    latitude_min: float,
+    latitude_max: float,
+) -> gpd.GeoDataFrame:
+    """Create a GeoDataFrame from bounding box coordinates with antimeridian handling.
+
+    Args:
+        longitude_min: Minimum longitude
+        longitude_max: Maximum longitude
+        latitude_min: Minimum latitude
+        latitude_max: Maximum latitude
+
+    Returns:
+        GeoDataFrame with proper geometry handling antimeridian crossing
+    """
+    # Convert longitude coordinates to -180 to 180 range
+    lon_min = utils.convert_longitude_to_180(longitude_min)
+    lon_max = utils.convert_longitude_to_180(longitude_max)
+
+    # Handle antimeridian crossing (when longitude_min > longitude_max after conversion)
+    if lon_min > lon_max:
+        # Create two polygons: one for each side of the antimeridian
+        polygon1 = Polygon(
+            [
+                (lon_min, latitude_min),
+                (180, latitude_min),
+                (180, latitude_max),
+                (lon_min, latitude_max),
+                (lon_min, latitude_min),
+            ]
+        )
+        polygon2 = Polygon(
+            [
+                (-180, latitude_min),
+                (lon_max, latitude_min),
+                (lon_max, latitude_max),
+                (-180, latitude_max),
+                (-180, latitude_min),
+            ]
+        )
+        # Use a MultiPolygon or combine the geometries
+        multi_polygon = MultiPolygon([polygon1, polygon2])
+        return gpd.GeoDataFrame(geometry=[multi_polygon], crs="EPSG:4326")
+    else:
+        # Normal case - no antimeridian crossing
+        polygon = Polygon(
+            [
+                (lon_min, latitude_min),
+                (lon_max, latitude_min),
+                (lon_max, latitude_max),
+                (lon_min, latitude_max),
+                (lon_min, latitude_min),
+            ]
+        )
+        return gpd.GeoDataFrame(geometry=[polygon], crs="EPSG:4326")
