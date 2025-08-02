@@ -42,16 +42,6 @@ class Region(ABC):
         mask_array = ~np.isnan(mask)
         return dataset.where(mask_array, drop=drop)
 
-    @property
-    def _lon_as_180(self) -> float:
-        """Return the longitude in the -180 to 180 degree range."""
-        return utils.convert_longitude_to_180(self.longitude)
-
-    @property
-    def _lon_as_360(self) -> float:
-        """Return the longitude in the 0-360 degree range."""
-        return utils.convert_longitude_to_360(self.longitude)
-
 
 class CenteredRegion(Region):
     """A region defined by a center point and a bounding box.
