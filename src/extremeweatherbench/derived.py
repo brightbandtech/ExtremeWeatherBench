@@ -5,7 +5,7 @@ import xarray as xr
 
 
 class DerivedVariable(ABC):
-    """A abstract base class defining the interface for ExtremeWeatherBench derived variables.
+    """An abstract base class defining the interface for ExtremeWeatherBench derived variables.
 
     A DerivedVariable is any variable that requires extra computation than what is provided in analysis
     or forecast data. Some examples include the practically perfect hindcast, MLCAPE, IVT, or atmospheric river masks.
