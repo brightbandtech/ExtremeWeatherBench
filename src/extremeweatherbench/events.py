@@ -43,9 +43,6 @@ class EventType(ABC):
             case_metadata: A dictionary with case metadata; EWB uses a YAML file to define the cases upstream.
         """
         self.case_metadata = case_metadata
-        self.expanded_forecast_variables, self.expanded_target_variables = (
-            self._maybe_expand_not_derived_variables()
-        )
 
     @property
     @abstractmethod
@@ -71,32 +68,6 @@ class EventType(ABC):
     @abstractmethod
     def target_list(self) -> List["targets.TargetBase"]:
         pass
-
-    def _maybe_expand_not_derived_variables(
-        self,
-    ) -> tuple[
-        List[str | "derived.DerivedVariable"], List[str | "derived.DerivedVariable"]
-    ]:
-        """Expand the variables to include the input variables of any derived variables.
-
-        This private method checks if there are variables in the DerivedVariable(s) not already
-        present in the forecast_variables or observation_variables. If so, it adds them to a new
-        list to ensure they are subset along with the other variables for evaluation.
-        """
-        expanded_forecast_variables = []
-        expanded_target_variables = []
-        for v in self.forecast_variables:
-            if hasattr(v, "input_variables"):
-                expanded_forecast_variables = (
-                    expanded_forecast_variables + v.input_variables
-                )
-
-        for v in self.target_variables:
-            if hasattr(v, "input_variables"):
-                expanded_target_variables = (
-                    expanded_target_variables + v.input_variables
-                )
-        return expanded_forecast_variables, expanded_target_variables
 
     def _build_base_case_metadata_collection(self) -> "case.BaseCaseMetadataCollection":
         """Build a list of IndividualCases from the case_metadata."""
@@ -132,16 +103,8 @@ class EventType(ABC):
                 targets=self.target_list,
                 forecast_source=forecast_source,
                 # if the expanded variables exist, use them, otherwise use the original variables
-                target_variables=(
-                    self.expanded_target_variables
-                    if self.expanded_target_variables
-                    else self.target_variables
-                ),
-                forecast_variables=(
-                    self.expanded_forecast_variables
-                    if self.expanded_forecast_variables
-                    else self.forecast_variables
-                ),
+                target_variables=self.target_variables,
+                forecast_variables=self.forecast_variables,
             )
             for case in case_metadata_collection.cases
         ]
