@@ -6,9 +6,13 @@ import datetime
 import logging
 from typing import List
 
-import xarray as xr
-
-from extremeweatherbench import derived, forecasts, regions, targets  # noqa: F401
+from extremeweatherbench import (  # noqa: F401
+    derived,
+    forecasts,
+    metrics,
+    regions,
+    targets,
+)
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -34,7 +38,7 @@ class IndividualCase:
     title: str
     start_date: datetime.datetime
     end_date: datetime.datetime
-    location: regions.Region
+    location: "regions.Region"
     event_type: str
 
 
@@ -95,28 +99,3 @@ class CaseOperator:
     forecast: "forecasts.Forecast"
     target_variables: list[str | "derived.DerivedVariable"]
     forecast_variables: list[str | "derived.DerivedVariable"]
-
-    def evaluate_case(self, forecast: xr.Dataset):
-        """Process a case."""
-        self.process_metrics(forecast)
-
-    def process_metrics(self, forecast: xr.Dataset):
-        """Process the metrics."""
-        for metric in self.metrics:
-            metric.process_metric(forecast, self.targets)
-
-    def build_targets(
-        self, target_storage_options: dict, target_variable_mapping: dict
-    ) -> list[xr.Dataset]:
-        """Build target xarray Datasets from the target sources."""
-        target_datasets = []
-        for target in self.targets:
-            target_dataset = target().run_pipeline(
-                case=self,
-                target_variables=self.target_variables,
-                storage_options=target_storage_options,
-                target_variable_mapping=target_variable_mapping,
-            )
-            target_datasets.append(target_dataset)
-
-        return target_datasets
