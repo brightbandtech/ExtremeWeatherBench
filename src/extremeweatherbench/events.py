@@ -1,5 +1,4 @@
-"""Definitions for different type of extreme weather Events for analysis.
-Logic for the dataclasses here largely to handle the logic of parsing the events."""
+"""Classes and methods for defining and building events."""
 
 from abc import ABC, abstractmethod
 from typing import Any, List
