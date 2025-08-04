@@ -4,13 +4,12 @@ Some code similarly structured to WeatherBench (Rasp et al.)."""
 import dataclasses
 import datetime
 import logging
-from enum import StrEnum
-from typing import List, Optional, Type
+from typing import List, Optional
 
 import numpy as np
 import xarray as xr
 
-from extremeweatherbench import metrics, regions, utils
+from extremeweatherbench import derived, metrics, regions, targets, utils
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -115,80 +114,79 @@ class IndividualCase:
 
 
 @dataclasses.dataclass
-class IndividualHeatWaveCase(IndividualCase):
-    """Container for metadata defining a single or individual case of a heat wave.
+class BaseCaseMetadataCollection:
+    """A collection of IndividualCases.
 
-    An IndividualHeatWaveCase is a subclass of IndividualCase that is designed to
-    provide additional metadata specific to heat wave events.
+    This class is used to store a collection of IndividualCases, which can be used to
+    subset the cases by event type.
 
     Attributes:
-        metrics_list: A list of Metrics to be used in the evaluation
+        cases: A list of IndividualCases.
+
+    Methods:
+        subset_cases_by_event_type: Subset the cases in the collection by event type.
     """
 
-    metrics_list: List[Type[metrics.Metric]] = dataclasses.field(
-        default_factory=lambda: [
-            metrics.MaxOfMinTempMAE,
-            metrics.RegionalRMSE,
-            metrics.MaximumMAE,
-        ]
-    )
-    data_vars: List[str] = dataclasses.field(
-        default_factory=lambda: ["surface_air_temperature"]
-    )
+    cases: List[IndividualCase]
 
-    def __post_init__(self):
-        self.data_vars = ["surface_air_temperature"]
+    def subset_cases_by_event_type(self, event_type: str) -> List[IndividualCase]:
+        """Subset the cases in the collection by event type."""
+        return [c for c in self.cases if c.event_type == event_type]
 
 
 @dataclasses.dataclass
-class IndividualFreezeCase(IndividualCase):
-    """Container for metadata defining a single or individual case of a freeze event.
+class CaseOperator:
+    """A class which stores the graph to process an individual case.
 
-    An IndividualFreezeCase is a subclass of IndividualCase that is designed to
-    provide additional metadata specific to freeze events.
+    This class is used to store the graph to process an individual case. The purpose of
+    this class is to be a one-stop-shop for the evaluation of a single case. Multiple
+    CaseOperators can be run in parallel to evaluate multiple cases, or run through the
+    ExtremeWeatherBench.run() method to evaluate all cases in an evaluation in serial.
 
     Attributes:
-        freeze_type: str: A string representing the type of freeze event.
+        case: The case to process.
+        metrics: A list of metrics to process.
+        targets: A list of targets to process.
+        target_variables: A list of target variables to process.
+        forecast_variables: A list of forecast variables to process.
+
+    Methods:
+        evaluate_case: Process a case's metrics
+        process_metrics: Process the metrics.
+        build_targets: Build target xarray Datasets from the target sources.
     """
 
-    metrics_list: List[Type[metrics.Metric]] = dataclasses.field(
-        default_factory=lambda: [metrics.RegionalRMSE]
-    )
-    data_vars: List[str] = dataclasses.field(
-        default_factory=lambda: [
-            "surface_air_temperature",
-            "surface_eastward_wind",
-            "surface_northward_wind",
-        ]
-    )
+    case: IndividualCase
+    metrics: list["metrics.BaseMetric"]
+    targets: list["targets.TargetBase"]
+    target_variables: list[str | "derived.DerivedVariable"]
+    forecast_variables: list[str | "derived.DerivedVariable"]
 
-    def __post_init__(self):
-        self.data_vars = [
-            "surface_air_temperature",
-            "surface_eastward_wind",
-            "surface_northward_wind",
-        ]
+    def evaluate_case(self, forecast: xr.Dataset):
+        """Process a case."""
+        self.process_metrics(forecast)
 
+    def process_metrics(self, forecast: xr.Dataset):
+        """Process the metrics."""
+        for metric in self.metrics:
+            metric.process_metric(forecast, self.targets)
 
-# maps the case event type to the corresponding dataclass
-# additional event types need to be added here and
-# CASE_EVENT_TYPE_MATCHER, which maps the metadata case event type
-# to the corresponding case dataclass.
-class CaseEventType(StrEnum):
-    """Enum class for the different types of extreme weather events."""
+    def build_targets(self, **kwargs) -> list[xr.Dataset]:
+        """Build target xarray Datasets from the target sources."""
+        target_storage_options = kwargs.get(
+            "target_storage_options",
+            {"remote_protocol": "s3", "remote_options": {"anon": True}},
+        )
+        target_variable_mapping = kwargs.get("target_variable_mapping", {"anon": True})
+        target_datasets = []
+        for target in self.targets:
+            # TODO: need to pipe in storage options here
+            target_dataset = target().run_pipeline(
+                case=self.case,
+                storage_options=target_storage_options,
+                target_variables=self.target_variables,
+                target_variable_mapping=target_variable_mapping,
+            )
+            target_datasets.append(target_dataset)
 
-    HEAT_WAVE = "heat_wave"
-    FREEZE = "freeze"
-
-
-CASE_EVENT_TYPE_MATCHER: dict[CaseEventType, type[IndividualCase]] = {
-    CaseEventType.HEAT_WAVE: IndividualHeatWaveCase,
-    CaseEventType.FREEZE: IndividualFreezeCase,
-}
-
-
-def get_case_event_dataclass(case_type: str) -> Type[IndividualCase]:
-    event_dataclass = CASE_EVENT_TYPE_MATCHER.get(CaseEventType(case_type))
-    if event_dataclass is None:
-        raise ValueError(f"Unknown case event type {case_type}")
-    return event_dataclass
+        return target_datasets
