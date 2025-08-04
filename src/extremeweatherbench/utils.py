@@ -7,16 +7,20 @@ import itertools
 import logging
 from importlib import resources
 from pathlib import Path
-from typing import List, Tuple, Union
+from typing import List, Optional, Tuple, TypeAlias, Union
 
 import numpy as np
 import pandas as pd  # type: ignore[import-untyped]
+import polars as pl
 import regionmask
 import xarray as xr
 import yaml
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+# All inputs to EWB must confirm to these types (for now).
+IncomingDataInput: TypeAlias = xr.Dataset | xr.DataArray | pl.LazyFrame | pd.DataFrame
 
 
 #: Maps the ARCO ERA5 to CF conventions.
@@ -585,3 +589,35 @@ PathOrStr = str | Path
 def _default_preprocess(ds: xr.Dataset) -> xr.Dataset:
     """Default forecast preprocess function that does nothing."""
     return ds
+
+
+def maybe_map_variable_names(
+    data: IncomingDataInput, variable_mapping: Optional[dict] = None
+) -> IncomingDataInput:
+    """Map the variable names to the observation data, if required.
+
+    Args:
+        data: The incoming data in the form of an object that has a rename method for data variables/columns.
+        variable_mapping: The mapping of variable names to the incoming data, with the format {incoming_name: new_name}.
+
+    Returns:
+        A dataset with mapped variable names, if any exist, else the original data.
+    """
+    if variable_mapping is None:
+        return data
+    # Filter the mapping to only include variables that exist in the dataset
+    if isinstance(data, (xr.Dataset, xr.DataArray)):
+        subset_variable_mapping = {
+            v: k for v, k in variable_mapping.items() if v in data.data_vars
+        }
+    elif isinstance(data, (pl.LazyFrame, pl.DataFrame, pd.DataFrame)):
+        subset_variable_mapping = {
+            v: k for v, k in variable_mapping.items() if v in data.columns
+        }
+    else:
+        raise ValueError(
+            f"Data is not a dataset, data array, lazy frame, dataframe, or pandas dataframe: {type(data)}"
+        )
+    if subset_variable_mapping:
+        data = data.rename(subset_variable_mapping)
+    return data
