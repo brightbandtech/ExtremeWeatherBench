@@ -58,29 +58,15 @@ class TargetBase(ABC):
             The target data with the variables subset to the case metadata.
         """
 
-    @abstractmethod
     def maybe_convert_to_dataset(self, data: IncomingDataInput) -> xr.Dataset:
-        """
-        Abstract method to convert the target data to an xarray dataset.
-
-        In the case of a target object already being a dataset, this method should return the data unchanged.
-        Some data, such as a LazyFrame or DataFrame, could have more complex steps to convert to a dataset
-        with the proper dimensions; this method is primarily used to handle these cases.
-
-        Args:
-            data: The target data already run through _subset_data_to_case.
-
-        Returns:
-            The target data as an xarray dataset.
-        """
-        pass
-
-    def _maybe_convert_to_dataset(self, data: IncomingDataInput) -> xr.Dataset:
         """
         Convert the target data to an xarray dataset if it is not already.
 
+        This method handles the common conversion cases automatically. Override this method
+        only if you need custom conversion logic beyond the standard cases.
+
         Args:
-            data: The target data already run through
+            data: The target data to convert.
 
         Returns:
             The target data as an xarray dataset.
@@ -90,7 +76,27 @@ class TargetBase(ABC):
         elif isinstance(data, xr.DataArray):
             return data.to_dataset()
         else:
-            return self._maybe_convert_to_dataset(data)
+            # For other data types, try to use a custom conversion method if available
+            return self._custom_convert_to_dataset(data)
+
+    def _custom_convert_to_dataset(self, data: IncomingDataInput) -> xr.Dataset:
+        """
+        Hook method for custom conversion logic. Override this method in subclasses
+        if you need custom conversion behavior for non-xarray data types.
+
+        By default, this raises a NotImplementedError to encourage explicit handling
+        of custom data types.
+
+        Args:
+            data: The target data to convert.
+
+        Returns:
+            The target data as an xarray dataset.
+        """
+        raise NotImplementedError(
+            f"Conversion from {type(data)} to xarray.Dataset not implemented. "
+            f"Override _custom_convert_to_dataset in your TargetBase subclass."
+        )
 
     def run_pipeline(
         self,
@@ -124,7 +130,7 @@ class TargetBase(ABC):
                 maybe_map_variable_names,
                 variable_mapping=target_variable_mapping,
             )
-            # subsets the target data to the case information
+            # subsets the target data using the caseoperator metadata
             .pipe(
                 self.subset_data_to_case,
                 case=case,
