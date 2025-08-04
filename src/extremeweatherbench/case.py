@@ -56,7 +56,14 @@ class BaseCaseMetadataCollection:
 
     def subset_cases_by_event_type(self, event_type: str) -> List[IndividualCase]:
         """Subset the cases in the collection by event type."""
-        return [c for c in self.cases if c.event_type == event_type]
+
+        case_list = [c for c in self.cases if c.event_type == event_type]
+
+        # raises error if no cases (empty list) are found for the event type
+        if case_list:
+            return case_list
+        else:
+            raise ValueError(f"No cases found for event type {event_type}")
 
 
 @dataclasses.dataclass
@@ -69,11 +76,12 @@ class CaseOperator:
     ExtremeWeatherBench.run() method to evaluate all cases in an evaluation in serial.
 
     Attributes:
-        case: The case to process.
-        metrics: A list of metrics to process.
-        targets: A list of targets to process.
-        target_variables: A list of target variables to process.
-        forecast_variables: A list of forecast variables to process.
+        case: IndividualCase metadata
+        metrics: A list of metrics that are intended to be evaluated for the case
+        targets: A list of targets to evaluate against the forecast
+        forecast: The incoming forecast data
+        target_variables: Names of the variables present in the target data relevant to the evaluation
+        forecast_variables: Names of the variables present in the forecast data relevant to the evaluation
 
     Methods:
         evaluate_case: Process a case's metrics
@@ -84,7 +92,7 @@ class CaseOperator:
     case: IndividualCase
     metrics: list["metrics.BaseMetric"]
     targets: list["targets.TargetBase"]
-    forecast_source: "forecasts.ForecastSource"
+    forecast: "forecasts.Forecast"
     target_variables: list[str | "derived.DerivedVariable"]
     forecast_variables: list[str | "derived.DerivedVariable"]
 
