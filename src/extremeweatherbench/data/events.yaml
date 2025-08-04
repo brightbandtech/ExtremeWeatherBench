@@ -3158,8 +3158,8 @@ cases:
     event_type: severe_convection
   - case_id_number: 269
     title: September 2020 Australia
-    start_date: 2020-09-05 00:00:00
-    end_date: 2020-09-06 00:00:00
+    start_date: 2020-09-25 00:00:00
+    end_date: 2020-09-26 00:00:00
     location:
       type: bounded_region
       parameters:
