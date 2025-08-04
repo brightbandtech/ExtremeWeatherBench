@@ -1,13 +1,15 @@
 """Evaluation routines for use during ExtremeWeatherBench case studies / analyses."""
 
-import logging
-from typing import Optional, Literal, Union
-import pandas as pd
-import xarray as xr
-from extremeweatherbench import config, events, case, utils, data_loader
-import dacite
 import dataclasses
 import itertools
+import logging
+from typing import Literal, Optional, Union
+
+import dacite
+import pandas as pd
+import xarray as xr
+
+from extremeweatherbench import case, config, data_loader, events, regions, utils
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -124,7 +126,7 @@ def _gridded_inputs_to_evaluation_input(
         )
     )
     completed_subset_gridded_obs_ds = (
-        case_evaluation_data.individual_case.perform_subsetting_procedure(
+        case_evaluation_data.individual_case.subset_region(
             time_var_subset_gridded_obs_ds
         )
     )
@@ -147,7 +149,7 @@ def _point_inputs_to_evaluation_input(
         raise ValueError("Point observation cannot be None")
     var_id_subset_point_obs = case_evaluation_data.observation.loc[
         case_evaluation_data.observation["case_id"]
-        == case_evaluation_data.individual_case.id
+        == case_evaluation_data.individual_case.case_id_number
     ]
 
     var_id_subset_point_obs.loc[:, "longitude"] = utils.convert_longitude_to_360(
@@ -206,10 +208,8 @@ def _check_and_subset_forecast_availability(
     forecast_time_subset = case_evaluation_data.individual_case._subset_valid_times(
         case_evaluation_data.forecast
     )
-    forecast_spatial_subset = (
-        case_evaluation_data.individual_case.perform_subsetting_procedure(
-            forecast_time_subset
-        )
+    forecast_spatial_subset = case_evaluation_data.individual_case.subset_region(
+        forecast_time_subset
     )
     # subset the forecast to the data variables for the event type/metric
     forecast = forecast_spatial_subset[case_evaluation_data.individual_case.data_vars]
@@ -217,7 +217,7 @@ def _check_and_subset_forecast_availability(
     if lead_time_len == 0:
         logger.warning(
             "No forecast data available for case %s, skipping",
-            case_evaluation_data.individual_case.id,
+            case_evaluation_data.individual_case.case_id_number,
         )
         return None
     elif (
@@ -229,10 +229,11 @@ def _check_and_subset_forecast_availability(
     ):
         logger.warning(
             "Fewer valid times in forecast than days in case %s, results likely unreliable",
-            case_evaluation_data.individual_case.id,
+            case_evaluation_data.individual_case.case_id_number,
         )
     logger.info(
-        "Forecast data available for case %s", case_evaluation_data.individual_case.id
+        "Forecast data available for case %s",
+        case_evaluation_data.individual_case.case_id_number,
     )
 
     return forecast
@@ -274,11 +275,24 @@ def evaluate(
             forecast_dataset=forecast_dataset,
             era5_dataset=gridded_obs,
         )
+
     for event in eval_config.event_types:
-        cases = dacite.from_dict(
-            data_class=event,
-            data=yaml_event_case,
-        )
+        # Check if event is a class (not instantiated) or an instance
+        if isinstance(event, type):
+            # type hooks does not work for nested dataclasses it seems; PRs on dacite also do not
+            # seem to be merged yet nor fix the issue. location still results in a dict.
+            cases = dacite.from_dict(
+                data_class=event,
+                data=yaml_event_case,
+                config=dacite.Config(
+                    type_hooks={regions.Region: regions.map_to_create_region},
+                ),
+            )
+        elif isinstance(event, events.EventContainer):
+            # if event is already an instance of EventContainer
+            cases = event
+        else:
+            raise ValueError(f"Unexpected event type: {type(event)}")
 
         logger.debug("beginning evaluation loop for %s", event.event_type)
         results = _maybe_evaluate_individual_cases_loop(
@@ -359,7 +373,9 @@ def _maybe_evaluate_individual_case(
     Raises:
         ValueError: If no forecast data is available.
     """
-    logger.info("Evaluating case %s, %s", individual_case.id, individual_case.title)
+    logger.info(
+        "Evaluating case %s, %s", individual_case.case_id_number, individual_case.title
+    )
     gridded_obs_evaluation = CaseEvaluationData(
         individual_case=individual_case,
         observation_type="gridded",
@@ -411,7 +427,7 @@ def _maybe_evaluate_individual_case(
         case_result_df = pd.concat([case_result_df] + results, ignore_index=True)
 
     # Add case metadata
-    case_result_df["case_id"] = individual_case.id
+    case_result_df["case_id"] = individual_case.case_id_number
     case_result_df["event_type"] = individual_case.event_type
 
     return case_result_df
@@ -432,6 +448,9 @@ def get_case_metadata(eval_config: config.Config) -> list[events.EventContainer]
         cases = dacite.from_dict(
             data_class=event,
             data=yaml_event_case,
+            config=dacite.Config(
+                type_hooks={regions.Region: regions.map_to_create_region}
+            ),
         )
         case_metadata_output.append(cases)
     return case_metadata_output

@@ -1,9 +1,12 @@
-import pytest
-from extremeweatherbench import case, evaluate, events
 import datetime
-import xarray as xr
+
 import numpy as np
 import pandas as pd
+import pytest
+import xarray as xr
+
+from extremeweatherbench import case, evaluate, events
+from extremeweatherbench.regions import CenteredRegion
 
 
 def test_get_case_metadata(sample_config):
@@ -14,16 +17,15 @@ def test_get_case_metadata(sample_config):
 
 def test_evaluate_individualcase(sample_forecast_dataset, sample_gridded_obs_dataset):
     base_case = case.IndividualCase(
-        id=1,
+        case_id_number=1,
         title="test_case",
         start_date=datetime.datetime(2021, 6, 20),
         end_date=datetime.datetime(2021, 7, 3),
-        bounding_box_degrees=500,
-        location={"latitude": 45.0, "longitude": -100.0},
+        location=CenteredRegion(latitude=45, longitude=-100, bounding_box_degrees=5),
         event_type="heat_wave",
         data_vars=["2m_temperature"],
     )
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(KeyError):
         evaluate._maybe_evaluate_individual_case(
             individual_case=base_case,
             forecast_dataset=sample_forecast_dataset,
@@ -87,7 +89,7 @@ def test_case_evaluation_data_init(mocker):
 def test_check_and_subset_forecast_availability(mocker):
     """Test _check_and_subset_forecast_availability function."""
     mock_case = mocker.MagicMock(spec=case.IndividualCase)
-    mock_case.id = "99"
+    mock_case.case_id_number = "99"
     mock_case.data_vars = ["surface_air_temperature"]
     mock_case.start_date = datetime.datetime(2021, 6, 20)
     mock_case.end_date = datetime.datetime(2021, 6, 25)
@@ -96,9 +98,9 @@ def test_check_and_subset_forecast_availability(mocker):
     time_subset_mock = mocker.MagicMock(spec=xr.Dataset)
     mock_case._subset_valid_times.return_value = time_subset_mock
 
-    # Setup the return value for perform_subsetting_procedure
+    # Setup the return value for subset_region
     spatial_subset_mock = mocker.MagicMock(spec=xr.Dataset)
-    mock_case.perform_subsetting_procedure.return_value = spatial_subset_mock
+    mock_case.subset_region.return_value = spatial_subset_mock
 
     # Create a mock for the data variable subset
     var_subset_mock = mocker.MagicMock(spec=xr.Dataset)
@@ -122,7 +124,7 @@ def test_check_and_subset_forecast_availability(mocker):
 
     # Verify the function calls and result
     mock_case._subset_valid_times.assert_called_once_with(mock_forecast)
-    mock_case.perform_subsetting_procedure.assert_called_once_with(time_subset_mock)
+    mock_case.subset_region.assert_called_once_with(time_subset_mock)
     spatial_subset_mock.__getitem__.assert_called_once_with(mock_case.data_vars)
     assert result is var_subset_mock
 
@@ -130,7 +132,7 @@ def test_check_and_subset_forecast_availability(mocker):
 def test_check_and_subset_forecast_availability_empty(mocker):
     """Test _check_and_subset_forecast_availability function with empty forecast."""
     mock_case = mocker.MagicMock(spec=case.IndividualCase)
-    mock_case.id = "test_case"
+    mock_case.case_id_number = "test_case"
     mock_case._subset_valid_times.return_value = mocker.MagicMock(spec=xr.Dataset)
     mock_case._subset_valid_times.return_value.init_time = []
     mock_case.start_date = datetime.datetime(2021, 6, 20)
@@ -155,7 +157,7 @@ def test_build_dataset_subsets_with_existing_forecast(
     """Test build_dataset_subsets with an existing forecast dataset."""
     # Create a mock case
     mock_case = mocker.MagicMock(spec=case.IndividualCase)
-    mock_case.id = "test_case"
+    mock_case.case_id_number = "test_case"
     mock_case.data_vars = "2m_temperature"
     mock_case.start_date = datetime.datetime(2021, 6, 20)
     mock_case.end_date = datetime.datetime(2021, 6, 25)
@@ -207,7 +209,7 @@ def test_build_dataset_subsets_with_existing_forecast(
 def test_build_dataarray_subsets_no_forecast(mocker):
     """Test build_dataarray_subsets with no forecast data."""
     mock_case = mocker.MagicMock(spec=case.IndividualCase)
-    mock_case.id = "test_case"
+    mock_case.case_id_number = "test_case"
     mock_case.data_vars = "2m_temperature"
 
     mock_forecast = mocker.MagicMock(spec=xr.Dataset)
@@ -237,13 +239,11 @@ def test_build_dataarray_subsets_gridded(
 ):
     """Test build_dataarray_subsets with gridded observation data."""
     mock_case = mocker.MagicMock(spec=case.IndividualCase)
-    mock_case.id = "test_case"
+    mock_case.case_id_number = "test_case"
     mock_case.data_vars = "2m_temperature"
     mock_case.start_date = datetime.datetime(2021, 6, 20)
     mock_case.end_date = datetime.datetime(2021, 6, 25)
-    mock_case.perform_subsetting_procedure.return_value = sample_gridded_obs_dataset[
-        "2m_temperature"
-    ]
+    mock_case.subset_region.return_value = sample_gridded_obs_dataset["2m_temperature"]
 
     case_eval_data = evaluate.CaseEvaluationData(
         individual_case=mock_case,
@@ -281,7 +281,7 @@ def test_build_dataarray_subsets_point(
 ):
     """Test build_dataarray_subsets with point observation data."""
     mock_case = mocker.MagicMock(spec=case.IndividualCase)
-    mock_case.id = 1  # Match the ID in sample_point_obs_df
+    mock_case.case_id_number = 1  # Match the ID in sample_point_obs_df
     mock_case.data_vars = "surface_air_temperature"
 
     case_eval_data = evaluate.CaseEvaluationData(
@@ -323,13 +323,11 @@ def test_subset_gridded_obs(
 ):
     """Test _subset_gridded_obs function."""
     mock_case = mocker.MagicMock(spec=case.IndividualCase)
-    mock_case.id = 99
+    mock_case.case_id_number = 99
     mock_case.start_date = datetime.datetime(2021, 6, 20)
     mock_case.end_date = datetime.datetime(2021, 6, 25)
     mock_case.data_vars = "2m_temperature"
-    mock_case.perform_subsetting_procedure.return_value = sample_gridded_obs_dataset[
-        "2m_temperature"
-    ]
+    mock_case.subset_region.return_value = sample_gridded_obs_dataset["2m_temperature"]
 
     case_eval_data = evaluate.CaseEvaluationData(
         individual_case=mock_case,
@@ -351,7 +349,7 @@ def test_subset_point_obs(
 ):
     """Test _subset_point_obs function."""
     mock_case = mocker.MagicMock(spec=case.IndividualCase)
-    mock_case.id = 1
+    mock_case.case_id_number = 1
     mock_case.start_date = datetime.datetime(2021, 6, 20)
     mock_case.end_date = datetime.datetime(2021, 6, 25)
     mock_case.data_vars = ["surface_air_temperature"]
