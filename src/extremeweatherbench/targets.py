@@ -136,7 +136,7 @@ class TargetBase(ABC):
                 case=case,
             )
             # converts the target data to an xarray dataset if it is not already
-            .pipe(self._maybe_convert_to_dataset)
+            .pipe(self.maybe_convert_to_dataset)
             # derives variables from the target data if derived variables are defined
             .pipe(derived.maybe_derive_variables, variables=case.target_variables)
         )
