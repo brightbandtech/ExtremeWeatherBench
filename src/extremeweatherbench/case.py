@@ -1,15 +1,14 @@
 """Classes for defining individual units of case studies for analysis.
-Some code similarly structured to WeatherBench (Rasp et al.)."""
+Some code similarly structured to WeatherBenchX (Rasp et al.)."""
 
 import dataclasses
 import datetime
 import logging
-from typing import List, Optional
+from typing import List
 
-import numpy as np
 import xarray as xr
 
-from extremeweatherbench import derived, metrics, regions, targets, utils
+from extremeweatherbench import derived, forecasts, regions, targets  # noqa: F401
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -29,7 +28,6 @@ class IndividualCase:
         end_date: The end date of the case, for use in subsetting data for analysis.
         location: A Location dataclass representing the location of a case.
         event_type: A string representing the type of extreme weather event.
-        cross_listed: A list of other event types that this case study is cross-listed under.
     """
 
     case_id_number: int
@@ -38,79 +36,6 @@ class IndividualCase:
     end_date: datetime.datetime
     location: regions.Region
     event_type: str
-    data_vars: Optional[List[str]] = None
-    cross_listed: Optional[List[str]] = None
-
-    def subset_region(self, dataset: xr.Dataset) -> xr.Dataset:
-        """Subset the input dataset to the region specified in the location.
-
-        Args:
-            dataset: xr.Dataset: The input dataset to subset.
-
-        Returns:
-            xr.Dataset: The subset dataset.
-        """
-        return self.location.mask(dataset, drop=True)
-
-    def _subset_data_vars(self, dataset: xr.Dataset) -> xr.Dataset:
-        """Subset the input dataset to only include the variables specified in data_vars.
-
-        Args:
-            dataset: xr.Dataset: The input dataset to subset.
-
-        Returns:
-            xr.Dataset: The subset dataset.
-        """
-        subset_dataset = dataset
-        if self.data_vars is not None:
-            subset_dataset = subset_dataset[self.data_vars]
-        return subset_dataset
-
-    def _subset_valid_times(self, dataset: xr.Dataset) -> xr.Dataset:
-        """Subset the input dataset to only include init times with valid times within the case period.
-
-        Args:
-            dataset: xr.Dataset: The input dataset to subset.
-
-        Returns:
-            xr.Dataset: The subset dataset.
-        """
-        indices = utils.derive_indices_from_init_time_and_lead_time(
-            dataset, self.start_date, self.end_date
-        )
-        return dataset.isel(init_time=np.unique(indices))
-
-    def _check_for_forecast_data_availability(
-        self,
-        forecast_dataset: xr.Dataset,
-    ) -> bool:
-        """Check if the forecast and observation datasets have overlapping time periods.
-
-        Args:
-            forecast_dataset: The forecast dataset.
-            gridded_obs: The gridded observation dataset.
-
-        Returns:
-            True if the datasets have overlapping time periods, False otherwise.
-        """
-        lead_time_len = len(forecast_dataset.init_time)
-
-        if lead_time_len == 0:
-            logger.warning(
-                "No forecast data available for case %s, skipping", self.case_id_number
-            )
-            return False
-        elif lead_time_len < (self.end_date - self.start_date).days:
-            logger.warning(
-                "Fewer valid times in forecast than days in case %s, results likely unreliable",
-                self.case_id_number,
-            )
-        else:
-            logger.info("Forecast data available for case %s", self.case_id_number)
-        logger.info(
-            "Lead time length for case %s: %s", self.case_id_number, lead_time_len
-        )
-        return True
 
 
 @dataclasses.dataclass
@@ -159,6 +84,7 @@ class CaseOperator:
     case: IndividualCase
     metrics: list["metrics.BaseMetric"]
     targets: list["targets.TargetBase"]
+    forecast_source: "forecasts.ForecastSource"
     target_variables: list[str | "derived.DerivedVariable"]
     forecast_variables: list[str | "derived.DerivedVariable"]
 
@@ -171,20 +97,16 @@ class CaseOperator:
         for metric in self.metrics:
             metric.process_metric(forecast, self.targets)
 
-    def build_targets(self, **kwargs) -> list[xr.Dataset]:
+    def build_targets(
+        self, target_storage_options: dict, target_variable_mapping: dict
+    ) -> list[xr.Dataset]:
         """Build target xarray Datasets from the target sources."""
-        target_storage_options = kwargs.get(
-            "target_storage_options",
-            {"remote_protocol": "s3", "remote_options": {"anon": True}},
-        )
-        target_variable_mapping = kwargs.get("target_variable_mapping", {"anon": True})
         target_datasets = []
         for target in self.targets:
-            # TODO: need to pipe in storage options here
             target_dataset = target().run_pipeline(
-                case=self.case,
-                storage_options=target_storage_options,
+                case=self,
                 target_variables=self.target_variables,
+                storage_options=target_storage_options,
                 target_variable_mapping=target_variable_mapping,
             )
             target_datasets.append(target_dataset)
