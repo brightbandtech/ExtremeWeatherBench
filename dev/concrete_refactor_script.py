@@ -6,6 +6,7 @@ import polars as pl
 import refactor_scripts as rs
 import scores.categorical as cat
 import xarray as xr
+from scores.continuous import mae, mean_error, rmse
 
 #: Storage/access options for gridded observation datasets.
 ARCO_ERA5_FULL_URI = (
@@ -19,6 +20,22 @@ DEFAULT_GHCN_URI = "gs://extremeweatherbench/datasets/ghcnh.parq"
 LSR_URI = "gs://extremeweatherbench/datasets/lsr_01012020_04302025.parq"
 
 IBTRACS_URI = "https://www.ncei.noaa.gov/data/international-best-track-archive-for-climate-stewardship-ibtracs/v04r01/access/csv/ibtracs.ALL.list.v04r01.csv"  # noqa: E501
+
+
+# TODO: assign LSRs to a 0.25 degree grid
+class PracticallyPerfectHindcast(rs.DerivedVariable):
+    """A derived variable that computes the practically perfect hindcast."""
+
+    name = "practically_perfect_hindcast"
+    input_variables = ["report_type"]
+
+    def build(self, data: xr.Dataset) -> xr.DataArray:
+        """Process the practically perfect hindcast."""
+        self._check_data_for_variables(data)
+        pph = rs.practically_perfect_hindcast(
+            data[self.input_variables], report_type=["tor", "hail"]
+        )
+        return pph["practically_perfect"]
 
 
 class CravenSignificantSevereParameter(rs.DerivedVariable):
@@ -48,8 +65,23 @@ class BinaryContingencyTable(rs.BaseMetric):
         return cat.BinaryContingencyManager(forecast, target, **kwargs)
 
 
+class MAE(rs.BaseMetric):
+    def compute(self, forecast: xr.Dataset, observation: xr.Dataset, **kwargs):
+        return mae(forecast, observation, **kwargs)
+
+
+class ME(rs.BaseMetric):
+    def compute(self, forecast: xr.Dataset, observation: xr.Dataset, **kwargs):
+        return mean_error(forecast, observation, **kwargs)
+
+
+class RMSE(rs.BaseMetric):
+    def compute(self, forecast: xr.Dataset, observation: xr.Dataset, **kwargs):
+        return rmse(forecast, observation, **kwargs)
+
+
 class MaximumMAE(rs.AppliedMetric):
-    base_metric = [rs.MAE]
+    base_metric = [MAE]
 
     def compute_metric(
         self,
@@ -84,7 +116,7 @@ class MaximumMAE(rs.AppliedMetric):
 
 
 class MaxMinMAE(rs.AppliedMetric):
-    base_metric = rs.MAE
+    base_metric = MAE
 
     def __init__(self, variables: list[str | rs.DerivedVariable]):
         super().__init__(variables)
@@ -95,7 +127,7 @@ class MaxMinMAE(rs.AppliedMetric):
 
 
 class OnsetME(rs.AppliedMetric):
-    base_metric = rs.ME
+    base_metric = ME
 
     def __init__(self, variables: list[str | rs.DerivedVariable]):
         super().__init__(variables)
@@ -106,7 +138,7 @@ class OnsetME(rs.AppliedMetric):
 
 
 class DurationME(rs.AppliedMetric):
-    base_metric = rs.MAE
+    base_metric = MAE
 
     def __init__(self, variables: list[str | rs.DerivedVariable]):
         super().__init__(variables)
@@ -128,7 +160,7 @@ class CSI(rs.AppliedMetric):
 
 
 class LeadTimeDetection(rs.AppliedMetric):
-    base_metric = rs.MAE
+    base_metric = MAE
 
     def __init__(self, variables: list[str | rs.DerivedVariable]):
         super().__init__(variables)
@@ -190,18 +222,20 @@ class ERA5(rs.TargetBase):
     def subset_data_to_case(
         self,
         data: rs.IncomingDataInput,
-        case: rs.CaseOperator,
+        case_operator: rs.CaseOperator,
     ) -> rs.IncomingDataInput:
         if not isinstance(data, (xr.Dataset, xr.DataArray)):
             raise ValueError(f"Expected xarray Dataset or DataArray, got {type(data)}")
 
         # subset time first to avoid OOM masking issues
         subset_time_data = data.sel(
-            time=slice(case.case.start_date, case.case.end_date)
+            time=slice(case_operator.case.start_date, case_operator.case.end_date)
         )
 
         # check that the variables are in the target data
-        target_variables = [v for v in case.target_variables if isinstance(v, str)]
+        target_variables = [
+            v for v in case_operator.target_variables if isinstance(v, str)
+        ]
         if target_variables and any(
             var not in subset_time_data.data_vars for var in target_variables
         ):
@@ -213,11 +247,8 @@ class ERA5(rs.TargetBase):
             raise ValueError(
                 "Variables not defined for ERA5. Please list at least one variable to select."
             )
-        # # calling chunk here to avoid loading subset_data into memory
-        chunks = {"time": 48, "latitude": 721, "longitude": 1440}
-        subset_time_variable_data = subset_time_variable_data.chunk(chunks)
         # mask the data to the case location
-        fully_subset_data = case.case.location.mask(
+        fully_subset_data = case_operator.case.location.mask(
             subset_time_variable_data, drop=True
         )
 
@@ -516,7 +547,7 @@ class SevereConvection(rs.EventType):
         CravenSignificantSevereParameter,
     ]
     observation_variables = [
-        rs.PracticallyPerfectHindcast,
+        PracticallyPerfectHindcast,
     ]
     metrics = [CSI, LeadTimeDetection, RegionalHitsMisses, HitsMisses]
     observations = [LSR]

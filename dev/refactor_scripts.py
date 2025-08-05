@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 import dataclasses
 import datetime
 import itertools
 from abc import ABC, abstractmethod
-from typing import Any, Callable, List, Optional, TypeAlias
+from typing import Any, Callable, List, Optional, TypeAlias, Union
 
 import dacite
 import numpy as np
@@ -42,6 +44,35 @@ class Forecast(ABC):
         Returns:
             The forecast data with a type determined by the user.
         """
+
+    def forecast_preprocess(
+        self,
+        forecast_ds: xr.Dataset,
+        forecast_preprocess_function: Callable = utils._default_preprocess,
+    ) -> xr.Dataset:
+        forecast_ds = forecast_preprocess_function(forecast_ds)
+        return forecast_ds
+
+    def run_pipeline(
+        self,
+        case_operator: CaseOperator,
+        **kwargs,
+    ):
+        forecast_ds = self.open_data_from_source(
+            forecast_storage_options=case_operator.forecast_storage_options
+        )
+        forecast_ds = self.forecast_preprocess(
+            forecast_ds,
+            forecast_preprocess_function=kwargs.get(
+                "forecast_preprocess_function", utils._default_preprocess
+            ),
+        )
+        forecast_ds = _maybe_rename_and_subset_forecast_dataset(
+            forecast_ds,
+            case_operator=case_operator,
+        )
+        forecast_ds = _maybe_convert_dataset_lead_time_to_int(forecast_ds)
+        return forecast_ds
 
 
 class DerivedVariable(ABC):
@@ -161,7 +192,7 @@ class AppliedMetric(ABC):
         observation_variables: list[str],
         **kwargs,
     ):
-        self.metric().compute(forecast, observation)
+        self.base_metrics().compute(forecast, observation)
 
 
 @dataclasses.dataclass
@@ -206,19 +237,23 @@ class CaseOperator:
 
     Attributes:
         case: IndividualCase metadata
-        metrics: A list of metrics that are intended to be evaluated for the case
-        targets: A list of targets to evaluate against the forecast
+        metric: A metric that is intended to be evaluated for the case
+        target: A target to evaluate against the forecast
         forecast: The incoming forecast data
         target_variables: Names of the variables present in the target data relevant to the evaluation
         forecast_variables: Names of the variables present in the forecast data relevant to the evaluation
     """
 
     case: IndividualCase
-    metrics: "BaseMetric"
-    targets: "TargetBase"
+    metric: "BaseMetric"
+    target: "TargetBase"
     forecast: "Forecast"
-    target_variables: list[str | "DerivedVariable"]
+    target_variables: list[Union[str, "DerivedVariable"]]
     forecast_variables: list[str | "DerivedVariable"]
+    target_storage_options: dict
+    forecast_storage_options: dict
+    target_variable_mapping: dict
+    forecast_variable_mapping: dict
 
 
 class TargetBase(ABC):
@@ -311,7 +346,7 @@ class TargetBase(ABC):
 
     def run_pipeline(
         self,
-        case: CaseOperator,
+        case_operator: CaseOperator,
         target_storage_options: Optional[dict] = None,
         target_variable_mapping: dict = {},
     ) -> xr.Dataset:
@@ -334,7 +369,7 @@ class TargetBase(ABC):
         data = (
             # opens data from user-defined source
             self.open_data_from_source(
-                storage_options=target_storage_options,
+                target_storage_options=target_storage_options,
             )
             # maps variable names to the target data if not already using EWB naming conventions
             .pipe(
@@ -344,12 +379,12 @@ class TargetBase(ABC):
             # subsets the target data using the caseoperator metadata
             .pipe(
                 self.subset_data_to_case,
-                case=case,
+                case_operator=case_operator,
             )
             # converts the target data to an xarray dataset if it is not already
             .pipe(self.maybe_convert_to_dataset)
             # derives variables from the target data if derived variables are defined
-            .pipe(maybe_derive_variables, variables=case.target_variables)
+            .pipe(maybe_derive_variables, variables=case_operator.target_variables)
         )
         return data
 
@@ -378,12 +413,8 @@ class EventType(ABC):
     and variables while each having unique dates and locations.
 
     Attributes:
-        event_type: The type of event.
-        forecast_variables: A list of variables that are used to forecast the event.
-        target_variables: A list of variables that are used to observe the event.
-        case_metadata: A dictionary or yaml file with guiding metadata.
-        metric_list: A list of Metrics that are used to evaluate the cases.
-        target_list: A list of Targets that are used as targets for the metrics.
+        case_metadata: A dictionary with case metadata; EWB uses a YAML file to define the cases upstream.
+        metric_evaluation_objects: A list of MetricEvaluationObject objects.
     """
 
     def __init__(
@@ -420,7 +451,7 @@ class EventType(ABC):
             A list of CaseOperator objects.
         """
         case_metadata_collection = dacite.from_dict(
-            data_class="IndividualCaseCollection",
+            data_class=IndividualCaseCollection,
             data=self.case_metadata,
             config=dacite.Config(
                 type_hooks={regions.Region: regions.map_to_create_region},
@@ -431,14 +462,14 @@ class EventType(ABC):
         ]
 
         case_operators = []
-        for case, metric_evaluation_object in itertools.product(
-            case_metadata_collection.cases, self.metric_evaluation_objects
+        for single_case, metric_evaluation_object in itertools.product(
+            case_metadata_collection, self.metric_evaluation_objects
         ):
             case_operators.append(
                 CaseOperator(
-                    case=case,
-                    metrics=metric_evaluation_object.metric,
-                    targets=metric_evaluation_object.target,
+                    case=single_case,
+                    metric=metric_evaluation_object.metric,
+                    target=metric_evaluation_object.target,
                     forecast=metric_evaluation_object.forecast,
                     target_variables=metric_evaluation_object.target_variables,
                     forecast_variables=metric_evaluation_object.forecast_variables,
@@ -564,8 +595,6 @@ def open_and_preprocess_forecast_dataset(
     forecast_ds = _maybe_rename_and_subset_forecast_dataset(
         forecast_ds, forecast_variable_mapping
     )
-    forecast_ds = _maybe_convert_dataset_lead_time_to_int(forecast_ds)
-
     return forecast_ds
 
 
@@ -609,28 +638,40 @@ def open_kerchunk_reference(
 
 
 def _maybe_rename_and_subset_forecast_dataset(
-    forecast_ds: xr.Dataset, variable_mapping: dict[str, list[str | DerivedVariable]]
+    data: xr.Dataset, case_operator: CaseOperator
 ) -> xr.Dataset:
-    """Rename the forecast dataset to the correct names expected by the evaluation routines.
+    """Subset and rename a dataset to the correct names expected by the evaluation routines.
 
     Args:
-        forecast_ds: The forecast dataset to rename.
-        forecast_schema_config: The forecast schema configuration.
+        data: The incoming data in the form of an object that has a rename method for data variables/columns.
+        variable_mapping: The mapping of variable names to the incoming data, with the format {incoming_name: new_name}.
 
     Returns:
-        The renamed forecast dataset.
+        A dataset with mapped variable names, if any exist, else the original data.
     """
     # Mapping here is used to rename the incoming data variables to the correct
     # names expected by the evaluation routines.
-    mapping = {variable: variable for variable in variable_mapping.keys()}
+
+    # subset time first to avoid OOM masking issues
+    subset_time_indices = utils.derive_indices_from_init_time_and_lead_time(
+        data,
+        case_operator.case.start_date,
+        case_operator.case.end_date,
+    )
+    subset_time_data = data.isel(init_time=np.unique(subset_time_indices[0]))
     # Filter the mapping to only include variables that are in the forecast dataset, else
     # an error will be raised.
-    mapping = {k: v for k, v in variable_mapping.items() if k in forecast_ds.data_vars}
-    variables = mapping.keys()
-    forecast_ds = forecast_ds[variables]
-    forecast_ds = forecast_ds.rename(mapping)
-
-    return forecast_ds
+    subset_time_data = maybe_map_variable_names(
+        subset_time_data, case_operator.forecast_variable_mapping
+    )
+    try:
+        subset_time_data = subset_time_data[case_operator.forecast_variables]
+    except KeyError:
+        raise KeyError(
+            f"Variables {case_operator.forecast_variables} not found in forecast data"
+        )
+    fully_subset_data = case_operator.case.location.mask(subset_time_data, drop=True)
+    return fully_subset_data
 
 
 def _maybe_convert_dataset_lead_time_to_int(dataset: xr.Dataset) -> xr.Dataset:
@@ -645,7 +686,7 @@ def _maybe_convert_dataset_lead_time_to_int(dataset: xr.Dataset) -> xr.Dataset:
     """
 
     lead_time = (
-        dataset["lead_time"] if "lead_time" in dataset.data_vars else dataset["time"]
+        dataset["lead_time"] if "lead_time" in dataset.coords else dataset["time"]
     )
     if lead_time.dtype == np.dtype("timedelta64[ns]"):
         # Convert timedelta64[ns] to hours and cast to int
@@ -665,8 +706,7 @@ def _maybe_convert_dataset_lead_time_to_int(dataset: xr.Dataset) -> xr.Dataset:
         dataset = dataset.rename({"time": "lead_time"})
     return dataset
 
-
-def _build_forecast(forecast_dir: str, case_operator: rs.CaseOperator, **kwargs):
+    # def _build_forecast(forecast_dir: str, case_operator: CaseOperator, **kwargs):
     forecast_ds = open_and_preprocess_forecast_dataset(
         forecast_dir,
         forecast_variables=case_operator.forecast_variables,
@@ -706,26 +746,39 @@ class ExtremeWeatherBench:
     def run(
         self,
         cache_dir: Optional[str] = None,
-        *args,
         **kwargs,
     ):
         """Runs the workflow in the order of the event operators and cases inside the event operators."""
+        # In run(), set up a method to store the opened targets and forecasts to avoid reloading each case operator
 
         # Collect all case operators from all events
         for event in self.events:
             case_operators = event.build_case_operators()
             for case_operator in case_operators:
-                observation_ds, forecast_ds = self.build_datasets(case_operator)
+                observation_ds, forecast_ds = self.build_datasets(
+                    case_operator, **kwargs
+                )
                 return observation_ds, forecast_ds
 
-    def build_datasets(self, case_operator: CaseOperator):
-        observation_ds = case_operator.build_observations(**kwargs)
-        forecast_ds = case_operator.build_forecasts(forecast)
+    def build_datasets(self, case_operator: CaseOperator, **kwargs):
+        observation_ds = case_operator.target().run_pipeline(
+            case_operator=case_operator,
+            target_storage_options=case_operator.target_storage_options,
+            target_variable_mapping=case_operator.target_variable_mapping,
+        )
+        forecast_ds = case_operator.forecast.run_pipeline(
+            case_operator=case_operator,
+            forecast_storage_options=case_operator.forecast_storage_options,
+            forecast_variable_mapping=case_operator.forecast_variable_mapping,
+            forecast_preprocess_function=kwargs.get(
+                "forecast_preprocess_function", utils._default_preprocess
+            ),
+        )
         return observation_ds, forecast_ds
 
-    def build_forecast(self, case_operator: CaseOperator, forecast_dir: str, **kwargs):
-        pre_derived_forecast_ds = _build_forecast(forecast_dir, case_operator, **kwargs)
-        derived_forecast_ds = maybe_derive_variables(
-            pre_derived_forecast_ds, variables=case_operator.forecast_variables
-        )
-        return derived_forecast_ds
+    # def build_forecast(self, case_operator: CaseOperator, forecast_dir: str, **kwargs):
+    #     pre_derived_forecast_ds = _build_forecast(forecast_dir, case_operator, **kwargs)
+    #     derived_forecast_ds = maybe_derive_variables(
+    #         pre_derived_forecast_ds, variables=case_operator.forecast_variables
+    #     )
+    #     return derived_forecast_ds
