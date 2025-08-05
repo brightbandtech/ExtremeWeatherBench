@@ -3,6 +3,7 @@ from __future__ import annotations
 import dataclasses
 import datetime
 import itertools
+import logging
 from abc import ABC, abstractmethod
 from typing import Any, Callable, List, Optional, TypeAlias, Union
 
@@ -11,9 +12,12 @@ import numpy as np
 import pandas as pd
 import polars as pl
 import xarray as xr
+from tqdm.auto import tqdm
 
 from extremeweatherbench import regions, utils
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 # from extremeweatherbench import derived, metrics, targets  # type: ignore
 # from extremeweatherbench.case import CaseOperator
 # from extremeweatherbench.forecasts import Forecast
@@ -58,20 +62,22 @@ class Forecast(ABC):
         case_operator: CaseOperator,
         **kwargs,
     ):
+        logger.info("opening forecast")
         forecast_ds = self.open_data_from_source(
             forecast_storage_options=case_operator.forecast_storage_options
         )
+        logger.info("starting preprocessing")
         forecast_ds = self.forecast_preprocess(
             forecast_ds,
             forecast_preprocess_function=kwargs.get(
                 "forecast_preprocess_function", utils._default_preprocess
             ),
         )
+        logger.info("starting subsetting")
         forecast_ds = _maybe_rename_and_subset_forecast_dataset(
             forecast_ds,
             case_operator=case_operator,
         )
-        forecast_ds = _maybe_convert_dataset_lead_time_to_int(forecast_ds)
         return forecast_ds
 
 
@@ -499,7 +505,7 @@ def maybe_map_variable_names(
     # Filter the mapping to only include variables that exist in the dataset
     if isinstance(data, (xr.Dataset, xr.DataArray)):
         subset_variable_mapping = {
-            v: k for v, k in variable_mapping.items() if v in data.data_vars
+            v: k for v, k in variable_mapping.items() if v in data.keys()
         }
     elif isinstance(data, (pl.LazyFrame, pl.DataFrame, pd.DataFrame)):
         subset_variable_mapping = {
@@ -658,7 +664,9 @@ def _maybe_rename_and_subset_forecast_dataset(
         case_operator.case.start_date,
         case_operator.case.end_date,
     )
+
     subset_time_data = data.isel(init_time=np.unique(subset_time_indices[0]))
+    subset_time_data = utils.convert_init_time_to_valid_time(subset_time_data)
     # Filter the mapping to only include variables that are in the forecast dataset, else
     # an error will be raised.
     subset_time_data = maybe_map_variable_names(
@@ -749,23 +757,24 @@ class ExtremeWeatherBench:
         **kwargs,
     ):
         """Runs the workflow in the order of the event operators and cases inside the event operators."""
-        # In run(), set up a method to store the opened targets and forecasts to avoid reloading each case operator
-
-        # Collect all case operators from all events
         for event in self.events:
             case_operators = event.build_case_operators()
-            for case_operator in case_operators:
-                observation_ds, forecast_ds = self.build_datasets(
-                    case_operator, **kwargs
-                )
-                return observation_ds, forecast_ds
+        logger.info("created case operators")
+        # TODO: set up a method to store the opened targets and forecasts to avoid reloading each case operator
+
+        for case_operator in tqdm(case_operators):
+            target_ds, forecast_ds = self.build_datasets(case_operator, **kwargs)
+            logger.info("datasets built")
+            case_operator.metric().compute_metric(forecast_ds, target_ds)
 
     def build_datasets(self, case_operator: CaseOperator, **kwargs):
-        observation_ds = case_operator.target().run_pipeline(
+        logger.info("running target pipeline")
+        target_ds = case_operator.target().run_pipeline(
             case_operator=case_operator,
             target_storage_options=case_operator.target_storage_options,
             target_variable_mapping=case_operator.target_variable_mapping,
         )
+        logger.info("running forecast pipeline")
         forecast_ds = case_operator.forecast.run_pipeline(
             case_operator=case_operator,
             forecast_storage_options=case_operator.forecast_storage_options,
@@ -774,11 +783,46 @@ class ExtremeWeatherBench:
                 "forecast_preprocess_function", utils._default_preprocess
             ),
         )
-        return observation_ds, forecast_ds
+        return target_ds, forecast_ds
 
-    # def build_forecast(self, case_operator: CaseOperator, forecast_dir: str, **kwargs):
-    #     pre_derived_forecast_ds = _build_forecast(forecast_dir, case_operator, **kwargs)
-    #     derived_forecast_ds = maybe_derive_variables(
-    #         pre_derived_forecast_ds, variables=case_operator.forecast_variables
-    #     )
-    #     return derived_forecast_ds
+
+def lead_time_init_time_to_valid_time(forecast):
+    """Convert init_time and lead_time to valid_time.
+
+    Args:
+        forecast: The forecast dataset.
+
+    Returns:
+        The forecast dataset with valid_time dimension.
+    """
+    if "lead_time" not in forecast.dims or "init_time" not in forecast.dims:
+        raise ValueError(
+            "lead_time and init_time must be dimensions of the forecast dataset"
+        )
+
+    lead_time_grid, init_time_grid = np.meshgrid(forecast.lead_time, forecast.init_time)
+    valid_times = (
+        init_time_grid.flatten()
+        + pd.to_timedelta(lead_time_grid.flatten(), unit="h").to_numpy()
+    )
+    return valid_times
+
+
+def align_target_and_forecast_time_dimensions(
+    target_ds: xr.Dataset, forecast_ds: xr.Dataset
+) -> tuple[xr.Dataset, xr.Dataset]:
+    """Align the time dimensions of the target and forecast datasets.
+
+    Args:
+        target_ds: The target dataset.
+        forecast_ds: The forecast dataset.
+
+    Returns:
+        The aligned target and forecast datasets.
+    """
+    valid_time = xr.DataArray(
+        forecast_ds.init_time, coords={"init_time": forecast_ds.init_time}
+    ) + xr.DataArray(forecast_ds.lead_time, coords={"lead_time": forecast_ds.lead_time})
+    trimmed_valid_time = valid_time.where(valid_time.isin(target_ds.time.values))
+
+    return trimmed_valid_time

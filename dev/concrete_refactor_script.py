@@ -81,20 +81,20 @@ class RMSE(rs.BaseMetric):
 
 
 class MaximumMAE(rs.AppliedMetric):
-    base_metric = [MAE]
+    base_metrics = [MAE]
 
     def compute_metric(
         self,
         forecast: xr.Dataset,
         target: xr.Dataset,
     ):
+        forecast = forecast.compute()
+        target = target.compute()
         maximum_timestep = (
             target.mean(["latitude", "longitude"]).idxmax("valid_time").values
         )
         maximum_value = (
-            target.mean(["latitude", "longitude"])
-            .sel(valid_time=maximum_timestep)
-            .values
+            target.mean(["latitude", "longitude"]).sel(time=maximum_timestep).values
         )
         forecast_spatial_mean = forecast.mean(["latitude", "longitude"])
         filtered_max_forecast = (
@@ -112,77 +112,77 @@ class MaximumMAE(rs.AppliedMetric):
             )
             .max("valid_time")
         )
-        return self.base_metric().compute(filtered_max_forecast, maximum_value)
+        return self.base_metrics[0].compute(filtered_max_forecast, maximum_value)
 
 
 class MaxMinMAE(rs.AppliedMetric):
-    base_metric = MAE
+    base_metrics = [MAE]
 
     def __init__(self, variables: list[str | rs.DerivedVariable]):
         super().__init__(variables)
 
     def compute_metric(self, forecast: xr.Dataset, target: xr.Dataset):
         # Dummy implementation for finding both max and min values
-        return self.metric().compute(forecast, target)
+        return self.base_metrics[0].compute(forecast, target)
 
 
 class OnsetME(rs.AppliedMetric):
-    base_metric = ME
+    base_metrics = [ME]
 
     def __init__(self, variables: list[str | rs.DerivedVariable]):
         super().__init__(variables)
 
     def compute_metric(self, forecast: xr.Dataset, target: xr.Dataset):
         # Dummy implementation for onset mean error
-        return self.metric().compute(forecast, target)
+        return self.base_metrics[0].compute(forecast, target)
 
 
 class DurationME(rs.AppliedMetric):
-    base_metric = MAE
+    base_metrics = [MAE]
 
     def __init__(self, variables: list[str | rs.DerivedVariable]):
         super().__init__(variables)
 
     def compute_metric(self, forecast: xr.Dataset, target: xr.Dataset):
         # Dummy implementation for duration mean error
-        return self.metric().compute(forecast, target)
+        return self.base_metrics[0].compute(forecast, target)
 
 
 class CSI(rs.AppliedMetric):
-    base_metric = BinaryContingencyTable
+    base_metrics = [BinaryContingencyTable]
 
     def __init__(self, variables: list[str | rs.DerivedVariable]):
         super().__init__(variables)
 
     def compute_metric(self, forecast: xr.Dataset, target: xr.Dataset):
         # Dummy implementation for Critical Success Index
-        return self.metric().compute(forecast, target)
+        return self.base_metrics[0].compute(forecast, target)
 
 
 class LeadTimeDetection(rs.AppliedMetric):
-    base_metric = MAE
+    base_metrics = [MAE]
 
     def __init__(self, variables: list[str | rs.DerivedVariable]):
         super().__init__(variables)
 
     def compute_metric(self, forecast: xr.Dataset, target: xr.Dataset):
         # Dummy implementation for lead time detection
-        return self.metric().compute(forecast, target)
+        return self.base_metrics[0].compute(forecast, target)
 
 
 class RegionalHitsMisses(rs.AppliedMetric):
-    base_metric = BinaryContingencyTable
+    base_metrics = [BinaryContingencyTable]
 
     def __init__(self, variables: list[str | rs.DerivedVariable]):
         super().__init__(variables)
 
     def compute_metric(self, forecast: xr.Dataset, target: xr.Dataset):
         # Dummy implementation for regional hits and misses
-        return self.metric().compute(forecast, target)
+        return self.base_metrics[0].compute(forecast, target)
 
 
 class HitsMisses(rs.AppliedMetric):
-    base_metric = BinaryContingencyTable
+    base_metrics = [BinaryContingencyTable]
 
     def __init__(
         self, variables: list[str | rs.DerivedVariable], threshold: float = 0.5
@@ -192,7 +192,7 @@ class HitsMisses(rs.AppliedMetric):
 
     def compute_metric(self, forecast: xr.Dataset, target: xr.Dataset):
         # Dummy implementation for hits and misses
-        return self.metric().compute(forecast, target)
+        return self.base_metrics[0].compute(forecast, target)
 
 
 class ERA5(rs.TargetBase):
@@ -229,7 +229,7 @@ class ERA5(rs.TargetBase):
 
         # subset time first to avoid OOM masking issues
         subset_time_data = data.sel(
-            time=slice(case_operator.case.start_date, case_operator.case.end_date)
+            valid_time=slice(case_operator.case.start_date, case_operator.case.end_date)
         )
 
         # check that the variables are in the target data
