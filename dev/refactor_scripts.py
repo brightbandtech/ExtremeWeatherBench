@@ -66,8 +66,10 @@ def _filter_kwargs_for_callable(kwargs: dict, callable_obj: Callable) -> dict:
 class Forecast(ABC):
     """A base class defining the interface for ExtremeWeatherBench forecast data.
 
-    A Forecast is data that acts as the "forecast" for a case. It can be a gridded dataset,
-    a point observation dataset, or any other reference dataset.
+    A Forecast is data that acts as the "forecast" for a case.
+
+    Attributes:
+        forecast_source: The source of the forecast data, which can be a local path or a remote URL/URI.
     """
 
     def __init__(self, forecast_source: str):
@@ -205,7 +207,7 @@ class BaseMetric(ABC):
     def compute_metric(
         self,
         forecast: xr.Dataset,
-        observation: xr.Dataset,
+        target: xr.Dataset,
         # default to preserving lead_time in EWB metrics
         preserve_dims: str = "lead_time",
     ):
@@ -233,8 +235,8 @@ class AppliedMetric(ABC):
     def base_metrics(self) -> list[BaseMetric]:
         pass
 
-    def compute_applied_metric(self, forecast: xr.DataArray, observation: xr.DataArray):
-        self.base_metrics().compute(forecast, observation)
+    def compute_applied_metric(self, forecast: xr.DataArray, target: xr.DataArray):
+        self.base_metrics().compute(forecast, target)
 
 
 @dataclasses.dataclass
@@ -322,7 +324,7 @@ class TargetBase(ABC):
         Open the target data from the source, opting to avoid loading the entire dataset into memory if possible.
 
         Args:
-            source: The source of the observation data, which can be a local path or a remote URL.
+            source: The source of the target data, which can be a local path or a remote URL.
             storage_options: Optional storage options for the source if the source is a remote URL.
 
         Returns:
@@ -342,7 +344,7 @@ class TargetBase(ABC):
         where this method is used to subset.
 
         Args:
-            data: The observation data to subset, which should be a xarray dataset, xarray dataarray, polars lazyframe,
+            data: The target data to subset, which should be a xarray dataset, xarray dataarray, polars lazyframe,
             pandas dataframe, or numpy array.
             case: The case operator to subset the data to; includes time information, spatial bounds, and variables.
 
@@ -473,7 +475,7 @@ class EventType(ABC):
 
     An Event in ExtremeWeatherBench defines a specific weather event type, such as a heat wave,
     severe convective weather, or atmospheric rivers. These events encapsulate a set of cases and
-    derived behavior for evaluating those cases. These cases will share common metrics, observations,
+    derived behavior for evaluating those cases. These cases will share common metrics, targets,
     and variables while each having unique dates and locations.
 
     Attributes:
@@ -549,7 +551,7 @@ class EventType(ABC):
 def maybe_map_variable_names(
     data: IncomingDataInput, variable_mapping: Optional[dict] = None
 ) -> IncomingDataInput:
-    """Map the variable names to the observation data, if required.
+    """Map the variable names to the target data, if required.
 
     Args:
         data: The incoming data in the form of an object that has a rename method for data variables/columns.
@@ -895,7 +897,7 @@ class ExtremeWeatherBench:
             )
 
         # Convert to DataFrame and add metadata
-        df = metric_result.to_dataframe().reset_index()
+        df = metric_result.to_dataframe(name="value").reset_index()
         df["target_variable"] = target_variable
         df["metric"] = metric.name
         df["target_source"] = case_operator.target().name
@@ -971,7 +973,8 @@ def align_target_and_forecast_time_dimensions(
 
 
 def min_if_all_timesteps_present(
-    x, num_timesteps: int, da_type: Literal["forecast", "target"] = "forecast"
+    da: xr.DataArray,
+    num_timesteps: int,
 ) -> xr.DataArray:
     """Return the minimum value of a DataArray if all timesteps of a day are present.
 
@@ -981,13 +984,22 @@ def min_if_all_timesteps_present(
     Returns:
         The minimum value of the DataArray if all timesteps are present, otherwise the original DataArray.
     """
-    if da_type == "forecast":
-        if len(x.valid_time) == num_timesteps:
-            return x.min("valid_time")
-        else:
-            return xr.DataArray(np.nan)
-    elif da_type == "target":
-        if len(x.values) == num_timesteps:
-            return x.min()
-        else:
-            return xr.DataArray(np.nan)
+    if len(da.values) == num_timesteps:
+        return da.min()
+    else:
+        return xr.DataArray(np.nan)
+
+
+def min_if_all_timesteps_present_forecast(x, num_timesteps: int = 4) -> xr.DataArray:
+    """Return the minimum value of a DataArray if all timesteps of a day are present given a dataset with lead_time and valid_time dimensions.
+
+    Args:
+        da: The input DataArray.
+
+    Returns:
+        The minimum value of the DataArray if all timesteps are present, otherwise the original DataArray.
+    """
+    if len(x.valid_time) == num_timesteps:
+        return x.min("valid_time")
+    else:
+        return xr.DataArray(np.nan)

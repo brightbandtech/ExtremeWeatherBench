@@ -8,12 +8,12 @@ import scores.categorical as cat
 import xarray as xr
 from scores.continuous import mae, mean_error, rmse
 
-#: Storage/access options for gridded observation datasets.
+#: Storage/access options for gridded target datasets.
 ARCO_ERA5_FULL_URI = (
     "gs://gcp-public-data-arco-era5/ar/full_37-1h-0p25deg-chunk-1.zarr-v3"
 )
 
-#: Storage/access options for default point observation dataset.
+#: Storage/access options for default point target dataset.
 DEFAULT_GHCN_URI = "gs://extremeweatherbench/datasets/ghcnh.parq"
 
 #: Storage/access options for local storm report (LSR) tabular data.
@@ -76,30 +76,30 @@ class MAE(rs.BaseMetric):
     def compute_metric(
         self,
         forecast: xr.Dataset,
-        observation: xr.Dataset,
+        target: xr.Dataset,
         preserve_dims: str = "lead_time",
     ):
-        return mae(forecast, observation, preserve_dims=preserve_dims)
+        return mae(forecast, target, preserve_dims=preserve_dims)
 
 
 class ME(rs.BaseMetric):
     def compute_metric(
         self,
         forecast: xr.Dataset,
-        observation: xr.Dataset,
+        target: xr.Dataset,
         preserve_dims: str = "lead_time",
     ):
-        return mean_error(forecast, observation, preserve_dims=preserve_dims)
+        return mean_error(forecast, target, preserve_dims=preserve_dims)
 
 
 class RMSE(rs.BaseMetric):
     def compute_metric(
         self,
         forecast: xr.Dataset,
-        observation: xr.Dataset,
+        target: xr.Dataset,
         preserve_dims: str = "lead_time",
     ):
-        return rmse(forecast, observation, preserve_dims=preserve_dims)
+        return rmse(forecast, target, preserve_dims=preserve_dims)
 
 
 class MaximumMAE(rs.AppliedMetric):
@@ -112,22 +112,18 @@ class MaximumMAE(rs.AppliedMetric):
         tolerance_range: int = 24,
     ):
         forecast = forecast.compute()
-        target = target.compute()
-        maximum_timestep = (
-            target.mean(["latitude", "longitude"]).idxmax("valid_time").values
-        )
-        maximum_value = target.mean(["latitude", "longitude"]).sel(
-            valid_time=maximum_timestep
-        )
+        target_spatial_mean = target.compute().mean(["latitude", "longitude"])
+        maximum_timestep = target_spatial_mean.idxmax("valid_time").values
+        maximum_value = target_spatial_mean.sel(valid_time=maximum_timestep)
         forecast_spatial_mean = forecast.mean(["latitude", "longitude"])
         filtered_max_forecast = forecast_spatial_mean.where(
             (
                 forecast_spatial_mean.valid_time
-                >= maximum_timestep - np.timedelta64(tolerance_range, "h")
+                >= maximum_timestep - np.timedelta64(tolerance_range // 2, "h")
             )
             & (
                 forecast_spatial_mean.valid_time
-                <= maximum_timestep + np.timedelta64(tolerance_range, "h")
+                <= maximum_timestep + np.timedelta64(tolerance_range // 2, "h")
             ),
             drop=True,
         ).max("valid_time")
@@ -145,42 +141,47 @@ class MaxMinMAE(rs.AppliedMetric):
         target: xr.Dataset,
         tolerance_range: int = 24,
     ):
-        forecast = forecast.compute()
-        target = target.compute()
-        max_min_target_value = (
-            target.mean(["latitude", "longitude"])
-            .groupby("valid_time.dayofyear")
+        forecast = forecast.compute().mean(["latitude", "longitude"])
+        target = target.compute().mean(["latitude", "longitude"])
+        max_min_target_dayofyear = (
+            target.groupby("valid_time.dayofyear")
             .map(
                 rs.min_if_all_timesteps_present,
+                # TODO: calculate num timesteps per day dynamically
                 num_timesteps=4,
-                da_type="target",
             )
-            .max()
+            .idxmax("dayofyear")
+            .values
         )
-        max_min_target_datetime = max_min_target_value.valid_time.values
-
-        forecast = (
-            forecast.mean(["latitude", "longitude"])
-            .where(
+        max_min_target_datetime = target.where(
+            target.valid_time.dt.dayofyear == max_min_target_dayofyear, drop=True
+        ).idxmin("valid_time")
+        max_min_target_value = target.sel(valid_time=max_min_target_datetime)
+        subset_forecast = (
+            forecast.where(
                 (
                     forecast.valid_time
-                    >= max_min_target_datetime - np.timedelta64(tolerance_range, "h")
+                    >= max_min_target_datetime
+                    - np.timedelta64(tolerance_range // 2, "h")
                 )
                 & (
                     forecast.valid_time
-                    <= max_min_target_datetime + np.timedelta64(tolerance_range, "h")
+                    <= max_min_target_datetime
+                    + np.timedelta64(tolerance_range // 2, "h")
                 ),
                 drop=True,
             )
             .groupby("valid_time.dayofyear")
             .map(
-                rs.min_if_all_timesteps_present,
-                num_timesteps=4,
-                da_type="forecast",
+                rs.min_if_all_timesteps_present_forecast,
+                # TODO: calculate num timesteps per day dynamically
+                num_timesteps=2,
             )
             .min("dayofyear")
         )
-        return self.base_metrics[0].compute_metric(forecast, max_min_target_value)
+        return self.base_metrics[0]().compute_metric(
+            subset_forecast, max_min_target_value
+        )
 
 
 class OnsetME(rs.AppliedMetric):
@@ -191,11 +192,13 @@ class OnsetME(rs.AppliedMetric):
             "timedelta64[h]"
         ) >= 48:
             min_daily_vals = forecast.groupby("valid_time.dayofyear").map(
-                rs.min_if_all_timesteps_present, num_timesteps=4, da_type="forecast"
+                rs.min_if_all_timesteps_present,
+                # TODO: calculate num timesteps per day dynamically
+                num_timesteps=4,
             )
-            # need to determine logic for 2+ consecutive days to find the date that the heatwave starts
             if len(min_daily_vals) >= 2:  # Check if we have at least 2 values
                 for i in range(len(min_daily_vals) - 1):
+                    # TODO: CHANGE LOGIC; define forecast heatwave onset
                     if min_daily_vals[i] >= 288.15 and min_daily_vals[i + 1] >= 288.15:
                         return xr.DataArray(
                             forecast.where(
@@ -214,53 +217,60 @@ class OnsetME(rs.AppliedMetric):
             return xr.DataArray(np.datetime64("NaT", "ns"))
 
     def compute_applied_metric(self, forecast: xr.Dataset, target: xr.Dataset):
-        # Dummy implementation for onset mean error
-        target_time = target.valid_time.values[0]
+        target_time = target.valid_time[0] + np.timedelta64(48, "h")
         forecast = (
             forecast.mean(["latitude", "longitude"])
             .groupby("init_time")
             .map(self.onset)
         )
-        return self.base_metrics[0].compute_metric(forecast, target_time)
+        return self.base_metrics[0]().compute_metric(
+            forecast, target_time, preserve_dims="init_time"
+        )
 
 
 class DurationME(rs.AppliedMetric):
-    base_metrics = [MAE]
+    base_metrics = [ME]
 
     def duration(self, forecast: xr.DataArray) -> xr.DataArray:
         if (forecast.valid_time.max() - forecast.valid_time.min()).values.astype(
             "timedelta64[h]"
         ) >= 48:
             min_daily_vals = forecast.groupby("valid_time.dayofyear").map(
-                rs.min_if_all_timesteps_present, num_timesteps=4
+                rs.min_if_all_timesteps_present,
+                # TODO: calculate num timesteps per day dynamically
+                num_timesteps=4,
             )
             # need to determine logic for 2+ consecutive days to find the date that the heatwave starts
             if len(min_daily_vals) >= 2:  # Check if we have at least 2 values
                 for i in range(len(min_daily_vals) - 1):
                     if min_daily_vals[i] >= 288.15 and min_daily_vals[i + 1] >= 288.15:
-                        consecutive_days = 2.0  # Start with 2 since we found first pair
+                        consecutive_days = np.timedelta64(
+                            2, "D"
+                        )  # Start with 2 since we found first pair
                         for j in range(i + 2, len(min_daily_vals)):
                             if min_daily_vals[j] >= 288.15:
-                                consecutive_days += 1
+                                consecutive_days += np.timedelta64(1, "D")
                             else:
                                 break
-                        return xr.DataArray(consecutive_days)
+                        return xr.DataArray(consecutive_days.astype("timedelta64[ns]"))
                     else:
-                        return xr.DataArray(np.nan)
+                        return xr.DataArray(np.timedelta64("NaT", "ns"))
             else:
-                return xr.DataArray(np.nan)
+                return xr.DataArray(np.timedelta64("NaT", "ns"))
         else:
-            return xr.DataArray(np.nan)
+            return xr.DataArray(np.timedelta64("NaT", "ns"))
 
     def compute_applied_metric(self, forecast: xr.Dataset, target: xr.Dataset):
         # Dummy implementation for duration mean error
-        target_duration = target.valid_time.values[-1] - target.valid_time.values[0]
+        target_duration = target.valid_time[-1] - target.valid_time[0]
         forecast = (
             forecast.mean(["latitude", "longitude"])
             .groupby("init_time")
             .map(self.duration)
         )
-        return self.base_metrics[0].compute_metric(forecast, target_duration)
+        return self.base_metrics[0]().compute_metric(
+            forecast, target_duration, preserve_dims="init_time"
+        )
 
 
 class CSI(rs.AppliedMetric):
@@ -271,7 +281,7 @@ class CSI(rs.AppliedMetric):
 
     def compute_applied_metric(self, forecast: xr.Dataset, target: xr.Dataset):
         # Dummy implementation for Critical Success Index
-        return self.base_metrics[0].compute_metric(forecast, target)
+        return self.base_metrics[0]().compute_metric(forecast, target)
 
 
 class LeadTimeDetection(rs.AppliedMetric):
@@ -282,7 +292,7 @@ class LeadTimeDetection(rs.AppliedMetric):
 
     def compute_applied_metric(self, forecast: xr.Dataset, target: xr.Dataset):
         # Dummy implementation for lead time detection
-        return self.base_metrics[0].compute_metric(forecast, target)
+        return self.base_metrics[0]().compute_metric(forecast, target)
 
 
 class RegionalHitsMisses(rs.AppliedMetric):
@@ -293,7 +303,7 @@ class RegionalHitsMisses(rs.AppliedMetric):
 
     def compute_applied_metric(self, forecast: xr.Dataset, target: xr.Dataset):
         # Dummy implementation for regional hits and misses
-        return self.base_metrics[0].compute_metric(forecast, target)
+        return self.base_metrics[0]().compute_metric(forecast, target)
 
 
 class HitsMisses(rs.AppliedMetric):
@@ -307,7 +317,7 @@ class HitsMisses(rs.AppliedMetric):
 
     def compute_applied_metric(self, forecast: xr.Dataset, target: xr.Dataset):
         # Dummy implementation for hits and misses
-        return self.base_metrics[0].compute_metric(forecast, target)
+        return self.base_metrics[0]().compute_metric(forecast, target)
 
 
 class ERA5(rs.TargetBase):
@@ -661,16 +671,16 @@ class SevereConvection(rs.EventType):
     forecast_variables = [
         CravenSignificantSevereParameter,
     ]
-    observation_variables = [
+    target_variables = [
         PracticallyPerfectHindcast,
     ]
     metrics = [CSI, LeadTimeDetection, RegionalHitsMisses, HitsMisses]
-    observations = [LSR]
+    targets = [LSR]
 
 
 class AtmosphericRiver(rs.EventType):
     event_type = "atmospheric_river"
     forecast_variables = []
-    observation_variables = []
+    target_variables = []
     metrics = [CSI, LeadTimeDetection]
-    observations = [ERA5]
+    targets = [ERA5]
