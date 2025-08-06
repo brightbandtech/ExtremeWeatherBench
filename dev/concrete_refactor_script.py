@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Callable, Optional
 
 import numpy as np
 import pandas as pd
@@ -62,7 +62,7 @@ class CravenSignificantSevereParameter(rs.DerivedVariable):
 
 
 class BinaryContingencyTable(rs.BaseMetric):
-    def compute_metric(
+    def _compute_metric(
         self,
         forecast: xr.Dataset,
         target: xr.Dataset,
@@ -74,7 +74,7 @@ class BinaryContingencyTable(rs.BaseMetric):
 
 
 class MAE(rs.BaseMetric):
-    def compute_metric(
+    def _compute_metric(
         self,
         forecast: xr.Dataset,
         target: xr.Dataset,
@@ -84,7 +84,7 @@ class MAE(rs.BaseMetric):
 
 
 class ME(rs.BaseMetric):
-    def compute_metric(
+    def _compute_metric(
         self,
         forecast: xr.Dataset,
         target: xr.Dataset,
@@ -94,7 +94,7 @@ class ME(rs.BaseMetric):
 
 
 class RMSE(rs.BaseMetric):
-    def compute_metric(
+    def _compute_metric(
         self,
         forecast: xr.Dataset,
         target: xr.Dataset,
@@ -104,9 +104,9 @@ class RMSE(rs.BaseMetric):
 
 
 class MaximumMAE(rs.AppliedMetric):
-    base_metrics = [MAE]
+    base_metric = MAE
 
-    def compute_applied_metric(
+    def _compute_applied_metric(
         self,
         forecast: xr.DataArray,
         target: xr.DataArray,
@@ -128,15 +128,17 @@ class MaximumMAE(rs.AppliedMetric):
             ),
             drop=True,
         ).max("valid_time")
-        return self.base_metrics[0]().compute_metric(
-            filtered_max_forecast, maximum_value
-        )
+        return {
+            "forecast": filtered_max_forecast,
+            "target": maximum_value,
+            "preserve_dims": self.base_metric().preserve_dims,
+        }
 
 
 class MaxMinMAE(rs.AppliedMetric):
-    base_metrics = [MAE]
+    base_metric = MAE
 
-    def compute_applied_metric(
+    def _compute_applied_metric(
         self,
         forecast: xr.Dataset,
         target: xr.Dataset,
@@ -144,49 +146,55 @@ class MaxMinMAE(rs.AppliedMetric):
     ):
         forecast = forecast.compute().mean(["latitude", "longitude"])
         target = target.compute().mean(["latitude", "longitude"])
-        max_min_target_dayofyear = (
+        max_min_target_value = (
             target.groupby("valid_time.dayofyear")
             .map(
                 rs.min_if_all_timesteps_present,
                 # TODO: calculate num timesteps per day dynamically
-                num_timesteps=4,
+                num_timesteps=rs.determine_timesteps_per_day_resolution(target),
             )
-            .idxmax("dayofyear")
-            .values
+            .max()
         )
         max_min_target_datetime = target.where(
-            target.valid_time.dt.dayofyear == max_min_target_dayofyear, drop=True
-        ).idxmin("valid_time")
+            target == max_min_target_value, drop=True
+        ).valid_time.values
         max_min_target_value = target.sel(valid_time=max_min_target_datetime)
         subset_forecast = (
             forecast.where(
                 (
                     forecast.valid_time
-                    >= max_min_target_datetime
-                    - np.timedelta64(tolerance_range // 2, "h")
+                    >= (
+                        max_min_target_datetime
+                        - np.timedelta64(tolerance_range // 2, "h")
+                    )
                 )
                 & (
                     forecast.valid_time
-                    <= max_min_target_datetime
-                    + np.timedelta64(tolerance_range // 2, "h")
+                    <= (
+                        max_min_target_datetime
+                        + np.timedelta64(tolerance_range // 2, "h")
+                    )
                 ),
                 drop=True,
             )
             .groupby("valid_time.dayofyear")
             .map(
                 rs.min_if_all_timesteps_present_forecast,
-                # TODO: calculate num timesteps per day dynamically
-                num_timesteps=2,
+                num_timesteps=rs.determine_timesteps_per_day_resolution(forecast),
             )
             .min("dayofyear")
         )
-        return self.base_metrics[0]().compute_metric(
-            subset_forecast, max_min_target_value
-        )
+
+        return {
+            "forecast": subset_forecast,
+            "target": max_min_target_value,
+            "preserve_dims": self.base_metric().preserve_dims,
+        }
 
 
 class OnsetME(rs.AppliedMetric):
-    base_metrics = [ME]
+    base_metric = ME
+    preserve_dims: str = "init_time"
 
     def onset(self, forecast: xr.DataArray) -> xr.DataArray:
         if (forecast.valid_time.max() - forecast.valid_time.min()).values.astype(
@@ -194,8 +202,7 @@ class OnsetME(rs.AppliedMetric):
         ) >= 48:
             min_daily_vals = forecast.groupby("valid_time.dayofyear").map(
                 rs.min_if_all_timesteps_present,
-                # TODO: calculate num timesteps per day dynamically
-                num_timesteps=4,
+                num_timesteps=rs.determine_timesteps_per_day_resolution(forecast),
             )
             if len(min_daily_vals) >= 2:  # Check if we have at least 2 values
                 for i in range(len(min_daily_vals) - 1):
@@ -217,20 +224,23 @@ class OnsetME(rs.AppliedMetric):
         else:
             return xr.DataArray(np.datetime64("NaT", "ns"))
 
-    def compute_applied_metric(self, forecast: xr.Dataset, target: xr.Dataset):
+    def _compute_applied_metric(self, forecast: xr.Dataset, target: xr.Dataset):
         target_time = target.valid_time[0] + np.timedelta64(48, "h")
         forecast = (
             forecast.mean(["latitude", "longitude"])
             .groupby("init_time")
             .map(self.onset)
         )
-        return self.base_metrics[0]().compute_metric(
-            forecast, target_time, preserve_dims="init_time"
-        )
+        return {
+            "forecast": forecast,
+            "target": target_time,
+            "preserve_dims": self.preserve_dims,
+        }
 
 
 class DurationME(rs.AppliedMetric):
-    base_metrics = [ME]
+    base_metric = ME
+    preserve_dims: str = "init_time"
 
     def duration(self, forecast: xr.DataArray) -> xr.DataArray:
         if (forecast.valid_time.max() - forecast.valid_time.min()).values.astype(
@@ -261,7 +271,7 @@ class DurationME(rs.AppliedMetric):
         else:
             return xr.DataArray(np.timedelta64("NaT", "ns"))
 
-    def compute_applied_metric(self, forecast: xr.Dataset, target: xr.Dataset):
+    def _compute_applied_metric(self, forecast: xr.Dataset, target: xr.Dataset):
         # Dummy implementation for duration mean error
         target_duration = target.valid_time[-1] - target.valid_time[0]
         forecast = (
@@ -269,46 +279,48 @@ class DurationME(rs.AppliedMetric):
             .groupby("init_time")
             .map(self.duration)
         )
-        return self.base_metrics[0]().compute_metric(
-            forecast, target_duration, preserve_dims="init_time"
-        )
+        return {
+            "forecast": forecast,
+            "target": target_duration,
+            "preserve_dims": self.preserve_dims,
+        }
 
 
 class CSI(rs.AppliedMetric):
-    base_metrics = [BinaryContingencyTable]
+    base_metric = BinaryContingencyTable
 
     def __init__(self, variables: list[str | rs.DerivedVariable]):
         super().__init__(variables)
 
-    def compute_applied_metric(self, forecast: xr.Dataset, target: xr.Dataset):
+    def _compute_applied_metric(self, forecast: xr.Dataset, target: xr.Dataset):
         # Dummy implementation for Critical Success Index
         return self.base_metrics[0]().compute_metric(forecast, target)
 
 
 class LeadTimeDetection(rs.AppliedMetric):
-    base_metrics = [MAE]
+    base_metric = MAE
 
     def __init__(self, variables: list[str | rs.DerivedVariable]):
         super().__init__(variables)
 
-    def compute_applied_metric(self, forecast: xr.Dataset, target: xr.Dataset):
+    def _compute_applied_metric(self, forecast: xr.Dataset, target: xr.Dataset):
         # Dummy implementation for lead time detection
         return self.base_metrics[0]().compute_metric(forecast, target)
 
 
 class RegionalHitsMisses(rs.AppliedMetric):
-    base_metrics = [BinaryContingencyTable]
+    base_metric = BinaryContingencyTable
 
     def __init__(self, variables: list[str | rs.DerivedVariable]):
         super().__init__(variables)
 
-    def compute_applied_metric(self, forecast: xr.Dataset, target: xr.Dataset):
+    def _compute_applied_metric(self, forecast: xr.Dataset, target: xr.Dataset):
         # Dummy implementation for regional hits and misses
         return self.base_metrics[0]().compute_metric(forecast, target)
 
 
 class HitsMisses(rs.AppliedMetric):
-    base_metrics = [BinaryContingencyTable]
+    base_metric = BinaryContingencyTable
 
     def __init__(
         self, variables: list[str | rs.DerivedVariable], threshold: float = 0.5
@@ -316,7 +328,7 @@ class HitsMisses(rs.AppliedMetric):
         super().__init__(variables)
         self.threshold = threshold
 
-    def compute_applied_metric(self, forecast: xr.Dataset, target: xr.Dataset):
+    def _compute_applied_metric(self, forecast: xr.Dataset, target: xr.Dataset):
         # Dummy implementation for hits and misses
         return self.base_metrics[0]().compute_metric(forecast, target)
 
@@ -331,9 +343,19 @@ class ERA5(rs.TargetBase):
     using another method is required.
     """
 
-    source: str = ARCO_ERA5_FULL_URI
+    def __init__(
+        self,
+        source: str,
+        variables: list[str | rs.DerivedVariable],
+        variable_mapping: dict[str, str],
+        storage_options: Optional[dict] = None,
+        preprocess: Callable = rs._default_preprocess,
+    ):
+        super().__init__(
+            source, variables, variable_mapping, storage_options, preprocess
+        )
 
-    def open_data_from_source(
+    def _open_data_from_source(
         self,
         target_storage_options: Optional[dict] = None,
         chunks: dict = {"time": 48, "latitude": 721, "longitude": 1440},
@@ -360,7 +382,7 @@ class ERA5(rs.TargetBase):
 
         # check that the variables are in the target data
         target_variables = [
-            v for v in case_operator.target_variables if isinstance(v, str)
+            v for v in case_operator.target_config.variables if isinstance(v, str)
         ]
         if target_variables and any(
             var not in subset_time_data.data_vars for var in target_variables
@@ -395,12 +417,21 @@ class GHCN(rs.TargetBase):
     into subset_data_to_case.
     """
 
-    source: str = DEFAULT_GHCN_URI
+    def __init__(
+        self,
+        source: str,
+        variables: list[str | rs.DerivedVariable],
+        variable_mapping: dict[str, str],
+        storage_options: Optional[dict] = None,
+        preprocess: Callable = rs._default_preprocess,
+    ):
+        super().__init__(
+            source, variables, variable_mapping, storage_options, preprocess
+        )
 
-    def open_data_from_source(
+    def _open_data_from_source(
         self,
         target_storage_options: Optional[dict] = None,
-        chunks: dict = {"time": 48, "latitude": 721, "longitude": 1440},
     ) -> rs.IncomingDataInput:
         target_data: pl.LazyFrame = pl.scan_parquet(
             self.source, storage_options=target_storage_options
@@ -475,9 +506,19 @@ class LSR(rs.TargetBase):
     12 UTC to the next day at 12 UTC to match SPC methods.
     """
 
-    source: str = LSR_URI
+    def __init__(
+        self,
+        source: str,
+        variables: list[str | rs.DerivedVariable],
+        variable_mapping: dict[str, str],
+        storage_options: Optional[dict] = None,
+        preprocess: Callable = rs._default_preprocess,
+    ):
+        super().__init__(
+            source, variables, variable_mapping, storage_options, preprocess
+        )
 
-    def open_data_from_source(
+    def _open_data_from_source(
         self, target_storage_options: Optional[dict] = None
     ) -> rs.IncomingDataInput:
         # force LSR to use anon token to prevent google reauth issues for users
@@ -543,7 +584,17 @@ class IBTrACS(rs.TargetBase):
     Target class for IBTrACS data.
     """
 
-    source: str = IBTRACS_URI
+    def __init__(
+        self,
+        source: str,
+        variables: list[str | rs.DerivedVariable],
+        variable_mapping: dict[str, str],
+        storage_options: Optional[dict] = None,
+        preprocess: Callable = rs._default_preprocess,
+    ):
+        super().__init__(
+            source, variables, variable_mapping, storage_options, preprocess
+        )
 
     def open_data_from_source(
         self, target_storage_options: Optional[dict] = None
@@ -635,64 +686,55 @@ class IBTrACS(rs.TargetBase):
             raise ValueError(f"Data is not a polars LazyFrame: {type(data)}")
 
 
-class KerchunkForecast(rs.Forecast):
+class KerchunkForecast(rs.ForecastBase):
     """
     Forecast class for kerchunked forecast data.
     """
 
-    def __init__(self, forecast_source: str):
-        super().__init__(forecast_source)
-
-    def open_data_from_source(
+    def __init__(
         self,
-        forecast_storage_options: Optional[dict] = None,
+        source: str,
+        variables: list[str | rs.DerivedVariable],
+        variable_mapping: dict[str, str],
+        storage_options: Optional[dict] = None,
+        preprocess: Callable = rs._default_preprocess,
         chunks: dict = {"time": 48, "latitude": 721, "longitude": 1440},
-    ) -> rs.IncomingDataInput:
+    ):
+        super().__init__(
+            source, variables, variable_mapping, storage_options, preprocess
+        )
+        self.chunks = chunks
+
+    def _open_data_from_source(self) -> rs.IncomingDataInput:
         return rs.open_kerchunk_reference(
-            self.forecast_source,
-            storage_options=forecast_storage_options,
-            chunks=chunks,
+            self.source,
+            storage_options=self.storage_options,
+            chunks=self.chunks,
         )
 
 
-class ZarrForecast(rs.Forecast):
+class ZarrForecast(rs.ForecastBase):
     """
     Forecast class for zarr forecast data.
     """
 
-    def __init__(self, forecast_source: str):
-        super().__init__(forecast_source)
-
-    def open_data_from_source(
+    def __init__(
         self,
-        forecast_storage_options: Optional[dict] = None,
-        chunks: dict = {"valid_time": 48, "latitude": 721, "longitude": 1440},
-    ) -> rs.IncomingDataInput:
-        return xr.open_zarr(
-            self.forecast_source, storage_options=forecast_storage_options
+        source: str,
+        variables: list[str | rs.DerivedVariable],
+        variable_mapping: dict[str, str],
+        storage_options: Optional[dict] = None,
+        preprocess: Callable = rs._default_preprocess,
+        chunks: dict = {"time": 48, "latitude": 721, "longitude": 1440},
+    ):
+        super().__init__(
+            source, variables, variable_mapping, storage_options, preprocess
         )
+        self.chunks = chunks
 
-
-class HeatWave(rs.EventType):
-    event_type = "heat_wave"
-    metric_evaluation_objects: list[rs.MetricEvaluationObject]
-
-
-class SevereConvection(rs.EventType):
-    event_type = "severe_convection"
-    forecast_variables = [
-        CravenSignificantSevereParameter,
-    ]
-    target_variables = [
-        PracticallyPerfectHindcast,
-    ]
-    metrics = [CSI, LeadTimeDetection, RegionalHitsMisses, HitsMisses]
-    targets = [LSR]
-
-
-class AtmosphericRiver(rs.EventType):
-    event_type = "atmospheric_river"
-    forecast_variables = []
-    target_variables = []
-    metrics = [CSI, LeadTimeDetection]
-    targets = [ERA5]
+    def _open_data_from_source(self) -> rs.IncomingDataInput:
+        return xr.open_zarr(
+            self.source,
+            storage_options=self.storage_options,
+            chunks=self.chunks,
+        )

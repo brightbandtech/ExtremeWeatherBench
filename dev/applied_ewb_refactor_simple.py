@@ -15,11 +15,7 @@ logger = logging.getLogger(__name__)
 case_yaml = utils.read_event_yaml(
     "/home/taylor/ExtremeWeatherBench/src/extremeweatherbench/data/events.yaml"
 )
-test_yaml = {"cases": [case_yaml["cases"][0]]}
-
-incoming_forecast = crs.KerchunkForecast(
-    forecast_source="gs://extremeweatherbench/FOUR_v200_GFS.parq"
-)
+test_yaml = {"cases": case_yaml["cases"][:]}
 
 
 def _preprocess_bb_cira_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
@@ -41,9 +37,36 @@ def _preprocess_bb_cira_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
     return ds
 
 
+era5_target_config = rs.TargetConfig(
+    target=crs.ERA5,
+    source=crs.ARCO_ERA5_FULL_URI,
+    variables=["surface_air_temperature"],
+    variable_mapping={
+        "2m_temperature": "surface_air_temperature",
+        "time": "valid_time",
+    },
+    storage_options={"remote_options": {"anon": True}},
+)
+ghcn_target_config = rs.TargetConfig(
+    target=crs.GHCN,
+    source=crs.DEFAULT_GHCN_URI,
+    variables=["surface_air_temperature"],
+    variable_mapping={"t2": "surface_air_temperature"},
+    storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
+)
+cira_forecast_config = rs.ForecastConfig(
+    forecast=crs.KerchunkForecast,
+    source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
+    variables=["surface_air_temperature"],
+    variable_mapping={"t2": "surface_air_temperature"},
+    storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
+    preprocess=_preprocess_bb_cira_forecast_dataset,
+)
+
 # just one for now
 heatwave_metric_list = [
     rs.MetricEvaluationObject(
+        event_type="heat_wave",
         metric=[
             crs.MaximumMAE,
             crs.RMSE,
@@ -51,34 +74,29 @@ heatwave_metric_list = [
             crs.DurationME,
             crs.MaxMinMAE,
         ],
-        target=crs.ERA5,
-        forecast=incoming_forecast,
-        target_variables=["surface_air_temperature"],
-        forecast_variables=["surface_air_temperature"],
-        target_storage_options={"remote_options": {"anon": True}},
-        forecast_storage_options={
-            "remote_protocol": "s3",
-            "remote_options": {"anon": True},
-        },
-        target_variable_mapping={
-            "2m_temperature": "surface_air_temperature",
-            "time": "valid_time",
-        },
-        forecast_variable_mapping={"t2": "surface_air_temperature"},
-    )
+        target_config=era5_target_config,
+        forecast_config=cira_forecast_config,
+    ),
+    # rs.MetricEvaluationObject(
+    #     event_type="heat_wave",
+    #     metric=[
+    #         crs.MaximumMAE,
+    #         crs.RMSE,
+    #         crs.OnsetME,
+    #         crs.DurationME,
+    #         crs.MaxMinMAE,
+    #     ],
+    #     target_config=ghcn_target_config,
+    #     forecast_config=cira_forecast_config,
+    # ),
 ]
 
-test_heat_wave = crs.HeatWave(
-    case_metadata=test_yaml, metric_evaluation_objects=heatwave_metric_list
-)
-
 test_ewb = rs.ExtremeWeatherBench(
-    events=[test_heat_wave],
-    forecast=incoming_forecast,
+    cases=test_yaml,
+    metrics=heatwave_metric_list,
 )
 logger.info("Starting EWB run")
 outputs = test_ewb.run(
-    forecast_preprocess_function=_preprocess_bb_cira_forecast_dataset,
     # tolerance range is the number of hours before and after the timestamp a
     # validating occurrence is checked in the forecasts
     tolerance_range=48,

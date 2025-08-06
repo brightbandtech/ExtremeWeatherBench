@@ -44,6 +44,7 @@ def _preprocess_bb_cira_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
 # multiple events
 heatwave_metric_list = [
     rs.MetricEvaluationObject(
+        event_type="heat_wave",
         metric=[
             crs.MaximumMAE,
             crs.RMSE,
@@ -68,13 +69,22 @@ heatwave_metric_list = [
     )
 ]
 
-severe_metric_list = [
+freeze_metric_list = [
     rs.MetricEvaluationObject(
-        metric=[crs.CSI],
+        event_type="freeze",
+        metric=[crs.RMSE, crs.OnsetME],
         target=crs.LSR,
         forecast=incoming_forecast,
-        target_variables=[crs.PracticallyPerfectHindcast],
-        forecast_variables=[crs.CravenSignificantSevereParameter],
+        target_variables=[
+            "surface_air_temperature",
+            "surface_eastward_wind",
+            "surface_northward_wind",
+        ],
+        forecast_variables=[
+            "surface_air_temperature",
+            "surface_eastward_wind",
+            "surface_northward_wind",
+        ],
         target_storage_options={"remote_options": {"anon": True}},
         forecast_storage_options={
             "remote_protocol": "s3",
@@ -82,36 +92,20 @@ severe_metric_list = [
         },
         target_variable_mapping={
             "2m_temperature": "surface_air_temperature",
-            "temperature": "air_temperature",
-            "dewpoint": "dewpoint_temperature",
-            "u_component_of_wind": "eastward_wind",
-            "v_component_of_wind": "northward_wind",
             "10m_u_component_of_wind": "surface_eastward_wind",
             "10m_v_component_of_wind": "surface_northward_wind",
-            "time": "valid_time",
         },
         forecast_variable_mapping={
             "t2": "surface_air_temperature",
-            "t": "air_temperature",
-            "r": "relative_humidity",
-            "q": "specific_humidity",
-            "p": "pressure",
-            "z": "geopotential",
             "u10": "surface_eastward_wind",
             "v10": "surface_northward_wind",
-            "u": "eastward_wind",
-            "v": "northward_wind",
         },
     )
 ]
-test_heat_wave = crs.HeatWave(
-    case_metadata=test_yaml, metric_evaluation_objects=heatwave_metric_list
-)
-test_severe = crs.SevereConvection(
-    case_metadata=test_yaml, metric_evaluation_objects=severe_metric_list
-)
+
 test_ewb = rs.ExtremeWeatherBench(
-    events=[test_heat_wave, test_severe],
+    cases=test_yaml,
+    metrics=heatwave_metric_list + freeze_metric_list,
     forecast=incoming_forecast,
 )
 logger.info("Starting EWB run")
