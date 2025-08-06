@@ -8,6 +8,8 @@ import scores.categorical as cat
 import xarray as xr
 from scores.continuous import mae, mean_error, rmse
 
+from extremeweatherbench import utils
+
 #: Storage/access options for gridded target datasets.
 ARCO_ERA5_FULL_URI = (
     "gs://gcp-public-data-arco-era5/ar/full_37-1h-0p25deg-chunk-1.zarr-v3"
@@ -29,9 +31,8 @@ class PracticallyPerfectHindcast(rs.DerivedVariable):
     name = "practically_perfect_hindcast"
     input_variables = ["report_type"]
 
-    def build(self, data: xr.Dataset) -> xr.DataArray:
+    def derive_variable(self, data: xr.Dataset) -> xr.DataArray:
         """Process the practically perfect hindcast."""
-        self._check_data_for_variables(data)
         pph = rs.practically_perfect_hindcast(
             data[self.input_variables], report_type=["tor", "hail"]
         )
@@ -397,7 +398,9 @@ class GHCN(rs.TargetBase):
     source: str = DEFAULT_GHCN_URI
 
     def open_data_from_source(
-        self, target_storage_options: Optional[dict] = None
+        self,
+        target_storage_options: Optional[dict] = None,
+        chunks: dict = {"time": 48, "latitude": 721, "longitude": 1440},
     ) -> rs.IncomingDataInput:
         target_data: pl.LazyFrame = pl.scan_parquet(
             self.source, storage_options=target_storage_options
@@ -408,11 +411,11 @@ class GHCN(rs.TargetBase):
     def subset_data_to_case(
         self,
         target_data: rs.IncomingDataInput,
-        case: rs.CaseOperator,
+        case_operator: rs.CaseOperator,
     ) -> rs.IncomingDataInput:
         # Create filter expressions for LazyFrame
-        time_min = case.case.start_date - pd.Timedelta(days=2)
-        time_max = case.case.end_date + pd.Timedelta(days=2)
+        time_min = case_operator.case.start_date - pd.Timedelta(days=2)
+        time_max = case_operator.case.end_date + pd.Timedelta(days=2)
 
         if not isinstance(target_data, pl.LazyFrame):
             raise ValueError(f"Expected polars LazyFrame, got {type(target_data)}")
@@ -421,14 +424,16 @@ class GHCN(rs.TargetBase):
         subset_target_data = target_data.filter(
             (pl.col("time") >= time_min)
             & (pl.col("time") <= time_max)
-            & (pl.col("latitude") >= case.case.location.latitude_min)
-            & (pl.col("latitude") <= case.case.location.latitude_max)
-            & (pl.col("longitude") >= case.case.location.longitude_min)
-            & (pl.col("longitude") <= case.case.location.longitude_max)
+            & (pl.col("latitude") >= case_operator.case.location.latitude_min)
+            & (pl.col("latitude") <= case_operator.case.location.latitude_max)
+            & (pl.col("longitude") >= case_operator.case.location.longitude_min)
+            & (pl.col("longitude") <= case_operator.case.location.longitude_max)
         )
 
         # Add time, latitude, and longitude to the variables, polars doesn't do indexes
-        target_variables = [v for v in case.target_variables if isinstance(v, str)]
+        target_variables = [
+            v for v in case_operator.target_variables if isinstance(v, str)
+        ]
         if target_variables is None:
             all_variables = ["time", "latitude", "longitude"]
         else:
@@ -485,7 +490,7 @@ class LSR(rs.TargetBase):
     def subset_data_to_case(
         self,
         target_data: rs.IncomingDataInput,
-        case: rs.CaseOperator,
+        case_operator: rs.CaseOperator,
     ) -> rs.IncomingDataInput:
         if not isinstance(target_data, pd.DataFrame):
             raise ValueError(f"Expected pandas DataFrame, got {type(target_data)}")
@@ -496,17 +501,21 @@ class LSR(rs.TargetBase):
         target_data["time"] = pd.to_datetime(target_data["time"])
 
         filters = (
-            (target_data["time"] >= case.case.start_date)
-            & (target_data["time"] <= case.case.end_date)
-            & (target_data["lat"] >= case.case.location.latitude_min)
-            & (target_data["lat"] <= case.case.location.latitude_max)
+            (target_data["time"] >= case_operator.case.start_date)
+            & (target_data["time"] <= case_operator.case.end_date)
+            & (target_data["lat"] >= case_operator.case.location.latitude_min)
+            & (target_data["lat"] <= case_operator.case.location.latitude_max)
             & (
                 target_data["lon"]
-                >= rs.convert_longitude_to_180(case.case.location.longitude_min)
+                >= utils.convert_longitude_to_180(
+                    case_operator.case.location.longitude_min
+                )
             )
             & (
                 target_data["lon"]
-                <= rs.convert_longitude_to_180(case.case.location.longitude_max)
+                <= utils.convert_longitude_to_180(
+                    case_operator.case.location.longitude_max
+                )
             )
         )
 
@@ -548,17 +557,17 @@ class IBTrACS(rs.TargetBase):
     def subset_data_to_case(
         self,
         target_data: rs.IncomingDataInput,
-        case: rs.CaseOperator,
+        case_operator: rs.CaseOperator,
     ) -> rs.IncomingDataInput:
         # Create filter expressions for LazyFrame
-        year = case.case.start_date.year
+        year = case_operator.case.start_date.year
 
         if not isinstance(target_data, pl.LazyFrame):
             raise ValueError(f"Expected polars LazyFrame, got {type(target_data)}")
 
         # Apply filters using proper polars expressions
         subset_target_data = target_data.filter(
-            (pl.col("NAME") == case.case.title.upper())
+            (pl.col("NAME") == case_operator.case.title.upper())
         )
 
         all_variables = [
@@ -578,7 +587,7 @@ class IBTrACS(rs.TargetBase):
 
         # First filter by name to get the storm data
         subset_target_data = target_data.filter(
-            (pl.col("NAME") == case.case.title.upper())
+            (pl.col("NAME") == case_operator.case.title.upper())
         )
 
         # Create a subquery to find all storm numbers in the same season
@@ -593,12 +602,15 @@ class IBTrACS(rs.TargetBase):
         subset_target_data = target_data.join(
             matching_numbers, on="NUMBER", how="inner"
         ).filter(
-            (pl.col("NAME") == case.case.title.upper()) & (pl.col("SEASON") == season)
+            (pl.col("NAME") == case_operator.case.title.upper())
+            & (pl.col("SEASON") == season)
         )
 
         # check that the variables are in the target data
         schema_fields = [field for field in subset_target_data.collect_schema()]
-        target_variables = [v for v in case.target_variables if isinstance(v, str)]
+        target_variables = [
+            v for v in case_operator.target_variables if isinstance(v, str)
+        ]
         if target_variables and any(var not in schema_fields for var in all_variables):
             raise ValueError(f"Variables {all_variables} not found in target data")
 
