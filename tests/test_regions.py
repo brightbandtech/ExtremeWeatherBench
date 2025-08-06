@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import pytest
 import xarray as xr
-from shapely import Polygon
+from shapely import MultiPolygon, Polygon
 
 from extremeweatherbench import utils
 from extremeweatherbench.regions import (
@@ -115,12 +115,12 @@ class TestRegionToGeopandas:
         polygon = gdf.geometry.iloc[0]
         assert isinstance(polygon, Polygon)
 
-        # Check bounds (should be 40-50 lat, 235-245 lon after conversion to 0-360)
+        # Check bounds (should be 40-50 lat, -125 to -115 lon after conversion to -180 to 180)
         bounds = polygon.bounds  # (minx, miny, maxx, maxy)
         assert abs(bounds[1] - 40.0) < 0.001  # min lat
         assert abs(bounds[3] - 50.0) < 0.001  # max lat
-        assert abs(bounds[0] - 235.0) < 0.001  # min lon (converted to 0-360)
-        assert abs(bounds[2] - 245.0) < 0.001  # max lon (converted to 0-360)
+        assert abs(bounds[0] - (-125.0)) < 0.001  # min lon (converted to -180 to 180)
+        assert abs(bounds[2] - (-115.0)) < 0.001  # max lon (converted to -180 to 180)
 
     def test_centered_region_to_geopandas_tuple_box(self):
         """Test CenteredRegion.geopandas with tuple bounding box."""
@@ -134,12 +134,12 @@ class TestRegionToGeopandas:
         assert isinstance(gdf, gpd.GeoDataFrame)
         assert len(gdf) == 1
 
-        # Check bounds (should be 42.5-47.5 lat, 235-245 lon after conversion to 0-360)
+        # Check bounds (should be 42.5-47.5 lat, -125 to -115 lon after conversion to -180 to 180)
         bounds = gdf.geometry.iloc[0].bounds
         assert abs(bounds[1] - 42.5) < 0.001  # min lat
         assert abs(bounds[3] - 47.5) < 0.001  # max lat
-        assert abs(bounds[0] - 235.0) < 0.001  # min lon (converted to 0-360)
-        assert abs(bounds[2] - 245.0) < 0.001  # max lon (converted to 0-360)
+        assert abs(bounds[0] - (-125.0)) < 0.001  # min lon (converted to -180 to 180)
+        assert abs(bounds[2] - (-115.0)) < 0.001  # max lon (converted to -180 to 180)
 
     def test_bounding_box_region_to_geopandas(self):
         """Test BoundingBoxRegion.geopandas."""
@@ -160,12 +160,12 @@ class TestRegionToGeopandas:
         polygon = gdf.geometry.iloc[0]
         assert isinstance(polygon, Polygon)
 
-        # Check bounds (longitude should be converted to 0-360)
+        # Check bounds (longitude should be converted to -180 to 180)
         bounds = polygon.bounds
         assert abs(bounds[1] - 40.0) < 0.001  # min lat
         assert abs(bounds[3] - 50.0) < 0.001  # max lat
-        assert abs(bounds[0] - 235.0) < 0.001  # min lon (converted to 0-360)
-        assert abs(bounds[2] - 245.0) < 0.001  # max lon (converted to 0-360)
+        assert abs(bounds[0] - (-125.0)) < 0.001  # min lon (converted to -180 to 180)
+        assert abs(bounds[2] - (-115.0)) < 0.001  # max lon (converted to -180 to 180)
 
     def test_shapefile_region_to_geopandas(self):
         """Test ShapefileRegion.geopandas."""
@@ -212,15 +212,15 @@ class TestRegionToGeopandas:
         assert isinstance(small_gdf, gpd.GeoDataFrame)
 
     def test_region_to_geopandas_longitude_conversion(self):
-        """Test that longitudes are properly converted to 0-360 range."""
+        """Test that longitudes are properly converted to -180 to 180 range."""
         # Test with negative longitudes
         region_neg = CenteredRegion.create_region(
             latitude=45.0, longitude=-120.0, bounding_box_degrees=10.0
         )
         gdf_neg = region_neg.geopandas
         bounds_neg = gdf_neg.geometry.iloc[0].bounds
-        assert bounds_neg[0] >= 0  # min lon should be >= 0
-        assert bounds_neg[2] >= 0  # max lon should be >= 0
+        assert bounds_neg[0] >= -180  # min lon should be >= -180
+        assert bounds_neg[2] <= 180  # max lon should be <= 180
 
         # Test with positive longitudes
         region_pos = CenteredRegion.create_region(
@@ -590,6 +590,160 @@ class TestLongitudeConversion:
         # Check that longitude is now in -180 to 180 range
         assert converted.lon.min() >= -180
         assert converted.lon.max() < 180
+
+
+class TestCreateGeopandasFromBounds:
+    """Test the _create_geopandas_from_bounds helper function."""
+
+    def test_normal_case_no_antimeridian_crossing(self):
+        """Test normal case where region doesn't cross antimeridian."""
+        from extremeweatherbench.regions import _create_geopandas_from_bounds
+
+        gdf = _create_geopandas_from_bounds(
+            longitude_min=100.0,
+            longitude_max=120.0,
+            latitude_min=40.0,
+            latitude_max=50.0,
+        )
+
+        assert isinstance(gdf, gpd.GeoDataFrame)
+        assert len(gdf) == 1
+
+        polygon = gdf.geometry.iloc[0]
+        assert isinstance(polygon, Polygon)
+
+        # Check bounds - should be converted to -180 to 180 range
+        bounds = polygon.bounds
+        assert abs(bounds[0] - 100.0) < 0.001  # min lon
+        assert abs(bounds[2] - 120.0) < 0.001  # max lon
+        assert abs(bounds[1] - 40.0) < 0.001  # min lat
+        assert abs(bounds[3] - 50.0) < 0.001  # max lat
+
+    def test_antimeridian_crossing_case(self):
+        """Test case where region crosses the antimeridian."""
+        from extremeweatherbench.regions import _create_geopandas_from_bounds
+
+        gdf = _create_geopandas_from_bounds(
+            longitude_min=170.0,  # This will become -10 after conversion
+            longitude_max=190.0,  # This will become 10 after conversion
+            latitude_min=40.0,
+            latitude_max=50.0,
+        )
+
+        assert isinstance(gdf, gpd.GeoDataFrame)
+        assert len(gdf) == 1
+
+        geometry = gdf.geometry.iloc[0]
+        # Should be a MultiPolygon for antimeridian crossing
+        assert isinstance(geometry, MultiPolygon)
+
+        # Check that we have two polygons
+        assert len(geometry.geoms) == 2
+
+    def test_negative_longitude_input(self):
+        """Test with negative longitude inputs."""
+        from extremeweatherbench.regions import _create_geopandas_from_bounds
+
+        gdf = _create_geopandas_from_bounds(
+            longitude_min=-120.0,
+            longitude_max=-100.0,
+            latitude_min=40.0,
+            latitude_max=50.0,
+        )
+
+        assert isinstance(gdf, gpd.GeoDataFrame)
+        assert len(gdf) == 1
+
+        polygon = gdf.geometry.iloc[0]
+        assert isinstance(polygon, Polygon)
+
+        # Check bounds - should be converted to -180 to 180 range
+        bounds = polygon.bounds
+        assert abs(bounds[0] - (-120.0)) < 0.001  # min lon
+        assert abs(bounds[2] - (-100.0)) < 0.001  # max lon
+
+    def test_longitude_conversion_to_180_range(self):
+        """Test that longitudes are properly converted to -180 to 180 range."""
+        from extremeweatherbench.regions import _create_geopandas_from_bounds
+
+        # Test with longitudes that need conversion
+        gdf = _create_geopandas_from_bounds(
+            longitude_min=200.0,  # Should become -160
+            longitude_max=220.0,  # Should become -140
+            latitude_min=40.0,
+            latitude_max=50.0,
+        )
+
+        bounds = gdf.geometry.iloc[0].bounds
+        assert abs(bounds[0] - (-160.0)) < 0.001  # min lon converted
+        assert abs(bounds[2] - (-140.0)) < 0.001  # max lon converted
+
+    def test_edge_case_180_degree_longitude(self):
+        """Test edge case with 180 degree longitude."""
+        from extremeweatherbench.regions import _create_geopandas_from_bounds
+
+        gdf = _create_geopandas_from_bounds(
+            longitude_min=175.0,
+            longitude_max=185.0,  # This crosses 180
+            latitude_min=40.0,
+            latitude_max=50.0,
+        )
+
+        geometry = gdf.geometry.iloc[0]
+        # Should be a MultiPolygon
+        assert isinstance(geometry, MultiPolygon)
+        assert len(geometry.geoms) == 2
+
+    def test_edge_case_0_degree_longitude(self):
+        """Test edge case with 0 degree longitude."""
+        from extremeweatherbench.regions import _create_geopandas_from_bounds
+
+        gdf = _create_geopandas_from_bounds(
+            longitude_min=-5.0,
+            longitude_max=5.0,  # This crosses 0
+            latitude_min=40.0,
+            latitude_max=50.0,
+        )
+
+        geometry = gdf.geometry.iloc[0]
+        # Should be a single Polygon (no antimeridian crossing)
+        assert isinstance(geometry, Polygon)
+
+    def test_polar_regions(self):
+        """Test with regions near the poles."""
+        from extremeweatherbench.regions import _create_geopandas_from_bounds
+
+        gdf = _create_geopandas_from_bounds(
+            longitude_min=0.0,
+            longitude_max=360.0,  # Full circle
+            latitude_min=80.0,
+            latitude_max=90.0,
+        )
+
+        assert isinstance(gdf, gpd.GeoDataFrame)
+        assert len(gdf) == 1
+
+        geometry = gdf.geometry.iloc[0]
+        # After conversion to -180 to 180, 360 becomes 0, so no antimeridian crossing
+        assert isinstance(geometry, Polygon)
+
+    def test_small_region(self):
+        """Test with a very small region."""
+        from extremeweatherbench.regions import _create_geopandas_from_bounds
+
+        gdf = _create_geopandas_from_bounds(
+            longitude_min=45.0, longitude_max=45.1, latitude_min=40.0, latitude_max=40.1
+        )
+
+        assert isinstance(gdf, gpd.GeoDataFrame)
+        assert len(gdf) == 1
+
+        polygon = gdf.geometry.iloc[0]
+        assert isinstance(polygon, Polygon)
+
+        bounds = polygon.bounds
+        assert abs(bounds[0] - 45.0) < 0.001
+        assert abs(bounds[2] - 45.1) < 0.001
 
 
 class TestRegionIntegration:
