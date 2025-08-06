@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import dataclasses
 import datetime
+import inspect
 import itertools
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Callable, List, Optional, TypeAlias, Union
+from pathlib import Path
+from typing import Any, Callable, List, Literal, Optional, TypeAlias, Union
 
 import dacite
 import numpy as np
@@ -13,6 +15,7 @@ import pandas as pd
 import polars as pl
 import xarray as xr
 from tqdm.auto import tqdm
+from tqdm.contrib.logging import logging_redirect_tqdm
 
 from extremeweatherbench import regions, utils
 
@@ -24,6 +27,40 @@ logger = logging.getLogger(__name__)
 # from extremeweatherbench.regions import Region
 
 IncomingDataInput: TypeAlias = xr.Dataset | xr.DataArray | pl.LazyFrame | pd.DataFrame
+
+
+def _filter_kwargs_for_callable(kwargs: dict, callable_obj: Callable) -> dict:
+    """Filter kwargs to only include arguments that the callable can accept.
+
+    This method uses introspection to determine which arguments the callable
+    can accept and filters kwargs accordingly.
+
+    Args:
+        kwargs: The full kwargs dictionary to filter
+        callable_obj: The callable (function, method, etc.) to check against
+
+    Returns:
+        A filtered dictionary containing only the kwargs that the callable can accept
+    """
+    # Get the signature of the callable
+    sig = inspect.signature(callable_obj)
+
+    # Get the parameter names that the callable accepts
+    # Handle different types of callables (functions, methods, etc.)
+    if hasattr(callable_obj, "__self__") and callable_obj.__self__ is not None:
+        # This is a bound method, skip 'self'
+        accepted_params = list(sig.parameters.keys())[1:]
+    else:
+        # This is a function or unbound method, include all parameters
+        accepted_params = list(sig.parameters.keys())
+
+    # Filter kwargs to only include accepted parameters
+    filtered_kwargs = {}
+    for param_name in accepted_params:
+        if param_name in kwargs:
+            filtered_kwargs[param_name] = kwargs[param_name]
+
+    return filtered_kwargs
 
 
 class Forecast(ABC):
@@ -165,7 +202,13 @@ class BaseMetric(ABC):
         return self.__class__.__name__
 
     @abstractmethod
-    def compute(self, forecast: xr.Dataset, observation: xr.Dataset):
+    def compute_metric(
+        self,
+        forecast: xr.Dataset,
+        observation: xr.Dataset,
+        # default to preserving lead_time in EWB metrics
+        preserve_dims: str = "lead_time",
+    ):
         pass
 
 
@@ -178,7 +221,7 @@ class AppliedMetric(ABC):
 
     Attributes:
         base_metrics: A list of BaseMetrics to compute.
-        compute_metric: A required method to compute the metric.
+        compute_applied_metric: A required method to compute the metric.
     """
 
     @property
@@ -190,14 +233,7 @@ class AppliedMetric(ABC):
     def base_metrics(self) -> list[BaseMetric]:
         pass
 
-    def compute_metric(
-        self,
-        forecast: xr.Dataset,
-        observation: xr.Dataset,
-        forecast_variables: list[str],
-        observation_variables: list[str],
-        **kwargs,
-    ):
+    def compute_applied_metric(self, forecast: xr.DataArray, observation: xr.DataArray):
         self.base_metrics().compute(forecast, observation)
 
 
@@ -273,6 +309,10 @@ class TargetBase(ABC):
     """
 
     source: str
+
+    @property
+    def name(self) -> str:
+        return self.__class__.__name__
 
     @abstractmethod
     def open_data_from_source(
@@ -397,9 +437,27 @@ class TargetBase(ABC):
 
 @dataclasses.dataclass
 class MetricEvaluationObject:
-    """A class to store the evaluation object for a metric."""
+    """A class to store the evaluation object for a metric.
 
-    metric: BaseMetric
+    A MetricEvaluationObject is a metric evaluation object for all cases in an event.
+    The evaluation is a set of all metrics, target variables, and forecast variables.
+
+    Multiple MEO's can be used to evaluate a single event type. This is useful for
+    evaluating distinct Targets or metrics with unique variables to evaluate.
+
+    Attributes:
+        metric: A list of BaseMetric objects.
+        target: A TargetBase object.
+        forecast: A Forecast object.
+        target_variables: A list of target variables.
+        forecast_variables: A list of forecast variables.
+        target_storage_options: A dictionary of target storage options.
+        forecast_storage_options: A dictionary of forecast storage options.
+        target_variable_mapping: A dictionary of target variable mappings in the format {incoming_name: ewb_name}.
+        forecast_variable_mapping: A dictionary of forecast variable mappings in the format {incoming_name: ewb_name}.
+    """
+
+    metric: list[BaseMetric]
     target: TargetBase
     forecast: Forecast
     target_variables: list[str | DerivedVariable]
@@ -714,26 +772,6 @@ def _maybe_convert_dataset_lead_time_to_int(dataset: xr.Dataset) -> xr.Dataset:
         dataset = dataset.rename({"time": "lead_time"})
     return dataset
 
-    # def _build_forecast(forecast_dir: str, case_operator: CaseOperator, **kwargs):
-    forecast_ds = open_and_preprocess_forecast_dataset(
-        forecast_dir,
-        forecast_variables=case_operator.forecast_variables,
-        forecast_variable_mapping=kwargs.get("forecast_variable_mapping", {}),
-        forecast_storage_options=kwargs.get(
-            "forecast_storage_options",
-            {"remote_protocol": "s3", "remote_options": {"anon": True}},
-        ),
-        forecast_chunks=kwargs.get(
-            "forecast_chunks", {"time": 48, "latitude": 721, "longitude": 1440}
-        ),
-    )
-    time_indices = utils.derive_indices_from_init_time_and_lead_time(
-        forecast_ds, case_operator.case.start_date, case_operator.case.end_date
-    )
-    forecast_ds_time_subset = forecast_ds.isel(init_time=np.unique(time_indices))
-    forecast_ds = case_operator.case.location.mask(forecast_ds_time_subset, drop=True)
-    return forecast_ds
-
 
 class ExtremeWeatherBench:
     def __init__(
@@ -753,27 +791,131 @@ class ExtremeWeatherBench:
 
     def run(
         self,
-        cache_dir: Optional[str] = None,
+        cache_dir: Optional[str | Path] = None,
         **kwargs,
-    ):
+    ) -> pd.DataFrame:
         """Runs the workflow in the order of the event operators and cases inside the event operators."""
+        self.cache_dir = cache_dir
+
+        # instantiate the cache directory if caching and build it if it does not exist
+        if self.cache_dir:
+            if isinstance(self.cache_dir, str):
+                self.cache_dir = Path(self.cache_dir)
+            if not self.cache_dir.exists():
+                self.cache_dir.mkdir(parents=True, exist_ok=True)
+
+        # build the case operators
         for event in self.events:
             case_operators = event.build_case_operators()
         logger.info("created case operators")
-        # TODO: set up a method to store the opened targets and forecasts to avoid reloading each case operator
 
-        for case_operator in tqdm(case_operators):
-            target_ds, forecast_ds = self.build_datasets(case_operator, **kwargs)
-            logger.info("datasets built")
-            case_operator.metric().compute_metric(forecast_ds, target_ds)
+        # TODO: set up a method to store the opened targets and forecasts to avoid reloading each case operator
+        # during run
+        run_results = []
+        with logging_redirect_tqdm():
+            for case_operator in tqdm(case_operators):
+                run_results.append(self._compute_case_operator(case_operator, **kwargs))
+
+                # store the results of each case operator if caching
+                if self.cache_dir:
+                    pd.concat(run_results).to_pickle(
+                        self.cache_dir / "case_results.pkl"
+                    )
+        return pd.concat(run_results, ignore_index=True)
+
+    def _compute_case_operator(self, case_operator: CaseOperator, **kwargs):
+        target_ds, forecast_ds = self.build_datasets(case_operator, **kwargs)
+
+        # align the target and forecast datasets to ensure they have the same valid_time dimension
+        target_ds, forecast_ds = xr.align(target_ds, forecast_ds)
+
+        # compute and cache the datasets if requested
+        if kwargs.get("pre_compute", False):
+            target_ds, forecast_ds = self._compute_and_maybe_cache(
+                target_ds, forecast_ds
+            )
+
+        logger.info(f"datasets built for case {case_operator.case.case_id_number}")
+        results = []
+        for target_variable, forecast_variable, metric in itertools.product(
+            case_operator.target_variables,
+            case_operator.forecast_variables,
+            case_operator.metric,
+        ):
+            results.append(
+                self._evaluate_metric_and_return_df(
+                    target_ds,
+                    forecast_ds,
+                    target_variable,
+                    forecast_variable,
+                    metric,
+                    case_operator,
+                    **kwargs,
+                )
+            )
+
+            # cache the results of each metric if caching
+            if self.cache_dir:
+                results.to_pickle(self.cache_dir / "results.pkl")
+
+        return pd.concat(results, ignore_index=True)
+
+    def _compute_and_maybe_cache(self, *datasets: xr.Dataset):
+        """Compute and cache the datasets if caching."""
+        logger.info("computing datasets")
+        computed_datasets = (dataset.compute() for dataset in datasets)
+        if self.cache_dir:
+            raise NotImplementedError("Caching is not implemented yet")
+            # (computed_dataset.to_netcdf(self.cache_dir) for computed_dataset in computed_datasets)
+        return computed_datasets
+
+    def _evaluate_metric_and_return_df(
+        self,
+        target_ds: xr.Dataset,
+        forecast_ds: xr.Dataset,
+        target_variable: str,
+        forecast_variable: str,
+        metric: BaseMetric,
+        case_operator: CaseOperator,
+        **kwargs,
+    ):
+        metric = metric()
+        logger.info(f"computing metric {metric.name}")
+        if isinstance(metric, AppliedMetric):
+            metric_result = metric.compute_applied_metric(
+                forecast_ds[forecast_variable],
+                target_ds[target_variable],
+                **_filter_kwargs_for_callable(kwargs, metric.compute_applied_metric),
+            )
+        else:
+            metric_result = metric.compute_metric(
+                forecast_ds[forecast_variable],
+                target_ds[target_variable],
+                **_filter_kwargs_for_callable(kwargs, metric.compute_metric),
+            )
+
+        # Convert to DataFrame and add metadata
+        df = metric_result.to_dataframe().reset_index()
+        df["target_variable"] = target_variable
+        df["metric"] = metric.name
+        df["target_source"] = case_operator.target().name
+        df["case_id_number"] = case_operator.case.case_id_number
+        df["event_type"] = case_operator.case.event_type
+        return df
 
     def build_datasets(self, case_operator: CaseOperator, **kwargs):
+        """Build the target and forecast datasets for a case operator.
+
+        This method will process through all stages of the pipeline for the target and forecast datasets,
+        including preprocessing, variable renaming, and subsetting.
+        """
         logger.info("running target pipeline")
         target_ds = case_operator.target().run_pipeline(
             case_operator=case_operator,
             target_storage_options=case_operator.target_storage_options,
             target_variable_mapping=case_operator.target_variable_mapping,
         )
+
         logger.info("running forecast pipeline")
         forecast_ds = case_operator.forecast.run_pipeline(
             case_operator=case_operator,
@@ -826,3 +968,26 @@ def align_target_and_forecast_time_dimensions(
     trimmed_valid_time = valid_time.where(valid_time.isin(target_ds.time.values))
 
     return trimmed_valid_time
+
+
+def min_if_all_timesteps_present(
+    x, num_timesteps: int, da_type: Literal["forecast", "target"] = "forecast"
+) -> xr.DataArray:
+    """Return the minimum value of a DataArray if all timesteps of a day are present.
+
+    Args:
+        da: The input DataArray.
+
+    Returns:
+        The minimum value of the DataArray if all timesteps are present, otherwise the original DataArray.
+    """
+    if da_type == "forecast":
+        if len(x.valid_time) == num_timesteps:
+            return x.min("valid_time")
+        else:
+            return xr.DataArray(np.nan)
+    elif da_type == "target":
+        if len(x.values) == num_timesteps:
+            return x.min()
+        else:
+            return xr.DataArray(np.nan)
