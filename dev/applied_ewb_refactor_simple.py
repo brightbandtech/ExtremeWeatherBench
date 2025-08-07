@@ -3,7 +3,7 @@ import logging
 import numpy as np
 import xarray as xr
 
-from extremeweatherbench import case, config, evaluate, inputs, metrics, utils
+from extremeweatherbench import config, evaluate, inputs, metrics, utils
 
 logging.getLogger("urllib3.connectionpool").setLevel(logging.CRITICAL)
 logging.getLogger("botocore.httpchecksum").setLevel(logging.CRITICAL)
