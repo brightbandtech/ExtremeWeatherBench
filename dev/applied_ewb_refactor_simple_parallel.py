@@ -1,25 +1,52 @@
 import logging
 import multiprocessing
 import os
+from logging.handlers import QueueHandler, QueueListener
+from multiprocessing import Manager
+from random import random
+from time import sleep
 
 import joblib
 import numpy as np
 import xarray as xr
-from dask.distributed import Client, LocalCluster
+from joblib import Parallel, delayed
 from tqdm.auto import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 
 from extremeweatherbench import config, evaluate, inputs, metrics, utils
 
-# replace with whichever cluster class you're using
-# https://docs.dask.org/en/stable/deploying.html#distributed-computing
-cluster = LocalCluster()
-# connect client to your cluster
-client = Client(cluster)
+log = logging.getLogger(__name__)
 
-logging.getLogger("urllib3.connectionpool").setLevel(logging.CRITICAL)
-logging.getLogger("botocore.httpchecksum").setLevel(logging.CRITICAL)
-logging.basicConfig(level=logging.INFO)
+
+def configure_root_logger():
+    root = logging.getLogger()
+    console_handler = logging.StreamHandler()
+    file_handler = logging.FileHandler("joblib.log")
+    formatter = logging.Formatter(
+        "%(asctime)s %(processName)-10s %(name)s %(levelname)-8s %(message)s"
+    )
+    file_handler.setFormatter(formatter)
+    console_handler.setFormatter(formatter)
+    root.addHandler(file_handler)
+    root.addHandler(console_handler)
+    root.setLevel(logging.DEBUG)
+    return root
+
+
+def configure_worker_logger(log_name="Default", log_level="DEBUG"):
+    def decorator(func: callable):
+        def wrapper(*args, **kwargs):
+            worker_logger = logging.getLogger(log_name)
+            if not worker_logger.hasHandlers():
+                h = QueueHandler(kwargs["log_queue"])
+                worker_logger.addHandler(h)
+            worker_logger.setLevel(log_level)
+            kwargs["log_queue"] = worker_logger
+            return func(*args, **kwargs)
+
+        return wrapper
+
+
 logger = logging.getLogger(__name__)
 
 case_yaml = utils.read_event_yaml(
@@ -118,18 +145,10 @@ os.environ["MKL_NUM_THREADS"] = str(n_threads_per_process)
 os.environ["OPENBLAS_NUM_THREADS"] = str(n_threads_per_process)
 os.environ["NUMEXPR_NUM_THREADS"] = str(n_threads_per_process)
 
-# joblib_config = parallel_config(n_jobs=n_processes, prefer="processes")
+joblib_config = joblib.parallel_config(n_jobs=n_processes, prefer="processes")
 # Use joblib to parallelize with n processes, each with 10 threads
-# with logging_redirect_tqdm():
-#     joblib.Parallel(n_jobs=n_processes, prefer="processes")(
-#         joblib.delayed(test_ewb.compute_case_operator)(
-#             case_op, tolerance_range=48, pre_compute=True
-#         )
-#         for case_op in tqdm(case_operators)
-#     )
-
-with joblib.parallel_config(backend="dask"):
-    joblib.Parallel(verbose=100)(
+with logging_redirect_tqdm():
+    joblib.Parallel(n_jobs=n_processes, prefer="processes")(
         joblib.delayed(test_ewb.compute_case_operator)(
             case_op, tolerance_range=48, pre_compute=True
         )
