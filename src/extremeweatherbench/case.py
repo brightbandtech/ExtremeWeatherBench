@@ -107,3 +107,23 @@ def build_case_operators(
                 )
             )
     return case_operators
+
+
+def load_individual_cases(cases: dict[str, list]):
+    """Load IndividualCase metadata from a dictionary.
+
+    Args:
+        cases: A dictionary of cases based on the IndividualCase dataclass.
+
+    Returns:
+        A list of IndividualCase objects.
+    """
+    case_metadata_collection = dacite.from_dict(
+        data_class=IndividualCaseCollection,
+        data=cases,
+        config=dacite.Config(
+            type_hooks={regions.Region: regions.map_to_create_region},
+        ),
+    )
+
+    return case_metadata_collection
