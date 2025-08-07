@@ -558,11 +558,7 @@ def derive_indices_from_init_time_and_lead_time(
     )
     valid_time_indices = np.asarray(valid_time_mask).nonzero()
 
-    # The first index will subset init_time based on the first valid_time_reshaped line above
-    # we don't need to subset lead_time but it might be useful in the future
-    init_time_subset_indices = valid_time_indices[0]
-
-    return init_time_subset_indices
+    return valid_time_indices
 
 
 def maybe_convert_to_path(value: str | Path) -> str | Path:
