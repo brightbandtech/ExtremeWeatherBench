@@ -3,14 +3,16 @@ other specialized package.
 """
 
 import datetime
+import inspect
 import itertools
 import logging
 from importlib import resources
 from pathlib import Path
-from typing import List, Tuple, Union
+from typing import Callable, List, Optional, Tuple, TypeAlias, Union
 
 import numpy as np
 import pandas as pd  # type: ignore[import-untyped]
+import polars as pl
 import regionmask
 import xarray as xr
 import yaml
@@ -18,7 +20,10 @@ import yaml
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
+IncomingDataInput: TypeAlias = xr.Dataset | xr.DataArray | pl.LazyFrame | pd.DataFrame
 
+# Type alias for use in type hints
+PathOrStr = str | Path
 #: Maps the ARCO ERA5 to CF conventions.
 ERA5_MAPPING = {
     "surface_air_temperature": "2m_temperature",
@@ -578,10 +583,176 @@ def maybe_convert_to_path(value: str | Path) -> str | Path:
     return value
 
 
-# Type alias for use in type hints
-PathOrStr = str | Path
-
-
-def _default_preprocess(ds: xr.Dataset) -> xr.Dataset:
+def _default_preprocess(input_data: IncomingDataInput) -> IncomingDataInput:
     """Default forecast preprocess function that does nothing."""
-    return ds
+    return input_data
+
+
+def _filter_kwargs_for_callable(kwargs: dict, callable_obj: Callable) -> dict:
+    """Filter kwargs to only include arguments that the callable can accept.
+
+    This method uses introspection to determine which arguments the callable
+    can accept and filters kwargs accordingly.
+
+    Args:
+        kwargs: The full kwargs dictionary to filter
+        callable_obj: The callable (function, method, etc.) to check against
+
+    Returns:
+        A filtered dictionary containing only the kwargs that the callable can accept
+    """
+    # Get the signature of the callable
+    sig = inspect.signature(callable_obj)
+
+    # Get the parameter names that the callable accepts
+    # Handle different types of callables (functions, methods, etc.)
+    if hasattr(callable_obj, "__self__") and callable_obj.__self__ is not None:
+        # This is a bound method, skip 'self'
+        accepted_params = list(sig.parameters.keys())[1:]
+    else:
+        # This is a function or unbound method, include all parameters
+        accepted_params = list(sig.parameters.keys())
+
+    # Filter kwargs to only include accepted parameters
+    filtered_kwargs = {}
+    for param_name in accepted_params:
+        if param_name in kwargs:
+            filtered_kwargs[param_name] = kwargs[param_name]
+
+    return filtered_kwargs
+
+
+def min_if_all_timesteps_present(
+    da: xr.DataArray,
+    num_timesteps: int,
+) -> xr.DataArray:
+    """Return the minimum value of a DataArray if all timesteps of a day are present.
+
+    Args:
+        da: The input DataArray.
+
+    Returns:
+        The minimum value of the DataArray if all timesteps are present, otherwise the original DataArray.
+    """
+    if len(da.values) == num_timesteps:
+        return da.min()
+    else:
+        return xr.DataArray(np.nan)
+
+
+def min_if_all_timesteps_present_forecast(
+    da: xr.DataArray, num_timesteps
+) -> xr.DataArray:
+    """Return the minimum value of a DataArray if all timesteps of a day are present given a dataset with lead_time and
+    valid_time dimensions.
+
+    Args:
+        da: The input DataArray.
+
+    Returns:
+        The minimum value of the DataArray if all timesteps are present, otherwise the original DataArray.
+    """
+    if len(da.valid_time) == num_timesteps:
+        return da.min("valid_time")
+    else:
+        # Return an array with the same lead_time dimension but filled with NaNs
+        return xr.DataArray(
+            np.full(len(da.lead_time), np.nan),
+            coords={"lead_time": da.lead_time},
+            dims=["lead_time"],
+        )
+
+
+def determine_timesteps_per_day_resolution(
+    ds: xr.Dataset | xr.DataArray,
+) -> int:
+    """Determine the number of timesteps per day for a dataset.
+
+    Args:
+        ds: The input dataset with a valid_time dimension or coordinate.
+
+    Returns:
+        The number of timesteps per day as an integer.
+    """
+    num_timesteps = 24 // np.unique(np.diff(ds.valid_time)).astype(
+        "timedelta64[h]"
+    ).astype(int)
+    if len(num_timesteps) > 1:
+        raise ValueError(
+            "The number of timesteps per day is not consistent in the dataset."
+        )
+    return num_timesteps[0]
+
+
+def maybe_map_variable_names(
+    data: IncomingDataInput, variable_mapping: Optional[dict] = None
+) -> IncomingDataInput:
+    """Map the variable names to the target data, if required.
+
+    Args:
+        data: The incoming data in the form of an object that has a rename method for data variables/columns.
+        variable_mapping: The mapping of variable names to the incoming data, with the format {incoming_name: new_name}.
+
+    Returns:
+        A dataset with mapped variable names, if any exist, else the original data.
+    """
+    if variable_mapping is None:
+        return data
+    # Filter the mapping to only include variables that exist in the dataset
+    if isinstance(data, (xr.Dataset, xr.DataArray)):
+        subset_variable_mapping = {
+            v: k for v, k in variable_mapping.items() if v in data.keys()
+        }
+    elif isinstance(data, (pl.LazyFrame, pl.DataFrame, pd.DataFrame)):
+        subset_variable_mapping = {
+            v: k for v, k in variable_mapping.items() if v in data.columns
+        }
+    else:
+        raise ValueError(
+            f"Data is not a dataset, data array, lazy frame, dataframe, or pandas dataframe: {type(data)}"
+        )
+    if subset_variable_mapping:
+        data = data.rename(subset_variable_mapping)
+    return data
+
+
+def align_target_and_forecast_time_dimensions(
+    target_ds: xr.Dataset, forecast_ds: xr.Dataset
+) -> tuple[xr.Dataset, xr.Dataset]:
+    """Align the time dimensions of the target and forecast datasets.
+
+    Args:
+        target_ds: The target dataset.
+        forecast_ds: The forecast dataset.
+
+    Returns:
+        The aligned target and forecast datasets.
+    """
+    valid_time = xr.DataArray(
+        forecast_ds.init_time, coords={"init_time": forecast_ds.init_time}
+    ) + xr.DataArray(forecast_ds.lead_time, coords={"lead_time": forecast_ds.lead_time})
+    trimmed_valid_time = valid_time.where(valid_time.isin(target_ds.time.values))
+
+    return trimmed_valid_time
+
+
+def lead_time_init_time_to_valid_time(forecast: xr.Dataset) -> xr.DataArray:
+    """Convert init_time and lead_time to valid_time.
+
+    Args:
+        forecast: The forecast dataset.
+
+    Returns:
+        The forecast dataset with valid_time dimension.
+    """
+    if "lead_time" not in forecast.dims or "init_time" not in forecast.dims:
+        raise ValueError(
+            "lead_time and init_time must be dimensions of the forecast dataset"
+        )
+
+    lead_time_grid, init_time_grid = np.meshgrid(forecast.lead_time, forecast.init_time)
+    valid_times = (
+        init_time_grid.flatten()
+        + pd.to_timedelta(lead_time_grid.flatten(), unit="h").to_numpy()
+    )
+    return valid_times

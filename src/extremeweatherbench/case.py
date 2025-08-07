@@ -3,15 +3,16 @@ Some code similarly structured to WeatherBench (Rasp et al.)."""
 
 import dataclasses
 import datetime
+import itertools
 import logging
-from enum import StrEnum
-from typing import List, Optional, Type
+from typing import TYPE_CHECKING
 
-import numpy as np
-import xarray as xr
+import dacite
 
-from extremeweatherbench import metrics, regions, utils
+from extremeweatherbench import regions
 
+if TYPE_CHECKING:
+    from extremeweatherbench import config, metrics
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
@@ -30,165 +31,79 @@ class IndividualCase:
         end_date: The end date of the case, for use in subsetting data for analysis.
         location: A Location dataclass representing the location of a case.
         event_type: A string representing the type of extreme weather event.
-        cross_listed: A list of other event types that this case study is cross-listed under.
     """
 
     case_id_number: int
     title: str
     start_date: datetime.datetime
     end_date: datetime.datetime
-    location: regions.Region
+    location: "regions.Region"
     event_type: str
-    data_vars: Optional[List[str]] = None
-    cross_listed: Optional[List[str]] = None
-
-    def subset_region(self, dataset: xr.Dataset) -> xr.Dataset:
-        """Subset the input dataset to the region specified in the location.
-
-        Args:
-            dataset: xr.Dataset: The input dataset to subset.
-
-        Returns:
-            xr.Dataset: The subset dataset.
-        """
-        return self.location.mask(dataset, drop=True)
-
-    def _subset_data_vars(self, dataset: xr.Dataset) -> xr.Dataset:
-        """Subset the input dataset to only include the variables specified in data_vars.
-
-        Args:
-            dataset: xr.Dataset: The input dataset to subset.
-
-        Returns:
-            xr.Dataset: The subset dataset.
-        """
-        subset_dataset = dataset
-        if self.data_vars is not None:
-            subset_dataset = subset_dataset[self.data_vars]
-        return subset_dataset
-
-    def _subset_valid_times(self, dataset: xr.Dataset) -> xr.Dataset:
-        """Subset the input dataset to only include init times with valid times within the case period.
-
-        Args:
-            dataset: xr.Dataset: The input dataset to subset.
-
-        Returns:
-            xr.Dataset: The subset dataset.
-        """
-        indices = utils.derive_indices_from_init_time_and_lead_time(
-            dataset, self.start_date, self.end_date
-        )
-        return dataset.isel(init_time=np.unique(indices))
-
-    def _check_for_forecast_data_availability(
-        self,
-        forecast_dataset: xr.Dataset,
-    ) -> bool:
-        """Check if the forecast and observation datasets have overlapping time periods.
-
-        Args:
-            forecast_dataset: The forecast dataset.
-            gridded_obs: The gridded observation dataset.
-
-        Returns:
-            True if the datasets have overlapping time periods, False otherwise.
-        """
-        lead_time_len = len(forecast_dataset.init_time)
-
-        if lead_time_len == 0:
-            logger.warning(
-                "No forecast data available for case %s, skipping", self.case_id_number
-            )
-            return False
-        elif lead_time_len < (self.end_date - self.start_date).days:
-            logger.warning(
-                "Fewer valid times in forecast than days in case %s, results likely unreliable",
-                self.case_id_number,
-            )
-        else:
-            logger.info("Forecast data available for case %s", self.case_id_number)
-        logger.info(
-            "Lead time length for case %s: %s", self.case_id_number, lead_time_len
-        )
-        return True
 
 
 @dataclasses.dataclass
-class IndividualHeatWaveCase(IndividualCase):
-    """Container for metadata defining a single or individual case of a heat wave.
+class IndividualCaseCollection:
+    """A collection of IndividualCases."""
 
-    An IndividualHeatWaveCase is a subclass of IndividualCase that is designed to
-    provide additional metadata specific to heat wave events.
-
-    Attributes:
-        metrics_list: A list of Metrics to be used in the evaluation
-    """
-
-    metrics_list: List[Type[metrics.Metric]] = dataclasses.field(
-        default_factory=lambda: [
-            metrics.MaxOfMinTempMAE,
-            metrics.RegionalRMSE,
-            metrics.MaximumMAE,
-        ]
-    )
-    data_vars: List[str] = dataclasses.field(
-        default_factory=lambda: ["surface_air_temperature"]
-    )
-
-    def __post_init__(self):
-        self.data_vars = ["surface_air_temperature"]
+    cases: list[IndividualCase]
 
 
 @dataclasses.dataclass
-class IndividualFreezeCase(IndividualCase):
-    """Container for metadata defining a single or individual case of a freeze event.
+class CaseOperator:
+    """A class which stores the graph to process an individual case.
 
-    An IndividualFreezeCase is a subclass of IndividualCase that is designed to
-    provide additional metadata specific to freeze events.
+    This class is used to store the graph to process an individual case. The purpose of
+    this class is to be a one-stop-shop for the evaluation of a single case. Multiple
+    CaseOperators can be run in parallel to evaluate multiple cases, or run through the
+    ExtremeWeatherBench.run() method to evaluate all cases in an evaluation in serial.
 
     Attributes:
-        freeze_type: str: A string representing the type of freeze event.
+        case: IndividualCase metadata
+        metric: A metric that is intended to be evaluated for the case
+        target_config: A TargetConfig object
+        forecast_config: A ForecastConfig object
     """
 
-    metrics_list: List[Type[metrics.Metric]] = dataclasses.field(
-        default_factory=lambda: [metrics.RegionalRMSE]
+    case: IndividualCase
+    metric: "metrics.BaseMetric"
+    target_config: "config.TargetConfig"
+    forecast_config: "config.ForecastConfig"
+
+
+def build_case_operators(
+    cases_dict: dict[str, list],
+    metric_evaluation_objects: list["config.MetricEvaluationObject"],
+) -> list[CaseOperator]:
+    """Build a CaseOperator from the case metadata and metric evaluation objects.
+
+    Args:
+        cases_dict: The case metadata to use for the case operators.
+        metric_evaluation_objects: The metric evaluation objects to use for the case operators.
+
+    Returns:
+        A list of CaseOperator objects.
+    """
+    case_metadata_collection = dacite.from_dict(
+        data_class=IndividualCaseCollection,
+        data=cases_dict,
+        config=dacite.Config(
+            type_hooks={regions.Region: regions.map_to_create_region},
+        ),
     )
-    data_vars: List[str] = dataclasses.field(
-        default_factory=lambda: [
-            "surface_air_temperature",
-            "surface_eastward_wind",
-            "surface_northward_wind",
-        ]
-    )
 
-    def __post_init__(self):
-        self.data_vars = [
-            "surface_air_temperature",
-            "surface_eastward_wind",
-            "surface_northward_wind",
-        ]
-
-
-# maps the case event type to the corresponding dataclass
-# additional event types need to be added here and
-# CASE_EVENT_TYPE_MATCHER, which maps the metadata case event type
-# to the corresponding case dataclass.
-class CaseEventType(StrEnum):
-    """Enum class for the different types of extreme weather events."""
-
-    HEAT_WAVE = "heat_wave"
-    FREEZE = "freeze"
-
-
-CASE_EVENT_TYPE_MATCHER: dict[CaseEventType, type[IndividualCase]] = {
-    CaseEventType.HEAT_WAVE: IndividualHeatWaveCase,
-    CaseEventType.FREEZE: IndividualFreezeCase,
-}
-
-
-def get_case_event_dataclass(case_type: str) -> Type[IndividualCase]:
-    event_dataclass = CASE_EVENT_TYPE_MATCHER.get(CaseEventType(case_type))
-    if event_dataclass is None:
-        raise ValueError(f"Unknown case event type {case_type}")
-    return event_dataclass
+    # build list of case operators based on information provided in case dict and
+    case_operators = []
+    for single_case, metric_evaluation_object in itertools.product(
+        case_metadata_collection.cases, metric_evaluation_objects
+    ):
+        # checks if case matches the event type provided in metric eval object
+        if single_case.event_type in metric_evaluation_object.event_type:
+            case_operators.append(
+                CaseOperator(
+                    case=single_case,
+                    metric=metric_evaluation_object.metric,
+                    target_config=metric_evaluation_object.target_config,
+                    forecast_config=metric_evaluation_object.forecast_config,
+                )
+            )
+    return case_operators
