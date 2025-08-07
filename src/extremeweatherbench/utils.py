@@ -756,3 +756,25 @@ def lead_time_init_time_to_valid_time(forecast: xr.Dataset) -> xr.DataArray:
         + pd.to_timedelta(lead_time_grid.flatten(), unit="h").to_numpy()
     )
     return valid_times
+
+
+def convert_init_time_to_valid_time(ds: xr.Dataset) -> xr.Dataset:
+    """Convert the init_time coordinate to a valid_time coordinate.
+
+    Args:
+        ds: The dataset to convert with lead_time and init_time coordinates.
+
+    Returns:
+        The dataset with a valid_time coordinate.
+    """
+    valid_time = xr.DataArray(
+        ds.init_time, coords={"init_time": ds.init_time}
+    ) + xr.DataArray(ds.lead_time, coords={"lead_time": ds.lead_time})
+    ds = ds.assign_coords(valid_time=valid_time)
+    return xr.concat(
+        [
+            ds.sel(lead_time=lead).swap_dims({"init_time": "valid_time"})
+            for lead in ds.lead_time
+        ],
+        "lead_time",
+    )

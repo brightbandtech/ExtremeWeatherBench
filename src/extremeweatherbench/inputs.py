@@ -161,7 +161,7 @@ class ForecastBase(InputBase):
         )
 
         subset_time_data = data.isel(init_time=np.unique(subset_time_indices[0]))
-        subset_time_data = utils.lead_time_init_time_to_valid_time(subset_time_data)
+        subset_time_data = utils.convert_init_time_to_valid_time(subset_time_data)
 
         try:
             subset_time_data = subset_time_data[case_operator.forecast_config.variables]
