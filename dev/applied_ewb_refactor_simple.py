@@ -3,17 +3,15 @@ import logging
 import numpy as np
 import xarray as xr
 
-from extremeweatherbench import config, evaluate, inputs, metrics, utils
+from extremeweatherbench import case, config, evaluate, inputs, metrics, utils
 
 logging.getLogger("urllib3.connectionpool").setLevel(logging.CRITICAL)
 logging.getLogger("botocore.httpchecksum").setLevel(logging.CRITICAL)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-case_yaml = utils.read_event_yaml(
-    "/home/taylor/ExtremeWeatherBench/src/extremeweatherbench/data/events.yaml"
-)
-test_yaml = {"cases": case_yaml["cases"][:]}
+case_yaml = utils.load_events_yaml()
+test_yaml = {"cases": case_yaml["cases"][:1]}
 
 
 def _preprocess_bb_cira_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
@@ -35,7 +33,7 @@ def _preprocess_bb_cira_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
     return ds
 
 
-era5_target_config = config.TargetConfig(
+era5_heatwave_target_config = config.TargetConfig(
     target=inputs.ERA5,
     source=inputs.ARCO_ERA5_FULL_URI,
     variables=["surface_air_temperature"],
@@ -45,6 +43,7 @@ era5_target_config = config.TargetConfig(
     },
     storage_options={"remote_options": {"anon": True}},
 )
+
 ghcn_target_config = config.TargetConfig(
     target=inputs.GHCN,
     source=inputs.DEFAULT_GHCN_URI,
@@ -52,13 +51,17 @@ ghcn_target_config = config.TargetConfig(
     variable_mapping={"t2": "surface_air_temperature"},
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
 )
-cira_forecast_config = config.ForecastConfig(
-    forecast=inputs.KerchunkForecast,
-    source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
+
+hres_forecast_config = config.ForecastConfig(
+    forecast=inputs.ZarrForecast,
+    source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
     variables=["surface_air_temperature"],
-    variable_mapping={"t2": "surface_air_temperature"},
-    storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
-    preprocess=_preprocess_bb_cira_forecast_dataset,
+    variable_mapping={
+        "2m_temperature": "surface_air_temperature",
+        "prediction_timedelta": "lead_time",
+        "time": "init_time",
+    },
+    storage_options={"remote_options": {"anon": True}},
 )
 
 # just one for now
@@ -72,8 +75,8 @@ heatwave_metric_list = [
             metrics.DurationME,
             metrics.MaxMinMAE,
         ],
-        target_config=era5_target_config,
-        forecast_config=cira_forecast_config,
+        target_config=era5_heatwave_target_config,
+        forecast_config=hres_forecast_config,
     ),
     # rs.MetricEvaluationObject(
     #     event_type="heat_wave",
@@ -101,3 +104,5 @@ outputs = test_ewb.run(
     # pre-compute the datasets to avoid recomputing them for each metric
     pre_compute=True,
 )
+
+outputs.to_csv("outputs_hres.csv")

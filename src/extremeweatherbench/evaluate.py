@@ -51,7 +51,7 @@ class ExtremeWeatherBench:
         run_results = []
         with logging_redirect_tqdm():
             for case_operator in tqdm(self.case_operators):
-                run_results.append(self.compute_case_operator(case_operator, **kwargs))
+                run_results.append(compute_case_operator(case_operator, **kwargs))
 
                 # store the results of each case operator if caching
                 if self.cache_dir:
@@ -60,119 +60,124 @@ class ExtremeWeatherBench:
                     )
         return pd.concat(run_results, ignore_index=True)
 
-    def compute_case_operator(self, case_operator: "case.CaseOperator", **kwargs):
-        target_ds, forecast_ds = self._build_datasets(case_operator, **kwargs)
 
-        # align the target and forecast datasets to ensure they have the same valid_time dimension
-        target_ds, forecast_ds = xr.align(target_ds, forecast_ds)
+def compute_case_operator(case_operator: "case.CaseOperator", **kwargs):
+    target_ds, forecast_ds = _build_datasets(case_operator)
 
-        # compute and cache the datasets if requested
-        if kwargs.get("pre_compute", False):
-            target_ds, forecast_ds = self._compute_and_maybe_cache(
-                target_ds, forecast_ds
-            )
+    # align the target and forecast datasets to ensure they have the same valid_time dimension
+    target_ds, forecast_ds = xr.align(target_ds, forecast_ds)
 
-        logger.info(f"datasets built for case {case_operator.case.case_id_number}")
-        results = []
-        for variables, metric in itertools.product(
-            zip(
-                case_operator.forecast_config.variables,
-                case_operator.target_config.variables,
-            ),
-            case_operator.metric,
-        ):
-            results.append(
-                self._evaluate_metric_and_return_df(
-                    target_ds=target_ds,
-                    forecast_ds=forecast_ds,
-                    forecast_variable=variables[0],
-                    target_variable=variables[1],
-                    metric=metric,
-                    target_name=case_operator.target_config.target.name,
-                    case_id_number=case_operator.case.case_id_number,
-                    event_type=case_operator.case.event_type,
-                    **kwargs,
-                )
-            )
+    # compute and cache the datasets if requested
+    if kwargs.get("pre_compute", False):
+        target_ds, forecast_ds = _compute_and_maybe_cache(
+            target_ds, forecast_ds, cache_dir=kwargs.get("cache_dir", None)
+        )
 
-            # cache the results of each metric if caching
-            if self.cache_dir:
-                results.to_pickle(self.cache_dir / "results.pkl")
-
-        return pd.concat(results, ignore_index=True)
-
-    def _compute_and_maybe_cache(self, *datasets: xr.Dataset) -> list[xr.Dataset]:
-        """Compute and cache the datasets if caching."""
-        logger.info("computing datasets")
-        computed_datasets = [dataset.compute() for dataset in datasets]
-        if self.cache_dir:
-            raise NotImplementedError("Caching is not implemented yet")
-            # (computed_dataset.to_netcdf(self.cache_dir) for computed_dataset in computed_datasets)
-        return computed_datasets
-
-    def _evaluate_metric_and_return_df(
-        self,
-        forecast_ds: xr.Dataset,
-        target_ds: xr.Dataset,
-        forecast_variable: Union[str, "derived.DerivedVariable"],
-        target_variable: Union[str, "derived.DerivedVariable"],
-        metric: "metrics.BaseMetric",
-        case_id_number: int,
-        event_type: str,
-        **kwargs,
+    logger.info(f"datasets built for case {case_operator.case.case_id_number}")
+    results = []
+    for variables, metric in itertools.product(
+        zip(
+            case_operator.forecast_config.variables,
+            case_operator.target_config.variables,
+        ),
+        case_operator.metric,
     ):
-        metric = metric()
-        logger.info(f"computing metric {metric.name}")
-        metric_result = metric.compute_metric(
-            forecast_ds[forecast_variable],
-            target_ds[target_variable],
-            **kwargs,
+        results.append(
+            _evaluate_metric_and_return_df(
+                target_ds=target_ds,
+                forecast_ds=forecast_ds,
+                forecast_variable=variables[0],
+                target_variable=variables[1],
+                metric=metric,
+                target_name=case_operator.target_config.target.name,
+                case_id_number=case_operator.case.case_id_number,
+                event_type=case_operator.case.event_type,
+                **kwargs,
+            )
         )
 
-        # Convert to DataFrame and add metadata
-        df = metric_result.to_dataframe(name="value").reset_index()
-        df["target_variable"] = target_variable
-        df["metric"] = metric.name
-        df["target_source"] = target_ds.attrs["source"]
-        df["forecast_source"] = forecast_ds.attrs["source"]
-        df["case_id_number"] = case_id_number
-        df["event_type"] = event_type
-        return df
+        # cache the results of each metric if caching
+        if kwargs.get("cache_dir", None):
+            results.to_pickle(kwargs.get("cache_dir") / "results.pkl")
 
-    def _build_datasets(self, case_operator: "case.CaseOperator", **kwargs):
-        """Build the target and forecast datasets for a case operator.
+    return pd.concat(results, ignore_index=True)
 
-        This method will process through all stages of the pipeline for the target and forecast datasets,
-        including preprocessing, variable renaming, and subsetting.
-        """
-        target_input = case_operator.target_config.target(
-            source=case_operator.target_config.source,
-            variables=case_operator.target_config.variables,
-            variable_mapping=case_operator.target_config.variable_mapping,
-            storage_options=case_operator.target_config.storage_options,
-            preprocess=case_operator.target_config.preprocess,
-        )
 
-        forecast_input = case_operator.forecast_config.forecast(
-            source=case_operator.forecast_config.source,
-            variables=case_operator.forecast_config.variables,
-            variable_mapping=case_operator.forecast_config.variable_mapping,
-            storage_options=case_operator.forecast_config.storage_options,
-            preprocess=case_operator.forecast_config.preprocess,
-        )
+def _evaluate_metric_and_return_df(
+    forecast_ds: xr.Dataset,
+    target_ds: xr.Dataset,
+    forecast_variable: Union[str, "derived.DerivedVariable"],
+    target_variable: Union[str, "derived.DerivedVariable"],
+    metric: "metrics.BaseMetric",
+    case_id_number: int,
+    event_type: str,
+    **kwargs,
+):
+    metric = metric()
+    logger.info(f"computing metric {metric.name}")
+    metric_result = metric.compute_metric(
+        forecast_ds[forecast_variable],
+        target_ds[target_variable],
+        **kwargs,
+    )
 
-        logger.info("running target pipeline")
-        target_ds = run_pipeline(
-            input_data=target_input,
-            case_operator=case_operator,
-        )
+    # Convert to DataFrame and add metadata
+    df = metric_result.to_dataframe(name="value").reset_index()
+    df["target_variable"] = target_variable
+    df["metric"] = metric.name
+    df["target_source"] = target_ds.attrs["source"]
+    df["forecast_source"] = forecast_ds.attrs["source"]
+    df["case_id_number"] = case_id_number
+    df["event_type"] = event_type
+    return df
 
-        logger.info("running forecast pipeline")
-        forecast_ds = run_pipeline(
-            input_data=forecast_input,
-            case_operator=case_operator,
-        )
-        return target_ds, forecast_ds
+
+def _build_datasets(case_operator: "case.CaseOperator"):
+    """Build the target and forecast datasets for a case operator.
+
+    This method will process through all stages of the pipeline for the target and forecast datasets,
+    including preprocessing, variable renaming, and subsetting.
+    """
+    target_input = case_operator.target_config.target(
+        source=case_operator.target_config.source,
+        variables=case_operator.target_config.variables,
+        variable_mapping=case_operator.target_config.variable_mapping,
+        storage_options=case_operator.target_config.storage_options,
+        preprocess=case_operator.target_config.preprocess,
+    )
+
+    forecast_input = case_operator.forecast_config.forecast(
+        source=case_operator.forecast_config.source,
+        variables=case_operator.forecast_config.variables,
+        variable_mapping=case_operator.forecast_config.variable_mapping,
+        storage_options=case_operator.forecast_config.storage_options,
+        preprocess=case_operator.forecast_config.preprocess,
+    )
+
+    logger.info("running target pipeline")
+    target_ds = run_pipeline(
+        input_data=target_input,
+        case_operator=case_operator,
+    )
+
+    logger.info("running forecast pipeline")
+    forecast_ds = run_pipeline(
+        input_data=forecast_input,
+        case_operator=case_operator,
+    )
+    return target_ds, forecast_ds
+
+
+def _compute_and_maybe_cache(
+    *datasets: xr.Dataset, cache_dir: Optional[Union[str, Path]]
+) -> list[xr.Dataset]:
+    """Compute and cache the datasets if caching."""
+    logger.info("computing datasets")
+    computed_datasets = [dataset.compute() for dataset in datasets]
+    if cache_dir:
+        raise NotImplementedError("Caching is not implemented yet")
+        # (computed_dataset.to_netcdf(self.cache_dir) for computed_dataset in computed_datasets)
+    return computed_datasets
 
 
 def run_pipeline(
