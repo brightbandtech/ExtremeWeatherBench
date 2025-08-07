@@ -160,7 +160,9 @@ class ForecastBase(InputBase):
             case_operator.case.end_date,
         )
 
-        subset_time_data = data.isel(init_time=np.unique(subset_time_indices[0]))
+        subset_time_data = data.sel(
+            init_time=data.init_time[np.unique(subset_time_indices[0])]
+        )
         subset_time_data = utils.convert_init_time_to_valid_time(subset_time_data)
 
         try:

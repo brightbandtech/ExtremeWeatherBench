@@ -101,10 +101,10 @@ class ExtremeWeatherBench:
 
         return pd.concat(results, ignore_index=True)
 
-    def _compute_and_maybe_cache(self, *datasets: xr.Dataset):
+    def _compute_and_maybe_cache(self, *datasets: xr.Dataset) -> list[xr.Dataset]:
         """Compute and cache the datasets if caching."""
         logger.info("computing datasets")
-        computed_datasets = (dataset.compute() for dataset in datasets)
+        computed_datasets = [dataset.compute() for dataset in datasets]
         if self.cache_dir:
             raise NotImplementedError("Caching is not implemented yet")
             # (computed_dataset.to_netcdf(self.cache_dir) for computed_dataset in computed_datasets)
