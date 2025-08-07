@@ -23,10 +23,12 @@ dependencies = [
     "tqdm>=4.67.1",
     "ujson>=5.10.0",
     "xarray[io]>=2024.11.0",
-    "zarr>=3.0.2",
+    "zarr==3.0.9",
     "kerchunk[dev]",
     "flox>=0.10.0",
     "click>=8.1.8",
+    "sparse>=0.17.0",
+    "polars>=1.32.1",
 ]
 
 [project.optional-dependencies]
@@ -40,6 +42,7 @@ dev = [
     "ipykernel>=6.29.5",
     "ipywidgets>=8.1.5",
     "isort>=6.0.1",
+    "jupyterlab>=4.4.5",
     "mypy>=1.14.1",
     "pre-commit>=4.1.0",
     "pytest>=8.3.4",
