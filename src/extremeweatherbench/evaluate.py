@@ -25,9 +25,11 @@ class ExtremeWeatherBench:
         self,
         cases: dict[str, list],
         metrics: list["config.MetricEvaluationObject"],
+        cache_dir: Optional[Union[str, Path]] = None,
     ):
         self.cases = cases
         self.metrics = metrics
+        self.cache_dir = cache_dir
 
     @property
     def case_operators(self) -> list["case.CaseOperator"]:
@@ -35,11 +37,9 @@ class ExtremeWeatherBench:
 
     def run(
         self,
-        cache_dir: Optional[Union[str, Path]] = None,
         **kwargs,
     ) -> pd.DataFrame:
         """Runs the workflow in the order of the event operators and cases inside the event operators."""
-        self.cache_dir = cache_dir
 
         # instantiate the cache directory if caching and build it if it does not exist
         if self.cache_dir:

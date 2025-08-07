@@ -270,12 +270,7 @@ class OnsetME(AppliedMetric):
                             .valid_time[0]
                             .values
                         )
-                    else:
-                        return xr.DataArray(np.datetime64("NaT", "ns"))
-            else:
-                return xr.DataArray(np.datetime64("NaT", "ns"))
-        else:
-            return xr.DataArray(np.datetime64("NaT", "ns"))
+        return xr.DataArray(np.datetime64("NaT", "ns"))
 
     def _compute_applied_metric(self, forecast: xr.Dataset, target: xr.Dataset):
         target_time = target.valid_time[0] + np.timedelta64(48, "h")
@@ -317,12 +312,7 @@ class DurationME(AppliedMetric):
                             else:
                                 break
                         return xr.DataArray(consecutive_days.astype("timedelta64[ns]"))
-                    else:
-                        return xr.DataArray(np.timedelta64("NaT", "ns"))
-            else:
-                return xr.DataArray(np.timedelta64("NaT", "ns"))
-        else:
-            return xr.DataArray(np.timedelta64("NaT", "ns"))
+        return xr.DataArray(np.timedelta64("NaT", "ns"))
 
     def _compute_applied_metric(self, forecast: xr.Dataset, target: xr.Dataset):
         # Dummy implementation for duration mean error
