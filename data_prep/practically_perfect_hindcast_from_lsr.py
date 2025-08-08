@@ -19,14 +19,18 @@ import numpy as np
 import xarray as xr
 from scipy.ndimage import gaussian_filter
 from extremeweatherbench import utils, inputs
+from typing import Union, Literal
+import sparse
+import pandas as pd
+from tqdm.auto import tqdm
 
 
 # %%
-def practically_perfect_hindcast(
-    ds: xr.Dataset,
+def sparse_practically_perfect_hindcast(
+    da: xr.DataArray,
     resolution: float = 0.25,
     # TODO: add report type back in
-    # report_type: Union[Literal["all"], list[Literal["tor", "hail", "wind"]]] = "all",
+    report_type: Union[Literal["all"], list[Literal["tor", "hail", "wind"]]] = ['tor','hail'],
     sigma: float = 1.5,
 ) -> xr.Dataset:
     """Compute the Practically Perfect Hindcast (PPH) using storm report data using latitude/longitude grid spacing
@@ -57,34 +61,67 @@ def practically_perfect_hindcast(
         "longitude": xr.DataArray(grid_lons, dims=["longitude"]),
     }
 
-    # Regrid the sparse dataset to the fixed global grid
-    # First, ensure longitude is in 0-360 range
-    if "longitude" in ds.coords:
-        ds = ds.assign_coords(longitude=utils.convert_longitude_to_360(ds.longitude))
+    da_dense = da.to_numpy()
 
+    # Find where we have non-NaN values - the sparse array might have NaNs instead of zeros
+    valid_mask = ~np.isnan(da_dense)
+    valid_indices = np.where(valid_mask)
+    lat_indices, lon_indices = valid_indices
+
+    # Only keep the locations that actually have data, not the zeros or NaNs
+    if len(lat_indices) > 0:
+        # Get the actual lat/lon coordinates for these spots
+        lats = da.latitude.values[lat_indices]
+        lons = da.longitude.values[lon_indices]
+        
+        # Get the report_type values at these locations
+        report_values = da_dense[valid_indices]
+        
+        # Put it all together in a dataframe
+        coords_df = pd.DataFrame({
+            'latitude': lats,
+            'longitude': lons,
+            'report_type': report_values.flatten() if hasattr(report_values, 'flatten') else report_values
+        })
+    else:
+        coords_df = pd.DataFrame(columns=['latitude', 'longitude', 'report_type'])
+
+    coords_df['report_type'] = (coords_df['report_type'] > 0).astype(int)
+
+    # First, ensure longitude is in 0-360 range
+    coords_df['longitude'] = utils.convert_longitude_to_360(coords_df['longitude'])
+
+    if len(coords_df['report_type']) == 0:
+        return xr.DataArray(
+        sparse.COO.from_numpy(np.zeros((len(grid_lats), len(grid_lons)))),
+        dims=["latitude", "longitude"],
+        coords={"latitude": grid_lats, "longitude": grid_lons},
+    )
+    coords_da = coords_df.set_index(['latitude', 'longitude']).to_xarray()['report_type']
+
+    # Regrid the sparse data to the target grid
     # Interpolate the sparse data to the target grid
-    regridded_ds = ds.interp(
+    regridded_da = coords_da.interp(
         latitude=target_coords["latitude"],
         longitude=target_coords["longitude"],
         method="nearest",  # Use nearest neighbor for sparse data
     )
 
-    # Fill NaN values with 0 for the reports
-    if "reports" in regridded_ds.data_vars:
-        regridded_ds["reports"] = regridded_ds["reports"].fillna(0)
+    # Fill NaN values with np.nan for the reports
+    regridded_da = regridded_da.fillna(0)
 
-    # Apply gaussian smoothing to the regridded data
-    if "reports" in regridded_ds.data_vars:
-        reports_data = regridded_ds["reports"].values
-        smoothed_reports = gaussian_filter(reports_data, sigma=sigma)
-        regridded_ds["practically_perfect"] = xr.DataArray(
-            smoothed_reports,
-            dims=["latitude", "longitude"],
-            coords={"latitude": grid_lats, "longitude": grid_lons},
-        )
 
-    return regridded_ds
-
+    smoothed_reports = gaussian_filter(regridded_da, sigma=sigma)
+    pph = xr.DataArray(
+        smoothed_reports,
+        dims=["latitude", "longitude"],
+        coords={"latitude": grid_lats, "longitude": grid_lons},
+    )
+    if any(coords_df.longitude < 180):
+        # Australia is a special case, we need to multiply by 10 to get over underreporting bias
+        pph = pph * 10
+    pph_sparse = pph.copy(data=sparse.COO.from_numpy(pph.to_numpy()))
+    return pph_sparse
 
 # %%
 lsr = inputs.LSR(source=inputs.LSR_URI, variables=['report'],variable_mapping={'report': 'reports'}, storage_options={'anon': True})
@@ -92,6 +129,19 @@ lsr_df = lsr.open_and_maybe_preprocess_data_from_source()
 lsr_ds = lsr._custom_convert_to_dataset(lsr_df)
 
 # %%
-lsr_ds
-# next step is to run the practically perfect hindcast for each unique valid_time
-# then we can save the results to a new dataset
+unique_valid_times = np.unique(lsr_ds['valid_time'].values)
+
+# %%
+import joblib
+
+pph_sparse = joblib.Parallel(n_jobs=-1)(
+    joblib.delayed(sparse_practically_perfect_hindcast)(lsr_ds['report_type'].sel(valid_time=time)) 
+    for time in tqdm(unique_valid_times)
+)
+pph_sparse = xr.concat(pph_sparse, dim='valid_time')
+pph_sparse
+
+# %%
+pph_sparse = [sparse_practically_perfect_hindcast(lsr_ds['report_type'].sel(valid_time=time)) for time in tqdm(unique_valid_times)]
+pph_sparse = xr.concat(pph_sparse, dim='valid_time')
+pph_sparse

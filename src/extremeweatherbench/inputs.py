@@ -438,6 +438,11 @@ class LSR(TargetBase):
         return subset_target_data
 
     def _custom_convert_to_dataset(self, data: utils.IncomingDataInput) -> xr.Dataset:
+        # Map report_type column to numeric values
+        if "report_type" in data.columns:
+            report_type_mapping = {"wind": 1, "hail": 2, "tornado": 3}
+            data["report_type"] = data["report_type"].map(report_type_mapping)
+
         if isinstance(data, pd.DataFrame):
             # Normalize these times for the LSR data
             # Western hemisphere reports get bucketed to 12Z on the date they fall between 12Z-12Z
@@ -489,6 +494,7 @@ class LSR(TargetBase):
             data = xr.Dataset.from_dataframe(
                 data[~data.index.duplicated(keep="first")], sparse=True
             )
+            data.attrs["report_type_mapping"] = report_type_mapping
             return data
         else:
             raise ValueError(f"Data is not a pandas DataFrame: {type(data)}")
