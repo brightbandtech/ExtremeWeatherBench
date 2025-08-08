@@ -102,7 +102,7 @@ cira_forecast_config = config.ForecastConfig(
 
 # just one for now
 heatwave_metric_list = [
-    config.MetricEvaluationObject(
+    config.EvaluationObject(
         event_type="heat_wave",
         metric=[
             metrics.MaximumMAE,
@@ -114,7 +114,7 @@ heatwave_metric_list = [
         target_config=era5_target_config,
         forecast_config=cira_forecast_config,
     ),
-    # rs.MetricEvaluationObject(
+    # rs.EvaluationObject(
     #     event_type="heat_wave",
     #     metric=[
     #         crs.MaximumMAE,

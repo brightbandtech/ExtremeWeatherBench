@@ -30,7 +30,7 @@ cira_forecast_config = config.ForecastConfig(
 
 
 BRIGHTBAND_METRICS = [
-    config.MetricEvaluationObject(
+    config.EvaluationObject(
         event_type="heat_wave",
         metric=[
             metrics.MaximumMAE,

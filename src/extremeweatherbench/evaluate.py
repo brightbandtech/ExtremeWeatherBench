@@ -3,7 +3,7 @@
 import itertools
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING, Literal, Optional, Union
 
 import pandas as pd
 import xarray as xr
@@ -13,7 +13,7 @@ from tqdm.contrib.logging import logging_redirect_tqdm
 from extremeweatherbench import case, derived, utils
 
 if TYPE_CHECKING:
-    from extremeweatherbench import config, inputs, metrics
+    from extremeweatherbench import inputs, metrics
 
 
 logging.basicConfig(level=logging.INFO)
@@ -24,7 +24,7 @@ class ExtremeWeatherBench:
     def __init__(
         self,
         cases: dict[str, list],
-        metrics: list["config.MetricEvaluationObject"],
+        metrics: list["inputs.EvaluationObject"],
         cache_dir: Optional[Union[str, Path]] = None,
     ):
         self.cases = cases
@@ -77,8 +77,8 @@ def compute_case_operator(case_operator: "case.CaseOperator", **kwargs):
     results = []
     for variables, metric in itertools.product(
         zip(
-            case_operator.forecast_config.variables,
-            case_operator.target_config.variables,
+            case_operator.forecast.variables,
+            case_operator.target.variables,
         ),
         case_operator.metric,
     ):
@@ -89,7 +89,7 @@ def compute_case_operator(case_operator: "case.CaseOperator", **kwargs):
                 forecast_variable=variables[0],
                 target_variable=variables[1],
                 metric=metric,
-                target_name=case_operator.target_config.target.name,
+                target_name=case_operator.target.name,
                 case_id_number=case_operator.case.case_id_number,
                 event_type=case_operator.case.event_type,
                 **kwargs,
@@ -132,40 +132,33 @@ def _evaluate_metric_and_return_df(
     return df
 
 
-def _build_datasets(case_operator: "case.CaseOperator"):
+def _build_target_dataset(case_operator: "case.CaseOperator") -> xr.Dataset:
+    """Build the target dataset for a case operator."""
+
+    return run_pipeline(case_operator, "target")
+
+
+def _build_forecast_dataset(
+    case_operator: "case.CaseOperator",
+) -> xr.Dataset:
+    """Build the forecast dataset for a case operator."""
+
+    return run_pipeline(case_operator, "forecast")
+
+
+def _build_datasets(
+    case_operator: "case.CaseOperator",
+) -> tuple[xr.Dataset, xr.Dataset]:
     """Build the target and forecast datasets for a case operator.
 
     This method will process through all stages of the pipeline for the target and forecast datasets,
     including preprocessing, variable renaming, and subsetting.
     """
-    target_input = case_operator.target_config.target(
-        source=case_operator.target_config.source,
-        variables=case_operator.target_config.variables,
-        variable_mapping=case_operator.target_config.variable_mapping,
-        storage_options=case_operator.target_config.storage_options,
-        preprocess=case_operator.target_config.preprocess,
-    )
-
-    forecast_input = case_operator.forecast_config.forecast(
-        source=case_operator.forecast_config.source,
-        variables=case_operator.forecast_config.variables,
-        variable_mapping=case_operator.forecast_config.variable_mapping,
-        storage_options=case_operator.forecast_config.storage_options,
-        preprocess=case_operator.forecast_config.preprocess,
-    )
-
     logger.info("running target pipeline")
-    target_ds = run_pipeline(
-        input_data=target_input,
-        case_operator=case_operator,
-    )
-
+    target_ds = _build_target_dataset(case_operator)
     logger.info("running forecast pipeline")
-    forecast_ds = run_pipeline(
-        input_data=forecast_input,
-        case_operator=case_operator,
-    )
-    return target_ds, forecast_ds
+    forecast_ds = _build_forecast_dataset(case_operator)
+    return (target_ds, forecast_ds)
 
 
 def _compute_and_maybe_cache(
@@ -181,21 +174,26 @@ def _compute_and_maybe_cache(
 
 
 def run_pipeline(
-    input_data: "inputs.InputBase",
     case_operator: "case.CaseOperator",
-    **kwargs,
+    input_source: Literal["target", "forecast"],
 ) -> xr.Dataset:
     """
     Shared method for running the target pipeline.
 
     Args:
-        input_data: The input data to run the pipeline on.
         case_operator: The case operator to run the pipeline on.
-        **kwargs: Additional keyword arguments to pass in as needed.
+        input_source: The input source to run the pipeline on.
 
     Returns:
         The target data with a type determined by the user.
     """
+
+    if input_source == "target":
+        input_data = case_operator.target
+    elif input_source == "forecast":
+        input_data = case_operator.forecast
+    else:
+        raise ValueError(f"Invalid input source: {input_source}")
 
     # Open data and process through pipeline steps
     data = (

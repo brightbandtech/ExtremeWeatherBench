@@ -12,7 +12,8 @@ import dacite
 from extremeweatherbench import regions
 
 if TYPE_CHECKING:
-    from extremeweatherbench import config, metrics
+    from extremeweatherbench import inputs, metrics
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
@@ -66,13 +67,13 @@ class CaseOperator:
 
     case: IndividualCase
     metric: "metrics.BaseMetric"
-    target_config: "config.TargetConfig"
-    forecast_config: "config.ForecastConfig"
+    target: "inputs.TargetBase"
+    forecast: "inputs.ForecastBase"
 
 
 def build_case_operators(
     cases_dict: dict[str, list],
-    metric_evaluation_objects: list["config.MetricEvaluationObject"],
+    metric_evaluation_objects: list["inputs.EvaluationObject"],
 ) -> list[CaseOperator]:
     """Build a CaseOperator from the case metadata and metric evaluation objects.
 
@@ -102,8 +103,8 @@ def build_case_operators(
                 CaseOperator(
                     case=single_case,
                     metric=metric_evaluation_object.metric,
-                    target_config=metric_evaluation_object.target_config,
-                    forecast_config=metric_evaluation_object.forecast_config,
+                    target=metric_evaluation_object.target,
+                    forecast=metric_evaluation_object.forecast,
                 )
             )
     return case_operators
