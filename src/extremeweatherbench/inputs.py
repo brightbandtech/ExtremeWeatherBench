@@ -458,7 +458,7 @@ class IBTrACS(TargetBase):
     Target class for IBTrACS data.
     """
 
-    def open_data_from_source(
+    def _open_data_from_source(
         self, target_storage_options: Optional[dict] = None
     ) -> utils.IncomingDataInput:
         # not using storage_options in this case due to NetCDF4Backend not supporting them

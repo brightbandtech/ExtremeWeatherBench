@@ -98,6 +98,86 @@ class CravenSignificantSevereParameter(DerivedVariable):
         return test_da
 
 
+class SurfaceWindSpeed(DerivedVariable):
+    """A derived variable that computes the surface wind speed."""
+
+    name = "surface_wind_speed"
+    input_variables = ["10u", "10v"]
+
+    def derive_variable(self, data: xr.Dataset) -> xr.DataArray:
+        """Derive the surface wind speed."""
+        return np.sqrt(
+            data[self.input_variables[0]] ** 2 + data[self.input_variables[1]] ** 2
+        )
+
+
+class AtmosphericRiverMask(DerivedVariable):
+    """A derived variable that computes the atmospheric river mask."""
+
+    name = "atmospheric_river_mask"
+    input_variables = ["msl"]
+
+    def derive_variable(self, data: xr.Dataset) -> xr.DataArray:
+        """Derive the atmospheric river mask."""
+        return data[self.input_variables[0]] < 1000
+
+
+class IntegratedVaporTransport(DerivedVariable):
+    """A derived variable that computes the integrated vapor transport."""
+
+    name = "integrated_vapor_transport"
+    input_variables = ["u", "v", "q"]
+
+    def derive_variable(self, data: xr.Dataset) -> xr.DataArray:
+        """Derive the integrated vapor transport."""
+        return (
+            data[self.input_variables[0]]
+            * data[self.input_variables[1]]
+            * data[self.input_variables[2]]
+        )
+
+
+class IntegratedVaporTransportJacobian(DerivedVariable):
+    """A derived variable that computes the integrated vapor transport Jacobian."""
+
+    name = "integrated_vapor_transport_jacobian"
+    input_variables = ["u", "v", "q"]
+
+    def derive_variable(self, data: xr.Dataset) -> xr.DataArray:
+        """Derive the integrated vapor transport Jacobian."""
+        return (
+            data[self.input_variables[0]]
+            * data[self.input_variables[1]]
+            * data[self.input_variables[2]]
+        )
+
+
+class MLCAPE(DerivedVariable):
+    """A derived variable that computes the MLCAPE."""
+
+    name = "mlcape"
+    input_variables = ["t", "z", "r"]
+
+    def derive_variable(self, data: xr.Dataset) -> xr.DataArray:
+        """Derive the MLCAPE."""
+        return (
+            data[self.input_variables[0]]
+            * data[self.input_variables[1]]
+            * data[self.input_variables[2]]
+        )
+
+
+class TCTrack(DerivedVariable):
+    """A derived variable that computes the TC track."""
+
+    name = "tc_track"
+    input_variables = ["vmax", "slp"]
+
+    def derive_variable(self, data: xr.Dataset) -> xr.DataArray:
+        """Derive the TC track."""
+        return data[self.input_variables[0]] * data[self.input_variables[1]]
+
+
 def maybe_derive_variables(
     ds: xr.Dataset, variables: list[str | DerivedVariable]
 ) -> xr.Dataset:

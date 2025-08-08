@@ -188,6 +188,38 @@ class MaximumMAE(AppliedMetric):
         }
 
 
+class MinimumMAE(AppliedMetric):
+    base_metric = MAE
+
+    def _compute_applied_metric(
+        self,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
+        tolerance_range: int = 24,
+    ):
+        forecast = forecast.compute()
+        target_spatial_mean = target.compute().mean(["latitude", "longitude"])
+        minimum_timestep = target_spatial_mean.idxmin("valid_time").values
+        minimum_value = target_spatial_mean.sel(valid_time=minimum_timestep)
+        forecast_spatial_mean = forecast.mean(["latitude", "longitude"])
+        filtered_min_forecast = forecast_spatial_mean.where(
+            (
+                forecast_spatial_mean.valid_time
+                >= minimum_timestep - np.timedelta64(tolerance_range // 2, "h")
+            )
+            & (
+                forecast_spatial_mean.valid_time
+                <= minimum_timestep + np.timedelta64(tolerance_range // 2, "h")
+            ),
+            drop=True,
+        ).min("valid_time")
+        return {
+            "forecast": filtered_min_forecast,
+            "target": minimum_value,
+            "preserve_dims": self.base_metric().preserve_dims,
+        }
+
+
 class MaxMinMAE(AppliedMetric):
     base_metric = MAE
 
@@ -327,6 +359,60 @@ class DurationME(AppliedMetric):
             "target": target_duration,
             "preserve_dims": self.preserve_dims,
         }
+
+
+# TODO: base metric for identifying signal
+class EarlySignal(AppliedMetric):
+    base_metric = BinaryContingencyTable
+
+    def _compute_applied_metric(self, forecast: xr.Dataset, target: xr.Dataset):
+        # Dummy implementation for early signal
+        return self.base_metrics[0]().compute_metric(forecast, target)
+
+
+# TODO: fill landfall displacement out
+class LandfallDisplacement(AppliedMetric):
+    base_metric = MAE
+
+    def _compute_applied_metric(self, forecast: xr.Dataset, target: xr.Dataset):
+        # Dummy implementation for landfall displacement
+        return self.base_metrics[0]().compute_metric(forecast, target)
+
+
+# TODO: fill landfall time mean error out
+class LandfallTimeME(AppliedMetric):
+    base_metric = ME
+
+    def _compute_applied_metric(self, forecast: xr.Dataset, target: xr.Dataset):
+        # Dummy implementation for landfall time mean error
+        return self.base_metrics[0]().compute_metric(forecast, target)
+
+
+# TODO: fill landfall intensity mean absolute error out
+class LandfallIntensityMAE(AppliedMetric):
+    base_metric = MAE
+
+    def _compute_applied_metric(self, forecast: xr.Dataset, target: xr.Dataset):
+        # Dummy implementation for landfall intensity mean absolute error
+        return self.base_metrics[0]().compute_metric(forecast, target)
+
+
+# TODO: fill spatial displacement out
+class SpatialDisplacement(AppliedMetric):
+    base_metric = MAE
+
+    def _compute_applied_metric(self, forecast: xr.Dataset, target: xr.Dataset):
+        # Dummy implementation for spatial displacement
+        return self.base_metrics[0]().compute_metric(forecast, target)
+
+
+# TODO: fill false alarm ratio out
+class FAR(AppliedMetric):
+    base_metric = BinaryContingencyTable
+
+    def _compute_applied_metric(self, forecast: xr.Dataset, target: xr.Dataset):
+        # Dummy implementation for False Alarm Rate
+        return self.base_metrics[0]().compute_metric(forecast, target)
 
 
 class CSI(AppliedMetric):
