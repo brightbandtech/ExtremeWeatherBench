@@ -493,19 +493,7 @@ class IBTrACS(TargetBase):
     Target class for IBTrACS data.
     """
 
-    def __init__(
-        self,
-        source: str,
-        variables: list[Union[str, "derived.DerivedVariable"]],
-        variable_mapping: dict[str, str],
-        storage_options: Optional[dict] = None,
-        preprocess: Callable = utils._default_preprocess,
-    ):
-        super().__init__(
-            source, variables, variable_mapping, storage_options, preprocess
-        )
-
-    def open_data_from_source(
+    def _open_data_from_source(
         self, target_storage_options: Optional[dict] = None
     ) -> utils.IncomingDataInput:
         # not using storage_options in this case due to NetCDF4Backend not supporting them
