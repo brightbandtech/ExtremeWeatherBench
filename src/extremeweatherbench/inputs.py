@@ -1,3 +1,4 @@
+import dataclasses
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Callable, Optional, Union
 
@@ -9,7 +10,7 @@ import xarray as xr
 from extremeweatherbench import derived, utils
 
 if TYPE_CHECKING:
-    from extremeweatherbench import case
+    from extremeweatherbench import case, metrics
 
 #: Storage/access options for gridded target datasets.
 ARCO_ERA5_FULL_URI = (
@@ -25,29 +26,24 @@ LSR_URI = "gs://extremeweatherbench/datasets/lsr_01012020_04302025.parq"
 IBTRACS_URI = "https://www.ncei.noaa.gov/data/international-best-track-archive-for-climate-stewardship-ibtracs/v04r01/access/csv/ibtracs.ALL.list.v04r01.csv"  # noqa: E501
 
 
+@dataclasses.dataclass
 class InputBase(ABC):
     """
-    An abstract base class for target and forecast data.
+    An abstract base dataclass for target and forecast data.
 
-    A TargetBase is data that acts as the "truth" for a case. It can be a gridded dataset,
-    a point observation dataset, or any other reference dataset. Targets in EWB
-    are not required to be the same variable as the forecast dataset, but they must be in the
-    same coordinate system for evaluation.
+    Attributes:
+        source: The source of the data, which can be a local path or a remote URL/URI.
+        variables: A list of variables to select from the data.
+        variable_mapping: A dictionary of variable names to map to the data.
+        storage_options: Storage/access options for the data.
+        preprocess: A function to preprocess the data.
     """
 
-    def __init__(
-        self,
-        source: str,
-        variables: list[Union[str, "derived.DerivedVariable"]],
-        variable_mapping: dict = {},
-        storage_options: Optional[dict] = None,
-        preprocess: Callable = utils._default_preprocess,
-    ):
-        self.source = source
-        self.variables = variables
-        self.variable_mapping = variable_mapping
-        self.storage_options = storage_options
-        self.preprocess = preprocess
+    source: str
+    variables: list[Union[str, "derived.DerivedVariable"]]
+    variable_mapping: dict
+    storage_options: dict
+    preprocess: Callable = utils._default_preprocess
 
     @property
     def name(self) -> str:
@@ -136,14 +132,9 @@ class InputBase(ABC):
         return ds
 
 
+@dataclasses.dataclass
 class ForecastBase(InputBase):
-    """A base class defining the interface for ExtremeWeatherBench forecast data.
-
-    A Forecast is data that acts as the "forecast" for a case.
-
-    Attributes:
-        forecast_source: The source of the forecast data, which can be a local path or a remote URL/URI.
-    """
+    """A class defining the interface for ExtremeWeatherBench forecast data."""
 
     def subset_data_to_case(
         self,
@@ -166,10 +157,10 @@ class ForecastBase(InputBase):
         subset_time_data = utils.convert_init_time_to_valid_time(subset_time_data)
 
         try:
-            subset_time_data = subset_time_data[case_operator.forecast_config.variables]
+            subset_time_data = subset_time_data[case_operator.forecast.variables]
         except KeyError:
             raise KeyError(
-                f"Variables {case_operator.forecast_config.variables} not found in forecast data"
+                f"Variables {case_operator.forecast.variables} not found in forecast data"
             )
         fully_subset_data = case_operator.case.location.mask(
             subset_time_data, drop=True
@@ -177,24 +168,38 @@ class ForecastBase(InputBase):
         return fully_subset_data
 
 
+@dataclasses.dataclass
+class EvaluationObject:
+    """A class to store the evaluation object for a metric.
+
+    A EvaluationObject is a metric evaluation object for all cases in an event.
+    The evaluation is a set of all metrics, target variables, and forecast variables.
+
+    Multiple EvaluationObjects can be used to evaluate a single event type. This is useful for
+    evaluating distinct Targets or metrics with unique variables to evaluate.
+
+    Attributes:
+        event_type: The event type to evaluate.
+        metric: A list of BaseMetric objects.
+        target: A TargetBase object.
+        forecast: A ForecastBase object.
+    """
+
+    event_type: str
+    metric: list["metrics.BaseMetric"]
+    target: "TargetBase"
+    forecast: "ForecastBase"
+
+
+@dataclasses.dataclass
 class KerchunkForecast(ForecastBase):
     """
     Forecast class for kerchunked forecast data.
     """
 
-    def __init__(
-        self,
-        source: str,
-        variables: list[Union[str, "derived.DerivedVariable"]],
-        variable_mapping: dict[str, str],
-        storage_options: Optional[dict] = None,
-        preprocess: Callable = utils._default_preprocess,
-        chunks: dict = {"time": 48, "latitude": 721, "longitude": 1440},
-    ):
-        super().__init__(
-            source, variables, variable_mapping, storage_options, preprocess
-        )
-        self.chunks = chunks
+    chunks: dict = dataclasses.field(
+        default_factory=lambda: {"time": 48, "latitude": 721, "longitude": 1440}
+    )
 
     def _open_data_from_source(self) -> utils.IncomingDataInput:
         return open_kerchunk_reference(
@@ -204,24 +209,15 @@ class KerchunkForecast(ForecastBase):
         )
 
 
+@dataclasses.dataclass
 class ZarrForecast(ForecastBase):
     """
     Forecast class for zarr forecast data.
     """
 
-    def __init__(
-        self,
-        source: str,
-        variables: list[Union[str, "derived.DerivedVariable"]],
-        variable_mapping: dict[str, str],
-        storage_options: Optional[dict] = None,
-        preprocess: Callable = utils._default_preprocess,
-        chunks: dict = {"time": 48, "latitude": 721, "longitude": 1440},
-    ):
-        super().__init__(
-            source, variables, variable_mapping, storage_options, preprocess
-        )
-        self.chunks = chunks
+    chunks: dict = dataclasses.field(
+        default_factory=lambda: {"time": 48, "latitude": 721, "longitude": 1440}
+    )
 
     def _open_data_from_source(self) -> utils.IncomingDataInput:
         return xr.open_zarr(
@@ -231,6 +227,7 @@ class ZarrForecast(ForecastBase):
         )
 
 
+@dataclasses.dataclass
 class TargetBase(InputBase):
     """
     An abstract base class for target data.
@@ -242,6 +239,7 @@ class TargetBase(InputBase):
     """
 
 
+@dataclasses.dataclass
 class ERA5(TargetBase):
     """
     Target class for ERA5 gridded data.
@@ -251,18 +249,6 @@ class ERA5(TargetBase):
     different zarr source or modifying the open_data_from_source method to open the data
     using another method is required.
     """
-
-    def __init__(
-        self,
-        source: str,
-        variables: list[Union[str, "derived.DerivedVariable"]],
-        variable_mapping: dict[str, str],
-        storage_options: Optional[dict] = None,
-        preprocess: Callable = utils._default_preprocess,
-    ):
-        super().__init__(
-            source, variables, variable_mapping, storage_options, preprocess
-        )
 
     def _open_data_from_source(
         self,
@@ -291,7 +277,7 @@ class ERA5(TargetBase):
 
         # check that the variables are in the target data
         target_variables = [
-            v for v in case_operator.target_config.variables if isinstance(v, str)
+            v for v in case_operator.target.variables if isinstance(v, str)
         ]
         if target_variables and any(
             var not in subset_time_data.data_vars for var in target_variables
@@ -317,6 +303,7 @@ class ERA5(TargetBase):
         return data
 
 
+@dataclasses.dataclass
 class GHCN(TargetBase):
     """
     Target class for GHCN tabular data.
@@ -325,18 +312,6 @@ class GHCN(TargetBase):
     paradigm in open_data_from_source and to separate the subsetting
     into subset_data_to_case.
     """
-
-    def __init__(
-        self,
-        source: str,
-        variables: list[Union[str, "derived.DerivedVariable"]],
-        variable_mapping: dict[str, str],
-        storage_options: Optional[dict] = None,
-        preprocess: Callable = utils._default_preprocess,
-    ):
-        super().__init__(
-            source, variables, variable_mapping, storage_options, preprocess
-        )
 
     def _open_data_from_source(
         self,
@@ -406,6 +381,7 @@ class GHCN(TargetBase):
             raise ValueError(f"Data is not a polars LazyFrame: {type(data)}")
 
 
+@dataclasses.dataclass
 class LSR(TargetBase):
     """
     Target class for local storm report (LSR) tabular data.
@@ -414,18 +390,6 @@ class LSR(TargetBase):
     probability data. IndividualCase date ranges for LSRs should ideally be
     12 UTC to the next day at 12 UTC to match SPC methods.
     """
-
-    def __init__(
-        self,
-        source: str,
-        variables: list[Union[str, "derived.DerivedVariable"]],
-        variable_mapping: dict[str, str],
-        storage_options: Optional[dict] = None,
-        preprocess: Callable = utils._default_preprocess,
-    ):
-        super().__init__(
-            source, variables, variable_mapping, storage_options, preprocess
-        )
 
     def _open_data_from_source(
         self, target_storage_options: Optional[dict] = None
@@ -488,6 +452,7 @@ class LSR(TargetBase):
             raise ValueError(f"Data is not a pandas DataFrame: {type(data)}")
 
 
+@dataclasses.dataclass
 class IBTrACS(TargetBase):
     """
     Target class for IBTrACS data.
