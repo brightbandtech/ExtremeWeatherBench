@@ -3,7 +3,7 @@ import logging
 import numpy as np
 import xarray as xr
 
-from extremeweatherbench import config, evaluate, inputs, metrics, utils
+from extremeweatherbench import evaluate, inputs, metrics, utils
 
 logging.getLogger("urllib3.connectionpool").setLevel(logging.CRITICAL)
 logging.getLogger("botocore.httpchecksum").setLevel(logging.CRITICAL)
@@ -33,8 +33,7 @@ def _preprocess_bb_cira_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
     return ds
 
 
-era5_heatwave_target_config = config.TargetConfig(
-    target=inputs.ERA5,
+era5_heatwave_target = inputs.ERA5(
     source=inputs.ARCO_ERA5_FULL_URI,
     variables=["surface_air_temperature"],
     variable_mapping={
@@ -44,16 +43,14 @@ era5_heatwave_target_config = config.TargetConfig(
     storage_options={"remote_options": {"anon": True}},
 )
 
-ghcn_target_config = config.TargetConfig(
-    target=inputs.GHCN,
+ghcn_target = inputs.GHCN(
     source=inputs.DEFAULT_GHCN_URI,
     variables=["surface_air_temperature"],
     variable_mapping={"t2": "surface_air_temperature"},
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
 )
 
-hres_forecast_config = config.ForecastConfig(
-    forecast=inputs.ZarrForecast,
+hres_forecast = inputs.ZarrForecast(
     source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
     variables=["surface_air_temperature"],
     variable_mapping={
@@ -66,7 +63,7 @@ hres_forecast_config = config.ForecastConfig(
 
 # just one for now
 heatwave_metric_list = [
-    config.MetricEvaluationObject(
+    inputs.EvaluationObject(
         event_type="heat_wave",
         metric=[
             metrics.MaximumMAE,
@@ -75,10 +72,10 @@ heatwave_metric_list = [
             metrics.DurationME,
             metrics.MaxMinMAE,
         ],
-        target_config=era5_heatwave_target_config,
-        forecast_config=hres_forecast_config,
+        target=era5_heatwave_target,
+        forecast=hres_forecast,
     ),
-    # rs.MetricEvaluationObject(
+    # rs.EvaluationObject(
     #     event_type="heat_wave",
     #     metric=[
     #         crs.MaximumMAE,
