@@ -347,7 +347,7 @@ class GHCN(TargetBase):
 
         # Add time, latitude, and longitude to the variables, polars doesn't do indexes
         target_variables = [
-            v for v in case_operator.target_variables if isinstance(v, str)
+            v for v in case_operator.target.variables if isinstance(v, str)
         ]
         if target_variables is None:
             all_variables = ["time", "latitude", "longitude"]
@@ -410,23 +410,23 @@ class LSR(TargetBase):
             raise ValueError(f"Expected pandas DataFrame, got {type(target_data)}")
 
         # latitude, longitude are strings by default, convert to float
-        target_data["lat"] = target_data["lat"].astype(float)
-        target_data["lon"] = target_data["lon"].astype(float)
-        target_data["time"] = pd.to_datetime(target_data["time"])
+        target_data["latitude"] = target_data["latitude"].astype(float)
+        target_data["longitude"] = target_data["longitude"].astype(float)
+        target_data["valid_time"] = pd.to_datetime(target_data["valid_time"])
 
         filters = (
-            (target_data["time"] >= case_operator.case.start_date)
-            & (target_data["time"] <= case_operator.case.end_date)
-            & (target_data["lat"] >= case_operator.case.location.latitude_min)
-            & (target_data["lat"] <= case_operator.case.location.latitude_max)
+            (target_data["valid_time"] >= case_operator.case.start_date)
+            & (target_data["valid_time"] <= case_operator.case.end_date)
+            & (target_data["latitude"] >= case_operator.case.location.latitude_min)
+            & (target_data["latitude"] <= case_operator.case.location.latitude_max)
             & (
-                target_data["lon"]
+                target_data["longitude"]
                 >= utils.convert_longitude_to_180(
                     case_operator.case.location.longitude_min
                 )
             )
             & (
-                target_data["lon"]
+                target_data["longitude"]
                 <= utils.convert_longitude_to_180(
                     case_operator.case.location.longitude_max
                 )
@@ -435,14 +435,56 @@ class LSR(TargetBase):
 
         subset_target_data = target_data.loc[filters]
 
-        subset_target_data = subset_target_data.rename(
-            columns={"lat": "latitude", "lon": "longitude", "time": "valid_time"}
-        )
-
         return subset_target_data
 
     def _custom_convert_to_dataset(self, data: utils.IncomingDataInput) -> xr.Dataset:
         if isinstance(data, pd.DataFrame):
+            # Normalize these times for the LSR data
+            # Western hemisphere reports get bucketed to 12Z on the date they fall between 12Z-12Z
+            # Eastern hemisphere reports get bucketed to 00Z on the date they occur
+
+            # First, let's figure out which hemisphere each report is in
+            western_hemisphere_mask = data["longitude"] < 0
+            eastern_hemisphere_mask = data["longitude"] >= 0
+
+            # For western hemisphere: if report is between today 12Z and tomorrow 12Z, assign to today 12Z
+            if western_hemisphere_mask.any():
+                western_data = data[western_hemisphere_mask].copy()
+                # Get the date portion and create 12Z times
+                report_dates = western_data["valid_time"].dt.date
+                twelve_z_times = pd.to_datetime(report_dates) + pd.Timedelta(hours=12)
+                next_day_twelve_z = twelve_z_times + pd.Timedelta(days=1)
+
+                # Check if report falls in the 12Z to 12Z+1day window
+                in_window_mask = (western_data["valid_time"] >= twelve_z_times) & (
+                    western_data["valid_time"] < next_day_twelve_z
+                )
+                # For reports that don't fall in today's 12Z window, try yesterday's window
+                yesterday_twelve_z = twelve_z_times - pd.Timedelta(days=1)
+                in_yesterday_window = (
+                    western_data["valid_time"] >= yesterday_twelve_z
+                ) & (western_data["valid_time"] < twelve_z_times)
+
+                # Assign 12Z times
+                western_data.loc[in_window_mask, "valid_time"] = twelve_z_times[
+                    in_window_mask
+                ]
+                western_data.loc[in_yesterday_window, "valid_time"] = (
+                    yesterday_twelve_z[in_yesterday_window]
+                )
+
+                data.loc[western_hemisphere_mask] = western_data
+
+            # For eastern hemisphere: assign to 00Z of the same date
+            if eastern_hemisphere_mask.any():
+                eastern_data = data[eastern_hemisphere_mask].copy()
+                # Get the date portion and create 00Z times
+                report_dates = eastern_data["valid_time"].dt.date
+                zero_z_times = pd.to_datetime(report_dates)
+                eastern_data["valid_time"] = zero_z_times
+
+                data.loc[eastern_hemisphere_mask] = eastern_data
+
             data = data.set_index(["valid_time", "latitude", "longitude"])
             data = xr.Dataset.from_dataframe(
                 data[~data.index.duplicated(keep="first")], sparse=True
@@ -522,7 +564,7 @@ class IBTrACS(TargetBase):
         # check that the variables are in the target data
         schema_fields = [field for field in subset_target_data.collect_schema()]
         target_variables = [
-            v for v in case_operator.target_variables if isinstance(v, str)
+            v for v in case_operator.target.variables if isinstance(v, str)
         ]
         if target_variables and any(var not in schema_fields for var in all_variables):
             raise ValueError(f"Variables {all_variables} not found in target data")
@@ -588,3 +630,8 @@ def open_kerchunk_reference(
             "Unknown kerchunk file type found in forecast path, only json and parquet are supported."
         )
     return kerchunk_ds
+
+
+def open_lazy_target_data(target_base: "TargetBase") -> utils.IncomingDataInput:
+    """Open the target data from the target URI."""
+    return target_base._open_data_from_source()
