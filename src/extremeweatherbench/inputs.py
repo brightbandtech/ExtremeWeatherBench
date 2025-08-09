@@ -440,7 +440,7 @@ class LSR(TargetBase):
     def _custom_convert_to_dataset(self, data: utils.IncomingDataInput) -> xr.Dataset:
         # Map report_type column to numeric values
         if "report_type" in data.columns:
-            report_type_mapping = {"wind": 1, "hail": 2, "tornado": 3}
+            report_type_mapping = {"wind": 1, "hail": 2, "tor": 3}
             data["report_type"] = data["report_type"].map(report_type_mapping)
 
         if isinstance(data, pd.DataFrame):
