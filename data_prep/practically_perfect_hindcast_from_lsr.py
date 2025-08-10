@@ -15,16 +15,16 @@
 # ---
 
 # %%
+import joblib
+import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
+import sparse
 import xarray as xr
 from scipy.ndimage import gaussian_filter
-from extremeweatherbench import utils, inputs
-import sparse
-import pandas as pd
 from tqdm.auto import tqdm
-import matplotlib.pyplot as plt
-from matplotlib.colors import ListedColormap
-import matplotlib.colors as mcolors
+
+from extremeweatherbench import inputs, utils
 
 
 # %%
@@ -95,6 +95,7 @@ def sparse_practically_perfect_hindcast(
         mapped_coords_df["report_type"] = coords_df["report_type"].map(
             {0: 0, 1: 0, 2: 50, 3: 10}
         )
+        sigma = 5
     else:
         mapped_coords_df["report_type"] = coords_df["report_type"].map(
             {0: 0, 1: 0, 2: 2, 3: 3}
@@ -132,13 +133,14 @@ def sparse_practically_perfect_hindcast(
     regridded_da = xr.DataArray(
         regrid_values,
         dims=["latitude", "longitude"],
-        coords={"latitude": target_coords["latitude"], "longitude": target_coords["longitude"]},
+        coords={
+            "latitude": target_coords["latitude"],
+            "longitude": target_coords["longitude"],
+        },
     )
-
 
     # Fill NaN values with np.nan for the reports
     regridded_da = regridded_da.fillna(0)
-
 
     smoothed_reports = gaussian_filter(regridded_da, sigma=sigma)
     pph = xr.DataArray(
@@ -151,29 +153,38 @@ def sparse_practically_perfect_hindcast(
         return None
     return pph_sparse
 
+
 # %%
-lsr = inputs.LSR(source=inputs.LSR_URI, variables=['report'],variable_mapping={'report': 'reports'}, storage_options={'anon': True})
+lsr = inputs.LSR(
+    source=inputs.LSR_URI,
+    variables=["report"],
+    variable_mapping={"report": "reports"},
+    storage_options={"anon": True},
+)
 lsr_df = lsr.open_and_maybe_preprocess_data_from_source()
 lsr_ds = lsr._custom_convert_to_dataset(lsr_df)
 
 # %%
-unique_valid_times = np.unique(lsr_ds['valid_time'].values)
+unique_valid_times = np.unique(lsr_ds["valid_time"].values)
 
 # %% [markdown]
 # parallel:
 
 # %%
-import joblib
-
 pph_sparse_list = joblib.Parallel(n_jobs=-1)(
-    joblib.delayed(sparse_practically_perfect_hindcast)(lsr_ds['report_type'].sel(valid_time=time)) 
+    joblib.delayed(sparse_practically_perfect_hindcast)(
+        lsr_ds["report_type"].sel(valid_time=time)
+    )
     for time in tqdm(unique_valid_times)
 )
 # Find indices where pph_sparse_list is None and filter them out
 valid_indices = [i for i, item in enumerate(pph_sparse_list) if item is not None]
 filtered_valid_times = [unique_valid_times[i] for i in valid_indices]
 
-pph_sparse = xr.concat([n for n in pph_sparse_list if n is not None], pd.Index(filtered_valid_times, name='valid_time'))
+pph_sparse = xr.concat(
+    [n for n in pph_sparse_list if n is not None],
+    pd.Index(filtered_valid_times, name="valid_time"),
+)
 pph_sparse
 
 # %% [markdown]
@@ -185,32 +196,34 @@ pph_sparse
 # pph_sparse
 
 # %%
-import matplotlib.pyplot as plt
+from datetime import datetime
+
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
-from datetime import datetime
+import matplotlib.pyplot as plt
+
 
 def plot_pph_contours(dt: datetime, da: xr.DataArray):
     """Make a cartopy contour plot of the practically perfect hindcast data.
-    
+
     Args:
         dt: The datetime to plot
         dataset: The xarray dataset containing PPH data
     """
     # Select the data for the given datetime
     try:
-        data_slice = da.sel(valid_time=dt, method='nearest')
+        data_slice = da.sel(valid_time=dt, method="nearest")
     except:
         data_slice = da
     n_points = data_slice.data.nnz
-    
+
     # Convert sparse array to dense if needed
-    if hasattr(data_slice.data, 'todense'):
+    if hasattr(data_slice.data, "todense"):
         data_slice = data_slice.copy(data=data_slice.data.todense())
     # Create the plot
     fig = plt.figure(figsize=(12, 8))
     ax = plt.axes(projection=ccrs.PlateCarree())
-    
+
     # Add map features
     ax.add_feature(cfeature.COASTLINE, linewidth=0.5)
     ax.add_feature(cfeature.BORDERS, linewidth=0.5)
@@ -219,39 +232,45 @@ def plot_pph_contours(dt: datetime, da: xr.DataArray):
     ax.add_feature(cfeature.LAND, alpha=0.3)
     ax.set_extent([-125, -66.5, 20, 50])
 
-    levels = [0.01, .05,.15,.30,.45,.60,.75]  # 10 levels between 0 and 1
+    levels = [0.01, 0.05, 0.15, 0.30, 0.45, 0.60, 0.75]  # 10 levels between 0 and 1
 
     # Create the colormap with alpha=0 for values below 0.05
     # Create a mask for values below 0.05
     mask = np.ma.masked_less(data_slice, 0.01)
     cmap_with_alpha = plt.cm.viridis.copy()
-    cmap_with_alpha.set_bad('none', alpha=0)  # Set masked values to transparent
+    cmap_with_alpha.set_bad("none", alpha=0)  # Set masked values to transparent
 
-    contour = ax.contour(data_slice.longitude, data_slice.latitude, mask, 
-                        levels=levels, transform=ccrs.PlateCarree(),
-                        cmap=cmap_with_alpha, extend='both')
-    
+    contour = ax.contour(
+        data_slice.longitude,
+        data_slice.latitude,
+        mask,
+        levels=levels,
+        transform=ccrs.PlateCarree(),
+        cmap=cmap_with_alpha,
+        extend="both",
+    )
+
     # Make the contour plot
     contours = ax.contour(
-        data_slice['longitude'], 
-        data_slice['latitude'], 
-        data_slice, 
-        levels=levels, 
+        data_slice["longitude"],
+        data_slice["latitude"],
+        data_slice,
+        levels=levels,
         transform=ccrs.PlateCarree(),
-        colors='black',
-        linewidths=0.75
+        colors="black",
+        linewidths=0.75,
     )
-    
-    # Add contour labels
-    ax.clabel(contours, inline=True, fontsize=10, fmt='%.1f')
 
-    
+    # Add contour labels
+    ax.clabel(contours, inline=True, fontsize=10, fmt="%.1f")
+
     # Add title
-    plt.title(f'Practically Perfect Hindcast - {pd.to_datetime(dt).strftime("%Y-%m-%d %H:%M UTC")}, N={n_points}')
-    
+    plt.title(
+        f"Practically Perfect Hindcast - {pd.to_datetime(dt).strftime('%Y-%m-%d %H:%M UTC')}, N={n_points}"
+    )
+
     plt.tight_layout()
     plt.show()
-
 
 
 # %%
@@ -268,24 +287,44 @@ ax.add_feature(cfeature.LAND, alpha=0.3)
 ax.set_extent([-125, -66.5, 20, 50])
 
 # Get the data for this time
-time_filtered_data = lsr_df[lsr_df['valid_time']==filtered_valid_times[865]]
+time_filtered_data = lsr_df[lsr_df["valid_time"] == filtered_valid_times[865]]
 
 # Plot the original reports on top - red for tornado (3), green for hail (2)
-tornado_reports = time_filtered_data[time_filtered_data['report_type'] == 3]
-hail_reports = time_filtered_data[time_filtered_data['report_type'] == 2]
+tornado_reports = time_filtered_data[time_filtered_data["report_type"] == 3]
+hail_reports = time_filtered_data[time_filtered_data["report_type"] == 2]
 
 if len(tornado_reports) > 0:
-    ax.scatter(tornado_reports['longitude'], tornado_reports['latitude'], 
-              c='red', s=50, alpha=0.9, transform=ccrs.PlateCarree(), 
-              label='Tornado Reports', marker='^', edgecolors='darkred', linewidths=1)
+    ax.scatter(
+        tornado_reports["longitude"],
+        tornado_reports["latitude"],
+        c="red",
+        s=50,
+        alpha=0.9,
+        transform=ccrs.PlateCarree(),
+        label="Tornado Reports",
+        marker="^",
+        edgecolors="darkred",
+        linewidths=1,
+    )
 
 if len(hail_reports) > 0:
-    ax.scatter(hail_reports['longitude'], hail_reports['latitude'], 
-              c='green', s=50, alpha=0.9, transform=ccrs.PlateCarree(), 
-              label='Hail Reports', marker='s', edgecolors='darkgreen', linewidths=1)
+    ax.scatter(
+        hail_reports["longitude"],
+        hail_reports["latitude"],
+        c="green",
+        s=50,
+        alpha=0.9,
+        transform=ccrs.PlateCarree(),
+        label="Hail Reports",
+        marker="s",
+        edgecolors="darkgreen",
+        linewidths=1,
+    )
 
 ax.legend()
-plt.title(f'Test Regridded Data & Storm Reports - {pd.to_datetime(filtered_valid_times[865]).strftime("%Y-%m-%d %H:%M UTC")}')
+plt.title(
+    f"Test Regridded Data & Storm Reports - {pd.to_datetime(filtered_valid_times[865]).strftime('%Y-%m-%d %H:%M UTC')}"
+)
 plt.tight_layout()
 
 # %%
@@ -299,4 +338,4 @@ pph_dense.name = "practically_perfect_hindcast"
 
 # %%
 # will become dataset on load
-pph_dense.to_zarr('practically_perfect_hindcast_20200104_20250430.zarr',mode='w')
+pph_dense.to_zarr("practically_perfect_hindcast_20200104_20250430.zarr", mode="w")
