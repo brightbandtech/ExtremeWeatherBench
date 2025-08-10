@@ -23,6 +23,8 @@ DEFAULT_GHCN_URI = "gs://extremeweatherbench/datasets/ghcnh.parq"
 #: Storage/access options for local storm report (LSR) tabular data.
 LSR_URI = "gs://extremeweatherbench/datasets/lsr_01012020_04302025.parq"
 
+PPH_URI = "gs://extremeweatherbench/datasets/practically_perfect_hindcast_20200104_20250430.zarr"
+
 IBTRACS_URI = "https://www.ncei.noaa.gov/data/international-best-track-archive-for-climate-stewardship-ibtracs/v04r01/access/csv/ibtracs.ALL.list.v04r01.csv"  # noqa: E501
 
 
@@ -267,40 +269,7 @@ class ERA5(TargetBase):
         data: utils.IncomingDataInput,
         case_operator: "case.CaseOperator",
     ) -> utils.IncomingDataInput:
-        if not isinstance(data, (xr.Dataset, xr.DataArray)):
-            raise ValueError(f"Expected xarray Dataset or DataArray, got {type(data)}")
-
-        # subset time first to avoid OOM masking issues
-        subset_time_data = data.sel(
-            valid_time=slice(case_operator.case.start_date, case_operator.case.end_date)
-        )
-
-        # check that the variables are in the target data
-        target_variables = [
-            v for v in case_operator.target.variables if isinstance(v, str)
-        ]
-        if target_variables and any(
-            var not in subset_time_data.data_vars for var in target_variables
-        ):
-            raise ValueError(f"Variables {target_variables} not found in target data")
-        # subset the variables
-        elif target_variables:
-            subset_time_variable_data = subset_time_data[target_variables]
-        else:
-            raise ValueError(
-                "Variables not defined for ERA5. Please list at least one variable to select."
-            )
-        # mask the data to the case location
-        fully_subset_data = case_operator.case.location.mask(
-            subset_time_variable_data, drop=True
-        )
-
-        return fully_subset_data
-
-    def _custom_convert_to_dataset(self, data: utils.IncomingDataInput) -> xr.Dataset:
-        if isinstance(data, xr.DataArray):
-            data = data.to_dataset()
-        return data
+        return zarr_target_subsetter(data, case_operator)
 
 
 @dataclasses.dataclass
@@ -501,6 +470,28 @@ class LSR(TargetBase):
 
 
 @dataclasses.dataclass
+class PPH(TargetBase):
+    """
+    Target class for practically perfect hindcast data.
+    """
+
+    def _open_data_from_source(
+        self, target_storage_options: Optional[dict] = None
+    ) -> utils.IncomingDataInput:
+        return xr.open_zarr(self.source, storage_options=target_storage_options)
+
+    def subset_data_to_case(
+        self,
+        target_data: utils.IncomingDataInput,
+        case_operator: "case.CaseOperator",
+    ) -> utils.IncomingDataInput:
+        return zarr_target_subsetter(target_data, case_operator)
+
+    def _custom_convert_to_dataset(self, data: utils.IncomingDataInput) -> xr.Dataset:
+        return data
+
+
+@dataclasses.dataclass
 class IBTrACS(TargetBase):
     """
     Target class for IBTrACS data.
@@ -641,3 +632,37 @@ def open_kerchunk_reference(
 def open_lazy_target_data(target_base: "TargetBase") -> utils.IncomingDataInput:
     """Open the target data from the target URI."""
     return target_base._open_data_from_source()
+
+
+def zarr_target_subsetter(
+    data: xr.Dataset,
+    case_operator: "case.CaseOperator",
+) -> xr.Dataset:
+    """Subset a zarr dataset to a case operator."""
+    if not isinstance(data, (xr.Dataset, xr.DataArray)):
+        raise ValueError(f"Expected xarray Dataset or DataArray, got {type(data)}")
+
+    # subset time first to avoid OOM masking issues
+    subset_time_data = data.sel(
+        valid_time=slice(case_operator.case.start_date, case_operator.case.end_date)
+    )
+
+    # check that the variables are in the target data
+    target_variables = [v for v in case_operator.target.variables if isinstance(v, str)]
+    if target_variables and any(
+        var not in subset_time_data.data_vars for var in target_variables
+    ):
+        raise ValueError(f"Variables {target_variables} not found in target data")
+    # subset the variables
+    elif target_variables:
+        subset_time_variable_data = subset_time_data[target_variables]
+    else:
+        raise ValueError(
+            "Variables not defined for ERA5. Please list at least one variable to select."
+        )
+    # mask the data to the case location
+    fully_subset_data = case_operator.case.location.mask(
+        subset_time_variable_data, drop=True
+    )
+
+    return fully_subset_data
