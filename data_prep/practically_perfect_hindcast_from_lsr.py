@@ -95,6 +95,7 @@ def sparse_practically_perfect_hindcast(
         mapped_coords_df["report_type"] = coords_df["report_type"].map(
             {0: 0, 1: 0, 2: 50, 3: 10}
         )
+        sigma = 5
     else:
         mapped_coords_df["report_type"] = coords_df["report_type"].map(
             {0: 0, 1: 0, 2: 2, 3: 3}
