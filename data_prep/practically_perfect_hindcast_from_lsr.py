@@ -22,6 +22,9 @@ from extremeweatherbench import utils, inputs
 import sparse
 import pandas as pd
 from tqdm.auto import tqdm
+import matplotlib.pyplot as plt
+from matplotlib.colors import ListedColormap
+import matplotlib.colors as mcolors
 
 
 # %%
@@ -29,7 +32,7 @@ def sparse_practically_perfect_hindcast(
     da: xr.DataArray,
     resolution: float = 0.25,
     # 1 is wind, 2 is hail, 3 is tornado
-    sigma: float = 1.5,
+    sigma: float = 3,
 ) -> xr.Dataset:
     """Compute the Practically Perfect Hindcast (PPH) using storm report data using latitude/longitude grid spacing
     instead of the NCEP 212 Eta Lambert Conformal projection; based on the method described in Hitchens et al 2013,
@@ -60,78 +63,78 @@ def sparse_practically_perfect_hindcast(
     }
 
     da_dense = da.to_numpy()
-
-    # Find where we have non-NaN values - the sparse array might have NaNs instead of zeros
     valid_mask = ~np.isnan(da_dense)
-    valid_indices = np.where(valid_mask)
-    lat_indices, lon_indices = valid_indices
+    lat_indices, lon_indices = np.where(valid_mask)
 
-    # Only keep the locations that actually have data, not the zeros or NaNs
     if len(lat_indices) > 0:
-        # Get the actual lat/lon coordinates for these spots
         lats = da.latitude.values[lat_indices]
         lons = da.longitude.values[lon_indices]
-        
-        # Get the report_type values at these locations
-        report_values = da_dense[valid_indices]
-        
-        # Put it all together in a dataframe
-        coords_df = pd.DataFrame({
-            'latitude': lats,
-            'longitude': lons,
-            'report_type': report_values.flatten() if hasattr(report_values, 'flatten') else report_values
-        })
+        report_values = da_dense[valid_mask]
+        coords_df = pd.DataFrame(
+            {
+                "latitude": lats,
+                "longitude": lons,
+                "report_type": report_values.flatten()
+                if hasattr(report_values, "flatten")
+                else report_values,
+            }
+        )
     else:
-        coords_df = pd.DataFrame(columns=['latitude', 'longitude', 'report_type'])
-    # 0 is no report, 1 is wind, 2 is hail, 3 is tornado. Drop no reports or wind reports.
-    if set(np.unique(coords_df['report_type'])).issubset({0, 1}):
+        coords_df = pd.DataFrame(columns=["latitude", "longitude", "report_type"])
+
+    # 0 is no report, 1 is wind, 2 is hail, 3 is tornado. Drop if only no report/wind.
+    if set(np.unique(coords_df["report_type"])).issubset({0, 1}):
         return None
-    # First, ensure longitude is in 0-360 range
-    coords_df['longitude'] = utils.convert_longitude_to_360(coords_df['longitude'])
+
+    # Normalize longitudes to [0, 360)
+    coords_df["longitude"] = utils.convert_longitude_to_360(coords_df["longitude"])
+
+    # Underreporting adjustment
     mapped_coords_df = coords_df.copy()
-    # If any longitude is less than 180, we need to multiply by 10 to get over underreporting bias
     if any(coords_df.longitude < 180):
-        # Australia is a special case, we need to multiply by 10 to get over underreporting bias
-        mapped_coords_df['report_type'] = coords_df['report_type'].map({0:0, 1:1, 2: 50, 3: 10})
-    else:
-        mapped_coords_df['report_type'] = coords_df['report_type'].map({0:0, 1:1, 2:2, 3:3})
-
-
-    coords_da = mapped_coords_df.set_index(['latitude', 'longitude']).to_xarray()['report_type']
-
-    # Regrid the sparse data to the target grid
-    # Interpolate the sparse data to the target grid
-    # Handle case where there's only one data point - interpolation doesn't work
-    if len(coords_da.latitude) <= 2 or len(coords_da.longitude) <= 2:
-        # Create a full grid filled with zeros
-        regridded_da = xr.DataArray(
-            np.zeros((len(target_coords["latitude"]), len(target_coords["longitude"]))),
-            dims=["latitude", "longitude"],
-            coords={"latitude": target_coords["latitude"], "longitude": target_coords["longitude"]}
+        mapped_coords_df["report_type"] = coords_df["report_type"].map(
+            {0: 0, 1: 0, 2: 50, 3: 10}
         )
-        
-        # Handle multiple data points when we have sparse data
-        for i in range(len(coords_da.latitude)):
-            for j in range(len(coords_da.longitude)):
-                lat_val = coords_da.latitude.values[i]
-                lon_val = coords_da.longitude.values[j]
-                report_val = coords_da.values[i, j]
-                
-                # Skip if this is a NaN value or zero (no report)
-                if np.isnan(report_val) or report_val == 0:
-                    continue
-                    
-                lat_idx = np.argmin(np.abs(target_coords["latitude"].values - lat_val))
-                lon_idx = np.argmin(np.abs(target_coords["longitude"].values - lon_val))
-                
-                # Use the maximum value if there's already a value at this grid point
-                regridded_da.values[lat_idx, lon_idx] = max(regridded_da.values[lat_idx, lon_idx], report_val)
     else:
-        regridded_da = coords_da.interp(
-            latitude=target_coords["latitude"],
-            longitude=target_coords["longitude"],
-            method="nearest", 
+        mapped_coords_df["report_type"] = coords_df["report_type"].map(
+            {0: 0, 1: 0, 2: 2, 3: 3}
         )
+
+    if len(mapped_coords_df) == 0:
+        return None
+
+    lat_vals = mapped_coords_df["latitude"].to_numpy()
+    lon_vals = mapped_coords_df["longitude"].to_numpy()
+    vals = mapped_coords_df["report_type"].to_numpy()
+
+    # Only keep nonzero, finite entries
+    good = np.isfinite(vals) & (vals != 0)
+    if not np.any(good):
+        return None
+
+    lat_vals = lat_vals[good]
+    lon_vals = lon_vals[good]
+    vals = vals[good]
+
+    nlat = grid_lats.size
+    nlon = grid_lons.size
+
+    # Compute nearest index per point; clip to bounds
+    lat_idx = np.rint((lat_vals - min_lat_fixed) / resolution).astype(int)
+    lon_idx = np.rint((lon_vals - min_lon_fixed) / resolution).astype(int)
+    lat_idx = np.clip(lat_idx, 0, nlat - 1)
+    lon_idx = np.clip(lon_idx, 0, nlon - 1)
+
+    # Scatter with max reduction (handles multiple points per cell)
+    regrid_values = np.zeros((nlat, nlon), dtype=float)
+    np.maximum.at(regrid_values, (lat_idx, lon_idx), vals)
+
+    regridded_da = xr.DataArray(
+        regrid_values,
+        dims=["latitude", "longitude"],
+        coords={"latitude": target_coords["latitude"], "longitude": target_coords["longitude"]},
+    )
+
 
     # Fill NaN values with np.nan for the reports
     regridded_da = regridded_da.fillna(0)
@@ -177,9 +180,9 @@ pph_sparse
 # serial:
 
 # %%
-pph_sparse = [sparse_practically_perfect_hindcast(lsr_ds['report_type'].sel(valid_time=time)) for time in tqdm(unique_valid_times)]
-pph_sparse = xr.concat(pph_sparse, unique_valid_times, name='valid_time')
-pph_sparse
+# pph_sparse = [sparse_practically_perfect_hindcast(lsr_ds['report_type'].sel(valid_time=time)) for time in tqdm(unique_valid_times)]
+# pph_sparse = xr.concat(pph_sparse, unique_valid_times, name='valid_time')
+# pph_sparse
 
 # %%
 import matplotlib.pyplot as plt
@@ -195,7 +198,10 @@ def plot_pph_contours(dt: datetime, da: xr.DataArray):
         dataset: The xarray dataset containing PPH data
     """
     # Select the data for the given datetime
-    data_slice = da.sel(valid_time=dt, method='nearest')
+    try:
+        data_slice = da.sel(valid_time=dt, method='nearest')
+    except:
+        data_slice = da
     n_points = data_slice.data.nnz
     
     # Convert sparse array to dense if needed
@@ -212,9 +218,18 @@ def plot_pph_contours(dt: datetime, da: xr.DataArray):
     ax.add_feature(cfeature.OCEAN, alpha=0.3)
     ax.add_feature(cfeature.LAND, alpha=0.3)
     ax.set_extent([-125, -66.5, 20, 50])
-    
-    # Create contour levels from 0 to 1 every 0.1
-    levels = np.arange(0.1, 1.1, 0.1)
+
+    levels = [0.01, .05,.15,.30,.45,.60,.75]  # 10 levels between 0 and 1
+
+    # Create the colormap with alpha=0 for values below 0.05
+    # Create a mask for values below 0.05
+    mask = np.ma.masked_less(data_slice, 0.01)
+    cmap_with_alpha = plt.cm.viridis.copy()
+    cmap_with_alpha.set_bad('none', alpha=0)  # Set masked values to transparent
+
+    contour = ax.contour(data_slice.longitude, data_slice.latitude, mask, 
+                        levels=levels, transform=ccrs.PlateCarree(),
+                        cmap=cmap_with_alpha, extend='both')
     
     # Make the contour plot
     contours = ax.contour(
@@ -223,25 +238,65 @@ def plot_pph_contours(dt: datetime, da: xr.DataArray):
         data_slice, 
         levels=levels, 
         transform=ccrs.PlateCarree(),
-        colors='red',
-        linewidths=1.5
+        colors='black',
+        linewidths=0.75
     )
     
     # Add contour labels
     ax.clabel(contours, inline=True, fontsize=10, fmt='%.1f')
-    
-    # Set extent to focus on data region
-    # ax.set_global()
+
     
     # Add title
     plt.title(f'Practically Perfect Hindcast - {pd.to_datetime(dt).strftime("%Y-%m-%d %H:%M UTC")}, N={n_points}')
     
     plt.tight_layout()
-    return fig, ax
+    plt.show()
 
 
 
 # %%
-plot_pph_contours(filtered_valid_times[40], pph_sparse)
+
+fig = plt.figure(figsize=(12, 8))
+ax = plt.axes(projection=ccrs.PlateCarree())
+
+
+ax.add_feature(cfeature.COASTLINE, linewidth=0.5)
+ax.add_feature(cfeature.BORDERS, linewidth=0.5)
+ax.add_feature(cfeature.STATES, linewidth=0.2)
+ax.add_feature(cfeature.OCEAN, alpha=0.3)
+ax.add_feature(cfeature.LAND, alpha=0.3)
+ax.set_extent([-125, -66.5, 20, 50])
+
+# Get the data for this time
+time_filtered_data = lsr_df[lsr_df['valid_time']==filtered_valid_times[865]]
+
+# Plot the original reports on top - red for tornado (3), green for hail (2)
+tornado_reports = time_filtered_data[time_filtered_data['report_type'] == 3]
+hail_reports = time_filtered_data[time_filtered_data['report_type'] == 2]
+
+if len(tornado_reports) > 0:
+    ax.scatter(tornado_reports['longitude'], tornado_reports['latitude'], 
+              c='red', s=50, alpha=0.9, transform=ccrs.PlateCarree(), 
+              label='Tornado Reports', marker='^', edgecolors='darkred', linewidths=1)
+
+if len(hail_reports) > 0:
+    ax.scatter(hail_reports['longitude'], hail_reports['latitude'], 
+              c='green', s=50, alpha=0.9, transform=ccrs.PlateCarree(), 
+              label='Hail Reports', marker='s', edgecolors='darkgreen', linewidths=1)
+
+ax.legend()
+plt.title(f'Test Regridded Data & Storm Reports - {pd.to_datetime(filtered_valid_times[865]).strftime("%Y-%m-%d %H:%M UTC")}')
+plt.tight_layout()
 
 # %%
+plot_pph_contours(filtered_valid_times[865], pph_sparse)
+
+# %%
+# Convert sparse array to dense and back to DataArray
+pph_dense = pph_sparse.copy()
+pph_dense.data = pph_sparse.data.todense()
+pph_dense.name = "practically_perfect_hindcast"
+
+# %%
+# will become dataset on load
+pph_dense.to_zarr('practically_perfect_hindcast_20200104_20250430.zarr',mode='w')
