@@ -499,7 +499,9 @@ class IBTrACS(TargetBase):
     ) -> utils.IncomingDataInput:
         # not using storage_options in this case due to NetCDF4Backend not supporting them
         target_data: pl.LazyFrame = pl.scan_csv(
-            self.source, storage_options=target_storage_options
+            self.source,
+            storage_options=target_storage_options,
+            skip_rows_after_header=1,
         )
         return target_data
 
