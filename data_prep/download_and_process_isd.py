@@ -11,21 +11,23 @@ This script is used for parsing ISD files and converting them to hourly data
 5. Save the processed data to a new parquet file
 """
 
-import pandas as pd
-import yaml
-from extremeweatherbench import utils
-import logging
-import numpy as np
-from pathlib import Path
-import aiohttp
 import asyncio
-from distributed import Client
+import logging
 import os
+from pathlib import Path
+
+import aiohttp
 import dask
+import numpy as np
+import pandas as pd
+import xarray as xr
+import yaml
+from distributed import Client
+from geopy.distance import great_circle as geodist
 from tqdm import tqdm
 from tqdm.asyncio import tqdm as atqdm
-import xarray as xr
-from geopy.distance import great_circle as geodist
+
+from extremeweatherbench import utils
 
 # Quality code for erroneous values flagged by ISD
 # To collect as much data as possible and avoid some values flagged by unknown codes being excluded,
@@ -64,9 +66,7 @@ async def download_file_async(session, station, url, output_dir, overwrite=False
 
 
 async def download_ISD_async(case_stations_dict, output_dir, overwrite=False):
-    """
-    Download the data from the source for the stations in station_list.
-    """
+    """Download the data from the source for the stations in station_list."""
     logger.info("Start downloading")
     async with aiohttp.ClientSession() as session:
         tasks = []
@@ -91,8 +91,7 @@ async def download_ISD_async(case_stations_dict, output_dir, overwrite=False):
 
 
 def parse_temperature_col(data):
-    """
-    Process temperature and dew point temperature columns
+    """Process temperature and dew point temperature columns
     TMP/DEW column format: -0100,1
     Steps:
     1. Set values flagged as erroneous/missing to NaN
@@ -125,8 +124,7 @@ def parse_temperature_col(data):
 
 
 def parse_wind_col(data):
-    """
-    Process wind speed and direction column
+    """Process wind speed and direction column
     WND column format: 267,1,N,0142,1
     N indicates normal (other values include Beaufort, Calm, etc.). Not used currently
     Steps:
@@ -163,8 +161,7 @@ def parse_wind_col(data):
 
 
 def parse_cloud_col(data):
-    """
-    Process total cloud cover column
+    """Process total cloud cover column
     All known columns including GA1-6, GD1-6, GF1 and GG1-6 are parsed and Maximum value of them is selected
     1. GA1-6 column format: 07,1,+00800,1,06,1
        The 1st and 2nd items are c and its quality
@@ -242,8 +239,7 @@ def parse_cloud_col(data):
 
 
 def parse_surface_pressure_col(data):
-    """
-    Process surface pressure (station-level pressure) column
+    """Process surface pressure (station-level pressure) column
     Currently MA1 column is used. Column format: 99999,9,09713,1
     The 3rd and 4th items are station pressure and its quality
     The 1st and 2nd items are altimeter setting and its quality which are not used currently
@@ -264,8 +260,7 @@ def parse_surface_pressure_col(data):
 
 
 def parse_sea_level_pressure_col(data):
-    """
-    Process mean sea level pressure column
+    """Process mean sea level pressure column
     MSL Column format: 09725,1
     Steps:
     1. Set values flagged as erroneous/missing to NaN
@@ -282,9 +277,7 @@ def parse_sea_level_pressure_col(data):
 
 
 def parse_single_precipitation_col(data, col):
-    """
-    Parse one of the precipitation columns AA1-4
-    """
+    """Parse one of the precipitation columns AA1-4"""
     if data[col].isnull().all():
         return pd.DataFrame()
     datacol = data[[col]].copy()
@@ -308,8 +301,7 @@ def parse_single_precipitation_col(data, col):
 
 
 def parse_precipitation_col(data):
-    """
-    Process precipitation columns
+    """Process precipitation columns
     Currently AA1-4 columns are used. Column format: 24,0073,3,1
     The items are period, depth, condition, quality. Condition is not used currently
     It is more complex than other variables as values during different periods are stored in same columns
@@ -341,10 +333,7 @@ def parse_precipitation_col(data):
 
 
 def parse_single_file(fpath, fpath_last_year):
-    """
-    Parse columns of each variable in a single ISD file
-    """
-    # Gxn for cloud cover, MA1 for surface pressure, AAn for precipitation
+    """Parse columns of each variable in a single ISD file"""  # Gxn for cloud cover, MA1 for surface pressure, AAn for precipitation
     cols_var = [
         "TMP",
         "DEW",
@@ -400,8 +389,8 @@ def parse_single_file(fpath, fpath_last_year):
 
 
 def aggregate_to_hourly(data):
-    """
-    Aggregate rows that represent same hour to one row
+    """Aggregate rows that represent same hour to one row
+
     Order the rows from same hour by difference from the top of the hour,
     then use ffill at each hour to get the nearest valid values for each variable
     Specifically, For t/td, avoid combining two records from different rows together
@@ -452,9 +441,7 @@ def aggregate_to_hourly(data):
 
 
 def post_process(data, year):
-    """
-    Some post-processing steps after aggregation
-    """
+    """Post-processing steps after aggregation."""
     data = data.set_index("time")
     sorted_ra_columns = sorted(
         [col for col in data.columns if col.startswith("ra")], key=lambda x: int(x[2:])
@@ -470,9 +457,7 @@ def post_process(data, year):
 
 
 def load_metadata(station_list):
-    """
-    Load the metadata of ISD data
-    """
+    """Load the metadata of ISD data"""
     meta = pd.read_fwf(
         LOCAL_ISD_HISTORY,
         skiprows=20,

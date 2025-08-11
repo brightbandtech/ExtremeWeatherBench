@@ -60,8 +60,7 @@ class InputBase(ABC):
 
     @abstractmethod
     def _open_data_from_source(self) -> utils.IncomingDataInput:
-        """
-        Open the target data from the source, opting to avoid loading the entire dataset into memory if possible.
+        """Open the target data from the source, opting to avoid loading the entire dataset into memory if possible.
 
         Returns:
             The target data with a type determined by the user.
@@ -73,8 +72,7 @@ class InputBase(ABC):
         data: utils.IncomingDataInput,
         case: "case.CaseOperator",
     ) -> utils.IncomingDataInput:
-        """
-        Subset the target data to the case information provided in CaseOperator.
+        """Subset the target data to the case information provided in CaseOperator.
 
         Time information, spatial bounds, and variables are captured in the case metadata
         where this method is used to subset.
@@ -89,8 +87,7 @@ class InputBase(ABC):
         """
 
     def maybe_convert_to_dataset(self, data: utils.IncomingDataInput) -> xr.Dataset:
-        """
-        Convert the target data to an xarray dataset if it is not already.
+        """Convert the target data to an xarray dataset if it is not already.
 
         This method handles the common conversion cases automatically. Override this method
         only if you need custom conversion logic beyond the standard cases.
@@ -110,8 +107,7 @@ class InputBase(ABC):
             return self._custom_convert_to_dataset(data)
 
     def _custom_convert_to_dataset(self, data: utils.IncomingDataInput) -> xr.Dataset:
-        """
-        Hook method for custom conversion logic. Override this method in subclasses
+        """Hook method for custom conversion logic. Override this method in subclasses
         if you need custom conversion behavior for non-xarray data types.
 
         By default, this raises a NotImplementedError to encourage explicit handling
@@ -231,8 +227,7 @@ class ZarrForecast(ForecastBase):
 
 @dataclasses.dataclass
 class TargetBase(InputBase):
-    """
-    An abstract base class for target data.
+    """An abstract base class for target data.
 
     A TargetBase is data that acts as the "truth" for a case. It can be a gridded dataset,
     a point observation dataset, or any other reference dataset. Targets in EWB
@@ -243,13 +238,11 @@ class TargetBase(InputBase):
 
 @dataclasses.dataclass
 class ERA5(TargetBase):
-    """
-    Target class for ERA5 gridded data.
+    """Target class for ERA5 gridded data.
 
-    The easiest approach to using this class
-    is to use the ARCO ERA5 dataset provided by Google for a source. Otherwise, either a
-    different zarr source or modifying the open_data_from_source method to open the data
-    using another method is required.
+    The easiest approach to using this class is to use the ARCO ERA5 dataset provided by
+    Google for a source. Otherwise, either a different zarr source or modifying the
+    open_data_from_source method to open the data using another method is required.
     """
 
     def _open_data_from_source(
@@ -274,8 +267,7 @@ class ERA5(TargetBase):
 
 @dataclasses.dataclass
 class GHCN(TargetBase):
-    """
-    Target class for GHCN tabular data.
+    """Target class for GHCN tabular data.
 
     Data is processed using polars to maintain the lazy loading
     paradigm in open_data_from_source and to separate the subsetting
@@ -352,12 +344,12 @@ class GHCN(TargetBase):
 
 @dataclasses.dataclass
 class LSR(TargetBase):
-    """
-    Target class for local storm report (LSR) tabular data.
+    """Target class for local storm report (LSR) tabular data.
 
     run_pipeline() returns a dataset with LSRs and practically perfect hindcast gridded
     probability data. IndividualCase date ranges for LSRs should ideally be
-    12 UTC to the next day at 12 UTC to match SPC methods.
+    12 UTC to the next day at 12 UTC to match SPC methods for US data. Australia data should be
+    00 UTC to 00 UTC.
     """
 
     def _open_data_from_source(
@@ -471,9 +463,7 @@ class LSR(TargetBase):
 
 @dataclasses.dataclass
 class PPH(TargetBase):
-    """
-    Target class for practically perfect hindcast data.
-    """
+    """Target class for practically perfect hindcast data."""
 
     def _open_data_from_source(
         self, target_storage_options: Optional[dict] = None
@@ -493,9 +483,7 @@ class PPH(TargetBase):
 
 @dataclasses.dataclass
 class IBTrACS(TargetBase):
-    """
-    Target class for IBTrACS data.
-    """
+    """Target class for IBTrACS data."""
 
     def _open_data_from_source(
         self, target_storage_options: Optional[dict] = None

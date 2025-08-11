@@ -21,6 +21,18 @@ logger = logging.getLogger(__name__)
 
 
 class ExtremeWeatherBench:
+    """A class to run the ExtremeWeatherBench workflow.
+
+    This class is used to run the ExtremeWeatherBench workflow. It is a wrapper around the
+    case operators and metrics to create either a serial loop or will return the built
+    case operators to run in parallel as defined by the user.
+
+    Attributes:
+        cases: A dictionary of cases to run.
+        metrics: A list of metrics to run.
+        cache_dir: An optional directory to cache the mid-flight outputs of the workflow.
+    """
+
     def __init__(
         self,
         cases: dict[str, list],
@@ -39,8 +51,14 @@ class ExtremeWeatherBench:
         self,
         **kwargs,
     ) -> pd.DataFrame:
-        """Runs the workflow in the order of the event operators and cases inside the event operators."""
+        """Runs the ExtremeWeatherBench workflow.
 
+        This method will run the workflow in the order of the case operators, optionally
+        caching the mid-flight outputs of the workflow if cache_dir was provided.
+
+        Keyword arguments are passed to the metric computations if there are specific requirements
+        needed for metrics such as threshold arguments.
+        """
         # instantiate the cache directory if caching and build it if it does not exist
         if self.cache_dir:
             if isinstance(self.cache_dir, str):
@@ -62,6 +80,18 @@ class ExtremeWeatherBench:
 
 
 def compute_case_operator(case_operator: "case.CaseOperator", **kwargs):
+    """Compute the results of a case operator.
+
+    This method will compute the results of a case operator. It will build the target and forecast datasets,
+    align them, compute the metrics, and return a concatenated dataframe of the results.
+
+    Args:
+        case_operator: The case operator to compute the results of.
+        kwargs: Keyword arguments to pass to the metric computations.
+
+    Returns:
+        A concatenated dataframe of the results of the case operator.
+    """
     target_ds, forecast_ds = _build_datasets(case_operator)
 
     # align the target and forecast datasets to ensure they have the same valid_time dimension
@@ -113,6 +143,20 @@ def _evaluate_metric_and_return_df(
     event_type: str,
     **kwargs,
 ):
+    """Evaluate a metric and return a dataframe of the results.
+
+    Args:
+        forecast_ds: The forecast dataset.
+        target_ds: The target dataset.
+        forecast_variable: The forecast variable to evaluate.
+        target_variable: The target variable to evaluate.
+        metric: The metric to evaluate.
+        case_id_number: The case id number.
+        event_type: The event type.
+
+    Returns:
+        A dataframe of the results of the metric evaluation.
+    """
     metric = metric()
     logger.info(f"computing metric {metric.name}")
     metric_result = metric.compute_metric(
