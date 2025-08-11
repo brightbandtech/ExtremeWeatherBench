@@ -446,7 +446,7 @@ for case_index, updated_case in updated_cases:
 # Write the updated events.yaml file
 events_data["cases"] = cases_old
 with open(
-    "/home/taylor/code/ExtremeWeatherBench/src/extremeweatherbench/data/events.yaml",
+    "src/extremeweatherbench/data/events.yaml",
     "w",
 ) as f:
     yaml.dump(events_data, f, default_flow_style=False, sort_keys=False, indent=2)
