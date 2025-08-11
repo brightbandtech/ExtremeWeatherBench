@@ -148,30 +148,68 @@ def create_great_circle_mask(ds: xr.Dataset, latlon_point: tuple[float, float], 
 
 
 # %%
-def calculate_extent_bounds(df: pd.DataFrame, extent_buffer: float = 250, extent_units: Literal["degrees", "km"] = "km") -> regions.Region:
+def calculate_end_point(start_lat: float, start_lon: float, bearing: float, distance_km: float) -> tuple[float, float]:
+    """
+    Calculate the end point (latitude, longitude) given a starting point, bearing, and distance.
+    
+    Parameters:
+    -----------
+    start_lat : float
+        Starting latitude in degrees
+    start_lon : float
+        Starting longitude in degrees
+    bearing : float
+        Bearing in degrees (0-360, where 0 is north, 90 is east)
+    distance_km : float
+        Distance in kilometers
+    
+    Returns:
+    --------
+    tuple[float, float]
+        End point as (latitude, longitude) in degrees
+    """
+    # Earth's radius in kilometers
+    R = 6371.0
+    
+    # Convert to radians
+    lat1 = np.radians(start_lat)
+    lon1 = np.radians(start_lon)
+    bearing_rad = np.radians(bearing)
+    
+    # Calculate end point
+    lat2 = np.arcsin(np.sin(lat1) * np.cos(distance_km / R) +
+                     np.cos(lat1) * np.sin(distance_km / R) * np.cos(bearing_rad))
+    
+    lon2 = lon1 + np.arctan2(np.sin(bearing_rad) * np.sin(distance_km / R) * np.cos(lat1),
+                             np.cos(distance_km / R) - np.sin(lat1) * np.sin(lat2))
+    
+    # Convert back to degrees
+    end_lat = np.degrees(lat2)
+    end_lon = np.degrees(lon2)
+    
+    return end_lat, end_lon
 
-    min_lat = df["latitude"].min()
-    max_lat = df["latitude"].max()
-    min_lon = df["longitude"].min()
-    max_lon = df["longitude"].max()
+def calculate_extent_bounds(left_lon: float, right_lon: float, bottom_lat: float, top_lat: float, extent_buffer: float = 250, extent_units: Literal["degrees", "km"] = "km") -> regions.Region:
 
-    min_lat = min_lat - extent_buffer
-    max_lat = max_lat + extent_buffer
-    min_lon = min_lon - extent_buffer
-    max_lon = max_lon + extent_buffer
-
-    return regions.Region(
-        min_lat=df["latitude"].min(),
-        max_lat=df["latitude"].max(),
-        min_lon=df["longitude"].min(),
-        max_lon=df["longitude"].max(),
-    )
-
+    new_left_lat, new_bottom_lon = calculate_end_point(bottom_lat, left_lon, 235, extent_buffer)
+    new_right_lat, new_top_lon = calculate_end_point(top_lat, right_lon, 45, extent_buffer)
+    new_box = regions.BoundingBoxRegion(new_left_lat, new_right_lat, new_bottom_lon, new_top_lon)
+    old_box = regions.BoundingBoxRegion(bottom_lat, top_lat, left_lon, right_lon)
+    return new_box, old_box
 
 
 # %%
 collected_df = subset_target_data.collect().to_pandas()
-collected_df
+collected_df['latitude'] = collected_df['latitude'].astype(float)
+collected_df['longitude'] = collected_df['longitude'].astype(float)
+
+new_box, old_box = calculate_extent_bounds(left_lon=170, right_lon=180, bottom_lat=-10, top_lat=10)
+
+fig, ax = plt.subplots(figsize=(10, 5))
+old_box.geopandas.plot(ax=ax, alpha=0.5, color='red')
+new_box.geopandas.plot(ax=ax, alpha=0.5, color='blue')
+ax.set_title("IBTrACS Bounding Box")
+plt.show()
 
 # %%
 xr.Dataset.from_dataframe(collected_df.set_index(["valid_time","latitude","longitude"]),sparse=True)
