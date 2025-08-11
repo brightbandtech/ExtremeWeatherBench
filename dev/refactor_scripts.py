@@ -400,7 +400,6 @@ class AppliedMetric(ABC):
     def base_metric(self) -> BaseMetric:
         pass
 
-    # @catch_exceptions
     def compute_metric(
         self,
         forecast: xr.DataArray,
