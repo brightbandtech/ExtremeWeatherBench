@@ -699,9 +699,15 @@ def maybe_map_variable_names(
         subset_variable_mapping = {
             v: k for v, k in variable_mapping.items() if v in data.keys()
         }
-    elif isinstance(data, (pl.LazyFrame, pl.DataFrame, pd.DataFrame)):
+    elif isinstance(data, (pl.DataFrame, pd.DataFrame)):
         subset_variable_mapping = {
             v: k for v, k in variable_mapping.items() if v in data.columns
+        }
+    elif isinstance(data, pl.LazyFrame):
+        subset_variable_mapping = {
+            v: k
+            for v, k in variable_mapping.items()
+            if v in data.collect_schema().names()
         }
     else:
         raise ValueError(

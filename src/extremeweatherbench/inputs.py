@@ -27,6 +27,15 @@ PPH_URI = "gs://extremeweatherbench/datasets/practically_perfect_hindcast_202001
 
 IBTRACS_URI = "https://www.ncei.noaa.gov/data/international-best-track-archive-for-climate-stewardship-ibtracs/v04r01/access/csv/ibtracs.ALL.list.v04r01.csv"  # noqa: E501
 
+IBTrACS_metadata_variable_mapping = {
+    "ISO_TIME": "valid_time",
+    "NAME": "tc_name",
+    "LAT": "latitude",
+    "LON": "longitude",
+    "USA_WIND": "surface_wind_speed",
+    "USA_PRES": "pressure_at_mean_sea_level",
+}
+
 
 @dataclasses.dataclass
 class InputBase(ABC):
@@ -499,42 +508,16 @@ class IBTrACS(TargetBase):
         target_data: utils.IncomingDataInput,
         case_operator: "case.CaseOperator",
     ) -> utils.IncomingDataInput:
-        # Create filter expressions for LazyFrame
-        year = case_operator.case.start_date.year
-
         if not isinstance(target_data, pl.LazyFrame):
             raise ValueError(f"Expected polars LazyFrame, got {type(target_data)}")
 
-        # Apply filters using proper polars expressions
-        subset_target_data = target_data.filter(
-            (pl.col("NAME") == case_operator.case.title.upper())
-        )
-
-        all_variables = [
-            "SEASON",
-            "NUMBER",
-            "NAME",
-            "ISO_TIME",
-            "LAT",
-            "LON",
-            "WMO_WIND",
-            "USA_WIND",
-            "WMO_PRES",
-            "USA_PRES",
-        ]
         # Get the season (year) from the case start date, cast as string as polars is interpreting the schema as strings
+        year = case_operator.case.start_date.year
         season = str(year)
-
-        # First filter by name to get the storm data
-        subset_target_data = target_data.filter(
-            (pl.col("NAME") == case_operator.case.title.upper())
-        )
 
         # Create a subquery to find all storm numbers in the same season
         matching_numbers = (
-            subset_target_data.filter(pl.col("SEASON") == season)
-            .select("NUMBER")
-            .unique()
+            target_data.filter(pl.col("SEASON") == season).select("NUMBER").unique()
         )
 
         # Apply the filter to get all data for storms with the same number in the same season
@@ -546,6 +529,7 @@ class IBTrACS(TargetBase):
             & (pl.col("SEASON") == season)
         )
 
+        all_variables = IBTrACS_metadata_variable_mapping.values()
         # check that the variables are in the target data
         schema_fields = [field for field in subset_target_data.collect_schema()]
         target_variables = [
@@ -555,8 +539,7 @@ class IBTrACS(TargetBase):
             raise ValueError(f"Variables {all_variables} not found in target data")
 
         # subset the variables
-        if target_variables:
-            subset_target_data = subset_target_data.select(all_variables)
+        subset_target_data = subset_target_data.select(all_variables)
 
         return subset_target_data
 
