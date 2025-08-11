@@ -604,14 +604,14 @@ def open_kerchunk_reference(
     Returns:
         The opened dataset.
     """
-    if "parq" in forecast_dir or "parquet" in forecast_dir:
+    if forecast_dir.endswith(".parq") or forecast_dir.endswith(".parquet"):
         kerchunk_ds = xr.open_dataset(
             forecast_dir,
             engine="kerchunk",
             storage_options=storage_options,
             chunks=chunks,
         )
-    elif "json" in forecast_dir:
+    elif forecast_dir.endswith(".json"):
         storage_options["fo"] = forecast_dir
         kerchunk_ds = xr.open_dataset(
             "reference://",
@@ -637,14 +637,16 @@ def open_lazy_target_data(target_base: "TargetBase") -> utils.IncomingDataInput:
 def zarr_target_subsetter(
     data: xr.Dataset,
     case_operator: "case.CaseOperator",
+    time_variable: str = "valid_time",
 ) -> xr.Dataset:
     """Subset a zarr dataset to a case operator."""
-    if not isinstance(data, (xr.Dataset, xr.DataArray)):
-        raise ValueError(f"Expected xarray Dataset or DataArray, got {type(data)}")
-
     # subset time first to avoid OOM masking issues
     subset_time_data = data.sel(
-        valid_time=slice(case_operator.case.start_date, case_operator.case.end_date)
+        {
+            time_variable: slice(
+                case_operator.case.start_date, case_operator.case.end_date
+            )
+        }
     )
 
     # check that the variables are in the target data
@@ -653,12 +655,12 @@ def zarr_target_subsetter(
         var not in subset_time_data.data_vars for var in target_variables
     ):
         raise ValueError(f"Variables {target_variables} not found in target data")
-    # subset the variables
+    # subset the variables if they exist in the target data
     elif target_variables:
         subset_time_variable_data = subset_time_data[target_variables]
     else:
         raise ValueError(
-            "Variables not defined for ERA5. Please list at least one variable to select."
+            "Variables not defined. Please list at least one target variable to select."
         )
     # mask the data to the case location
     fully_subset_data = case_operator.case.location.mask(
