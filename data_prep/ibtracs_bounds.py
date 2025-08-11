@@ -120,7 +120,7 @@ IBTRACS = inputs.IBTrACS(
     variables=["vmax", "slp"],
     variable_mapping={
         "vmax": "surface_wind_speed",
-        "slp": "pressure_at_mean_sea_level",
+        "slp": "air_pressure_at_mean_sea_level",
     },
     storage_options={"anon": True},
 )
@@ -132,32 +132,32 @@ IBTrACS_metadata_variable_mapping = {
     "LAT": "latitude",
     "LON": "longitude",
     "WMO_WIND": "wmo_surface_wind_speed",
-    "WMO_PRES": "wmo_pressure_at_mean_sea_level",
+    "WMO_PRES": "wmo_air_pressure_at_mean_sea_level",
     "USA_WIND": "usa_surface_wind_speed",
-    "USA_PRES": "usa_pressure_at_mean_sea_level",
+    "USA_PRES": "usa_air_pressure_at_mean_sea_level",
     "NEUMANN_WIND": "neumann_surface_wind_speed",
-    "NEUMANN_PRES": "neumann_pressure_at_mean_sea_level",
+    "NEUMANN_PRES": "neumann_air_pressure_at_mean_sea_level",
     "TOKYO_WIND": "tokyo_surface_wind_speed",
-    "TOKYO_PRES": "tokyo_pressure_at_mean_sea_level",
+    "TOKYO_PRES": "tokyo_air_pressure_at_mean_sea_level",
     "CMA_WIND": "cma_surface_wind_speed",
-    "CMA_PRES": "cma_pressure_at_mean_sea_level",
+    "CMA_PRES": "cma_air_pressure_at_mean_sea_level",
     "HKO_WIND": "hko_surface_wind_speed",
     "KMA_WIND": "kma_surface_wind_speed",
-    "KMA_PRES": "kma_pressure_at_mean_sea_level",
+    "KMA_PRES": "kma_air_pressure_at_mean_sea_level",
     "NEWDELHI_WIND": "newdelhi_surface_wind_speed",
-    "NEWDELHI_PRES": "newdelhi_pressure_at_mean_sea_level",
+    "NEWDELHI_PRES": "newdelhi_air_pressure_at_mean_sea_level",
     "REUNION_WIND": "reunion_surface_wind_speed",
-    "REUNION_PRES": "reunion_pressure_at_mean_sea_level",
+    "REUNION_PRES": "reunion_air_pressure_at_mean_sea_level",
     "BOM_WIND": "bom_surface_wind_speed",
-    "BOM_PRES": "bom_pressure_at_mean_sea_level",
+    "BOM_PRES": "bom_air_pressure_at_mean_sea_level",
     "NADI_WIND": "nadi_surface_wind_speed",
-    "NADI_PRES": "nadi_pressure_at_mean_sea_level",
+    "NADI_PRES": "nadi_air_pressure_at_mean_sea_level",
     "WELLINGTON_WIND": "wellington_surface_wind_speed",
-    "WELLINGTON_PRES": "wellington_pressure_at_mean_sea_level",
+    "WELLINGTON_PRES": "wellington_air_pressure_at_mean_sea_level",
     "DS824_WIND": "ds824_surface_wind_speed",
-    "DS824_PRES": "ds824_pressure_at_mean_sea_level",
+    "DS824_PRES": "ds824_air_pressure_at_mean_sea_level",
     "MLC_WIND": "mlc_surface_wind_speed",
-    "MLC_PRES": "mlc_pressure_at_mean_sea_level",
+    "MLC_PRES": "mlc_air_pressure_at_mean_sea_level",
 }
 
 IBTRACS_lf = utils.maybe_map_variable_names(
@@ -168,18 +168,94 @@ IBTRACS_lf = utils.maybe_map_variable_names(
 # Get all storms from 2020 - 2025 seasons:
 
 # %%
+# Keep the data as a LazyFrame and do all operations lazily
 all_storms_2020_2025_lf = IBTRACS_lf.filter(
     (pl.col("SEASON").cast(pl.Int32) >= 2020)
 ).select(IBTrACS_metadata_variable_mapping.values())
-all_storms_df = all_storms_2020_2025_lf.collect().to_pandas()
-# Convert pressure and surface wind columns to float, replacing " " with NaN
-pressure_cols = [col for col in all_storms_df.columns if "pressure" in col.lower()]
-wind_cols = [col for col in all_storms_df.columns if "wind" in col.lower()]
 
-for col in pressure_cols + wind_cols:
-    all_storms_df[col] = all_storms_df[col].replace(" ", np.nan).astype(float)
+schema = all_storms_2020_2025_lf.collect_schema()
+# Convert pressure and surface wind columns to float, replacing " " with null
+# Get column names that contain "pressure" or "wind"
+pressure_cols = [col for col in schema if "pressure" in col.lower()]
+wind_cols = [col for col in schema if "wind" in col.lower()]
 
-all_storms_df = all_storms_df.dropna(how="all")
+# Apply transformations to convert " " to null and cast to float
+all_storms_lf = all_storms_2020_2025_lf.with_columns(
+    [
+        pl.when(pl.col(col) == " ")
+        .then(None)
+        .otherwise(pl.col(col))
+        .cast(pl.Float64, strict=False)
+        .alias(col)
+        for col in pressure_cols + wind_cols
+    ]
+)
+
+# Drop rows where ALL columns are null (equivalent to pandas dropna(how="all"))
+all_storms_lf = all_storms_lf.filter(~pl.all_horizontal(pl.all().is_null()))
+
+# Create unified pressure and wind columns by preferring USA and WMO data
+# For surface wind speed
+wind_columns = [col for col in schema if "surface_wind_speed" in col]
+wind_priority = ["usa_surface_wind_speed", "wmo_surface_wind_speed"] + [
+    col
+    for col in wind_columns
+    if col not in ["usa_surface_wind_speed", "wmo_surface_wind_speed"]
+]
+
+# For pressure at mean sea level
+pressure_columns = [col for col in schema if "air_pressure_at_mean_sea_level" in col]
+pressure_priority = [
+    "usa_air_pressure_at_mean_sea_level",
+    "wmo_air_pressure_at_mean_sea_level",
+] + [
+    col
+    for col in pressure_columns
+    if col
+    not in ["usa_air_pressure_at_mean_sea_level", "wmo_air_pressure_at_mean_sea_level"]
+]
+
+# Create unified columns using coalesce (equivalent to pandas bfill)
+all_storms_lf = all_storms_lf.with_columns(
+    [
+        pl.coalesce(wind_priority).alias("surface_wind_speed"),
+        pl.coalesce(pressure_priority).alias("air_pressure_at_mean_sea_level"),
+    ]
+)
+
+# Select only the columns to keep
+columns_to_keep = [
+    "valid_time",
+    "tc_name",
+    "latitude",
+    "longitude",
+    "surface_wind_speed",
+    "air_pressure_at_mean_sea_level",
+]
+
+all_storms_lf = all_storms_lf.select(columns_to_keep)
+
+# Drop rows where wind speed OR pressure are null (equivalent to pandas dropna with how="any")
+all_storms_lf = all_storms_lf.filter(
+    pl.col("surface_wind_speed").is_not_null()
+    & pl.col("air_pressure_at_mean_sea_level").is_not_null()
+)
+
+# Only collect when you need the actual data for operations that require pandas
+# For checking null counts, you can collect just the null counts:
+print("Missing values per column:")
+null_counts = all_storms_lf.select(
+    [pl.col(col).null_count().alias(f"{col}_nulls") for col in columns_to_keep]
+).collect()
+print(null_counts)
+
+print(f"Total rows after filtering: {all_storms_lf.select(pl.len()).collect().item()}")
+
+# When you need pandas DataFrame for the groupby operation with your custom function:
+all_storms_df = all_storms_lf.collect().to_pandas()
+
+# %%
+all_storms_df
 
 # %%
 # Check for missing values in each column
@@ -202,18 +278,19 @@ all_storms_df["surface_wind_speed"] = (
 
 # For pressure at mean sea level
 pressure_columns = [
-    col for col in all_storms_df.columns if "pressure_at_mean_sea_level" in col
+    col for col in all_storms_df.columns if "air_pressure_at_mean_sea_level" in col
 ]
 pressure_priority = [
-    "usa_pressure_at_mean_sea_level",
-    "wmo_pressure_at_mean_sea_level",
+    "usa_air_pressure_at_mean_sea_level",
+    "wmo_air_pressure_at_mean_sea_level",
 ] + [
     col
     for col in pressure_columns
-    if col not in ["usa_pressure_at_mean_sea_level", "wmo_pressure_at_mean_sea_level"]
+    if col
+    not in ["usa_air_pressure_at_mean_sea_level", "wmo_air_pressure_at_mean_sea_level"]
 ]
 
-all_storms_df["pressure_at_mean_sea_level"] = (
+all_storms_df["air_pressure_at_mean_sea_level"] = (
     all_storms_df[pressure_priority].bfill(axis=1).iloc[:, 0]
 )
 
@@ -224,7 +301,7 @@ columns_to_keep = [
     "latitude",
     "longitude",
     "surface_wind_speed",
-    "pressure_at_mean_sea_level",
+    "air_pressure_at_mean_sea_level",
 ]
 all_storms_df = all_storms_df[columns_to_keep]
 
@@ -235,7 +312,7 @@ print(all_storms_df.isnull().sum())
 # %%
 # Drop rows where both wind speed and pressure are NaN
 all_storms_df = all_storms_df.dropna(
-    subset=["surface_wind_speed", "pressure_at_mean_sea_level"], how="any"
+    subset=["surface_wind_speed", "air_pressure_at_mean_sea_level"], how="any"
 )
 
 print(
