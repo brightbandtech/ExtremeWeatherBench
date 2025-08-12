@@ -84,7 +84,7 @@ ibtracs_target = inputs.IBTrACS(
     variables=[derived.TCTrack],
     variable_mapping={
         "vmax": "surface_wind_speed_maximum",
-        "slp": "pressure_at_mean_sea_level",
+        "slp": "air_pressure_at_mean_sea_level",
     },
     storage_options={"remote_options": {"anon": True}},
 )
@@ -153,7 +153,7 @@ cira_tropical_cyclone_forecast = inputs.KerchunkForecast(
         "10u": "surface_eastward_wind",
         "10v": "surface_northward_wind",
         "z": "geopotential",
-        "msl": "pressure_at_mean_sea_level",
+        "msl": "air_pressure_at_mean_sea_level",
     },
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
 )
