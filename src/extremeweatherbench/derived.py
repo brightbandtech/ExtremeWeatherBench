@@ -70,6 +70,7 @@ class DerivedVariable(ABC):
         return self.derive_variable(data)
 
 
+# TODO: add the surface wind speed calculations if needed
 class SurfaceWindSpeed(DerivedVariable):
     """A derived variable that computes the surface wind speed."""
 
@@ -83,6 +84,7 @@ class SurfaceWindSpeed(DerivedVariable):
         )
 
 
+# TODO: add the AR mask calculations
 class AtmosphericRiverMask(DerivedVariable):
     """A derived variable that computes the atmospheric river mask."""
 
@@ -95,6 +97,7 @@ class AtmosphericRiverMask(DerivedVariable):
         return data[self.input_variables[0]] < 1000
 
 
+# TODO: add the IVT calculations for ARs
 class IntegratedVaporTransport(DerivedVariable):
     """A derived variable that computes the integrated vapor transport."""
 
@@ -110,7 +113,8 @@ class IntegratedVaporTransport(DerivedVariable):
         )
 
 
-class IntegratedVaporTransportJacobian(DerivedVariable):
+# TODO: add the IVT Laplacian calculations for ARs
+class IntegratedVaporTransportLaplacian(DerivedVariable):
     """A derived variable that computes the integrated vapor transport Jacobian."""
 
     name = "integrated_vapor_transport_jacobian"

@@ -332,6 +332,7 @@ def create_tctracks(tcs: list[TC]) -> list[TCTracks]:
     return tracks
 
 
+# TODO: review for potential improvements (vectorization, better readability, etc.)
 def create_tctracks_from_dataset(
     cyclone_dataset: xr.Dataset,
     slp_contour_magnitude=200,
