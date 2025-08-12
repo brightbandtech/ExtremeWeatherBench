@@ -347,7 +347,8 @@ def create_tctracks_from_dataset(
     id_number = 0
     # Initialize a time counter for time slice filters
     for init_time in slp.init_time[:]:
-        if slp.init_time[:, 11][0].isnull():
+        # If there are no valid times for the init_time, skip
+        if init_time.isnull().all():
             continue
         else:
             valid_candidates[init_time[0].values] = []
@@ -447,11 +448,18 @@ def tctracks_to_3d_dataset(tctracks: list[TCTracks]) -> xr.Dataset:
     # Create 3D dataset
     ds_3d = xr.Dataset(
         {
-            "vmax": (["time", "latitude", "longitude"], vmax_data),
-            "slp": (["time", "latitude", "longitude"], slp_data),
+            "wind_speed": (["time", "latitude", "longitude"], vmax_data),
+            "air_pressure_at_mean_sea_level": (
+                ["time", "latitude", "longitude"],
+                slp_data,
+            ),
             "track_id": (["time", "latitude", "longitude"], track_id_data),
         },
-        coords={"time": time_coords, "latitude": lat_coords, "longitude": lon_coords},
+        coords={
+            "valid_time": time_coords,
+            "latitude": lat_coords,
+            "longitude": lon_coords,
+        },
     )
 
     return ds_3d
