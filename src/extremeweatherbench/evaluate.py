@@ -94,13 +94,19 @@ def compute_case_operator(case_operator: "case.CaseOperator", **kwargs):
     """
     target_ds, forecast_ds = _build_datasets(case_operator)
 
-    # align the target and forecast datasets to ensure they have the same valid_time dimension
-    target_ds, forecast_ds = xr.align(target_ds, forecast_ds)
+    # time align the target and forecast datasets to ensure they have the same valid_time dimension
+    time_aligned_target_ds, time_aligned_forecast_ds = xr.align(
+        target_ds,
+        forecast_ds,
+        exclude=["latitude", "longitude"],
+    )
 
     # compute and cache the datasets if requested
     if kwargs.get("pre_compute", False):
-        target_ds, forecast_ds = _compute_and_maybe_cache(
-            target_ds, forecast_ds, cache_dir=kwargs.get("cache_dir", None)
+        time_aligned_target_ds, time_aligned_forecast_ds = _compute_and_maybe_cache(
+            time_aligned_target_ds,
+            time_aligned_forecast_ds,
+            cache_dir=kwargs.get("cache_dir", None),
         )
 
     logger.info(f"datasets built for case {case_operator.case.case_id_number}")
@@ -114,8 +120,8 @@ def compute_case_operator(case_operator: "case.CaseOperator", **kwargs):
     ):
         results.append(
             _evaluate_metric_and_return_df(
-                target_ds=target_ds,
-                forecast_ds=forecast_ds,
+                target_ds=time_aligned_target_ds,
+                forecast_ds=time_aligned_forecast_ds,
                 forecast_variable=variables[0],
                 target_variable=variables[1],
                 metric=metric,
