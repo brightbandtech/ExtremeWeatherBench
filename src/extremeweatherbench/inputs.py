@@ -358,7 +358,9 @@ class GHCN(TargetBase):
                 <= case_operator.case_metadata.location.geopandas.total_bounds[2]
             )
         )
-
+        subset_target_data = subset_target_data.with_columns(
+            pl.col("surface_air_temperature").add(273.15)
+        )
         # Add time, latitude, and longitude to the variables, polars doesn't do indexes
         target_variables = [
             v for v in case_operator.target.variables if isinstance(v, str)
