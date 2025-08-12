@@ -104,7 +104,7 @@ def build_case_operators(
         if single_case.event_type in metric_evaluation_object.event_type:
             case_operators.append(
                 CaseOperator(
-                    case=single_case,
+                    case_metadata=single_case,
                     metric=metric_evaluation_object.metric,
                     target=metric_evaluation_object.target,
                     forecast=metric_evaluation_object.forecast,

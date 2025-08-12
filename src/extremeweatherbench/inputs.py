@@ -179,8 +179,8 @@ class ForecastBase(InputBase):
         # subset time first to avoid OOM masking issues
         subset_time_indices = utils.derive_indices_from_init_time_and_lead_time(
             data,
-            case_operator.case.start_date,
-            case_operator.case.end_date,
+            case_operator.case_metadata.start_date,
+            case_operator.case_metadata.end_date,
         )
 
         subset_time_data = data.sel(
@@ -200,7 +200,7 @@ class ForecastBase(InputBase):
             raise KeyError(
                 f"One of the variables {expected_and_maybe_derived_variables} not found in forecast data"
             )
-        fully_subset_data = case_operator.case.location.mask(
+        fully_subset_data = case_operator.case_metadata.location.mask(
             subset_time_data, drop=True
         )
         return fully_subset_data
@@ -331,20 +331,32 @@ class GHCN(TargetBase):
         case_operator: "case.CaseOperator",
     ) -> utils.IncomingDataInput:
         # Create filter expressions for LazyFrame
-        time_min = case_operator.case.start_date - pd.Timedelta(days=2)
-        time_max = case_operator.case.end_date + pd.Timedelta(days=2)
+        time_min = case_operator.case_metadata.start_date - pd.Timedelta(days=2)
+        time_max = case_operator.case_metadata.end_date + pd.Timedelta(days=2)
 
         if not isinstance(target_data, pl.LazyFrame):
             raise ValueError(f"Expected polars LazyFrame, got {type(target_data)}")
 
         # Apply filters using proper polars expressions
         subset_target_data = target_data.filter(
-            (pl.col("time") >= time_min)
-            & (pl.col("time") <= time_max)
-            & (pl.col("latitude") >= case_operator.case.location.latitude_min)
-            & (pl.col("latitude") <= case_operator.case.location.latitude_max)
-            & (pl.col("longitude") >= case_operator.case.location.longitude_min)
-            & (pl.col("longitude") <= case_operator.case.location.longitude_max)
+            (pl.col("valid_time") >= time_min)
+            & (pl.col("valid_time") <= time_max)
+            & (
+                pl.col("latitude")
+                >= case_operator.case_metadata.location.geopandas.total_bounds[1]
+            )
+            & (
+                pl.col("latitude")
+                <= case_operator.case_metadata.location.geopandas.total_bounds[3]
+            )
+            & (
+                pl.col("longitude")
+                >= case_operator.case_metadata.location.geopandas.total_bounds[0]
+            )
+            & (
+                pl.col("longitude")
+                <= case_operator.case_metadata.location.geopandas.total_bounds[2]
+            )
         )
 
         # Add time, latitude, and longitude to the variables, polars doesn't do indexes
@@ -352,9 +364,9 @@ class GHCN(TargetBase):
             v for v in case_operator.target.variables if isinstance(v, str)
         ]
         if target_variables is None:
-            all_variables = ["time", "latitude", "longitude"]
+            all_variables = ["valid_time", "latitude", "longitude"]
         else:
-            all_variables = target_variables + ["time", "latitude", "longitude"]
+            all_variables = target_variables + ["valid_time", "latitude", "longitude"]
 
         # check that the variables are in the target data
         schema_fields = [field for field in subset_target_data.collect_schema()]
@@ -370,7 +382,7 @@ class GHCN(TargetBase):
     def _custom_convert_to_dataset(self, data: utils.IncomingDataInput) -> xr.Dataset:
         if isinstance(data, pl.LazyFrame):
             data = data.collect().to_pandas()
-            data = data.set_index(["time", "latitude", "longitude"])
+            data = data.set_index(["valid_time", "latitude", "longitude"])
             # GHCN data can have duplicate values right now, dropping here if it occurs
             try:
                 data = data.to_xarray()
@@ -418,20 +430,26 @@ class LSR(TargetBase):
 
         # filters to apply to the target data including datetimes and location bounds
         filters = (
-            (target_data["valid_time"] >= case_operator.case.start_date)
-            & (target_data["valid_time"] <= case_operator.case.end_date)
-            & (target_data["latitude"] >= case_operator.case.location.latitude_min)
-            & (target_data["latitude"] <= case_operator.case.location.latitude_max)
+            (target_data["valid_time"] >= case_operator.case_metadata.start_date)
+            & (target_data["valid_time"] <= case_operator.case_metadata.end_date)
+            & (
+                target_data["latitude"]
+                >= case_operator.case_metadata.location.latitude_min
+            )
+            & (
+                target_data["latitude"]
+                <= case_operator.case_metadata.location.latitude_max
+            )
             & (
                 target_data["longitude"]
                 >= utils.convert_longitude_to_180(
-                    case_operator.case.location.longitude_min
+                    case_operator.case_metadata.location.longitude_min
                 )
             )
             & (
                 target_data["longitude"]
                 <= utils.convert_longitude_to_180(
-                    case_operator.case.location.longitude_max
+                    case_operator.case_metadata.location.longitude_max
                 )
             )
         )
@@ -546,8 +564,8 @@ class IBTrACS(TargetBase):
             raise ValueError(f"Expected polars LazyFrame, got {type(target_data)}")
 
         # Get the season (year) from the case start date, cast as string as polars is interpreting the schema as strings
-        season = case_operator.case.start_date.year
-        if case_operator.case.start_date.month > 11:
+        season = case_operator.case_metadata.start_date.year
+        if case_operator.case_metadata.start_date.month > 11:
             season += 1
 
         # Create a subquery to find all storm numbers in the same season
@@ -562,7 +580,7 @@ class IBTrACS(TargetBase):
         subset_target_data = target_data.join(
             matching_numbers, on="NUMBER", how="inner"
         ).filter(
-            (pl.col("tc_name") == case_operator.case.title.upper())
+            (pl.col("tc_name") == case_operator.case_metadata.title.upper())
             & (pl.col("SEASON").cast(pl.Int64) == season)
         )
 
@@ -726,7 +744,8 @@ def zarr_target_subsetter(
     subset_time_data = data.sel(
         {
             time_variable: slice(
-                case_operator.case.start_date, case_operator.case.end_date
+                case_operator.case_metadata.start_date,
+                case_operator.case_metadata.end_date,
             )
         }
     )
@@ -752,7 +771,7 @@ def zarr_target_subsetter(
             "Variables not defined. Please list at least one target variable to select."
         )
     # mask the data to the case location
-    fully_subset_data = case_operator.case.location.mask(
+    fully_subset_data = case_operator.case_metadata.location.mask(
         subset_time_variable_data, drop=True
     )
 

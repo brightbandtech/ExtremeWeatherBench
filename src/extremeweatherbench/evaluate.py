@@ -111,7 +111,7 @@ def compute_case_operator(case_operator: "case.CaseOperator", **kwargs):
             cache_dir=kwargs.get("cache_dir", None),
         )
 
-    logger.info(f"datasets built for case {case_operator.case.case_id_number}")
+    logger.info(f"datasets built for case {case_operator.case_metadata.case_id_number}")
     results = []
     # TODO: determine if derived variables need to be pushed here or at pre-compute
     for variables, metric in itertools.product(
@@ -129,8 +129,8 @@ def compute_case_operator(case_operator: "case.CaseOperator", **kwargs):
                 target_variable=variables[1],
                 metric=metric,
                 target_name=case_operator.target.name,
-                case_id_number=case_operator.case.case_id_number,
-                event_type=case_operator.case.event_type,
+                case_id_number=case_operator.case_metadata.case_id_number,
+                event_type=case_operator.case_metadata.event_type,
                 **kwargs,
             )
         )
