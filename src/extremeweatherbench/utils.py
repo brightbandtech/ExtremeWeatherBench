@@ -584,7 +584,7 @@ def _default_preprocess(input_data: IncomingDataInput) -> IncomingDataInput:
     return input_data
 
 
-def _filter_kwargs_for_callable(kwargs: dict, callable_obj: Callable) -> dict:
+def filter_kwargs_for_callable(kwargs: dict, callable_obj: Callable) -> dict:
     """Filter kwargs to only include arguments that the callable can accept.
 
     This method uses introspection to determine which arguments the callable

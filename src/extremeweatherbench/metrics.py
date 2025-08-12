@@ -52,7 +52,7 @@ class BaseMetric(ABC):
         return self._compute_metric(
             forecast,
             target,
-            **utils._filter_kwargs_for_callable(kwargs, self._compute_metric),
+            **utils.filter_kwargs_for_callable(kwargs, self._compute_metric),
         )
 
 
@@ -89,11 +89,11 @@ class AppliedMetric(ABC):
             **self._compute_applied_metric(
                 forecast,
                 target,
-                **utils._filter_kwargs_for_callable(
+                **utils.filter_kwargs_for_callable(
                     kwargs, self._compute_applied_metric
                 ),
             ),
-            **utils._filter_kwargs_for_callable(
+            **utils.filter_kwargs_for_callable(
                 kwargs, self.base_metric()._compute_metric
             ),
         )
