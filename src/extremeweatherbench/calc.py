@@ -27,8 +27,6 @@ class TC:
 
 
 # TODO: determine if this is needed or can be removed for the refactor
-
-
 @dataclasses.dataclass
 class TCTracks:
     id: int
