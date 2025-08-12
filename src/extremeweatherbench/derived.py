@@ -1,7 +1,10 @@
 from abc import ABC, abstractmethod
-from typing import List
+from typing import List, Union
 
+import numpy as np
 import xarray as xr
+
+from extremeweatherbench import calc, utils
 
 
 class DerivedVariable(ABC):
@@ -12,35 +15,32 @@ class DerivedVariable(ABC):
 
     Attributes:
         name: The name that is used for applications of derived variables. Defaults to the class name.
-        input_variables: A list of variables that are used to build the variable.
-        build: A method that builds the variable from the input variables. Build is used specifically to distinguish
+        required_variables: A list of variables that are used to build the variable.
+        build: A method that builds the variable from the required variables. Build is used specifically to distinguish
         from the compute method in xarray, which eagerly processes the data and loads into memory; build is used to
         lazily process the data and return a dataset that can be used later to compute the variable.
-        _check_data_for_variables: A method that checks that the data has the variables required to build the variable,
-        using input_variables.
-        derive_variable: An abstractmethod that defines the computation to derive the variable from input_variables.
+        derive_variable: An abstract method that defines the computation to derive the variable from required_variables.
     """
 
     @property
-    @abstractmethod
     def name(self) -> str:
         """A name for the derived variable. Defaults to the class name."""
-        pass
+        return self.__class__.__name__
 
     @property
     @abstractmethod
-    def input_variables(self) -> List[str]:
+    def required_variables(self) -> List[str]:
         """A list of variables that are used to compute the variable.
 
         Each derived variable is a product of one or more variables in an incoming dataset.
-        The input variables are the names of the variables in the incoming dataset.
+        The required variables are the names of the variables in the incoming dataset.
 
         """
         pass
 
     @abstractmethod
     def derive_variable(self, data: xr.Dataset) -> xr.DataArray:
-        """Derive the variable from the input variables.
+        """Derive the variable from the required variables.
 
         The output of the derivation must be a single variable output returned as
         a DataArray.
@@ -66,21 +66,15 @@ class DerivedVariable(ABC):
         Returns:
             A DataArray with the derived variable.
         """
-        self._check_data_for_variables(data)
+        utils.check_data_for_variables(data, self.input_variables)
         return self.derive_variable(data)
-
-    def _check_data_for_variables(self, data: xr.Dataset):
-        """Check that the data has the variables required to build the variable, based on assigned input variables."""
-        for v in self.input_variables:
-            if v not in data.data_vars:
-                raise ValueError(f"Input variable {v} not found in data")
 
 
 class CravenSignificantSevereParameter(DerivedVariable):
     """A derived variable that computes the Craven significant severe parameter."""
 
     name = "craven_significant_severe_parameter"
-    input_variables = [
+    required_variables = [
         "2m_temperature",
         "2m_dewpoint_temperature",
         "2m_relative_humidity",
@@ -102,12 +96,12 @@ class SurfaceWindSpeed(DerivedVariable):
     """A derived variable that computes the surface wind speed."""
 
     name = "surface_wind_speed"
-    input_variables = ["10u", "10v"]
+    required_variables = ["surface_eastward_wind", "surface_northward_wind"]
 
     def derive_variable(self, data: xr.Dataset) -> xr.DataArray:
         """Derive the surface wind speed."""
-        return np.sqrt(
-            data[self.input_variables[0]] ** 2 + data[self.input_variables[1]] ** 2
+        return np.hypot(
+            data[self.required_variables[0]], data[self.required_variables[1]]
         )
 
 
@@ -117,6 +111,7 @@ class AtmosphericRiverMask(DerivedVariable):
     name = "atmospheric_river_mask"
     input_variables = ["msl"]
 
+    # TODO: add the AR mask calculations
     def derive_variable(self, data: xr.Dataset) -> xr.DataArray:
         """Derive the atmospheric river mask."""
         return data[self.input_variables[0]] < 1000
@@ -168,14 +163,101 @@ class MLCAPE(DerivedVariable):
 
 
 class TCTrack(DerivedVariable):
-    """A derived variable that computes the TC track."""
+    """A derived variable that computes the TC track outputs."""
 
-    name = "tc_track"
-    input_variables = ["vmax", "slp"]
+    def __init__(self, prefer_wind_speed: bool = True):
+        """Initialize TCTrack with flexible wind variable handling.
+
+        Args:
+            prefer_wind_speed: If True, prefer surface_wind_speed over component winds.
+            If False, prefer component winds over wind speed.
+        """
+        self.prefer_wind_speed = prefer_wind_speed
+
+    @property
+    def required_variables(self) -> List[str]:
+        """Return flexible input variables based on data availability."""
+        # Base required variables
+        base_vars = [
+            "air_pressure_at_mean_sea_level",
+            "geopotential",
+        ]
+
+        # Wind variables - we'll check availability in get_required_variables
+        wind_vars = [
+            "surface_wind_speed",  # Preferred if available
+            "surface_eastward_wind",  # Fallback u component
+            "surface_northward_wind",  # Fallback v component
+        ]
+
+        return base_vars + wind_vars
+
+    def get_required_variables(self, data: xr.Dataset) -> List[str]:
+        """Get the actually required variables based on what's available in the data."""
+        base_vars = ["air_pressure_at_mean_sea_level", "geopotential"]
+
+        # Check wind variable availability
+        has_wind_speed = "surface_wind_speed" in data.data_vars
+        has_wind_components = (
+            "surface_eastward_wind" in data.data_vars
+            and "surface_northward_wind" in data.data_vars
+        )
+
+        if self.prefer_wind_speed and has_wind_speed:
+            wind_vars = ["surface_wind_speed"]
+        elif has_wind_components:
+            wind_vars = ["surface_eastward_wind", "surface_northward_wind"]
+        elif has_wind_speed:
+            wind_vars = ["surface_wind_speed"]
+        else:
+            raise ValueError(
+                "Neither 'surface_wind_speed' nor both 'surface_eastward_wind' and "
+                "'surface_northward_wind' are available in the dataset"
+            )
+
+        return base_vars + wind_vars
+
+    def _prepare_wind_data(self, data: xr.Dataset) -> xr.Dataset:
+        """Prepare wind data by computing wind speed if needed."""
+        # Make a copy to avoid modifying original
+        prepared_data = data.copy()
+
+        has_wind_speed = "surface_wind_speed" in data.data_vars
+        has_wind_components = (
+            "surface_eastward_wind" in data.data_vars
+            and "surface_northward_wind" in data.data_vars
+        )
+
+        # If we don't have wind speed but have components, compute it
+        if not has_wind_speed and has_wind_components:
+            prepared_data["surface_wind_speed"] = np.hypot(
+                data["surface_eastward_wind"], data["surface_northward_wind"]
+            )
+
+        return prepared_data
+
+    def build(self, data: xr.Dataset) -> xr.DataArray:
+        """Build the derived variable with flexible input checking."""
+        # Get the actually required variables for this dataset
+        required_vars = self.get_required_variables(data)
+
+        # Check that we have the required variables
+        utils.check_data_for_variables(data, required_vars)
+        # Prepare the data with wind variables as needed
+        prepared_data = self._prepare_wind_data(data)
+
+        return self.derive_variable(prepared_data)
 
     def derive_variable(self, data: xr.Dataset) -> xr.DataArray:
         """Derive the TC track."""
-        return data[self.input_variables[0]] * data[self.input_variables[1]]
+        cyclone_dataset_builder = calc.CycloneDatasetBuilder()
+
+        # Generates the variables needed for the TC track calculation (geop. thickness, winds, temps, slp)
+        cyclone_dataset = cyclone_dataset_builder.generate_variables(data)
+        tctracks = calc.create_tctracks_from_dataset(cyclone_dataset)
+        tctracks_ds_3d = calc.tctracks_to_3d_dataset(tctracks)
+
+        return tctracks_ds_3d
 
 
 def maybe_derive_variables(
@@ -198,8 +280,31 @@ def maybe_derive_variables(
     derived_variables = [v for v in variables if not isinstance(v, str)]
     if derived_variables:
         for v in derived_variables:
-            derived_variable = v()
+            derived_variable = v() if isinstance(v, type) else v
             derived_data = derived_variable.build(data=ds)
             ds[derived_variable.name] = derived_data
 
     return ds
+
+
+def maybe_pull_required_variables_from_derived_input(
+    incoming_variables: list[Union[str, DerivedVariable]],
+) -> list[str]:
+    """Pull the required variables from a derived input and add to the list of variables to pull.
+
+    Args:
+        incoming_variables: a list of string and/or derived variables.
+
+    Returns:
+        A list of variables possibly including derived variables' required variables.
+    """
+    string_variables = [v for v in incoming_variables if isinstance(v, str)]
+    derived_required_variables = []
+
+    for v in incoming_variables:
+        if not isinstance(v, str):
+            derived_variable = v() if isinstance(v, type) else v
+            if isinstance(derived_variable, DerivedVariable):
+                derived_required_variables.extend(derived_variable.required_variables)
+
+    return string_variables + derived_required_variables
