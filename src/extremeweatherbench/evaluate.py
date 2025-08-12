@@ -43,6 +43,8 @@ class ExtremeWeatherBench:
         self.metrics = metrics
         self.cache_dir = cache_dir
 
+    # case operators as a property are a convenience method for users to use them outside the class
+    # if desired for a parallel workflow
     @property
     def case_operators(self) -> list["case.CaseOperator"]:
         return case.build_case_operators(self.cases, self.metrics)
@@ -183,20 +185,6 @@ def _evaluate_metric_and_return_df(
     return df
 
 
-def _build_target_dataset(case_operator: "case.CaseOperator") -> xr.Dataset:
-    """Build the target dataset for a case operator."""
-
-    return run_pipeline(case_operator, "target")
-
-
-def _build_forecast_dataset(
-    case_operator: "case.CaseOperator",
-) -> xr.Dataset:
-    """Build the forecast dataset for a case operator."""
-
-    return run_pipeline(case_operator, "forecast")
-
-
 def _build_datasets(
     case_operator: "case.CaseOperator",
 ) -> tuple[xr.Dataset, xr.Dataset]:
@@ -206,9 +194,9 @@ def _build_datasets(
     including preprocessing, variable renaming, and subsetting.
     """
     logger.info("running target pipeline")
-    target_ds = _build_target_dataset(case_operator)
+    target_ds = run_pipeline(case_operator, "target")
     logger.info("running forecast pipeline")
-    forecast_ds = _build_forecast_dataset(case_operator)
+    forecast_ds = run_pipeline(case_operator, "forecast")
     return (target_ds, forecast_ds)
 
 
