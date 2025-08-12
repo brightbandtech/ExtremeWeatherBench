@@ -262,6 +262,7 @@ class ZarrForecast(ForecastBase):
             self.source,
             storage_options=self.storage_options,
             chunks=self.chunks,
+            decode_timedelta=True,
         )
 
 
