@@ -70,28 +70,6 @@ class DerivedVariable(ABC):
         return self.derive_variable(data)
 
 
-class CravenSignificantSevereParameter(DerivedVariable):
-    """A derived variable that computes the Craven significant severe parameter."""
-
-    name = "craven_significant_severe_parameter"
-    required_variables = [
-        "2m_temperature",
-        "2m_dewpoint_temperature",
-        "2m_relative_humidity",
-        "10m_u_component_of_wind",
-        "10m_v_component_of_wind",
-        "surface_pressure",
-        "geopotential",
-    ]
-
-    def derive_variable(self, data: xr.Dataset) -> xr.DataArray:
-        """Derive the Craven significant severe parameter."""
-        # cbss_ds = calc.craven_brooks_sig_svr(data[variables],variable_mapping={'pressure':'level', 'dewpoint':
-        # 'dewpoint_temperature','temperature':'air_temperature'})
-        test_da = data[self.input_variables[0]] * 2
-        return test_da
-
-
 class SurfaceWindSpeed(DerivedVariable):
     """A derived variable that computes the surface wind speed."""
 
@@ -140,21 +118,6 @@ class IntegratedVaporTransportJacobian(DerivedVariable):
 
     def derive_variable(self, data: xr.Dataset) -> xr.DataArray:
         """Derive the integrated vapor transport Jacobian."""
-        return (
-            data[self.input_variables[0]]
-            * data[self.input_variables[1]]
-            * data[self.input_variables[2]]
-        )
-
-
-class MLCAPE(DerivedVariable):
-    """A derived variable that computes the MLCAPE."""
-
-    name = "mlcape"
-    input_variables = ["t", "z", "r"]
-
-    def derive_variable(self, data: xr.Dataset) -> xr.DataArray:
-        """Derive the MLCAPE."""
         return (
             data[self.input_variables[0]]
             * data[self.input_variables[1]]
