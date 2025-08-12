@@ -780,3 +780,18 @@ def convert_init_time_to_valid_time(ds: xr.Dataset) -> xr.Dataset:
         ],
         "lead_time",
     )
+
+
+def check_data_for_variables(data: xr.Dataset, variables: list[str]):
+    """Check that the data has the variables required to build the variable.
+
+    Args:
+        data: The input dataset.
+        variables: The variables to check for in the dataset.
+
+    Returns:
+        None.
+    """
+    for v in variables:
+        if v not in data.data_vars:
+            raise ValueError(f"Input variable {v} not found in data")
