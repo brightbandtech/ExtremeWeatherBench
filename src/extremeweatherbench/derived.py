@@ -125,17 +125,16 @@ class IntegratedVaporTransportJacobian(DerivedVariable):
         )
 
 
-class TCTrack(DerivedVariable):
-    """A derived variable that computes the TC track outputs."""
+class TCTrackVariables(DerivedVariable):
+    """A derived variable that computes the TC track outputs.
 
-    def __init__(self, prefer_wind_speed: bool = True):
-        """Initialize TCTrack with flexible wind variable handling.
+    This derived variable is used to compute the TC track outputs.
+    It is a flexible variable that can be used to compute the TC track outputs
+    based on the data availability.
 
-        Args:
-            prefer_wind_speed: If True, prefer surface_wind_speed over component winds.
-            If False, prefer component winds over wind speed.
-        """
-        self.prefer_wind_speed = prefer_wind_speed
+    Deriving the track locations using default TempestExtremes criteria:
+    https://doi.org/10.5194/gmd-14-5023-2021
+    """
 
     @property
     def required_variables(self) -> List[str]:
@@ -166,12 +165,10 @@ class TCTrack(DerivedVariable):
             and "surface_northward_wind" in data.data_vars
         )
 
-        if self.prefer_wind_speed and has_wind_speed:
+        if has_wind_speed:
             wind_vars = ["surface_wind_speed"]
         elif has_wind_components:
             wind_vars = ["surface_eastward_wind", "surface_northward_wind"]
-        elif has_wind_speed:
-            wind_vars = ["surface_wind_speed"]
         else:
             raise ValueError(
                 "Neither 'surface_wind_speed' nor both 'surface_eastward_wind' and "
@@ -213,10 +210,9 @@ class TCTrack(DerivedVariable):
 
     def derive_variable(self, data: xr.Dataset) -> xr.DataArray:
         """Derive the TC track."""
-        cyclone_dataset_builder = calc.CycloneDatasetBuilder()
 
         # Generates the variables needed for the TC track calculation (geop. thickness, winds, temps, slp)
-        cyclone_dataset = cyclone_dataset_builder.generate_variables(data)
+        cyclone_dataset = calc.generate_tc_variables(data)
         tctracks = calc.create_tctracks_from_dataset(cyclone_dataset)
         tctracks_ds_3d = calc.tctracks_to_3d_dataset(tctracks)
 
