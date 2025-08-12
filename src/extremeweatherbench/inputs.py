@@ -276,6 +276,27 @@ class TargetBase(InputBase):
     same coordinate system for evaluation.
     """
 
+    def maybe_align_forecast_to_target(
+        self,
+        forecast_data: xr.Dataset,
+        target_data: xr.Dataset,
+    ) -> tuple[xr.Dataset, xr.Dataset]:
+        """Align the target data to the forecast data.
+
+        This method is used to align the forecast data to the target data (not vice versa).
+        Implementation is useful for non-gridded targets that need to be aligned to the forecast
+        data.
+
+        Args:
+            forecast_data: The forecast data to align.
+            target_data: The target data to align to.
+
+        Returns:
+            A tuple of the aligned target data and forecast data. Defaults to passing through
+            the target and forecast data.
+        """
+        return target_data, forecast_data
+
 
 @dataclasses.dataclass
 class ERA5(TargetBase):
@@ -396,6 +417,13 @@ class GHCN(TargetBase):
             return data
         else:
             raise ValueError(f"Data is not a polars LazyFrame: {type(data)}")
+
+    def maybe_align_forecast_to_target(
+        self,
+        forecast_data: xr.Dataset,
+        target_data: xr.Dataset,
+    ) -> tuple[xr.Dataset, xr.Dataset]:
+        return align_point_obs_target_to_forecast(target_data, forecast_data)
 
 
 @dataclasses.dataclass
@@ -522,7 +550,15 @@ class LSR(TargetBase):
         else:
             raise ValueError(f"Data is not a pandas DataFrame: {type(data)}")
 
+    def maybe_align_forecast_to_target(
+        self,
+        forecast_data: xr.Dataset,
+        target_data: xr.Dataset,
+    ) -> tuple[xr.Dataset, xr.Dataset]:
+        return align_point_obs_target_to_forecast(target_data, forecast_data)
 
+
+# TODO: get PPH connector working properly
 @dataclasses.dataclass
 class PPH(TargetBase):
     """Target class for practically perfect hindcast data."""
@@ -774,3 +810,23 @@ def zarr_target_subsetter(
     )
 
     return fully_subset_data
+
+
+def align_point_obs_target_to_forecast(
+    target_data: xr.Dataset,
+    forecast_data: xr.Dataset,
+) -> tuple[xr.Dataset, xr.Dataset]:
+    lons = xr.DataArray(target_data["longitude"].values, dims="location")
+    lats = xr.DataArray(target_data["latitude"].values, dims="location")
+
+    time_aligned_target_data, time_aligned_forecast_data = xr.align(
+        target_data, forecast_data, exclude=["latitude", "longitude"]
+    )
+
+    time_aligned_forecast_data = time_aligned_forecast_data.interp(
+        latitude=lats, longitude=lons, method="nearest"
+    )
+    time_aligned_forecast_data = time_aligned_forecast_data.set_index(
+        location=("latitude", "longitude")
+    ).unstack("location")
+    return time_aligned_target_data, time_aligned_forecast_data
