@@ -84,13 +84,16 @@ def build_case_operators(
     Returns:
         A list of CaseOperator objects.
     """
-    case_metadata_collection = dacite.from_dict(
-        data_class=IndividualCaseCollection,
-        data=cases_dict,
-        config=dacite.Config(
-            type_hooks={regions.Region: regions.map_to_create_region},
-        ),
-    )
+    if isinstance(cases_dict["cases"], list):
+        case_metadata_collection = dacite.from_dict(
+            data_class=IndividualCaseCollection,
+            data=cases_dict,
+            config=dacite.Config(
+                type_hooks={regions.Region: regions.map_to_create_region},
+            ),
+        )
+    else:
+        raise TypeError("cases_dict['cases'] must be a list of cases")
 
     # build list of case operators based on information provided in case dict and
     case_operators = []
