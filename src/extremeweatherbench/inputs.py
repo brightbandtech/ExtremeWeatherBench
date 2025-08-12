@@ -358,6 +358,7 @@ class GHCN(TargetBase):
                 <= case_operator.case_metadata.location.geopandas.total_bounds[2]
             )
         )
+        # convert to Kelvin
         subset_target_data = subset_target_data.with_columns(
             pl.col("surface_air_temperature").add(273.15)
         )
@@ -729,11 +730,6 @@ def open_kerchunk_reference(
             "Unknown kerchunk file type found in forecast path, only json and parquet are supported."
         )
     return kerchunk_ds
-
-
-def open_lazy_target_data(target_base: "TargetBase") -> utils.IncomingDataInput:
-    """Open the target data from the target URI."""
-    return target_base._open_data_from_source()
 
 
 def zarr_target_subsetter(
