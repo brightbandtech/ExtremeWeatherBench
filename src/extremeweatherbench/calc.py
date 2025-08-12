@@ -457,7 +457,7 @@ def tctracks_to_3d_dataset(tctracks: list[TCTracks]) -> xr.Dataset:
     return ds_3d
 
 
-def orography(self, ds: xr.Dataset) -> xr.DataArray:
+def orography(ds: xr.Dataset) -> xr.DataArray:
     """Calculate the orography from the geopotential at the surface using ERA5.
 
     Args:
@@ -482,7 +482,7 @@ def orography(self, ds: xr.Dataset) -> xr.DataArray:
         )
 
 
-def calculate_wind_speed(self, ds: xr.Dataset) -> xr.DataArray:
+def calculate_wind_speed(ds: xr.Dataset) -> xr.DataArray:
     """Calculate wind speed from available wind data.
 
     Args:
@@ -503,7 +503,6 @@ def calculate_wind_speed(self, ds: xr.Dataset) -> xr.DataArray:
 
 
 def subset_variable_and_maybe_levels(
-    self,
     ds: xr.Dataset,
     var_name: str,
     level_name: str = "level",
@@ -527,7 +526,6 @@ def subset_variable_and_maybe_levels(
 
 
 def generate_geopotential_thickness(
-    self,
     ds: xr.Dataset,
     var_name: str = "geopotential",
     level_name: str = "level",
@@ -546,10 +544,10 @@ def generate_geopotential_thickness(
     Returns:
         The geopotential thickness as an xarray DataArray.
     """
-    geopotential_heights = self.subset_variable_and_maybe_levels(
+    geopotential_heights = subset_variable_and_maybe_levels(
         ds=ds, var_name=var_name, level_name=level_name, level_value=top_level_value
     )
-    geopotential_height_bottom = self.subset_variable_and_maybe_levels(
+    geopotential_height_bottom = subset_variable_and_maybe_levels(
         ds=ds,
         var_name=var_name,
         level_name=level_name,
@@ -564,7 +562,7 @@ def generate_geopotential_thickness(
     return geopotential_thickness
 
 
-def generate_tc_variables(self, ds: xr.Dataset) -> xr.Dataset:
+def generate_tc_variables(ds: xr.Dataset) -> xr.Dataset:
     """Generate the variables needed for the TC track calculation.
 
     Args:
@@ -576,13 +574,13 @@ def generate_tc_variables(self, ds: xr.Dataset) -> xr.Dataset:
 
     output = xr.Dataset(
         {
-            "air_pressure_at_mean_sea_level": self.subset_variable_and_maybe_levels(
+            "air_pressure_at_mean_sea_level": subset_variable_and_maybe_levels(
                 ds, var_name="air_pressure_at_mean_sea_level"
             ),
-            "geopotential_thickness": self.generate_geopotential_thickness(
+            "geopotential_thickness": generate_geopotential_thickness(
                 ds, top_level_value=300, bottom_level_value=500
             ),
-            "surface_wind_speed": self.calculate_wind_speed(ds),
+            "surface_wind_speed": calculate_wind_speed(ds),
         },
     )
 
