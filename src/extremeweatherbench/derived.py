@@ -232,7 +232,6 @@ def maybe_derive_variables(
 
     Args:
         ds: The dataset, ideally already subset in case of in memory operations in the derived variables.
-        case: The case to derive the variables for.
         variables: The potential variables to derive as a list of strings or DerivedVariable objects.
 
     Returns:

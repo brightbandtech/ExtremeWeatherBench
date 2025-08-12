@@ -59,13 +59,13 @@ class CaseOperator:
     ExtremeWeatherBench.run() method to evaluate all cases in an evaluation in serial.
 
     Attributes:
-        case: IndividualCase metadata
+        case_metadata: IndividualCase metadata
         metric: A metric that is intended to be evaluated for the case
         target_config: A TargetConfig object
         forecast_config: A ForecastConfig object
     """
 
-    case: IndividualCase
+    case_metadata: IndividualCase
     metric: "metrics.BaseMetric"
     target: "inputs.TargetBase"
     forecast: "inputs.ForecastBase"
