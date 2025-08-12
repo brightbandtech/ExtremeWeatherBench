@@ -32,8 +32,33 @@ IBTrACS_metadata_variable_mapping = {
     "NAME": "tc_name",
     "LAT": "latitude",
     "LON": "longitude",
-    "USA_WIND": "surface_wind_speed",
-    "USA_PRES": "pressure_at_mean_sea_level",
+    "WMO_WIND": "wmo_surface_wind_speed",
+    "WMO_PRES": "wmo_air_pressure_at_mean_sea_level",
+    "USA_WIND": "usa_surface_wind_speed",
+    "USA_PRES": "usa_air_pressure_at_mean_sea_level",
+    "NEUMANN_WIND": "neumann_surface_wind_speed",
+    "NEUMANN_PRES": "neumann_air_pressure_at_mean_sea_level",
+    "TOKYO_WIND": "tokyo_surface_wind_speed",
+    "TOKYO_PRES": "tokyo_air_pressure_at_mean_sea_level",
+    "CMA_WIND": "cma_surface_wind_speed",
+    "CMA_PRES": "cma_air_pressure_at_mean_sea_level",
+    "HKO_WIND": "hko_surface_wind_speed",
+    "KMA_WIND": "kma_surface_wind_speed",
+    "KMA_PRES": "kma_air_pressure_at_mean_sea_level",
+    "NEWDELHI_WIND": "newdelhi_surface_wind_speed",
+    "NEWDELHI_PRES": "newdelhi_air_pressure_at_mean_sea_level",
+    "REUNION_WIND": "reunion_surface_wind_speed",
+    "REUNION_PRES": "reunion_air_pressure_at_mean_sea_level",
+    "BOM_WIND": "bom_surface_wind_speed",
+    "BOM_PRES": "bom_air_pressure_at_mean_sea_level",
+    "NADI_WIND": "nadi_surface_wind_speed",
+    "NADI_PRES": "nadi_air_pressure_at_mean_sea_level",
+    "WELLINGTON_WIND": "wellington_surface_wind_speed",
+    "WELLINGTON_PRES": "wellington_air_pressure_at_mean_sea_level",
+    "DS824_WIND": "ds824_surface_wind_speed",
+    "DS824_PRES": "ds824_air_pressure_at_mean_sea_level",
+    "MLC_WIND": "mlc_surface_wind_speed",
+    "MLC_PRES": "mlc_air_pressure_at_mean_sea_level",
 }
 
 
@@ -163,11 +188,17 @@ class ForecastBase(InputBase):
         )
         subset_time_data = utils.convert_init_time_to_valid_time(subset_time_data)
 
+        # use the list of required variables from the derived variables in the eval to add to the list of variables
+        expected_and_maybe_derived_variables = (
+            derived.maybe_pull_required_variables_from_derived_input(
+                case_operator.forecast.variables
+            )
+        )
         try:
-            subset_time_data = subset_time_data[case_operator.forecast.variables]
+            subset_time_data = subset_time_data[expected_and_maybe_derived_variables]
         except KeyError:
             raise KeyError(
-                f"Variables {case_operator.forecast.variables} not found in forecast data"
+                f"One of the variables {expected_and_maybe_derived_variables} not found in forecast data"
             )
         fully_subset_data = case_operator.case.location.mask(
             subset_time_data, drop=True
@@ -384,6 +415,7 @@ class LSR(TargetBase):
         target_data["longitude"] = target_data["longitude"].astype(float)
         target_data["valid_time"] = pd.to_datetime(target_data["valid_time"])
 
+        # filters to apply to the target data including datetimes and location bounds
         filters = (
             (target_data["valid_time"] >= case_operator.case.start_date)
             & (target_data["valid_time"] <= case_operator.case.end_date)
@@ -402,7 +434,6 @@ class LSR(TargetBase):
                 )
             )
         )
-
         subset_target_data = target_data.loc[filters]
 
         return subset_target_data
@@ -514,12 +545,15 @@ class IBTrACS(TargetBase):
             raise ValueError(f"Expected polars LazyFrame, got {type(target_data)}")
 
         # Get the season (year) from the case start date, cast as string as polars is interpreting the schema as strings
-        year = case_operator.case.start_date.year
-        season = str(year)
+        season = case_operator.case.start_date.year
+        if case_operator.case.start_date.month > 11:
+            season += 1
 
         # Create a subquery to find all storm numbers in the same season
         matching_numbers = (
-            target_data.filter(pl.col("SEASON") == season).select("NUMBER").unique()
+            target_data.filter(pl.col("SEASON").cast(pl.Int64) == season)
+            .select("NUMBER")
+            .unique()
         )
 
         # Apply the filter to get all data for storms with the same number in the same season
@@ -527,34 +561,108 @@ class IBTrACS(TargetBase):
         subset_target_data = target_data.join(
             matching_numbers, on="NUMBER", how="inner"
         ).filter(
-            (pl.col("NAME") == case_operator.case.title.upper())
-            & (pl.col("SEASON") == season)
+            (pl.col("tc_name") == case_operator.case.title.upper())
+            & (pl.col("SEASON").cast(pl.Int64) == season)
         )
 
         all_variables = IBTrACS_metadata_variable_mapping.values()
-        # check that the variables are in the target data
-        schema_fields = [field for field in subset_target_data.collect_schema()]
-        target_variables = [
-            v for v in case_operator.target.variables if isinstance(v, str)
-        ]
-        if target_variables and any(var not in schema_fields for var in all_variables):
-            raise ValueError(f"Variables {all_variables} not found in target data")
-
         # subset the variables
         subset_target_data = subset_target_data.select(all_variables)
+
+        schema = subset_target_data.collect_schema()
+        # Convert pressure and surface wind columns to float, replacing " " with null
+        # Get column names that contain "pressure" or "wind"
+        pressure_cols = [col for col in schema if "pressure" in col.lower()]
+        wind_cols = [col for col in schema if "wind" in col.lower()]
+
+        # Apply transformations to convert " " to null and cast to float
+        subset_target_data = subset_target_data.with_columns(
+            [
+                pl.when(pl.col(col) == " ")
+                .then(None)
+                .otherwise(pl.col(col))
+                .cast(pl.Float64, strict=False)
+                .alias(col)
+                for col in pressure_cols + wind_cols
+            ]
+        )
+
+        # Drop rows where ALL columns are null (equivalent to pandas dropna(how="all"))
+        subset_target_data = subset_target_data.filter(
+            ~pl.all_horizontal(pl.all().is_null())
+        )
+
+        # Create unified pressure and wind columns by preferring USA and WMO data
+        # For surface wind speed
+        wind_columns = [col for col in schema if "surface_wind_speed" in col]
+        wind_priority = ["usa_surface_wind_speed", "wmo_surface_wind_speed"] + [
+            col
+            for col in wind_columns
+            if col not in ["usa_surface_wind_speed", "wmo_surface_wind_speed"]
+        ]
+
+        # For pressure at mean sea level
+        pressure_columns = [
+            col for col in schema if "air_pressure_at_mean_sea_level" in col
+        ]
+        pressure_priority = [
+            "usa_air_pressure_at_mean_sea_level",
+            "wmo_air_pressure_at_mean_sea_level",
+        ] + [
+            col
+            for col in pressure_columns
+            if col
+            not in [
+                "usa_air_pressure_at_mean_sea_level",
+                "wmo_air_pressure_at_mean_sea_level",
+            ]
+        ]
+
+        # Create unified columns using coalesce (equivalent to pandas bfill)
+        subset_target_data = subset_target_data.with_columns(
+            [
+                pl.coalesce(wind_priority).alias("surface_wind_speed"),
+                pl.coalesce(pressure_priority).alias("air_pressure_at_mean_sea_level"),
+            ]
+        )
+
+        # Select only the columns to keep
+        columns_to_keep = [
+            "valid_time",
+            "tc_name",
+            "latitude",
+            "longitude",
+            "surface_wind_speed",
+            "air_pressure_at_mean_sea_level",
+        ]
+
+        subset_target_data = subset_target_data.select(columns_to_keep)
+
+        # Drop rows where wind speed OR pressure are null (equivalent to pandas dropna with how="any")
+        subset_target_data = subset_target_data.filter(
+            pl.col("surface_wind_speed").is_not_null()
+            & pl.col("air_pressure_at_mean_sea_level").is_not_null()
+        )
 
         return subset_target_data
 
     def _custom_convert_to_dataset(self, data: utils.IncomingDataInput) -> xr.Dataset:
         if isinstance(data, pl.LazyFrame):
             data = data.collect().to_pandas()
-            data = data.set_index(["ISO_TIME"])
+
+            # IBTrACS data is in -180 to 180, convert to 0 to 360
+            data["longitude"] = utils.convert_longitude_to_360(data["longitude"])
+
+            # Due to missing data in the IBTrACS dataset, polars doesn't convert the valid_time to a datetime by default
+            data["valid_time"] = pd.to_datetime(data["valid_time"])
+            data = data.set_index(["valid_time", "latitude", "longitude"])
+
             try:
-                data = data.to_xarray()
+                data = xr.Dataset.from_dataframe(data, sparse=True)
             except ValueError as e:
                 if "non-unique" in str(e):
                     pass
-                data = data.drop_duplicates().to_xarray()
+                data = xr.Dataset.from_dataframe(data.drop_duplicates(), sparse=True)
             return data
         else:
             raise ValueError(f"Data is not a polars LazyFrame: {type(data)}")
@@ -622,15 +730,22 @@ def zarr_target_subsetter(
         }
     )
 
+    target_and_maybe_derived_variables = (
+        derived.maybe_pull_required_variables_from_derived_input(
+            case_operator.target.variables
+        )
+    )
     # check that the variables are in the target data
-    target_variables = [v for v in case_operator.target.variables if isinstance(v, str)]
-    if target_variables and any(
-        var not in subset_time_data.data_vars for var in target_variables
+    if target_and_maybe_derived_variables and any(
+        var not in subset_time_data.data_vars
+        for var in target_and_maybe_derived_variables
     ):
-        raise ValueError(f"Variables {target_variables} not found in target data")
+        raise ValueError(
+            f"Variables {target_and_maybe_derived_variables} not found in target data"
+        )
     # subset the variables if they exist in the target data
-    elif target_variables:
-        subset_time_variable_data = subset_time_data[target_variables]
+    elif target_and_maybe_derived_variables:
+        subset_time_variable_data = subset_time_data[target_and_maybe_derived_variables]
     else:
         raise ValueError(
             "Variables not defined. Please list at least one target variable to select."
