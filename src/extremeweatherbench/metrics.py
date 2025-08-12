@@ -83,6 +83,8 @@ class AppliedMetric(ABC):
         target: xr.DataArray,
         **kwargs,
     ):
+        # TODO: build a spatial dim/time dim separator to allow for spatial and temporal
+        # metrics to be computed separately
         return self.base_metric()._compute_metric(
             **self._compute_applied_metric(
                 forecast,
