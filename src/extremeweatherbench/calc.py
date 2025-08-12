@@ -13,109 +13,10 @@ from skimage.feature import peak_local_max
 
 from extremeweatherbench import inputs
 
-
-class CycloneDatasetBuilder:
-    """
-    A class to find cyclones in a dataset using the TempestExtremes criteria.
-    <insert citation here>
-    """
-
-    def orography(self, ds: xr.Dataset) -> xr.DataArray:
-        if "geopotential_at_surface" in ds.variables:
-            return ds["geopotential_at_surface"] / 9.80665
-        else:
-            era5 = xr.open_zarr(
-                inputs.ARCO_ERA5_FULL_URI,
-                chunks=None,
-                storage_options=dict(token="anon"),
-            )
-            return (
-                era5.isel(time=1000000)["geopotential_at_surface"].sel(
-                    latitude=ds.latitude, longitude=ds.longitude
-                )
-                / 9.80665
-            )
-
-    def calculate_wind_speed(self, ds: xr.Dataset) -> xr.DataArray:
-        """Calculate wind speed from available wind data."""
-        if "surface_wind_speed" in ds.data_vars:
-            return ds["surface_wind_speed"]
-        elif (
-            "surface_eastward_wind" in ds.data_vars
-            and "surface_northward_wind" in ds.data_vars
-        ):
-            return np.hypot(ds["surface_eastward_wind"], ds["surface_northward_wind"])
-        else:
-            raise ValueError("No suitable wind speed variables found in dataset")
-
-    def subset_variable(
-        self,
-        ds: xr.Dataset,
-        var_name: str,
-        level_name: str = "level",
-        level_value: Optional[int | Sequence[int]] = None,
-    ):
-        if level_value is None:
-            return ds[var_name]
-        else:
-            return ds[var_name].sel({level_name: level_value})
-
-    def generate_geopotential_thickness(
-        self,
-        ds: xr.Dataset,
-        var_name: str = "geopotential",
-        level_name: str = "level",
-        top_level_value: int | Sequence[int] = [200, 300, 400],
-        bottom_level_value: int = 500,
-    ):
-        geopotential_heights = self.subset_variable(
-            ds=ds, var_name=var_name, level_name=level_name, level_value=top_level_value
-        )
-        geopotential_height_bottom = self.subset_variable(
-            ds=ds,
-            var_name=var_name,
-            level_name=level_name,
-            level_value=bottom_level_value,
-        )
-        geopotential_thickness = (
-            geopotential_heights - geopotential_height_bottom
-        ) / 9.80665
-        geopotential_thickness.attrs = dict(
-            description="Geopotential thickness of level and 500 hPa", units="m"
-        )
-        return geopotential_thickness
-
-    def generate_variables(self, ds: xr.Dataset):
-        """Subset the variables based on the variables argument.
-
-        Using "min" will subset the minimum required variables - sea level pressure and geopotential thickness.
-        Using "max" will subset the maximum required variables - sea level pressure, geopotential thickness, u and v
-        surface winds, u and v 850 hPa winds, and air temperature at 400 hPa.
-        Args:
-            vars: The variable pattern to subset.
-
-        Returns:
-            The subsetted variables.
-        """
-
-        output = xr.Dataset(
-            {
-                "air_pressure_at_mean_sea_level": self.subset_variable(
-                    ds, var_name="air_pressure_at_mean_sea_level"
-                ),
-                "geopotential_thickness": self.generate_geopotential_thickness(
-                    ds, top_level_value=300, bottom_level_value=500
-                ),
-                "surface_wind_speed": self.calculate_wind_speed(ds),
-            },
-        )
-
-        return output
-
-
 Location = namedtuple("Location", ["latitude", "longitude"])
 
 
+# TODO: determine if this is needed or can be removed for the refactor
 @dataclasses.dataclass
 class TC:
     id: int
@@ -125,8 +26,11 @@ class TC:
     slp: float
 
 
+# TODO: determine if this is needed or can be removed for the refactor
+
+
 @dataclasses.dataclass
-class TCTrack:
+class TCTracks:
     id: int
     track: list[TC]
 
@@ -166,8 +70,17 @@ class TCTrack:
 def find_furthest_contour_from_point(
     contour: np.ndarray, point: np.ndarray
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Find the two points in a contour that are furthest apart. From
+    """Find the two points in a contour that are furthest apart.
+
+    From
     https://stackoverflow.com/questions/50468643/finding-two-most-far-away-points-in-plot-with-many-points-in-python
+
+    Args:
+        contour: The contour to find the furthest point from.
+        point: The point to find the furthest point from.
+
+    Returns:
+        The furthest point from the contour as a tuple of x,y coordinates.
     """
 
     # Calculate distances from point to all points in contour
@@ -232,24 +145,15 @@ def calculate_haversine_degree_distance(
 def create_great_circle_mask(
     ds: xr.Dataset, latlon_point: tuple[float, float], radius_degrees: float
 ) -> xr.DataArray:
-    """
-    Create a circular mask based on great circle distance for an xarray dataset.
+    """Create a circular mask based on great circle distance for an xarray dataset.
 
-    Parameters:
-    -----------
-    ds : xarray.Dataset or xarray.DataArray
-        Dataset with 'latitude' and 'longitude' coordinates
-    center_lat : float
-        Latitude of the center point
-    center_lon : float
-        Longitude of the center point
-    radius_degrees : float
-        Radius in degrees of great circle distance
+    Args:
+        ds: Dataset with 'latitude' and 'longitude' coordinates.
+        latlon_point: Tuple containing (latitude, longitude) of the center point.
+        radius_degrees: Radius in degrees of great circle distance.
 
     Returns:
-    --------
-    mask : xarray.DataArray
-        Boolean mask where True indicates points within the radius
+        Boolean mask where True indicates points within the radius.
     """
 
     distance = calculate_haversine_degree_distance(
@@ -264,6 +168,16 @@ def create_great_circle_mask(
 def find_contours_from_point_specified_field(
     field: xr.DataArray, point: tuple[float, float], level: float
 ) -> Sequence[tuple[float, float]]:
+    """Find the contours from a point for a specified field.
+
+    Args:
+        field: The field to find the contours from.
+        point: The point at which the field is subtracted from to find the anomaly contours.
+        level: The anomaly level to find the contours at.
+
+    Returns:
+        The contours as a list of tuples of latitude and longitude.
+    """
     field_at_point = field - field.isel(latitude=point[0], longitude=point[1])
     contours = measure.find_contours(
         field_at_point.values, level=level, positive_orientation="high"
@@ -276,6 +190,16 @@ def find_valid_contour_from_point(
     point: tuple[float, float],
     ds_mapping: xr.Dataset,
 ) -> tuple[float, float]:
+    """Find the great circle distance from a point to a contour.
+
+    Args:
+        contour: The contour to find the great circle distance to.
+        point: The point to find the great circle distance to.
+        ds_mapping: The xarray dataset to map the point to.
+
+    Returns:
+        The great circle distance from the point to the contour.
+    """
     gc_distance_point = find_furthest_contour_from_point(contour, point)
     gc_distance_point_latlon = convert_from_cartesian_to_latlon(
         gc_distance_point, ds_mapping
@@ -297,6 +221,25 @@ def find_valid_candidates(
     max_gc_distance_dz_contour: float = 6.5,
     orography_filter_threshold: float = 150,
 ) -> dict[pd.Timestamp, tuple[float, float]]:
+    """Find valid candidate coordinate for a TC.
+
+    Defaults use the TempestExtremes criteria for TC track detection, where the slp must increase by at least n hPa
+    within 5.5 great circle degrees from the center point, geopotential thickness must increase by at least m meters
+    within 6.5 great circle degrees from the center point, and the terrain must be less than 150m.
+
+    Args:
+        slp_contours: List of SLP contours.
+        dz_contours: List of DZ contours.
+        point: The point to find the valid candidate for.
+        ds_mapping: The xarray dataset to map the point to.
+        time_counter: The time counter.
+        max_gc_distance_slp_contour: The maximum great circle distance for the SLP contour.
+        max_gc_distance_dz_contour: The maximum great circle distance for the DZ contour.
+        orography_filter_threshold: The threshold for the orography filter.
+
+    Returns:
+        The valid candidate coordinate as a dict of timestamp and tuple of latitude and longitude.
+    """
     latitude = convert_from_cartesian_to_latlon(point, ds_mapping)[0]
     longitude = convert_from_cartesian_to_latlon(point, ds_mapping)[1]
     orography_filter = (
@@ -332,16 +275,19 @@ def find_valid_candidates(
     return None
 
 
-def create_tctracks(tcs: list[TC]) -> list[TCTrack]:
-    """
-    Create a TCTrack from a list of TCs.
+def create_tctracks(tcs: list[TC]) -> list[TCTracks]:
+    """Create a TCTrack from a list of TCs.
 
     Groups TCs into tracks if they are:
     1. At unique timesteps
     2. Within 8 great circle degrees of the previous timestep
     3. Within 54 hours of the previous timestep
 
-    Returns a list of TCTrack objects.
+    Args:
+        tcs: List of TC objects.
+
+    Returns:
+        A list of TCTracks objects.
     """
     # Sort TCs by time
     tcs = sorted(tcs, key=lambda x: x.valid_time)
@@ -381,7 +327,7 @@ def create_tctracks(tcs: list[TC]) -> list[TCTrack]:
 
         # Create track if it has points
         if len(current_track) > 1:
-            tracks.append(TCTrack(id=track_id, track=current_track))
+            tracks.append(TCTracks(id=track_id, track=current_track))
             track_id += 1
     return tracks
 
@@ -450,8 +396,15 @@ def create_tctracks_from_dataset(
     return tctracks
 
 
-def tctracks_to_3d_dataset(tctracks: list[TCTrack]) -> xr.Dataset:
-    """Convert list of TCTrack objects to 3D xarray Dataset with time, lat, lon dimensions."""
+def tctracks_to_3d_dataset(tctracks: list[TCTracks]) -> xr.Dataset:
+    """Convert list of TCTracks objects to 3D xarray Dataset with time, latitude, and longitude dimensions.
+
+    Args:
+        tctracks: List of TCTracks objects.
+
+    Returns:
+        A 3D xarray Dataset with time, lat, lon dimensions.
+    """
     # Get all unique times, latitudes, and longitudes
     all_times = []
     all_lats = []
@@ -502,3 +455,135 @@ def tctracks_to_3d_dataset(tctracks: list[TCTrack]) -> xr.Dataset:
     )
 
     return ds_3d
+
+
+def orography(self, ds: xr.Dataset) -> xr.DataArray:
+    """Calculate the orography from the geopotential at the surface using ERA5.
+
+    Args:
+        ds: The potential xarray dataset to calculate the orography from.
+
+    Returns:
+        The orography as an xarray DataArray.
+    """
+    if "geopotential_at_surface" in ds.variables:
+        return ds["geopotential_at_surface"] / 9.80665
+    else:
+        era5 = xr.open_zarr(
+            inputs.ARCO_ERA5_FULL_URI,
+            chunks=None,
+            storage_options=dict(token="anon"),
+        )
+        return (
+            era5.isel(time=1000000)["geopotential_at_surface"].sel(
+                latitude=ds.latitude, longitude=ds.longitude
+            )
+            / 9.80665
+        )
+
+
+def calculate_wind_speed(self, ds: xr.Dataset) -> xr.DataArray:
+    """Calculate wind speed from available wind data.
+
+    Args:
+        ds: The xarray dataset to calculate the wind speed from.
+
+    Returns:
+        The wind speed as an xarray DataArray.
+    """
+    if "surface_wind_speed" in ds.data_vars:
+        return ds["surface_wind_speed"]
+    elif (
+        "surface_eastward_wind" in ds.data_vars
+        and "surface_northward_wind" in ds.data_vars
+    ):
+        return np.hypot(ds["surface_eastward_wind"], ds["surface_northward_wind"])
+    else:
+        raise ValueError("No suitable wind speed variables found in dataset")
+
+
+def subset_variable_and_maybe_levels(
+    self,
+    ds: xr.Dataset,
+    var_name: str,
+    level_name: str = "level",
+    level_value: Optional[int | Sequence[int]] = None,
+) -> xr.DataArray:
+    """Subset a variable and its levels from an xarray dataset.
+
+    Args:
+        ds: The xarray dataset to subset.
+        var_name: The name of the variable to subset.
+        level_name: The name of the level to subset.
+        level_value: The value of the level to subset.
+
+    Returns:
+        The subsetted variable as an xarray DataArray.
+    """
+    if level_value is None:
+        return ds[var_name]
+    else:
+        return ds[var_name].sel({level_name: level_value})
+
+
+def generate_geopotential_thickness(
+    self,
+    ds: xr.Dataset,
+    var_name: str = "geopotential",
+    level_name: str = "level",
+    top_level_value: int | Sequence[int] = [200, 300, 400],
+    bottom_level_value: int = 500,
+) -> xr.DataArray:
+    """Generate the geopotential thickness from the geopotential heights.
+
+    Args:
+        ds: The xarray dataset to generate the geopotential thickness from.
+        var_name: The name of the variable to generate the geopotential thickness from.
+        level_name: The name of the level to generate the geopotential thickness from.
+        top_level_value: The value of the top level to generate the geopotential thickness from.
+        bottom_level_value: The value of the bottom level to generate the geopotential thickness from.
+
+    Returns:
+        The geopotential thickness as an xarray DataArray.
+    """
+    geopotential_heights = self.subset_variable_and_maybe_levels(
+        ds=ds, var_name=var_name, level_name=level_name, level_value=top_level_value
+    )
+    geopotential_height_bottom = self.subset_variable_and_maybe_levels(
+        ds=ds,
+        var_name=var_name,
+        level_name=level_name,
+        level_value=bottom_level_value,
+    )
+    geopotential_thickness = (
+        geopotential_heights - geopotential_height_bottom
+    ) / 9.80665
+    geopotential_thickness.attrs = dict(
+        description="Geopotential thickness of level and 500 hPa", units="m"
+    )
+    return geopotential_thickness
+
+
+def generate_tc_variables(self, ds: xr.Dataset) -> xr.Dataset:
+    """Generate the variables needed for the TC track calculation.
+
+    Args:
+        ds: The xarray dataset to subset from.
+
+    Returns:
+        The subset variables as an xarray Dataset.
+    """
+
+    output = xr.Dataset(
+        {
+            "air_pressure_at_mean_sea_level": self.subset_variable_and_maybe_levels(
+                ds, var_name="air_pressure_at_mean_sea_level"
+            ),
+            "geopotential_thickness": self.generate_geopotential_thickness(
+                ds, top_level_value=300, bottom_level_value=500
+            ),
+            "surface_wind_speed": self.calculate_wind_speed(ds),
+        },
+    )
+
+    return output
