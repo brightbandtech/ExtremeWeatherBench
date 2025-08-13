@@ -234,7 +234,7 @@ def maybe_derive_variables(
 
     derived_variables = [v for v in variables if not isinstance(v, str)]
     derived_data = {v.name: v.compute(data=ds) for v in derived_variables}
-    # TODO check logic for merging derived data
+    # TODO consider removing data variables only used for derivation
     ds = ds.merge(derived_data)
     return ds
 
