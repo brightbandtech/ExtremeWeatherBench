@@ -77,22 +77,70 @@ class AtmosphericRiverMask(DerivedVariable):
 
 # TODO: add the IVT calculations for ARs
 class IntegratedVaporTransport(DerivedVariable):
-    """A derived variable that computes the integrated vapor transport."""
+    """Calculates the IVT (Integrated Vapor Transport) from a dataset,
+    using the method described in Newell et al. 1992 and elsewhere (e.g. Mo 2024).
+    """
 
     required_variables = [
-        "surface_eastward_wind",
-        "surface_northward_wind",
+        "eastward_wind",
+        "northward_wind",
         "specific_humidity",
     ]
 
     @classmethod
     def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
-        """Derive the integrated vapor transport."""
-        return (
-            data[cls.input_variables[0]]
-            * data[cls.input_variables[1]]
-            * data[cls.input_variables[2]]
+        """Derive the integrated vapor transport.
+
+        Args:
+            data: The input xarray dataset.
+
+        Returns:
+            The IVT (Integrated Vapor Transport) quantity as a DataArray.
+        """
+        coords_dict = {dim: data.coords[dim] for dim in data.dims if dim != "level"}
+        if "surface_standard_pressure" not in data.data_vars:
+            data["surface_standard_pressure"] = calc.calculate_pressure_at_surface(
+                calc.orography(data)
+            )
+
+        # Find the axis corresponding to "level", assuming all variables have the same dimension order
+        level_axis = list(data.dims).index("level")
+
+        # TODO: REMOVE COMPUTE BEFORE MERGE, this is to speed up testing
+        data = data.compute()
+
+        _, level_broadcast, sfc_pres_broadcast = xr.broadcast(
+            data, data["level"], data["surface_standard_pressure"]
         )
+        data["adjusted_level"] = xr.where(
+            level_broadcast * 100 < sfc_pres_broadcast, data["level"], np.nan
+        )
+        data["vertical_integral_of_eastward_water_vapour_flux"] = xr.DataArray(
+            calc.nantrapezoid(
+                data["eastward_wind"] * data["specific_humidity"],
+                x=data.adjusted_level * 100,
+                axis=level_axis,
+            )
+            / 9.80665,
+            coords=coords_dict,
+            dims=coords_dict.keys(),
+        )
+        data["vertical_integral_of_northward_water_vapour_flux"] = xr.DataArray(
+            calc.nantrapezoid(
+                data["northward_wind"] * data["specific_humidity"],
+                x=data.adjusted_level * 100,
+                axis=level_axis,
+            )
+            / 9.80665,
+            coords=coords_dict,
+            dims=coords_dict.keys(),
+        )
+
+        ivt_da = np.hypot(
+            data["vertical_integral_of_eastward_water_vapour_flux"],
+            data["vertical_integral_of_northward_water_vapour_flux"],
+        )
+        return ivt_da
 
 
 # TODO: add the IVT Laplacian calculations for ARs
@@ -115,6 +163,7 @@ class IntegratedVaporTransportLaplacian(DerivedVariable):
         )
 
 
+# TODO: finish TC track calculation port
 class TCTrackVariables(DerivedVariable):
     """A derived variable that computes the TC track outputs.
 
