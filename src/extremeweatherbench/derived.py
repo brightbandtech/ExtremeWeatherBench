@@ -31,7 +31,7 @@ class DerivedVariable(ABC):
 
     @classmethod
     @abstractmethod
-    def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
+    def derive_variable(self, data: xr.Dataset) -> xr.DataArray:
         """Derive the variable from the required variables.
 
         The output of the derivation must be a single variable output returned as
@@ -69,7 +69,7 @@ class AtmosphericRiverMask(DerivedVariable):
 
     required_variables = ["air_pressure_at_mean_sea_level"]
 
-    # TODO: add the AR mask calculations
+    # TODO: add the AR mask calculations@classmethod@classmethod
     def derive_variable(self, data: xr.Dataset) -> xr.DataArray:
         """Derive the atmospheric river mask."""
         return data[self.input_variables[0]] < 1000
@@ -85,12 +85,13 @@ class IntegratedVaporTransport(DerivedVariable):
         "specific_humidity",
     ]
 
-    def derive_variable(self, data: xr.Dataset) -> xr.DataArray:
+    @classmethod
+    def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
         """Derive the integrated vapor transport."""
         return (
-            data[self.input_variables[0]]
-            * data[self.input_variables[1]]
-            * data[self.input_variables[2]]
+            data[cls.input_variables[0]]
+            * data[cls.input_variables[1]]
+            * data[cls.input_variables[2]]
         )
 
 
@@ -104,12 +105,13 @@ class IntegratedVaporTransportLaplacian(DerivedVariable):
         "specific_humidity",
     ]
 
-    def derive_variable(self, data: xr.Dataset) -> xr.DataArray:
+    @classmethod
+    def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
         """Derive the integrated vapor transport Jacobian."""
         return (
-            data[self.input_variables[0]]
-            * data[self.input_variables[1]]
-            * data[self.input_variables[2]]
+            data[cls.input_variables[0]]
+            * data[cls.input_variables[1]]
+            * data[cls.input_variables[2]]
         )
 
 
@@ -132,59 +134,31 @@ class TCTrackVariables(DerivedVariable):
         "surface_northward_wind",
     ]
 
-    def get_required_variables(self, data: xr.Dataset) -> List[str]:
-        """Get the actually required variables based on what's available in the data."""
-        base_vars = ["air_pressure_at_mean_sea_level", "geopotential"]
-
-        # Check wind variable availability
-        has_wind_speed = "surface_wind_speed" in data.data_vars
-        has_wind_components = (
-            "surface_eastward_wind" in data.data_vars
-            and "surface_northward_wind" in data.data_vars
-        )
-
-        if has_wind_speed:
-            wind_vars = ["surface_wind_speed"]
-        elif has_wind_components:
-            wind_vars = ["surface_eastward_wind", "surface_northward_wind"]
-        else:
-            raise ValueError(
-                "Neither 'surface_wind_speed' nor both 'surface_eastward_wind' and "
-                "'surface_northward_wind' are available in the dataset"
-            )
-
-        return base_vars + wind_vars
-
-    def _prepare_wind_data(self, data: xr.Dataset) -> xr.Dataset:
-        """Prepare wind data by computing wind speed if needed."""
-        # Make a copy to avoid modifying original
-        prepared_data = data.copy()
-
-        has_wind_speed = "surface_wind_speed" in data.data_vars
-        has_wind_components = (
-            "surface_eastward_wind" in data.data_vars
-            and "surface_northward_wind" in data.data_vars
-        )
-
-        # If we don't have wind speed but have components, compute it
-        if not has_wind_speed and has_wind_components:
-            prepared_data["surface_wind_speed"] = np.hypot(
-                data["surface_eastward_wind"], data["surface_northward_wind"]
-            )
-
-        return prepared_data
-
-    def derive_variable(self, data: xr.Dataset) -> xr.DataArray:
+    @classmethod
+    def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
         """Derive the TC track variables."""
 
-        # Get the actually required variables for this dataset
-        required_vars = self.get_required_variables(data)
+        def _prepare_wind_data(data: xr.Dataset) -> xr.Dataset:
+            """Prepare wind data by computing wind speed if needed."""
+            # Make a copy to avoid modifying original
+            prepared_data = data.copy()
 
-        # Check that we have the required variables
-        utils.check_data_for_variables(data, required_vars)
+            has_wind_speed = "surface_wind_speed" in data.data_vars
+            has_wind_components = (
+                "surface_eastward_wind" in data.data_vars
+                and "surface_northward_wind" in data.data_vars
+            )
+
+            # If we don't have wind speed but have components, compute it
+            if not has_wind_speed and has_wind_components:
+                prepared_data["surface_wind_speed"] = np.hypot(
+                    data["surface_eastward_wind"], data["surface_northward_wind"]
+                )
+
+            return prepared_data
 
         # Prepare the data with wind variables as needed
-        prepared_data = self._prepare_wind_data(data)
+        prepared_data = _prepare_wind_data(data)
 
         # Generates the variables needed for the TC track calculation (geop. thickness, winds, temps, slp)
         cyclone_dataset = calc.generate_tc_variables(prepared_data)
