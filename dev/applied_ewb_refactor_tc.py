@@ -35,30 +35,6 @@ case_yaml = utils.load_events_yaml()
 test_yaml = {"cases": [case_yaml["cases"][200]]}
 
 # %%
-test_yaml
-
-
-# %%
-def _preprocess_bb_cira_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
-    """An example preprocess function that renames the time coordinate to lead_time,
-    creates a valid_time coordinate, and sets the lead time range and resolution not
-    present in the original dataset.
-
-    Args:
-        ds: The forecast dataset to rename.
-
-    Returns:
-        The renamed forecast dataset.
-    """
-    ds = ds.rename({"time": "lead_time"})
-    # The evaluation configuration is used to set the lead time range and resolution.
-    ds["lead_time"] = np.array(
-        [i for i in range(0, 241, 6)], dtype="timedelta64[h]"
-    ).astype("timedelta64[ns]")
-    return ds
-
-
-# %%
 ibtracs_target = inputs.IBTrACS(
     source=inputs.IBTRACS_URI,
     variables=[],
@@ -97,10 +73,6 @@ tc_metric_list = [
         forecast=hres_forecast,
     ),
 ]
-
-# %%
-hres_forecast
-
 # %%
 test_ewb = evaluate.ExtremeWeatherBench(
     cases=test_yaml,
@@ -114,5 +86,3 @@ outputs = test_ewb.run(
     # pre-compute the datasets to avoid recomputing them for each metric
     pre_compute=True,
 )
-
-# %%
