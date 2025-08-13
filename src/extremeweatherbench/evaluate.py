@@ -102,7 +102,7 @@ def compute_case_operator(case_operator: "case.CaseOperator", **kwargs):
         forecast_ds,
         exclude=["latitude", "longitude"],
     )
-    # TODO: determine if derived variables need to be pushed here or at loop
+
     # compute and cache the datasets if requested
     if kwargs.get("pre_compute", False):
         time_aligned_target_ds, time_aligned_forecast_ds = _compute_and_maybe_cache(
@@ -111,6 +111,13 @@ def compute_case_operator(case_operator: "case.CaseOperator", **kwargs):
             cache_dir=kwargs.get("cache_dir", None),
         )
 
+    time_aligned_target_ds, time_aligned_forecast_ds = [
+        derived.maybe_derive_variables(ds, variables)
+        for ds, variables in zip(
+            [time_aligned_target_ds, time_aligned_forecast_ds],
+            [case_operator.target.variables, case_operator.forecast.variables],
+        )
+    ]
     logger.info(f"datasets built for case {case_operator.case_metadata.case_id_number}")
     results = []
     # TODO: determine if derived variables need to be pushed here or at pre-compute
@@ -250,8 +257,6 @@ def run_pipeline(
         )
         # converts the target data to an xarray dataset if it is not already
         .pipe(input_data.maybe_convert_to_dataset)
-        # derives variables from the target data if derived variables are defined
-        .pipe(derived.maybe_derive_variables, variables=input_data.variables)
         .pipe(input_data.add_source_to_dataset_attrs)
     )
     return data
