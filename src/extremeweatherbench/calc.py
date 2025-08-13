@@ -352,6 +352,8 @@ def create_tctracks_from_dataset(
             continue
         else:
             valid_candidates[init_time[0].values] = []
+
+            # TODO: get init time working here
             slp_time = slp.sel(init_time=init_time)
             dz_time = dz.sel(init_time=init_time)
             for time_counter, t in enumerate(slp_time.valid_time):
