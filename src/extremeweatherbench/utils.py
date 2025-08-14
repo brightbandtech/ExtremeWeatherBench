@@ -14,7 +14,7 @@ import pandas as pd  # type: ignore[import-untyped]
 import polars as pl
 import regionmask
 import xarray as xr
-import yaml
+import yaml  # type: ignore[import]
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)

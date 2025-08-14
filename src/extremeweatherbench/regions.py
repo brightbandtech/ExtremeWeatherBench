@@ -5,7 +5,7 @@ import logging
 from abc import ABC, abstractmethod
 from collections import namedtuple
 from pathlib import Path
-from typing import Type
+from typing import Any, Type
 
 import geopandas as gpd  # type: ignore[import-untyped]
 import numpy as np
@@ -44,7 +44,7 @@ class Region(ABC):
         return dataset.where(mask_array, drop=drop)
 
     @property
-    def get_bounding_coordinates(self) -> tuple[float, float, float, float]:
+    def get_bounding_coordinates(self) -> tuple[Any, ...]:
         """Get the bounding coordinates of the region."""
         return namedtuple(
             "BoundingCoordinates",
