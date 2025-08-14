@@ -35,7 +35,7 @@ class TestRegionClasses:
             latitude=45.0, longitude=-120.0, bounding_box_degrees=10.0
         )
         assert region.latitude == 45.0
-        assert region.longitude == 240.0
+        assert region.longitude == -120.0
         assert region.bounding_box_degrees == 10.0
         assert isinstance(region, Region)
 
@@ -45,7 +45,7 @@ class TestRegionClasses:
             latitude=45.0, longitude=-120.0, bounding_box_degrees=(5.0, 10.0)
         )
         assert region.latitude == 45.0
-        assert region.longitude == 240.0
+        assert region.longitude == -120.0
         assert region.bounding_box_degrees == (5.0, 10.0)
 
     def test_bounding_box_region_creation(self):
@@ -58,8 +58,8 @@ class TestRegionClasses:
         )
         assert region.latitude_min == 40.0
         assert region.latitude_max == 50.0
-        assert region.longitude_min == 235.0
-        assert region.longitude_max == 245.0
+        assert region.longitude_min == -125.0
+        assert region.longitude_max == -115.0
         assert isinstance(region, Region)
 
     def test_shapefile_region_creation(self):
