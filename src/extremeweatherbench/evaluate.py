@@ -95,7 +95,7 @@ def compute_case_operator(case_operator: "cases.CaseOperator", **kwargs):
     Returns:
         A concatenated dataframe of the results of the case operator.
     """
-    target_ds, forecast_ds = _build_datasets(case_operator)
+    forecast_ds, target_ds = _build_datasets(case_operator)
 
     # spatiotemporally align the target and forecast datasets dependent on the forecast
     aligned_forecast_ds, aligned_target_ds = (
@@ -110,11 +110,11 @@ def compute_case_operator(case_operator: "cases.CaseOperator", **kwargs):
             cache_dir=kwargs.get("cache_dir", None),
         )
 
-    time_aligned_target_ds, time_aligned_forecast_ds = [
+    aligned_forecast_ds, aligned_target_ds = [
         derived.maybe_derive_variables(ds, variables)
         for ds, variables in zip(
-            [time_aligned_target_ds, time_aligned_forecast_ds],
-            [case_operator.target.variables, case_operator.forecast.variables],
+            [aligned_forecast_ds, aligned_target_ds],
+            [case_operator.forecast.variables, case_operator.target.variables],
         )
     ]
     logger.info(f"datasets built for case {case_operator.case_metadata.case_id_number}")
@@ -200,10 +200,10 @@ def _build_datasets(
     including preprocessing, variable renaming, and subsetting.
     """
     logger.info("running target pipeline")
-    target_ds = run_pipeline(case_operator, "target")
-    logger.info("running forecast pipeline")
     forecast_ds = run_pipeline(case_operator, "forecast")
-    return (target_ds, forecast_ds)
+    logger.info("running target pipeline")
+    target_ds = run_pipeline(case_operator, "target")
+    return (forecast_ds, target_ds)
 
 
 def _compute_and_maybe_cache(
