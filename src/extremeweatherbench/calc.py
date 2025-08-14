@@ -352,6 +352,8 @@ def create_tctracks_from_dataset(
             continue
         else:
             valid_candidates[init_time[0].values] = []
+
+            # TODO: get init time working here
             slp_time = slp.sel(init_time=init_time)
             dz_time = dz.sel(init_time=init_time)
             for time_counter, t in enumerate(slp_time.valid_time):
@@ -490,6 +492,20 @@ def orography(ds: xr.Dataset) -> xr.DataArray:
         )
 
 
+def calculate_pressure_at_surface(orography_da: xr.DataArray) -> xr.DataArray:
+    """Calculate the pressure at the surface, based on orography.
+
+    The dataarray is orography (geopotential at the surface/g0).
+
+    Args:
+        orography_da: The orography dataarray.
+
+    Returns:
+        The pressure at the surface of the dataarray in Pa.
+    """
+    return 101325 * (1 - 2.25577e-5 * orography_da) ** 5.25579
+
+
 def calculate_wind_speed(ds: xr.Dataset) -> xr.DataArray:
     """Calculate wind speed from available wind data.
 
@@ -593,3 +609,45 @@ def generate_tc_variables(ds: xr.Dataset) -> xr.Dataset:
     )
 
     return output
+
+
+def nantrapezoid(
+    y: np.ndarray,
+    x: np.ndarray | None = None,
+    dx: float = 1.0,
+    axis: int = -1,
+):
+    """
+    Trapezoid rule for arrays with nans.
+
+    Identical to np.trapezoid but with nans handled correctly in the summation.
+    """
+    y = np.asanyarray(y)
+    if x is None:
+        d = dx
+    else:
+        x = np.asanyarray(x)
+        if x.ndim == 1:
+            d = np.diff(x)
+            # reshape to correct shape
+            shape = [1] * y.ndim
+            shape[axis] = d.shape[0]
+            d = d.reshape(shape)
+        else:
+            d = np.diff(x, axis=axis)
+    if y.ndim != d.ndim:
+        d = np.expand_dims(d, axis=1)
+    nd = y.ndim
+    slice1 = [slice(None)] * nd
+    slice2 = [slice(None)] * nd
+    slice1[axis] = slice(1, None)
+    slice2[axis] = slice(None, -1)
+    try:
+        # This is the only location different from np.trapezoid
+        ret = np.nansum(d * (y[tuple(slice1)] + y[tuple(slice2)]) / 2.0, axis=axis)
+    except ValueError:
+        # Operations didn't work, cast to ndarray
+        d = np.asarray(d)
+        y = np.asarray(y)
+        ret = np.add.reduce(d * (y[tuple(slice1)] + y[tuple(slice2)]) / 2.0, axis)
+    return ret
