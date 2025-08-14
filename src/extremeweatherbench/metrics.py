@@ -27,6 +27,7 @@ class BaseMetric(ABC):
     def name(self) -> str:
         return self.__class__.__name__
 
+    @classmethod
     @abstractmethod
     def _compute_metric(
         self,
@@ -43,16 +44,17 @@ class BaseMetric(ABC):
         """
         pass
 
+    @classmethod
     def compute_metric(
-        self,
+        cls,
         forecast: xr.Dataset,
         target: xr.Dataset,
         **kwargs,
     ):
-        return self._compute_metric(
+        return cls._compute_metric(
             forecast,
             target,
-            **utils.filter_kwargs_for_callable(kwargs, self._compute_metric),
+            **utils.filter_kwargs_for_callable(kwargs, cls._compute_metric),
         )
 
 
@@ -155,6 +157,13 @@ class RMSE(BaseMetric):
         preserve_dims: str = "lead_time",
     ):
         return rmse(forecast, target, preserve_dims=preserve_dims)
+
+
+# TODO: base metric for identifying signal and complete implementation
+class EarlySignal(BaseMetric):
+    def _compute_metric(self, forecast: xr.Dataset, target: xr.Dataset):
+        # Dummy implementation for early signal
+        raise NotImplementedError("EarlySignal is not implemented yet")
 
 
 class MaximumMAE(AppliedMetric):
@@ -362,87 +371,82 @@ class DurationME(AppliedMetric):
         }
 
 
-# TODO: base metric for identifying signal
-class EarlySignal(AppliedMetric):
-    base_metric = BinaryContingencyTable
-
-    def _compute_applied_metric(self, forecast: xr.Dataset, target: xr.Dataset):
-        # Dummy implementation for early signal
-        return self.base_metrics[0]().compute_metric(forecast, target)
-
-
 # TODO: fill landfall displacement out
 class LandfallDisplacement(AppliedMetric):
     base_metric = MAE
 
     def _compute_applied_metric(self, forecast: xr.Dataset, target: xr.Dataset):
         # Dummy implementation for landfall displacement
-        return self.base_metrics[0]().compute_metric(forecast, target)
+        raise NotImplementedError("LandfallDisplacement is not implemented yet")
 
 
-# TODO: fill landfall time mean error out
+# TODO: complete landfall time mean error implementation
 class LandfallTimeME(AppliedMetric):
     base_metric = ME
 
     def _compute_applied_metric(self, forecast: xr.Dataset, target: xr.Dataset):
         # Dummy implementation for landfall time mean error
-        return self.base_metrics[0]().compute_metric(forecast, target)
+        raise NotImplementedError("LandfallTimeME is not implemented yet")
 
 
-# TODO: fill landfall intensity mean absolute error out
+# TODO: complete landfall intensity mean absolute error implementation
 class LandfallIntensityMAE(AppliedMetric):
     base_metric = MAE
 
     def _compute_applied_metric(self, forecast: xr.Dataset, target: xr.Dataset):
         # Dummy implementation for landfall intensity mean absolute error
-        return self.base_metrics[0]().compute_metric(forecast, target)
+        raise NotImplementedError("LandfallIntensityMAE is not implemented yet")
 
 
-# TODO: fill spatial displacement out
+# TODO: complete spatial displacement implementation
 class SpatialDisplacement(AppliedMetric):
     base_metric = MAE
 
     def _compute_applied_metric(self, forecast: xr.Dataset, target: xr.Dataset):
         # Dummy implementation for spatial displacement
-        return self.base_metrics[0]().compute_metric(forecast, target)
+        raise NotImplementedError("SpatialDisplacement is not implemented yet")
 
 
-# TODO: fill false alarm ratio out
+# TODO: complete false alarm ratio implementation
 class FAR(AppliedMetric):
     base_metric = BinaryContingencyTable
 
     def _compute_applied_metric(self, forecast: xr.Dataset, target: xr.Dataset):
         # Dummy implementation for False Alarm Rate
-        return self.base_metrics[0]().compute_metric(forecast, target)
+        raise NotImplementedError("FAR is not implemented yet")
 
 
+# TODO: complete CSI implementation
 class CSI(AppliedMetric):
     base_metric = BinaryContingencyTable
 
     def _compute_applied_metric(self, forecast: xr.Dataset, target: xr.Dataset):
         # Dummy implementation for Critical Success Index
-        return self.base_metrics[0]().compute_metric(forecast, target)
+        raise NotImplementedError("CSI is not implemented yet")
 
 
+# TODO: complete lead time detection implementation
 class LeadTimeDetection(AppliedMetric):
     base_metric = MAE
 
     def _compute_applied_metric(self, forecast: xr.Dataset, target: xr.Dataset):
         # Dummy implementation for lead time detection
-        return self.base_metrics[0]().compute_metric(forecast, target)
+        raise NotImplementedError("LeadTimeDetection is not implemented yet")
 
 
+# TODO: complete regional hits and misses implementation
 class RegionalHitsMisses(AppliedMetric):
     base_metric = BinaryContingencyTable
 
     def _compute_applied_metric(self, forecast: xr.Dataset, target: xr.Dataset):
         # Dummy implementation for regional hits and misses
-        return self.base_metrics[0]().compute_metric(forecast, target)
+        raise NotImplementedError("RegionalHitsMisses is not implemented yet")
 
 
+# TODO: complete hits and misses implementation
 class HitsMisses(AppliedMetric):
     base_metric = BinaryContingencyTable
 
     def _compute_applied_metric(self, forecast: xr.Dataset, target: xr.Dataset):
         # Dummy implementation for hits and misses
-        return self.base_metrics[0]().compute_metric(forecast, target)
+        raise NotImplementedError("HitsMisses is not implemented yet")
