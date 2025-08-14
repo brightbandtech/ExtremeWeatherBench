@@ -246,8 +246,8 @@ def run_pipeline(
         input_data.open_and_maybe_preprocess_data_from_source()
         # maps variable names to the target data if not already using EWB naming conventions
         .pipe(
-            utils.maybe_map_variable_names,
-            variable_mapping=input_data.variable_mapping,
+            maybe_map_variable_names,
+            case_operator=case_operator,
         )
         # subsets the target data using the caseoperator metadata
         .pipe(
