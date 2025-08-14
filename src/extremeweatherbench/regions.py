@@ -3,6 +3,7 @@
 import dataclasses
 import logging
 from abc import ABC, abstractmethod
+from collections import namedtuple
 from pathlib import Path
 from typing import Type
 
@@ -42,6 +43,13 @@ class Region(ABC):
         mask_array = ~np.isnan(mask)
         return dataset.where(mask_array, drop=drop)
 
+    @property
+    def get_bounding_coordinates(self) -> tuple[float, float, float, float]:
+        """Get the bounding coordinates of the region."""
+        return namedtuple(
+            "BoundingCoordinates", ["min_lon", "min_lat", "max_lon", "max_lat"]
+        )(*self.geopandas.total_bounds)
+
 
 class CenteredRegion(Region):
     """A region defined by a center point and a bounding box.
@@ -66,7 +74,7 @@ class CenteredRegion(Region):
         self, latitude: float, longitude: float, bounding_box_degrees: float | tuple
     ):
         self.latitude = latitude
-        self.longitude = utils.convert_longitude_to_360(longitude)
+        self.longitude = longitude
         self.bounding_box_degrees = bounding_box_degrees
 
     @classmethod
@@ -128,8 +136,8 @@ class BoundingBoxRegion(Region):
     ):
         self.latitude_min = latitude_min
         self.latitude_max = latitude_max
-        self.longitude_min = utils.convert_longitude_to_360(longitude_min)
-        self.longitude_max = utils.convert_longitude_to_360(longitude_max)
+        self.longitude_min = longitude_min
+        self.longitude_max = longitude_max
 
     @classmethod
     def create_region(
@@ -241,12 +249,27 @@ def _create_geopandas_from_bounds(
     Returns:
         GeoDataFrame with proper geometry handling antimeridian crossing
     """
+    # Check if the original coordinates cross the antimeridian before conversion
+    # This happens when the longitude range naturally crosses 180°/-180°
+    original_crosses_antimeridian = (
+        longitude_max > 180 and longitude_min < longitude_max - 360
+    )
+
     # Convert longitude coordinates to -180 to 180 range
     lon_min = utils.convert_longitude_to_180(longitude_min)
     lon_max = utils.convert_longitude_to_180(longitude_max)
 
-    # Handle antimeridian crossing (when longitude_min > longitude_max after conversion)
-    if lon_min > lon_max:
+    # Special case: if original coordinates went exactly to 180°, keep it as 180° instead of -180°
+    if longitude_max == 180:
+        lon_max = 180
+
+    # Handle antimeridian crossing
+    # Check if we have a true antimeridian crossing (not just a conversion artifact)
+    crosses_antimeridian = original_crosses_antimeridian or (
+        lon_min > lon_max and not (longitude_max == 180 and lon_max == 180)
+    )
+
+    if crosses_antimeridian:
         # Create two polygons: one for each side of the antimeridian
         polygon1 = Polygon(
             [

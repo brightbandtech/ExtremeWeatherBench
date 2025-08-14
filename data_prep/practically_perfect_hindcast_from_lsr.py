@@ -15,6 +15,10 @@
 # ---
 
 # %%
+from datetime import datetime
+
+import cartopy.crs as ccrs
+import cartopy.feature as cfeature
 import joblib
 import matplotlib.pyplot as plt
 import numpy as np
@@ -191,16 +195,13 @@ pph_sparse
 # serial:
 
 # %%
-# pph_sparse = [sparse_practically_perfect_hindcast(lsr_ds['report_type'].sel(valid_time=time)) for time in tqdm(unique_valid_times)]
+# pph_sparse = [
+# sparse_practically_perfect_hindcast(lsr_ds['report_type'].sel(valid_time=time)) for time in tqdm(unique_valid_times)
+# ]
 # pph_sparse = xr.concat(pph_sparse, unique_valid_times, name='valid_time')
 # pph_sparse
 
 # %%
-from datetime import datetime
-
-import cartopy.crs as ccrs
-import cartopy.feature as cfeature
-import matplotlib.pyplot as plt
 
 
 def plot_pph_contours(dt: datetime, da: xr.DataArray):
@@ -211,17 +212,14 @@ def plot_pph_contours(dt: datetime, da: xr.DataArray):
         dataset: The xarray dataset containing PPH data
     """
     # Select the data for the given datetime
-    try:
-        data_slice = da.sel(valid_time=dt, method="nearest")
-    except:
-        data_slice = da
+    data_slice = da.sel(valid_time=dt, method="nearest")
     n_points = data_slice.data.nnz
 
     # Convert sparse array to dense if needed
     if hasattr(data_slice.data, "todense"):
         data_slice = data_slice.copy(data=data_slice.data.todense())
     # Create the plot
-    fig = plt.figure(figsize=(12, 8))
+    _ = plt.figure(figsize=(12, 8))
     ax = plt.axes(projection=ccrs.PlateCarree())
 
     # Add map features
@@ -240,7 +238,7 @@ def plot_pph_contours(dt: datetime, da: xr.DataArray):
     cmap_with_alpha = plt.cm.viridis.copy()
     cmap_with_alpha.set_bad("none", alpha=0)  # Set masked values to transparent
 
-    contour = ax.contour(
+    _ = ax.contour(
         data_slice.longitude,
         data_slice.latitude,
         mask,
