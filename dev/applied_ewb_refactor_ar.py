@@ -18,10 +18,6 @@
 import logging
 
 # %%
-import numpy as np
-import xarray as xr
-
-# %%
 from extremeweatherbench import derived, evaluate, inputs, metrics, utils
 
 # %%
@@ -32,20 +28,31 @@ logger = logging.getLogger(__name__)
 
 # %%
 case_yaml = utils.load_events_yaml()
-test_yaml = {"cases": [case_yaml["cases"][200]]}
+test_yaml = {
+    "cases": [
+        n
+        for n in case_yaml["cases"]
+        if n["start_date"].year < 2023 and n["event_type"] == "atmospheric_river"
+    ][5:6]
+}
 
 # %%
-ibtracs_target = inputs.IBTrACS(
-    source=inputs.IBTRACS_URI,
-    variables=[],
-    variable_mapping=inputs.IBTrACS_metadata_variable_mapping,
-    storage_options={"anon": True},
+era5_target = inputs.ERA5(
+    source=inputs.ARCO_ERA5_FULL_URI,
+    variables=[derived.IntegratedVaporTransport],
+    variable_mapping={
+        "specific_humidity": "specific_humidity",
+        "u_component_of_wind": "eastward_wind",
+        "v_component_of_wind": "northward_wind",
+        "time": "valid_time",
+    },
+    storage_options={"remote_options": {"anon": True}},
 )
 
 # %%
 hres_forecast = inputs.ZarrForecast(
     source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
-    variables=[derived.TCTrackVariables],
+    variables=[derived.IntegratedVaporTransport],
     variable_mapping={
         "2m_temperature": "surface_air_temperature",
         "10m_u_component_of_wind": "surface_eastward_wind",
@@ -63,20 +70,20 @@ hres_forecast = inputs.ZarrForecast(
 
 # %%
 # just one for now
-tc_metric_list = [
+ar_metric_list = [
     inputs.EvaluationObject(
-        event_type="tropical_cyclone",
+        event_type="atmospheric_river",
         metric=[
             metrics.MAE,
         ],
-        target=ibtracs_target,
+        target=era5_target,
         forecast=hres_forecast,
     ),
 ]
 # %%
 test_ewb = evaluate.ExtremeWeatherBench(
     cases=test_yaml,
-    metrics=tc_metric_list,
+    metrics=ar_metric_list,
 )
 logger.info("Starting EWB run")
 outputs = test_ewb.run(
