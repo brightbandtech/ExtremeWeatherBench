@@ -78,7 +78,21 @@ class ExtremeWeatherBench:
                     pd.concat(run_results).to_pickle(
                         self.cache_dir / "case_results.pkl"
                     )
-        return pd.concat(run_results, ignore_index=True)
+        if run_results:
+            return pd.concat(run_results, ignore_index=True)
+        else:
+            # Return empty DataFrame with expected columns
+            return pd.DataFrame(
+                columns=[
+                    "value",
+                    "target_variable",
+                    "metric",
+                    "target_source",
+                    "forecast_source",
+                    "case_id_number",
+                    "event_type",
+                ]
+            )
 
 
 def compute_case_operator(case_operator: "cases.CaseOperator", **kwargs):
@@ -133,7 +147,6 @@ def compute_case_operator(case_operator: "cases.CaseOperator", **kwargs):
                 forecast_variable=variables[0],
                 target_variable=variables[1],
                 metric=metric,
-                target_name=case_operator.target.name,
                 case_id_number=case_operator.case_metadata.case_id_number,
                 event_type=case_operator.case_metadata.event_type,
                 **kwargs,
@@ -142,9 +155,25 @@ def compute_case_operator(case_operator: "cases.CaseOperator", **kwargs):
 
         # cache the results of each metric if caching
         if kwargs.get("cache_dir", None):
-            results.to_pickle(kwargs.get("cache_dir") / "results.pkl")
+            pd.concat(results, ignore_index=True).to_pickle(
+                kwargs.get("cache_dir") / "results.pkl"
+            )
 
-    return pd.concat(results, ignore_index=True)
+    if results:
+        return pd.concat(results, ignore_index=True)
+    else:
+        # Return empty DataFrame with expected columns
+        return pd.DataFrame(
+            columns=[
+                "value",
+                "target_variable",
+                "metric",
+                "target_source",
+                "forecast_source",
+                "case_id_number",
+                "event_type",
+            ]
+        )
 
 
 def _evaluate_metric_and_return_df(
@@ -221,8 +250,7 @@ def run_pipeline(
     case_operator: "cases.CaseOperator",
     input_source: Literal["target", "forecast"],
 ) -> xr.Dataset:
-    """
-    Shared method for running the target pipeline.
+    """Shared method for running the target pipeline.
 
     Args:
         case_operator: The case operator to run the pipeline on.
