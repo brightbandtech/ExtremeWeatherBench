@@ -216,7 +216,8 @@ class TestExtremeWeatherBench:
             cache_dir=cache_dir,
         )
 
-        assert ewb.cache_dir == cache_dir
+        # Cache dir should be converted to Path object
+        assert ewb.cache_dir == Path(cache_dir)
 
     def test_initialization_with_path_cache_dir(
         self, sample_cases_dict, sample_evaluation_object
@@ -320,7 +321,7 @@ class TestExtremeWeatherBench:
                     cache_dir=cache_dir,
                 )
 
-                result = ewb.run()
+                ewb.run()
 
                 # Check that cache directory was created
                 assert cache_dir.exists()
@@ -652,7 +653,7 @@ class TestMetricEvaluation:
         mock_metric_instance.compute_metric.return_value = mock_result
         mock_base_metric.return_value = mock_metric_instance
 
-        result = evaluate._evaluate_metric_and_return_df(
+        evaluate._evaluate_metric_and_return_df(
             forecast_ds=sample_forecast_dataset,
             target_ds=sample_target_dataset,
             forecast_variable="surface_air_temperature",
