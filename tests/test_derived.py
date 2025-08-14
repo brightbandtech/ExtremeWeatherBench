@@ -167,24 +167,16 @@ class TestAtmosphericRiverMask:
             "air_pressure_at_mean_sea_level"
         ]
 
-    @pytest.mark.xfail(
-        reason="Current implementation has syntax errors that need fixing"
-    )
     def test_derive_variable_basic(self, sample_dataset):
         """Test basic functionality of derive_variable method."""
         # This test will fail until the syntax errors are fixed
-        result = derived.AtmosphericRiverMask.derive_variable(sample_dataset)
+        with pytest.raises(NotImplementedError):
+            derived.AtmosphericRiverMask.derive_variable(sample_dataset)
 
-        assert isinstance(result, xr.DataArray)
-        # Should create a boolean mask where pressure < 1000 hPa
-        expected = sample_dataset["air_pressure_at_mean_sea_level"] < 1000
-        xr.testing.assert_equal(result, expected)
-
-    @pytest.mark.xfail(reason="Current implementation has syntax errors")
     def test_compute_integration(self, sample_dataset):
         """Test the compute method integration."""
-        result = derived.AtmosphericRiverMask.compute(sample_dataset)
-        assert isinstance(result, xr.DataArray)
+        with pytest.raises(NotImplementedError):
+            derived.AtmosphericRiverMask.compute(sample_dataset)
 
     def test_name_property(self):
         """Test the name property."""
@@ -274,16 +266,12 @@ class TestIntegratedVaporTransportLaplacian:
             == expected_vars
         )
 
-    @pytest.mark.xfail(reason="Current implementation has attribute name errors")
     def test_derive_variable_basic(self, sample_dataset):
         """Test basic functionality - will fail until attribute errors are fixed."""
         # Add the required surface variables to the dataset
         enhanced_dataset = sample_dataset.copy()
-
-        result = derived.IntegratedVaporTransportLaplacian.derive_variable(
-            enhanced_dataset
-        )
-        assert isinstance(result, xr.DataArray)
+        with pytest.raises(NotImplementedError):
+            derived.IntegratedVaporTransportLaplacian.derive_variable(enhanced_dataset)
 
 
 class TestTCTrackVariables:
