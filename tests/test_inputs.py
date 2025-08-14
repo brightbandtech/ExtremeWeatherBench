@@ -512,7 +512,7 @@ class TestZarrForecast:
         mock_open_zarr.assert_called_once_with(
             "test.zarr",
             storage_options={},
-            chunks=None,
+            chunks="auto",
             decode_timedelta=True,
         )
         assert result == sample_forecast_dataset

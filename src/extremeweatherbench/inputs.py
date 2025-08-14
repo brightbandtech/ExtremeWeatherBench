@@ -225,7 +225,7 @@ class InputBase(ABC):
 class ForecastBase(InputBase):
     """A class defining the interface for ExtremeWeatherBench forecast data."""
 
-    chunks: Optional[Union[dict, str]] = None
+    chunks: Optional[Union[dict, str]] = "auto"
 
     def subset_data_to_case(
         self,
@@ -245,7 +245,6 @@ class ForecastBase(InputBase):
         subset_time_data = data.sel(
             init_time=data.init_time[np.unique(subset_time_indices[0])]
         )
-        subset_time_data = utils.convert_init_time_to_valid_time(subset_time_data)
 
         # use the list of required variables from the derived variables in the eval to add to the list of variables
         expected_and_maybe_derived_variables = (
@@ -259,10 +258,15 @@ class ForecastBase(InputBase):
             raise KeyError(
                 f"One of the variables {expected_and_maybe_derived_variables} not found in forecast data"
             )
-        fully_subset_data = case_operator.case_metadata.location.mask(
+        spatiotemporally_subset_data = case_operator.case_metadata.location.mask(
             subset_time_data, drop=True
         )
-        return fully_subset_data
+
+        # convert from init_time/lead_time to init_time/valid_time
+        spatiotemporally_subset_data = utils.convert_init_time_to_valid_time(
+            spatiotemporally_subset_data
+        )
+        return spatiotemporally_subset_data
 
 
 @dataclasses.dataclass
@@ -310,7 +314,7 @@ class ZarrForecast(ForecastBase):
     Forecast class for zarr forecast data.
     """
 
-    chunks: Optional[Union[dict, str]] = None
+    chunks: Optional[Union[dict, str]] = "auto"
 
     def _open_data_from_source(self) -> utils.IncomingDataInput:
         return xr.open_zarr(
