@@ -385,7 +385,7 @@ class TestCreateRegion:
         )
         assert isinstance(region, CenteredRegion)
         assert region.latitude == 45.0
-        assert region.longitude == 240
+        assert region.longitude == -120.0
         assert region.bounding_box_degrees == 10.0
 
     def test_create_centered_region_with_tuple(self):
@@ -419,8 +419,8 @@ class TestCreateRegion:
         assert isinstance(region, BoundingBoxRegion)
         assert region.latitude_min == 40.0
         assert region.latitude_max == 50.0
-        assert region.longitude_min == 235.0
-        assert region.longitude_max == 245.0
+        assert region.longitude_min == -125.0
+        assert region.longitude_max == -115.0
 
     def test_create_shapefile_region(self):
         """Test creating a ShapefileRegion via factory function."""
@@ -448,7 +448,9 @@ class TestCreateRegion:
             # Missing bounding_box_degrees
 
         # Missing required parameters for BoundingBoxRegion
-        with pytest.raises(TypeError, match="missing 1 required positional argument"):
+        with pytest.raises(
+            TypeError, match="missing 1 required positional argument: 'longitude_max'"
+        ):
             map_to_create_region(
                 {
                     "type": "bounded_region",
@@ -464,7 +466,7 @@ class TestCreateRegion:
         # Mixed parameters that don't form a valid region
         with pytest.raises(
             TypeError,
-            match="got an unexpected keyword argument 'longitude_min'. Did you mean 'longitude'?",
+            match="got an unexpected keyword argument 'longitude_min'",
         ):
             map_to_create_region(
                 {
@@ -505,7 +507,7 @@ class TestMapToCreateRegion:
         region = map_to_create_region(kwargs)
         assert isinstance(region, CenteredRegion)
         assert region.latitude == 45.0
-        assert region.longitude == 240
+        assert region.longitude == -120.0
         assert region.bounding_box_degrees == 10.0
 
     def test_map_to_create_region_bounding_box(self):
@@ -921,6 +923,7 @@ class TestGetBoundingCoordinates:
         assert isinstance(coords.max_lat, float)
 
 
+@pytest.mark.integration
 class TestRegionIntegration:
     """Integration tests for region functionality."""
 
@@ -942,12 +945,12 @@ class TestRegionIntegration:
 
         assert isinstance(region, CenteredRegion)
         assert region.latitude == 45.0
-        assert region.longitude == 240.0
+        assert region.longitude == -120.0
         assert region.bounding_box_degrees == 10.0
 
     def test_region_with_individual_case_integration(self):
         """Test that regions work correctly with IndividualCase."""
-        from extremeweatherbench import case
+        from extremeweatherbench import cases
 
         region = CenteredRegion.create_region(
             latitude=45.0, longitude=-120.0, bounding_box_degrees=10.0
@@ -963,17 +966,20 @@ class TestRegionIntegration:
         )
 
         # Create IndividualCase with the region
-        individual_case = case.IndividualCase(
+        individual_case = cases.IndividualCase(
             case_id_number=1,
             title="Test Case",
             start_date=pd.Timestamp("2021-01-01"),
             end_date=pd.Timestamp("2021-01-02"),
             location=region,
             event_type="test",
-            data_vars=["temperature"],
         )
-
-        # Test that subset_region works
-        subset = individual_case.subset_region(dataset)
+        # Test that mask with drop=True works to subset coordinates
+        subset = individual_case.location.mask(dataset, drop=True)
         assert len(subset.latitude) < len(dataset.latitude)
         assert len(subset.longitude) < len(dataset.longitude)
+
+        # Test that mask with drop=False works to subset coordinates
+        subset = individual_case.location.mask(dataset, drop=False)
+        assert len(subset.latitude) == len(dataset.latitude)
+        assert len(subset.longitude) == len(dataset.longitude)
