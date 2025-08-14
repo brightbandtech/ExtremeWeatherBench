@@ -47,7 +47,8 @@ class Region(ABC):
     def get_bounding_coordinates(self) -> tuple[float, float, float, float]:
         """Get the bounding coordinates of the region."""
         return namedtuple(
-            "BoundingCoordinates", ["min_lon", "min_lat", "max_lon", "max_lat"]
+            "BoundingCoordinates",
+            ["longitude_min", "latitude_min", "longitude_max", "latitude_max"],
         )(*self.geopandas.total_bounds)
 
 
