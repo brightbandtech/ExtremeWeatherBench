@@ -190,11 +190,14 @@ def make_sample_era5_dataset():
     data = np.random.RandomState(12345).standard_normal(size=(len(time), 91, 180))
     latitudes = np.linspace(-90, 90, 91)
     longitudes = np.linspace(0, 359, 180)
-    
+
     dataset = xr.Dataset(
         {
             "2m_temperature": (["time", "latitude", "longitude"], 273.15 + 10 * data),
-            "mean_sea_level_pressure": (["time", "latitude", "longitude"], 101325 + 1000 * data),
+            "mean_sea_level_pressure": (
+                ["time", "latitude", "longitude"],
+                101325 + 1000 * data,
+            ),
         },
         coords={"time": time, "latitude": latitudes, "longitude": longitudes},
     )
@@ -207,13 +210,23 @@ def make_sample_forecast_with_valid_time():
     data = np.random.RandomState(54321).standard_normal(size=(len(valid_time), 91, 180))
     latitudes = np.linspace(-90, 90, 91)
     longitudes = np.linspace(0, 359, 180)
-    
+
     dataset = xr.Dataset(
         {
-            "surface_air_temperature": (["valid_time", "latitude", "longitude"], 273.15 + 10 * data),
-            "surface_pressure": (["valid_time", "latitude", "longitude"], 101325 + 1000 * data),
+            "surface_air_temperature": (
+                ["valid_time", "latitude", "longitude"],
+                273.15 + 10 * data,
+            ),
+            "surface_pressure": (
+                ["valid_time", "latitude", "longitude"],
+                101325 + 1000 * data,
+            ),
         },
-        coords={"valid_time": valid_time, "latitude": latitudes, "longitude": longitudes},
+        coords={
+            "valid_time": valid_time,
+            "latitude": latitudes,
+            "longitude": longitudes,
+        },
     )
     return dataset
 
@@ -221,28 +234,30 @@ def make_sample_forecast_with_valid_time():
 def make_sample_ghcn_dataframe():
     """Create a sample GHCN-like polars DataFrame."""
     import polars as pl
-    
+
     dates = pd.date_range("2021-06-20", periods=100, freq="6h")
     n_stations = 5
-    
+
     # Create combinations of stations and times
     station_ids = [f"STATION_{i:03d}" for i in range(n_stations)]
-    
+
     data = []
     for station_id in station_ids:
         for date in dates:
             lat = 40 + np.random.normal(0, 5)
             lon = -100 + np.random.normal(0, 10)
             temp = 273.15 + np.random.normal(20, 5)
-            
-            data.append({
-                "valid_time": date,
-                "station_id": station_id,
-                "latitude": lat,
-                "longitude": lon,
-                "surface_air_temperature": temp,
-            })
-    
+
+            data.append(
+                {
+                    "valid_time": date,
+                    "station_id": station_id,
+                    "latitude": lat,
+                    "longitude": lon,
+                    "surface_air_temperature": temp,
+                }
+            )
+
     return pl.DataFrame(data)
 
 
@@ -261,9 +276,13 @@ def make_sample_lsr_dataframe():
 def make_sample_ibtracs_dataframe():
     """Create a sample IBTrACS-like polars DataFrame."""
     import polars as pl
-    
+
     data = {
-        "valid_time": ["2021-06-20 00:00:00", "2021-06-20 06:00:00", "2021-06-20 12:00:00"],
+        "valid_time": [
+            "2021-06-20 00:00:00",
+            "2021-06-20 06:00:00",
+            "2021-06-20 12:00:00",
+        ],
         "tc_name": ["TESTCYCLONE", "TESTCYCLONE", "TESTCYCLONE"],
         "latitude": [25.0, 26.0, 27.0],
         "longitude": [280.0, 281.0, 282.0],
