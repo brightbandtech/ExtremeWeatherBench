@@ -43,6 +43,7 @@ class Region(ABC):
         mask_array = ~np.isnan(mask)
         return dataset.where(mask_array, drop=drop)
 
+    @property
     def get_bounding_coordinates(self) -> tuple[float, float, float, float]:
         """Get the bounding coordinates of the region."""
         return namedtuple(

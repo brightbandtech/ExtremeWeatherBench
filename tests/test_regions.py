@@ -747,21 +747,21 @@ class TestCreateGeopandasFromBounds:
 
 
 class TestGetBoundingCoordinates:
-    """Test the get_bounding_coordinates() method for all Region subclasses."""
+    """Test the get_bounding_coordinates method for all Region subclasses."""
 
     def test_centered_region_bounding_coordinates(self):
-        """Test CenteredRegion.get_bounding_coordinates() method."""
+        """Test CenteredRegion.get_bounding_coordinates method."""
         region = CenteredRegion.create_region(
             latitude=45.0, longitude=-120.0, bounding_box_degrees=10.0
         )
 
-        coords = region.get_bounding_coordinates()
+        coords = region.get_bounding_coordinates
 
         # Check that it's a named tuple with correct attributes
-        assert hasattr(coords, 'min_lon')
-        assert hasattr(coords, 'min_lat')
-        assert hasattr(coords, 'max_lon')
-        assert hasattr(coords, 'max_lat')
+        assert hasattr(coords, "min_lon")
+        assert hasattr(coords, "min_lat")
+        assert hasattr(coords, "max_lon")
+        assert hasattr(coords, "max_lat")
 
         # Check coordinate values (longitude should be converted to -180 to 180 range)
         assert abs(coords.min_lat - 40.0) < 0.001
@@ -770,12 +770,12 @@ class TestGetBoundingCoordinates:
         assert abs(coords.max_lon - (-115.0)) < 0.001
 
     def test_centered_region_bounding_coordinates_tuple_box(self):
-        """Test CenteredRegion.get_bounding_coordinates() with tuple bounding box."""
+        """Test CenteredRegion.get_bounding_coordinates with tuple bounding box."""
         region = CenteredRegion.create_region(
             latitude=45.0, longitude=-120.0, bounding_box_degrees=(5.0, 10.0)
         )
 
-        coords = region.get_bounding_coordinates()
+        coords = region.get_bounding_coordinates
 
         # Check coordinate values (should be 42.5-47.5 lat, -125 to -115 lon)
         assert abs(coords.min_lat - 42.5) < 0.001
@@ -784,7 +784,7 @@ class TestGetBoundingCoordinates:
         assert abs(coords.max_lon - (-115.0)) < 0.001
 
     def test_bounding_box_region_bounding_coordinates(self):
-        """Test BoundingBoxRegion.get_bounding_coordinates() method."""
+        """Test BoundingBoxRegion.get_bounding_coordinates method."""
         region = BoundingBoxRegion.create_region(
             latitude_min=40.0,
             latitude_max=50.0,
@@ -792,7 +792,7 @@ class TestGetBoundingCoordinates:
             longitude_max=-115.0,
         )
 
-        coords = region.get_bounding_coordinates()
+        coords = region.get_bounding_coordinates
 
         # Check coordinate values
         assert abs(coords.min_lat - 40.0) < 0.001
@@ -801,17 +801,17 @@ class TestGetBoundingCoordinates:
         assert abs(coords.max_lon - (-115.0)) < 0.001
 
     def test_shapefile_region_bounding_coordinates(self):
-        """Test ShapefileRegion.get_bounding_coordinates() method."""
+        """Test ShapefileRegion.get_bounding_coordinates method."""
         # Create a mock polygon with known bounds
         mock_polygon = Polygon([(240, 40), (250, 40), (250, 50), (240, 50), (240, 40)])
         mock_gdf = gpd.GeoDataFrame(geometry=[mock_polygon], crs="EPSG:4326")
-        
+
         with patch("geopandas.read_file", return_value=mock_gdf):
             region = ShapefileRegion.create_region(
                 shapefile_path="/path/to/shapefile.shp"
             )
 
-            coords = region.get_bounding_coordinates()
+            coords = region.get_bounding_coordinates
 
             # Check coordinate values (should match the polygon bounds)
             assert abs(coords.min_lon - 240.0) < 0.001
@@ -823,10 +823,12 @@ class TestGetBoundingCoordinates:
         """Test get_bounding_coordinates with antimeridian crossing."""
         # Create a region that truly crosses the antimeridian (longitude spans > 180°)
         region = CenteredRegion.create_region(
-            latitude=45.0, longitude=175.0, bounding_box_degrees=20.0  # 165° to 185° crosses antimeridian
+            latitude=45.0,
+            longitude=175.0,
+            bounding_box_degrees=20.0,  # 165° to 185° crosses antimeridian
         )
 
-        coords = region.get_bounding_coordinates()
+        coords = region.get_bounding_coordinates
 
         # For antimeridian crossing regions, coordinates should span -180 to 180
         assert coords.min_lon == -180.0
@@ -838,10 +840,12 @@ class TestGetBoundingCoordinates:
         """Test get_bounding_coordinates for region near but not crossing antimeridian."""
         # Create a region that goes exactly to 180° but doesn't cross it
         region = CenteredRegion.create_region(
-            latitude=45.0, longitude=175.0, bounding_box_degrees=10.0  # 170° to 180°, no crossing
+            latitude=45.0,
+            longitude=175.0,
+            bounding_box_degrees=10.0,  # 170° to 180°, no crossing
         )
 
-        coords = region.get_bounding_coordinates()
+        coords = region.get_bounding_coordinates
 
         # Should be a single polygon from 170° to 180°
         assert abs(coords.min_lon - 170.0) < 0.001
@@ -853,10 +857,12 @@ class TestGetBoundingCoordinates:
         """Test that bounding coordinates properly handle longitude conversion."""
         # Test with positive longitude that should be converted
         region = CenteredRegion.create_region(
-            latitude=45.0, longitude=200.0, bounding_box_degrees=10.0  # 200° = -160°
+            latitude=45.0,
+            longitude=200.0,
+            bounding_box_degrees=10.0,  # 200° = -160°
         )
 
-        coords = region.get_bounding_coordinates()
+        coords = region.get_bounding_coordinates
 
         # Coordinates should be in -180 to 180 range
         assert coords.min_lon >= -180
@@ -878,7 +884,7 @@ class TestGetBoundingCoordinates:
             longitude_min=-120.01,
             longitude_max=-119.99,
         )
-        coords = small_region.get_bounding_coordinates()
+        coords = small_region.get_bounding_coordinates
         assert coords.max_lat > coords.min_lat
         assert coords.max_lon > coords.min_lon
 
@@ -886,7 +892,7 @@ class TestGetBoundingCoordinates:
         polar_region = CenteredRegion.create_region(
             latitude=85.0, longitude=0.0, bounding_box_degrees=10.0
         )
-        polar_coords = polar_region.get_bounding_coordinates()
+        polar_coords = polar_region.get_bounding_coordinates
         assert polar_coords.min_lat >= -90
         assert polar_coords.max_lat <= 90
 
@@ -896,17 +902,17 @@ class TestGetBoundingCoordinates:
             latitude=45.0, longitude=-120.0, bounding_box_degrees=10.0
         )
 
-        coords = region.get_bounding_coordinates()
+        coords = region.get_bounding_coordinates
 
         # Should return a tuple
         assert isinstance(coords, tuple)
         assert len(coords) == 4
 
         # Should have named attributes
-        assert hasattr(coords, 'min_lon')
-        assert hasattr(coords, 'min_lat')
-        assert hasattr(coords, 'max_lon')
-        assert hasattr(coords, 'max_lat')
+        assert hasattr(coords, "min_lon")
+        assert hasattr(coords, "min_lat")
+        assert hasattr(coords, "max_lon")
+        assert hasattr(coords, "max_lat")
 
         # All values should be floats
         assert isinstance(coords.min_lon, float)
