@@ -1,13 +1,13 @@
 import dataclasses
 from collections import namedtuple
 from itertools import product
-from typing import Optional, Sequence
+from typing import Optional, Sequence, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import xarray as xr
-from scipy import spatial
+from scipy import spatial  # type: ignore[import-untyped]
 from skimage import measure
 from skimage.feature import peak_local_max
 
@@ -66,7 +66,8 @@ class TCTracks:
 
 
 def find_furthest_contour_from_point(
-    contour: np.ndarray, point: np.ndarray
+    contour: Union[np.ndarray, Sequence[tuple[float, float]]],
+    point: Union[np.ndarray, tuple[float, float]],
 ) -> tuple[np.ndarray, np.ndarray]:
     """Find the two points in a contour that are furthest apart.
 
@@ -81,18 +82,24 @@ def find_furthest_contour_from_point(
         The furthest point from the contour as a tuple of x,y coordinates.
     """
 
+    # Convert inputs to numpy arrays if needed
+    contour_array = (
+        np.array(contour) if not isinstance(contour, np.ndarray) else contour
+    )
+    point_array = np.array(point) if not isinstance(point, np.ndarray) else point
+
     # Calculate distances from point to all points in contour
-    distances = spatial.distance.cdist([point], contour)[0]
+    distances = spatial.distance.cdist([point_array], contour_array)[0]
     # Find index of point with maximum distance
     furthest_idx = np.argmax(distances)
 
     # Get the furthest point
-    i = furthest_idx
-    return contour[i]
+    furthest_point = contour_array[furthest_idx]
+    return furthest_point, furthest_point  # Return as tuple of arrays
 
 
 def convert_from_cartesian_to_latlon(
-    input_point: np.ndarray, ds_mapping: xr.Dataset
+    input_point: Union[np.ndarray, tuple[float, float]], ds_mapping: xr.Dataset
 ) -> tuple[float, float]:
     """Convert a point from the cartesian coordinate system to the lat/lon coordinate system.
 
@@ -114,8 +121,8 @@ def convert_from_cartesian_to_latlon(
 
 
 def calculate_haversine_degree_distance(
-    input_a: Sequence[float], input_b: Sequence[float]
-) -> float:
+    input_a: Sequence[float], input_b: Sequence[Union[float, xr.DataArray]]
+) -> Union[float, xr.DataArray]:
     """Calculate the great-circle distance between two points on the Earth's surface.
 
     Args:
@@ -158,14 +165,18 @@ def create_great_circle_mask(
         latlon_point, (ds.latitude, ds.longitude)
     )
     # Create mask as xarray DataArray
-    mask = distance <= radius_degrees
+    if isinstance(distance, xr.DataArray):
+        mask = distance <= radius_degrees
+    else:
+        # If distance is a scalar, create a DataArray mask
+        mask = xr.full_like(ds.latitude, distance <= radius_degrees, dtype=bool)
 
     return mask
 
 
 def find_contours_from_point_specified_field(
     field: xr.DataArray, point: tuple[float, float], level: float
-) -> Sequence[tuple[float, float]]:
+) -> Sequence[Sequence[tuple[float, float]]]:
     """Find the contours from a point for a specified field.
 
     Args:
@@ -187,7 +198,7 @@ def find_valid_contour_from_point(
     contour: Sequence[tuple[float, float]],
     point: tuple[float, float],
     ds_mapping: xr.Dataset,
-) -> tuple[float, float]:
+) -> float:
     """Find the great circle distance from a point to a contour.
 
     Args:
@@ -198,15 +209,18 @@ def find_valid_contour_from_point(
     Returns:
         The great circle distance from the point to the contour.
     """
-    gc_distance_point = find_furthest_contour_from_point(contour, point)
+    furthest_point, _ = find_furthest_contour_from_point(contour, point)
     gc_distance_point_latlon = convert_from_cartesian_to_latlon(
-        gc_distance_point, ds_mapping
+        furthest_point, ds_mapping
     )
     point_latlon = convert_from_cartesian_to_latlon(point, ds_mapping)
     gc_distance_contour_distance = calculate_haversine_degree_distance(
         gc_distance_point_latlon, point_latlon
     )
-    return gc_distance_contour_distance
+    # Ensure we return a float
+    if isinstance(gc_distance_contour_distance, xr.DataArray):
+        return float(gc_distance_contour_distance.values)
+    return float(gc_distance_contour_distance)
 
 
 def find_valid_candidates(
@@ -218,7 +232,7 @@ def find_valid_candidates(
     max_gc_distance_slp_contour: float = 5.5,
     max_gc_distance_dz_contour: float = 6.5,
     orography_filter_threshold: float = 150,
-) -> dict[pd.Timestamp, tuple[float, float]]:
+) -> Optional[Location]:
     """Find valid candidate coordinate for a TC.
 
     Defaults use the TempestExtremes criteria for TC track detection, where the slp must increase by at least n hPa
@@ -338,11 +352,23 @@ def create_tctracks_from_dataset(
     dz_contour_magnitude=-6,
     min_distance=12,
 ):
+    """Create TCTracks from a cyclone dataset.
+
+
+    Args:
+        cyclone_dataset: The cyclone dataset.
+        slp_contour_magnitude: The SLP contour magnitude.
+        dz_contour_magnitude: The DZ contour magnitude.
+        min_distance: The minimum distance between TCs.
+
+    Returns:
+        A list of TCTracks objects.
+    """
     # Find the SLP minima
     slp = cyclone_dataset["air_pressure_at_mean_sea_level"]
     # Find the DZ maxima
     dz = cyclone_dataset["geopotential_thickness"]
-    valid_candidates = {}
+    all_tcs: list[TC] = []
     # Initialize the id number to increment for each new TC
     id_number = 0
     # Initialize a time counter for time slice filters
@@ -350,52 +376,53 @@ def create_tctracks_from_dataset(
         # If there are no valid times for the init_time, skip
         if init_time.isnull().all():
             continue
-        else:
-            valid_candidates[init_time[0].values] = []
 
-            # TODO: get init time working here
-            slp_time = slp.sel(init_time=init_time)
-            dz_time = dz.sel(init_time=init_time)
-            for time_counter, t in enumerate(slp_time.valid_time):
-                candidate_slp_points = peak_local_max(
-                    -(slp_time.values),
-                    min_distance=min_distance,
-                    # exclude_border=0 required as points <= min_distance from border are not included
-                    exclude_border=0,
+        # TODO: get init time working here
+        slp_time = slp.sel(init_time=init_time)
+        dz_time = dz.sel(init_time=init_time)
+        for time_counter, t in enumerate(slp_time.valid_time):
+            candidate_slp_points = peak_local_max(
+                -(slp_time.values),
+                min_distance=min_distance,
+                # exclude_border=0 required as points <= min_distance from border are not included
+                exclude_border=0,
+            )
+            for point in candidate_slp_points:
+                slp_contours = find_contours_from_point_specified_field(
+                    slp_time, point, slp_contour_magnitude
                 )
-                for point in candidate_slp_points:
-                    slp_contours = find_contours_from_point_specified_field(
-                        slp_time, point, slp_contour_magnitude
+                dz_contours = find_contours_from_point_specified_field(
+                    dz_time, point, dz_contour_magnitude
+                )
+                candidate = find_valid_candidates(
+                    slp_contours, dz_contours, point, cyclone_dataset, time_counter
+                )
+                if candidate is not None:
+                    vmax_mask = create_great_circle_mask(
+                        cyclone_dataset, (candidate.latitude, candidate.longitude), 2
                     )
-                    dz_contours = find_contours_from_point_specified_field(
-                        dz_time, point, dz_contour_magnitude
+                    vmax = np.max(
+                        cyclone_dataset.where(vmax_mask)["surface_wind_speed"]
+                        .max()
+                        .values
                     )
-                    candidate = find_valid_candidates(
-                        slp_contours, dz_contours, point, cyclone_dataset, time_counter
+                    tc = TC(
+                        id=id_number,
+                        valid_time=pd.to_datetime(t.values),
+                        coordinate=candidate,
+                        vmax=vmax,
+                        slp=float(
+                            slp_time.sel(
+                                latitude=candidate.latitude,
+                                longitude=candidate.longitude,
+                            ).values
+                        ),
                     )
-                    if candidate is not None:
-                        vmax_mask = create_great_circle_mask(
-                            cyclone_dataset, candidate, 2
-                        )
-                        vmax = np.max(
-                            cyclone_dataset.where(vmax_mask)["surface_wind_speed"]
-                            .max()
-                            .values
-                        )
-                        tc = TC(
-                            id=id_number,
-                            valid_time=pd.to_datetime(t.values),
-                            coordinate=candidate,
-                            vmax=vmax,
-                            slp=slp_time.sel(
-                                latitude=candidate[0], longitude=candidate[1]
-                            ).values,
-                        )
-                        valid_candidates[init_time].append(tc)
-                        # Increment the id number for the next individual TC point
-                        id_number += 1
+                    all_tcs.append(tc)
+                    # Increment the id number for the next individual TC point
+                    id_number += 1
 
-    tctracks = create_tctracks(valid_candidates)
+    tctracks = create_tctracks(all_tcs)
     return tctracks
 
 
@@ -521,7 +548,12 @@ def calculate_wind_speed(ds: xr.Dataset) -> xr.DataArray:
         "surface_eastward_wind" in ds.data_vars
         and "surface_northward_wind" in ds.data_vars
     ):
-        return np.hypot(ds["surface_eastward_wind"], ds["surface_northward_wind"])
+        return xr.apply_ufunc(
+            np.hypot,
+            ds["surface_eastward_wind"],
+            ds["surface_northward_wind"],
+            dask="allowed",
+        )
     else:
         raise ValueError("No suitable wind speed variables found in dataset")
 
@@ -624,7 +656,12 @@ def nantrapezoid(
     """
     y = np.asanyarray(y)
     if x is None:
-        d = dx
+        # Create an array of the step size
+        d = np.full(y.shape[axis] - 1, dx) if y.shape[axis] > 1 else np.array([dx])
+        # reshape to correct shape
+        shape = [1] * y.ndim
+        shape[axis] = d.shape[0]
+        d = d.reshape(shape)
     else:
         x = np.asanyarray(x)
         if x.ndim == 1:
