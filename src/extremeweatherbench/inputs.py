@@ -282,7 +282,7 @@ class TargetBase(InputBase):
         forecast_data: xr.Dataset,
         target_data: xr.Dataset,
     ) -> tuple[xr.Dataset, xr.Dataset]:
-        """Align the target data to the forecast data.
+        """Align the forecast data to the target data.
 
         This method is used to align the forecast data to the target data (not vice versa).
         Implementation is useful for non-gridded targets that need to be aligned to the forecast
@@ -326,6 +326,65 @@ class ERA5(TargetBase):
         case_operator: "cases.CaseOperator",
     ) -> utils.IncomingDataInput:
         return zarr_target_subsetter(data, case_operator)
+
+    def maybe_align_forecast_to_target(
+        self,
+        forecast_data: xr.Dataset,
+        target_data: xr.Dataset,
+    ) -> tuple[xr.Dataset, xr.Dataset]:
+        """Align forecast data to ERA5 target data.
+
+        This method handles alignment between forecast data and ERA5 target data by:
+        1. Aligning time dimensions (handles valid_time vs time naming)
+        2. Handling spatial alignment (regridding if needed)
+
+        Args:
+            forecast_data: Forecast dataset with valid_time, latitude, longitude
+            target_data: ERA5 target dataset with time, latitude, longitude
+
+        Returns:
+            Tuple of (aligned_target_data, aligned_forecast_data)
+        """
+        # Handle time dimension naming differences
+        target_time_dim = "time" if "time" in target_data.dims else "valid_time"
+        forecast_time_dim = (
+            "valid_time" if "valid_time" in forecast_data.dims else "time"
+        )
+
+        # Rename target time dimension to match forecast if needed
+        aligned_target = target_data.copy()
+        if target_time_dim != forecast_time_dim:
+            aligned_target = aligned_target.rename({target_time_dim: forecast_time_dim})
+
+        # Align time dimensions - find overlapping times
+        time_aligned_target, time_aligned_forecast = xr.align(
+            aligned_target,
+            forecast_data,
+            join="inner",
+            exclude=["latitude", "longitude"],
+        )
+
+        # Spatial alignment - check if regridding is needed
+        target_lats = time_aligned_target.latitude.values
+        target_lons = time_aligned_target.longitude.values
+        forecast_lats = time_aligned_forecast.latitude.values
+        forecast_lons = time_aligned_forecast.longitude.values
+
+        # Check if spatial grids are identical (within tolerance)
+        lats_match = len(target_lats) == len(forecast_lats) and np.allclose(
+            target_lats, forecast_lats, rtol=1e-5
+        )
+        lons_match = len(target_lons) == len(forecast_lons) and np.allclose(
+            target_lons, forecast_lons, rtol=1e-5
+        )
+
+        if not (lats_match and lons_match):
+            # Regrid forecast to target grid using nearest neighbor interpolation
+            time_aligned_forecast = time_aligned_forecast.interp(
+                latitude=target_lats, longitude=target_lons, method="nearest"
+            )
+
+        return time_aligned_target, time_aligned_forecast
 
 
 @dataclasses.dataclass
