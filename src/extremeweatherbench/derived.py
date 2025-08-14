@@ -31,7 +31,7 @@ class DerivedVariable(ABC):
 
     @classmethod
     @abstractmethod
-    def derive_variable(self, data: xr.Dataset) -> xr.DataArray:
+    def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
         """Derive the variable from the required variables.
 
         The output of the derivation must be a single variable output returned as
@@ -71,10 +71,11 @@ class AtmosphericRiverMask(DerivedVariable):
 
     required_variables = ["air_pressure_at_mean_sea_level"]
 
-    # TODO: add the AR mask calculations@classmethod@classmethod
-    def derive_variable(self, data: xr.Dataset) -> xr.DataArray:
+    # TODO: add the AR mask calculations
+    @classmethod
+    def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
         """Derive the atmospheric river mask."""
-        return data[self.input_variables[0]] < 1000
+        raise NotImplementedError("Atmospheric river mask not yet implemented")
 
 
 # TODO: add the IVT calculations for ARs
@@ -158,11 +159,7 @@ class IntegratedVaporTransportLaplacian(DerivedVariable):
     @classmethod
     def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
         """Derive the integrated vapor transport Jacobian."""
-        return (
-            data[cls.input_variables[0]]
-            * data[cls.input_variables[1]]
-            * data[cls.input_variables[2]]
-        )
+        raise NotImplementedError("IVT Laplacian not yet implemented")
 
 
 # TODO: finish TC track calculation port

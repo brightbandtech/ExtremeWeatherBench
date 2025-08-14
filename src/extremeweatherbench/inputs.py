@@ -304,7 +304,7 @@ class KerchunkForecast(ForecastBase):
         return open_kerchunk_reference(
             self.source,
             storage_options=self.storage_options,
-            chunks=self.chunks,
+            chunks=self.chunks or "auto",
         )
 
 

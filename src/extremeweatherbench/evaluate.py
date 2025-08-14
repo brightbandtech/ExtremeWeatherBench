@@ -41,7 +41,7 @@ class ExtremeWeatherBench:
     ):
         self.cases = cases
         self.metrics = metrics
-        self.cache_dir = cache_dir
+        self.cache_dir = Path(cache_dir) if cache_dir else None
 
     # case operators as a property are a convenience method for users to use them outside the class
     # if desired for a parallel workflow
@@ -154,10 +154,10 @@ def compute_case_operator(case_operator: "cases.CaseOperator", **kwargs):
         )
 
         # cache the results of each metric if caching
-        if kwargs.get("cache_dir", None):
-            pd.concat(results, ignore_index=True).to_pickle(
-                kwargs.get("cache_dir") / "results.pkl"
-            )
+        cache_dir = kwargs.get("cache_dir", None)
+        if cache_dir:
+            cache_path = Path(cache_dir) if isinstance(cache_dir, str) else cache_dir
+            pd.concat(results, ignore_index=True).to_pickle(cache_path / "results.pkl")
 
     if results:
         return pd.concat(results, ignore_index=True)

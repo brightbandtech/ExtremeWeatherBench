@@ -6,7 +6,7 @@ from typing import Optional
 
 import click
 import pandas as pd
-from joblib import Parallel, delayed
+from joblib import Parallel, delayed  # type: ignore[import-untyped]
 
 from extremeweatherbench import defaults
 from extremeweatherbench.evaluate import ExtremeWeatherBench, compute_case_operator
@@ -100,6 +100,7 @@ def cli_runner(
         evaluation_objects = defaults.BRIGHTBAND_EVALUATION_OBJECTS
         cases_dict = _load_default_cases()
     else:
+        assert config_file is not None  # for mypy
         click.echo(f"Loading evaluation objects from {config_file}...")
         evaluation_objects, cases_dict = _load_config_file(config_file)
 
@@ -154,10 +155,10 @@ def _load_config_file(config_path: str) -> tuple:
     - evaluation_objects: List of EvaluationObject instances
     - cases_dict: Dictionary containing case data
     """
-    config_path = Path(config_path)
+    config_path_obj = Path(config_path)
 
     # Load the config module
-    spec = importlib.util.spec_from_file_location("config", config_path)
+    spec = importlib.util.spec_from_file_location("config", str(config_path_obj))
     if spec is None or spec.loader is None:
         raise click.ClickException(f"Could not load config file: {config_path}")
 

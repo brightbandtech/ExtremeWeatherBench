@@ -7,7 +7,7 @@ import inspect
 import logging
 from importlib import resources
 from pathlib import Path
-from typing import Callable, TypeAlias, Union
+from typing import Any, Callable, TypeAlias, Union
 
 import numpy as np
 import pandas as pd  # type: ignore[import-untyped]
@@ -83,7 +83,7 @@ def derive_indices_from_init_time_and_lead_time(
     dataset: xr.Dataset,
     start_date: datetime.datetime,
     end_date: datetime.datetime,
-) -> np.ndarray:
+) -> tuple[np.ndarray[Any, Any], ...]:
     """Derive the indices of valid times in a dataset when the dataset has init_time and lead_time coordinates.
 
     Args:
