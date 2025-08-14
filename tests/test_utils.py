@@ -56,7 +56,7 @@ def test_remove_ocean_gridpoints():
     # Should return a dataset (may have NaNs for ocean points)
     assert isinstance(result, xr.Dataset)
     assert "temperature" in result.data_vars
-    assert result.dims == ds.dims
+    assert result.sizes == ds.sizes
 
 
 def test_load_events_yaml():
