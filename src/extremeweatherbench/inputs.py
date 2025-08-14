@@ -277,6 +277,27 @@ class TargetBase(InputBase):
     same coordinate system for evaluation.
     """
 
+    def maybe_align_forecast_to_target(
+        self,
+        forecast_data: xr.Dataset,
+        target_data: xr.Dataset,
+    ) -> tuple[xr.Dataset, xr.Dataset]:
+        """Align the forecast data to the target data.
+
+        This method is used to align the forecast data to the target data (not vice versa).
+        Implementation is useful for non-gridded targets that need to be aligned to the forecast
+        data.
+
+        Args:
+            forecast_data: The forecast data to align.
+            target_data: The target data to align to.
+
+        Returns:
+            A tuple of the aligned forecast data and target data. Defaults to passing through
+            the forecast and target data.
+        """
+        return forecast_data, target_data
+
 
 @dataclasses.dataclass
 class ERA5(TargetBase):
@@ -306,6 +327,29 @@ class ERA5(TargetBase):
     ) -> utils.IncomingDataInput:
         return zarr_target_subsetter(data, case_operator)
 
+    def maybe_align_forecast_to_target(
+        self,
+        forecast_data: xr.Dataset,
+        target_data: xr.Dataset,
+    ) -> tuple[xr.Dataset, xr.Dataset]:
+        """Align forecast data to ERA5 target data.
+
+        This method handles alignment between forecast data and ERA5 target data by:
+        1. Aligning time dimensions (handles valid_time vs time naming)
+        2. Handling spatial alignment (regridding if needed)
+
+        Args:
+            forecast_data: Forecast dataset with valid_time, latitude, longitude
+            target_data: ERA5 target dataset with time, latitude, longitude
+
+        Returns:
+            Tuple of (aligned_forecast_data, aligned_target_data)
+        """
+        aligned_forecast_data, aligned_target_data = align_forecast_to_gridded_target(
+            forecast_data, target_data
+        )
+        return aligned_forecast_data, aligned_target_data
+
 
 @dataclasses.dataclass
 class GHCN(TargetBase):
@@ -331,12 +375,12 @@ class GHCN(TargetBase):
         target_data: utils.IncomingDataInput,
         case_operator: "cases.CaseOperator",
     ) -> utils.IncomingDataInput:
+        if not isinstance(target_data, pl.LazyFrame):
+            raise ValueError(f"Expected polars LazyFrame, got {type(target_data)}")
+
         # Create filter expressions for LazyFrame
         time_min = case_operator.case_metadata.start_date - pd.Timedelta(days=2)
         time_max = case_operator.case_metadata.end_date + pd.Timedelta(days=2)
-
-        if not isinstance(target_data, pl.LazyFrame):
-            raise ValueError(f"Expected polars LazyFrame, got {type(target_data)}")
 
         # Apply filters using proper polars expressions
         subset_target_data = target_data.filter(
@@ -397,6 +441,13 @@ class GHCN(TargetBase):
             return data
         else:
             raise ValueError(f"Data is not a polars LazyFrame: {type(data)}")
+
+    def maybe_align_forecast_to_target(
+        self,
+        forecast_data: xr.Dataset,
+        target_data: xr.Dataset,
+    ) -> tuple[xr.Dataset, xr.Dataset]:
+        return align_forecast_to_point_obs_target(forecast_data, target_data)
 
 
 @dataclasses.dataclass
@@ -462,68 +513,77 @@ class LSR(TargetBase):
         return subset_target_data
 
     def _custom_convert_to_dataset(self, data: utils.IncomingDataInput) -> xr.Dataset:
+        if not isinstance(data, pd.DataFrame):
+            raise ValueError(f"Data is not a pandas DataFrame: {type(data)}")
+
         # Map report_type column to numeric values
         if "report_type" in data.columns:
             report_type_mapping = {"wind": 1, "hail": 2, "tor": 3}
             data["report_type"] = data["report_type"].map(report_type_mapping)
 
-        if isinstance(data, pd.DataFrame):
-            # Normalize these times for the LSR data
-            # Western hemisphere reports get bucketed to 12Z on the date they fall between 12Z-12Z
-            # Eastern hemisphere reports get bucketed to 00Z on the date they occur
+        # Normalize these times for the LSR data
+        # Western hemisphere reports get bucketed to 12Z on the date they fall between 12Z-12Z
+        # Eastern hemisphere reports get bucketed to 00Z on the date they occur
 
-            # First, let's figure out which hemisphere each report is in
-            western_hemisphere_mask = data["longitude"] < 0
-            eastern_hemisphere_mask = data["longitude"] >= 0
+        # First, let's figure out which hemisphere each report is in
+        western_hemisphere_mask = data["longitude"] < 0
+        eastern_hemisphere_mask = data["longitude"] >= 0
 
-            # For western hemisphere: if report is between today 12Z and tomorrow 12Z, assign to today 12Z
-            if western_hemisphere_mask.any():
-                western_data = data[western_hemisphere_mask].copy()
-                # Get the date portion and create 12Z times
-                report_dates = western_data["valid_time"].dt.date
-                twelve_z_times = pd.to_datetime(report_dates) + pd.Timedelta(hours=12)
-                next_day_twelve_z = twelve_z_times + pd.Timedelta(days=1)
+        # For western hemisphere: if report is between today 12Z and tomorrow 12Z, assign to today 12Z
+        if western_hemisphere_mask.any():
+            western_data = data[western_hemisphere_mask].copy()
+            # Get the date portion and create 12Z times
+            report_dates = western_data["valid_time"].dt.date
+            twelve_z_times = pd.to_datetime(report_dates) + pd.Timedelta(hours=12)
+            next_day_twelve_z = twelve_z_times + pd.Timedelta(days=1)
 
-                # Check if report falls in the 12Z to 12Z+1day window
-                in_window_mask = (western_data["valid_time"] >= twelve_z_times) & (
-                    western_data["valid_time"] < next_day_twelve_z
-                )
-                # For reports that don't fall in today's 12Z window, try yesterday's window
-                yesterday_twelve_z = twelve_z_times - pd.Timedelta(days=1)
-                in_yesterday_window = (
-                    western_data["valid_time"] >= yesterday_twelve_z
-                ) & (western_data["valid_time"] < twelve_z_times)
-
-                # Assign 12Z times
-                western_data.loc[in_window_mask, "valid_time"] = twelve_z_times[
-                    in_window_mask
-                ]
-                western_data.loc[in_yesterday_window, "valid_time"] = (
-                    yesterday_twelve_z[in_yesterday_window]
-                )
-
-                data.loc[western_hemisphere_mask] = western_data
-
-            # For eastern hemisphere: assign to 00Z of the same date
-            if eastern_hemisphere_mask.any():
-                eastern_data = data[eastern_hemisphere_mask].copy()
-                # Get the date portion and create 00Z times
-                report_dates = eastern_data["valid_time"].dt.date
-                zero_z_times = pd.to_datetime(report_dates)
-                eastern_data["valid_time"] = zero_z_times
-
-                data.loc[eastern_hemisphere_mask] = eastern_data
-
-            data = data.set_index(["valid_time", "latitude", "longitude"])
-            data = xr.Dataset.from_dataframe(
-                data[~data.index.duplicated(keep="first")], sparse=True
+            # Check if report falls in the 12Z to 12Z+1day window
+            in_window_mask = (western_data["valid_time"] >= twelve_z_times) & (
+                western_data["valid_time"] < next_day_twelve_z
             )
-            data.attrs["report_type_mapping"] = report_type_mapping
-            return data
-        else:
-            raise ValueError(f"Data is not a pandas DataFrame: {type(data)}")
+            # For reports that don't fall in today's 12Z window, try yesterday's window
+            yesterday_twelve_z = twelve_z_times - pd.Timedelta(days=1)
+            in_yesterday_window = (western_data["valid_time"] >= yesterday_twelve_z) & (
+                western_data["valid_time"] < twelve_z_times
+            )
+
+            # Assign 12Z times
+            western_data.loc[in_window_mask, "valid_time"] = twelve_z_times[
+                in_window_mask
+            ]
+            western_data.loc[in_yesterday_window, "valid_time"] = yesterday_twelve_z[
+                in_yesterday_window
+            ]
+
+            data.loc[western_hemisphere_mask] = western_data
+
+        # For eastern hemisphere: assign to 00Z of the same date
+        if eastern_hemisphere_mask.any():
+            eastern_data = data[eastern_hemisphere_mask].copy()
+            # Get the date portion and create 00Z times
+            report_dates = eastern_data["valid_time"].dt.date
+            zero_z_times = pd.to_datetime(report_dates)
+            eastern_data["valid_time"] = zero_z_times
+
+            data.loc[eastern_hemisphere_mask] = eastern_data
+
+        data = data.set_index(["valid_time", "latitude", "longitude"])
+        data = xr.Dataset.from_dataframe(
+            data[~data.index.duplicated(keep="first")], sparse=True
+        )
+        data.attrs["report_type_mapping"] = report_type_mapping
+        return data
+
+    # TODO: keep forecasts on original grid for LSRs
+    def maybe_align_forecast_to_target(
+        self,
+        forecast_data: xr.Dataset,
+        target_data: xr.Dataset,
+    ) -> tuple[xr.Dataset, xr.Dataset]:
+        return align_forecast_to_point_obs_target(forecast_data, target_data)
 
 
+# TODO: get PPH connector working properly
 @dataclasses.dataclass
 class PPH(TargetBase):
     """Target class for practically perfect hindcast data."""
@@ -542,6 +602,13 @@ class PPH(TargetBase):
 
     def _custom_convert_to_dataset(self, data: utils.IncomingDataInput) -> xr.Dataset:
         return data
+
+    def maybe_align_forecast_to_target(
+        self,
+        forecast_data: xr.Dataset,
+        target_data: xr.Dataset,
+    ) -> tuple[xr.Dataset, xr.Dataset]:
+        return align_forecast_to_gridded_target(forecast_data, target_data)
 
 
 @dataclasses.dataclass
@@ -739,6 +806,17 @@ def zarr_target_subsetter(
     time_variable: str = "valid_time",
 ) -> xr.Dataset:
     """Subset a zarr dataset to a case operator."""
+    # Determine the actual time variable in the dataset
+    if time_variable not in data.dims:
+        if "time" in data.dims:
+            time_variable = "time"
+        elif "valid_time" in data.dims:
+            time_variable = "valid_time"
+        else:
+            raise ValueError(
+                f"No suitable time dimension found in dataset. Available dimensions: {list(data.dims)}"
+            )
+
     # subset time first to avoid OOM masking issues
     subset_time_data = data.sel(
         {
@@ -775,3 +853,66 @@ def zarr_target_subsetter(
     )
 
     return fully_subset_data
+
+
+def align_forecast_to_point_obs_target(
+    forecast_data: xr.Dataset,
+    target_data: xr.Dataset,
+) -> tuple[xr.Dataset, xr.Dataset]:
+    lons = xr.DataArray(target_data["longitude"].values, dims="location")
+    lats = xr.DataArray(target_data["latitude"].values, dims="location")
+
+    time_aligned_target_data, time_aligned_forecast_data = xr.align(
+        target_data, forecast_data, exclude=["latitude", "longitude"]
+    )
+
+    time_aligned_forecast_data = time_aligned_forecast_data.interp(
+        latitude=lats, longitude=lons, method="nearest"
+    )
+    time_aligned_forecast_data = time_aligned_forecast_data.set_index(
+        location=("latitude", "longitude")
+    ).unstack("location")
+    return time_aligned_forecast_data, time_aligned_target_data
+
+
+def align_forecast_to_gridded_target(
+    forecast_data: xr.Dataset,
+    target_data: xr.Dataset,
+) -> tuple[xr.Dataset, xr.Dataset]:
+    target_time_dim = "time" if "time" in target_data.dims else "valid_time"
+    forecast_time_dim = "valid_time" if "valid_time" in forecast_data.dims else "time"
+
+    # Rename target time dimension to match forecast if needed
+    aligned_target = target_data.copy()
+    if target_time_dim != forecast_time_dim:
+        aligned_target = aligned_target.rename({target_time_dim: forecast_time_dim})
+
+    # Align time dimensions - find overlapping times
+    time_aligned_target, time_aligned_forecast = xr.align(
+        aligned_target,
+        forecast_data,
+        join="inner",
+        exclude=["latitude", "longitude"],
+    )
+
+    # Spatial alignment - check if regridding is needed
+    target_lats = time_aligned_target.latitude.values
+    target_lons = time_aligned_target.longitude.values
+    forecast_lats = time_aligned_forecast.latitude.values
+    forecast_lons = time_aligned_forecast.longitude.values
+
+    # Check if spatial grids are identical (within tolerance)
+    lats_match = len(target_lats) == len(forecast_lats) and np.allclose(
+        target_lats, forecast_lats, rtol=1e-5
+    )
+    lons_match = len(target_lons) == len(forecast_lons) and np.allclose(
+        target_lons, forecast_lons, rtol=1e-5
+    )
+
+    if not (lats_match and lons_match):
+        # Regrid forecast to target grid using nearest neighbor interpolation
+        time_aligned_forecast = time_aligned_forecast.interp(
+            latitude=target_lats, longitude=target_lons, method="nearest"
+        )
+
+    return time_aligned_forecast, time_aligned_target
