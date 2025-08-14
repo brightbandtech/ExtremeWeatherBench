@@ -96,7 +96,7 @@ def compute_case_operator(case_operator: "cases.CaseOperator", **kwargs):
     """
     target_ds, forecast_ds = _build_datasets(case_operator)
 
-    # spatiotemporally align the target and forecast datasets dependent on the target
+    # spatiotemporally align the target and forecast datasets dependent on the forecast
     aligned_target_ds, aligned_forecast_ds = (
         case_operator.target.maybe_align_forecast_to_target(forecast_ds, target_ds)
     )
