@@ -41,6 +41,7 @@ era5_heatwave_target = inputs.ERA5(
         "time": "valid_time",
     },
     storage_options={"remote_options": {"anon": True}},
+    chunks=None,
 )
 
 ghcn_target = inputs.GHCN(
