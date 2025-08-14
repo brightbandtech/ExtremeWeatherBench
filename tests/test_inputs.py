@@ -1270,6 +1270,9 @@ class TestConstants:
 class TestInputsIntegration:
     """Integration tests for inputs module."""
 
+    # zarr throws a consolidated metadata warning that
+    # is inconsequential (as of now)
+    @pytest.mark.filterwarnings("ignore::UserWarning")
     def test_era5_full_workflow_with_zarr(self, temp_zarr_file):
         """Test complete ERA5 workflow with zarr file."""
         era5 = inputs.ERA5(
