@@ -375,12 +375,12 @@ class GHCN(TargetBase):
         target_data: utils.IncomingDataInput,
         case_operator: "cases.CaseOperator",
     ) -> utils.IncomingDataInput:
+        if not isinstance(target_data, pl.LazyFrame):
+            raise ValueError(f"Expected polars LazyFrame, got {type(target_data)}")
+
         # Create filter expressions for LazyFrame
         time_min = case_operator.case_metadata.start_date - pd.Timedelta(days=2)
         time_max = case_operator.case_metadata.end_date + pd.Timedelta(days=2)
-
-        if not isinstance(target_data, pl.LazyFrame):
-            raise ValueError(f"Expected polars LazyFrame, got {type(target_data)}")
 
         # Apply filters using proper polars expressions
         subset_target_data = target_data.filter(
@@ -513,66 +513,66 @@ class LSR(TargetBase):
         return subset_target_data
 
     def _custom_convert_to_dataset(self, data: utils.IncomingDataInput) -> xr.Dataset:
+        if not isinstance(data, pd.DataFrame):
+            raise ValueError(f"Data is not a pandas DataFrame: {type(data)}")
+
         # Map report_type column to numeric values
         if "report_type" in data.columns:
             report_type_mapping = {"wind": 1, "hail": 2, "tor": 3}
             data["report_type"] = data["report_type"].map(report_type_mapping)
 
-        if isinstance(data, pd.DataFrame):
-            # Normalize these times for the LSR data
-            # Western hemisphere reports get bucketed to 12Z on the date they fall between 12Z-12Z
-            # Eastern hemisphere reports get bucketed to 00Z on the date they occur
+        # Normalize these times for the LSR data
+        # Western hemisphere reports get bucketed to 12Z on the date they fall between 12Z-12Z
+        # Eastern hemisphere reports get bucketed to 00Z on the date they occur
 
-            # First, let's figure out which hemisphere each report is in
-            western_hemisphere_mask = data["longitude"] < 0
-            eastern_hemisphere_mask = data["longitude"] >= 0
+        # First, let's figure out which hemisphere each report is in
+        western_hemisphere_mask = data["longitude"] < 0
+        eastern_hemisphere_mask = data["longitude"] >= 0
 
-            # For western hemisphere: if report is between today 12Z and tomorrow 12Z, assign to today 12Z
-            if western_hemisphere_mask.any():
-                western_data = data[western_hemisphere_mask].copy()
-                # Get the date portion and create 12Z times
-                report_dates = western_data["valid_time"].dt.date
-                twelve_z_times = pd.to_datetime(report_dates) + pd.Timedelta(hours=12)
-                next_day_twelve_z = twelve_z_times + pd.Timedelta(days=1)
+        # For western hemisphere: if report is between today 12Z and tomorrow 12Z, assign to today 12Z
+        if western_hemisphere_mask.any():
+            western_data = data[western_hemisphere_mask].copy()
+            # Get the date portion and create 12Z times
+            report_dates = western_data["valid_time"].dt.date
+            twelve_z_times = pd.to_datetime(report_dates) + pd.Timedelta(hours=12)
+            next_day_twelve_z = twelve_z_times + pd.Timedelta(days=1)
 
-                # Check if report falls in the 12Z to 12Z+1day window
-                in_window_mask = (western_data["valid_time"] >= twelve_z_times) & (
-                    western_data["valid_time"] < next_day_twelve_z
-                )
-                # For reports that don't fall in today's 12Z window, try yesterday's window
-                yesterday_twelve_z = twelve_z_times - pd.Timedelta(days=1)
-                in_yesterday_window = (
-                    western_data["valid_time"] >= yesterday_twelve_z
-                ) & (western_data["valid_time"] < twelve_z_times)
-
-                # Assign 12Z times
-                western_data.loc[in_window_mask, "valid_time"] = twelve_z_times[
-                    in_window_mask
-                ]
-                western_data.loc[in_yesterday_window, "valid_time"] = (
-                    yesterday_twelve_z[in_yesterday_window]
-                )
-
-                data.loc[western_hemisphere_mask] = western_data
-
-            # For eastern hemisphere: assign to 00Z of the same date
-            if eastern_hemisphere_mask.any():
-                eastern_data = data[eastern_hemisphere_mask].copy()
-                # Get the date portion and create 00Z times
-                report_dates = eastern_data["valid_time"].dt.date
-                zero_z_times = pd.to_datetime(report_dates)
-                eastern_data["valid_time"] = zero_z_times
-
-                data.loc[eastern_hemisphere_mask] = eastern_data
-
-            data = data.set_index(["valid_time", "latitude", "longitude"])
-            data = xr.Dataset.from_dataframe(
-                data[~data.index.duplicated(keep="first")], sparse=True
+            # Check if report falls in the 12Z to 12Z+1day window
+            in_window_mask = (western_data["valid_time"] >= twelve_z_times) & (
+                western_data["valid_time"] < next_day_twelve_z
             )
-            data.attrs["report_type_mapping"] = report_type_mapping
-            return data
-        else:
-            raise ValueError(f"Data is not a pandas DataFrame: {type(data)}")
+            # For reports that don't fall in today's 12Z window, try yesterday's window
+            yesterday_twelve_z = twelve_z_times - pd.Timedelta(days=1)
+            in_yesterday_window = (western_data["valid_time"] >= yesterday_twelve_z) & (
+                western_data["valid_time"] < twelve_z_times
+            )
+
+            # Assign 12Z times
+            western_data.loc[in_window_mask, "valid_time"] = twelve_z_times[
+                in_window_mask
+            ]
+            western_data.loc[in_yesterday_window, "valid_time"] = yesterday_twelve_z[
+                in_yesterday_window
+            ]
+
+            data.loc[western_hemisphere_mask] = western_data
+
+        # For eastern hemisphere: assign to 00Z of the same date
+        if eastern_hemisphere_mask.any():
+            eastern_data = data[eastern_hemisphere_mask].copy()
+            # Get the date portion and create 00Z times
+            report_dates = eastern_data["valid_time"].dt.date
+            zero_z_times = pd.to_datetime(report_dates)
+            eastern_data["valid_time"] = zero_z_times
+
+            data.loc[eastern_hemisphere_mask] = eastern_data
+
+        data = data.set_index(["valid_time", "latitude", "longitude"])
+        data = xr.Dataset.from_dataframe(
+            data[~data.index.duplicated(keep="first")], sparse=True
+        )
+        data.attrs["report_type_mapping"] = report_type_mapping
+        return data
 
     # TODO: keep forecasts on original grid for LSRs
     def maybe_align_forecast_to_target(
@@ -580,7 +580,7 @@ class LSR(TargetBase):
         forecast_data: xr.Dataset,
         target_data: xr.Dataset,
     ) -> tuple[xr.Dataset, xr.Dataset]:
-        return forecast_data, target_data
+        return align_forecast_to_point_obs_target(forecast_data, target_data)
 
 
 # TODO: get PPH connector working properly
@@ -806,6 +806,17 @@ def zarr_target_subsetter(
     time_variable: str = "valid_time",
 ) -> xr.Dataset:
     """Subset a zarr dataset to a case operator."""
+    # Determine the actual time variable in the dataset
+    if time_variable not in data.dims:
+        if "time" in data.dims:
+            time_variable = "time"
+        elif "valid_time" in data.dims:
+            time_variable = "valid_time"
+        else:
+            raise ValueError(
+                f"No suitable time dimension found in dataset. Available dimensions: {list(data.dims)}"
+            )
+
     # subset time first to avoid OOM masking issues
     subset_time_data = data.sel(
         {
