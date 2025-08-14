@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Literal, Optional, Union
 
 import pandas as pd
+import polars as pl
 import xarray as xr
 from tqdm.auto import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
@@ -260,3 +261,68 @@ def run_pipeline(
         .pipe(input_data.add_source_to_dataset_attrs)
     )
     return data
+
+
+def maybe_map_variable_names(
+    data: utils.IncomingDataInput, case_operator: "case.CaseOperator"
+) -> utils.IncomingDataInput:
+    """Map the variable names to the target data, if required.
+
+    Args:
+        data: The incoming data in the form of an object that has a rename method for data variables/columns.
+        case_operator: The case operator to run the pipeline on.
+
+    Returns:
+        A dataset with mapped variable names, if any exist, else the original data.
+    """
+    variable_mapping = case_operator.target.variable_mapping
+    target_and_maybe_derived_variables = (
+        derived.maybe_pull_required_variables_from_derived_input(
+            variable_mapping.keys()
+        )
+    )
+    # check that the variables are in the target data
+    if target_and_maybe_derived_variables and any(
+        var not in data.variables for var in target_and_maybe_derived_variables
+    ):
+        raise ValueError(
+            f"Variables {target_and_maybe_derived_variables} not found in target data"
+        )
+    # subset the variables if they exist in the target data
+    elif target_and_maybe_derived_variables:
+        variable_subset_data = data[target_and_maybe_derived_variables]
+    else:
+        raise ValueError(
+            "Variables not defined. Please list at least one target variable to select."
+        )
+    if variable_mapping is None:
+        return variable_subset_data
+    # Filter the mapping to only include variables that exist in the dataset
+    if isinstance(data, (xr.Dataset, xr.DataArray)):
+        subset_variable_mapping = {
+            v: k
+            for v, k in variable_mapping.items()
+            if v in variable_subset_data.keys()
+        }
+    elif isinstance(data, (pl.DataFrame, pd.DataFrame)):
+        subset_variable_mapping = {
+            v: k
+            for v, k in variable_mapping.items()
+            if v in variable_subset_data.columns
+        }
+    elif isinstance(data, pl.LazyFrame):
+        subset_variable_mapping = {
+            v: k
+            for v, k in variable_mapping.items()
+            if v in variable_subset_data.collect_schema().names()
+        }
+    else:
+        raise ValueError(
+            (
+                "Data is not a dataset, data array, lazy frame, dataframe, or pandas dataframe:"
+                f"{type(variable_subset_data)}"
+            )
+        )
+    if subset_variable_mapping:
+        variable_subset_data = variable_subset_data.rename(subset_variable_mapping)
+    return variable_subset_data

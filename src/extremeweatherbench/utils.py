@@ -680,44 +680,6 @@ def determine_timesteps_per_day_resolution(
     return num_timesteps[0]
 
 
-def maybe_map_variable_names(
-    data: IncomingDataInput, variable_mapping: Optional[dict] = None
-) -> IncomingDataInput:
-    """Map the variable names to the target data, if required.
-
-    Args:
-        data: The incoming data in the form of an object that has a rename method for data variables/columns.
-        variable_mapping: The mapping of variable names to the incoming data, with the format {incoming_name: new_name}.
-
-    Returns:
-        A dataset with mapped variable names, if any exist, else the original data.
-    """
-    if variable_mapping is None:
-        return data
-    # Filter the mapping to only include variables that exist in the dataset
-    if isinstance(data, (xr.Dataset, xr.DataArray)):
-        subset_variable_mapping = {
-            v: k for v, k in variable_mapping.items() if v in data.keys()
-        }
-    elif isinstance(data, (pl.DataFrame, pd.DataFrame)):
-        subset_variable_mapping = {
-            v: k for v, k in variable_mapping.items() if v in data.columns
-        }
-    elif isinstance(data, pl.LazyFrame):
-        subset_variable_mapping = {
-            v: k
-            for v, k in variable_mapping.items()
-            if v in data.collect_schema().names()
-        }
-    else:
-        raise ValueError(
-            f"Data is not a dataset, data array, lazy frame, dataframe, or pandas dataframe: {type(data)}"
-        )
-    if subset_variable_mapping:
-        data = data.rename(subset_variable_mapping)
-    return data
-
-
 def align_target_and_forecast_time_dimensions(
     target_ds: xr.Dataset, forecast_ds: xr.Dataset
 ) -> tuple[xr.Dataset, xr.Dataset]:
