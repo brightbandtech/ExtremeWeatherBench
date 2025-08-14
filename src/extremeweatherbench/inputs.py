@@ -114,7 +114,8 @@ class InputBase(ABC):
         Args:
             data: The target data to subset, which should be a xarray dataset, xarray dataarray, polars lazyframe,
             pandas dataframe, or numpy array.
-            case_operator: The case operator to subset the data to; includes time information, spatial bounds, and variables.
+            case_operator: The case operator to subset the data to; includes time information, spatial bounds, and
+            variables.
 
         Returns:
             The target data with the variables subset to the case metadata.
