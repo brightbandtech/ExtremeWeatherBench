@@ -8,7 +8,7 @@ Usage:
     ewb --config-file example_config.py
 """
 
-from extremeweatherbench import derived, inputs, metrics
+from extremeweatherbench import inputs, metrics
 from extremeweatherbench.utils import load_events_yaml
 
 # Define targets (observation data)

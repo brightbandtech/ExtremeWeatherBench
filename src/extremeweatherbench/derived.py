@@ -4,7 +4,7 @@ from typing import List, Union
 import numpy as np
 import xarray as xr
 
-from extremeweatherbench import calc, utils
+from extremeweatherbench import calc
 
 
 class DerivedVariable(ABC):

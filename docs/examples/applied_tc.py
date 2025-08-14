@@ -18,8 +18,6 @@
 import logging
 
 # %%
-import numpy as np
-import xarray as xr
 
 # %%
 from extremeweatherbench import derived, evaluate, inputs, metrics, utils
