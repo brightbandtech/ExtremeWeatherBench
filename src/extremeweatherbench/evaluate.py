@@ -6,15 +6,14 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Literal, Optional, Union
 
 import pandas as pd
-import polars as pl
 import xarray as xr
 from tqdm.auto import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 
-from extremeweatherbench import cases, derived, utils
+from extremeweatherbench import cases, derived, inputs
 
 if TYPE_CHECKING:
-    from extremeweatherbench import inputs, metrics
+    from extremeweatherbench import metrics
 
 
 logging.basicConfig(level=logging.INFO)
