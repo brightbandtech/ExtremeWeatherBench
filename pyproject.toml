@@ -44,13 +44,17 @@ dev = [
     "ipywidgets>=8.1.5",
     "isort>=6.0.1",
     "jupyterlab>=4.4.5",
+    "lxml-stubs>=0.5.1",
     "mypy>=1.14.1",
+    "pandas-stubs>=2.3.0.250703",
     "pre-commit>=4.1.0",
     "pytest>=8.3.4",
     "pytest-cov>=6.0.0",
     "pytest-mock>=3.14.0",
     "ruff>=0.9.4",
+    "types-pytz>=2025.2.0.20250809",
     "types-pyyaml>=6.0.12.20241230",
+    "types-tqdm>=4.67.0.20250809",
 ]
 
 [build-system]
