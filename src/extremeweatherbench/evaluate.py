@@ -10,7 +10,7 @@ import xarray as xr
 from tqdm.auto import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 
-from extremeweatherbench import case, derived, utils
+from extremeweatherbench import cases, derived, utils
 
 if TYPE_CHECKING:
     from extremeweatherbench import inputs, metrics
@@ -46,8 +46,8 @@ class ExtremeWeatherBench:
     # case operators as a property are a convenience method for users to use them outside the class
     # if desired for a parallel workflow
     @property
-    def case_operators(self) -> list["case.CaseOperator"]:
-        return case.build_case_operators(self.cases, self.metrics)
+    def case_operators(self) -> list["cases.CaseOperator"]:
+        return cases.build_case_operators(self.cases, self.metrics)
 
     def run(
         self,
@@ -81,7 +81,7 @@ class ExtremeWeatherBench:
         return pd.concat(run_results, ignore_index=True)
 
 
-def compute_case_operator(case_operator: "case.CaseOperator", **kwargs):
+def compute_case_operator(case_operator: "cases.CaseOperator", **kwargs):
     """Compute the results of a case operator.
 
     This method will compute the results of a case operator. It will build the target and forecast datasets,
@@ -186,7 +186,7 @@ def _evaluate_metric_and_return_df(
 
 
 def _build_datasets(
-    case_operator: "case.CaseOperator",
+    case_operator: "cases.CaseOperator",
 ) -> tuple[xr.Dataset, xr.Dataset]:
     """Build the target and forecast datasets for a case operator.
 
@@ -213,7 +213,7 @@ def _compute_and_maybe_cache(
 
 
 def run_pipeline(
-    case_operator: "case.CaseOperator",
+    case_operator: "cases.CaseOperator",
     input_source: Literal["target", "forecast"],
 ) -> xr.Dataset:
     """
