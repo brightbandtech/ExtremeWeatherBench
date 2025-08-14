@@ -1,5 +1,6 @@
 """Comprehensive tests for extremeweatherbench.inputs module."""
 
+from unittest import mock
 from unittest.mock import Mock, patch
 
 import numpy as np
@@ -108,6 +109,288 @@ class TestInputBase:
 
         result = test_input.add_source_to_dataset_attrs(sample_era5_dataset)
         assert result.attrs["source"] == "TestInput"
+
+
+class TestMaybeMapVariableNames:
+    """Test the maybe_map_variable_names method across different data types."""
+
+    @pytest.fixture
+    def test_input_base(self):
+        """Create a concrete test class for InputBase."""
+
+        class TestInput(inputs.InputBase):
+            def _open_data_from_source(self):
+                return None
+
+            def subset_data_to_case(self, data, case_operator):
+                return data
+
+        return TestInput
+
+    @patch(
+        "extremeweatherbench.derived.maybe_pull_required_variables_from_derived_input"
+    )
+    def test_maybe_map_variable_names_xarray_dataset_with_mapping(
+        self, mock_derived, test_input_base, sample_era5_dataset
+    ):
+        """Test variable mapping with xarray Dataset."""
+        mock_derived.return_value = ["original_temp", "original_pressure"]
+
+        # Create a dataset with original variable names
+        test_data = sample_era5_dataset.copy()
+        test_data = test_data.rename(
+            {
+                "2m_temperature": "original_temp",
+                "mean_sea_level_pressure": "original_pressure",
+            }
+        )
+
+        # Test input with variable mapping
+        test_input = test_input_base(
+            source="test",
+            variables=["mapped_temp", "mapped_pressure"],
+            variable_mapping={
+                "original_temp": "mapped_temp",
+                "original_pressure": "mapped_pressure",
+            },
+            storage_options={},
+        )
+
+        result = test_input.maybe_map_variable_names(test_data)
+
+        # Check that variables were renamed according to mapping
+        assert "mapped_temp" in result.data_vars
+        assert "mapped_pressure" in result.data_vars
+        assert "original_temp" not in result.data_vars
+        assert "original_pressure" not in result.data_vars
+
+        mock_derived.assert_called_once_with(mock.ANY)
+
+    @patch(
+        "extremeweatherbench.derived.maybe_pull_required_variables_from_derived_input"
+    )
+    def test_maybe_map_variable_names_xarray_dataset_no_mapping(
+        self, mock_derived, test_input_base, sample_era5_dataset
+    ):
+        """Test variable selection without mapping with xarray Dataset."""
+        mock_derived.return_value = ["2m_temperature"]
+
+        test_input = test_input_base(
+            source="test",
+            variables=["2m_temperature"],
+            variable_mapping={},
+            storage_options={},
+        )
+
+        result = test_input.maybe_map_variable_names(sample_era5_dataset)
+
+        # Check that only specified variable is included, no renaming
+        assert "2m_temperature" in result.data_vars
+        assert "mean_sea_level_pressure" not in result.data_vars
+
+        mock_derived.assert_called_once_with([])
+
+    @patch(
+        "extremeweatherbench.derived.maybe_pull_required_variables_from_derived_input"
+    )
+    def test_maybe_map_variable_names_xarray_dataarray(
+        self, mock_derived, test_input_base, sample_gridded_obs_dataarray
+    ):
+        """Test variable mapping with xarray DataArray."""
+        mock_derived.return_value = ["2m_temperature"]
+
+        test_input = test_input_base(
+            source="test",
+            variables=["temp"],
+            variable_mapping={"2m_temperature": "temp"},
+            storage_options={},
+        )
+
+        result = test_input.maybe_map_variable_names(sample_gridded_obs_dataarray)
+
+        # DataArray should be renamed
+        assert isinstance(result, xr.Dataset)
+        assert "temp" in result.data_vars
+        assert "2m_temperature" not in result.data_vars
+
+    @patch(
+        "extremeweatherbench.derived.maybe_pull_required_variables_from_derived_input"
+    )
+    def test_maybe_map_variable_names_polars_lazyframe(
+        self, mock_derived, test_input_base, sample_ghcn_dataframe
+    ):
+        """Test variable mapping with polars LazyFrame."""
+        import polars as pl
+
+        mock_derived.return_value = ["surface_air_temperature", "latitude"]
+
+        test_input = test_input_base(
+            source="test",
+            variables=["temp"],
+            variable_mapping={"surface_air_temperature": "temp"},
+            storage_options={},
+        )
+
+        lazy_data = sample_ghcn_dataframe.lazy()
+        result = test_input.maybe_map_variable_names(lazy_data)
+
+        # Check that LazyFrame columns were renamed
+        assert isinstance(result, pl.LazyFrame)
+        schema = result.collect_schema()
+        assert "temp" in schema.names()
+        assert "surface_air_temperature" not in schema.names()
+        assert "latitude" in schema.names()
+
+    @patch(
+        "extremeweatherbench.derived.maybe_pull_required_variables_from_derived_input"
+    )
+    def test_maybe_map_variable_names_pandas_dataframe(
+        self, mock_derived, test_input_base, sample_lsr_dataframe
+    ):
+        """Test variable mapping with pandas DataFrame."""
+        mock_derived.return_value = ["report_type", "magnitude"]
+
+        test_input = test_input_base(
+            source="test",
+            variables=["event_type"],
+            variable_mapping={"report_type": "event_type"},
+            storage_options={},
+        )
+
+        result = test_input.maybe_map_variable_names(sample_lsr_dataframe)
+
+        # Check that DataFrame columns were renamed
+        assert isinstance(result, pd.DataFrame)
+        assert "event_type" in result.columns
+        assert "report_type" not in result.columns
+        assert "magnitude" in result.columns
+
+    @patch(
+        "extremeweatherbench.derived.maybe_pull_required_variables_from_derived_input"
+    )
+    def test_maybe_map_variable_names_partial_mapping(
+        self, mock_derived, test_input_base, sample_era5_dataset
+    ):
+        """Test variable mapping when only some variables in mapping exist in data."""
+        mock_derived.return_value = ["2m_temperature", "nonexistent_var"]
+
+        test_input = test_input_base(
+            source="test",
+            variables=["temp"],
+            variable_mapping={
+                "2m_temperature": "temp",
+                "nonexistent_var": "missing_var",
+            },
+            storage_options={},
+        )
+
+        # This should raise an error since nonexistent_var is not in data
+        with pytest.raises(KeyError):
+            test_input.maybe_map_variable_names(sample_era5_dataset)
+
+    @patch(
+        "extremeweatherbench.derived.maybe_pull_required_variables_from_derived_input"
+    )
+    def test_maybe_map_variable_names_no_variables_defined(
+        self, mock_derived, test_input_base, sample_era5_dataset
+    ):
+        """Test error when no variables are defined."""
+        mock_derived.return_value = []
+
+        test_input = test_input_base(
+            source="test", variables=[], variable_mapping={}, storage_options={}
+        )
+
+        result = test_input.maybe_map_variable_names(sample_era5_dataset)
+        xr.testing.assert_identical(result, sample_era5_dataset)
+
+    @patch(
+        "extremeweatherbench.derived.maybe_pull_required_variables_from_derived_input"
+    )
+    def test_maybe_map_variable_names_unsupported_data_type(
+        self, mock_derived, test_input_base
+    ):
+        """Test error with unsupported data type."""
+        mock_derived.return_value = ["test_var"]
+
+        test_input = test_input_base(
+            source="test",
+            variables=["test_var"],
+            variable_mapping={},
+            storage_options={},
+        )
+
+        # Create mock data that doesn't have .variables attribute
+        class MockData:
+            def __init__(self):
+                self.variables = ["test_var"]
+
+            def __getitem__(self, key):
+                return self
+
+        mock_data = MockData()
+
+        with pytest.raises(ValueError, match="Data type .* not supported"):
+            test_input.maybe_map_variable_names(mock_data)
+
+    @patch(
+        "extremeweatherbench.derived.maybe_pull_required_variables_from_derived_input"
+    )
+    def test_maybe_map_variable_names_empty_variable_mapping(
+        self, mock_derived, test_input_base, sample_era5_dataset
+    ):
+        """Test when variable_mapping is empty dict."""
+        mock_derived.return_value = ["2m_temperature"]
+
+        test_input = test_input_base(
+            source="test",
+            variables=["2m_temperature"],
+            variable_mapping={},
+            storage_options={},
+        )
+
+        result = test_input.maybe_map_variable_names(sample_era5_dataset)
+
+        # Should return subset data without any renaming
+        assert "2m_temperature" in result.data_vars
+        assert "mean_sea_level_pressure" not in result.data_vars
+
+    @patch(
+        "extremeweatherbench.derived.maybe_pull_required_variables_from_derived_input"
+    )
+    def test_maybe_map_variable_names_with_derived_variables(
+        self, mock_derived, test_input_base, sample_era5_dataset
+    ):
+        """Test variable mapping with derived variables involved."""
+        # Mock derived variables that require multiple base variables
+        mock_derived.return_value = [
+            "2m_temperature",
+            "mean_sea_level_pressure",
+            "extra_derived_var",
+        ]
+
+        # Add the extra variable that would be required by derived variable
+        test_data = sample_era5_dataset.copy()
+        test_data["extra_derived_var"] = test_data["2m_temperature"] * 2
+
+        test_input = test_input_base(
+            source="test",
+            variables=["temp"],
+            variable_mapping={
+                "2m_temperature": "temp",
+                "mean_sea_level_pressure": "pressure",
+            },
+            storage_options={},
+        )
+
+        result = test_input.maybe_map_variable_names(test_data)
+
+        # Should include derived variable requirements and apply mapping
+        assert "temp" in result.data_vars
+        assert "pressure" in result.data_vars
+        assert "extra_derived_var" in result.data_vars
+        assert "2m_temperature" not in result.data_vars
+        assert "mean_sea_level_pressure" not in result.data_vars
 
 
 class TestForecastBase:
@@ -229,7 +512,7 @@ class TestZarrForecast:
         mock_open_zarr.assert_called_once_with(
             "test.zarr",
             storage_options={},
-            chunks={"time": 48, "latitude": 721, "longitude": 1440},
+            chunks=None,
             decode_timedelta=True,
         )
         assert result == sample_forecast_dataset
@@ -271,7 +554,7 @@ class TestKerchunkForecast:
         mock_open_kerchunk.assert_called_once_with(
             "test.parq",
             storage_options={},
-            chunks={"time": 48, "latitude": 721, "longitude": 1440},
+            chunks="auto",
         )
         assert result == sample_forecast_dataset
 
@@ -289,16 +572,17 @@ class TestERA5:
             variables=["2m_temperature"],
             variable_mapping={},
             storage_options={},
+            chunks={"time": 48, "latitude": "auto", "longitude": "auto"},
         )
 
         result = era5._open_data_from_source()
 
         mock_open_zarr.assert_called_once_with(
             "gs://test-bucket/era5.zarr",
-            storage_options=None,
-            chunks={"time": 48, "latitude": 721, "longitude": 1440},
+            storage_options={},
+            chunks={"time": 48, "latitude": "auto", "longitude": "auto"},
         )
-        assert result == sample_era5_dataset
+        xr.testing.assert_identical(result, sample_era5_dataset)
 
     @patch("extremeweatherbench.inputs.zarr_target_subsetter")
     def test_era5_subset_data_to_case(self, mock_subsetter, sample_era5_dataset):
@@ -454,7 +738,7 @@ class TestGHCN:
 
         result = ghcn._open_data_from_source()
 
-        mock_scan_parquet.assert_called_once_with("test.parquet", storage_options=None)
+        mock_scan_parquet.assert_called_once_with("test.parquet", storage_options={})
         assert isinstance(result, pl.LazyFrame)
 
     def test_ghcn_subset_data_to_case(self, sample_ghcn_dataframe):
@@ -556,7 +840,7 @@ class TestLSR:
 
         result = lsr._open_data_from_source()
 
-        mock_read_parquet.assert_called_once_with("test.parquet", storage_options=None)
+        mock_read_parquet.assert_called_once_with("test.parquet", storage_options={})
         assert result.equals(sample_lsr_dataframe)
 
     def test_lsr_subset_data_to_case(self, sample_lsr_dataframe):
@@ -658,7 +942,7 @@ class TestPPH:
 
         result = pph._open_data_from_source()
 
-        mock_open_zarr.assert_called_once_with("test.zarr", storage_options=None)
+        mock_open_zarr.assert_called_once_with("test.zarr", storage_options={})
         assert result == sample_era5_dataset
 
     @patch("extremeweatherbench.inputs.zarr_target_subsetter")
@@ -714,7 +998,7 @@ class TestIBTrACS:
 
         mock_scan_csv.assert_called_once_with(
             "test.csv",
-            storage_options=None,
+            storage_options={},
             skip_rows_after_header=1,
         )
         assert isinstance(result, pl.LazyFrame)

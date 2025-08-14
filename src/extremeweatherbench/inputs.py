@@ -164,10 +164,68 @@ class InputBase(ABC):
         ds.attrs["source"] = self.name
         return ds
 
+    def maybe_map_variable_names(
+        self, data: utils.IncomingDataInput
+    ) -> utils.IncomingDataInput:
+        """Map the variable names to the data, if required.
+
+        Args:
+            data: The incoming data in the form of an object that has a rename method for data variables/columns.
+
+        Returns:
+            A dataset with mapped variable names, if any exist, else the original data.
+        """
+        # Some inputs may not have variables defined, in which case we return the data unmodified
+        if not self.variables:
+            return data
+
+        variable_mapping = self.variable_mapping
+
+        variables_with_maybe_derived_variable_inputs = (
+            derived.maybe_pull_required_variables_from_derived_input(
+                list(variable_mapping.keys())
+            )
+        )
+
+        if isinstance(data, xr.DataArray):
+            old_name_obj = data.name
+            # convert to dataset to handle as rename(dict) won't work with just the DataArray name
+            variable_subset_data = data.to_dataset()
+        elif isinstance(data, xr.Dataset):
+            old_name_obj = data.variables.keys()
+            variable_subset_data = data[variables_with_maybe_derived_variable_inputs]
+        elif isinstance(data, pl.LazyFrame):
+            old_name_obj = data.collect_schema().names()
+            variable_subset_data = data.select(
+                variables_with_maybe_derived_variable_inputs
+            )
+        elif isinstance(data, pd.DataFrame):
+            old_name_obj = data.columns
+            variable_subset_data = data[variables_with_maybe_derived_variable_inputs]
+        else:
+            raise ValueError(f"Data type {type(data)} not supported")
+
+        if not variable_mapping:
+            return variable_subset_data
+
+        output_dict = {
+            old_name: new_name
+            for old_name, new_name in variable_mapping.items()
+            if old_name in old_name_obj
+        }
+
+        return (
+            variable_subset_data.rename(output_dict)
+            if not isinstance(data, pd.DataFrame)
+            else variable_subset_data.rename(columns=output_dict)
+        )
+
 
 @dataclasses.dataclass
 class ForecastBase(InputBase):
     """A class defining the interface for ExtremeWeatherBench forecast data."""
+
+    chunks: Optional[Union[dict, str]] = None
 
     def subset_data_to_case(
         self,
@@ -236,9 +294,7 @@ class KerchunkForecast(ForecastBase):
     Forecast class for kerchunked forecast data.
     """
 
-    chunks: dict = dataclasses.field(
-        default_factory=lambda: {"time": 48, "latitude": 721, "longitude": 1440}
-    )
+    chunks: Optional[Union[dict, str]] = "auto"
 
     def _open_data_from_source(self) -> utils.IncomingDataInput:
         return open_kerchunk_reference(
@@ -254,9 +310,7 @@ class ZarrForecast(ForecastBase):
     Forecast class for zarr forecast data.
     """
 
-    chunks: dict = dataclasses.field(
-        default_factory=lambda: {"time": 48, "latitude": 721, "longitude": 1440}
-    )
+    chunks: Optional[Union[dict, str]] = None
 
     def _open_data_from_source(self) -> utils.IncomingDataInput:
         return xr.open_zarr(
@@ -306,17 +360,16 @@ class ERA5(TargetBase):
     The easiest approach to using this class is to use the ARCO ERA5 dataset provided by
     Google for a source. Otherwise, either a different zarr source or modifying the
     open_data_from_source method to open the data using another method is required.
+    If there are multiple variables in the ta
     """
 
-    def _open_data_from_source(
-        self,
-        target_storage_options: Optional[dict] = None,
-        chunks: dict = {"time": 48, "latitude": 721, "longitude": 1440},
-    ) -> utils.IncomingDataInput:
+    chunks: Optional[Union[dict, str]] = None
+
+    def _open_data_from_source(self) -> utils.IncomingDataInput:
         data = xr.open_zarr(
             self.source,
-            storage_options=target_storage_options,
-            chunks=chunks,
+            storage_options=self.storage_options,
+            chunks=self.chunks,
         )
         return data
 
@@ -360,12 +413,9 @@ class GHCN(TargetBase):
     into subset_data_to_case.
     """
 
-    def _open_data_from_source(
-        self,
-        target_storage_options: Optional[dict] = None,
-    ) -> utils.IncomingDataInput:
+    def _open_data_from_source(self) -> utils.IncomingDataInput:
         target_data: pl.LazyFrame = pl.scan_parquet(
-            self.source, storage_options=target_storage_options
+            self.source, storage_options=self.storage_options
         )
 
         return target_data
@@ -460,13 +510,9 @@ class LSR(TargetBase):
     00 UTC to 00 UTC.
     """
 
-    def _open_data_from_source(
-        self, target_storage_options: Optional[dict] = None
-    ) -> utils.IncomingDataInput:
+    def _open_data_from_source(self) -> utils.IncomingDataInput:
         # force LSR to use anon token to prevent google reauth issues for users
-        target_data = pd.read_parquet(
-            self.source, storage_options=target_storage_options
-        )
+        target_data = pd.read_parquet(self.source, storage_options=self.storage_options)
 
         return target_data
 
@@ -589,9 +635,9 @@ class PPH(TargetBase):
     """Target class for practically perfect hindcast data."""
 
     def _open_data_from_source(
-        self, target_storage_options: Optional[dict] = None
+        self,
     ) -> utils.IncomingDataInput:
-        return xr.open_zarr(self.source, storage_options=target_storage_options)
+        return xr.open_zarr(self.source, storage_options=self.storage_options)
 
     def subset_data_to_case(
         self,
@@ -615,13 +661,11 @@ class PPH(TargetBase):
 class IBTrACS(TargetBase):
     """Target class for IBTrACS data."""
 
-    def _open_data_from_source(
-        self, target_storage_options: Optional[dict] = None
-    ) -> utils.IncomingDataInput:
+    def _open_data_from_source(self) -> utils.IncomingDataInput:
         # not using storage_options in this case due to NetCDF4Backend not supporting them
         target_data: pl.LazyFrame = pl.scan_csv(
             self.source,
-            storage_options=target_storage_options,
+            storage_options=self.storage_options,
             skip_rows_after_header=1,
         )
         return target_data
