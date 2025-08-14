@@ -199,7 +199,7 @@ def _build_datasets(
     This method will process through all stages of the pipeline for the target and forecast datasets,
     including preprocessing, variable renaming, and subsetting.
     """
-    logger.info("running target pipeline")
+    logger.info("running forecast pipeline")
     forecast_ds = run_pipeline(case_operator, "forecast")
     logger.info("running target pipeline")
     target_ds = run_pipeline(case_operator, "target")
