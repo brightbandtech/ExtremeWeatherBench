@@ -97,15 +97,15 @@ def compute_case_operator(case_operator: "cases.CaseOperator", **kwargs):
     target_ds, forecast_ds = _build_datasets(case_operator)
 
     # spatiotemporally align the target and forecast datasets dependent on the forecast
-    aligned_target_ds, aligned_forecast_ds = (
+    aligned_forecast_ds, aligned_target_ds = (
         case_operator.target.maybe_align_forecast_to_target(forecast_ds, target_ds)
     )
     # TODO: determine if derived variables need to be pushed here or at loop
     # compute and cache the datasets if requested
     if kwargs.get("pre_compute", False):
-        aligned_target_ds, aligned_forecast_ds = _compute_and_maybe_cache(
-            aligned_target_ds,
+        aligned_forecast_ds, aligned_target_ds = _compute_and_maybe_cache(
             aligned_forecast_ds,
+            aligned_target_ds,
             cache_dir=kwargs.get("cache_dir", None),
         )
 
@@ -121,8 +121,8 @@ def compute_case_operator(case_operator: "cases.CaseOperator", **kwargs):
     ):
         results.append(
             _evaluate_metric_and_return_df(
-                target_ds=aligned_target_ds,
                 forecast_ds=aligned_forecast_ds,
+                target_ds=aligned_target_ds,
                 forecast_variable=variables[0],
                 target_variable=variables[1],
                 metric=metric,
