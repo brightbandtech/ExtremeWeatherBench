@@ -1,15 +1,10 @@
 import logging
 import multiprocessing
 import os
-from logging.handlers import QueueHandler, QueueListener
-from multiprocessing import Manager
-from random import random
-from time import sleep
 
 import joblib
 import numpy as np
 import xarray as xr
-from joblib import Parallel, delayed
 from tqdm.auto import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 
@@ -33,18 +28,18 @@ def configure_root_logger():
     return root
 
 
-def configure_worker_logger(log_name="Default", log_level="DEBUG"):
-    def decorator(func: callable):
-        def wrapper(*args, **kwargs):
-            worker_logger = logging.getLogger(log_name)
-            if not worker_logger.hasHandlers():
-                h = QueueHandler(kwargs["log_queue"])
-                worker_logger.addHandler(h)
-            worker_logger.setLevel(log_level)
-            kwargs["log_queue"] = worker_logger
-            return func(*args, **kwargs)
+# def configure_worker_logger(log_name="Default", log_level="DEBUG"):
+#     def decorator(func: callable):
+#         def wrapper(*args, **kwargs):
+#             worker_logger = logging.getLogger(log_name)
+#             if not worker_logger.hasHandlers():
+#                 h = QueueHandler(kwargs["log_queue"])
+#                 worker_logger.addHandler(h)
+#             worker_logger.setLevel(log_level)
+#             kwargs["log_queue"] = worker_logger
+#             return func(*args, **kwargs)
 
-        return wrapper
+#         return wrapper
 
 
 logger = logging.getLogger(__name__)
