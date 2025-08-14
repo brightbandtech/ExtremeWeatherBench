@@ -1,11 +1,11 @@
-import pytest
-import xarray as xr
-import pandas as pd
-import numpy as np
-from extremeweatherbench import config, events, data_loader
-from click.testing import CliRunner
 import tempfile
 from pathlib import Path
+
+import numpy as np
+import pandas as pd
+import pytest
+import xarray as xr
+from click.testing import CliRunner
 
 
 def make_sample_gridded_obs_dataset():
@@ -130,46 +130,9 @@ def sample_forecast_dataset():
 
 
 @pytest.fixture
-def sample_schema_config_point_obs_df():
-    sample_schema_config_point_obs_df = make_sample_point_obs_df()
-
-    return sample_schema_config_point_obs_df
-
-
-@pytest.fixture
-def sample_config():
-    return config.Config(
-        event_types=[events.HeatWave],
-        forecast_dir="test/forecast/path",
-        gridded_obs_path="test/obs/path",
-        forecast_schema_config=config.ForecastSchemaConfig(),
-        point_obs_schema_config=config.PointObservationSchemaConfig(),
-    )
-
-
-@pytest.fixture
-def default_forecast_config():
-    return config.ForecastSchemaConfig()
-
-
-@pytest.fixture
-def sample_gridded_obs_dataset():
-    sample_gridded_obs_dataset = make_sample_gridded_obs_dataset()
-    return sample_gridded_obs_dataset
-
-
-@pytest.fixture
 def sample_forecast_dataarray():
     sample_forecast_dataarray = dataset_to_dataarray(make_sample_forecast_dataset())
     return sample_forecast_dataarray
-
-
-@pytest.fixture
-def sample_gridded_obs_dataarray():
-    sample_gridded_obs_dataarray = dataset_to_dataarray(
-        make_sample_gridded_obs_dataset()
-    )
-    return sample_gridded_obs_dataarray
 
 
 @pytest.fixture
@@ -182,44 +145,9 @@ def sample_subset_forecast_dataarray():
 
 
 @pytest.fixture
-def sample_subset_gridded_obs_dataarray():
-    sample_gridded_obs_dataarray = dataset_to_dataarray(
-        make_sample_gridded_obs_dataset()
-    )
-    subset_sample_gridded_obs_dataarray = sample_gridded_obs_dataarray.sel(
-        latitude=slice(40, 45), longitude=slice(100, 105)
-    )
-    return subset_sample_gridded_obs_dataarray
-
-
-@pytest.fixture
 def sample_results_dataarray_list():
     sample_results_dataarray_list = make_sample_results_dataarray_list()
     return sample_results_dataarray_list
-
-
-@pytest.fixture
-def sample_point_obs_df():
-    sample_point_obs_df = make_sample_point_obs_df()
-    return sample_point_obs_df
-
-
-@pytest.fixture
-def sample_point_obs_df_with_attrs():
-    sample_point_obs_schema_config = config.PointObservationSchemaConfig(
-        case_id="id",
-        station_long_name="name",
-        station_id="call",
-        elevation="elev",
-    )
-    sample_point_obs_df = make_sample_point_obs_df()
-    sample_point_obs_df.attrs = {
-        "metadata_vars": sample_point_obs_schema_config.mapped_metadata_vars
-    }
-    sample_point_obs_df = data_loader._rename_point_obs_dataset(
-        sample_point_obs_df, sample_point_obs_schema_config
-    )
-    return sample_point_obs_df
 
 
 @pytest.fixture

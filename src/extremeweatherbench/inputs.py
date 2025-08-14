@@ -7,10 +7,10 @@ import pandas as pd
 import polars as pl
 import xarray as xr
 
-from extremeweatherbench import derived, utils
+from extremeweatherbench import cases, derived, utils
 
 if TYPE_CHECKING:
-    from extremeweatherbench import case, metrics
+    from extremeweatherbench import metrics
 
 #: Storage/access options for gridded target datasets.
 ARCO_ERA5_FULL_URI = (
@@ -104,7 +104,7 @@ class InputBase(ABC):
     def subset_data_to_case(
         self,
         data: utils.IncomingDataInput,
-        case_operator: "case.CaseOperator",
+        case_operator: "cases.CaseOperator",
     ) -> utils.IncomingDataInput:
         """Subset the target data to the case information provided in CaseOperator.
 
@@ -114,7 +114,8 @@ class InputBase(ABC):
         Args:
             data: The target data to subset, which should be a xarray dataset, xarray dataarray, polars lazyframe,
             pandas dataframe, or numpy array.
-            case_operator: The case operator to subset the data to; includes time information, spatial bounds, and variables.
+            case_operator: The case operator to subset the data to; includes time information, spatial bounds, and
+            variables.
 
         Returns:
             The target data with the variables subset to the case metadata.
@@ -171,7 +172,7 @@ class ForecastBase(InputBase):
     def subset_data_to_case(
         self,
         data: utils.IncomingDataInput,
-        case_operator: "case.CaseOperator",
+        case_operator: "cases.CaseOperator",
     ) -> utils.IncomingDataInput:
         if not isinstance(data, xr.Dataset):
             raise ValueError(f"Expected xarray Dataset, got {type(data)}")
@@ -322,7 +323,7 @@ class ERA5(TargetBase):
     def subset_data_to_case(
         self,
         data: utils.IncomingDataInput,
-        case_operator: "case.CaseOperator",
+        case_operator: "cases.CaseOperator",
     ) -> utils.IncomingDataInput:
         return zarr_target_subsetter(data, case_operator)
 
@@ -349,7 +350,7 @@ class GHCN(TargetBase):
     def subset_data_to_case(
         self,
         target_data: utils.IncomingDataInput,
-        case_operator: "case.CaseOperator",
+        case_operator: "cases.CaseOperator",
     ) -> utils.IncomingDataInput:
         # Create filter expressions for LazyFrame
         time_min = case_operator.case_metadata.start_date - pd.Timedelta(days=2)
@@ -449,7 +450,7 @@ class LSR(TargetBase):
     def subset_data_to_case(
         self,
         target_data: utils.IncomingDataInput,
-        case_operator: "case.CaseOperator",
+        case_operator: "cases.CaseOperator",
     ) -> utils.IncomingDataInput:
         if not isinstance(target_data, pd.DataFrame):
             raise ValueError(f"Expected pandas DataFrame, got {type(target_data)}")
@@ -571,7 +572,7 @@ class PPH(TargetBase):
     def subset_data_to_case(
         self,
         target_data: utils.IncomingDataInput,
-        case_operator: "case.CaseOperator",
+        case_operator: "cases.CaseOperator",
     ) -> utils.IncomingDataInput:
         return zarr_target_subsetter(target_data, case_operator)
 
@@ -597,7 +598,7 @@ class IBTrACS(TargetBase):
     def subset_data_to_case(
         self,
         target_data: utils.IncomingDataInput,
-        case_operator: "case.CaseOperator",
+        case_operator: "cases.CaseOperator",
     ) -> utils.IncomingDataInput:
         if not isinstance(target_data, pl.LazyFrame):
             raise ValueError(f"Expected polars LazyFrame, got {type(target_data)}")
@@ -770,7 +771,7 @@ def open_kerchunk_reference(
 
 def zarr_target_subsetter(
     data: xr.Dataset,
-    case_operator: "case.CaseOperator",
+    case_operator: "cases.CaseOperator",
     time_variable: str = "valid_time",
 ) -> xr.Dataset:
     """Subset a zarr dataset to a case operator."""

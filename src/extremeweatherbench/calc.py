@@ -281,6 +281,7 @@ def create_tctracks(tcs: list[TC]) -> list[TCTracks]:
     2. Within 8 great circle degrees of the previous timestep
     3. Within 54 hours of the previous timestep
 
+    Parameters from TempestExtremes: https://gmd.copernicus.org/articles/14/5023/2021/#section3
     Args:
         tcs: List of TC objects.
 
