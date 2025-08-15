@@ -192,33 +192,19 @@ class InputBase(ABC):
 
         variable_mapping = self.variable_mapping
 
-        variables_with_maybe_derived_variable_inputs = (
-            derived.maybe_pull_required_variables_from_derived_input(
-                list(variable_mapping.keys())
-            )
-        )
-
         if isinstance(data, xr.DataArray):
             old_name_obj = data.name
-            # convert to dataset to handle as rename(dict) won't work with just
-            # the DataArray name
-            variable_subset_data = data.to_dataset()
         elif isinstance(data, xr.Dataset):
             old_name_obj = data.variables.keys()
-            variable_subset_data = data[variables_with_maybe_derived_variable_inputs]
         elif isinstance(data, pl.LazyFrame):
             old_name_obj = data.collect_schema().names()
-            variable_subset_data = data.select(
-                variables_with_maybe_derived_variable_inputs
-            )
         elif isinstance(data, pd.DataFrame):
             old_name_obj = data.columns
-            variable_subset_data = data[variables_with_maybe_derived_variable_inputs]
         else:
             raise ValueError(f"Data type {type(data)} not supported")
 
         if not variable_mapping:
-            return variable_subset_data
+            return data
 
         output_dict = {
             old_name: new_name
@@ -227,9 +213,9 @@ class InputBase(ABC):
         }
 
         return (
-            variable_subset_data.rename(output_dict)
+            data.rename(output_dict)
             if not isinstance(data, pd.DataFrame)
-            else variable_subset_data.rename(columns=output_dict)
+            else data.rename(columns=output_dict)
         )
 
 
