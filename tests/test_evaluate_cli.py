@@ -206,7 +206,9 @@ class TestParallelExecution:
 
         assert result.exit_code == 0
         # Output suppressed - only check exit code
-        mock_parallel_eval.assert_called_once_with(mock_ewb.case_operators, 3)
+        mock_parallel_eval.assert_called_once_with(
+            mock_ewb.case_operators, 3, precompute=False
+        )
 
     @patch("extremeweatherbench.defaults.BRIGHTBAND_EVALUATION_OBJECTS", [])
     @patch("extremeweatherbench.evaluate_cli._load_default_cases")
@@ -428,7 +430,9 @@ class TestHelperFunctions:
 
         mock_case_ops = [Mock(), Mock(), Mock()]
 
-        result = evaluate_cli._run_parallel_evaluation(mock_case_ops, 2)
+        result = evaluate_cli._run_parallel_evaluation(
+            mock_case_ops, 2, precompute=False
+        )
 
         # Verify Parallel was called correctly
         mock_parallel_class.assert_called_once_with(n_jobs=2)
@@ -444,7 +448,9 @@ class TestHelperFunctions:
             mock_parallel_class.return_value = mock_parallel
             mock_parallel.return_value = [None, None, None]
 
-            result = evaluate_cli._run_parallel_evaluation([Mock()], 1)
+            result = evaluate_cli._run_parallel_evaluation(
+                [Mock()], 1, precompute=False
+            )
 
             assert isinstance(result, pd.DataFrame)
             assert len(result) == 0
