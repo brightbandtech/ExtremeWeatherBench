@@ -258,7 +258,8 @@ class TestCaseOperatorSaving:
         assert result.exit_code == 0
         # Output suppressed - only check exit code
 
-        # Verify pickle file was created and contains the right data (in temp dir, auto-cleanup)
+        # Verify pickle file was created and contains the right data (in temp dir,
+        # auto-cleanup)
         assert save_path.exists()
         with open(save_path, "rb") as f:
             loaded_ops = pickle.load(f)
@@ -347,7 +348,8 @@ class TestValidationAndErrorHandling:
         with runner.isolated_filesystem():
             result = runner.invoke(evaluate_cli.cli_runner, ["--default"])
             assert result.exit_code == 0
-            # Check that the CLI completed successfully - any files created are in the isolated temp filesystem
+            # Check that the CLI completed successfully - any files created are in the
+            # isolated temp filesystem
 
 
 class TestResultsSaving:
