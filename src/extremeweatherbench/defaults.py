@@ -1,7 +1,13 @@
+import logging
+
 import numpy as np
 import xarray as xr
 
 from extremeweatherbench import inputs, metrics
+
+# Suppress noisy log messages
+logging.getLogger("urllib3.connectionpool").setLevel(logging.CRITICAL)
+logging.getLogger("botocore.httpchecksum").setLevel(logging.CRITICAL)
 
 
 def _preprocess_bb_cira_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
