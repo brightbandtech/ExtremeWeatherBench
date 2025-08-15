@@ -257,7 +257,7 @@ def maybe_derive_variables(
 
 
 def maybe_pull_required_variables_from_derived_input(
-    incoming_variables: list[Union[str, DerivedVariable]],
+    incoming_variables: list[Union[str, DerivedVariable, Type[DerivedVariable]]],
 ) -> list[str]:
     """Pull the required variables from a derived input and add to the list of
     variables to pull.
@@ -270,12 +270,14 @@ def maybe_pull_required_variables_from_derived_input(
         variables.
     """
     string_variables = [v for v in incoming_variables if isinstance(v, str)]
-    derived_required_variables = []
 
+    derived_required_variables = []
     for v in incoming_variables:
-        if not isinstance(v, str):
-            derived_variable = v() if isinstance(v, type) else v
-            if isinstance(derived_variable, DerivedVariable):
-                derived_required_variables.extend(derived_variable.required_variables)
+        if isinstance(v, DerivedVariable):
+            # Handle instances of DerivedVariable
+            derived_required_variables.extend(v.required_variables)
+        elif isinstance(v, type) and issubclass(v, DerivedVariable):
+            # Handle classes that inherit from DerivedVariable
+            derived_required_variables.extend(v.required_variables)
 
     return string_variables + derived_required_variables
