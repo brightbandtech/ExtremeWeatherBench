@@ -1,4 +1,27 @@
+import numpy as np
+import xarray as xr
+
 from extremeweatherbench import inputs, metrics
+
+
+def _preprocess_bb_cira_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
+    """An example preprocess function that renames the time coordinate to lead_time,
+    creates a valid_time coordinate, and sets the lead time range and resolution not
+    present in the original dataset.
+
+    Args:
+        ds: The forecast dataset to rename.
+
+    Returns:
+        The renamed forecast dataset.
+    """
+    ds = ds.rename({"time": "lead_time"})
+    # The evaluation configuration is used to set the lead time range and resolution.
+    ds["lead_time"] = np.array(
+        [i for i in range(0, 241, 6)], dtype="timedelta64[h]"
+    ).astype("timedelta64[ns]")
+    return ds
+
 
 # ERA5 targets
 era5_heatwave_target = inputs.ERA5(
@@ -105,6 +128,7 @@ cira_heatwave_forecast = inputs.KerchunkForecast(
     variables=["surface_air_temperature"],
     variable_mapping={"t2": "surface_air_temperature"},
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
+    preprocess=_preprocess_bb_cira_forecast_dataset,
 )
 
 cira_freeze_forecast = inputs.KerchunkForecast(
@@ -120,6 +144,7 @@ cira_freeze_forecast = inputs.KerchunkForecast(
         "10v": "surface_northward_wind",
     },
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
+    preprocess=_preprocess_bb_cira_forecast_dataset,
 )
 
 # TODO: Re-enable when atmospheric river forecast is implemented
