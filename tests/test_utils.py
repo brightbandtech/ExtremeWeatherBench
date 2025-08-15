@@ -1,9 +1,10 @@
-from pathlib import Path
+import datetime
 
 import numpy as np
 import pandas as pd
 import pytest
 import xarray as xr
+import yaml
 
 from extremeweatherbench import utils
 
@@ -16,408 +17,224 @@ def test_convert_longitude_to_360_param(input, expected):
     assert utils.convert_longitude_to_360(input) == expected
 
 
-def test_center_forecast_on_time(
-    sample_subset_forecast_dataarray,
-    sample_subset_gridded_obs_dataarray,
-):
-    """Test that the center_forecast_on_time function properly centers the forecast on the given
-    timestamp, including at edges of the forecast which produce truncated outputs."""
-    hours = 48
-    test_aligned_da = utils.temporal_align_dataarrays(
-        sample_subset_forecast_dataarray,
-        sample_subset_gridded_obs_dataarray,
-        pd.Timestamp(sample_subset_forecast_dataarray.init_time[0].values),
-    )[0]
+def test_convert_longitude_to_180():
+    """Test converting longitude from [0, 360) to [-180, 180) range."""
+    # Test scalar values
+    assert utils.convert_longitude_to_180(0) == 0
+    assert utils.convert_longitude_to_180(180) == -180
+    assert utils.convert_longitude_to_180(270) == -90
+    assert utils.convert_longitude_to_180(359) == -1
 
-    test_aligned_da_timestamps = test_aligned_da.time.values
-    test_timestamps = [
-        test_aligned_da_timestamps[0],
-        test_aligned_da_timestamps[2],
-        test_aligned_da_timestamps[len(test_aligned_da_timestamps) // 2],
-        test_aligned_da_timestamps[-3],
-        test_aligned_da_timestamps[-1],
-    ]
-    aligned_forecast_timedelta = pd.to_timedelta(
-        test_aligned_da.time[-1].values - test_aligned_da.time[0].values
-    )
-    assert aligned_forecast_timedelta > pd.to_timedelta(hours * 2, unit="h")
-    for timestamp in test_timestamps:
-        centered_forecast_da = utils.center_forecast_on_time(
-            test_aligned_da, timestamp, hours=hours
-        )
-        centered_forecast_timedelta = pd.to_timedelta(
-            centered_forecast_da.time[-1].values - centered_forecast_da.time[0].values
-        )
-        index = np.where(test_aligned_da.time.values == timestamp)[0][0]
-        if index == 0 and centered_forecast_timedelta == pd.to_timedelta(
-            hours, unit="h"
-        ):
-            # test if centering on the 0th index produced a forecast with the correct time range
-            assert centered_forecast_da.time[0] == timestamp
-            assert centered_forecast_da.time[-1] == timestamp + pd.to_timedelta(
-                hours, unit="h"
-            )
-        elif index == len(
-            test_aligned_da.time.values
-        ) - 1 and centered_forecast_timedelta == pd.to_timedelta(hours, unit="h"):
-            # test if centering on the last index produced a forecast with the correct time range
-            assert centered_forecast_da.time[0] == timestamp - pd.to_timedelta(
-                hours, unit="h"
-            )
-            assert centered_forecast_da.time[-1] == timestamp
-        elif index == len(
-            test_aligned_da.time.values
-        ) // 2 and centered_forecast_timedelta == pd.to_timedelta(hours * 2, unit="h"):
-            # test if centering on the middle index produced a forecast with the correct time range,
-            # with the added condition that the timedelta is twice the size of the hours
-            # in case future modifications to fixtures changes the mock forecast time range
-            assert centered_forecast_da.time[0] == timestamp - pd.to_timedelta(
-                hours, unit="h"
-            )
-            assert centered_forecast_da.time[-1] == timestamp + pd.to_timedelta(
-                hours, unit="h"
-            )
-            # TODO: Add test for the case where the centered forecast is close to the edges,
-            # e.g. at index 2 or -3
+    # Test with xarray Dataset (note: result is sorted by longitude)
+    ds = xr.Dataset(coords={"longitude": [0, 90, 180, 270, 359]})
+    converted_ds = utils.convert_longitude_to_180(ds)
+    # After conversion and sorting: -180, -90, -1, 0, 90
+    expected_lons_sorted = [-180, -90, -1, 0, 90]
+    np.testing.assert_allclose(converted_ds.longitude.values, expected_lons_sorted)
+
+    # Test with custom longitude name
+    ds_custom = xr.Dataset(coords={"lon": [0, 90, 180, 270]})
+    converted_custom = utils.convert_longitude_to_180(ds_custom, longitude_name="lon")
+    # After conversion and sorting: -180, -90, 0, 90
+    expected_custom_sorted = [-180, -90, 0, 90]
+    np.testing.assert_allclose(converted_custom.lon.values, expected_custom_sorted)
 
 
-def test_temporal_align_dataarrays(
-    sample_forecast_dataarray, sample_gridded_obs_dataarray
-):
-    """Test that the conversion from init time to valid time (named as time) produces an aligned
-    dataarray to ensure metrics are applied properly."""
-    init_time_datetime = pd.Timestamp(
-        sample_forecast_dataarray.init_time[0].values
-    ).to_pydatetime()
-    aligned_forecast, aligned_obs = utils.temporal_align_dataarrays(
-        sample_forecast_dataarray, sample_gridded_obs_dataarray, init_time_datetime
+def test_remove_ocean_gridpoints():
+    """Test removing ocean gridpoints from dataset."""
+    # Create a simple test dataset with known land/ocean points
+    ds = xr.Dataset(
+        data_vars={"temperature": (["latitude", "longitude"], [[1, 2], [3, 4]])},
+        coords={
+            "latitude": [40.0, 41.0],  # Land coordinates (roughly US)
+            "longitude": [260.0, 261.0],  # Convert from -100, -99
+        },
     )
 
-    # Check aligned datasets have same time coordinates
-    assert (aligned_forecast.time == aligned_obs.time).all()
+    result = utils.remove_ocean_gridpoints(ds)
 
-    # Check forecast was properly subset by init time
-    assert aligned_forecast.init_time.size == 1
-    assert pd.Timestamp(aligned_forecast.init_time.values) == pd.Timestamp(
-        sample_forecast_dataarray.init_time[0].values
-    )
+    # Should return a dataset (may have NaNs for ocean points)
+    assert isinstance(result, xr.Dataset)
+    assert "temperature" in result.data_vars
+    assert result.sizes == ds.sizes
 
 
-def test_process_dataarray_for_output(sample_results_dataarray_list):
-    """Test to ensure the inputs to process_dataarray_for_output always result in a DataArray
-    regardless of length."""
-    test_output = utils.process_dataarray_for_output(sample_results_dataarray_list)
-    assert isinstance(test_output, xr.DataArray)
+def test_load_events_yaml():
+    """Test loading events yaml file."""
+    result = utils.load_events_yaml()
 
-    test_len_0_output = utils.process_dataarray_for_output([])
-    assert isinstance(test_len_0_output, xr.DataArray)
-
-
-def test_obs_finer_temporal_resolution(
-    sample_forecast_dataarray, sample_gridded_obs_dataarray
-):
-    """Test when observation has finer temporal resolution."""
-    aligned_obs = utils.align_observations_temporal_resolution(
-        sample_forecast_dataarray, sample_gridded_obs_dataarray
-    )
-    # Check that observation was modified
-    assert len(np.unique(np.diff(aligned_obs.time))) == 1
-    assert np.unique(np.diff(aligned_obs.time)).astype("timedelta64[h]").astype(
-        int
-    ) == np.unique(np.diff(sample_forecast_dataarray.lead_time))
+    # Should return a dictionary
+    assert isinstance(result, dict)
+    # Should contain 'cases' key (based on the existing yaml structure)
+    assert "cases" in result
 
 
-def test_obs_finer_temporal_resolution_data(
-    sample_forecast_dataarray, sample_gridded_obs_dataarray
-):
-    """Test when observation has finer temporal resolution than forecast,
-    that the outputs are the correct values at the hour."""
-    aligned_obs = utils.align_observations_temporal_resolution(
-        sample_forecast_dataarray, sample_gridded_obs_dataarray
-    )
+def test_read_event_yaml(tmp_path):
+    """Test reading events yaml from file."""
+    # Create a temporary yaml file
+    yaml_content = {
+        "cases": {"test_case": {"start_date": "2020-01-01", "end_date": "2020-01-02"}}
+    }
 
-    test_truncated_obs, test_aligned_obs = xr.align(
-        sample_gridded_obs_dataarray, aligned_obs, join="inner"
-    )
-    # Check that observation was modified
-    assert (test_aligned_obs == test_truncated_obs).all()
+    yaml_file = tmp_path / "test_events.yaml"
+    with open(yaml_file, "w") as f:
+        yaml.dump(yaml_content, f)
 
+    result = utils.read_event_yaml(yaml_file)
 
-def test_obs_coarser_temporal_resolution(
-    sample_forecast_dataarray, sample_gridded_obs_dataarray
-):
-    """Test when observation has coarser temporal resolution than forecast,
-    that observations are unmodified."""
-    sample_forecast_dataarray = sample_forecast_dataarray.isel(init_time=0)
-    aligned_obs = utils.align_observations_temporal_resolution(
-        sample_forecast_dataarray,
-        sample_gridded_obs_dataarray.resample(time="12h").first(),
-    )
-    # Check that observation was modified
-    assert (aligned_obs == sample_gridded_obs_dataarray).all()
+    assert isinstance(result, dict)
+    assert "cases" in result
+    assert "test_case" in result["cases"]
+    assert result["cases"]["test_case"]["start_date"] == "2020-01-01"
 
 
-def test_align_point_obs_from_gridded_basic(
-    sample_forecast_dataset, sample_point_obs_df_with_attrs
-):
-    """Test basic functionality of align_point_obs_from_gridded."""  # Adjust point obs to match forecast time
-    valid_time = pd.Timestamp(
-        sample_forecast_dataset.init_time[0].values
-    ) + pd.Timedelta(hours=6)
-    sample_point_obs_df_with_attrs.iloc[
-        0, sample_point_obs_df_with_attrs.columns.get_loc("time")
-    ] = valid_time
-    sample_point_obs_df_with_attrs.iloc[
-        1, sample_point_obs_df_with_attrs.columns.get_loc("time")
-    ] = valid_time
-    # Convert longitude to 0-360 range to match forecast
-    sample_point_obs_df_with_attrs["longitude"] = sample_point_obs_df_with_attrs[
-        "longitude"
-    ].apply(lambda x: x + 360 if x < 0 else x)
-
-    data_var = ["surface_air_temperature"]
-    forecast, obs = utils.align_point_obs_from_gridded(
-        sample_forecast_dataset, sample_point_obs_df_with_attrs, data_var
-    )
-    # Check basic properties
-    assert isinstance(forecast, xr.Dataset)
-    assert isinstance(obs, xr.Dataset)
-    assert "station_id" in forecast.dims
-    assert "station_id" in obs.dims
-    assert len(forecast.station_id) == len(sample_point_obs_df_with_attrs)
-    assert len(obs.station_id) == len(sample_point_obs_df_with_attrs)
-    assert all(
-        station in forecast.station_id.values
-        for station in sample_point_obs_df_with_attrs["station_id"]
-    )
-
-
-def test_align_point_obs_from_gridded_multiple_times(
-    sample_forecast_dataarray, sample_point_obs_df_with_attrs
-):
-    """Test aligning point observations with multiple valid times."""
-    # Create a larger dataframe with multiple times
-    dfs = []
-    for i in range(3):
-        df_copy = sample_point_obs_df_with_attrs.copy()
-        valid_time = pd.Timestamp(
-            sample_forecast_dataarray.init_time[0].values
-        ) + pd.Timedelta(hours=i * 6)
-        df_copy["time"] = valid_time
-        dfs.append(df_copy)
-
-    multi_time_df = pd.concat(dfs, ignore_index=True)
-
-    # Convert longitude to 0-360 range
-    multi_time_df["longitude"] = multi_time_df["longitude"].apply(
-        lambda x: x + 360 if x < 0 else x
-    )
-
-    # Set latitude and longitude values that fall within the forecast grid
-    multi_time_df["latitude"] = np.tile(np.array([40.5, 41.8]), 3)
-    multi_time_df["longitude"] = np.tile(
-        np.array([260.5, 260.2]), 3
-    )  # ~-99.5, ~-99.8 in 0-360 space
-
-    data_var = ["surface_air_temperature"]
-
-    forecast, obs = utils.align_point_obs_from_gridded(
-        sample_forecast_dataarray, multi_time_df, data_var
-    )
-
-    # Check there are multiple stations and times
-    assert len(forecast.station_id) == len(multi_time_df)
-    assert len(np.unique(forecast.time.values)) == 3
-
-
-def test_align_point_obs_from_gridded_missing_times(
-    sample_forecast_dataarray, sample_point_obs_df_with_attrs
-):
-    """Test behavior when some observation times don't match forecast times."""
-    # Create a dataframe with some matching times and some that don't match
-    valid_time1 = pd.Timestamp(
-        sample_forecast_dataarray.init_time[0].values
-    ) + pd.Timedelta(hours=6)
-    valid_time2 = pd.Timestamp(
-        sample_forecast_dataarray.init_time[0].values
-    ) + pd.Timedelta(hours=7)  # Not in forecast
-
-    df = sample_point_obs_df_with_attrs.copy()
-    df.iloc[0, df.columns.get_loc("time")] = valid_time1
-    df.iloc[1, df.columns.get_loc("time")] = valid_time2
-
-    # Convert longitude to 0-360 range
-    df["longitude"] = df["longitude"].apply(lambda x: x + 360 if x < 0 else x)
-
-    # Set latitude and longitude values that fall within the forecast grid
-    df["latitude"] = np.array([40.5, 41.8])
-    df["longitude"] = np.array([260.5, 260.2])  # ~-99.5, ~-99.8 in 0-360 space
-
-    data_var = ["surface_air_temperature"]
-
-    forecast, obs = utils.align_point_obs_from_gridded(
-        sample_forecast_dataarray, df, data_var
-    )
-
-    # Should only include the valid time that matches a forecast time
-    assert len(forecast.station_id) == 1
-
-
-def test_align_point_obs_from_gridded_out_of_bounds(
-    sample_forecast_dataarray, sample_point_obs_df_with_attrs
-):
-    """Test behavior when point observations are outside the forecast domain."""
-    # Set timestamp to match forecast
-    valid_time = pd.Timestamp(
-        sample_forecast_dataarray.init_time[0].values
-    ) + pd.Timedelta(hours=6)
-    sample_point_obs_df_with_attrs["time"] = valid_time
-
-    # Put one point within forecast domain and one outside
-    sample_point_obs_df_with_attrs["latitude"] = np.array(
-        [40.5, 95.0]
-    )  # 95 is outside valid range
-    sample_point_obs_df_with_attrs["longitude"] = np.array([260.5, 260.2])
-
-    data_var = ["surface_air_temperature"]
-
-    forecast, obs = utils.align_point_obs_from_gridded(
-        sample_forecast_dataarray, sample_point_obs_df_with_attrs, data_var
-    )
-
-    # Should only include the point within the domain
-    assert len(forecast.station_id) == 1
-    assert (
-        forecast.station_id.values[0] == sample_point_obs_df_with_attrs["station_id"][0]
-    )
-
-
-def test_align_point_obs_from_gridded_all_empty():
-    # Test with empty inputs
-    forecast, obs = utils.align_point_obs_from_gridded(
-        xr.Dataset(),  # invalid forecast
-        pd.DataFrame(),  # empty dataframe
-        [],  # empty data vars
-    )
-    assert isinstance(forecast, xr.Dataset)
-    assert isinstance(obs, xr.Dataset)
-    assert len(forecast.data_vars) == 0
-    assert len(obs.data_vars) == 0
-
-
-def test_align_point_obs_from_gridded_empty_point_obs(
-    sample_forecast_dataarray, sample_point_obs_df_with_attrs
-):
-    """Test behavior when point observations are empty."""
-    # Create an empty DataFrame with the same columns as the sample
-    empty_df = pd.DataFrame(
-        columns=[
-            "station_id",
-            "station_long_name",
-            "latitude",
-            "longitude",
-            "elevation",
-            "surface_air_temperature",
-            "surface_air_pressure",
-            "air_pressure_at_mean_sea_level",
-            "accumulated_1_hour_precipitation",
-            "surface_wind_speed",
-            "surface_wind_from_direction",
-            "surface_dew_point_temperature",
-            "surface_relative_humidity",
-            "hour_dist",
-            "time",
-            "case_id",
-        ]
-    )
-    # Add metadata attributes to match the sample
-    empty_df.attrs = sample_point_obs_df_with_attrs.attrs
-
-    data_var = ["surface_air_temperature"]
-
-    # Test with empty observations
-    forecast, obs = utils.align_point_obs_from_gridded(
-        sample_forecast_dataarray, empty_df, data_var
-    )
-
-    # Should return empty datasets
-    assert isinstance(forecast, xr.Dataset)
-    assert isinstance(obs, xr.Dataset)
-    assert len(forecast.data_vars) == 0
-    assert len(obs.data_vars) == 0
-
-    # Set timestamp to match forecast
-
-
-def test_align_point_obs_from_gridded_vars_empty_forecast(
-    sample_point_obs_df_with_attrs,
-):
-    """Test behavior when point observations have variables not in the forecast."""
-    # Create a dataframe with variables not in the forecast
-    data_var = [
-        "surface_air_temperature",
-        "surface_air_pressure",
-        "air_pressure_at_mean_sea_level",
-        "accumulated_1_hour_precipitation",
-        "surface_wind_speed",
-        "surface_wind_from_direction",
-        "surface_dew_point_temperature",
-    ]
-
-    empty_forecast = xr.Dataset()
-    # If the forecast is empty, the function should raise a KeyError
-    # there should have been an exception raised well before this point in this case
-    with pytest.raises(KeyError):
-        forecast, obs = utils.align_point_obs_from_gridded(
-            empty_forecast, sample_point_obs_df_with_attrs, data_var
-        )
-
-
-def test_location_subset_point_obs():
-    # Create sample data
-    df = pd.DataFrame(
-        {
-            "latitude": [0, 1, 2, 3, 4],
-            "longitude": [0, 1, 2, 3, 4],
-            "value": ["a", "b", "c", "d", "e"],
+def test_derive_indices_from_init_time_and_lead_time():
+    """Test deriving indices from init_time and lead_time coordinates."""
+    # Create test dataset
+    ds = xr.Dataset(
+        coords={
+            "init_time": pd.date_range("2020-01-01", "2020-01-03", freq="D"),
+            "lead_time": [0, 24, 48],  # hours
         }
     )
 
-    # Test bounds
-    result = utils.location_subset_point_obs(
-        df, min_lat=1, max_lat=3, min_lon=1, max_lon=3
+    start_date = datetime.datetime(2020, 1, 1)
+    end_date = datetime.datetime(2020, 1, 4)
+
+    indices = utils.derive_indices_from_init_time_and_lead_time(
+        ds, start_date, end_date
     )
-    assert len(result) == 3
-    assert all(result["value"] == ["b", "c", "d"])
-    assert all((result["latitude"] >= 1) & (result["latitude"] <= 3))
-    assert all((result["longitude"] >= 1) & (result["longitude"] <= 3))
 
-    # Test empty result
-    result = utils.location_subset_point_obs(
-        df, min_lat=10, max_lat=20, min_lon=10, max_lon=20
+    # Should return tuple of arrays (init_time_indices, lead_time_indices)
+    assert isinstance(indices, tuple)
+    assert len(indices) == 2
+    assert isinstance(indices[0], np.ndarray)
+    assert isinstance(indices[1], np.ndarray)
+
+
+def test_default_preprocess():
+    """Test default preprocess function."""
+    # Test with xarray Dataset
+    ds = xr.Dataset({"temp": (["x"], [1, 2, 3])})
+    result = utils._default_preprocess(ds)
+    assert result is ds  # Should return the same object unchanged
+
+    # Test with pandas DataFrame
+    df = pd.DataFrame({"a": [1, 2, 3]})
+    result_df = utils._default_preprocess(df)
+    assert result_df is df
+
+
+def test_filter_kwargs_for_callable():
+    """Test filtering kwargs to match callable signature."""
+
+    # Define test function
+    def test_func(a, b, c=None):
+        return a + b
+
+    # Test with matching kwargs
+    kwargs = {"a": 1, "b": 2, "c": 3, "d": 4}  # d should be filtered out
+    filtered = utils.filter_kwargs_for_callable(kwargs, test_func)
+
+    expected = {"a": 1, "b": 2, "c": 3}
+    assert filtered == expected
+
+    # Test with method (bound method)
+    class TestClass:
+        def method(self, x, y):
+            return x + y
+
+    obj = TestClass()
+    kwargs_method = {"x": 1, "y": 2, "z": 3}  # z should be filtered out
+    filtered_method = utils.filter_kwargs_for_callable(kwargs_method, obj.method)
+
+    # Bound methods already have 'self' excluded from signature
+    expected_method = {"x": 1, "y": 2}
+    assert filtered_method == expected_method
+
+
+def test_min_if_all_timesteps_present():
+    """Test returning minimum if all timesteps are present."""
+    # Test with complete timesteps
+    da_complete = xr.DataArray([1, 2, 3, 4], dims=["time"])
+    result_complete = utils.min_if_all_timesteps_present(da_complete, 4)
+
+    # Should return minimum value
+    assert result_complete.values == 1
+
+    # Test with incomplete timesteps
+    da_incomplete = xr.DataArray([1, 2, 3], dims=["time"])
+    result_incomplete = utils.min_if_all_timesteps_present(da_incomplete, 4)
+
+    # Should return NaN
+    assert np.isnan(result_incomplete.values)
+
+
+def test_min_if_all_timesteps_present_forecast():
+    """Test returning minimum for forecast with valid_time dimension."""
+    # Test with complete timesteps
+    da_complete = xr.DataArray(
+        [[1, 2, 3], [4, 5, 6]],
+        dims=["lead_time", "valid_time"],
+        coords={"lead_time": [0, 6], "valid_time": [0, 1, 2]},
     )
-    assert len(result) == 0
+    result_complete = utils.min_if_all_timesteps_present_forecast(da_complete, 3)
+
+    # Should return minimum along valid_time dimension
+    expected = xr.DataArray([1, 4], dims=["lead_time"], coords={"lead_time": [0, 6]})
+    xr.testing.assert_equal(result_complete, expected)
+
+    # Test with incomplete timesteps
+    da_incomplete = xr.DataArray(
+        [[1, 2], [4, 5]],
+        dims=["lead_time", "valid_time"],
+        coords={"lead_time": [0, 6], "valid_time": [0, 1]},
+    )
+    result_incomplete = utils.min_if_all_timesteps_present_forecast(da_incomplete, 3)
+
+    # Should return NaN array with same lead_time dimension
+    assert len(result_incomplete.lead_time) == 2
+    assert np.all(np.isnan(result_incomplete.values))
 
 
-def test_maybe_convert_to_path():
-    """Test the maybe_convert_to_path function with various inputs."""
-    # Test local filesystem paths
-    assert isinstance(utils.maybe_convert_to_path("./data"), Path)
-    assert isinstance(utils.maybe_convert_to_path("/absolute/path"), Path)
-    assert isinstance(utils.maybe_convert_to_path("relative/path"), Path)
-    assert isinstance(utils.maybe_convert_to_path("~/home/path"), Path)
+def test_determine_timesteps_per_day_resolution():
+    """Test determining timesteps per day resolution."""
+    # Create dataset with 6-hourly data (4 timesteps per day)
+    times = pd.date_range("2020-01-01", "2020-01-02", freq="6h")[:-1]  # 4 timesteps
+    ds = xr.Dataset(
+        data_vars={"temp": (["valid_time"], [1, 2, 3, 4])}, coords={"valid_time": times}
+    )
 
-    # Test URLs and cloud storage paths (should remain strings)
-    assert isinstance(utils.maybe_convert_to_path("http://example.com"), str)
-    assert isinstance(utils.maybe_convert_to_path("https://example.com"), str)
-    assert isinstance(utils.maybe_convert_to_path("s3://bucket/path"), str)
-    assert isinstance(utils.maybe_convert_to_path("gs://bucket/path"), str)
+    result = utils.determine_timesteps_per_day_resolution(ds)
+    assert result == 4
 
-    # Test existing Path objects (should remain unchanged)
-    path_obj = Path("./data")
-    result = utils.maybe_convert_to_path(path_obj)
-    assert isinstance(result, Path)
-    assert result == path_obj
+    # Test with hourly data (24 timesteps per day)
+    times_hourly = pd.date_range("2020-01-01", "2020-01-02", freq="1h")[:-1]
+    ds_hourly = xr.Dataset(
+        data_vars={"temp": (["valid_time"], range(24))},
+        coords={"valid_time": times_hourly},
+    )
 
-    # Test edge cases
-    assert isinstance(utils.maybe_convert_to_path("file:///path"), Path)  # File URL
+    result_hourly = utils.determine_timesteps_per_day_resolution(ds_hourly)
+    assert result_hourly == 24
+
+
+def test_convert_init_time_to_valid_time():
+    """Test converting init_time coordinate to valid_time."""
+    # Create test dataset
+    ds = xr.Dataset(
+        data_vars={"temp": (["init_time", "lead_time"], [[1, 2], [3, 4]])},
+        coords={
+            "init_time": pd.date_range("2020-01-01", periods=2, freq="D"),
+            "lead_time": [0, 24],  # hours
+        },
+    )
+
+    result = utils.convert_init_time_to_valid_time(ds)
+
+    # Should have valid_time coordinate
+    assert "valid_time" in result.coords
+    # Should maintain lead_time dimension
+    assert "lead_time" in result.dims
+    # Should have swapped init_time for valid_time in the primary dimension
+    assert "init_time" not in result.dims or "valid_time" in result.dims
