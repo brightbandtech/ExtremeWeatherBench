@@ -925,6 +925,7 @@ def align_forecast_to_point_obs_target(
     time_aligned_forecast_data = time_aligned_forecast_data.interp(
         latitude=lats, longitude=lons, method="nearest"
     )
+    # TODO: improve performance on chunks here (PerformanceWarning)
     time_aligned_forecast_data = time_aligned_forecast_data.set_index(
         location=("latitude", "longitude")
     ).unstack("location")
