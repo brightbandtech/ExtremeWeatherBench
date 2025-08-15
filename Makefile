@@ -15,10 +15,10 @@ help:
 	@echo "  make default            - Run the CLI with --default mode"
 	@echo ""
 	@echo "Testing:"
-	@echo "  make test               - Run basic test with default mode"
-	@echo "  make test-config        - Test with custom config file"
-	@echo "  make test-parallel      - Test with parallel execution (4 jobs)"
-	@echo "  make test-cache         - Test with caching enabled"
+	@echo "  make test               - Run basic test with default mode (includes --precompute)"
+	@echo "  make test-config        - Test with custom config file (includes --precompute)"
+	@echo "  make test-parallel      - Test with parallel execution (4 jobs + --precompute)"
+	@echo "  make test-cache         - Test with caching enabled (includes --precompute)"
 	@echo "  make all-tests          - Run all test scenarios"
 	@echo ""
 	@echo "Development:"
@@ -46,7 +46,7 @@ default:
 # Testing targets
 test:
 	@echo "Running basic test with default configuration..."
-	$(CLI) --default --output-dir $(OUTPUT_DIR)/test
+	$(CLI) --default --precompute --output-dir $(OUTPUT_DIR)/test
 	@if [ -f $(OUTPUT_DIR)/test/evaluation_results.csv ]; then \
 		echo "✓ Test passed: Output file created at $(OUTPUT_DIR)/test/evaluation_results.csv"; \
 		ls -la $(OUTPUT_DIR)/test/; \
@@ -57,7 +57,7 @@ test:
 
 test-config:
 	@echo "Testing with custom config file..."
-	$(CLI) --config-file $(TEST_CONFIG) --output-dir $(OUTPUT_DIR)/config-test
+	$(CLI) --config-file $(TEST_CONFIG) --precompute --output-dir $(OUTPUT_DIR)/config-test
 	@if [ -f $(OUTPUT_DIR)/config-test/evaluation_results.csv ]; then \
 		echo "✓ Config test passed: Output file created"; \
 	else \
@@ -67,7 +67,7 @@ test-config:
 
 test-parallel:
 	@echo "Testing with parallel execution (4 jobs)..."
-	$(CLI) --default --parallel 4 --output-dir $(OUTPUT_DIR)/parallel-test
+	$(CLI) --default --parallel 4 --precompute --output-dir $(OUTPUT_DIR)/parallel-test
 	@if [ -f $(OUTPUT_DIR)/parallel-test/evaluation_results.csv ]; then \
 		echo "✓ Parallel test passed: Output file created"; \
 	else \
@@ -77,7 +77,7 @@ test-parallel:
 
 test-cache:
 	@echo "Testing with caching enabled..."
-	$(CLI) --default --cache-dir $(OUTPUT_DIR)/cache --output-dir $(OUTPUT_DIR)/cache-test
+	$(CLI) --default --precompute --cache-dir $(OUTPUT_DIR)/cache --output-dir $(OUTPUT_DIR)/cache-test
 	@if [ -f $(OUTPUT_DIR)/cache-test/evaluation_results.csv ]; then \
 		echo "✓ Cache test passed: Output file created"; \
 		if [ -d $(OUTPUT_DIR)/cache ]; then \
@@ -90,7 +90,7 @@ test-cache:
 
 test-save-operators:
 	@echo "Testing case operator saving..."
-	$(CLI) --default --save-case-operators $(OUTPUT_DIR)/case_operators.pkl --output-dir $(OUTPUT_DIR)/save-test
+	$(CLI) --default --precompute --save-case-operators $(OUTPUT_DIR)/case_operators.pkl --output-dir $(OUTPUT_DIR)/save-test
 	@if [ -f $(OUTPUT_DIR)/case_operators.pkl ]; then \
 		echo "✓ Case operators saved successfully"; \
 	else \

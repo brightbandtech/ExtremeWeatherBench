@@ -45,6 +45,14 @@ from extremeweatherbench.evaluate import ExtremeWeatherBench, compute_case_opera
     type=click.Path(),
     help="Save CaseOperator objects to a pickle file at this path",
 )
+@click.option(
+    "--precompute",
+    is_flag=True,
+    help=(
+        "Pre-compute datasets to avoid recomputing them for each metric (faster but "
+        "uses more memory)"
+    ),
+)
 def cli_runner(
     default: bool,
     config_file: Optional[str],
@@ -52,6 +60,7 @@ def cli_runner(
     cache_dir: Optional[str],
     parallel: int,
     save_case_operators: Optional[str],
+    precompute: bool,
 ):
     """ExtremeWeatherBench command line interface.
 
@@ -79,6 +88,9 @@ def cli_runner(
 
         # Use custom output and cache directories
         $ ewb --default --output-dir ./results --cache-dir ./cache
+
+        # Use precompute for faster execution (higher memory usage)
+        $ ewb --default --precompute
     """
     # Set default output directory to current working directory
     if output_dir is None:
@@ -126,10 +138,12 @@ def cli_runner(
     # Run evaluation
     if parallel > 1:
         click.echo(f"Running evaluation with {parallel} parallel jobs...")
-        results = _run_parallel_evaluation(case_operators, parallel)
+        results = _run_parallel_evaluation(
+            case_operators, parallel, precompute=precompute
+        )
     else:
         click.echo("Running evaluation in serial...")
-        results = ewb.run()
+        results = ewb.run(pre_compute=precompute)
 
     # Save results
     output_file = output_path / "evaluation_results.csv"
@@ -175,10 +189,13 @@ def _load_config_file(config_path: str) -> tuple:
     return config_module.evaluation_objects, config_module.cases_dict
 
 
-def _run_parallel_evaluation(case_operators, n_jobs: int) -> pd.DataFrame:
+def _run_parallel_evaluation(
+    case_operators, n_jobs: int, precompute: bool = False
+) -> pd.DataFrame:
     """Run case operators in parallel using joblib."""
     results = Parallel(n_jobs=n_jobs)(
-        delayed(compute_case_operator)(case_op) for case_op in case_operators
+        delayed(compute_case_operator)(case_op, pre_compute=precompute)
+        for case_op in case_operators
     )
 
     # Filter out None results and concatenate
