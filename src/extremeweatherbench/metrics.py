@@ -91,18 +91,22 @@ class AppliedMetric(ABC):
     ) -> Any:
         # TODO: build a spatial dim/time dim separator to allow for spatial and temporal
         # metrics to be computed separately
-        return self.base_metric._compute_metric(
-            **self._compute_applied_metric(
-                forecast,
-                target,
-                **utils.filter_kwargs_for_callable(
-                    kwargs, self._compute_applied_metric
-                ),
-            ),
-            **utils.filter_kwargs_for_callable(
-                kwargs, self.base_metric._compute_metric
-            ),
+
+        # Filter kwargs for each method
+        applied_metric_kwargs = utils.filter_kwargs_for_callable(
+            kwargs, self._compute_applied_metric
         )
+        base_metric_kwargs = utils.filter_kwargs_for_callable(
+            kwargs, self.base_metric._compute_metric
+        )
+
+        # Compute the applied metric first
+        applied_result = self._compute_applied_metric(
+            forecast, target, **applied_metric_kwargs
+        )
+
+        # Then compute the base metric with the applied result
+        return self.base_metric._compute_metric(**applied_result, **base_metric_kwargs)
 
     @abstractmethod
     def _compute_applied_metric(
