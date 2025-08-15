@@ -38,14 +38,19 @@ def sparse_practically_perfect_hindcast(
     # 1 is wind, 2 is hail, 3 is tornado
     sigma: float = 3,
 ) -> xr.Dataset:
-    """Compute the Practically Perfect Hindcast (PPH) using storm report data using latitude/longitude grid spacing
-    instead of the NCEP 212 Eta Lambert Conformal projection; based on the method described in Hitchens et al 2013,
+    """Compute the Practically Perfect Hindcast (PPH) using storm report data
+    using latitude/longitude grid spacing instead of the NCEP 212 Eta Lambert
+    Conformal projection; based on the method described in Hitchens et al 2013,
     https://doi.org/10.1175/WAF-D-12-00113.1
 
     Args:
-        ds: An xarray Dataset containing the storm report data as a sparse (COO) array.
-        resolution: The resolution of the grid in degrees to use. Default is 0.25 degrees.
-        sigma: The standard deviation of the gaussian filter to use. Default is 1.5.
+        ds: An xarray Dataset containing the storm report data as a sparse
+            (COO) array.
+        resolution: The resolution of the grid in degrees to use. Default is
+            0.25 degrees.
+        sigma: The standard deviation of the gaussian filter to use. Default
+            is 1.5.
+
     Returns:
         pph: An xarray Dataset containing the PPH and storm report data.
     """
@@ -196,7 +201,8 @@ pph_sparse
 
 # %%
 # pph_sparse = [
-# sparse_practically_perfect_hindcast(lsr_ds['report_type'].sel(valid_time=time)) for time in tqdm(unique_valid_times)
+#     sparse_practically_perfect_hindcast(lsr_ds['report_type'].sel(valid_time=time))
+#     for time in tqdm(unique_valid_times)
 # ]
 # pph_sparse = xr.concat(pph_sparse, unique_valid_times, name='valid_time')
 # pph_sparse

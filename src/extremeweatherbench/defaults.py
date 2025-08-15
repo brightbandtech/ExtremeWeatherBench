@@ -38,8 +38,10 @@ era5_freeze_target = inputs.ERA5(
 #         "u_component_of_wind": "eastward_wind",
 #         "v_component_of_wind": "northward_wind",
 #         "temperature": "air_temperature",
-#         "vertical_integral_of_northward_water_vapour_flux": "northward_water_vapour_flux",
-#         "vertical_integral_of_eastward_water_vapour_flux": "eastward_water_vapour_flux",
+#         "vertical_integral_of_northward_water_vapour_flux":
+#             "northward_water_vapour_flux",
+#         "vertical_integral_of_eastward_water_vapour_flux":
+#             "eastward_water_vapour_flux",
 #     },
 #     storage_options={"remote_options": {"anon": True}},
 # )
@@ -132,8 +134,10 @@ cira_freeze_forecast = inputs.KerchunkForecast(
 #         "v_component_of_wind": "northward_wind",
 #         "specific_humidity": "specific_humidity",
 #         "temperature": "air_temperature",
-#         "vertical_integral_of_northward_water_vapour_flux": "northward_water_vapour_flux",
-#         "vertical_integral_of_eastward_water_vapour_flux": "eastward_water_vapour_flux",
+#         "vertical_integral_of_northward_water_vapour_flux":
+#             "northward_water_vapour_flux",
+#         "vertical_integral_of_eastward_water_vapour_flux":
+#             "eastward_water_vapour_flux",
 #     },
 #     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
 # )

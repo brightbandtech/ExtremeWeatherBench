@@ -32,8 +32,8 @@ def runner():
 def temp_config_dir():
     """Create a temporary directory for config files and test outputs.
 
-    This ensures all test files are created in temporary directories
-    and automatically cleaned up after each test.
+    This ensures all test files are created in temporary directories and automatically
+    cleaned up after each test.
     """
     with tempfile.TemporaryDirectory() as temp_dir:
         yield Path(temp_dir)

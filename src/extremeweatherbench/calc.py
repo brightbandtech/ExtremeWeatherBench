@@ -33,9 +33,7 @@ class TCTracks:
     track: list[TC]
 
     def plot(self, ax: plt.Axes, *args, **kwargs):
-        """
-        Plot the TCTrack line on the given axes.
-        """
+        """Plot the TCTrack line on the given axes."""
         # Extract lat/lon coordinates from track
         lats = [tc.coordinate.latitude for tc in self.track]
         lons = [tc.coordinate.longitude for tc in self.track]
@@ -72,7 +70,8 @@ def find_furthest_contour_from_point(
     """Find the two points in a contour that are furthest apart.
 
     From
-    https://stackoverflow.com/questions/50468643/finding-two-most-far-away-points-in-plot-with-many-points-in-python
+    https://stackoverflow.com/questions/50468643/finding-two-most-far-away-points-
+    in-plot-with-many-points-in-python
 
     Args:
         contour: The contour to find the furthest point from.
@@ -101,14 +100,18 @@ def find_furthest_contour_from_point(
 def convert_from_cartesian_to_latlon(
     input_point: Union[np.ndarray, tuple[float, float]], ds_mapping: xr.Dataset
 ) -> tuple[float, float]:
-    """Convert a point from the cartesian coordinate system to the lat/lon coordinate system.
+    """Convert a point from the cartesian coordinate system to the lat/lon coordinate
+    system.
 
     Args:
-        input_point: The point to convert, represented as a tuple (y, x) in the cartesian coordinate system.
-        ds_mapping: The dataset containing the latitude and longitude coordinates.
+        input_point: The point to convert, represented as a tuple (y, x) in the
+            cartesian coordinate system.
+        ds_mapping: The dataset containing the latitude and longitude
+            coordinates.
 
     Returns:
-        The point in the lat/lon coordinate system, represented as a tuple (latitude, longitude) in degrees.
+        The point in the lat/lon coordinate system, represented as a tuple
+        (latitude, longitude) in degrees.
     """
     return (
         ds_mapping.isel(
@@ -126,8 +129,10 @@ def calculate_haversine_degree_distance(
     """Calculate the great-circle distance between two points on the Earth's surface.
 
     Args:
-        input_a: The first point, represented as an ndarray of shape (2,n) in degrees lat/lon.
-        input_b: The second point(s), represented as an ndarray of shape (2,n) in degrees lat/lon.
+        input_a: The first point, represented as an ndarray of shape (2,n) in
+            degrees lat/lon.
+        input_b: The second point(s), represented as an ndarray of shape (2,n)
+            in degrees lat/lon.
 
     Returns:
         The great-circle distance between the two points in kilometers.
@@ -181,7 +186,8 @@ def find_contours_from_point_specified_field(
 
     Args:
         field: The field to find the contours from.
-        point: The point at which the field is subtracted from to find the anomaly contours.
+        point: The point at which the field is subtracted from to find the
+            anomaly contours.
         level: The anomaly level to find the contours at.
 
     Returns:
@@ -235,9 +241,11 @@ def find_valid_candidates(
 ) -> Optional[Location]:
     """Find valid candidate coordinate for a TC.
 
-    Defaults use the TempestExtremes criteria for TC track detection, where the slp must increase by at least n hPa
-    within 5.5 great circle degrees from the center point, geopotential thickness must increase by at least m meters
-    within 6.5 great circle degrees from the center point, and the terrain must be less than 150m.
+    Defaults use the TempestExtremes criteria for TC track detection, where the
+    slp must increase by at least n hPa within 5.5 great circle degrees from
+    the center point, geopotential thickness must increase by at least m meters
+    within 6.5 great circle degrees from the center point, and the terrain must
+    be less than 150m.
 
     Args:
         slp_contours: List of SLP contours.
@@ -245,12 +253,15 @@ def find_valid_candidates(
         point: The point to find the valid candidate for.
         ds_mapping: The xarray dataset to map the point to.
         time_counter: The time counter.
-        max_gc_distance_slp_contour: The maximum great circle distance for the SLP contour.
-        max_gc_distance_dz_contour: The maximum great circle distance for the DZ contour.
+        max_gc_distance_slp_contour: The maximum great circle distance for the
+            SLP contour.
+        max_gc_distance_dz_contour: The maximum great circle distance for the
+            DZ contour.
         orography_filter_threshold: The threshold for the orography filter.
 
     Returns:
-        The valid candidate coordinate as a dict of timestamp and tuple of latitude and longitude.
+        The valid candidate coordinate as a dict of timestamp and tuple of
+        latitude and longitude.
     """
     latitude = convert_from_cartesian_to_latlon(point, ds_mapping)[0]
     longitude = convert_from_cartesian_to_latlon(point, ds_mapping)[1]
@@ -295,7 +306,8 @@ def create_tctracks(tcs: list[TC]) -> list[TCTracks]:
     2. Within 8 great circle degrees of the previous timestep
     3. Within 54 hours of the previous timestep
 
-    Parameters from TempestExtremes: https://gmd.copernicus.org/articles/14/5023/2021/#section3
+    Parameters from TempestExtremes:
+    https://gmd.copernicus.org/articles/14/5023/2021/#section3
     Args:
         tcs: List of TC objects.
 
@@ -354,7 +366,6 @@ def create_tctracks_from_dataset(
 ):
     """Create TCTracks from a cyclone dataset.
 
-
     Args:
         cyclone_dataset: The cyclone dataset.
         slp_contour_magnitude: The SLP contour magnitude.
@@ -384,7 +395,8 @@ def create_tctracks_from_dataset(
             candidate_slp_points = peak_local_max(
                 -(slp_time.values),
                 min_distance=min_distance,
-                # exclude_border=0 required as points <= min_distance from border are not included
+                # exclude_border=0 required as points <= min_distance from border are
+                # not included
                 exclude_border=0,
             )
             for point in candidate_slp_points:
@@ -427,7 +439,8 @@ def create_tctracks_from_dataset(
 
 
 def tctracks_to_3d_dataset(tctracks: list[TCTracks]) -> xr.Dataset:
-    """Convert list of TCTracks objects to 3D xarray Dataset with time, latitude, and longitude dimensions.
+    """Convert list of TCTracks objects to 3D xarray Dataset with time, latitude, and
+    longitude dimensions.
 
     Args:
         tctracks: List of TCTracks objects.
@@ -558,29 +571,6 @@ def calculate_wind_speed(ds: xr.Dataset) -> xr.DataArray:
         raise ValueError("No suitable wind speed variables found in dataset")
 
 
-def subset_variable_and_maybe_levels(
-    ds: xr.Dataset,
-    var_name: str,
-    level_name: str = "level",
-    level_value: Optional[int | Sequence[int]] = None,
-) -> xr.DataArray:
-    """Subset a variable and its levels from an xarray dataset.
-
-    Args:
-        ds: The xarray dataset to subset.
-        var_name: The name of the variable to subset.
-        level_name: The name of the level to subset.
-        level_value: The value of the level to subset.
-
-    Returns:
-        The subsetted variable as an xarray DataArray.
-    """
-    if level_value is None:
-        return ds[var_name]
-    else:
-        return ds[var_name].sel({level_name: level_value})
-
-
 def generate_geopotential_thickness(
     ds: xr.Dataset,
     var_name: str = "geopotential",
@@ -594,21 +584,16 @@ def generate_geopotential_thickness(
         ds: The xarray dataset to generate the geopotential thickness from.
         var_name: The name of the variable to generate the geopotential thickness from.
         level_name: The name of the level to generate the geopotential thickness from.
-        top_level_value: The value of the top level to generate the geopotential thickness from.
-        bottom_level_value: The value of the bottom level to generate the geopotential thickness from.
+        top_level_value: The value of the top level to generate the geopotential
+            thickness from.
+        bottom_level_value: The value of the bottom level to generate the
+            geopotential thickness from.
 
     Returns:
         The geopotential thickness as an xarray DataArray.
     """
-    geopotential_heights = subset_variable_and_maybe_levels(
-        ds=ds, var_name=var_name, level_name=level_name, level_value=top_level_value
-    )
-    geopotential_height_bottom = subset_variable_and_maybe_levels(
-        ds=ds,
-        var_name=var_name,
-        level_name=level_name,
-        level_value=bottom_level_value,
-    )
+    geopotential_heights = ds[var_name].sel({level_name: top_level_value})
+    geopotential_height_bottom = ds[var_name].sel({level_name: bottom_level_value})
     geopotential_thickness = (
         geopotential_heights - geopotential_height_bottom
     ) / 9.80665
@@ -630,9 +615,7 @@ def generate_tc_variables(ds: xr.Dataset) -> xr.Dataset:
 
     output = xr.Dataset(
         {
-            "air_pressure_at_mean_sea_level": subset_variable_and_maybe_levels(
-                ds, var_name="air_pressure_at_mean_sea_level"
-            ),
+            "air_pressure_at_mean_sea_level": ds["air_pressure_at_mean_sea_level"],
             "geopotential_thickness": generate_geopotential_thickness(
                 ds, top_level_value=300, bottom_level_value=500
             ),
@@ -649,8 +632,7 @@ def nantrapezoid(
     dx: float = 1.0,
     axis: int = -1,
 ):
-    """
-    Trapezoid rule for arrays with nans.
+    """Trapezoid rule for arrays with nans.
 
     Identical to np.trapezoid but with nans handled correctly in the summation.
     """

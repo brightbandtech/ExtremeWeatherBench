@@ -1,5 +1,6 @@
 # %%
-# !uv pip install numpy aiohttp asyncio nest_asyncio distributed tqdm xarray geopy h5py pyarrow
+# !uv pip install numpy aiohttp asyncio nest_asyncio distributed tqdm xarray
+# !uv pip install geopy h5py pyarrow
 # !uv pip install git+https://github.com/brightbandtech/ExtremeWeatherBench.git
 # !uv pip install git+https://github.com/fsspec/kerchunk
 # !uv pip install ipywidgets
@@ -59,12 +60,10 @@ def subset_stations_by_lat_lon_box(df, min_lat, max_lat, min_lon, max_lon):
 
 
 def aggregate_to_hourly(data):
-    """
-    Aggregate rows that represent same hour to one row
-    Order the rows from same hour by difference from the top of the hour,
-    then use ffill at each hour to get the nearest valid values for each variable
-    Specifically, For t/td, avoid combining two records from different rows together
-    """
+    """Aggregate rows that represent same hour to one row Order the rows from same hour
+    by difference from the top of the hour, then use ffill at each hour to get the
+    nearest valid values for each variable Specifically, For t/td, avoid combining two
+    records from different rows together."""
     data["hour"] = data["DATE"].dt.round("h")
     # Sort data by difference from the top of the hour so that bfill can be applied
     # to give priority to the closer records
@@ -72,7 +71,8 @@ def aggregate_to_hourly(data):
     data = data.sort_values(["hour", "hour_dist"])
 
     if data["hour"].duplicated().any():
-        # For same hour, fill NaNs at the first row in the order of difference from the top of the hour
+        # For same hour, fill NaNs at the first row in the order of difference from the
+        # top of the hour
         data = data.groupby("hour").apply(
             lambda df: df.bfill().iloc[0], include_groups=False
         )
@@ -84,9 +84,7 @@ def aggregate_to_hourly(data):
 def location_translation(
     location: dict, degrees: Optional[float] = None
 ) -> BoundingBox:
-    """
-    Translate the location dictionary to a BoundingBox object
-    """
+    """Translate the location dictionary to a BoundingBox object."""
     # Handle new YAML format with type and parameters
     if "type" in location and "parameters" in location:
         region = map_to_create_region(location)
@@ -157,10 +155,8 @@ async def download_file_async(session, station, url, output_dir, overwrite=False
 
 
 async def download_async(case_stations_dict, output_dir, overwrite=False):
-    """
-    Download the data from the source for the stations in station_list.
-    """
-    URL_DATA = "https://www.ncei.noaa.gov/oa/global-historical-climatology-network/hourly/access/by-year"
+    """Download the data from the source for the stations in station_list."""
+    URL_DATA = "https://www.ncei.noaa.gov/oa/global-historical-climatology-network/hourly/access/by-year"  # noqa: E501
 
     async with aiohttp.ClientSession() as session:
         tasks = []
@@ -290,7 +286,8 @@ def main():
         max_lon = bounding_box.max_lon
 
         if min_lon > max_lon:
-            # Ensure max_lon is always the larger value and account for cyclic nature of lon
+            # Ensure max_lon is always the larger value and account for
+            # cyclic nature of lon
             min_lon, max_lon = max_lon, min_lon
         # Filter stations within bounding box
         stations_in_box = subset_stations_by_lat_lon_box(
@@ -346,7 +343,6 @@ def main():
     # Filter out None results and extend df_list
     df_list.extend([df for df in results if df is not None])
 
-    # %%
     # Set up parallel processing with progress bar
     n_jobs = -1  # Use all available cores
     results = Parallel(n_jobs=n_jobs, verbose=1)(
@@ -355,22 +351,15 @@ def main():
 
     # Concatenate the results
     datasets_df_new = pd.concat(results, ignore_index=True)
-
-    # %%
     datasets_df_new.to_parquet("interim_ghcnh_20250630.parq")
-
-    # %%
     datasets_df_new = pd.read_parquet("interim_ghcnh.parq")
     datasets_df_new
-
-    # %%
     # Extract 'member0' values from dictionaries in 'relative_humidity' column
     mask = datasets_df_new["relative_humidity"].apply(lambda x: isinstance(x, dict))
     datasets_df_new.loc[mask, "relative_humidity"] = datasets_df_new.loc[
         mask, "relative_humidity"
     ].apply(lambda x: x.get("member0"))
 
-    # %%
     datasets_df_new = datasets_df_new.rename(
         columns={
             "temperature": "surface_air_temperature",
@@ -390,9 +379,7 @@ def main():
         }
     ).drop(["DATE", "hour"], axis=1)
 
-    # %%
     datasets_df_new.to_parquet("ghcnh_20250630.parq")
-    # %%
     # # for parquets
     # datasets_df_new.rename(columns={'temperature': 'surface_air_temperature',
     # 'dew_point_temperature': 'surface_dew_point',
@@ -402,7 +389,8 @@ def main():
     # 'sea_level_pressure': 'air_pressure_at_mean_sea_level',
     # 'c': 'cloud_area_fraction',
     # 'relative_humidity': 'surface_relative_humidity',
-    # 'precipitation': 'accumulated_1_hour_precipitation',}).drop(['DATE','hour'],axis=1).to_parquet('ghcnh.parq')
+    # 'precipitation': 'accumulated_1_hour_precipitation',}
+    # ).drop(['DATE','hour'],axis=1).to_parquet('ghcnh.parq')
 
     # for psvs
     datasets_df_new.rename(

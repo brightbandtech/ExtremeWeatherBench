@@ -8,25 +8,35 @@ from extremeweatherbench import calc
 
 
 class DerivedVariable(ABC):
-    """An abstract base class defining the interface for ExtremeWeatherBench derived variables.
+    """An abstract base class defining the interface for ExtremeWeatherBench
+    derived variables.
 
-    A DerivedVariable is any variable that requires extra computation than what is provided in analysis
-    or forecast data. Some examples include the practically perfect hindcast, MLCAPE, IVT, or atmospheric river masks.
+    A DerivedVariable is any variable that requires extra computation than what
+    is provided in analysis or forecast data. Some examples include the
+    practically perfect hindcast, MLCAPE, IVT, or atmospheric river masks.
 
     Attributes:
-        name: The name that is used for applications of derived variables. Defaults to the class name.
-        required_variables: A list of variables that are used to build the variable.
-        build: A method that builds the variable from the required variables. Build is used specifically to distinguish
-        from the compute method in xarray, which eagerly processes the data and loads into memory; build is used to
-        lazily process the data and return a dataset that can be used later to compute the variable.
-        derive_variable: An abstract method that defines the computation to derive the variable from required_variables.
+        name: The name that is used for applications of derived variables.
+            Defaults to the class name.
+        required_variables: A list of variables that are used to build the
+            variable.
+        build: A method that builds the variable from the required variables.
+            Build is used specifically to distinguish from the compute method in
+            xarray, which eagerly processes the data and loads into memory;
+            build is used to lazily process the data and return a dataset that
+            can be used later to compute the variable.
+        derive_variable: An abstract method that defines the computation to
+            derive the variable from required_variables.
     """
 
     required_variables: List[str]
 
     @property
     def name(self) -> str:
-        """A name for the derived variable. Defaults to the class name."""
+        """A name for the derived variable.
+
+        Defaults to the class name.
+        """
         return self.__class__.__name__
 
     @classmethod
@@ -80,8 +90,10 @@ class AtmosphericRiverMask(DerivedVariable):
 
 # TODO: add the IVT calculations for ARs
 class IntegratedVaporTransport(DerivedVariable):
-    """Calculates the IVT (Integrated Vapor Transport) from a dataset,
-    using the method described in Newell et al. 1992 and elsewhere (e.g. Mo 2024).
+    """Calculates the IVT (Integrated Vapor Transport) from a dataset, using the method
+    described in Newell et al.
+
+    1992 and elsewhere (e.g. Mo 2024).
     """
 
     required_variables = [
@@ -106,7 +118,8 @@ class IntegratedVaporTransport(DerivedVariable):
                 calc.orography(data)
             )
 
-        # Find the axis corresponding to "level", assuming all variables have the same dimension order
+        # Find the axis corresponding to "level", assuming all variables have
+        # the same dimension order
         level_axis = list(data.dims).index("level")
 
         # TODO: REMOVE COMPUTE BEFORE MERGE, this is to speed up testing
@@ -208,7 +221,8 @@ class TCTrackVariables(DerivedVariable):
         # Prepare the data with wind variables as needed
         prepared_data = _prepare_wind_data(data)
 
-        # Generates the variables needed for the TC track calculation (geop. thickness, winds, temps, slp)
+        # Generates the variables needed for the TC track calculation
+        # (geop. thickness, winds, temps, slp)
         cyclone_dataset = calc.generate_tc_variables(prepared_data)
         tctracks = calc.create_tctracks_from_dataset(cyclone_dataset)
         tctracks_ds_3d = calc.tctracks_to_3d_dataset(tctracks)
@@ -221,14 +235,18 @@ def maybe_derive_variables(
 ) -> xr.Dataset:
     """Derive variables from the data if any exist in a list of variables.
 
-    Derived variables must maintain the same spatial dimensions as the original dataset.
+    Derived variables must maintain the same spatial dimensions as the original
+    dataset.
 
     Args:
-        ds: The dataset, ideally already subset in case of in memory operations in the derived variables.
-        variables: The potential variables to derive as a list of strings or DerivedVariable objects.
+        ds: The dataset, ideally already subset in case of in memory operations
+            in the derived variables.
+        variables: The potential variables to derive as a list of strings or
+            DerivedVariable objects.
 
     Returns:
-        A dataset with derived variables, if any exist, else the original dataset.
+        A dataset with derived variables, if any exist, else the original
+        dataset.
     """
 
     derived_variables = [v for v in variables if not isinstance(v, str)]
@@ -241,13 +259,15 @@ def maybe_derive_variables(
 def maybe_pull_required_variables_from_derived_input(
     incoming_variables: list[Union[str, DerivedVariable]],
 ) -> list[str]:
-    """Pull the required variables from a derived input and add to the list of variables to pull.
+    """Pull the required variables from a derived input and add to the list of
+    variables to pull.
 
     Args:
         incoming_variables: a list of string and/or derived variables.
 
     Returns:
-        A list of variables possibly including derived variables' required variables.
+        A list of variables possibly including derived variables' required
+        variables.
     """
     string_variables = [v for v in incoming_variables if isinstance(v, str)]
     derived_required_variables = []

@@ -1,5 +1,4 @@
-"""
-Comprehensive unit tests for the extremeweatherbench.derived module.
+"""Comprehensive unit tests for the extremeweatherbench.derived module.
 
 This test suite covers:
 - Abstract base class DerivedVariable

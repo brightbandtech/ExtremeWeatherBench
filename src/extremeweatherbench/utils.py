@@ -1,6 +1,5 @@
-"""Utility functions for the ExtremeWeatherBench package that don't fit into any
-other specialized package.
-"""
+"""Utility functions for the ExtremeWeatherBench package that don't fit into any other
+specialized package."""
 
 import datetime
 import inspect
@@ -33,7 +32,8 @@ def convert_longitude_to_180(
 ) -> float | Union[xr.Dataset, xr.DataArray]:
     """Convert a longitude from the range [0, 360) to [-180, 180).
 
-    Datasets are coerced to [-180, 180) and sorted by longitude."""
+    Datasets are coerced to [-180, 180) and sorted by longitude.
+    """
     if isinstance(longitude, xr.Dataset) or isinstance(longitude, xr.DataArray):
         longitude.coords[longitude_name] = (
             longitude.coords[longitude_name] + 180
@@ -84,7 +84,8 @@ def derive_indices_from_init_time_and_lead_time(
     start_date: datetime.datetime,
     end_date: datetime.datetime,
 ) -> tuple[np.ndarray[Any, Any], ...]:
-    """Derive the indices of valid times in a dataset when the dataset has init_time and lead_time coordinates.
+    """Derive the indices of valid times in a dataset when the dataset has init_time and
+    lead_time coordinates.
 
     Args:
         dataset: The dataset to derive the indices from.
@@ -176,7 +177,8 @@ def min_if_all_timesteps_present(
         da: The input DataArray.
 
     Returns:
-        The minimum value of the DataArray if all timesteps are present, otherwise the original DataArray.
+        The minimum value of the DataArray if all timesteps are present,
+        otherwise the original DataArray.
     """
     if len(da.values) == num_timesteps:
         return da.min()
@@ -187,14 +189,15 @@ def min_if_all_timesteps_present(
 def min_if_all_timesteps_present_forecast(
     da: xr.DataArray, num_timesteps
 ) -> xr.DataArray:
-    """Return the minimum value of a DataArray if all timesteps of a day are present given a dataset with lead_time and
-    valid_time dimensions.
+    """Return the minimum value of a DataArray if all timesteps of a day are present
+    given a dataset with lead_time and valid_time dimensions.
 
     Args:
         da: The input DataArray.
 
     Returns:
-        The minimum value of the DataArray if all timesteps are present, otherwise the original DataArray.
+        The minimum value of the DataArray if all timesteps are present,
+        otherwise the original DataArray.
     """
     if len(da.valid_time) == num_timesteps:
         return da.min("valid_time")

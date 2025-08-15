@@ -205,7 +205,8 @@ def make_sample_era5_dataset():
 
 
 def make_sample_forecast_with_valid_time():
-    """Create a forecast dataset with valid_time dimension instead of init_time/lead_time."""
+    """Create a forecast dataset with valid_time dimension instead of
+    init_time/lead_time."""
     valid_time = pd.date_range("2021-06-20", freq="6h", periods=40)
     data = np.random.RandomState(54321).standard_normal(size=(len(valid_time), 91, 180))
     latitudes = np.linspace(-90, 90, 91)

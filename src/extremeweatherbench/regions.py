@@ -25,14 +25,14 @@ class Region(ABC):
     @classmethod
     @abstractmethod
     def create_region(cls, *args, **kwargs) -> "Region":
-        """Abstract factory method to create a region;
-        subclasses must implement with their own, specialized arguments."""
+        """Abstract factory method to create a region; subclasses must implement with
+        their own, specialized arguments."""
         pass
 
     @property
     @abstractmethod
     def geopandas(self) -> gpd.GeoDataFrame:
-        """Return representation of this Region as a GeoDataFrame"""
+        """Return representation of this Region as a GeoDataFrame."""
         pass
 
     def mask(self, dataset: xr.Dataset, drop: bool = False) -> xr.Dataset:
@@ -56,12 +56,14 @@ class CenteredRegion(Region):
     """A region defined by a center point and a bounding box.
 
     bounding_box_degrees is the width (length) of one or all sides, not half size;
-    e.g., bounding_box_degrees=10.0 means a 10 degree by 10 degree box around the center point.
+    e.g., bounding_box_degrees=10.0 means a 10 degree by 10 degree box around
+    the center point.
 
     Attributes:
         latitude: Center latitude
         longitude: Center longitude
-        bounding_box_degrees: Size of bounding box in degrees or tuple of (lat_degrees, lon_degrees)
+        bounding_box_degrees: Size of bounding box in degrees or tuple of
+            (lat_degrees, lon_degrees)
     """
 
     def __repr__(self):
@@ -92,7 +94,7 @@ class CenteredRegion(Region):
 
     @property
     def geopandas(self) -> gpd.GeoDataFrame:
-        """Return representation of this Region as a GeoDataFrame"""
+        """Return representation of this Region as a GeoDataFrame."""
         if isinstance(self.bounding_box_degrees, tuple):
             bounding_box_degrees = tuple(self.bounding_box_degrees)
             latitude_min = self.latitude - bounding_box_degrees[0] / 2
@@ -158,7 +160,7 @@ class BoundingBoxRegion(Region):
 
     @property
     def geopandas(self) -> gpd.GeoDataFrame:
-        """Return representation of this Region as a GeoDataFrame"""
+        """Return representation of this Region as a GeoDataFrame."""
         return _create_geopandas_from_bounds(
             self.longitude_min, self.longitude_max, self.latitude_min, self.latitude_max
         )
@@ -188,7 +190,7 @@ class ShapefileRegion(Region):
 
     @property
     def geopandas(self) -> gpd.GeoDataFrame:
-        """Return representation of this Region as a GeoDataFrame"""
+        """Return representation of this Region as a GeoDataFrame."""
         try:
             return gpd.read_file(self.shapefile_path)
         except Exception as e:
@@ -207,7 +209,8 @@ REGION_TYPES: dict[str, Type[Region]] = {
 def map_to_create_region(region_input: Region | dict) -> Region:
     """Map a dictionary of keyword arguments to a Region object.
 
-    This is used to map the Region objects from the yaml file to the create_region function
+    This is used to map the Region objects from the yaml file to the
+    create_region function
     with dacite.from_dict and type_hooks.
 
     Args:
@@ -224,7 +227,8 @@ def map_to_create_region(region_input: Region | dict) -> Region:
 
     if region_type not in REGION_TYPES:
         raise KeyError(
-            f"Region type '{region_type}' not registered. Available types: {list(REGION_TYPES.keys())}"
+            f"Region type '{region_type}' not registered. Available types: "
+            f"{list(REGION_TYPES.keys())}"
         )
 
     region_class = REGION_TYPES[region_type]
@@ -260,7 +264,8 @@ def _create_geopandas_from_bounds(
     lon_min = utils.convert_longitude_to_180(longitude_min)
     lon_max = utils.convert_longitude_to_180(longitude_max)
 
-    # Special case: if original coordinates went exactly to 180°, keep it as 180° instead of -180°
+    # Special case: if original coordinates went exactly to 180°, keep it as
+    # 180° instead of -180°
     if longitude_max == 180:
         lon_max = 180
 

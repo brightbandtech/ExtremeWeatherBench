@@ -1,7 +1,8 @@
 """Comprehensive test suite for evaluate.py module.
 
-This test suite covers all the main functionality of the ExtremeWeatherBench evaluation workflow,
-including the ExtremeWeatherBench class, pipeline functions, and error handling.
+This test suite covers all the main functionality of the ExtremeWeatherBench evaluation
+workflow, including the ExtremeWeatherBench class, pipeline functions, and error
+handling.
 """
 
 import datetime
@@ -589,7 +590,8 @@ class TestPipelineFunctions:
     def test_compute_and_maybe_cache_with_cache_dir(
         self, sample_forecast_dataset, sample_target_dataset
     ):
-        """Test _compute_and_maybe_cache with cache directory (should raise NotImplementedError)."""
+        """Test _compute_and_maybe_cache with cache directory (should raise
+        NotImplementedError)."""
         with tempfile.TemporaryDirectory() as temp_dir:
             cache_dir = Path(temp_dir)
 

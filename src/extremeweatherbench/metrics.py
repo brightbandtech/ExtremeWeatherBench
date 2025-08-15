@@ -14,11 +14,12 @@ logger.setLevel(logging.INFO)
 
 
 class BaseMetric(ABC):
-    """A BaseMetric class is an abstract class that defines the foundational interface for all metrics.
+    """A BaseMetric class is an abstract class that defines the foundational interface
+    for all metrics.
 
-    Metrics are general operations applied between a forecast and analysis
-    xarray dataset. EWB metrics prioritize the use of any arbitrary sets of forecasts
-    and analyses, so long as the spatiotemporal dimensions are the same.
+    Metrics are general operations applied between a forecast and analysis xarray
+    dataset. EWB metrics prioritize the use of any arbitrary sets of forecasts and
+    analyses, so long as the spatiotemporal dimensions are the same.
     """
 
     # default to preserving lead_time in EWB metrics
@@ -62,9 +63,11 @@ class BaseMetric(ABC):
 class AppliedMetric(ABC):
     """An applied metric is a derivative of a BaseMetric.
 
-    It is a wrapper around one or more BaseMetrics that is intended for more complex rollups or aggregations.
-    Typically, these metrics are used for one event type and are very specific. Temporal onset mean error,
-    case duration mean error, and maximum temperature mean absolute error, are all examples of applied metrics.
+    It is a wrapper around one or more BaseMetrics that is intended for more
+    complex rollups or aggregations. Typically, these metrics are used for one
+    event type and are very specific. Temporal onset mean error, case duration
+    mean error, and maximum temperature mean absolute error, are all examples
+    of applied metrics.
 
     Attributes:
         base_metrics: A list of BaseMetrics to compute.
@@ -370,7 +373,8 @@ class DurationME(AppliedMetric):
                 # TODO: calculate num timesteps per day dynamically
                 num_timesteps=4,
             )
-            # need to determine logic for 2+ consecutive days to find the date that the heatwave starts
+            # need to determine logic for 2+ consecutive days to find the date
+            # that the heatwave starts
             if len(min_daily_vals) >= 2:  # Check if we have at least 2 values
                 for i in range(len(min_daily_vals) - 1):
                     if min_daily_vals[i] >= 288.15 and min_daily_vals[i + 1] >= 288.15:

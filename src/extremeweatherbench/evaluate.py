@@ -23,14 +23,16 @@ logger = logging.getLogger(__name__)
 class ExtremeWeatherBench:
     """A class to run the ExtremeWeatherBench workflow.
 
-    This class is used to run the ExtremeWeatherBench workflow. It is a wrapper around the
+    This class is used to run the ExtremeWeatherBench workflow. It is a
+    wrapper around the
     case operators and metrics to create either a serial loop or will return the built
     case operators to run in parallel as defined by the user.
 
     Attributes:
         cases: A dictionary of cases to run.
         metrics: A list of metrics to run.
-        cache_dir: An optional directory to cache the mid-flight outputs of the workflow.
+        cache_dir: An optional directory to cache the mid-flight outputs of the
+            workflow.
     """
 
     def __init__(
@@ -43,7 +45,8 @@ class ExtremeWeatherBench:
         self.metrics = metrics
         self.cache_dir = Path(cache_dir) if cache_dir else None
 
-    # case operators as a property are a convenience method for users to use them outside the class
+    # case operators as a property are a convenience method for users to use
+    # them outside the class
     # if desired for a parallel workflow
     @property
     def case_operators(self) -> list["cases.CaseOperator"]:
@@ -58,8 +61,8 @@ class ExtremeWeatherBench:
         This method will run the workflow in the order of the case operators, optionally
         caching the mid-flight outputs of the workflow if cache_dir was provided.
 
-        Keyword arguments are passed to the metric computations if there are specific requirements
-        needed for metrics such as threshold arguments.
+        Keyword arguments are passed to the metric computations if there are specific
+        requirements needed for metrics such as threshold arguments.
         """
         # instantiate the cache directory if caching and build it if it does not exist
         if self.cache_dir:
@@ -98,7 +101,8 @@ class ExtremeWeatherBench:
 def compute_case_operator(case_operator: "cases.CaseOperator", **kwargs):
     """Compute the results of a case operator.
 
-    This method will compute the results of a case operator. It will build the target and forecast datasets,
+    This method will compute the results of a case operator. It will build
+    the target and forecast datasets,
     align them, compute the metrics, and return a concatenated dataframe of the results.
 
     Args:
@@ -224,8 +228,8 @@ def _build_datasets(
 ) -> tuple[xr.Dataset, xr.Dataset]:
     """Build the target and forecast datasets for a case operator.
 
-    This method will process through all stages of the pipeline for the target and forecast datasets,
-    including preprocessing, variable renaming, and subsetting.
+    This method will process through all stages of the pipeline for the target and
+    forecast datasets, including preprocessing, variable renaming, and subsetting.
     """
     logger.info("running forecast pipeline")
     forecast_ds = run_pipeline(case_operator, "forecast")
@@ -242,7 +246,8 @@ def _compute_and_maybe_cache(
     computed_datasets = [dataset.compute() for dataset in datasets]
     if cache_dir:
         raise NotImplementedError("Caching is not implemented yet")
-        # (computed_dataset.to_netcdf(self.cache_dir) for computed_dataset in computed_datasets)
+        # (computed_dataset.to_netcdf(self.cache_dir) for computed_dataset in
+        # computed_datasets)
     return computed_datasets
 
 
@@ -271,7 +276,8 @@ def run_pipeline(
     data = (
         # opens data from user-defined source
         input_data.open_and_maybe_preprocess_data_from_source()
-        # maps variable names to the target data if not already using EWB naming conventions
+        # maps variable names to the target data if not already using EWB
+        # naming conventions
         .pipe(input_data.maybe_map_variable_names)
         # subsets the target data using the caseoperator metadata
         .pipe(

@@ -23,9 +23,15 @@ DEFAULT_GHCN_URI = "gs://extremeweatherbench/datasets/ghcnh.parq"
 #: Storage/access options for local storm report (LSR) tabular data.
 LSR_URI = "gs://extremeweatherbench/datasets/lsr_01012020_04302025.parq"
 
-PPH_URI = "gs://extremeweatherbench/datasets/practically_perfect_hindcast_20200104_20250430.zarr"
+PPH_URI = (
+    "gs://extremeweatherbench/datasets/"
+    "practically_perfect_hindcast_20200104_20250430.zarr"
+)
 
-IBTRACS_URI = "https://www.ncei.noaa.gov/data/international-best-track-archive-for-climate-stewardship-ibtracs/v04r01/access/csv/ibtracs.ALL.list.v04r01.csv"  # noqa: E501
+IBTRACS_URI = (
+    "https://www.ncei.noaa.gov/data/international-best-track-archive-for-"
+    "climate-stewardship-ibtracs/v04r01/access/csv/ibtracs.ALL.list.v04r01.csv"
+)
 
 IBTrACS_metadata_variable_mapping = {
     "ISO_TIME": "valid_time",
@@ -64,8 +70,7 @@ IBTrACS_metadata_variable_mapping = {
 
 @dataclasses.dataclass
 class InputBase(ABC):
-    """
-    An abstract base dataclass for target and forecast data.
+    """An abstract base dataclass for target and forecast data.
 
     Attributes:
         source: The source of the data, which can be a local path or a remote URL/URI.
@@ -94,7 +99,8 @@ class InputBase(ABC):
 
     @abstractmethod
     def _open_data_from_source(self) -> utils.IncomingDataInput:
-        """Open the target data from the source, opting to avoid loading the entire dataset into memory if possible.
+        """Open the target data from the source, opting to avoid loading the entire
+        dataset into memory if possible.
 
         Returns:
             The target data with a type determined by the user.
@@ -108,14 +114,16 @@ class InputBase(ABC):
     ) -> utils.IncomingDataInput:
         """Subset the target data to the case information provided in CaseOperator.
 
-        Time information, spatial bounds, and variables are captured in the case metadata
+        Time information, spatial bounds, and variables are captured in the case
+        metadata
         where this method is used to subset.
 
         Args:
-            data: The target data to subset, which should be a xarray dataset, xarray dataarray, polars lazyframe,
-            pandas dataframe, or numpy array.
-            case_operator: The case operator to subset the data to; includes time information, spatial bounds, and
-            variables.
+            data: The target data to subset, which should be a xarray dataset,
+                xarray dataarray, polars lazyframe, pandas dataframe, or numpy
+                array.
+            case_operator: The case operator to subset the data to; includes time
+                information, spatial bounds, and variables.
 
         Returns:
             The target data with the variables subset to the case metadata.
@@ -124,7 +132,8 @@ class InputBase(ABC):
     def maybe_convert_to_dataset(self, data: utils.IncomingDataInput) -> xr.Dataset:
         """Convert the target data to an xarray dataset if it is not already.
 
-        This method handles the common conversion cases automatically. Override this method
+        This method handles the common conversion cases automatically. Override
+        this method
         only if you need custom conversion logic beyond the standard cases.
 
         Args:
@@ -170,12 +179,14 @@ class InputBase(ABC):
         """Map the variable names to the data, if required.
 
         Args:
-            data: The incoming data in the form of an object that has a rename method for data variables/columns.
+            data: The incoming data in the form of an object that has a rename
+                method for data variables/columns.
 
         Returns:
             A dataset with mapped variable names, if any exist, else the original data.
         """
-        # Some inputs may not have variables defined, in which case we return the data unmodified
+        # Some inputs may not have variables defined, in which case we return
+        # the data unmodified
         if not self.variables:
             return data
 
@@ -189,7 +200,8 @@ class InputBase(ABC):
 
         if isinstance(data, xr.DataArray):
             old_name_obj = data.name
-            # convert to dataset to handle as rename(dict) won't work with just the DataArray name
+            # convert to dataset to handle as rename(dict) won't work with just
+            # the DataArray name
             variable_subset_data = data.to_dataset()
         elif isinstance(data, xr.Dataset):
             old_name_obj = data.variables.keys()
@@ -246,7 +258,8 @@ class ForecastBase(InputBase):
             init_time=data.init_time[np.unique(subset_time_indices[0])]
         )
 
-        # use the list of required variables from the derived variables in the eval to add to the list of variables
+        # use the list of required variables from the derived variables in the
+        # eval to add to the list of variables
         expected_and_maybe_derived_variables = (
             derived.maybe_pull_required_variables_from_derived_input(
                 case_operator.forecast.variables
@@ -256,7 +269,8 @@ class ForecastBase(InputBase):
             subset_time_data = subset_time_data[expected_and_maybe_derived_variables]
         except KeyError:
             raise KeyError(
-                f"One of the variables {expected_and_maybe_derived_variables} not found in forecast data"
+                f"One of the variables {expected_and_maybe_derived_variables} not "
+                f"found in forecast data"
             )
         spatiotemporally_subset_data = case_operator.case_metadata.location.mask(
             subset_time_data, drop=True
@@ -276,7 +290,8 @@ class EvaluationObject:
     A EvaluationObject is a metric evaluation object for all cases in an event.
     The evaluation is a set of all metrics, target variables, and forecast variables.
 
-    Multiple EvaluationObjects can be used to evaluate a single event type. This is useful for
+    Multiple EvaluationObjects can be used to evaluate a single event type.
+    This is useful for
     evaluating distinct Targets or metrics with unique variables to evaluate.
 
     Attributes:
@@ -294,9 +309,7 @@ class EvaluationObject:
 
 @dataclasses.dataclass
 class KerchunkForecast(ForecastBase):
-    """
-    Forecast class for kerchunked forecast data.
-    """
+    """Forecast class for kerchunked forecast data."""
 
     chunks: Optional[Union[dict, str]] = "auto"
 
@@ -310,9 +323,7 @@ class KerchunkForecast(ForecastBase):
 
 @dataclasses.dataclass
 class ZarrForecast(ForecastBase):
-    """
-    Forecast class for zarr forecast data.
-    """
+    """Forecast class for zarr forecast data."""
 
     chunks: Optional[Union[dict, str]] = "auto"
 
@@ -329,10 +340,10 @@ class ZarrForecast(ForecastBase):
 class TargetBase(InputBase):
     """An abstract base class for target data.
 
-    A TargetBase is data that acts as the "truth" for a case. It can be a gridded dataset,
-    a point observation dataset, or any other reference dataset. Targets in EWB
-    are not required to be the same variable as the forecast dataset, but they must be in the
-    same coordinate system for evaluation.
+    A TargetBase is data that acts as the "truth" for a case. It can be a gridded
+    dataset, a point observation dataset, or any other reference dataset. Targets in EWB
+    are not required to be the same variable as the forecast dataset, but they must be
+    in the same coordinate system for evaluation.
     """
 
     def maybe_align_forecast_to_target(
@@ -342,8 +353,9 @@ class TargetBase(InputBase):
     ) -> tuple[xr.Dataset, xr.Dataset]:
         """Align the forecast data to the target data.
 
-        This method is used to align the forecast data to the target data (not vice versa).
-        Implementation is useful for non-gridded targets that need to be aligned to the forecast
+        This method is used to align the forecast data to the target data (not
+        vice versa). Implementation is useful for non-gridded targets that need
+        to be aligned to the forecast
         data.
 
         Args:
@@ -351,7 +363,8 @@ class TargetBase(InputBase):
             target_data: The target data to align to.
 
         Returns:
-            A tuple of the aligned forecast data and target data. Defaults to passing through
+            A tuple of the aligned forecast data and target data. Defaults to
+            passing through
             the forecast and target data.
         """
         return forecast_data, target_data
@@ -363,8 +376,8 @@ class ERA5(TargetBase):
 
     The easiest approach to using this class is to use the ARCO ERA5 dataset provided by
     Google for a source. Otherwise, either a different zarr source or modifying the
-    open_data_from_source method to open the data using another method is required.
-    If there are multiple variables in the ta
+    open_data_from_source method to open the data using another method is required. If
+    there are multiple variables in the ta
     """
 
     chunks: Optional[Union[dict, str]] = None
@@ -412,9 +425,8 @@ class ERA5(TargetBase):
 class GHCN(TargetBase):
     """Target class for GHCN tabular data.
 
-    Data is processed using polars to maintain the lazy loading
-    paradigm in open_data_from_source and to separate the subsetting
-    into subset_data_to_case.
+    Data is processed using polars to maintain the lazy loading paradigm in
+    open_data_from_source and to separate the subsetting into subset_data_to_case.
     """
 
     def _open_data_from_source(self) -> utils.IncomingDataInput:
@@ -509,9 +521,9 @@ class LSR(TargetBase):
     """Target class for local storm report (LSR) tabular data.
 
     run_pipeline() returns a dataset with LSRs and practically perfect hindcast gridded
-    probability data. IndividualCase date ranges for LSRs should ideally be
-    12 UTC to the next day at 12 UTC to match SPC methods for US data. Australia data should be
-    00 UTC to 00 UTC.
+    probability data. IndividualCase date ranges for LSRs should ideally be 12 UTC to
+    the next day at 12 UTC to match SPC methods for US data. Australia data should be 00
+    UTC to 00 UTC.
     """
 
     def _open_data_from_source(self) -> utils.IncomingDataInput:
@@ -572,14 +584,16 @@ class LSR(TargetBase):
             data["report_type"] = data["report_type"].map(report_type_mapping)
 
         # Normalize these times for the LSR data
-        # Western hemisphere reports get bucketed to 12Z on the date they fall between 12Z-12Z
+        # Western hemisphere reports get bucketed to 12Z on the date they fall
+        # between 12Z-12Z
         # Eastern hemisphere reports get bucketed to 00Z on the date they occur
 
         # First, let's figure out which hemisphere each report is in
         western_hemisphere_mask = data["longitude"] < 0
         eastern_hemisphere_mask = data["longitude"] >= 0
 
-        # For western hemisphere: if report is between today 12Z and tomorrow 12Z, assign to today 12Z
+        # For western hemisphere: if report is between today 12Z and tomorrow
+        # 12Z, assign to today 12Z
         if western_hemisphere_mask.any():
             western_data = data[western_hemisphere_mask].copy()
             # Get the date portion and create 12Z times
@@ -666,7 +680,8 @@ class IBTrACS(TargetBase):
     """Target class for IBTrACS data."""
 
     def _open_data_from_source(self) -> utils.IncomingDataInput:
-        # not using storage_options in this case due to NetCDF4Backend not supporting them
+        # not using storage_options in this case due to NetCDF4Backend not
+        # supporting them
         target_data: pl.LazyFrame = pl.scan_csv(
             self.source,
             storage_options=self.storage_options,
@@ -682,7 +697,8 @@ class IBTrACS(TargetBase):
         if not isinstance(target_data, pl.LazyFrame):
             raise ValueError(f"Expected polars LazyFrame, got {type(target_data)}")
 
-        # Get the season (year) from the case start date, cast as string as polars is interpreting the schema as strings
+        # Get the season (year) from the case start date, cast as string as
+        # polars is interpreting the schema as strings
         season = case_operator.case_metadata.start_date.year
         if case_operator.case_metadata.start_date.month > 11:
             season += 1
@@ -694,7 +710,8 @@ class IBTrACS(TargetBase):
             .unique()
         )
 
-        # Apply the filter to get all data for storms with the same number in the same season
+        # Apply the filter to get all data for storms with the same number in
+        # the same season
         # This maintains the lazy evaluation
         subset_target_data = target_data.join(
             matching_numbers, on="NUMBER", how="inner"
@@ -776,7 +793,8 @@ class IBTrACS(TargetBase):
 
         subset_target_data = subset_target_data.select(columns_to_keep)
 
-        # Drop rows where wind speed OR pressure are null (equivalent to pandas dropna with how="any")
+        # Drop rows where wind speed OR pressure are null (equivalent to pandas
+        # dropna with how="any")
         subset_target_data = subset_target_data.filter(
             pl.col("surface_wind_speed").is_not_null()
             & pl.col("air_pressure_at_mean_sea_level").is_not_null()
@@ -791,7 +809,8 @@ class IBTrACS(TargetBase):
             # IBTrACS data is in -180 to 180, convert to 0 to 360
             data["longitude"] = utils.convert_longitude_to_360(data["longitude"])
 
-            # Due to missing data in the IBTrACS dataset, polars doesn't convert the valid_time to a datetime by default
+            # Due to missing data in the IBTrACS dataset, polars doesn't convert
+            # the valid_time to a datetime by default
             data["valid_time"] = pd.to_datetime(data["valid_time"])
             data = data.set_index(["valid_time", "latitude", "longitude"])
 
@@ -812,7 +831,8 @@ def open_kerchunk_reference(
     chunks: Union[dict, str] = "auto",
 ) -> xr.Dataset:
     """Open a dataset from a kerchunked reference file in parquet or json format.
-    This has been built primarily for the CIRA MLWP S3 bucket's data (https://registry.opendata.aws/aiwp/),
+    This has been built primarily for the CIRA MLWP S3 bucket's data
+    (https://registry.opendata.aws/aiwp/),
     but can work with other data in the future. Currently only supports CIRA data unless
     schema is identical to the CIRA schema.
 
@@ -843,7 +863,8 @@ def open_kerchunk_reference(
         )
     else:
         raise TypeError(
-            "Unknown kerchunk file type found in forecast path, only json and parquet are supported."
+            "Unknown kerchunk file type found in forecast path, only json and "
+            "parquet are supported."
         )
     return kerchunk_ds
 
@@ -862,7 +883,8 @@ def zarr_target_subsetter(
             time_variable = "valid_time"
         else:
             raise ValueError(
-                f"No suitable time dimension found in dataset. Available dimensions: {list(data.dims)}"
+                f"No suitable time dimension found in dataset. Available "
+                f"dimensions: {list(data.dims)}"
             )
 
     # subset time first to avoid OOM masking issues

@@ -1,5 +1,7 @@
 """Classes for defining individual units of case studies for analysis.
-Some code similarly structured to WeatherBench (Rasp et al.)."""
+
+Some code similarly structured to WeatherBench (Rasp et al.).
+"""
 
 import dataclasses
 import datetime
@@ -79,7 +81,8 @@ def build_case_operators(
 
     Args:
         cases_dict: The case metadata to use for the case operators.
-        metric_evaluation_objects: The metric evaluation objects to use for the case operators.
+        metric_evaluation_objects: The metric evaluation objects to use for the
+            case operators.
 
     Returns:
         A list of CaseOperator objects.

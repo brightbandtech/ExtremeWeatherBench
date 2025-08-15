@@ -1,5 +1,4 @@
-"""
-Example configuration file for ExtremeWeatherBench CLI.
+"""Example configuration file for ExtremeWeatherBench CLI.
 
 This file demonstrates how to create custom evaluation objects and case data
 for use with the --config-file option.

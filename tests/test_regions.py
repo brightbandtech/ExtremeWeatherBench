@@ -839,7 +839,8 @@ class TestGetBoundingCoordinates:
         assert abs(coords.latitude_max - 55.0) < 0.001  # 45 + 10
 
     def test_bounding_coordinates_near_antimeridian_no_crossing(self):
-        """Test get_bounding_coordinates for region near but not crossing antimeridian."""
+        """Test get_bounding_coordinates for region near but not crossing
+        antimeridian."""
         # Create a region that goes exactly to 180° but doesn't cross it
         region = CenteredRegion.create_region(
             latitude=45.0,

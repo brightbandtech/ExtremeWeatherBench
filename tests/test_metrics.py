@@ -434,7 +434,8 @@ class TestIncompleteMetrics:
             assert hasattr(metric, "_compute_metric")
 
     def test_incomplete_metrics_have_appropriate_base_metrics(self):
-        """Test that incomplete applied metrics have reasonable base metric assignments."""
+        """Test that incomplete applied metrics have reasonable base metric
+        assignments."""
         # Binary contingency table based metrics
         binary_metrics = [
             metrics.FAR,

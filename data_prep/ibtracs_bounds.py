@@ -37,8 +37,8 @@ from extremeweatherbench import inputs, regions, utils
 def calculate_end_point(
     start_lat: float, start_lon: float, bearing: float, distance_km: float
 ) -> tuple[float, float]:
-    """
-    Calculate the end point (latitude, longitude) given a starting point, bearing, and distance.
+    """Calculate the end point (latitude, longitude) given a starting point, bearing,
+    and distance.
 
     Parameters:
     -----------
@@ -235,7 +235,8 @@ columns_to_keep = [
 
 all_storms_lf = all_storms_lf.select(columns_to_keep)
 
-# Drop rows where wind speed OR pressure are null (equivalent to pandas dropna with how="any")
+# Drop rows where wind speed OR pressure are null (equivalent to pandas dropna with
+# how="any")
 all_storms_lf = all_storms_lf.filter(
     pl.col("surface_wind_speed").is_not_null()
     & pl.col("air_pressure_at_mean_sea_level").is_not_null()
@@ -316,7 +317,8 @@ all_storms_df = all_storms_df.dropna(
 )
 
 print(
-    f"After dropping rows with missing wind speed and pressure: {len(all_storms_df)} rows remaining"
+    f"After dropping rows with missing wind speed and pressure: {len(all_storms_df)} "
+    "rows remaining"
 )
 print("Missing values per column:")
 print(all_storms_df.isnull().sum())
@@ -417,7 +419,8 @@ for single_case in cases_new:
                 bounds1 = storm_bounds.get(name1)
                 bounds2 = storm_bounds.get(name2)
 
-                # If we found both, merge them by taking the bounding box that encompasses both
+                # If we found both, merge them by taking the bounding box that
+                # encompasses both
                 if bounds1 and bounds2:
                     from types import SimpleNamespace
 
