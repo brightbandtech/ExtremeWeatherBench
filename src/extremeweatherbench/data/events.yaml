@@ -1968,9 +1968,9 @@ cases:
       longitude_max: 128.8
   event_type: tropical_cyclone
 - case_id_number: 170
-  title: Krathon (Julian)
-  start_date: '2021-08-26'
-  end_date: '2021-09-02'
+  title: Krathon
+  start_date: '2024-09-24'
+  end_date: '2024-10-05'
   location:
     type: bounded_region
     parameters:
@@ -2041,14 +2041,14 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 176
   title: Harold
-  start_date: '2020-03-30'
+  start_date: '2023-08-19'
   end_date: '2023-08-25'
   location:
     type: bounded_region
     parameters:
       latitude_min: -37.2
-      latitude_max: 31.9
-      longitude_min: 254.0
+      latitude_max: -7.0
+      longitude_min: 152.2
       longitude_max: 214.7
   event_type: tropical_cyclone
 - case_id_number: 177
@@ -2232,7 +2232,7 @@ cases:
       longitude_max: 130.3
   event_type: tropical_cyclone
 - case_id_number: 192
-  title: Haikui (Hanna)
+  title: Haikui
   start_date: '2023-08-25'
   end_date: '2023-09-12'
   location:
@@ -2509,14 +2509,14 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 215
   title: Ana
-  start_date: '2021-01-26'
+  start_date: '2022-01-18'
   end_date: '2022-01-27'
   location:
     type: bounded_region
     parameters:
       latitude_min: -32.5
-      latitude_max: 39.8
-      longitude_min: 294.7
+      latitude_max: -13.3
+      longitude_min: 168.8
       longitude_max: 191.7
   event_type: tropical_cyclone
 - case_id_number: 216
@@ -2652,16 +2652,16 @@ cases:
       longitude_max: 341.7
   event_type: tropical_cyclone
 - case_id_number: 227
-  title: Nicolas
-  start_date: 2021-09-12 00:00:00
-  end_date: 2021-09-16 00:00:00
+  title: Nicholas
+  start_date: '2021-09-10'
+  end_date: '2021-09-19'
   location:
     type: bounded_region
     parameters:
-      latitude_min: 20.0
-      latitude_max: 30.0
-      longitude_min: 265.0
-      longitude_max: 275.0
+      latitude_min: 18.8
+      latitude_max: 33.0
+      longitude_min: 260.9
+      longitude_max: 270.8
   event_type: tropical_cyclone
 - case_id_number: 228
   title: Claudette
@@ -2748,9 +2748,9 @@ cases:
       longitude_max: 136.5
   event_type: tropical_cyclone
 - case_id_number: 235
-  title: Rai (Odette)
-  start_date: '2022-01-22'
-  end_date: '2022-02-12'
+  title: Rai
+  start_date: '2021-12-09'
+  end_date: '2021-12-23'
   location:
     type: bounded_region
     parameters:
@@ -2785,15 +2785,15 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 238
   title: Gulab and Shaheen
-  start_date: 2021-09-24 00:00:00
-  end_date: 2021-10-05 00:00:00
+  start_date: '2021-09-21'
+  end_date: '2021-10-06'
   location:
     type: bounded_region
     parameters:
-      latitude_min: 15.0
-      latitude_max: 25.0
-      longitude_min: 60.0
-      longitude_max: 85.0
+      latitude_min: 15.9
+      latitude_max: 26.6
+      longitude_min: 53.7
+      longitude_max: 96.5
   event_type: tropical_cyclone
 - case_id_number: 239
   title: Eloise
@@ -2809,8 +2809,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 240
   title: Amanda and Cristobal
-  start_date: '2022-01-22'
-  end_date: '2022-02-12'
+  start_date: '2020-05-28'
+  end_date: '2020-06-14'
   location:
     type: bounded_region
     parameters:
@@ -2976,9 +2976,9 @@ cases:
       longitude_max: 182.5
   event_type: tropical_cyclone
 - case_id_number: 254
-  title: Maysak (Julian)
-  start_date: '2021-08-26'
-  end_date: '2021-09-02'
+  title: Maysak
+  start_date: '2020-08-24'
+  end_date: '2020-09-08'
   location:
     type: bounded_region
     parameters:
@@ -3097,14 +3097,14 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 264
   title: Harold
-  start_date: '2020-03-30'
+  start_date: '2023-08-19'
   end_date: '2023-08-25'
   location:
     type: bounded_region
     parameters:
       latitude_min: -37.2
-      latitude_max: 31.9
-      longitude_min: 254.0
+      latitude_max: -7.0
+      longitude_min: 152.2
       longitude_max: 214.7
   event_type: tropical_cyclone
 - case_id_number: 265
