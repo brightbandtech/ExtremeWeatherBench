@@ -1801,8 +1801,8 @@ cases:
   event_type: atmospheric_river
 - case_id_number: 156
   title: Milton
-  start_date: '2024-10-02'
-  end_date: '2024-10-13'
+  start_date: 2024-10-02 00:00:00
+  end_date: 2024-10-13 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -1813,8 +1813,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 157
   title: Helene
-  start_date: '2024-09-21'
-  end_date: '2024-09-30'
+  start_date: 2024-09-21 00:00:00
+  end_date: 2024-09-30 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -1825,8 +1825,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 158
   title: Francine
-  start_date: '2024-09-06'
-  end_date: '2024-09-16'
+  start_date: 2024-09-06 00:00:00
+  end_date: 2024-09-16 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -1837,8 +1837,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 159
   title: Debby
-  start_date: '2024-07-31'
-  end_date: '2024-08-12'
+  start_date: 2024-07-31 00:00:00
+  end_date: 2024-08-12 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -1849,8 +1849,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 160
   title: Beryl
-  start_date: '2024-06-26'
-  end_date: '2024-07-13'
+  start_date: 2024-06-26 00:00:00
+  end_date: 2024-07-13 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -1861,8 +1861,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 161
   title: John
-  start_date: '2024-09-20'
-  end_date: '2024-09-29'
+  start_date: 2024-09-20 00:00:00
+  end_date: 2024-09-29 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -1873,8 +1873,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 162
   title: Hone
-  start_date: '2024-08-17'
-  end_date: '2024-09-03'
+  start_date: 2024-08-17 00:00:00
+  end_date: 2024-09-03 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -1885,8 +1885,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 163
   title: Trami
-  start_date: '2024-10-18'
-  end_date: '2024-10-31'
+  start_date: 2024-10-18 00:00:00
+  end_date: 2024-10-31 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -1897,8 +1897,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 164
   title: Prapiroon (Butchoy)
-  start_date: '2024-07-17'
-  end_date: '2024-07-27'
+  start_date: 2024-07-17 00:00:00
+  end_date: 2024-07-27 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -1909,8 +1909,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 165
   title: Gaemi (Carina)
-  start_date: '2024-07-17'
-  end_date: '2024-07-30'
+  start_date: 2024-07-17 00:00:00
+  end_date: 2024-07-30 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -1921,8 +1921,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 166
   title: Shanshan
-  start_date: '2024-08-19'
-  end_date: '2024-09-03'
+  start_date: 2024-08-19 00:00:00
+  end_date: 2024-09-03 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -1933,8 +1933,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 167
   title: Yagi (Enteng)
-  start_date: '2024-08-30'
-  end_date: '2024-09-10'
+  start_date: 2024-08-30 00:00:00
+  end_date: 2024-09-10 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -1945,8 +1945,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 168
   title: Bebinca (Ferdie)
-  start_date: '2024-09-07'
-  end_date: '2024-09-20'
+  start_date: 2024-09-07 00:00:00
+  end_date: 2024-09-20 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -1957,8 +1957,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 169
   title: Soulik (Gener)
-  start_date: '2024-09-13'
-  end_date: '2024-09-22'
+  start_date: 2024-09-13 00:00:00
+  end_date: 2024-09-22 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -1969,8 +1969,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 170
   title: Krathon
-  start_date: '2024-09-24'
-  end_date: '2024-10-05'
+  start_date: 2024-09-24 00:00:00
+  end_date: 2024-10-05 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -1981,8 +1981,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 171
   title: Asna
-  start_date: '2024-08-28'
-  end_date: '2024-09-04'
+  start_date: 2024-08-28 00:00:00
+  end_date: 2024-09-04 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -1993,8 +1993,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 172
   title: Kirrily
-  start_date: '2024-01-15'
-  end_date: '2024-02-07'
+  start_date: 2024-01-15 00:00:00
+  end_date: 2024-02-07 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2005,8 +2005,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 173
   title: Belal
-  start_date: '2024-01-10'
-  end_date: '2024-01-21'
+  start_date: 2024-01-10 00:00:00
+  end_date: 2024-01-21 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2017,8 +2017,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 174
   title: Alvaro
-  start_date: '2023-12-30'
-  end_date: '2024-01-06'
+  start_date: 2023-12-30 00:00:00
+  end_date: 2024-01-06 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2029,8 +2029,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 175
   title: Franklin
-  start_date: '2023-08-17'
-  end_date: '2023-09-11'
+  start_date: 2023-08-17 00:00:00
+  end_date: 2023-09-11 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2041,8 +2041,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 176
   title: Harold
-  start_date: '2023-08-19'
-  end_date: '2023-08-25'
+  start_date: 2023-08-19 00:00:00
+  end_date: 2023-08-25 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2053,8 +2053,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 177
   title: Idalia
-  start_date: '2023-08-24'
-  end_date: '2023-09-10'
+  start_date: 2023-08-24 00:00:00
+  end_date: 2023-09-10 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2065,8 +2065,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 178
   title: Lee
-  start_date: '2023-09-03'
-  end_date: '2023-09-20'
+  start_date: 2023-09-03 00:00:00
+  end_date: 2023-09-20 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2077,8 +2077,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 179
   title: Ophelia
-  start_date: '2023-09-19'
-  end_date: '2023-09-26'
+  start_date: 2023-09-19 00:00:00
+  end_date: 2023-09-26 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2089,8 +2089,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 180
   title: Tammy
-  start_date: '2023-10-16'
-  end_date: '2023-11-02'
+  start_date: 2023-10-16 00:00:00
+  end_date: 2023-11-02 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2101,8 +2101,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 181
   title: Hilary
-  start_date: '2023-08-14'
-  end_date: '2023-08-22'
+  start_date: 2023-08-14 00:00:00
+  end_date: 2023-08-22 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2113,8 +2113,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 182
   title: Lidia
-  start_date: '2023-10-01'
-  end_date: '2023-10-13'
+  start_date: 2023-10-01 00:00:00
+  end_date: 2023-10-13 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2125,8 +2125,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 183
   title: Max
-  start_date: '2023-10-06'
-  end_date: '2023-10-12'
+  start_date: 2023-10-06 00:00:00
+  end_date: 2023-10-12 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2149,8 +2149,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 185
   title: Otis
-  start_date: '2023-10-19'
-  end_date: '2023-10-27'
+  start_date: 2023-10-19 00:00:00
+  end_date: 2023-10-27 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2161,8 +2161,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 186
   title: Mawar (Betty)
-  start_date: '2023-05-16'
-  end_date: '2023-06-05'
+  start_date: 2023-05-16 00:00:00
+  end_date: 2023-06-05 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2173,8 +2173,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 187
   title: Talim (Dodong)
-  start_date: '2023-07-11'
-  end_date: '2023-07-21'
+  start_date: 2023-07-11 00:00:00
+  end_date: 2023-07-21 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2185,8 +2185,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 188
   title: Doksuri (Egay)
-  start_date: '2023-07-18'
-  end_date: '2023-08-02'
+  start_date: 2023-07-18 00:00:00
+  end_date: 2023-08-02 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2197,8 +2197,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 189
   title: Khanun (Falcon)
-  start_date: '2023-07-24'
-  end_date: '2023-08-13'
+  start_date: 2023-07-24 00:00:00
+  end_date: 2023-08-13 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2209,8 +2209,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 190
   title: Lan
-  start_date: '2023-08-04'
-  end_date: '2023-08-20'
+  start_date: 2023-08-04 00:00:00
+  end_date: 2023-08-20 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2221,8 +2221,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 191
   title: Saola (Goring)
-  start_date: '2023-08-20'
-  end_date: '2023-09-06'
+  start_date: 2023-08-20 00:00:00
+  end_date: 2023-09-06 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2233,8 +2233,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 192
   title: Haikui
-  start_date: '2023-08-25'
-  end_date: '2023-09-12'
+  start_date: 2023-08-25 00:00:00
+  end_date: 2023-09-12 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2245,8 +2245,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 193
   title: Koinu (Jenny)
-  start_date: '2023-09-25'
-  end_date: '2023-10-12'
+  start_date: 2023-09-25 00:00:00
+  end_date: 2023-10-12 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2257,8 +2257,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 194
   title: Mocha
-  start_date: '2023-05-06'
-  end_date: '2023-05-17'
+  start_date: 2023-05-06 00:00:00
+  end_date: 2023-05-17 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2269,8 +2269,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 195
   title: Biparjoy
-  start_date: '2023-06-03'
-  end_date: '2023-06-21'
+  start_date: 2023-06-03 00:00:00
+  end_date: 2023-06-21 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2281,8 +2281,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 196
   title: Hamoon
-  start_date: '2023-10-18'
-  end_date: '2023-10-27'
+  start_date: 2023-10-18 00:00:00
+  end_date: 2023-10-27 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2293,8 +2293,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 197
   title: Freddy
-  start_date: '2023-02-02'
-  end_date: '2023-03-15'
+  start_date: 2023-02-02 00:00:00
+  end_date: 2023-03-15 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2305,8 +2305,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 198
   title: Jasper
-  start_date: '2023-11-30'
-  end_date: '2023-12-19'
+  start_date: 2023-11-30 00:00:00
+  end_date: 2023-12-19 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2329,8 +2329,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 200
   title: Alex
-  start_date: '2022-05-31'
-  end_date: '2022-06-08'
+  start_date: 2022-05-31 00:00:00
+  end_date: 2022-06-08 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2341,8 +2341,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 201
   title: Fiona
-  start_date: '2022-09-12'
-  end_date: '2022-09-29'
+  start_date: 2022-09-12 00:00:00
+  end_date: 2022-09-29 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2353,8 +2353,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 202
   title: Ian
-  start_date: '2022-09-20'
-  end_date: '2022-10-03'
+  start_date: 2022-09-20 00:00:00
+  end_date: 2022-10-03 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2365,8 +2365,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 203
   title: Julia
-  start_date: '2022-10-04'
-  end_date: '2022-10-12'
+  start_date: 2022-10-04 00:00:00
+  end_date: 2022-10-12 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2377,8 +2377,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 204
   title: Nicole
-  start_date: '2022-11-04'
-  end_date: '2022-11-13'
+  start_date: 2022-11-04 00:00:00
+  end_date: 2022-11-13 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2389,8 +2389,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 205
   title: Agatha
-  start_date: '2022-05-25'
-  end_date: '2022-06-03'
+  start_date: 2022-05-25 00:00:00
+  end_date: 2022-06-03 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2401,8 +2401,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 206
   title: Kay
-  start_date: '2022-09-02'
-  end_date: '2022-09-15'
+  start_date: 2022-09-02 00:00:00
+  end_date: 2022-09-15 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2413,8 +2413,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 207
   title: Roslyn
-  start_date: '2022-10-18'
-  end_date: '2022-10-26'
+  start_date: 2022-10-18 00:00:00
+  end_date: 2022-10-26 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2425,8 +2425,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 208
   title: Megi (Agaton)
-  start_date: '2022-04-06'
-  end_date: '2022-04-15'
+  start_date: 2022-04-06 00:00:00
+  end_date: 2022-04-15 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2437,8 +2437,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 209
   title: Hinnamnor (Henry)
-  start_date: '2022-08-25'
-  end_date: '2022-09-10'
+  start_date: 2022-08-25 00:00:00
+  end_date: 2022-09-10 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2449,8 +2449,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 210
   title: Muifa (Inday)
-  start_date: '2022-09-02'
-  end_date: '2022-09-18'
+  start_date: 2022-09-02 00:00:00
+  end_date: 2022-09-18 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2461,8 +2461,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 211
   title: Nanmadol (Josie)
-  start_date: '2022-09-09'
-  end_date: '2022-09-22'
+  start_date: 2022-09-09 00:00:00
+  end_date: 2022-09-22 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2473,8 +2473,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 212
   title: Noru (Karding)
-  start_date: '2022-09-19'
-  end_date: '2022-10-01'
+  start_date: 2022-09-19 00:00:00
+  end_date: 2022-10-01 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2485,8 +2485,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 213
   title: Nalgae (Paeng)
-  start_date: '2022-10-24'
-  end_date: '2022-11-05'
+  start_date: 2022-10-24 00:00:00
+  end_date: 2022-11-05 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2497,8 +2497,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 214
   title: Sitrang
-  start_date: '2022-10-19'
-  end_date: '2022-10-27'
+  start_date: 2022-10-19 00:00:00
+  end_date: 2022-10-27 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2509,8 +2509,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 215
   title: Ana
-  start_date: '2022-01-18'
-  end_date: '2022-01-27'
+  start_date: 2022-01-18 00:00:00
+  end_date: 2022-01-27 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2521,8 +2521,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 216
   title: Batsirai
-  start_date: '2022-01-22'
-  end_date: '2022-02-12'
+  start_date: 2022-01-22 00:00:00
+  end_date: 2022-02-12 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2533,8 +2533,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 217
   title: Gombe
-  start_date: '2022-03-04'
-  end_date: '2022-03-19'
+  start_date: 2022-03-04 00:00:00
+  end_date: 2022-03-19 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2545,8 +2545,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 218
   title: Seth
-  start_date: '2021-12-21'
-  end_date: '2022-01-09'
+  start_date: 2021-12-21 00:00:00
+  end_date: 2022-01-09 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2557,8 +2557,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 219
   title: Blas
-  start_date: '2022-06-12'
-  end_date: '2022-06-24'
+  start_date: 2022-06-12 00:00:00
+  end_date: 2022-06-24 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2581,8 +2581,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 221
   title: Elsa
-  start_date: '2021-06-28'
-  end_date: '2021-07-12'
+  start_date: 2021-06-28 00:00:00
+  end_date: 2021-07-12 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2593,8 +2593,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 222
   title: Fred
-  start_date: '2021-08-07'
-  end_date: '2021-08-22'
+  start_date: 2021-08-07 00:00:00
+  end_date: 2021-08-22 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2605,8 +2605,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 223
   title: Grace
-  start_date: '2021-08-11'
-  end_date: '2021-08-23'
+  start_date: 2021-08-11 00:00:00
+  end_date: 2021-08-23 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2617,8 +2617,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 224
   title: Henri
-  start_date: '2021-08-13'
-  end_date: '2021-08-26'
+  start_date: 2021-08-13 00:00:00
+  end_date: 2021-08-26 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2629,8 +2629,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 225
   title: Ida
-  start_date: '2021-08-24'
-  end_date: '2021-09-06'
+  start_date: 2021-08-24 00:00:00
+  end_date: 2021-09-06 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2641,8 +2641,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 226
   title: Larry
-  start_date: '2021-08-29'
-  end_date: '2021-09-13'
+  start_date: 2021-08-29 00:00:00
+  end_date: 2021-09-13 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2653,8 +2653,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 227
   title: Nicholas
-  start_date: '2021-09-10'
-  end_date: '2021-09-19'
+  start_date: 2021-09-10 00:00:00
+  end_date: 2021-09-19 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2665,8 +2665,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 228
   title: Claudette
-  start_date: '2021-06-15'
-  end_date: '2021-06-25'
+  start_date: 2021-06-15 00:00:00
+  end_date: 2021-06-25 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2677,8 +2677,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 229
   title: Nora
-  start_date: '2021-08-22'
-  end_date: '2021-09-01'
+  start_date: 2021-08-22 00:00:00
+  end_date: 2021-09-01 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2689,8 +2689,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 230
   title: Olaf
-  start_date: '2021-09-04'
-  end_date: '2021-09-14'
+  start_date: 2021-09-04 00:00:00
+  end_date: 2021-09-14 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2701,8 +2701,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 231
   title: Pamela
-  start_date: '2021-10-08'
-  end_date: '2021-10-15'
+  start_date: 2021-10-08 00:00:00
+  end_date: 2021-10-15 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2713,8 +2713,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 232
   title: Surigae (Bising)
-  start_date: '2021-04-09'
-  end_date: '2021-05-02'
+  start_date: 2021-04-09 00:00:00
+  end_date: 2021-05-02 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2725,8 +2725,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 233
   title: In-fa (Fabian)
-  start_date: '2021-07-14'
-  end_date: '2021-08-02'
+  start_date: 2021-07-14 00:00:00
+  end_date: 2021-08-02 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2737,8 +2737,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 234
   title: Kompasu (Maring)
-  start_date: '2021-10-05'
-  end_date: '2021-10-16'
+  start_date: 2021-10-05 00:00:00
+  end_date: 2021-10-16 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2749,8 +2749,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 235
   title: Rai
-  start_date: '2021-12-09'
-  end_date: '2021-12-23'
+  start_date: 2021-12-09 00:00:00
+  end_date: 2021-12-23 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2761,8 +2761,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 236
   title: Tauktae
-  start_date: '2021-05-11'
-  end_date: '2021-05-21'
+  start_date: 2021-05-11 00:00:00
+  end_date: 2021-05-21 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2773,8 +2773,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 237
   title: Yaas
-  start_date: '2021-05-21'
-  end_date: '2021-05-29'
+  start_date: 2021-05-21 00:00:00
+  end_date: 2021-05-29 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2785,8 +2785,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 238
   title: Gulab and Shaheen
-  start_date: '2021-09-21'
-  end_date: '2021-10-06'
+  start_date: 2021-09-21 00:00:00
+  end_date: 2021-10-06 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2797,8 +2797,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 239
   title: Eloise
-  start_date: '2021-01-09'
-  end_date: '2021-01-26'
+  start_date: 2021-01-09 00:00:00
+  end_date: 2021-01-26 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2809,8 +2809,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 240
   title: Amanda and Cristobal
-  start_date: '2020-05-28'
-  end_date: '2020-06-14'
+  start_date: 2020-05-28 00:00:00
+  end_date: 2020-06-14 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2821,8 +2821,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 241
   title: Hanna
-  start_date: '2020-07-21'
-  end_date: '2020-07-28'
+  start_date: 2020-07-21 00:00:00
+  end_date: 2020-07-28 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2833,8 +2833,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 242
   title: Isaias
-  start_date: '2020-07-26'
-  end_date: '2020-08-07'
+  start_date: 2020-07-26 00:00:00
+  end_date: 2020-08-07 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2845,8 +2845,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 243
   title: Laura
-  start_date: '2020-08-18'
-  end_date: '2020-08-31'
+  start_date: 2020-08-18 00:00:00
+  end_date: 2020-08-31 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2857,8 +2857,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 244
   title: Nana
-  start_date: '2020-08-30'
-  end_date: '2020-09-06'
+  start_date: 2020-08-30 00:00:00
+  end_date: 2020-09-06 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2869,8 +2869,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 245
   title: Paulette
-  start_date: '2020-09-05'
-  end_date: '2020-09-30'
+  start_date: 2020-09-05 00:00:00
+  end_date: 2020-09-30 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2881,8 +2881,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 246
   title: Sally
-  start_date: '2020-09-09'
-  end_date: '2020-09-20'
+  start_date: 2020-09-09 00:00:00
+  end_date: 2020-09-20 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2893,8 +2893,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 247
   title: Teddy
-  start_date: '2020-09-10'
-  end_date: '2020-09-26'
+  start_date: 2020-09-10 00:00:00
+  end_date: 2020-09-26 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2905,8 +2905,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 248
   title: Delta
-  start_date: '2020-10-02'
-  end_date: '2020-10-13'
+  start_date: 2020-10-02 00:00:00
+  end_date: 2020-10-13 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2917,8 +2917,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 249
   title: Zeta
-  start_date: '2020-10-22'
-  end_date: '2020-11-01'
+  start_date: 2020-10-22 00:00:00
+  end_date: 2020-11-01 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2929,8 +2929,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 250
   title: Eta
-  start_date: '2020-10-29'
-  end_date: '2020-11-16'
+  start_date: 2020-10-29 00:00:00
+  end_date: 2020-11-16 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2941,8 +2941,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 251
   title: Iota
-  start_date: '2020-11-10'
-  end_date: '2020-11-20'
+  start_date: 2020-11-10 00:00:00
+  end_date: 2020-11-20 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2953,8 +2953,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 252
   title: Genevieve
-  start_date: '2020-08-14'
-  end_date: '2020-08-24'
+  start_date: 2020-08-14 00:00:00
+  end_date: 2020-08-24 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2965,8 +2965,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 253
   title: Hagupit (Dindo)
-  start_date: '2020-07-29'
-  end_date: '2020-08-14'
+  start_date: 2020-07-29 00:00:00
+  end_date: 2020-08-14 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2977,8 +2977,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 254
   title: Maysak
-  start_date: '2020-08-24'
-  end_date: '2020-09-08'
+  start_date: 2020-08-24 00:00:00
+  end_date: 2020-09-08 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -2989,8 +2989,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 255
   title: Noul (Leon)
-  start_date: '2020-09-12'
-  end_date: '2020-09-21'
+  start_date: 2020-09-12 00:00:00
+  end_date: 2020-09-21 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -3001,8 +3001,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 256
   title: Linfa
-  start_date: '2020-10-05'
-  end_date: '2020-10-14'
+  start_date: 2020-10-05 00:00:00
+  end_date: 2020-10-14 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -3013,8 +3013,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 257
   title: Molave (Quinta)
-  start_date: '2020-10-19'
-  end_date: '2020-10-31'
+  start_date: 2020-10-19 00:00:00
+  end_date: 2020-10-31 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -3025,8 +3025,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 258
   title: Goni (Rolly)
-  start_date: '2020-10-23'
-  end_date: '2020-11-08'
+  start_date: 2020-10-23 00:00:00
+  end_date: 2020-11-08 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -3037,8 +3037,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 259
   title: Vamco (Ulysse)
-  start_date: '2020-11-06'
-  end_date: '2020-11-18'
+  start_date: 2020-11-06 00:00:00
+  end_date: 2020-11-18 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -3049,8 +3049,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 260
   title: Remal
-  start_date: '2024-05-23'
-  end_date: '2024-05-29'
+  start_date: 2024-05-23 00:00:00
+  end_date: 2024-05-29 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -3061,8 +3061,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 261
   title: Amphan
-  start_date: '2020-05-13'
-  end_date: '2020-05-23'
+  start_date: 2020-05-13 00:00:00
+  end_date: 2020-05-23 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -3073,8 +3073,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 262
   title: Nisarga
-  start_date: '2020-05-29'
-  end_date: '2020-06-06'
+  start_date: 2020-05-29 00:00:00
+  end_date: 2020-06-06 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -3085,8 +3085,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 263
   title: Damien
-  start_date: '2020-02-01'
-  end_date: '2020-02-12'
+  start_date: 2020-02-01 00:00:00
+  end_date: 2020-02-12 00:00:00
   location:
     type: bounded_region
     parameters:
@@ -3097,8 +3097,8 @@ cases:
   event_type: tropical_cyclone
 - case_id_number: 264
   title: Harold
-  start_date: '2023-08-19'
-  end_date: '2023-08-25'
+  start_date: 2023-08-19 00:00:00
+  end_date: 2023-08-25 00:00:00
   location:
     type: bounded_region
     parameters:
