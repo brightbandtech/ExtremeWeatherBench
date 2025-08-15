@@ -401,7 +401,7 @@ class ERA5(TargetBase):
         Returns:
             Tuple of (aligned_forecast_data, aligned_target_data)
         """
-        aligned_forecast_data, aligned_target_data = align_forecast_to_gridded_target(
+        aligned_forecast_data, aligned_target_data = align_forecast_to_target(
             forecast_data, target_data
         )
         return aligned_forecast_data, aligned_target_data
@@ -482,6 +482,8 @@ class GHCN(TargetBase):
     def _custom_convert_to_dataset(self, data: utils.IncomingDataInput) -> xr.Dataset:
         if isinstance(data, pl.LazyFrame):
             data = data.collect().to_pandas()
+            data["longitude"] = utils.convert_longitude_to_360(data["longitude"])
+
             data = data.set_index(["valid_time", "latitude", "longitude"])
             # GHCN data can have duplicate values right now, dropping here if it occurs
             try:
@@ -499,7 +501,7 @@ class GHCN(TargetBase):
         forecast_data: xr.Dataset,
         target_data: xr.Dataset,
     ) -> tuple[xr.Dataset, xr.Dataset]:
-        return align_forecast_to_point_obs_target(forecast_data, target_data)
+        return align_forecast_to_target(forecast_data, target_data)
 
 
 @dataclasses.dataclass
@@ -630,7 +632,7 @@ class LSR(TargetBase):
         forecast_data: xr.Dataset,
         target_data: xr.Dataset,
     ) -> tuple[xr.Dataset, xr.Dataset]:
-        return align_forecast_to_point_obs_target(forecast_data, target_data)
+        return align_forecast_to_target(forecast_data, target_data)
 
 
 # TODO: get PPH connector working properly
@@ -658,7 +660,7 @@ class PPH(TargetBase):
         forecast_data: xr.Dataset,
         target_data: xr.Dataset,
     ) -> tuple[xr.Dataset, xr.Dataset]:
-        return align_forecast_to_gridded_target(forecast_data, target_data)
+        return align_forecast_to_target(forecast_data, target_data)
 
 
 @dataclasses.dataclass
@@ -932,44 +934,33 @@ def align_forecast_to_point_obs_target(
     return time_aligned_forecast_data, time_aligned_target_data
 
 
-def align_forecast_to_gridded_target(
+def align_forecast_to_target(
     forecast_data: xr.Dataset,
     target_data: xr.Dataset,
+    # TODO: provide passthrough for other methods
+    method: str = "nearest",
 ) -> tuple[xr.Dataset, xr.Dataset]:
-    target_time_dim = "time" if "time" in target_data.dims else "valid_time"
-    forecast_time_dim = "valid_time" if "valid_time" in forecast_data.dims else "time"
+    # Find spatial dimensions that exist in both datasets
+    intersection_dims = [
+        dim
+        for dim in forecast_data.dims
+        if dim in target_data.dims
+        and dim not in ["time", "valid_time", "lead_time", "init_time"]
+    ]
 
-    # Rename target time dimension to match forecast if needed
-    aligned_target = target_data.copy()
-    if target_time_dim != forecast_time_dim:
-        aligned_target = aligned_target.rename({target_time_dim: forecast_time_dim})
-
+    spatial_dims = {dim: target_data[dim] for dim in intersection_dims}
     # Align time dimensions - find overlapping times
     time_aligned_target, time_aligned_forecast = xr.align(
-        aligned_target,
+        target_data,
         forecast_data,
         join="inner",
-        exclude=["latitude", "longitude"],
+        exclude=spatial_dims.keys(),
     )
 
-    # Spatial alignment - check if regridding is needed
-    target_lats = time_aligned_target.latitude.values
-    target_lons = time_aligned_target.longitude.values
-    forecast_lats = time_aligned_forecast.latitude.values
-    forecast_lons = time_aligned_forecast.longitude.values
-
-    # Check if spatial grids are identical (within tolerance)
-    lats_match = len(target_lats) == len(forecast_lats) and np.allclose(
-        target_lats, forecast_lats, rtol=1e-5
-    )
-    lons_match = len(target_lons) == len(forecast_lons) and np.allclose(
-        target_lons, forecast_lons, rtol=1e-5
+    # Regrid forecast to target grid using nearest neighbor interpolation
+    # extrapolate in the case of targets slightly outside the forecast domain
+    time_space_aligned_forecast = time_aligned_forecast.interp(
+        **spatial_dims, method=method, kwargs={"fill_value": "extrapolate"}
     )
 
-    if not (lats_match and lons_match):
-        # Regrid forecast to target grid using nearest neighbor interpolation
-        time_aligned_forecast = time_aligned_forecast.interp(
-            latitude=target_lats, longitude=target_lons, method="nearest"
-        )
-
-    return time_aligned_forecast, time_aligned_target
+    return time_space_aligned_forecast, time_aligned_target
