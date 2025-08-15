@@ -80,7 +80,7 @@ ghcn_heatwave_target = inputs.GHCN(
     source=inputs.DEFAULT_GHCN_URI,
     variables=["surface_air_temperature"],
     variable_mapping={"t2": "surface_air_temperature"},
-    storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
+    storage_options={},
 )
 
 ghcn_freeze_target = inputs.GHCN(
@@ -95,7 +95,7 @@ ghcn_freeze_target = inputs.GHCN(
         "surface_eastward_wind": "surface_eastward_wind",
         "surface_northward_wind": "surface_northward_wind",
     },
-    storage_options={"remote_options": {"anon": True}},
+    storage_options={},
 )
 
 # LSR/PPH target
