@@ -25,7 +25,8 @@ def subset_event_and_mask_climatology(
     actual_end_date: datetime.datetime,
     single_case: case.IndividualCase,
 ):
-    """Calculate the times where regional average of temperature exceeds the climatology."""
+    """Calculate the times where regional average of temperature exceeds the
+    climatology."""
     era5_event = era5[["2m_temperature"]].sel(
         time=slice(actual_start_date, actual_end_date)
     )
@@ -56,8 +57,8 @@ def find_heatwave_events(
     single_case: case.IndividualCase,
     plot: bool = True,
 ):
-    """Find the start and end dates of heatwave events, stepping +- 6 hours until
-    < climatology timesteps are located."""
+    """Find the start and end dates of heatwave events, stepping +- 6 hours until <
+    climatology timesteps are located."""
     start_date = pd.to_datetime(single_case.start_date)
     end_date = pd.to_datetime(single_case.end_date)
     location_center = single_case.location
@@ -127,8 +128,8 @@ def case_plot(
     time_based_merged_dataset: xr.Dataset,
     single_case: case.IndividualCase,
 ):
-    """Plot the max timestep of the heatwave event, the average regional temperature time series,
-    and the associated climatology."""
+    """Plot the max timestep of the heatwave event, the average regional temperature
+    time series, and the associated climatology."""
     fig, (ax1, ax2) = plt.subplots(
         2, 1, figsize=(6, 10), gridspec_kw={"height_ratios": [1, 1]}
     )
