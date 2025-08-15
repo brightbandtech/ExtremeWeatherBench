@@ -152,11 +152,15 @@ class IntegratedVaporTransport(DerivedVariable):
             dims=coords_dict.keys(),
         )
 
-        ivt_da = np.hypot(
+        ivt_magnitude = np.hypot(
             data["vertical_integral_of_eastward_water_vapour_flux"],
             data["vertical_integral_of_northward_water_vapour_flux"],
         )
-        return ivt_da
+        return xr.DataArray(
+            ivt_magnitude,
+            coords=coords_dict,
+            dims=coords_dict.keys(),
+        )
 
 
 # TODO: add the IVT Laplacian calculations for ARs
@@ -227,7 +231,7 @@ class TCTrackVariables(DerivedVariable):
         tctracks = calc.create_tctracks_from_dataset(cyclone_dataset)
         tctracks_ds_3d = calc.tctracks_to_3d_dataset(tctracks)
 
-        return tctracks_ds_3d
+        return tctracks_ds_3d  # type: ignore[return-value]
 
 
 def maybe_derive_variables(
