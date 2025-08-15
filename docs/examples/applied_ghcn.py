@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 case_yaml = utils.load_events_yaml()
 test_yaml = {"cases": case_yaml["cases"][:1]}
 
-
+# TODO: improve performance on chunks (PerformanceWarning)
 ghcn_target = inputs.GHCN(
     source=inputs.DEFAULT_GHCN_URI,
     variables=["surface_air_temperature"],
