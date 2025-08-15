@@ -18,9 +18,8 @@ ghcn_target = inputs.GHCN(
         "surface_air_temperature": "surface_air_temperature",
         "time": "valid_time",
     },
-    storage_options={"remote_options": {"anon": True}},
+    storage_options={},
 )
-
 hres_forecast = inputs.ZarrForecast(
     source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
     variables=["surface_air_temperature"],
@@ -61,4 +60,4 @@ outputs = test_ewb.run(
     pre_compute=True,
 )
 
-outputs.to_csv("outputs_hres.csv")
+print(outputs.head())

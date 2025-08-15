@@ -103,4 +103,4 @@ outputs = test_ewb.run(
     pre_compute=True,
 )
 
-outputs.to_csv("outputs_hres.csv")
+print(outputs.head())
