@@ -193,7 +193,7 @@ class InputBase(ABC):
         variable_mapping = self.variable_mapping
 
         if isinstance(data, xr.DataArray):
-            old_name_obj = data.name
+            return data.rename(variable_mapping[data.name])
         elif isinstance(data, xr.Dataset):
             old_name_obj = data.variables.keys()
         elif isinstance(data, pl.LazyFrame):
