@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import List, Union
+from typing import List, Type, Union
 
 import numpy as np
 import xarray as xr
