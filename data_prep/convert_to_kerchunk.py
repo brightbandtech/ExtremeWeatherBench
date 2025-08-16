@@ -1,11 +1,12 @@
-"""Tooling to kerchunk CIRA data from https://noaa-oar-mlwp-data.s3.amazonaws.com/index.html
-and convert it into jsons for xarray datasets."""
+"""Tooling to kerchunk CIRA data from
+https://noaa-oar-mlwp-data.s3.amazonaws.com/index.html and convert it into
+jsons for xarray datasets."""
 
-from kerchunk.hdf import SingleHdf5ToZarr
-from kerchunk.combine import MultiZarrToZarr
 import fsspec
 import ujson
 import xarray as xr
+from kerchunk.combine import MultiZarrToZarr
+from kerchunk.hdf import SingleHdf5ToZarr
 
 
 def generate_json_from_nc(
@@ -16,7 +17,8 @@ def generate_json_from_nc(
     json_dir: str,
 ) -> list:
     """Generate a kerchunk JSON file from a NetCDF file.
-    Arguments:
+
+    Args:
         file_url: The URL/URI of the file to convert
         fs_read: The filesystem to read the file from
         fs_out: The filesystem to write the json to
@@ -47,13 +49,14 @@ def xarray_dataset_from_json_list(
     combined_json_name: str = "combined.json",
 ) -> xr.Dataset:
     """Combine the list of jsons into a single file.
-    This is hardcoded to assume the CIRA conventions in the s3://noaa-oar-mlwp-data bucket,
-    available at https://noaa-oar-mlwp-data.s3.amazonaws.com/index.html
+    This is hardcoded to assume the CIRA conventions in the s3://noaa-oar-mlwp-data
+    bucket, available at https://noaa-oar-mlwp-data.s3.amazonaws.com/index.html
 
     Arguments:
         json_list: A list of jsons in the directory to combine. Assumes full path
         combined_json_directory: The directory to write the combined json file to
-        fs_out: the local (or remote) fsspec filesystem to write the combined json file with
+        fs_out: the local (or remote) fsspec filesystem to write the combined json file
+        with
 
     Returns an xarray dataset."""
     mzz = MultiZarrToZarr(

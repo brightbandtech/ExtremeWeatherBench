@@ -35,7 +35,7 @@ class TestRegionClasses:
             latitude=45.0, longitude=-120.0, bounding_box_degrees=10.0
         )
         assert region.latitude == 45.0
-        assert region.longitude == 240.0
+        assert region.longitude == -120.0
         assert region.bounding_box_degrees == 10.0
         assert isinstance(region, Region)
 
@@ -45,7 +45,7 @@ class TestRegionClasses:
             latitude=45.0, longitude=-120.0, bounding_box_degrees=(5.0, 10.0)
         )
         assert region.latitude == 45.0
-        assert region.longitude == 240.0
+        assert region.longitude == -120.0
         assert region.bounding_box_degrees == (5.0, 10.0)
 
     def test_bounding_box_region_creation(self):
@@ -58,8 +58,8 @@ class TestRegionClasses:
         )
         assert region.latitude_min == 40.0
         assert region.latitude_max == 50.0
-        assert region.longitude_min == 235.0
-        assert region.longitude_max == 245.0
+        assert region.longitude_min == -125.0
+        assert region.longitude_max == -115.0
         assert isinstance(region, Region)
 
     def test_shapefile_region_creation(self):
@@ -385,7 +385,7 @@ class TestCreateRegion:
         )
         assert isinstance(region, CenteredRegion)
         assert region.latitude == 45.0
-        assert region.longitude == 240
+        assert region.longitude == -120.0
         assert region.bounding_box_degrees == 10.0
 
     def test_create_centered_region_with_tuple(self):
@@ -419,8 +419,8 @@ class TestCreateRegion:
         assert isinstance(region, BoundingBoxRegion)
         assert region.latitude_min == 40.0
         assert region.latitude_max == 50.0
-        assert region.longitude_min == 235.0
-        assert region.longitude_max == 245.0
+        assert region.longitude_min == -125.0
+        assert region.longitude_max == -115.0
 
     def test_create_shapefile_region(self):
         """Test creating a ShapefileRegion via factory function."""
@@ -448,7 +448,9 @@ class TestCreateRegion:
             # Missing bounding_box_degrees
 
         # Missing required parameters for BoundingBoxRegion
-        with pytest.raises(TypeError, match="missing 1 required positional argument"):
+        with pytest.raises(
+            TypeError, match="missing 1 required positional argument: 'longitude_max'"
+        ):
             map_to_create_region(
                 {
                     "type": "bounded_region",
@@ -464,7 +466,7 @@ class TestCreateRegion:
         # Mixed parameters that don't form a valid region
         with pytest.raises(
             TypeError,
-            match="got an unexpected keyword argument 'longitude_min'. Did you mean 'longitude'?",
+            match="got an unexpected keyword argument 'longitude_min'",
         ):
             map_to_create_region(
                 {
@@ -505,7 +507,7 @@ class TestMapToCreateRegion:
         region = map_to_create_region(kwargs)
         assert isinstance(region, CenteredRegion)
         assert region.latitude == 45.0
-        assert region.longitude == 240
+        assert region.longitude == -120.0
         assert region.bounding_box_degrees == 10.0
 
     def test_map_to_create_region_bounding_box(self):
@@ -746,6 +748,183 @@ class TestCreateGeopandasFromBounds:
         assert abs(bounds[2] - 45.1) < 0.001
 
 
+class TestGetBoundingCoordinates:
+    """Test the get_bounding_coordinates method for all Region subclasses."""
+
+    def test_centered_region_bounding_coordinates(self):
+        """Test CenteredRegion.get_bounding_coordinates method."""
+        region = CenteredRegion.create_region(
+            latitude=45.0, longitude=-120.0, bounding_box_degrees=10.0
+        )
+
+        coords = region.get_bounding_coordinates
+
+        # Check that it's a named tuple with correct attributes
+        assert hasattr(coords, "longitude_min")
+        assert hasattr(coords, "latitude_min")
+        assert hasattr(coords, "longitude_max")
+        assert hasattr(coords, "latitude_max")
+
+        # Check coordinate values (longitude should be converted to -180 to 180 range)
+        assert abs(coords.latitude_min - 40.0) < 0.001
+        assert abs(coords.latitude_max - 50.0) < 0.001
+        assert abs(coords.longitude_min - (-125.0)) < 0.001
+        assert abs(coords.longitude_max - (-115.0)) < 0.001
+
+    def test_centered_region_bounding_coordinates_tuple_box(self):
+        """Test CenteredRegion.get_bounding_coordinates with tuple bounding box."""
+        region = CenteredRegion.create_region(
+            latitude=45.0, longitude=-120.0, bounding_box_degrees=(5.0, 10.0)
+        )
+
+        coords = region.get_bounding_coordinates
+
+        # Check coordinate values (should be 42.5-47.5 lat, -125 to -115 lon)
+        assert abs(coords.latitude_min - 42.5) < 0.001
+        assert abs(coords.latitude_max - 47.5) < 0.001
+        assert abs(coords.longitude_min - (-125.0)) < 0.001
+        assert abs(coords.longitude_max - (-115.0)) < 0.001
+
+    def test_bounding_box_region_bounding_coordinates(self):
+        """Test BoundingBoxRegion.get_bounding_coordinates method."""
+        region = BoundingBoxRegion.create_region(
+            latitude_min=40.0,
+            latitude_max=50.0,
+            longitude_min=-125.0,
+            longitude_max=-115.0,
+        )
+
+        coords = region.get_bounding_coordinates
+
+        # Check coordinate values
+        assert abs(coords.latitude_min - 40.0) < 0.001
+        assert abs(coords.latitude_max - 50.0) < 0.001
+        assert abs(coords.longitude_min - (-125.0)) < 0.001
+        assert abs(coords.longitude_max - (-115.0)) < 0.001
+
+    def test_shapefile_region_bounding_coordinates(self):
+        """Test ShapefileRegion.get_bounding_coordinates method."""
+        # Create a mock polygon with known bounds
+        mock_polygon = Polygon([(240, 40), (250, 40), (250, 50), (240, 50), (240, 40)])
+        mock_gdf = gpd.GeoDataFrame(geometry=[mock_polygon], crs="EPSG:4326")
+
+        with patch("geopandas.read_file", return_value=mock_gdf):
+            region = ShapefileRegion.create_region(
+                shapefile_path="/path/to/shapefile.shp"
+            )
+
+            coords = region.get_bounding_coordinates
+
+            # Check coordinate values (should match the polygon bounds)
+            assert abs(coords.longitude_min - 240.0) < 0.001
+            assert abs(coords.longitude_max - 250.0) < 0.001
+            assert abs(coords.latitude_min - 40.0) < 0.001
+            assert abs(coords.latitude_max - 50.0) < 0.001
+
+    def test_bounding_coordinates_antimeridian_crossing(self):
+        """Test get_bounding_coordinates with antimeridian crossing."""
+        # Create a region that truly crosses the antimeridian (longitude spans > 180°)
+        region = CenteredRegion.create_region(
+            latitude=45.0,
+            longitude=175.0,
+            bounding_box_degrees=20.0,  # 165° to 185° crosses antimeridian
+        )
+
+        coords = region.get_bounding_coordinates
+
+        # For antimeridian crossing regions, coordinates should span -180 to 180
+        assert coords.longitude_min == -180.0
+        assert coords.longitude_max == 180.0
+        assert abs(coords.latitude_min - 35.0) < 0.001  # 45 - 10
+        assert abs(coords.latitude_max - 55.0) < 0.001  # 45 + 10
+
+    def test_bounding_coordinates_near_antimeridian_no_crossing(self):
+        """Test get_bounding_coordinates for region near but not crossing
+        antimeridian."""
+        # Create a region that goes exactly to 180° but doesn't cross it
+        region = CenteredRegion.create_region(
+            latitude=45.0,
+            longitude=175.0,
+            bounding_box_degrees=10.0,  # 170° to 180°, no crossing
+        )
+
+        coords = region.get_bounding_coordinates
+
+        # Should be a single polygon from 170° to 180°
+        assert abs(coords.longitude_min - 170.0) < 0.001
+        assert abs(coords.longitude_max - 180.0) < 0.001
+        assert abs(coords.latitude_min - 40.0) < 0.001
+        assert abs(coords.latitude_max - 50.0) < 0.001
+
+    def test_bounding_coordinates_longitude_conversion(self):
+        """Test that bounding coordinates properly handle longitude conversion."""
+        # Test with positive longitude that should be converted
+        region = CenteredRegion.create_region(
+            latitude=45.0,
+            longitude=200.0,
+            bounding_box_degrees=10.0,  # 200° = -160°
+        )
+
+        coords = region.get_bounding_coordinates
+
+        # Coordinates should be in -180 to 180 range
+        assert coords.longitude_min >= -180
+        assert coords.longitude_max <= 180
+
+        # Test specific expected values
+        # Center at 200° (converted to -160°), ±5° box should be -165° to -155°
+        expected_min_lon = -165.0
+        expected_max_lon = -155.0
+        assert abs(coords.longitude_min - expected_min_lon) < 0.001
+        assert abs(coords.longitude_max - expected_max_lon) < 0.001
+
+    def test_bounding_coordinates_edge_cases(self):
+        """Test get_bounding_coordinates with edge cases."""
+        # Test very small region
+        small_region = BoundingBoxRegion.create_region(
+            latitude_min=44.99,
+            latitude_max=45.01,
+            longitude_min=-120.01,
+            longitude_max=-119.99,
+        )
+        coords = small_region.get_bounding_coordinates
+        assert coords.latitude_max > coords.latitude_min
+        assert coords.longitude_max > coords.longitude_min
+
+        # Test polar region
+        polar_region = CenteredRegion.create_region(
+            latitude=85.0, longitude=0.0, bounding_box_degrees=10.0
+        )
+        polar_coords = polar_region.get_bounding_coordinates
+        assert polar_coords.latitude_min >= -90
+        assert polar_coords.latitude_max <= 90
+
+    def test_bounding_coordinates_return_type(self):
+        """Test that get_bounding_coordinates returns correct type."""
+        region = CenteredRegion.create_region(
+            latitude=45.0, longitude=-120.0, bounding_box_degrees=10.0
+        )
+
+        coords = region.get_bounding_coordinates
+
+        # Should return a tuple
+        assert isinstance(coords, tuple)
+        assert len(coords) == 4
+
+        # Should have named attributes
+        assert hasattr(coords, "longitude_min")
+        assert hasattr(coords, "latitude_min")
+        assert hasattr(coords, "longitude_max")
+        assert hasattr(coords, "latitude_max")
+
+        # All values should be floats
+        assert isinstance(coords.longitude_min, float)
+        assert isinstance(coords.latitude_min, float)
+        assert isinstance(coords.longitude_max, float)
+        assert isinstance(coords.latitude_max, float)
+
+
+@pytest.mark.integration
 class TestRegionIntegration:
     """Integration tests for region functionality."""
 
@@ -767,12 +946,12 @@ class TestRegionIntegration:
 
         assert isinstance(region, CenteredRegion)
         assert region.latitude == 45.0
-        assert region.longitude == 240.0
+        assert region.longitude == -120.0
         assert region.bounding_box_degrees == 10.0
 
     def test_region_with_individual_case_integration(self):
         """Test that regions work correctly with IndividualCase."""
-        from extremeweatherbench import case
+        from extremeweatherbench import cases
 
         region = CenteredRegion.create_region(
             latitude=45.0, longitude=-120.0, bounding_box_degrees=10.0
@@ -788,17 +967,20 @@ class TestRegionIntegration:
         )
 
         # Create IndividualCase with the region
-        individual_case = case.IndividualCase(
+        individual_case = cases.IndividualCase(
             case_id_number=1,
             title="Test Case",
             start_date=pd.Timestamp("2021-01-01"),
             end_date=pd.Timestamp("2021-01-02"),
             location=region,
             event_type="test",
-            data_vars=["temperature"],
         )
-
-        # Test that subset_region works
-        subset = individual_case.subset_region(dataset)
+        # Test that mask with drop=True works to subset coordinates
+        subset = individual_case.location.mask(dataset, drop=True)
         assert len(subset.latitude) < len(dataset.latitude)
         assert len(subset.longitude) < len(dataset.longitude)
+
+        # Test that mask with drop=False works to subset coordinates
+        subset = individual_case.location.mask(dataset, drop=False)
+        assert len(subset.latitude) == len(dataset.latitude)
+        assert len(subset.longitude) == len(dataset.longitude)
