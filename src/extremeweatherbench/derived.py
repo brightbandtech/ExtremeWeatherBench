@@ -45,7 +45,7 @@ class DerivedVariable(ABC):
 
     @classmethod
     @abstractmethod
-    def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
+    def derive_variable(cls, data: xr.Dataset, *args, **kwargs) -> xr.DataArray:
         """Derive the variable from the required variables.
 
         The output of the derivation must be a single variable output returned as
@@ -60,7 +60,7 @@ class DerivedVariable(ABC):
         pass
 
     @classmethod
-    def compute(cls, data: xr.Dataset) -> xr.DataArray:
+    def compute(cls, data: xr.Dataset, *args, **kwargs) -> xr.DataArray:
         """Build the derived variable from the input variables.
 
         This method is used to build the derived variable from the input variables.
@@ -69,6 +69,8 @@ class DerivedVariable(ABC):
 
         Args:
             data: The dataset to build the derived variable from.
+            *args: Additional positional arguments to pass to derive_variable.
+            **kwargs: Additional keyword arguments to pass to derive_variable.
 
         Returns:
             A DataArray with the derived variable.
@@ -76,7 +78,7 @@ class DerivedVariable(ABC):
         for v in cls.required_variables:
             if v not in data.data_vars:
                 raise ValueError(f"Input variable {v} not found in data")
-        return cls.derive_variable(data)
+        return cls.derive_variable(data, *args, **kwargs)
 
 
 # TODO: add the AR mask calculations
@@ -87,7 +89,7 @@ class AtmosphericRiverMask(DerivedVariable):
 
     # TODO: add the AR mask calculations
     @classmethod
-    def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
+    def derive_variable(cls, data: xr.Dataset, *args, **kwargs) -> xr.DataArray:
         """Derive the atmospheric river mask."""
         raise NotImplementedError("Atmospheric river mask not yet implemented")
 
@@ -107,7 +109,7 @@ class IntegratedVaporTransport(DerivedVariable):
     ]
 
     @classmethod
-    def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
+    def derive_variable(cls, data: xr.Dataset, *args, **kwargs) -> xr.DataArray:
         """Derive the integrated vapor transport.
 
         Args:
@@ -178,9 +180,52 @@ class IntegratedVaporTransportLaplacian(DerivedVariable):
     ]
 
     @classmethod
-    def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
+    def derive_variable(cls, data: xr.Dataset, *args, **kwargs) -> xr.DataArray:
         """Derive the integrated vapor transport Jacobian."""
         raise NotImplementedError("IVT Laplacian not yet implemented")
+
+
+class GeopotentialThickness(DerivedVariable):
+    """A derived variable that computes the geopotential thickness."""
+
+    required_variables = ["geopotential"]
+
+    @classmethod
+    def derive_variable(cls, data: xr.Dataset, *args, **kwargs) -> xr.DataArray:
+        """Derive the geopotential thickness.
+
+        Args:
+            data: The input xarray dataset.
+            top_level: The top level of the geopotential thickness in hPa.
+            bottom_level: The bottom level of the geopotential thickness in hPa.
+
+        Returns:
+            The geopotential thickness as a DataArray.
+        """
+        top_level = kwargs.get("top_level", 300)
+        bottom_level = kwargs.get("bottom_level", 500)
+        top_level_geopotential = data["geopotential"].sel(level=top_level)
+        bottom_level_geopotential = data["geopotential"].sel(level=bottom_level)
+        geopotential_thickness = (
+            top_level_geopotential - bottom_level_geopotential
+        ) / 9.80665
+
+        geopotential_thickness.attrs = dict(
+            description=f"Geopotential thickness of {top_level} and {bottom_level} hPa",
+            units="m",
+        )
+        return geopotential_thickness
+
+
+class SurfaceWindSpeed(DerivedVariable):
+    """A derived variable that computes the surface wind speed."""
+
+    required_variables = ["surface_eastward_wind", "surface_northward_wind"]
+
+    @classmethod
+    def derive_variable(cls, data: xr.Dataset, *args, **kwargs) -> xr.DataArray:
+        """Derive the surface wind speed."""
+        return np.hypot(data["surface_eastward_wind"], data["surface_northward_wind"])
 
 
 # TODO: finish TC track calculation port
@@ -204,7 +249,7 @@ class TCTrackVariables(DerivedVariable):
     ]
 
     @classmethod
-    def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
+    def derive_variable(cls, data: xr.Dataset, *args, **kwargs) -> xr.DataArray:
         """Derive the TC track variables."""
 
         def _prepare_wind_data(data: xr.Dataset) -> xr.Dataset:
