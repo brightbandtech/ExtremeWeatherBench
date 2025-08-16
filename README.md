@@ -24,13 +24,28 @@ Extreme Weather Bench welcomes your involvement!  The success of a benchmark sui
 
 Currently, the easiest way to install EWB is using the ```pip``` command:
 
-```
-pip install git+https://github.com/brightbandtech/ExtremeWeatherBench.git
+```shell
+$ pip install git+https://github.com/brightbandtech/ExtremeWeatherBench.git
 ```
 
+It is highly recommend to use [uv](https://docs.astral.sh/uv/) if possible:
+
+```shell
+$ git clone https://github.com/brightbandtech/ExtremeWeatherBench.git
+$ cd ExtremeWeatherBench
+$ uv sync
+```
 # How to Run EWB
 
 Running EWB on sample data (included) is straightforward. 
+
+## Using command line initialization:
+
+```shell
+$ ewb --default 
+```
+## Using Jupyter Notebook or script:
+
 ```python
 from extremeweatherbench import config, events, evaluate
 import pickle 
@@ -38,29 +53,34 @@ import pickle
 # Select model
 model = 'FOUR_v200_GFS'
 
-# Set up path to directory of file - zarr, json, or parquet
+# Set up path to directory of file - zarr or kerchunk/virtualizarr json/parquet
 forecast_dir = f'gs://extremeweatherbench/{model}.parq'
 
 # Choose the event types you want to include
 event_list = [events.HeatWave,
               events.Freeze]
 
-# Set up configuration object that includes events and the forecast directory
-heatwave_configuration = config.Config(
-    event_types=event_list,
-    forecast_dir=forecast_dir,
-    )
-
 # Use ForecastSchemaConfig to map forecast variable names to CF convention-based names used in EWB
 # the sample forecast kerchunk references to the CIRA MLWP archive are the default configuration
 default_forecast_config = config.ForecastSchemaConfig()
 
-# Run the evaluate script which outputs a dict of event results with associated metrics and variables
-cases = evaluate.evaluate(eval_config=heatwave_configuration, forecast_schema_config=default_forecast_config)
+# Set up configuration object that includes events and the forecast directory
+heatwave_and_freeze_configuration = config.Config(
+    event_types=event_list,
+    forecast_dir=forecast_dir,
+    # This line is not necessary, forecast_schema_config defaults to the default_forecast_config.
+    # Here as an example if values need to be changed for your use case 
+    forecast_schema_config=default_forecast_config 
+    )
+# Run the evaluate script which outputs a dataframe of case results with associated metrics and variables
+cases = evaluate.evaluate(eval_config=heatwave_and_freeze_configuration)
 
 # Save the results to a pickle file
-with open(f'cases_{model}.pkl', 'wb') as f:
+with open(f'ewb_cases_{model}.pkl', 'wb') as f:
     pickle.dump(cases, f)
+
+# Or, save to csv:
+cases.to_csv(f'ewb_cases_{model}.csv')
 ```
 # EWB case studies and categories
 EWB case studies are fully documented [here](docs/AllCaseStudies.md).  

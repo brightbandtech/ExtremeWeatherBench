@@ -1,437 +1,291 @@
 """Evaluation routines for use during ExtremeWeatherBench case studies / analyses."""
 
+import itertools
 import logging
-from typing import Optional, Literal, Union
+from pathlib import Path
+from typing import TYPE_CHECKING, Literal, Optional, Union
+
 import pandas as pd
 import xarray as xr
-from extremeweatherbench import config, events, case, utils, data_loader
-import dacite
-import dataclasses
-import itertools
+from tqdm.auto import tqdm
+from tqdm.contrib.logging import logging_redirect_tqdm
+
+from extremeweatherbench import cases, derived, inputs
+
+if TYPE_CHECKING:
+    from extremeweatherbench import metrics
+
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-@dataclasses.dataclass
-class CaseEvaluationInput:
-    """
-    A dataclass for storing the inputs of an evaluation.
+class ExtremeWeatherBench:
+    """A class to run the ExtremeWeatherBench workflow.
+
+    This class is used to run the ExtremeWeatherBench workflow. It is a
+    wrapper around the
+    case operators and metrics to create either a serial loop or will return the built
+    case operators to run in parallel as defined by the user.
 
     Attributes:
-        observation_type: The type of observation to evaluate (gridded or point).
-        observation: The observation dataarray to evaluate.
-        forecast: The forecast dataarray to evaluate.
+        cases: A dictionary of cases to run.
+        metrics: A list of metrics to run.
+        cache_dir: An optional directory to cache the mid-flight outputs of the
+            workflow.
     """
 
-    observation_type: Literal["gridded", "point"]
-    observation: Optional[xr.DataArray] = None
-    forecast: Optional[xr.DataArray] = None
-
-    def load_data(self):
-        """Load the evaluation inputs into memory."""
-        logger.debug("Loading evaluation inputs into memory if not None")
-        if self.observation is not None:
-            self.observation = self.observation.compute()
-        if self.forecast is not None:
-            self.forecast = self.forecast.compute()
-
-
-@dataclasses.dataclass
-class CaseEvaluationData:
-    """
-    This class is designed to be used in conjunction with the `case.IndividualCase` class to build
-    datasets for evaluation of individual Cases across a set of Events.
-
-    Attributes:
-        individual_case: The `case.IndividualCase` object to evaluate.
-        forecast: The forecast dataset to evaluate.
-        gridded_observation: The gridded observation dataset to evaluate.
-        point_observation: The point observation dataset to evaluate.
-    """
-
-    individual_case: case.IndividualCase
-    forecast: xr.Dataset
-    observation_type: Literal["gridded", "point"]
-    observation: Optional[Union[xr.Dataset | pd.DataFrame]] = None
-
-
-def build_dataset_subsets(
-    case_evaluation_data: CaseEvaluationData,
-    compute: bool = True,
-    existing_forecast: Optional[xr.Dataset] = None,
-) -> CaseEvaluationInput:
-    """Build the subsets of the gridded and point observations for a given data variable.
-    Computation occurs based on what observation datasets are provided in the Evaluation object.
-
-    Args:
-        data_var: The data variable to evaluate.
-        compute: Flag to disable performing actual calculations (but still validate
-            case configurations). Defaults to "False."
-        existing_forecast: If a forecast dataset is already loaded, this can be passed
-            in to avoid recomputing the forecast data into memory.
-    Returns:
-        A tuple of xarray DataArrays containing the gridded and point observation subsets.
-    """
-    if existing_forecast is not None:
-        logger.debug(
-            "Using existing forecast dataset for %s",
-            case_evaluation_data.observation_type,
-        )
-        case_evaluation_data.forecast = existing_forecast
-    else:
-        case_evaluation_data.forecast = _check_and_subset_forecast_availability(
-            case_evaluation_data
-        )
-    if (
-        case_evaluation_data.forecast is None
-        or case_evaluation_data.observation is None
+    def __init__(
+        self,
+        cases: dict[str, list],
+        metrics: list["inputs.EvaluationObject"],
+        cache_dir: Optional[Union[str, Path]] = None,
     ):
-        return CaseEvaluationInput(
-            observation_type=case_evaluation_data.observation_type,
-            observation=None,
-            forecast=None,
-        )
-    else:
-        if case_evaluation_data.observation_type == "gridded":
-            evaluation_result = _gridded_inputs_to_evaluation_input(
-                case_evaluation_data
-            )
-        elif case_evaluation_data.observation_type == "point":
-            # point obs needs to be computed if compute is True due to complex subsetting operations
-            evaluation_result = _point_inputs_to_evaluation_input(
-                case_evaluation_data, compute=compute
-            )
-        if compute:
-            evaluation_result.load_data()
-        return evaluation_result
+        self.cases = cases
+        self.metrics = metrics
+        self.cache_dir = Path(cache_dir) if cache_dir else None
 
+    # case operators as a property are a convenience method for users to use
+    # them outside the class
+    # if desired for a parallel workflow
+    @property
+    def case_operators(self) -> list["cases.CaseOperator"]:
+        return cases.build_case_operators(self.cases, self.metrics)
 
-def _gridded_inputs_to_evaluation_input(
-    case_evaluation_data: CaseEvaluationData,
-) -> CaseEvaluationInput:
-    """Subset the gridded observation dataarray for a given data variable."""
+    def run(
+        self,
+        **kwargs,
+    ) -> pd.DataFrame:
+        """Runs the ExtremeWeatherBench workflow.
 
-    if case_evaluation_data.observation is None:
-        raise ValueError("Gridded observation cannot be None")
-    var_subset_gridded_obs_ds = case_evaluation_data.observation[
-        case_evaluation_data.individual_case.data_vars
-    ]
-    time_var_subset_gridded_obs_ds = var_subset_gridded_obs_ds.sel(
-        time=slice(
-            case_evaluation_data.individual_case.start_date,
-            case_evaluation_data.individual_case.end_date,
-        )
-    )
-    completed_subset_gridded_obs_ds = (
-        case_evaluation_data.individual_case.perform_subsetting_procedure(
-            time_var_subset_gridded_obs_ds
-        )
-    )
-    # Align gridded_obs and forecast_dataset by time
-    subset_gridded_obs, forecast_ds = xr.align(
-        completed_subset_gridded_obs_ds,
-        case_evaluation_data.forecast,
-        join="inner",
-    )
-    return CaseEvaluationInput(
-        "gridded", observation=subset_gridded_obs, forecast=forecast_ds
-    )
+        This method will run the workflow in the order of the case operators, optionally
+        caching the mid-flight outputs of the workflow if cache_dir was provided.
 
+        Keyword arguments are passed to the metric computations if there are specific
+        requirements needed for metrics such as threshold arguments.
+        """
+        # instantiate the cache directory if caching and build it if it does not exist
+        if self.cache_dir:
+            if isinstance(self.cache_dir, str):
+                self.cache_dir = Path(self.cache_dir)
+            if not self.cache_dir.exists():
+                self.cache_dir.mkdir(parents=True, exist_ok=True)
 
-def _point_inputs_to_evaluation_input(
-    case_evaluation_data: CaseEvaluationData, compute: bool = True
-) -> CaseEvaluationInput:
-    """Subset the point observation dataarray for a given data variable."""
-    if case_evaluation_data.observation is None:
-        raise ValueError("Point observation cannot be None")
-    var_id_subset_point_obs = case_evaluation_data.observation.loc[
-        case_evaluation_data.observation["case_id"]
-        == case_evaluation_data.individual_case.id
-    ]
+        run_results = []
+        with logging_redirect_tqdm():
+            for case_operator in tqdm(self.case_operators):
+                run_results.append(compute_case_operator(case_operator, **kwargs))
 
-    var_id_subset_point_obs.loc[:, "longitude"] = utils.convert_longitude_to_360(
-        var_id_subset_point_obs.loc[:, "longitude"]
-    )
-    # this saves a significant amount of time if done prior to alignment with point obs
-    if compute:
-        logger.debug("Computing forecast dataset in point obs subsetting")
-        case_evaluation_data.forecast = case_evaluation_data.forecast.compute()
-    point_forecast_ds, subset_point_obs_ds = utils.align_point_obs_from_gridded(
-        forecast_ds=case_evaluation_data.forecast,
-        case_subset_point_obs_df=var_id_subset_point_obs,
-        data_var=case_evaluation_data.individual_case.data_vars,
-    )
-    if len(point_forecast_ds) == 0 or len(subset_point_obs_ds) == 0:
-        return CaseEvaluationInput(
-            "point",
-            observation=None,
-            forecast=None,
-        )
-    else:
-        point_forecast_df = point_forecast_ds.to_dataframe()
-        subset_point_obs_df = subset_point_obs_ds.to_dataframe()
-
-        # pandas groupby is significantly faster than xarray groupby, so we use that here
-        point_forecast_recompiled_ds = (
-            point_forecast_df.reset_index()
-            .groupby(["init_time", "lead_time", "latitude", "longitude"])
-            .first()
-            .to_xarray()
-        )
-
-        subset_point_obs_recompiled_ds = (
-            subset_point_obs_df.reset_index()
-            .groupby(["time", "latitude", "longitude"])
-            .first()
-            .to_xarray()
-        )
-        return CaseEvaluationInput(
-            "point",
-            observation=subset_point_obs_recompiled_ds,
-            forecast=point_forecast_recompiled_ds,
-        )
-
-
-def _check_and_subset_forecast_availability(
-    case_evaluation_data: CaseEvaluationData,
-) -> Optional[xr.DataArray]:
-    if (
-        len(case_evaluation_data.forecast.lead_time) == 0
-        or len(case_evaluation_data.forecast.init_time) == 0
-    ):
-        raise ValueError("No forecast data available, check forecast dataset.")
-
-    # subset the forecast to the valid times of the case
-    forecast_time_subset = case_evaluation_data.individual_case._subset_valid_times(
-        case_evaluation_data.forecast
-    )
-    forecast_spatial_subset = (
-        case_evaluation_data.individual_case.perform_subsetting_procedure(
-            forecast_time_subset
-        )
-    )
-    # subset the forecast to the data variables for the event type/metric
-    forecast = forecast_spatial_subset[case_evaluation_data.individual_case.data_vars]
-    lead_time_len = len(forecast.init_time)
-    if lead_time_len == 0:
-        logger.warning(
-            "No forecast data available for case %s, skipping",
-            case_evaluation_data.individual_case.id,
-        )
-        return None
-    elif (
-        lead_time_len
-        < (
-            case_evaluation_data.individual_case.end_date
-            - case_evaluation_data.individual_case.start_date
-        ).days
-    ):
-        logger.warning(
-            "Fewer valid times in forecast than days in case %s, results likely unreliable",
-            case_evaluation_data.individual_case.id,
-        )
-    logger.info(
-        "Forecast data available for case %s", case_evaluation_data.individual_case.id
-    )
-
-    return forecast
-
-
-def evaluate(
-    eval_config: config.Config,
-) -> pd.DataFrame:
-    """Driver for evaluating a collection of Cases across a set of Events.
-
-    Args:
-        eval_config: A configuration object defining the evaluation run.
-        forecast_schema_config: A mapping of the forecast variable naming schema to use
-            when reading / decoding forecast data in the analysis.
-        point_obs_schema_config: A mapping of the point observation variable naming schema to use
-            when reading / decoding point observation data in the analysis.
-
-    Returns:
-        A dictionary mapping event types to lists of xarray Datasets containing the
-        evaluation results for each case within the event type.
-    """
-
-    all_results_df = pd.DataFrame()
-    yaml_event_case = utils.load_events_yaml()
-
-    logger.debug("Evaluation starting")
-    point_obs, gridded_obs = data_loader.open_obs_datasets(eval_config)
-    forecast_dataset = data_loader.open_and_preprocess_forecast_dataset(eval_config)
-    logger.debug("Forecast and observation datasets loaded")
-    logger.debug(
-        "Observation data: Point %s, Gridded %s",
-        point_obs is not None,
-        gridded_obs is not None,
-    )
-    # map era5 vars by renaming and dropping extra vars
-    if gridded_obs is not None:
-        gridded_obs = utils.map_era5_vars_to_forecast(
-            eval_config.forecast_schema_config,
-            forecast_dataset=forecast_dataset,
-            era5_dataset=gridded_obs,
-        )
-    for event in eval_config.event_types:
-        cases = dacite.from_dict(
-            data_class=event,
-            data=yaml_event_case,
-        )
-
-        logger.debug("beginning evaluation loop for %s", event.event_type)
-        results = _maybe_evaluate_individual_cases_loop(
-            cases, forecast_dataset, gridded_obs, point_obs
-        )
-        all_results_df = pd.concat([all_results_df, results])
-        logger.debug("evaluation loop complete for %s", event.event_type)
-    logger.info(
-        "\nVerification Summary:\n"
-        "- Processed %s event types\n"
-        "- Observation types verified against: %s\n"
-        "- Generated results for %s cases\n"
-        "Evaluation complete.",
-        len(eval_config.event_types),
-        ", ".join(
-            [
-                x
-                for x in [
-                    "point" if point_obs is not None else "",
-                    "gridded" if gridded_obs is not None else "",
+                # store the results of each case operator if caching
+                if self.cache_dir:
+                    pd.concat(run_results).to_pickle(
+                        self.cache_dir / "case_results.pkl"
+                    )
+        if run_results:
+            return pd.concat(run_results, ignore_index=True)
+        else:
+            # Return empty DataFrame with expected columns
+            return pd.DataFrame(
+                columns=[
+                    "value",
+                    "target_variable",
+                    "metric",
+                    "target_source",
+                    "forecast_source",
+                    "case_id_number",
+                    "event_type",
                 ]
-                if x
-            ]
-        ),
-        all_results_df["case_id"].nunique(),
-    )
-    return all_results_df
+            )
 
 
-def _maybe_evaluate_individual_cases_loop(
-    event: events.EventContainer,
-    forecast_dataset: xr.Dataset,
-    gridded_obs: Optional[xr.Dataset] = None,
-    point_obs: Optional[pd.DataFrame] = None,
-) -> pd.DataFrame:
-    """Sequentially loop over and evalute all cases for a specific event type.
+def compute_case_operator(case_operator: "cases.CaseOperator", **kwargs):
+    """Compute the results of a case operator.
+
+    This method will compute the results of a case operator. It will build
+    the target and forecast datasets,
+    align them, compute the metrics, and return a concatenated dataframe of the results.
 
     Args:
-        event: The Event object containing the cases to evaluate.
-        forecast_dataset: The forecast dataset to evaluate against.
-        gridded_obs: The gridded observation dataset to use for evaluation.
-        point_obs: The point observation dataset to use for evaluation.
+        case_operator: The case operator to compute the results of.
+        kwargs: Keyword arguments to pass to the metric computations.
 
     Returns:
-        A list of xarray Datasets containing the evaluation results for each case
-        in the Event of interest.
+        A concatenated dataframe of the results of the case operator.
     """
-    results_df = pd.DataFrame()
-    for individual_case in event.cases:
-        result = _maybe_evaluate_individual_case(
-            individual_case,
-            forecast_dataset,
-            gridded_obs,
-            point_obs,
+    forecast_ds, target_ds = _build_datasets(case_operator)
+
+    # spatiotemporally align the target and forecast datasets dependent on the forecast
+    aligned_forecast_ds, aligned_target_ds = (
+        case_operator.target.maybe_align_forecast_to_target(forecast_ds, target_ds)
+    )
+
+    # compute and cache the datasets if requested
+    if kwargs.get("pre_compute", False):
+        aligned_forecast_ds, aligned_target_ds = _compute_and_maybe_cache(
+            aligned_forecast_ds,
+            aligned_target_ds,
+            cache_dir=kwargs.get("cache_dir", None),
         )
-        results_df = pd.concat([results_df, result])
 
-    return results_df
-
-
-def _maybe_evaluate_individual_case(
-    individual_case: case.IndividualCase,
-    forecast_dataset: Optional[xr.Dataset],
-    gridded_obs: Optional[xr.Dataset],
-    point_obs: Optional[pd.DataFrame],
-) -> pd.DataFrame:
-    """Evaluate a single case given forecast data and observations.
-
-    Args:
-        individual_case: A configuration object defining the case to evaluate.
-        forecast_dataset: The forecast dataset to evaluate against.
-        gridded_obs: The gridded observation dataset to use for evaluation.
-        point_obs: The point observation dataset to use for evaluation.
-
-    Returns:
-        An xarray Dataset containing the evaluation results for the case.
-
-    Raises:
-        ValueError: If no forecast data is available.
-    """
-    logger.info("Evaluating case %s, %s", individual_case.id, individual_case.title)
-    gridded_obs_evaluation = CaseEvaluationData(
-        individual_case=individual_case,
-        observation_type="gridded",
-        observation=gridded_obs,
-        forecast=forecast_dataset,
-    )
-    point_obs_evaluation = CaseEvaluationData(
-        individual_case=individual_case,
-        observation_type="point",
-        observation=point_obs,
-        forecast=forecast_dataset,
-    )
-
-    gridded_case_eval = build_dataset_subsets(gridded_obs_evaluation, compute=True)
-    point_case_eval = build_dataset_subsets(
-        point_obs_evaluation,
-        compute=True,
-        existing_forecast=(
-            gridded_case_eval.forecast
-            if gridded_case_eval.forecast is not None
-            else None
+    aligned_forecast_ds, aligned_target_ds = [
+        derived.maybe_derive_variables(ds, variables)
+        for ds, variables in zip(
+            [aligned_forecast_ds, aligned_target_ds],
+            [case_operator.forecast.variables, case_operator.target.variables],
+        )
+    ]
+    logger.info(f"datasets built for case {case_operator.case_metadata.case_id_number}")
+    results = []
+    # TODO: determine if derived variables need to be pushed here or at pre-compute
+    for variables, metric in itertools.product(
+        zip(
+            case_operator.forecast.variables,
+            case_operator.target.variables,
         ),
-    )
-    case_result_df = pd.DataFrame()
-
-    # Process each data variable and metric combination
-    for data_var, metric in itertools.product(
-        individual_case.data_vars, individual_case.metrics_list
+        case_operator.metric,
     ):
-        metric_instance = metric()
-        logging.debug("Computing metric: %s", metric_instance.name)
+        results.append(
+            _evaluate_metric_and_return_df(
+                forecast_ds=aligned_forecast_ds,
+                target_ds=aligned_target_ds,
+                forecast_variable=variables[0],
+                target_variable=variables[1],
+                metric=metric,
+                case_id_number=case_operator.case_metadata.case_id_number,
+                event_type=case_operator.case_metadata.event_type,
+                **kwargs,
+            )
+        )
 
-        results = []
-        # Process both gridded and point observations
-        for eval_data in [gridded_case_eval, point_case_eval]:
-            if eval_data.observation is not None and eval_data.forecast is not None:
-                # Compute metric and format result
-                result = metric_instance.compute(
-                    eval_data.forecast[data_var], eval_data.observation[data_var]
-                )
-                result.name = "value"
-                # Convert to DataFrame and add metadata
-                df = result.to_dataframe().reset_index()
-                df["variable"] = data_var
-                df["metric"] = metric_instance.name
-                df["observation_type"] = eval_data.observation_type
-                results.append(df)
+        # cache the results of each metric if caching
+        cache_dir = kwargs.get("cache_dir", None)
+        if cache_dir:
+            cache_path = Path(cache_dir) if isinstance(cache_dir, str) else cache_dir
+            pd.concat(results, ignore_index=True).to_pickle(cache_path / "results.pkl")
 
-        case_result_df = pd.concat([case_result_df] + results, ignore_index=True)
-
-    # Add case metadata
-    case_result_df["case_id"] = individual_case.id
-    case_result_df["event_type"] = individual_case.event_type
-
-    return case_result_df
+    if results:
+        return pd.concat(results, ignore_index=True)
+    else:
+        # Return empty DataFrame with expected columns
+        return pd.DataFrame(
+            columns=[
+                "value",
+                "target_variable",
+                "metric",
+                "target_source",
+                "forecast_source",
+                "case_id_number",
+                "event_type",
+            ]
+        )
 
 
-def get_case_metadata(eval_config: config.Config) -> list[events.EventContainer]:
-    """Extract case metadata from a dictionary of case information.
+def _evaluate_metric_and_return_df(
+    forecast_ds: xr.Dataset,
+    target_ds: xr.Dataset,
+    forecast_variable: Union[str, "derived.DerivedVariable"],
+    target_variable: Union[str, "derived.DerivedVariable"],
+    metric: "metrics.BaseMetric",
+    case_id_number: int,
+    event_type: str,
+    **kwargs,
+):
+    """Evaluate a metric and return a dataframe of the results.
 
     Args:
-        eval_config: The configuration object defining the evaluation run.
+        forecast_ds: The forecast dataset.
+        target_ds: The target dataset.
+        forecast_variable: The forecast variable to evaluate.
+        target_variable: The target variable to evaluate.
+        metric: The metric to evaluate.
+        case_id_number: The case id number.
+        event_type: The event type.
 
     Returns:
-        A list of EventContainer objects containing the case metadata.
+        A dataframe of the results of the metric evaluation.
     """
-    yaml_event_case = utils.load_events_yaml()
-    case_metadata_output = []
-    for event in eval_config.event_types:
-        cases = dacite.from_dict(
-            data_class=event,
-            data=yaml_event_case,
+    metric = metric()
+    logger.info(f"computing metric {metric.name}")
+    metric_result = metric.compute_metric(
+        forecast_ds[forecast_variable],
+        target_ds[target_variable],
+        **kwargs,
+    )
+
+    # Convert to DataFrame and add metadata
+    df = metric_result.to_dataframe(name="value").reset_index()
+    df["target_variable"] = target_variable
+    df["metric"] = metric.name
+    df["target_source"] = target_ds.attrs["source"]
+    df["forecast_source"] = forecast_ds.attrs["source"]
+    df["case_id_number"] = case_id_number
+    df["event_type"] = event_type
+    return df
+
+
+def _build_datasets(
+    case_operator: "cases.CaseOperator",
+) -> tuple[xr.Dataset, xr.Dataset]:
+    """Build the target and forecast datasets for a case operator.
+
+    This method will process through all stages of the pipeline for the target and
+    forecast datasets, including preprocessing, variable renaming, and subsetting.
+    """
+    logger.info("running forecast pipeline")
+    forecast_ds = run_pipeline(case_operator, "forecast")
+    logger.info("running target pipeline")
+    target_ds = run_pipeline(case_operator, "target")
+    return (forecast_ds, target_ds)
+
+
+def _compute_and_maybe_cache(
+    *datasets: xr.Dataset, cache_dir: Optional[Union[str, Path]]
+) -> list[xr.Dataset]:
+    """Compute and cache the datasets if caching."""
+    logger.info("computing datasets")
+    computed_datasets = [dataset.compute() for dataset in datasets]
+    if cache_dir:
+        raise NotImplementedError("Caching is not implemented yet")
+        # (computed_dataset.to_netcdf(self.cache_dir) for computed_dataset in
+        # computed_datasets)
+    return computed_datasets
+
+
+def run_pipeline(
+    case_operator: "cases.CaseOperator",
+    input_source: Literal["target", "forecast"],
+) -> xr.Dataset:
+    """Shared method for running the target pipeline.
+
+    Args:
+        case_operator: The case operator to run the pipeline on.
+        input_source: The input source to run the pipeline on.
+
+    Returns:
+        The target data with a type determined by the user.
+    """
+
+    if input_source == "target":
+        input_data = case_operator.target
+    elif input_source == "forecast":
+        input_data = case_operator.forecast
+    else:
+        raise ValueError(f"Invalid input source: {input_source}")
+
+    # Open data and process through pipeline steps
+    data = (
+        # opens data from user-defined source
+        input_data.open_and_maybe_preprocess_data_from_source()
+        # maps variable names to the target data if not already using EWB
+        # naming conventions
+        .pipe(input_data.maybe_map_variable_names)
+        # subsets the target data using the caseoperator metadata
+        .pipe(
+            input_data.subset_data_to_case,
+            case_operator=case_operator,
         )
-        case_metadata_output.append(cases)
-    return case_metadata_output
+        # converts the target data to an xarray dataset if it is not already
+        .pipe(input_data.maybe_convert_to_dataset)
+        .pipe(input_data.add_source_to_dataset_attrs)
+    )
+    return data

@@ -22,11 +22,15 @@ dependencies = [
     "seaborn>=0.13.2",
     "tqdm>=4.67.1",
     "ujson>=5.10.0",
-    "xarray[io]>=2024.11.0",
-    "zarr>=3.0.2",
+    "xarray[io]==2025.7.1",
+    "zarr==3.0.9",
     "kerchunk[dev]",
     "flox>=0.10.0",
     "mkapi>=4.4.0",
+    "click>=8.1.8",
+    "sparse>=0.17.0",
+    "polars>=1.32.1",
+    "scikit-image>=0.25.2",
 ]
 
 [project.optional-dependencies]
@@ -42,13 +46,18 @@ dev = [
     "isort>=6.0.1",
     "mkdocs>=1.6.1",
     "mkdocs-material>=9.6.14",
+    "jupyterlab>=4.4.5",
+    "lxml-stubs>=0.5.1",
     "mypy>=1.14.1",
+    "pandas-stubs>=2.3.0.250703",
     "pre-commit>=4.1.0",
     "pytest>=8.3.4",
     "pytest-cov>=6.0.0",
     "pytest-mock>=3.14.0",
     "ruff>=0.9.4",
+    "types-pytz>=2025.2.0.20250809",
     "types-pyyaml>=6.0.12.20241230",
+    "types-tqdm>=4.67.0.20250809",
 ]
 
 [build-system]
@@ -62,6 +71,9 @@ include-package-data = true
 
 [tool.setuptools.package-data]
 extremeweatherbench = ["data/**/*", "data/**/.*"]
+
+[project.scripts]
+ewb = "extremeweatherbench.evaluate_cli:cli_runner"
 
 [tool.uv.sources]
 extremeweatherbench = { workspace = true }

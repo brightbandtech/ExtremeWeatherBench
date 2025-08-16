@@ -1,407 +1,915 @@
-import pytest
-from extremeweatherbench import case, evaluate, events
+"""Comprehensive test suite for evaluate.py module.
+
+This test suite covers all the main functionality of the ExtremeWeatherBench evaluation
+workflow, including the ExtremeWeatherBench class, pipeline functions, and error
+handling.
+"""
+
 import datetime
-import xarray as xr
+import tempfile
+from pathlib import Path
+from unittest.mock import Mock, patch
+
 import numpy as np
 import pandas as pd
+import pytest
+import xarray as xr
+
+from extremeweatherbench import cases, evaluate, inputs, metrics
+from extremeweatherbench.regions import CenteredRegion
+
+# =============================================================================
+# Test Fixtures
+# =============================================================================
 
 
-def test_get_case_metadata(sample_config):
-    result = evaluate.get_case_metadata(sample_config)
-    assert isinstance(result, list)
-    assert isinstance(result[0], events.EventContainer)
-
-
-def test_evaluate_individualcase(sample_forecast_dataset, sample_gridded_obs_dataset):
-    base_case = case.IndividualCase(
-        id=1,
-        title="test_case",
+@pytest.fixture
+def sample_individual_case():
+    """Create a sample IndividualCase for testing."""
+    return cases.IndividualCase(
+        case_id_number=1,
+        title="Test Heat Wave",
         start_date=datetime.datetime(2021, 6, 20),
-        end_date=datetime.datetime(2021, 7, 3),
-        bounding_box_degrees=500,
-        location={"latitude": 45.0, "longitude": -100.0},
+        end_date=datetime.datetime(2021, 6, 25),
+        location=CenteredRegion(
+            latitude=45.0, longitude=-120.0, bounding_box_degrees=5.0
+        ),
         event_type="heat_wave",
-        data_vars=["2m_temperature"],
     )
-    with pytest.raises(NotImplementedError):
-        evaluate._maybe_evaluate_individual_case(
-            individual_case=base_case,
-            forecast_dataset=sample_forecast_dataset,
-            gridded_obs=sample_gridded_obs_dataset,
-            point_obs=None,
+
+
+@pytest.fixture
+def sample_cases_dict(sample_individual_case):
+    """Create a sample cases dictionary."""
+    return {
+        "cases": [
+            {
+                "case_id_number": 1,
+                "title": "Test Heat Wave",
+                "start_date": datetime.datetime(2021, 6, 20),
+                "end_date": datetime.datetime(2021, 6, 25),
+                "location": {
+                    "type": "centered_region",
+                    "parameters": {
+                        "latitude": 45.0,
+                        "longitude": -120.0,
+                        "bounding_box_degrees": 5.0,
+                    },
+                },
+                "event_type": "heat_wave",
+            }
+        ]
+    }
+
+
+@pytest.fixture
+def mock_target_base():
+    """Create a mock TargetBase object."""
+    mock_target = Mock(spec=inputs.TargetBase)
+    mock_target.name = "MockTarget"
+    mock_target.variables = ["2m_temperature"]
+    mock_target.open_and_maybe_preprocess_data_from_source.return_value = xr.Dataset()
+    mock_target.maybe_map_variable_names.return_value = xr.Dataset()
+    mock_target.subset_data_to_case.return_value = xr.Dataset()
+    mock_target.maybe_convert_to_dataset.return_value = xr.Dataset()
+    mock_target.add_source_to_dataset_attrs.return_value = xr.Dataset(
+        attrs={"source": "mock_target"}
+    )
+    mock_target.maybe_align_forecast_to_target.return_value = (
+        xr.Dataset(),
+        xr.Dataset(),
+    )
+    return mock_target
+
+
+@pytest.fixture
+def mock_forecast_base():
+    """Create a mock ForecastBase object."""
+    mock_forecast = Mock(spec=inputs.ForecastBase)
+    mock_forecast.name = "MockForecast"
+    mock_forecast.variables = ["surface_air_temperature"]
+    mock_forecast.open_and_maybe_preprocess_data_from_source.return_value = xr.Dataset()
+    mock_forecast.maybe_map_variable_names.return_value = xr.Dataset()
+    mock_forecast.subset_data_to_case.return_value = xr.Dataset()
+    mock_forecast.maybe_convert_to_dataset.return_value = xr.Dataset()
+    mock_forecast.add_source_to_dataset_attrs.return_value = xr.Dataset(
+        attrs={"source": "mock_forecast"}
+    )
+    return mock_forecast
+
+
+@pytest.fixture
+def mock_base_metric():
+    """Create a mock BaseMetric object."""
+    mock_metric = Mock(spec=metrics.BaseMetric)
+    mock_metric.name = "MockMetric"
+    mock_metric.compute_metric.return_value = xr.DataArray(
+        data=[1.0], dims=["lead_time"], coords={"lead_time": [0]}
+    )
+    return mock_metric
+
+
+@pytest.fixture
+def sample_evaluation_object(mock_target_base, mock_forecast_base, mock_base_metric):
+    """Create a sample EvaluationObject."""
+    return inputs.EvaluationObject(
+        event_type="heat_wave",
+        metric=[mock_base_metric],
+        target=mock_target_base,
+        forecast=mock_forecast_base,
+    )
+
+
+@pytest.fixture
+def sample_case_operator(
+    sample_individual_case, mock_target_base, mock_forecast_base, mock_base_metric
+):
+    """Create a sample CaseOperator."""
+    return cases.CaseOperator(
+        case_metadata=sample_individual_case,
+        metric=mock_base_metric,
+        target=mock_target_base,
+        forecast=mock_forecast_base,
+    )
+
+
+@pytest.fixture
+def sample_forecast_dataset():
+    """Create a sample forecast dataset."""
+    init_time = pd.date_range("2021-06-20", periods=3)
+    lead_time = [0, 6, 12]
+    latitudes = np.linspace(40, 50, 11)
+    longitudes = np.linspace(-125, -115, 11)
+
+    data = np.random.random(
+        (len(init_time), len(latitudes), len(longitudes), len(lead_time))
+    )
+
+    return xr.Dataset(
+        {
+            "surface_air_temperature": (
+                ["init_time", "latitude", "longitude", "lead_time"],
+                data + 273.15,
+            )
+        },
+        coords={
+            "init_time": init_time,
+            "latitude": latitudes,
+            "longitude": longitudes,
+            "lead_time": lead_time,
+        },
+        attrs={"source": "test_forecast"},
+    )
+
+
+@pytest.fixture
+def sample_target_dataset():
+    """Create a sample target dataset."""
+    time = pd.date_range("2021-06-20", periods=20, freq="6h")
+    latitudes = np.linspace(40, 50, 11)
+    longitudes = np.linspace(-125, -115, 11)
+
+    data = np.random.random((len(time), len(latitudes), len(longitudes)))
+
+    return xr.Dataset(
+        {
+            "2m_temperature": (
+                ["time", "latitude", "longitude"],
+                data + 273.15,
+            )
+        },
+        coords={
+            "time": time,
+            "latitude": latitudes,
+            "longitude": longitudes,
+        },
+        attrs={"source": "test_target"},
+    )
+
+
+# =============================================================================
+# Test ExtremeWeatherBench Class
+# =============================================================================
+
+
+class TestExtremeWeatherBench:
+    """Test the ExtremeWeatherBench class."""
+
+    def test_initialization(self, sample_cases_dict, sample_evaluation_object):
+        """Test ExtremeWeatherBench initialization."""
+        ewb = evaluate.ExtremeWeatherBench(
+            cases=sample_cases_dict,
+            metrics=[sample_evaluation_object],
         )
 
-
-def test_case_evaluation_input_init():
-    """Test initialization of CaseEvaluationInput."""
-    eval_input = evaluate.CaseEvaluationInput(observation_type="gridded")
-    assert eval_input.observation_type == "gridded"
-    assert eval_input.observation is None
-    assert eval_input.forecast is None
-
-
-def test_case_evaluation_input_load_data(
-    sample_gridded_obs_dataarray, sample_forecast_dataarray
-):
-    """Test load_data method of CaseEvaluationInput."""
-    # Create lazy arrays
-    lazy_obs = sample_gridded_obs_dataarray.chunk()
-    lazy_forecast = sample_forecast_dataarray.chunk()
-
-    eval_input = evaluate.CaseEvaluationInput(
-        observation_type="gridded", observation=lazy_obs, forecast=lazy_forecast
-    )
-
-    # Verify arrays are lazy before load_data
-    assert isinstance(eval_input.observation.data, type(lazy_obs.data))
-    assert isinstance(eval_input.forecast.data, type(lazy_forecast.data))
-
-    # Call load_data
-    eval_input.load_data()
-
-    # Verify arrays are now in memory
-    assert isinstance(eval_input.observation.data, np.ndarray)
-    assert isinstance(eval_input.forecast.data, np.ndarray)
-
-
-def test_case_evaluation_data_init(mocker):
-    """Test initialization of CaseEvaluationData."""
-    mock_case = mocker.MagicMock(spec=case.IndividualCase)
-    mock_case.data_vars = "2m_temperature"
-    mock_forecast = mocker.MagicMock(spec=xr.Dataset)
-    mock_obs = mocker.MagicMock(spec=xr.Dataset)
-
-    eval_data = evaluate.CaseEvaluationData(
-        individual_case=mock_case,
-        observation_type="gridded",
-        forecast=mock_forecast,
-        observation=mock_obs,
-    )
-
-    assert eval_data.individual_case == mock_case
-    assert eval_data.observation_type == "gridded"
-    assert eval_data.forecast == mock_forecast
-    assert eval_data.observation == mock_obs
-
-
-def test_check_and_subset_forecast_availability(mocker):
-    """Test _check_and_subset_forecast_availability function."""
-    mock_case = mocker.MagicMock(spec=case.IndividualCase)
-    mock_case.id = "99"
-    mock_case.data_vars = ["surface_air_temperature"]
-    mock_case.start_date = datetime.datetime(2021, 6, 20)
-    mock_case.end_date = datetime.datetime(2021, 6, 25)
-
-    # Setup the return value for _subset_valid_times
-    time_subset_mock = mocker.MagicMock(spec=xr.Dataset)
-    mock_case._subset_valid_times.return_value = time_subset_mock
-
-    # Setup the return value for perform_subsetting_procedure
-    spatial_subset_mock = mocker.MagicMock(spec=xr.Dataset)
-    mock_case.perform_subsetting_procedure.return_value = spatial_subset_mock
-
-    # Create a mock for the data variable subset
-    var_subset_mock = mocker.MagicMock(spec=xr.Dataset)
-    var_subset_mock.init_time = range(10)
-    spatial_subset_mock.__getitem__.return_value = var_subset_mock
-
-    # Create the forecast mock
-    mock_forecast = mocker.MagicMock(spec=xr.Dataset)
-    mock_forecast.lead_time = range(5)
-    mock_forecast.init_time = range(5)
-
-    # Create the case evaluation data
-    case_eval_data = evaluate.CaseEvaluationData(
-        individual_case=mock_case,
-        observation_type="gridded",
-        forecast=mock_forecast,
-        observation=mocker.MagicMock(spec=xr.Dataset),
-    )
-
-    result = evaluate._check_and_subset_forecast_availability(case_eval_data)
-
-    # Verify the function calls and result
-    mock_case._subset_valid_times.assert_called_once_with(mock_forecast)
-    mock_case.perform_subsetting_procedure.assert_called_once_with(time_subset_mock)
-    spatial_subset_mock.__getitem__.assert_called_once_with(mock_case.data_vars)
-    assert result is var_subset_mock
-
-
-def test_check_and_subset_forecast_availability_empty(mocker):
-    """Test _check_and_subset_forecast_availability function with empty forecast."""
-    mock_case = mocker.MagicMock(spec=case.IndividualCase)
-    mock_case.id = "test_case"
-    mock_case._subset_valid_times.return_value = mocker.MagicMock(spec=xr.Dataset)
-    mock_case._subset_valid_times.return_value.init_time = []
-    mock_case.start_date = datetime.datetime(2021, 6, 20)
-    mock_case.end_date = datetime.datetime(2021, 6, 25)
-
-    mock_forecast = mocker.MagicMock(spec=xr.Dataset)
-    mock_forecast.lead_time = range(5)
-    mock_forecast.init_time = range(5)
-
-    # Create a mock self object with the required attributes
-    mock_self = mocker.MagicMock()
-    mock_self.individual_case = mock_case
-    mock_self.forecast = mock_forecast
-
-    result = evaluate._check_and_subset_forecast_availability(mock_self)
-    assert result is None
-
-
-def test_build_dataset_subsets_with_existing_forecast(
-    mocker, sample_gridded_obs_dataset, sample_forecast_dataset
-):
-    """Test build_dataset_subsets with an existing forecast dataset."""
-    # Create a mock case
-    mock_case = mocker.MagicMock(spec=case.IndividualCase)
-    mock_case.id = "test_case"
-    mock_case.data_vars = "2m_temperature"
-    mock_case.start_date = datetime.datetime(2021, 6, 20)
-    mock_case.end_date = datetime.datetime(2021, 6, 25)
-
-    # Create a mock existing forecast dataset
-    existing_forecast = sample_forecast_dataset.copy(deep=True)
-
-    # Create the case evaluation data
-    case_eval_data = evaluate.CaseEvaluationData(
-        individual_case=mock_case,
-        observation_type="gridded",
-        forecast=sample_forecast_dataset,  # This should be replaced by existing_forecast
-        observation=sample_gridded_obs_dataset,
-    )
-
-    # Mock _subset_gridded_obs to return a CaseEvaluationInput
-    mock_result = evaluate.CaseEvaluationInput(
-        observation_type="gridded",
-        observation=sample_gridded_obs_dataset["2m_temperature"],
-        forecast=existing_forecast["surface_air_temperature"],
-    )
-    mocker.patch(
-        "extremeweatherbench.evaluate._gridded_inputs_to_evaluation_input",
-        return_value=mock_result,
-    )
-
-    # Spy on _check_and_subset_forecast_availability to verify it's not called
-    check_forecast_spy = mocker.patch(
-        "extremeweatherbench.evaluate._check_and_subset_forecast_availability"
-    )
-
-    # Call the function with existing_forecast
-    result = evaluate.build_dataset_subsets(
-        case_eval_data, compute=False, existing_forecast=existing_forecast
-    )
-
-    # Verify that _check_and_subset_forecast_availability was not called
-    check_forecast_spy.assert_not_called()
-
-    # Verify that the forecast in case_eval_data was replaced with existing_forecast
-    assert case_eval_data.forecast is existing_forecast
-
-    # Verify the result
-    assert result.observation_type == "gridded"
-    assert result.observation is not None
-    assert result.forecast is not None
-
-
-def test_build_dataarray_subsets_no_forecast(mocker):
-    """Test build_dataarray_subsets with no forecast data."""
-    mock_case = mocker.MagicMock(spec=case.IndividualCase)
-    mock_case.id = "test_case"
-    mock_case.data_vars = "2m_temperature"
-
-    mock_forecast = mocker.MagicMock(spec=xr.Dataset)
-
-    case_eval_data = evaluate.CaseEvaluationData(
-        individual_case=mock_case,
-        observation_type="gridded",
-        forecast=mock_forecast,
-        observation=None,
-    )
-
-    # Mock _check_and_subset_forecast_availability to return None
-    mocker.patch(
-        "extremeweatherbench.evaluate._check_and_subset_forecast_availability",
-        return_value=None,
-    )
-
-    result = evaluate.build_dataset_subsets(case_eval_data)
-
-    assert result.observation_type == "gridded"
-    assert result.observation is None
-    assert result.forecast is None
-
-
-def test_build_dataarray_subsets_gridded(
-    mocker, sample_gridded_obs_dataset, sample_forecast_dataset
-):
-    """Test build_dataarray_subsets with gridded observation data."""
-    mock_case = mocker.MagicMock(spec=case.IndividualCase)
-    mock_case.id = "test_case"
-    mock_case.data_vars = "2m_temperature"
-    mock_case.start_date = datetime.datetime(2021, 6, 20)
-    mock_case.end_date = datetime.datetime(2021, 6, 25)
-    mock_case.perform_subsetting_procedure.return_value = sample_gridded_obs_dataset[
-        "2m_temperature"
-    ]
-
-    case_eval_data = evaluate.CaseEvaluationData(
-        individual_case=mock_case,
-        observation_type="gridded",
-        forecast=sample_forecast_dataset,
-        observation=sample_gridded_obs_dataset,
-    )
-
-    # Mock _check_and_subset_forecast_availability to return the forecast dataset
-    mocker.patch(
-        "extremeweatherbench.evaluate._check_and_subset_forecast_availability",
-        return_value=sample_forecast_dataset,
-    )
-
-    # Mock _subset_gridded_obs to return a CaseEvaluationInput
-    mock_result = evaluate.CaseEvaluationInput(
-        observation_type="gridded",
-        observation=sample_gridded_obs_dataset["2m_temperature"],
-        forecast=sample_forecast_dataset["surface_air_temperature"],
-    )
-    mocker.patch(
-        "extremeweatherbench.evaluate._gridded_inputs_to_evaluation_input",
-        return_value=mock_result,
-    )
-
-    result = evaluate.build_dataset_subsets(case_eval_data, compute=False)
-
-    assert result.observation_type == "gridded"
-    assert result.observation is not None
-    assert result.forecast is not None
-
-
-def test_build_dataarray_subsets_point(
-    mocker, sample_point_obs_df, sample_forecast_dataset
-):
-    """Test build_dataarray_subsets with point observation data."""
-    mock_case = mocker.MagicMock(spec=case.IndividualCase)
-    mock_case.id = 1  # Match the ID in sample_point_obs_df
-    mock_case.data_vars = "surface_air_temperature"
-
-    case_eval_data = evaluate.CaseEvaluationData(
-        individual_case=mock_case,
-        observation_type="point",
-        forecast=sample_forecast_dataset,
-        observation=sample_point_obs_df,
-    )
-
-    # Mock _check_and_subset_forecast_availability to return the forecast dataset
-    mocker.patch(
-        "extremeweatherbench.evaluate._check_and_subset_forecast_availability",
-        return_value=sample_forecast_dataset,
-    )
-
-    # Mock _subset_point_obs to return a CaseEvaluationInput
-    mock_obs = xr.DataArray(
-        data=np.array([20.0]), dims=["time"], coords={"time": ["2023-01-01"]}
-    )
-    mock_forecast = xr.DataArray(
-        data=np.array([21.0]), dims=["init_time"], coords={"init_time": ["2023-01-01"]}
-    )
-    mock_result = evaluate.CaseEvaluationInput(
-        observation_type="point", observation=mock_obs, forecast=mock_forecast
-    )
-    mocker.patch(
-        "extremeweatherbench.evaluate._point_inputs_to_evaluation_input",
-        return_value=mock_result,
-    )
-    result = evaluate.build_dataset_subsets(case_eval_data, compute=False)
-
-    assert result.observation_type == "point"
-    assert result.observation is not None
-    assert result.forecast is not None
-
-
-def test_subset_gridded_obs(
-    mocker, sample_gridded_obs_dataset, sample_forecast_dataset
-):
-    """Test _subset_gridded_obs function."""
-    mock_case = mocker.MagicMock(spec=case.IndividualCase)
-    mock_case.id = 99
-    mock_case.start_date = datetime.datetime(2021, 6, 20)
-    mock_case.end_date = datetime.datetime(2021, 6, 25)
-    mock_case.data_vars = "2m_temperature"
-    mock_case.perform_subsetting_procedure.return_value = sample_gridded_obs_dataset[
-        "2m_temperature"
-    ]
-
-    case_eval_data = evaluate.CaseEvaluationData(
-        individual_case=mock_case,
-        observation_type="gridded",
-        forecast=sample_forecast_dataset,
-        observation=sample_gridded_obs_dataset,
-    )
-
-    result = evaluate._gridded_inputs_to_evaluation_input(case_eval_data)
-
-    assert isinstance(result, evaluate.CaseEvaluationInput)
-    assert result.observation_type == "gridded"
-    assert isinstance(result.observation, xr.DataArray)
-    assert isinstance(result.forecast, xr.Dataset)
-
-
-def test_subset_point_obs(
-    mocker, sample_point_obs_df_with_attrs, sample_forecast_dataset
-):
-    """Test _subset_point_obs function."""
-    mock_case = mocker.MagicMock(spec=case.IndividualCase)
-    mock_case.id = 1
-    mock_case.start_date = datetime.datetime(2021, 6, 20)
-    mock_case.end_date = datetime.datetime(2021, 6, 25)
-    mock_case.data_vars = ["surface_air_temperature"]
-    valid_time = pd.Timestamp(
-        sample_forecast_dataset.init_time[0].values
-    ) + pd.Timedelta(hours=6)
-    sample_point_obs_df_with_attrs.iloc[
-        0, sample_point_obs_df_with_attrs.columns.get_loc("time")
-    ] = valid_time
-    sample_point_obs_df_with_attrs.iloc[
-        1, sample_point_obs_df_with_attrs.columns.get_loc("time")
-    ] = valid_time
-
-    case_eval_data = evaluate.CaseEvaluationData(
-        individual_case=mock_case,
-        observation_type="point",
-        forecast=sample_forecast_dataset,
-        observation=sample_point_obs_df_with_attrs,
-    )
-
-    result = evaluate._point_inputs_to_evaluation_input(case_eval_data)
-
-    assert isinstance(result, evaluate.CaseEvaluationInput)
-    assert result.observation_type == "point"
-    assert result.observation is not None
-    assert result.forecast is not None
-
-
-def test_evaluate_full_workflow(
-    mocker, sample_config, sample_gridded_obs_dataset, sample_forecast_dataset
-):
-    # The return func will have the forecast dataset's data vars names switched already
-    mocker.patch(
-        "extremeweatherbench.data_loader.open_and_preprocess_forecast_dataset",
-        return_value=sample_forecast_dataset,
-    )
-    mocker.patch(
-        "extremeweatherbench.data_loader.open_obs_datasets",
-        return_value=(None, sample_gridded_obs_dataset),
-    )
-    result = evaluate.evaluate(sample_config)
-    assert isinstance(result, pd.DataFrame)
-    # Check that the result DataFrame contains all the expected columns
-    expected_columns = [
-        "lead_time",
-        "value",
-        "variable",
-        "metric",
-        "observation_type",
-        "case_id",
-        "event_type",
-    ]
-    assert all(col in result.columns for col in expected_columns)
+        assert ewb.cases == sample_cases_dict
+        assert ewb.metrics == [sample_evaluation_object]
+        assert ewb.cache_dir is None
+
+    def test_initialization_with_cache_dir(
+        self, sample_cases_dict, sample_evaluation_object
+    ):
+        """Test ExtremeWeatherBench initialization with cache directory."""
+        cache_dir = "/tmp/test_cache"
+        ewb = evaluate.ExtremeWeatherBench(
+            cases=sample_cases_dict,
+            metrics=[sample_evaluation_object],
+            cache_dir=cache_dir,
+        )
+
+        # Cache dir should be converted to Path object
+        assert ewb.cache_dir == Path(cache_dir)
+
+    def test_initialization_with_path_cache_dir(
+        self, sample_cases_dict, sample_evaluation_object
+    ):
+        """Test ExtremeWeatherBench initialization with Path cache directory."""
+        cache_dir = Path("/tmp/test_cache")
+        ewb = evaluate.ExtremeWeatherBench(
+            cases=sample_cases_dict,
+            metrics=[sample_evaluation_object],
+            cache_dir=cache_dir,
+        )
+
+        assert ewb.cache_dir == cache_dir
+
+    @patch("extremeweatherbench.cases.build_case_operators")
+    def test_case_operators_property(
+        self,
+        mock_build_case_operators,
+        sample_cases_dict,
+        sample_evaluation_object,
+        sample_case_operator,
+    ):
+        """Test case_operators property."""
+        mock_build_case_operators.return_value = [sample_case_operator]
+
+        ewb = evaluate.ExtremeWeatherBench(
+            cases=sample_cases_dict,
+            metrics=[sample_evaluation_object],
+        )
+
+        result = ewb.case_operators
+
+        mock_build_case_operators.assert_called_once_with(
+            sample_cases_dict, [sample_evaluation_object]
+        )
+        assert result == [sample_case_operator]
+
+    @patch("extremeweatherbench.evaluate.compute_case_operator")
+    def test_run_serial(
+        self,
+        mock_compute_case_operator,
+        sample_cases_dict,
+        sample_evaluation_object,
+        sample_case_operator,
+    ):
+        """Test the run method executes serially."""
+        # Mock the case operators property
+        with patch.object(
+            evaluate.ExtremeWeatherBench, "case_operators", new=[sample_case_operator]
+        ):
+            # Mock compute_case_operator to return a DataFrame
+            mock_result = pd.DataFrame(
+                {
+                    "value": [1.0],
+                    "metric": ["MockMetric"],
+                    "case_id_number": [1],
+                }
+            )
+            mock_compute_case_operator.return_value = mock_result
+
+            ewb = evaluate.ExtremeWeatherBench(
+                cases=sample_cases_dict,
+                metrics=[sample_evaluation_object],
+            )
+
+            result = ewb.run()
+
+            mock_compute_case_operator.assert_called_once_with(sample_case_operator)
+            assert isinstance(result, pd.DataFrame)
+            assert len(result) == 1
+
+    @patch("extremeweatherbench.evaluate.compute_case_operator")
+    def test_run_with_caching(
+        self,
+        mock_compute_case_operator,
+        sample_cases_dict,
+        sample_evaluation_object,
+        sample_case_operator,
+    ):
+        """Test the run method with caching enabled."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            cache_dir = Path(temp_dir)
+
+            with patch.object(
+                evaluate.ExtremeWeatherBench,
+                "case_operators",
+                new=[sample_case_operator],
+            ):
+                mock_result = pd.DataFrame(
+                    {
+                        "value": [1.0],
+                        "metric": ["MockMetric"],
+                        "case_id_number": [1],
+                    }
+                )
+                mock_compute_case_operator.return_value = mock_result
+
+                ewb = evaluate.ExtremeWeatherBench(
+                    cases=sample_cases_dict,
+                    metrics=[sample_evaluation_object],
+                    cache_dir=cache_dir,
+                )
+
+                ewb.run()
+
+                # Check that cache directory was created
+                assert cache_dir.exists()
+
+                # Check that results were cached
+                cache_file = cache_dir / "case_results.pkl"
+                assert cache_file.exists()
+
+    @patch("extremeweatherbench.evaluate.compute_case_operator")
+    def test_run_multiple_cases(
+        self, mock_compute_case_operator, sample_cases_dict, sample_evaluation_object
+    ):
+        """Test the run method with multiple case operators."""
+        # Create multiple case operators
+        case_operator_1 = Mock()
+        case_operator_2 = Mock()
+
+        with patch.object(
+            evaluate.ExtremeWeatherBench,
+            "case_operators",
+            new=[case_operator_1, case_operator_2],
+        ):
+            # Mock compute_case_operator to return different DataFrames
+            mock_compute_case_operator.side_effect = [
+                pd.DataFrame({"value": [1.0], "case_id_number": [1]}),
+                pd.DataFrame({"value": [2.0], "case_id_number": [2]}),
+            ]
+
+            ewb = evaluate.ExtremeWeatherBench(
+                cases=sample_cases_dict,
+                metrics=[sample_evaluation_object],
+            )
+
+            result = ewb.run()
+
+            assert mock_compute_case_operator.call_count == 2
+            assert len(result) == 2
+            assert result["case_id_number"].tolist() == [1, 2]
+
+
+# =============================================================================
+# Test compute_case_operator Function
+# =============================================================================
+
+
+class TestComputeCaseOperator:
+    """Test the compute_case_operator function."""
+
+    @patch("extremeweatherbench.evaluate._build_datasets")
+    @patch("extremeweatherbench.derived.maybe_derive_variables")
+    @patch("extremeweatherbench.evaluate._evaluate_metric_and_return_df")
+    def test_compute_case_operator_basic(
+        self,
+        mock_evaluate_metric,
+        mock_derive_variables,
+        mock_build_datasets,
+        sample_case_operator,
+        sample_forecast_dataset,
+        sample_target_dataset,
+    ):
+        """Test basic compute_case_operator functionality."""
+        # Setup mocks
+        mock_build_datasets.return_value = (
+            sample_forecast_dataset,
+            sample_target_dataset,
+        )
+        mock_derive_variables.side_effect = lambda ds, vars: ds  # Return unchanged
+
+        mock_result = pd.DataFrame(
+            {
+                "value": [1.0],
+                "metric": ["MockMetric"],
+                "case_id_number": [1],
+            }
+        )
+        mock_evaluate_metric.return_value = mock_result
+
+        # Setup the case operator mocks - metric should be a list for iteration
+        sample_case_operator.metric = [mock_base_metric]
+        sample_case_operator.target.maybe_align_forecast_to_target.return_value = (
+            sample_forecast_dataset,
+            sample_target_dataset,
+        )
+
+        result = evaluate.compute_case_operator(sample_case_operator)
+
+        mock_build_datasets.assert_called_once_with(sample_case_operator)
+        assert isinstance(result, pd.DataFrame)
+
+    @patch("extremeweatherbench.evaluate._build_datasets")
+    @patch("extremeweatherbench.derived.maybe_derive_variables")
+    def test_compute_case_operator_with_precompute(
+        self,
+        mock_derive_variables,
+        mock_build_datasets,
+        sample_case_operator,
+        sample_forecast_dataset,
+        sample_target_dataset,
+    ):
+        """Test compute_case_operator with pre_compute=True."""
+        mock_build_datasets.return_value = (
+            sample_forecast_dataset,
+            sample_target_dataset,
+        )
+        mock_derive_variables.side_effect = lambda ds, vars: ds
+
+        sample_case_operator.target.maybe_align_forecast_to_target.return_value = (
+            sample_forecast_dataset,
+            sample_target_dataset,
+        )
+        sample_case_operator.metric = [Mock()]
+
+        with patch(
+            "extremeweatherbench.evaluate._compute_and_maybe_cache"
+        ) as mock_compute_cache:
+            mock_compute_cache.return_value = [
+                sample_forecast_dataset,
+                sample_target_dataset,
+            ]
+
+            with patch(
+                "extremeweatherbench.evaluate._evaluate_metric_and_return_df"
+            ) as mock_evaluate:
+                mock_evaluate.return_value = pd.DataFrame({"value": [1.0]})
+
+                result = evaluate.compute_case_operator(
+                    sample_case_operator, pre_compute=True
+                )
+
+                mock_compute_cache.assert_called_once()
+                assert isinstance(result, pd.DataFrame)
+
+    @patch("extremeweatherbench.evaluate._build_datasets")
+    def test_compute_case_operator_multiple_metrics(
+        self,
+        mock_build_datasets,
+        sample_case_operator,
+        sample_forecast_dataset,
+        sample_target_dataset,
+    ):
+        """Test compute_case_operator with multiple metrics."""
+        mock_build_datasets.return_value = (
+            sample_forecast_dataset,
+            sample_target_dataset,
+        )
+
+        # Create multiple metrics
+        metric_1 = Mock()
+        metric_2 = Mock()
+        sample_case_operator.metric = [metric_1, metric_2]
+
+        sample_case_operator.target.maybe_align_forecast_to_target.return_value = (
+            sample_forecast_dataset,
+            sample_target_dataset,
+        )
+
+        with patch("extremeweatherbench.derived.maybe_derive_variables") as mock_derive:
+            mock_derive.side_effect = lambda ds, vars: ds
+
+            with patch(
+                "extremeweatherbench.evaluate._evaluate_metric_and_return_df"
+            ) as mock_evaluate:
+                mock_evaluate.return_value = pd.DataFrame({"value": [1.0]})
+
+                result = evaluate.compute_case_operator(sample_case_operator)
+
+                # Should be called twice (once for each metric)
+                assert mock_evaluate.call_count == 2
+                assert len(result) == 2
+
+
+# =============================================================================
+# Test Pipeline Functions
+# =============================================================================
+
+
+class TestPipelineFunctions:
+    """Test the pipeline functions."""
+
+    def test_build_datasets(self, sample_case_operator):
+        """Test _build_datasets function."""
+        with patch("extremeweatherbench.evaluate.run_pipeline") as mock_run_pipeline:
+            mock_forecast_ds = xr.Dataset(attrs={"source": "forecast"})
+            mock_target_ds = xr.Dataset(attrs={"source": "target"})
+            mock_run_pipeline.side_effect = [mock_forecast_ds, mock_target_ds]
+
+            forecast_ds, target_ds = evaluate._build_datasets(sample_case_operator)
+
+            assert mock_run_pipeline.call_count == 2
+            assert forecast_ds.attrs["source"] == "forecast"
+            assert target_ds.attrs["source"] == "target"
+
+    def test_run_pipeline_forecast(self, sample_case_operator, sample_forecast_dataset):
+        """Test run_pipeline function for forecast data."""
+        # Mock the pipeline methods
+        sample_case_operator.forecast.open_and_maybe_preprocess_data_from_source.return_value = sample_forecast_dataset
+        sample_case_operator.forecast.maybe_map_variable_names.return_value = (
+            sample_forecast_dataset
+        )
+        sample_case_operator.forecast.subset_data_to_case.return_value = (
+            sample_forecast_dataset
+        )
+        sample_case_operator.forecast.maybe_convert_to_dataset.return_value = (
+            sample_forecast_dataset
+        )
+        sample_case_operator.forecast.add_source_to_dataset_attrs.return_value = (
+            sample_forecast_dataset
+        )
+
+        result = evaluate.run_pipeline(sample_case_operator, "forecast")
+
+        assert isinstance(result, xr.Dataset)
+        sample_case_operator.forecast.open_and_maybe_preprocess_data_from_source.assert_called_once()
+        sample_case_operator.forecast.maybe_map_variable_names.assert_called_once()
+        # The pipe() method passes the dataset as first argument, then case_operator as kwarg
+        assert sample_case_operator.forecast.subset_data_to_case.call_count == 1
+        call_args = sample_case_operator.forecast.subset_data_to_case.call_args
+        assert call_args[1]["case_operator"] == sample_case_operator
+        sample_case_operator.forecast.maybe_convert_to_dataset.assert_called_once()
+        sample_case_operator.forecast.add_source_to_dataset_attrs.assert_called_once()
+
+    def test_run_pipeline_target(self, sample_case_operator, sample_target_dataset):
+        """Test run_pipeline function for target data."""
+        # Mock the pipeline methods
+        sample_case_operator.target.open_and_maybe_preprocess_data_from_source.return_value = sample_target_dataset
+        sample_case_operator.target.maybe_map_variable_names.return_value = (
+            sample_target_dataset
+        )
+        sample_case_operator.target.subset_data_to_case.return_value = (
+            sample_target_dataset
+        )
+        sample_case_operator.target.maybe_convert_to_dataset.return_value = (
+            sample_target_dataset
+        )
+        sample_case_operator.target.add_source_to_dataset_attrs.return_value = (
+            sample_target_dataset
+        )
+
+        result = evaluate.run_pipeline(sample_case_operator, "target")
+
+        assert isinstance(result, xr.Dataset)
+        sample_case_operator.target.open_and_maybe_preprocess_data_from_source.assert_called_once()
+
+    def test_run_pipeline_invalid_source(self, sample_case_operator):
+        """Test run_pipeline function with invalid input source."""
+        with pytest.raises(ValueError, match="Invalid input source"):
+            evaluate.run_pipeline(sample_case_operator, "invalid")
+
+    def test_compute_and_maybe_cache(
+        self, sample_forecast_dataset, sample_target_dataset
+    ):
+        """Test _compute_and_maybe_cache function."""
+        # Create lazy datasets
+        lazy_forecast = sample_forecast_dataset.chunk()
+        lazy_target = sample_target_dataset.chunk()
+
+        result = evaluate._compute_and_maybe_cache(
+            lazy_forecast, lazy_target, cache_dir=None
+        )
+
+        assert len(result) == 2
+        assert isinstance(result[0], xr.Dataset)
+        assert isinstance(result[1], xr.Dataset)
+
+    def test_compute_and_maybe_cache_with_cache_dir(
+        self, sample_forecast_dataset, sample_target_dataset
+    ):
+        """Test _compute_and_maybe_cache with cache directory (should raise
+        NotImplementedError)."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            cache_dir = Path(temp_dir)
+
+            with pytest.raises(
+                NotImplementedError, match="Caching is not implemented yet"
+            ):
+                evaluate._compute_and_maybe_cache(
+                    sample_forecast_dataset, sample_target_dataset, cache_dir=cache_dir
+                )
+
+
+# =============================================================================
+# Test Metric Evaluation
+# =============================================================================
+
+
+class TestMetricEvaluation:
+    """Test metric evaluation functionality."""
+
+    def test_evaluate_metric_and_return_df(
+        self, sample_forecast_dataset, sample_target_dataset, mock_base_metric
+    ):
+        """Test _evaluate_metric_and_return_df function."""
+        # Setup the metric mock
+        mock_result = xr.DataArray(
+            data=[1.5], dims=["lead_time"], coords={"lead_time": [0]}
+        )
+        mock_metric_instance = Mock()
+        mock_metric_instance.name = "TestMetric"
+        mock_metric_instance.compute_metric.return_value = mock_result
+        mock_base_metric.return_value = mock_metric_instance
+
+        result = evaluate._evaluate_metric_and_return_df(
+            forecast_ds=sample_forecast_dataset,
+            target_ds=sample_target_dataset,
+            forecast_variable="surface_air_temperature",
+            target_variable="2m_temperature",
+            metric=mock_base_metric,
+            case_id_number=1,
+            event_type="heat_wave",
+        )
+
+        assert isinstance(result, pd.DataFrame)
+        assert "value" in result.columns
+        assert "metric" in result.columns
+        assert "case_id_number" in result.columns
+        assert "event_type" in result.columns
+        assert result["metric"].iloc[0] == "TestMetric"
+        assert result["case_id_number"].iloc[0] == 1
+        assert result["event_type"].iloc[0] == "heat_wave"
+
+    def test_evaluate_metric_and_return_df_with_kwargs(
+        self, sample_forecast_dataset, sample_target_dataset, mock_base_metric
+    ):
+        """Test _evaluate_metric_and_return_df with additional kwargs."""
+        mock_result = xr.DataArray(
+            data=[2.0], dims=["lead_time"], coords={"lead_time": [6]}
+        )
+        mock_metric_instance = Mock()
+        mock_metric_instance.name = "TestMetric"
+        mock_metric_instance.compute_metric.return_value = mock_result
+        mock_base_metric.return_value = mock_metric_instance
+
+        evaluate._evaluate_metric_and_return_df(
+            forecast_ds=sample_forecast_dataset,
+            target_ds=sample_target_dataset,
+            forecast_variable="surface_air_temperature",
+            target_variable="2m_temperature",
+            metric=mock_base_metric,
+            case_id_number=2,
+            event_type="freeze",
+            threshold=0.5,  # Additional kwarg
+        )
+
+        # Verify that kwargs were passed to compute_metric
+        mock_metric_instance.compute_metric.assert_called_once()
+        call_kwargs = mock_metric_instance.compute_metric.call_args[1]
+        assert "threshold" in call_kwargs
+        assert call_kwargs["threshold"] == 0.5
+
+
+# =============================================================================
+# Test Error Handling and Edge Cases
+# =============================================================================
+
+
+class TestErrorHandling:
+    """Test error handling and edge cases."""
+
+    def test_extremeweatherbench_empty_cases(self, sample_evaluation_object):
+        """Test ExtremeWeatherBench with empty cases."""
+        empty_cases = {"cases": []}
+
+        ewb = evaluate.ExtremeWeatherBench(
+            cases=empty_cases,
+            metrics=[sample_evaluation_object],
+        )
+
+        with patch("extremeweatherbench.cases.build_case_operators") as mock_build:
+            mock_build.return_value = []
+
+            result = ewb.run()
+
+            # Should return empty DataFrame when no cases
+            assert isinstance(result, pd.DataFrame)
+            assert len(result) == 0
+
+    def test_compute_case_operator_exception_handling(self, sample_case_operator):
+        """Test exception handling in compute_case_operator."""
+        with patch("extremeweatherbench.evaluate._build_datasets") as mock_build:
+            mock_build.side_effect = Exception("Data loading failed")
+
+            with pytest.raises(Exception, match="Data loading failed"):
+                evaluate.compute_case_operator(sample_case_operator)
+
+    def test_run_pipeline_missing_method(self, sample_case_operator):
+        """Test run_pipeline when a required method is missing."""
+        # Remove a required method
+        del sample_case_operator.forecast.open_and_maybe_preprocess_data_from_source
+
+        with pytest.raises(AttributeError):
+            evaluate.run_pipeline(sample_case_operator, "forecast")
+
+    def test_evaluate_metric_computation_failure(
+        self, sample_forecast_dataset, sample_target_dataset, mock_base_metric
+    ):
+        """Test metric evaluation when computation fails."""
+        mock_metric_instance = Mock()
+        mock_metric_instance.name = "FailingMetric"
+        mock_metric_instance.compute_metric.side_effect = Exception(
+            "Metric computation failed"
+        )
+        mock_base_metric.return_value = mock_metric_instance
+
+        with pytest.raises(Exception, match="Metric computation failed"):
+            evaluate._evaluate_metric_and_return_df(
+                forecast_ds=sample_forecast_dataset,
+                target_ds=sample_target_dataset,
+                forecast_variable="surface_air_temperature",
+                target_variable="2m_temperature",
+                metric=mock_base_metric,
+                case_id_number=1,
+                event_type="heat_wave",
+            )
+
+
+# =============================================================================
+# Test Integration Scenarios
+# =============================================================================
+
+
+class TestIntegration:
+    """Test integration scenarios with real-like data."""
+
+    @patch("extremeweatherbench.derived.maybe_derive_variables")
+    def test_end_to_end_workflow(
+        self,
+        mock_derive_variables,
+        sample_cases_dict,
+        sample_evaluation_object,
+        sample_forecast_dataset,
+        sample_target_dataset,
+    ):
+        """Test a complete end-to-end workflow."""
+        mock_derive_variables.side_effect = lambda ds, vars: ds
+
+        # Setup the evaluation object methods
+        sample_evaluation_object.target.maybe_align_forecast_to_target.return_value = (
+            sample_forecast_dataset,
+            sample_target_dataset,
+        )
+
+        # Mock the pipeline methods to return our test datasets
+        sample_evaluation_object.forecast.open_and_maybe_preprocess_data_from_source.return_value = sample_forecast_dataset
+        sample_evaluation_object.forecast.maybe_map_variable_names.return_value = (
+            sample_forecast_dataset
+        )
+        sample_evaluation_object.forecast.subset_data_to_case.return_value = (
+            sample_forecast_dataset
+        )
+        sample_evaluation_object.forecast.maybe_convert_to_dataset.return_value = (
+            sample_forecast_dataset
+        )
+        sample_evaluation_object.forecast.add_source_to_dataset_attrs.return_value = (
+            sample_forecast_dataset
+        )
+
+        sample_evaluation_object.target.open_and_maybe_preprocess_data_from_source.return_value = sample_target_dataset
+        sample_evaluation_object.target.maybe_map_variable_names.return_value = (
+            sample_target_dataset
+        )
+        sample_evaluation_object.target.subset_data_to_case.return_value = (
+            sample_target_dataset
+        )
+        sample_evaluation_object.target.maybe_convert_to_dataset.return_value = (
+            sample_target_dataset
+        )
+        sample_evaluation_object.target.add_source_to_dataset_attrs.return_value = (
+            sample_target_dataset
+        )
+
+        # Mock the metric evaluation to return a proper DataFrame
+        mock_result_df = pd.DataFrame(
+            {
+                "value": [1.0],
+                "target_variable": ["2m_temperature"],
+                "metric": ["MockMetric"],
+                "target_source": ["test_target"],
+                "forecast_source": ["test_forecast"],
+                "case_id_number": [1],
+                "event_type": ["heat_wave"],
+            }
+        )
+
+        with patch(
+            "extremeweatherbench.evaluate._evaluate_metric_and_return_df"
+        ) as mock_eval:
+            mock_eval.return_value = mock_result_df
+
+            # Create and run the workflow
+            ewb = evaluate.ExtremeWeatherBench(
+                cases=sample_cases_dict,
+                metrics=[sample_evaluation_object],
+            )
+
+            result = ewb.run()
+
+        # Verify the result structure
+        assert isinstance(result, pd.DataFrame)
+        assert len(result) > 0
+        assert "value" in result.columns
+        assert "metric" in result.columns
+        assert "case_id_number" in result.columns
+        assert "event_type" in result.columns
+
+    def test_multiple_variables_and_metrics(
+        self, sample_cases_dict, sample_forecast_dataset, sample_target_dataset
+    ):
+        """Test workflow with multiple variables and metrics."""
+        # Create multiple metrics
+        metric_1 = Mock(spec=metrics.BaseMetric)
+        metric_1.name = "Metric1"
+        metric_1.return_value.name = "Metric1"
+        metric_1.return_value.compute_metric.return_value = xr.DataArray(
+            data=[1.0], dims=["lead_time"], coords={"lead_time": [0]}
+        )
+
+        metric_2 = Mock(spec=metrics.BaseMetric)
+        metric_2.name = "Metric2"
+        metric_2.return_value.name = "Metric2"
+        metric_2.return_value.compute_metric.return_value = xr.DataArray(
+            data=[2.0], dims=["lead_time"], coords={"lead_time": [0]}
+        )
+
+        # Create evaluation object with multiple metrics and variables
+        eval_obj = Mock(spec=inputs.EvaluationObject)
+        eval_obj.event_type = "heat_wave"
+        eval_obj.metric = [metric_1, metric_2]
+
+        # Mock target and forecast with variables that match our datasets
+        eval_obj.target = Mock(spec=inputs.TargetBase)
+        eval_obj.target.name = "MultiTarget"
+        eval_obj.target.variables = [
+            "2m_temperature"
+        ]  # Only include variables that exist
+
+        eval_obj.forecast = Mock(spec=inputs.ForecastBase)
+        eval_obj.forecast.name = "MultiForecast"
+        eval_obj.forecast.variables = [
+            "surface_air_temperature"
+        ]  # Only include variables that exist
+
+        # Setup pipeline mocks
+        for obj in [eval_obj.target, eval_obj.forecast]:
+            obj.open_and_maybe_preprocess_data_from_source.return_value = (
+                sample_forecast_dataset
+            )
+            obj.maybe_map_variable_names.return_value = sample_forecast_dataset
+            obj.subset_data_to_case.return_value = sample_forecast_dataset
+            obj.maybe_convert_to_dataset.return_value = sample_forecast_dataset
+            obj.add_source_to_dataset_attrs.return_value = sample_forecast_dataset
+
+        eval_obj.target.maybe_align_forecast_to_target.return_value = (
+            sample_forecast_dataset,
+            sample_target_dataset,
+        )
+
+        # Mock the metric evaluation to return proper DataFrames
+        mock_result_df = pd.DataFrame(
+            {
+                "value": [1.0],
+                "target_variable": ["2m_temperature"],
+                "metric": ["TestMetric"],
+                "target_source": ["test_target"],
+                "forecast_source": ["test_forecast"],
+                "case_id_number": [1],
+                "event_type": ["heat_wave"],
+            }
+        )
+
+        with patch("extremeweatherbench.derived.maybe_derive_variables") as mock_derive:
+            mock_derive.side_effect = lambda ds, vars: ds
+
+            with patch(
+                "extremeweatherbench.evaluate._evaluate_metric_and_return_df"
+            ) as mock_eval:
+                mock_eval.return_value = mock_result_df
+
+                ewb = evaluate.ExtremeWeatherBench(
+                    cases=sample_cases_dict,
+                    metrics=[eval_obj],
+                )
+
+                result = ewb.run()
+
+                # Should have results for each metric combination
+                assert len(result) >= 2  # At least 2 metrics * 1 case
+
+
+if __name__ == "__main__":
+    pytest.main([__file__])
