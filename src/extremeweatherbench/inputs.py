@@ -487,11 +487,11 @@ class GHCN(TargetBase):
             data = data.set_index(["valid_time", "latitude", "longitude"])
             # GHCN data can have duplicate values right now, dropping here if it occurs
             try:
-                data = data.to_xarray()
+                data = xr.Dataset.from_dataframe(data, sparse=True)
             except ValueError as e:
                 if "non-unique" in str(e):
                     pass
-                data = data.drop_duplicates().to_xarray()
+                data = xr.Dataset.from_dataframe(data.drop_duplicates(), sparse=True)
             return data
         else:
             raise ValueError(f"Data is not a polars LazyFrame: {type(data)}")
