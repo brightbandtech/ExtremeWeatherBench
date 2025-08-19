@@ -19,6 +19,16 @@ if TYPE_CHECKING:
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+OUTPUT_COLUMNS = [
+    "value",
+    "target_variable",
+    "metric",
+    "target_source",
+    "forecast_source",
+    "case_id_number",
+    "event_type",
+]
+
 
 class ExtremeWeatherBench:
     """A class to run the ExtremeWeatherBench workflow.
@@ -85,17 +95,7 @@ class ExtremeWeatherBench:
             return pd.concat(run_results, ignore_index=True)
         else:
             # Return empty DataFrame with expected columns
-            return pd.DataFrame(
-                columns=[
-                    "value",
-                    "target_variable",
-                    "metric",
-                    "target_source",
-                    "forecast_source",
-                    "case_id_number",
-                    "event_type",
-                ]
-            )
+            return pd.DataFrame(columns=OUTPUT_COLUMNS)
 
 
 def compute_case_operator(case_operator: "cases.CaseOperator", **kwargs):
@@ -168,17 +168,7 @@ def compute_case_operator(case_operator: "cases.CaseOperator", **kwargs):
         return pd.concat(results, ignore_index=True)
     else:
         # Return empty DataFrame with expected columns
-        return pd.DataFrame(
-            columns=[
-                "value",
-                "target_variable",
-                "metric",
-                "target_source",
-                "forecast_source",
-                "case_id_number",
-                "event_type",
-            ]
-        )
+        return pd.DataFrame(columns=OUTPUT_COLUMNS)
 
 
 def _evaluate_metric_and_return_df(
