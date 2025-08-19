@@ -234,10 +234,13 @@ def _build_datasets(
     """
     logger.info("running forecast pipeline")
     forecast_ds = run_pipeline(case_operator, "forecast")
-    if len(forecast_ds.valid_time) == 0:
+
+    # Check if any dimension has zero length
+    zero_length_dims = [dim for dim, size in forecast_ds.sizes.items() if size == 0]
+    if zero_length_dims:
         logger.warning(
             f"forecast dataset for case {case_operator.case_metadata.case_id_number} "
-            f"has no valid times for case time range "
+            f"has zero-length dimensions {zero_length_dims} for case time range "
             f"{case_operator.case_metadata.start_date} to "
             f"{case_operator.case_metadata.end_date}"
         )

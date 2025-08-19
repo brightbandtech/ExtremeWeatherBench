@@ -515,10 +515,123 @@ class TestPipelineFunctions:
             assert forecast_ds.attrs["source"] == "forecast"
             assert target_ds.attrs["source"] == "target"
 
+    def test_build_datasets_zero_length_dimensions(self, sample_case_operator):
+        """Test _build_datasets when forecast has zero-length dimensions."""
+        with patch("extremeweatherbench.evaluate.run_pipeline") as mock_run_pipeline:
+            # Create a forecast dataset with zero-length valid_time dimension
+            mock_forecast_ds = xr.Dataset(
+                coords={"valid_time": []},  # Empty valid_time coordinate
+                attrs={"source": "forecast"},
+            )
+            mock_target_ds = xr.Dataset(attrs={"source": "target"})
+            mock_run_pipeline.side_effect = [mock_forecast_ds, mock_target_ds]
+
+            with patch("extremeweatherbench.evaluate.logger.warning") as mock_warning:
+                forecast_ds, target_ds = evaluate._build_datasets(sample_case_operator)
+
+                # Should return empty datasets
+                assert len(forecast_ds) == 0
+                assert len(target_ds) == 0
+                assert isinstance(forecast_ds, xr.Dataset)
+                assert isinstance(target_ds, xr.Dataset)
+
+                # Should log a warning
+                mock_warning.assert_called_once()
+                warning_message = mock_warning.call_args[0][0]
+                assert "zero-length dimensions" in warning_message
+                assert "['valid_time']" in warning_message
+                assert (
+                    str(sample_case_operator.case_metadata.case_id_number)
+                    in warning_message
+                )
+
+                # Should only call run_pipeline once (for forecast), not for target
+                assert mock_run_pipeline.call_count == 1
+
+    def test_build_datasets_zero_length_warning_content(self, sample_case_operator):
+        """Test _build_datasets warning message content when forecast has
+        zero-length dimensions."""
+        with patch("extremeweatherbench.evaluate.run_pipeline") as mock_run_pipeline:
+            # Create a forecast dataset with zero-length dimension
+            mock_forecast_ds = xr.Dataset(
+                coords={"lead_time": []}, attrs={"source": "forecast"}
+            )
+            mock_run_pipeline.return_value = mock_forecast_ds
+
+            with patch("extremeweatherbench.evaluate.logger.warning") as mock_warning:
+                forecast_ds, target_ds = evaluate._build_datasets(sample_case_operator)
+
+                # Verify warning message contains expected information
+                mock_warning.assert_called_once()
+                warning_message = mock_warning.call_args[0][0]
+
+                # Check all expected components are in the warning message
+                assert (
+                    f"case {sample_case_operator.case_metadata.case_id_number}"
+                    in warning_message
+                )
+                assert "zero-length dimensions" in warning_message
+                assert "['lead_time']" in warning_message
+                assert (
+                    str(sample_case_operator.case_metadata.start_date)
+                    in warning_message
+                )
+                assert (
+                    str(sample_case_operator.case_metadata.end_date) in warning_message
+                )
+
+    def test_build_datasets_multiple_zero_length_dimensions(self, sample_case_operator):
+        """Test _build_datasets when forecast has multiple zero-length dimensions."""
+        with patch("extremeweatherbench.evaluate.run_pipeline") as mock_run_pipeline:
+            # Create a forecast dataset with multiple zero-length dimensions
+            mock_forecast_ds = xr.Dataset(
+                coords={"valid_time": [], "latitude": []}, attrs={"source": "forecast"}
+            )
+            mock_run_pipeline.return_value = mock_forecast_ds
+
+            with patch("extremeweatherbench.evaluate.logger.warning") as mock_warning:
+                forecast_ds, target_ds = evaluate._build_datasets(sample_case_operator)
+
+                # Should return empty datasets
+                assert len(forecast_ds) == 0
+                assert len(target_ds) == 0
+
+                # Should log a warning with both dimensions
+                mock_warning.assert_called_once()
+                warning_message = mock_warning.call_args[0][0]
+                assert "zero-length dimensions" in warning_message
+                # Check that both dimensions are mentioned (order may vary)
+                assert "valid_time" in warning_message
+                assert "latitude" in warning_message
+
+    def test_build_datasets_normal_dimensions(self, sample_case_operator):
+        """Test _build_datasets when forecast has normal (non-zero) dimensions."""
+        with patch("extremeweatherbench.evaluate.run_pipeline") as mock_run_pipeline:
+            # Create datasets with normal dimensions
+            mock_forecast_ds = xr.Dataset(
+                coords={"valid_time": [1, 2, 3], "latitude": [40, 45, 50]},
+                attrs={"source": "forecast"},
+            )
+            mock_target_ds = xr.Dataset(attrs={"source": "target"})
+            mock_run_pipeline.side_effect = [mock_forecast_ds, mock_target_ds]
+
+            with patch("extremeweatherbench.evaluate.logger.warning") as mock_warning:
+                forecast_ds, target_ds = evaluate._build_datasets(sample_case_operator)
+
+                # Should return the actual datasets
+                assert forecast_ds.attrs["source"] == "forecast"
+                assert target_ds.attrs["source"] == "target"
+
+                # Should not log any warning
+                mock_warning.assert_not_called()
+
+                # Should call run_pipeline twice (for both forecast and target)
+                assert mock_run_pipeline.call_count == 2
+
     def test_run_pipeline_forecast(self, sample_case_operator, sample_forecast_dataset):
         """Test run_pipeline function for forecast data."""
         # Mock the pipeline methods
-        sample_case_operator.forecast.open_and_maybe_preprocess_data_from_source.return_value = sample_forecast_dataset
+        sample_case_operator.forecast.open_and_maybe_preprocess_data_from_source.return_value = sample_forecast_dataset  # noqa: E501
         sample_case_operator.forecast.maybe_map_variable_names.return_value = (
             sample_forecast_dataset
         )
@@ -535,9 +648,9 @@ class TestPipelineFunctions:
         result = evaluate.run_pipeline(sample_case_operator, "forecast")
 
         assert isinstance(result, xr.Dataset)
-        sample_case_operator.forecast.open_and_maybe_preprocess_data_from_source.assert_called_once()
+        sample_case_operator.forecast.open_and_maybe_preprocess_data_from_source.assert_called_once()  # noqa: E501
         sample_case_operator.forecast.maybe_map_variable_names.assert_called_once()
-        # The pipe() method passes the dataset as first argument, then case_operator as kwarg
+        # The pipe() method passes the dataset, then case_operator as kwarg
         assert sample_case_operator.forecast.subset_data_to_case.call_count == 1
         call_args = sample_case_operator.forecast.subset_data_to_case.call_args
         assert call_args[1]["case_operator"] == sample_case_operator
@@ -547,7 +660,7 @@ class TestPipelineFunctions:
     def test_run_pipeline_target(self, sample_case_operator, sample_target_dataset):
         """Test run_pipeline function for target data."""
         # Mock the pipeline methods
-        sample_case_operator.target.open_and_maybe_preprocess_data_from_source.return_value = sample_target_dataset
+        sample_case_operator.target.open_and_maybe_preprocess_data_from_source.return_value = sample_target_dataset  # noqa: E501
         sample_case_operator.target.maybe_map_variable_names.return_value = (
             sample_target_dataset
         )
@@ -564,7 +677,7 @@ class TestPipelineFunctions:
         result = evaluate.run_pipeline(sample_case_operator, "target")
 
         assert isinstance(result, xr.Dataset)
-        sample_case_operator.target.open_and_maybe_preprocess_data_from_source.assert_called_once()
+        sample_case_operator.target.open_and_maybe_preprocess_data_from_source.assert_called_once()  # noqa: E501
 
     def test_run_pipeline_invalid_source(self, sample_case_operator):
         """Test run_pipeline function with invalid input source."""
@@ -779,7 +892,7 @@ class TestIntegration:
             sample_forecast_dataset
         )
 
-        sample_evaluation_object.target.open_and_maybe_preprocess_data_from_source.return_value = sample_target_dataset
+        sample_evaluation_object.target.open_and_maybe_preprocess_data_from_source.return_value = sample_target_dataset  # noqa: E501
         sample_evaluation_object.target.maybe_map_variable_names.return_value = (
             sample_target_dataset
         )
