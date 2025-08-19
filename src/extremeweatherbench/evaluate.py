@@ -113,7 +113,8 @@ def compute_case_operator(case_operator: "cases.CaseOperator", **kwargs):
         A concatenated dataframe of the results of the case operator.
     """
     forecast_ds, target_ds = _build_datasets(case_operator)
-
+    if len(forecast_ds) == 0 or len(target_ds) == 0:
+        return pd.DataFrame(columns=OUTPUT_COLUMNS)
     # spatiotemporally align the target and forecast datasets dependent on the forecast
     aligned_forecast_ds, aligned_target_ds = (
         case_operator.target.maybe_align_forecast_to_target(forecast_ds, target_ds)
@@ -233,6 +234,14 @@ def _build_datasets(
     """
     logger.info("running forecast pipeline")
     forecast_ds = run_pipeline(case_operator, "forecast")
+    if len(forecast_ds.valid_time) == 0:
+        logger.warning(
+            f"forecast dataset for case {case_operator.case_metadata.case_id_number} "
+            f"has no valid times for case time range "
+            f"{case_operator.case_metadata.start_date} to "
+            f"{case_operator.case_metadata.end_date}"
+        )
+        return xr.Dataset(), xr.Dataset()
     logger.info("running target pipeline")
     target_ds = run_pipeline(case_operator, "target")
     return (forecast_ds, target_ds)
