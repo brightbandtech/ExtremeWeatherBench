@@ -39,7 +39,12 @@ test_yaml = {
 # %%
 era5_target = inputs.ERA5(
     source=inputs.ARCO_ERA5_FULL_URI,
-    variables=[derived.IntegratedVaporTransport],
+    variables=[
+        derived.IntegratedVaporTransport,
+        derived.IntegratedVaporTransportLaplacian,
+        derived.AtmosphericRiverMask,
+        derived.AtmosphericRiverLandIntersection,
+    ],
     variable_mapping={
         "specific_humidity": "specific_humidity",
         "u_component_of_wind": "eastward_wind",
@@ -52,18 +57,17 @@ era5_target = inputs.ERA5(
 # %%
 hres_forecast = inputs.ZarrForecast(
     source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
-    variables=[derived.IntegratedVaporTransport],
+    variables=[
+        derived.IntegratedVaporTransport,
+        derived.IntegratedVaporTransportLaplacian,
+        derived.AtmosphericRiverMask,
+        derived.AtmosphericRiverLandIntersection,
+    ],
     variable_mapping={
-        "2m_temperature": "surface_air_temperature",
-        "10m_u_component_of_wind": "surface_eastward_wind",
-        "10m_v_component_of_wind": "surface_northward_wind",
         "u_component_of_wind": "eastward_wind",
         "v_component_of_wind": "northward_wind",
         "prediction_timedelta": "lead_time",
         "time": "init_time",
-        "lead_time": "prediction_timedelta",
-        "mean_sea_level_pressure": "air_pressure_at_mean_sea_level",
-        "10m_wind_speed": "surface_wind_speed",
     },
     storage_options={"remote_options": {"anon": True}},
 )
@@ -74,7 +78,12 @@ ar_metric_list = [
     inputs.EvaluationObject(
         event_type="atmospheric_river",
         metric=[
-            metrics.MAE,
+            metrics.SpatialDisplacement(
+                forecast_variable=derived.IntegratedVaporTransport.name,
+                target_variable=derived.IntegratedVaporTransport.name,
+                forecast_mask_variable=derived.AtmosphericRiverLandIntersection.name,
+                target_mask_variable=derived.AtmosphericRiverLandIntersection.name,
+            ),
         ],
         target=era5_target,
         forecast=hres_forecast,
@@ -87,9 +96,6 @@ test_ewb = evaluate.ExtremeWeatherBench(
 )
 logger.info("Starting EWB run")
 outputs = test_ewb.run(
-    # tolerance range is the number of hours before and after the timestamp a
-    # validating occurrence is checked in the forecasts
-    tolerance_range=48,
     # pre-compute the datasets to avoid recomputing them for each metric
     pre_compute=True,
 )

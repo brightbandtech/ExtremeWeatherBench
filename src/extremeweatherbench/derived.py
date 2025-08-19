@@ -1,9 +1,10 @@
 from abc import ABC, abstractmethod
-from typing import List, Type, Union
+from typing import List, Optional, Type, Union
 
 import numpy as np
 import xarray as xr
 
+import extremeweatherbench.events.atmospheric_river as ar
 from extremeweatherbench import calc
 
 
@@ -29,7 +30,8 @@ class DerivedVariable(ABC):
             derive the variable from required_variables.
     """
 
-    required_variables: List[str]
+    required_variables: List[str | Type["DerivedVariable"]]
+    optional_variables: Optional[List[str | Type["DerivedVariable"]]] = None
 
     @property
     def name(self) -> str:
@@ -70,30 +72,22 @@ class DerivedVariable(ABC):
             A DataArray with the derived variable.
         """
         for v in cls.required_variables:
-            if v not in data.data_vars:
-                raise ValueError(f"Input variable {v} not found in data")
+            if isinstance(v, str):
+                if v not in data.data_vars:
+                    raise ValueError(f"Input variable {v} not found in data")
+            elif issubclass(v, DerivedVariable):
+                if v.name not in data.data_vars:
+                    raise ValueError(f"Input variable {v.name} not found in data")
+            else:
+                raise ValueError(f"Invalid input variable type: {type(v)}")
         return cls.derive_variable(data)
 
 
-# TODO: add the AR mask calculations
-class AtmosphericRiverMask(DerivedVariable):
-    """A derived variable that computes the atmospheric river mask."""
-
-    required_variables = ["air_pressure_at_mean_sea_level"]
-
-    # TODO: add the AR mask calculations
-    @classmethod
-    def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
-        """Derive the atmospheric river mask."""
-        raise NotImplementedError("Atmospheric river mask not yet implemented")
-
-
-# TODO: add the IVT calculations for ARs
 class IntegratedVaporTransport(DerivedVariable):
-    """Calculates the IVT (Integrated Vapor Transport) from a dataset, using the method
-    described in Newell et al.
+    """Calculates the IVT (Integrated Vapor Transport) from a dataset.
 
-    1992 and elsewhere (e.g. Mo 2024).
+    IVT is calculated using the method described in Newell et al. 1992 and elsewhere
+    (e.g. Mo 2024).
     """
 
     required_variables = [
@@ -101,6 +95,7 @@ class IntegratedVaporTransport(DerivedVariable):
         "northward_wind",
         "specific_humidity",
     ]
+    name = "integrated_vapor_transport"
 
     @classmethod
     def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
@@ -122,15 +117,16 @@ class IntegratedVaporTransport(DerivedVariable):
         # the same dimension order
         level_axis = list(data.dims).index("level")
 
-        # TODO: REMOVE COMPUTE BEFORE MERGE, this is to speed up testing
-        data = data.compute()
-
-        _, level_broadcast, sfc_pres_broadcast = xr.broadcast(
+        data, level_broadcast, sfc_pres_broadcast = xr.broadcast(
             data, data["level"], data["surface_standard_pressure"]
         )
+        # Only include levels > 200 hPa (levels below 200 hPa)
         data["adjusted_level"] = xr.where(
-            level_broadcast * 100 < sfc_pres_broadcast, data["level"], np.nan
+            (level_broadcast * 100 < sfc_pres_broadcast) & (data["level"] > 200),
+            data["level"],
+            np.nan,
         )
+
         data["vertical_integral_of_eastward_water_vapour_flux"] = xr.DataArray(
             calc.nantrapezoid(
                 data["eastward_wind"] * data["specific_humidity"],
@@ -152,31 +148,69 @@ class IntegratedVaporTransport(DerivedVariable):
             dims=coords_dict.keys(),
         )
 
-        ivt_magnitude = np.hypot(
+        ivt_da = np.hypot(
             data["vertical_integral_of_eastward_water_vapour_flux"],
             data["vertical_integral_of_northward_water_vapour_flux"],
         )
         return xr.DataArray(
-            ivt_magnitude,
+            ivt_da,
             coords=coords_dict,
             dims=coords_dict.keys(),
+            name=cls.name,
         )
 
 
-# TODO: add the IVT Laplacian calculations for ARs
 class IntegratedVaporTransportLaplacian(DerivedVariable):
-    """A derived variable that computes the integrated vapor transport Jacobian."""
+    """A derived variable that computes the integrated vapor transport Laplacian."""
 
-    required_variables = [
-        "surface_eastward_wind",
-        "surface_northward_wind",
-        "specific_humidity",
-    ]
+    required_variables = [IntegratedVaporTransport]
+    name = "integrated_vapor_transport_laplacian"
 
     @classmethod
     def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
-        """Derive the integrated vapor transport Jacobian."""
-        raise NotImplementedError("IVT Laplacian not yet implemented")
+        """Derive the integrated vapor transport Laplacian."""
+        coords_dict = {dim: data.coords[dim] for dim in data.dims if dim != "level"}
+        ivt_laplacian_da = xr.DataArray(
+            ar.blurred_laplacian(data[IntegratedVaporTransport.name]),
+            coords=coords_dict,
+            dims=coords_dict.keys(),
+            name=cls.name,
+        )
+        return ivt_laplacian_da
+
+
+class AtmosphericRiverMask(DerivedVariable):
+    """A derived variable that computes the atmospheric river mask."""
+
+    required_variables = [
+        IntegratedVaporTransport,
+        IntegratedVaporTransportLaplacian,
+    ]
+    name = "atmospheric_river_mask"
+
+    @classmethod
+    def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
+        """Derive the atmospheric river mask."""
+        ar_mask = ar.ar_mask(
+            data[
+                [IntegratedVaporTransport.name, IntegratedVaporTransportLaplacian.name]
+            ],
+        )
+        return xr.DataArray(ar_mask, name=cls.name)
+
+
+class AtmosphericRiverLandIntersection(DerivedVariable):
+    """A derived variable that computes the atmospheric river land intersection."""
+
+    required_variables = [AtmosphericRiverMask]
+    name = "atmospheric_river_land_intersection"
+
+    @classmethod
+    def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
+        """Derive the atmospheric river land intersection."""
+        ar_mask = data[AtmosphericRiverMask.name]
+        land_intersection = calc.find_land_intersection(ar_mask)
+        return xr.DataArray(land_intersection, name=cls.name)
 
 
 # TODO: finish TC track calculation port
@@ -254,13 +288,17 @@ def maybe_derive_variables(
     """
 
     derived_variables = [v for v in variables if not isinstance(v, str)]
-    derived_data = {v.name: v.compute(data=ds) for v in derived_variables}
+    derived_data = {}
+    for v in derived_variables:
+        output_da = v.compute(data=ds)
+        if output_da.name not in ds.data_vars:
+            ds[output_da.name] = output_da
     # TODO consider removing data variables only used for derivation
     ds = ds.merge(derived_data)
     return ds
 
 
-def maybe_pull_required_variables_from_derived_input(
+def maybe_pull_variables_from_derived_input(
     incoming_variables: list[Union[str, DerivedVariable, Type[DerivedVariable]]],
 ) -> list[str]:
     """Pull the required variables from a derived input and add to the list of
@@ -282,6 +320,11 @@ def maybe_pull_required_variables_from_derived_input(
             derived_required_variables.extend(v.required_variables)
         elif isinstance(v, type) and issubclass(v, DerivedVariable):
             # Handle classes that inherit from DerivedVariable
-            derived_required_variables.extend(v.required_variables)
+            # Recursively pull required variables from derived variables
+            derived_required_variables.extend(
+                maybe_pull_variables_from_derived_input(v.required_variables)
+            )
 
-    return string_variables + derived_required_variables
+    # Remove duplicates by converting to set and back to list
+    all_variables = string_variables + derived_required_variables
+    return list(set(all_variables))

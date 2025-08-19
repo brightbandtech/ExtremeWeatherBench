@@ -1,13 +1,14 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, Optional, Type
 
 import numpy as np
 import scores.categorical as cat  # type: ignore[import-untyped]
 import xarray as xr
 from scores.continuous import mae, mean_error, rmse  # type: ignore[import-untyped]
 
-from extremeweatherbench import utils
+from extremeweatherbench import derived, utils
+from extremeweatherbench.calc import calculate_haversine_distance
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -24,6 +25,30 @@ class BaseMetric(ABC):
 
     # default to preserving lead_time in EWB metrics
     preserve_dims: str = "lead_time"
+    variables: Optional[list[str | Type["derived.DerivedVariable"]]] = None
+
+    def __init__(
+        self,
+        forecast_variable: Optional[str | Type["derived.DerivedVariable"]] = None,
+        target_variable: Optional[str | Type["derived.DerivedVariable"]] = None,
+    ):
+        self.forecast_variable = forecast_variable
+        self.target_variable = target_variable
+        if self.forecast_variable and not self.target_variable:
+            raise ValueError(
+                "Target variable must be provided if forecast variable is provided"
+            )
+        if self.target_variable and not self.forecast_variable:
+            raise ValueError(
+                "Forecast variable must be provided if target variable is provided"
+            )
+        else:
+            # catch if the user provides a DerivedVariable object instead of a string
+            # or not using the .name attribute
+            if not isinstance(self.forecast_variable, str):
+                self.forecast_variable = self.forecast_variable.name
+            if not isinstance(self.target_variable, str):
+                self.target_variable = self.target_variable.name
 
     @property
     def name(self) -> str:
@@ -177,12 +202,154 @@ class RMSE(BaseMetric):
 
 # TODO: base metric for identifying signal and complete implementation
 class EarlySignal(BaseMetric):
+    """Metric to identify the earliest signal detection in forecast data.
+
+    This metric finds the first occurrence where a signal is detected based on
+    threshold criteria and returns the corresponding init_time, lead_time, and
+    valid_time information. The metric is designed to be flexible for different
+    signal detection criteria that can be specified in applied metrics downstream.
+    """
+
     @classmethod
     def _compute_metric(
-        cls, forecast: xr.Dataset, target: xr.Dataset, **kwargs: Any
-    ) -> Any:
-        # Dummy implementation for early signal
-        raise NotImplementedError("EarlySignal is not implemented yet")
+        cls,
+        forecast: xr.Dataset,
+        target: xr.Dataset,
+        threshold: float = None,
+        variable: str = None,
+        comparison: str = ">=",
+        spatial_aggregation: str = "any",
+        **kwargs: Any,
+    ) -> xr.Dataset:
+        """Compute early signal detection.
+
+        Args:
+            forecast: The forecast dataset with init_time, lead_time, valid_time
+            target: The target dataset (used for reference/validation)
+            threshold: Threshold value for signal detection
+            variable: Variable name to analyze for signal detection
+            comparison: Comparison operator (">=", "<=", ">", "<", "==", "!=")
+            spatial_aggregation: How to aggregate spatially ("any", "all", "mean")
+            **kwargs: Additional arguments
+
+        Returns:
+            Dataset containing earliest detection times with coordinates:
+            - earliest_init_time: First init_time when signal was detected
+            - earliest_lead_time: Corresponding lead_time
+            - earliest_valid_time: Corresponding valid_time
+            - detection_found: Boolean indicating if any detection occurred
+        """
+        if threshold is None or variable is None:
+            # Return structure for when no detection criteria specified
+            return xr.Dataset(
+                {
+                    "earliest_init_time": xr.DataArray(np.datetime64("NaT")),
+                    "earliest_lead_time": xr.DataArray(np.timedelta64("NaT")),
+                    "earliest_valid_time": xr.DataArray(np.datetime64("NaT")),
+                    "detection_found": xr.DataArray(False),
+                }
+            )
+
+        if variable not in forecast.data_vars:
+            raise ValueError(f"Variable '{variable}' not found in forecast dataset")
+
+        data = forecast[variable]
+
+        # Apply threshold comparison
+        comparison_ops = {
+            ">=": lambda x, t: x >= t,
+            "<=": lambda x, t: x <= t,
+            ">": lambda x, t: x > t,
+            "<": lambda x, t: x < t,
+            "==": lambda x, t: x == t,
+            "!=": lambda x, t: x != t,
+        }
+
+        if comparison not in comparison_ops:
+            raise ValueError(f"Comparison '{comparison}' not supported")
+
+        # Create detection mask
+        detection_mask = comparison_ops[comparison](data, threshold)
+
+        # Apply spatial aggregation
+        spatial_dims = [
+            dim
+            for dim in detection_mask.dims
+            if dim not in ["init_time", "lead_time", "valid_time"]
+        ]
+
+        if spatial_dims:
+            if spatial_aggregation == "any":
+                detection_mask = detection_mask.any(spatial_dims)
+            elif spatial_aggregation == "all":
+                detection_mask = detection_mask.all(spatial_dims)
+            elif spatial_aggregation == "mean":
+                detection_mask = detection_mask.mean(spatial_dims) > 0.5
+            else:
+                raise ValueError(
+                    f"Spatial aggregation '{spatial_aggregation}' not supported"
+                )
+
+        # Find earliest detection for each init_time
+        earliest_results = {}
+
+        for init_t in forecast.init_time:
+            init_mask = detection_mask.sel(init_time=init_t)
+
+            # Find first occurrence along lead_time dimension
+            if init_mask.any():
+                # Get the first True index along lead_time
+                first_detection_idx = init_mask.argmax("lead_time")
+                earliest_lead = forecast.lead_time[first_detection_idx]
+                earliest_valid = init_t.values + np.timedelta64(int(earliest_lead), "h")
+
+                earliest_results[init_t.values] = {
+                    "init_time": init_t.values,
+                    "lead_time": earliest_lead.values,
+                    "valid_time": earliest_valid,
+                    "found": True,
+                }
+            else:
+                earliest_results[init_t.values] = {
+                    "init_time": init_t.values,
+                    "lead_time": np.timedelta64("NaT"),
+                    "valid_time": np.datetime64("NaT"),
+                    "found": False,
+                }
+
+        # Convert to xarray Dataset
+        init_times = list(earliest_results.keys())
+        earliest_init_times = [r["init_time"] for r in earliest_results.values()]
+        earliest_lead_times = [r["lead_time"] for r in earliest_results.values()]
+        earliest_valid_times = [r["valid_time"] for r in earliest_results.values()]
+        detection_found = [r["found"] for r in earliest_results.values()]
+
+        result = xr.Dataset(
+            {
+                "earliest_init_time": xr.DataArray(
+                    earliest_init_times,
+                    coords={"init_time": init_times},
+                    dims=["init_time"],
+                ),
+                "earliest_lead_time": xr.DataArray(
+                    earliest_lead_times,
+                    coords={"init_time": init_times},
+                    dims=["init_time"],
+                ),
+                "earliest_valid_time": xr.DataArray(
+                    earliest_valid_times,
+                    coords={"init_time": init_times},
+                    dims=["init_time"],
+                ),
+                "detection_found": xr.DataArray(
+                    detection_found,
+                    coords={"init_time": init_times},
+                    dims=["init_time"],
+                ),
+            }
+        )
+
+        return result
 
 
 class MaximumMAE(AppliedMetric):
@@ -410,8 +577,36 @@ class DurationME(AppliedMetric):
         }
 
 
-# TODO: fill landfall displacement out
-class LandfallDisplacement(AppliedMetric):
+class LandfallDetection(AppliedMetric):
+    preserve_dims: str = "init_time"
+
+    @property
+    def base_metric(self) -> type[BaseMetric]:
+        return EarlySignal
+
+    def _compute_applied_metric(
+        self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
+    ) -> Any:
+        return {
+            "forecast": forecast,
+            "target": target,
+            "preserve_dims": self.preserve_dims,
+            "threshold": 1,
+            "variable": "atmospheric_river_land_intersection",
+            "comparison": "==",
+            "spatial_aggregation": "any",
+        }
+
+
+class HaversineDistance(BaseMetric):
+    """Metric to calculate the haversine distance between two points on the Earth's
+    surface.
+
+    Args:
+        forecast: The forecast dataset.
+        target: The target dataset.
+    """
+
     @property
     def base_metric(self) -> type[BaseMetric]:
         return MAE
@@ -419,8 +614,104 @@ class LandfallDisplacement(AppliedMetric):
     def _compute_applied_metric(
         self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
     ) -> Any:
-        # Dummy implementation for landfall displacement
-        raise NotImplementedError("LandfallDisplacement is not implemented yet")
+        return calculate_haversine_distance(forecast, target)
+
+
+class SpatialDisplacement(AppliedMetric):
+    def __init__(
+        self,
+        forecast_variable: Optional[str | Type["derived.DerivedVariable"]] = None,
+        target_variable: Optional[str | Type["derived.DerivedVariable"]] = None,
+        forecast_mask_variable: Optional[str | Type["derived.DerivedVariable"]] = None,
+        target_mask_variable: Optional[str | Type["derived.DerivedVariable"]] = None,
+    ):
+        self.forecast_variable = forecast_variable
+        self.target_variable = target_variable
+        self.forecast_mask_variable = forecast_mask_variable
+        self.target_mask_variable = target_mask_variable
+
+    @property
+    def base_metric(self) -> type[BaseMetric]:
+        return HaversineDistance
+
+    def _compute_applied_metric(
+        self, forecast: xr.Dataset, target: xr.Dataset, **kwargs: Any
+    ) -> Any:
+        from scipy.ndimage import center_of_mass, label
+
+        # Get the masked data for target and forecast
+        target_masked = target[self.target_variable].where(
+            target[self.target_mask_variable], 0
+        )
+        forecast_masked = forecast[self.forecast_variable].where(
+            forecast[self.forecast_mask_variable], 0
+        )
+
+        # Initialize arrays to store results
+        lead_times = forecast.lead_time.values
+        valid_times = forecast.valid_time.values
+
+        target_lat_com = np.full((len(valid_times),), np.nan)
+        target_lon_com = np.full((len(valid_times),), np.nan)
+        forecast_lat_com = np.full((len(lead_times), len(valid_times)), np.nan)
+        forecast_lon_com = np.full((len(lead_times), len(valid_times)), np.nan)
+
+        # Iterate over all lead_time and valid_time combinations
+        for lt_idx, lead_time in enumerate(forecast.lead_time):
+            for vt_idx, valid_time in enumerate(forecast.valid_time):
+                # Extract 2D slice for this time combination
+                target_slice = target_masked.sel(valid_time=valid_time)
+                forecast_slice = forecast_masked.sel(
+                    lead_time=lead_time, valid_time=valid_time
+                )
+
+                # Label connected components and find center of mass
+                target_labels, _ = label(target_slice.values > 0)
+                forecast_labels, _ = label(forecast_slice.values > 0)
+
+                if target_labels.max() > 0:
+                    target_com = center_of_mass(target_slice.values, target_labels, 1)
+                    # Convert indices to actual coordinates
+                    target_lat_com[vt_idx] = target_slice.latitude.values[
+                        int(target_com[0])
+                    ]
+                    target_lon_com[vt_idx] = target_slice.longitude.values[
+                        int(target_com[1])
+                    ]
+
+                if forecast_labels.max() > 0:
+                    forecast_com = center_of_mass(
+                        forecast_slice.values, forecast_labels, 1
+                    )
+                    # Convert indices to actual coordinates
+                    forecast_lat_com[lt_idx, vt_idx] = forecast_slice.latitude.values[
+                        int(forecast_com[0])
+                    ]
+                    forecast_lon_com[lt_idx, vt_idx] = forecast_slice.longitude.values[
+                        int(forecast_com[1])
+                    ]
+
+        # Create properly structured datasets with lead_time and valid_time dimensions
+        target_com = xr.Dataset(
+            {
+                "latitude": (["valid_time"], target_lat_com),
+                "longitude": (["valid_time"], target_lon_com),
+            },
+            coords={"valid_time": valid_times},
+        )
+
+        forecast_com = xr.Dataset(
+            {
+                "latitude": (["lead_time", "valid_time"], forecast_lat_com),
+                "longitude": (["lead_time", "valid_time"], forecast_lon_com),
+            },
+            coords={"lead_time": lead_times, "valid_time": valid_times},
+        )
+        return {
+            "forecast": forecast_com,
+            "target": target_com,
+            "preserve_dims": self.preserve_dims,
+        }
 
 
 # TODO: complete landfall time mean error implementation
@@ -447,19 +738,6 @@ class LandfallIntensityMAE(AppliedMetric):
     ) -> Any:
         # Dummy implementation for landfall intensity mean absolute error
         raise NotImplementedError("LandfallIntensityMAE is not implemented yet")
-
-
-# TODO: complete spatial displacement implementation
-class SpatialDisplacement(AppliedMetric):
-    @property
-    def base_metric(self) -> type[BaseMetric]:
-        return MAE
-
-    def _compute_applied_metric(
-        self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
-    ) -> Any:
-        # Dummy implementation for spatial displacement
-        raise NotImplementedError("SpatialDisplacement is not implemented yet")
 
 
 # TODO: complete false alarm ratio implementation
