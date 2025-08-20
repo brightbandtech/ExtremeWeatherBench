@@ -103,8 +103,14 @@ def sample_atmospheric_dataset(
 
     dataset = xr.Dataset(
         {
-            "temperature": (["time", "latitude", "longitude", "level"], temperature),
-            "dewpoint": (["time", "latitude", "longitude", "level"], dewpoint),
+            "air_temperature": (
+                ["time", "latitude", "longitude", "level"],
+                temperature,
+            ),
+            "dewpoint_temperature": (
+                ["time", "latitude", "longitude", "level"],
+                dewpoint,
+            ),
             "pressure": (["time", "latitude", "longitude", "level"], pressure),
             "eastward_wind": (["time", "latitude", "longitude", "level"], u_wind),
             "northward_wind": (["time", "latitude", "longitude", "level"], v_wind),
@@ -343,10 +349,10 @@ class TestVirtualTemperature:
 
         result = sc.virtual_temperature_from_dewpoint(pressure, temperature, dewpoint)
 
-        # Should be higher than original temperature (result is in Kelvin)
-        assert result > temperature + 273.15
+        # Should be higher than original temperature (result is in Celsius)
+        assert result > temperature
         # But not too much higher (reasonable moist air correction)
-        assert result < temperature + 273.15 + 5.0
+        assert result < temperature + 5.0
 
 
 class TestLiftingCondensationLevel:
@@ -403,8 +409,8 @@ class TestMixedLayerFunctions:
         # Extract 1D profiles for testing
         ds_1d = xr.Dataset(
             {
-                "temperature": (["level"], ds.temperature.values),
-                "dewpoint": (["level"], ds.dewpoint.values),
+                "air_temperature": (["level"], ds.air_temperature.values),
+                "dewpoint_temperature": (["level"], ds.dewpoint_temperature.values),
                 "pressure": (["level"], ds.pressure.values),
             },
             coords={"level": ds.level},
@@ -412,9 +418,6 @@ class TestMixedLayerFunctions:
 
         start_p, temp, dewpoint = sc.mixed_parcel(
             ds_1d,
-            pressure_var="pressure",
-            temperature_var="temperature",
-            temperature_dewpoint_var="dewpoint",
             depth=100.0,
             temperature_units="C",
         )
@@ -456,9 +459,6 @@ class TestConvectionCalculations:
 
         cape, cin = sc.mixed_layer_cape_cin(
             ds,
-            pressure_var="pressure",
-            temperature_var="temperature",
-            temperature_dewpoint_var="dewpoint",
             depth=100.0,
         )
 
@@ -538,13 +538,7 @@ class TestSevereWeatherIndices:
         """Test low-level shear calculation."""
         ds = sample_atmospheric_dataset.isel(time=0)
 
-        shear = sc.low_level_shear(
-            ds,
-            eastward_wind_var="eastward_wind",
-            northward_wind_var="northward_wind",
-            surface_eastward_wind_var="surface_eastward_wind",
-            surface_northward_wind_var="surface_northward_wind",
-        )
+        shear = sc.low_level_shear(ds)
 
         # Check shape matches spatial dimensions
         expected_shape = ds.surface_eastward_wind.shape
@@ -566,13 +560,6 @@ class TestSevereWeatherIndices:
 
         cbss = sc.craven_brooks_significant_severe(
             ds,
-            pressure_var="pressure",
-            temperature_var="temperature",
-            temperature_dewpoint_var="dewpoint",
-            eastward_wind_var="eastward_wind",
-            northward_wind_var="northward_wind",
-            surface_eastward_wind_var="surface_eastward_wind",
-            surface_northward_wind_var="surface_northward_wind",
             depth=100.0,
         )
 
@@ -652,7 +639,7 @@ class TestPhysicalConsistency:
 
         # Check all grid points and levels
         assert np.all(
-            ds.dewpoint <= ds.temperature + 0.1
+            ds.dewpoint_temperature <= ds.air_temperature + 0.1
         )  # Small tolerance for numerical errors
 
     def test_pressure_monotonicity(self, sample_atmospheric_dataset):
@@ -670,14 +657,11 @@ class TestPhysicalConsistency:
         # Create more realistic unstable environment for CAPE calculation
         ds = ds.copy()
         # Make surface warmer and moister
-        ds["temperature"][0] = 30.0  # °C
-        ds["dewpoint"][0] = 25.0  # °C
+        ds["air_temperature"][0] = 30.0  # °C
+        ds["dewpoint_temperature"][0] = 25.0  # °C
 
         cape, cin = sc.mixed_layer_cape_cin(
             ds.expand_dims(["time", "latitude", "longitude"], axis=[0, 1, 2]),
-            pressure_var="pressure",
-            temperature_var="temperature",
-            temperature_dewpoint_var="dewpoint",
             depth=50.0,
         )
 
@@ -712,15 +696,12 @@ class TestErrorHandling:
         ds = sample_atmospheric_dataset.copy()
 
         # Introduce some NaN values
-        ds["temperature"][0, 0, 0, :] = np.nan
+        ds["air_temperature"][0, 0, 0, :] = np.nan
 
         # Should handle NaN gracefully without crashing
         try:
             cape, cin = sc.mixed_layer_cape_cin(
-                ds.isel(time=0, latitude=slice(0, 1), longitude=slice(0, 1)),
-                pressure_var="pressure",
-                temperature_var="temperature",
-                temperature_dewpoint_var="dewpoint",
+                ds.isel(time=0, latitude=slice(0, 1), longitude=slice(0, 1))
             )
             # Results should contain NaN where input was NaN
             assert np.isnan(cape[0, 0])
@@ -773,11 +754,14 @@ class TestPerformance:
 
         ds = xr.Dataset(
             {
-                "temperature": (
+                "air_temperature": (
                     ["time", "latitude", "longitude", "level"],
                     temperature,
                 ),
-                "dewpoint": (["time", "latitude", "longitude", "level"], dewpoint),
+                "dewpoint_temperature": (
+                    ["time", "latitude", "longitude", "level"],
+                    dewpoint,
+                ),
                 "pressure": (
                     ["time", "latitude", "longitude", "level"],
                     np.broadcast_to(levels, (nt, nlat, nlon, nlev)),
@@ -801,12 +785,7 @@ class TestPerformance:
         start_time = timer.time()
 
         # This should complete in reasonable time (< 30 seconds)
-        cape, cin = sc.mixed_layer_cape_cin(
-            ds_subset,
-            pressure_var="pressure",
-            temperature_var="temperature",
-            temperature_dewpoint_var="dewpoint",
-        )
+        cape, cin = sc.mixed_layer_cape_cin(ds_subset)
 
         elapsed_time = timer.time() - start_time
 
@@ -834,9 +813,6 @@ def test_mixed_layer_depth_variations(sample_atmospheric_dataset, depth):
     try:
         start_p, temp, dewpoint = sc.mixed_parcel(
             ds.expand_dims(["time", "latitude", "longitude"], axis=[0, 1, 2]),
-            pressure_var="pressure",
-            temperature_var="temperature",
-            temperature_dewpoint_var="dewpoint",
             depth=depth,
             temperature_units="C",  # Input data is in Celsius
         )
@@ -863,6 +839,354 @@ def test_saturation_vapor_pressure_ranges(temp, expected_range):
     """Test saturation vapor pressure across temperature range."""
     result = sc.saturation_vapor_pressure(temp)
     assert expected_range[0] <= result <= expected_range[1]
+
+
+class TestCapeRegression:
+    """
+    Regression tests to ensure CAPE calculations remain consistent.
+
+    These tests verify that the severe_convection module produces identical results
+    to the working derived.py implementation, preventing future regressions.
+    """
+
+    @pytest.fixture
+    def regression_profile_data(self):
+        """Real atmospheric profile data that previously caused CAPE calculation issues."""
+        temperature_data = np.array(
+            [
+                [
+                    [
+                        [
+                            301.28543,
+                            299.1248,
+                            297.09048,
+                            295.43634,
+                            294.92474,
+                            295.21307,
+                            293.94577,
+                            292.04193,
+                            290.3143,
+                            288.84793,
+                            287.33905,
+                            283.8867,
+                            279.625,
+                            275.22556,
+                            270.86078,
+                            267.3587,
+                            262.63983,
+                            257.73883,
+                            251.98715,
+                            243.52557,
+                            233.61082,
+                            227.47162,
+                            221.12878,
+                            214.0264,
+                            205.74919,
+                            197.13243,
+                            191.42583,
+                            199.72433,
+                            207.74922,
+                            216.8675,
+                            222.79562,
+                        ]
+                    ]
+                ]
+            ],
+            dtype=np.float32,
+        )
+
+        dewpoint_data = np.array(
+            [
+                [
+                    [
+                        [
+                            297.61893116,
+                            297.13275546,
+                            296.44573097,
+                            294.80113066,
+                            291.13749249,
+                            283.34013614,
+                            282.99282511,
+                            283.63682326,
+                            284.33227243,
+                            283.24106933,
+                            280.77318722,
+                            275.38862408,
+                            272.4862496,
+                            265.95849926,
+                            259.03940721,
+                            250.30099479,
+                            251.54912813,
+                            247.51921695,
+                            233.09329238,
+                            230.85397818,
+                            227.70883628,
+                            220.04485818,
+                            212.19363724,
+                            204.95689596,
+                            198.84596866,
+                            193.71371149,
+                            187.67939167,
+                            186.69142712,
+                            183.83190612,
+                            181.16366895,
+                            178.95581394,
+                        ]
+                    ]
+                ]
+            ]
+        )
+
+        pressure_data = np.array(
+            [
+                [
+                    [
+                        [
+                            1000.0,
+                            975.0,
+                            950.0,
+                            925.0,
+                            900.0,
+                            875.0,
+                            850.0,
+                            825.0,
+                            800.0,
+                            775.0,
+                            750.0,
+                            700.0,
+                            650.0,
+                            600.0,
+                            550.0,
+                            500.0,
+                            450.0,
+                            400.0,
+                            350.0,
+                            300.0,
+                            250.0,
+                            225.0,
+                            200.0,
+                            175.0,
+                            150.0,
+                            125.0,
+                            100.0,
+                            70.0,
+                            50.0,
+                            30.0,
+                            20.0,
+                        ]
+                    ]
+                ]
+            ]
+        )
+
+        wind_data = np.zeros_like(temperature_data)
+        pressure_levels = np.array(
+            [
+                1000.0,
+                975.0,
+                950.0,
+                925.0,
+                900.0,
+                875.0,
+                850.0,
+                825.0,
+                800.0,
+                775.0,
+                750.0,
+                700.0,
+                650.0,
+                600.0,
+                550.0,
+                500.0,
+                450.0,
+                400.0,
+                350.0,
+                300.0,
+                250.0,
+                225.0,
+                200.0,
+                175.0,
+                150.0,
+                125.0,
+                100.0,
+                70.0,
+                50.0,
+                30.0,
+                20.0,
+            ]
+        )
+
+        return xr.Dataset(
+            {
+                "air_temperature": (
+                    ["time", "latitude", "longitude", "level"],
+                    temperature_data,
+                ),
+                "dewpoint_temperature": (
+                    ["time", "latitude", "longitude", "level"],
+                    dewpoint_data,
+                ),
+                "pressure": (["time", "latitude", "longitude", "level"], pressure_data),
+                "eastward_wind": (
+                    ["time", "latitude", "longitude", "level"],
+                    wind_data,
+                ),
+                "northward_wind": (
+                    ["time", "latitude", "longitude", "level"],
+                    wind_data,
+                ),
+                "surface_eastward_wind": (
+                    ["time", "latitude", "longitude"],
+                    wind_data[:, :, :, 0],
+                ),
+                "surface_northward_wind": (
+                    ["time", "latitude", "longitude"],
+                    wind_data[:, :, :, 0],
+                ),
+            },
+            coords={
+                "time": [0],
+                "latitude": [0],
+                "longitude": [0],
+                "level": pressure_levels,
+            },
+        )
+
+    def test_cape_calculation_matches_expected_values(self, regression_profile_data):
+        """Test that CAPE calculation produces expected values for known
+        atmospheric profile."""
+        cape, cin = sc.mixed_layer_cape_cin(
+            regression_profile_data,
+        )
+
+        # Expected values from the working derived.py implementation
+        expected_cape = 1890.1
+        expected_cin = -87.7
+
+        # Allow small numerical differences (within 1%)
+        assert np.isclose(
+            cape[0, 0, 0], expected_cape, rtol=0.01
+        ), f"CAPE mismatch: got {cape[0, 0, 0]:.1f}, expected {expected_cape:.1f}"
+
+        assert np.isclose(
+            cin[0, 0, 0], expected_cin, rtol=0.01
+        ), f"CIN mismatch: got {cin[0, 0, 0]:.1f}, expected {expected_cin:.1f}"
+
+    def test_cape_not_zero_regression(self, regression_profile_data):
+        """Regression test to ensure CAPE is not incorrectly calculated as zero."""
+        cape, cin = sc.mixed_layer_cape_cin(
+            regression_profile_data,
+        )
+
+        # This profile should produce substantial CAPE, never zero
+        assert (
+            cape[0, 0, 0] > 1000
+        ), f"CAPE should be > 1000 J/kg for this profile, got {cape[0, 0, 0]:.1f}"
+
+        # CIN should be negative but not extremely large in magnitude
+        assert (
+            -200 < cin[0, 0, 0] < 0
+        ), f"CIN should be between -200 and 0 J/kg, got {cin[0, 0, 0]:.1f}"
+
+    def test_craven_brooks_with_realistic_shear(self, regression_profile_data):
+        """Test Craven-Brooks significant severe parameter with realistic wind shear."""
+        # Add realistic wind shear to the dataset
+        shear_u = np.linspace(5, 25, 31)  # 5 to 25 m/s eastward wind
+        shear_v = np.linspace(2, 10, 31)  # 2 to 10 m/s northward wind
+
+        regression_profile_data["eastward_wind"] = (
+            ["time", "latitude", "longitude", "level"],
+            shear_u.reshape(1, 1, 1, -1),
+        )
+        regression_profile_data["northward_wind"] = (
+            ["time", "latitude", "longitude", "level"],
+            shear_v.reshape(1, 1, 1, -1),
+        )
+        regression_profile_data["surface_eastward_wind"] = (
+            ["time", "latitude", "longitude"],
+            np.array([[[5.0]]]),
+        )
+        regression_profile_data["surface_northward_wind"] = (
+            ["time", "latitude", "longitude"],
+            np.array([[[2.0]]]),
+        )
+
+        cbss = sc.craven_brooks_significant_severe(
+            regression_profile_data,
+        )
+
+        # Expected: CAPE (~1890) * Shear (~10.8 m/s) ≈ 20,357 m³/s³
+        expected_cbss = 20357
+        assert np.isclose(
+            cbss.values[0, 0, 0], expected_cbss, rtol=0.1
+        ), f"CBSS mismatch: got {cbss.values[0, 0, 0]:.0f}, expected ~{expected_cbss}"
+
+        # Should be in a reasonable range for severe weather potential (> 10,000 m³/s³)
+        assert cbss.values[0, 0, 0] > 10000, (
+            f"CBSS should indicate severe weather potential (> 10,000), "
+            f"got {cbss.values[0, 0, 0]:.0f}"
+        )
+
+    def test_virtual_temperature_unit_consistency(self):
+        """Test that virtual temperature functions work with Celsius as expected."""
+        pressure = np.array([1000.0, 900.0, 800.0])
+        temperature = np.array([20.0, 15.0, 10.0])  # Celsius
+        dewpoint = np.array([15.0, 10.0, 5.0])  # Celsius
+
+        # Test virtual temperature from dewpoint
+        tv_env = sc.virtual_temperature_from_dewpoint(pressure, temperature, dewpoint)
+
+        # Should return values in Celsius (close to input temperatures)
+        assert np.all(
+            tv_env > temperature
+        ), "Virtual temperature should be > actual temperature"
+        assert np.all(
+            tv_env < temperature + 5
+        ), "Virtual temperature shouldn't be much higher than actual"
+
+        # Test parcel virtual temperature
+        mixing_ratio = sc.saturation_mixing_ratio(pressure, dewpoint)
+        tv_parcel = sc.virtual_temperature(
+            temperature + 2, mixing_ratio
+        )  # Slightly warmer parcel
+
+        # Should show positive buoyancy
+        temp_diff = tv_parcel - tv_env
+        assert np.all(
+            temp_diff > 0
+        ), f"Parcel should be warmer than environment, got differences: {temp_diff}"
+
+    def test_temperature_unit_conversions_regression(self):
+        """Regression test for temperature unit conversion bugs."""
+        # Test that virtual temperature functions return expected ranges
+        pressure = np.array([1000.0, 500.0])
+        temp_celsius = np.array([20.0, -20.0])
+        dewpoint_celsius = np.array([15.0, -25.0])
+
+        # Virtual temperature from dewpoint should return Celsius
+        vt_env = sc.virtual_temperature_from_dewpoint(
+            pressure, temp_celsius, dewpoint_celsius
+        )
+
+        # Should be close to input temps (in Celsius, not Kelvin)
+        assert np.all(
+            vt_env < 50
+        ), f"Virtual temps too high (possibly in Kelvin): {vt_env}"
+        assert np.all(vt_env > -50), f"Virtual temps too low: {vt_env}"
+
+        # Should be close to actual temps (can be slightly lower due to numerical
+        # precision)
+        assert np.allclose(
+            vt_env, temp_celsius, atol=0.5
+        ), "Virtual temps should be close to actual temps"
+
+        # Virtual temperature function should work with Celsius
+        mixing_ratio = sc.saturation_mixing_ratio(pressure, dewpoint_celsius)
+        vt_parcel = sc.virtual_temperature(temp_celsius, mixing_ratio)
+
+        # Should also be in reasonable Celsius range
+        assert np.all(vt_parcel < 50), f"Parcel virtual temps too high: {vt_parcel}"
+        assert np.all(vt_parcel > -50), f"Parcel virtual temps too low: {vt_parcel}"
 
 
 if __name__ == "__main__":
