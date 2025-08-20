@@ -28,45 +28,15 @@ Constants defined in this module follow standard atmospheric physics:
 """
 
 import itertools
+from importlib import resources
 
 import numpy as np
 import numpy.ma as ma
+import pandas as pd
 import scipy.optimize as so
 import xarray as xr
 from scipy.interpolate import interp1d
 from scipy.special import lambertw
-
-# from extremeweatherbench.utils import load_moist_lapse_lookup
-# TODO: Implement this function in utils module
-
-
-def load_moist_lapse_lookup():
-    """Temporary mock function for moist lapse lookup table.
-
-    TODO: Replace with actual lookup table implementation.
-    Returns a simple pandas DataFrame for testing purposes.
-    """
-    import pandas as pd
-
-    # Create a simple mock lookup table with pressure levels as index
-    # and temperature profiles as columns
-    pressure_levels = np.arange(1000, 99, -25)  # 1000 to 100 hPa
-
-    # Create mock temperature profiles (columns represent different starting temps)
-    n_profiles = 50
-    profiles_data = np.zeros((len(pressure_levels), n_profiles))
-
-    for i, start_temp in enumerate(np.linspace(-10, 40, n_profiles)):
-        # Simple moist adiabatic approximation
-        temp_profile = start_temp - 6.5 * np.log(1000 / pressure_levels)
-        profiles_data[:, i] = temp_profile
-
-    return pd.DataFrame(
-        profiles_data,
-        index=pressure_levels,
-        columns=[f"profile_{i}" for i in range(n_profiles)],
-    )
-
 
 # Physical constants following standard atmospheric physics values
 gamma = 6.5  # Standard atmospheric temperature lapse rate (K/km)
@@ -87,6 +57,32 @@ Rv = (R / Mw) * 1000  # Specific gas constant for water vapor (J/kg/K)
 Cp_l = 4219.4  # Specific heat of liquid water (J/kg/K)
 Cp_v = 1860.078011865639  # Specific heat of water vapor at constant pressure (J/kg/K)
 T0 = 273.15  # Temperature at 0°C in Kelvin (K)
+
+
+def load_moist_lapse_lookup():
+    """Load the moist lapse lookup table for pseudoadiabatic calculations.
+
+    Loads a precomputed lookup table containing moist adiabatic temperature
+    profiles for various starting conditions. This table is used to efficiently
+    calculate parcel temperatures above the LCL without iterative computation.
+
+    Returns:
+        pd.DataFrame: Lookup table with pressure levels as index and temperature
+            profiles as columns. Each column represents a different starting
+            temperature condition for moist adiabatic ascent.
+
+    Notes:
+        - The lookup table is stored as a parquet file for efficient loading
+        - Used by moist_lapse_lookup() for interpolating parcel temperatures
+        - Critical for CAPE/CIN calculations above the lifting condensation level
+    """
+    import extremeweatherbench.data
+
+    moist_lapse_lookup_table = resources.files(extremeweatherbench.data).joinpath(
+        "moist_lapse_lookup.parq"
+    )
+    moist_lapse_lookup_df = pd.read_parquet(moist_lapse_lookup_table)
+    return moist_lapse_lookup_df
 
 
 def _basic_ds_checks(ds: xr.Dataset) -> xr.Dataset:
