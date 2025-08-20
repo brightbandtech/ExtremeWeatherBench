@@ -9,33 +9,8 @@ from extremeweatherbench import inputs, metrics
 logging.getLogger("urllib3.connectionpool").setLevel(logging.CRITICAL)
 logging.getLogger("botocore.httpchecksum").setLevel(logging.CRITICAL)
 
-# Base columns for the evaluation output dataframe
-# This is the core set of columns that all evaluation outputs should have.
-# Users can extend this by creating their own OUTPUT_COLUMNS list that includes
-# BASE_OUTPUT_COLUMNS plus any additional columns they need.
-#
-# Example of extending the schema:
-#   from extremeweatherbench.defaults import BASE_OUTPUT_COLUMNS
-#
-#   # Create extended schema for your specialized evaluation
-#   EXTENDED_OUTPUT_COLUMNS = BASE_OUTPUT_COLUMNS + [
-#       "lead_time",      # Add lead time information
-#       "region",         # Add region information
-#       "model_version",  # Add model version tracking
-#   ]
-#
-#   # Use in evaluation:
-#   result_df = _ensure_output_schema(
-#       df,
-#       required_columns=EXTENDED_OUTPUT_COLUMNS,
-#       target_variable=target_var,
-#       metric=metric.name,
-#       # ... standard metadata ...
-#       lead_time=6,           # Extended metadata
-#       region="Pacific NW",   # Extended metadata
-#       model_version="v2.1",  # Extended metadata
-#   )
-BASE_OUTPUT_COLUMNS = [
+# Columns for the evaluation output dataframe
+OUTPUT_COLUMNS = [
     "value",
     "lead_time",
     "target_variable",
@@ -45,9 +20,6 @@ BASE_OUTPUT_COLUMNS = [
     "case_id_number",
     "event_type",
 ]
-
-# Default OUTPUT_COLUMNS for standard evaluations (same as BASE for now)
-OUTPUT_COLUMNS = BASE_OUTPUT_COLUMNS.copy()
 
 
 def _preprocess_bb_cira_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:

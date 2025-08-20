@@ -221,15 +221,6 @@ def _ensure_output_schema(df: pd.DataFrame, **metadata) -> pd.DataFrame:
             case_id_number=case_id,
             event_type=event_type
         )
-
-    Note:
-        If you need custom columns, modify OUTPUT_COLUMNS in your module:
-
-        from extremeweatherbench.defaults import BASE_OUTPUT_COLUMNS
-        OUTPUT_COLUMNS = BASE_OUTPUT_COLUMNS + ["lead_time", "region"]
-
-        Then use _ensure_output_schema normally - it will automatically use
-        your extended OUTPUT_COLUMNS.
     """
     # Add metadata columns
     for col, value in metadata.items():
