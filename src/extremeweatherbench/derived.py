@@ -6,6 +6,7 @@ import numpy as np
 import xarray as xr
 
 from extremeweatherbench import calc
+from extremeweatherbench.events import tropical_cyclone
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -228,30 +229,53 @@ class SurfaceWindSpeed(DerivedVariable):
         return np.hypot(data["surface_eastward_wind"], data["surface_northward_wind"])
 
 
-# TODO: finish TC track calculation port
-class TCTrackVariables(DerivedVariable):
-    """A derived variable that computes the TC track outputs.
+class TropicalCycloneTrackVariable(DerivedVariable):
+    """A derived variable abstract class for tropical cyclone (TC) variables.
 
-    This derived variable is used to compute the TC track outputs.
-    It is a flexible variable that can be used to compute the TC track outputs
-    based on the data availability.
+    This class serves as a parent for TC-related derived variables and provides
+    shared track computation with caching to avoid reprocessing the same data
+    multiple times across different child classes.
+
+    The track data is computed once and cached, then child classes can extract
+    specific variables (like sea level pressure, wind speed) from the cached
+    track dataset.
 
     Deriving the track locations using default TempestExtremes criteria:
     https://doi.org/10.5194/gmd-14-5023-2021
+
+    For forecast data, when IBTrACS data is provided, the valid candidates
+    approach is filtered to only include candidates within 5 great circle
+    degrees of IBTrACS points and within 120 hours of the valid_time.
     """
 
+    # required variables for TC track identification
     required_variables = [
         "air_pressure_at_mean_sea_level",
         "geopotential",
-        "surface_wind_speed",
         "surface_eastward_wind",
         "surface_northward_wind",
     ]
 
     @classmethod
-    def derive_variable(cls, data: xr.Dataset, *args, **kwargs) -> xr.DataArray:
-        """Derive the TC track variables."""
+    def _get_or_compute_tracks(cls, data: xr.Dataset, *args, **kwargs) -> xr.Dataset:
+        """Get cached track data or compute if not already cached.
 
+        This method handles the caching logic to ensure track computation
+        is only done once per unique dataset.
+
+        Args:
+            data: Input dataset containing required variables
+
+        Returns:
+            3D dataset containing tropical cyclone track information
+        """
+        cache_key = tropical_cyclone._generate_cache_key(data)
+
+        # Return cached result if available
+        if cache_key in tropical_cyclone._TC_TRACK_CACHE:
+            return tropical_cyclone._TC_TRACK_CACHE[cache_key]
+
+        # Compute tracks if not cached
         def _prepare_wind_data(data: xr.Dataset) -> xr.Dataset:
             """Prepare wind data by computing wind speed if needed."""
             # Make a copy to avoid modifying original
@@ -276,15 +300,273 @@ class TCTrackVariables(DerivedVariable):
 
         # Generates the variables needed for the TC track calculation
         # (geop. thickness, winds, temps, slp)
-        cyclone_dataset = calc.generate_tc_variables(prepared_data)
-        tctracks = calc.create_tctracks_from_dataset(cyclone_dataset)
-        tctracks_ds_3d = calc.tctracks_to_3d_dataset(tctracks)
+        cyclone_dataset = tropical_cyclone.generate_tc_variables(prepared_data)
 
-        return tctracks_ds_3d  # type: ignore[return-value]
+        # Check if we should apply IBTrACS filtering
+        # First check kwargs, then the global registry
+        ibtracs_data = kwargs.get("ibtracs_data", None)
+        if ibtracs_data is None:
+            # Try to get from registry using case_id if provided
+            case_id = kwargs.get("case_id", None)
+            if case_id is not None:
+                ibtracs_data = tropical_cyclone.get_ibtracs_data(case_id)
+        if ibtracs_data is not None:
+            # Use IBTrACS-filtered TC detection
+            tctracks_ds = (
+                tropical_cyclone.create_tctracks_from_dataset_with_ibtracs_filter(
+                    cyclone_dataset, ibtracs_data
+                )
+            )
+        else:
+            raise ValueError("No IBTrACS data provided to constrain TC tracks.")
+
+        # Cache the result
+        tropical_cyclone._TC_TRACK_CACHE[cache_key] = tctracks_ds
+
+        return tctracks_ds
+
+    @classmethod
+    def derive_variable(cls, data: xr.Dataset, *args, **kwargs) -> xr.DataArray:
+        """Derive the TC track variables.
+
+        This base method returns the full track dataset. Child classes should
+        override this method to extract specific variables from the track data.
+
+        Args:
+            data: Input dataset containing required meteorological variables
+
+        Returns:
+            DataArray containing the derived variable
+        """
+        # Get the cached or computed track data
+        tracks_dataset = cls._get_or_compute_tracks(data, *args, **kwargs)
+
+        # For the base class, return the full dataset as a combined DataArray
+        # Child classes should override this to return specific variables
+        return tracks_dataset.to_array().squeeze()
+
+    @classmethod
+    def clear_cache(cls) -> None:
+        """Clear the global track cache.
+
+        Useful for memory management or when processing completely different datasets.
+        """
+        tropical_cyclone._TC_TRACK_CACHE.clear()
+
+
+class TrackSeaLevelPressure(TropicalCycloneTrackVariable):
+    """Derive sea level pressure values along tropical cyclone tracks.
+
+    This class extracts the air pressure at mean sea level values
+    from the computed tropical cyclone tracks, formatted for EWB evaluation
+    pipeline including candidate matching and track interpolation.
+    """
+
+    @classmethod
+    def derive_variable(cls, data: xr.Dataset, *args, **kwargs) -> xr.DataArray:
+        """Derive sea level pressure along TC tracks for EWB evaluation.
+
+        Args:
+            data: Input dataset containing required meteorological variables
+
+        Returns:
+            DataArray with TC tracks in EWB-compatible format including:
+            - Exact lat/lon coordinates for each candidate
+            - Valid times for temporal matching with IBTrACS
+            - Track IDs for connecting candidates across time
+            - Init times for model run identification
+        """
+        tracks_dataset = cls._get_or_compute_tracks(data, *args, **kwargs)
+
+        # Convert to EWB evaluation format
+        slp_tracks = cls._convert_to_ewb_evaluation_format(
+            tracks_dataset, data, "tc_slp"
+        )
+
+        slp_tracks.name = "air_pressure_at_mean_sea_level"  # EWB standard name
+        slp_tracks.attrs.update(
+            {
+                "long_name": "Tropical cyclone sea level pressure",
+                "units": "Pa",
+                "description": ("Air pressure at mean sea level along TC tracks"),
+                "standard_name": "air_pressure_at_mean_sea_level",
+            }
+        )
+
+        return slp_tracks
+
+    @classmethod
+    def _convert_to_ewb_evaluation_format(
+        cls, tracks_dataset: xr.Dataset, original_data: xr.Dataset, variable_name: str
+    ) -> xr.DataArray:
+        """Convert tracks to EWB evaluation format with proper structure.
+
+        This format supports:
+        1. Candidate matching: coordinates + valid_time for IBTrACS comparison
+        2. Track interpolation: connected candidates with track_id for landfall
+        """
+        # Extract track data
+        tc_data = tracks_dataset[variable_name]
+        tc_lats = tracks_dataset["tc_latitude"]
+        tc_lons = tracks_dataset["tc_longitude"]
+        track_ids = tracks_dataset.get("track_id", None)
+
+        # Create proper time coordinates
+        if (
+            "time" in original_data.dims
+            and "prediction_timedelta" in original_data.dims
+        ):
+            # Create valid_time from init_time + lead_time
+            init_times = original_data.time
+            lead_times = original_data.prediction_timedelta
+
+            # Broadcast to create full time grids
+            init_mesh, lead_mesh = xr.broadcast(init_times, lead_times)
+            valid_times = init_mesh + lead_mesh
+
+            # Add time coordinates to the track dataset
+            tc_data = tc_data.assign_coords(
+                {
+                    "valid_time": (["time", "prediction_timedelta"], valid_times.data),
+                    "init_time": (["time", "prediction_timedelta"], init_mesh.data),
+                    "lead_time": (["time", "prediction_timedelta"], lead_mesh.data),
+                }
+            )
+
+            tc_lats = tc_lats.assign_coords(
+                {
+                    "valid_time": (["time", "prediction_timedelta"], valid_times.data),
+                    "init_time": (["time", "prediction_timedelta"], init_mesh.data),
+                    "lead_time": (["time", "prediction_timedelta"], lead_mesh.data),
+                }
+            )
+
+            tc_lons = tc_lons.assign_coords(
+                {
+                    "valid_time": (["time", "prediction_timedelta"], valid_times.data),
+                    "init_time": (["time", "prediction_timedelta"], init_mesh.data),
+                    "lead_time": (["time", "prediction_timedelta"], lead_mesh.data),
+                }
+            )
+
+            if track_ids is not None:
+                track_ids = track_ids.assign_coords(
+                    {
+                        "valid_time": (
+                            ["time", "prediction_timedelta"],
+                            valid_times.data,
+                        ),
+                        "init_time": (["time", "prediction_timedelta"], init_mesh.data),
+                        "lead_time": (["time", "prediction_timedelta"], lead_mesh.data),
+                    }
+                )
+
+        # Add coordinate information as additional coordinates
+        tc_data = tc_data.assign_coords(
+            {
+                "latitude": tc_lats,
+                "longitude": tc_lons,
+            }
+        )
+
+        if track_ids is not None:
+            tc_data = tc_data.assign_coords(track_id=track_ids)
+
+        # Update attributes for EWB compatibility
+        tc_data.latitude.attrs = {
+            "long_name": "Tropical cyclone latitude",
+            "units": "degrees_north",
+            "standard_name": "latitude",
+        }
+
+        tc_data.longitude.attrs = {
+            "long_name": "Tropical cyclone longitude",
+            "units": "degrees_east",
+            "standard_name": "longitude",
+        }
+
+        if track_ids is not None:
+            tc_data.track_id.attrs = {
+                "long_name": "Tropical cyclone track identifier",
+                "description": "Unique ID connecting TC candidates across time "
+                + "(-1 for untracked)",
+            }
+
+        return tc_data
+
+
+class TrackSurfaceWindSpeed(TropicalCycloneTrackVariable):
+    """Derive surface wind speed values along tropical cyclone tracks.
+
+    This class extracts the surface wind speed values (vmax)
+    from the computed tropical cyclone tracks, formatted for EWB evaluation
+    pipeline including candidate matching and track interpolation.
+    """
+
+    @classmethod
+    def derive_variable(cls, data: xr.Dataset, *args, **kwargs) -> xr.DataArray:
+        """Derive surface wind speed along TC tracks for EWB evaluation.
+
+        Args:
+            data: Input dataset containing required meteorological variables
+
+        Returns:
+            DataArray with TC tracks in EWB-compatible format including:
+            - Exact lat/lon coordinates for each candidate
+            - Valid times for temporal matching with IBTrACS
+            - Track IDs for connecting candidates across time
+            - Init times for model run identification
+        """
+        tracks_dataset = cls._get_or_compute_tracks(data, *args, **kwargs)
+
+        # Convert to EWB evaluation format using shared method
+        wind_speed_tracks = TrackSeaLevelPressure._convert_to_ewb_evaluation_format(
+            tracks_dataset, data, "tc_vmax"
+        )
+
+        wind_speed_tracks.name = "surface_wind_speed"  # EWB standard name
+        wind_speed_tracks.attrs.update(
+            {
+                "long_name": "Tropical cyclone wind speed",
+                "units": "m s-1",
+                "description": ("Maximum surface wind speed along TC tracks"),
+                "standard_name": "wind_speed",
+            }
+        )
+
+        return wind_speed_tracks
+
+
+class TCTrackVariables(TropicalCycloneTrackVariable):
+    """Backward compatibility class for TC track variables.
+
+    This class maintains compatibility with existing tests and code
+    that expects the old TCTrackVariables interface.
+    """
+
+    # Override required variables to match test expectations
+    required_variables = [
+        "air_pressure_at_mean_sea_level",
+        "geopotential",
+        "surface_wind_speed",
+        "surface_eastward_wind",
+        "surface_northward_wind",
+    ]
+
+    @classmethod
+    def derive_variable(cls, data: xr.Dataset, *args, **kwargs) -> xr.Dataset:
+        """Derive the TC track variables, returning a Dataset for compatibility.
+
+        Returns the full track dataset rather than a single DataArray,
+        maintaining compatibility with existing code.
+        """
+        # Get the cached or computed track data
+        tracks_dataset = cls._get_or_compute_tracks(data, *args, **kwargs)
+        return tracks_dataset
 
 
 def maybe_derive_variables(
-    ds: xr.Dataset, variables: list[str | DerivedVariable]
+    ds: xr.Dataset, variables: list[str | DerivedVariable], **kwargs
 ) -> xr.Dataset:
     """Derive variables from the data if any exist in a list of variables.
 
