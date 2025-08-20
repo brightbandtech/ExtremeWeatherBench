@@ -19,6 +19,7 @@ if TYPE_CHECKING:
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Columns for the evaluation output dataframe
 OUTPUT_COLUMNS = [
     "value",
     "target_variable",
