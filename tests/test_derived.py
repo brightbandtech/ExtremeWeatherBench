@@ -16,6 +16,9 @@ import pytest
 import xarray as xr
 
 from extremeweatherbench import derived
+from extremeweatherbench.events import tropical_cyclone
+
+# flake8: noqa: E501
 
 
 class TestValidDerivedVariable(derived.DerivedVariable):
@@ -837,3 +840,542 @@ class TestIntegrationWithRealData:
         # Should have at least the original variables
         for var in sample_dataset.data_vars:
             assert var in result.data_vars
+
+
+@pytest.fixture
+def sample_tc_forecast_dataset():
+    """Create a sample forecast dataset for TC testing."""
+    time = pd.date_range("2023-09-01", periods=3, freq="12h")
+    prediction_timedelta = np.array([0, 12, 24, 36], dtype="timedelta64[h]")
+    lat = np.linspace(10, 40, 16)
+    lon = np.linspace(-90, -60, 16)
+
+    # Create realistic meteorological data
+    data_shape = (len(time), len(lat), len(lon), len(prediction_timedelta))
+
+    dataset = xr.Dataset(
+        {
+            "air_pressure_at_mean_sea_level": (
+                ["time", "latitude", "longitude", "prediction_timedelta"],
+                np.random.normal(101325, 1000, data_shape),
+            ),
+            "surface_eastward_wind": (
+                ["time", "latitude", "longitude", "prediction_timedelta"],
+                np.random.normal(0, 10, data_shape),
+            ),
+            "surface_northward_wind": (
+                ["time", "latitude", "longitude", "prediction_timedelta"],
+                np.random.normal(0, 10, data_shape),
+            ),
+            "geopotential": (
+                ["time", "latitude", "longitude", "prediction_timedelta"],
+                np.random.normal(5000, 1000, data_shape) * 9.80665,
+            ),
+        },
+        coords={
+            "time": time,
+            "latitude": lat,
+            "longitude": lon,
+            "prediction_timedelta": prediction_timedelta,
+        },
+    )
+
+    return dataset
+
+
+@pytest.fixture
+def sample_tc_tracks_dataset():
+    """Create a sample TC tracks dataset."""
+    time = pd.date_range("2023-09-01", periods=3, freq="12h")
+    prediction_timedelta = np.array([0, 12, 24, 36], dtype="timedelta64[h]")
+
+    data_shape = (len(time), len(prediction_timedelta))
+
+    dataset = xr.Dataset(
+        {
+            "tc_slp": (
+                ["time", "prediction_timedelta"],
+                np.random.normal(101000, 1000, data_shape),
+            ),
+            "tc_latitude": (
+                ["time", "prediction_timedelta"],
+                np.random.uniform(15, 35, data_shape),
+            ),
+            "tc_longitude": (
+                ["time", "prediction_timedelta"],
+                np.random.uniform(-85, -65, data_shape),
+            ),
+            "tc_vmax": (
+                ["time", "prediction_timedelta"],
+                np.random.uniform(20, 60, data_shape),
+            ),
+            "track_id": (
+                ["time", "prediction_timedelta"],
+                np.random.randint(1, 5, data_shape),
+            ),
+        },
+        coords={
+            "time": time,
+            "prediction_timedelta": prediction_timedelta,
+        },
+    )
+
+    return dataset
+
+
+class TestTropicalCycloneTrackVariable:
+    """Test the base TropicalCycloneTrackVariable class."""
+
+    def setup_method(self):
+        """Clear cache before each test."""
+        derived.TropicalCycloneTrackVariable.clear_cache()
+        tropical_cyclone.clear_ibtracs_registry()
+
+    def test_required_variables(self):
+        """Test that required variables are properly defined."""
+        expected_vars = [
+            "air_pressure_at_mean_sea_level",
+            "geopotential",
+            "surface_eastward_wind",
+            "surface_northward_wind",
+        ]
+
+        assert derived.TropicalCycloneTrackVariable.required_variables == expected_vars
+
+    @patch(
+        "extremeweatherbench.events.tropical_cyclone.create_tctracks_from_dataset_with_ibtracs_filter"
+    )
+    @patch("extremeweatherbench.events.tropical_cyclone.generate_tc_variables")
+    def test_get_or_compute_tracks_no_cache(
+        self,
+        mock_generate_tc_vars,
+        mock_create_tracks,
+        sample_tc_forecast_dataset,
+        sample_tc_tracks_dataset,
+    ):
+        """Test track computation when not cached."""
+        # Setup mocks
+        mock_generate_tc_vars.return_value = sample_tc_forecast_dataset
+        mock_create_tracks.return_value = sample_tc_tracks_dataset
+
+        # Register IBTrACS data
+        ibtracs_data = xr.Dataset(
+            {
+                "latitude": (["time"], [25.0, 26.0]),
+                "longitude": (["time"], [-75.0, -74.0]),
+            },
+            coords={"time": pd.date_range("2023-09-01", periods=2, freq="6h")},
+        )
+
+        result = derived.TropicalCycloneTrackVariable._get_or_compute_tracks(
+            sample_tc_forecast_dataset, ibtracs_data=ibtracs_data
+        )
+
+        # Should call the necessary functions
+        mock_generate_tc_vars.assert_called_once()
+        mock_create_tracks.assert_called_once()
+
+        # Should return the tracks dataset
+        assert result is sample_tc_tracks_dataset
+
+    @patch(
+        "extremeweatherbench.events.tropical_cyclone.create_tctracks_from_dataset_with_ibtracs_filter"
+    )
+    @patch("extremeweatherbench.events.tropical_cyclone.generate_tc_variables")
+    def test_get_or_compute_tracks_with_cache(
+        self,
+        mock_generate_tc_vars,
+        mock_create_tracks,
+        sample_tc_forecast_dataset,
+        sample_tc_tracks_dataset,
+    ):
+        """Test that cache is used when available."""
+        # Manually add to cache
+        cache_key = tropical_cyclone._generate_cache_key(sample_tc_forecast_dataset)
+        tropical_cyclone._TC_TRACK_CACHE[cache_key] = sample_tc_tracks_dataset
+
+        result = derived.TropicalCycloneTrackVariable._get_or_compute_tracks(
+            sample_tc_forecast_dataset,
+            ibtracs_data=xr.Dataset(),  # Empty dataset
+        )
+
+        # Should not call computation functions
+        mock_generate_tc_vars.assert_not_called()
+        mock_create_tracks.assert_not_called()
+
+        # Should return cached dataset
+        assert result is sample_tc_tracks_dataset
+
+    def test_get_or_compute_tracks_no_ibtracs_error(self, sample_tc_forecast_dataset):
+        """Test error when no IBTrACS data is provided."""
+        with pytest.raises(ValueError, match="No IBTrACS data provided"):
+            derived.TropicalCycloneTrackVariable._get_or_compute_tracks(
+                sample_tc_forecast_dataset
+            )
+
+    @patch("extremeweatherbench.events.tropical_cyclone.get_ibtracs_data")
+    def test_get_or_compute_tracks_from_registry(
+        self, mock_get_ibtracs, sample_tc_forecast_dataset
+    ):
+        """Test getting IBTrACS data from registry using case_id."""
+        # Mock registry return
+        ibtracs_data = xr.Dataset(
+            {
+                "latitude": (["time"], [25.0]),
+                "longitude": (["time"], [-75.0]),
+            },
+            coords={"time": [pd.Timestamp("2023-09-01")]},
+        )
+
+        mock_get_ibtracs.return_value = ibtracs_data
+
+        with patch(
+            "extremeweatherbench.events.tropical_cyclone.create_tctracks_from_dataset_with_ibtracs_filter"
+        ) as mock_create:
+            mock_create.return_value = xr.Dataset()
+
+            derived.TropicalCycloneTrackVariable._get_or_compute_tracks(
+                sample_tc_forecast_dataset, case_id="test_case_123"
+            )
+
+            # Should have tried to get from registry
+            mock_get_ibtracs.assert_called_once_with("test_case_123")
+
+    def test_clear_cache(self, sample_tc_tracks_dataset):
+        """Test cache clearing functionality."""
+        # Add something to cache
+        tropical_cyclone._TC_TRACK_CACHE["test_key"] = sample_tc_tracks_dataset
+
+        # Verify it's there
+        assert len(tropical_cyclone._TC_TRACK_CACHE) == 1
+
+        # Clear cache
+        derived.TropicalCycloneTrackVariable.clear_cache()
+
+        # Should be empty
+        assert len(tropical_cyclone._TC_TRACK_CACHE) == 0
+
+    @patch.object(derived.TropicalCycloneTrackVariable, "_get_or_compute_tracks")
+    def test_derive_variable_base_class(
+        self, mock_get_tracks, sample_tc_forecast_dataset, sample_tc_tracks_dataset
+    ):
+        """Test the base derive_variable method."""
+        mock_get_tracks.return_value = sample_tc_tracks_dataset
+
+        result = derived.TropicalCycloneTrackVariable.derive_variable(
+            sample_tc_forecast_dataset
+        )
+
+        # Should call _get_or_compute_tracks
+        mock_get_tracks.assert_called_once()
+
+        # Should return a DataArray (converted from Dataset)
+        assert isinstance(result, xr.DataArray)
+
+
+class TestTrackSeaLevelPressure:
+    """Test the TrackSeaLevelPressure derived variable."""
+
+    def setup_method(self):
+        """Clear cache before each test."""
+        derived.TropicalCycloneTrackVariable.clear_cache()
+
+    @patch.object(derived.TrackSeaLevelPressure, "_get_or_compute_tracks")
+    def test_derive_variable(
+        self, mock_get_tracks, sample_tc_forecast_dataset, sample_tc_tracks_dataset
+    ):
+        """Test TrackSeaLevelPressure derive_variable method."""
+        mock_get_tracks.return_value = sample_tc_tracks_dataset
+
+        with patch.object(
+            derived.TrackSeaLevelPressure, "_convert_to_ewb_evaluation_format"
+        ) as mock_convert:
+            # Mock the conversion to return a properly formatted DataArray
+            mock_slp_tracks = xr.DataArray(
+                np.random.normal(101000, 1000, (3, 4)),
+                dims=["time", "prediction_timedelta"],
+                coords={
+                    "time": sample_tc_tracks_dataset.time,
+                    "prediction_timedelta": sample_tc_tracks_dataset.prediction_timedelta,
+                },
+            )
+            mock_convert.return_value = mock_slp_tracks
+
+            result = derived.TrackSeaLevelPressure.derive_variable(
+                sample_tc_forecast_dataset
+            )
+
+            # Should call necessary methods
+            mock_get_tracks.assert_called_once()
+            mock_convert.assert_called_once_with(
+                sample_tc_tracks_dataset, sample_tc_forecast_dataset, "tc_slp"
+            )
+
+            # Should return properly formatted DataArray
+            assert isinstance(result, xr.DataArray)
+            assert result.name == "air_pressure_at_mean_sea_level"
+
+            # Check attributes
+            assert "long_name" in result.attrs
+            assert "units" in result.attrs
+            assert result.attrs["units"] == "Pa"
+
+    def test_convert_to_ewb_evaluation_format_basic(
+        self, sample_tc_tracks_dataset, sample_tc_forecast_dataset
+    ):
+        """Test conversion to EWB evaluation format."""
+        result = derived.TrackSeaLevelPressure._convert_to_ewb_evaluation_format(
+            sample_tc_tracks_dataset, sample_tc_forecast_dataset, "tc_slp"
+        )
+
+        # Should return a DataArray
+        assert isinstance(result, xr.DataArray)
+
+        # Should have proper coordinates
+        assert "latitude" in result.coords
+        assert "longitude" in result.coords
+
+        # Should have proper attributes on coordinates
+        assert "long_name" in result.latitude.attrs
+        assert "units" in result.latitude.attrs
+        assert result.latitude.attrs["units"] == "degrees_north"
+
+    def test_convert_to_ewb_evaluation_format_with_time_coords(self):
+        """Test conversion with proper time coordinates."""
+        # Create dataset with init_time and prediction_timedelta
+        time = pd.date_range("2023-09-01", periods=2, freq="12h")
+        prediction_timedelta = np.array([0, 12], dtype="timedelta64[h]")
+
+        tracks_dataset = xr.Dataset(
+            {
+                "tc_slp": (
+                    ["time", "prediction_timedelta"],
+                    [[101000, 101010], [101020, 101030]],
+                ),
+                "tc_latitude": (
+                    ["time", "prediction_timedelta"],
+                    [[25.0, 25.5], [26.0, 26.5]],
+                ),
+                "tc_longitude": (
+                    ["time", "prediction_timedelta"],
+                    [[-75.0, -74.5], [-74.0, -73.5]],
+                ),
+            },
+            coords={"time": time, "prediction_timedelta": prediction_timedelta},
+        )
+
+        original_dataset = xr.Dataset(
+            coords={
+                "time": time,
+                "prediction_timedelta": prediction_timedelta,
+            }
+        )
+
+        result = derived.TrackSeaLevelPressure._convert_to_ewb_evaluation_format(
+            tracks_dataset, original_dataset, "tc_slp"
+        )
+
+        # Should have valid_time coordinate
+        assert "valid_time" in result.coords
+        assert "init_time" in result.coords
+        assert "lead_time" in result.coords
+
+        # Check that valid_time is properly calculated
+        expected_valid_time = result.init_time + result.lead_time
+        xr.testing.assert_equal(result.valid_time, expected_valid_time)
+
+
+class TestTrackSurfaceWindSpeed:
+    """Test the TrackSurfaceWindSpeed derived variable."""
+
+    def setup_method(self):
+        """Clear cache before each test."""
+        derived.TropicalCycloneTrackVariable.clear_cache()
+
+    @patch.object(derived.TrackSurfaceWindSpeed, "_get_or_compute_tracks")
+    def test_derive_variable(
+        self, mock_get_tracks, sample_tc_forecast_dataset, sample_tc_tracks_dataset
+    ):
+        """Test TrackSurfaceWindSpeed derive_variable method."""
+        mock_get_tracks.return_value = sample_tc_tracks_dataset
+
+        with patch.object(
+            derived.TrackSeaLevelPressure, "_convert_to_ewb_evaluation_format"
+        ) as mock_convert:
+            # Mock the conversion to return a properly formatted DataArray
+            mock_wind_tracks = xr.DataArray(
+                np.random.uniform(10, 50, (3, 4)),
+                dims=["time", "prediction_timedelta"],
+                coords={
+                    "time": sample_tc_tracks_dataset.time,
+                    "prediction_timedelta": sample_tc_tracks_dataset.prediction_timedelta,
+                },
+            )
+            mock_convert.return_value = mock_wind_tracks
+
+            result = derived.TrackSurfaceWindSpeed.derive_variable(
+                sample_tc_forecast_dataset
+            )
+
+            # Should call necessary methods
+            mock_get_tracks.assert_called_once()
+            mock_convert.assert_called_once_with(
+                sample_tc_tracks_dataset, sample_tc_forecast_dataset, "tc_vmax"
+            )
+
+            # Should return properly formatted DataArray
+            assert isinstance(result, xr.DataArray)
+            assert result.name == "surface_wind_speed"
+
+            # Check attributes
+            assert "long_name" in result.attrs
+            assert "units" in result.attrs
+            assert result.attrs["units"] == "m s-1"
+
+
+class TestTCTrackVariablesBackwardCompatibility:
+    """Test the backward compatibility TCTrackVariables class."""
+
+    def test_required_variables(self):
+        """Test that TCTrackVariables has the expected required variables."""
+        expected_vars = [
+            "air_pressure_at_mean_sea_level",
+            "geopotential",
+            "surface_wind_speed",
+            "surface_eastward_wind",
+            "surface_northward_wind",
+        ]
+
+        assert derived.TCTrackVariables.required_variables == expected_vars
+
+    @patch.object(derived.TCTrackVariables, "_get_or_compute_tracks")
+    def test_derive_variable_returns_dataset(
+        self, mock_get_tracks, sample_tc_forecast_dataset, sample_tc_tracks_dataset
+    ):
+        """Test that TCTrackVariables returns a Dataset for backward compatibility."""
+        mock_get_tracks.return_value = sample_tc_tracks_dataset
+
+        result = derived.TCTrackVariables.derive_variable(sample_tc_forecast_dataset)
+
+        # Should return the Dataset directly, not a DataArray
+        assert isinstance(result, xr.Dataset)
+        assert result is sample_tc_tracks_dataset
+
+
+class TestWindDataPreparation:
+    """Test wind data preparation in TC track computation."""
+
+    def test_prepare_wind_data_with_components_only(self):
+        """Test preparation when only wind components are available."""
+        # Create dataset with only wind components
+        time = pd.date_range("2023-09-01", periods=2, freq="6h")
+        lat = np.linspace(20, 30, 5)
+        lon = np.linspace(-80, -70, 5)
+
+        u_wind = np.random.normal(0, 10, (2, 5, 5))
+        v_wind = np.random.normal(0, 10, (2, 5, 5))
+
+        dataset = xr.Dataset(
+            {
+                "surface_eastward_wind": (["time", "latitude", "longitude"], u_wind),
+                "surface_northward_wind": (["time", "latitude", "longitude"], v_wind),
+                "air_pressure_at_mean_sea_level": (
+                    ["time", "latitude", "longitude"],
+                    np.random.normal(101325, 1000, (2, 5, 5)),
+                ),
+                "geopotential": (
+                    ["time", "latitude", "longitude"],
+                    np.random.normal(5000, 1000, (2, 5, 5)) * 9.80665,
+                ),
+            },
+            coords={"time": time, "latitude": lat, "longitude": lon},
+        )
+
+        # Mock the track computation to test preparation
+        with patch(
+            "extremeweatherbench.events.tropical_cyclone.generate_tc_variables"
+        ) as mock_gen_vars:
+            with patch(
+                "extremeweatherbench.events.tropical_cyclone.create_tctracks_from_dataset_with_ibtracs_filter"
+            ) as mock_create:
+                mock_gen_vars.return_value = dataset
+                mock_create.return_value = xr.Dataset()
+
+                derived.TropicalCycloneTrackVariable._get_or_compute_tracks(
+                    dataset,
+                    ibtracs_data=xr.Dataset(
+                        {
+                            "latitude": (["time"], [25.0]),
+                            "longitude": (["time"], [-75.0]),
+                        },
+                        coords={"time": [pd.Timestamp("2023-09-01")]},
+                    ),
+                )
+
+                # Check that generate_tc_variables was called with data that has wind speed
+                called_dataset = mock_gen_vars.call_args[0][0]
+                assert "surface_wind_speed" in called_dataset.data_vars
+
+                # Verify wind speed calculation
+                expected_wind_speed = np.sqrt(u_wind**2 + v_wind**2)
+                calculated_wind_speed = called_dataset["surface_wind_speed"].values
+                np.testing.assert_allclose(calculated_wind_speed, expected_wind_speed)
+
+    def test_prepare_wind_data_with_existing_wind_speed(self):
+        """Test preparation when wind speed already exists."""
+        # Create dataset with existing wind speed
+        time = pd.date_range("2023-09-01", periods=2, freq="6h")
+        lat = np.linspace(20, 30, 5)
+        lon = np.linspace(-80, -70, 5)
+
+        wind_speed = np.random.uniform(0, 30, (2, 5, 5))
+
+        dataset = xr.Dataset(
+            {
+                "surface_wind_speed": (["time", "latitude", "longitude"], wind_speed),
+                "surface_eastward_wind": (
+                    ["time", "latitude", "longitude"],
+                    np.random.normal(0, 10, (2, 5, 5)),
+                ),
+                "surface_northward_wind": (
+                    ["time", "latitude", "longitude"],
+                    np.random.normal(0, 10, (2, 5, 5)),
+                ),
+                "air_pressure_at_mean_sea_level": (
+                    ["time", "latitude", "longitude"],
+                    np.random.normal(101325, 1000, (2, 5, 5)),
+                ),
+                "geopotential": (
+                    ["time", "latitude", "longitude"],
+                    np.random.normal(5000, 1000, (2, 5, 5)) * 9.80665,
+                ),
+            },
+            coords={"time": time, "latitude": lat, "longitude": lon},
+        )
+
+        # Mock the track computation
+        with patch(
+            "extremeweatherbench.events.tropical_cyclone.generate_tc_variables"
+        ) as mock_gen_vars:
+            with patch(
+                "extremeweatherbench.events.tropical_cyclone.create_tctracks_from_dataset_with_ibtracs_filter"
+            ) as mock_create:
+                mock_gen_vars.return_value = dataset
+                mock_create.return_value = xr.Dataset()
+
+                derived.TropicalCycloneTrackVariable._get_or_compute_tracks(
+                    dataset,
+                    ibtracs_data=xr.Dataset(
+                        {
+                            "latitude": (["time"], [25.0]),
+                            "longitude": (["time"], [-75.0]),
+                        },
+                        coords={"time": [pd.Timestamp("2023-09-01")]},
+                    ),
+                )
+
+                # Check that the original wind speed was preserved
+                called_dataset = mock_gen_vars.call_args[0][0]
+                np.testing.assert_array_equal(
+                    called_dataset["surface_wind_speed"].values, wind_speed
+                )
