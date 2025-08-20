@@ -749,7 +749,7 @@ def combine_profiles(
 
 def mixed_parcel(
     ds: xr.Dataset,
-    depth: float = 100,
+    layer_depth: float = 100,
     temperature_units: str = "K",
 ):
     """Calculates the mixed parcel properties of a dataset.
@@ -759,7 +759,7 @@ def mixed_parcel(
         pressure_var: Name of the pressure variable in the dataset
         temperature_var: Name of the temperature variable in the dataset
         temperature_dewpoint_var: Name of the dewpoint variable in the dataset
-        depth: Depth of the mixed layer in hPa
+        layer_depth: Depth of the mixed layer in hPa
 
     Returns:
         calculated_parcel_start_pressure: ndarray of the pressure at the start of the
@@ -778,7 +778,7 @@ def mixed_parcel(
     pressure = ds["level"]
     # begin mixed layer
     bottom_pressure, _ = get_pressure_height(np.atleast_1d(pressure[0]))
-    top = bottom_pressure - depth  # hPa
+    top = bottom_pressure - layer_depth  # hPa
     top_pressure, _ = get_pressure_height(top)
 
     # Get the mask of pressures in between bottom (high) pressure and top (low) pressure
@@ -1135,14 +1135,7 @@ def dewpoint_from_specific_humidity(
 
 def craven_brooks_significant_severe(
     ds: xr.Dataset,
-    pressure_var: str = "pressure",
-    temperature_var: str = "temperature",
-    temperature_dewpoint_var: str = "dewpoint",
-    eastward_wind_var: str = "eastward_wind",
-    northward_wind_var: str = "northward_wind",
-    surface_eastward_wind_var: str = "surface_eastward_wind",
-    surface_northward_wind_var: str = "surface_northward_wind",
-    depth: float = 100,
+    layer_depth: float = 100,
 ) -> xr.DataArray:
     """Calculate the Craven-Brooks Significant Severe (CBSS) parameter.
 
@@ -1165,7 +1158,7 @@ def craven_brooks_significant_severe(
         northward_wind_var: Name of v-component wind variable (m/s).
         surface_eastward_wind_var: Name of surface u-component wind (m/s).
         surface_northward_wind_var: Name of surface v-component wind (m/s).
-        depth: Mixed layer depth in hPa for CAPE calculation (default: 100).
+        layer_depth: Mixed layer depth in hPa for CAPE calculation (default: 100).
 
     Returns:
         xr.DataArray: CBSS parameter values in m³/s³.
@@ -1189,7 +1182,7 @@ def craven_brooks_significant_severe(
     # CIN not needed for CBSS
     cape, _ = mixed_layer_cape_cin(
         ds,
-        depth,
+        layer_depth,
     )
     shear = low_level_shear(
         ds,
@@ -1218,17 +1211,17 @@ def low_level_shear(
 
 def mixed_layer_cape_cin(
     ds: xr.Dataset,
-    depth: float = 100,
+    layer_depth: float = 100,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Calculate mixed layer CAPE and CIN for severe weather forecasting.
 
     Computes Convective Available Potential Energy (CAPE) and Convective Inhibition
     (CIN) by lifting a mixed layer parcel through the atmosphere. The mixed layer
-    is defined as the average properties over a specified depth from the surface.
+    is defined as the average properties over a specified layer_depth from the surface.
 
     Uses optimized lookup tables for moist pseudoadiabatic calculations to handle
     large gridded datasets efficiently. The calculation follows these steps:
-    1. Create a mixed layer parcel from the specified depth
+    1. Create a mixed layer parcel from the specified layer_depth
     2. Lift the parcel dry adiabatically to the LCL
     3. Lift moist adiabatically above the LCL using lookup tables
     4. Calculate CAPE (positive area) and CIN (negative area) between parcel
@@ -1240,7 +1233,8 @@ def mixed_layer_cape_cin(
         pressure_var: Name of pressure variable in ds (hPa).
         temperature_var: Name of temperature variable in ds (°C).
         temperature_dewpoint_var: Name of dewpoint temperature variable in ds (°C).
-        depth: Mixed layer depth in hPa (typically 50-100 hPa for severe weather).
+        layer_depth: Mixed layer layer_depth in hPa (typically 50-100 hPa for severe
+        weather).
 
     Returns:
         tuple[np.ndarray, np.ndarray]: CAPE and CIN values both in J/kg.
@@ -1261,7 +1255,7 @@ def mixed_layer_cape_cin(
     """
     ds = _basic_ds_checks(ds)
     pressure = ds["level"]
-    mixed_layer_mask = ds["pressure"] < (pressure[0] - depth)
+    mixed_layer_mask = ds["pressure"] < (pressure[0] - layer_depth)
     # Get the indices where the condition is True along the last dimension
     valid_indices = np.any(
         mixed_layer_mask, axis=tuple(range(mixed_layer_mask.ndim - 1))
@@ -1271,7 +1265,7 @@ def mixed_layer_cape_cin(
         calculated_parcel_start_pressure,
         calculated_parcel_temp,
         calculated_parcel_dewpoint,
-    ) = mixed_parcel(ds, depth)
+    ) = mixed_parcel(ds, layer_depth)
     parcel_temp_reshaped = np.expand_dims(calculated_parcel_temp, axis=-1)
     parcel_dewpoint_reshaped = np.expand_dims(calculated_parcel_dewpoint, axis=-1)
 
