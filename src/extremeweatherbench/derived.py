@@ -83,11 +83,15 @@ class DerivedVariable(ABC):
         return cls.derive_variable(data)
 
 
-class IntegratedVaporTransport(DerivedVariable):
-    """Calculates the IVT (Integrated Vapor Transport) from a dataset.
+class AtmosphericRiverMask(DerivedVariable):
+    """A derived variable that computes the atmospheric river mask.
 
-    IVT is calculated using the method described in Newell et al. 1992 and elsewhere
+    Calculates the IVT (Integrated Vapor Transport) and its Laplacian from a dataset.IVT
+    is calculated using the method described in Newell et al. 1992 and elsewhere
     (e.g. Mo 2024).
+
+    The Laplacian of IVT is calculated using a Gaussian blurring kernel with a
+    sigma of 3 grid points, meant to smooth out 0.25 degree grid scale features.
     """
 
     required_variables = [
@@ -95,18 +99,12 @@ class IntegratedVaporTransport(DerivedVariable):
         "northward_wind",
         "specific_humidity",
     ]
-    name = "integrated_vapor_transport"
+    name = "atmospheric_river_mask"
 
     @classmethod
     def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
-        """Derive the integrated vapor transport.
+        """Derive the atmospheric river mask."""
 
-        Args:
-            data: The input xarray dataset.
-
-        Returns:
-            The IVT (Integrated Vapor Transport) quantity as a DataArray.
-        """
         coords_dict = {dim: data.coords[dim] for dim in data.dims if dim != "level"}
         if "surface_standard_pressure" not in data.data_vars:
             data["surface_standard_pressure"] = calc.calculate_pressure_at_surface(
@@ -152,50 +150,9 @@ class IntegratedVaporTransport(DerivedVariable):
             data["vertical_integral_of_eastward_water_vapour_flux"],
             data["vertical_integral_of_northward_water_vapour_flux"],
         )
-        return xr.DataArray(
-            ivt_da,
-            coords=coords_dict,
-            dims=coords_dict.keys(),
-            name=cls.name,
-        )
-
-
-class IntegratedVaporTransportLaplacian(DerivedVariable):
-    """A derived variable that computes the integrated vapor transport Laplacian."""
-
-    required_variables = [IntegratedVaporTransport]
-    name = "integrated_vapor_transport_laplacian"
-
-    @classmethod
-    def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
-        """Derive the integrated vapor transport Laplacian."""
-        coords_dict = {dim: data.coords[dim] for dim in data.dims if dim != "level"}
-        ivt_laplacian_da = xr.DataArray(
-            ar.blurred_laplacian(data[IntegratedVaporTransport.name]),
-            coords=coords_dict,
-            dims=coords_dict.keys(),
-            name=cls.name,
-        )
-        return ivt_laplacian_da
-
-
-class AtmosphericRiverMask(DerivedVariable):
-    """A derived variable that computes the atmospheric river mask."""
-
-    required_variables = [
-        IntegratedVaporTransport,
-        IntegratedVaporTransportLaplacian,
-    ]
-    name = "atmospheric_river_mask"
-
-    @classmethod
-    def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
-        """Derive the atmospheric river mask."""
-        ar_mask = ar.ar_mask(
-            data[
-                [IntegratedVaporTransport.name, IntegratedVaporTransportLaplacian.name]
-            ],
-        )
+        ivt_laplacian_da = ar.blurred_laplacian(ivt_da)
+        data = xr.merge([ivt_da, ivt_laplacian_da])
+        ar_mask = ar.ar_mask(data)
         return xr.DataArray(ar_mask, name=cls.name)
 
 
