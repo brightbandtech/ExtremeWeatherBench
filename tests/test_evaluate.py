@@ -16,6 +16,7 @@ import pytest
 import xarray as xr
 
 from extremeweatherbench import cases, evaluate, inputs, metrics
+from extremeweatherbench.defaults import OUTPUT_COLUMNS
 from extremeweatherbench.regions import CenteredRegion
 
 # =============================================================================
@@ -509,7 +510,7 @@ class TestComputeCaseOperator:
         # Should return empty DataFrame with correct columns
         assert isinstance(result, pd.DataFrame)
         assert len(result) == 0
-        assert list(result.columns) == evaluate.OUTPUT_COLUMNS
+        assert list(result.columns) == OUTPUT_COLUMNS
 
         # _build_datasets should be called, but no further processing should occur
         mock_build_datasets.assert_called_once_with(sample_case_operator)
@@ -529,7 +530,7 @@ class TestComputeCaseOperator:
         # Should return empty DataFrame with correct columns
         assert isinstance(result, pd.DataFrame)
         assert len(result) == 0
-        assert list(result.columns) == evaluate.OUTPUT_COLUMNS
+        assert list(result.columns) == OUTPUT_COLUMNS
 
         mock_build_datasets.assert_called_once_with(sample_case_operator)
 

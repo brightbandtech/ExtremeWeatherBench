@@ -11,6 +11,7 @@ from tqdm.auto import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 
 from extremeweatherbench import cases, derived, inputs
+from extremeweatherbench.defaults import OUTPUT_COLUMNS
 
 if TYPE_CHECKING:
     from extremeweatherbench import metrics
@@ -18,18 +19,6 @@ if TYPE_CHECKING:
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# Columns for the evaluation output dataframe
-OUTPUT_COLUMNS = [
-    "value",
-    "target_variable",
-    "metric",
-    "target_source",
-    "forecast_source",
-    "case_id_number",
-    "event_type",
-]
-
 
 class ExtremeWeatherBench:
     """A class to run the ExtremeWeatherBench workflow.

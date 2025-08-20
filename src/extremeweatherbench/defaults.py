@@ -9,6 +9,17 @@ from extremeweatherbench import inputs, metrics
 logging.getLogger("urllib3.connectionpool").setLevel(logging.CRITICAL)
 logging.getLogger("botocore.httpchecksum").setLevel(logging.CRITICAL)
 
+# Columns for the evaluation output dataframe
+OUTPUT_COLUMNS = [
+    "value",
+    "target_variable",
+    "metric",
+    "target_source",
+    "forecast_source",
+    "case_id_number",
+    "event_type",
+]
+
 
 def _preprocess_bb_cira_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
     """An example preprocess function that renames the time coordinate to lead_time,
