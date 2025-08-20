@@ -270,6 +270,7 @@ def _evaluate_metric_and_return_df(
 
     # Convert to DataFrame and add metadata, ensuring OUTPUT_COLUMNS compliance
     df = metric_result.to_dataframe(name="value").reset_index()
+    # TODO: add functionality for custom metadata columns
     metadata = _extract_standard_metadata(
         target_variable, metric, target_ds, forecast_ds, case_id_number, event_type
     )
