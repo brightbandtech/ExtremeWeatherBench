@@ -11,6 +11,7 @@ from tqdm.auto import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 
 from extremeweatherbench import cases, derived, inputs
+from extremeweatherbench.defaults import OUTPUT_COLUMNS
 
 if TYPE_CHECKING:
     from extremeweatherbench import metrics
@@ -97,6 +98,7 @@ class ExtremeWeatherBench:
         else:
             # Return empty DataFrame with expected columns
             return pd.DataFrame(columns=OUTPUT_COLUMNS)
+            return pd.DataFrame(columns=OUTPUT_COLUMNS)
 
 
 def compute_case_operator(case_operator: "cases.CaseOperator", **kwargs):
@@ -172,6 +174,80 @@ def compute_case_operator(case_operator: "cases.CaseOperator", **kwargs):
         return pd.DataFrame(columns=OUTPUT_COLUMNS)
 
 
+def _extract_standard_metadata(
+    target_variable: Union[str, "derived.DerivedVariable"],
+    metric: "metrics.BaseMetric",
+    target_ds: xr.Dataset,
+    forecast_ds: xr.Dataset,
+    case_id_number: int,
+    event_type: str,
+) -> dict:
+    """Extract standard metadata for output dataframe.
+
+    This function centralizes the logic for extracting metadata from the
+    evaluation context. Makes it easy to modify how metadata is extracted
+    without changing the schema enforcement logic.
+
+    Args:
+        target_variable: The target variable
+        metric: The metric instance
+        target_ds: Target dataset
+        forecast_ds: Forecast dataset
+        case_id_number: Case ID number
+        event_type: Event type string
+
+    Returns:
+        Dictionary of metadata for the output dataframe
+    """
+    return {
+        "target_variable": target_variable,
+        "metric": metric.name,
+        "target_source": target_ds.attrs["source"],
+        "forecast_source": forecast_ds.attrs["source"],
+        "case_id_number": case_id_number,
+        "event_type": event_type,
+    }
+
+
+def _ensure_output_schema(df: pd.DataFrame, **metadata) -> pd.DataFrame:
+    """Ensure dataframe conforms to OUTPUT_COLUMNS schema.
+
+    This function adds any provided metadata columns to the dataframe and validates
+    that all OUTPUT_COLUMNS are present. Any missing columns will be filled with NaN
+    and a warning will be logged.
+
+    Args:
+        df: Base dataframe (typically with 'value' column from metric result)
+        **metadata: Key-value pairs for metadata columns (e.g., target_variable='temp')
+
+    Returns:
+        DataFrame with columns matching OUTPUT_COLUMNS specification
+
+    Example:
+        df = _ensure_output_schema(
+            metric_df,
+            target_variable=target_var,
+            metric=metric.name,
+            target_source=target_ds.attrs["source"],
+            forecast_source=forecast_ds.attrs["source"],
+            case_id_number=case_id,
+            event_type=event_type
+        )
+    """
+    # Add metadata columns
+    for col, value in metadata.items():
+        df[col] = value
+
+    # Check for missing columns and warn
+    missing_cols = set(OUTPUT_COLUMNS) - set(df.columns)
+    if missing_cols:
+        logger.warning(f"Missing expected columns: {missing_cols}")
+
+    # Ensure all OUTPUT_COLUMNS are present (missing ones will be NaN)
+    # and reorder to match OUTPUT_COLUMNS specification
+    return df.reindex(columns=OUTPUT_COLUMNS)
+
+
 def _evaluate_metric_and_return_df(
     forecast_ds: xr.Dataset,
     target_ds: xr.Dataset,
@@ -204,15 +280,13 @@ def _evaluate_metric_and_return_df(
         **kwargs,
     )
 
-    # Convert to DataFrame and add metadata
+    # Convert to DataFrame and add metadata, ensuring OUTPUT_COLUMNS compliance
     df = metric_result.to_dataframe(name="value").reset_index()
-    df["target_variable"] = target_variable
-    df["metric"] = metric.name
-    df["target_source"] = target_ds.attrs["source"]
-    df["forecast_source"] = forecast_ds.attrs["source"]
-    df["case_id_number"] = case_id_number
-    df["event_type"] = event_type
-    return df
+    # TODO: add functionality for custom metadata columns
+    metadata = _extract_standard_metadata(
+        target_variable, metric, target_ds, forecast_ds, case_id_number, event_type
+    )
+    return _ensure_output_schema(df, **metadata)
 
 
 def _build_datasets(
