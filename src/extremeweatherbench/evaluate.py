@@ -20,6 +20,7 @@ if TYPE_CHECKING:
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 class ExtremeWeatherBench:
     """A class to run the ExtremeWeatherBench workflow.
 
