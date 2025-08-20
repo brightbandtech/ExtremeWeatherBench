@@ -1253,6 +1253,45 @@ def mixed_layer_cape_cin(
         virtual temperature correction on CAPE calculations. Wea. Forecasting,
         9, 625–629.
     """
+
+    # Check if we need to combine time dimensions
+    # Expected: (time_dims..., latitude, longitude, level)
+    # Need to merge all time dims into single dimension for processing
+
+    # Identify spatial and level dimensions
+    spatial_dims = ["latitude", "longitude", "lat", "lon", "y", "x"]
+    found_spatial = [dim for dim in ds.dims if dim in spatial_dims]
+
+    # All dimensions except spatial and level are considered time dimensions
+    time_dims = [dim for dim in ds.dims if dim != "level" and dim not in found_spatial]
+
+    # If we have multiple time dimensions, we need to stack them
+    if len(time_dims) > 1:
+        # Store original shapes for reshaping results
+        original_time_shape = tuple(ds.sizes[dim] for dim in time_dims)
+        spatial_shape = tuple(ds.sizes[dim] for dim in found_spatial)
+
+        # Stack all time dimensions into single 'time' dimension
+        stacked_ds = ds.stack(time=time_dims)
+
+        # Run the calculation on the stacked dataset
+        cape_flat, cin_flat = _run_cape_calculation(stacked_ds, layer_depth)
+
+        # Reshape results back to original time structure
+        # cape_flat shape: (time, spatial...) -> (time_dims..., spatial...)
+        cape_reshaped = cape_flat.reshape(original_time_shape + spatial_shape)
+        cin_reshaped = cin_flat.reshape(original_time_shape + spatial_shape)
+
+        return cape_reshaped, cin_reshaped
+
+    # Single or no time dimension - run calculation directly
+    return _run_cape_calculation(ds, layer_depth)
+
+
+def _run_cape_calculation(
+    ds: xr.Dataset, layer_depth: float
+) -> tuple[np.ndarray, np.ndarray]:
+    """Run the core CAPE calculation on a dataset with standard dimensions."""
     ds = _basic_ds_checks(ds)
     pressure = ds["level"]
     mixed_layer_mask = ds["pressure"] < (pressure[0] - layer_depth)

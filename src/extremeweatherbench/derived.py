@@ -76,7 +76,10 @@ class DerivedVariable(ABC):
         """
         for v in cls.required_variables:
             if v not in data.data_vars:
-                raise ValueError(f"Input variable {v} not found in data")
+                if v in cls.optional_variables:
+                    continue
+                else:
+                    raise ValueError(f"Input variable {v} not found in data")
         return cls.derive_variable(data)
 
 
@@ -87,24 +90,36 @@ class CravenBrooksSignificantSevere(DerivedVariable):
 
     required_variables = [
         "air_temperature",
+        "dewpoint_temperature",
         "eastward_wind",
         "northward_wind",
+        "specific_humidity",
         "surface_eastward_wind",
         "surface_northward_wind",
-        "specific_humidity",
+        "air_pressure_at_mean_sea_level",
     ]
+
+    optional_variables = ["dewpoint_temperature"]
+    name = "craven_brooks_significant_severe"
 
     @classmethod
     def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
         """Derive the Craven-Brooks significant severe convection index."""
-        data["dewpoint_temperature"] = sc.dewpoint_from_specific_humidity(
-            data["specific_humidity"], data["air_pressure_at_mean_sea_level"]
+        # create broadcasted pressure variable, output target is always last
+        _, data["pressure"] = xr.broadcast(data["air_temperature"], data["level"])
+        # calculate dewpoint temperature if not present
+        if "dewpoint_temperature" not in data.data_vars:
+            data["dewpoint_temperature"] = sc.dewpoint_from_specific_humidity(
+                data["specific_humidity"], data["pressure"]
+            )
+        cbss = sc.craven_brooks_significant_severe(data)
+        coords = {dim: data.coords[dim] for dim in data.dims if dim != "level"}
+        return xr.DataArray(
+            cbss,
+            coords=coords,
+            dims=coords.keys(),
+            name=cls.name,
         )
-        # create broadcasted pressure variable
-        data["pressure"] = xr.broadcast(
-            data["level"], data["air_pressure_at_mean_sea_level"]
-        )[0]
-        return sc.craven_brooks_significant_severe(data)
 
 
 # TODO: add the AR mask calculations
