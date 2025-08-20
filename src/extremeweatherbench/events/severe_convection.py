@@ -771,8 +771,8 @@ def mixed_parcel(
     theta = potential_temperature(
         ds["air_temperature"], ds["pressure"], units=temperature_units
     )
-    # convert temperature to celsius
-    es = saturation_vapor_pressure(ds["dewpoint_temperature"] - 273.15)
+    # dewpoint is already in celsius
+    es = saturation_vapor_pressure(ds["dewpoint_temperature"])
     mixing_ratio_g_g = mixing_ratio(es, ds["pressure"])
     # because pressure is the same across the domain, we can use a single column
     pressure = ds["level"]
@@ -804,16 +804,9 @@ def mixed_parcel(
         calculated_parcel_start_pressure
     )
     vapor_pres = vapor_pressure(calculated_parcel_start_pressure, mean_mixing_ratio)
-
-    # Handle invalid vapor pressure values
-    if np.any(vapor_pres <= 0) or np.any(np.isnan(vapor_pres)):
-        calculated_parcel_dewpoint_kelvin = np.full_like(
-            calculated_parcel_temp_kelvin, np.nan
-        )
-    else:
-        calculated_parcel_dewpoint_kelvin = (
-            dewpoint_from_vapor_pressure(vapor_pres) + 273.15
-        )
+    calculated_parcel_dewpoint_kelvin = (
+        dewpoint_from_vapor_pressure(vapor_pres) + 273.15
+    )
 
     return (
         calculated_parcel_start_pressure,
