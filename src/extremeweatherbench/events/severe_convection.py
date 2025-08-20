@@ -162,8 +162,18 @@ def moist_lapse_lookup(target_pressure, target_temp, reference_pressure=None):
     # Convert inputs to arrays if they aren't already
     target_temp = np.asarray(target_temp)
     target_pressure = np.asarray(target_pressure)
+
+    # Handle empty arrays
+    if target_pressure.size == 0 or target_temp.size == 0:
+        return np.array([])
+
     if target_temp.ndim > 1:
         target_temp = target_temp.flatten()
+
+    # Ensure target_pressure is at least 2D
+    if target_pressure.ndim == 1:
+        target_pressure = target_pressure.reshape(1, -1)
+
     # Flatten target pressure and temp arrays to 2D
     target_pressure_reshaped = target_pressure.reshape(-1, target_pressure.shape[-1])
     # Get the pressure level closest to each target_pressure
@@ -230,7 +240,9 @@ def mixing_ratio(partial_pressure, total_pressure):
         - Values typically range from 0 to ~0.025 kg/kg in the atmosphere
         - ε (epsilon) = 0.622 is the ratio of molecular weights (H2O/dry air)
     """
-    return epsilon * partial_pressure / (total_pressure - partial_pressure)
+    # Suppress warnings for this specific calculation
+    with np.errstate(divide="ignore", invalid="ignore"):
+        return epsilon * partial_pressure / (total_pressure - partial_pressure)
 
 
 def vapor_pressure(pressure, mixing_ratio):
@@ -243,7 +255,9 @@ def vapor_pressure(pressure, mixing_ratio):
     Returns:
         Vapor pressure values in provided pressure units
     """
-    return pressure * mixing_ratio / (epsilon + mixing_ratio)
+    # Suppress warnings for this specific calculation
+    with np.errstate(divide="ignore", invalid="ignore"):
+        return pressure * mixing_ratio / (epsilon + mixing_ratio)
 
 
 def saturation_vapor_pressure(temperature):
@@ -264,7 +278,9 @@ def saturation_vapor_pressure(temperature):
         - Saturation vapor pressure increases exponentially with temperature
         - At 0°C: ~6.11 hPa, at 20°C: ~23.4 hPa, at 30°C: ~42.4 hPa
     """
-    return sat_press_0c * np.exp(17.67 * temperature / (temperature + 243.5))
+    # Suppress overflow warnings for this calculation
+    with np.errstate(over="ignore", invalid="ignore"):
+        return sat_press_0c * np.exp(17.67 * temperature / (temperature + 243.5))
 
 
 def exner_function(pressure):
@@ -323,8 +339,10 @@ def dewpoint_from_vapor_pressure(vapor_pressure):
     Returns:
         Dewpoint values in C
     """
-    val = np.log(vapor_pressure / sat_press_0c)
-    return 243.5 * val / (17.67 - val)
+    # Suppress warnings for this calculation
+    with np.errstate(invalid="ignore", divide="ignore"):
+        val = np.log(vapor_pressure / sat_press_0c)
+        return 243.5 * val / (17.67 - val)
 
 
 def dry_lapse(pressure, temperature):
@@ -376,12 +394,20 @@ def virtual_temperature_from_dewpoint(pressure, temperature, dewpoint):
 
     This function calculates virtual temperature from dewpoint, temperature, and
     pressure.
+
+    Args:
+        pressure: Pressure values in hPa
+        temperature: Temperature values in Celsius
+        dewpoint: Dewpoint values in Celsius
+
+    Returns:
+        Virtual temperature values in Kelvin
     """
 
     # Convert dewpoint to mixing ratio
     mixing_ratio = saturation_mixing_ratio(pressure, dewpoint)
-    # Calculate virtual temperature with given parameters
-    return virtual_temperature(temperature, mixing_ratio)
+    # Calculate virtual temperature with given parameters (convert temp to Kelvin)
+    return virtual_temperature(temperature + 273.15, mixing_ratio)
 
 
 def virtual_temperature(temperature, mixing_ratio):
@@ -691,20 +717,29 @@ def combine_profiles(
     calculated_temp_upper,
     axis=0,
 ):
+    """Combine pressure and temperature profiles, handling empty arrays."""
+
+    # Handle empty upper arrays by reshaping to match lower arrays
+    if calculated_press_upper.size == 0:
+        target_shape = list(calculated_press_lower.shape)
+        target_shape[axis] = 0
+        calculated_press_upper = np.empty(target_shape)
+        calculated_temp_upper = np.empty(target_shape)
+
     calculated_new_pressure = np.concatenate(
         (
-            np.atleast_1d(calculated_press_lower),
-            np.atleast_1d(calculated_lcl_p),
-            np.atleast_1d(calculated_press_upper),
+            calculated_press_lower,
+            calculated_lcl_p,
+            calculated_press_upper,
         ),
         axis=axis,
     )
 
     calculated_prof_dewpoint = np.concatenate(
         (
-            np.atleast_1d(calculated_temp_lower),
-            np.atleast_1d(calculated_lcl_td),
-            np.atleast_1d(calculated_temp_upper),
+            calculated_temp_lower,
+            calculated_lcl_td,
+            calculated_temp_upper,
         ),
         axis=axis,
     )
@@ -772,9 +807,16 @@ def mixed_parcel(
         calculated_parcel_start_pressure
     )
     vapor_pres = vapor_pressure(calculated_parcel_start_pressure, mean_mixing_ratio)
-    calculated_parcel_dewpoint_kelvin = (
-        dewpoint_from_vapor_pressure(vapor_pres) + 273.15
-    )
+
+    # Handle invalid vapor pressure values
+    if np.any(vapor_pres <= 0) or np.any(np.isnan(vapor_pres)):
+        calculated_parcel_dewpoint_kelvin = np.full_like(
+            calculated_parcel_temp_kelvin, np.nan
+        )
+    else:
+        calculated_parcel_dewpoint_kelvin = (
+            dewpoint_from_vapor_pressure(vapor_pres) + 273.15
+        )
 
     return (
         calculated_parcel_start_pressure,
@@ -968,7 +1010,7 @@ def level_free_convection(pressure, temperature, dewpoint, parcel_profile):
                 temperature[1:],
                 direction="decreasing",
             )
-            if np.min(el_pressure) > lcl_pressure:
+            if len(el_pressure) > 0 and np.min(el_pressure) > lcl_pressure:
                 return np.nan, np.nan
             else:
                 x, y = lcl_pressure, lcl_temperature_c
@@ -992,6 +1034,11 @@ def mlcape_cin(pressure, temperature, dewpoint, parcel_profile):
         cape: numpy array of CAPE values in J/kg
         cin: numpy array of CIN values in J/kg
     """
+    # Handle empty arrays
+    if pressure.size == 0 or pressure.shape[-1] == 0:
+        target_shape = pressure.shape[:-1] if pressure.size > 0 else (1,)
+        return np.full(target_shape, np.nan), np.full(target_shape, np.nan)
+
     # Get the LCL pressure for each profile
     pressure_lcl, _ = new_lcl(
         pressure[..., 0], temperature[..., 0] + 273.15, dewpoint[..., 0] + 273.15
@@ -1378,6 +1425,15 @@ def mixed_layer_cape_cin(
     ]
 
     # Finally, calculate CAPE and CIN
+    # Check if we have valid data to work with
+    if (
+        combined_all_pressure_w_lcl.size == 0
+        or combined_all_pressure_w_lcl.shape[-1] == 0
+    ):
+        # Return NaN for invalid cases with appropriate shape
+        target_shape = calculated_new_temp.shape[:-1]
+        return np.full(target_shape, np.nan), np.full(target_shape, np.nan)
+
     # Convert temps back to Celsius
     # TODO: sanity check combined_all_temp_w_lcl as the ml_profile. might be too hot
     cape, cin = mlcape_cin(
