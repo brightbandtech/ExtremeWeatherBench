@@ -418,7 +418,7 @@ class TestMixedLayerFunctions:
 
         start_p, temp, dewpoint = sc.mixed_parcel(
             ds_1d,
-            depth=100.0,
+            layer_depth=100.0,
             temperature_units="C",
         )
 
@@ -459,7 +459,7 @@ class TestConvectionCalculations:
 
         cape, cin = sc.mixed_layer_cape_cin(
             ds,
-            depth=100.0,
+            layer_depth=100.0,
         )
 
         # Check shapes
@@ -560,7 +560,7 @@ class TestSevereWeatherIndices:
 
         cbss = sc.craven_brooks_significant_severe(
             ds,
-            depth=100.0,
+            layer_depth=100.0,
         )
 
         # Check output type and shape
@@ -662,7 +662,7 @@ class TestPhysicalConsistency:
 
         cape, cin = sc.mixed_layer_cape_cin(
             ds.expand_dims(["time", "latitude", "longitude"], axis=[0, 1, 2]),
-            depth=50.0,
+            layer_depth=50.0,
         )
 
         # Physical constraints (handle NaN values from numerical issues)
@@ -805,15 +805,15 @@ class TestPerformance:
 
 
 # Parametrized tests for comprehensive coverage
-@pytest.mark.parametrize("depth", [50, 100, 150])
-def test_mixed_layer_depth_variations(sample_atmospheric_dataset, depth):
-    """Test mixed layer calculations with different depths."""
+@pytest.mark.parametrize("layer_depth", [50, 100, 150])
+def test_mixed_layer_depth_variations(sample_atmospheric_dataset, layer_depth):
+    """Test mixed layer calculations with different layer_depths."""
     ds = sample_atmospheric_dataset.isel(time=0, latitude=0, longitude=0)
 
     try:
         start_p, temp, dewpoint = sc.mixed_parcel(
             ds.expand_dims(["time", "latitude", "longitude"], axis=[0, 1, 2]),
-            depth=depth,
+            layer_depth=layer_depth,
             temperature_units="C",  # Input data is in Celsius
         )
 
@@ -823,7 +823,7 @@ def test_mixed_layer_depth_variations(sample_atmospheric_dataset, depth):
         assert np.isnan(dewpoint) or dewpoint < temp
 
     except Exception as e:
-        pytest.fail(f"Mixed parcel calculation failed for depth {depth}: {e}")
+        pytest.fail(f"Mixed parcel calculation failed for depth {layer_depth}: {e}")
 
 
 @pytest.mark.parametrize(
@@ -851,7 +851,8 @@ class TestCapeRegression:
 
     @pytest.fixture
     def regression_profile_data(self):
-        """Real atmospheric profile data that previously caused CAPE calculation issues."""
+        """Real atmospheric profile data that previously caused CAPE calculation
+        issues."""
         temperature_data = np.array(
             [
                 [
@@ -1064,13 +1065,13 @@ class TestCapeRegression:
         expected_cin = -87.7
 
         # Allow small numerical differences (within 1%)
-        assert np.isclose(
-            cape[0, 0, 0], expected_cape, rtol=0.01
-        ), f"CAPE mismatch: got {cape[0, 0, 0]:.1f}, expected {expected_cape:.1f}"
+        assert np.isclose(cape[0, 0, 0], expected_cape, rtol=0.01), (
+            f"CAPE mismatch: got {cape[0, 0, 0]:.1f}, expected {expected_cape:.1f}"
+        )
 
-        assert np.isclose(
-            cin[0, 0, 0], expected_cin, rtol=0.01
-        ), f"CIN mismatch: got {cin[0, 0, 0]:.1f}, expected {expected_cin:.1f}"
+        assert np.isclose(cin[0, 0, 0], expected_cin, rtol=0.01), (
+            f"CIN mismatch: got {cin[0, 0, 0]:.1f}, expected {expected_cin:.1f}"
+        )
 
     def test_cape_not_zero_regression(self, regression_profile_data):
         """Regression test to ensure CAPE is not incorrectly calculated as zero."""
@@ -1079,14 +1080,14 @@ class TestCapeRegression:
         )
 
         # This profile should produce substantial CAPE, never zero
-        assert (
-            cape[0, 0, 0] > 1000
-        ), f"CAPE should be > 1000 J/kg for this profile, got {cape[0, 0, 0]:.1f}"
+        assert cape[0, 0, 0] > 1000, (
+            f"CAPE should be > 1000 J/kg for this profile, got {cape[0, 0, 0]:.1f}"
+        )
 
         # CIN should be negative but not extremely large in magnitude
-        assert (
-            -200 < cin[0, 0, 0] < 0
-        ), f"CIN should be between -200 and 0 J/kg, got {cin[0, 0, 0]:.1f}"
+        assert -200 < cin[0, 0, 0] < 0, (
+            f"CIN should be between -200 and 0 J/kg, got {cin[0, 0, 0]:.1f}"
+        )
 
     def test_craven_brooks_with_realistic_shear(self, regression_profile_data):
         """Test Craven-Brooks significant severe parameter with realistic wind shear."""
@@ -1117,9 +1118,9 @@ class TestCapeRegression:
 
         # Expected: CAPE (~1890) * Shear (~10.8 m/s) ≈ 20,357 m³/s³
         expected_cbss = 20357
-        assert np.isclose(
-            cbss.values[0, 0, 0], expected_cbss, rtol=0.1
-        ), f"CBSS mismatch: got {cbss.values[0, 0, 0]:.0f}, expected ~{expected_cbss}"
+        assert np.isclose(cbss.values[0, 0, 0], expected_cbss, rtol=0.1), (
+            f"CBSS mismatch: got {cbss.values[0, 0, 0]:.0f}, expected ~{expected_cbss}"
+        )
 
         # Should be in a reasonable range for severe weather potential (> 10,000 m³/s³)
         assert cbss.values[0, 0, 0] > 10000, (
@@ -1137,12 +1138,12 @@ class TestCapeRegression:
         tv_env = sc.virtual_temperature_from_dewpoint(pressure, temperature, dewpoint)
 
         # Should return values in Celsius (close to input temperatures)
-        assert np.all(
-            tv_env > temperature
-        ), "Virtual temperature should be > actual temperature"
-        assert np.all(
-            tv_env < temperature + 5
-        ), "Virtual temperature shouldn't be much higher than actual"
+        assert np.all(tv_env > temperature), (
+            "Virtual temperature should be > actual temperature"
+        )
+        assert np.all(tv_env < temperature + 5), (
+            "Virtual temperature shouldn't be much higher than actual"
+        )
 
         # Test parcel virtual temperature
         mixing_ratio = sc.saturation_mixing_ratio(pressure, dewpoint)
@@ -1152,9 +1153,9 @@ class TestCapeRegression:
 
         # Should show positive buoyancy
         temp_diff = tv_parcel - tv_env
-        assert np.all(
-            temp_diff > 0
-        ), f"Parcel should be warmer than environment, got differences: {temp_diff}"
+        assert np.all(temp_diff > 0), (
+            f"Parcel should be warmer than environment, got differences: {temp_diff}"
+        )
 
     def test_temperature_unit_conversions_regression(self):
         """Regression test for temperature unit conversion bugs."""
@@ -1169,16 +1170,16 @@ class TestCapeRegression:
         )
 
         # Should be close to input temps (in Celsius, not Kelvin)
-        assert np.all(
-            vt_env < 50
-        ), f"Virtual temps too high (possibly in Kelvin): {vt_env}"
+        assert np.all(vt_env < 50), (
+            f"Virtual temps too high (possibly in Kelvin): {vt_env}"
+        )
         assert np.all(vt_env > -50), f"Virtual temps too low: {vt_env}"
 
         # Should be close to actual temps (can be slightly lower due to numerical
         # precision)
-        assert np.allclose(
-            vt_env, temp_celsius, atol=0.5
-        ), "Virtual temps should be close to actual temps"
+        assert np.allclose(vt_env, temp_celsius, atol=0.5), (
+            "Virtual temps should be close to actual temps"
+        )
 
         # Virtual temperature function should work with Celsius
         mixing_ratio = sc.saturation_mixing_ratio(pressure, dewpoint_celsius)
