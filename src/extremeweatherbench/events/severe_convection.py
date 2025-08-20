@@ -401,24 +401,24 @@ def virtual_temperature_from_dewpoint(pressure, temperature, dewpoint):
         dewpoint: Dewpoint values in Celsius
 
     Returns:
-        Virtual temperature values in Kelvin
+        Virtual temperature values in Celsius
     """
 
     # Convert dewpoint to mixing ratio
     mixing_ratio = saturation_mixing_ratio(pressure, dewpoint)
-    # Calculate virtual temperature with given parameters (convert temp to Kelvin)
-    return virtual_temperature(temperature + 273.15, mixing_ratio)
+    # Calculate virtual temperature with given parameters
+    return virtual_temperature(temperature, mixing_ratio)
 
 
 def virtual_temperature(temperature, mixing_ratio):
     """Calculates the virtual temperature of a parcel.
 
     Args:
-        temperature: Temperature values in K
+        temperature: Temperature values in Celsius
         mixing_ratio: Mixing ratio values in kg/kg
 
     Returns:
-        Virtual temperature values in K
+        Virtual temperature values in Celsius
     """
     return temperature * ((mixing_ratio + epsilon) / (epsilon * (1 + mixing_ratio)))
 
@@ -749,9 +749,6 @@ def combine_profiles(
 
 def mixed_parcel(
     ds: xr.Dataset,
-    pressure_var: str = "pressure",
-    temperature_var: str = "temperature",
-    temperature_dewpoint_var: str = "dewpoint",
     depth: float = 100,
     temperature_units: str = "K",
 ):
@@ -772,11 +769,11 @@ def mixed_parcel(
     """
 
     theta = potential_temperature(
-        ds[temperature_var], ds[pressure_var], units=temperature_units
+        ds["air_temperature"], ds["pressure"], units=temperature_units
     )
     # convert temperature to celsius
-    es = saturation_vapor_pressure(ds[temperature_dewpoint_var] - 273.15)
-    mixing_ratio_g_g = mixing_ratio(es, ds[pressure_var])
+    es = saturation_vapor_pressure(ds["dewpoint_temperature"] - 273.15)
+    mixing_ratio_g_g = mixing_ratio(es, ds["pressure"])
     # because pressure is the same across the domain, we can use a single column
     pressure = ds["level"]
     # begin mixed layer
@@ -1192,17 +1189,10 @@ def craven_brooks_significant_severe(
     # CIN not needed for CBSS
     cape, _ = mixed_layer_cape_cin(
         ds,
-        pressure_var,
-        temperature_var,
-        temperature_dewpoint_var,
         depth,
     )
     shear = low_level_shear(
         ds,
-        eastward_wind_var,
-        northward_wind_var,
-        surface_eastward_wind_var,
-        surface_northward_wind_var,
     )
     cbss = cape * shear
     return cbss
@@ -1210,10 +1200,6 @@ def craven_brooks_significant_severe(
 
 def low_level_shear(
     ds: xr.Dataset,
-    eastward_wind_var: str = "eastward_wind",
-    northward_wind_var: str = "northward_wind",
-    surface_eastward_wind_var: str = "surface_eastward_wind",
-    surface_northward_wind_var: str = "surface_northward_wind",
 ) -> xr.DataArray:
     """Calculates the low level (0-6 km) shear of a dataset (Lepore et al 2021).
 
@@ -1224,17 +1210,14 @@ def low_level_shear(
         ll_shear: ndarray of low level shear values in m/s
     """
     ll_shear = np.sqrt(
-        (ds[eastward_wind_var].sel(level=500) - ds[surface_eastward_wind_var]) ** 2
-        + (ds[northward_wind_var].sel(level=500) - ds[surface_northward_wind_var]) ** 2
+        (ds["eastward_wind"].sel(level=500) - ds["surface_eastward_wind"]) ** 2
+        + (ds["northward_wind"].sel(level=500) - ds["surface_northward_wind"]) ** 2
     )
     return ll_shear
 
 
 def mixed_layer_cape_cin(
     ds: xr.Dataset,
-    pressure_var: str = "pressure",
-    temperature_var: str = "temperature",
-    temperature_dewpoint_var: str = "dewpoint",
     depth: float = 100,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Calculate mixed layer CAPE and CIN for severe weather forecasting.
@@ -1278,7 +1261,7 @@ def mixed_layer_cape_cin(
     """
     ds = _basic_ds_checks(ds)
     pressure = ds["level"]
-    mixed_layer_mask = ds[pressure_var] < (pressure[0] - depth)
+    mixed_layer_mask = ds["pressure"] < (pressure[0] - depth)
     # Get the indices where the condition is True along the last dimension
     valid_indices = np.any(
         mixed_layer_mask, axis=tuple(range(mixed_layer_mask.ndim - 1))
@@ -1288,14 +1271,14 @@ def mixed_layer_cape_cin(
         calculated_parcel_start_pressure,
         calculated_parcel_temp,
         calculated_parcel_dewpoint,
-    ) = mixed_parcel(ds, pressure_var, temperature_var, temperature_dewpoint_var, depth)
+    ) = mixed_parcel(ds, depth)
     parcel_temp_reshaped = np.expand_dims(calculated_parcel_temp, axis=-1)
     parcel_dewpoint_reshaped = np.expand_dims(calculated_parcel_dewpoint, axis=-1)
 
     # Extract valid pressure, temperature and dewpoint profiles
-    pressure_prof = ds[pressure_var][..., valid_indices]
-    temp_prof = ds[temperature_var][..., valid_indices]
-    dew_prof = ds[temperature_dewpoint_var][..., valid_indices]
+    pressure_prof = ds["pressure"][..., valid_indices]
+    temp_prof = ds["air_temperature"][..., valid_indices]
+    dew_prof = ds["dewpoint_temperature"][..., valid_indices]
     # Concatenate the mixed parcel properties with the profiles
     parcel_start_pressure_reshaped = np.full(
         (*pressure_prof.shape[:-1], 1),
