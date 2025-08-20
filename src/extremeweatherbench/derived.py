@@ -5,6 +5,7 @@ from typing import List, Type, Union
 import numpy as np
 import xarray as xr
 
+import extremeweatherbench.events.severe_convection as sc
 from extremeweatherbench import calc
 
 logging.basicConfig(level=logging.INFO)
@@ -77,6 +78,33 @@ class DerivedVariable(ABC):
             if v not in data.data_vars:
                 raise ValueError(f"Input variable {v} not found in data")
         return cls.derive_variable(data)
+
+
+class CravenBrooksSignificantSevere(DerivedVariable):
+    """A derived variable that computes the Craven-Brooks significant severe
+    convection index.
+    """
+
+    required_variables = [
+        "air_temperature",
+        "eastward_wind",
+        "northward_wind",
+        "surface_eastward_wind",
+        "surface_northward_wind",
+        "specific_humidity",
+    ]
+
+    @classmethod
+    def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
+        """Derive the Craven-Brooks significant severe convection index."""
+        data["dewpoint_temperature"] = sc.dewpoint_from_specific_humidity(
+            data["specific_humidity"], data["air_pressure_at_mean_sea_level"]
+        )
+        # create broadcasted pressure variable
+        data["pressure"] = xr.broadcast(
+            data["level"], data["air_pressure_at_mean_sea_level"]
+        )[0]
+        return sc.craven_brooks_significant_severe(data)
 
 
 # TODO: add the AR mask calculations
