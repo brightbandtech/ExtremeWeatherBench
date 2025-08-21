@@ -5,7 +5,6 @@ from typing import List, Type, Union
 import numpy as np
 import xarray as xr
 
-from extremeweatherbench import utils
 from extremeweatherbench.events import tropical_cyclone
 
 logging.basicConfig(level=logging.INFO)
@@ -189,9 +188,9 @@ class TropicalCycloneTrackVariable(DerivedVariable):
         """
         # Get the cached or computed track data
         tracks_dataset = cls._get_or_compute_tracks(data, *args, **kwargs)
-        tracks_dataset = utils.convert_valid_time_to_init_time(tracks_dataset)
 
-        return tracks_dataset
+        # Squeeze the dataset to remove the track dimension if only one track is present
+        return tracks_dataset.squeeze()
 
     @classmethod
     def clear_cache(cls) -> None:
@@ -225,11 +224,20 @@ def maybe_derive_variables(
     derived_data = {}
     if derived_variables:
         for v in derived_variables:
-            output_da = v.compute(data=ds, **kwargs)
-            # Ensure the DataArray has the correct name
-            if output_da.name is None:
-                output_da.name = v.name
-            derived_data[v.name] = output_da
+            output = v.compute(data=ds, **kwargs)
+            # Ensure the DataArray has the correct name and is a DataArray.
+            # Some derived variables return a dataset, so we need to check
+            if isinstance(output, xr.DataArray):
+                if output.name is None:
+                    output.name = v.name
+                derived_data[v.name] = output
+            elif isinstance(output, xr.Dataset) and output.dims != ds.dims:
+                # If the derived variable returns a dataset with different dims to ds,
+                # we need to return it instead of merging it with ds
+                # This is the case for the tropical cyclone track variable, which
+                # returns a dataset with different shape to ds
+                return output
+
     # TODO consider removing data variables only used for derivation
     ds = ds.merge(derived_data)
     return ds
