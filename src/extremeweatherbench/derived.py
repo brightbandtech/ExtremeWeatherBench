@@ -1,3 +1,4 @@
+import logging
 from abc import ABC, abstractmethod
 from typing import List, Type, Union
 
@@ -6,6 +7,9 @@ import xarray as xr
 
 import extremeweatherbench.events.severe_convection as sc
 from extremeweatherbench import calc
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 class DerivedVariable(ABC):
@@ -70,12 +74,13 @@ class DerivedVariable(ABC):
         Returns:
             A DataArray with the derived variable.
         """
+        # Log missing variables but continue processing
+        # TODO: add optional variables approach for primary variables that
+        # have a fallback option in derived methods
         for v in cls.required_variables:
             if v not in data.data_vars:
-                if v in cls.optional_variables:
-                    continue
-                else:
-                    raise ValueError(f"Input variable {v} not found in data")
+                logger.warning(f"Input variable {v} not found in data")
+                
         return cls.derive_variable(data)
 
 
@@ -301,7 +306,10 @@ def maybe_derive_variables(
     if derived_variables:
         for v in derived_variables:
             output_da = v.compute(data=ds)
-            derived_data[output_da.name] = output_da
+            # Ensure the DataArray has the correct name
+            if output_da.name is None:
+                output_da.name = v.name
+            derived_data[v.name] = output_da
 
     ds = ds.merge(derived_data)
     return ds
