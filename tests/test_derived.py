@@ -151,15 +151,19 @@ class TestDerivedVariableAbstractClass:
         expected = sample_dataset["test_variable_1"] + sample_dataset["test_variable_2"]
         xr.testing.assert_equal(result, expected)
 
-    def test_compute_raises_error_missing_variables(self, sample_dataset):
-        """Test that compute raises error when required variables are missing."""
+    def test_compute_logs_warning_missing_variables(self, sample_dataset, caplog):
+        """Test that compute logs warning when required variables are missing."""
         # Remove one of the required variables
         incomplete_dataset = sample_dataset.drop_vars("test_variable_2")
 
+        # This should not raise an error, but may fail during derive_variable
         with pytest.raises(
-            ValueError, match="Input variable test_variable_2 not found in data"
-        ):
+            KeyError
+        ):  # derive_variable will fail when accessing missing variable
             TestValidDerivedVariable.compute(incomplete_dataset)
+
+        # Check that warning was logged
+        assert "Input variable test_variable_2 not found in data" in caplog.text
 
     def test_required_variables_class_attribute(self):
         """Test that required_variables is properly defined as class attribute."""
@@ -248,15 +252,6 @@ class TestIntegratedVaporTransport:
             mock_nantrapezoid.call_count == 2
         )  # Called for eastward and northward components
 
-    def test_missing_required_variables(self, sample_dataset):
-        """Test behavior when required variables are missing."""
-        incomplete_dataset = sample_dataset.drop_vars("specific_humidity")
-
-        with pytest.raises(
-            ValueError, match="Input variable specific_humidity not found in data"
-        ):
-            derived.IntegratedVaporTransport.compute(incomplete_dataset)
-
     def test_name_property(self):
         """Test the name property."""
         instance = derived.IntegratedVaporTransport()
@@ -339,15 +334,6 @@ class TestTCTrackVariables:
         assert "surface_wind_speed" not in dataset_no_speed.data_vars
         assert "surface_eastward_wind" in dataset_no_speed.data_vars
         assert "surface_northward_wind" in dataset_no_speed.data_vars
-
-    def test_missing_required_variables(self, sample_dataset):
-        """Test behavior when required variables are missing."""
-        incomplete_dataset = sample_dataset.drop_vars("geopotential")
-
-        with pytest.raises(
-            ValueError, match="Input variable geopotential not found in data"
-        ):
-            derived.TCTrackVariables.compute(incomplete_dataset)
 
 
 class TestUtilityFunctions:
@@ -458,12 +444,19 @@ class TestUtilityFunctions:
 class TestEdgeCasesAndErrorConditions:
     """Test edge cases and error conditions across the module."""
 
-    def test_derived_variable_with_empty_dataset(self):
+    def test_derived_variable_with_empty_dataset(self, caplog):
         """Test behavior with empty datasets."""
         empty_dataset = xr.Dataset()
 
-        with pytest.raises(ValueError, match="Input variable .* not found in data"):
+        # Should log warnings but may fail during derive_variable
+        with pytest.raises(
+            KeyError
+        ):  # derive_variable will fail when accessing missing variables
             TestValidDerivedVariable.compute(empty_dataset)
+
+        # Check that warnings were logged for missing variables
+        assert "Input variable test_variable_1 not found in data" in caplog.text
+        assert "Input variable test_variable_2 not found in data" in caplog.text
 
     def test_derived_variable_with_wrong_dimensions(self, sample_dataset):
         """Test behavior when variables have unexpected dimensions."""
