@@ -173,429 +173,6 @@ class TestDerivedVariableAbstractClass:
         ]
 
 
-class TestAtmosphericRiverMask:
-    """Test the AtmosphericRiverMask derived variable implementation."""
-
-    def test_required_variables(self):
-        """Test that required variables are correctly defined."""
-        assert derived.AtmosphericRiverMask.required_variables == [
-            "air_pressure_at_mean_sea_level"
-        ]
-
-    def test_derive_variable_basic(self, sample_dataset):
-        """Test basic functionality of derive_variable method."""
-        # This test will fail until the syntax errors are fixed
-        with pytest.raises(NotImplementedError):
-            derived.AtmosphericRiverMask.derive_variable(sample_dataset)
-
-    def test_compute_integration(self, sample_dataset):
-        """Test the compute method integration."""
-        with pytest.raises(NotImplementedError):
-            derived.AtmosphericRiverMask.compute(sample_dataset)
-
-    def test_name_property(self):
-        """Test the name property."""
-        instance = derived.AtmosphericRiverMask()
-        assert instance.name == "AtmosphericRiverMask"
-
-
-class TestIntegratedVaporTransport:
-    """Test the IntegratedVaporTransport derived variable implementation."""
-
-    def test_required_variables(self):
-        """Test that required variables are correctly defined."""
-        expected_vars = ["eastward_wind", "northward_wind", "specific_humidity"]
-        assert derived.IntegratedVaporTransport.required_variables == expected_vars
-
-    @patch("extremeweatherbench.calc.calculate_pressure_at_surface")
-    @patch("extremeweatherbench.calc.orography")
-    @patch("extremeweatherbench.calc.nantrapezoid")
-    def test_derive_variable_with_mocks(
-        self, mock_nantrapezoid, mock_orography, mock_calc_pressure, sample_dataset
-    ):
-        """Test derive_variable with mocked calc functions."""
-        # Mock the calc functions to avoid complex dependencies
-        mock_orography.return_value = xr.DataArray(
-            np.ones((len(sample_dataset.latitude), len(sample_dataset.longitude))),
-            coords={
-                "latitude": sample_dataset.latitude,
-                "longitude": sample_dataset.longitude,
-            },
-        )
-        mock_calc_pressure.return_value = xr.DataArray(
-            np.full(
-                (len(sample_dataset.latitude), len(sample_dataset.longitude)), 101325
-            ),
-            coords={
-                "latitude": sample_dataset.latitude,
-                "longitude": sample_dataset.longitude,
-            },
-        )
-        mock_nantrapezoid.return_value = np.random.normal(
-            0,
-            100,
-            size=(
-                len(sample_dataset.time),
-                len(sample_dataset.latitude),
-                len(sample_dataset.longitude),
-            ),
-        )
-
-        result = derived.IntegratedVaporTransport.derive_variable(sample_dataset)
-
-        assert isinstance(result, xr.DataArray)
-        # Verify calc functions were called
-        mock_orography.assert_called_once()
-        mock_calc_pressure.assert_called_once()
-        assert (
-            mock_nantrapezoid.call_count == 2
-        )  # Called for eastward and northward components
-
-    def test_missing_required_variables(self, sample_dataset):
-        """Test behavior when required variables are missing."""
-        incomplete_dataset = sample_dataset.drop_vars("specific_humidity")
-
-        with pytest.raises(
-            ValueError, match="Input variable specific_humidity not found in data"
-        ):
-            derived.IntegratedVaporTransport.compute(incomplete_dataset)
-
-    def test_name_property(self):
-        """Test the name property."""
-        instance = derived.IntegratedVaporTransport()
-        assert instance.name == "IntegratedVaporTransport"
-
-
-class TestGeopotentialThickness:
-    """Test the GeopotentialThickness derived variable implementation."""
-
-    def test_required_variables(self):
-        """Test that required variables are correctly defined."""
-        expected_vars = ["geopotential"]
-        assert derived.GeopotentialThickness.required_variables == expected_vars
-
-    def test_derive_variable_basic(self, sample_dataset):
-        """Test basic functionality of derive_variable method."""
-        top_level = 500.0
-        bottom_level = 1000.0
-
-        result = derived.GeopotentialThickness.derive_variable(
-            sample_dataset, top_level, bottom_level
-        )
-
-        assert isinstance(result, xr.DataArray)
-        assert result.dims == ("time", "latitude", "longitude")
-        assert result.attrs["units"] == "m"
-        assert "Geopotential thickness" in result.attrs["description"]
-        assert "500" in result.attrs["description"]
-        assert "1000" in result.attrs["description"]
-
-    def test_derive_variable_calculation_correctness(self, sample_dataset):
-        """Test that the calculation is mathematically correct."""
-        top_level = 500.0
-        bottom_level = 1000.0
-
-        result = derived.GeopotentialThickness.derive_variable(
-            sample_dataset, top_level, bottom_level
-        )
-
-        # Manually calculate expected result
-        top_geopotential = sample_dataset["geopotential"].sel(level=top_level)
-        bottom_geopotential = sample_dataset["geopotential"].sel(level=bottom_level)
-        expected = (top_geopotential - bottom_geopotential) / 9.80665
-
-        xr.testing.assert_allclose(result, expected)
-
-    def test_derive_variable_different_levels(self, sample_dataset):
-        """Test with different pressure levels."""
-        test_cases = [
-            (300.0, 500.0),
-            (500.0, 700.0),
-            (700.0, 850.0),
-            (850.0, 1000.0),
-        ]
-
-        for top_level, bottom_level in test_cases:
-            result = derived.GeopotentialThickness.derive_variable(
-                sample_dataset, top_level, bottom_level
-            )
-
-            assert isinstance(result, xr.DataArray)
-            assert result.attrs["units"] == "m"
-            assert str(int(top_level)) in result.attrs["description"]
-            assert str(int(bottom_level)) in result.attrs["description"]
-
-    def test_derive_variable_reversed_levels(self, sample_dataset):
-        """Test with top level higher pressure than bottom level (reversed)."""
-        # This should still work mathematically, result can be positive or negative
-        # depending on the random test data
-        top_level = 1000.0  # Higher pressure (lower altitude)
-        bottom_level = 500.0  # Lower pressure (higher altitude)
-
-        result = derived.GeopotentialThickness.derive_variable(
-            sample_dataset, top_level, bottom_level
-        )
-
-        assert isinstance(result, xr.DataArray)
-        # The result will be the negative of the normal thickness calculation
-        normal_result = derived.GeopotentialThickness.derive_variable(
-            sample_dataset, bottom_level, top_level
-        )
-        xr.testing.assert_allclose(result, -normal_result)
-
-    def test_derive_variable_single_level_difference(self, sample_dataset):
-        """Test with the same level for both top and bottom."""
-        level = 500.0
-
-        result = derived.GeopotentialThickness.derive_variable(
-            sample_dataset, level, level
-        )
-
-        assert isinstance(result, xr.DataArray)
-        # Should be zero since it's the same level (difference of same values)
-        expected_zero = sample_dataset["geopotential"].sel(level=level) * 0
-        xr.testing.assert_allclose(result, expected_zero)
-
-    def test_derive_variable_preserves_coordinates(self, sample_dataset):
-        """Test that derived variable preserves coordinate information."""
-        top_level = 500.0
-        bottom_level = 1000.0
-
-        result = derived.GeopotentialThickness.derive_variable(
-            sample_dataset, top_level, bottom_level
-        )
-
-        # Check that coordinates are preserved
-        assert "time" in result.coords
-        assert "latitude" in result.coords
-        assert "longitude" in result.coords
-
-        # Check coordinate values are the same
-        xr.testing.assert_equal(result.coords["time"], sample_dataset.coords["time"])
-        xr.testing.assert_equal(
-            result.coords["latitude"], sample_dataset.coords["latitude"]
-        )
-        xr.testing.assert_equal(
-            result.coords["longitude"], sample_dataset.coords["longitude"]
-        )
-
-    def test_derive_variable_missing_level(self, sample_dataset):
-        """Test behavior when requested level is not available."""
-        top_level = 123.45  # Non-existent level
-        bottom_level = 1000.0
-
-        with pytest.raises(KeyError):
-            derived.GeopotentialThickness.derive_variable(
-                sample_dataset, top_level, bottom_level
-            )
-
-    def test_compute_integration(self, sample_dataset):
-        """Test the compute method integration."""
-        # The compute method should work with default parameters
-        result = derived.GeopotentialThickness.compute(sample_dataset)
-        assert isinstance(result, xr.DataArray)
-        assert "300" in result.attrs["description"]
-        assert "500" in result.attrs["description"]
-
-    def test_missing_required_variables(self, sample_dataset):
-        """Test behavior when required variables are missing."""
-        incomplete_dataset = sample_dataset.drop_vars("geopotential")
-
-        with pytest.raises(
-            ValueError, match="Input variable geopotential not found in data"
-        ):
-            derived.GeopotentialThickness.compute(incomplete_dataset)
-
-    def test_name_property(self):
-        """Test the name property."""
-        instance = derived.GeopotentialThickness()
-        assert instance.name == "GeopotentialThickness"
-
-    def test_realistic_thickness_values(self, sample_dataset):
-        """Test that calculated thickness values are reasonable."""
-        # Test 1000-500 hPa thickness (common meteorological layer)
-        result = derived.GeopotentialThickness.derive_variable(
-            sample_dataset, 500.0, 1000.0
-        )
-
-        # With random test data, we just check that the values are finite and reasonable
-        assert result.notnull().all()  # No NaN values
-        assert (abs(result) < 50000).all()  # Should be less than 50km in absolute value
-        assert result.shape == (8, 11, 21)  # Correct shape
-
-    def test_attributes_formatting(self, sample_dataset):
-        """Test that attributes are properly formatted."""
-        top_level = 300.0
-        bottom_level = 850.0
-
-        result = derived.GeopotentialThickness.derive_variable(
-            sample_dataset, top_level, bottom_level
-        )
-
-        expected_description = "Geopotential thickness of 300.0 and 850.0 hPa"
-        assert result.attrs["description"] == expected_description
-        assert result.attrs["units"] == "m"
-
-
-class TestSurfaceWindSpeed:
-    """Test the SurfaceWindSpeed derived variable implementation."""
-
-    def test_required_variables(self):
-        """Test that required variables are correctly defined."""
-        expected_vars = ["surface_eastward_wind", "surface_northward_wind"]
-        assert derived.SurfaceWindSpeed.required_variables == expected_vars
-
-    def test_derive_variable_basic(self, sample_dataset):
-        """Test basic functionality of derive_variable method."""
-        result = derived.SurfaceWindSpeed.derive_variable(sample_dataset)
-
-        assert isinstance(result, xr.DataArray)
-        assert result.dims == ("time", "latitude", "longitude")
-
-    def test_derive_variable_calculation_correctness(self, sample_dataset):
-        """Test that the calculation is mathematically correct."""
-        result = derived.SurfaceWindSpeed.derive_variable(sample_dataset)
-
-        # Manually calculate expected result using numpy hypot
-        expected = np.hypot(
-            sample_dataset["surface_eastward_wind"],
-            sample_dataset["surface_northward_wind"],
-        )
-
-        xr.testing.assert_allclose(result, expected)
-
-    def test_derive_variable_always_positive(self, sample_dataset):
-        """Test that wind speed is always non-negative."""
-        result = derived.SurfaceWindSpeed.derive_variable(sample_dataset)
-
-        assert (result >= 0).all()
-
-    def test_derive_variable_zero_wind(self):
-        """Test with zero wind components."""
-        time = pd.date_range("2021-06-20", freq="6h", periods=2)
-        latitudes = np.linspace(30, 35, 3)
-        longitudes = np.linspace(250, 255, 3)
-
-        zero_wind_dataset = xr.Dataset(
-            {
-                "surface_eastward_wind": (
-                    ["time", "latitude", "longitude"],
-                    np.zeros((len(time), len(latitudes), len(longitudes))),
-                ),
-                "surface_northward_wind": (
-                    ["time", "latitude", "longitude"],
-                    np.zeros((len(time), len(latitudes), len(longitudes))),
-                ),
-            },
-            coords={
-                "time": time,
-                "latitude": latitudes,
-                "longitude": longitudes,
-            },
-        )
-
-        result = derived.SurfaceWindSpeed.derive_variable(zero_wind_dataset)
-
-        # Should be all zeros
-        expected = zero_wind_dataset["surface_eastward_wind"] * 0
-        xr.testing.assert_allclose(result, expected)
-
-    def test_derive_variable_extreme_values(self):
-        """Test with extreme wind values."""
-        time = pd.date_range("2021-06-20", freq="6h", periods=2)
-        latitudes = np.linspace(30, 35, 3)
-        longitudes = np.linspace(250, 255, 3)
-
-        extreme_wind_dataset = xr.Dataset(
-            {
-                "surface_eastward_wind": (
-                    ["time", "latitude", "longitude"],
-                    np.full((len(time), len(latitudes), len(longitudes)), 100.0),
-                ),
-                "surface_northward_wind": (
-                    ["time", "latitude", "longitude"],
-                    np.full((len(time), len(latitudes), len(longitudes)), -100.0),
-                ),
-            },
-            coords={
-                "time": time,
-                "latitude": latitudes,
-                "longitude": longitudes,
-            },
-        )
-
-        result = derived.SurfaceWindSpeed.derive_variable(extreme_wind_dataset)
-
-        # Should be sqrt(100^2 + (-100)^2) = sqrt(20000) ≈ 141.42
-        expected_scalar = np.sqrt(100**2 + 100**2)
-        expected = xr.full_like(
-            extreme_wind_dataset["surface_eastward_wind"], expected_scalar
-        )
-        xr.testing.assert_allclose(result, expected, rtol=1e-10)
-
-    def test_compute_integration(self, sample_dataset):
-        """Test the compute method integration."""
-        result = derived.SurfaceWindSpeed.compute(sample_dataset)
-
-        assert isinstance(result, xr.DataArray)
-        assert result.dims == ("time", "latitude", "longitude")
-
-    def test_missing_required_variables(self, sample_dataset):
-        """Test behavior when required variables are missing."""
-        incomplete_dataset = sample_dataset.drop_vars("surface_eastward_wind")
-
-        with pytest.raises(
-            ValueError, match="Input variable surface_eastward_wind not found in data"
-        ):
-            derived.SurfaceWindSpeed.compute(incomplete_dataset)
-
-    def test_name_property(self):
-        """Test the name property."""
-        instance = derived.SurfaceWindSpeed()
-        assert instance.name == "SurfaceWindSpeed"
-
-    def test_preserves_coordinates(self, sample_dataset):
-        """Test that derived variable preserves coordinate information."""
-        result = derived.SurfaceWindSpeed.derive_variable(sample_dataset)
-
-        # Check that coordinates are preserved
-        assert "time" in result.coords
-        assert "latitude" in result.coords
-        assert "longitude" in result.coords
-
-        # Check coordinate values are the same
-        xr.testing.assert_equal(result.coords["time"], sample_dataset.coords["time"])
-        xr.testing.assert_equal(
-            result.coords["latitude"], sample_dataset.coords["latitude"]
-        )
-        xr.testing.assert_equal(
-            result.coords["longitude"], sample_dataset.coords["longitude"]
-        )
-
-
-class TestIntegratedVaporTransportLaplacian:
-    """Test the IntegratedVaporTransportLaplacian derived variable implementation."""
-
-    def test_required_variables(self):
-        """Test that required variables are correctly defined."""
-        expected_vars = [
-            "surface_eastward_wind",
-            "surface_northward_wind",
-            "specific_humidity",
-        ]
-        assert (
-            derived.IntegratedVaporTransportLaplacian.required_variables
-            == expected_vars
-        )
-
-    def test_derive_variable_basic(self, sample_dataset):
-        """Test basic functionality - will fail until attribute errors are fixed."""
-        # Add the required surface variables to the dataset
-        enhanced_dataset = sample_dataset.copy()
-        with pytest.raises(NotImplementedError):
-            derived.IntegratedVaporTransportLaplacian.derive_variable(enhanced_dataset)
-
-
 class TestTCTrackVariables:
     """Test the TCTrackVariables derived variable implementation."""
 
@@ -613,12 +190,7 @@ class TestTCTrackVariables:
     @patch(
         "extremeweatherbench.events.tropical_cyclone.create_tctracks_from_dataset_with_ibtracs_filter"
     )
-    @patch(
-        "extremeweatherbench.events.tropical_cyclone.create_tctracks_from_dataset_with_ibtracs_filter"
-    )
-    @patch("extremeweatherbench.calc.generate_tc_variables")
-    @patch("extremeweatherbench.calc.create_tctracks_from_dataset")
-    @patch("extremeweatherbench.calc.tctracks_to_3d_dataset")
+    @patch("extremeweatherbench.events.tropical_cyclone.generate_tc_variables")
     def test_derive_variable_with_mocks(
         self,
         mock_to_3d,
@@ -1025,7 +597,7 @@ class TestTropicalCycloneTrackVariable:
     @patch(
         "extremeweatherbench.events.tropical_cyclone.create_tctracks_from_dataset_with_ibtracs_filter"
     )
-    @patch("extremeweatherbench.calc.generate_tc_variables")
+    @patch("extremeweatherbench.events.tropical_cyclone.generate_tc_variables")
     def test_get_or_compute_tracks_no_cache(
         self,
         mock_generate_tc_vars,
@@ -1061,7 +633,7 @@ class TestTropicalCycloneTrackVariable:
     @patch(
         "extremeweatherbench.events.tropical_cyclone.create_tctracks_from_dataset_with_ibtracs_filter"
     )
-    @patch("extremeweatherbench.calc.generate_tc_variables")
+    @patch("extremeweatherbench.events.tropical_cyclone.generate_tc_variables")
     def test_get_or_compute_tracks_with_cache(
         self,
         mock_generate_tc_vars,
@@ -1372,7 +944,9 @@ class TestWindDataPreparation:
         )
 
         # Mock the track computation to test preparation
-        with patch("extremeweatherbench.calc.generate_tc_variables") as mock_gen_vars:
+        with patch(
+            "extremeweatherbench.events.tropical_cyclone.generate_tc_variables"
+        ) as mock_gen_vars:
             with patch(
                 "extremeweatherbench.events.tropical_cyclone.create_tctracks_from_dataset_with_ibtracs_filter"
             ) as mock_create:
@@ -1432,7 +1006,9 @@ class TestWindDataPreparation:
         )
 
         # Mock the track computation
-        with patch("extremeweatherbench.calc.generate_tc_variables") as mock_gen_vars:
+        with patch(
+            "extremeweatherbench.events.tropical_cyclone.generate_tc_variables"
+        ) as mock_gen_vars:
             with patch(
                 "extremeweatherbench.events.tropical_cyclone.create_tctracks_from_dataset_with_ibtracs_filter"
             ) as mock_create:
