@@ -5,9 +5,9 @@ from typing import Dict, Optional, Sequence, Union
 
 import numpy as np
 import pandas as pd
-import scipy.ndimage as measure
 import scipy.spatial as spatial
 import xarray as xr
+from skimage import measure
 from skimage.feature import peak_local_max
 
 from extremeweatherbench import calc
