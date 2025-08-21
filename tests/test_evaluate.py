@@ -392,7 +392,9 @@ class TestComputeCaseOperator:
             sample_forecast_dataset,
             sample_target_dataset,
         )
-        mock_derive_variables.side_effect = lambda ds, vars: ds  # Return unchanged
+        mock_derive_variables.side_effect = (
+            lambda ds, vars, **kwargs: ds
+        )  # Return unchanged
 
         mock_result = pd.DataFrame(
             {
@@ -430,7 +432,7 @@ class TestComputeCaseOperator:
             sample_forecast_dataset,
             sample_target_dataset,
         )
-        mock_derive_variables.side_effect = lambda ds, vars: ds
+        mock_derive_variables.side_effect = lambda ds, vars, **kwargs: ds
 
         sample_case_operator.target.maybe_align_forecast_to_target.return_value = (
             sample_forecast_dataset,
@@ -483,7 +485,7 @@ class TestComputeCaseOperator:
         )
 
         with patch("extremeweatherbench.derived.maybe_derive_variables") as mock_derive:
-            mock_derive.side_effect = lambda ds, vars: ds
+            mock_derive.side_effect = lambda ds, vars, **kwargs: ds
 
             with patch(
                 "extremeweatherbench.evaluate._evaluate_metric_and_return_df"
@@ -759,7 +761,7 @@ class TestIntegration:
         sample_target_dataset,
     ):
         """Test a complete end-to-end workflow."""
-        mock_derive_variables.side_effect = lambda ds, vars: ds
+        mock_derive_variables.side_effect = lambda ds, vars, **kwargs: ds
 
         # Setup the evaluation object methods
         sample_evaluation_object.target.maybe_align_forecast_to_target.return_value = (
@@ -896,7 +898,7 @@ class TestIntegration:
         )
 
         with patch("extremeweatherbench.derived.maybe_derive_variables") as mock_derive:
-            mock_derive.side_effect = lambda ds, vars: ds
+            mock_derive.side_effect = lambda ds, vars, **kwargs: ds
 
             with patch(
                 "extremeweatherbench.evaluate._evaluate_metric_and_return_df"
@@ -1029,7 +1031,22 @@ class TestTropicalCycloneEvaluation:
             sample_tc_forecast_dataset,
             sample_ibtracs_dataset,
         )
-        mock_derive_vars.side_effect = lambda ds, variables, **kwargs: ds
+
+        def mock_derive_side_effect(ds, variables, **kwargs):
+            # Create a copy of the dataset and add the derived variable
+            ds_copy = ds.copy()
+            # Add TrackSeaLevelPressure as a derived variable
+            ds_copy["TrackSeaLevelPressure"] = xr.DataArray(
+                [[1.0, 2.0, 3.0, 4.0], [5.0, 6.0, 7.0, 8.0]],
+                dims=["time", "prediction_timedelta"],
+                coords={
+                    "time": ds.time,
+                    "prediction_timedelta": ds.prediction_timedelta,
+                },
+            )
+            return ds_copy
+
+        mock_derive_vars.side_effect = mock_derive_side_effect
 
         # Mock the target's maybe_align_forecast_to_target method
         sample_tc_case_operator.target.maybe_align_forecast_to_target.return_value = (

@@ -199,8 +199,13 @@ class GeopotentialThickness(DerivedVariable):
         Returns:
             The geopotential thickness as a DataArray.
         """
-        top_level = kwargs.get("top_level", 300)
-        bottom_level = kwargs.get("bottom_level", 500)
+        # Handle both positional and keyword arguments
+        if len(args) >= 2:
+            top_level = args[0]
+            bottom_level = args[1]
+        else:
+            top_level = kwargs.get("top_level", 300)
+            bottom_level = kwargs.get("bottom_level", 500)
         top_level_geopotential = data["geopotential"].sel(level=top_level)
         bottom_level_geopotential = data["geopotential"].sel(level=bottom_level)
         geopotential_thickness = (
@@ -296,7 +301,7 @@ class TropicalCycloneTrackVariable(DerivedVariable):
 
         # Generates the variables needed for the TC track calculation
         # (geop. thickness, winds, temps, slp)
-        cyclone_dataset = tropical_cyclone.generate_tc_variables(prepared_data)
+        cyclone_dataset = calc.generate_tc_variables(prepared_data)
 
         # Check if we should apply IBTrACS filtering
         # First check kwargs, then the global registry
@@ -314,6 +319,8 @@ class TropicalCycloneTrackVariable(DerivedVariable):
                 )
             )
         else:
+            # TODO: In the future, allow TC track computation without IBTrACS data
+            # by using calc.create_tctracks_from_dataset as a fallback
             raise ValueError("No IBTrACS data provided to constrain TC tracks.")
 
         # Cache the result
