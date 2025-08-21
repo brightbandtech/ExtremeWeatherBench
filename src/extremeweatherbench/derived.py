@@ -5,7 +5,7 @@ from typing import List, Type, Union
 import numpy as np
 import xarray as xr
 
-from extremeweatherbench import calc
+from extremeweatherbench import calc, utils
 from extremeweatherbench.events import tropical_cyclone
 
 logging.basicConfig(level=logging.INFO)
@@ -341,10 +341,9 @@ class TropicalCycloneTrackVariable(DerivedVariable):
         """
         # Get the cached or computed track data
         tracks_dataset = cls._get_or_compute_tracks(data, *args, **kwargs)
+        tracks_dataset = utils.convert_valid_time_to_init_time(tracks_dataset)
 
-        # For the base class, return the full dataset as a combined DataArray
-        # Child classes should override this to return specific variables
-        return tracks_dataset.to_array().squeeze()
+        return tracks_dataset
 
     @classmethod
     def clear_cache(cls) -> None:
