@@ -771,8 +771,8 @@ def mixed_parcel(
     theta = potential_temperature(
         ds["air_temperature"], ds["pressure"], units=temperature_units
     )
-    # dewpoint is already in celsius
-    es = saturation_vapor_pressure(ds["dewpoint_temperature"])
+    # convert temperature to celsius
+    es = saturation_vapor_pressure(ds["dewpoint_temperature"] - 273.15)
     mixing_ratio_g_g = mixing_ratio(es, ds["pressure"])
     # because pressure is the same across the domain, we can use a single column
     pressure = ds["level"]
@@ -1118,12 +1118,12 @@ def dewpoint_from_specific_humidity(
         pressure: The pressure in hPa.
 
     Returns:
-        The dewpoint DataArray.
+        The dewpoint DataArray in Celsius.
     """
     mixing_ratio = specific_humidity / (1 - specific_humidity)
     e = pressure * mixing_ratio / (epsilon + mixing_ratio)
 
-    return dewpoint_from_vapor_pressure(e)
+    return dewpoint_from_vapor_pressure(e) + 273.15
 
 
 def craven_brooks_significant_severe(
@@ -1419,8 +1419,14 @@ def _run_cape_calculation(
     )
 
     # Find indices where all values are NaN in the last dimension
-    nan_mask_pressure = np.all(np.isnan(combined_all_pressure_w_lcl), axis=(0, 1, 2))
-    nan_mask_temp = np.all(np.isnan(combined_all_temp_w_lcl), axis=(0, 1, 2))
+    nan_mask_pressure = np.all(
+        np.isnan(combined_all_pressure_w_lcl),
+        axis=tuple(range(combined_all_pressure_w_lcl.ndim - 1)),
+    )
+    nan_mask_temp = np.all(
+        np.isnan(combined_all_temp_w_lcl),
+        axis=tuple(range(combined_all_temp_w_lcl.ndim - 1)),
+    )
 
     # Combine masks - if either pressure or temp is all NaN, we want to drop that row
     combined_nan_mask = np.logical_or(nan_mask_pressure, nan_mask_temp)
@@ -1444,7 +1450,6 @@ def _run_cape_calculation(
         return np.full(target_shape, np.nan), np.full(target_shape, np.nan)
 
     # Convert temps back to Celsius
-    # TODO: sanity check combined_all_temp_w_lcl as the ml_profile. might be too hot
     cape, cin = mlcape_cin(
         combined_all_pressure_w_lcl,
         calculated_new_temp - 273.15,
