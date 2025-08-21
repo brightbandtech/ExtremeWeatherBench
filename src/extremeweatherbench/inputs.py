@@ -731,7 +731,9 @@ class IBTrACS(TargetBase):
                 for col in pressure_cols + wind_cols
             ]
         )
-
+        subset_target_data = subset_target_data.with_columns(
+            [(pl.col(col) * 0.514444).alias(col) for col in wind_cols]
+        )
         # Drop rows where ALL columns are null (equivalent to pandas dropna(how="all"))
         subset_target_data = subset_target_data.filter(
             ~pl.all_horizontal(pl.all().is_null())
