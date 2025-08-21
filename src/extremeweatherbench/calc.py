@@ -1,4 +1,4 @@
-from typing import Sequence, Union
+from typing import Literal, Sequence, Union
 
 import numpy as np
 import xarray as xr
@@ -32,8 +32,10 @@ def convert_from_cartesian_to_latlon(
     )
 
 
-def calculate_haversine_degree_distance(
-    input_a: Sequence[float], input_b: Sequence[Union[float, xr.DataArray]]
+def calculate_haversine_distance(
+    input_a: Sequence[float],
+    input_b: Sequence[Union[float, xr.DataArray]],
+    units: Literal["km", "deg"] = "km",
 ) -> Union[float, xr.DataArray]:
     """Calculate the great-circle distance between two points on the Earth's surface.
 
@@ -57,8 +59,12 @@ def calculate_haversine_degree_distance(
     dlat = lat2 - lat1
     a = np.sin(dlat / 2) ** 2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2) ** 2
     c = 2 * np.arcsin(np.sqrt(a))
-    distance = np.degrees(c)  # Convert back to degrees
-    return distance
+    if units == "km":
+        return 6371 * c
+    elif units == "deg":
+        return np.degrees(c)  # Convert back to degrees
+    else:
+        raise ValueError(f"Invalid units: {units}")
 
 
 def create_great_circle_mask(
@@ -75,8 +81,8 @@ def create_great_circle_mask(
         Boolean mask where True indicates points within the radius.
     """
 
-    distance = calculate_haversine_degree_distance(
-        latlon_point, (ds.latitude, ds.longitude)
+    distance = calculate_haversine_distance(
+        latlon_point, (ds.latitude, ds.longitude), units="deg"
     )
     # Create mask as xarray DataArray
     if isinstance(distance, xr.DataArray):
