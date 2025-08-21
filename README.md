@@ -80,4 +80,4 @@ with open(f'ewb_cases_{model}.pkl', 'wb') as f:
 cases.to_csv(f'ewb_cases_{model}.csv')
 ```
 # EWB case studies and categories
-EWB case studies are fully documented [here](docs/AllCaseStudies.md).  
+EWB case studies are fully documented [here](docs/events/AllCaseStudies.md).  
