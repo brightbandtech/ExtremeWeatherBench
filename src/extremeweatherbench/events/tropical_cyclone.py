@@ -1079,13 +1079,19 @@ def find_landfall_xarray(track_dataset: xr.Dataset) -> Optional[xr.Dataset]:
         xarray Dataset with landfall point data, or None if no landfall found.
         For forecast data, includes init_time dimension.
     """
+    # Pre-load coastline data once
+    from cartopy.io.shapereader import Reader, natural_earth
+
+    land = natural_earth(category="physical", name="land", resolution="10m")
+    land_geom = list(Reader(land).geometries())[0]
+
     # Case 1: IBTrACS data with valid_time dimension
     if "valid_time" in track_dataset.dims and "lead_time" not in track_dataset.dims:
-        return _find_landfall_ibtracs(track_dataset)
+        return _find_landfall_ibtracs(track_dataset, land_geom)
 
     # Case 2: Forecast data with lead_time and valid_time dimensions
     elif "lead_time" in track_dataset.dims and "valid_time" in track_dataset.dims:
-        return _find_landfall_forecast(track_dataset)
+        return _find_landfall_forecast(track_dataset, land_geom)
 
     else:
         raise ValueError(
@@ -1095,7 +1101,9 @@ def find_landfall_xarray(track_dataset: xr.Dataset) -> Optional[xr.Dataset]:
         )
 
 
-def _find_landfall_ibtracs(track_dataset: xr.Dataset) -> Optional[xr.Dataset]:
+def _find_landfall_ibtracs(
+    track_dataset: xr.Dataset, land_geom
+) -> Optional[xr.Dataset]:
     """
     Find landfall for IBTrACS data (single track with valid_time dimension).
     Based on the original find_landfall function.
@@ -1173,7 +1181,9 @@ def _find_landfall_ibtracs(track_dataset: xr.Dataset) -> Optional[xr.Dataset]:
     return None
 
 
-def _find_landfall_forecast(track_dataset: xr.Dataset) -> Optional[xr.Dataset]:
+def _find_landfall_forecast(
+    track_dataset: xr.Dataset, land_geom
+) -> Optional[xr.Dataset]:
     """
     Find landfall for forecast data (lead_time, valid_time dimensions).
     Simple version that processes by unique init_time.
@@ -1182,22 +1192,13 @@ def _find_landfall_forecast(track_dataset: xr.Dataset) -> Optional[xr.Dataset]:
     if "track" in track_dataset.dims and track_dataset.sizes["track"] == 1:
         track_dataset = track_dataset.squeeze("track", drop=True)
 
-    # Pre-load coastline data once
-    from cartopy.io.shapereader import Reader, natural_earth
-
-    land = natural_earth(category="physical", name="land", resolution="10m")
-    land_geom = list(Reader(land).geometries())[0]
-
     landfall_results = []
     valid_init_times = []
-
+    track_dataset = utils.convert_valid_time_to_init_time(track_dataset)
     # Process each lead_time separately (each represents a different init_time)
-    for lead_idx in range(track_dataset.sizes["lead_time"]):
+    for init_time in track_dataset.init_time:
         # Extract data for this lead_time
-        single_forecast = track_dataset.isel(lead_time=lead_idx)
-
-        # Calculate init_time for this forecast
-        init_time = single_forecast.valid_time - single_forecast.lead_time
+        single_forecast = track_dataset.sel(init_time=init_time)
 
         # Convert to numpy arrays
         lats = single_forecast.latitude.values
@@ -1227,23 +1228,17 @@ def _find_landfall_forecast(track_dataset: xr.Dataset) -> Optional[xr.Dataset]:
 
         # Find landfall using optimized approach
         landfall = _find_landfall_optimized(lats, lons, vmax, slp, times, land_geom)
-
+        landfall = landfall.assign_coords(init_time=init_time)
         if landfall is not None:
             landfall_results.append(landfall)
             # Use the first init_time value (they should all be the same for this
             # lead_time)
             valid_init_times.append(
-                init_time.values[0] if hasattr(init_time, "values") else init_time
+                init_time.values if hasattr(init_time, "values") else init_time
             )
 
     if not landfall_results:
         return None
-
-    # Combine results along init_time dimension
-    for i, (result, init_time) in enumerate(zip(landfall_results, valid_init_times)):
-        landfall_results[i] = result.expand_dims("init_time").assign_coords(
-            init_time=[init_time]
-        )
 
     # Concatenate along init_time dimension
     combined_landfall = xr.concat(landfall_results, dim="init_time")
