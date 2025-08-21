@@ -117,7 +117,12 @@ class TestBasicCalculations:
 
         # Should return an xarray DataArray
         assert isinstance(distances, xr.DataArray)
-        assert distances.shape == sample_calc_dataset.latitude.shape
+        # Should have shape (lat, lon) since we're computing distance to every grid point
+        expected_shape = (
+            len(sample_calc_dataset.latitude),
+            len(sample_calc_dataset.longitude),
+        )
+        assert distances.shape == expected_shape
 
     def test_create_great_circle_mask(self, sample_calc_dataset):
         """Test creation of great circle mask."""
@@ -129,7 +134,12 @@ class TestBasicCalculations:
         # Should return boolean mask
         assert isinstance(mask, xr.DataArray)
         assert mask.dtype == bool
-        assert mask.shape == sample_calc_dataset.latitude.shape
+        # Should have shape (lat, lon) since it's a mask over the entire grid
+        expected_shape = (
+            len(sample_calc_dataset.latitude),
+            len(sample_calc_dataset.longitude),
+        )
+        assert mask.shape == expected_shape
 
         # Some points should be within radius, some outside
         assert mask.any()  # At least some True values

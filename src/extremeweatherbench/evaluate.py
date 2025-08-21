@@ -273,11 +273,22 @@ def _evaluate_metric_and_return_df(
     Returns:
         A dataframe of the results of the metric evaluation.
     """
+    # Handle derived variable classes by using their .name property
+    if hasattr(forecast_variable, "name") and not isinstance(forecast_variable, str):
+        forecast_var_name = forecast_variable().name
+    else:
+        forecast_var_name = forecast_variable
+
+    if hasattr(target_variable, "name") and not isinstance(target_variable, str):
+        target_var_name = target_variable().name
+    else:
+        target_var_name = target_variable
+
     metric = metric()
     logger.info(f"computing metric {metric.name}")
     metric_result = metric.compute_metric(
-        forecast_ds[forecast_variable],
-        target_ds[target_variable],
+        forecast_ds[forecast_var_name],
+        target_ds[target_var_name],
         **kwargs,
     )
 

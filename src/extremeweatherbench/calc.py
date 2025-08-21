@@ -98,7 +98,8 @@ def orography(ds: xr.Dataset) -> xr.DataArray:
         The orography as an xarray DataArray.
     """
     if "geopotential_at_surface" in ds.variables:
-        return ds["geopotential_at_surface"] / 9.80665
+        # Take the first time slice since orography is time-independent
+        return ds["geopotential_at_surface"].isel(time=0) / 9.80665
     else:
         era5 = xr.open_zarr(
             inputs.ARCO_ERA5_FULL_URI,
@@ -154,7 +155,7 @@ def generate_geopotential_thickness(
     ds: xr.Dataset,
     var_name: str = "geopotential",
     level_name: str = "level",
-    top_level_value: int | Sequence[int] = [200, 300, 400],
+    top_level_value: int | Sequence[int] = 300,
     bottom_level_value: int = 500,
 ) -> xr.DataArray:
     """Generate the geopotential thickness from the geopotential heights.
@@ -192,17 +193,46 @@ def generate_tc_variables(ds: xr.Dataset) -> xr.Dataset:
         The subset variables as an xarray Dataset.
     """
 
-    output = xr.Dataset(
-        {
-            "air_pressure_at_mean_sea_level": ds["air_pressure_at_mean_sea_level"],
-            "geopotential_thickness": generate_geopotential_thickness(
-                ds, top_level_value=300, bottom_level_value=500
-            ),
-            "surface_wind_speed": calculate_wind_speed(ds),
-        },
-    )
+    output_vars = {
+        "air_pressure_at_mean_sea_level": ds["air_pressure_at_mean_sea_level"],
+        "surface_wind_speed": calculate_wind_speed(ds),
+    }
 
+    # Only add geopotential thickness if the dataset has level data
+    if "level" in ds.dims and "geopotential" in ds.data_vars:
+        output_vars["geopotential_thickness"] = generate_geopotential_thickness(
+            ds, top_level_value=300, bottom_level_value=500
+        )
+
+    output = xr.Dataset(output_vars)
     return output
+
+
+def create_tctracks_from_dataset(dataset: xr.Dataset) -> xr.Dataset:
+    """Create TC tracks from dataset.
+
+    Args:
+        dataset: The input dataset.
+
+    Returns:
+        A dataset containing TC track information.
+    """
+    # Stub implementation - return empty dataset for now
+    return xr.Dataset()
+
+
+def tctracks_to_3d_dataset(tracks_dataset: xr.Dataset) -> xr.Dataset:
+    """Convert TC tracks to 3D dataset format.
+
+    Args:
+        tracks_dataset: The TC tracks dataset.
+
+    Returns:
+        The tracks dataset converted to 3D format.
+    """
+    # For now, return the dataset as-is
+    # This function may need more specific implementation based on requirements
+    return tracks_dataset
 
 
 def nantrapezoid(

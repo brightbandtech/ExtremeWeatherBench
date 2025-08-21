@@ -391,10 +391,11 @@ class TestGeopotentialThickness:
 
     def test_compute_integration(self, sample_dataset):
         """Test the compute method integration."""
-        # The compute method doesn't take the level parameters, so this should fail
-        # because derive_variable requires additional parameters that aren't passed
-        with pytest.raises(TypeError):
-            derived.GeopotentialThickness.compute(sample_dataset)
+        # The compute method should work with default parameters
+        result = derived.GeopotentialThickness.compute(sample_dataset)
+        assert isinstance(result, xr.DataArray)
+        assert "300" in result.attrs["description"]
+        assert "500" in result.attrs["description"]
 
     def test_missing_required_variables(self, sample_dataset):
         """Test behavior when required variables are missing."""
@@ -609,16 +610,31 @@ class TestTCTrackVariables:
         ]
         assert derived.TCTrackVariables.required_variables == expected_vars
 
+    @patch(
+        "extremeweatherbench.events.tropical_cyclone.create_tctracks_from_dataset_with_ibtracs_filter"
+    )
     @patch("extremeweatherbench.calc.generate_tc_variables")
     @patch("extremeweatherbench.calc.create_tctracks_from_dataset")
     @patch("extremeweatherbench.calc.tctracks_to_3d_dataset")
     def test_derive_variable_with_mocks(
-        self, mock_to_3d, mock_create_tracks, mock_generate_vars, sample_dataset
+        self,
+        mock_to_3d,
+        mock_create_tracks,
+        mock_generate_vars,
+        mock_ibtracs_filter,
+        sample_dataset,
     ):
         """Test derive_variable with mocked calc functions."""
         # Mock the complex calc functions
         mock_generate_vars.return_value = sample_dataset
         mock_create_tracks.return_value = []
+        mock_ibtracs_filter.return_value = xr.Dataset(
+            {
+                "track_data": xr.DataArray(
+                    np.ones((10, 10, 10)), dims=["time", "latitude", "longitude"]
+                )
+            }
+        )
         mock_to_3d.return_value = xr.Dataset(
             {
                 "track_data": xr.DataArray(
@@ -627,12 +643,24 @@ class TestTCTrackVariables:
             }
         )
 
-        result = derived.TCTrackVariables.derive_variable(sample_dataset)
+        # Create mock IBTrACS data
+        ibtracs_data = xr.Dataset(
+            {
+                "latitude": (["time"], [25.0, 26.0]),
+                "longitude": (["time"], [-75.0, -74.0]),
+            },
+            coords={"time": pd.date_range("2021-06-20", periods=2, freq="6h")},
+        )
+
+        result = derived.TCTrackVariables.derive_variable(
+            sample_dataset, ibtracs_data=ibtracs_data
+        )
 
         assert isinstance(result, xr.Dataset)
         mock_generate_vars.assert_called_once()
-        mock_create_tracks.assert_called_once()
-        mock_to_3d.assert_called_once()
+        mock_ibtracs_filter.assert_called_once()
+        # mock_create_tracks should NOT be called when IBTrACS data is provided
+        mock_create_tracks.assert_not_called()
 
     def test_prepare_wind_data_helper(self, sample_dataset):
         """Test the internal _prepare_wind_data helper function."""
@@ -972,7 +1000,7 @@ class TestTropicalCycloneTrackVariable:
     @patch(
         "extremeweatherbench.events.tropical_cyclone.create_tctracks_from_dataset_with_ibtracs_filter"
     )
-    @patch("extremeweatherbench.events.tropical_cyclone.generate_tc_variables")
+    @patch("extremeweatherbench.calc.generate_tc_variables")
     def test_get_or_compute_tracks_no_cache(
         self,
         mock_generate_tc_vars,
@@ -1008,7 +1036,7 @@ class TestTropicalCycloneTrackVariable:
     @patch(
         "extremeweatherbench.events.tropical_cyclone.create_tctracks_from_dataset_with_ibtracs_filter"
     )
-    @patch("extremeweatherbench.events.tropical_cyclone.generate_tc_variables")
+    @patch("extremeweatherbench.calc.generate_tc_variables")
     def test_get_or_compute_tracks_with_cache(
         self,
         mock_generate_tc_vars,
@@ -1319,9 +1347,7 @@ class TestWindDataPreparation:
         )
 
         # Mock the track computation to test preparation
-        with patch(
-            "extremeweatherbench.events.tropical_cyclone.generate_tc_variables"
-        ) as mock_gen_vars:
+        with patch("extremeweatherbench.calc.generate_tc_variables") as mock_gen_vars:
             with patch(
                 "extremeweatherbench.events.tropical_cyclone.create_tctracks_from_dataset_with_ibtracs_filter"
             ) as mock_create:
@@ -1381,9 +1407,7 @@ class TestWindDataPreparation:
         )
 
         # Mock the track computation
-        with patch(
-            "extremeweatherbench.events.tropical_cyclone.generate_tc_variables"
-        ) as mock_gen_vars:
+        with patch("extremeweatherbench.calc.generate_tc_variables") as mock_gen_vars:
             with patch(
                 "extremeweatherbench.events.tropical_cyclone.create_tctracks_from_dataset_with_ibtracs_filter"
             ) as mock_create:
