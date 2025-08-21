@@ -117,7 +117,8 @@ class TestBasicCalculations:
 
         # Should return an xarray DataArray
         assert isinstance(distances, xr.DataArray)
-        # Should have shape (lat, lon) since we're computing distance to every grid point
+        # Should have shape (lat, lon) since we're computing distance to every grid
+        # point
         expected_shape = (
             len(sample_calc_dataset.latitude),
             len(sample_calc_dataset.longitude),
