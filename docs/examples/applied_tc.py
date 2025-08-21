@@ -18,7 +18,6 @@
 import logging
 
 # %%
-
 # %%
 from extremeweatherbench import derived, evaluate, inputs, metrics, utils
 
@@ -35,15 +34,13 @@ test_yaml = {"cases": [case_yaml["cases"][200]]}
 # %%
 ibtracs_target = inputs.IBTrACS(
     source=inputs.IBTRACS_URI,
-    variables=[],
     variable_mapping=inputs.IBTrACS_metadata_variable_mapping,
-    storage_options={"anon": True},
 )
 
 # %%
 hres_forecast = inputs.ZarrForecast(
     source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
-    variables=[derived.TCTrackVariables],
+    variables=[derived.TropicalCycloneTrackVariable],
     variable_mapping={
         "2m_temperature": "surface_air_temperature",
         "10m_u_component_of_wind": "surface_eastward_wind",
@@ -65,7 +62,9 @@ tc_metric_list = [
     inputs.EvaluationObject(
         event_type="tropical_cyclone",
         metric=[
-            metrics.MAE,
+            metrics.LandfallTimeME,
+            metrics.LandfallIntensityMAE,
+            metrics.LandfallDisplacement,
         ],
         target=ibtracs_target,
         forecast=hres_forecast,
@@ -81,6 +80,5 @@ outputs = test_ewb.run(
     # tolerance range is the number of hours before and after the timestamp a
     # validating occurrence is checked in the forecasts
     tolerance_range=48,
-    # pre-compute the datasets to avoid recomputing them for each metric
-    pre_compute=True,
 )
+outputs.to_csv("tc_metric_test_results.csv")
