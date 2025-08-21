@@ -80,7 +80,7 @@ class DerivedVariable(ABC):
         for v in cls.required_variables:
             if v not in data.data_vars:
                 logger.warning(f"Input variable {v} not found in data")
-                
+
         return cls.derive_variable(data)
 
 
