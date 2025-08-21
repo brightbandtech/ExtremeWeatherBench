@@ -81,9 +81,11 @@ class InputBase(ABC):
     """
 
     source: str
-    variables: list[Union[str, "derived.DerivedVariable"]]
-    variable_mapping: dict
-    storage_options: dict
+    variables: list[Union[str, "derived.DerivedVariable"]] = dataclasses.field(
+        default_factory=list
+    )
+    variable_mapping: dict = dataclasses.field(default_factory=dict)
+    storage_options: dict = dataclasses.field(default_factory=dict)
     preprocess: Callable = utils._default_preprocess
 
     @property
@@ -187,7 +189,7 @@ class InputBase(ABC):
         """
         # Some inputs may not have variables defined, in which case we return
         # the data unmodified
-        if not self.variables:
+        if not self.variables and not self.variable_mapping:
             return data
 
         variable_mapping = self.variable_mapping
