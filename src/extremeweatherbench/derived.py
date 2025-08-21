@@ -595,7 +595,7 @@ def maybe_derive_variables(
     derived_data = {}
     if derived_variables:
         for v in derived_variables:
-            output_da = v.compute(data=ds)
+            output_da = v.compute(data=ds, **kwargs)
             # Ensure the DataArray has the correct name
             if output_da.name is None:
                 output_da.name = v.name
