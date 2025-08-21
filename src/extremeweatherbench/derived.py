@@ -99,7 +99,8 @@ class CravenBrooksSignificantSevere(DerivedVariable):
         "surface_northward_wind",
         "air_pressure_at_mean_sea_level",
     ]
-
+    # TODO: add optional variables approach for primary variables that
+    # have a fallback option in derived methods
     optional_variables = ["dewpoint_temperature"]
     name = "craven_brooks_significant_severe"
 
