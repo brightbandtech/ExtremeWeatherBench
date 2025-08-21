@@ -596,9 +596,9 @@ class TestUtilityFunctions:
         assert result.shape == specific_humidity.shape
         # Higher specific humidity should give higher dewpoint
         assert np.all(np.diff(result) > 0)
-        # Should be reasonable values (-50 to 30°C range)
-        assert np.all(result > -50)
-        assert np.all(result < 50)
+        # Should be reasonable values (223 to 323K range, equivalent to -50 to 50°C)
+        assert np.all(result > 223)  # -50°C in Kelvin
+        assert np.all(result < 323)  # 50°C in Kelvin
 
     def test_log_interpolate_function(self):
         """Test logarithmic interpolation function."""
