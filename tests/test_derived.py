@@ -613,6 +613,9 @@ class TestTCTrackVariables:
     @patch(
         "extremeweatherbench.events.tropical_cyclone.create_tctracks_from_dataset_with_ibtracs_filter"
     )
+    @patch(
+        "extremeweatherbench.events.tropical_cyclone.create_tctracks_from_dataset_with_ibtracs_filter"
+    )
     @patch("extremeweatherbench.calc.generate_tc_variables")
     @patch("extremeweatherbench.calc.create_tctracks_from_dataset")
     @patch("extremeweatherbench.calc.tctracks_to_3d_dataset")
@@ -628,6 +631,13 @@ class TestTCTrackVariables:
         # Mock the complex calc functions
         mock_generate_vars.return_value = sample_dataset
         mock_create_tracks.return_value = []
+        mock_ibtracs_filter.return_value = xr.Dataset(
+            {
+                "track_data": xr.DataArray(
+                    np.ones((10, 10, 10)), dims=["time", "latitude", "longitude"]
+                )
+            }
+        )
         mock_ibtracs_filter.return_value = xr.Dataset(
             {
                 "track_data": xr.DataArray(
@@ -655,9 +665,24 @@ class TestTCTrackVariables:
         result = derived.TCTrackVariables.derive_variable(
             sample_dataset, ibtracs_data=ibtracs_data
         )
+        # Create mock IBTrACS data
+        ibtracs_data = xr.Dataset(
+            {
+                "latitude": (["time"], [25.0, 26.0]),
+                "longitude": (["time"], [-75.0, -74.0]),
+            },
+            coords={"time": pd.date_range("2021-06-20", periods=2, freq="6h")},
+        )
+
+        result = derived.TCTrackVariables.derive_variable(
+            sample_dataset, ibtracs_data=ibtracs_data
+        )
 
         assert isinstance(result, xr.Dataset)
         mock_generate_vars.assert_called_once()
+        mock_ibtracs_filter.assert_called_once()
+        # mock_create_tracks should NOT be called when IBTrACS data is provided
+        mock_create_tracks.assert_not_called()
         mock_ibtracs_filter.assert_called_once()
         # mock_create_tracks should NOT be called when IBTrACS data is provided
         mock_create_tracks.assert_not_called()
