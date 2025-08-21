@@ -18,28 +18,6 @@ import xarray as xr
 from extremeweatherbench import derived
 
 
-class TestValidDerivedVariable(derived.DerivedVariable):
-    """A valid test implementation of DerivedVariable for testing purposes."""
-
-    required_variables = ["test_variable_1", "test_variable_2"]
-
-    @classmethod
-    def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
-        """Test implementation that sums two variables."""
-        return data[cls.required_variables[0]] + data[cls.required_variables[1]]
-
-
-class TestMinimalDerivedVariable(derived.DerivedVariable):
-    """A minimal test implementation with one required variable."""
-
-    required_variables = ["single_variable"]
-
-    @classmethod
-    def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
-        """Test implementation that returns the variable unchanged."""
-        return data[cls.required_variables[0]]
-
-
 @pytest.fixture
 def sample_dataset():
     """Create a sample xarray Dataset for testing."""
@@ -115,6 +93,41 @@ def sample_dataset():
     )
 
     return dataset
+
+
+class TestValidDerivedVariable(derived.DerivedVariable):
+    """A valid test implementation of DerivedVariable for testing purposes."""
+
+    required_variables = ["test_variable_1", "test_variable_2"]
+
+    @classmethod
+    def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
+        """Test implementation that sums two variables."""
+        return data[cls.required_variables[0]] + data[cls.required_variables[1]]
+
+
+class TestMinimalDerivedVariable(derived.DerivedVariable):
+    """A minimal test implementation with one required variable."""
+
+    required_variables = ["single_variable"]
+
+    @classmethod
+    def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
+        """Test implementation that returns the variable unchanged."""
+        return data[cls.required_variables[0]]
+
+
+class TestDerivedVariableWithoutName(derived.DerivedVariable):
+    """A test implementation that returns a DataArray without a name."""
+
+    required_variables = ["single_variable"]
+
+    @classmethod
+    def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
+        """Test implementation that returns DataArray without name."""
+        result = data[cls.required_variables[0]]
+        result.name = None
+        return result
 
 
 class TestDerivedVariableAbstractClass:
@@ -372,6 +385,20 @@ class TestUtilityFunctions:
 
         # Should return the original dataset unchanged
         xr.testing.assert_equal(result, sample_dataset)
+
+    def test_maybe_derive_variables_with_dataarray_without_name(self, sample_dataset):
+        """Test maybe_derive_variables with DataArray that has no name."""
+        # Create a derived variable that returns a DataArray without a name
+        variables = [TestDerivedVariableWithoutName()]
+
+        result = derived.maybe_derive_variables(sample_dataset, variables)
+
+        assert isinstance(result, xr.Dataset)
+        # The derived variable should be added with the correct name
+        assert "TestDerivedVariableWithoutName" in result.data_vars
+        # Verify the DataArray got the correct name assigned
+        derived_var = result["TestDerivedVariableWithoutName"]
+        assert derived_var.name == "TestDerivedVariableWithoutName"
 
     def test_maybe_pull_required_variables_from_derived_input_with_instances(self):
         """Test maybe_pull_required_variables_from_derived_input with instances."""
