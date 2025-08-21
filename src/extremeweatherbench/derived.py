@@ -1,3 +1,4 @@
+import logging
 from abc import ABC, abstractmethod
 from typing import List, Type, Union
 
@@ -5,6 +6,9 @@ import numpy as np
 import xarray as xr
 
 from extremeweatherbench import calc
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 class DerivedVariable(ABC):
@@ -254,7 +258,14 @@ def maybe_derive_variables(
     """
 
     derived_variables = [v for v in variables if not isinstance(v, str)]
-    derived_data = {v.name: v.compute(data=ds) for v in derived_variables}
+    derived_data = {}
+    if derived_variables:
+        for v in derived_variables:
+            output_da = v.compute(data=ds)
+            # Ensure the DataArray has the correct name
+            if output_da.name is None:
+                output_da.name = v.name
+            derived_data[v.name] = output_da
     # TODO consider removing data variables only used for derivation
     ds = ds.merge(derived_data)
     return ds
