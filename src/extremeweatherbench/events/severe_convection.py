@@ -1,5 +1,4 @@
-"""
-Severe convection atmospheric physics calculations for ExtremeWeatherBench.
+"""Severe convection atmospheric physics calculations for ExtremeWeatherBench.
 
 This module contains constants and functions for calculating atmospheric
 convection parameters including CAPE, CIN, and severe weather indices.
@@ -15,19 +14,13 @@ The module supports calculation of:
 - Low-level wind shear
 - Various thermodynamic quantities
 
-All temperature inputs are in Celsius unless otherwise noted.
+All temperature inputs are in Celsius unless otherwise noted. Inputs are expected
+to be in Kelvin for main entrypoints to Craven-Brooks significant severe and MLCAPE.
 All pressure inputs are in hPa (hectopascals).
 All wind inputs are in m/s.
 Energy outputs (CAPE/CIN) are in J/kg.
-
-Constants defined in this module follow standard atmospheric physics:
-- Dry air gas constant (Rd): 287.05 J/(kg·K)
-- Specific heat at constant pressure (Cp_d): 1004.67 J/(kg·K)
-- Gravitational acceleration (g): 9.81 m/s²
-- Water vapor gas constant (Rv): 461.5 J/(kg·K)
 """
 
-import itertools
 from importlib import resources
 
 import numpy as np
@@ -574,8 +567,8 @@ def insert_lcl_level_fast(pressure, temperature, lcl_pressure):
     pressure_flat = pressure.reshape(-1, pressure.shape[-1])
     temperature_flat = temperature.reshape(-1, temperature.shape[-1])
 
-    # Handle lcl_pressure dimensions - ensure it has the same number of dimensions as pressure
-    # but with the last dimension being 1
+    # Handle lcl_pressure dimensions - ensure it has the same number of dimensions
+    # as pressure but with the last dimension being 1
     if lcl_pressure.ndim == pressure.ndim - 1:
         # lcl_pressure needs one more dimension
         lcl_pressure_expanded = np.expand_dims(lcl_pressure, axis=-1)
