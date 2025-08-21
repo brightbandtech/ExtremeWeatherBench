@@ -1058,3 +1058,28 @@ def create_tctracks_from_dataset_with_ibtracs_filter(
         use_contour_validation,
         min_track_length,
     )
+
+
+def generate_tc_variables(ds: xr.Dataset) -> xr.Dataset:
+    """Generate the variables needed for the TC track calculation.
+
+    Args:
+        ds: The xarray dataset to subset from.
+
+    Returns:
+        The subset variables as an xarray Dataset.
+    """
+
+    output_vars = {
+        "air_pressure_at_mean_sea_level": ds["air_pressure_at_mean_sea_level"],
+        "surface_wind_speed": calc.calculate_wind_speed(ds),
+    }
+
+    # Only add geopotential thickness if the dataset has level data
+    if "level" in ds.dims and "geopotential" in ds.data_vars:
+        output_vars["geopotential_thickness"] = calc.generate_geopotential_thickness(
+            ds, top_level_value=300, bottom_level_value=500
+        )
+
+    output = xr.Dataset(output_vars)
+    return output

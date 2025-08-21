@@ -183,58 +183,6 @@ def generate_geopotential_thickness(
     return geopotential_thickness
 
 
-def generate_tc_variables(ds: xr.Dataset) -> xr.Dataset:
-    """Generate the variables needed for the TC track calculation.
-
-    Args:
-        ds: The xarray dataset to subset from.
-
-    Returns:
-        The subset variables as an xarray Dataset.
-    """
-
-    output_vars = {
-        "air_pressure_at_mean_sea_level": ds["air_pressure_at_mean_sea_level"],
-        "surface_wind_speed": calculate_wind_speed(ds),
-    }
-
-    # Only add geopotential thickness if the dataset has level data
-    if "level" in ds.dims and "geopotential" in ds.data_vars:
-        output_vars["geopotential_thickness"] = generate_geopotential_thickness(
-            ds, top_level_value=300, bottom_level_value=500
-        )
-
-    output = xr.Dataset(output_vars)
-    return output
-
-
-def create_tctracks_from_dataset(dataset: xr.Dataset) -> xr.Dataset:
-    """Create TC tracks from dataset.
-
-    Args:
-        dataset: The input dataset.
-
-    Returns:
-        A dataset containing TC track information.
-    """
-    # Stub implementation - return empty dataset for now
-    return xr.Dataset()
-
-
-def tctracks_to_3d_dataset(tracks_dataset: xr.Dataset) -> xr.Dataset:
-    """Convert TC tracks to 3D dataset format.
-
-    Args:
-        tracks_dataset: The TC tracks dataset.
-
-    Returns:
-        The tracks dataset converted to 3D format.
-    """
-    # For now, return the dataset as-is
-    # This function may need more specific implementation based on requirements
-    return tracks_dataset
-
-
 def nantrapezoid(
     y: np.ndarray,
     x: np.ndarray | None = None,

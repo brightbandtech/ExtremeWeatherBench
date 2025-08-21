@@ -305,7 +305,7 @@ class TropicalCycloneTrackVariable(DerivedVariable):
 
         # Generates the variables needed for the TC track calculation
         # (geop. thickness, winds, temps, slp)
-        cyclone_dataset = calc.generate_tc_variables(prepared_data)
+        cyclone_dataset = tropical_cyclone.generate_tc_variables(prepared_data)
 
         # Check if we should apply IBTrACS filtering
         # First check kwargs, then the global registry
