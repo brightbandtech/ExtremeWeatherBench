@@ -40,7 +40,7 @@ ibtracs_target = inputs.IBTrACS(
 # %%
 hres_forecast = inputs.ZarrForecast(
     source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
-    variables=[derived.TropicalCycloneTrackVariable],
+    variables=[derived.TropicalCycloneTrackVariables],
     variable_mapping={
         "2m_temperature": "surface_air_temperature",
         "10m_u_component_of_wind": "surface_eastward_wind",

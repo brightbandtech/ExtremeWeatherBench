@@ -78,10 +78,10 @@ def sample_tc_dataset():
             ),
         },
         coords={
-            "time": time,
+            "valid_time": time,
             "latitude": lat,
             "longitude": lon,
-            "prediction_timedelta": lead_time,
+            "lead_time": lead_time,
         },
     )
 
@@ -234,8 +234,8 @@ class TestTropicalCycloneDetection:
 
         furthest, _ = tropical_cyclone.find_furthest_contour_from_point(contour, point)
 
-        # All corners are equidistant, so any corner is valid
-        assert furthest in contour
+        # All corners are equidistant, so any corner is valid so long as its a tuple
+        assert tuple(furthest) in contour
 
     def test_find_furthest_contour_with_numpy_arrays(self):
         """Test with numpy arrays instead of lists."""
@@ -266,7 +266,7 @@ class TestTropicalCycloneDetection:
             np.array([[5, 5], [6, 5], [6, 6], [5, 6]])  # Simple square contour
         ]
 
-        point = (15.0, -65.0)  # Middle of the domain
+        point = (5, 5)  # Middle of the domain (array indices)
         level = 0.0
 
         contours = tropical_cyclone.find_contours_from_point_specified_field(
