@@ -214,31 +214,54 @@ def maybe_derive_variables(
             in the derived variables.
         variables: The potential variables to derive as a list of strings or
             DerivedVariable objects.
+        **kwargs: Additional keyword arguments to pass to the derived variables.
 
     Returns:
         A dataset with derived variables, if any exist, else the original
         dataset.
     """
 
+    # pull out the derived variables only from the list of variables
     derived_variables = [v for v in variables if not isinstance(v, str)]
     derived_data = {}
+
     if derived_variables:
         for v in derived_variables:
             output = v.compute(data=ds, **kwargs)
             # Ensure the DataArray has the correct name and is a DataArray.
-            # Some derived variables return a dataset, so we need to check
+            # Some derived variables return a dataset (multiple variables), so we need
+            # to check
             if isinstance(output, xr.DataArray):
                 if output.name is None:
+                    logger.warning(
+                        "Derived variable %s has no name, using class name.",
+                        v.name,
+                    )
                     output.name = v.name
                 derived_data[v.name] = output
-            elif isinstance(output, xr.Dataset) and output.dims != ds.dims:
-                # If the derived variable returns a dataset with different dims to ds,
-                # we need to return it instead of merging it with ds
-                # This is the case for the tropical cyclone track variable, which
-                # returns a dataset with different shape to ds
-                return output
+            elif isinstance(output, xr.Dataset):
+                # Check if derived dataset dimensions are compatible for merging
+                # We check if all dimensions in the derived dataset exist in the
+                # original dataset with the same sizes
+                compatible_dims = all(
+                    dim in ds.sizes and ds.sizes[dim] == output.sizes[dim]
+                    for dim in output.sizes
+                )
+
+                if not compatible_dims:
+                    logger.warning(
+                        "Derived variable %s returning instead of merging with input "
+                        "dataset, dims are different.",
+                        v.name,
+                    )
+                    return output
+                else:
+                    # Dataset has compatible dimensions, merge all its variables
+                    for var_name, data_array in output.data_vars.items():
+                        derived_data[var_name] = data_array
 
     # TODO consider removing data variables only used for derivation
+    # Merge dataarrays into the original dataset
     ds = ds.merge(derived_data)
     return ds
 
