@@ -243,8 +243,10 @@ def maybe_derive_variables(
 ) -> xr.Dataset:
     """Derive variables from the data if any exist in a list of variables.
 
-    Derived variables must maintain the same spatial dimensions as the original
-    dataset.
+    Derived variables do not need to maintain the same spatial dimensions as the
+    original dataset, but will overwrite the original dataset if they do, e.g.
+    in the cast of tropical cyclone track variables. This is temporary behavior;
+    will be fixed to allow for different spatial dimensions simultaneously.
 
     Args:
         ds: The dataset, ideally already subset in case of in memory operations
@@ -284,11 +286,14 @@ def maybe_derive_variables(
                     dim in ds.sizes and ds.sizes[dim] == output.sizes[dim]
                     for dim in output.sizes
                 )
-
+                # TODO: remove this warning once we have a way to handle different
+                # spatial dimensions simultaneously
                 if not compatible_dims:
                     logger.warning(
-                        "Derived variable %s returning instead of merging with input "
-                        "dataset, dims are different.",
+                        "Derived variable %s xarray object returning instead of "
+                        "merging with input dataset, dims are different. This is "
+                        "temporary behavior; will be fixed to allow for different "
+                        "spatial dimensions simultaneously.",
                         v.name,
                     )
                     return output
