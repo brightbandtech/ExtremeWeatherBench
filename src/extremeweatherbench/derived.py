@@ -270,7 +270,7 @@ def maybe_derive_variables(
             # to check
             if isinstance(output, xr.DataArray):
                 if output.name is None:
-                    logger.warning(
+                    logger.debug(
                         "Derived variable %s has no name, using class name.",
                         v.name,
                     )
