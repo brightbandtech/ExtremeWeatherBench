@@ -175,8 +175,8 @@ def find_valid_contour_from_point(
         furthest_point, ds_mapping
     )
     point_latlon = calc.convert_from_cartesian_to_latlon(point, ds_mapping)
-    gc_distance_contour_distance = calc.calculate_haversine_degree_distance(
-        gc_distance_point_latlon, point_latlon
+    gc_distance_contour_distance = calc.calculate_haversine_distance(
+        gc_distance_point_latlon, point_latlon, unit="degrees"
     )
     # Ensure we return a float
     if isinstance(gc_distance_contour_distance, xr.DataArray):
@@ -1138,7 +1138,9 @@ def _find_landfall_ibtracs(
     lons_180 = (lons + 180) % 360 - 180
 
     # Check each track segment - from original code
-    for i in range(len(lats) - 1):
+    landfall_data = []
+
+    for i in range(len(valid_times) - 1):
         try:
             # Create line segment between consecutive points
             segment = LineString(
@@ -1164,21 +1166,22 @@ def _find_landfall_ibtracs(
                 landfall_vmax = vmax[i] + frac * (vmax[i + 1] - vmax[i])
                 landfall_slp = slp[i] + frac * (slp[i + 1] - slp[i])
 
-                # Create landfall dataset - similar to original TC structure
-                return xr.Dataset(
+                # Store landfall data
+                landfall_data.append(
                     {
-                        "latitude": ([], landfall_lat),
-                        "longitude": ([], utils.convert_longitude_to_360(landfall_lon)),
-                        "surface_wind_speed": ([], landfall_vmax),
-                        "air_pressure_at_mean_sea_level": ([], landfall_slp),
-                    },
-                    coords={"valid_time": landfall_time},
+                        "latitude": landfall_lat,
+                        "longitude": utils.convert_longitude_to_360(landfall_lon),
+                        "surface_wind_speed": landfall_vmax,
+                        "air_pressure_at_mean_sea_level": landfall_slp,
+                        "valid_time": landfall_time,
+                    }
                 )
-        except Exception:
+        except Exception as e:
+            print(f"Error finding landfall: {e}")
             # Skip this segment if any error occurs
             continue
 
-    return None
+    return xr.Dataset(landfall_data)
 
 
 def _find_landfall_forecast(
@@ -1378,9 +1381,10 @@ def calculate_landfall_distance_km_xarray(
         return xr.DataArray(np.nan)
 
     # Use xarray operations to handle multi-dimensional case
-    distance_degrees = calc.calculate_haversine_degree_distance(
+    distance_degrees = calc.calculate_haversine_distance(
         (landfall1.latitude, landfall1.longitude),
         (landfall2.latitude, landfall2.longitude),
+        unit="degrees",
     )
 
     # Convert from degrees to kilometers (1 degree ≈ 111 km at equator)

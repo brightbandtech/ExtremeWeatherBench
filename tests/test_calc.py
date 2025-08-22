@@ -97,23 +97,23 @@ class TestBasicCalculations:
         assert abs(lat - expected_lat) < 1e-10
         assert abs(lon - expected_lon) < 1e-10
 
-    def test_calculate_haversine_degree_distance(self):
+    def test_calculate_haversine_distance(self):
         """Test haversine distance calculation."""
         # Test known distances
         point_a = [0.0, 0.0]  # Equator, prime meridian
         point_b = [90.0, 0.0]  # North pole
 
-        distance = calc.calculate_haversine_degree_distance(point_a, point_b)
+        distance = calc.calculate_haversine_distance(point_a, point_b, units="deg")
 
         # Should be 90 degrees (quarter of great circle)
         assert abs(distance - 90.0) < 0.1
 
-    def test_calculate_haversine_degree_distance_with_xarray(self, sample_calc_dataset):
+    def test_calculate_haversine_distance_with_xarray(self, sample_calc_dataset):
         """Test haversine distance calculation with xarray inputs."""
         point_a = [30.0, -100.0]
         point_b = [sample_calc_dataset.latitude, sample_calc_dataset.longitude]
 
-        distances = calc.calculate_haversine_degree_distance(point_a, point_b)
+        distances = calc.calculate_haversine_distance(point_a, point_b, units="deg")
 
         # Should return an xarray DataArray
         assert isinstance(distances, xr.DataArray)
@@ -124,6 +124,41 @@ class TestBasicCalculations:
             len(sample_calc_dataset.longitude),
         )
         assert distances.shape == expected_shape
+
+    def test_calculate_haversine_distance_km(self):
+        """Test haversine distance calculation with km units."""
+        # Test known distances
+        point_a = [0.0, 0.0]  # Equator, prime meridian
+        point_b = [90.0, 0.0]  # North pole
+
+        distance = calc.calculate_haversine_distance(point_a, point_b, units="km")
+
+        # Should be approximately 10,018 km (quarter of great circle)
+        # Earth's circumference is ~40,075 km, so quarter is ~10,018 km
+        assert abs(distance - 10018.0) < 50.0
+
+    def test_calculate_haversine_distance_km_with_xarray(self, sample_calc_dataset):
+        """Test haversine distance calculation with km units and xarray inputs."""
+        point_a = [30.0, -100.0]
+        point_b = [sample_calc_dataset.latitude, sample_calc_dataset.longitude]
+
+        distances = calc.calculate_haversine_distance(point_a, point_b, units="km")
+
+        # Should return an xarray DataArray
+        assert isinstance(distances, xr.DataArray)
+        # Should have shape (lat, lon) since we're computing distance to every grid
+        # point
+        expected_shape = (
+            len(sample_calc_dataset.latitude),
+            len(sample_calc_dataset.longitude),
+        )
+        assert distances.shape == expected_shape
+
+        # All distances should be positive
+        assert (distances >= 0).all()
+
+        # Distances should be reasonable (not too large for Earth)
+        assert (distances <= 20000).all()  # Maximum distance on Earth ~20,000 km
 
     def test_create_great_circle_mask(self, sample_calc_dataset):
         """Test creation of great circle mask."""
