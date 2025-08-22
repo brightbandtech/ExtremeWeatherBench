@@ -239,7 +239,7 @@ class TCTrackVariables(DerivedVariable):
 
 
 def maybe_derive_variables(
-    ds: xr.Dataset, variables: list[str | DerivedVariable]
+    ds: xr.Dataset, variables: list[str | DerivedVariable], **kwargs
 ) -> xr.Dataset:
     """Derive variables from the data if any exist in a list of variables.
 
@@ -251,22 +251,45 @@ def maybe_derive_variables(
             in the derived variables.
         variables: The potential variables to derive as a list of strings or
             DerivedVariable objects.
+        **kwargs: Additional keyword arguments to pass to the derived variables.
 
     Returns:
         A dataset with derived variables, if any exist, else the original
         dataset.
     """
 
+    # pull out the derived variables only from the list of variables
     derived_variables = [v for v in variables if not isinstance(v, str)]
     derived_data = {}
+
     if derived_variables:
         for v in derived_variables:
-            output_da = v.compute(data=ds)
-            # Ensure the DataArray has the correct name
-            if output_da.name is None:
-                output_da.name = v.name
-            derived_data[v.name] = output_da
+            output = v.compute(data=ds, **kwargs)
+            # Ensure the DataArray has the correct name and is a DataArray.
+            # Some derived variables return a dataset (multiple variables), so we need
+            # to check
+            if isinstance(output, xr.DataArray):
+                if output.name is None:
+                    logger.warning(
+                        "Derived variable %s has no name, using class name.",
+                        v.name,
+                    )
+                    output.name = v.name
+                derived_data[v.name] = output
+            # If the derived variable returns a dataset with different dims to ds,
+            # we need to return it instead of merging it with ds
+            # This is the case for the tropical cyclone track variable, which
+            # returns a dataset with different shape to ds
+            elif isinstance(output, xr.Dataset) and output.dims != ds.dims:
+                logger.warning(
+                    "Derived variable %s returning instead of merging with input "
+                    "dataset, dims are different.",
+                    v.name,
+                )
+                return output
+
     # TODO consider removing data variables only used for derivation
+    # Merge dataarrays into the original dataset
     ds = ds.merge(derived_data)
     return ds
 
