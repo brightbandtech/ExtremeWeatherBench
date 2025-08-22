@@ -1090,11 +1090,11 @@ def sample_tc_case_operator():
     # Create mock target (IBTrACS)
     mock_target = MagicMock(spec=inputs.IBTrACS)
     mock_target.__class__.__name__ = "IBTrACS"
-    mock_target.variables = [derived.TrackSeaLevelPressure]
+    mock_target.variables = [derived.TropicalCycloneTrackVariables]
 
     # Create mock forecast
     mock_forecast = MagicMock(spec=inputs.KerchunkForecast)
-    mock_forecast.variables = [derived.TrackSeaLevelPressure]
+    mock_forecast.variables = [derived.TropicalCycloneTrackVariables]
 
     # Create mock metric
     mock_metric = MagicMock(spec=metrics.BaseMetric)
@@ -1339,7 +1339,7 @@ class TestDerivedVariableIntegration:
     def setup_method(self):
         """Clear caches before each test."""
         tropical_cyclone.clear_ibtracs_registry()
-        derived.TropicalCycloneTrackVariable.clear_cache()
+        derived.TropicalCycloneTrackVariables.clear_cache()
 
     @patch(
         "extremeweatherbench.events.tropical_cyclone.create_tctracks_from_dataset_with_ibtracs_filter"
@@ -1483,7 +1483,7 @@ class TestFullTCEvaluationWorkflow:
     def setup_method(self):
         """Clear all caches and registries."""
         tropical_cyclone.clear_ibtracs_registry()
-        derived.TropicalCycloneTrackVariable.clear_cache()
+        derived.TropicalCycloneTrackVariables.clear_cache()
 
     @patch("extremeweatherbench.evaluate._build_datasets")
     @patch(

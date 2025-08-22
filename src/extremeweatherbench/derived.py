@@ -81,7 +81,7 @@ class DerivedVariable(ABC):
         return cls.derive_variable(data, *args, **kwargs)
 
 
-class TropicalCycloneTrackVariable(DerivedVariable):
+class TropicalCycloneTrackVariables(DerivedVariable):
     """A derived variable abstract class for tropical cyclone (TC) variables.
 
     This class serves as a parent for TC-related derived variables and provides

@@ -575,12 +575,12 @@ def sample_tc_tracks_dataset():
     return dataset
 
 
-class TestTropicalCycloneTrackVariable:
-    """Test the base TropicalCycloneTrackVariable class."""
+class TestTropicalCycloneTrackVariables:
+    """Test the base TropicalCycloneTrackVariables class."""
 
     def setup_method(self):
         """Clear cache before each test."""
-        derived.TropicalCycloneTrackVariable.clear_cache()
+        derived.TropicalCycloneTrackVariables.clear_cache()
         tropical_cyclone.clear_ibtracs_registry()
 
     def test_required_variables(self):
@@ -592,7 +592,7 @@ class TestTropicalCycloneTrackVariable:
             "surface_northward_wind",
         ]
 
-        assert derived.TropicalCycloneTrackVariable.required_variables == expected_vars
+        assert derived.TropicalCycloneTrackVariables.required_variables == expected_vars
 
     @patch(
         "extremeweatherbench.events.tropical_cyclone.create_tctracks_from_dataset_with_ibtracs_filter"
@@ -619,7 +619,7 @@ class TestTropicalCycloneTrackVariable:
             coords={"time": pd.date_range("2023-09-01", periods=2, freq="6h")},
         )
 
-        result = derived.TropicalCycloneTrackVariable._get_or_compute_tracks(
+        result = derived.TropicalCycloneTrackVariables._get_or_compute_tracks(
             sample_tc_forecast_dataset, ibtracs_data=ibtracs_data
         )
 
@@ -646,7 +646,7 @@ class TestTropicalCycloneTrackVariable:
         cache_key = tropical_cyclone._generate_cache_key(sample_tc_forecast_dataset)
         tropical_cyclone._TC_TRACK_CACHE[cache_key] = sample_tc_tracks_dataset
 
-        result = derived.TropicalCycloneTrackVariable._get_or_compute_tracks(
+        result = derived.TropicalCycloneTrackVariables._get_or_compute_tracks(
             sample_tc_forecast_dataset,
             ibtracs_data=xr.Dataset(),  # Empty dataset
         )
@@ -661,7 +661,7 @@ class TestTropicalCycloneTrackVariable:
     def test_get_or_compute_tracks_no_ibtracs_error(self, sample_tc_forecast_dataset):
         """Test error when no IBTrACS data is provided."""
         with pytest.raises(ValueError, match="No IBTrACS data provided"):
-            derived.TropicalCycloneTrackVariable._get_or_compute_tracks(
+            derived.TropicalCycloneTrackVariables._get_or_compute_tracks(
                 sample_tc_forecast_dataset
             )
 
@@ -686,7 +686,7 @@ class TestTropicalCycloneTrackVariable:
         ) as mock_create:
             mock_create.return_value = xr.Dataset()
 
-            derived.TropicalCycloneTrackVariable._get_or_compute_tracks(
+            derived.TropicalCycloneTrackVariables._get_or_compute_tracks(
                 sample_tc_forecast_dataset, case_id="test_case_123"
             )
 
@@ -702,19 +702,19 @@ class TestTropicalCycloneTrackVariable:
         assert len(tropical_cyclone._TC_TRACK_CACHE) == 1
 
         # Clear cache
-        derived.TropicalCycloneTrackVariable.clear_cache()
+        derived.TropicalCycloneTrackVariables.clear_cache()
 
         # Should be empty
         assert len(tropical_cyclone._TC_TRACK_CACHE) == 0
 
-    @patch.object(derived.TropicalCycloneTrackVariable, "_get_or_compute_tracks")
+    @patch.object(derived.TropicalCycloneTrackVariables, "_get_or_compute_tracks")
     def test_derive_variable_base_class(
         self, mock_get_tracks, sample_tc_forecast_dataset, sample_tc_tracks_dataset
     ):
         """Test the base derive_variable method."""
         mock_get_tracks.return_value = sample_tc_tracks_dataset
 
-        result = derived.TropicalCycloneTrackVariable.derive_variable(
+        result = derived.TropicalCycloneTrackVariables.derive_variable(
             sample_tc_forecast_dataset
         )
 
@@ -723,195 +723,6 @@ class TestTropicalCycloneTrackVariable:
 
         # Should return a DataArray (converted from Dataset)
         assert isinstance(result, xr.DataArray)
-
-
-class TestTrackSeaLevelPressure:
-    """Test the TrackSeaLevelPressure derived variable."""
-
-    def setup_method(self):
-        """Clear cache before each test."""
-        derived.TropicalCycloneTrackVariable.clear_cache()
-
-    @patch.object(derived.TrackSeaLevelPressure, "_get_or_compute_tracks")
-    def test_derive_variable(
-        self, mock_get_tracks, sample_tc_forecast_dataset, sample_tc_tracks_dataset
-    ):
-        """Test TrackSeaLevelPressure derive_variable method."""
-        mock_get_tracks.return_value = sample_tc_tracks_dataset
-
-        with patch.object(
-            derived.TrackSeaLevelPressure, "_convert_to_ewb_evaluation_format"
-        ) as mock_convert:
-            # Mock the conversion to return a properly formatted DataArray
-            mock_slp_tracks = xr.DataArray(
-                np.random.normal(101000, 1000, (3, 4)),
-                dims=["time", "prediction_timedelta"],
-                coords={
-                    "time": sample_tc_tracks_dataset.time,
-                    "prediction_timedelta": sample_tc_tracks_dataset.prediction_timedelta,
-                },
-            )
-            mock_convert.return_value = mock_slp_tracks
-
-            result = derived.TrackSeaLevelPressure.derive_variable(
-                sample_tc_forecast_dataset
-            )
-
-            # Should call necessary methods
-            mock_get_tracks.assert_called_once()
-            mock_convert.assert_called_once_with(
-                sample_tc_tracks_dataset, sample_tc_forecast_dataset, "tc_slp"
-            )
-
-            # Should return properly formatted DataArray
-            assert isinstance(result, xr.DataArray)
-            assert result.name == "air_pressure_at_mean_sea_level"
-
-            # Check attributes
-            assert "long_name" in result.attrs
-            assert "units" in result.attrs
-            assert result.attrs["units"] == "Pa"
-
-    def test_convert_to_ewb_evaluation_format_basic(
-        self, sample_tc_tracks_dataset, sample_tc_forecast_dataset
-    ):
-        """Test conversion to EWB evaluation format."""
-        result = derived.TrackSeaLevelPressure._convert_to_ewb_evaluation_format(
-            sample_tc_tracks_dataset, sample_tc_forecast_dataset, "tc_slp"
-        )
-
-        # Should return a DataArray
-        assert isinstance(result, xr.DataArray)
-
-        # Should have proper coordinates
-        assert "latitude" in result.coords
-        assert "longitude" in result.coords
-
-        # Should have proper attributes on coordinates
-        assert "long_name" in result.latitude.attrs
-        assert "units" in result.latitude.attrs
-        assert result.latitude.attrs["units"] == "degrees_north"
-
-    def test_convert_to_ewb_evaluation_format_with_time_coords(self):
-        """Test conversion with proper time coordinates."""
-        # Create dataset with init_time and prediction_timedelta
-        time = pd.date_range("2023-09-01", periods=2, freq="12h")
-        prediction_timedelta = np.array([0, 12], dtype="timedelta64[h]")
-
-        tracks_dataset = xr.Dataset(
-            {
-                "tc_slp": (
-                    ["time", "prediction_timedelta"],
-                    [[101000, 101010], [101020, 101030]],
-                ),
-                "tc_latitude": (
-                    ["time", "prediction_timedelta"],
-                    [[25.0, 25.5], [26.0, 26.5]],
-                ),
-                "tc_longitude": (
-                    ["time", "prediction_timedelta"],
-                    [[-75.0, -74.5], [-74.0, -73.5]],
-                ),
-            },
-            coords={"time": time, "prediction_timedelta": prediction_timedelta},
-        )
-
-        original_dataset = xr.Dataset(
-            coords={
-                "time": time,
-                "prediction_timedelta": prediction_timedelta,
-            }
-        )
-
-        result = derived.TrackSeaLevelPressure._convert_to_ewb_evaluation_format(
-            tracks_dataset, original_dataset, "tc_slp"
-        )
-
-        # Should have valid_time coordinate
-        assert "valid_time" in result.coords
-        assert "init_time" in result.coords
-        assert "lead_time" in result.coords
-
-        # Check that valid_time is properly calculated
-        expected_valid_time = result.init_time + result.lead_time
-        xr.testing.assert_equal(result.valid_time, expected_valid_time)
-
-
-class TestTrackSurfaceWindSpeed:
-    """Test the TrackSurfaceWindSpeed derived variable."""
-
-    def setup_method(self):
-        """Clear cache before each test."""
-        derived.TropicalCycloneTrackVariable.clear_cache()
-
-    @patch.object(derived.TrackSurfaceWindSpeed, "_get_or_compute_tracks")
-    def test_derive_variable(
-        self, mock_get_tracks, sample_tc_forecast_dataset, sample_tc_tracks_dataset
-    ):
-        """Test TrackSurfaceWindSpeed derive_variable method."""
-        mock_get_tracks.return_value = sample_tc_tracks_dataset
-
-        with patch.object(
-            derived.TrackSeaLevelPressure, "_convert_to_ewb_evaluation_format"
-        ) as mock_convert:
-            # Mock the conversion to return a properly formatted DataArray
-            mock_wind_tracks = xr.DataArray(
-                np.random.uniform(10, 50, (3, 4)),
-                dims=["time", "prediction_timedelta"],
-                coords={
-                    "time": sample_tc_tracks_dataset.time,
-                    "prediction_timedelta": sample_tc_tracks_dataset.prediction_timedelta,
-                },
-            )
-            mock_convert.return_value = mock_wind_tracks
-
-            result = derived.TrackSurfaceWindSpeed.derive_variable(
-                sample_tc_forecast_dataset
-            )
-
-            # Should call necessary methods
-            mock_get_tracks.assert_called_once()
-            mock_convert.assert_called_once_with(
-                sample_tc_tracks_dataset, sample_tc_forecast_dataset, "tc_vmax"
-            )
-
-            # Should return properly formatted DataArray
-            assert isinstance(result, xr.DataArray)
-            assert result.name == "surface_wind_speed"
-
-            # Check attributes
-            assert "long_name" in result.attrs
-            assert "units" in result.attrs
-            assert result.attrs["units"] == "m s-1"
-
-
-class TestTCTrackVariablesBackwardCompatibility:
-    """Test the backward compatibility TCTrackVariables class."""
-
-    def test_required_variables(self):
-        """Test that TCTrackVariables has the expected required variables."""
-        expected_vars = [
-            "air_pressure_at_mean_sea_level",
-            "geopotential",
-            "surface_wind_speed",
-            "surface_eastward_wind",
-            "surface_northward_wind",
-        ]
-
-        assert derived.TCTrackVariables.required_variables == expected_vars
-
-    @patch.object(derived.TCTrackVariables, "_get_or_compute_tracks")
-    def test_derive_variable_returns_dataset(
-        self, mock_get_tracks, sample_tc_forecast_dataset, sample_tc_tracks_dataset
-    ):
-        """Test that TCTrackVariables returns a Dataset for backward compatibility."""
-        mock_get_tracks.return_value = sample_tc_tracks_dataset
-
-        result = derived.TCTrackVariables.derive_variable(sample_tc_forecast_dataset)
-
-        # Should return the Dataset directly, not a DataArray
-        assert isinstance(result, xr.Dataset)
-        assert result is sample_tc_tracks_dataset
 
 
 class TestWindDataPreparation:
@@ -953,7 +764,7 @@ class TestWindDataPreparation:
                 mock_gen_vars.return_value = dataset
                 mock_create.return_value = xr.Dataset()
 
-                derived.TropicalCycloneTrackVariable._get_or_compute_tracks(
+                derived.TropicalCycloneTrackVariables._get_or_compute_tracks(
                     dataset,
                     ibtracs_data=xr.Dataset(
                         {
@@ -1015,7 +826,7 @@ class TestWindDataPreparation:
                 mock_gen_vars.return_value = dataset
                 mock_create.return_value = xr.Dataset()
 
-                derived.TropicalCycloneTrackVariable._get_or_compute_tracks(
+                derived.TropicalCycloneTrackVariables._get_or_compute_tracks(
                     dataset,
                     ibtracs_data=xr.Dataset(
                         {
