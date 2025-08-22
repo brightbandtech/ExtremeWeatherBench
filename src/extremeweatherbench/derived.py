@@ -276,17 +276,26 @@ def maybe_derive_variables(
                     )
                     output.name = v.name
                 derived_data[v.name] = output
-            # If the derived variable returns a dataset with different dims to ds,
-            # we need to return it instead of merging it with ds
-            # This is the case for the tropical cyclone track variable, which
-            # returns a dataset with different shape to ds
-            elif isinstance(output, xr.Dataset) and output.dims != ds.dims:
-                logger.warning(
-                    "Derived variable %s returning instead of merging with input "
-                    "dataset, dims are different.",
-                    v.name,
+            elif isinstance(output, xr.Dataset):
+                # Check if derived dataset dimensions are compatible for merging
+                # We check if all dimensions in the derived dataset exist in the
+                # original dataset with the same sizes
+                compatible_dims = all(
+                    dim in ds.sizes and ds.sizes[dim] == output.sizes[dim]
+                    for dim in output.sizes
                 )
-                return output
+
+                if not compatible_dims:
+                    logger.warning(
+                        "Derived variable %s returning instead of merging with input "
+                        "dataset, dims are different.",
+                        v.name,
+                    )
+                    return output
+                else:
+                    # Dataset has compatible dimensions, merge all its variables
+                    for var_name, data_array in output.data_vars.items():
+                        derived_data[var_name] = data_array
 
     # TODO consider removing data variables only used for derivation
     # Merge dataarrays into the original dataset

@@ -614,6 +614,89 @@ class TestMaybeDeriveVariablesFunction:
         assert "TestNeverExecuted" not in result.data_vars
         assert list(result.dims) == ["special_dim"]
 
+    def test_derived_variable_returns_dataset_matching_dims(self, sample_dataset):
+        """Test derived variable that returns Dataset with matching dimensions."""
+
+        class TestDatasetMatchingDims(derived.DerivedVariable):
+            required_variables = ["test_variable_1"]
+
+            @classmethod
+            def derive_variable(cls, data: xr.Dataset) -> xr.Dataset:
+                # Return a dataset with same dimensions as input but multiple variables
+                return xr.Dataset(
+                    {
+                        "derived_var_1": data["test_variable_1"] * 2,
+                        "derived_var_2": data["test_variable_1"] + 10,
+                        "derived_var_3": data["test_variable_1"] ** 2,
+                    }
+                )
+
+        variables = [TestDatasetMatchingDims()]
+
+        result = derived.maybe_derive_variables(sample_dataset, variables)
+
+        # Should merge the dataset variables, not return early
+        assert isinstance(result, xr.Dataset)
+        # All three derived variables should be present
+        assert "derived_var_1" in result.data_vars
+        assert "derived_var_2" in result.data_vars
+        assert "derived_var_3" in result.data_vars
+        # Original variables should still be present
+        for var in sample_dataset.data_vars:
+            assert var in result.data_vars
+        # Verify the computed values are correct
+        expected_var_1 = sample_dataset["test_variable_1"] * 2
+        expected_var_2 = sample_dataset["test_variable_1"] + 10
+        expected_var_3 = sample_dataset["test_variable_1"] ** 2
+        xr.testing.assert_equal(result["derived_var_1"], expected_var_1)
+        xr.testing.assert_equal(result["derived_var_2"], expected_var_2)
+        xr.testing.assert_equal(result["derived_var_3"], expected_var_3)
+
+    def test_mixed_dataarray_and_dataset_outputs(self, sample_dataset):
+        """Test mix of derived variables returning DataArrays and matching Dataset."""
+
+        class TestDataArrayOutput(derived.DerivedVariable):
+            required_variables = ["test_variable_1"]
+
+            @classmethod
+            def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
+                return data["test_variable_1"] * 3
+
+        class TestDatasetOutput(derived.DerivedVariable):
+            required_variables = ["test_variable_2"]
+
+            @classmethod
+            def derive_variable(cls, data: xr.Dataset) -> xr.Dataset:
+                # Return dataset with matching dimensions
+                return xr.Dataset(
+                    {
+                        "multi_var_1": data["test_variable_2"] / 2,
+                        "multi_var_2": data["test_variable_2"] + 5,
+                    }
+                )
+
+        variables = [TestDataArrayOutput(), TestDatasetOutput()]
+
+        result = derived.maybe_derive_variables(sample_dataset, variables)
+
+        # Should merge all variables from both derived variables
+        assert isinstance(result, xr.Dataset)
+        # DataArray output should be present
+        assert "TestDataArrayOutput" in result.data_vars
+        # Dataset outputs should be present
+        assert "multi_var_1" in result.data_vars
+        assert "multi_var_2" in result.data_vars
+        # Original variables should still be present
+        for var in sample_dataset.data_vars:
+            assert var in result.data_vars
+        # Verify computed values
+        expected_dataarray = sample_dataset["test_variable_1"] * 3
+        expected_multi_1 = sample_dataset["test_variable_2"] / 2
+        expected_multi_2 = sample_dataset["test_variable_2"] + 5
+        xr.testing.assert_equal(result["TestDataArrayOutput"], expected_dataarray)
+        xr.testing.assert_equal(result["multi_var_1"], expected_multi_1)
+        xr.testing.assert_equal(result["multi_var_2"], expected_multi_2)
+
 
 class TestUtilityFunctions:
     """Test utility functions in the derived module."""
