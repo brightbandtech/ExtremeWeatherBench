@@ -611,7 +611,7 @@ class TestTropicalCycloneTrackVariables:
         mock_get_tracks.assert_called_once()
 
         # Should return a DataArray (converted from Dataset)
-        assert isinstance(result, xr.DataArray)
+        assert isinstance(result, xr.Dataset)
 
 
 class TestWindDataPreparation:

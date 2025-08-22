@@ -1192,7 +1192,7 @@ class TestTropicalCycloneEvaluation:
             # Create a copy of the dataset and add the derived variable
             ds_copy = ds.copy()
             # Add TrackSeaLevelPressure as a derived variable
-            ds_copy["TrackSeaLevelPressure"] = xr.DataArray(
+            ds_copy["air_pressure_at_mean_sea_level"] = xr.DataArray(
                 [[1.0, 2.0, 3.0, 4.0], [5.0, 6.0, 7.0, 8.0]],
                 dims=["time", "prediction_timedelta"],
                 coords={
@@ -1379,19 +1379,19 @@ class TestDerivedVariableIntegration:
         # Mock the track computation
         mock_tracks = xr.Dataset(
             {
-                "tc_slp": (
+                "air_pressure_at_mean_sea_level": (
                     ["time", "prediction_timedelta"],
                     [[101000, 101010], [101020, 101030]],
                 ),
-                "tc_latitude": (
+                "latitude": (
                     ["time", "prediction_timedelta"],
                     [[25.0, 25.5], [26.0, 26.5]],
                 ),
-                "tc_longitude": (
+                "longitude": (
                     ["time", "prediction_timedelta"],
                     [[-75.0, -74.5], [-74.0, -73.5]],
                 ),
-                "tc_vmax": (
+                "surface_wind_speed": (
                     ["time", "prediction_timedelta"],
                     [[25.0, 26.0], [27.0, 28.0]],
                 ),
@@ -1413,21 +1413,21 @@ class TestDerivedVariableIntegration:
         tropical_cyclone.register_ibtracs_data("test_case", ibtracs_data)
 
         # Test derivation
-        variables = [derived.TrackSeaLevelPressure]
+        variables = [derived.TropicalCycloneTrackVariables]
         result = derived.maybe_derive_variables(
             base_dataset, variables, case_id="test_case"
         )
 
         # Should have the derived variable
         assert isinstance(result, xr.Dataset)
-        assert "TrackSeaLevelPressure" in result.data_vars
+        assert "air_pressure_at_mean_sea_level" in result.data_vars
+        assert "surface_wind_speed" in result.data_vars
 
     def test_maybe_pull_required_variables_from_derived_input_tc(self):
         """Test pulling required variables from TC derived variables."""
         incoming_variables = [
             "existing_variable",
-            derived.TrackSeaLevelPressure,
-            derived.TrackSurfaceWindSpeed,
+            derived.TropicalCycloneTrackVariables,
         ]
 
         result = derived.maybe_pull_required_variables_from_derived_input(
@@ -1451,12 +1451,11 @@ class TestDerivedVariableIntegration:
 
     def test_maybe_pull_required_variables_with_instances_and_classes(self):
         """Test with both instances and classes of derived variables."""
-        track_slp_instance = derived.TrackSeaLevelPressure()
+        track_instance = derived.TropicalCycloneTrackVariables()
 
         incoming_variables = [
             "base_variable",
-            track_slp_instance,  # Instance
-            derived.TrackSurfaceWindSpeed,  # Class
+            track_instance,  # Instance
         ]
 
         result = derived.maybe_pull_required_variables_from_derived_input(
@@ -1542,11 +1541,11 @@ class TestFullTCEvaluationWorkflow:
         # Mock track computation result
         mock_tracks = xr.Dataset(
             {
-                "tc_slp": sample_tc_forecast_dataset.air_pressure_at_mean_sea_level,
-                "tc_latitude": sample_tc_forecast_dataset.latitude,
-                "tc_longitude": sample_tc_forecast_dataset.longitude,
-                "tc_vmax": (
-                    ["time", "prediction_timedelta"],
+                "air_pressure_at_mean_sea_level": sample_tc_forecast_dataset.air_pressure_at_mean_sea_level,
+                "latitude": sample_tc_forecast_dataset.latitude,
+                "longitude": sample_tc_forecast_dataset.longitude,
+                "surface_wind_speed": (
+                    ["init_time", "lead_time"],
                     np.random.uniform(
                         20,
                         50,
