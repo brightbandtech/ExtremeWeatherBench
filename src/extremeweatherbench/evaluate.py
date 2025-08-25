@@ -120,7 +120,7 @@ def compute_case_operator(case_operator: "cases.CaseOperator", **kwargs):
         )
 
     aligned_forecast_ds, aligned_target_ds = [
-        derived.maybe_derive_variables(ds, variables)
+        derived.maybe_derive_variable(ds, variables)
         for ds, variables in zip(
             [aligned_forecast_ds, aligned_target_ds],
             [case_operator.forecast.variables, case_operator.target.variables],

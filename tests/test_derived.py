@@ -169,13 +169,13 @@ class TestDerivedVariableAbstractClass:
 
 
 class TestMaybeDeriveVariablesFunction:
-    """Comprehensive tests for the maybe_derive_variables function."""
+    """Comprehensive tests for the maybe_derive_variable function."""
 
     def test_only_string_variables(self, sample_dataset):
         """Test function with only string variables - should return unchanged."""
         variables = ["air_pressure_at_mean_sea_level", "surface_eastward_wind"]
 
-        result = derived.maybe_derive_variables(sample_dataset, variables)
+        result = derived.maybe_derive_variable(sample_dataset, variables)
 
         # Should return the exact same dataset when no derived variables present
         xr.testing.assert_equal(result, sample_dataset)
@@ -185,7 +185,7 @@ class TestMaybeDeriveVariablesFunction:
 
     def test_empty_variable_list(self, sample_dataset):
         """Test function with empty variable list."""
-        result = derived.maybe_derive_variables(sample_dataset, [])
+        result = derived.maybe_derive_variable(sample_dataset, [])
 
         # Should return original dataset unchanged
         xr.testing.assert_equal(result, sample_dataset)
@@ -194,7 +194,7 @@ class TestMaybeDeriveVariablesFunction:
         """Test with single derived variable that returns DataArray."""
         variables = [TestValidDerivedVariable()]
 
-        result = derived.maybe_derive_variables(sample_dataset, variables)
+        result = derived.maybe_derive_variable(sample_dataset, variables)
 
         assert isinstance(result, xr.DataArray)
         # Verify the name is correctly assigned
@@ -209,7 +209,7 @@ class TestMaybeDeriveVariablesFunction:
         """Test with multiple derived variables - only first is computed."""
         variables = [TestValidDerivedVariable(), TestMinimalDerivedVariable()]
 
-        result = derived.maybe_derive_variables(sample_dataset, variables)
+        result = derived.maybe_derive_variable(sample_dataset, variables)
 
         # Should return only the first derived variable as DataArray
         assert isinstance(result, xr.DataArray)
@@ -229,7 +229,7 @@ class TestMaybeDeriveVariablesFunction:
             TestMinimalDerivedVariable(),  # Another derived variable
         ]
 
-        result = derived.maybe_derive_variables(sample_dataset, variables)
+        result = derived.maybe_derive_variable(sample_dataset, variables)
 
         # Should return only the first derived variable as DataArray
         assert isinstance(result, xr.DataArray)
@@ -245,7 +245,7 @@ class TestMaybeDeriveVariablesFunction:
         variables = [TestDerivedVariableWithoutName()]
 
         # Logger warnings are not pytest warnings, so just check functionality
-        result = derived.maybe_derive_variables(sample_dataset, variables)
+        result = derived.maybe_derive_variable(sample_dataset, variables)
 
         assert isinstance(result, xr.DataArray)
         # Verify the DataArray got the correct name assigned
@@ -273,7 +273,7 @@ class TestMaybeDeriveVariablesFunction:
         variables = [TestDerivedVariableWithKwargs()]
         test_multiplier = 5.0
 
-        result = derived.maybe_derive_variables(
+        result = derived.maybe_derive_variable(
             sample_dataset, variables, multiplier=test_multiplier
         )
 
@@ -305,7 +305,7 @@ class TestMaybeDeriveVariablesFunction:
         variables = [TestDatasetReturnVariable()]
 
         # Logger warnings are not pytest warnings, so just check functionality
-        result = derived.maybe_derive_variables(sample_dataset, variables)
+        result = derived.maybe_derive_variable(sample_dataset, variables)
 
         # Should return the new dataset, not merge with original
         assert isinstance(result, xr.Dataset)
@@ -327,13 +327,13 @@ class TestMaybeDeriveVariablesFunction:
         variables = [TestMissingVarDerived()]
 
         with pytest.raises(ValueError, match="Input variable nonexistent_variable"):
-            derived.maybe_derive_variables(sample_dataset, variables)
+            derived.maybe_derive_variable(sample_dataset, variables)
 
     def test_no_derived_variables_in_list(self, sample_dataset):
         """Test when no derived variables are in the variable list."""
         variables = ["var1", "var2", "var3"]  # All strings
 
-        result = derived.maybe_derive_variables(sample_dataset, variables)
+        result = derived.maybe_derive_variable(sample_dataset, variables)
 
         # Should return original dataset since no derived variables to process
         xr.testing.assert_equal(result, sample_dataset)
@@ -343,7 +343,7 @@ class TestMaybeDeriveVariablesFunction:
         # Test with multiple derived variables
         variables = [TestValidDerivedVariable(), TestMinimalDerivedVariable()]
 
-        result = derived.maybe_derive_variables(sample_dataset, variables)
+        result = derived.maybe_derive_variable(sample_dataset, variables)
 
         # Should return only the first derived variable as DataArray
         assert isinstance(result, xr.DataArray)
@@ -367,7 +367,7 @@ class TestMaybeDeriveVariablesFunction:
         variables = [TestExceptionDerived()]
 
         with pytest.raises(RuntimeError, match="Test exception from derive_variable"):
-            derived.maybe_derive_variables(sample_dataset, variables)
+            derived.maybe_derive_variable(sample_dataset, variables)
 
     def test_duplicate_derived_variable_names(self, sample_dataset):
         """Test behavior with multiple derived variables - only first is processed."""
@@ -392,7 +392,7 @@ class TestMaybeDeriveVariablesFunction:
 
         variables = [TestDuplicateName1(), TestDuplicateName2()]
 
-        result = derived.maybe_derive_variables(sample_dataset, variables)
+        result = derived.maybe_derive_variable(sample_dataset, variables)
 
         # Should return only the first derived variable as DataArray
         assert isinstance(result, xr.DataArray)
@@ -425,7 +425,7 @@ class TestMaybeDeriveVariablesFunction:
         variables = [TestEarlyReturnDataset(), TestNeverExecuted()]
 
         # Logger warnings are not pytest warnings, so just check functionality
-        result = derived.maybe_derive_variables(sample_dataset, variables)
+        result = derived.maybe_derive_variable(sample_dataset, variables)
 
         # Should return the special dataset, not merged
         assert isinstance(result, xr.Dataset)
@@ -452,7 +452,7 @@ class TestMaybeDeriveVariablesFunction:
 
         variables = [TestDatasetMatchingDims()]
 
-        result = derived.maybe_derive_variables(sample_dataset, variables)
+        result = derived.maybe_derive_variable(sample_dataset, variables)
 
         # Should return the derived dataset directly (no merging with original)
         assert isinstance(result, xr.Dataset)
@@ -495,7 +495,7 @@ class TestMaybeDeriveVariablesFunction:
 
         variables = [TestDataArrayOutput(), TestDatasetOutput()]
 
-        result = derived.maybe_derive_variables(sample_dataset, variables)
+        result = derived.maybe_derive_variable(sample_dataset, variables)
 
         # Should return only the first derived variable (DataArray)
         assert isinstance(result, xr.DataArray)
@@ -638,7 +638,7 @@ class TestIntegrationWithRealData:
         subset_dataset = sample_dataset[available_vars]
 
         # Step 3: Derive variables (only first one will be processed)
-        final_result = derived.maybe_derive_variables(
+        final_result = derived.maybe_derive_variable(
             subset_dataset, variables_to_derive
         )
 
@@ -664,7 +664,7 @@ class TestIntegrationWithRealData:
         self, sample_dataset, variable_combination
     ):
         """Test different combinations of derived variables."""
-        result = derived.maybe_derive_variables(sample_dataset, variable_combination)
+        result = derived.maybe_derive_variable(sample_dataset, variable_combination)
 
         if len(variable_combination) == 0:
             # No derived variables - should return original dataset

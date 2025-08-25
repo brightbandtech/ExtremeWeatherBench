@@ -238,7 +238,7 @@ class TCTrackVariables(DerivedVariable):
         return tctracks_ds_3d  # type: ignore[return-value]
 
 
-def maybe_derive_variables(
+def maybe_derive_variable(
     ds: xr.Dataset, variables: list[str | DerivedVariable], **kwargs
 ) -> xr.Dataset:
     """Derive variable from the data if it exists in a list of variables.
