@@ -97,7 +97,7 @@ class TestBasicCalculations:
         nyc = [40.7128, -74.0060]
         la = [34.0522, -118.2437]
         distance = calc.calculate_haversine_distance(nyc, la, units="km")
-        assert abs(distance - 3944) < 100  # Allow 100km tolerance
+        assert abs(distance - 3944) < 20  # Allow 100km tolerance
 
         # London to Paris (approximate distance ~344 km)
         london = [51.5074, -0.1278]
@@ -109,7 +109,7 @@ class TestBasicCalculations:
         sydney = [-33.8688, 151.2093]
         melbourne = [-37.8136, 144.9631]
         distance = calc.calculate_haversine_distance(sydney, melbourne, units="km")
-        assert abs(distance - 713) < 30  # Allow 30km tolerance
+        assert abs(distance - 713) < 20  # Allow 30km tolerance
 
     def test_calculate_haversine_distance_units_conversion(self):
         """Test unit conversion between km and degrees."""
