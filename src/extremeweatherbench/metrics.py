@@ -142,8 +142,6 @@ class BinaryContingencyTable(BaseMetric):
 
 
 class MAE(BaseMetric):
-    preserve_dims: str = "lead_time"
-
     @classmethod
     def _compute_metric(
         cls,
