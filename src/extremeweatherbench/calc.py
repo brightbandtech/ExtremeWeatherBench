@@ -35,7 +35,7 @@ def convert_from_cartesian_to_latlon(
 def calculate_haversine_distance(
     input_a: Sequence[float],
     input_b: Sequence[Union[float, xr.DataArray]],
-    units: Literal["km", "deg"] = "km",
+    units: Literal["km", "kilometers", "deg", "degrees"] = "km",
 ) -> Union[float, xr.DataArray]:
     """Calculate the great-circle distance between two points on the Earth's surface.
 
@@ -59,9 +59,9 @@ def calculate_haversine_distance(
     dlat = lat2 - lat1
     a = np.sin(dlat / 2) ** 2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2) ** 2
     c = 2 * np.arcsin(np.sqrt(a))
-    if units == "km":
+    if units == "km" or units == "kilometers":
         return 6371 * c
-    elif units == "deg":
+    elif units == "deg" or units == "degrees":
         return np.degrees(c)  # Convert back to degrees
     else:
         raise ValueError(f"Invalid units: {units}")

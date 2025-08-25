@@ -419,3 +419,231 @@ def sample_calc_dataset():
     )
 
     return dataset
+
+
+@pytest.fixture
+def sample_derived_dataset():
+    """Create a sample xarray Dataset for testing."""
+    time = pd.date_range("2021-06-20", freq="6h", periods=8)
+    latitudes = np.linspace(30, 50, 11)
+    longitudes = np.linspace(250, 270, 21)
+    level = [1000, 850, 700, 500, 300, 200]
+
+    # Create realistic sample data
+    np.random.seed(42)
+    base_data = np.random.normal(
+        20, 5, size=(len(time), len(latitudes), len(longitudes))
+    )
+    level_data = np.random.normal(
+        0, 10, size=(len(time), len(level), len(latitudes), len(longitudes))
+    )
+
+    dataset = xr.Dataset(
+        {
+            # Basic surface variables
+            "air_pressure_at_mean_sea_level": (
+                ["time", "latitude", "longitude"],
+                np.random.normal(
+                    101325, 1000, size=(len(time), len(latitudes), len(longitudes))
+                ),
+            ),
+            "surface_eastward_wind": (
+                ["time", "latitude", "longitude"],
+                np.random.normal(
+                    5, 3, size=(len(time), len(latitudes), len(longitudes))
+                ),
+            ),
+            "surface_northward_wind": (
+                ["time", "latitude", "longitude"],
+                np.random.normal(
+                    2, 3, size=(len(time), len(latitudes), len(longitudes))
+                ),
+            ),
+            "surface_wind_speed": (
+                ["time", "latitude", "longitude"],
+                np.random.uniform(
+                    0, 15, size=(len(time), len(latitudes), len(longitudes))
+                ),
+            ),
+            # 3D atmospheric variables
+            "eastward_wind": (
+                ["time", "level", "latitude", "longitude"],
+                level_data + np.random.normal(10, 5, size=level_data.shape),
+            ),
+            "northward_wind": (
+                ["time", "level", "latitude", "longitude"],
+                level_data + np.random.normal(3, 5, size=level_data.shape),
+            ),
+            "specific_humidity": (
+                ["time", "level", "latitude", "longitude"],
+                np.random.exponential(0.008, size=level_data.shape),
+            ),
+            "geopotential": (
+                ["time", "level", "latitude", "longitude"],
+                level_data * 100 + np.random.normal(50000, 5000, size=level_data.shape),
+            ),
+            # Test variables
+            "test_variable_1": (["time", "latitude", "longitude"], base_data),
+            "test_variable_2": (["time", "latitude", "longitude"], base_data + 5),
+            "single_variable": (["time", "latitude", "longitude"], base_data * 2),
+        },
+        coords={
+            "time": time,
+            "latitude": latitudes,
+            "longitude": longitudes,
+            "level": level,
+        },
+    )
+
+    return dataset
+
+
+@pytest.fixture
+def sample_tc_forecast_dataset():
+    """Create a sample forecast dataset for TC testing."""
+    valid_time = pd.date_range("2023-09-01", periods=3, freq="12h")
+    prediction_timedelta = np.array([0, 12, 24, 36], dtype="timedelta64[h]")
+    lat = np.linspace(10, 40, 16)
+    lon = np.linspace(-90, -60, 16)
+
+    # Create realistic meteorological data
+    data_shape = (len(valid_time), len(lat), len(lon), len(prediction_timedelta))
+
+    dataset = xr.Dataset(
+        {
+            "air_pressure_at_mean_sea_level": (
+                ["valid_time", "latitude", "longitude", "prediction_timedelta"],
+                np.random.normal(101325, 1000, data_shape),
+            ),
+            "surface_eastward_wind": (
+                ["valid_time", "latitude", "longitude", "prediction_timedelta"],
+                np.random.normal(0, 10, data_shape),
+            ),
+            "surface_northward_wind": (
+                ["valid_time", "latitude", "longitude", "prediction_timedelta"],
+                np.random.normal(0, 10, data_shape),
+            ),
+            "geopotential": (
+                ["valid_time", "latitude", "longitude", "prediction_timedelta"],
+                np.random.normal(5000, 1000, data_shape) * 9.80665,
+            ),
+        },
+        coords={
+            "valid_time": valid_time,
+            "latitude": lat,
+            "longitude": lon,
+            "prediction_timedelta": prediction_timedelta,
+        },
+    )
+
+    return dataset
+
+
+@pytest.fixture
+def sample_tc_tracks_dataset():
+    """Create a sample TC tracks dataset."""
+    time = pd.date_range("2023-09-01", periods=3, freq="12h")
+    prediction_timedelta = np.array([0, 12, 24, 36], dtype="timedelta64[h]")
+
+    data_shape = (len(time), len(prediction_timedelta))
+
+    dataset = xr.Dataset(
+        {
+            "tc_slp": (
+                ["time", "prediction_timedelta"],
+                np.random.normal(101000, 1000, data_shape),
+            ),
+            "tc_latitude": (
+                ["time", "prediction_timedelta"],
+                np.random.uniform(15, 35, data_shape),
+            ),
+            "tc_longitude": (
+                ["time", "prediction_timedelta"],
+                np.random.uniform(-85, -65, data_shape),
+            ),
+            "tc_vmax": (
+                ["time", "prediction_timedelta"],
+                np.random.uniform(20, 60, data_shape),
+            ),
+            "track_id": (
+                ["time", "prediction_timedelta"],
+                np.random.randint(1, 5, data_shape),
+            ),
+        },
+        coords={
+            "time": time,
+            "prediction_timedelta": prediction_timedelta,
+        },
+    )
+
+    return dataset
+
+
+@pytest.fixture
+def realistic_forecast_dataset(self):
+    """Create dataset matching the structure that caused the original bug."""
+    lead_times = np.arange(0, 42, 6)  # 7 lead times
+    valid_times = pd.date_range(
+        "2023-09-01", periods=20, freq="6h"
+    )  # Smaller for testing
+    lat = np.linspace(10, 40, 31)  # Smaller grid for testing
+    lon = np.linspace(240, 360, 41)
+
+    # Create init_time with (lead_time, valid_time) dimensions
+    init_time_base = pd.date_range("2023-08-31", periods=len(lead_times), freq="6h")
+    init_time_grid = np.broadcast_to(
+        init_time_base.values.reshape(-1, 1), (len(lead_times), len(valid_times))
+    )
+
+    data_shape = (len(lead_times), len(valid_times), len(lat), len(lon))
+    level_shape = (len(lead_times), len(valid_times), 6, len(lat), len(lon))
+
+    return xr.Dataset(
+        {
+            "air_pressure_at_mean_sea_level": (
+                ["lead_time", "valid_time", "latitude", "longitude"],
+                np.random.normal(101325, 1000, data_shape),
+            ),
+            "surface_eastward_wind": (
+                ["lead_time", "valid_time", "latitude", "longitude"],
+                np.random.normal(0, 10, data_shape),
+            ),
+            "surface_northward_wind": (
+                ["lead_time", "valid_time", "latitude", "longitude"],
+                np.random.normal(0, 10, data_shape),
+            ),
+            "geopotential": (
+                ["lead_time", "valid_time", "level", "latitude", "longitude"],
+                np.random.normal(5000, 1000, level_shape) * 9.80665,
+            ),
+        },
+        coords={
+            "lead_time": lead_times,
+            "valid_time": valid_times,
+            "latitude": lat,
+            "longitude": lon,
+            "level": [1000, 850, 700, 500, 300, 200],
+            "init_time": (["lead_time", "valid_time"], init_time_grid),
+        },
+    )
+
+
+@pytest.fixture
+def sample_ibtracs_dataset():
+    """Create a sample IBTrACS dataset for testing."""
+    valid_time = pd.date_range("2023-09-01", periods=10, freq="6h")
+
+    dataset = xr.Dataset(
+        {
+            "air_pressure_at_mean_sea_level": (
+                ["valid_time"],
+                np.random.uniform(950, 1010, len(valid_time)),
+            ),
+            "latitude": (["valid_time"], np.linspace(15, 30, len(valid_time))),
+            "longitude": (["valid_time"], np.linspace(-80, -70, len(valid_time))),
+        },
+        coords={"valid_time": valid_time},
+    )
+    dataset.attrs["source"] = "IBTrACS"
+
+    return dataset

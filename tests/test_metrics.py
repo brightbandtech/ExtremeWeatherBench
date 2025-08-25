@@ -293,7 +293,8 @@ class TestMaxMinMAE:
             assert "target" in result
             assert "preserve_dims" in result
         except Exception:
-            # If computation fails due to data structure issues, at least test instantiation works
+            # If computation fails due to data structure issues, at least test
+            # instantiation works
             assert isinstance(metric, metrics.MaxMinMAE)
 
 
@@ -404,10 +405,15 @@ class TestIncompleteMetrics:
 
     def test_all_incomplete_applied_metrics_can_be_instantiated(self):
         """Test that all incomplete applied metric classes can be instantiated."""
-        incomplete_applied_metrics = [
+        # Separate base metrics from applied metrics since our landfall
+        # metrics are now BaseMetric
+        incomplete_base_metrics = [
             metrics.LandfallDisplacement,
             metrics.LandfallTimeME,
             metrics.LandfallIntensityMAE,
+        ]
+
+        incomplete_applied_metrics = [
             metrics.SpatialDisplacement,
             metrics.FAR,
             metrics.CSI,
@@ -416,6 +422,13 @@ class TestIncompleteMetrics:
             metrics.HitsMisses,
         ]
 
+        # Test BaseMetric landfall classes
+        for metric_class in incomplete_base_metrics:
+            metric = metric_class()
+            assert isinstance(metric, metrics.BaseMetric)
+            assert hasattr(metric, "_compute_metric")
+
+        # Test AppliedMetric classes
         for metric_class in incomplete_applied_metrics:
             metric = metric_class()
             assert isinstance(metric, metrics.AppliedMetric)
@@ -448,10 +461,9 @@ class TestIncompleteMetrics:
             metric = metric_class()
             assert metric.base_metric == metrics.BinaryContingencyTable
 
-        # MAE based metrics
+        # MAE based applied metrics (excluding consolidated landfall metrics
+        # which are now BaseMetric)
         mae_metrics = [
-            metrics.LandfallDisplacement,
-            metrics.LandfallIntensityMAE,
             metrics.SpatialDisplacement,
             metrics.LeadTimeDetection,
         ]
@@ -460,14 +472,110 @@ class TestIncompleteMetrics:
             metric = metric_class()
             assert metric.base_metric == metrics.MAE
 
-        # ME based metrics
-        me_metrics = [
-            metrics.LandfallTimeME,
+        # Note: LandfallDisplacement, LandfallTimeME, LandfallIntensityMAE
+        # are now BaseMetric classes. They don't have base_metric properties
+        # since they implement _compute_metric directly
+
+
+class TestConsolidatedLandfallMetrics:
+    """Tests for the new consolidated landfall metrics."""
+
+    def test_landfall_displacement_instantiation(self):
+        """Test that consolidated LandfallDisplacement can be instantiated with
+        different approaches."""
+        # Test default approach
+        metric_default = metrics.LandfallDisplacement()
+        assert metric_default.approach == "first"
+        assert metric_default.aggregation == "mean"
+
+        # Test next approach
+        metric_next = metrics.LandfallDisplacement(approach="next")
+        assert metric_next.approach == "next"
+
+        # Test all approach with different aggregation
+        metric_all = metrics.LandfallDisplacement(approach="all", aggregation="median")
+        assert metric_all.approach == "all"
+        assert metric_all.aggregation == "median"
+
+    def test_landfall_time_me_instantiation(self):
+        """Test that consolidated LandfallTimeME can be instantiated with
+        different options."""
+        # Test default
+        metric_default = metrics.LandfallTimeME()
+        assert metric_default.approach == "first"
+        assert metric_default.units == "hours"
+
+        # Test with days
+        metric_days = metrics.LandfallTimeME(units="days")
+        assert metric_days.units == "days"
+
+        # Test next approach
+        metric_next = metrics.LandfallTimeME(approach="next", aggregation="median")
+        assert metric_next.approach == "next"
+        assert metric_next.aggregation == "median"
+
+    def test_landfall_intensity_mae_instantiation(self):
+        """Test that consolidated LandfallIntensityMAE can be instantiated with
+        different options."""
+        # Test default
+        metric_default = metrics.LandfallIntensityMAE()
+        assert metric_default.approach == "first"
+        assert metric_default.intensity_var == "surface_wind_speed"
+
+        # Test with pressure
+        metric_pressure = metrics.LandfallIntensityMAE(
+            intensity_var="minimum_central_pressure"
+        )
+        assert metric_pressure.intensity_var == "minimum_central_pressure"
+
+        # Test all approach
+        metric_all = metrics.LandfallIntensityMAE(approach="all", aggregation="min")
+        assert metric_all.approach == "all"
+        assert metric_all.aggregation == "min"
+
+    def test_landfall_metrics_parameter_validation(self):
+        """Test parameter validation for consolidated landfall metrics."""
+        # Test invalid approach
+        with pytest.raises(ValueError, match="approach must be one of"):
+            metrics.LandfallDisplacement(approach="invalid")
+
+        # Test invalid aggregation
+        with pytest.raises(ValueError, match="aggregation must be one of"):
+            metrics.LandfallTimeME(aggregation="invalid")
+
+        # Test invalid units
+        with pytest.raises(ValueError, match="units must be one of"):
+            metrics.LandfallTimeME(units="invalid")
+
+    def test_consolidated_metrics_are_base_metrics(self):
+        """Test that consolidated landfall metrics are BaseMetric instances."""
+        landfall_metrics = [
+            metrics.LandfallDisplacement(),
+            metrics.LandfallTimeME(),
+            metrics.LandfallIntensityMAE(),
         ]
 
-        for metric_class in me_metrics:
-            metric = metric_class()
-            assert metric.base_metric == metrics.ME
+        for metric in landfall_metrics:
+            assert isinstance(metric, metrics.BaseMetric)
+            assert hasattr(metric, "_compute_metric")
+            assert hasattr(metric, "compute_metric")
+            assert hasattr(metric, "name")
+
+    def test_backwards_compatibility(self):
+        """Test that default behavior matches original classes."""
+        # Default LandfallDisplacement should behave like the original
+        metric = metrics.LandfallDisplacement()
+        assert metric.approach == "first"  # Classic behavior
+
+        # Default LandfallTimeME should behave like the original
+        metric = metrics.LandfallTimeME()
+        assert metric.approach == "first"  # Classic behavior
+        assert metric.units == "hours"
+
+        # Default LandfallIntensityMAE should behave like the original
+        metric = metrics.LandfallIntensityMAE()
+        assert metric.approach == "first"  # Classic behavior
+        assert metric.intensity_var == "surface_wind_speed"
 
 
 class TestMetricIntegration:
@@ -497,10 +605,7 @@ class TestMetricIntegration:
             metrics.MaxMinMAE,
             metrics.OnsetME,
             metrics.DurationME,
-            # Include incomplete ones too
-            metrics.LandfallDisplacement,
-            metrics.LandfallTimeME,
-            metrics.LandfallIntensityMAE,
+            # Include incomplete applied metrics (landfall metrics are now BaseMetric)
             metrics.SpatialDisplacement,
             metrics.FAR,
             metrics.CSI,
