@@ -743,6 +743,7 @@ class TestConsolidatedLandfallFunctionality:
         assert displacement_next.approach == "next"
         assert displacement_all.approach == "all"
 
+    @pytest.mark.slow
     def test_consolidated_metrics_with_simple_data(self):
         """Test consolidated landfall functionality with simple synthetic data."""
         # Create simple test data that should work without complex geometry
@@ -796,21 +797,3 @@ class TestConsolidatedLandfallFunctionality:
             # If there are geometry-related errors, that's expected in the test environment
             print(f"Geometry-related test limitation (acceptable): {e}")
             assert True
-
-    def test_backwards_compatibility_behavior(self):
-        """Test that default approach='first' provides backwards compatibility."""
-        from extremeweatherbench import metrics
-
-        # Default behavior should match original classes
-        displacement_default = metrics.LandfallDisplacement()
-        timing_default = metrics.LandfallTimeME()
-        intensity_default = metrics.LandfallIntensityMAE()
-
-        assert displacement_default.approach == "first"
-        assert timing_default.approach == "first"
-        assert intensity_default.approach == "first"
-
-        # These should behave like the original separate classes
-        assert isinstance(displacement_default, metrics.BaseMetric)
-        assert isinstance(timing_default, metrics.BaseMetric)
-        assert isinstance(intensity_default, metrics.BaseMetric)

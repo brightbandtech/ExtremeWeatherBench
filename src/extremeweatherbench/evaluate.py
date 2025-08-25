@@ -203,8 +203,8 @@ def _extract_standard_metadata(
     return {
         "target_variable": target_variable,
         "metric": metric.name,
-        "target_source": target_ds.attrs["source"],
-        "forecast_source": forecast_ds.attrs["source"],
+        "target_source": target_ds.attrs.get("source", "unknown"),
+        "forecast_source": forecast_ds.attrs.get("source", "unknown"),
         "case_id_number": case_id_number,
         "event_type": event_type,
     }
