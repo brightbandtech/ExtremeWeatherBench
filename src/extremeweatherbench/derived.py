@@ -239,34 +239,71 @@ class TCTrackVariables(DerivedVariable):
 
 
 def maybe_derive_variables(
-    ds: xr.Dataset, variables: list[str | DerivedVariable]
+    ds: xr.Dataset, variables: list[str | DerivedVariable], **kwargs
 ) -> xr.Dataset:
     """Derive variables from the data if any exist in a list of variables.
 
-    Derived variables must maintain the same spatial dimensions as the original
-    dataset.
+    Derived variables do not need to maintain the same spatial dimensions as the
+    original dataset, but will overwrite the original dataset if they do, e.g.
+    in the cast of tropical cyclone track variables. This is temporary behavior;
+    will be fixed to allow for different spatial dimensions simultaneously.
 
     Args:
         ds: The dataset, ideally already subset in case of in memory operations
             in the derived variables.
         variables: The potential variables to derive as a list of strings or
             DerivedVariable objects.
+        **kwargs: Additional keyword arguments to pass to the derived variables.
 
     Returns:
         A dataset with derived variables, if any exist, else the original
         dataset.
     """
 
+    # pull out the derived variables only from the list of variables
     derived_variables = [v for v in variables if not isinstance(v, str)]
     derived_data = {}
+
     if derived_variables:
         for v in derived_variables:
-            output_da = v.compute(data=ds)
-            # Ensure the DataArray has the correct name
-            if output_da.name is None:
-                output_da.name = v.name
-            derived_data[v.name] = output_da
+            output = v.compute(data=ds, **kwargs)
+            # Ensure the DataArray has the correct name and is a DataArray.
+            # Some derived variables return a dataset (multiple variables), so we need
+            # to check
+            if isinstance(output, xr.DataArray):
+                if output.name is None:
+                    logger.debug(
+                        "Derived variable %s has no name, using class name.",
+                        v.name,
+                    )
+                    output.name = v.name
+                derived_data[v.name] = output
+            elif isinstance(output, xr.Dataset):
+                # Check if derived dataset dimensions are compatible for merging
+                # We check if all dimensions in the derived dataset exist in the
+                # original dataset with the same sizes
+                compatible_dims = all(
+                    dim in ds.sizes and ds.sizes[dim] == output.sizes[dim]
+                    for dim in output.sizes
+                )
+                # TODO: remove this warning once we have a way to handle different
+                # spatial dimensions simultaneously
+                if not compatible_dims:
+                    logger.warning(
+                        "Derived variable %s xarray object returning instead of "
+                        "merging with input dataset, dims are different. This is "
+                        "temporary behavior; will be fixed to allow for different "
+                        "spatial dimensions simultaneously.",
+                        v.name,
+                    )
+                    return output
+                else:
+                    # Dataset has compatible dimensions, merge all its variables
+                    for var_name, data_array in output.data_vars.items():
+                        derived_data[var_name] = data_array
+
     # TODO consider removing data variables only used for derivation
+    # Merge dataarrays into the original dataset
     ds = ds.merge(derived_data)
     return ds
 
