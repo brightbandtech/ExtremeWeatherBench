@@ -779,34 +779,38 @@ class TestTCDimensionRegressionTests:
     )
     @patch("extremeweatherbench.events.tropical_cyclone.generate_tc_variables")
     def test_tc_variables_with_forecast_dimensions(
-        mock_generate_vars, mock_create_tracks, realistic_forecast_dataset
+        self, mock_generate_vars, mock_create_tracks, realistic_forecast_dataset
     ):
         """Test TC variable computation with forecast-style dimensions."""
         # Setup mocks to avoid actual expensive computation
         mock_generate_vars.return_value = realistic_forecast_dataset.drop_vars(
             "geopotential"
         )
+        # Use actual dimensions from the realistic dataset
+        n_lead_times = len(realistic_forecast_dataset.lead_time)
+        n_valid_times = len(realistic_forecast_dataset.valid_time)
+
         mock_tracks = xr.Dataset(
             {
                 "track_id": (
                     ["lead_time", "valid_time", "track"],
-                    np.full((7, 20, 1), 1),
+                    np.full((n_lead_times, n_valid_times, 1), 1),
                 ),
                 "air_pressure_at_mean_sea_level": (
                     ["lead_time", "valid_time", "track"],
-                    np.full((7, 20, 1), 101000.0),
+                    np.full((n_lead_times, n_valid_times, 1), 101000.0),
                 ),
                 "surface_wind_speed": (
                     ["lead_time", "valid_time", "track"],
-                    np.full((7, 20, 1), 25.0),
+                    np.full((n_lead_times, n_valid_times, 1), 25.0),
                 ),
                 "latitude": (
                     ["lead_time", "valid_time", "track"],
-                    np.full((7, 20, 1), 25.0),
+                    np.full((n_lead_times, n_valid_times, 1), 25.0),
                 ),
                 "longitude": (
                     ["lead_time", "valid_time", "track"],
-                    np.full((7, 20, 1), -75.0),
+                    np.full((n_lead_times, n_valid_times, 1), -75.0),
                 ),
             },
             coords={
@@ -839,7 +843,7 @@ class TestTCDimensionRegressionTests:
         "extremeweatherbench.events.tropical_cyclone._process_entire_dataset_compact"
     )
     def test_end_to_end_dimension_compatibility(
-        mock_process, realistic_forecast_dataset
+        self, mock_process, realistic_forecast_dataset
     ):
         """Test end-to-end compatibility with the dimension fixes."""
         # Mock successful processing with empty results
@@ -854,13 +858,14 @@ class TestTCDimensionRegressionTests:
             np.array([]),  # wind_vals
         )
 
-        # Create IBTrACS data
+        # Create IBTrACS data using the first valid_time from the forecast dataset
+        first_valid_time = realistic_forecast_dataset.valid_time.values[0]
         ibtracs_data = xr.Dataset(
             {
                 "latitude": (["valid_time"], [25.0]),
                 "longitude": (["valid_time"], [-75.0]),
             },
-            coords={"valid_time": [realistic_forecast_dataset.valid_time[0]]},
+            coords={"valid_time": [first_valid_time]},
         )
 
         # Test the full pipeline - this was failing before the fix
@@ -872,7 +877,7 @@ class TestTCDimensionRegressionTests:
         assert isinstance(result, xr.Dataset)
         mock_process.assert_called_once()
 
-    def test_dimension_detection_logic(realistic_forecast_dataset):
+    def test_dimension_detection_logic(self, realistic_forecast_dataset):
         """Test the specific dimension detection logic that was fixed."""
         # Extract the data that caused the original issue
         slp = realistic_forecast_dataset["air_pressure_at_mean_sea_level"]

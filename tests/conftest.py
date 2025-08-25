@@ -580,7 +580,7 @@ def sample_tc_tracks_dataset():
 
 
 @pytest.fixture
-def realistic_forecast_dataset(self):
+def realistic_forecast_dataset():
     """Create dataset matching the structure that caused the original bug."""
     lead_times = np.arange(0, 42, 6)  # 7 lead times
     valid_times = pd.date_range(
@@ -611,6 +611,10 @@ def realistic_forecast_dataset(self):
             "surface_northward_wind": (
                 ["lead_time", "valid_time", "latitude", "longitude"],
                 np.random.normal(0, 10, data_shape),
+            ),
+            "surface_wind_speed": (
+                ["lead_time", "valid_time", "latitude", "longitude"],
+                np.random.uniform(5, 50, data_shape),
             ),
             "geopotential": (
                 ["lead_time", "valid_time", "level", "latitude", "longitude"],
