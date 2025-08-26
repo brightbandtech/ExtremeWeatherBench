@@ -107,6 +107,7 @@ class AppliedMetric(ABC):
         applied_result = self._compute_applied_metric(
             forecast, target, **applied_metric_kwargs
         )
+
         # Then compute the base metric with the applied result
         return self.base_metric._compute_metric(**applied_result, **base_metric_kwargs)
 
