@@ -251,25 +251,3 @@ def convert_init_time_to_valid_time(ds: xr.Dataset) -> xr.Dataset:
         ],
         "lead_time",
     )
-
-
-def convert_valid_time_to_init_time(ds: xr.Dataset) -> xr.Dataset:
-    """Convert the init_time coordinate to a valid_time coordinate.
-
-    Args:
-        ds: The dataset to convert with lead_time and init_time coordinates.
-
-    Returns:
-        The dataset with a valid_time coordinate.
-    """
-    init_time = xr.DataArray(
-        ds.valid_time, coords={"valid_time": ds.valid_time}
-    ) - xr.DataArray(ds.lead_time, coords={"lead_time": ds.lead_time})
-    ds = ds.assign_coords(init_time=init_time)
-    return xr.concat(
-        [
-            ds.sel(lead_time=lead).swap_dims({"valid_time": "init_time"})
-            for lead in ds.lead_time
-        ],
-        "lead_time",
-    )
