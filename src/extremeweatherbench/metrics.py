@@ -585,6 +585,7 @@ class LandfallTimeME(BaseMetric):
             units=units,
         )
 
+
 class LandfallIntensityMAE(BaseMetric):
     """Landfall intensity metric with configurable landfall detection approaches.
 
