@@ -1,14 +1,5 @@
 # tests/test_calc.py
-"""Comprehensive unit tests for the calc module.
-
-This test suite covers:
-- Basic calculation functions
-- Wind speed calculations
-- Pressure calculations
-- Geopotential thickness calculations
-- TC variable generation
-- Numerical integration functions
-"""
+"""Comprehensive unit tests for the calc module."""
 
 import numpy as np
 import pandas as pd
