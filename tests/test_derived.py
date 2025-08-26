@@ -16,6 +16,23 @@ import xarray as xr
 from extremeweatherbench import derived
 
 
+def create_mock_case_operator(variables, dataset_type="forecast"):
+    """Create a mock case operator with specified variables."""
+    from unittest.mock import Mock
+
+    case_operator = Mock()
+    case_operator.case_metadata.case_id_number = 123
+
+    if dataset_type == "forecast":
+        case_operator.forecast.variables = variables
+        case_operator.target.variables = []
+    else:
+        case_operator.forecast.variables = []
+        case_operator.target.variables = variables
+
+    return case_operator
+
+
 @pytest.fixture
 def sample_dataset():
     """Create a sample xarray Dataset for testing."""
@@ -171,29 +188,12 @@ class TestDerivedVariableAbstractClass:
 class TestMaybeDeriveVariablesFunction:
     """Comprehensive tests for the maybe_derive_variable function."""
 
-    def create_mock_case_operator(self, variables, dataset_type="forecast"):
-        """Create a mock case operator with specified variables."""
-        from unittest.mock import Mock
-
-        case_operator = Mock()
-        case_operator.case_metadata.case_id_number = 123
-
-        if dataset_type == "forecast":
-            case_operator.forecast.variables = variables
-            case_operator.target.variables = []
-        else:
-            case_operator.forecast.variables = []
-            case_operator.target.variables = variables
-
-        return case_operator
-
     def test_only_string_variables(self, sample_dataset):
         """Test function with only string variables - should return unchanged."""
         variables = ["air_pressure_at_mean_sea_level", "surface_eastward_wind"]
 
-        # Set dataset_type to match the variables
         sample_dataset.attrs["dataset_type"] = "forecast"
-        case_operator = self.create_mock_case_operator(variables, "forecast")
+        case_operator = create_mock_case_operator(variables, "forecast")
 
         result = derived.maybe_derive_variable(sample_dataset, case_operator)
 
@@ -206,7 +206,7 @@ class TestMaybeDeriveVariablesFunction:
     def test_empty_variable_list(self, sample_dataset):
         """Test function with empty variable list."""
         sample_dataset.attrs["dataset_type"] = "forecast"
-        case_operator = self.create_mock_case_operator([], "forecast")
+        case_operator = create_mock_case_operator([], "forecast")
 
         result = derived.maybe_derive_variable(sample_dataset, case_operator)
 
@@ -218,7 +218,7 @@ class TestMaybeDeriveVariablesFunction:
         variables = [TestValidDerivedVariable()]
 
         sample_dataset.attrs["dataset_type"] = "forecast"
-        case_operator = self.create_mock_case_operator(variables, "forecast")
+        case_operator = create_mock_case_operator(variables, "forecast")
 
         result = derived.maybe_derive_variable(sample_dataset, case_operator)
 
@@ -236,7 +236,7 @@ class TestMaybeDeriveVariablesFunction:
         variables = [TestValidDerivedVariable(), TestMinimalDerivedVariable()]
 
         sample_dataset.attrs["dataset_type"] = "forecast"
-        case_operator = self.create_mock_case_operator(variables, "forecast")
+        case_operator = create_mock_case_operator(variables, "forecast")
 
         result = derived.maybe_derive_variable(sample_dataset, case_operator)
 
@@ -259,7 +259,7 @@ class TestMaybeDeriveVariablesFunction:
         ]
 
         sample_dataset.attrs["dataset_type"] = "forecast"
-        case_operator = self.create_mock_case_operator(variables, "forecast")
+        case_operator = create_mock_case_operator(variables, "forecast")
 
         result = derived.maybe_derive_variable(sample_dataset, case_operator)
 
@@ -277,7 +277,7 @@ class TestMaybeDeriveVariablesFunction:
         variables = [TestDerivedVariableWithoutName()]
 
         sample_dataset.attrs["dataset_type"] = "forecast"
-        case_operator = self.create_mock_case_operator(variables, "forecast")
+        case_operator = create_mock_case_operator(variables, "forecast")
 
         # Logger warnings are not pytest warnings, so just check functionality
         result = derived.maybe_derive_variable(sample_dataset, case_operator)
@@ -309,7 +309,7 @@ class TestMaybeDeriveVariablesFunction:
         test_multiplier = 5.0
 
         sample_dataset.attrs["dataset_type"] = "forecast"
-        case_operator = self.create_mock_case_operator(variables, "forecast")
+        case_operator = create_mock_case_operator(variables, "forecast")
 
         result = derived.maybe_derive_variable(
             sample_dataset, case_operator, multiplier=test_multiplier
@@ -343,7 +343,7 @@ class TestMaybeDeriveVariablesFunction:
         variables = [TestDatasetReturnVariable()]
 
         sample_dataset.attrs["dataset_type"] = "forecast"
-        case_operator = self.create_mock_case_operator(variables, "forecast")
+        case_operator = create_mock_case_operator(variables, "forecast")
 
         # Logger warnings are not pytest warnings, so just check functionality
         result = derived.maybe_derive_variable(sample_dataset, case_operator)
@@ -368,7 +368,7 @@ class TestMaybeDeriveVariablesFunction:
         variables = [TestMissingVarDerived()]
 
         sample_dataset.attrs["dataset_type"] = "forecast"
-        case_operator = self.create_mock_case_operator(variables, "forecast")
+        case_operator = create_mock_case_operator(variables, "forecast")
 
         with pytest.raises(ValueError, match="Input variable nonexistent_variable"):
             derived.maybe_derive_variable(sample_dataset, case_operator)
@@ -378,7 +378,7 @@ class TestMaybeDeriveVariablesFunction:
         variables = ["var1", "var2", "var3"]  # All strings
 
         sample_dataset.attrs["dataset_type"] = "forecast"
-        case_operator = self.create_mock_case_operator(variables, "forecast")
+        case_operator = create_mock_case_operator(variables, "forecast")
 
         result = derived.maybe_derive_variable(sample_dataset, case_operator)
 
@@ -390,7 +390,7 @@ class TestMaybeDeriveVariablesFunction:
         variables = [TestValidDerivedVariable()]
 
         sample_dataset.attrs["dataset_type"] = "target"
-        case_operator = self.create_mock_case_operator(variables, "target")
+        case_operator = create_mock_case_operator(variables, "target")
 
         result = derived.maybe_derive_variable(sample_dataset, case_operator)
 
@@ -402,7 +402,7 @@ class TestMaybeDeriveVariablesFunction:
         variables = [TestValidDerivedVariable()]
 
         sample_dataset.attrs["dataset_type"] = "unknown"
-        case_operator = self.create_mock_case_operator(variables, "forecast")
+        case_operator = create_mock_case_operator(variables, "forecast")
 
         result = derived.maybe_derive_variable(sample_dataset, case_operator)
 
@@ -414,16 +414,19 @@ class TestMaybeDeriveVariablesFunction:
         # Test with multiple derived variables
         variables = [TestValidDerivedVariable(), TestMinimalDerivedVariable()]
 
-        result = derived.maybe_derive_variable(sample_dataset, variables)
+        sample_dataset.attrs["dataset_type"] = "forecast"
+        case_operator = create_mock_case_operator(variables, "forecast")
 
-        # Should return only the first derived variable as DataArray
-        assert isinstance(result, xr.DataArray)
-        assert result.name == "TestValidDerivedVariable"
+        result = derived.maybe_derive_variable(sample_dataset, case_operator)
+
+        # Should return only the first derived variable as Dataset
+        assert isinstance(result, xr.Dataset)
+        assert "TestValidDerivedVariable" in result.data_vars
         # Verify the computed value is correct (from first variable only)
         expected_value = (
             sample_dataset["test_variable_1"] + sample_dataset["test_variable_2"]
         )
-        xr.testing.assert_equal(result, expected_value)
+        xr.testing.assert_equal(result["TestValidDerivedVariable"], expected_value)
 
     def test_derived_variable_compute_exception_propagates(self, sample_dataset):
         """Test that exceptions from derived variable compute methods propagate."""
@@ -437,8 +440,11 @@ class TestMaybeDeriveVariablesFunction:
 
         variables = [TestExceptionDerived()]
 
+        sample_dataset.attrs["dataset_type"] = "forecast"
+        case_operator = create_mock_case_operator(variables, "forecast")
+
         with pytest.raises(RuntimeError, match="Test exception from derive_variable"):
-            derived.maybe_derive_variable(sample_dataset, variables)
+            derived.maybe_derive_variable(sample_dataset, case_operator)
 
     def test_duplicate_derived_variable_names(self, sample_dataset):
         """Test behavior with multiple derived variables - only first is processed."""
@@ -463,14 +469,19 @@ class TestMaybeDeriveVariablesFunction:
 
         variables = [TestDuplicateName1(), TestDuplicateName2()]
 
-        result = derived.maybe_derive_variable(sample_dataset, variables)
+        sample_dataset.attrs["dataset_type"] = "forecast"
+        case_operator = create_mock_case_operator(variables, "forecast")
 
-        # Should return only the first derived variable as DataArray
-        assert isinstance(result, xr.DataArray)
-        assert result.name == "test_variable_1"  # Name from the data, not class
-        # Should contain the result from the first variable (test_variable_1 * 2)
+        result = derived.maybe_derive_variable(sample_dataset, case_operator)
+
+        # Should return only the first derived variable as Dataset
+        assert isinstance(result, xr.Dataset)
+        # Check what's actually in the result
+        data_var_names = list(result.data_vars.keys())
+        assert len(data_var_names) == 1  # Should only have one variable
+        result_var_name = data_var_names[0]
         expected = sample_dataset["test_variable_1"] * 2
-        xr.testing.assert_equal(result, expected)
+        xr.testing.assert_equal(result[result_var_name], expected)
 
     def test_early_return_from_dataset_with_different_dims(self, sample_dataset):
         """Test early return when first derived var returns dataset with diff dims."""
@@ -496,7 +507,10 @@ class TestMaybeDeriveVariablesFunction:
         variables = [TestEarlyReturnDataset(), TestNeverExecuted()]
 
         # Logger warnings are not pytest warnings, so just check functionality
-        result = derived.maybe_derive_variable(sample_dataset, variables)
+        sample_dataset.attrs["dataset_type"] = "forecast"
+        case_operator = create_mock_case_operator(variables, "forecast")
+
+        result = derived.maybe_derive_variable(sample_dataset, case_operator)
 
         # Should return the special dataset, not merged
         assert isinstance(result, xr.Dataset)
@@ -523,7 +537,10 @@ class TestMaybeDeriveVariablesFunction:
 
         variables = [TestDatasetMatchingDims()]
 
-        result = derived.maybe_derive_variable(sample_dataset, variables)
+        sample_dataset.attrs["dataset_type"] = "forecast"
+        case_operator = create_mock_case_operator(variables, "forecast")
+
+        result = derived.maybe_derive_variable(sample_dataset, case_operator)
 
         # Should return the derived dataset directly (no merging with original)
         assert isinstance(result, xr.Dataset)
@@ -566,14 +583,20 @@ class TestMaybeDeriveVariablesFunction:
 
         variables = [TestDataArrayOutput(), TestDatasetOutput()]
 
-        result = derived.maybe_derive_variable(sample_dataset, variables)
+        sample_dataset.attrs["dataset_type"] = "forecast"
+        case_operator = create_mock_case_operator(variables, "forecast")
 
-        # Should return only the first derived variable (DataArray)
-        assert isinstance(result, xr.DataArray)
-        assert result.name == "test_variable_1"
+        result = derived.maybe_derive_variable(sample_dataset, case_operator)
+
+        # Should return only the first derived variable (as Dataset)
+        assert isinstance(result, xr.Dataset)
+        # First derived variable returns DataArray, converted to Dataset
+        data_var_names = list(result.data_vars.keys())
+        assert len(data_var_names) == 1  # Should only have one variable
+        result_var_name = data_var_names[0]
         # Verify computed value (only from first variable)
         expected_dataarray = sample_dataset["test_variable_1"] * 3
-        xr.testing.assert_equal(result, expected_dataarray)
+        xr.testing.assert_equal(result[result_var_name], expected_dataarray)
 
 
 class TestUtilityFunctions:
@@ -709,18 +732,21 @@ class TestIntegrationWithRealData:
         subset_dataset = sample_dataset[available_vars]
 
         # Step 3: Derive variables (only first one will be processed)
-        final_result = derived.maybe_derive_variable(
-            subset_dataset, variables_to_derive
-        )
+        subset_dataset.attrs["dataset_type"] = "forecast"
+        case_operator = create_mock_case_operator(variables_to_derive, "forecast")
 
-        # Verify results - should return only first derived variable as DataArray
-        assert isinstance(final_result, xr.DataArray)
-        assert final_result.name == "TestValidDerivedVariable"
+        final_result = derived.maybe_derive_variable(subset_dataset, case_operator)
+
+        # Verify results - should return only first derived variable as Dataset
+        assert isinstance(final_result, xr.Dataset)
+        assert "TestValidDerivedVariable" in final_result.data_vars
         # Verify the computed value is correct
         expected_value = (
             subset_dataset["test_variable_1"] + subset_dataset["test_variable_2"]
         )
-        xr.testing.assert_equal(final_result, expected_value)
+        xr.testing.assert_equal(
+            final_result["TestValidDerivedVariable"], expected_value
+        )
 
     @pytest.mark.parametrize(
         "variable_combination",
@@ -735,17 +761,25 @@ class TestIntegrationWithRealData:
         self, sample_dataset, variable_combination
     ):
         """Test different combinations of derived variables."""
-        result = derived.maybe_derive_variable(sample_dataset, variable_combination)
+        sample_dataset.attrs["dataset_type"] = "forecast"
+        case_operator = create_mock_case_operator(variable_combination, "forecast")
+
+        result = derived.maybe_derive_variable(sample_dataset, case_operator)
 
         if len(variable_combination) == 0:
             # No derived variables - should return original dataset
             assert isinstance(result, xr.Dataset)
             xr.testing.assert_equal(result, sample_dataset)
         else:
-            # Has derived variables - should return first one as DataArray
-            assert isinstance(result, xr.DataArray)
-            # Verify the name matches the expected derived variable
+            # Has derived variables - should return first one as Dataset
+            assert isinstance(result, xr.Dataset)
+            # Check that derived variable was added
             if isinstance(variable_combination[0], TestValidDerivedVariable):
-                assert result.name == "TestValidDerivedVariable"
+                assert "TestValidDerivedVariable" in result.data_vars
             elif isinstance(variable_combination[0], TestMinimalDerivedVariable):
-                assert result.name == "single_variable"
+                # TestMinimalDerivedVariable returns single_variable DataArray
+                # which keeps its original name if the DataArray has no name
+                assert (
+                    "single_variable" in result.data_vars
+                    or variable_combination[0].name in result.data_vars
+                )
