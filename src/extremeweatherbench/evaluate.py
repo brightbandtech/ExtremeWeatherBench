@@ -21,6 +21,72 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+def _safe_concat(
+    dataframes: list[pd.DataFrame], ignore_index: bool = True
+) -> pd.DataFrame:
+    """Safely concatenate DataFrames, filtering out empty ones.
+
+    This function prevents FutureWarnings from pd.concat when dealing with
+    empty or all-NA DataFrames by filtering them out before concatenation.
+    It also handles dtype mismatches by converting to object dtype only when
+    necessary to prevent concatenation warnings.
+
+    Args:
+        dataframes: List of DataFrames to concatenate
+        ignore_index: Whether to ignore index during concatenation
+
+    Returns:
+        Concatenated DataFrame, or empty DataFrame with OUTPUT_COLUMNS if all
+        input DataFrames are empty. Preserves original dtypes when consistent
+        across DataFrames, converts to object dtype only when there are
+        dtype mismatches.
+    """
+    # Filter out problematic DataFrames that would trigger FutureWarning
+    valid_dfs = []
+    for i, df in enumerate(dataframes):
+        # Skip empty DataFrames
+        if df.empty:
+            logger.debug(f"Skipping empty DataFrame {i}")
+            continue
+        # Skip DataFrames where all values are NA
+        if df.isna().all().all():
+            logger.debug(f"Skipping all-NA DataFrame {i}")
+            continue
+        # Skip DataFrames where all columns are empty/NA
+        if len(df.columns) > 0 and all(df[col].isna().all() for col in df.columns):
+            logger.debug(f"Skipping DataFrame {i} with all-NA columns")
+            continue
+
+        valid_dfs.append(df)
+
+    if valid_dfs:
+        # Check for dtype inconsistencies that cause FutureWarning
+        if len(valid_dfs) > 1:
+            # Check if there are dtype mismatches between DataFrames
+            reference_df = valid_dfs[0]
+            has_dtype_mismatch = False
+
+            for df in valid_dfs[1:]:
+                # Check if columns have different dtypes across DataFrames
+                for col in reference_df.columns:
+                    if col in df.columns:
+                        if reference_df[col].dtype != df[col].dtype:
+                            has_dtype_mismatch = True
+                            break
+                if has_dtype_mismatch:
+                    break
+
+            if has_dtype_mismatch:
+                # Only convert to object dtype if there are mismatches
+                consistent_dfs = [df.astype(object) for df in valid_dfs]
+                return pd.concat(consistent_dfs, ignore_index=ignore_index)
+
+        # No dtype mismatches, concatenate normally
+        return pd.concat(valid_dfs, ignore_index=ignore_index)
+    else:
+        return pd.DataFrame(columns=OUTPUT_COLUMNS)
+
+
 class ExtremeWeatherBench:
     """A class to run the ExtremeWeatherBench workflow.
 
@@ -74,19 +140,16 @@ class ExtremeWeatherBench:
 
         run_results = []
         with logging_redirect_tqdm():
-            for case_operator in tqdm(self.case_operators):
+            for case_operator in tqdm(self.case_operators, desc="Processing cases"):
                 run_results.append(compute_case_operator(case_operator, **kwargs))
 
                 # store the results of each case operator if caching
                 if self.cache_dir:
-                    pd.concat(run_results).to_pickle(
-                        self.cache_dir / "case_results.pkl"
-                    )
-        if run_results:
-            return pd.concat(run_results, ignore_index=True)
-        else:
-            # Return empty DataFrame with expected columns
-            return pd.DataFrame(columns=OUTPUT_COLUMNS)
+                    concatenated = _safe_concat(run_results, ignore_index=False)
+                    if not concatenated.empty:
+                        concatenated.to_pickle(self.cache_dir / "case_results.pkl")
+
+        return _safe_concat(run_results, ignore_index=True)
 
 
 def compute_case_operator(case_operator: "cases.CaseOperator", **kwargs):
@@ -153,13 +216,11 @@ def compute_case_operator(case_operator: "cases.CaseOperator", **kwargs):
         cache_dir = kwargs.get("cache_dir", None)
         if cache_dir:
             cache_path = Path(cache_dir) if isinstance(cache_dir, str) else cache_dir
-            pd.concat(results, ignore_index=True).to_pickle(cache_path / "results.pkl")
+            concatenated = _safe_concat(results, ignore_index=True)
+            if not concatenated.empty:
+                concatenated.to_pickle(cache_path / "results.pkl")
 
-    if results:
-        return pd.concat(results, ignore_index=True)
-    else:
-        # Return empty DataFrame with expected columns
-        return pd.DataFrame(columns=OUTPUT_COLUMNS)
+    return _safe_concat(results, ignore_index=True)
 
 
 def _extract_standard_metadata(
