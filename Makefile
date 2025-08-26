@@ -1,4 +1,4 @@
-.PHONY: help install run default test test-config test-parallel test-cache clean lint format typecheck dev-test all-tests
+.PHONY: help install run default test test-config test-parallel test-cache test-mini test-mini-ar test-mini-heatwave test-mini-tc verify-setup clean lint format typecheck dev-test all-tests
 
 CLI=ewb
 OUTPUT_DIR=make_outputs
@@ -19,6 +19,11 @@ help:
 	@echo "  make test-config        - Test with custom config file (includes --precompute)"
 	@echo "  make test-parallel      - Test with parallel execution (4 jobs + --precompute)"
 	@echo "  make test-cache         - Test with caching enabled (includes --precompute)"
+	@echo "  make test-mini          - Run all miniaturized tests (fast verification)"
+	@echo "  make test-mini-ar       - Run miniaturized atmospheric river test"
+	@echo "  make test-mini-heatwave - Run miniaturized heatwave test"
+	@echo "  make test-mini-tc       - Run miniaturized tropical cyclone test"
+	@echo "  make verify-setup       - Verify setup without external data access"
 	@echo "  make all-tests          - Run all test scenarios"
 	@echo ""
 	@echo "Development:"
@@ -98,7 +103,39 @@ test-save-operators:
 		exit 1; \
 	fi
 
-all-tests: test test-config test-parallel test-cache test-save-operators
+# Miniaturized test targets for fast verification
+test-mini:
+	@echo "Running all miniaturized tests..."
+	@echo "Note: These tests require Google Cloud authentication for data access"
+	@echo "Run 'gcloud auth application-default login' if you see authentication errors"
+	.venv/bin/python tests/applied/mini_applied_all.py
+	@echo "✓ All miniaturized tests completed!"
+
+test-mini-ar:
+	@echo "Running miniaturized atmospheric river test..."
+	@echo "Note: Requires Google Cloud authentication for data access"
+	.venv/bin/python tests/applied/mini_applied_ar.py
+	@echo "✓ Atmospheric river test completed!"
+
+test-mini-heatwave:
+	@echo "Running miniaturized heatwave test..."
+	@echo "Note: Requires Google Cloud authentication for data access"
+	.venv/bin/python tests/applied/mini_applied_heatwave.py
+	@echo "✓ Heatwave test completed!"
+
+test-mini-tc:
+	@echo "Running miniaturized tropical cyclone test..."
+	@echo "Note: Requires Google Cloud authentication for data access"
+	.venv/bin/python tests/applied/mini_applied_tc.py
+	@echo "✓ Tropical cyclone test completed!"
+
+verify-setup:
+	@echo "Verifying ExtremeWeatherBench setup..."
+	@echo "This test does not require external data access"
+	.venv/bin/python tests/applied/verify_setup.py
+	@echo "✓ Setup verification completed!"
+
+all-tests: test test-config test-parallel test-cache test-save-operators verify-setup test-mini
 	@echo "✓ All tests completed successfully!"
 
 # Development targets
