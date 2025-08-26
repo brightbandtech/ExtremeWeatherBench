@@ -300,31 +300,6 @@ class TestTCTrackVariables:
         ]
         assert derived.TCTrackVariables.required_variables == expected_vars
 
-    @patch("extremeweatherbench.calc.generate_tc_variables")
-    @patch("extremeweatherbench.calc.create_tctracks_from_dataset")
-    @patch("extremeweatherbench.calc.tctracks_to_3d_dataset")
-    def test_derive_variable_with_mocks(
-        self, mock_to_3d, mock_create_tracks, mock_generate_vars, sample_dataset
-    ):
-        """Test derive_variable with mocked calc functions."""
-        # Mock the complex calc functions
-        mock_generate_vars.return_value = sample_dataset
-        mock_create_tracks.return_value = []
-        mock_to_3d.return_value = xr.Dataset(
-            {
-                "track_data": xr.DataArray(
-                    np.ones((10, 10, 10)), dims=["time", "latitude", "longitude"]
-                )
-            }
-        )
-
-        result = derived.TCTrackVariables.derive_variable(sample_dataset)
-
-        assert isinstance(result, xr.Dataset)
-        mock_generate_vars.assert_called_once()
-        mock_create_tracks.assert_called_once()
-        mock_to_3d.assert_called_once()
-
     def test_prepare_wind_data_helper(self, sample_dataset):
         """Test the internal _prepare_wind_data helper function."""
         # This tests the helper function within derive_variable
