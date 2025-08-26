@@ -1,7 +1,7 @@
 import dataclasses
 from collections import namedtuple
 from itertools import product
-from typing import Optional, Sequence, Union
+from typing import Literal, Optional, Sequence, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -123,8 +123,10 @@ def convert_from_cartesian_to_latlon(
     )
 
 
-def calculate_haversine_degree_distance(
-    input_a: Sequence[float], input_b: Sequence[Union[float, xr.DataArray]]
+def calculate_haversine_distance(
+    input_a: Sequence[float],
+    input_b: Sequence[Union[float, xr.DataArray]],
+    units: Literal["km", "kilometers", "deg", "degrees"] = "km",
 ) -> Union[float, xr.DataArray]:
     """Calculate the great-circle distance between two points on the Earth's surface.
 
@@ -148,8 +150,12 @@ def calculate_haversine_degree_distance(
     dlat = lat2 - lat1
     a = np.sin(dlat / 2) ** 2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2) ** 2
     c = 2 * np.arcsin(np.sqrt(a))
-    distance = np.degrees(c)  # Convert back to degrees
-    return distance
+    if units == "km" or units == "kilometers":
+        return 6371 * c
+    elif units == "deg" or units == "degrees":
+        return np.degrees(c)  # Convert back to degrees
+    else:
+        raise ValueError(f"Invalid units: {units}")
 
 
 def create_great_circle_mask(
@@ -166,9 +172,7 @@ def create_great_circle_mask(
         Boolean mask where True indicates points within the radius.
     """
 
-    distance = calculate_haversine_degree_distance(
-        latlon_point, (ds.latitude, ds.longitude)
-    )
+    distance = calculate_haversine_distance(latlon_point, (ds.latitude, ds.longitude))
     # Create mask as xarray DataArray
     if isinstance(distance, xr.DataArray):
         mask = distance <= radius_degrees
@@ -220,7 +224,7 @@ def find_valid_contour_from_point(
         furthest_point, ds_mapping
     )
     point_latlon = convert_from_cartesian_to_latlon(point, ds_mapping)
-    gc_distance_contour_distance = calculate_haversine_degree_distance(
+    gc_distance_contour_distance = calculate_haversine_distance(
         gc_distance_point_latlon, point_latlon
     )
     # Ensure we return a float
@@ -340,7 +344,7 @@ def create_tctracks(tcs: list[TC]) -> list[TCTracks]:
                 continue
 
             # Check if within 8 degrees
-            distance = calculate_haversine_degree_distance(
+            distance = calculate_haversine_distance(
                 (last_tc.coordinate.latitude, last_tc.coordinate.longitude),
                 (next_tc.coordinate.latitude, next_tc.coordinate.longitude),
             )
