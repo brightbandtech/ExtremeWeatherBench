@@ -585,10 +585,6 @@ class LandfallTimeME(BaseMetric):
             units=units,
         )
 
-
-# LandfallTimeMEMulti is now integrated into LandfallTimeME with approach='all'
-
-
 class LandfallIntensityMAE(BaseMetric):
     """Landfall intensity metric with configurable landfall detection approaches.
 
@@ -676,10 +672,6 @@ class LandfallIntensityMAE(BaseMetric):
             aggregation=aggregation,
             intensity_var=intensity_var,
         )
-
-
-# LandfallIntensityMAEMulti is now integrated into LandfallIntensityMAE with approach=
-# 'all'
 
 
 # TODO: complete spatial displacement implementation
