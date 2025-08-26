@@ -96,6 +96,14 @@ class InputBase(ABC):
         data = self.preprocess(data)
         return data
 
+    def set_name(self, name: str) -> None:
+        """Set the name of the input data source.
+
+        Args:
+            name: The new name to assign to this input data source.
+        """
+        self.name = name
+
     @abstractmethod
     def _open_data_from_source(self) -> utils.IncomingDataInput:
         """Open the target data from the source, opting to avoid loading the entire
@@ -296,7 +304,7 @@ class EvaluationObject:
 class KerchunkForecast(ForecastBase):
     """Forecast class for kerchunked forecast data."""
 
-    name: str = "Kerchunked Forecast"
+    name: str = "kerchunk_forecast"
     chunks: Optional[Union[dict, str]] = "auto"
 
     def _open_data_from_source(self) -> utils.IncomingDataInput:
@@ -311,7 +319,7 @@ class KerchunkForecast(ForecastBase):
 class ZarrForecast(ForecastBase):
     """Forecast class for zarr forecast data."""
 
-    name: str = "Zarr Forecast"
+    name: str = "zarr_forecast"
     chunks: Optional[Union[dict, str]] = "auto"
 
     def _open_data_from_source(self) -> utils.IncomingDataInput:
@@ -518,7 +526,7 @@ class LSR(TargetBase):
     UTC to 00 UTC.
     """
 
-    name: str = "Local Storm Reports"
+    name: str = "local_storm_reports"
 
     def _open_data_from_source(self) -> utils.IncomingDataInput:
         # force LSR to use anon token to prevent google reauth issues for users
@@ -646,7 +654,7 @@ class LSR(TargetBase):
 class PPH(TargetBase):
     """Target class for practically perfect hindcast data."""
 
-    name: str = "Practically Perfect Hindcast"
+    name: str = "practically_perfect_hindcast"
 
     def _open_data_from_source(
         self,
