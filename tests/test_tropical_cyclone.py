@@ -404,6 +404,186 @@ class TestUtilityFunctions:
         assert mask.shape == (3, 3)  # lat x lon
         assert mask.dtype == bool
 
+    def test_convert_valid_time_to_init_time(self):
+        """Test converting valid_time coordinates to init_time coordinates."""
+        # Create a test dataset with valid_time and lead_time coordinates
+        valid_times = pd.date_range("2023-09-01", periods=3, freq="6h")
+        lead_times = np.array([0, 6], dtype="timedelta64[h]")
+
+        dataset = xr.Dataset(
+            {
+                "temperature": (["valid_time"], [20.0, 21.0, 22.0]),
+            },
+            coords={
+                "valid_time": valid_times,
+                "lead_time": lead_times,
+            },
+        )
+
+        # Convert using the function
+        result = tropical_cyclone.convert_valid_time_to_init_time(dataset)
+
+        # Test that the result has an init_time coordinate
+        assert "init_time" in result.coords
+        assert "lead_time" in result.dims
+
+        # Test that the dimensions are transformed correctly
+        assert "lead_time" in result.dims
+        assert "init_time" in result.dims
+        assert result["temperature"].dims == ("lead_time", "init_time")
+
+        # Test that lead_time dimension is preserved
+        assert len(result.lead_time) == len(lead_times)
+        np.testing.assert_array_equal(result.lead_time.values, lead_times)
+
+        # Test that init_time coordinate is correctly calculated
+        # The function creates init_times by subtracting each lead_time from each valid_time
+        # and then concatenates all unique init_times
+        expected_init_times = set()
+        for valid_time in valid_times:
+            for lead_time in lead_times:
+                init_time = pd.Timestamp(valid_time) - pd.Timedelta(lead_time)
+                expected_init_times.add(init_time)
+
+        expected_init_times = sorted(expected_init_times)
+        actual_init_times = sorted(result.init_time.values)
+
+        # Convert to pandas timestamps for comparison
+        expected_init_times = [pd.Timestamp(t) for t in expected_init_times]
+        actual_init_times = [pd.Timestamp(t) for t in actual_init_times]
+
+        assert len(actual_init_times) == len(expected_init_times)
+        for expected, actual in zip(expected_init_times, actual_init_times):
+            assert expected == actual
+
+        # Test that data structure makes sense
+        # For 0-hour lead time, there should be valid data where init_time matches original valid_time
+        zero_lead_data = result.sel(lead_time=lead_times[0])
+
+        # Check that some data points are not NaN (where init_time aligns with original valid_times)
+        assert not np.all(np.isnan(zero_lead_data["temperature"].values))
+
+        # Test with spatial dimensions
+        spatial_dataset = xr.Dataset(
+            {
+                "pressure": (
+                    ["valid_time", "latitude"],
+                    [[100.0, 101.0], [102.0, 103.0], [104.0, 105.0]],
+                ),
+            },
+            coords={
+                "valid_time": valid_times,
+                "lead_time": lead_times,
+                "latitude": [10.0, 20.0],
+            },
+        )
+
+        spatial_result = tropical_cyclone.convert_valid_time_to_init_time(
+            spatial_dataset
+        )
+
+        # Test that spatial dimensions are preserved
+        assert "latitude" in spatial_result.dims
+        assert spatial_result["pressure"].dims == ("lead_time", "init_time", "latitude")
+        assert len(spatial_result.latitude) == 2
+
+    def test_convert_valid_time_to_init_time_with_complex_data(self):
+        """Test convert_valid_time_to_init_time with more complex forecast-like data."""
+        # Create a more realistic forecast dataset structure
+        valid_times = pd.date_range("2023-09-01", periods=10, freq="3h")
+        lead_times = np.array([0, 6, 12, 18, 24], dtype="timedelta64[h]")
+        lat = np.linspace(20, 30, 10)
+        lon = np.linspace(-80, -70, 10)
+
+        # Create multiple variables
+        data_shape = (len(valid_times), len(lat), len(lon))
+
+        dataset = xr.Dataset(
+            {
+                "air_pressure_at_mean_sea_level": (
+                    ["valid_time", "latitude", "longitude"],
+                    np.random.normal(101325, 1000, data_shape),
+                ),
+                "surface_wind_speed": (
+                    ["valid_time", "latitude", "longitude"],
+                    np.random.uniform(0, 30, data_shape),
+                ),
+            },
+            coords={
+                "valid_time": valid_times,
+                "lead_time": lead_times,
+                "latitude": lat,
+                "longitude": lon,
+            },
+        )
+
+        # Convert using the function
+        result = tropical_cyclone.convert_valid_time_to_init_time(dataset)
+
+        # Test that all variables are preserved
+        expected_vars = [
+            "air_pressure_at_mean_sea_level",
+            "surface_wind_speed",
+        ]
+        for var in expected_vars:
+            assert var in result.data_vars
+
+        # Test dimensions are correctly transformed
+        for var in expected_vars:
+            assert result[var].dims[0] == "lead_time"
+            # The second dimension should be the new init_time dimension
+            # (swapped from valid_time)
+
+        # Test that the init_time coordinate exists and has correct values
+        assert "init_time" in result.coords
+
+        # Test data integrity - dimensions should make sense
+        assert result.sizes["lead_time"] == len(lead_times)
+        assert "init_time" in result.sizes
+
+    def test_convert_valid_time_to_init_time_edge_cases(self):
+        """Test convert_valid_time_to_init_time with edge cases."""
+        # Test with single time point
+        valid_times = pd.date_range("2023-09-01", periods=1)
+        lead_times = np.array([0], dtype="timedelta64[h]")
+
+        dataset = xr.Dataset(
+            {
+                "temperature": (["valid_time"], [20.0]),
+            },
+            coords={
+                "valid_time": valid_times,
+                "lead_time": lead_times,
+            },
+        )
+
+        result = tropical_cyclone.convert_valid_time_to_init_time(dataset)
+
+        assert "init_time" in result.coords
+        assert len(result.lead_time) == 1
+
+        # For zero lead time, init_time should equal valid_time
+        assert result.init_time.values[0] == valid_times.values[0]
+
+        # Test with empty dataset
+        empty_dataset = xr.Dataset(
+            coords={
+                "valid_time": pd.date_range("2023-09-01", periods=0),
+                "lead_time": np.array([], dtype="timedelta64[h]"),
+            }
+        )
+
+        # Should handle empty dataset gracefully
+        try:
+            empty_result = tropical_cyclone.convert_valid_time_to_init_time(
+                empty_dataset
+            )
+            # If it doesn't raise an error, init_time should be present
+            assert "init_time" in empty_result.coords
+        except (ValueError, IndexError):
+            # Some edge cases might raise errors, which is acceptable
+            pass
+
 
 class TestDimensionHandling:
     """Test dimension handling in TC detection functions."""

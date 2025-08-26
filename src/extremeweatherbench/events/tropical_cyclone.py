@@ -1434,7 +1434,7 @@ def _filter_post_landfall_init_times(
 
     # Convert cyclone_dataset to have init_time coordinate if it doesn't already
     if "init_time" not in cyclone_dataset.coords:
-        cyclone_dataset = utils.convert_valid_time_to_init_time(cyclone_dataset)
+        cyclone_dataset = convert_valid_time_to_init_time(cyclone_dataset)
 
     # Filter to only include init_times before the latest landfall
     valid_init_times = cyclone_dataset.init_time < latest_landfall
@@ -1530,7 +1530,7 @@ def find_next_landfall_for_init_time(
 
     # Convert forecast to have init_time if needed
     if "init_time" not in forecast_dataset.coords:
-        forecast_dataset = utils.convert_valid_time_to_init_time(forecast_dataset)
+        forecast_dataset = convert_valid_time_to_init_time(forecast_dataset)
 
     # Get all target landfall times
     target_times = target_landfalls.valid_time.values
@@ -1830,7 +1830,7 @@ def _find_landfall_forecast(
 
     landfall_results = []
     valid_init_times = []
-    track_dataset = utils.convert_valid_time_to_init_time(track_dataset)
+    track_dataset = convert_valid_time_to_init_time(track_dataset)
     # Process each lead_time separately (each represents a different init_time)
     for init_time in track_dataset.init_time:
         # Extract data for this lead_time
@@ -1894,7 +1894,7 @@ def _find_all_landfalls_forecast(
         track_dataset = track_dataset.squeeze("track", drop=True)
 
     landfall_results = []
-    track_dataset = utils.convert_valid_time_to_init_time(track_dataset)
+    track_dataset = convert_valid_time_to_init_time(track_dataset)
 
     # Process each init_time separately
     for init_time in track_dataset.init_time:
@@ -2368,13 +2368,13 @@ def generate_tc_variables(ds: xr.Dataset) -> xr.Dataset:
 
 
 def convert_valid_time_to_init_time(ds: xr.Dataset) -> xr.Dataset:
-    """Convert the init_time coordinate to a valid_time coordinate.
+    """Convert the valid_time coordinate to a init_time coordinate.
 
     Args:
-        ds: The dataset to convert with lead_time and init_time coordinates.
+        ds: The dataset to convert with lead_time and valid_time coordinates.
 
     Returns:
-        The dataset with a valid_time coordinate.
+        The dataset with a init_time coordinate.
     """
     init_time = xr.DataArray(
         ds.valid_time, coords={"valid_time": ds.valid_time}
