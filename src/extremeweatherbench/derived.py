@@ -1,9 +1,12 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import List, Type, Union
+from typing import TYPE_CHECKING, List, Type, Union
 
 import numpy as np
 import xarray as xr
+
+if TYPE_CHECKING:
+    from extremeweatherbench import cases
 
 from extremeweatherbench import calc
 
@@ -60,7 +63,7 @@ class DerivedVariable(ABC):
         pass
 
     @classmethod
-    def compute(cls, data: xr.Dataset) -> xr.DataArray:
+    def compute(cls, data: xr.Dataset, **kwargs) -> xr.DataArray:
         """Build the derived variable from the input variables.
 
         This method is used to build the derived variable from the input variables.
@@ -69,6 +72,7 @@ class DerivedVariable(ABC):
 
         Args:
             data: The dataset to build the derived variable from.
+            **kwargs: Additional keyword arguments to pass to the derived variable.
 
         Returns:
             A DataArray with the derived variable.
@@ -239,7 +243,9 @@ class TCTrackVariables(DerivedVariable):
 
 
 def maybe_derive_variable(
-    ds: xr.Dataset, variables: list[str | DerivedVariable], **kwargs
+    dataset: xr.Dataset,
+    case_operator: "cases.CaseOperator",
+    **kwargs,
 ) -> xr.Dataset:
     """Derive variable from the data if it exists in a list of variables.
 
@@ -258,33 +264,57 @@ def maybe_derive_variable(
         A dataset with derived variables, if any exist, else the original
         dataset.
     """
+    # TODO: add case_id_number back in for hash based caching
+    # kwargs["case_id_number"] = case_operator.case_metadata.case_id_number
 
-    # Pull out the derived variable only from the list of variables
-    derived_variables = [v for v in variables if not isinstance(v, str)]
-
-    if derived_variables:
-        if len(derived_variables) > 1:
-            logger.warning(
-                "Multiple derived variables provided. Only the first one will be "
-                "computed. Users must user separate EvaluationObjects to derive "
-                "each variable."
-            )
-        derived_variable = derived_variables[0]
-        output = derived_variable.compute(data=ds, **kwargs)
-        # Ensure the DataArray has the correct name and is a DataArray.
-        # Some derived variables return a dataset (multiple variables), so we need
-        # to check
-        if isinstance(output, xr.DataArray):
-            if output.name is None:
-                logger.debug(
-                    "Derived variable %s has no name, using class name.",
-                    derived_variable.name,
-                )
-                output.name = derived_variable.name
-        return output
+    dataset_type = dataset.attrs.get("dataset_type", "unknown")
+    if dataset_type == "forecast":
+        variables = case_operator.forecast.variables
+    elif dataset_type == "target":
+        variables = case_operator.target.variables
     else:
-        logger.info("No derived variables in current EvaluationObject.")
-        return ds
+        logger.warning("Unknown dataset_type '%s', skipping", dataset_type)
+        return dataset
+
+    maybe_derived_variables = [v for v in variables if not isinstance(v, str)]
+
+    if not maybe_derived_variables:
+        logger.debug("No derived variables for dataset type '%s'", dataset_type)
+        return dataset
+
+    if len(maybe_derived_variables) > 1:
+        logger.warning(
+            "Multiple derived variables provided. Only the first one will be "
+            "computed. Users must use separate EvaluationObjects to derive "
+            "each variable."
+        )
+
+    # Take the first derived variable and process it
+    derived_variable = maybe_derived_variables[0]
+    output = derived_variable.compute(data=dataset, **kwargs)
+
+    # Ensure the DataArray has the correct name and is a DataArray.
+    # Some derived variables return a dataset (multiple variables), so we need
+    # to check
+    if isinstance(output, xr.DataArray):
+        if output.name is None:
+            logger.debug(
+                "Derived variable %s has no name, using class name.",
+                derived_variable.name,
+            )
+            output.name = derived_variable.name
+        # Merge the derived variable into the dataset
+        return output.to_dataset()
+    elif isinstance(output, xr.Dataset):
+        # Check if derived dataset dimensions are compatible for merging
+        return output
+
+    # If output is neither DataArray nor Dataset, return original
+    logger.warning(
+        f"Derived variable {derived_variable.name} returned neither DataArray nor "
+        "Dataset. Returning original dataset."
+    )
+    return dataset
 
 
 def maybe_pull_required_variables_from_derived_input(
