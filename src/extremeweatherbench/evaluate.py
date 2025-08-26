@@ -12,7 +12,6 @@ from tqdm.contrib.logging import logging_redirect_tqdm
 
 from extremeweatherbench import cases, derived, inputs
 from extremeweatherbench.defaults import OUTPUT_COLUMNS
-from extremeweatherbench.events import tropical_cyclone
 
 if TYPE_CHECKING:
     from extremeweatherbench import metrics
@@ -120,19 +119,11 @@ def compute_case_operator(case_operator: "cases.CaseOperator", **kwargs):
             cache_dir=kwargs.get("cache_dir", None),
         )
 
-    # Register IBTrACS data if we're evaluating TC tracks
-    if (
-        hasattr(case_operator.target, "__class__")
-        and case_operator.target.__class__.__name__ == "IBTrACS"
-    ):
-        # Register the target dataset for TC filtering
-        tropical_cyclone.register_ibtracs_data(
-            str(case_operator.case_metadata.case_id_number), aligned_target_ds
-        )
-
     aligned_forecast_ds, aligned_target_ds = [
         derived.maybe_derive_variables(
-            ds, variables, case_id=str(case_operator.case_metadata.case_id_number)
+            ds,
+            variables,
+            case_id_number=str(case_operator.case_metadata.case_id_number),
         )
         for ds, variables in zip(
             [aligned_forecast_ds, aligned_target_ds],

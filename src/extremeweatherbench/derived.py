@@ -158,10 +158,10 @@ class TropicalCycloneTrackVariables(DerivedVariable):
         # First check kwargs, then the global registry
         ibtracs_data = kwargs.get("ibtracs_data", None)
         if ibtracs_data is None:
-            # Try to get from registry using case_id if provided
-            case_id = kwargs.get("case_id", None)
-            if case_id is not None:
-                ibtracs_data = tropical_cyclone.get_ibtracs_data(case_id)
+            # Try to get from registry using case_id_number if provided
+            case_id_number = kwargs.get("case_id_number", None)
+            if case_id_number is not None:
+                ibtracs_data = tropical_cyclone.get_ibtracs_data(case_id_number)
             else:
                 raise ValueError("No IBTrACS data provided to constrain TC tracks.")
         # Use IBTrACS-filtered TC detection
@@ -220,6 +220,13 @@ def maybe_derive_variables(
         A dataset with derived variables, if any exist, else the original
         dataset.
     """
+    # Auto-register IBTrACS data if this dataset is marked as such
+    if ds.attrs.get("is_ibtracs_data", False):
+        case_id_number = kwargs.get("case_id_number")
+        if case_id_number is not None:
+            from extremeweatherbench.events import tropical_cyclone
+
+            tropical_cyclone.register_ibtracs_data(case_id_number, ds)
 
     # pull out the derived variables only from the list of variables
     derived_variables = [v for v in variables if not isinstance(v, str)]

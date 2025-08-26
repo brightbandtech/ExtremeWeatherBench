@@ -733,7 +733,7 @@ class TestTropicalCycloneTrackVariables:
             mock_create.return_value = xr.Dataset()
 
             derived.TropicalCycloneTrackVariables._get_or_compute_tracks(
-                sample_tc_forecast_dataset, case_id="test_case_123"
+                sample_tc_forecast_dataset, case_id_number="test_case_123"
             )
 
             # Should have tried to get from registry

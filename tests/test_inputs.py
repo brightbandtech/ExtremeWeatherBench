@@ -1090,6 +1090,78 @@ class TestIBTrACS:
         with pytest.raises(ValueError, match="Data is not a polars LazyFrame"):
             ibtracs._custom_convert_to_dataset("invalid_data")
 
+    def test_ibtracs_adds_registration_flag(self):
+        """Test that IBTrACS class properly flags datasets for TC registration."""
+        import pandas as pd
+
+        # Create fresh test datasets to avoid attribute pollution
+        test_dataset = xr.Dataset(
+            {
+                "surface_wind_speed": (["time"], [30.0, 35.0, 40.0]),
+                "air_pressure_at_mean_sea_level": (
+                    ["time"],
+                    [98000.0, 97500.0, 97000.0],
+                ),
+            },
+            coords={"time": pd.date_range("2023-09-01", periods=3, freq="6h")},
+        )
+
+        ibtracs = inputs.IBTrACS(
+            source="test.csv",
+            variables=["surface_wind_speed"],
+            variable_mapping={},
+            storage_options={},
+        )
+
+        # Test that add_source_to_dataset_attrs adds the IBTrACS flag
+        result = ibtracs.add_source_to_dataset_attrs(test_dataset.copy())
+
+        # Verify both the base functionality and the IBTrACS-specific flag
+        assert result.attrs["source"] == "IBTrACS"
+        assert result.attrs["is_ibtracs_data"] is True
+
+        # Test with a regular target class for comparison
+        era5 = inputs.ERA5(
+            source="test.zarr",
+            variables=["2m_temperature"],
+            variable_mapping={},
+            storage_options={},
+        )
+
+        era5_result = era5.add_source_to_dataset_attrs(test_dataset.copy())
+        assert era5_result.attrs["source"] == "ERA5"
+        assert era5_result.attrs.get("is_ibtracs_data", False) is False
+
+    def test_ibtracs_auto_registration_in_derived_variables(self):
+        """Test that IBTrACS data is automatically registered in derived processing."""
+        import pandas as pd
+
+        from extremeweatherbench import derived
+        from extremeweatherbench.events import tropical_cyclone
+
+        # Create test dataset flagged as IBTrACS data
+        test_dataset = xr.Dataset(
+            {
+                "surface_wind_speed": (["valid_time"], [30.0, 35.0, 40.0]),
+                "air_pressure_at_mean_sea_level": (
+                    ["valid_time"],
+                    [98000.0, 97500.0, 97000.0],
+                ),
+            },
+            coords={"valid_time": pd.date_range("2023-09-01", periods=3, freq="6h")},
+        )
+        test_dataset.attrs["is_ibtracs_data"] = True
+
+        # Clear registry and test registration
+        tropical_cyclone._IBTRACS_DATA_REGISTRY.clear()
+        test_case_id = "test_case_456"
+
+        # Process through derived variables (should trigger registration)
+        derived.maybe_derive_variables(test_dataset, [], case_id_number=test_case_id)
+
+        # Verify registration occurred
+        assert test_case_id in tropical_cyclone._IBTRACS_DATA_REGISTRY
+
 
 class TestStandaloneFunctions:
     """Test standalone functions in inputs module."""

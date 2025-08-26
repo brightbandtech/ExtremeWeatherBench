@@ -649,5 +649,6 @@ def sample_ibtracs_dataset():
         coords={"valid_time": valid_time},
     )
     dataset.attrs["source"] = "IBTrACS"
+    dataset.attrs["is_ibtracs_data"] = True
 
     return dataset
