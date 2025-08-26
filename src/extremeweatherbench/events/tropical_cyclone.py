@@ -1,4 +1,5 @@
 import hashlib
+import logging
 import math
 from collections import namedtuple
 from itertools import product
@@ -16,6 +17,9 @@ from skimage.feature import peak_local_max
 
 from extremeweatherbench import calc, utils
 
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
 
 def compute_landfall_metric(
     forecast,
@@ -26,8 +30,7 @@ def compute_landfall_metric(
     units="hours",
     intensity_var="surface_wind_speed",
 ):
-    """
-    Unified function to compute landfall metrics with different approaches.
+    """Unified function to compute landfall metrics with different approaches.
 
     Args:
         forecast: Forecast TC track dataset
@@ -1255,7 +1258,6 @@ def _create_tctracks_optimized_with_ibtracs(
     detected peaks are validated using TempestExtremes-style SLP and DZ contour
     criteria for improved track quality.
     """
-
     # Handle datasets with init_time coordinate
     if "init_time" in cyclone_dataset.coords:
         # Vectorized approach: process all init_times at once using groupby
@@ -1394,7 +1396,7 @@ def create_tctracks_from_dataset_with_ibtracs_filter(
     # Convert IBTrACS to pandas for easier temporal filtering
     ibtracs_df = ibtracs_data.to_dataframe().reset_index()
     ibtracs_df["valid_time"] = pd.to_datetime(ibtracs_df["valid_time"])
-
+    logger.info("Generating TC tracks")
     return _create_tctracks_optimized_with_ibtracs(
         cyclone_dataset,
         ibtracs_df,
@@ -2159,11 +2161,10 @@ def _find_landfall_intersection_point(lon1, lat1, lon2, lat2, land_geom):
 
 
 def _find_all_landfalls_optimized(lats, lons, vmax, slp, times, land_geom):
-    """
-    Optimized detection for ALL true landfall points along pre-processed coordinate
+    """Optimized detection for ALL true landfall points along pre-processed coordinate
     arrays.
 
-    Only detects ocean to land movements, not land to ocean.
+    Only detects ocean to land linestrings.
     """
     if len(lats) < 2:
         return None
@@ -2234,9 +2235,7 @@ def _find_all_landfalls_optimized(lats, lons, vmax, slp, times, land_geom):
 def calculate_landfall_time_difference_hours_xarray(
     landfall1: xr.Dataset, landfall2: xr.Dataset
 ) -> xr.DataArray:
-    """
-    Calculate the time difference between two landfall points in hours.
-    Handles both scalar and multi-dimensional (with init_time) datasets.
+    """Calculate the time difference between two landfall points in hours.
 
     Args:
         landfall1: First landfall xarray Dataset
@@ -2244,35 +2243,43 @@ def calculate_landfall_time_difference_hours_xarray(
 
     Returns:
         Time difference in hours (landfall1 - landfall2) as xarray DataArray
+        with init_time as the sole dimension
     """
     if landfall1 is None or landfall2 is None:
         return xr.DataArray(np.nan)
 
-    # Find the time coordinate in each dataset
-    time_coord1 = None
-    time_coord2 = None
+    # Get time values from landfall datasets
+    time1 = landfall1.valid_time if "valid_time" in landfall1 else landfall1.time
+    time2 = landfall2.valid_time if "valid_time" in landfall2 else landfall2.time
 
-    for coord_name in ["valid_time", "lead_time", "time"]:
-        if coord_name in landfall1.coords:
-            time_coord1 = landfall1[coord_name]
-        if coord_name in landfall2.coords:
-            time_coord2 = landfall2[coord_name]
-
-    if time_coord1 is None or time_coord2 is None:
-        return xr.DataArray(np.nan)
-
-    time_diff = time_coord1 - time_coord2
-    # Convert to hours
+    # Calculate time difference in hours
+    time_diff = time1 - time2
     time_diff_hours = time_diff / np.timedelta64(1, "h")
 
-    return time_diff_hours
+    # Return with init_time as the only dimension
+    if "init_time" in landfall1.dims:
+        # Ensure the values are properly shaped for init_time dimension
+        if time_diff_hours.dims == ():
+            # Scalar case - broadcast to all init_times
+            values = np.full(len(landfall1.init_time), float(time_diff_hours.values))
+        else:
+            # Already has the right dimensions
+            values = time_diff_hours.values
+
+        return xr.DataArray(
+            values,
+            dims=["init_time"],
+            coords={"init_time": landfall1.init_time},
+        )
+    else:
+        # Scalar case - no init_time dimension
+        return time_diff_hours
 
 
 def calculate_landfall_distance_km_xarray(
     landfall1: xr.Dataset, landfall2: xr.Dataset
 ) -> xr.DataArray:
-    """
-    Calculate the distance between two landfall points in kilometers.
+    """Calculate the distance between two landfall points in kilometers.
     Handles both scalar and multi-dimensional (with init_time) datasets.
 
     Args:
@@ -2296,50 +2303,6 @@ def calculate_landfall_distance_km_xarray(
     distance_km = np.radians(distance_degrees) * 6371
 
     return distance_km
-
-
-def analyze_landfall_metrics_xarray(
-    forecast_tracks: xr.Dataset, target_tracks: xr.Dataset
-):
-    """
-    Example function demonstrating how to compute landfall metrics using pure xarray.
-
-    Args:
-        forecast_tracks: Forecast TC track dataset
-        target_tracks: Target/analysis TC track dataset
-
-    Returns:
-        Dictionary containing landfall analysis results
-    """
-    # Find landfall points using xarray
-    forecast_landfall = find_landfall_xarray(forecast_tracks)
-    target_landfall = find_landfall_xarray(target_tracks)
-
-    if forecast_landfall is None or target_landfall is None:
-        return {
-            "landfall_time_error_hours": np.nan,
-            "landfall_distance_error_km": np.nan,
-            "landfall_intensity_error": np.nan,
-        }
-
-    # Compute metrics as in the original code
-    time_error_hours = calculate_landfall_time_difference_hours_xarray(
-        forecast_landfall, target_landfall
-    )
-    distance_error_km = calculate_landfall_distance_km_xarray(
-        forecast_landfall, target_landfall
-    )
-    intensity_error = float(forecast_landfall.surface_wind_speed.values) - float(
-        target_landfall.surface_wind_speed.values
-    )
-
-    return {
-        "landfall_time_error_hours": np.round(time_error_hours, 2),
-        "landfall_distance_error_km": np.round(distance_error_km, 2),
-        "landfall_intensity_error": np.round(intensity_error, 2),
-        "forecast_landfall": forecast_landfall,
-        "target_landfall": target_landfall,
-    }
 
 
 def generate_tc_variables(ds: xr.Dataset) -> xr.Dataset:
