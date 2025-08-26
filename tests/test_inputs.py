@@ -18,27 +18,12 @@ class TestInputBase:
         """Test that InputBase cannot be instantiated directly."""
         with pytest.raises(TypeError):
             inputs.InputBase(
+                name="test",
                 source="test",
                 variables=["test"],
                 variable_mapping={},
                 storage_options={},
             )
-
-    def test_input_base_name_property(self):
-        """Test that name property returns class name."""
-
-        # Create a concrete subclass for testing
-        class TestInput(inputs.InputBase):
-            def _open_data_from_source(self):
-                return None
-
-            def subset_data_to_case(self, data, case_operator):
-                return data
-
-        test_input = TestInput(
-            source="test", variables=["test"], variable_mapping={}, storage_options={}
-        )
-        assert test_input.name == "TestInput"
 
     def test_maybe_convert_to_dataset_with_dataset(self, sample_era5_dataset):
         """Test maybe_convert_to_dataset with xarray Dataset input."""
@@ -51,7 +36,11 @@ class TestInputBase:
                 return data
 
         test_input = TestInput(
-            source="test", variables=["test"], variable_mapping={}, storage_options={}
+            name="test",
+            source="test",
+            variables=["test"],
+            variable_mapping={},
+            storage_options={},
         )
         result = test_input.maybe_convert_to_dataset(sample_era5_dataset)
         assert isinstance(result, xr.Dataset)
@@ -70,7 +59,11 @@ class TestInputBase:
                 return data
 
         test_input = TestInput(
-            source="test", variables=["test"], variable_mapping={}, storage_options={}
+            name="test",
+            source="test",
+            variables=["test"],
+            variable_mapping={},
+            storage_options={},
         )
         result = test_input.maybe_convert_to_dataset(sample_gridded_obs_dataarray)
         assert isinstance(result, xr.Dataset)
@@ -86,7 +79,11 @@ class TestInputBase:
                 return data
 
         test_input = TestInput(
-            source="test", variables=["test"], variable_mapping={}, storage_options={}
+            name="test",
+            source="test",
+            variables=["test"],
+            variable_mapping={},
+            storage_options={},
         )
 
         with pytest.raises(NotImplementedError):
@@ -103,11 +100,46 @@ class TestInputBase:
                 return data
 
         test_input = TestInput(
-            source="test", variables=["test"], variable_mapping={}, storage_options={}
+            name="test",
+            source="test",
+            variables=["test"],
+            variable_mapping={},
+            storage_options={},
         )
 
         result = test_input.add_source_to_dataset_attrs(sample_era5_dataset)
-        assert result.attrs["source"] == "TestInput"
+        assert result.attrs["source"] == "test"
+
+    def test_set_name(self):
+        """Test setting the name using the set_name method."""
+
+        class TestInput(inputs.InputBase):
+            def _open_data_from_source(self):
+                return None
+
+            def subset_data_to_case(self, data, case_operator):
+                return data
+
+        test_input = TestInput(
+            name="original_name",
+            source="test",
+            variables=["test"],
+            variable_mapping={},
+            storage_options={},
+        )
+
+        # Verify original name
+        assert test_input.name == "original_name"
+
+        # Change the name using set_name method
+        test_input.set_name("new_name")
+
+        # Verify the name was changed
+        assert test_input.name == "new_name"
+
+        # Test with different name types
+        test_input.set_name("forecast_v2")
+        assert test_input.name == "forecast_v2"
 
 
 class TestMaybeMapVariableNames:
@@ -141,6 +173,7 @@ class TestMaybeMapVariableNames:
 
         # Test input with variable mapping
         test_input = test_input_base(
+            name="test",
             source="test",
             variables=["mapped_temp", "mapped_pressure"],
             variable_mapping={
@@ -163,6 +196,7 @@ class TestMaybeMapVariableNames:
     ):
         """Test no variable mapping returns data unchanged with xarray Dataset."""
         test_input = test_input_base(
+            name="test",
             source="test",
             variables=["2m_temperature"],
             variable_mapping={},
@@ -179,6 +213,7 @@ class TestMaybeMapVariableNames:
     ):
         """Test variable mapping with xarray DataArray."""
         test_input = test_input_base(
+            name="test",
             source="test",
             variables=["temp"],
             variable_mapping={"2m_temperature": "temp"},
@@ -203,6 +238,7 @@ class TestMaybeMapVariableNames:
         mock_derived.return_value = ["surface_air_temperature", "latitude"]
 
         test_input = test_input_base(
+            name="test",
             source="test",
             variables=["temp"],
             variable_mapping={"surface_air_temperature": "temp"},
@@ -229,6 +265,7 @@ class TestMaybeMapVariableNames:
         mock_derived.return_value = ["report_type", "magnitude"]
 
         test_input = test_input_base(
+            name="test",
             source="test",
             variables=["event_type"],
             variable_mapping={"report_type": "event_type"},
@@ -248,6 +285,7 @@ class TestMaybeMapVariableNames:
     ):
         """Test variable mapping when only some variables in mapping exist in data."""
         test_input = test_input_base(
+            name="test",
             source="test",
             variables=["temp"],
             variable_mapping={
@@ -270,7 +308,11 @@ class TestMaybeMapVariableNames:
     ):
         """Test when no variables are defined."""
         test_input = test_input_base(
-            source="test", variables=[], variable_mapping={}, storage_options={}
+            name="test",
+            source="test",
+            variables=[],
+            variable_mapping={},
+            storage_options={},
         )
 
         result = test_input.maybe_map_variable_names(sample_era5_dataset)
@@ -279,6 +321,7 @@ class TestMaybeMapVariableNames:
     def test_maybe_map_variable_names_unsupported_data_type(self, test_input_base):
         """Test error with unsupported data type."""
         test_input = test_input_base(
+            name="test",
             source="test",
             variables=["test_var"],
             variable_mapping={},
@@ -303,6 +346,7 @@ class TestMaybeMapVariableNames:
     ):
         """Test when variable_mapping is empty dict."""
         test_input = test_input_base(
+            name="test",
             source="test",
             variables=["2m_temperature"],
             variable_mapping={},
@@ -333,6 +377,7 @@ class TestMaybeMapVariableNames:
         test_data["extra_derived_var"] = test_data["2m_temperature"] * 2
 
         test_input = test_input_base(
+            name="test",
             source="test",
             variables=["temp"],
             variable_mapping={
@@ -358,6 +403,7 @@ class TestForecastBase:
     def test_forecast_base_subset_data_to_case_invalid_input(self):
         """Test subset_data_to_case with invalid input type."""
         forecast = inputs.ZarrForecast(
+            name="test",
             source="test.zarr",
             variables=["temperature"],
             variable_mapping={},
@@ -389,6 +435,7 @@ class TestForecastBase:
         mock_case.forecast.variables = ["surface_air_temperature"]
 
         forecast = inputs.ZarrForecast(
+            name="test",
             source="test.zarr",
             variables=["surface_air_temperature"],
             variable_mapping={},
@@ -397,6 +444,25 @@ class TestForecastBase:
 
         result = forecast.subset_data_to_case(sample_forecast_dataset, mock_case)
         assert isinstance(result, xr.Dataset)
+
+    def test_forecast_base_set_name_inheritance(self):
+        """Test that ForecastBase inherits set_name method from InputBase."""
+        forecast = inputs.ZarrForecast(
+            name="original_forecast",
+            source="test.zarr",
+            variables=["temperature"],
+            variable_mapping={},
+            storage_options={},
+        )
+
+        # Verify original name
+        assert forecast.name == "original_forecast"
+
+        # Use inherited set_name method
+        forecast.set_name("updated_forecast")
+
+        # Verify the name was changed
+        assert forecast.name == "updated_forecast"
 
 
 class TestTargetBase:
@@ -415,7 +481,11 @@ class TestTargetBase:
                 return data
 
         target = TestTarget(
-            source="test", variables=["test"], variable_mapping={}, storage_options={}
+            name="test",
+            source="test",
+            variables=["test"],
+            variable_mapping={},
+            storage_options={},
         )
 
         forecast_result, target_result = target.maybe_align_forecast_to_target(
@@ -425,6 +495,25 @@ class TestTargetBase:
         # Default implementation should return inputs unchanged
         assert forecast_result is sample_forecast_dataset
         assert target_result is sample_era5_dataset
+
+    def test_target_base_set_name_inheritance(self):
+        """Test that TargetBase inherits set_name method from InputBase."""
+        target = inputs.ERA5(
+            name="original_era5",
+            source="gs://test-bucket/era5.zarr",
+            variables=["2m_temperature"],
+            variable_mapping={},
+            storage_options={},
+        )
+
+        # Verify original name
+        assert target.name == "original_era5"
+
+        # Use inherited set_name method
+        target.set_name("updated_era5")
+
+        # Verify the name was changed
+        assert target.name == "updated_era5"
 
 
 class TestEvaluationObject:
@@ -460,6 +549,7 @@ class TestZarrForecast:
         mock_open_zarr.return_value = sample_forecast_dataset
 
         forecast = inputs.ZarrForecast(
+            name="test",
             source="test.zarr",
             variables=["temperature"],
             variable_mapping={},
@@ -481,6 +571,7 @@ class TestZarrForecast:
         custom_chunks = {"time": 24, "latitude": 361, "longitude": 720}
 
         forecast = inputs.ZarrForecast(
+            name="test",
             source="test.zarr",
             variables=["temperature"],
             variable_mapping={},
@@ -502,6 +593,7 @@ class TestKerchunkForecast:
         mock_open_kerchunk.return_value = sample_forecast_dataset
 
         forecast = inputs.KerchunkForecast(
+            name="test",
             source="test.parq",
             variables=["temperature"],
             variable_mapping={},
@@ -527,6 +619,7 @@ class TestERA5:
         mock_open_zarr.return_value = sample_era5_dataset
 
         era5 = inputs.ERA5(
+            name="test",
             source="gs://test-bucket/era5.zarr",
             variables=["2m_temperature"],
             variable_mapping={},
@@ -550,6 +643,7 @@ class TestERA5:
         mock_case = Mock()
 
         era5 = inputs.ERA5(
+            name="test",
             source="test.zarr",
             variables=["2m_temperature"],
             variable_mapping={},
@@ -575,6 +669,7 @@ class TestERA5:
         )
 
         era5 = inputs.ERA5(
+            name="test",
             source="test.zarr",
             variables=["2m_temperature"],
             variable_mapping={},
