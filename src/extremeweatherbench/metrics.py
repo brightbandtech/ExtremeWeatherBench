@@ -26,7 +26,7 @@ class BaseMetric(ABC):
     """
 
     # default to preserving lead_time in EWB metrics
-    preserve_dims: str = "init_time"
+    preserve_dims: str = "lead_time"
 
     @property
     def name(self) -> str:
