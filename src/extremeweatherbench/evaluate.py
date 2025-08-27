@@ -120,11 +120,8 @@ def compute_case_operator(case_operator: "cases.CaseOperator", **kwargs):
         )
 
     aligned_forecast_ds, aligned_target_ds = [
-        derived.maybe_derive_variables(ds, variables)
-        for ds, variables in zip(
-            [aligned_forecast_ds, aligned_target_ds],
-            [case_operator.forecast.variables, case_operator.target.variables],
-        )
+        derived.maybe_derive_variable(ds, case_operator=case_operator)
+        for ds in [aligned_forecast_ds, aligned_target_ds]
     ]
     logger.info(f"datasets built for case {case_operator.case_metadata.case_id_number}")
     results = []
@@ -190,8 +187,8 @@ def _extract_standard_metadata(
     return {
         "target_variable": target_variable,
         "metric": metric.name,
-        "target_source": target_ds.attrs["source"],
-        "forecast_source": forecast_ds.attrs["source"],
+        "target_source": target_ds.attrs.get("source", "unknown"),
+        "forecast_source": forecast_ds.attrs.get("source", "unknown"),
         "case_id_number": case_id_number,
         "event_type": event_type,
     }
@@ -260,11 +257,22 @@ def _evaluate_metric_and_return_df(
     Returns:
         A dataframe of the results of the metric evaluation.
     """
+    for variable in [forecast_variable, target_variable]:
+        if hasattr(variable, "name") and not isinstance(variable, str):
+            variable = [data_var for data_var in forecast_ds.data_vars]
+        elif isinstance(variable, str):
+            variable = variable
+        else:
+            variable = variable.name
+
+    # TODO: swap compute_metric to classmethod
     metric = metric()
     logger.info(f"computing metric {metric.name}")
+    # loads in all variables if no name is provided
+    # TODO: expand typing to allow for datasets or rethink logic with inputs like TCs
     metric_result = metric.compute_metric(
-        forecast_ds[forecast_variable],
-        target_ds[target_variable],
+        forecast_ds.get(forecast_variable, forecast_ds.data_vars),
+        target_ds.get(target_variable, target_ds.data_vars),
         **kwargs,
     )
 
