@@ -266,7 +266,6 @@ def _evaluate_metric_and_return_df(
             variable = variable.name
 
     # TODO: swap compute_metric to classmethod
-    metric = metric()
     logger.info(f"computing metric {metric.name}")
     # loads in all variables if no name is provided
     # TODO: expand typing to allow for datasets or rethink logic with inputs like TCs
