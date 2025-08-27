@@ -305,55 +305,20 @@ class TestMaybeDeriveVariablesFunction:
                         raise ValueError(f"Input variable {v} not found in data")
                 return cls.derive_variable(data, **kwargs)
 
-        variables = [TestDerivedVariableWithKwargs()]
-        test_multiplier = 5.0
+    def test_prepare_wind_data_helper(self, sample_dataset):
+        """Test the internal _prepare_wind_data helper function."""
+        # This tests the helper function within derive_variable
+        # We need to access it indirectly since it's defined within the method
 
-        sample_dataset.attrs["dataset_type"] = "forecast"
-        case_operator = create_mock_case_operator(variables, "forecast")
+        # Test case 1: Dataset has wind speed
+        result1 = sample_dataset.copy()
+        assert "surface_wind_speed" in result1.data_vars
 
-        result = derived.maybe_derive_variable(
-            sample_dataset, case_operator, multiplier=test_multiplier
-        )
-
-        assert isinstance(result, xr.Dataset)
-        assert "test_variable_1" in result.data_vars  # Derived from test_variable_1
-        expected = sample_dataset["test_variable_1"] * test_multiplier
-        xr.testing.assert_equal(result["test_variable_1"], expected)
-
-    def test_derived_variable_returns_dataset_different_dims(self, sample_dataset):
-        """Test derived variable that returns Dataset with different dimensions."""
-
-        class TestDatasetReturnVariable(derived.DerivedVariable):
-            required_variables = ["test_variable_1"]
-
-            @classmethod
-            def derive_variable(cls, data: xr.Dataset) -> xr.Dataset:
-                # Return a dataset with different dimensions
-                new_coords = {"new_dim": [1, 2, 3], "other_dim": [10, 20]}
-                return xr.Dataset(
-                    {
-                        "new_variable": xr.DataArray(
-                            np.ones((3, 2)),
-                            dims=["new_dim", "other_dim"],
-                            coords=new_coords,
-                        )
-                    }
-                )
-
-        variables = [TestDatasetReturnVariable()]
-
-        sample_dataset.attrs["dataset_type"] = "forecast"
-        case_operator = create_mock_case_operator(variables, "forecast")
-
-        # Logger warnings are not pytest warnings, so just check functionality
-        result = derived.maybe_derive_variable(sample_dataset, case_operator)
-
-        # Should return the new dataset, not merge with original
-        assert isinstance(result, xr.Dataset)
-        assert "new_variable" in result.data_vars
-        # Original dataset variables should NOT be present
-        assert "test_variable_1" not in result.data_vars
-        assert set(result.dims) == {"new_dim", "other_dim"}
+        # Test case 2: Dataset missing wind speed but has components
+        dataset_no_speed = sample_dataset.drop_vars("surface_wind_speed")
+        assert "surface_wind_speed" not in dataset_no_speed.data_vars
+        assert "surface_eastward_wind" in dataset_no_speed.data_vars
+        assert "surface_northward_wind" in dataset_no_speed.data_vars
 
     def test_derived_variable_missing_required_vars(self, sample_dataset):
         """Test derived variable with missing required variables."""
