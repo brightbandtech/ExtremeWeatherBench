@@ -12,6 +12,7 @@ from tqdm.contrib.logging import logging_redirect_tqdm
 
 from extremeweatherbench import cases, derived, inputs
 from extremeweatherbench.defaults import OUTPUT_COLUMNS
+from extremeweatherbench.events import tropical_cyclone
 
 if TYPE_CHECKING:
     from extremeweatherbench import metrics
@@ -119,8 +120,20 @@ def compute_case_operator(case_operator: "cases.CaseOperator", **kwargs):
             cache_dir=kwargs.get("cache_dir", None),
         )
 
+    # Register IBTrACS data if we're evaluating TC tracks
+    if (
+        hasattr(case_operator.target, "__class__")
+        and case_operator.target.__class__.__name__ == "IBTrACS"
+    ):
+        # Register the target dataset for TC filtering
+        tropical_cyclone.register_ibtracs_data(
+            str(case_operator.case_metadata.case_id_number), aligned_target_ds
+        )
+
     aligned_forecast_ds, aligned_target_ds = [
-        derived.maybe_derive_variables(ds, variables)
+        derived.maybe_derive_variables(
+            ds, variables, case_id=str(case_operator.case_metadata.case_id_number)
+        )
         for ds, variables in zip(
             [aligned_forecast_ds, aligned_target_ds],
             [case_operator.forecast.variables, case_operator.target.variables],
@@ -260,11 +273,22 @@ def _evaluate_metric_and_return_df(
     Returns:
         A dataframe of the results of the metric evaluation.
     """
+    for variable in [forecast_variable, target_variable]:
+        if hasattr(variable, "name") and not isinstance(variable, str):
+            variable = [data_var for data_var in forecast_ds.data_vars]
+        elif isinstance(variable, str):
+            variable = variable
+        else:
+            variable = variable.name
+
+    # TODO: swap compute_metric to classmethod
     metric = metric()
     logger.info(f"computing metric {metric.name}")
+    # loads in all variables if no name is provided
+    # TODO: expand typing to allow for datasets or rethink logic with inputs like TCs
     metric_result = metric.compute_metric(
-        forecast_ds[forecast_variable],
-        target_ds[target_variable],
+        forecast_ds.get(forecast_variable, forecast_ds.data_vars),
+        target_ds.get(target_variable, target_ds.data_vars),
         **kwargs,
     )
 
