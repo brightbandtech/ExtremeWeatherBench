@@ -14,7 +14,6 @@ import pytest
 import xarray as xr
 
 from extremeweatherbench import derived
-from extremeweatherbench.events import tropical_cyclone
 
 
 def create_mock_case_operator(variables, dataset_type="forecast"):
