@@ -391,7 +391,7 @@ class TestComputeCaseOperator:
             sample_target_dataset,
         )
         mock_derive_variables.side_effect = (
-            lambda ds, case_operator: ds  # Return unchanged
+            lambda ds, variables: ds  # Return unchanged
         )
 
         mock_result = pd.DataFrame(
@@ -430,7 +430,7 @@ class TestComputeCaseOperator:
             sample_forecast_dataset,
             sample_target_dataset,
         )
-        mock_derive_variables.side_effect = lambda ds, case_operator: ds
+        mock_derive_variables.side_effect = lambda ds, variables: ds
 
         sample_case_operator.target.maybe_align_forecast_to_target.return_value = (
             sample_forecast_dataset,
@@ -482,8 +482,8 @@ class TestComputeCaseOperator:
             sample_target_dataset,
         )
 
-        with patch("extremeweatherbench.derived.maybe_derive_variable") as mock_derive:
-            mock_derive.side_effect = lambda ds, case_operator: ds
+        with patch("extremeweatherbench.derived.maybe_derive_variables") as mock_derive:
+            mock_derive.side_effect = lambda ds, variables: ds
 
             with patch(
                 "extremeweatherbench.evaluate._evaluate_metric_and_return_df"
@@ -912,7 +912,7 @@ class TestIntegration:
         sample_target_dataset,
     ):
         """Test a complete end-to-end workflow."""
-        mock_derive_variables.side_effect = lambda ds, case_operator: ds
+        mock_derive_variables.side_effect = lambda ds, variables: ds
 
         # Setup the evaluation object methods
         sample_evaluation_object.target.maybe_align_forecast_to_target.return_value = (
@@ -1052,8 +1052,8 @@ class TestIntegration:
             }
         )
 
-        with patch("extremeweatherbench.derived.maybe_derive_variable") as mock_derive:
-            mock_derive.side_effect = lambda ds, case_operator: ds
+        with patch("extremeweatherbench.derived.maybe_derive_variables") as mock_derive:
+            mock_derive.side_effect = lambda ds, variables: ds
 
             with patch(
                 "extremeweatherbench.evaluate._evaluate_metric_and_return_df"
