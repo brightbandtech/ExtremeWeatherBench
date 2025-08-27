@@ -1,11 +1,11 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import List, Type, Union
+from typing import List, Optional, Sequence, Type, Union
 
 import numpy as np
 import xarray as xr
 
-from extremeweatherbench.events import tropical_cyclone
+from extremeweatherbench.events import atmospheric_river, tropical_cyclone
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -33,7 +33,8 @@ class DerivedVariable(ABC):
             derive the variable from required_variables.
     """
 
-    required_variables: List[str]
+    required_variables: List[str | Type["DerivedVariable"]]
+    optional_variables: Optional[List[str | Type["DerivedVariable"]]] = None
 
     @property
     def name(self) -> str:
@@ -76,9 +77,39 @@ class DerivedVariable(ABC):
             A DataArray with the derived variable.
         """
         for v in cls.required_variables:
-            if v not in data.data_vars:
-                raise ValueError(f"Input variable {v} not found in data")
+            if isinstance(v, str):
+                if v not in data.data_vars:
+                    raise ValueError(f"Input variable {v} not found in data")
+            elif issubclass(v, DerivedVariable):
+                if v.name not in data.data_vars:
+                    raise ValueError(f"Input variable {v.name} not found in data")
+            else:
+                raise ValueError(f"Invalid input variable type: {type(v)}")
         return cls.derive_variable(data, *args, **kwargs)
+
+
+class AtmosphericRiverMask(DerivedVariable):
+    """A derived variable that computes the atmospheric river mask.
+
+    Calculates the IVT (Integrated Vapor Transport) and its Laplacian from a dataset.IVT
+    is calculated using the method described in Newell et al. 1992 and elsewhere
+    (e.g. Mo 2024).
+
+    The Laplacian of IVT is calculated using a Gaussian blurring kernel with a
+    sigma of 3 grid points, meant to smooth out 0.25 degree grid scale features.
+    """
+
+    required_variables = [
+        "eastward_wind",
+        "northward_wind",
+        "specific_humidity",
+    ]
+    name = "atmospheric_river_mask"
+
+    @classmethod
+    def derive_variable(cls, data: xr.Dataset, *args, **kwargs) -> xr.Dataset:
+        """Derive the atmospheric river mask using xr.apply_ufunc approach."""
+        return atmospheric_river.compute_atmospheric_river_mask_ufunc(data)
 
 
 class TropicalCycloneTrackVariables(DerivedVariable):
@@ -243,9 +274,9 @@ def maybe_derive_variables(
     return ds
 
 
-def maybe_pull_required_variables_from_derived_input(
-    incoming_variables: list[Union[str, DerivedVariable, Type[DerivedVariable]]],
-) -> list[str]:
+def maybe_pull_variables_from_derived_input(
+    incoming_variables: Sequence[Union[str, DerivedVariable, Type[DerivedVariable]]],
+) -> Sequence[str]:
     """Pull the required variables from a derived input and add to the list of
     variables to pull.
 
@@ -256,15 +287,29 @@ def maybe_pull_required_variables_from_derived_input(
         A list of variables possibly including derived variables' required
         variables.
     """
-    string_variables = [v for v in incoming_variables if isinstance(v, str)]
+    # Use a set to automatically handle deduplication
+    all_variables = set()
 
-    derived_required_variables = []
     for v in incoming_variables:
-        if isinstance(v, DerivedVariable):
+        if isinstance(v, str):
+            all_variables.add(v)
+        elif isinstance(v, DerivedVariable):
             # Handle instances of DerivedVariable
-            derived_required_variables.extend(v.required_variables)
+            for req_var in v.required_variables:
+                if isinstance(req_var, type) and issubclass(req_var, DerivedVariable):
+                    raise NotImplementedError(
+                        "DerivedVariable instances are not supported in "
+                        "required_variables"
+                    )
+                all_variables.add(req_var)
         elif isinstance(v, type) and issubclass(v, DerivedVariable):
             # Handle classes that inherit from DerivedVariable
-            derived_required_variables.extend(v.required_variables)
+            # Recursively pull required variables from derived variables
+            recursive_vars = maybe_pull_variables_from_derived_input(
+                v.required_variables
+            )
+            all_variables.update(recursive_vars)
+        else:
+            all_variables.add(str(v))
 
-    return string_variables + derived_required_variables
+    return list(all_variables)

@@ -40,7 +40,10 @@ test_yaml = {
 era5_target = inputs.ERA5(
     source=inputs.ARCO_ERA5_FULL_URI,
     variables=[
+        derived.IntegratedVaporTransport,
+        derived.IntegratedVaporTransportLaplacian,
         derived.AtmosphericRiverMask,
+        derived.AtmosphericRiverLandIntersection,
     ],
     variable_mapping={
         "specific_humidity": "specific_humidity",
@@ -55,7 +58,10 @@ era5_target = inputs.ERA5(
 hres_forecast = inputs.ZarrForecast(
     source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
     variables=[
+        derived.IntegratedVaporTransport,
+        derived.IntegratedVaporTransportLaplacian,
         derived.AtmosphericRiverMask,
+        derived.AtmosphericRiverLandIntersection,
     ],
     variable_mapping={
         "u_component_of_wind": "eastward_wind",
@@ -71,7 +77,14 @@ hres_forecast = inputs.ZarrForecast(
 ar_metric_list = [
     inputs.EvaluationObject(
         event_type="atmospheric_river",
-        metric=[metrics.SpatialDisplacement],
+        metric=[
+            metrics.SpatialDisplacement(
+                forecast_variable=derived.IntegratedVaporTransport.name,
+                target_variable=derived.IntegratedVaporTransport.name,
+                forecast_mask_variable=derived.AtmosphericRiverLandIntersection.name,
+                target_mask_variable=derived.AtmosphericRiverLandIntersection.name,
+            ),
+        ],
         target=era5_target,
         forecast=hres_forecast,
     ),
