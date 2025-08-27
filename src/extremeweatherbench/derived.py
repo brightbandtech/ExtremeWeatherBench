@@ -106,7 +106,7 @@ class AtmosphericRiverMask(DerivedVariable):
     name = "atmospheric_river_mask"
 
     @classmethod
-    def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
+    def derive_variable(cls, data: xr.Dataset) -> xr.Dataset:
         """Derive the atmospheric river mask."""
 
         coords_dict = {dim: data.coords[dim] for dim in data.dims if dim != "level"}
@@ -157,7 +157,13 @@ class AtmosphericRiverMask(DerivedVariable):
         ivt_laplacian_da = ar.blurred_laplacian(ivt_da)
         data = xr.merge([ivt_da, ivt_laplacian_da])
         ar_mask = ar.ar_mask(data)
-        return xr.DataArray(ar_mask, name=cls.name)
+        land_intersection = calc.find_land_intersection(ar_mask)
+        return xr.Dataset(
+            {
+                "atmospheric_river_mask": ar_mask,
+                "atmospheric_river_land_intersection": land_intersection,
+            }
+        )
 
 
 class AtmosphericRiverLandIntersection(DerivedVariable):
@@ -172,61 +178,6 @@ class AtmosphericRiverLandIntersection(DerivedVariable):
         ar_mask = data[AtmosphericRiverMask.name]
         land_intersection = calc.find_land_intersection(ar_mask)
         return xr.DataArray(land_intersection, name=cls.name)
-
-
-# TODO: finish TC track calculation port
-class TCTrackVariables(DerivedVariable):
-    """A derived variable that computes the TC track outputs.
-
-    This derived variable is used to compute the TC track outputs.
-    It is a flexible variable that can be used to compute the TC track outputs
-    based on the data availability.
-
-    Deriving the track locations using default TempestExtremes criteria:
-    https://doi.org/10.5194/gmd-14-5023-2021
-    """
-
-    required_variables = [
-        "air_pressure_at_mean_sea_level",
-        "geopotential",
-        "surface_wind_speed",
-        "surface_eastward_wind",
-        "surface_northward_wind",
-    ]
-
-    @classmethod
-    def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
-        """Derive the TC track variables."""
-
-        def _prepare_wind_data(data: xr.Dataset) -> xr.Dataset:
-            """Prepare wind data by computing wind speed if needed."""
-            # Make a copy to avoid modifying original
-            prepared_data = data.copy()
-
-            has_wind_speed = "surface_wind_speed" in data.data_vars
-            has_wind_components = (
-                "surface_eastward_wind" in data.data_vars
-                and "surface_northward_wind" in data.data_vars
-            )
-
-            # If we don't have wind speed but have components, compute it
-            if not has_wind_speed and has_wind_components:
-                prepared_data["surface_wind_speed"] = np.hypot(
-                    data["surface_eastward_wind"], data["surface_northward_wind"]
-                )
-
-            return prepared_data
-
-        # Prepare the data with wind variables as needed
-        prepared_data = _prepare_wind_data(data)
-
-        # Generates the variables needed for the TC track calculation
-        # (geop. thickness, winds, temps, slp)
-        cyclone_dataset = calc.generate_tc_variables(prepared_data)
-        tctracks = calc.create_tctracks_from_dataset(cyclone_dataset)
-        tctracks_ds_3d = calc.tctracks_to_3d_dataset(tctracks)
-
-        return tctracks_ds_3d  # type: ignore[return-value]
 
 
 def maybe_derive_variables(
