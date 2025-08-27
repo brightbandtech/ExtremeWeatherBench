@@ -261,6 +261,7 @@ def maybe_derive_variables(
         A dataset with derived variables, if any exist, else the original
         dataset.
     """
+
     maybe_derived_variables = [v for v in variables if not isinstance(v, str)]
 
     if not maybe_derived_variables:
