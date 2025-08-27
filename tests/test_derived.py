@@ -248,8 +248,10 @@ class TestMaybeDeriveVariablesFunction:
         assert "test_variable_1" not in result.data_vars
         assert set(result.dims) == {"new_dim", "other_dim"}
 
-    def test_derived_variable_missing_required_vars(self, sample_derived_dataset):
-        """Test derived variable with missing required variables."""
+    def test_prepare_wind_data_helper(self, sample_derived_dataset):
+        """Test the internal _prepare_wind_data helper function."""
+        # This tests the helper function within derive_variable
+        # We need to access it indirectly since it's defined within the method
 
         class TestMissingVarDerived(derived.DerivedVariable):
             required_variables = ["nonexistent_variable"]

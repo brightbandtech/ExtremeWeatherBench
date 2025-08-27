@@ -104,7 +104,6 @@ def orography(ds: xr.Dataset) -> xr.DataArray:
         The orography as an xarray DataArray.
     """
     if "geopotential_at_surface" in ds.variables:
-        # Take the first time slice since orography is time-independent
         return ds["geopotential_at_surface"].isel(time=0) / 9.80665
     else:
         era5 = xr.open_zarr(
@@ -149,10 +148,7 @@ def calculate_wind_speed(ds: xr.Dataset) -> xr.DataArray:
         "surface_eastward_wind" in ds.data_vars
         and "surface_northward_wind" in ds.data_vars
     ):
-        return np.hypot(
-            ds["surface_eastward_wind"],
-            ds["surface_northward_wind"],
-        )
+        return np.hypot(ds["surface_eastward_wind"], ds["surface_northward_wind"])
     else:
         raise ValueError("No suitable wind speed variables found in dataset")
 
@@ -161,7 +157,7 @@ def generate_geopotential_thickness(
     ds: xr.Dataset,
     var_name: str = "geopotential",
     level_name: str = "level",
-    top_level_value: int | Sequence[int] = 300,
+    top_level_value: int = 300,
     bottom_level_value: int = 500,
 ) -> xr.DataArray:
     """Generate the geopotential thickness from the geopotential heights.
