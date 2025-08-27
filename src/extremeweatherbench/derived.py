@@ -1,11 +1,14 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import List, Type, Union
+from typing import TYPE_CHECKING, List, Type, Union
 
 import numpy as np
 import xarray as xr
 
 from extremeweatherbench.events import tropical_cyclone
+
+if TYPE_CHECKING:
+    from extremeweatherbench import cases
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -201,76 +204,83 @@ class TropicalCycloneTrackVariables(DerivedVariable):
         tropical_cyclone._TC_TRACK_CACHE.clear()
 
 
-def maybe_derive_variables(
-    ds: xr.Dataset, variables: list[str | DerivedVariable], **kwargs
+def maybe_derive_variable(
+    dataset: xr.Dataset,
+    case_operator: "cases.CaseOperator",
+    **kwargs,
 ) -> xr.Dataset:
-    """Derive variables from the data if any exist in a list of variables.
+    """Derive variable from the data if it exists in a list of variables.
 
-    Derived variables must maintain the same spatial dimensions as the original
-    dataset.
+    Derived variables do not need to maintain the same spatial dimensions as the
+    original dataset. Expected behavior is that an EvaluationObject has one derived
+    variable. If there are multiple derived variables, the first one will be used.
 
     Args:
-        ds: The dataset, ideally already subset in case of in memory operations
+        dataset: The dataset, ideally already subset in case of in memory operations
             in the derived variables.
-        variables: The potential variables to derive as a list of strings or
-            DerivedVariable objects.
+        case_operator: The case operator containing variable information.
         **kwargs: Additional keyword arguments to pass to the derived variables.
 
     Returns:
         A dataset with derived variables, if any exist, else the original
         dataset.
     """
-    # Auto-register IBTrACS data if this dataset is marked as such
-    if ds.attrs.get("is_ibtracs_data", False):
-        case_id_number = kwargs.get("case_id_number")
-        if case_id_number is not None:
-            from extremeweatherbench.events import tropical_cyclone
+    dataset_type = dataset.attrs.get("dataset_type", "unknown")
+    if dataset_type == "forecast":
+        variables = case_operator.forecast.variables
+    elif dataset_type == "target":
+        variables = case_operator.target.variables
+    else:
+        logger.warning(
+            "Unknown dataset_type '%s', skipping",
+            dataset_type,
+        )
+        return dataset
 
-            tropical_cyclone.register_ibtracs_data(case_id_number, ds)
+    maybe_derived_variables = [v for v in variables if not isinstance(v, str)]
 
-    # pull out the derived variables only from the list of variables
-    derived_variables = [v for v in variables if not isinstance(v, str)]
-    derived_data = {}
+    if not maybe_derived_variables:
+        logger.debug("No derived variables for dataset type '%s'", dataset_type)
+        return dataset
 
-    if derived_variables:
-        for v in derived_variables:
-            output = v.compute(data=ds, **kwargs)
-            # Ensure the DataArray has the correct name and is a DataArray.
-            # Some derived variables return a dataset (multiple variables), so we need
-            # to check
-            if isinstance(output, xr.DataArray):
-                if output.name is None:
-                    logger.warning(
-                        "Derived variable %s has no name, using class name.",
-                        v.name,
-                    )
-                    output.name = v.name
-                derived_data[v.name] = output
-            elif isinstance(output, xr.Dataset):
-                # Check if derived dataset dimensions are compatible for merging
-                # We check if all dimensions in the derived dataset exist in the
-                # original dataset with the same sizes
-                compatible_dims = all(
-                    dim in ds.sizes and ds.sizes[dim] == output.sizes[dim]
-                    for dim in output.sizes
-                )
+    if len(maybe_derived_variables) > 1:
+        logger.warning(
+            "Multiple derived variables provided. Only the first one will be "
+            "computed. Users must use separate EvaluationObjects to derive "
+            "each variable."
+        )
 
-                if not compatible_dims:
-                    logger.warning(
-                        "Derived variable %s returning instead of merging with input "
-                        "dataset, dims are different.",
-                        v.name,
-                    )
-                    return output
-                else:
-                    # Dataset has compatible dimensions, merge all its variables
-                    for var_name, data_array in output.data_vars.items():
-                        derived_data[var_name] = data_array
+    # Take the first derived variable and process it
+    derived_variable = maybe_derived_variables[0]
 
-    # TODO consider removing data variables only used for derivation
-    # Merge dataarrays into the original dataset
-    ds = ds.merge(derived_data)
-    return ds
+    # Ensure case_id_number is available for derived variable computation
+    if "case_id_number" not in kwargs:
+        kwargs["case_id_number"] = case_operator.case_metadata.case_id_number
+
+    output = derived_variable.compute(data=dataset, **kwargs)
+
+    # Ensure the DataArray has the correct name and is a DataArray.
+    # Some derived variables return a dataset (multiple variables), so we need
+    # to check
+    if isinstance(output, xr.DataArray):
+        if output.name is None:
+            logger.debug(
+                "Derived variable %s has no name, using class name.",
+                derived_variable.name,
+            )
+            output.name = derived_variable.name
+        # Merge the derived variable into the dataset
+        return output.to_dataset()
+    elif isinstance(output, xr.Dataset):
+        # Check if derived dataset dimensions are compatible for merging
+        return output
+
+    # If output is neither DataArray nor Dataset, return original
+    logger.warning(
+        f"Derived variable {derived_variable.name} returned neither DataArray nor "
+        "Dataset. Returning original dataset."
+    )
+    return dataset
 
 
 def maybe_pull_required_variables_from_derived_input(

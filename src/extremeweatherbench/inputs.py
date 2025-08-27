@@ -692,6 +692,7 @@ class IBTrACS(TargetBase):
     """Target class for IBTrACS data."""
 
     name: str = "IBTrACS"
+    _current_case_id: Optional[str] = dataclasses.field(default=None, init=False)
 
     def _open_data_from_source(self) -> utils.IncomingDataInput:
         # not using storage_options in this case due to NetCDF4Backend not
@@ -708,6 +709,9 @@ class IBTrACS(TargetBase):
         target_data: utils.IncomingDataInput,
         case_operator: "cases.CaseOperator",
     ) -> utils.IncomingDataInput:
+        # Store case_id_number for IBTrACS registration
+        self._current_case_id = str(case_operator.case_metadata.case_id_number)
+
         if not isinstance(target_data, pl.LazyFrame):
             raise ValueError(f"Expected polars LazyFrame, got {type(target_data)}")
 
@@ -856,9 +860,13 @@ class IBTrACS(TargetBase):
         """
         ds = super().add_source_to_dataset_attrs(ds)
 
-        # Store flag indicating this is IBTrACS data that should be registered
-        # The actual registration will happen in the evaluate module using
-        # the case_id_number as the key for consistency
+        # Register IBTrACS data immediately for tropical cyclone filtering
+        if self._current_case_id is not None:
+            from extremeweatherbench.events import tropical_cyclone
+
+            tropical_cyclone.register_ibtracs_data(self._current_case_id, ds)
+
+        # Store flag indicating this is IBTrACS data
         ds.attrs["is_ibtracs_data"] = True
 
         return ds

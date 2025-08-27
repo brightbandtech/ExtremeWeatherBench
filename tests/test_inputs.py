@@ -1211,14 +1211,28 @@ class TestIBTrACS:
         assert era5_result.attrs["source"] == "ERA5"
         assert era5_result.attrs.get("is_ibtracs_data", False) is False
 
-    def test_ibtracs_auto_registration_in_derived_variables(self):
-        """Test that IBTrACS data is automatically registered in derived processing."""
+    def test_ibtracs_auto_registration_in_inputs_pipeline(self):
+        """Test that IBTrACS data is automatically registered during processing."""
+        from unittest.mock import Mock
+
         import pandas as pd
 
-        from extremeweatherbench import derived
         from extremeweatherbench.events import tropical_cyclone
+        from extremeweatherbench.inputs import IBTrACS
 
-        # Create test dataset flagged as IBTrACS data
+        # Clear registry and test registration
+        tropical_cyclone._IBTRACS_DATA_REGISTRY.clear()
+        test_case_id = "test_case_456"
+
+        # Create an IBTrACS instance
+        ibtracs = IBTrACS(source="dummy", name="test_ibtracs")
+
+        # Create a mock case operator
+        mock_case_operator = Mock()
+        mock_case_operator.case_metadata = Mock()
+        mock_case_operator.case_metadata.case_id_number = test_case_id
+
+        # Create test dataset
         test_dataset = xr.Dataset(
             {
                 "surface_wind_speed": (["valid_time"], [30.0, 35.0, 40.0]),
@@ -1229,17 +1243,15 @@ class TestIBTrACS:
             },
             coords={"valid_time": pd.date_range("2023-09-01", periods=3, freq="6h")},
         )
-        test_dataset.attrs["is_ibtracs_data"] = True
 
-        # Clear registry and test registration
-        tropical_cyclone._IBTRACS_DATA_REGISTRY.clear()
-        test_case_id = "test_case_456"
-
-        # Process through derived variables (should trigger registration)
-        derived.maybe_derive_variables(test_dataset, [], case_id_number=test_case_id)
+        # Simulate the pipeline: first subset (which stores case_id), then add attrs
+        # (which registers)
+        ibtracs._current_case_id = test_case_id  # Simulate subset_data_to_case
+        result_dataset = ibtracs.add_source_to_dataset_attrs(test_dataset)
 
         # Verify registration occurred
         assert test_case_id in tropical_cyclone._IBTRACS_DATA_REGISTRY
+        assert result_dataset.attrs["is_ibtracs_data"] is True
 
 
 class TestStandaloneFunctions:
