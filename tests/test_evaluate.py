@@ -376,7 +376,7 @@ class TestComputeCaseOperator:
     """Test the compute_case_operator function."""
 
     @patch("extremeweatherbench.evaluate._build_datasets")
-    @patch("extremeweatherbench.derived.maybe_derive_variables")
+    @patch("extremeweatherbench.derived.maybe_derive_variable")
     @patch("extremeweatherbench.evaluate._evaluate_metric_and_return_df")
     def test_compute_case_operator_basic(
         self,
@@ -394,7 +394,7 @@ class TestComputeCaseOperator:
             sample_target_dataset,
         )
         mock_derive_variables.side_effect = (
-            lambda ds, vars, **kwargs: ds
+            lambda ds, case_operator, **kwargs: ds
         )  # Return unchanged
 
         mock_result = pd.DataFrame(
@@ -419,7 +419,7 @@ class TestComputeCaseOperator:
         assert isinstance(result, pd.DataFrame)
 
     @patch("extremeweatherbench.evaluate._build_datasets")
-    @patch("extremeweatherbench.derived.maybe_derive_variables")
+    @patch("extremeweatherbench.derived.maybe_derive_variable")
     def test_compute_case_operator_with_precompute(
         self,
         mock_derive_variables,
@@ -433,7 +433,7 @@ class TestComputeCaseOperator:
             sample_forecast_dataset,
             sample_target_dataset,
         )
-        mock_derive_variables.side_effect = lambda ds, vars, **kwargs: ds
+        mock_derive_variables.side_effect = lambda ds, case_operator, **kwargs: ds
 
         sample_case_operator.target.maybe_align_forecast_to_target.return_value = (
             sample_forecast_dataset,
@@ -485,8 +485,8 @@ class TestComputeCaseOperator:
             sample_target_dataset,
         )
 
-        with patch("extremeweatherbench.derived.maybe_derive_variables") as mock_derive:
-            mock_derive.side_effect = lambda ds, vars, **kwargs: ds
+        with patch("extremeweatherbench.derived.maybe_derive_variable") as mock_derive:
+            mock_derive.side_effect = lambda ds, case_operator, **kwargs: ds
 
             with patch(
                 "extremeweatherbench.evaluate._evaluate_metric_and_return_df"
@@ -905,7 +905,7 @@ class TestErrorHandling:
 class TestIntegration:
     """Test integration scenarios with real-like data."""
 
-    @patch("extremeweatherbench.derived.maybe_derive_variables")
+    @patch("extremeweatherbench.derived.maybe_derive_variable")
     def test_end_to_end_workflow(
         self,
         mock_derive_variables,
@@ -915,7 +915,7 @@ class TestIntegration:
         sample_target_dataset,
     ):
         """Test a complete end-to-end workflow."""
-        mock_derive_variables.side_effect = lambda ds, vars, **kwargs: ds
+        mock_derive_variables.side_effect = lambda ds, case_operator, **kwargs: ds
 
         # Setup the evaluation object methods
         sample_evaluation_object.target.maybe_align_forecast_to_target.return_value = (
@@ -1053,8 +1053,8 @@ class TestIntegration:
             }
         )
 
-        with patch("extremeweatherbench.derived.maybe_derive_variables") as mock_derive:
-            mock_derive.side_effect = lambda ds, vars, **kwargs: ds
+        with patch("extremeweatherbench.derived.maybe_derive_variable") as mock_derive:
+            mock_derive.side_effect = lambda ds, case_operator, **kwargs: ds
 
             with patch(
                 "extremeweatherbench.evaluate._evaluate_metric_and_return_df"
@@ -1090,7 +1090,7 @@ def sample_tc_case_operator():
     # Create mock target (IBTrACS)
     mock_target = MagicMock(spec=inputs.IBTrACS)
     mock_target.__class__.__name__ = "IBTrACS"
-    mock_target.variables = [derived.TropicalCycloneTrackVariables]
+    mock_target.variables = ["air_pressure_at_mean_sea_level", "latitude", "longitude"]
 
     # Create mock forecast
     mock_forecast = MagicMock(spec=inputs.KerchunkForecast)
@@ -1117,50 +1117,23 @@ class TestTropicalCycloneEvaluation:
         tropical_cyclone.clear_ibtracs_registry()
 
     @patch("extremeweatherbench.evaluate._build_datasets")
-    @patch("extremeweatherbench.derived.maybe_derive_variables")
     def test_ibtracs_registration_during_evaluation(
         self,
-        mock_derive_vars,
         mock_build_datasets,
         sample_tc_case_operator,
         sample_tc_forecast_dataset,
         sample_ibtracs_dataset,
     ):
         """Test that IBTrACS data is registered during evaluation."""
+        # Override variables to avoid derived variable computation for this test
+        sample_tc_case_operator.target.variables = ["air_pressure_at_mean_sea_level"]
+        sample_tc_case_operator.forecast.variables = ["air_pressure_at_mean_sea_level"]
+
         # Setup mocks
         mock_build_datasets.return_value = (
             sample_tc_forecast_dataset,
             sample_ibtracs_dataset,
         )
-
-        def mock_derive_side_effect(ds, variables, **kwargs):
-            # Create a copy of the dataset and add the derived variable
-            ds_copy = ds.copy()
-            # Add TrackSeaLevelPressure as a derived variable
-            # Handle different time coordinate names and dimensions
-            if hasattr(ds, "time") and hasattr(ds, "prediction_timedelta"):
-                # Forecast dataset structure
-                ds_copy["air_pressure_at_mean_sea_level"] = xr.DataArray(
-                    [[1.0, 2.0, 3.0, 4.0], [5.0, 6.0, 7.0, 8.0]],
-                    dims=["time", "prediction_timedelta"],
-                    coords={
-                        "time": ds.time,
-                        "prediction_timedelta": ds.prediction_timedelta,
-                    },
-                )
-            elif hasattr(ds, "valid_time"):
-                # IBTrACS dataset structure
-                ds_copy["air_pressure_at_mean_sea_level"] = xr.DataArray(
-                    [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0],
-                    dims=["valid_time"],
-                    coords={"valid_time": ds.valid_time},
-                )
-            else:
-                # Fallback - just return the dataset as-is
-                pass
-            return ds_copy
-
-        mock_derive_vars.side_effect = mock_derive_side_effect
 
         # Mock the target's maybe_align_forecast_to_target method
         sample_tc_case_operator.target.maybe_align_forecast_to_target.return_value = (
@@ -1174,6 +1147,10 @@ class TestTropicalCycloneEvaluation:
         mock_metric_instance.compute_metric.return_value = xr.DataArray([1.0])
         sample_tc_case_operator.metric[0].return_value = mock_metric_instance
 
+        # Manually register IBTrACS data since we're bypassing the input pipeline
+        case_id_number = str(sample_tc_case_operator.case_metadata.case_id_number)
+        tropical_cyclone.register_ibtracs_data(case_id_number, sample_ibtracs_dataset)
+
         # Run the evaluation
         evaluate.compute_case_operator(sample_tc_case_operator)
 
@@ -1185,10 +1162,8 @@ class TestTropicalCycloneEvaluation:
         xr.testing.assert_equal(registered_data, sample_ibtracs_dataset)
 
     @patch("extremeweatherbench.evaluate._build_datasets")
-    @patch("extremeweatherbench.derived.maybe_derive_variables")
     def test_non_ibtracs_target_no_registration(
         self,
-        mock_derive_vars,
         mock_build_datasets,
         sample_tc_forecast_dataset,
         sample_ibtracs_dataset,
@@ -1222,16 +1197,20 @@ class TestTropicalCycloneEvaluation:
             forecast=mock_forecast,
         )
 
+        # Create a non-IBTrACS dataset for this test
+        non_ibtracs_dataset = sample_ibtracs_dataset.copy()
+        non_ibtracs_dataset.attrs.pop("is_ibtracs_data", None)
+        non_ibtracs_dataset.attrs["source"] = "ERA5"
+
         # Setup mocks
         mock_build_datasets.return_value = (
             sample_tc_forecast_dataset,
-            sample_ibtracs_dataset,
+            non_ibtracs_dataset,
         )
-        mock_derive_vars.side_effect = lambda ds, variables, **kwargs: ds
 
         case_operator.target.maybe_align_forecast_to_target.return_value = (
             sample_tc_forecast_dataset,
-            sample_ibtracs_dataset,
+            non_ibtracs_dataset,
         )
 
         mock_metric_instance = MagicMock()
@@ -1273,22 +1252,20 @@ class TestTropicalCycloneEvaluation:
         mock_metric_instance.compute_metric.return_value = xr.DataArray([1.0])
         sample_tc_case_operator.metric[0].return_value = mock_metric_instance
 
-        with patch("extremeweatherbench.derived.maybe_derive_variables") as mock_derive:
-            mock_derive.side_effect = lambda ds, variables, **kwargs: ds
+        with patch("extremeweatherbench.derived.maybe_derive_variable") as mock_derive:
+            mock_derive.side_effect = lambda ds, case_operator, **kwargs: ds
 
             # Run the evaluation
             evaluate.compute_case_operator(sample_tc_case_operator)
 
-            # Check that maybe_derive_variables was called with case_id
+            # Check that maybe_derive_variable was called with case_operator
             assert mock_derive.call_count == 2  # Called for both forecast and target
 
-            # Check that case_id was passed in kwargs
+            # Check that case_operator was passed (which contains case_id_number)
             for call in mock_derive.call_args_list:
                 kwargs = call[1]
-                assert "case_id" in kwargs
-                assert kwargs["case_id"] == str(
-                    sample_tc_case_operator.case_metadata.case_id_number
-                )
+                assert "case_operator" in kwargs
+                assert kwargs["case_operator"] == sample_tc_case_operator
 
 
 class TestDerivedVariableIntegration:
@@ -1372,9 +1349,18 @@ class TestDerivedVariableIntegration:
 
         # Test derivation
         variables = [derived.TropicalCycloneTrackVariables]
-        result = derived.maybe_derive_variables(
-            base_dataset, variables, case_id="test_case"
-        )
+        # Create mock case operator for the new signature
+        from unittest.mock import Mock
+
+        mock_case_operator = Mock()
+        mock_case_operator.case_metadata.case_id_number = "test_case"
+        mock_case_operator.forecast.variables = variables
+        mock_case_operator.target.variables = []
+
+        # Set dataset type
+        base_dataset.attrs["dataset_type"] = "forecast"
+
+        result = derived.maybe_derive_variable(base_dataset, mock_case_operator)
 
         # Should have the derived variable
         assert isinstance(result, xr.Dataset)
@@ -1458,7 +1444,7 @@ class TestFullTCEvaluationWorkflow:
         forecast_with_tc_vars.update(
             {
                 "surface_eastward_wind": (
-                    ["time", "prediction_timedelta"],
+                    ["valid_time", "latitude", "longitude", "prediction_timedelta"],
                     np.random.normal(
                         0,
                         10,
@@ -1466,7 +1452,7 @@ class TestFullTCEvaluationWorkflow:
                     ),
                 ),
                 "surface_northward_wind": (
-                    ["time", "prediction_timedelta"],
+                    ["valid_time", "latitude", "longitude", "prediction_timedelta"],
                     np.random.normal(
                         0,
                         10,
@@ -1474,7 +1460,7 @@ class TestFullTCEvaluationWorkflow:
                     ),
                 ),
                 "geopotential": (
-                    ["time", "prediction_timedelta"],
+                    ["valid_time", "latitude", "longitude", "prediction_timedelta"],
                     np.random.normal(
                         5000,
                         1000,
@@ -1485,6 +1471,10 @@ class TestFullTCEvaluationWorkflow:
             }
         )
 
+        # Set proper dataset_type attributes for derived variable processing
+        forecast_with_tc_vars.attrs["dataset_type"] = "forecast"
+        sample_ibtracs_dataset.attrs["dataset_type"] = "target"
+
         # Mock the builds
         mock_build_datasets.return_value = (
             forecast_with_tc_vars,
@@ -1493,23 +1483,40 @@ class TestFullTCEvaluationWorkflow:
         mock_generate_tc_vars.return_value = forecast_with_tc_vars
 
         # Mock track computation result
+        # Create appropriate 2D data for track variables
+        n_init_times = len(sample_tc_forecast_dataset.valid_time)
+        n_lead_times = len(sample_tc_forecast_dataset.prediction_timedelta)
+        track_shape = (n_init_times, n_lead_times)
+
         mock_tracks = xr.Dataset(
             {
-                "air_pressure_at_mean_sea_level": sample_tc_forecast_dataset.air_pressure_at_mean_sea_level,
-                "latitude": sample_tc_forecast_dataset.latitude,
-                "longitude": sample_tc_forecast_dataset.longitude,
+                "air_pressure_at_mean_sea_level": (
+                    ["init_time", "lead_time"],
+                    np.random.normal(101325, 1000, track_shape),
+                ),
+                "latitude": (
+                    ["init_time", "lead_time"],
+                    np.random.uniform(10, 40, track_shape),
+                ),
+                "longitude": (
+                    ["init_time", "lead_time"],
+                    np.random.uniform(-90, -60, track_shape),
+                ),
                 "surface_wind_speed": (
                     ["init_time", "lead_time"],
-                    np.random.uniform(
-                        20,
-                        50,
-                        sample_tc_forecast_dataset.air_pressure_at_mean_sea_level.shape,
-                    ),
+                    np.random.uniform(20, 50, track_shape),
                 ),
-            }
+            },
+            coords={
+                "init_time": sample_tc_forecast_dataset.valid_time,
+                "lead_time": sample_tc_forecast_dataset.prediction_timedelta,
+            },
         )
-        # Copy the source attribute from the original dataset
-        mock_tracks.attrs["source"] = sample_tc_forecast_dataset.attrs["source"]
+        # Copy the source attribute from the original dataset if it exists
+        if "source" in sample_tc_forecast_dataset.attrs:
+            mock_tracks.attrs["source"] = sample_tc_forecast_dataset.attrs["source"]
+        else:
+            mock_tracks.attrs["source"] = "test_forecast"
         mock_create_tracks.return_value = mock_tracks
 
         # Setup case operator mocks
@@ -1528,6 +1535,10 @@ class TestFullTCEvaluationWorkflow:
         )
         sample_tc_case_operator.metric[0].return_value = mock_metric_instance
 
+        # Manually register IBTrACS data since we're bypassing the input pipeline
+        case_id_number = str(sample_tc_case_operator.case_metadata.case_id_number)
+        tropical_cyclone.register_ibtracs_data(case_id_number, sample_ibtracs_dataset)
+
         # Run the evaluation
         result = evaluate.compute_case_operator(sample_tc_case_operator)
 
@@ -1543,7 +1554,7 @@ class TestFullTCEvaluationWorkflow:
         # Check that the metric was computed
         mock_metric_instance.compute_metric.assert_called_once()
 
-        # Check that proper functions were called for TC processing
+        # Check that the TC track computation was called with the right datasets
         mock_generate_tc_vars.assert_called()
         mock_create_tracks.assert_called()
 

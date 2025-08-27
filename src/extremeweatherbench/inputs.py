@@ -695,6 +695,7 @@ class IBTrACS(TargetBase):
     """Target class for IBTrACS data."""
 
     name: str = "IBTrACS"
+    _current_case_id: Optional[str] = dataclasses.field(default=None, init=False)
 
     def _open_data_from_source(self) -> utils.IncomingDataInput:
         # not using storage_options in this case due to NetCDF4Backend not
@@ -711,6 +712,9 @@ class IBTrACS(TargetBase):
         target_data: utils.IncomingDataInput,
         case_operator: "cases.CaseOperator",
     ) -> utils.IncomingDataInput:
+        # Store case_id_number for IBTrACS registration
+        self._current_case_id = str(case_operator.case_metadata.case_id_number)
+
         if not isinstance(target_data, pl.LazyFrame):
             raise ValueError(f"Expected polars LazyFrame, got {type(target_data)}")
 
@@ -758,6 +762,7 @@ class IBTrACS(TargetBase):
                 for col in pressure_cols + wind_cols
             ]
         )
+        # Convert knots to m/s
         subset_target_data = subset_target_data.with_columns(
             [(pl.col(col) * 0.514444).alias(col) for col in wind_cols]
         )
@@ -842,6 +847,32 @@ class IBTrACS(TargetBase):
             return data
         else:
             raise ValueError(f"Data is not a polars LazyFrame: {type(data)}")
+
+    def add_source_to_dataset_attrs(self, ds: xr.Dataset) -> xr.Dataset:
+        """Add the source name and register IBTrACS data for TC filtering.
+
+        This method extends the base functionality to also register this
+        IBTrACS dataset for use in tropical cyclone filtering operations.
+        The registration happens automatically when IBTrACS data is processed.
+
+        Args:
+            ds: The dataset to add source attributes to.
+
+        Returns:
+            The dataset with source attributes added.
+        """
+        ds = super().add_source_to_dataset_attrs(ds)
+
+        # Register IBTrACS data immediately for tropical cyclone filtering
+        if self._current_case_id is not None:
+            from extremeweatherbench.events import tropical_cyclone
+
+            tropical_cyclone.register_ibtracs_data(self._current_case_id, ds)
+
+        # Store flag indicating this is IBTrACS data
+        ds.attrs["is_ibtracs_data"] = True
+
+        return ds
 
 
 def open_kerchunk_reference(

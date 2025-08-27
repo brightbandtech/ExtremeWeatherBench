@@ -1,6 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import List, Optional, Sequence, Type, Union, cast
+from typing import TYPE_CHECKING, List, Optional, Sequence, Type, Union, cast
 
 import numpy as np
 import xarray as xr
@@ -10,6 +10,9 @@ from extremeweatherbench.events import (
     severe_convection,
     tropical_cyclone,
 )
+
+if TYPE_CHECKING:
+    from extremeweatherbench import cases
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -225,10 +228,10 @@ class TropicalCycloneTrackVariables(DerivedVariable):
         # First check kwargs, then the global registry
         ibtracs_data = kwargs.get("ibtracs_data", None)
         if ibtracs_data is None:
-            # Try to get from registry using case_id if provided
-            case_id = kwargs.get("case_id", None)
-            if case_id is not None:
-                ibtracs_data = tropical_cyclone.get_ibtracs_data(case_id)
+            # Try to get from registry using case_id_number if provided
+            case_id_number = kwargs.get("case_id_number", None)
+            if case_id_number is not None:
+                ibtracs_data = tropical_cyclone.get_ibtracs_data(case_id_number)
             else:
                 raise ValueError("No IBTrACS data provided to constrain TC tracks.")
         # Use IBTrACS-filtered TC detection
@@ -268,46 +271,83 @@ class TropicalCycloneTrackVariables(DerivedVariable):
         tropical_cyclone._TC_TRACK_CACHE.clear()
 
 
-def maybe_derive_variables(
-    ds: xr.Dataset, variables: list[str | DerivedVariable], **kwargs
+def maybe_derive_variable(
+    dataset: xr.Dataset,
+    case_operator: "cases.CaseOperator",
+    **kwargs,
 ) -> xr.Dataset:
-    """Derive variables from the data if any exist in a list of variables.
+    """Derive variable from the data if it exists in a list of variables.
 
-    Derived variables must maintain the same spatial dimensions as the original
-    dataset.
+    Derived variables do not need to maintain the same spatial dimensions as the
+    original dataset. Expected behavior is that an EvaluationObject has one derived
+    variable. If there are multiple derived variables, the first one will be used.
 
     Args:
-        ds: The dataset, ideally already subset in case of in memory operations
+        dataset: The dataset, ideally already subset in case of in memory operations
             in the derived variables.
-        variables: The potential variables to derive as a list of strings or
-            DerivedVariable objects.
+        case_operator: The case operator containing variable information.
+        **kwargs: Additional keyword arguments to pass to the derived variables.
 
     Returns:
         A dataset with derived variables, if any exist, else the original
         dataset.
     """
+    dataset_type = dataset.attrs.get("dataset_type", "unknown")
+    if dataset_type == "forecast":
+        variables = case_operator.forecast.variables
+    elif dataset_type == "target":
+        variables = case_operator.target.variables
+    else:
+        logger.warning(
+            "Unknown dataset_type '%s', skipping",
+            dataset_type,
+        )
+        return dataset
 
-    derived_variables = [v for v in variables if not isinstance(v, str)]
-    derived_data = {}
-    if derived_variables:
-        for v in derived_variables:
-            output = v.compute(data=ds, **kwargs)
-            # Ensure the DataArray has the correct name and is a DataArray.
-            # Some derived variables return a dataset, so we need to check
-            if isinstance(output, xr.DataArray):
-                if output.name is None:
-                    output.name = v.name
-                derived_data[v.name] = output
-            elif isinstance(output, xr.Dataset) and output.sizes != ds.sizes:
-                # If the derived variable returns a dataset with different dims to ds,
-                # we need to return it instead of merging it with ds
-                # This is the case for the tropical cyclone track variable, which
-                # returns a dataset with different shape to ds
-                return output
+    maybe_derived_variables = [v for v in variables if not isinstance(v, str)]
 
-    # TODO consider removing data variables only used for derivation
-    ds = ds.merge(derived_data)
-    return ds
+    if not maybe_derived_variables:
+        logger.debug("No derived variables for dataset type '%s'", dataset_type)
+        return dataset
+
+    if len(maybe_derived_variables) > 1:
+        logger.warning(
+            "Multiple derived variables provided. Only the first one will be "
+            "computed. Users must use separate EvaluationObjects to derive "
+            "each variable."
+        )
+
+    # Take the first derived variable and process it
+    derived_variable = maybe_derived_variables[0]
+
+    # Ensure case_id_number is available for derived variable computation
+    if "case_id_number" not in kwargs:
+        kwargs["case_id_number"] = case_operator.case_metadata.case_id_number
+
+    output = derived_variable.compute(data=dataset, **kwargs)
+
+    # Ensure the DataArray has the correct name and is a DataArray.
+    # Some derived variables return a dataset (multiple variables), so we need
+    # to check
+    if isinstance(output, xr.DataArray):
+        if output.name is None:
+            logger.debug(
+                "Derived variable %s has no name, using class name.",
+                derived_variable.name,
+            )
+            output.name = derived_variable.name
+        # Merge the derived variable into the dataset
+        return output.to_dataset()
+    elif isinstance(output, xr.Dataset):
+        # Check if derived dataset dimensions are compatible for merging
+        return output
+
+    # If output is neither DataArray nor Dataset, return original
+    logger.warning(
+        f"Derived variable {derived_variable.name} returned neither DataArray nor "
+        "Dataset. Returning original dataset."
+    )
+    return dataset
 
 
 def maybe_pull_variables_from_derived_input(
