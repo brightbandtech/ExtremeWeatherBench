@@ -109,20 +109,6 @@ class AtmosphericRiverMask(DerivedVariable):
         return ar.compute_atmospheric_river_mask_ufunc(data)
 
 
-class AtmosphericRiverLandIntersection(DerivedVariable):
-    """A derived variable that computes the atmospheric river land intersection."""
-
-    required_variables = [AtmosphericRiverMask]
-    name = "atmospheric_river_land_intersection"
-
-    @classmethod
-    def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
-        """Derive the atmospheric river land intersection."""
-        ar_mask = data[AtmosphericRiverMask.name]
-        land_intersection = ar.find_land_intersection(ar_mask)
-        return xr.DataArray(land_intersection, name=cls.name)
-
-
 def maybe_derive_variables(
     ds: xr.Dataset, variables: list[str | DerivedVariable]
 ) -> xr.Dataset:
