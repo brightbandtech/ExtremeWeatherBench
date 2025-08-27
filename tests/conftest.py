@@ -361,3 +361,61 @@ def temp_parquet_file():
         df = make_sample_ghcn_dataframe()
         df.write_parquet(parquet_path)
         yield str(parquet_path)
+
+
+@pytest.fixture
+def sample_calc_dataset():
+    """Create a sample dataset for calc testing."""
+    time = pd.date_range("2023-01-01", periods=5, freq="6h")
+    lat = np.linspace(20, 50, 16)
+    lon = np.linspace(-120, -80, 21)
+    level = [1000, 850, 700, 500, 300, 200]
+
+    # Create realistic meteorological data
+    data_shape_3d = (len(time), len(lat), len(lon))
+    data_shape_4d = (len(time), len(level), len(lat), len(lon))
+
+    dataset = xr.Dataset(
+        {
+            "air_pressure_at_mean_sea_level": (
+                ["time", "latitude", "longitude"],
+                np.random.normal(101325, 1000, data_shape_3d),
+            ),
+            "surface_eastward_wind": (
+                ["time", "latitude", "longitude"],
+                np.random.normal(0, 10, data_shape_3d),
+            ),
+            "surface_northward_wind": (
+                ["time", "latitude", "longitude"],
+                np.random.normal(0, 10, data_shape_3d),
+            ),
+            "geopotential": (
+                ["time", "level", "latitude", "longitude"],
+                np.random.normal(5000, 1000, data_shape_4d) * 9.80665,
+            ),
+            "geopotential_at_surface": (
+                ["time", "latitude", "longitude"],
+                np.random.normal(500, 200, data_shape_3d) * 9.80665,
+            ),
+            "eastward_wind": (
+                ["time", "level", "latitude", "longitude"],
+                np.random.normal(0, 15, data_shape_4d),
+            ),
+            "northward_wind": (
+                ["time", "level", "latitude", "longitude"],
+                np.random.normal(0, 15, data_shape_4d),
+            ),
+            "specific_humidity": (
+                ["time", "level", "latitude", "longitude"],
+                np.random.uniform(0.001, 0.02, data_shape_4d),
+            ),
+        },
+        coords={
+            "time": time,
+            "latitude": lat,
+            "longitude": lon,
+            "level": level,
+        },
+    )
+
+    return dataset
