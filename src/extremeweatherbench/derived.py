@@ -70,7 +70,8 @@ class DerivedVariable(ABC):
 
         Args:
             data: The dataset to build the derived variable from.
-            **kwargs: Additional keyword arguments to pass to the derived variable.
+            *args: Additional positional arguments to pass to derive_variable.
+            **kwargs: Additional keyword arguments to pass to derive_variable.
 
         Returns:
             A DataArray with the derived variable.

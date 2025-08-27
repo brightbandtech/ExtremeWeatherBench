@@ -3,14 +3,14 @@ import logging
 import math
 from collections import namedtuple
 from itertools import product
-from typing import Dict, Optional, Sequence, Union
+from typing import Dict, Literal, Optional, Sequence, Union
 
 import numpy as np
 import pandas as pd
 import scipy.spatial as spatial
 import xarray as xr
 from cartopy.io.shapereader import Reader, natural_earth
-from shapely.geometry import LineString, Point
+from shapely.geometry import LineString, Point, Polygon
 from shapely.ops import unary_union
 from skimage import measure
 from skimage.feature import peak_local_max
@@ -22,13 +22,13 @@ logger.setLevel(logging.INFO)
 
 
 def compute_landfall_metric(
-    forecast,
-    target,
-    approach="first",
-    metric_type="displacement",
-    aggregation="mean",
-    units="hours",
-    intensity_var="surface_wind_speed",
+    forecast: xr.Dataset,
+    target: xr.Dataset,
+    approach: Literal["first", "next", "all"] = "first",
+    metric_type: Literal["displacement", "timing", "intensity"] = "displacement",
+    aggregation: Literal["mean", "max", "min"] = "mean",
+    units: Literal["hours", "days"] = "hours",
+    intensity_var: str = "surface_wind_speed",
 ):
     """Unified function to compute landfall metrics with different approaches.
 
@@ -66,7 +66,13 @@ def compute_landfall_metric(
         raise ValueError(f"Unknown approach: {approach}")
 
 
-def _compute_first_landfall_metric(forecast, target, metric_type, units, intensity_var):
+def _compute_first_landfall_metric(
+    forecast: xr.Dataset,
+    target: xr.Dataset,
+    metric_type: Literal["displacement", "timing", "intensity"],
+    units: Literal["hours", "days"],
+    intensity_var: str,
+):
     """Compute metric using first landfall approach (classic)."""
     # Find landfall points using pure xarray
     forecast_landfall = find_landfall_xarray(forecast)
@@ -102,7 +108,12 @@ def _compute_first_landfall_metric(forecast, target, metric_type, units, intensi
 
 
 def _compute_next_landfall_metric(
-    forecast, target, metric_type, aggregation, units, intensity_var
+    forecast: xr.Dataset,
+    target: xr.Dataset,
+    metric_type: Literal["displacement", "timing", "intensity"],
+    aggregation: Literal["mean", "max", "min"],
+    units: Literal["hours", "days"],
+    intensity_var: str,
 ):
     """Compute metric using next upcoming landfall approach."""
     # Find all target landfalls
@@ -200,7 +211,12 @@ def _compute_next_landfall_metric(
 
 
 def _compute_all_landfalls_metric(
-    forecast, target, metric_type, aggregation, units, intensity_var
+    forecast: xr.Dataset,
+    target: xr.Dataset,
+    metric_type: Literal["displacement", "timing", "intensity"],
+    aggregation: Literal["mean", "max", "min"],
+    units: Literal["hours", "days"],
+    intensity_var: str,
 ):
     """Compute metric considering all landfalls with aggregation."""
     # For now, delegate to next approach - could expand later
@@ -209,7 +225,9 @@ def _compute_all_landfalls_metric(
     )
 
 
-def _compute_displacement_metric(forecast_landfall, target_landfall):
+def _compute_displacement_metric(
+    forecast_landfall: xr.Dataset, target_landfall: xr.Dataset
+):
     """Compute displacement between forecast and target landfall."""
     # Check dimensions and compute displacement
     if "init_time" in forecast_landfall.dims:
@@ -228,7 +246,11 @@ def _compute_displacement_metric(forecast_landfall, target_landfall):
                 dist = calc.calculate_haversine_distance(
                     [f_lat, f_lon], [t_lat, t_lon], units="km"
                 )
-                distances.append(dist)
+                # Ensure we append a scalar value
+                if hasattr(dist, "item"):
+                    distances.append(float(dist.item()))
+                else:
+                    distances.append(float(dist))
 
         return xr.DataArray(
             distances,
@@ -240,7 +262,11 @@ def _compute_displacement_metric(forecast_landfall, target_landfall):
         return calculate_landfall_distance_km_xarray(forecast_landfall, target_landfall)
 
 
-def _compute_timing_metric(forecast_landfall, target_landfall, units):
+def _compute_timing_metric(
+    forecast_landfall: xr.Dataset,
+    target_landfall: xr.Dataset,
+    units: Literal["hours", "days"],
+):
     """Compute timing difference between forecast and target landfall."""
     # Calculate time difference in hours
     time_diff_hours = calculate_landfall_time_difference_hours_xarray(
@@ -253,10 +279,12 @@ def _compute_timing_metric(forecast_landfall, target_landfall, units):
     elif units == "days":
         return time_diff_hours / 24.0
 
-    return time_diff_hours
 
-
-def _compute_intensity_metric(forecast_landfall, target_landfall, intensity_var):
+def _compute_intensity_metric(
+    forecast_landfall: xr.Dataset,
+    target_landfall: xr.Dataset,
+    intensity_var: str,
+):
     """Compute intensity difference between forecast and target landfall."""
     # Get intensity values
     if intensity_var not in forecast_landfall.data_vars:
@@ -541,7 +569,7 @@ def _process_all_init_times_vectorized(
     spatial_dims = ["latitude", "longitude"]
     non_spatial_dims = [dim for dim in slp.dims if dim not in spatial_dims]
     ibtracs_df = ibtracs_df[
-        pd.to_datetime(ibtracs_df["valid_time"]).isin(pd.to_datetime(time_coord))
+        pd.to_datetime(ibtracs_df["valid_time"]).isin(pd.to_datetime(time_coord.values))
     ]
     # Get wind speed data
     wind_speed = cyclone_dataset["surface_wind_speed"]
@@ -558,19 +586,23 @@ def _process_all_init_times_vectorized(
         slp.longitude,
         wind_speed,
     ]
-    input_core_dims = [
-        non_spatial_dims + spatial_dims,  # ['lead_time', 'valid_time', etc.]
+    input_core_dims: list[list[str]] = [
+        [str(dim) for dim in non_spatial_dims + spatial_dims],  # lead_time, valid_time
         [time_coord_name],  # e.g., ['valid_time']
-        list(init_time_coord.dims),  # Use actual init_time dims
+        [str(dim) for dim in init_time_coord.dims],  # Use actual init_time dims
         ["latitude"],  # latitude coordinates
         ["longitude"],  # longitude coordinates
-        non_spatial_dims + spatial_dims,  # wind speed dims
+        [str(dim) for dim in non_spatial_dims + spatial_dims],  # wind speed dims
     ]
 
-    # Add DZ data if available
+    # Always pass dz_array (either the data or None)
     if dz is not None:
         input_vars.append(dz)
-        input_core_dims.append(non_spatial_dims + spatial_dims)
+        input_core_dims.append([str(dim) for dim in non_spatial_dims + spatial_dims])
+    else:
+        # Add None as a placeholder for dz_array
+        input_vars.append(None)
+        input_core_dims.append([])  # type: ignore
 
     detection_data = xr.apply_ufunc(
         _process_entire_dataset_compact,
@@ -579,7 +611,7 @@ def _process_all_init_times_vectorized(
             "ibtracs_df": ibtracs_df,
             "max_spatial_distance_degrees": max_spatial_distance_degrees,
             "min_distance": min_distance,
-            "dz_array": None,  # Will be passed positionally if available
+            "max_temporal_hours": max_temporal_hours,
             "slp_contour_magnitude": slp_contour_magnitude,
             "dz_contour_magnitude": dz_contour_magnitude,
             "use_contour_validation": use_contour_validation and dz is not None,
@@ -624,9 +656,9 @@ def _process_all_init_times_vectorized(
         lons,
         slp_vals,
         wind_vals,
-        slp,  # Pass the full dataset to access all coordinates
+        cyclone_dataset,  # Pass the full dataset to access all coordinates
         time_coord_name,
-        non_spatial_dims,
+        [str(dim) for dim in non_spatial_dims],  # Convert Hashable to str
     )
 
 
@@ -637,11 +669,11 @@ def _process_entire_dataset_compact(
     lat_array: np.ndarray,
     lon_array: np.ndarray,
     wind_array: np.ndarray,
-    *args,  # Handle optional dz_array positionally
+    dz_array: Optional[np.ndarray],  # Can be None when no DZ data available
     ibtracs_df: pd.DataFrame,
     max_spatial_distance_degrees: float,
     min_distance: int,
-    dz_array: np.ndarray = None,
+    max_temporal_hours: float,
     slp_contour_magnitude: float = 200,
     dz_contour_magnitude: float = -6,
     use_contour_validation: bool = True,
@@ -656,11 +688,25 @@ def _process_entire_dataset_compact(
     np.ndarray,
     np.ndarray,
 ]:
-    """Process dataset and return compact detection arrays."""
+    """Process dataset and return compact detection arrays.
 
-    # Handle optional DZ array passed positionally
-    if args:
-        dz_array = args[0]
+    Args:
+        slp_array: Sea level pressure array (lead_time, valid_time, lat, lon)
+        time_array: Valid time array
+        init_time_array: Initialization time array (lead_time, valid_time)
+        lat_array: Latitude coordinate array
+        lon_array: Longitude coordinate array
+        wind_array: Wind speed array (lead_time, valid_time, lat, lon)
+        dz_array: Geopotential thickness array (lead_time, valid_time, lat, lon)
+        ibtracs_df: IBTrACS dataframe for filtering
+        max_spatial_distance_degrees: Max spatial distance for IBTrACS filtering
+        min_distance: Minimum distance between detected peaks
+        max_temporal_hours: Maximum temporal window from init_time
+        slp_contour_magnitude: SLP contour threshold for validation
+        dz_contour_magnitude: DZ contour threshold for validation
+        use_contour_validation: Whether to use contour validation
+        min_track_length: Minimum consecutive lead times for valid tracks
+    """
 
     # Convert to numpy arrays if they're Dask arrays
     if hasattr(slp_array, "compute"):
@@ -718,7 +764,22 @@ def _process_entire_dataset_compact(
         for lt_idx in range(n_lead_times):
             for vt_idx in range(n_valid_times):
                 if init_time_mask[lt_idx, vt_idx]:
-                    time_indices.append((lt_idx, vt_idx, valid_time_array[vt_idx]))
+                    # Apply temporal filtering within max_temporal_hours
+                    current_valid_time = valid_time_array[vt_idx]
+                    if hasattr(current_valid_time, "item"):
+                        current_valid_time = current_valid_time.item()
+
+                    # Convert to pandas Timestamp for consistent datetime operations
+                    current_valid_time = pd.Timestamp(current_valid_time)
+                    current_init_time = pd.Timestamp(current_init_time)
+
+                    # Calculate time difference in hours
+                    time_diff = current_valid_time - current_init_time
+                    time_diff_hours = time_diff.total_seconds() / 3600.0
+
+                    # Only include if within max_temporal_hours
+                    if time_diff_hours <= max_temporal_hours:
+                        time_indices.append((lt_idx, vt_idx, current_valid_time))
 
         # Sort by valid_time to ensure temporal continuity
         time_indices.sort(key=lambda x: x[2])
@@ -740,7 +801,7 @@ def _process_entire_dataset_compact(
                 lat_array,
                 lon_array,
                 max_spatial_distance_degrees,
-                dz_slice,
+                dz_slice if dz_slice is not None else np.array([]),
                 slp_contour_magnitude,
                 dz_contour_magnitude,
                 use_contour_validation,
@@ -839,10 +900,16 @@ def _process_entire_dataset_compact(
 
             if track_key not in track_lead_times:
                 track_lead_times[track_key] = set()
-            track_lead_times[track_key].add(lt_idx)
+            # Ensure lt_idx is converted to int for the set
+            lt_idx_int: int
+            if hasattr(lt_idx, "item"):
+                lt_idx_int = int(lt_idx.item())
+            else:
+                lt_idx_int = int(lt_idx)
+            track_lead_times[track_key].add(lt_idx_int)
 
         # Check for consecutive lead times for each track
-        valid_track_keys = set()
+        valid_track_keys: set[tuple[int, pd.Timestamp]] = set()
         for track_key, lt_indices in track_lead_times.items():
             # Sort lead time indices to check for consecutive sequences
             sorted_lt_indices = sorted(lt_indices)
@@ -916,7 +983,9 @@ def _process_entire_dataset_compact(
     )
 
 
-def _safe_extract_value(array_or_scalar):
+def _safe_extract_value(
+    array_or_scalar: Union[xr.DataArray, np.ndarray, float],
+) -> Union[float, str]:
     """Safely extract scalar value from DataArray or return as-is."""
     if hasattr(array_or_scalar, "item") and hasattr(array_or_scalar, "ndim"):
         # Handle numpy arrays and xarray DataArrays
@@ -924,23 +993,26 @@ def _safe_extract_value(array_or_scalar):
             return array_or_scalar.item()
         else:
             # For arrays with more than 0 dimensions, return the first element
-            return array_or_scalar.flat[0]
+            if hasattr(array_or_scalar, "flat"):
+                return array_or_scalar.flat[0]
+            else:
+                return array_or_scalar
     else:
         return array_or_scalar
 
 
 def _convert_detections_to_dataset(
-    n_detections,
-    lt_indices,
-    vt_indices,
-    track_ids,
-    lats,
-    lons,
-    slp_vals,
-    wind_vals,
-    original_dataset,
-    time_coord_name,
-    non_spatial_dims,
+    n_detections: np.ndarray,
+    lt_indices: np.ndarray,
+    vt_indices: np.ndarray,
+    track_ids: np.ndarray,
+    lats: np.ndarray,
+    lons: np.ndarray,
+    slp_vals: np.ndarray,
+    wind_vals: np.ndarray,
+    original_dataset: xr.Dataset,
+    time_coord_name: str,
+    non_spatial_dims: list[str],
 ) -> xr.Dataset:
     """Convert detection arrays to compact xarray Dataset."""
 
@@ -973,11 +1045,11 @@ def _convert_detections_to_dataset(
 
     # Get unique combinations of lead_time and valid_time indices
     unique_combinations: dict[tuple[int, int], list[int]] = {}
-    for i in range(n_dets_val):
+    for i in range(int(n_dets_val)):
         # Convert DataArrays to regular integers for use as dictionary keys
         lt_idx = _safe_extract_value(lt_indices[i])
         vt_idx = _safe_extract_value(vt_indices[i])
-        key = (lt_idx, vt_idx)
+        key = (int(lt_idx), int(vt_idx))
         if key not in unique_combinations:
             unique_combinations[key] = []
         unique_combinations[key].append(i)
@@ -1061,10 +1133,10 @@ def _find_peaks_for_time_slice(
     ibtracs_df: pd.DataFrame,
     max_temporal_hours: float,
     min_distance: int,
-    lat_coords: np.ndarray = None,
-    lon_coords: np.ndarray = None,
+    lat_coords: Optional[np.ndarray] = None,
+    lon_coords: Optional[np.ndarray] = None,
     max_spatial_distance_degrees: float = 5.0,
-    dz_slice: np.ndarray = None,
+    dz_slice: Optional[np.ndarray] = None,
     slp_contour_magnitude: float = 200,
     dz_contour_magnitude: float = -6,
     use_contour_validation: bool = True,
@@ -1093,6 +1165,9 @@ def _find_peaks_for_time_slice(
         return np.array([])
 
     # OPTIMIZED: Vectorized spatial masking
+    if lat_coords is None or lon_coords is None:
+        return np.array([])
+
     spatial_mask = _create_spatial_mask_vectorized(
         lat_coords, lon_coords, nearby_ibtracs, max_spatial_distance_degrees
     )
@@ -1166,7 +1241,10 @@ def _find_peaks_for_time_slice(
 
 
 def _create_spatial_mask_vectorized(
-    lat_coords, lon_coords, nearby_ibtracs, max_distance_degrees
+    lat_coords: np.ndarray,
+    lon_coords: np.ndarray,
+    nearby_ibtracs: pd.DataFrame,
+    max_distance_degrees: float,
 ):
     """Create spatial mask using vectorized distance calculation."""
 
@@ -1192,7 +1270,9 @@ def _create_spatial_mask_vectorized(
     return spatial_mask
 
 
-def _calculate_great_circle_distance_vectorized(lat1, lon1, lat2, lon2):
+def _calculate_great_circle_distance_vectorized(
+    lat1: np.ndarray, lon1: np.ndarray, lat2: np.ndarray, lon2: np.ndarray
+):
     """Vectorized great circle distance calculation."""
     # Convert to radians
     lat1_rad = np.radians(lat1)
@@ -1284,14 +1364,14 @@ def _create_tctracks_optimized_with_ibtracs(
         # Handle datasets without init_time coordinate
         # Find the time dimension in the data variables
         sample_var = cyclone_dataset["air_pressure_at_mean_sea_level"]
-        time_dims = [dim for dim in sample_var.dims if "time" in dim]
+        time_dims = [str(dim) for dim in sample_var.dims if "time" in str(dim)]
         time_dim = time_dims[0] if time_dims else "time"
 
         # Find the lead time dimension
         lead_time_dims = [
-            dim
+            str(dim)
             for dim in sample_var.dims
-            if "prediction_timedelta" in dim or "lead" in dim
+            if "prediction_timedelta" in str(dim) or "lead" in str(dim)
         ]
         lead_time_dim = lead_time_dims[0] if lead_time_dims else "prediction_timedelta"
 
@@ -1311,7 +1391,7 @@ def _create_tctracks_optimized_with_ibtracs(
             lead_time_coord = cyclone_dataset.lead_time
             lead_time_dim = "prediction_timedelta"
         else:
-            lead_time_coord = [0]
+            lead_time_coord = xr.DataArray([0], dims=["prediction_timedelta"])
 
         # Create empty dataset as fallback for now
         return xr.Dataset(
@@ -1343,14 +1423,14 @@ def _create_tctracks_optimized_with_ibtracs(
 def create_tctracks_from_dataset_with_ibtracs_filter(
     cyclone_dataset: xr.Dataset,
     ibtracs_data: xr.Dataset,
-    slp_contour_magnitude=200,
-    dz_contour_magnitude=-6,
-    min_distance=5,
-    max_spatial_distance_degrees=5.0,
-    max_temporal_hours=120,
-    use_contour_validation=True,
-    min_track_length=10,
-    exclude_post_landfall_init_times=False,
+    slp_contour_magnitude: float = 200,
+    dz_contour_magnitude: float = -6,
+    min_distance: int = 5,
+    max_spatial_distance_degrees: float = 5.0,
+    max_temporal_hours: float = 120,
+    use_contour_validation: bool = True,
+    min_track_length: int = 10,
+    exclude_post_landfall_init_times: bool = False,
 ) -> xr.Dataset:
     """Create storm tracks from a cyclone dataset with IBTrACS proximity filtering.
 
@@ -1378,20 +1458,22 @@ def create_tctracks_from_dataset_with_ibtracs_filter(
     """
     # Filter out init_times that occur after all IBTrACS landfalls
     if exclude_post_landfall_init_times:
-        cyclone_dataset = _filter_post_landfall_init_times(
+        filtered_dataset = _filter_post_landfall_init_times(
             cyclone_dataset, ibtracs_data
         )
 
         # If no valid init_times remain, return empty dataset
-        if cyclone_dataset is None:
+        if filtered_dataset is None:
             return _create_empty_tracks_dataset()
 
         # Check if dataset has init_time after filtering
         if (
-            "init_time" in cyclone_dataset.coords
-            and len(cyclone_dataset.init_time) == 0
+            "init_time" in filtered_dataset.coords
+            and len(filtered_dataset.init_time) == 0
         ):
             return _create_empty_tracks_dataset()
+
+        cyclone_dataset = filtered_dataset
 
     # Convert IBTrACS to pandas for easier temporal filtering
     ibtracs_df = ibtracs_data.to_dataframe().reset_index()
@@ -1473,8 +1555,7 @@ def _create_empty_tracks_dataset() -> xr.Dataset:
 
 
 def find_landfall_xarray(track_dataset: xr.Dataset) -> Optional[xr.Dataset]:
-    """
-    Finds the first point where a tropical cyclone track intersects with land
+    """Finds the first point where a tropical cyclone track intersects with land
     by linearly interpolating between track points using pure xarray operations.
 
     Based on the original find_landfall function, handles two cases:
@@ -1516,8 +1597,7 @@ def find_landfall_xarray(track_dataset: xr.Dataset) -> Optional[xr.Dataset]:
 def find_next_landfall_for_init_time(
     forecast_dataset: xr.Dataset, target_landfalls: xr.Dataset
 ) -> Optional[xr.Dataset]:
-    """
-    For each init_time in the forecast, find the next upcoming landfall from target
+    """For each init_time in the forecast, find the next upcoming landfall from target
     data.
 
     Args:
@@ -1580,8 +1660,7 @@ def find_next_landfall_for_init_time(
 
 
 def find_all_landfalls_xarray(track_dataset: xr.Dataset) -> Optional[xr.Dataset]:
-    """
-    Finds ALL points where a tropical cyclone track intersects with land
+    """Finds ALL points where a tropical cyclone track intersects with land
     by linearly interpolating between track points using pure xarray operations.
 
     Args:
@@ -1625,8 +1704,7 @@ def find_all_landfalls_xarray(track_dataset: xr.Dataset) -> Optional[xr.Dataset]
 def _find_landfall_ibtracs(
     track_dataset: xr.Dataset, land_geom
 ) -> Optional[xr.Dataset]:
-    """
-    Find landfall for IBTrACS data (single track with valid_time dimension).
+    """Find landfall for IBTrACS data (single track with valid_time dimension).
     Based on the original find_landfall function.
     """
     # Filter out NaN values and sort by time
@@ -1722,11 +1800,10 @@ def _find_landfall_ibtracs(
 
 
 def _find_all_landfalls_ibtracs(
-    track_dataset: xr.Dataset, land_geom
+    track_dataset: xr.Dataset, land_geom: Polygon
 ) -> Optional[xr.Dataset]:
-    """
-    Find ALL landfall points for IBTrACS data (single track with valid_time dimension).
-    """
+    """Find ALL landfall points for IBTrACS data (single track with valid_time
+    dimension)."""
     # Filter out NaN values and sort by time
     valid_mask = (
         ~np.isnan(track_dataset["latitude"])
@@ -1822,8 +1899,7 @@ def _find_all_landfalls_ibtracs(
 def _find_landfall_forecast(
     track_dataset: xr.Dataset, land_geom
 ) -> Optional[xr.Dataset]:
-    """
-    Find landfall for forecast data (lead_time, valid_time dimensions).
+    """Find landfall for forecast data (lead_time, valid_time dimensions).
     Simple version that processes by unique init_time.
     """
     # Squeeze out track dimension if it exists and has size 1
@@ -1884,10 +1960,9 @@ def _find_landfall_forecast(
 
 
 def _find_all_landfalls_forecast(
-    track_dataset: xr.Dataset, land_geom
+    track_dataset: xr.Dataset, land_geom: Polygon
 ) -> Optional[xr.Dataset]:
-    """
-    Find ALL landfall points for forecast data (lead_time, valid_time dimensions).
+    """Find ALL landfall points for forecast data (lead_time, valid_time dimensions).
     Returns all landfall points for each init_time,
     with init_time and landfall dimensions.
     """
@@ -1945,9 +2020,10 @@ def _find_all_landfalls_forecast(
     return combined_landfall
 
 
-def _is_true_landfall(lon1, lat1, lon2, lat2, land_geom):
-    """
-    Clean landfall detection following exact requirements:
+def _is_true_landfall(
+    lon1: float, lat1: float, lon2: float, lat2: float, land_geom: Polygon
+):
+    """Clean landfall detection following exact requirements:
     1. Ocean -> Land = LANDFALL
     2. Ocean -> Ocean (with land between) = LANDFALL
     3. Land -> Ocean = NOT LANDFALL
@@ -2019,9 +2095,15 @@ def _is_true_landfall(lon1, lat1, lon2, lat2, land_geom):
     #     return segment.intersects(land_geom)
 
 
-def _find_landfall_optimized(lats, lons, vmax, slp, times, land_geom):
-    """
-    Optimized landfall detection for pre-processed coordinate arrays.
+def _find_landfall_optimized(
+    lats: np.ndarray,
+    lons: np.ndarray,
+    vmax: np.ndarray,
+    slp: np.ndarray,
+    times: np.ndarray,
+    land_geom: Polygon,
+):
+    """Optimized landfall detection for pre-processed coordinate arrays.
     Uses simple intersection detection for forecast data.
     """
     if len(lats) < 2:
@@ -2114,8 +2196,7 @@ def _find_landfall_optimized(lats, lons, vmax, slp, times, land_geom):
 
 
 def _find_landfall_intersection_point(lon1, lat1, lon2, lat2, land_geom):
-    """
-    Find the FIRST intersection point where a track segment enters land.
+    """Find the FIRST intersection point where a track segment enters land.
     For ocean->ocean crossings, this returns the entry point, not the exit.
     """
 

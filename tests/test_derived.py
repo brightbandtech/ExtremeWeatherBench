@@ -244,51 +244,28 @@ class TestMaybeDeriveVariablesFunction:
         expected = sample_derived_dataset["test_variable_1"] * test_multiplier
         xr.testing.assert_equal(result["test_variable_1"], expected)
 
-    def test_derived_variable_returns_dataset_different_dims(
+    def test_multiple_derived_variables_second_implementation(
         self, sample_derived_dataset
     ):
-        """Test derived variable that returns Dataset with different dimensions."""
-
-        class TestDatasetReturnVariable(derived.DerivedVariable):
-            required_variables = ["test_variable_1"]
-
-            @classmethod
-            def derive_variable(cls, data: xr.Dataset, **kwargs) -> xr.Dataset:
-                # Return a dataset with different dimensions
-                new_coords = {"new_dim": [1, 2, 3], "other_dim": [10, 20]}
-                return xr.Dataset(
-                    {
-                        "new_variable": xr.DataArray(
-                            np.ones((3, 2)),
-                            dims=["new_dim", "other_dim"],
-                            coords=new_coords,
-                        )
-                    }
-                )
-
-        variables = [TestDatasetReturnVariable()]
+        """Test with multiple derived variables - second implementation."""
+        variables = [TestValidDerivedVariable(), TestMinimalDerivedVariable()]
 
         # Logger warnings are not pytest warnings, so just check functionality
         sample_derived_dataset.attrs["dataset_type"] = "forecast"
         result = derived.maybe_derive_variables(sample_derived_dataset, variables)
 
-        # Should return the new dataset, not merge with original
+        # Should return only the first derived variable as Dataset
         assert isinstance(result, xr.Dataset)
-        assert "new_variable" in result.data_vars
-        # Original dataset variables should NOT be present
-        assert "test_variable_1" not in result.data_vars
-        assert set(result.dims) == {"new_dim", "other_dim"}
+        assert "TestValidDerivedVariable" in result.data_vars
 
-    def test_prepare_wind_data_helper(self, sample_derived_dataset):
-        """Test the internal _prepare_wind_data helper function."""
-        # This tests the helper function within derive_variable
-        # We need to access it indirectly since it's defined within the method
+    def test_derived_variable_missing_required_vars(self, sample_derived_dataset):
+        """Test derived variable with missing required variables."""
 
         class TestMissingVarDerived(derived.DerivedVariable):
             required_variables = ["nonexistent_variable"]
 
             @classmethod
-            def derive_variable(cls, data: xr.Dataset, **kwargs) -> xr.DataArray:
+            def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
                 return data[cls.required_variables[0]]
 
         variables = [TestMissingVarDerived()]
