@@ -120,10 +120,10 @@ def compute_case_operator(case_operator: "cases.CaseOperator", **kwargs):
         )
 
     # Derive the variables for the forecast and target datasets independently
-    aligned_forecast_ds = derived.maybe_derive_variable(
+    aligned_forecast_ds = derived.maybe_derive_variables(
         aligned_forecast_ds, variables=case_operator.forecast.variables
     )
-    aligned_target_ds = derived.maybe_derive_variable(
+    aligned_target_ds = derived.maybe_derive_variables(
         aligned_target_ds, variables=case_operator.target.variables
     )
 
