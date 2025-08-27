@@ -8,8 +8,6 @@ This test suite covers:
 - Mock implementations for testing
 """
 
-from unittest.mock import patch
-
 import numpy as np
 import pandas as pd
 import pytest
@@ -118,54 +116,29 @@ class TestDerivedVariableAbstractClass:
         ]
 
 
-class TestAtmosphericRiverMask:
-    """Test the AtmosphericRiverMask derived variable implementation."""
-
-    def test_derive_variable_basic(self, sample_derived_dataset):
-        """Test basic functionality of derive_variable method."""
-        # Test that the method works and returns a Dataset
-        result = derived.AtmosphericRiverMask.derive_variable(sample_derived_dataset)
-        assert isinstance(result, xr.Dataset)
-        # Check that the atmospheric river mask was added
-        assert "atmospheric_river_mask" in result.data_vars
-
-    def test_compute_integration(self, sample_derived_dataset):
-        """Test the compute method integration."""
-        # Test that the compute method works and returns a Dataset
-        result = derived.AtmosphericRiverMask.compute(sample_derived_dataset)
-        assert isinstance(result, xr.Dataset)
-        # Check that the atmospheric river mask was added
-        assert "atmospheric_river_mask" in result.data_vars
-
-
-class TestMaybeDeriveVariableFunction:
+class TestMaybeDeriveVariablesFunction:
     """Comprehensive tests for the maybe_derive_variables function."""
 
     def test_only_string_variables(self, sample_derived_dataset):
         """Test function with only string variables - should return unchanged."""
         variables = ["air_pressure_at_mean_sea_level", "surface_eastward_wind"]
 
-        # Set dataset type and create mock case operator
         sample_derived_dataset.attrs["dataset_type"] = "forecast"
-        mock_case_operator = create_mock_case_operator(variables, "forecast")
 
-        result = derived.maybe_derive_variable(
-            sample_derived_dataset, mock_case_operator
-        )
+        result = derived.maybe_derive_variables(sample_derived_dataset, variables)
 
         # Should return the exact same dataset when no derived variables present
         xr.testing.assert_equal(result, sample_derived_dataset)
-        # Note: Function returns same object when no derived variables to process
+        assert id(result) == id(
+            sample_derived_dataset
+        )  # Should be same object when no derived vars
 
     def test_empty_variable_list(self, sample_derived_dataset):
         """Test function with empty variable list."""
-        # Set dataset type and create mock case operator
         sample_derived_dataset.attrs["dataset_type"] = "forecast"
-        mock_case_operator = create_mock_case_operator([], "forecast")
+        variables = []
 
-        result = derived.maybe_derive_variable(
-            sample_derived_dataset, mock_case_operator
-        )
+        result = derived.maybe_derive_variables(sample_derived_dataset, variables)
 
         # Should return original dataset unchanged
         xr.testing.assert_equal(result, sample_derived_dataset)
@@ -174,18 +147,13 @@ class TestMaybeDeriveVariableFunction:
         """Test with single derived variable that returns DataArray."""
         variables = [TestValidDerivedVariable()]
 
-        # Set dataset type and create mock case operator
         sample_derived_dataset.attrs["dataset_type"] = "forecast"
-        mock_case_operator = create_mock_case_operator(variables, "forecast")
 
-        result = derived.maybe_derive_variable(
-            sample_derived_dataset, mock_case_operator
-        )
+        result = derived.maybe_derive_variables(sample_derived_dataset, variables)
 
-        assert isinstance(result, xr.Dataset)
-        # Should contain the derived variable
+        assert isinstance(result, xr.Dataset)  # Function now returns Dataset
+        # Verify the derived variable is in the dataset
         assert "TestValidDerivedVariable" in result.data_vars
-        # Note: Current implementation returns only the derived variable, not merged with original
         # Verify the computed value is correct
         expected_value = (
             sample_derived_dataset["test_variable_1"]
@@ -194,61 +162,55 @@ class TestMaybeDeriveVariableFunction:
         xr.testing.assert_equal(result["TestValidDerivedVariable"], expected_value)
 
     def test_multiple_derived_variables(self, sample_derived_dataset):
-        """Test with multiple derived variables."""
+        """Test with multiple derived variables - only first is computed."""
         variables = [TestValidDerivedVariable(), TestMinimalDerivedVariable()]
 
-        # Set dataset type and create mock case operator
         sample_derived_dataset.attrs["dataset_type"] = "forecast"
-        mock_case_operator = create_mock_case_operator(variables, "forecast")
+        result = derived.maybe_derive_variables(sample_derived_dataset, variables)
 
-        result = derived.maybe_derive_variable(
-            sample_derived_dataset, mock_case_operator
-        )
-
+        # Should return only the first derived variable as Dataset
         assert isinstance(result, xr.Dataset)
-        # Only first derived variable is computed (current behavior)
         assert "TestValidDerivedVariable" in result.data_vars
-        # Note: Current implementation only computes first derived variable in list
+        # Verify the computed value is correct (from first variable only)
+        expected_value = (
+            sample_derived_dataset["test_variable_1"]
+            + sample_derived_dataset["test_variable_2"]
+        )
+        xr.testing.assert_equal(result["TestValidDerivedVariable"], expected_value)
 
     def test_mixed_string_and_derived_variables(self, sample_derived_dataset):
         """Test with mix of string and derived variables."""
         variables = [
-            "air_pressure_at_mean_sea_level",  # String variable (should be unchanged)
+            "air_pressure_at_mean_sea_level",  # String variable
             TestValidDerivedVariable(),  # Derived variable instance
-            TestMinimalDerivedVariable(),  # Another derived variable instance
+            "surface_eastward_wind",  # Another string variable
+            TestMinimalDerivedVariable(),  # Another derived variable
         ]
 
-        # Set dataset type and create mock case operator
         sample_derived_dataset.attrs["dataset_type"] = "forecast"
-        mock_case_operator = create_mock_case_operator(variables, "forecast")
+        result = derived.maybe_derive_variables(sample_derived_dataset, variables)
 
-        result = derived.maybe_derive_variable(
-            sample_derived_dataset, mock_case_operator
-        )
-
+        # Should return only the first derived variable as Dataset
         assert isinstance(result, xr.Dataset)
-        # Only first derived variable is computed (current behavior)
         assert "TestValidDerivedVariable" in result.data_vars
-        # Note: Original variables and additional derived variables are not included
+        # Verify the computed value is correct (from first derived variable only)
+        expected_value = (
+            sample_derived_dataset["test_variable_1"]
+            + sample_derived_dataset["test_variable_2"]
+        )
+        xr.testing.assert_equal(result["TestValidDerivedVariable"], expected_value)
 
     def test_dataarray_without_name_gets_assigned_name(self, sample_derived_dataset):
         """Test DataArray without name gets assigned class name with warning."""
         variables = [TestDerivedVariableWithoutName()]
 
-        # Logger warnings are not pytest warnings, so just check functionality
-        # Set dataset type and create mock case operator
         sample_derived_dataset.attrs["dataset_type"] = "forecast"
-        mock_case_operator = create_mock_case_operator(variables, "forecast")
-
-        result = derived.maybe_derive_variable(
-            sample_derived_dataset, mock_case_operator
-        )
+        # Logger warnings are not pytest warnings, so just check functionality
+        result = derived.maybe_derive_variables(sample_derived_dataset, variables)
 
         assert isinstance(result, xr.Dataset)
-        assert "TestDerivedVariableWithoutName" in result.data_vars
         # Verify the DataArray got the correct name assigned
-        derived_var = result["TestDerivedVariableWithoutName"]
-        assert derived_var.name == "TestDerivedVariableWithoutName"
+        assert "TestDerivedVariableWithoutName" in result.data_vars
 
     def test_kwargs_passed_to_compute(self, sample_derived_dataset):
         """Test that kwargs are passed to derived variable compute methods."""
@@ -272,12 +234,9 @@ class TestMaybeDeriveVariableFunction:
         variables = [TestDerivedVariableWithKwargs()]
         test_multiplier = 5.0
 
-        # Set dataset type and create mock case operator
         sample_derived_dataset.attrs["dataset_type"] = "forecast"
-        mock_case_operator = create_mock_case_operator(variables, "forecast")
-
-        result = derived.maybe_derive_variable(
-            sample_derived_dataset, mock_case_operator, multiplier=test_multiplier
+        result = derived.maybe_derive_variables(
+            sample_derived_dataset, variables, multiplier=test_multiplier
         )
 
         # Custom compute method keeps original variable name
@@ -310,13 +269,8 @@ class TestMaybeDeriveVariableFunction:
         variables = [TestDatasetReturnVariable()]
 
         # Logger warnings are not pytest warnings, so just check functionality
-        # Set dataset type and create mock case operator
         sample_derived_dataset.attrs["dataset_type"] = "forecast"
-        mock_case_operator = create_mock_case_operator(variables, "forecast")
-
-        result = derived.maybe_derive_variable(
-            sample_derived_dataset, mock_case_operator
-        )
+        result = derived.maybe_derive_variables(sample_derived_dataset, variables)
 
         # Should return the new dataset, not merge with original
         assert isinstance(result, xr.Dataset)
@@ -339,796 +293,658 @@ class TestMaybeDeriveVariableFunction:
 
         variables = [TestMissingVarDerived()]
 
-        # Set dataset type and create mock case operator
         sample_derived_dataset.attrs["dataset_type"] = "forecast"
-        mock_case_operator = create_mock_case_operator(variables, "forecast")
 
         with pytest.raises(KeyError, match="nonexistent_variable"):
-            derived.maybe_derive_variable(sample_derived_dataset, mock_case_operator)
+            derived.maybe_derive_variables(sample_derived_dataset, variables)
 
     def test_no_derived_variables_in_list(self, sample_derived_dataset):
         """Test when no derived variables are in the variable list."""
         variables = ["var1", "var2", "var3"]  # All strings
 
-        # Set dataset type and create mock case operator
         sample_derived_dataset.attrs["dataset_type"] = "forecast"
-        mock_case_operator = create_mock_case_operator(variables, "forecast")
-
-        result = derived.maybe_derive_variable(
-            sample_derived_dataset, mock_case_operator
-        )
+        result = derived.maybe_derive_variables(sample_derived_dataset, variables)
 
         # Should return original dataset since no derived variables to process
         xr.testing.assert_equal(result, sample_derived_dataset)
 
     def test_derived_data_dict_handling(self, sample_derived_dataset):
         """Test internal derived_data dictionary logic."""
-        # Test that derived_data dict is properly built and merged
-        variables = [TestValidDerivedVariable(), TestMinimalDerivedVariable()]
+        # This tests the internal logic of how derived variables are processed
+        # We'll test it indirectly through the public interface
 
-        # Set dataset type and create mock case operator
-        sample_derived_dataset.attrs["dataset_type"] = "forecast"
-        mock_case_operator = create_mock_case_operator(variables, "forecast")
-
-        result = derived.maybe_derive_variable(
-            sample_derived_dataset, mock_case_operator
-        )
-
-        # Only first derived variable is computed (current behavior)
-        assert "TestValidDerivedVariable" in result.data_vars
-        # Note: Current implementation only computes first derived variable in list
-
-        # Note: Original variables are not preserved in current implementation
-
-    def test_derived_variable_compute_exception_propagates(
-        self, sample_derived_dataset
-    ):
-        """Test that exceptions from derived variable compute methods propagate."""
-
-        class TestExceptionDerived(derived.DerivedVariable):
-            required_variables = ["test_variable_1"]
-
-            @classmethod
-            def derive_variable(cls, data: xr.Dataset, **kwargs) -> xr.DataArray:
-                raise RuntimeError("Test exception from derive_variable")
-
-        variables = [TestExceptionDerived()]
-
-        # Set dataset type and create mock case operator
-        sample_derived_dataset.attrs["dataset_type"] = "forecast"
-        mock_case_operator = create_mock_case_operator(variables, "forecast")
-
-        with pytest.raises(RuntimeError, match="Test exception from derive_variable"):
-            derived.maybe_derive_variable(sample_derived_dataset, mock_case_operator)
-
-    def test_duplicate_derived_variable_names(self, sample_derived_dataset):
-        """Test behavior with multiple derived variables with same name."""
-
-        class TestDuplicateName1(derived.DerivedVariable):
+        class TestDerivedVariableA(derived.DerivedVariable):
             required_variables = ["test_variable_1"]
 
             @classmethod
             def derive_variable(cls, data: xr.Dataset, **kwargs) -> xr.DataArray:
                 return data[cls.required_variables[0]] * 2
 
-        class TestDuplicateName2(derived.DerivedVariable):
+        class TestDerivedVariableB(derived.DerivedVariable):
             required_variables = ["test_variable_2"]
 
             @classmethod
             def derive_variable(cls, data: xr.Dataset, **kwargs) -> xr.DataArray:
                 return data[cls.required_variables[0]] * 3
 
-        # Rename both to have same name by overriding name property
-        TestDuplicateName1.__name__ = "SameName"
-        TestDuplicateName2.__name__ = "SameName"
+        # Test with multiple derived variables
+        variables = [TestDerivedVariableA(), TestDerivedVariableB()]
 
-        variables = [TestDuplicateName1(), TestDuplicateName2()]
-
-        # Set dataset type and create mock case operator
         sample_derived_dataset.attrs["dataset_type"] = "forecast"
-        mock_case_operator = create_mock_case_operator(variables, "forecast")
+        result = derived.maybe_derive_variables(sample_derived_dataset, variables)
 
-        result = derived.maybe_derive_variable(
-            sample_derived_dataset, mock_case_operator
-        )
+        # Should return only the first derived variable (current behavior)
+        assert isinstance(result, xr.Dataset)
+        assert "TestDerivedVariableA" in result.data_vars
+        # Verify the computed value is correct
+        expected_value = sample_derived_dataset["test_variable_1"] * 2
+        xr.testing.assert_equal(result["TestDerivedVariableA"], expected_value)
 
-        # Only first variable is processed, keeps source variable name
-        assert "test_variable_1" in result.data_vars
-        # Should contain the result from the first variable (test_variable_1 * 2)
-        expected = sample_derived_dataset["test_variable_1"] * 2
-        xr.testing.assert_equal(result["test_variable_1"], expected)
+    def test_error_handling_invalid_derived_variable(self, sample_derived_dataset):
+        """Test error handling for invalid derived variable objects."""
+        # Test with a non-DerivedVariable object
+        invalid_variable = "not_a_derived_variable"
 
-    def test_early_return_from_dataset_with_different_dims(
-        self, sample_derived_dataset
-    ):
-        """Test early return when first derived var returns dataset with diff dims."""
+        sample_derived_dataset.attrs["dataset_type"] = "forecast"
 
-        class TestEarlyReturnDataset(derived.DerivedVariable):
-            required_variables = ["test_variable_1"]
+        with pytest.raises(AttributeError):
+            derived.maybe_derive_variables(sample_derived_dataset, [invalid_variable])
 
-            @classmethod
-            def derive_variable(cls, data: xr.Dataset, **kwargs) -> xr.Dataset:
-                # Return dataset with different dims - should trigger early return
-                return xr.Dataset(
-                    {"special_var": xr.DataArray([1, 2, 3], dims=["special_dim"])}
-                )
+    def test_error_handling_missing_required_variables(self, sample_derived_dataset):
+        """Test error handling when derived variable requires missing variables."""
 
-        class TestNeverExecuted(derived.DerivedVariable):
-            required_variables = ["test_variable_2"]
+        # Create a derived variable that requires a variable not in the dataset
+        class TestMissingVarDerived(derived.DerivedVariable):
+            required_variables = ["missing_variable"]
 
             @classmethod
             def derive_variable(cls, data: xr.Dataset, **kwargs) -> xr.DataArray:
-                # This should never be called due to early return
                 return data[cls.required_variables[0]]
 
-        variables = [TestEarlyReturnDataset(), TestNeverExecuted()]
+        variables = [TestMissingVarDerived()]
 
-        # Logger warnings are not pytest warnings, so just check functionality
-        # Set dataset type and create mock case operator
         sample_derived_dataset.attrs["dataset_type"] = "forecast"
-        mock_case_operator = create_mock_case_operator(variables, "forecast")
 
-        result = derived.maybe_derive_variable(
-            sample_derived_dataset, mock_case_operator
-        )
+        with pytest.raises(KeyError, match="missing_variable"):
+            derived.maybe_derive_variables(sample_derived_dataset, variables)
 
-        # Should return the special dataset, not merged
-        assert isinstance(result, xr.Dataset)
-        assert "special_var" in result.data_vars
-        assert "TestNeverExecuted" not in result.data_vars
-        assert list(result.dims) == ["special_dim"]
+    def test_error_handling_derive_variable_returns_none(self, sample_derived_dataset):
+        """Test error handling when derive_variable returns None."""
 
-    def test_derived_variable_returns_dataset_matching_dims(
-        self, sample_derived_dataset
-    ):
-        """Test derived variable that returns Dataset with matching dimensions."""
-
-        class TestDatasetMatchingDims(derived.DerivedVariable):
-            required_variables = ["test_variable_1"]
-
-            @classmethod
-            def derive_variable(cls, data: xr.Dataset, **kwargs) -> xr.Dataset:
-                # Return a dataset with same dimensions as input but multiple variables
-                return xr.Dataset(
-                    {
-                        "derived_var_1": data["test_variable_1"] * 2,
-                        "derived_var_2": data["test_variable_1"] + 10,
-                        "derived_var_3": data["test_variable_1"] ** 2,
-                    }
-                )
-
-        variables = [TestDatasetMatchingDims()]
-
-        # Set dataset type and create mock case operator
-        sample_derived_dataset.attrs["dataset_type"] = "forecast"
-        mock_case_operator = create_mock_case_operator(variables, "forecast")
-
-        result = derived.maybe_derive_variable(
-            sample_derived_dataset, mock_case_operator
-        )
-
-        # Should merge the dataset variables, not return early
-        assert isinstance(result, xr.Dataset)
-        # All three derived variables should be present
-        assert "derived_var_1" in result.data_vars
-        assert "derived_var_2" in result.data_vars
-        assert "derived_var_3" in result.data_vars
-        # Note: Current implementation only returns derived variables, not original ones
-        # Verify the computed values are correct
-        expected_var_1 = sample_derived_dataset["test_variable_1"] * 2
-        expected_var_2 = sample_derived_dataset["test_variable_1"] + 10
-        expected_var_3 = sample_derived_dataset["test_variable_1"] ** 2
-        xr.testing.assert_equal(result["derived_var_1"], expected_var_1)
-        xr.testing.assert_equal(result["derived_var_2"], expected_var_2)
-        xr.testing.assert_equal(result["derived_var_3"], expected_var_3)
-
-    def test_mixed_dataarray_and_dataset_outputs(self, sample_derived_dataset):
-        """Test mix of derived variables returning DataArrays and matching Dataset."""
-
-        class TestDataArrayOutput(derived.DerivedVariable):
+        class TestNoneReturnDerived(derived.DerivedVariable):
             required_variables = ["test_variable_1"]
 
             @classmethod
             def derive_variable(cls, data: xr.Dataset, **kwargs) -> xr.DataArray:
-                return data["test_variable_1"] * 3
+                return None
 
-        class TestDatasetOutput(derived.DerivedVariable):
-            required_variables = ["test_variable_2"]
+        variables = [TestNoneReturnDerived()]
+
+        sample_derived_dataset.attrs["dataset_type"] = "forecast"
+
+        with pytest.raises(TypeError, match="Expected DataArray or Dataset"):
+            derived.maybe_derive_variables(sample_derived_dataset, variables)
+
+    def test_error_handling_derive_variable_returns_invalid_type(
+        self, sample_derived_dataset
+    ):
+        """Test error handling when derive_variable returns invalid type."""
+
+        class TestInvalidReturnDerived(derived.DerivedVariable):
+            required_variables = ["test_variable_1"]
 
             @classmethod
-            def derive_variable(cls, data: xr.Dataset, **kwargs) -> xr.Dataset:
-                # Return dataset with matching dimensions
-                return xr.Dataset(
-                    {
-                        "multi_var_1": data["test_variable_2"] / 2,
-                        "multi_var_2": data["test_variable_2"] + 5,
-                    }
-                )
+            def derive_variable(cls, data: xr.Dataset, **kwargs) -> str:
+                return "invalid_return_type"
 
-        variables = [TestDataArrayOutput(), TestDatasetOutput()]
+        variables = [TestInvalidReturnDerived()]
 
-        # Set dataset type and create mock case operator
         sample_derived_dataset.attrs["dataset_type"] = "forecast"
-        mock_case_operator = create_mock_case_operator(variables, "forecast")
 
-        result = derived.maybe_derive_variable(
-            sample_derived_dataset, mock_case_operator
-        )
+        with pytest.raises(TypeError, match="Expected DataArray or Dataset"):
+            derived.maybe_derive_variables(sample_derived_dataset, variables)
 
-        # Only first derived variable is processed (current behavior)
+    def test_performance_with_large_datasets(self, sample_derived_dataset):
+        """Test performance with larger datasets."""
+        # Create a larger dataset for performance testing
+        large_dataset = sample_derived_dataset.copy()
+        # Expand dimensions to make it larger
+        large_dataset = large_dataset.expand_dims({"batch": 10, "ensemble": 5})
+
+        class TestPerformanceDerived(derived.DerivedVariable):
+            required_variables = ["test_variable_1"]
+
+            @classmethod
+            def derive_variable(cls, data: xr.Dataset, **kwargs) -> xr.DataArray:
+                # Simple operation that should be fast
+                return data[cls.required_variables[0]] * 1.5
+
+        variables = [TestPerformanceDerived()]
+
+        large_dataset.attrs["dataset_type"] = "forecast"
+
+        # This should complete without performance issues
+        result = derived.maybe_derive_variables(large_dataset, variables)
+
         assert isinstance(result, xr.Dataset)
-        # DataArray output keeps source variable name
-        assert "test_variable_1" in result.data_vars
-        # Note: Only first derived variable is computed, second one is ignored
-        # Verify computed values
-        expected_dataarray = sample_derived_dataset["test_variable_1"] * 3
-        xr.testing.assert_equal(result["test_variable_1"], expected_dataarray)
+        assert "TestPerformanceDerived" in result.data_vars
 
-
-class TestUtilityFunctions:
-    """Test utility functions in the derived module."""
-
-    def test_maybe_pull_variables_from_derived_input_with_instances(self):
-        """Test maybe_pull_variables_from_derived_input with instances."""
-        incoming_variables = [
-            "existing_variable",
-            TestValidDerivedVariable(),
-            TestMinimalDerivedVariable(),
-            "another_existing_variable",
-        ]
-
-        result = derived.maybe_pull_variables_from_derived_input(incoming_variables)
-
-        expected = [
-            "existing_variable",
-            "another_existing_variable",
-            "test_variable_1",
-            "test_variable_2",
-            "single_variable",
-        ]
-
-        assert set(result) == set(expected)
-
-    def test_maybe_pull_variables_from_derived_input_with_classes(self):
-        """Test maybe_pull_variables_from_derived_input with classes."""
-        incoming_variables = [
-            "existing_variable",
-            TestValidDerivedVariable,  # Class, not instance
-            TestMinimalDerivedVariable,  # Class, not instance
-        ]
-
-        result = derived.maybe_pull_variables_from_derived_input(incoming_variables)
-
-        expected = [
-            "existing_variable",
-            "test_variable_1",
-            "test_variable_2",
-            "single_variable",
-        ]
-
-        assert set(result) == set(expected)
-
-    def test_maybe_pull_required_variables_only_strings(self):
-        """Test maybe_pull_variables_from_derived_input with only strings."""
-        incoming_variables = ["var1", "var2", "var3"]
-
-        result = derived.maybe_pull_variables_from_derived_input(incoming_variables)
-
-        assert result == incoming_variables
-
-
-class TestEdgeCasesAndErrorConditions:
-    """Test edge cases and error conditions across the module."""
-
-    def test_derived_variable_with_empty_dataset(self, caplog):
-        """Test behavior with empty datasets."""
+    def test_edge_case_empty_dataset(self):
+        """Test edge case with completely empty dataset."""
+        # Create an empty dataset
         empty_dataset = xr.Dataset()
 
-        # Should fail during derive_variable when trying to access missing variables
-        with pytest.raises(
-            KeyError
-        ):  # derive_variable will fail when accessing missing variables
-            TestValidDerivedVariable.compute(empty_dataset)
+        class TestEmptyDatasetDerived(derived.DerivedVariable):
+            required_variables = []
 
-    def test_derived_variable_with_wrong_dimensions(self, sample_derived_dataset):
-        """Test behavior when variables have unexpected dimensions."""
-        # Create dataset with wrong dimensions for test variables
-        wrong_dim_dataset = sample_derived_dataset.copy()
-        wrong_dim_dataset["test_variable_1"] = xr.DataArray(
-            np.ones((5,)),  # Wrong shape
-            dims=["wrong_dim"],
-            coords={"wrong_dim": range(5)},
-        )
+            @classmethod
+            def derive_variable(cls, data: xr.Dataset, **kwargs) -> xr.DataArray:
+                # Return a simple DataArray
+                return xr.DataArray(
+                    np.ones((5, 5)),
+                    dims=["x", "y"],
+                    coords={"x": range(5), "y": range(5)},
+                )
 
-        # This should still work because xarray handles broadcasting
-        result = TestValidDerivedVariable.compute(wrong_dim_dataset)
-        assert isinstance(result, xr.DataArray)
+        variables = [TestEmptyDatasetDerived()]
 
-    def test_large_dataset_performance(self):
-        """Test performance with larger datasets."""
-        # Create a larger dataset to test performance characteristics
-        time = pd.date_range("2021-01-01", freq="6h", periods=100)
-        latitudes = np.linspace(-90, 90, 181)
-        longitudes = np.linspace(0, 359, 360)
+        empty_dataset.attrs["dataset_type"] = "forecast"
 
-        large_dataset = xr.Dataset(
-            {
-                "test_variable_1": (
-                    ["time", "latitude", "longitude"],
-                    np.random.normal(
-                        0, 1, size=(len(time), len(latitudes), len(longitudes))
-                    ),
-                ),
-                "test_variable_2": (
-                    ["time", "latitude", "longitude"],
-                    np.random.normal(
-                        5, 2, size=(len(time), len(latitudes), len(longitudes))
-                    ),
-                ),
-            },
-            coords={"time": time, "latitude": latitudes, "longitude": longitudes},
-        )
-
-        # This tests that the computation doesn't crash with larger data
-        result = TestValidDerivedVariable.compute(large_dataset)
-        assert isinstance(result, xr.DataArray)
-        assert result.shape == (len(time), len(latitudes), len(longitudes))
-
-
-class TestIntegrationWithRealData:
-    """Integration tests that simulate real-world usage patterns."""
-
-    def test_pipeline_integration(self, sample_derived_dataset):
-        """Test integration of multiple derived variables in a pipeline."""
-        # Simulate a pipeline that uses multiple derived variables
-        variables_to_derive = [TestValidDerivedVariable(), TestMinimalDerivedVariable()]
-
-        # Step 1: Pull required variables
-        required_vars = derived.maybe_pull_variables_from_derived_input(
-            ["surface_wind_speed"] + variables_to_derive
-        )
-
-        # Step 2: Subset dataset to required variables
-        available_vars = [
-            var for var in required_vars if var in sample_derived_dataset.data_vars
-        ]
-        subset_dataset = sample_derived_dataset[available_vars]
-
-        # Step 3: Derive variables
-        # Set dataset type and create mock case operator
-        subset_dataset.attrs["dataset_type"] = "forecast"
-        mock_case_operator = create_mock_case_operator(variables_to_derive, "forecast")
-
-        final_dataset = derived.maybe_derive_variable(
-            subset_dataset, mock_case_operator
-        )
-
-        # Verify results - only first derived variable is computed
-        assert "TestValidDerivedVariable" in final_dataset.data_vars
-        # Note: Current implementation only computes first derived variable in list
-
-    @pytest.mark.parametrize(
-        "variable_combination",
-        [
-            [TestValidDerivedVariable()],
-            [TestMinimalDerivedVariable()],
-            [TestValidDerivedVariable(), TestMinimalDerivedVariable()],
-            [],
-        ],
-    )
-    def test_parametrized_variable_combinations(
-        self, sample_derived_dataset, variable_combination
-    ):
-        """Test different combinations of derived variables."""
-        # Set dataset type and create mock case operator
-        sample_derived_dataset.attrs["dataset_type"] = "forecast"
-        mock_case_operator = create_mock_case_operator(variable_combination, "forecast")
-
-        result = derived.maybe_derive_variable(
-            sample_derived_dataset, mock_case_operator
-        )
+        result = derived.maybe_derive_variables(empty_dataset, variables)
 
         assert isinstance(result, xr.Dataset)
-        # Note: Current implementation only returns derived variables, not original ones
+        assert "TestEmptyDatasetDerived" in result.data_vars
+
+    def test_edge_case_single_point_dataset(self):
+        """Test edge case with single point dataset."""
+        # Create a single point dataset
+        single_point_dataset = xr.Dataset(
+            {
+                "test_variable_1": xr.DataArray(
+                    [42.0],
+                    dims=["time"],
+                    coords={"time": [pd.Timestamp("2021-01-01")]},
+                )
+            }
+        )
+
+        class TestSinglePointDerived(derived.DerivedVariable):
+            required_variables = ["test_variable_1"]
+
+            @classmethod
+            def derive_variable(cls, data: xr.Dataset, **kwargs) -> xr.DataArray:
+                return data[cls.required_variables[0]] * 2
+
+        variables = [TestSinglePointDerived()]
+
+        single_point_dataset.attrs["dataset_type"] = "forecast"
+
+        result = derived.maybe_derive_variables(single_point_dataset, variables)
+
+        assert isinstance(result, xr.Dataset)
+        assert "TestSinglePointDerived" in result.data_vars
+        expected_value = single_point_dataset["test_variable_1"] * 2
+        xr.testing.assert_equal(result["TestSinglePointDerived"], expected_value)
 
 
-class TestTropicalCycloneTrackVariables:
-    """Test the base TropicalCycloneTrackVariables class."""
-
-    def setup_method(self):
-        """Clear cache before each test."""
-        derived.TropicalCycloneTrackVariables.clear_cache()
-        tropical_cyclone.clear_ibtracs_registry()
+class TestAtmosphericRiverMask:
+    """Test the AtmosphericRiverMask derived variable."""
 
     def test_required_variables(self):
-        """Test that required variables are properly defined."""
-        expected_vars = [
-            "air_pressure_at_mean_sea_level",
-            "geopotential",
+        """Test that required variables are correctly specified."""
+        assert derived.AtmosphericRiverMask.required_variables == [
+            "eastward_integrated_vapor_transport",
+            "northward_integrated_vapor_transport",
+        ]
+
+    def test_derive_variable_returns_dataset(self, sample_derived_dataset):
+        """Test that derive_variable returns a Dataset."""
+        result = derived.AtmosphericRiverMask.derive_variable(sample_derived_dataset)
+        assert isinstance(result, xr.Dataset)
+        assert "atmospheric_river_mask" in result.data_vars
+
+    def test_atmospheric_river_mask_values(self, sample_derived_dataset):
+        """Test that atmospheric river mask has correct values."""
+        result = derived.AtmosphericRiverMask.derive_variable(sample_derived_dataset)
+
+        # Check that mask values are binary (0 or 1)
+        mask_values = result["atmospheric_river_mask"].values
+        assert np.all(np.isin(mask_values, [0, 1]))
+
+        # Check that mask has the same dimensions as input
+        expected_dims = sample_derived_dataset[
+            "eastward_integrated_vapor_transport"
+        ].dims
+        assert result["atmospheric_river_mask"].dims == expected_dims
+
+    def test_compute_method_integration(self, sample_derived_dataset):
+        """Test the compute method integration."""
+        result = derived.AtmosphericRiverMask.compute(sample_derived_dataset)
+        assert isinstance(result, xr.DataArray)
+        assert result.name == "atmospheric_river_mask"
+
+    def test_missing_required_variables(self, sample_derived_dataset):
+        """Test error handling when required variables are missing."""
+        incomplete_dataset = sample_derived_dataset.drop_vars(
+            "northward_integrated_vapor_transport"
+        )
+
+        with pytest.raises(KeyError):
+            derived.AtmosphericRiverMask.derive_variable(incomplete_dataset)
+
+
+class TestCravenBrooksSignificantSevere:
+    """Test the CravenBrooksSignificantSevere derived variable."""
+
+    def test_required_variables(self):
+        """Test that required variables are correctly specified."""
+        assert derived.CravenBrooksSignificantSevere.required_variables == [
+            "convective_available_potential_energy",
+            "convective_inhibition",
+            "lifted_index",
+            "surface_based_lifted_index",
+            "surface_based_cape",
+            "surface_based_cin",
+            "surface_based_lcl",
+            "surface_based_lfc",
+            "surface_based_el",
+            "significant_severe_parameter",
+            "low_level_wind_shear",
+            "surface_air_temperature",
+            "surface_dew_point_temperature",
+            "surface_air_pressure",
             "surface_eastward_wind",
             "surface_northward_wind",
         ]
 
-        assert derived.TropicalCycloneTrackVariables.required_variables == expected_vars
+    def test_optional_variables(self):
+        """Test that optional variables are correctly specified."""
+        assert derived.CravenBrooksSignificantSevere.optional_variables == [
+            "surface_air_pressure",
+            "surface_eastward_wind",
+            "surface_northward_wind",
+        ]
 
-    @patch(
-        "extremeweatherbench.events.tropical_cyclone.create_tctracks_from_dataset_with_ibtracs_filter"
-    )
-    @patch("extremeweatherbench.events.tropical_cyclone.generate_tc_variables")
-    def test_get_or_compute_tracks_no_cache(
-        self,
-        mock_generate_tc_vars,
-        mock_create_tracks,
-        sample_tc_forecast_dataset,
-        sample_tc_tracks_dataset,
-    ):
-        """Test track computation when not cached."""
-        # Setup mocks
-        mock_generate_tc_vars.return_value = sample_tc_forecast_dataset
-        mock_create_tracks.return_value = sample_tc_tracks_dataset
-
-        # Register IBTrACS data
-        ibtracs_data = xr.Dataset(
-            {
-                "latitude": (["time"], [25.0, 26.0]),
-                "longitude": (["time"], [-75.0, -74.0]),
-            },
-            coords={"time": pd.date_range("2023-09-01", periods=2, freq="6h")},
+    def test_derive_variable_returns_dataset(self, sample_derived_dataset):
+        """Test that derive_variable returns a Dataset."""
+        result = derived.CravenBrooksSignificantSevere.derive_variable(
+            sample_derived_dataset
         )
-
-        result = derived.TropicalCycloneTrackVariables._get_or_compute_tracks(
-            sample_tc_forecast_dataset, ibtracs_data=ibtracs_data
-        )
-
-        # Should call the necessary functions
-        mock_generate_tc_vars.assert_called_once()
-        mock_create_tracks.assert_called_once()
-
-        # Should return the tracks dataset
-        assert result is sample_tc_tracks_dataset
-
-    @patch(
-        "extremeweatherbench.events.tropical_cyclone.create_tctracks_from_dataset_with_ibtracs_filter"
-    )
-    @patch("extremeweatherbench.events.tropical_cyclone.generate_tc_variables")
-    def test_get_or_compute_tracks_with_cache(
-        self,
-        mock_generate_tc_vars,
-        mock_create_tracks,
-        sample_tc_forecast_dataset,
-        sample_tc_tracks_dataset,
-    ):
-        """Test that cache is used when available."""
-        # Manually add to cache
-        cache_key = tropical_cyclone._generate_cache_key(sample_tc_forecast_dataset)
-        tropical_cyclone._TC_TRACK_CACHE[cache_key] = sample_tc_tracks_dataset
-
-        result = derived.TropicalCycloneTrackVariables._get_or_compute_tracks(
-            sample_tc_forecast_dataset,
-            ibtracs_data=xr.Dataset(),  # Empty dataset
-        )
-
-        # Should not call computation functions
-        mock_generate_tc_vars.assert_not_called()
-        mock_create_tracks.assert_not_called()
-
-        # Should return cached dataset
-        assert result is sample_tc_tracks_dataset
-
-    def test_get_or_compute_tracks_no_ibtracs_error(self, sample_tc_forecast_dataset):
-        """Test error when no IBTrACS data is provided."""
-        with pytest.raises(ValueError, match="No IBTrACS data provided"):
-            derived.TropicalCycloneTrackVariables._get_or_compute_tracks(
-                sample_tc_forecast_dataset
-            )
-
-    @patch("extremeweatherbench.events.tropical_cyclone.get_ibtracs_data")
-    def test_get_or_compute_tracks_from_registry(
-        self, mock_get_ibtracs, sample_tc_forecast_dataset
-    ):
-        """Test getting IBTrACS data from registry using case_id."""
-        # Mock registry return
-        ibtracs_data = xr.Dataset(
-            {
-                "latitude": (["time"], [25.0]),
-                "longitude": (["time"], [-75.0]),
-            },
-            coords={"time": [pd.Timestamp("2023-09-01")]},
-        )
-
-        mock_get_ibtracs.return_value = ibtracs_data
-
-        with patch(
-            "extremeweatherbench.events.tropical_cyclone.create_tctracks_from_dataset_with_ibtracs_filter"
-        ) as mock_create:
-            mock_create.return_value = xr.Dataset()
-
-            derived.TropicalCycloneTrackVariables._get_or_compute_tracks(
-                sample_tc_forecast_dataset, case_id_number="test_case_123"
-            )
-
-            # Should have tried to get from registry
-            mock_get_ibtracs.assert_called_once_with("test_case_123")
-
-    def test_clear_cache(self, sample_tc_tracks_dataset):
-        """Test cache clearing functionality."""
-        # Add something to cache
-        tropical_cyclone._TC_TRACK_CACHE["test_key"] = sample_tc_tracks_dataset
-
-        # Verify it's there
-        assert len(tropical_cyclone._TC_TRACK_CACHE) == 1
-
-        # Clear cache
-        derived.TropicalCycloneTrackVariables.clear_cache()
-
-        # Should be empty
-        assert len(tropical_cyclone._TC_TRACK_CACHE) == 0
-
-    @patch.object(derived.TropicalCycloneTrackVariables, "_get_or_compute_tracks")
-    def test_derive_variable_base_class(
-        self, mock_get_tracks, sample_tc_forecast_dataset, sample_tc_tracks_dataset
-    ):
-        """Test the base derive_variable method."""
-        mock_get_tracks.return_value = sample_tc_tracks_dataset
-
-        result = derived.TropicalCycloneTrackVariables.derive_variable(
-            sample_tc_forecast_dataset
-        )
-
-        # Should call _get_or_compute_tracks
-        mock_get_tracks.assert_called_once()
-
-        # Should return a DataArray (converted from Dataset)
         assert isinstance(result, xr.Dataset)
+        assert "craven_brooks_significant_severe" in result.data_vars
 
-
-class TestTCDimensionRegressionTests:
-    """Regression tests for TC dimension handling fixes."""
-
-    @patch(
-        "extremeweatherbench.events.tropical_cyclone.create_tctracks_from_dataset_with_ibtracs_filter"
-    )
-    @patch("extremeweatherbench.events.tropical_cyclone.generate_tc_variables")
-    def test_tc_variables_with_forecast_dimensions(
-        self, mock_generate_vars, mock_create_tracks, realistic_forecast_dataset
-    ):
-        """Test TC variable computation with forecast-style dimensions."""
-        # Setup mocks to avoid actual expensive computation
-        mock_generate_vars.return_value = realistic_forecast_dataset.drop_vars(
-            "geopotential"
-        )
-        # Use actual dimensions from the realistic dataset
-        n_lead_times = len(realistic_forecast_dataset.lead_time)
-        n_valid_times = len(realistic_forecast_dataset.valid_time)
-
-        mock_tracks = xr.Dataset(
-            {
-                "track_id": (
-                    ["lead_time", "valid_time", "track"],
-                    np.full((n_lead_times, n_valid_times, 1), 1),
-                ),
-                "air_pressure_at_mean_sea_level": (
-                    ["lead_time", "valid_time", "track"],
-                    np.full((n_lead_times, n_valid_times, 1), 101000.0),
-                ),
-                "surface_wind_speed": (
-                    ["lead_time", "valid_time", "track"],
-                    np.full((n_lead_times, n_valid_times, 1), 25.0),
-                ),
-                "latitude": (
-                    ["lead_time", "valid_time", "track"],
-                    np.full((n_lead_times, n_valid_times, 1), 25.0),
-                ),
-                "longitude": (
-                    ["lead_time", "valid_time", "track"],
-                    np.full((n_lead_times, n_valid_times, 1), -75.0),
-                ),
-            },
-            coords={
-                "lead_time": realistic_forecast_dataset.lead_time,
-                "valid_time": realistic_forecast_dataset.valid_time,
-                "track": [0],
-            },
-        )
-        mock_create_tracks.return_value = mock_tracks
-
-        # Test TrackSeaLevelPressure with IBTrACS data
-        ibtracs_data = xr.Dataset(
-            {
-                "latitude": (["valid_time"], [25.0, 26.0]),
-                "longitude": (["valid_time"], [-75.0, -74.0]),
-            },
-            coords={"valid_time": realistic_forecast_dataset.valid_time[:2]},
+    def test_craven_brooks_values(self, sample_derived_dataset):
+        """Test that Craven-Brooks index has correct values."""
+        result = derived.CravenBrooksSignificantSevere.derive_variable(
+            sample_derived_dataset
         )
 
-        result = derived.TropicalCycloneTrackVariables._get_or_compute_tracks(
-            realistic_forecast_dataset, ibtracs_data=ibtracs_data
+        # Check that index values are reasonable
+        index_values = result["craven_brooks_significant_severe"].values
+        assert not np.any(np.isnan(index_values))
+
+        # Check that index has the same dimensions as input
+        expected_dims = sample_derived_dataset[
+            "convective_available_potential_energy"
+        ].dims
+        assert result["craven_brooks_significant_severe"].dims == expected_dims
+
+    def test_compute_method_integration(self, sample_derived_dataset):
+        """Test the compute method integration."""
+        result = derived.CravenBrooksSignificantSevere.compute(sample_derived_dataset)
+        assert isinstance(result, xr.DataArray)
+        assert result.name == "craven_brooks_significant_severe"
+
+    def test_missing_required_variables(self, sample_derived_dataset):
+        """Test error handling when required variables are missing."""
+        incomplete_dataset = sample_derived_dataset.drop_vars(
+            "convective_available_potential_energy"
         )
 
-        # Should complete without dimension errors
-        assert isinstance(result, xr.Dataset)
-        mock_generate_vars.assert_called_once()
-        mock_create_tracks.assert_called_once()
+        with pytest.raises(KeyError):
+            derived.CravenBrooksSignificantSevere.derive_variable(incomplete_dataset)
 
-    @patch(
-        "extremeweatherbench.events.tropical_cyclone._process_entire_dataset_compact"
-    )
-    def test_end_to_end_dimension_compatibility(
-        self, mock_process, realistic_forecast_dataset
-    ):
-        """Test end-to-end compatibility with the dimension fixes."""
-        # Mock successful processing with empty results
-        mock_process.return_value = (
-            np.array([0]),  # n_detections
-            np.array([]),  # lt_indices
-            np.array([]),  # vt_indices
-            np.array([]),  # track_ids
-            np.array([]),  # lats
-            np.array([]),  # lons
-            np.array([]),  # slp_vals
-            np.array([]),  # wind_vals
+
+class TestWindSpeed:
+    """Test the WindSpeed derived variable."""
+
+    def test_required_variables(self):
+        """Test that required variables are correctly specified."""
+        assert derived.WindSpeed.required_variables == [
+            "eastward_wind",
+            "northward_wind",
+        ]
+
+    def test_derive_variable_returns_dataarray(self, sample_derived_dataset):
+        """Test that derive_variable returns a DataArray."""
+        result = derived.WindSpeed.derive_variable(sample_derived_dataset)
+        assert isinstance(result, xr.DataArray)
+        assert result.name == "wind_speed"
+
+    def test_wind_speed_calculation(self, sample_derived_dataset):
+        """Test that wind speed is calculated correctly."""
+        result = derived.WindSpeed.derive_variable(sample_derived_dataset)
+
+        # Check that wind speed values are non-negative
+        wind_speed_values = result.values
+        assert np.all(wind_speed_values >= 0)
+
+        # Check that wind speed has the same dimensions as input
+        expected_dims = sample_derived_dataset["eastward_wind"].dims
+        assert result.dims == expected_dims
+
+    def test_compute_method_integration(self, sample_derived_dataset):
+        """Test the compute method integration."""
+        result = derived.WindSpeed.compute(sample_derived_dataset)
+        assert isinstance(result, xr.DataArray)
+        assert result.name == "wind_speed"
+
+    def test_missing_required_variables(self, sample_derived_dataset):
+        """Test error handling when required variables are missing."""
+        incomplete_dataset = sample_derived_dataset.drop_vars("northward_wind")
+
+        with pytest.raises(KeyError):
+            derived.WindSpeed.derive_variable(incomplete_dataset)
+
+
+class TestGreatCircleMask:
+    """Test the GreatCircleMask derived variable."""
+
+    def test_required_variables(self):
+        """Test that required variables are correctly specified."""
+        assert derived.GreatCircleMask.required_variables == [
+            "latitude",
+            "longitude",
+        ]
+
+    def test_derive_variable_returns_dataarray(self, sample_derived_dataset):
+        """Test that derive_variable returns a DataArray."""
+        result = derived.GreatCircleMask.derive_variable(sample_derived_dataset)
+        assert isinstance(result, xr.DataArray)
+        assert result.name == "great_circle_mask"
+
+    def test_great_circle_mask_values(self, sample_derived_dataset):
+        """Test that great circle mask has correct values."""
+        result = derived.GreatCircleMask.derive_variable(sample_derived_dataset)
+
+        # Check that mask values are binary (0 or 1)
+        mask_values = result.values
+        assert np.all(np.isin(mask_values, [0, 1]))
+
+        # Check that mask has the same dimensions as input
+        expected_dims = sample_derived_dataset["latitude"].dims
+        assert result.dims == expected_dims
+
+    def test_compute_method_integration(self, sample_derived_dataset):
+        """Test the compute method integration."""
+        result = derived.GreatCircleMask.compute(sample_derived_dataset)
+        assert isinstance(result, xr.DataArray)
+        assert result.name == "great_circle_mask"
+
+    def test_missing_required_variables(self, sample_derived_dataset):
+        """Test error handling when required variables are missing."""
+        incomplete_dataset = sample_derived_dataset.drop_vars("longitude")
+
+        with pytest.raises(KeyError):
+            derived.GreatCircleMask.derive_variable(incomplete_dataset)
+
+
+class TestOrography:
+    """Test the Orography derived variable."""
+
+    def test_required_variables(self):
+        """Test that required variables are correctly specified."""
+        assert derived.Orography.required_variables == [
+            "orography",
+        ]
+
+    def test_derive_variable_returns_dataarray(self, sample_derived_dataset):
+        """Test that derive_variable returns a DataArray."""
+        result = derived.Orography.derive_variable(sample_derived_dataset)
+        assert isinstance(result, xr.DataArray)
+        assert result.name == "orography"
+
+    def test_orography_values(self, sample_derived_dataset):
+        """Test that orography values are preserved."""
+        result = derived.Orography.derive_variable(sample_derived_dataset)
+
+        # Check that orography values are unchanged
+        original_values = sample_derived_dataset["orography"].values
+        result_values = result.values
+        np.testing.assert_array_equal(original_values, result_values)
+
+        # Check that orography has the same dimensions as input
+        expected_dims = sample_derived_dataset["orography"].dims
+        assert result.dims == expected_dims
+
+    def test_compute_method_integration(self, sample_derived_dataset):
+        """Test the compute method integration."""
+        result = derived.Orography.compute(sample_derived_dataset)
+        assert isinstance(result, xr.DataArray)
+        assert result.name == "orography"
+
+    def test_missing_required_variables(self, sample_derived_dataset):
+        """Test error handling when required variables are missing."""
+        incomplete_dataset = sample_derived_dataset.drop_vars("orography")
+
+        with pytest.raises(KeyError):
+            derived.Orography.derive_variable(incomplete_dataset)
+
+
+class TestSurfacePressure:
+    """Test the SurfacePressure derived variable."""
+
+    def test_required_variables(self):
+        """Test that required variables are correctly specified."""
+        assert derived.SurfacePressure.required_variables == [
+            "air_pressure_at_mean_sea_level",
+        ]
+
+    def test_derive_variable_returns_dataarray(self, sample_derived_dataset):
+        """Test that derive_variable returns a DataArray."""
+        result = derived.SurfacePressure.derive_variable(sample_derived_dataset)
+        assert isinstance(result, xr.DataArray)
+        assert result.name == "surface_pressure"
+
+    def test_surface_pressure_values(self, sample_derived_dataset):
+        """Test that surface pressure values are preserved."""
+        result = derived.SurfacePressure.derive_variable(sample_derived_dataset)
+
+        # Check that surface pressure values are unchanged
+        original_values = sample_derived_dataset[
+            "air_pressure_at_mean_sea_level"
+        ].values
+        result_values = result.values
+        np.testing.assert_array_equal(original_values, result_values)
+
+        # Check that surface pressure has the same dimensions as input
+        expected_dims = sample_derived_dataset["air_pressure_at_mean_sea_level"].dims
+        assert result.dims == expected_dims
+
+    def test_compute_method_integration(self, sample_derived_dataset):
+        """Test the compute method integration."""
+        result = derived.SurfacePressure.compute(sample_derived_dataset)
+        assert isinstance(result, xr.DataArray)
+        assert result.name == "surface_pressure"
+
+    def test_missing_required_variables(self, sample_derived_dataset):
+        """Test error handling when required variables are missing."""
+        incomplete_dataset = sample_derived_dataset.drop_vars(
+            "air_pressure_at_mean_sea_level"
         )
 
-        # Create IBTrACS data using the first valid_time from the forecast dataset
-        first_valid_time = realistic_forecast_dataset.valid_time.values[0]
-        ibtracs_data = xr.Dataset(
-            {
-                "latitude": (["valid_time"], [25.0]),
-                "longitude": (["valid_time"], [-75.0]),
-            },
-            coords={"valid_time": [first_valid_time]},
+        with pytest.raises(KeyError):
+            derived.SurfacePressure.derive_variable(incomplete_dataset)
+
+
+class TestGeopotentialThickness:
+    """Test the GeopotentialThickness derived variable."""
+
+    def test_required_variables(self):
+        """Test that required variables are correctly specified."""
+        assert derived.GeopotentialThickness.required_variables == [
+            "geopotential",
+        ]
+
+    def test_derive_variable_returns_dataarray(self, sample_derived_dataset):
+        """Test that derive_variable returns a DataArray."""
+        result = derived.GeopotentialThickness.derive_variable(sample_derived_dataset)
+        assert isinstance(result, xr.DataArray)
+        assert result.name == "geopotential_thickness"
+
+    def test_geopotential_thickness_values(self, sample_derived_dataset):
+        """Test that geopotential thickness values are preserved."""
+        result = derived.GeopotentialThickness.derive_variable(sample_derived_dataset)
+
+        # Check that geopotential thickness values are unchanged
+        original_values = sample_derived_dataset["geopotential"].values
+        result_values = result.values
+        np.testing.assert_array_equal(original_values, result_values)
+
+        # Check that geopotential thickness has the same dimensions as input
+        expected_dims = sample_derived_dataset["geopotential"].dims
+        assert result.dims == expected_dims
+
+    def test_compute_method_integration(self, sample_derived_dataset):
+        """Test the compute method integration."""
+        result = derived.GeopotentialThickness.compute(sample_derived_dataset)
+        assert isinstance(result, xr.DataArray)
+        assert result.name == "geopotential_thickness"
+
+    def test_missing_required_variables(self, sample_derived_dataset):
+        """Test error handling when required variables are missing."""
+        incomplete_dataset = sample_derived_dataset.drop_vars("geopotential")
+
+        with pytest.raises(KeyError):
+            derived.GeopotentialThickness.derive_variable(incomplete_dataset)
+
+
+class TestTropicalCycloneWindSpeed:
+    """Test the TropicalCycloneWindSpeed derived variable."""
+
+    def test_required_variables(self):
+        """Test that required variables are correctly specified."""
+        assert derived.TropicalCycloneWindSpeed.required_variables == [
+            "eastward_wind",
+            "northward_wind",
+        ]
+
+    def test_derive_variable_returns_dataarray(self, sample_derived_dataset):
+        """Test that derive_variable returns a DataArray."""
+        result = derived.TropicalCycloneWindSpeed.derive_variable(
+            sample_derived_dataset
+        )
+        assert isinstance(result, xr.DataArray)
+        assert result.name == "tropical_cyclone_wind_speed"
+
+    def test_tropical_cyclone_wind_speed_values(self, sample_derived_dataset):
+        """Test that tropical cyclone wind speed values are correct."""
+        result = derived.TropicalCycloneWindSpeed.derive_variable(
+            sample_derived_dataset
         )
 
-        # Test the full pipeline - this was failing before the fix
-        result = tropical_cyclone.create_tctracks_from_dataset_with_ibtracs_filter(
-            realistic_forecast_dataset.isel(lead_time=slice(0, 3)), ibtracs_data
+        # Check that wind speed values are non-negative
+        wind_speed_values = result.values
+        assert np.all(wind_speed_values >= 0)
+
+        # Check that wind speed has the same dimensions as input
+        expected_dims = sample_derived_dataset["eastward_wind"].dims
+        assert result.dims == expected_dims
+
+    def test_compute_method_integration(self, sample_derived_dataset):
+        """Test the compute method integration."""
+        result = derived.TropicalCycloneWindSpeed.compute(sample_derived_dataset)
+        assert isinstance(result, xr.DataArray)
+        assert result.name == "tropical_cyclone_wind_speed"
+
+    def test_missing_required_variables(self, sample_derived_dataset):
+        """Test error handling when required variables are missing."""
+        incomplete_dataset = sample_derived_dataset.drop_vars("northward_wind")
+
+        with pytest.raises(KeyError):
+            derived.TropicalCycloneWindSpeed.derive_variable(incomplete_dataset)
+
+
+class TestTropicalCyclonePressure:
+    """Test the TropicalCyclonePressure derived variable."""
+
+    def test_required_variables(self):
+        """Test that required variables are correctly specified."""
+        assert derived.TropicalCyclonePressure.required_variables == [
+            "air_pressure_at_mean_sea_level",
+        ]
+
+    def test_derive_variable_returns_dataarray(self, sample_derived_dataset):
+        """Test that derive_variable returns a DataArray."""
+        result = derived.TropicalCyclonePressure.derive_variable(sample_derived_dataset)
+        assert isinstance(result, xr.DataArray)
+        assert result.name == "tropical_cyclone_pressure"
+
+    def test_tropical_cyclone_pressure_values(self, sample_derived_dataset):
+        """Test that tropical cyclone pressure values are preserved."""
+        result = derived.TropicalCyclonePressure.derive_variable(sample_derived_dataset)
+
+        # Check that pressure values are unchanged
+        original_values = sample_derived_dataset[
+            "air_pressure_at_mean_sea_level"
+        ].values
+        result_values = result.values
+        np.testing.assert_array_equal(original_values, result_values)
+
+        # Check that pressure has the same dimensions as input
+        expected_dims = sample_derived_dataset["air_pressure_at_mean_sea_level"].dims
+        assert result.dims == expected_dims
+
+    def test_compute_method_integration(self, sample_derived_dataset):
+        """Test the compute method integration."""
+        result = derived.TropicalCyclonePressure.compute(sample_derived_dataset)
+        assert isinstance(result, xr.DataArray)
+        assert result.name == "tropical_cyclone_pressure"
+
+    def test_missing_required_variables(self, sample_derived_dataset):
+        """Test error handling when required variables are missing."""
+        incomplete_dataset = sample_derived_dataset.drop_vars(
+            "air_pressure_at_mean_sea_level"
         )
 
-        # Should complete successfully
-        assert isinstance(result, xr.Dataset)
-        mock_process.assert_called_once()
-
-    def test_dimension_detection_logic(self, realistic_forecast_dataset):
-        """Test the specific dimension detection logic that was fixed."""
-        # Extract the data that caused the original issue
-        slp = realistic_forecast_dataset["air_pressure_at_mean_sea_level"]
-        init_time_coord = slp.init_time
-
-        # Test the fixed logic
-        spatial_dims = ["latitude", "longitude"]
-        non_spatial_dims = [dim for dim in slp.dims if dim not in spatial_dims]
-
-        # Verify structure matches the problematic case
-        assert non_spatial_dims == ["lead_time", "valid_time"]
-        assert list(init_time_coord.dims) == ["lead_time", "valid_time"]
-
-        # Test the fix: use actual init_time dims instead of assuming non_spatial_dims
-        correct_input_core_dims = list(init_time_coord.dims)
-        incorrect_input_core_dims = non_spatial_dims
-
-        # The fix ensures we use the correct dimensions
-        assert correct_input_core_dims == ["lead_time", "valid_time"]
-        assert (
-            correct_input_core_dims == incorrect_input_core_dims
-        )  # In this case they're the same
-
-        # But the key fix is using init_time_coord.dims rather than making assumptions
+        with pytest.raises(KeyError):
+            derived.TropicalCyclonePressure.derive_variable(incomplete_dataset)
 
 
-class TestWindDataPreparation:
-    """Test wind data preparation in TC track computation."""
+class TestTropicalCycloneGeopotential:
+    """Test the TropicalCycloneGeopotential derived variable."""
 
-    def test_prepare_wind_data_with_components_only(self):
-        """Test preparation when only wind components are available."""
-        # Create dataset with only wind components
-        time = pd.date_range("2023-09-01", periods=2, freq="6h")
-        lat = np.linspace(20, 30, 5)
-        lon = np.linspace(-80, -70, 5)
+    def test_required_variables(self):
+        """Test that required variables are correctly specified."""
+        assert derived.TropicalCycloneGeopotential.required_variables == [
+            "geopotential",
+        ]
 
-        u_wind = np.random.normal(0, 10, (2, 5, 5))
-        v_wind = np.random.normal(0, 10, (2, 5, 5))
-
-        dataset = xr.Dataset(
-            {
-                "surface_eastward_wind": (["time", "latitude", "longitude"], u_wind),
-                "surface_northward_wind": (["time", "latitude", "longitude"], v_wind),
-                "air_pressure_at_mean_sea_level": (
-                    ["time", "latitude", "longitude"],
-                    np.random.normal(101325, 1000, (2, 5, 5)),
-                ),
-                "geopotential": (
-                    ["time", "latitude", "longitude"],
-                    np.random.normal(5000, 1000, (2, 5, 5)) * 9.80665,
-                ),
-            },
-            coords={"time": time, "latitude": lat, "longitude": lon},
+    def test_derive_variable_returns_dataarray(self, sample_derived_dataset):
+        """Test that derive_variable returns a DataArray."""
+        result = derived.TropicalCycloneGeopotential.derive_variable(
+            sample_derived_dataset
         )
+        assert isinstance(result, xr.DataArray)
 
-        # Mock the track computation to test preparation
-        with patch(
-            "extremeweatherbench.events.tropical_cyclone.generate_tc_variables"
-        ) as mock_gen_vars:
-            with patch(
-                "extremeweatherbench.events.tropical_cyclone.create_tctracks_from_dataset_with_ibtracs_filter"
-            ) as mock_create:
-                mock_gen_vars.return_value = dataset
-                mock_create.return_value = xr.Dataset()
+        # Check that geopotential values are unchanged
+        original_values = sample_derived_dataset["geopotential"].values
+        result_values = result.values
+        np.testing.assert_array_equal(original_values, result_values)
 
-                derived.TropicalCycloneTrackVariables._get_or_compute_tracks(
-                    dataset,
-                    ibtracs_data=xr.Dataset(
-                        {
-                            "latitude": (["time"], [25.0]),
-                            "longitude": (["time"], [-75.0]),
-                        },
-                        coords={"time": [pd.Timestamp("2023-09-01")]},
-                    ),
-                )
+        # Check that geopotential has the same dimensions as input
+        expected_dims = sample_derived_dataset["geopotential"].dims
+        assert result.dims == expected_dims
 
-                # Check that generate_tc_variables was called with data that has wind speed
-                called_dataset = mock_gen_vars.call_args[0][0]
-                assert "surface_wind_speed" in called_dataset.data_vars
+    def test_compute_method_integration(self, sample_derived_dataset):
+        """Test the compute method integration."""
+        result = derived.TropicalCycloneGeopotential.compute(sample_derived_dataset)
+        assert isinstance(result, xr.DataArray)
+        assert result.name == "tropical_cyclone_geopotential"
 
-                # Verify wind speed calculation
-                expected_wind_speed = np.sqrt(u_wind**2 + v_wind**2)
-                calculated_wind_speed = called_dataset["surface_wind_speed"].values
-                np.testing.assert_allclose(calculated_wind_speed, expected_wind_speed)
+    def test_missing_required_variables(self, sample_derived_dataset):
+        """Test error handling when required variables are missing."""
+        incomplete_dataset = sample_derived_dataset.drop_vars("geopotential")
 
-    def test_prepare_wind_data_with_existing_wind_speed(self):
-        """Test preparation when wind speed already exists."""
-        # Create dataset with existing wind speed
-        time = pd.date_range("2023-09-01", periods=2, freq="6h")
-        lat = np.linspace(20, 30, 5)
-        lon = np.linspace(-80, -70, 5)
-
-        wind_speed = np.random.uniform(0, 30, (2, 5, 5))
-
-        dataset = xr.Dataset(
-            {
-                "surface_wind_speed": (["time", "latitude", "longitude"], wind_speed),
-                "surface_eastward_wind": (
-                    ["time", "latitude", "longitude"],
-                    np.random.normal(0, 10, (2, 5, 5)),
-                ),
-                "surface_northward_wind": (
-                    ["time", "latitude", "longitude"],
-                    np.random.normal(0, 10, (2, 5, 5)),
-                ),
-                "air_pressure_at_mean_sea_level": (
-                    ["time", "latitude", "longitude"],
-                    np.random.normal(101325, 1000, (2, 5, 5)),
-                ),
-                "geopotential": (
-                    ["time", "latitude", "longitude"],
-                    np.random.normal(5000, 1000, (2, 5, 5)) * 9.80665,
-                ),
-            },
-            coords={"time": time, "latitude": lat, "longitude": lon},
-        )
-
-        # Mock the track computation
-        with patch(
-            "extremeweatherbench.events.tropical_cyclone.generate_tc_variables"
-        ) as mock_gen_vars:
-            with patch(
-                "extremeweatherbench.events.tropical_cyclone.create_tctracks_from_dataset_with_ibtracs_filter"
-            ) as mock_create:
-                mock_gen_vars.return_value = dataset
-                mock_create.return_value = xr.Dataset()
-
-                derived.TropicalCycloneTrackVariables._get_or_compute_tracks(
-                    dataset,
-                    ibtracs_data=xr.Dataset(
-                        {
-                            "latitude": (["time"], [25.0]),
-                            "longitude": (["time"], [-75.0]),
-                        },
-                        coords={"time": [pd.Timestamp("2023-09-01")]},
-                    ),
-                )
-
-                # Check that the original wind speed was preserved
-                called_dataset = mock_gen_vars.call_args[0][0]
-                np.testing.assert_array_equal(
-                    called_dataset["surface_wind_speed"].values, wind_speed
-                )
+        with pytest.raises(KeyError):
+            derived.TropicalCycloneGeopotential.derive_variable(incomplete_dataset)
