@@ -373,7 +373,7 @@ class TestComputeCaseOperator:
     """Test the compute_case_operator function."""
 
     @patch("extremeweatherbench.evaluate._build_datasets")
-    @patch("extremeweatherbench.derived.maybe_derive_variable")
+    @patch("extremeweatherbench.derived.maybe_derive_variables")
     @patch("extremeweatherbench.evaluate._evaluate_metric_and_return_df")
     def test_compute_case_operator_basic(
         self,
@@ -416,7 +416,7 @@ class TestComputeCaseOperator:
         assert isinstance(result, pd.DataFrame)
 
     @patch("extremeweatherbench.evaluate._build_datasets")
-    @patch("extremeweatherbench.derived.maybe_derive_variable")
+    @patch("extremeweatherbench.derived.maybe_derive_variables")
     def test_compute_case_operator_with_precompute(
         self,
         mock_derive_variables,
@@ -902,7 +902,7 @@ class TestErrorHandling:
 class TestIntegration:
     """Test integration scenarios with real-like data."""
 
-    @patch("extremeweatherbench.derived.maybe_derive_variable")
+    @patch("extremeweatherbench.derived.maybe_derive_variables")
     def test_end_to_end_workflow(
         self,
         mock_derive_variables,
