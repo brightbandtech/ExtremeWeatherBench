@@ -1,12 +1,9 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, List, Type, Union
+from typing import List, Type, Union
 
 import numpy as np
 import xarray as xr
-
-if TYPE_CHECKING:
-    from extremeweatherbench import cases
 
 from extremeweatherbench import calc
 
@@ -242,9 +239,9 @@ class TCTrackVariables(DerivedVariable):
         return tctracks_ds_3d  # type: ignore[return-value]
 
 
-def maybe_derive_variable(
+def maybe_derive_variables(
     dataset: xr.Dataset,
-    case_operator: "cases.CaseOperator",
+    variables: list[Union[str, DerivedVariable, Type[DerivedVariable]]],
     **kwargs,
 ) -> xr.Dataset:
     """Derive variable from the data if it exists in a list of variables.
@@ -264,22 +261,11 @@ def maybe_derive_variable(
         A dataset with derived variables, if any exist, else the original
         dataset.
     """
-    # TODO: add case_id_number back in for hash based caching
-    # kwargs["case_id_number"] = case_operator.case_metadata.case_id_number
-
-    dataset_type = dataset.attrs.get("dataset_type", "unknown")
-    if dataset_type == "forecast":
-        variables = case_operator.forecast.variables
-    elif dataset_type == "target":
-        variables = case_operator.target.variables
-    else:
-        logger.warning("Unknown dataset_type '%s', skipping", dataset_type)
-        return dataset
 
     maybe_derived_variables = [v for v in variables if not isinstance(v, str)]
 
     if not maybe_derived_variables:
-        logger.debug("No derived variables for dataset type '%s'", dataset_type)
+        logger.debug("No derived variables for dataset type.")
         return dataset
 
     if len(maybe_derived_variables) > 1:
@@ -305,6 +291,7 @@ def maybe_derive_variable(
             output.name = derived_variable.name
         # Merge the derived variable into the dataset
         return output.to_dataset()
+
     elif isinstance(output, xr.Dataset):
         # Check if derived dataset dimensions are compatible for merging
         return output
