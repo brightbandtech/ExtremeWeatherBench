@@ -52,6 +52,7 @@ ghcn_target = inputs.GHCN(
 )
 
 hres_forecast = inputs.ZarrForecast(
+    name="hres_forecast",
     source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
     variables=["surface_air_temperature"],
     variable_mapping={
