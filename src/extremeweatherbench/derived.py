@@ -2,11 +2,9 @@ import logging
 from abc import ABC, abstractmethod
 from typing import List, Optional, Type, Union
 
-import numpy as np
 import xarray as xr
 
 import extremeweatherbench.events.atmospheric_river as ar
-from extremeweatherbench import calc
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -107,63 +105,8 @@ class AtmosphericRiverMask(DerivedVariable):
 
     @classmethod
     def derive_variable(cls, data: xr.Dataset) -> xr.Dataset:
-        """Derive the atmospheric river mask."""
-
-        coords_dict = {dim: data.coords[dim] for dim in data.dims if dim != "level"}
-        if "surface_standard_pressure" not in data.data_vars:
-            data["surface_standard_pressure"] = calc.calculate_pressure_at_surface(
-                calc.orography(data)
-            )
-
-        # Find the axis corresponding to "level", assuming all variables have
-        # the same dimension order
-        level_axis = list(data.dims).index("level")
-
-        data, level_broadcast, sfc_pres_broadcast = xr.broadcast(
-            data, data["level"], data["surface_standard_pressure"]
-        )
-        # Only include levels > 200 hPa (levels below 200 hPa)
-        data["adjusted_level"] = xr.where(
-            (level_broadcast * 100 < sfc_pres_broadcast) & (data["level"] > 200),
-            data["level"],
-            np.nan,
-        )
-
-        data["vertical_integral_of_eastward_water_vapour_flux"] = xr.DataArray(
-            calc.nantrapezoid(
-                data["eastward_wind"] * data["specific_humidity"],
-                x=data.adjusted_level * 100,
-                axis=level_axis,
-            )
-            / 9.80665,
-            coords=coords_dict,
-            dims=coords_dict.keys(),
-        )
-        data["vertical_integral_of_northward_water_vapour_flux"] = xr.DataArray(
-            calc.nantrapezoid(
-                data["northward_wind"] * data["specific_humidity"],
-                x=data.adjusted_level * 100,
-                axis=level_axis,
-            )
-            / 9.80665,
-            coords=coords_dict,
-            dims=coords_dict.keys(),
-        )
-
-        ivt_da = np.hypot(
-            data["vertical_integral_of_eastward_water_vapour_flux"],
-            data["vertical_integral_of_northward_water_vapour_flux"],
-        )
-        ivt_laplacian_da = ar.blurred_laplacian(ivt_da)
-        data = xr.merge([ivt_da, ivt_laplacian_da])
-        ar_mask = ar.ar_mask(data)
-        land_intersection = calc.find_land_intersection(ar_mask)
-        return xr.Dataset(
-            {
-                "atmospheric_river_mask": ar_mask,
-                "atmospheric_river_land_intersection": land_intersection,
-            }
-        )
+        """Derive the atmospheric river mask using xr.apply_ufunc approach."""
+        return ar.compute_atmospheric_river_mask_ufunc(data)
 
 
 class AtmosphericRiverLandIntersection(DerivedVariable):
@@ -176,7 +119,7 @@ class AtmosphericRiverLandIntersection(DerivedVariable):
     def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
         """Derive the atmospheric river land intersection."""
         ar_mask = data[AtmosphericRiverMask.name]
-        land_intersection = calc.find_land_intersection(ar_mask)
+        land_intersection = ar.find_land_intersection(ar_mask)
         return xr.DataArray(land_intersection, name=cls.name)
 
 
