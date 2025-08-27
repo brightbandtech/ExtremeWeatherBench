@@ -81,14 +81,13 @@ class InputBase(ABC):
     """
 
     source: str
-    variables: list[Union[str, "derived.DerivedVariable"]]
-    variable_mapping: dict
-    storage_options: dict
+    name: str
+    variables: list[Union[str, "derived.DerivedVariable"]] = dataclasses.field(
+        default_factory=list
+    )
+    variable_mapping: dict = dataclasses.field(default_factory=dict)
+    storage_options: dict = dataclasses.field(default_factory=dict)
     preprocess: Callable = utils._default_preprocess
-
-    @property
-    def name(self) -> str:
-        return self.__class__.__name__
 
     def open_and_maybe_preprocess_data_from_source(
         self,
@@ -96,6 +95,14 @@ class InputBase(ABC):
         data = self._open_data_from_source()
         data = self.preprocess(data)
         return data
+
+    def set_name(self, name: str) -> None:
+        """Set the name of the input data source.
+
+        Args:
+            name: The new name to assign to this input data source.
+        """
+        self.name = name
 
     @abstractmethod
     def _open_data_from_source(self) -> utils.IncomingDataInput:
@@ -169,7 +176,15 @@ class InputBase(ABC):
         )
 
     def add_source_to_dataset_attrs(self, ds: xr.Dataset) -> xr.Dataset:
-        """Add the name of the dataset to the dataset attributes."""
+        """Add the name and type of the dataset to the dataset attributes."""
+        # Check if this instance is a ForecastBase or TargetBase subclass
+        if isinstance(self, ForecastBase):
+            ds.attrs["dataset_type"] = "forecast"
+        elif isinstance(self, TargetBase):
+            ds.attrs["dataset_type"] = "target"
+        else:
+            # Fallback to class name for other InputBase subclasses
+            ds.attrs["dataset_type"] = self.__class__.__name__
         ds.attrs["source"] = self.name
         return ds
 
@@ -187,7 +202,7 @@ class InputBase(ABC):
         """
         # Some inputs may not have variables defined, in which case we return
         # the data unmodified
-        if not self.variables:
+        if not self.variables and not self.variable_mapping:
             return data
 
         variable_mapping = self.variable_mapping
@@ -297,6 +312,7 @@ class EvaluationObject:
 class KerchunkForecast(ForecastBase):
     """Forecast class for kerchunked forecast data."""
 
+    name: str = "kerchunk_forecast"
     chunks: Optional[Union[dict, str]] = "auto"
 
     def _open_data_from_source(self) -> utils.IncomingDataInput:
@@ -311,6 +327,7 @@ class KerchunkForecast(ForecastBase):
 class ZarrForecast(ForecastBase):
     """Forecast class for zarr forecast data."""
 
+    name: str = "zarr_forecast"
     chunks: Optional[Union[dict, str]] = "auto"
 
     def _open_data_from_source(self) -> utils.IncomingDataInput:
@@ -366,6 +383,7 @@ class ERA5(TargetBase):
     there are multiple variables in the ta
     """
 
+    name: str = "ERA5"
     chunks: Optional[Union[dict, str]] = None
 
     def _open_data_from_source(self) -> utils.IncomingDataInput:
@@ -414,6 +432,8 @@ class GHCN(TargetBase):
     Data is processed using polars to maintain the lazy loading paradigm in
     open_data_from_source and to separate the subsetting into subset_data_to_case.
     """
+
+    name: str = "GHCN"
 
     def _open_data_from_source(self) -> utils.IncomingDataInput:
         target_data: pl.LazyFrame = pl.scan_parquet(
@@ -513,6 +533,8 @@ class LSR(TargetBase):
     the next day at 12 UTC to match SPC methods for US data. Australia data should be 00
     UTC to 00 UTC.
     """
+
+    name: str = "local_storm_reports"
 
     def _open_data_from_source(self) -> utils.IncomingDataInput:
         # force LSR to use anon token to prevent google reauth issues for users
@@ -640,6 +662,8 @@ class LSR(TargetBase):
 class PPH(TargetBase):
     """Target class for practically perfect hindcast data."""
 
+    name: str = "practically_perfect_hindcast"
+
     def _open_data_from_source(
         self,
     ) -> utils.IncomingDataInput:
@@ -666,6 +690,8 @@ class PPH(TargetBase):
 @dataclasses.dataclass
 class IBTrACS(TargetBase):
     """Target class for IBTrACS data."""
+
+    name: str = "IBTrACS"
 
     def _open_data_from_source(self) -> utils.IncomingDataInput:
         # not using storage_options in this case due to NetCDF4Backend not

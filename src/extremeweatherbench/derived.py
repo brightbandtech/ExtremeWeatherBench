@@ -1,3 +1,4 @@
+import logging
 from abc import ABC, abstractmethod
 from typing import List, Optional, Type, Union
 
@@ -6,6 +7,9 @@ import xarray as xr
 
 import extremeweatherbench.events.atmospheric_river as ar
 from extremeweatherbench import calc
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 class DerivedVariable(ABC):
@@ -246,10 +250,13 @@ def maybe_derive_variables(
 
     derived_variables = [v for v in variables if not isinstance(v, str)]
     derived_data = {}
-    for v in derived_variables:
-        output_da = v.compute(data=ds)
-        if output_da.name not in ds.data_vars:
-            ds[output_da.name] = output_da
+    if derived_variables:
+        for v in derived_variables:
+            output_da = v.compute(data=ds)
+            # Ensure the DataArray has the correct name
+            if output_da.name is None:
+                output_da.name = v.name
+            derived_data[v.name] = output_da
     # TODO consider removing data variables only used for derivation
     ds = ds.merge(derived_data)
     return ds
