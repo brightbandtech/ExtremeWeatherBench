@@ -274,19 +274,6 @@ def maybe_derive_variables(
             "each variable."
         )
 
-    maybe_derived_variables = [v for v in variables if not isinstance(v, str)]
-
-    if not maybe_derived_variables:
-        logger.debug("No derived variables for dataset type.")
-        return dataset
-
-    if len(maybe_derived_variables) > 1:
-        logger.warning(
-            "Multiple derived variables provided. Only the first one will be "
-            "computed. Users must use separate EvaluationObjects to derive "
-            "each variable."
-        )
-
     # Take the first derived variable and process it
     derived_variable = maybe_derived_variables[0]
     output = derived_variable.compute(data=dataset, **kwargs)
