@@ -119,10 +119,18 @@ def compute_case_operator(case_operator: "cases.CaseOperator", **kwargs):
             cache_dir=kwargs.get("cache_dir", None),
         )
 
-    aligned_forecast_ds, aligned_target_ds = [
-        derived.maybe_derive_variable(ds, case_operator=case_operator)
-        for ds in [aligned_forecast_ds, aligned_target_ds]
-    ]
+    # Derive the variables for the forecast and target datasets independently
+    aligned_forecast_ds = derived.maybe_derive_variables(
+        aligned_forecast_ds,
+        variables=case_operator.forecast.variables,
+        case_id_number=case_operator.case_metadata.case_id_number,
+    )
+    aligned_target_ds = derived.maybe_derive_variables(
+        aligned_target_ds,
+        variables=case_operator.target.variables,
+        case_id_number=case_operator.case_metadata.case_id_number,
+    )
+
     logger.info(f"datasets built for case {case_operator.case_metadata.case_id_number}")
     results = []
     # TODO: determine if derived variables need to be pushed here or at pre-compute

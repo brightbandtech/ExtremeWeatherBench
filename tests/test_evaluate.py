@@ -376,7 +376,7 @@ class TestComputeCaseOperator:
     """Test the compute_case_operator function."""
 
     @patch("extremeweatherbench.evaluate._build_datasets")
-    @patch("extremeweatherbench.derived.maybe_derive_variable")
+    @patch("extremeweatherbench.derived.maybe_derive_variables")
     @patch("extremeweatherbench.evaluate._evaluate_metric_and_return_df")
     def test_compute_case_operator_basic(
         self,
@@ -394,7 +394,7 @@ class TestComputeCaseOperator:
             sample_target_dataset,
         )
         mock_derive_variables.side_effect = (
-            lambda ds, case_operator, **kwargs: ds
+            lambda ds, variables, **kwargs: ds
         )  # Return unchanged
 
         mock_result = pd.DataFrame(
@@ -419,7 +419,7 @@ class TestComputeCaseOperator:
         assert isinstance(result, pd.DataFrame)
 
     @patch("extremeweatherbench.evaluate._build_datasets")
-    @patch("extremeweatherbench.derived.maybe_derive_variable")
+    @patch("extremeweatherbench.derived.maybe_derive_variables")
     def test_compute_case_operator_with_precompute(
         self,
         mock_derive_variables,
@@ -433,7 +433,7 @@ class TestComputeCaseOperator:
             sample_forecast_dataset,
             sample_target_dataset,
         )
-        mock_derive_variables.side_effect = lambda ds, case_operator, **kwargs: ds
+        mock_derive_variables.side_effect = lambda ds, variables, **kwargs: ds
 
         sample_case_operator.target.maybe_align_forecast_to_target.return_value = (
             sample_forecast_dataset,
@@ -485,8 +485,8 @@ class TestComputeCaseOperator:
             sample_target_dataset,
         )
 
-        with patch("extremeweatherbench.derived.maybe_derive_variable") as mock_derive:
-            mock_derive.side_effect = lambda ds, case_operator, **kwargs: ds
+        with patch("extremeweatherbench.derived.maybe_derive_variables") as mock_derive:
+            mock_derive.side_effect = lambda ds, variables, **kwargs: ds
 
             with patch(
                 "extremeweatherbench.evaluate._evaluate_metric_and_return_df"
@@ -905,7 +905,7 @@ class TestErrorHandling:
 class TestIntegration:
     """Test integration scenarios with real-like data."""
 
-    @patch("extremeweatherbench.derived.maybe_derive_variable")
+    @patch("extremeweatherbench.derived.maybe_derive_variables")
     def test_end_to_end_workflow(
         self,
         mock_derive_variables,
@@ -915,7 +915,7 @@ class TestIntegration:
         sample_target_dataset,
     ):
         """Test a complete end-to-end workflow."""
-        mock_derive_variables.side_effect = lambda ds, case_operator, **kwargs: ds
+        mock_derive_variables.side_effect = lambda ds, variables, **kwargs: ds
 
         # Setup the evaluation object methods
         sample_evaluation_object.target.maybe_align_forecast_to_target.return_value = (
@@ -1053,8 +1053,8 @@ class TestIntegration:
             }
         )
 
-        with patch("extremeweatherbench.derived.maybe_derive_variable") as mock_derive:
-            mock_derive.side_effect = lambda ds, case_operator, **kwargs: ds
+        with patch("extremeweatherbench.derived.maybe_derive_variables") as mock_derive:
+            mock_derive.side_effect = lambda ds, variables, **kwargs: ds
 
             with patch(
                 "extremeweatherbench.evaluate._evaluate_metric_and_return_df"
@@ -1252,20 +1252,25 @@ class TestTropicalCycloneEvaluation:
         mock_metric_instance.compute_metric.return_value = xr.DataArray([1.0])
         sample_tc_case_operator.metric[0].return_value = mock_metric_instance
 
-        with patch("extremeweatherbench.derived.maybe_derive_variable") as mock_derive:
-            mock_derive.side_effect = lambda ds, case_operator, **kwargs: ds
+        with patch("extremeweatherbench.derived.maybe_derive_variables") as mock_derive:
+            mock_derive.side_effect = lambda ds, variables, **kwargs: ds
 
             # Run the evaluation
             evaluate.compute_case_operator(sample_tc_case_operator)
 
-            # Check that maybe_derive_variable was called with case_operator
+            # Check that maybe_derive_variables was called
             assert mock_derive.call_count == 2  # Called for both forecast and target
 
-            # Check that case_operator was passed (which contains case_id_number)
+            # Check that the function was called with the right parameters
             for call in mock_derive.call_args_list:
+                args = call[0]
                 kwargs = call[1]
-                assert "case_operator" in kwargs
-                assert kwargs["case_operator"] == sample_tc_case_operator
+                assert len(args) >= 1  # Should have dataset as first argument
+                assert (
+                    "variables" in kwargs
+                )  # Should have variables as keyword argument
+                # The first call should be for forecast variables
+                # The second call should be for target variables
 
 
 class TestDerivedVariableIntegration:
@@ -1360,7 +1365,9 @@ class TestDerivedVariableIntegration:
         # Set dataset type
         base_dataset.attrs["dataset_type"] = "forecast"
 
-        result = derived.maybe_derive_variable(base_dataset, mock_case_operator)
+        result = derived.maybe_derive_variables(
+            base_dataset, variables, case_id_number="test_case"
+        )
 
         # Should have the derived variable
         assert isinstance(result, xr.Dataset)

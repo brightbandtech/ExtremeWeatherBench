@@ -1,14 +1,11 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, List, Type, Union
+from typing import List, Type, Union
 
 import numpy as np
 import xarray as xr
 
 from extremeweatherbench.events import tropical_cyclone
-
-if TYPE_CHECKING:
-    from extremeweatherbench import cases
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -204,9 +201,9 @@ class TropicalCycloneTrackVariables(DerivedVariable):
         tropical_cyclone._TC_TRACK_CACHE.clear()
 
 
-def maybe_derive_variable(
+def maybe_derive_variables(
     dataset: xr.Dataset,
-    case_operator: "cases.CaseOperator",
+    variables: list[Union[str, DerivedVariable, Type[DerivedVariable]]],
     **kwargs,
 ) -> xr.Dataset:
     """Derive variable from the data if it exists in a list of variables.
@@ -218,29 +215,18 @@ def maybe_derive_variable(
     Args:
         dataset: The dataset, ideally already subset in case of in memory operations
             in the derived variables.
-        case_operator: The case operator containing variable information.
+        variables: The potential variables to derive as a list of strings or
+            DerivedVariable objects.
         **kwargs: Additional keyword arguments to pass to the derived variables.
 
     Returns:
         A dataset with derived variables, if any exist, else the original
         dataset.
     """
-    dataset_type = dataset.attrs.get("dataset_type", "unknown")
-    if dataset_type == "forecast":
-        variables = case_operator.forecast.variables
-    elif dataset_type == "target":
-        variables = case_operator.target.variables
-    else:
-        logger.warning(
-            "Unknown dataset_type '%s', skipping",
-            dataset_type,
-        )
-        return dataset
-
     maybe_derived_variables = [v for v in variables if not isinstance(v, str)]
 
     if not maybe_derived_variables:
-        logger.debug("No derived variables for dataset type '%s'", dataset_type)
+        logger.debug("No derived variables for dataset type.")
         return dataset
 
     if len(maybe_derived_variables) > 1:
@@ -252,11 +238,6 @@ def maybe_derive_variable(
 
     # Take the first derived variable and process it
     derived_variable = maybe_derived_variables[0]
-
-    # Ensure case_id_number is available for derived variable computation
-    if "case_id_number" not in kwargs:
-        kwargs["case_id_number"] = case_operator.case_metadata.case_id_number
-
     output = derived_variable.compute(data=dataset, **kwargs)
 
     # Ensure the DataArray has the correct name and is a DataArray.
