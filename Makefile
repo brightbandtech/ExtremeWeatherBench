@@ -1,4 +1,4 @@
-.PHONY: help install run default test test-config test-parallel test-cache test-mini test-mini-ar test-mini-heatwave test-mini-tc verify-setup clean lint format typecheck dev-test all-tests
+.PHONY: help install run default test test-config test-parallel test-cache test-mini test-mini-ar test-mini-heatwave test-mini-tc verify-setup test-offline test-integration test-requires-auth clean lint format typecheck dev-test all-tests
 
 CLI=ewb
 OUTPUT_DIR=make_outputs
@@ -31,6 +31,9 @@ help:
 	@echo "  make format             - Run ruff formatting"
 	@echo "  make typecheck          - Run mypy type checking"
 	@echo "  make dev-test           - Run pytest test suite"
+	@echo "  make test-offline       - Run offline tests (no external deps)"
+	@echo "  make test-integration   - Run integration tests (requires auth)"
+	@echo "  make test-requires-auth - Run auth-required tests"
 	@echo ""
 	@echo "Cleanup:"
 	@echo "  make clean              - Remove output files and cache"
@@ -153,7 +156,19 @@ typecheck:
 
 dev-test:
 	@echo "Running pytest test suite..."
-	pytest tests/ -v
+	.venv/bin/pytest tests/ -v
+
+test-offline:
+	@echo "Running offline tests (no external dependencies)..."
+	.venv/bin/pytest tests/ -m "offline" -v
+
+test-integration:
+	@echo "Running integration tests (requires authentication)..."
+	.venv/bin/pytest tests/ -m "integration" -v
+
+test-requires-auth:
+	@echo "Running tests that require authentication..."
+	.venv/bin/pytest tests/ -m "requires_auth" -v
 
 # Cleanup
 clean:

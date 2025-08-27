@@ -6,7 +6,7 @@ Reduced data scope for quick verification of the EWB pipeline.
 
 import logging
 
-from extremeweatherbench import derived, evaluate, inputs, metrics, utils
+from extremeweatherbench import evaluate, inputs, metrics, utils
 
 # Configure logging to suppress verbose output
 logging.getLogger("urllib3.connectionpool").setLevel(logging.CRITICAL)
