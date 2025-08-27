@@ -89,8 +89,52 @@ class TestInputBase:
         with pytest.raises(NotImplementedError):
             test_input.maybe_convert_to_dataset("invalid_data_type")
 
-    def test_add_source_to_dataset_attrs(self, sample_era5_dataset):
-        """Test adding source to dataset attributes."""
+    def test_add_source_to_dataset_attrs_forecast_base(self, sample_era5_dataset):
+        """Test adding source and dataset_type for ForecastBase subclass."""
+
+        class TestForecast(inputs.ForecastBase):
+            def _open_data_from_source(self):
+                return None
+
+            def subset_data_to_case(self, data, case_operator):
+                return data
+
+        test_forecast = TestForecast(
+            name="test_forecast",
+            source="test_source",
+            variables=["test"],
+            variable_mapping={},
+            storage_options={},
+        )
+
+        result = test_forecast.add_source_to_dataset_attrs(sample_era5_dataset)
+        assert result.attrs["source"] == "test_forecast"
+        assert result.attrs["dataset_type"] == "forecast"
+
+    def test_add_source_to_dataset_attrs_target_base(self, sample_era5_dataset):
+        """Test adding source and dataset_type for TargetBase subclass."""
+
+        class TestTarget(inputs.TargetBase):
+            def _open_data_from_source(self):
+                return None
+
+            def subset_data_to_case(self, data, case_operator):
+                return data
+
+        test_target = TestTarget(
+            name="test_target",
+            source="test_source",
+            variables=["test"],
+            variable_mapping={},
+            storage_options={},
+        )
+
+        result = test_target.add_source_to_dataset_attrs(sample_era5_dataset)
+        assert result.attrs["source"] == "test_target"
+        assert result.attrs["dataset_type"] == "target"
+
+    def test_add_source_to_dataset_attrs_generic_input_base(self, sample_era5_dataset):
+        """Test adding source and dataset_type for generic InputBase subclass."""
 
         class TestInput(inputs.InputBase):
             def _open_data_from_source(self):
@@ -98,6 +142,34 @@ class TestInputBase:
 
             def subset_data_to_case(self, data, case_operator):
                 return data
+
+        test_input = TestInput(
+            name="test_input",
+            source="test_source",
+            variables=["test"],
+            variable_mapping={},
+            storage_options={},
+        )
+
+        result = test_input.add_source_to_dataset_attrs(sample_era5_dataset)
+        assert result.attrs["source"] == "test_input"
+        assert result.attrs["dataset_type"] == "TestInput"
+
+    def test_add_source_to_dataset_attrs_preserves_existing_attrs(
+        self, sample_era5_dataset
+    ):
+        """Test that adding source preserves existing dataset attributes."""
+
+        class TestInput(inputs.InputBase):
+            def _open_data_from_source(self):
+                return None
+
+            def subset_data_to_case(self, data, case_operator):
+                return data
+
+        # Add some existing attributes to the dataset
+        sample_era5_dataset.attrs["existing_attr"] = "existing_value"
+        sample_era5_dataset.attrs["description"] = "Test dataset"
 
         test_input = TestInput(
             name="test",
@@ -108,7 +180,14 @@ class TestInputBase:
         )
 
         result = test_input.add_source_to_dataset_attrs(sample_era5_dataset)
+
+        # Check new attributes are added
         assert result.attrs["source"] == "test"
+        assert result.attrs["dataset_type"] == "TestInput"
+
+        # Check existing attributes are preserved
+        assert result.attrs["existing_attr"] == "existing_value"
+        assert result.attrs["description"] == "Test dataset"
 
     def test_set_name(self):
         """Test setting the name using the set_name method."""

@@ -176,7 +176,15 @@ class InputBase(ABC):
         )
 
     def add_source_to_dataset_attrs(self, ds: xr.Dataset) -> xr.Dataset:
-        """Add the name of the dataset to the dataset attributes."""
+        """Add the name and type of the dataset to the dataset attributes."""
+        # Check if this instance is a ForecastBase or TargetBase subclass
+        if isinstance(self, ForecastBase):
+            ds.attrs["dataset_type"] = "forecast"
+        elif isinstance(self, TargetBase):
+            ds.attrs["dataset_type"] = "target"
+        else:
+            # Fallback to class name for other InputBase subclasses
+            ds.attrs["dataset_type"] = self.__class__.__name__
         ds.attrs["source"] = self.name
         return ds
 
