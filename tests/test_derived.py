@@ -21,83 +21,6 @@ from extremeweatherbench.events import tropical_cyclone
 # flake8: noqa: E501
 
 
-@pytest.fixture
-def sample_dataset():
-    """Create a sample xarray Dataset for testing."""
-    time = pd.date_range("2021-06-20", freq="6h", periods=8)
-    latitudes = np.linspace(30, 50, 11)
-    longitudes = np.linspace(250, 270, 21)
-    level = [1000, 850, 700, 500, 300, 200]
-
-    # Create realistic sample data
-    np.random.seed(42)
-    base_data = np.random.normal(
-        20, 5, size=(len(time), len(latitudes), len(longitudes))
-    )
-    level_data = np.random.normal(
-        0, 10, size=(len(time), len(level), len(latitudes), len(longitudes))
-    )
-
-    dataset = xr.Dataset(
-        {
-            # Basic surface variables
-            "air_pressure_at_mean_sea_level": (
-                ["time", "latitude", "longitude"],
-                np.random.normal(
-                    101325, 1000, size=(len(time), len(latitudes), len(longitudes))
-                ),
-            ),
-            "surface_eastward_wind": (
-                ["time", "latitude", "longitude"],
-                np.random.normal(
-                    5, 3, size=(len(time), len(latitudes), len(longitudes))
-                ),
-            ),
-            "surface_northward_wind": (
-                ["time", "latitude", "longitude"],
-                np.random.normal(
-                    2, 3, size=(len(time), len(latitudes), len(longitudes))
-                ),
-            ),
-            "surface_wind_speed": (
-                ["time", "latitude", "longitude"],
-                np.random.uniform(
-                    0, 15, size=(len(time), len(latitudes), len(longitudes))
-                ),
-            ),
-            # 3D atmospheric variables
-            "eastward_wind": (
-                ["time", "level", "latitude", "longitude"],
-                level_data + np.random.normal(10, 5, size=level_data.shape),
-            ),
-            "northward_wind": (
-                ["time", "level", "latitude", "longitude"],
-                level_data + np.random.normal(3, 5, size=level_data.shape),
-            ),
-            "specific_humidity": (
-                ["time", "level", "latitude", "longitude"],
-                np.random.exponential(0.008, size=level_data.shape),
-            ),
-            "geopotential": (
-                ["time", "level", "latitude", "longitude"],
-                level_data * 100 + np.random.normal(50000, 5000, size=level_data.shape),
-            ),
-            # Test variables
-            "test_variable_1": (["time", "latitude", "longitude"], base_data),
-            "test_variable_2": (["time", "latitude", "longitude"], base_data + 5),
-            "single_variable": (["time", "latitude", "longitude"], base_data * 2),
-        },
-        coords={
-            "time": time,
-            "latitude": latitudes,
-            "longitude": longitudes,
-            "level": level,
-        },
-    )
-
-    return dataset
-
-
 class TestValidDerivedVariable(derived.DerivedVariable):
     """A valid test implementation of DerivedVariable for testing purposes."""
 
@@ -154,14 +77,15 @@ class TestDerivedVariableAbstractClass:
         expected = sample_dataset["test_variable_1"] + sample_dataset["test_variable_2"]
         xr.testing.assert_equal(result, expected)
 
-    def test_compute_raises_error_missing_variables(self, sample_dataset):
-        """Test that compute raises error when required variables are missing."""
+    def test_compute_logs_warning_missing_variables(self, sample_dataset, caplog):
+        """Test that compute fails with KeyError when required variables are missing."""
         # Remove one of the required variables
         incomplete_dataset = sample_dataset.drop_vars("test_variable_2")
 
+        # This should fail during derive_variable when trying to access missing variable
         with pytest.raises(
-            ValueError, match="Input variable test_variable_2 not found in data"
-        ):
+            KeyError
+        ):  # derive_variable will fail when accessing missing variable
             TestValidDerivedVariable.compute(incomplete_dataset)
 
     def test_required_variables_class_attribute(self):
@@ -171,6 +95,37 @@ class TestDerivedVariableAbstractClass:
             "test_variable_1",
             "test_variable_2",
         ]
+
+
+class TestAtmosphericRiverMask:
+    """Test the AtmosphericRiverMask derived variable implementation."""
+
+    def test_required_variables(self):
+        """Test that required variables are correctly defined."""
+        assert derived.AtmosphericRiverMask.required_variables == [
+            "air_pressure_at_mean_sea_level"
+        ]
+
+    def test_derive_variable_basic(self, sample_dataset):
+        """Test basic functionality of derive_variable method."""
+        # Test that the method works and returns a Dataset
+        result = derived.AtmosphericRiverMask.derive_variable(sample_dataset)
+        assert isinstance(result, xr.Dataset)
+        # Check that the atmospheric river mask was added
+        assert "atmospheric_river_mask" in result.data_vars
+
+    def test_compute_integration(self, sample_dataset):
+        """Test the compute method integration."""
+        # Test that the compute method works and returns a Dataset
+        result = derived.AtmosphericRiverMask.compute(sample_dataset)
+        assert isinstance(result, xr.Dataset)
+        # Check that the atmospheric river mask was added
+        assert "atmospheric_river_mask" in result.data_vars
+
+    def test_name_property(self):
+        """Test the name property."""
+        instance = derived.AtmosphericRiverMask()
+        assert instance.name == "AtmosphericRiverMask"
 
 
 class TestUtilityFunctions:
@@ -223,8 +178,8 @@ class TestUtilityFunctions:
         derived_var = result["TestDerivedVariableWithoutName"]
         assert derived_var.name == "TestDerivedVariableWithoutName"
 
-    def test_maybe_pull_required_variables_from_derived_input_with_instances(self):
-        """Test maybe_pull_required_variables_from_derived_input with instances."""
+    def test_maybe_pull_variables_from_derived_input_with_instances(self):
+        """Test maybe_pull_variables_from_derived_input with instances."""
         incoming_variables = [
             "existing_variable",
             TestValidDerivedVariable(),
@@ -232,9 +187,7 @@ class TestUtilityFunctions:
             "another_existing_variable",
         ]
 
-        result = derived.maybe_pull_required_variables_from_derived_input(
-            incoming_variables
-        )
+        result = derived.maybe_pull_variables_from_derived_input(incoming_variables)
 
         expected = [
             "existing_variable",
@@ -246,17 +199,15 @@ class TestUtilityFunctions:
 
         assert set(result) == set(expected)
 
-    def test_maybe_pull_required_variables_from_derived_input_with_classes(self):
-        """Test maybe_pull_required_variables_from_derived_input with classes."""
+    def test_maybe_pull_variables_from_derived_input_with_classes(self):
+        """Test maybe_pull_variables_from_derived_input with classes."""
         incoming_variables = [
             "existing_variable",
             TestValidDerivedVariable,  # Class, not instance
             TestMinimalDerivedVariable,  # Class, not instance
         ]
 
-        result = derived.maybe_pull_required_variables_from_derived_input(
-            incoming_variables
-        )
+        result = derived.maybe_pull_variables_from_derived_input(incoming_variables)
 
         expected = [
             "existing_variable",
@@ -268,12 +219,10 @@ class TestUtilityFunctions:
         assert set(result) == set(expected)
 
     def test_maybe_pull_required_variables_only_strings(self):
-        """Test maybe_pull_required_variables_from_derived_input with only strings."""
+        """Test maybe_pull_variables_from_derived_input with only strings."""
         incoming_variables = ["var1", "var2", "var3"]
 
-        result = derived.maybe_pull_required_variables_from_derived_input(
-            incoming_variables
-        )
+        result = derived.maybe_pull_variables_from_derived_input(incoming_variables)
 
         assert result == incoming_variables
 
@@ -281,11 +230,14 @@ class TestUtilityFunctions:
 class TestEdgeCasesAndErrorConditions:
     """Test edge cases and error conditions across the module."""
 
-    def test_derived_variable_with_empty_dataset(self):
+    def test_derived_variable_with_empty_dataset(self, caplog):
         """Test behavior with empty datasets."""
         empty_dataset = xr.Dataset()
 
-        with pytest.raises(ValueError, match="Input variable .* not found in data"):
+        # Should fail during derive_variable when trying to access missing variables
+        with pytest.raises(
+            KeyError
+        ):  # derive_variable will fail when accessing missing variables
             TestValidDerivedVariable.compute(empty_dataset)
 
     def test_derived_variable_with_wrong_dimensions(self, sample_dataset):
@@ -342,7 +294,7 @@ class TestIntegrationWithRealData:
         variables_to_derive = [TestValidDerivedVariable(), TestMinimalDerivedVariable()]
 
         # Step 1: Pull required variables
-        required_vars = derived.maybe_pull_required_variables_from_derived_input(
+        required_vars = derived.maybe_pull_variables_from_derived_input(
             ["surface_wind_speed"] + variables_to_derive
         )
 

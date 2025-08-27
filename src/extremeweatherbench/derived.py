@@ -1,11 +1,15 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import List, Optional, Sequence, Type, Union
+from typing import List, Optional, Sequence, Type, Union, cast
 
 import numpy as np
 import xarray as xr
 
-from extremeweatherbench.events import atmospheric_river, tropical_cyclone
+from extremeweatherbench.events import (
+    atmospheric_river,
+    severe_convection,
+    tropical_cyclone,
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -24,11 +28,7 @@ class DerivedVariable(ABC):
             Defaults to the class name.
         required_variables: A list of variables that are used to build the
             variable.
-        build: A method that builds the variable from the required variables.
-            Build is used specifically to distinguish from the compute method in
-            xarray, which eagerly processes the data and loads into memory;
-            build is used to lazily process the data and return a dataset that
-            can be used later to compute the variable.
+        compute: A method that computes the variable from the required variables.
         derive_variable: An abstract method that defines the computation to
             derive the variable from required_variables.
     """
@@ -65,8 +65,8 @@ class DerivedVariable(ABC):
         """Build the derived variable from the input variables.
 
         This method is used to build the derived variable from the input variables.
-        It checks that the data has the variables required to build the variable,
-        and then derives the variable from the input variables.
+        It calls derive_variable which handles the actual computation and may raise
+        errors if required variables are missing.
 
         Args:
             data: The dataset to build the derived variable from.
@@ -76,15 +76,6 @@ class DerivedVariable(ABC):
         Returns:
             A DataArray with the derived variable.
         """
-        for v in cls.required_variables:
-            if isinstance(v, str):
-                if v not in data.data_vars:
-                    raise ValueError(f"Input variable {v} not found in data")
-            elif issubclass(v, DerivedVariable):
-                if v.name not in data.data_vars:
-                    raise ValueError(f"Input variable {v.name} not found in data")
-            else:
-                raise ValueError(f"Invalid input variable type: {type(v)}")
         return cls.derive_variable(data, *args, **kwargs)
 
 
@@ -100,16 +91,61 @@ class AtmosphericRiverMask(DerivedVariable):
     """
 
     required_variables = [
-        "eastward_wind",
-        "northward_wind",
-        "specific_humidity",
+        "air_pressure_at_mean_sea_level",
     ]
-    name = "atmospheric_river_mask"
 
     @classmethod
     def derive_variable(cls, data: xr.Dataset, *args, **kwargs) -> xr.Dataset:
         """Derive the atmospheric river mask using xr.apply_ufunc approach."""
-        return atmospheric_river.compute_atmospheric_river_mask_ufunc(data)
+        result = atmospheric_river.compute_atmospheric_river_mask_ufunc(data)
+        # Extract the atmospheric river mask DataArray and add it to the input dataset
+        ar_mask = result["atmospheric_river_mask"]
+        # Merge the mask into the original dataset
+        merged_data = data.copy()
+        merged_data["atmospheric_river_mask"] = ar_mask
+        return merged_data
+
+
+class CravenBrooksSignificantSevere(DerivedVariable):
+    """A derived variable that computes the Craven-Brooks significant severe
+    convection index.
+    """
+
+    required_variables = [
+        "air_temperature",
+        "dewpoint_temperature",
+        "eastward_wind",
+        "northward_wind",
+        "specific_humidity",
+        "surface_eastward_wind",
+        "surface_northward_wind",
+        "air_pressure_at_mean_sea_level",
+    ]
+    # TODO: add optional variables approach for primary variables that
+    # have a fallback option in derived methods
+    optional_variables = ["dewpoint_temperature"]
+    name = "craven_brooks_significant_severe"
+
+    @classmethod
+    def derive_variable(cls, data: xr.Dataset, *args, **kwargs) -> xr.DataArray:
+        """Derive the Craven-Brooks significant severe convection index."""
+        # create broadcasted pressure variable, output target is always last
+        _, data["pressure"] = xr.broadcast(data["air_temperature"], data["level"])
+        # calculate dewpoint temperature if not present
+        if "dewpoint_temperature" not in data.data_vars:
+            data["dewpoint_temperature"] = (
+                severe_convection.dewpoint_from_specific_humidity(
+                    data["specific_humidity"], data["pressure"]
+                )
+            )
+        cbss = severe_convection.craven_brooks_significant_severe(data)
+        coords = {dim: data.coords[dim] for dim in data.sizes.keys() if dim != "level"}
+        return xr.DataArray(
+            cbss,
+            coords=coords,
+            dims=coords.keys(),
+            name=cls.name,
+        )
 
 
 class TropicalCycloneTrackVariables(DerivedVariable):
@@ -262,7 +298,7 @@ def maybe_derive_variables(
                 if output.name is None:
                     output.name = v.name
                 derived_data[v.name] = output
-            elif isinstance(output, xr.Dataset) and output.dims != ds.dims:
+            elif isinstance(output, xr.Dataset) and output.sizes != ds.sizes:
                 # If the derived variable returns a dataset with different dims to ds,
                 # we need to return it instead of merging it with ds
                 # This is the case for the tropical cyclone track variable, which
@@ -287,7 +323,12 @@ def maybe_pull_variables_from_derived_input(
         A list of variables possibly including derived variables' required
         variables.
     """
-    # Use a set to automatically handle deduplication
+    # Check if all inputs are strings - preserve order in this case
+    if all(isinstance(v, str) for v in incoming_variables):
+        # Type cast to satisfy mypy - we've verified all elements are strings
+        return cast(List[str], list(incoming_variables))
+
+    # Use a set to automatically handle deduplication for mixed types
     all_variables = set()
 
     for v in incoming_variables:

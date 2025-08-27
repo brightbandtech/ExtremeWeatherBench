@@ -1109,61 +1109,6 @@ def sample_tc_case_operator():
     return case_operator
 
 
-@pytest.fixture
-def sample_ibtracs_dataset():
-    """Create a sample IBTrACS dataset for testing."""
-    valid_time = pd.date_range("2023-09-01", periods=10, freq="6h")
-
-    dataset = xr.Dataset(
-        {
-            "air_pressure_at_mean_sea_level": (
-                ["valid_time"],
-                np.random.uniform(950, 1010, len(valid_time)),
-            ),
-            "latitude": (["valid_time"], np.linspace(15, 30, len(valid_time))),
-            "longitude": (["valid_time"], np.linspace(-80, -70, len(valid_time))),
-        },
-        coords={"valid_time": valid_time},
-    )
-    dataset.attrs["source"] = "IBTrACS"
-
-    return dataset
-
-
-@pytest.fixture
-def sample_tc_forecast_dataset():
-    """Create a sample TC forecast dataset."""
-    time = pd.date_range("2023-09-01", periods=2, freq="12h")
-    prediction_timedelta = np.array([0, 12, 24, 36], dtype="timedelta64[h]")
-
-    # Create sample TC track data
-    data_shape = (len(time), len(prediction_timedelta))
-
-    dataset = xr.Dataset(
-        {
-            "air_pressure_at_mean_sea_level": (
-                ["time", "prediction_timedelta"],
-                np.random.normal(101000, 1000, data_shape),
-            ),
-        },
-        coords={
-            "time": time,
-            "prediction_timedelta": prediction_timedelta,
-            "latitude": (
-                ["time", "prediction_timedelta"],
-                np.random.uniform(15, 35, data_shape),
-            ),
-            "longitude": (
-                ["time", "prediction_timedelta"],
-                np.random.uniform(-85, -65, data_shape),
-            ),
-        },
-    )
-    dataset.attrs["source"] = "Test Forecast"
-
-    return dataset
-
-
 class TestTropicalCycloneEvaluation:
     """Test tropical cyclone specific evaluation functionality."""
 
@@ -1192,14 +1137,27 @@ class TestTropicalCycloneEvaluation:
             # Create a copy of the dataset and add the derived variable
             ds_copy = ds.copy()
             # Add TrackSeaLevelPressure as a derived variable
-            ds_copy["air_pressure_at_mean_sea_level"] = xr.DataArray(
-                [[1.0, 2.0, 3.0, 4.0], [5.0, 6.0, 7.0, 8.0]],
-                dims=["time", "prediction_timedelta"],
-                coords={
-                    "time": ds.time,
-                    "prediction_timedelta": ds.prediction_timedelta,
-                },
-            )
+            # Handle different time coordinate names and dimensions
+            if hasattr(ds, "time") and hasattr(ds, "prediction_timedelta"):
+                # Forecast dataset structure
+                ds_copy["air_pressure_at_mean_sea_level"] = xr.DataArray(
+                    [[1.0, 2.0, 3.0, 4.0], [5.0, 6.0, 7.0, 8.0]],
+                    dims=["time", "prediction_timedelta"],
+                    coords={
+                        "time": ds.time,
+                        "prediction_timedelta": ds.prediction_timedelta,
+                    },
+                )
+            elif hasattr(ds, "valid_time"):
+                # IBTrACS dataset structure
+                ds_copy["air_pressure_at_mean_sea_level"] = xr.DataArray(
+                    [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0],
+                    dims=["valid_time"],
+                    coords={"valid_time": ds.valid_time},
+                )
+            else:
+                # Fallback - just return the dataset as-is
+                pass
             return ds_copy
 
         mock_derive_vars.side_effect = mock_derive_side_effect
@@ -1423,16 +1381,14 @@ class TestDerivedVariableIntegration:
         assert "air_pressure_at_mean_sea_level" in result.data_vars
         assert "surface_wind_speed" in result.data_vars
 
-    def test_maybe_pull_required_variables_from_derived_input_tc(self):
+    def test_maybe_pull_variables_from_derived_input_tc(self):
         """Test pulling required variables from TC derived variables."""
         incoming_variables = [
             "existing_variable",
             derived.TropicalCycloneTrackVariables,
         ]
 
-        result = derived.maybe_pull_required_variables_from_derived_input(
-            incoming_variables
-        )
+        result = derived.maybe_pull_variables_from_derived_input(incoming_variables)
 
         # Should include original string variable and all required variables from derived variables
         expected_vars = [
@@ -1458,9 +1414,7 @@ class TestDerivedVariableIntegration:
             track_instance,  # Instance
         ]
 
-        result = derived.maybe_pull_required_variables_from_derived_input(
-            incoming_variables
-        )
+        result = derived.maybe_pull_variables_from_derived_input(incoming_variables)
 
         # Should handle both instances and classes
         expected_vars = [
@@ -1554,6 +1508,8 @@ class TestFullTCEvaluationWorkflow:
                 ),
             }
         )
+        # Copy the source attribute from the original dataset
+        mock_tracks.attrs["source"] = sample_tc_forecast_dataset.attrs["source"]
         mock_create_tracks.return_value = mock_tracks
 
         # Setup case operator mocks

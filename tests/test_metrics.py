@@ -405,10 +405,8 @@ class TestIncompleteMetrics:
     def test_all_incomplete_applied_metrics_can_be_instantiated(self):
         """Test that all incomplete applied metric classes can be instantiated."""
         incomplete_applied_metrics = [
-            metrics.LandfallDisplacement,
             metrics.LandfallTimeME,
             metrics.LandfallIntensityMAE,
-            metrics.SpatialDisplacement,
             metrics.FAR,
             metrics.CSI,
             metrics.LeadTimeDetection,
@@ -426,6 +424,7 @@ class TestIncompleteMetrics:
         """Test that incomplete base metric classes can be instantiated."""
         incomplete_base_metrics = [
             metrics.EarlySignal,
+            metrics.LandfallDisplacement,
         ]
 
         for metric_class in incomplete_base_metrics:
@@ -450,9 +449,7 @@ class TestIncompleteMetrics:
 
         # MAE based metrics
         mae_metrics = [
-            metrics.LandfallDisplacement,
             metrics.LandfallIntensityMAE,
-            metrics.SpatialDisplacement,
             metrics.LeadTimeDetection,
         ]
 
@@ -481,6 +478,7 @@ class TestMetricIntegration:
             metrics.ME,
             metrics.RMSE,
             metrics.EarlySignal,  # Now a BaseMetric
+            metrics.LandfallDisplacement,
         ]
 
         for metric_class in base_metrics:
@@ -498,10 +496,8 @@ class TestMetricIntegration:
             metrics.OnsetME,
             metrics.DurationME,
             # Include incomplete ones too
-            metrics.LandfallDisplacement,
             metrics.LandfallTimeME,
             metrics.LandfallIntensityMAE,
-            metrics.SpatialDisplacement,
             metrics.FAR,
             metrics.CSI,
             metrics.LeadTimeDetection,
@@ -537,7 +533,6 @@ class TestMetricIntegration:
             "LandfallDisplacement",
             "LandfallTimeME",
             "LandfallIntensityMAE",
-            "SpatialDisplacement",
             "FAR",
             "CSI",
             "LeadTimeDetection",

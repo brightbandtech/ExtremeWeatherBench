@@ -81,6 +81,7 @@ class InputBase(ABC):
     """
 
     source: str
+    name: str
     variables: list[Union[str, "derived.DerivedVariable"]] = dataclasses.field(
         default_factory=list
     )
@@ -257,6 +258,9 @@ class ForecastBase(InputBase):
         subset_time_data = data.sel(
             init_time=data.init_time[np.unique(subset_time_indices[0])]
         )
+        # TODO: add a method to get the list of required variables from the derived
+        # variables in the eval object instead of here, so case_metadata can be used
+        # as input instead of case_operator
 
         # use the list of required variables from the derived variables in the
         # eval to add to the list of variables

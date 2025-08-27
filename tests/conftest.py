@@ -419,3 +419,135 @@ def sample_calc_dataset():
     )
 
     return dataset
+
+
+@pytest.fixture
+def sample_dataset():
+    """Create a sample xarray Dataset for testing derived variables."""
+    time = pd.date_range("2021-06-20", freq="6h", periods=8)
+    latitudes = np.linspace(30, 50, 11)
+    longitudes = np.linspace(250, 270, 21)
+    level = [1000, 850, 700, 500, 300, 200]
+
+    # Create realistic sample data
+    np.random.seed(42)
+    base_data = np.random.normal(
+        20, 5, size=(len(time), len(latitudes), len(longitudes))
+    )
+    level_data = np.random.normal(
+        0, 10, size=(len(time), len(level), len(latitudes), len(longitudes))
+    )
+
+    dataset = xr.Dataset(
+        {
+            # Basic surface variables
+            "air_pressure_at_mean_sea_level": (
+                ["time", "latitude", "longitude"],
+                np.random.normal(
+                    101325, 1000, size=(len(time), len(latitudes), len(longitudes))
+                ),
+            ),
+            "surface_eastward_wind": (
+                ["time", "latitude", "longitude"],
+                np.random.normal(
+                    5, 3, size=(len(time), len(latitudes), len(longitudes))
+                ),
+            ),
+            "surface_northward_wind": (
+                ["time", "latitude", "longitude"],
+                np.random.normal(
+                    2, 3, size=(len(time), len(latitudes), len(longitudes))
+                ),
+            ),
+            "surface_wind_speed": (
+                ["time", "latitude", "longitude"],
+                np.random.uniform(
+                    0, 15, size=(len(time), len(latitudes), len(longitudes))
+                ),
+            ),
+            # 3D atmospheric variables
+            "eastward_wind": (
+                ["time", "level", "latitude", "longitude"],
+                level_data + np.random.normal(10, 5, size=level_data.shape),
+            ),
+            "northward_wind": (
+                ["time", "level", "latitude", "longitude"],
+                level_data + np.random.normal(3, 5, size=level_data.shape),
+            ),
+            "specific_humidity": (
+                ["time", "level", "latitude", "longitude"],
+                np.random.exponential(0.008, size=level_data.shape),
+            ),
+            "geopotential": (
+                ["time", "level", "latitude", "longitude"],
+                level_data * 100 + np.random.normal(50000, 5000, size=level_data.shape),
+            ),
+            # Test variables
+            "test_variable_1": (["time", "latitude", "longitude"], base_data),
+            "test_variable_2": (["time", "latitude", "longitude"], base_data + 5),
+            "single_variable": (["time", "latitude", "longitude"], base_data * 2),
+        },
+        coords={
+            "time": time,
+            "latitude": latitudes,
+            "longitude": longitudes,
+            "level": level,
+        },
+    )
+
+    return dataset
+
+
+@pytest.fixture
+def sample_tc_forecast_dataset():
+    """Create a sample TC forecast dataset."""
+    time = pd.date_range("2023-09-01", periods=2, freq="12h")
+    prediction_timedelta = np.array([0, 12, 24, 36], dtype="timedelta64[h]")
+
+    # Create sample TC track data
+    data_shape = (len(time), len(prediction_timedelta))
+
+    dataset = xr.Dataset(
+        {
+            "air_pressure_at_mean_sea_level": (
+                ["time", "prediction_timedelta"],
+                np.random.normal(101000, 1000, data_shape),
+            ),
+        },
+        coords={
+            "time": time,
+            "prediction_timedelta": prediction_timedelta,
+            "latitude": (
+                ["time", "prediction_timedelta"],
+                np.random.uniform(15, 35, data_shape),
+            ),
+            "longitude": (
+                ["time", "prediction_timedelta"],
+                np.random.uniform(-85, -65, data_shape),
+            ),
+        },
+    )
+    dataset.attrs["source"] = "Test Forecast"
+
+    return dataset
+
+
+@pytest.fixture
+def sample_ibtracs_dataset():
+    """Create a sample IBTrACS dataset for testing."""
+    valid_time = pd.date_range("2023-09-01", periods=10, freq="6h")
+
+    dataset = xr.Dataset(
+        {
+            "air_pressure_at_mean_sea_level": (
+                ["valid_time"],
+                np.random.uniform(950, 1010, len(valid_time)),
+            ),
+            "latitude": (["valid_time"], np.linspace(15, 30, len(valid_time))),
+            "longitude": (["valid_time"], np.linspace(-80, -70, len(valid_time))),
+        },
+        coords={"valid_time": valid_time},
+    )
+    dataset.attrs["source"] = "IBTrACS"
+
+    return dataset
