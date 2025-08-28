@@ -60,6 +60,8 @@ def remove_ocean_gridpoints(dataset: xr.Dataset) -> xr.Dataset:
     return dataset.where(land_mask)
 
 
+# TODO: remove this function and replace with
+# cases.load_ewb_events_yaml_into_case_collection
 def load_events_yaml():
     """Load the events yaml file."""
     import extremeweatherbench.data
@@ -71,6 +73,7 @@ def load_events_yaml():
     return yaml_event_case
 
 
+# TODO: move to cases module
 def read_event_yaml(input_pth: str | Path) -> dict:
     """Read events yaml from data."""
     input_pth = Path(input_pth)

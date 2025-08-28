@@ -1,9 +1,10 @@
 """Tests for the cases module."""
 
 import datetime
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import pytest
+import yaml
 
 from extremeweatherbench import cases
 from extremeweatherbench.regions import BoundingBoxRegion, CenteredRegion
@@ -354,6 +355,341 @@ class TestBuildCaseOperators:
             TypeError, match="cases_dict\\['cases'\\] must be a list of cases"
         ):
             cases.build_case_operators(invalid_cases_dict, [mock_eval_obj])
+
+
+class TestLoadIndividualCasesFromYaml:
+    """Test the load_individual_cases_from_yaml function."""
+
+    def test_load_from_yaml_file(self, tmp_path):
+        """Test loading individual cases from YAML file."""
+        yaml_content = {
+            "cases": [
+                {
+                    "case_id_number": 42,
+                    "title": "YAML Test Case",
+                    "start_date": datetime.datetime(2022, 5, 1),
+                    "end_date": datetime.datetime(2022, 5, 15),
+                    "location": {
+                        "type": "centered_region",
+                        "parameters": {
+                            "latitude": 38.0,
+                            "longitude": -95.0,
+                            "bounding_box_degrees": 7.5,
+                        },
+                    },
+                    "event_type": "severe_storm",
+                }
+            ]
+        }
+
+        yaml_file = tmp_path / "test_cases.yaml"
+        with open(yaml_file, "w") as f:
+            yaml.dump(yaml_content, f)
+
+        collection = cases.load_individual_cases_from_yaml(yaml_file)
+
+        assert isinstance(collection, cases.IndividualCaseCollection)
+        assert len(collection.cases) == 1
+
+        case = collection.cases[0]
+        assert case.case_id_number == 42
+        assert case.title == "YAML Test Case"
+        assert case.event_type == "severe_storm"
+        assert isinstance(case.location, CenteredRegion)
+
+    def test_load_from_yaml_string_path(self, tmp_path):
+        """Test loading with string path instead of Path object."""
+        yaml_content = {
+            "cases": [
+                {
+                    "case_id_number": 1,
+                    "title": "String Path Test",
+                    "start_date": datetime.datetime(2023, 1, 1),
+                    "end_date": datetime.datetime(2023, 1, 10),
+                    "location": {
+                        "type": "bounded_region",
+                        "parameters": {
+                            "latitude_min": 30.0,
+                            "latitude_max": 40.0,
+                            "longitude_min": -110.0,
+                            "longitude_max": -100.0,
+                        },
+                    },
+                    "event_type": "wildfire",
+                }
+            ]
+        }
+
+        yaml_file = tmp_path / "test_string_path.yaml"
+        with open(yaml_file, "w") as f:
+            yaml.dump(yaml_content, f)
+
+        # Pass as string, not Path object
+        collection = cases.load_individual_cases_from_yaml(str(yaml_file))
+
+        assert len(collection.cases) == 1
+        assert collection.cases[0].title == "String Path Test"
+        assert isinstance(collection.cases[0].location, BoundingBoxRegion)
+
+    def test_load_from_yaml_malformed_file(self, tmp_path):
+        """Test error handling with malformed YAML."""
+        malformed_yaml = "cases:\n  - invalid: [unclosed"
+
+        yaml_file = tmp_path / "malformed.yaml"
+        with open(yaml_file, "w") as f:
+            f.write(malformed_yaml)
+
+        with pytest.raises(yaml.YAMLError):
+            cases.load_individual_cases_from_yaml(yaml_file)
+
+    def test_load_from_yaml_missing_file(self):
+        """Test error handling with non-existent file."""
+        with pytest.raises(FileNotFoundError):
+            cases.load_individual_cases_from_yaml("nonexistent.yaml")
+
+
+class TestLoadEventsYaml:
+    """Test the load_ewb_events_yaml_into_case_collection function."""
+
+    @patch("extremeweatherbench.cases.resources")
+    def test_load_ewb_events_yaml_into_case_collection_success(self, mock_resources):
+        """Test successful loading of events YAML."""
+        # Mock the resource access
+        mock_files = Mock()
+        mock_resources.files.return_value = mock_files
+        mock_files.joinpath.return_value = "/mock/path/events.yaml"
+
+        # Mock the file content
+        mock_yaml_content = {
+            "cases": [
+                {
+                    "case_id_number": 999,
+                    "title": "Mock Event",
+                    "start_date": datetime.datetime(2021, 1, 1),
+                    "end_date": datetime.datetime(2021, 1, 5),
+                    "location": {
+                        "type": "centered_region",
+                        "parameters": {
+                            "latitude": 0.0,
+                            "longitude": 0.0,
+                            "bounding_box_degrees": 1.0,
+                        },
+                    },
+                    "event_type": "test_event",
+                }
+            ]
+        }
+
+        with patch("extremeweatherbench.cases.resources.as_file") as mock_as_file:
+            with patch("extremeweatherbench.cases.read_incoming_yaml") as mock_read:
+                mock_read.return_value = mock_yaml_content
+                mock_as_file.return_value.__enter__.return_value = "/mock/file"
+
+                result = cases.load_ewb_events_yaml_into_case_collection()
+
+                # Should return an IndividualCaseCollection, not the raw dict
+                assert isinstance(result, cases.IndividualCaseCollection)
+                assert len(result.cases) == 1
+
+                # Verify the case was loaded correctly
+                case = result.cases[0]
+                assert case.case_id_number == 999
+                assert case.title == "Mock Event"
+                assert case.event_type == "test_event"
+
+                mock_read.assert_called_once()
+
+
+class TestReadIncomingYaml:
+    """Test the read_incoming_yaml function."""
+
+    def test_read_incoming_yaml_success(self, tmp_path):
+        """Test successful reading of YAML file."""
+        test_data = {
+            "test_key": "test_value",
+            "cases": [{"case_id_number": 1, "title": "Test"}],
+        }
+
+        yaml_file = tmp_path / "test_input.yaml"
+        with open(yaml_file, "w") as f:
+            yaml.dump(test_data, f)
+
+        result = cases.read_incoming_yaml(yaml_file)
+
+        assert result == test_data
+        assert isinstance(result, dict)
+        assert "test_key" in result
+        assert result["test_key"] == "test_value"
+
+    def test_read_incoming_yaml_with_string_path(self, tmp_path):
+        """Test reading YAML with string path."""
+        test_data = {"simple": "data"}
+
+        yaml_file = tmp_path / "string_test.yaml"
+        with open(yaml_file, "w") as f:
+            yaml.dump(test_data, f)
+
+        result = cases.read_incoming_yaml(str(yaml_file))
+        assert result == test_data
+
+    def test_read_incoming_yaml_file_not_found(self):
+        """Test error handling for non-existent file."""
+        with pytest.raises(FileNotFoundError):
+            cases.read_incoming_yaml("does_not_exist.yaml")
+
+    def test_read_incoming_yaml_empty_file(self, tmp_path):
+        """Test handling of empty YAML file."""
+        empty_file = tmp_path / "empty.yaml"
+        empty_file.touch()
+
+        result = cases.read_incoming_yaml(empty_file)
+        assert result is None
+
+
+class TestCasesEdgeCases:
+    """Test edge cases and error conditions."""
+
+    def test_individual_case_date_validation(self):
+        """Test cases with edge case dates."""
+        region = CenteredRegion.create_region(
+            latitude=0.0, longitude=0.0, bounding_box_degrees=1.0
+        )
+
+        # Test with same start and end date
+        case = cases.IndividualCase(
+            case_id_number=1,
+            title="Same Date Case",
+            start_date=datetime.datetime(2021, 1, 1, 12, 0),
+            end_date=datetime.datetime(2021, 1, 1, 12, 0),
+            location=region,
+            event_type="instantaneous",
+        )
+
+        assert case.start_date == case.end_date
+
+    def test_case_operator_with_list_metrics(self):
+        """Test CaseOperator with list of metrics."""
+        region = CenteredRegion.create_region(
+            latitude=40.0, longitude=-100.0, bounding_box_degrees=5.0
+        )
+
+        case = cases.IndividualCase(
+            case_id_number=1,
+            title="Multi-Metric Case",
+            start_date=datetime.datetime(2021, 1, 1),
+            end_date=datetime.datetime(2021, 1, 15),
+            location=region,
+            event_type="multi_metric_event",
+        )
+
+        # Test with list of metrics
+        metric_list = [Mock(), Mock(), Mock()]
+        mock_target = Mock()
+        mock_forecast = Mock()
+
+        operator = cases.CaseOperator(
+            case_metadata=case,
+            metric=metric_list,
+            target=mock_target,
+            forecast=mock_forecast,
+        )
+
+        assert operator.metric == metric_list
+        assert len(operator.metric) == 3
+
+    def test_build_case_operators_empty_evaluation_objects(self):
+        """Test building case operators with empty evaluation objects."""
+        cases_dict = {
+            "cases": [
+                {
+                    "case_id_number": 1,
+                    "title": "Lonely Case",
+                    "start_date": datetime.datetime(2021, 1, 1),
+                    "end_date": datetime.datetime(2021, 1, 15),
+                    "location": {
+                        "type": "centered_region",
+                        "parameters": {
+                            "latitude": 40.0,
+                            "longitude": -100.0,
+                            "bounding_box_degrees": 5.0,
+                        },
+                    },
+                    "event_type": "lonely_event",
+                }
+            ]
+        }
+
+        operators = cases.build_case_operators(cases_dict, [])
+        assert len(operators) == 0
+
+    def test_build_case_operators_partial_event_matches(self):
+        """Test case operators with complex event type matching."""
+        cases_dict = {
+            "cases": [
+                {
+                    "case_id_number": 1,
+                    "title": "Heat Wave",
+                    "start_date": datetime.datetime(2021, 6, 1),
+                    "end_date": datetime.datetime(2021, 6, 15),
+                    "location": {
+                        "type": "centered_region",
+                        "parameters": {
+                            "latitude": 40.0,
+                            "longitude": -100.0,
+                            "bounding_box_degrees": 5.0,
+                        },
+                    },
+                    "event_type": "heat_wave",
+                },
+                {
+                    "case_id_number": 2,
+                    "title": "Drought",
+                    "start_date": datetime.datetime(2021, 7, 1),
+                    "end_date": datetime.datetime(2021, 7, 31),
+                    "location": {
+                        "type": "centered_region",
+                        "parameters": {
+                            "latitude": 35.0,
+                            "longitude": -105.0,
+                            "bounding_box_degrees": 8.0,
+                        },
+                    },
+                    "event_type": "drought",
+                },
+                {
+                    "case_id_number": 3,
+                    "title": "Flood",
+                    "start_date": datetime.datetime(2021, 8, 1),
+                    "end_date": datetime.datetime(2021, 8, 10),
+                    "location": {
+                        "type": "centered_region",
+                        "parameters": {
+                            "latitude": 45.0,
+                            "longitude": -90.0,
+                            "bounding_box_degrees": 3.0,
+                        },
+                    },
+                    "event_type": "flood",
+                },
+            ]
+        }
+
+        # Evaluation object that only matches heat_wave and drought
+        eval_obj = Mock()
+        eval_obj.event_type = ["heat_wave", "drought"]
+        eval_obj.metric = Mock()
+        eval_obj.target = Mock()
+        eval_obj.forecast = Mock()
+
+        operators = cases.build_case_operators(cases_dict, [eval_obj])
+
+        # Should create 2 operators (heat_wave and drought, but not flood)
+        assert len(operators) == 2
+
+        created_case_ids = [op.case_metadata.case_id_number for op in operators]
+        assert 1 in created_case_ids  # heat_wave case
+        assert 2 in created_case_ids  # drought case
+        assert 3 not in created_case_ids  # flood case should be excluded
 
 
 class TestCasesIntegration:
