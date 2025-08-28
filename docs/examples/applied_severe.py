@@ -46,7 +46,6 @@ pph_target = inputs.PPH(
     variables=["practically_perfect_hindcast"],
     variable_mapping={},
     storage_options={"remote_options": {"anon": True}},
-    chunks="auto",
 )
 
 hres_forecast = inputs.ZarrForecast(
