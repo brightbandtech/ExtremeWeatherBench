@@ -60,7 +60,7 @@ class DerivedVariable(ABC):
         pass
 
     @classmethod
-    def compute(cls, data: xr.Dataset) -> xr.DataArray:
+    def compute(cls, data: xr.Dataset, **kwargs) -> xr.DataArray:
         """Build the derived variable from the input variables.
 
         This method is used to build the derived variable from the input variables.
@@ -69,6 +69,7 @@ class DerivedVariable(ABC):
 
         Args:
             data: The dataset to build the derived variable from.
+            **kwargs: Additional keyword arguments to pass to the derived variable.
 
         Returns:
             A DataArray with the derived variable.
@@ -110,36 +111,68 @@ class AtmosphericRiverMask(DerivedVariable):
 
 
 def maybe_derive_variables(
-    ds: xr.Dataset, variables: list[str | DerivedVariable]
+    dataset: xr.Dataset,
+    variables: list[Union[str, DerivedVariable, Type[DerivedVariable]]],
+    **kwargs,
 ) -> xr.Dataset:
-    """Derive variables from the data if any exist in a list of variables.
+    """Derive variable from the data if it exists in a list of variables.
 
-    Derived variables must maintain the same spatial dimensions as the original
-    dataset.
+    Derived variables do not need to maintain the same spatial dimensions as the
+    original dataset. Expected behavior is that an EvaluationObject has one derived
+    variable. If there are multiple derived variables, the first one will be used.
 
     Args:
         ds: The dataset, ideally already subset in case of in memory operations
             in the derived variables.
         variables: The potential variables to derive as a list of strings or
             DerivedVariable objects.
+        **kwargs: Additional keyword arguments to pass to the derived variables.
 
     Returns:
         A dataset with derived variables, if any exist, else the original
         dataset.
     """
 
-    derived_variables = [v for v in variables if not isinstance(v, str)]
-    derived_data = {}
-    if derived_variables:
-        for v in derived_variables:
-            output_da = v.compute(data=ds)
-            # Ensure the DataArray has the correct name
-            if output_da.name is None:
-                output_da.name = v.name
-            derived_data[v.name] = output_da
-    # TODO consider removing data variables only used for derivation
-    ds = ds.merge(derived_data)
-    return ds
+    maybe_derived_variables = [v for v in variables if not isinstance(v, str)]
+
+    if not maybe_derived_variables:
+        logger.debug("No derived variables for dataset type.")
+        return dataset
+
+    if len(maybe_derived_variables) > 1:
+        logger.warning(
+            "Multiple derived variables provided. Only the first one will be "
+            "computed. Users must use separate EvaluationObjects to derive "
+            "each variable."
+        )
+
+    # Take the first derived variable and process it
+    derived_variable = maybe_derived_variables[0]
+    output = derived_variable.compute(data=dataset, **kwargs)
+
+    # Ensure the DataArray has the correct name and is a DataArray.
+    # Some derived variables return a dataset (multiple variables), so we need
+    # to check
+    if isinstance(output, xr.DataArray):
+        if output.name is None:
+            logger.debug(
+                "Derived variable %s has no name, using class name.",
+                derived_variable.name,
+            )
+            output.name = derived_variable.name
+        # Merge the derived variable into the dataset
+        return output.to_dataset()
+
+    elif isinstance(output, xr.Dataset):
+        # Check if derived dataset dimensions are compatible for merging
+        return output
+
+    # If output is neither DataArray nor Dataset, return original
+    logger.warning(
+        f"Derived variable {derived_variable.name} returned neither DataArray nor "
+        "Dataset. Returning original dataset."
+    )
+    return dataset
 
 
 def maybe_pull_variables_from_derived_input(
