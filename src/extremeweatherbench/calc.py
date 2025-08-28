@@ -185,29 +185,6 @@ def generate_geopotential_thickness(
     return geopotential_thickness
 
 
-def generate_tc_variables(ds: xr.Dataset) -> xr.Dataset:
-    """Generate the variables needed for the TC track calculation.
-
-    Args:
-        ds: The xarray dataset to subset from.
-
-    Returns:
-        The subset variables as an xarray Dataset.
-    """
-
-    output = xr.Dataset(
-        {
-            "air_pressure_at_mean_sea_level": ds["air_pressure_at_mean_sea_level"],
-            "geopotential_thickness": generate_geopotential_thickness(
-                ds, top_level_value=300, bottom_level_value=500
-            ),
-            "surface_wind_speed": calculate_wind_speed(ds),
-        },
-    )
-
-    return output
-
-
 def nantrapezoid(
     y: np.ndarray,
     x: np.ndarray | None = None,
