@@ -351,7 +351,7 @@ class TestMaybeDeriveVariablesFunction:
             required_variables = ["test_variable_1"]
 
             @classmethod
-            def derive_variable(cls, data: xr.Dataset, **kwargs) -> xr.DataArray:
+            def derive_variable(cls, data: xr.Dataset, **kwargs) -> None:  # type: ignore[override]
                 return None
 
         variables = [TestNoneReturnDerived()]
@@ -370,7 +370,7 @@ class TestMaybeDeriveVariablesFunction:
             required_variables = ["test_variable_1"]
 
             @classmethod
-            def derive_variable(cls, data: xr.Dataset, **kwargs) -> str:
+            def derive_variable(cls, data: xr.Dataset, **kwargs) -> str:  # type: ignore[override]
                 return "invalid_return_type"
 
         variables = [TestInvalidReturnDerived()]

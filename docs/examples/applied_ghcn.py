@@ -34,7 +34,7 @@ hres_forecast = inputs.ZarrForecast(
 heatwave_metric_list = [
     inputs.EvaluationObject(
         event_type="heat_wave",
-        metric=[
+        metric_list=[
             metrics.MaximumMAE,
             metrics.RMSE,
             metrics.OnsetME,
@@ -48,7 +48,7 @@ heatwave_metric_list = [
 
 test_ewb = evaluate.ExtremeWeatherBench(
     cases=test_yaml,
-    metrics=heatwave_metric_list,
+    metric_list=heatwave_metric_list,
 )
 logger.info("Starting EWB run")
 outputs = test_ewb.run(

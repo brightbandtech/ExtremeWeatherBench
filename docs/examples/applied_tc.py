@@ -62,7 +62,7 @@ hres_forecast = inputs.ZarrForecast(
 tc_metric_list = [
     inputs.EvaluationObject(
         event_type="tropical_cyclone",
-        metric=[
+        metric_list=[
             metrics.LandfallTimeME,
             metrics.LandfallIntensityMAE,
             metrics.LandfallDisplacement,
@@ -74,7 +74,7 @@ tc_metric_list = [
 # %%
 test_ewb = evaluate.ExtremeWeatherBench(
     cases=test_yaml,
-    metrics=tc_metric_list,
+    metric_list=tc_metric_list,
 )
 logger.info("Starting EWB run")
 outputs = test_ewb.run(

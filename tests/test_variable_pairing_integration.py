@@ -539,7 +539,7 @@ class TestExtremeWeatherBenchVariablePairing:
         # Create and run ExtremeWeatherBench
         ewb = evaluate.ExtremeWeatherBench(
             cases=cases_dict,
-            metrics=[evaluation_obj],
+            metric_list=[evaluation_obj],
         )
 
         result = ewb.run()
@@ -620,7 +620,7 @@ class TestExtremeWeatherBenchVariablePairing:
         # Create and run ExtremeWeatherBench
         ewb = evaluate.ExtremeWeatherBench(
             cases=cases_dict,
-            metrics=[evaluation_obj],
+            metric_list=[evaluation_obj],
         )
 
         result = ewb.run()

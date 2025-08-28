@@ -33,7 +33,7 @@ custom_forecast = inputs.KerchunkForecast(
 evaluation_objects = [
     inputs.EvaluationObject(
         event_type="heat_wave",
-        metric=[
+        metric_list=[
             metrics.MaximumMAE,
             metrics.RMSE,
             metrics.OnsetME,

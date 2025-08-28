@@ -71,7 +71,7 @@ hres_forecast = inputs.ZarrForecast(
 ar_metric_list = [
     inputs.EvaluationObject(
         event_type="atmospheric_river",
-        metric=[metrics.SpatialDisplacement],
+        metric_list=[metrics.SpatialDisplacement],
         target=era5_target,
         forecast=hres_forecast,
     ),
@@ -79,7 +79,7 @@ ar_metric_list = [
 # %%
 test_ewb = evaluate.ExtremeWeatherBench(
     cases=test_yaml,
-    metrics=ar_metric_list,
+    metric_list=ar_metric_list,
 )
 logger.info("Starting EWB run")
 outputs = test_ewb.run(

@@ -99,7 +99,7 @@ cira_forecast_config = config.ForecastConfig(
 heatwave_metric_list = [
     config.MetricEvaluationObject(
         event_type="heat_wave",
-        metric=[
+        metric_list=[
             metrics.MaximumMAE,
             metrics.RMSE,
             metrics.OnsetME,
@@ -111,7 +111,7 @@ heatwave_metric_list = [
     ),
     # rs.MetricEvaluationObject(
     #     event_type="heat_wave",
-    #     metric=[
+    #     metric_list=[
     #         crs.MaximumMAE,
     #         crs.RMSE,
     #         crs.OnsetME,
@@ -125,7 +125,7 @@ heatwave_metric_list = [
 
 test_ewb = evaluate.ExtremeWeatherBench(
     cases=test_yaml,
-    metrics=heatwave_metric_list,
+    metric_list=heatwave_metric_list,
 )
 logger.info("Starting EWB run")
 

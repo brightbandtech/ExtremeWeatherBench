@@ -206,7 +206,7 @@ cira_freeze_forecast = inputs.KerchunkForecast(
 BRIGHTBAND_EVALUATION_OBJECTS = [
     inputs.EvaluationObject(
         event_type="heat_wave",
-        metric=[
+        metric_list=[
             metrics.MaximumMAE,
             metrics.RMSE,
             metrics.OnsetME,
@@ -218,7 +218,7 @@ BRIGHTBAND_EVALUATION_OBJECTS = [
     ),
     inputs.EvaluationObject(
         event_type="heat_wave",
-        metric=[
+        metric_list=[
             metrics.MaximumMAE,
             metrics.RMSE,
             metrics.OnsetME,
@@ -230,7 +230,7 @@ BRIGHTBAND_EVALUATION_OBJECTS = [
     ),
     inputs.EvaluationObject(
         event_type="freeze",
-        metric=[
+        metric_list=[
             metrics.MinimumMAE,
             metrics.RMSE,
             metrics.OnsetME,
@@ -241,7 +241,7 @@ BRIGHTBAND_EVALUATION_OBJECTS = [
     ),
     inputs.EvaluationObject(
         event_type="freeze",
-        metric=[
+        metric_list=[
             metrics.MinimumMAE,
             metrics.RMSE,
             metrics.OnsetME,
@@ -253,7 +253,7 @@ BRIGHTBAND_EVALUATION_OBJECTS = [
     # TODO: Re-enable when severe convection forecast is implemented
     # inputs.EvaluationObject(
     #     event_type="severe_convection",
-    #     metric=[
+    #     metric_list=[
     #         metrics.CSI,
     #         metrics.FAR,
     #         metrics.RegionalHitsMisses,
@@ -265,14 +265,14 @@ BRIGHTBAND_EVALUATION_OBJECTS = [
     # TODO: Re-enable when atmospheric river forecast is implemented
     # inputs.EvaluationObject(
     #     event_type="atmospheric_river",
-    #     metric=[metrics.CSI, metrics.SpatialDisplacement, metrics.EarlySignal],
+    #     metric_list=[metrics.CSI, metrics.SpatialDisplacement, metrics.EarlySignal],
     #     target=era5_atmospheric_river_target,
     #     forecast=cira_atmospheric_river_forecast,
     # ),
     # TODO: Re-enable when tropical cyclone forecast is implemented
     # inputs.EvaluationObject(
     #     event_type="tropical_cyclone",
-    #     metric=[
+    #     metric_list=[
     #         metrics.EarlySignal,
     #         metrics.LandfallDisplacement,
     #         metrics.LandfallTimeME,

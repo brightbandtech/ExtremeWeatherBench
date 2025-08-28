@@ -71,7 +71,7 @@ hres_forecast = inputs.ZarrForecast(
 severe_convection_metric_list = [
     inputs.EvaluationObject(
         event_type="severe_convection",
-        metric=[
+        metric_list=[
             metrics.RMSE,
         ],
         target=pph_target,
@@ -81,7 +81,7 @@ severe_convection_metric_list = [
 
 test_ewb = evaluate.ExtremeWeatherBench(
     cases=test_yaml,
-    metrics=severe_convection_metric_list,
+    metric_list=severe_convection_metric_list,
 )
 logger.info("Starting EWB run")
 outputs = test_ewb.run(

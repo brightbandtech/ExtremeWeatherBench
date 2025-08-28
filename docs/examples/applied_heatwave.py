@@ -10,10 +10,8 @@ logging.getLogger("botocore.httpchecksum").setLevel(logging.CRITICAL)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-case_yaml = utils.load_events_yaml()
-test_yaml = {"cases": case_yaml["cases"][:1]}
 
-
+# example preprocess function for the BB CIRA datasets
 def _preprocess_bb_cira_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
     """An example preprocess function that renames the time coordinate to lead_time,
     creates a valid_time coordinate, and sets the lead time range and resolution not
@@ -33,75 +31,117 @@ def _preprocess_bb_cira_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
     return ds
 
 
-era5_heatwave_target = inputs.ERA5(
-    source=inputs.ARCO_ERA5_FULL_URI,
-    variables=["surface_air_temperature"],
-    variable_mapping={
-        "2m_temperature": "surface_air_temperature",
-        "time": "valid_time",
-    },
-    storage_options={"remote_options": {"anon": True}},
-    chunks=None,
-)
+if __name__ == "__main__":
+    # load the case yaml file
+    case_yaml = utils.load_events_yaml()
+    test_yaml = {"cases": case_yaml["cases"]}
 
-ghcn_target = inputs.GHCN(
-    source=inputs.DEFAULT_GHCN_URI,
-    variables=["surface_air_temperature"],
-    variable_mapping={"t2": "surface_air_temperature"},
-    storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
-)
+    # load the ERA5 target dataset for heatwaves
+    era5_heatwave_target = inputs.ERA5(
+        source=inputs.ARCO_ERA5_FULL_URI,
+        variables=["surface_air_temperature"],
+        variable_mapping={
+            "2m_temperature": "surface_air_temperature",
+            "time": "valid_time",
+        },
+        storage_options={"remote_options": {"anon": True}},
+        chunks=None,
+    )
 
-hres_forecast = inputs.ZarrForecast(
-    name="hres_forecast",
-    source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
-    variables=["surface_air_temperature"],
-    variable_mapping={
-        "2m_temperature": "surface_air_temperature",
-        "prediction_timedelta": "lead_time",
-        "time": "init_time",
-    },
-    storage_options={"remote_options": {"anon": True}},
-)
+    # load the ERA5 target dataset for freezes
+    era5_freeze_target = inputs.ERA5(
+        source=inputs.ARCO_ERA5_FULL_URI,
+        variables=["2m_temperature", "surface_eastward_wind", "surface_northward_wind"],
+        variable_mapping={
+            "2m_temperature": "2m_temperature",
+            "time": "valid_time",
+            "10m_u_component_of_wind": "surface_eastward_wind",
+            "10m_v_component_of_wind": "surface_northward_wind",
+        },
+        storage_options={"remote_options": {"anon": True}},
+        chunks=None,
+    )
 
-# just one for now
-heatwave_metric_list = [
-    inputs.EvaluationObject(
-        event_type="heat_wave",
-        metric=[
-            metrics.MaximumMAE,
-            metrics.RMSE,
-            metrics.OnsetME,
-            metrics.DurationME,
-            metrics.MaxMinMAE,
-        ],
-        target=era5_heatwave_target,
-        forecast=hres_forecast,
-    ),
-    # rs.EvaluationObject(
-    #     event_type="heat_wave",
-    #     metric=[
-    #         crs.MaximumMAE,
-    #         crs.RMSE,
-    #         crs.OnsetME,
-    #         crs.DurationME,
-    #         crs.MaxMinMAE,
-    #     ],
-    #     target_config=ghcn_target_config,
-    #     forecast_config=cira_forecast_config,
-    # ),
-]
+    # load the GHCN target dataset for heatwaves
+    ghcn_target = inputs.GHCN(
+        source=inputs.DEFAULT_GHCN_URI,
+        variables=["surface_air_temperature"],
+        variable_mapping={"t2": "surface_air_temperature"},
+    )
 
-test_ewb = evaluate.ExtremeWeatherBench(
-    cases=test_yaml,
-    metrics=heatwave_metric_list,
-)
-logger.info("Starting EWB run")
-outputs = test_ewb.run(
-    # tolerance range is the number of hours before and after the timestamp a
-    # validating occurrence is checked in the forecasts
-    tolerance_range=48,
-    # pre-compute the datasets to avoid recomputing them for each metric
-    pre_compute=True,
-)
+    # load the HRES forecast dataset for heatwaves
+    hres_forecast = inputs.ZarrForecast(
+        name="hres_forecast",
+        source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
+        variables=["surface_air_temperature"],
+        variable_mapping={
+            "2m_temperature": "surface_air_temperature",
+            "prediction_timedelta": "lead_time",
+            "time": "init_time",
+        },
+        storage_options={"remote_options": {"anon": True}},
+    )
 
-print(outputs.head())
+    # load the FCN forecast dataset for heatwaves
+    fcn_forecast = inputs.KerchunkForecast(
+        name="fcn_forecast",
+        preprocess=_preprocess_bb_cira_forecast_dataset,
+        source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
+        variables=["surface_air_temperature"],
+        variable_mapping={
+            "t2": "surface_air_temperature",
+        },
+        storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
+    )
+    # just one for now
+    heatwave_metric_list = [
+        inputs.EvaluationObject(
+            event_type="heat_wave",
+            metric_list=[
+                metrics.MaximumMAE,
+                metrics.RMSE,
+                metrics.OnsetME,
+                metrics.DurationME,
+                metrics.MaxMinMAE,
+            ],
+            target=era5_heatwave_target,
+            forecast=hres_forecast,
+        ),
+        inputs.EvaluationObject(
+            event_type="heat_wave",
+            metric_list=[
+                metrics.MaximumMAE,
+                metrics.RMSE,
+                metrics.OnsetME,
+                metrics.DurationME,
+                metrics.MaxMinMAE,
+            ],
+            target=era5_heatwave_target,
+            forecast=fcn_forecast,
+        ),
+        # Uncomment to run freeze metric
+        # inputs.EvaluationObject(
+        #     event_type="freeze",
+        #     metric_list=[
+        #         metrics.MinimumMAE,
+        #         metrics.RMSE,
+        #     ],
+        #     target=era5_heatwave_target,
+        #     forecast=hres_forecast,
+        # ),
+    ]
+
+    test_ewb = evaluate.ExtremeWeatherBench(
+        cases=test_yaml,
+        metric_list=heatwave_metric_list,
+    )
+    logger.info("Starting EWB run")
+    outputs = test_ewb.run(
+        # tolerance range is the number of hours before and after the timestamp a
+        # validating occurrence is checked in the forecasts
+        tolerance_range=48,
+        # pre-compute the datasets to avoid recomputing them for each metric
+        pre_compute=True,
+    )
+
+    outputs.to_csv("heatwave_results.csv")

@@ -77,7 +77,7 @@ hres_forecast = inputs.ZarrForecast(
 ar_metric_list = [
     inputs.EvaluationObject(
         event_type="atmospheric_river",
-        metric=[
+        metric_list=[
             metrics.SpatialDisplacement(
                 forecast_variable=derived.IntegratedVaporTransport.name,
                 target_variable=derived.IntegratedVaporTransport.name,
@@ -92,7 +92,7 @@ ar_metric_list = [
 # %%
 test_ewb = evaluate.ExtremeWeatherBench(
     cases=test_yaml,
-    metrics=ar_metric_list,
+    metric_list=ar_metric_list,
 )
 logger.info("Starting EWB run")
 outputs = test_ewb.run(
