@@ -212,7 +212,7 @@ def min_if_all_timesteps_present_forecast(
 
 def determine_timesteps_per_day_resolution(
     ds: xr.Dataset | xr.DataArray,
-) -> int:
+) -> Optional[int]:
     """Determine the number of timesteps per day for a dataset.
 
     Args:
@@ -225,9 +225,12 @@ def determine_timesteps_per_day_resolution(
         "timedelta64[h]"
     ).astype(int)
     if len(num_timesteps) > 1:
-        raise ValueError(
-            "The number of timesteps per day is not consistent in the dataset."
+        logger.warning(
+            "Multiple time resolutions found in dataset, skipping"
+            " this iteration, "
+            f"({pd.to_datetime(ds['init_time'].values[0]).strftime('%Y-%m-%d %H:%M')})."
         )
+        return None
     return num_timesteps[0]
 
 

@@ -453,14 +453,19 @@ class MaxMinMAE(AppliedMetric):
         tolerance_range: int = 24,
         **kwargs: Any,
     ) -> Any:
-        forecast = forecast.compute().mean(["latitude", "longitude"])
-        target = target.compute().mean(["latitude", "longitude"])
+        num_timesteps = utils.determine_timesteps_per_day_resolution(forecast)
+        if num_timesteps is None:
+            return {
+                "forecast": xr.DataArray(np.nan),
+                "target": xr.DataArray(np.nan),
+                "preserve_dims": None,
+            }
+
         max_min_target_value = (
             target.groupby("valid_time.dayofyear")
             .map(
                 utils.min_if_all_timesteps_present,
-                # TODO: calculate num timesteps per day dynamically
-                num_timesteps=utils.determine_timesteps_per_day_resolution(target),
+                num_timesteps=num_timesteps,
             )
             .max()
         )
@@ -489,7 +494,7 @@ class MaxMinMAE(AppliedMetric):
             .groupby("valid_time.dayofyear")
             .map(
                 utils.min_if_all_timesteps_present_forecast,
-                num_timesteps=utils.determine_timesteps_per_day_resolution(forecast),
+                num_timesteps=num_timesteps,
             )
             .min("dayofyear")
         )
@@ -511,9 +516,12 @@ class OnsetME(AppliedMetric):
         if (forecast.valid_time.max() - forecast.valid_time.min()).values.astype(
             "timedelta64[h]"
         ) >= 48:
+            num_timesteps = utils.determine_timesteps_per_day_resolution(forecast)
+            if num_timesteps is None:
+                return xr.DataArray(np.datetime64("NaT", "ns"))
             min_daily_vals = forecast.groupby("valid_time.dayofyear").map(
                 utils.min_if_all_timesteps_present,
-                num_timesteps=utils.determine_timesteps_per_day_resolution(forecast),
+                num_timesteps=num_timesteps,
             )
             if len(min_daily_vals) >= 2:  # Check if we have at least 2 values
                 for i in range(len(min_daily_vals) - 1):
@@ -557,10 +565,12 @@ class DurationME(AppliedMetric):
         if (forecast.valid_time.max() - forecast.valid_time.min()).values.astype(
             "timedelta64[h]"
         ) >= 48:
+            num_timesteps = utils.determine_timesteps_per_day_resolution(forecast)
+            if num_timesteps is None:
+                return xr.DataArray(np.datetime64("NaT", "ns"))
             min_daily_vals = forecast.groupby("valid_time.dayofyear").map(
                 utils.min_if_all_timesteps_present,
-                # TODO: calculate num timesteps per day dynamically
-                num_timesteps=4,
+                num_timesteps=num_timesteps,
             )
             # need to determine logic for 2+ consecutive days to find the date
             # that the heatwave starts
