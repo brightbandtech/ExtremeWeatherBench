@@ -6,7 +6,7 @@ import inspect
 import logging
 from importlib import resources
 from pathlib import Path
-from typing import Any, Callable, TypeAlias, Union
+from typing import Any, Callable, Optional, TypeAlias, Union
 
 import numpy as np
 import pandas as pd  # type: ignore[import-untyped]
