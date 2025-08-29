@@ -210,11 +210,11 @@ class InputBase(ABC):
         if isinstance(data, xr.DataArray):
             return data.rename(variable_mapping[data.name])
         elif isinstance(data, xr.Dataset):
-            old_name_obj = data.variables.keys()
+            old_name_obj = list(data.variables.keys())
         elif isinstance(data, pl.LazyFrame):
             old_name_obj = data.collect_schema().names()
         elif isinstance(data, pd.DataFrame):
-            old_name_obj = data.columns
+            old_name_obj = list(data.columns)
         else:
             raise ValueError(f"Data type {type(data)} not supported")
 
