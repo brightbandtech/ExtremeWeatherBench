@@ -134,9 +134,10 @@ class BinaryContingencyTable(BaseMetric):
         **kwargs: Any,
     ) -> Any:
         preserve_dims = kwargs.get("preserve_dims", "lead_time")
-        return cat.BinaryContingencyManager(
-            forecast, target, preserve_dims=preserve_dims
-        )
+        function = kwargs.get("function", cat.BasicContingencyManager.accuracy)
+        binary_contingency_manager = cat.BinaryContingencyManager(forecast, target)
+        transformed = binary_contingency_manager.transform(preserve_dims=preserve_dims)
+        return function(transformed)
 
 
 class MAE(BaseMetric):
@@ -477,6 +478,13 @@ class FAR(AppliedMetric):
 
 # TODO: complete CSI implementation
 class CSI(AppliedMetric):
+    name = "critical_success_index"
+
+    def __init__(self, **kwargs: Any):
+        self.forecast_threshold = kwargs.get("forecast_threshold", 0.5)
+        self.target_threshold = kwargs.get("target_threshold", 0.5)
+        self.preserve_dims = kwargs.get("preserve_dims", "lead_time")
+
     @property
     def base_metric(self) -> type[BaseMetric]:
         return BinaryContingencyTable
@@ -484,8 +492,14 @@ class CSI(AppliedMetric):
     def _compute_applied_metric(
         self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
     ) -> Any:
-        # Dummy implementation for Critical Success Index
-        raise NotImplementedError("CSI is not implemented yet")
+        binary_forecast = (forecast >= self.forecast_threshold).astype(float)
+        binary_observation = (target >= self.target_threshold).astype(float)
+        return {
+            "forecast": binary_forecast,
+            "target": binary_observation,
+            "preserve_dims": self.preserve_dims,
+            "function": cat.BasicContingencyManager.critical_success_index,
+        }
 
 
 # TODO: complete lead time detection implementation
