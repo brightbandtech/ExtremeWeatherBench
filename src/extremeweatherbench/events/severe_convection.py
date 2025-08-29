@@ -1128,7 +1128,9 @@ def find_intersections(
     _, y21 = _next_non_masked_element(y2, next_idx)
 
     # Check for None values from masked elements
-    if None in [x0, x1, y10, y11, y20, y21]:
+
+    none_values = [x0, x1, y10, y11, y20, y21]
+    if any(x is None for x in none_values):
         return np.array([]), np.array([])
 
     delta_y0 = y10 - y20  # type: ignore[operator]
