@@ -106,7 +106,7 @@ def compute_case_operator(case_operator: "cases.CaseOperator", **kwargs):
     forecast_ds, target_ds = _build_datasets(case_operator)
     if len(forecast_ds) == 0 or len(target_ds) == 0:
         return pd.DataFrame(columns=OUTPUT_COLUMNS)
-    # spatiotemporally align the target and forecast datasets dependent on the forecast
+    # spatiotemporally align the target and forecast datasets dependent on the target
     aligned_forecast_ds, aligned_target_ds = (
         case_operator.target.maybe_align_forecast_to_target(forecast_ds, target_ds)
     )
