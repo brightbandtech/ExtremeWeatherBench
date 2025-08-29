@@ -44,8 +44,8 @@ class BaseMetric(ABC):
                 "or both must be None"
             )
         else:
-            # catch if the user provides a DerivedVariable object instead of a string
-            # or not using the .name attribute
+            # catch if the user provides a DerivedVariable object/class instead of a
+            # string or not using the .name attribute
             if not isinstance(self.forecast_variable, str):
                 self.forecast_variable = self.forecast_variable.name
             if not isinstance(self.target_variable, str):

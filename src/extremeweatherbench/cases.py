@@ -1,6 +1,6 @@
 """Classes for defining individual units of case studies for analysis.
 
-Some code similarly structured to WeatherBench (Rasp et al.).
+Some code similarly structured to WeatherBenchX (Rasp et al.).
 """
 
 import dataclasses
