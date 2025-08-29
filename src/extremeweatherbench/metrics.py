@@ -453,6 +453,20 @@ class MaxMinMAE(AppliedMetric):
         tolerance_range: int = 24,
         **kwargs: Any,
     ) -> Any:
+        forecast = forecast.mean(
+            [
+                dim
+                for dim in forecast.dims
+                if dim not in ["valid_time", "lead_time", "time"]
+            ]
+        )
+        target = target.mean(
+            [
+                dim
+                for dim in target.dims
+                if dim not in ["valid_time", "lead_time", "time"]
+            ]
+        )
         num_timesteps = utils.determine_timesteps_per_day_resolution(forecast)
         if num_timesteps is None:
             return {
