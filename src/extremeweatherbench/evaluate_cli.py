@@ -10,6 +10,7 @@ from joblib import Parallel, delayed  # type: ignore[import-untyped]
 
 from extremeweatherbench import defaults
 from extremeweatherbench.evaluate import ExtremeWeatherBench, compute_case_operator
+from extremeweatherbench.progress import enhanced_logging, progress_tracker
 
 
 @click.command(no_args_is_help=True)
@@ -192,11 +193,19 @@ def _load_config_file(config_path: str) -> tuple:
 def _run_parallel_evaluation(
     case_operators, n_jobs: int, precompute: bool = False
 ) -> pd.DataFrame:
-    """Run case operators in parallel using joblib."""
-    results = Parallel(n_jobs=n_jobs)(
-        delayed(compute_case_operator)(case_op, pre_compute=precompute)
-        for case_op in case_operators
-    )
+    """Run case operators in parallel using joblib with enhanced progress tracking."""
+
+    with enhanced_logging():
+        with progress_tracker.parallel_execution(len(case_operators), n_jobs) as pbar:
+            # Define a wrapper function that updates progress
+            def compute_with_progress(case_op):
+                result = compute_case_operator(case_op, pre_compute=precompute)
+                pbar.update(1)
+                return result
+
+            results = Parallel(n_jobs=n_jobs)(
+                delayed(compute_with_progress)(case_op) for case_op in case_operators
+            )
 
     # Filter out None results and concatenate
     valid_results = [r for r in results if r is not None]
