@@ -93,7 +93,6 @@ class CravenBrooksSignificantSevere(DerivedVariable):
         "specific_humidity",
         "surface_eastward_wind",
         "surface_northward_wind",
-        "air_pressure_at_mean_sea_level",
     ]
     # TODO: add optional variables approach for primary variables that
     # have a fallback option in derived methods
