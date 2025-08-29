@@ -3,7 +3,7 @@
 import itertools
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, Optional, Union
+from typing import TYPE_CHECKING, Optional, Union
 
 import pandas as pd
 import xarray as xr
@@ -118,15 +118,6 @@ def compute_case_operator(case_operator: "cases.CaseOperator", **kwargs):
             aligned_target_ds,
             cache_dir=kwargs.get("cache_dir", None),
         )
-
-    # Derive the variables for the forecast and target datasets independently
-    aligned_forecast_ds = derived.maybe_derive_variables(
-        aligned_forecast_ds, variables=case_operator.forecast.variables
-    )
-    aligned_target_ds = derived.maybe_derive_variables(
-        aligned_target_ds, variables=case_operator.target.variables
-    )
-
     logger.info(f"datasets built for case {case_operator.case_metadata.case_id_number}")
     results = []
     # TODO: determine if derived variables need to be pushed here or at pre-compute
@@ -294,7 +285,7 @@ def _build_datasets(
     forecast datasets, including preprocessing, variable renaming, and subsetting.
     """
     logger.info("running forecast pipeline")
-    forecast_ds = run_pipeline(case_operator, "forecast")
+    forecast_ds = run_pipeline(case_operator.case_metadata, case_operator.forecast)
 
     # Check if any dimension has zero length
     zero_length_dims = [dim for dim, size in forecast_ds.sizes.items() if size == 0]
@@ -307,7 +298,7 @@ def _build_datasets(
         )
         return xr.Dataset(), xr.Dataset()
     logger.info("running target pipeline")
-    target_ds = run_pipeline(case_operator, "target")
+    target_ds = run_pipeline(case_operator.case_metadata, case_operator.target)
     return (forecast_ds, target_ds)
 
 
@@ -325,8 +316,8 @@ def _compute_and_maybe_cache(
 
 
 def run_pipeline(
-    case_operator: "cases.CaseOperator",
-    input_source: Literal["target", "forecast"],
+    case_metadata: "cases.IndividualCase",
+    input_data: "inputs.InputBase",
 ) -> xr.Dataset:
     """Shared method for running the target pipeline.
 
@@ -337,14 +328,6 @@ def run_pipeline(
     Returns:
         The target data with a type determined by the user.
     """
-
-    if input_source == "target":
-        input_data = case_operator.target
-    elif input_source == "forecast":
-        input_data = case_operator.forecast
-    else:
-        raise ValueError(f"Invalid input source: {input_source}")
-
     # Open data and process through pipeline steps
     data = (
         # opens data from user-defined source
@@ -355,10 +338,12 @@ def run_pipeline(
         # subsets the target data using the caseoperator metadata
         .pipe(
             input_data.subset_data_to_case,
-            case_operator=case_operator,
+            case_metadata=case_metadata,
         )
         # converts the target data to an xarray dataset if it is not already
         .pipe(input_data.maybe_convert_to_dataset)
         .pipe(input_data.add_source_to_dataset_attrs)
+        .pipe(input_data.maybe_subset_variables, variables=input_data.variables)
+        .pipe(derived.maybe_derive_variables, variables=input_data.variables)
     )
     return data
