@@ -66,8 +66,6 @@ class DerivedVariable(ABC):
         """Build the derived variable from the input variables.
 
         This method is used to build the derived variable from the input variables.
-        It checks that the data has the variables required to build the variable,
-        and then derives the variable from the input variables.
 
         Args:
             data: The dataset to build the derived variable from.
