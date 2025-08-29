@@ -92,7 +92,6 @@ class CravenBrooksSignificantSevere(DerivedVariable):
 
     required_variables = [
         "air_temperature",
-        "dewpoint_temperature",
         "eastward_wind",
         "northward_wind",
         "specific_humidity",
@@ -103,6 +102,9 @@ class CravenBrooksSignificantSevere(DerivedVariable):
     # TODO: add optional variables approach for primary variables that
     # have a fallback option in derived methods
     optional_variables = ["dewpoint_temperature"]
+    optional_variables_mapping = {
+        "dewpoint_temperature": "specific_humidity",
+    }
     name = "craven_brooks_significant_severe"
 
     @classmethod
