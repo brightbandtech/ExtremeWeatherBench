@@ -154,8 +154,9 @@ class BinaryContingencyTable(BaseMetric):
 
     name = "binary_contingency_table"
 
+    @classmethod
     def _compute_metric(
-        self,
+        cls,
         forecast: xr.Dataset,
         target: xr.Dataset,
         **kwargs: Any,
