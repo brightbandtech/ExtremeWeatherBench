@@ -378,9 +378,8 @@ class TargetBase(InputBase):
         """Align the forecast data to the target data.
 
         This method is used to align the forecast data to the target data (not
-        vice versa). Implementation is useful for non-gridded targets that need
-        to be aligned to the forecast
-        data.
+        vice versa). Implementation is key for non-gridded targets that have dims
+        unlike the forecast data.
 
         Args:
             forecast_data: The forecast data to align.
