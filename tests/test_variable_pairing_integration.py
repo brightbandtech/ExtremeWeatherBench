@@ -10,7 +10,7 @@ target variables using the zip() pairing logic, covering various scenarios:
 
 import datetime
 from typing import List
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import numpy as np
 import pandas as pd
@@ -136,6 +136,7 @@ def create_mock_input(variables: List[str], dataset: xr.Dataset, input_type: str
     # Mock all pipeline methods to return the dataset
     mock_input.open_and_maybe_preprocess_data_from_source.return_value = dataset
     mock_input.maybe_map_variable_names.return_value = dataset
+    mock_input.maybe_subset_variables.return_value = dataset
     mock_input.subset_data_to_case.return_value = dataset
     mock_input.maybe_convert_to_dataset.return_value = dataset
     mock_input.add_source_to_dataset_attrs.return_value = dataset
@@ -216,10 +217,18 @@ def create_case_operator(
 class TestVariablePairingIntegration:
     """Integration tests for variable pairing behavior."""
 
+    @patch("extremeweatherbench.derived.maybe_derive_variables")
     def test_single_variable_pairing(
-        self, sample_case, base_forecast_dataset, base_target_dataset, mock_metric
+        self,
+        mock_derived,
+        sample_case,
+        base_forecast_dataset,
+        base_target_dataset,
+        mock_metric,
     ):
         """Test 1: Single forecast variable vs single target variable."""
+        mock_derived.side_effect = lambda ds, variables: ds
+
         # Create case operator with single variables
         case_op = create_case_operator(
             sample_case,
@@ -247,10 +256,17 @@ class TestVariablePairingIntegration:
         assert result["case_id_number"].iloc[0] == 1
         assert result["event_type"].iloc[0] == "test_event"
 
+    @patch("extremeweatherbench.derived.maybe_derive_variables")
     def test_two_variable_pairwise_pairing(
-        self, sample_case, base_forecast_dataset, base_target_dataset, mock_metric
+        self,
+        mock_derived,
+        sample_case,
+        base_forecast_dataset,
+        base_target_dataset,
+        mock_metric,
     ):
         """Test 2: Two forecast variables vs two target variables (pairwise)."""
+        mock_derived.side_effect = lambda ds, variables: ds
         # Create case operator with two variables each
         case_op = create_case_operator(
             sample_case,
@@ -332,9 +348,9 @@ class TestVariablePairingIntegration:
 
         # Verify results
         assert isinstance(result, pd.DataFrame)
-        assert (
-            len(result) == 1
-        ), "Should have exactly one evaluation result (only first pairing)"
+        assert len(result) == 1, (
+            "Should have exactly one evaluation result (only first pairing)"
+        )
 
         # Check that only the first pairing was created: var_a <-> var_x
         assert result["target_variable"].iloc[0] == "var_x"
@@ -362,9 +378,9 @@ class TestVariablePairingIntegration:
 
         # Verify results
         assert isinstance(result, pd.DataFrame)
-        assert (
-            len(result) == 1
-        ), "Should have exactly one evaluation result (only first pairing)"
+        assert len(result) == 1, (
+            "Should have exactly one evaluation result (only first pairing)"
+        )
 
         # Check that only the first pairing was created: var_a <-> var_x
         assert result["target_variable"].iloc[0] == "var_x"
