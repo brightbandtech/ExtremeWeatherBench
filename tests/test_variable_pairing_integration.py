@@ -29,7 +29,7 @@ class MockMetric(metrics.BaseMetric):
     """A simple mock metric for testing."""
 
     @classmethod
-    def _compute_metric(cls, forecast: xr.DataArray, target: xr.DataArray, **kwargs):
+    def _compute_metric(cls, forecast: xr.Dataset, target: xr.Dataset, **kwargs):
         """Return a simple mean absolute difference."""
         diff = abs(forecast - target)
         # Reduce to a scalar but return as DataArray for EWB compatibility
