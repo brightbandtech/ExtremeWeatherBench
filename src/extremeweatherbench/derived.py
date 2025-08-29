@@ -1,4 +1,3 @@
-import dataclasses
 import logging
 from abc import ABC, abstractmethod
 from typing import Sequence, Type, Union
@@ -36,8 +35,8 @@ class DerivedVariable(ABC):
     """
 
     required_variables: list[str]
-    optional_variables: list[str] = dataclasses.field(default_factory=list)
-    optional_variables_mapping: dict = dataclasses.field(default_factory=dict)
+    optional_variables: list[str] = []
+    optional_variables_mapping: dict = {}
 
     @property
     def name(self) -> str:
@@ -68,8 +67,6 @@ class DerivedVariable(ABC):
         """Build the derived variable from the input variables.
 
         This method is used to build the derived variable from the input variables.
-        It checks that the data has the variables required to build the variable,
-        and then derives the variable from the input variables.
 
         Args:
             data: The dataset to build the derived variable from.

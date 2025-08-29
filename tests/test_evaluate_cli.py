@@ -25,7 +25,7 @@ def suppress_cli_output():
 @pytest.fixture
 def runner():
     """Create a Click test runner with output suppression."""
-    return click.testing.CliRunner(mix_stderr=False)
+    return click.testing.CliRunner()
 
 
 @pytest.fixture
@@ -63,7 +63,7 @@ class TestCLIBasicFunctionality:
     def test_cli_no_args_shows_help(self, runner):
         """Test that CLI shows help when no arguments provided."""
         result = runner.invoke(evaluate_cli.cli_runner, [])
-        assert result.exit_code == 0
+        assert result.exit_code == 2  # Click returns 2 for missing required arguments
 
 
 class TestDefaultMode:
