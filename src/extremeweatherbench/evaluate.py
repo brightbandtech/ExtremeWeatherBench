@@ -189,8 +189,6 @@ def _extract_standard_metadata(
     return {
         "target_variable": target_variable,
         "metric": metric.name,
-        "target_source": target_ds.attrs["source"],
-        "forecast_source": forecast_ds.attrs["source"],
         "case_id_number": case_id_number,
         "event_type": event_type,
     }
@@ -215,8 +213,6 @@ def _ensure_output_schema(df: pd.DataFrame, **metadata) -> pd.DataFrame:
             metric_df,
             target_variable=target_var,
             metric=metric.name,
-            target_source=target_ds.attrs["source"],
-            forecast_source=forecast_ds.attrs["source"],
             case_id_number=case_id,
             event_type=event_type
         )
