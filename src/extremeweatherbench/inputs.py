@@ -559,28 +559,19 @@ class LSR(TargetBase):
         target_data["valid_time"] = pd.to_datetime(target_data["valid_time"])
 
         # filters to apply to the target data including datetimes and location bounds
+        bounds = case_operator.case_metadata.location.get_bounding_coordinates
         filters = (
             (target_data["valid_time"] >= case_operator.case_metadata.start_date)
             & (target_data["valid_time"] <= case_operator.case_metadata.end_date)
+            & (target_data["latitude"] >= bounds.latitude_min)
+            & (target_data["latitude"] <= bounds.latitude_max)
             & (
-                target_data["latitude"]
-                >= case_operator.case_metadata.location.latitude_min
-            )
-            & (
-                target_data["latitude"]
-                <= case_operator.case_metadata.location.latitude_max
+                target_data["longitude"]
+                >= utils.convert_longitude_to_180(bounds.longitude_min)
             )
             & (
                 target_data["longitude"]
-                >= utils.convert_longitude_to_180(
-                    case_operator.case_metadata.location.longitude_min
-                )
-            )
-            & (
-                target_data["longitude"]
-                <= utils.convert_longitude_to_180(
-                    case_operator.case_metadata.location.longitude_max
-                )
+                <= utils.convert_longitude_to_180(bounds.longitude_max)
             )
         )
         subset_target_data = target_data.loc[filters]
