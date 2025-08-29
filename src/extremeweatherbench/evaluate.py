@@ -3,7 +3,7 @@
 import itertools
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, Optional, Union
+from typing import TYPE_CHECKING, Optional, Union
 
 import pandas as pd
 import xarray as xr
@@ -316,8 +316,8 @@ def _compute_and_maybe_cache(
 
 
 def run_pipeline(
-    case_operator: "cases.CaseOperator",
-    input_source: Literal["target", "forecast"],
+    case_metadata: "cases.IndividualCase",
+    input_data: "inputs.InputBase",
 ) -> xr.Dataset:
     """Shared method for running the target pipeline.
 
@@ -328,14 +328,6 @@ def run_pipeline(
     Returns:
         The target data with a type determined by the user.
     """
-
-    if input_source == "target":
-        input_data = case_operator.target
-    elif input_source == "forecast":
-        input_data = case_operator.forecast
-    else:
-        raise ValueError(f"Invalid input source: {input_source}")
-
     # Open data and process through pipeline steps
     data = (
         # opens data from user-defined source
@@ -343,13 +335,15 @@ def run_pipeline(
         # maps variable names to the target data if not already using EWB
         # naming conventions
         .pipe(input_data.maybe_map_variable_names)
+        .pipe(input_data.maybe_subset_variables, variables=input_data.variables)
         # subsets the target data using the caseoperator metadata
         .pipe(
             input_data.subset_data_to_case,
-            case_operator=case_operator,
+            case_metadata=case_metadata,
         )
         # converts the target data to an xarray dataset if it is not already
         .pipe(input_data.maybe_convert_to_dataset)
         .pipe(input_data.add_source_to_dataset_attrs)
+        .pipe(derived.maybe_derive_variables, variables=input_data.variables)
     )
     return data
