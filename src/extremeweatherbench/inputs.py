@@ -123,10 +123,7 @@ class InputBase(ABC):
 
     @abstractmethod
     def subset_data_to_case(
-        self,
-        data: utils.IncomingDataInput,
-        case_metadata: "cases.IndividualCase",
-        **kwargs,
+        self, data: utils.IncomingDataInput, case_metadata: "cases.IndividualCase"
     ) -> utils.IncomingDataInput:
         """Subset the target data to the case information provided in IndividualCase.
 
@@ -253,7 +250,11 @@ class InputBase(ABC):
             v
             for v in variables
             if isinstance(v, type) and issubclass(v, derived.DerivedVariable)
-        ][0]
+        ]
+        if derived_variables:
+            derived_variables = derived_variables[0]
+        else:
+            derived_variables = None
 
         # get the optional variables and mapping from the derived variable
         optional_variables = (
