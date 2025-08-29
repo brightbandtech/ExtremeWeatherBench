@@ -72,6 +72,7 @@ severe_convection_metric_list = [
         event_type="severe_convection",
         metric=[
             metrics.RMSE,
+            metrics.CSI(forecast_threshold=15000, target_threshold=0.3),
         ],
         target=pph_target,
         forecast=hres_forecast,
