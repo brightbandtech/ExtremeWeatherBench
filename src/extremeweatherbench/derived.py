@@ -1,6 +1,7 @@
+import dataclasses
 import logging
 from abc import ABC, abstractmethod
-from typing import List, Sequence, Type, Union
+from typing import Sequence, Type, Union
 
 import numpy as np
 import xarray as xr
@@ -34,7 +35,9 @@ class DerivedVariable(ABC):
             derive the variable from required_variables.
     """
 
-    required_variables: List[str]
+    required_variables: list[str]
+    optional_variables: list[str] = dataclasses.field(default_factory=list)
+    optional_variables_mapping: dict = dataclasses.field(default_factory=dict)
 
     @property
     def name(self) -> str:
@@ -75,13 +78,6 @@ class DerivedVariable(ABC):
         Returns:
             A DataArray with the derived variable.
         """
-        # Log missing variables but continue processing
-        # TODO: add optional variables approach for primary variables that
-        # have a fallback option in derived methods
-        for v in cls.required_variables:
-            if v not in data.data_vars:
-                logger.warning(f"Input variable {v} not found in data")
-
         return cls.derive_variable(data)
 
 
