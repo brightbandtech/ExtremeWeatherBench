@@ -91,8 +91,6 @@ class InputBase(ABC):
     variables: list[Union[str, "derived.DerivedVariable"]] = dataclasses.field(
         default_factory=list
     )
-    optional_variables: list[str] = dataclasses.field(default_factory=list)
-    optional_variables_mapping: dict = dataclasses.field(default_factory=dict)
     variable_mapping: dict = dataclasses.field(default_factory=dict)
     storage_options: dict = dataclasses.field(default_factory=dict)
     preprocess: Callable = utils._default_preprocess
@@ -125,7 +123,7 @@ class InputBase(ABC):
     def subset_data_to_case(
         self,
         data: utils.IncomingDataInput,
-        case_operator: "cases.CaseOperator",
+        case_metadata: "cases.IndividualCase",
     ) -> utils.IncomingDataInput:
         """Subset the target data to the case information provided in CaseOperator.
 
@@ -137,7 +135,7 @@ class InputBase(ABC):
             data: The target data to subset, which should be a xarray dataset,
                 xarray dataarray, polars lazyframe, pandas dataframe, or numpy
                 array.
-            case_operator: The case operator to subset the data to; includes time
+            case_metadata: The case metadata to subset the data to; includes time
                 information, spatial bounds, and variables.
 
         Returns:
@@ -241,6 +239,35 @@ class InputBase(ABC):
             else data.rename(columns=output_dict)
         )
 
+    def maybe_subset_variables(
+        self,
+        data: utils.IncomingDataInput,
+        variables: list[Union[str, "derived.DerivedVariable"]],
+    ) -> utils.IncomingDataInput:
+        """Subset the variables from the data, if required."""
+
+        # get the first derived variable if it exists
+        derived_variables = [
+            v
+            for v in variables
+            if isinstance(v, type) and issubclass(v, derived.DerivedVariable)
+        ][0]
+
+        # get the optional variables and mapping from the derived variable
+        optional_variables = derived_variables.optional_variables or []
+        optional_variables_mapping = derived_variables.optional_variables_mapping or {}
+
+        expected_and_maybe_derived_variables = (
+            derived.maybe_include_variables_from_derived_input(variables)
+        )
+        data = safely_pull_variables(
+            data,
+            expected_and_maybe_derived_variables,
+            optional_variables=optional_variables,
+            optional_variables_mapping=optional_variables_mapping,
+        )
+        return data
+
 
 @dataclasses.dataclass
 class ForecastBase(InputBase):
@@ -251,7 +278,7 @@ class ForecastBase(InputBase):
     def subset_data_to_case(
         self,
         data: utils.IncomingDataInput,
-        case_operator: "cases.CaseOperator",
+        case_metadata: "cases.IndividualCase",
     ) -> utils.IncomingDataInput:
         if not isinstance(data, xr.Dataset):
             raise ValueError(f"Expected xarray Dataset, got {type(data)}")
@@ -259,32 +286,16 @@ class ForecastBase(InputBase):
         # subset time first to avoid OOM masking issues
         subset_time_indices = utils.derive_indices_from_init_time_and_lead_time(
             data,
-            case_operator.case_metadata.start_date,
-            case_operator.case_metadata.end_date,
+            case_metadata.start_date,
+            case_metadata.end_date,
         )
 
         subset_time_data = data.sel(
             init_time=data.init_time[np.unique(subset_time_indices[0])]
         )
-        # TODO: add a method to get the list of required variables from the derived
-        # variables in the eval object instead of here, so case_metadata can be used
-        # as input instead of case_operator
 
-        # use the list of required variables from the derived variables in the
-        # eval to add to the list of variables
-        expected_and_maybe_derived_variables = (
-            derived.maybe_include_variables_from_derived_input(
-                case_operator.forecast.variables
-            )
-        )
-        variable_time_subset_data = safely_pull_variables(
-            subset_time_data,
-            expected_and_maybe_derived_variables,
-            optional_variables=self.optional_variables,
-            optional_variables_mapping=self.optional_variables_mapping,
-        )
-        spatiotemporally_subset_data = case_operator.case_metadata.location.mask(
-            variable_time_subset_data, drop=True
+        spatiotemporally_subset_data = case_metadata.location.mask(
+            subset_time_data, drop=True
         )
 
         # convert from init_time/lead_time to init_time/valid_time
