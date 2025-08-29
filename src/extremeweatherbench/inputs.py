@@ -125,7 +125,7 @@ class InputBase(ABC):
     def subset_data_to_case(
         self,
         data: utils.IncomingDataInput,
-        case_operator: "cases.CaseOperator",
+        case_metadata: "cases.IndividualCase",
     ) -> utils.IncomingDataInput:
         """Subset the target data to the case information provided in CaseOperator.
 
@@ -137,8 +137,7 @@ class InputBase(ABC):
             data: The target data to subset, which should be a xarray dataset,
                 xarray dataarray, polars lazyframe, pandas dataframe, or numpy
                 array.
-            case_operator: The case operator to subset the data to; includes time
-                information, spatial bounds, and variables.
+            case_metadata: The case metadata to subset the data to; includes time
 
         Returns:
             The target data with the variables subset to the case metadata.
