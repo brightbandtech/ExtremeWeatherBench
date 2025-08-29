@@ -74,7 +74,13 @@ class InputBase(ABC):
 
     Attributes:
         source: The source of the data, which can be a local path or a remote URL/URI.
+        name: The name of the input data source.
         variables: A list of variables to select from the data.
+        optional_variables: A list of variables to select from the data, but are not
+            required for the evaluation. These variables are not required to be present,
+            but can be used, for example, to avoid extra unnecessary computation.
+        optional_variables_mapping: A dictionary of which optional variables replace
+            which required variables in the variables list.
         variable_mapping: A dictionary of variable names to map to the data.
         storage_options: Storage/access options for the data.
         preprocess: A function to preprocess the data.
@@ -85,6 +91,8 @@ class InputBase(ABC):
     variables: list[Union[str, "derived.DerivedVariable"]] = dataclasses.field(
         default_factory=list
     )
+    optional_variables: list[str] = dataclasses.field(default_factory=list)
+    optional_variables_mapping: dict = dataclasses.field(default_factory=dict)
     variable_mapping: dict = dataclasses.field(default_factory=dict)
     storage_options: dict = dataclasses.field(default_factory=dict)
     preprocess: Callable = utils._default_preprocess
@@ -258,23 +266,25 @@ class ForecastBase(InputBase):
         subset_time_data = data.sel(
             init_time=data.init_time[np.unique(subset_time_indices[0])]
         )
+        # TODO: add a method to get the list of required variables from the derived
+        # variables in the eval object instead of here, so case_metadata can be used
+        # as input instead of case_operator
 
         # use the list of required variables from the derived variables in the
         # eval to add to the list of variables
         expected_and_maybe_derived_variables = (
-            derived.maybe_pull_required_variables_from_derived_input(
+            derived.maybe_include_variables_from_derived_input(
                 case_operator.forecast.variables
             )
         )
-        try:
-            subset_time_data = subset_time_data[expected_and_maybe_derived_variables]
-        except KeyError:
-            raise KeyError(
-                f"One of the variables {expected_and_maybe_derived_variables} not "
-                f"found in forecast data"
-            )
+        variable_time_subset_data = safely_pull_variables(
+            subset_time_data,
+            expected_and_maybe_derived_variables,
+            optional_variables=self.optional_variables,
+            optional_variables_mapping=self.optional_variables_mapping,
+        )
         spatiotemporally_subset_data = case_operator.case_metadata.location.mask(
-            subset_time_data, drop=True
+            variable_time_subset_data, drop=True
         )
 
         # convert from init_time/lead_time to init_time/valid_time
@@ -912,7 +922,7 @@ def zarr_target_subsetter(
     )
 
     target_and_maybe_derived_variables = (
-        derived.maybe_pull_required_variables_from_derived_input(
+        derived.maybe_include_variables_from_derived_input(
             case_operator.target.variables
         )
     )
@@ -990,3 +1000,88 @@ def align_forecast_to_target(
     )
 
     return time_space_aligned_forecast, time_aligned_target
+
+
+def safely_pull_variables(
+    dataset: xr.Dataset,
+    variables: list[str],
+    optional_variables: Optional[list[str]] = None,
+    optional_variables_mapping: Optional[dict[str, list[str]]] = None,
+) -> xr.Dataset:
+    """Safely pull variables from an xarray dataset, prioritizing optionals.
+
+    This function attempts to extract variables from a dataset, giving
+    priority to optional variables when available. If optional variables
+    are present, they can replace the need for required variables through
+    the mapping dictionary.
+
+    Args:
+        dataset: The xarray dataset to extract variables from.
+        variables: List of required variable names to extract.
+        optional_variables: List of optional variable names to try first.
+        optional_variables_mapping: Dict mapping optional vars to list of
+            required vars they can replace.
+
+    Returns:
+        xr.Dataset containing the extracted variables.
+
+    Raises:
+        KeyError: If required variables are not present and no suitable
+            optional variables are available as replacements.
+
+    Examples:
+        >>> ds = xr.Dataset(
+        ...     {"temp": (["x"], [1, 2, 3]), "temperature_2m": (["x"], [4, 5, 6])}
+        ... )
+        >>> result = safely_pull_variables(
+        ...     ds,
+        ...     variables=["temp"],
+        ...     optional_variables=["dewpoint_temperature"],
+        ...     optional_variables_mapping={
+        ...         "dewpoint_temperature": ["specific_humidity", "pressure"]
+        ...     },
+        ... )
+    """
+    if optional_variables is None:
+        optional_variables = []
+    if optional_variables_mapping is None:
+        optional_variables_mapping = {}
+
+    # Track which variables we've found
+    found_variables = []
+    required_variables_satisfied = set()
+
+    # First, check for optional variables and add them if present
+    for opt_var in optional_variables:
+        if opt_var in dataset.data_vars:
+            found_variables.append(opt_var)
+            # Check if this optional variable replaces required variables
+            if opt_var in optional_variables_mapping:
+                replaced_vars = optional_variables_mapping[opt_var]
+                # Handle both single string and list of strings
+                if isinstance(replaced_vars, str):
+                    required_variables_satisfied.add(replaced_vars)
+                else:
+                    required_variables_satisfied.update(replaced_vars)
+
+    # Then check for required variables that weren't replaced
+    missing_variables = []
+    for var in variables:
+        if var in required_variables_satisfied:
+            # This required variable was replaced by an optional variable
+            continue
+        elif var in dataset.data_vars:
+            found_variables.append(var)
+        else:
+            missing_variables.append(var)
+
+    # Raise error if any required variables are missing
+    if missing_variables:
+        available_vars = list(dataset.data_vars.keys())
+        raise KeyError(
+            f"Required variables {missing_variables} not found in dataset. "
+            f"Available variables: {available_vars}"
+        )
+
+    # Return dataset with only the found variables
+    return dataset[found_variables]
