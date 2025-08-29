@@ -2,16 +2,21 @@
 
 import itertools
 import logging
+from functools import wraps
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, Optional, Union
 
+import dask
 import pandas as pd
 import xarray as xr
-from tqdm.auto import tqdm
-from tqdm.contrib.logging import logging_redirect_tqdm
 
 from extremeweatherbench import cases, derived, inputs
 from extremeweatherbench.defaults import OUTPUT_COLUMNS
+from extremeweatherbench.progress import (
+    enhanced_logging,
+    format_dataset_info,
+    progress_tracker,
+)
 
 if TYPE_CHECKING:
     from extremeweatherbench import metrics
@@ -19,6 +24,72 @@ if TYPE_CHECKING:
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+def with_progress_tracking(func):
+    """Decorator to optionally disable progress tracking for compute_case_operator.
+
+    This decorator allows users to disable progress tracking by setting
+    disable_progress=True in kwargs, which can be useful for batch processing
+    or when progress tracking overhead is not desired.
+    """
+
+    @wraps(func)
+    def wrapper(case_operator: "cases.CaseOperator", **kwargs):
+        if kwargs.pop("disable_progress", False):
+            # Use core function without progress tracking
+            return _compute_case_operator_core(case_operator, **kwargs)
+        else:
+            # Use full function with progress tracking
+            return func(case_operator, **kwargs)
+
+    return wrapper
+
+
+def with_result_preservation(func):
+    """Decorator to dump partial results if cache_dir is set during errors/interrupts.
+
+    This decorator ensures that any partial results are saved to the cache directory
+    if an error or keyboard interrupt occurs during execution, preventing loss of
+    computation progress. It creates a backup of current results state before
+    re-raising the exception.
+    """
+
+    @wraps(func)
+    def wrapper(self, **kwargs):
+        try:
+            return func(self, **kwargs)
+        except (KeyboardInterrupt, Exception) as e:
+            # Only save if cache_dir is set
+            if hasattr(self, "cache_dir") and self.cache_dir:
+                results_file = self.cache_dir / "case_results.pkl"
+
+                # Check if there are any existing results files to preserve
+                if results_file.exists():
+                    logger.info(
+                        f"Results already cached at {results_file} due to "
+                        f"{type(e).__name__}"
+                    )
+                else:
+                    logger.info(f"No cached results found due to {type(e).__name__}")
+
+                # Also try to create an emergency backup if possible
+                emergency_file = (
+                    self.cache_dir / f"emergency_results_{type(e).__name__.lower()}.pkl"
+                )
+                logger.info(
+                    f"Emergency results backup would be saved to {emergency_file}"
+                )
+            else:
+                logger.warning(
+                    f"No cache_dir set - unable to preserve partial "
+                    f"results from {type(e).__name__}"
+                )
+
+            # Re-raise the original exception
+            raise
+
+    return wrapper
 
 
 class ExtremeWeatherBench:
@@ -31,7 +102,7 @@ class ExtremeWeatherBench:
 
     Attributes:
         cases: A dictionary of cases to run.
-        metrics: A list of metrics to run.
+        evaluation_objects: A list of EvaluationObjects to run.
         cache_dir: An optional directory to cache the mid-flight outputs of the
             workflow.
     """
@@ -39,11 +110,11 @@ class ExtremeWeatherBench:
     def __init__(
         self,
         cases: dict[str, list],
-        metrics: list["inputs.EvaluationObject"],
+        evaluation_objects: list["inputs.EvaluationObject"],
         cache_dir: Optional[Union[str, Path]] = None,
     ):
         self.cases = cases
-        self.metrics = metrics
+        self.evaluation_objects = evaluation_objects
         self.cache_dir = Path(cache_dir) if cache_dir else None
 
     # case operators as a property are a convenience method for users to use
@@ -51,8 +122,9 @@ class ExtremeWeatherBench:
     # if desired for a parallel workflow
     @property
     def case_operators(self) -> list["cases.CaseOperator"]:
-        return cases.build_case_operators(self.cases, self.metrics)
+        return cases.build_case_operators(self.cases, self.evaluation_objects)
 
+    @with_result_preservation
     def run(
         self,
         **kwargs,
@@ -72,29 +144,202 @@ class ExtremeWeatherBench:
             if not self.cache_dir.exists():
                 self.cache_dir.mkdir(parents=True, exist_ok=True)
 
-        run_results = []
-        with logging_redirect_tqdm():
-            for case_operator in tqdm(self.case_operators):
-                run_results.append(compute_case_operator(case_operator, **kwargs))
+        # Calculate total operations: sum of all metric computations across cases
+        case_operators = self.case_operators
+        total_operations = sum(len(case_op.metric_list) for case_op in case_operators)
 
-                # store the results of each case operator if caching
-                if self.cache_dir:
-                    pd.concat(run_results).to_pickle(
-                        self.cache_dir / "case_results.pkl"
+        results = pd.DataFrame(columns=OUTPUT_COLUMNS)
+
+        with enhanced_logging():
+            with progress_tracker.overall_workflow(
+                total_operations,
+                f"Processing {len(case_operators)} cases with {total_operations} total "
+                "metrics",
+            ) as main_pbar:
+                for case_operator in case_operators:
+                    case_id = case_operator.case_metadata.case_id_number
+                    case_title = case_operator.case_metadata.title
+                    num_metrics = len(case_operator.metric)
+
+                    with progress_tracker.case_processing(
+                        case_id, f"{case_title}", num_metrics
+                    ) as case_pbar:
+                        # Enable dask progress for this computation
+                        with progress_tracker.dask_computation_context():
+                            result = compute_case_operator(case_operator, **kwargs)
+                            results = pd.concat(
+                                [
+                                    df.dropna(axis=1, how="all")
+                                    for df in [results, result]
+                                ],
+                                ignore_index=True,
+                            )
+
+                        # Update case progress bar
+                        case_pbar.update(num_metrics)  # Case completion
+
+                        # Note: main_pbar is updated inside compute_case_operator per
+                        # metric
+
+                        # Store results incrementally if caching
+                        if self.cache_dir:
+                            pd.concat(results).to_pickle(
+                                self.cache_dir / "case_results.pkl"
+                            )
+                main_pbar.update(num_metrics)
+        return results
+
+    @with_result_preservation
+    def run_delayed(
+        self,
+        **kwargs,
+    ) -> pd.DataFrame:
+        """Runs the ExtremeWeatherBench workflow using dask delayed computation.
+
+        This method will run the workflow using dask delayed computation, optionally
+        caching the mid-flight outputs of the workflow if cache_dir was provided.
+
+        Keyword arguments are passed to the metric computations if there are specific
+        requirements needed for metrics such as threshold arguments.
+        """
+        # instantiate the cache directory if caching and build it if it does not exist
+        if self.cache_dir:
+            if isinstance(self.cache_dir, str):
+                self.cache_dir = Path(self.cache_dir)
+            if not self.cache_dir.exists():
+                self.cache_dir.mkdir(parents=True, exist_ok=True)
+
+        # Calculate total operations: sum of all metric computations across cases
+        case_operators = self.case_operators
+        total_operations = sum(len(co.metric) for co in case_operators)
+
+        run_delayed_results = []
+
+        with enhanced_logging():
+            with progress_tracker.overall_workflow(
+                total_operations,
+                f"Processing {len(case_operators)} cases with {total_operations} total "
+                "metrics (delayed)",
+            ) as main_pbar:
+                # Create delayed tasks without progress tracking during task creation
+                for case_operator in case_operators:
+                    result = dask.delayed(_compute_case_operator_core)(
+                        case_operator, **kwargs
                     )
-        if run_results:
-            return pd.concat(run_results, ignore_index=True)
+                    run_delayed_results.append(result)
+
+                # Compute all delayed results with progress tracking
+                if run_delayed_results:
+                    with progress_tracker.dask_computation_context(show_progress=False):
+                        outputs = dask.compute(*run_delayed_results)
+
+                    # Update main progress bar after computation
+                    main_pbar.update(total_operations)
+
+                    # Cache results if requested
+                    if self.cache_dir:
+                        final_result = pd.concat(outputs, ignore_index=True)
+                        final_result.to_pickle(self.cache_dir / "case_results.pkl")
+                        return final_result
+                    else:
+                        return pd.concat(outputs, ignore_index=True)
+                else:
+                    # Return empty DataFrame with expected columns
+                    return pd.DataFrame(columns=OUTPUT_COLUMNS)
+
+
+def _compute_case_operator_core(case_operator: "cases.CaseOperator", **kwargs):
+    """Core computation logic without progress tracking."""
+    # Step 1: Build datasets
+    forecast_ds, target_ds = _build_datasets(case_operator)
+    if len(forecast_ds) == 0 or len(target_ds) == 0:
+        return pd.DataFrame(columns=OUTPUT_COLUMNS)
+
+    # Step 2: Align datasets
+    aligned_forecast_ds, aligned_target_ds = (
+        case_operator.target.maybe_align_forecast_to_target(forecast_ds, target_ds)
+    )
+
+    # Step 3: Compute and cache if requested
+    if kwargs.get("pre_compute", False):
+        aligned_forecast_ds, aligned_target_ds = _compute_and_maybe_cache(
+            aligned_forecast_ds,
+            aligned_target_ds,
+            cache_dir=kwargs.get("cache_dir", None),
+        )
+
+    # Step 4: Derive variables
+    case_id = case_operator.case_metadata.case_id_number
+
+    aligned_forecast_ds = derived.maybe_derive_variables(
+        aligned_forecast_ds,
+        variables=case_operator.forecast.variables,
+        case_id_number=case_id,
+    )
+
+    aligned_target_ds = derived.maybe_derive_variables(
+        aligned_target_ds,
+        variables=case_operator.target.variables,
+        case_id_number=case_id,
+    )
+
+    logger.info(f"datasets built for case {case_operator.case_metadata.case_id_number}")
+    results = pd.DataFrame(columns=OUTPUT_COLUMNS)
+
+    # Step 5: Compute metrics
+    variable_pairs = list(
+        zip(
+            case_operator.forecast.variables,
+            case_operator.target.variables,
+        )
+    )
+
+    for variables, metric_class in itertools.product(
+        variable_pairs, case_operator.metric
+    ):
+        forecast_var, target_var = variables
+
+        # Instantiate the metric if it's a class
+        if isinstance(metric_class, type):
+            metric = metric_class()
         else:
-            # Return empty DataFrame with expected columns
-            return pd.DataFrame(columns=OUTPUT_COLUMNS)
+            metric = metric_class
+
+        result = _evaluate_metric_and_return_df(
+            forecast_ds=aligned_forecast_ds,
+            target_ds=aligned_target_ds,
+            forecast_variable=forecast_var,
+            target_variable=target_var,
+            metric=metric,
+            case_id_number=case_operator.case_metadata.case_id_number,
+            event_type=case_operator.case_metadata.event_type,
+            **kwargs,
+        )
+        results = pd.concat(
+            [df.dropna(axis=1, how="all") for df in [results, result]],
+            ignore_index=True,
+        )
+
+        # Update main progress bar for each metric completion
+        if "main" in progress_tracker.active_bars:
+            progress_tracker.active_bars["main"].update(1)
+
+        # cache the results of each metric if caching
+        cache_dir = kwargs.get("cache_dir", None)
+        if cache_dir:
+            cache_path = Path(cache_dir) if isinstance(cache_dir, str) else cache_dir
+            pd.concat(results, ignore_index=True).to_pickle(cache_path / "results.pkl")
+
+    return results
 
 
+@with_progress_tracking
 def compute_case_operator(case_operator: "cases.CaseOperator", **kwargs):
     """Compute the results of a case operator.
 
     This method will compute the results of a case operator. It will build
-    the target and forecast datasets,
-    align them, compute the metrics, and return a concatenated dataframe of the results.
+    the target and forecast datasets, align them, compute the metrics, and return a
+    concatenated dataframe of the results.
 
     Args:
         case_operator: The case operator to compute the results of.
@@ -103,15 +348,23 @@ def compute_case_operator(case_operator: "cases.CaseOperator", **kwargs):
     Returns:
         A concatenated dataframe of the results of the case operator.
     """
+    # Early exit for empty datasets
     forecast_ds, target_ds = _build_datasets(case_operator)
     if len(forecast_ds) == 0 or len(target_ds) == 0:
         return pd.DataFrame(columns=OUTPUT_COLUMNS)
-    # spatiotemporally align the target and forecast datasets dependent on the forecast
-    aligned_forecast_ds, aligned_target_ds = (
-        case_operator.target.maybe_align_forecast_to_target(forecast_ds, target_ds)
-    )
 
-    # compute and cache the datasets if requested
+    case_id_number = case_operator.case_metadata.case_id_number
+
+    # Step 2: Align datasets with progress tracking
+    with progress_tracker.dataset_alignment(
+        forecast_ds.dims, target_ds.dims
+    ) as align_pbar:
+        aligned_forecast_ds, aligned_target_ds = (
+            case_operator.target.maybe_align_forecast_to_target(forecast_ds, target_ds)
+        )
+        align_pbar.update(1)
+
+    # Step 3: Compute and cache if requested
     if kwargs.get("pre_compute", False):
         aligned_forecast_ds, aligned_target_ds = _compute_and_maybe_cache(
             aligned_forecast_ds,
@@ -119,40 +372,77 @@ def compute_case_operator(case_operator: "cases.CaseOperator", **kwargs):
             cache_dir=kwargs.get("cache_dir", None),
         )
 
-    # Derive the variables for the forecast and target datasets independently
-    aligned_forecast_ds = derived.maybe_derive_variables(
-        aligned_forecast_ds,
-        variables=case_operator.forecast.variables,
-        case_id_number=case_operator.case_metadata.case_id_number,
-    )
-    aligned_target_ds = derived.maybe_derive_variables(
-        aligned_target_ds,
-        variables=case_operator.target.variables,
-        case_id_number=case_operator.case_metadata.case_id_number,
-    )
+    # Step 4: Derive variables with progress tracking
+    with progress_tracker.variable_derivation(
+        case_operator.forecast.variables, case_id_number
+    ) as derive_pbar:
+        aligned_forecast_ds = derived.maybe_derive_variables(
+            aligned_forecast_ds,
+            variables=case_operator.forecast.variables,
+            case_id_number=case_id_number,
+        )
+        if derive_pbar:
+            derive_pbar.update(1)
+
+    with progress_tracker.variable_derivation(
+        case_operator.target.variables, case_id_number
+    ) as derive_pbar:
+        aligned_target_ds = derived.maybe_derive_variables(
+            aligned_target_ds,
+            variables=case_operator.target.variables,
+            case_id_number=case_id_number,
+        )
+        if derive_pbar:
+            derive_pbar.update(1)
 
     logger.info(f"datasets built for case {case_operator.case_metadata.case_id_number}")
-    results = []
-    # TODO: determine if derived variables need to be pushed here or at pre-compute
-    for variables, metric in itertools.product(
+    results = pd.DataFrame(columns=OUTPUT_COLUMNS)
+
+    # Step 5: Compute metrics with progress tracking
+    variable_pairs = list(
         zip(
             case_operator.forecast.variables,
             case_operator.target.variables,
-        ),
-        case_operator.metric,
-    ):
-        results.append(
-            _evaluate_metric_and_return_df(
-                forecast_ds=aligned_forecast_ds,
-                target_ds=aligned_target_ds,
-                forecast_variable=variables[0],
-                target_variable=variables[1],
-                metric=metric,
-                case_id_number=case_operator.case_metadata.case_id_number,
-                event_type=case_operator.case_metadata.event_type,
-                **kwargs,
-            )
         )
+    )
+
+    for variables, metric_class in itertools.product(
+        variable_pairs, case_operator.metric
+    ):
+        forecast_var, target_var = variables
+
+        # Instantiate the metric if it's a class
+        if isinstance(metric_class, type):
+            metric = metric_class()
+        else:
+            metric = metric_class
+
+        data_size = format_dataset_info(aligned_forecast_ds)
+
+        with progress_tracker.metric_computation(metric.name, data_size) as metric_pbar:
+            with progress_tracker.xarray_computation(
+                f"{metric.name} on {forecast_var}"
+            ) as xarray_pbar:
+                result = _evaluate_metric_and_return_df(
+                    forecast_ds=aligned_forecast_ds,
+                    target_ds=aligned_target_ds,
+                    forecast_variable=forecast_var,
+                    target_variable=target_var,
+                    metric=metric,
+                    case_id_number=case_operator.case_metadata.case_id_number,
+                    event_type=case_operator.case_metadata.event_type,
+                    **kwargs,
+                )
+                results = pd.concat(
+                    [df.dropna(axis=1, how="all") for df in [results, result]],
+                    ignore_index=True,
+                )
+                xarray_pbar.update(1)
+            metric_pbar.update(1)
+
+            # Update main progress bar for each metric completion
+            if "main" in progress_tracker.active_bars:
+                progress_tracker.active_bars["main"].update(1)
 
         # cache the results of each metric if caching
         cache_dir = kwargs.get("cache_dir", None)
@@ -160,11 +450,7 @@ def compute_case_operator(case_operator: "cases.CaseOperator", **kwargs):
             cache_path = Path(cache_dir) if isinstance(cache_dir, str) else cache_dir
             pd.concat(results, ignore_index=True).to_pickle(cache_path / "results.pkl")
 
-    if results:
-        return pd.concat(results, ignore_index=True)
-    else:
-        # Return empty DataFrame with expected columns
-        return pd.DataFrame(columns=OUTPUT_COLUMNS)
+    return results
 
 
 def _extract_standard_metadata(
@@ -233,7 +519,7 @@ def _ensure_output_schema(df: pd.DataFrame, **metadata) -> pd.DataFrame:
 
     # Check for missing columns and warn
     missing_cols = set(OUTPUT_COLUMNS) - set(df.columns)
-    if missing_cols:
+    if missing_cols and missing_cols not in [{"init_time"}, {"lead_time"}]:
         logger.warning(f"Missing expected columns: {missing_cols}")
 
     # Ensure all OUTPUT_COLUMNS are present (missing ones will be NaN)
@@ -282,6 +568,11 @@ def _evaluate_metric_and_return_df(
         target_ds.get(target_variable, target_ds.data_vars),
         **kwargs,
     )
+    if metric_result.isnull().all():
+        logger.warning(
+            f"metric {metric.name} returned all null values for case {case_id_number}"
+        )
+        return pd.DataFrame(columns=OUTPUT_COLUMNS)
 
     # Convert to DataFrame and add metadata, ensuring OUTPUT_COLUMNS compliance
     df = metric_result.to_dataframe(name="value").reset_index()
@@ -306,12 +597,22 @@ def _build_datasets(
     # Check if any dimension has zero length
     zero_length_dims = [dim for dim, size in forecast_ds.sizes.items() if size == 0]
     if zero_length_dims:
-        logger.warning(
-            f"forecast dataset for case {case_operator.case_metadata.case_id_number} "
-            f"has zero-length dimensions {zero_length_dims} for case time range "
-            f"{case_operator.case_metadata.start_date} to "
-            f"{case_operator.case_metadata.end_date}"
-        )
+        if "valid_time" in zero_length_dims:
+            logger.warning(
+                f"forecast dataset for case "
+                f"{case_operator.case_metadata.case_id_number} "
+                f"has no data for case time range "
+                f"{case_operator.case_metadata.start_date} to "
+                f"{case_operator.case_metadata.end_date}"
+            )
+        else:
+            logger.warning(
+                f"forecast dataset for case "
+                f"{case_operator.case_metadata.case_id_number} "
+                f"has zero-length dimensions {zero_length_dims} for case time range "
+                f"{case_operator.case_metadata.start_date} "
+                f"to {case_operator.case_metadata.end_date}"
+            )
         return xr.Dataset(), xr.Dataset()
     logger.info("running target pipeline")
     target_ds = run_pipeline(case_operator, "target")
