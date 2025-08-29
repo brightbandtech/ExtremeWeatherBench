@@ -78,7 +78,7 @@ class DerivedVariable(ABC):
         Returns:
             A DataArray with the derived variable.
         """
-        return cls.derive_variable(data)
+        return cls.derive_variable(data, **kwargs)
 
 
 class CravenBrooksSignificantSevere(DerivedVariable):
@@ -103,7 +103,7 @@ class CravenBrooksSignificantSevere(DerivedVariable):
     name = "craven_brooks_significant_severe"
 
     @classmethod
-    def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
+    def derive_variable(cls, data: xr.Dataset, **kwargs) -> xr.DataArray:
         """Derive the Craven-Brooks significant severe convection index."""
         # create broadcasted pressure variable, output target is always last
         _, data["pressure"] = xr.broadcast(data["air_temperature"], data["level"])
