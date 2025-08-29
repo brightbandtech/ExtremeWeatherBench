@@ -88,29 +88,13 @@ def location_translation(
     # Handle new YAML format with type and parameters
     if "type" in location and "parameters" in location:
         region = map_to_create_region(location)
-        if hasattr(region, "latitude_min"):
-            # BoundingBoxRegion
-            return BoundingBox(
-                min_lat=region.latitude_min,
-                max_lat=region.latitude_max,
-                min_lon=region.longitude_min,
-                max_lon=region.longitude_max,
-            )
-        elif hasattr(region, "latitude") and hasattr(region, "bounding_box_degrees"):
-            # CenteredRegion
-            if isinstance(region.bounding_box_degrees, tuple):
-                lat_degrees, lon_degrees = region.bounding_box_degrees
-            else:
-                lat_degrees = lon_degrees = region.bounding_box_degrees
-
-            min_lat = region.latitude - lat_degrees / 2
-            max_lat = region.latitude + lat_degrees / 2
-            min_lon = region.longitude - lon_degrees / 2
-            max_lon = region.longitude + lon_degrees / 2
-
-            return BoundingBox(
-                min_lat=min_lat, max_lat=max_lat, min_lon=min_lon, max_lon=max_lon
-            )
+        bounds = region.get_bounding_coordinates
+        return BoundingBox(
+            min_lat=bounds.latitude_min,
+            max_lat=bounds.latitude_max,
+            min_lon=bounds.longitude_min,
+            max_lon=bounds.longitude_max,
+        )
 
     # Handle legacy format
     if "latitude" in location and "longitude" in location:
