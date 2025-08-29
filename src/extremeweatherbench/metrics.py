@@ -1024,7 +1024,7 @@ class SpatialDisplacement(BaseMetric):
             coords={"lead_time": lead_times, "valid_time": valid_times},
         )
 
-        haversine_distance = calc.haversine_distance(
+        haversine_distance = calc.calculate_haversine_distance(
             forecast_com.latitude,
             forecast_com.longitude,
             target_com.latitude,
