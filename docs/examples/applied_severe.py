@@ -66,13 +66,30 @@ hres_forecast = inputs.ZarrForecast(
     storage_options={"remote_options": {"anon": True}},
 )
 
+# Option 1: Use the cached factory functions directly (simplest approach)
+# These will automatically share the global cache for the same thresholds
+simple_metrics = [
+    metrics.CSI(forecast_threshold=15000, target_threshold=0.3),
+    metrics.FAR(forecast_threshold=15000, target_threshold=0.3),
+    metrics.TP(forecast_threshold=15000, target_threshold=0.3),
+    metrics.FP(forecast_threshold=15000, target_threshold=0.3),
+    metrics.TN(forecast_threshold=15000, target_threshold=0.3),
+    metrics.FN(forecast_threshold=15000, target_threshold=0.3),
+]
+
+# Option 2: Create cached metrics that share the same transformed contingency manager
+cached_metrics = metrics.create_threshold_metrics(
+    forecast_threshold=15000,
+    target_threshold=0.3,
+    functions=[metrics.csi_function, metrics.far_function, metrics.accuracy_function],
+    instances=[metrics.tp, metrics.fp, metrics.tn, metrics.fn],
+)
+
 # just one for now
 severe_convection_metric_list = [
     inputs.EvaluationObject(
         event_type="severe_convection",
-        metric=[
-            metrics.RMSE,
-        ],
+        metric=simple_metrics,  # These will use global cache automatically
         target=pph_target,
         forecast=hres_forecast,
     ),
@@ -83,9 +100,5 @@ test_ewb = evaluate.ExtremeWeatherBench(
     metrics=severe_convection_metric_list,
 )
 logger.info("Starting EWB run")
-outputs = test_ewb.run(
-    # pre-compute the datasets to avoid recomputing them for each metric
-    pre_compute=True,
-)
-
-print(outputs.head())
+outputs = test_ewb.run(pre_compute=True)
+outputs.to_csv("applied_severe_results.csv")
