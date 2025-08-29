@@ -240,6 +240,39 @@ class InputBase(ABC):
             else data.rename(columns=output_dict)
         )
 
+    def maybe_subset_variables(
+        self,
+        data: utils.IncomingDataInput,
+        variables: list[Union[str, "derived.DerivedVariable"]],
+    ) -> utils.IncomingDataInput:
+        """Subset the variables from the data, if required."""
+
+        # get the first derived variable if it exists
+        derived_variables = [
+            v
+            for v in variables
+            if isinstance(v, type) and issubclass(v, derived.DerivedVariable)
+        ][0]
+
+        # get the optional variables and mapping from the derived variable
+        optional_variables = (
+            getattr(derived_variables, "optional_variables", None) or []
+        )
+        optional_variables_mapping = (
+            getattr(derived_variables, "optional_variables_mapping", None) or {}
+        )
+
+        expected_and_maybe_derived_variables = (
+            derived.maybe_include_variables_from_derived_input(variables)
+        )
+        data = safely_pull_variables(
+            data,
+            expected_and_maybe_derived_variables,
+            optional_variables=optional_variables,
+            optional_variables_mapping=optional_variables_mapping,
+        )
+        return data
+
 
 @dataclasses.dataclass
 class ForecastBase(InputBase):
