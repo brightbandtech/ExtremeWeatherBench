@@ -83,9 +83,6 @@ test_ewb = evaluate.ExtremeWeatherBench(
     metrics=severe_convection_metric_list,
 )
 logger.info("Starting EWB run")
-outputs = test_ewb.run(
-    # pre-compute the datasets to avoid recomputing them for each metric
-    pre_compute=True,
-)
+outputs = test_ewb.run()
 
 print(outputs.head())
