@@ -335,6 +335,7 @@ def run_pipeline(
         # maps variable names to the target data if not already using EWB
         # naming conventions
         .pipe(input_data.maybe_map_variable_names)
+        .pipe(input_data.maybe_subset_variables, variables=input_data.variables)
         # subsets the target data using the caseoperator metadata
         .pipe(
             input_data.subset_data_to_case,
@@ -343,7 +344,6 @@ def run_pipeline(
         # converts the target data to an xarray dataset if it is not already
         .pipe(input_data.maybe_convert_to_dataset)
         .pipe(input_data.add_source_to_dataset_attrs)
-        .pipe(input_data.maybe_subset_variables, variables=input_data.variables)
         .pipe(derived.maybe_derive_variables, variables=input_data.variables)
     )
     return data
