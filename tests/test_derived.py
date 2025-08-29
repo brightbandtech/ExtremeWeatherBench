@@ -550,8 +550,8 @@ class TestMaybeDeriveVariablesFunction:
 class TestUtilityFunctions:
     """Test utility functions in the derived module."""
 
-    def test_maybe_pull_required_variables_from_derived_input_with_instances(self):
-        """Test maybe_pull_required_variables_from_derived_input with instances."""
+    def test_maybe_include_variables_from_derived_input_with_instances(self):
+        """Test maybe_include_variables_from_derived_input with instances."""
         incoming_variables = [
             "existing_variable",
             TestValidDerivedVariable(),
@@ -559,9 +559,7 @@ class TestUtilityFunctions:
             "another_existing_variable",
         ]
 
-        result = derived.maybe_pull_required_variables_from_derived_input(
-            incoming_variables
-        )
+        result = derived.maybe_include_variables_from_derived_input(incoming_variables)
 
         expected = [
             "existing_variable",
@@ -573,17 +571,15 @@ class TestUtilityFunctions:
 
         assert set(result) == set(expected)
 
-    def test_maybe_pull_required_variables_from_derived_input_with_classes(self):
-        """Test maybe_pull_required_variables_from_derived_input with classes."""
+    def test_maybe_include_variables_from_derived_input_with_classes(self):
+        """Test maybe_include_variables_from_derived_input with classes."""
         incoming_variables = [
             "existing_variable",
             TestValidDerivedVariable,  # Class, not instance
             TestMinimalDerivedVariable,  # Class, not instance
         ]
 
-        result = derived.maybe_pull_required_variables_from_derived_input(
-            incoming_variables
-        )
+        result = derived.maybe_include_variables_from_derived_input(incoming_variables)
 
         expected = [
             "existing_variable",
@@ -594,13 +590,11 @@ class TestUtilityFunctions:
 
         assert set(result) == set(expected)
 
-    def test_maybe_pull_required_variables_only_strings(self):
-        """Test maybe_pull_required_variables_from_derived_input with only strings."""
+    def test_maybe_include_variables_only_strings(self):
+        """Test maybe_include_variables_from_derived_input with only strings."""
         incoming_variables = ["var1", "var2", "var3"]
 
-        result = derived.maybe_pull_required_variables_from_derived_input(
-            incoming_variables
-        )
+        result = derived.maybe_include_variables_from_derived_input(incoming_variables)
 
         assert result == incoming_variables
 
@@ -676,7 +670,7 @@ class TestIntegrationWithRealData:
         variables_to_derive = [TestValidDerivedVariable(), TestMinimalDerivedVariable()]
 
         # Step 1: Pull required variables
-        required_vars = derived.maybe_pull_required_variables_from_derived_input(
+        required_vars = derived.maybe_include_variables_from_derived_input(
             ["surface_wind_speed"] + variables_to_derive
         )
 

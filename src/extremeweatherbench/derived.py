@@ -1,6 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import List, Type, Union
+from typing import List, Sequence, Type, Union
 
 import numpy as np
 import xarray as xr
@@ -349,11 +349,10 @@ def maybe_derive_variables(
     return dataset
 
 
-def maybe_pull_required_variables_from_derived_input(
-    incoming_variables: list[Union[str, DerivedVariable, Type[DerivedVariable]]],
+def maybe_include_variables_from_derived_input(
+    incoming_variables: Sequence[Union[str, DerivedVariable, Type[DerivedVariable]]],
 ) -> list[str]:
-    """Pull the required variables from a derived input and add to the list of
-    variables to pull.
+    """Identify and return variables that a derived variable needs to compute.
 
     Args:
         incoming_variables: a list of string and/or derived variables.
@@ -371,6 +370,17 @@ def maybe_pull_required_variables_from_derived_input(
             derived_required_variables.extend(v.required_variables)
         elif isinstance(v, type) and issubclass(v, DerivedVariable):
             # Handle classes that inherit from DerivedVariable
-            derived_required_variables.extend(v.required_variables)
+            # Recursively pull required variables from derived variables
+            derived_required_variables.extend(
+                maybe_include_variables_from_derived_input(v.required_variables)
+            )
 
-    return string_variables + derived_required_variables
+    # Remove duplicates while preserving order
+    all_variables = string_variables + derived_required_variables
+    seen = set()
+    result = []
+    for var in all_variables:
+        if var not in seen:
+            seen.add(var)
+            result.append(var)
+    return result
