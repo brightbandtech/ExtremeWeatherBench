@@ -110,12 +110,19 @@ class CravenBrooksSignificantSevere(DerivedVariable):
                 data["specific_humidity"], data["pressure"]
             )
         cbss = sc.craven_brooks_significant_severe(data)
-        coords = {dim: data.coords[dim] for dim in data.dims if dim != "level"}
+        coords = {
+            dim: data.coords[dim]
+            for dim in data.dims
+            if dim != "level" and dim != "valid_time"
+        }
         return xr.DataArray(
-            cbss,
+            # we take the max over valid_time to account for the max CBSS over the
+            # case
+            cbss.max(dim="valid_time"),
             coords=coords,
             dims=coords.keys(),
             name=cls.name,
+            attrs=data.attrs,
         )
 
 
