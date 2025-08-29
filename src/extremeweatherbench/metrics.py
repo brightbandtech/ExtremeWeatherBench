@@ -116,7 +116,7 @@ class AppliedMetric(ABC):
         forecast: xr.DataArray,
         target: xr.DataArray,
         **kwargs: Any,
-    ) -> tuple[xr.DataArray, xr.DataArray]:
+    ) -> dict[str, xr.DataArray]:
         """Logic to compute, roll up, or otherwise transform the inputs for the base
         metric.
 
@@ -380,7 +380,7 @@ class MaximumMAE(AppliedMetric):
         target: xr.DataArray,
         tolerance_range: int = 24,
         **kwargs,
-    ) -> tuple[xr.DataArray, xr.DataArray]:
+    ) -> dict[str, xr.DataArray]:
         forecast = forecast.compute()
         target_spatial_mean = target.compute().mean(["latitude", "longitude"])
         maximum_timestep = target_spatial_mean.idxmax("valid_time").values
