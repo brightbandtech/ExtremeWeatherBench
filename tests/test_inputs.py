@@ -305,9 +305,7 @@ class TestMaybeMapVariableNames:
         assert isinstance(result, xr.DataArray)
         assert result.name == "temp"
 
-    @patch(
-        "extremeweatherbench.derived.maybe_pull_required_variables_from_derived_input"
-    )
+    @patch("extremeweatherbench.derived.maybe_include_variables_from_derived_input")
     def test_maybe_map_variable_names_polars_lazyframe(
         self, mock_derived, test_input_base, sample_ghcn_dataframe
     ):
@@ -334,9 +332,7 @@ class TestMaybeMapVariableNames:
         assert "surface_air_temperature" not in schema.names()
         assert "latitude" in schema.names()
 
-    @patch(
-        "extremeweatherbench.derived.maybe_pull_required_variables_from_derived_input"
-    )
+    @patch("extremeweatherbench.derived.maybe_include_variables_from_derived_input")
     def test_maybe_map_variable_names_pandas_dataframe(
         self, mock_derived, test_input_base, sample_lsr_dataframe
     ):
@@ -437,9 +433,7 @@ class TestMaybeMapVariableNames:
         # Should return data unchanged when variable mapping is empty
         xr.testing.assert_identical(result, sample_era5_dataset)
 
-    @patch(
-        "extremeweatherbench.derived.maybe_pull_required_variables_from_derived_input"
-    )
+    @patch("extremeweatherbench.derived.maybe_include_variables_from_derived_input")
     def test_maybe_map_variable_names_with_derived_variables(
         self, mock_derived, test_input_base, sample_era5_dataset
     ):
@@ -494,9 +488,7 @@ class TestForecastBase:
 
     @patch("extremeweatherbench.utils.derive_indices_from_init_time_and_lead_time")
     @patch("extremeweatherbench.utils.convert_init_time_to_valid_time")
-    @patch(
-        "extremeweatherbench.derived.maybe_pull_required_variables_from_derived_input"
-    )
+    @patch("extremeweatherbench.derived.maybe_include_variables_from_derived_input")
     def test_forecast_base_subset_data_to_case(
         self, mock_derived, mock_convert, mock_derive, sample_forecast_dataset
     ):
@@ -1118,6 +1110,282 @@ class TestPPH:
         assert result is sample_era5_dataset
 
 
+class TestSafelyPullVariables:
+    """Test the safely_pull_variables function."""
+
+    def test_basic_variable_extraction(self, sample_dataset_for_variable_pulling):
+        """Test basic variable extraction without optional variables."""
+        result = inputs.safely_pull_variables(
+            sample_dataset_for_variable_pulling, variables=["temperature", "pressure"]
+        )
+
+        assert isinstance(result, xr.Dataset)
+        assert set(result.data_vars.keys()) == {"temperature", "pressure"}
+        xr.testing.assert_equal(
+            result["temperature"], sample_dataset_for_variable_pulling["temperature"]
+        )
+
+    def test_missing_required_variable_raises_keyerror(
+        self, sample_dataset_for_variable_pulling
+    ):
+        """Test missing required variables raise KeyError with helpful message."""
+        with pytest.raises(
+            KeyError, match="Required variables .* not found in dataset"
+        ):
+            inputs.safely_pull_variables(
+                sample_dataset_for_variable_pulling, variables=["nonexistent_variable"]
+            )
+
+    def test_optional_variables_added_when_present(
+        self, sample_dataset_for_variable_pulling
+    ):
+        """Test that optional variables are added when present."""
+        result = inputs.safely_pull_variables(
+            sample_dataset_for_variable_pulling,
+            variables=["temperature"],
+            optional_variables=["wind_speed", "nonexistent_optional"],
+        )
+
+        assert set(result.data_vars.keys()) == {"temperature", "wind_speed"}
+
+    def test_optional_variable_replaces_required_single_mapping(
+        self, sample_dataset_for_variable_pulling
+    ):
+        """Test optional variable replacing a single required variable."""
+        result = inputs.safely_pull_variables(
+            sample_dataset_for_variable_pulling,
+            variables=["temperature", "pressure"],
+            optional_variables=["temperature_2m"],
+            optional_variables_mapping={"temperature_2m": ["temperature"]},
+        )
+
+        # Should have temperature_2m instead of temperature, plus pressure
+        assert set(result.data_vars.keys()) == {"temperature_2m", "pressure"}
+        xr.testing.assert_equal(
+            result["temperature_2m"],
+            sample_dataset_for_variable_pulling["temperature_2m"],
+        )
+
+    def test_optional_variable_replaces_multiple_required_variables(
+        self, sample_dataset_for_variable_pulling
+    ):
+        """Test optional variable replacing multiple required variables."""
+        result = inputs.safely_pull_variables(
+            sample_dataset_for_variable_pulling,
+            variables=["specific_humidity", "pressure", "wind_speed"],
+            optional_variables=["dewpoint_temperature"],
+            optional_variables_mapping={
+                "dewpoint_temperature": ["specific_humidity", "pressure"]
+            },
+        )
+
+        # Should have dewpoint_temperature instead of specific_humidity and pressure
+        assert set(result.data_vars.keys()) == {"dewpoint_temperature", "wind_speed"}
+
+    def test_multiple_optional_variables_with_mapping(
+        self, sample_dataset_for_variable_pulling
+    ):
+        """Test multiple optional variables with different mappings."""
+        result = inputs.safely_pull_variables(
+            sample_dataset_for_variable_pulling,
+            variables=["temperature", "specific_humidity", "pressure"],
+            optional_variables=["temperature_2m", "dewpoint_temperature", "wind_speed"],
+            optional_variables_mapping={
+                "temperature_2m": ["temperature"],
+                "dewpoint_temperature": ["specific_humidity", "pressure"],
+            },
+        )
+
+        expected_vars = {"temperature_2m", "dewpoint_temperature", "wind_speed"}
+        assert set(result.data_vars.keys()) == expected_vars
+
+    def test_optional_mapping_with_missing_optional_variable(
+        self, sample_dataset_for_variable_pulling
+    ):
+        """Test behavior when optional variable in mapping is missing."""
+        # Remove temperature_2m to simulate missing optional variable
+        dataset_missing_optional = sample_dataset_for_variable_pulling.drop_vars(
+            "temperature_2m"
+        )
+
+        result = inputs.safely_pull_variables(
+            dataset_missing_optional,
+            variables=["temperature", "pressure"],
+            optional_variables=["temperature_2m"],
+            optional_variables_mapping={"temperature_2m": ["temperature"]},
+        )
+
+        # Should fall back to required variables since optional is missing
+        assert set(result.data_vars.keys()) == {"temperature", "pressure"}
+
+    def test_optional_mapping_with_missing_required_and_optional(
+        self, sample_dataset_for_variable_pulling
+    ):
+        """Test error when both required and optional replacement are missing."""
+        dataset_missing_both = sample_dataset_for_variable_pulling.drop_vars(
+            ["temperature", "temperature_2m"]
+        )
+
+        with pytest.raises(
+            KeyError, match="Required variables .* not found in dataset"
+        ):
+            inputs.safely_pull_variables(
+                dataset_missing_both,
+                variables=["temperature", "pressure"],
+                optional_variables=["temperature_2m"],
+                optional_variables_mapping={"temperature_2m": ["temperature"]},
+            )
+
+    def test_empty_lists(self, sample_dataset_for_variable_pulling):
+        """Test behavior with empty optional variables and mapping."""
+        result = inputs.safely_pull_variables(
+            sample_dataset_for_variable_pulling,
+            variables=["temperature"],
+            optional_variables=[],
+            optional_variables_mapping={},
+        )
+
+        assert set(result.data_vars.keys()) == {"temperature"}
+
+    def test_none_optional_parameters(self, sample_dataset_for_variable_pulling):
+        """Test behavior when optional parameters are None."""
+        result = inputs.safely_pull_variables(
+            sample_dataset_for_variable_pulling,
+            variables=["temperature"],
+            optional_variables=None,
+            optional_variables_mapping=None,
+        )
+
+        assert set(result.data_vars.keys()) == {"temperature"}
+
+    def test_complex_scenario_with_partial_replacements(
+        self, sample_dataset_for_variable_pulling
+    ):
+        """Test complex scenario with some variables replaced and others not."""
+        result = inputs.safely_pull_variables(
+            sample_dataset_for_variable_pulling,
+            variables=["temperature", "pressure", "wind_speed", "specific_humidity"],
+            optional_variables=["temperature_2m", "nonexistent"],
+            optional_variables_mapping={
+                "temperature_2m": ["temperature"],
+                # This won't apply since nonexistent is missing
+                "nonexistent": ["pressure"],
+            },
+        )
+
+        # Should have temperature_2m (replaced), pressure (not replaced),
+        # wind_speed (required), specific_humidity (required)
+        expected_vars = {
+            "temperature_2m",
+            "pressure",
+            "wind_speed",
+            "specific_humidity",
+        }
+        assert set(result.data_vars.keys()) == expected_vars
+
+    def test_error_message_shows_available_variables(
+        self, sample_dataset_for_variable_pulling
+    ):
+        """Test that error message shows available variables."""
+        with pytest.raises(KeyError) as exc_info:
+            inputs.safely_pull_variables(
+                sample_dataset_for_variable_pulling,
+                variables=["nonexistent1", "nonexistent2"],
+            )
+
+        error_msg = str(exc_info.value)
+        assert "Available variables:" in error_msg
+        assert "temperature" in error_msg
+        assert "pressure" in error_msg
+
+
+class TestForecastBaseSubsetDataToCaseUpdated:
+    """Test the updated ForecastBase.subset_data_to_case method."""
+
+    @patch("extremeweatherbench.utils.derive_indices_from_init_time_and_lead_time")
+    @patch("extremeweatherbench.utils.convert_init_time_to_valid_time")
+    @patch("extremeweatherbench.derived.maybe_include_variables_from_derived_input")
+    @patch("extremeweatherbench.inputs.safely_pull_variables")
+    def test_subset_data_to_case_with_optional_variables(
+        self,
+        mock_safely_pull,
+        mock_derived,
+        mock_convert,
+        mock_derive,
+        sample_forecast_dataset,
+    ):
+        """Test subset_data_to_case with optional variables and mapping."""
+        # Setup mocks
+        mock_derive.return_value = np.array([[0, 1], [0, 1]])
+        mock_convert.return_value = sample_forecast_dataset
+        mock_derived.return_value = ["surface_air_temperature"]
+        mock_safely_pull.return_value = sample_forecast_dataset
+
+        # Create forecast with optional variables
+        forecast = inputs.ZarrForecast(
+            name="test",
+            source="test.zarr",
+            variables=["surface_air_temperature"],
+            optional_variables=["temperature_2m"],
+            optional_variables_mapping={"temperature_2m": ["surface_air_temperature"]},
+            variable_mapping={},
+            storage_options={},
+        )
+
+        # Create mock case operator
+        mock_case = Mock()
+        mock_case.case_metadata.start_date = pd.Timestamp("2021-06-20")
+        mock_case.case_metadata.end_date = pd.Timestamp("2021-06-22")
+        mock_case.case_metadata.location.mask.return_value = sample_forecast_dataset
+        mock_case.forecast.variables = ["surface_air_temperature"]
+
+        result = forecast.subset_data_to_case(sample_forecast_dataset, mock_case)
+
+        # Verify safely_pull_variables was called with correct parameters
+        mock_safely_pull.assert_called_once()
+        call_args = mock_safely_pull.call_args
+        assert call_args[1]["optional_variables"] == ["temperature_2m"]
+        assert call_args[1]["optional_variables_mapping"] == {
+            "temperature_2m": ["surface_air_temperature"]
+        }
+
+        assert isinstance(result, xr.Dataset)
+
+    @patch("extremeweatherbench.utils.derive_indices_from_init_time_and_lead_time")
+    @patch("extremeweatherbench.utils.convert_init_time_to_valid_time")
+    @patch("extremeweatherbench.derived.maybe_include_variables_from_derived_input")
+    @patch("extremeweatherbench.inputs.safely_pull_variables")
+    def test_subset_data_to_case_handles_safely_pull_keyerror(
+        self,
+        mock_safely_pull,
+        mock_derived,
+        mock_convert,
+        mock_derive,
+        sample_forecast_dataset,
+    ):
+        """Test that KeyError from safely_pull_variables is propagated."""
+        # Setup mocks
+        mock_derive.return_value = np.array([[0, 1], [0, 1]])
+        mock_derived.return_value = ["missing_variable"]
+        mock_safely_pull.side_effect = KeyError("Variable not found")
+
+        forecast = inputs.ZarrForecast(
+            name="test",
+            source="test.zarr",
+            variables=["missing_variable"],
+            variable_mapping={},
+            storage_options={},
+        )
+
+        mock_case = Mock()
+        mock_case.case_metadata.start_date = pd.Timestamp("2021-06-20")
+        mock_case.case_metadata.end_date = pd.Timestamp("2021-06-22")
+        mock_case.forecast.variables = ["missing_variable"]
+
+        with pytest.raises(KeyError, match="Variable not found"):
+            forecast.subset_data_to_case(sample_forecast_dataset, mock_case)
+
+
 class TestIBTrACS:
     """Test the IBTrACS target class."""
 
@@ -1227,9 +1495,7 @@ class TestStandaloneFunctions:
         with pytest.raises(TypeError, match="Unknown kerchunk file type"):
             inputs.open_kerchunk_reference("test.txt")
 
-    @patch(
-        "extremeweatherbench.derived.maybe_pull_required_variables_from_derived_input"
-    )
+    @patch("extremeweatherbench.derived.maybe_include_variables_from_derived_input")
     def test_zarr_target_subsetter(self, mock_derived, sample_era5_dataset):
         """Test zarr_target_subsetter function."""
         mock_derived.return_value = ["2m_temperature"]
@@ -1247,9 +1513,7 @@ class TestStandaloneFunctions:
         mock_case.case_metadata.location.mask.assert_called_once()
         assert isinstance(result, xr.Dataset)
 
-    @patch(
-        "extremeweatherbench.derived.maybe_pull_required_variables_from_derived_input"
-    )
+    @patch("extremeweatherbench.derived.maybe_include_variables_from_derived_input")
     def test_zarr_target_subsetter_missing_variables(
         self, mock_derived, sample_era5_dataset
     ):
@@ -1264,9 +1528,7 @@ class TestStandaloneFunctions:
         with pytest.raises(ValueError, match="Variables .* not found in target data"):
             inputs.zarr_target_subsetter(sample_era5_dataset, mock_case)
 
-    @patch(
-        "extremeweatherbench.derived.maybe_pull_required_variables_from_derived_input"
-    )
+    @patch("extremeweatherbench.derived.maybe_include_variables_from_derived_input")
     def test_zarr_target_subsetter_no_variables(
         self, mock_derived, sample_era5_dataset
     ):

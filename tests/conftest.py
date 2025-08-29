@@ -419,3 +419,18 @@ def sample_calc_dataset():
     )
 
     return dataset
+
+
+@pytest.fixture
+def sample_dataset_for_variable_pulling():
+    """Create a sample dataset for testing variable pulling functionality."""
+    return xr.Dataset(
+        {
+            "temperature": (["x"], [1.0, 2.0, 3.0]),
+            "pressure": (["x"], [1000.0, 1001.0, 1002.0]),
+            "temperature_2m": (["x"], [4.0, 5.0, 6.0]),
+            "wind_speed": (["x"], [10.0, 11.0, 12.0]),
+            "specific_humidity": (["x"], [0.01, 0.02, 0.03]),
+            "dewpoint_temperature": (["x"], [280.0, 281.0, 282.0]),
+        }
+    )
