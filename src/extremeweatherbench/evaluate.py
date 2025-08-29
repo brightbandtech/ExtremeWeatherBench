@@ -6,7 +6,6 @@ from functools import wraps
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, Optional, Union
 
-import dask
 import pandas as pd
 import xarray as xr
 
@@ -189,64 +188,6 @@ class ExtremeWeatherBench:
                 main_pbar.update(num_metrics)
         return results
 
-    @with_result_preservation
-    def run_delayed(
-        self,
-        **kwargs,
-    ) -> pd.DataFrame:
-        """Runs the ExtremeWeatherBench workflow using dask delayed computation.
-
-        This method will run the workflow using dask delayed computation, optionally
-        caching the mid-flight outputs of the workflow if cache_dir was provided.
-
-        Keyword arguments are passed to the metric computations if there are specific
-        requirements needed for metrics such as threshold arguments.
-        """
-        # instantiate the cache directory if caching and build it if it does not exist
-        if self.cache_dir:
-            if isinstance(self.cache_dir, str):
-                self.cache_dir = Path(self.cache_dir)
-            if not self.cache_dir.exists():
-                self.cache_dir.mkdir(parents=True, exist_ok=True)
-
-        # Calculate total operations: sum of all metric computations across cases
-        case_operators = self.case_operators
-        total_operations = sum(len(co.metric) for co in case_operators)
-
-        run_delayed_results = []
-
-        with enhanced_logging():
-            with progress_tracker.overall_workflow(
-                total_operations,
-                f"Processing {len(case_operators)} cases with {total_operations} total "
-                "metrics (delayed)",
-            ) as main_pbar:
-                # Create delayed tasks without progress tracking during task creation
-                for case_operator in case_operators:
-                    result = dask.delayed(_compute_case_operator_core)(
-                        case_operator, **kwargs
-                    )
-                    run_delayed_results.append(result)
-
-                # Compute all delayed results with progress tracking
-                if run_delayed_results:
-                    with progress_tracker.dask_computation_context(show_progress=False):
-                        outputs = dask.compute(*run_delayed_results)
-
-                    # Update main progress bar after computation
-                    main_pbar.update(total_operations)
-
-                    # Cache results if requested
-                    if self.cache_dir:
-                        final_result = pd.concat(outputs, ignore_index=True)
-                        final_result.to_pickle(self.cache_dir / "case_results.pkl")
-                        return final_result
-                    else:
-                        return pd.concat(outputs, ignore_index=True)
-                else:
-                    # Return empty DataFrame with expected columns
-                    return pd.DataFrame(columns=OUTPUT_COLUMNS)
-
 
 def _compute_case_operator_core(case_operator: "cases.CaseOperator", **kwargs):
     """Core computation logic without progress tracking."""
@@ -298,6 +239,11 @@ def _compute_case_operator_core(case_operator: "cases.CaseOperator", **kwargs):
         variable_pairs, case_operator.metric
     ):
         forecast_var, target_var = variables
+        # Handle derived variables by extracting their names
+        forecast_var = (
+            forecast_var.name if hasattr(forecast_var, "name") else forecast_var
+        )
+        target_var = target_var.name if hasattr(target_var, "name") else target_var
 
         # Instantiate the metric if it's a class
         if isinstance(metric_class, type):
