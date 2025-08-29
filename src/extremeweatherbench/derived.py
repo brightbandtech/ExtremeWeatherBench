@@ -34,6 +34,8 @@ class DerivedVariable(ABC):
     """
 
     required_variables: List[str]
+    optional_variables: list[str] = []
+    optional_variables_mapping: dict = {}
 
     @property
     def name(self) -> str:
