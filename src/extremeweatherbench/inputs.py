@@ -126,8 +126,9 @@ class InputBase(ABC):
         self,
         data: utils.IncomingDataInput,
         case_metadata: "cases.IndividualCase",
+        **kwargs,
     ) -> utils.IncomingDataInput:
-        """Subset the target data to the case information provided in CaseOperator.
+        """Subset the target data to the case information provided in IndividualCase.
 
         Time information, spatial bounds, and variables are captured in the case
         metadata
@@ -283,7 +284,7 @@ class ForecastBase(InputBase):
     def subset_data_to_case(
         self,
         data: utils.IncomingDataInput,
-        case_operator: "cases.CaseOperator",
+        case_metadata: "cases.IndividualCase",
     ) -> utils.IncomingDataInput:
         if not isinstance(data, xr.Dataset):
             raise ValueError(f"Expected xarray Dataset, got {type(data)}")
@@ -291,39 +292,49 @@ class ForecastBase(InputBase):
         # subset time first to avoid OOM masking issues
         subset_time_indices = utils.derive_indices_from_init_time_and_lead_time(
             data,
-            case_operator.case_metadata.start_date,
-            case_operator.case_metadata.end_date,
+            case_metadata.start_date,
+            case_metadata.end_date,
         )
 
-        subset_time_data = data.sel(
-            init_time=data.init_time[np.unique(subset_time_indices[0])]
-        )
-        # TODO: add a method to get the list of required variables from the derived
-        # variables in the eval object instead of here, so case_metadata can be used
-        # as input instead of case_operator
+        # Use only valid init_time indices, but keep all lead_times
+        unique_init_indices = np.unique(subset_time_indices[0])
+        subset_time_data = data.sel(init_time=data.init_time[unique_init_indices])
 
-        # use the list of required variables from the derived variables in the
-        # eval to add to the list of variables
-        expected_and_maybe_derived_variables = (
-            derived.maybe_include_variables_from_derived_input(
-                case_operator.forecast.variables
-            )
+        # Create a mask indicating which (init_time, lead_time) combinations
+        # result in valid_times within the case date range
+        valid_combinations_mask = np.zeros(
+            (len(subset_time_data.init_time), len(subset_time_data.lead_time)),
+            dtype=bool,
         )
-        variable_time_subset_data = safely_pull_variables(
-            subset_time_data,
-            expected_and_maybe_derived_variables,
-            optional_variables=self.optional_variables,
-            optional_variables_mapping=self.optional_variables_mapping,
+
+        # Map the valid indices back to the subset data coordinates
+        for i, j in zip(subset_time_indices[0], subset_time_indices[1]):
+            # Find the position of this init_time in the subset data
+            init_pos = np.where(unique_init_indices == i)[0]
+            if len(init_pos) > 0:
+                valid_combinations_mask[init_pos[0], j] = True
+
+        # Add the mask as a coordinate so downstream code can use it
+        subset_time_data = subset_time_data.assign_coords(
+            valid_time_mask=(["init_time", "lead_time"], valid_combinations_mask)
         )
-        spatiotemporally_subset_data = case_operator.case_metadata.location.mask(
-            variable_time_subset_data, drop=True
+
+        spatiotemporally_subset_data = case_metadata.location.mask(
+            subset_time_data, drop=True
         )
 
         # convert from init_time/lead_time to init_time/valid_time
         spatiotemporally_subset_data = utils.convert_init_time_to_valid_time(
             spatiotemporally_subset_data
         )
-        return spatiotemporally_subset_data
+
+        # Now filter to only include valid_times within the case date range
+        # This eliminates the actual time steps that fall outside the range
+        time_filtered_data = spatiotemporally_subset_data.sel(
+            valid_time=slice(case_metadata.start_date, case_metadata.end_date)
+        )
+
+        return time_filtered_data
 
 
 @dataclasses.dataclass
@@ -439,9 +450,9 @@ class ERA5(TargetBase):
     def subset_data_to_case(
         self,
         data: utils.IncomingDataInput,
-        case_operator: "cases.CaseOperator",
+        case_metadata: "cases.IndividualCase",
     ) -> utils.IncomingDataInput:
-        return zarr_target_subsetter(data, case_operator)
+        return zarr_target_subsetter(data, case_metadata)
 
     def maybe_align_forecast_to_target(
         self,
@@ -487,58 +498,28 @@ class GHCN(TargetBase):
     def subset_data_to_case(
         self,
         target_data: utils.IncomingDataInput,
-        case_operator: "cases.CaseOperator",
+        case_metadata: "cases.IndividualCase",
     ) -> utils.IncomingDataInput:
         if not isinstance(target_data, pl.LazyFrame):
             raise ValueError(f"Expected polars LazyFrame, got {type(target_data)}")
 
         # Create filter expressions for LazyFrame
-        time_min = case_operator.case_metadata.start_date - pd.Timedelta(days=2)
-        time_max = case_operator.case_metadata.end_date + pd.Timedelta(days=2)
+        time_min = case_metadata.start_date - pd.Timedelta(days=2)
+        time_max = case_metadata.end_date + pd.Timedelta(days=2)
 
         # Apply filters using proper polars expressions
         subset_target_data = target_data.filter(
             (pl.col("valid_time") >= time_min)
             & (pl.col("valid_time") <= time_max)
-            & (
-                pl.col("latitude")
-                >= case_operator.case_metadata.location.geopandas.total_bounds[1]
-            )
-            & (
-                pl.col("latitude")
-                <= case_operator.case_metadata.location.geopandas.total_bounds[3]
-            )
-            & (
-                pl.col("longitude")
-                >= case_operator.case_metadata.location.geopandas.total_bounds[0]
-            )
-            & (
-                pl.col("longitude")
-                <= case_operator.case_metadata.location.geopandas.total_bounds[2]
-            )
+            & (pl.col("latitude") >= case_metadata.location.geopandas.total_bounds[1])
+            & (pl.col("latitude") <= case_metadata.location.geopandas.total_bounds[3])
+            & (pl.col("longitude") >= case_metadata.location.geopandas.total_bounds[0])
+            & (pl.col("longitude") <= case_metadata.location.geopandas.total_bounds[2])
         )
         # convert to Kelvin
         subset_target_data = subset_target_data.with_columns(
             pl.col("surface_air_temperature").add(273.15)
         )
-        # Add time, latitude, and longitude to the variables, polars doesn't do indexes
-        target_variables = [
-            v for v in case_operator.target.variables if isinstance(v, str)
-        ]
-        if target_variables is None:
-            all_variables = ["valid_time", "latitude", "longitude"]
-        else:
-            all_variables = target_variables + ["valid_time", "latitude", "longitude"]
-
-        # check that the variables are in the target data
-        schema_fields = [field for field in subset_target_data.collect_schema()]
-        if target_variables and any(var not in schema_fields for var in all_variables):
-            raise ValueError(f"Variables {all_variables} not found in target data")
-
-        # subset the variables
-        if target_variables:
-            subset_target_data = subset_target_data.select(all_variables)
-
         return subset_target_data
 
     def _custom_convert_to_dataset(self, data: utils.IncomingDataInput) -> xr.Dataset:
@@ -587,7 +568,7 @@ class LSR(TargetBase):
     def subset_data_to_case(
         self,
         target_data: utils.IncomingDataInput,
-        case_operator: "cases.CaseOperator",
+        case_metadata: "cases.IndividualCase",
     ) -> utils.IncomingDataInput:
         if not isinstance(target_data, pd.DataFrame):
             raise ValueError(f"Expected pandas DataFrame, got {type(target_data)}")
@@ -599,27 +580,17 @@ class LSR(TargetBase):
 
         # filters to apply to the target data including datetimes and location bounds
         filters = (
-            (target_data["valid_time"] >= case_operator.case_metadata.start_date)
-            & (target_data["valid_time"] <= case_operator.case_metadata.end_date)
+            (target_data["valid_time"] >= case_metadata.start_date)
+            & (target_data["valid_time"] <= case_metadata.end_date)
+            & (target_data["latitude"] >= case_metadata.location.latitude_min)
+            & (target_data["latitude"] <= case_metadata.location.latitude_max)
             & (
-                target_data["latitude"]
-                >= case_operator.case_metadata.location.latitude_min
-            )
-            & (
-                target_data["latitude"]
-                <= case_operator.case_metadata.location.latitude_max
+                target_data["longitude"]
+                >= utils.convert_longitude_to_180(case_metadata.location.longitude_min)
             )
             & (
                 target_data["longitude"]
-                >= utils.convert_longitude_to_180(
-                    case_operator.case_metadata.location.longitude_min
-                )
-            )
-            & (
-                target_data["longitude"]
-                <= utils.convert_longitude_to_180(
-                    case_operator.case_metadata.location.longitude_max
-                )
+                <= utils.convert_longitude_to_180(case_metadata.location.longitude_max)
             )
         )
         subset_target_data = target_data.loc[filters]
@@ -714,9 +685,9 @@ class PPH(TargetBase):
     def subset_data_to_case(
         self,
         target_data: utils.IncomingDataInput,
-        case_operator: "cases.CaseOperator",
+        case_metadata: "cases.IndividualCase",
     ) -> utils.IncomingDataInput:
-        return zarr_target_subsetter(target_data, case_operator)
+        return zarr_target_subsetter(target_data, case_metadata)
 
     def _custom_convert_to_dataset(self, data: utils.IncomingDataInput) -> xr.Dataset:
         return data
@@ -748,15 +719,15 @@ class IBTrACS(TargetBase):
     def subset_data_to_case(
         self,
         target_data: utils.IncomingDataInput,
-        case_operator: "cases.CaseOperator",
+        case_metadata: "cases.IndividualCase",
     ) -> utils.IncomingDataInput:
         if not isinstance(target_data, pl.LazyFrame):
             raise ValueError(f"Expected polars LazyFrame, got {type(target_data)}")
 
         # Get the season (year) from the case start date, cast as string as
         # polars is interpreting the schema as strings
-        season = case_operator.case_metadata.start_date.year
-        if case_operator.case_metadata.start_date.month > 11:
+        season = case_metadata.start_date.year
+        if case_metadata.start_date.month > 11:
             season += 1
 
         # Create a subquery to find all storm numbers in the same season
@@ -772,7 +743,7 @@ class IBTrACS(TargetBase):
         subset_target_data = target_data.join(
             matching_numbers, on="NUMBER", how="inner"
         ).filter(
-            (pl.col("tc_name") == case_operator.case_metadata.title.upper())
+            (pl.col("tc_name") == case_metadata.title.upper())
             & (pl.col("SEASON").cast(pl.Int64) == season)
         )
 
@@ -927,7 +898,7 @@ def open_kerchunk_reference(
 
 def zarr_target_subsetter(
     data: xr.Dataset,
-    case_operator: "cases.CaseOperator",
+    case_metadata: "cases.IndividualCase",
     time_variable: str = "valid_time",
 ) -> xr.Dataset:
     """Subset a zarr dataset to a case operator."""
@@ -947,36 +918,14 @@ def zarr_target_subsetter(
     subset_time_data = data.sel(
         {
             time_variable: slice(
-                case_operator.case_metadata.start_date,
-                case_operator.case_metadata.end_date,
+                case_metadata.start_date,
+                case_metadata.end_date,
             )
         }
     )
 
-    target_and_maybe_derived_variables = (
-        derived.maybe_include_variables_from_derived_input(
-            case_operator.target.variables
-        )
-    )
-    # check that the variables are in the target data
-    if target_and_maybe_derived_variables and any(
-        var not in subset_time_data.data_vars
-        for var in target_and_maybe_derived_variables
-    ):
-        raise ValueError(
-            f"Variables {target_and_maybe_derived_variables} not found in target data"
-        )
-    # subset the variables if they exist in the target data
-    elif target_and_maybe_derived_variables:
-        subset_time_variable_data = subset_time_data[target_and_maybe_derived_variables]
-    else:
-        raise ValueError(
-            "Variables not defined. Please list at least one target variable to select."
-        )
     # mask the data to the case location
-    fully_subset_data = case_operator.case_metadata.location.mask(
-        subset_time_variable_data, drop=True
-    )
+    fully_subset_data = case_metadata.location.mask(subset_time_data, drop=True)
 
     return fully_subset_data
 
