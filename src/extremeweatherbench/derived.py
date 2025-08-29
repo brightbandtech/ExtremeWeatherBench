@@ -241,7 +241,7 @@ class TropicalCycloneTrackVariables(DerivedVariable):
         return tctracks_ds
 
     @classmethod
-    def derive_variable(cls, data: xr.Dataset, *args, **kwargs) -> xr.DataArray:
+    def derive_variable(cls, data: xr.Dataset, *args, **kwargs) -> xr.Dataset:
         """Derive the TC track variables.
 
         This base method returns the full track dataset. Child classes should
