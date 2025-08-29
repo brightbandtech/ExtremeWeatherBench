@@ -254,8 +254,12 @@ class InputBase(ABC):
         ][0]
 
         # get the optional variables and mapping from the derived variable
-        optional_variables = derived_variables.optional_variables or []
-        optional_variables_mapping = derived_variables.optional_variables_mapping or {}
+        optional_variables = (
+            getattr(derived_variables, "optional_variables", None) or []
+        )
+        optional_variables_mapping = (
+            getattr(derived_variables, "optional_variables_mapping", None) or {}
+        )
 
         expected_and_maybe_derived_variables = (
             derived.maybe_include_variables_from_derived_input(variables)

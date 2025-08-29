@@ -29,10 +29,10 @@ from typing import Optional, Union
 import numpy as np
 import numpy.ma as ma
 import pandas as pd
-import scipy.optimize as so
+import scipy.optimize as so  # type: ignore[import-untyped]
 import xarray as xr
-from scipy.interpolate import interp1d
-from scipy.special import lambertw
+from scipy.interpolate import interp1d  # type: ignore[import-untyped]
+from scipy.special import lambertw  # type: ignore[import-untyped]
 
 # Atmospheric Physics Constants
 # All constants follow standard atmospheric physics values from CODATA and WMO
@@ -236,7 +236,7 @@ def moist_lapse_lookup(
         reference_pressure = np.round(reference_pressure, 2)
 
     # Reshape reference pressure to 1D for indexing
-    reference_pressure_flat = reference_pressure.flatten()
+    reference_pressure_flat = np.atleast_1d(reference_pressure).flatten()
     pressure_indices = moist_lapse_lookup_df.index.get_indexer(
         reference_pressure_flat, method="nearest"
     )
@@ -825,9 +825,9 @@ def insert_lcl_level(
     # Insert the interpolated temperature at the LCL pressure point
     # Reshape arrays to handle insertion along pressure dimension
     orig_shape = calculated_new_temp.shape
-    new_shape = list(orig_shape)
-    new_shape[-1] += 1  # Increase the last dimension by 1
-    new_shape = tuple(new_shape)
+    new_shape_list = list(orig_shape)
+    new_shape_list[-1] += 1  # Increase the last dimension by 1
+    new_shape = tuple(new_shape_list)
 
     # Create output array with new shape
     result = np.zeros(new_shape) * np.nan
@@ -1127,11 +1127,20 @@ def find_intersections(
     _, y20 = _next_non_masked_element(y2, closest_idx)
     _, y21 = _next_non_masked_element(y2, next_idx)
 
-    delta_y0 = y10 - y20
-    delta_y1 = y11 - y21
-    intersect_x = (delta_y1 * x0 - delta_y0 * x1) / (delta_y1 - delta_y0)
+    # Check for None values from masked elements
+    if None in [x0, x1, y10, y11, y20, y21]:
+        return np.array([]), np.array([])
 
-    intersect_y = ((intersect_x - x0) / (x1 - x0)) * (y11 - y10) + y10
+    delta_y0 = y10 - y20  # type: ignore[operator]
+    delta_y1 = y11 - y21  # type: ignore[operator]
+    intersect_x = (delta_y1 * x0 - delta_y0 * x1) / (delta_y1 - delta_y0)  # type: ignore[operator]  # noqa: E501
+
+    intersect_y = ((intersect_x - x0) / (x1 - x0)) * (y11 - y10) + y10  # type: ignore[operator]  # noqa: E501
+
+    # Ensure results are arrays
+    intersect_x = np.atleast_1d(intersect_x)
+    intersect_y = np.atleast_1d(intersect_y)
+
     # If there's no intersections, return
     if len(intersect_x) == 0:
         return intersect_x, intersect_y
