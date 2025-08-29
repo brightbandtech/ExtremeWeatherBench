@@ -248,7 +248,8 @@ def TP(forecast_threshold: float = 0.5, target_threshold: float = 0.5, **kwargs)
                 target_threshold=target_threshold,
                 preserve_dims=preserve_dims,
             )
-            return transformed.get_counts()["tp_count"]
+            counts = transformed.get_counts()
+            return counts["tp_count"] / counts["total_count"]
 
         def compute_metric(self, forecast: xr.Dataset, target: xr.Dataset, **kwargs):
             # Override preserve_dims from kwargs if provided
@@ -299,7 +300,8 @@ def FP(forecast_threshold: float = 0.5, target_threshold: float = 0.5, **kwargs)
                 target_threshold=target_threshold,
                 preserve_dims=preserve_dims,
             )
-            return transformed.get_counts()["fp_count"]
+            counts = transformed.get_counts()
+            return counts["fp_count"] / counts["total_count"]
 
         def compute_metric(self, forecast: xr.Dataset, target: xr.Dataset, **kwargs):
             # Override preserve_dims from kwargs if provided
@@ -350,7 +352,8 @@ def TN(forecast_threshold: float = 0.5, target_threshold: float = 0.5, **kwargs)
                 target_threshold=target_threshold,
                 preserve_dims=preserve_dims,
             )
-            return transformed.get_counts()["tn_count"]
+            counts = transformed.get_counts()
+            return counts["tn_count"] / counts["total_count"]
 
         def compute_metric(self, forecast: xr.Dataset, target: xr.Dataset, **kwargs):
             # Override preserve_dims from kwargs if provided
@@ -401,7 +404,8 @@ def FN(forecast_threshold: float = 0.5, target_threshold: float = 0.5, **kwargs)
                 target_threshold=target_threshold,
                 preserve_dims=preserve_dims,
             )
-            return transformed.get_counts()["fn_count"]
+            counts = transformed.get_counts()
+            return counts["fn_count"] / counts["total_count"]
 
         def compute_metric(self, forecast: xr.Dataset, target: xr.Dataset, **kwargs):
             # Override preserve_dims from kwargs if provided
