@@ -106,7 +106,7 @@ def compute_case_operator(case_operator: "cases.CaseOperator", **kwargs):
     forecast_ds, target_ds = _build_datasets(case_operator)
     if len(forecast_ds) == 0 or len(target_ds) == 0:
         return pd.DataFrame(columns=OUTPUT_COLUMNS)
-    # spatiotemporally align the target and forecast datasets dependent on the forecast
+    # spatiotemporally align the target and forecast datasets dependent on the target
     aligned_forecast_ds, aligned_target_ds = (
         case_operator.target.maybe_align_forecast_to_target(forecast_ds, target_ds)
     )
@@ -118,15 +118,6 @@ def compute_case_operator(case_operator: "cases.CaseOperator", **kwargs):
             aligned_target_ds,
             cache_dir=kwargs.get("cache_dir", None),
         )
-
-    # Derive the variables for the forecast and target datasets independently
-    aligned_forecast_ds = derived.maybe_derive_variables(
-        aligned_forecast_ds, variables=case_operator.forecast.variables
-    )
-    aligned_target_ds = derived.maybe_derive_variables(
-        aligned_target_ds, variables=case_operator.target.variables
-    )
-
     logger.info(f"datasets built for case {case_operator.case_metadata.case_id_number}")
     results = []
     # TODO: determine if derived variables need to be pushed here or at pre-compute
@@ -137,12 +128,19 @@ def compute_case_operator(case_operator: "cases.CaseOperator", **kwargs):
         ),
         case_operator.metric,
     ):
+        # Handle derived variables by extracting their names
+        forecast_var = (
+            variables[0].name if hasattr(variables[0], "name") else variables[0]
+        )
+        target_var = (
+            variables[1].name if hasattr(variables[1], "name") else variables[1]
+        )
         results.append(
             _evaluate_metric_and_return_df(
                 forecast_ds=aligned_forecast_ds,
                 target_ds=aligned_target_ds,
-                forecast_variable=variables[0],
-                target_variable=variables[1],
+                forecast_variable=forecast_var,
+                target_variable=target_var,
                 metric=metric,
                 case_id_number=case_operator.case_metadata.case_id_number,
                 event_type=case_operator.case_metadata.event_type,
