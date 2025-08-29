@@ -328,7 +328,6 @@ def run_pipeline(
     Returns:
         The target data with a type determined by the user.
     """
-
     # Open data and process through pipeline steps
     data = (
         # opens data from user-defined source
