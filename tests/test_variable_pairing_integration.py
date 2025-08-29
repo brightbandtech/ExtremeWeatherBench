@@ -348,9 +348,9 @@ class TestVariablePairingIntegration:
 
         # Verify results
         assert isinstance(result, pd.DataFrame)
-        assert len(result) == 1, (
-            "Should have exactly one evaluation result (only first pairing)"
-        )
+        assert (
+            len(result) == 1
+        ), "Should have exactly one evaluation result (only first pairing)"
 
         # Check that only the first pairing was created: var_a <-> var_x
         assert result["target_variable"].iloc[0] == "var_x"
@@ -378,9 +378,9 @@ class TestVariablePairingIntegration:
 
         # Verify results
         assert isinstance(result, pd.DataFrame)
-        assert len(result) == 1, (
-            "Should have exactly one evaluation result (only first pairing)"
-        )
+        assert (
+            len(result) == 1
+        ), "Should have exactly one evaluation result (only first pairing)"
 
         # Check that only the first pairing was created: var_a <-> var_x
         assert result["target_variable"].iloc[0] == "var_x"
