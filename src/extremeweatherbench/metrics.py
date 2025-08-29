@@ -90,7 +90,7 @@ class BaseMetric(ABC):
         )
 
 
-class AppliedMetric(BaseMetric):
+class AppliedMetric(ABC):
     """An applied metric is a wrapper around a BaseMetric.
 
     It is a wrapper around a BaseMetric that is intended for more complex
