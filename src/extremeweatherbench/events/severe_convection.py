@@ -21,7 +21,10 @@ All wind inputs are in m/s.
 Energy outputs (CAPE/CIN) are in J/kg.
 """
 
+from __future__ import annotations
+
 from importlib import resources
+from typing import Optional, Union
 
 import numpy as np
 import numpy.ma as ma
@@ -31,28 +34,43 @@ import xarray as xr
 from scipy.interpolate import interp1d
 from scipy.special import lambertw
 
-# Physical constants following standard atmospheric physics values
-gamma = 6.5  # Standard atmospheric temperature lapse rate (K/km)
-p0 = 1000  # Reference pressure (hPa)
-p0_stp = 1013.25  # Standard atmospheric pressure at sea level (hPa)
-t0 = 288.0  # Standard temperature at sea level (K)
-Rd = 287.04749097718457  # Specific gas constant for dry air (J/kg/K)
-depth = 100  # Default mixed layer depth (hPa)
-epsilon = 0.6219569100577033  # Ratio of molecular weights (water vapor/dry air)
-sat_press_0c = 6.112  # Saturation vapor pressure at 0°C (hPa)
-kappa = 0.28571428571428564  # Poisson constant (Rd/Cp_d) for dry air
-g = 9.81  # Gravitational acceleration (m/s²)
-Lv = 2500840  # Latent heat of vaporization of water at 0°C (J/kg)
-Cp_d = 1004.6662184201462  # Specific heat of dry air at constant pressure (J/kg/K)
-R = 8.314462618  # Universal gas constant (J/mol/K)
-Mw = 18.015268  # Molecular weight of water (g/mol)
-Rv = (R / Mw) * 1000  # Specific gas constant for water vapor (J/kg/K)
-Cp_l = 4219.4  # Specific heat of liquid water (J/kg/K)
-Cp_v = 1860.078011865639  # Specific heat of water vapor at constant pressure (J/kg/K)
-T0 = 273.15  # Temperature at 0°C in Kelvin (K)
+# Atmospheric Physics Constants
+# All constants follow standard atmospheric physics values from CODATA and WMO
+
+# Temperature and pressure reference values
+gamma: float = 6.5  # Standard atmospheric temperature lapse rate (K/km)
+p0: float = 1000  # Reference pressure (hPa)
+p0_stp: float = 1013.25  # Standard atmospheric pressure at sea level (hPa)
+t0: float = 288.0  # Standard temperature at sea level (K)
+T0: float = 273.15  # Temperature at 0°C in Kelvin (K)
+
+# Gas constants and thermodynamic properties
+Rd: float = 287.04749097718457  # Specific gas constant for dry air (J/kg/K)
+R: float = 8.314462618  # Universal gas constant (J/mol/K)
+Mw: float = 18.015268  # Molecular weight of water (g/mol)
+Rv: float = (R / Mw) * 1000  # Specific gas constant for water vapor (J/kg/K)
+epsilon: float = 0.6219569100577033  # Ratio of molecular weights (H2O/dry air)
+kappa: float = 0.28571428571428564  # Poisson constant (Rd/Cp_d) for dry air
+
+# Specific heat capacities
+Cp_d: float = (
+    1004.6662184201462  # Specific heat of dry air at constant pressure (J/kg/K)
+)
+Cp_l: float = 4219.4  # Specific heat of liquid water (J/kg/K)
+Cp_v: float = (
+    1860.078011865639  # Specific heat of water vapor at constant pressure (J/kg/K)
+)
+
+# Physical constants
+g: float = 9.81  # Gravitational acceleration (m/s²)
+Lv: float = 2500840  # Latent heat of vaporization of water at 0°C (J/kg)
+sat_press_0c: float = 6.112  # Saturation vapor pressure at 0°C (hPa)
+
+# Default calculation parameters
+depth: float = 100  # Default mixed layer depth (hPa)
 
 
-def load_moist_lapse_lookup():
+def load_moist_lapse_lookup() -> pd.DataFrame:
     """Load the moist lapse lookup table for pseudoadiabatic calculations.
 
     Loads a precomputed lookup table containing moist adiabatic temperature
@@ -139,31 +157,57 @@ def _basic_ds_checks(ds: xr.Dataset) -> xr.Dataset:
     return ds
 
 
-def _interp_integrate(pressure, pressure_interp, layer_depth, vars, axis=0):
+def _interp_integrate(
+    pressure: np.ndarray,
+    pressure_interp: np.ndarray,
+    layer_depth: float,
+    vars: np.ndarray,
+    axis: int = 0,
+) -> np.ndarray:
+    """Interpolate and integrate variables over a pressure layer.
+
+    Performs logarithmic interpolation of atmospheric variables and
+    integrates over pressure to compute layer-averaged values.
+
+    Args:
+        pressure: Original pressure levels (hPa).
+        pressure_interp: Interpolation pressure levels (hPa).
+        layer_depth: Pressure depth of layer (hPa).
+        vars: Variables to interpolate and integrate.
+        axis: Axis along which to integrate (default: 0).
+
+    Returns:
+        Layer-integrated variable values.
+    """
     vars_interp = log_interpolate(pressure_interp, pressure, vars)
     integration = np.trapezoid(vars_interp, pressure_interp, axis=axis) / -layer_depth
     return integration
 
 
-def moist_lapse_lookup(target_pressure, target_temp, reference_pressure=None):
-    """
-    Find the column in test_df that matches the closest temperature and pressure.
+def moist_lapse_lookup(
+    target_pressure: Union[float, np.ndarray],
+    target_temp: Union[float, np.ndarray],
+    reference_pressure: Optional[Union[float, np.ndarray]] = None,
+) -> np.ndarray:
+    """Calculate moist adiabatic temperatures using precomputed lookup table.
 
-    Parameters:
-    -----------
-    target_temp : float or ndarray
-        Target temperature(s) in Celsius
-    target_pressure : float or ndarray
-        Target pressure(s) in hPa
-    reference_pressure: float or ndarray
-        Pressure(s) to start lifting from in hPa
-    table_path : str
-        Location of lookup table
+    Efficiently computes moist adiabatic temperature profiles by interpolating
+    from a precomputed lookup table. This avoids iterative pseudoadiabatic
+    calculations for large gridded datasets.
+
+    Args:
+        target_pressure: Target pressure levels (hPa).
+        target_temp: Initial parcel temperature (°C).
+        reference_pressure: Starting pressure for lifting (hPa).
+            If None, uses first pressure level from target_pressure.
 
     Returns:
-    --------
-    ndarray
-        Array of temperature profiles that best match the target conditions
+        Moist adiabatic temperature profile at target pressure levels (°C).
+
+    Notes:
+        The lookup table contains precomputed moist adiabatic profiles
+        for various initial conditions. This method is optimized for
+        CAPE calculations on large atmospheric datasets.
     """
 
     moist_lapse_lookup_df = load_moist_lapse_lookup()
@@ -191,7 +235,6 @@ def moist_lapse_lookup(target_pressure, target_temp, reference_pressure=None):
         # round reference pressure to be able to get the index in the lookup table
         reference_pressure = np.round(reference_pressure, 2)
 
-    # TODO: doesn't work with > 1 dimension, fix this so it can
     # Reshape reference pressure to 1D for indexing
     reference_pressure_flat = reference_pressure.flatten()
     pressure_indices = moist_lapse_lookup_df.index.get_indexer(
@@ -210,7 +253,7 @@ def moist_lapse_lookup(target_pressure, target_temp, reference_pressure=None):
     profiles = profiles.reshape(*target_temp.shape, -1)
 
     # Vectorized interpolation using apply_ufunc
-    def _interp_moist_lapse(target_p, profile):
+    def _interp_moist_lapse(target_p: np.ndarray, profile: np.ndarray) -> np.ndarray:
         return np.interp(
             target_p[::-1], moist_lapse_lookup_df.index[::-1], profile[::-1]
         )[::-1]
@@ -244,7 +287,9 @@ def moist_lapse_lookup(target_pressure, target_temp, reference_pressure=None):
     return interpolated_profiles
 
 
-def mixing_ratio(partial_pressure, total_pressure):
+def mixing_ratio(
+    partial_pressure: Union[float, np.ndarray], total_pressure: Union[float, np.ndarray]
+) -> np.ndarray:
     """Calculate the mixing ratio of water vapor in air.
 
     The mixing ratio represents the mass of water vapor per unit mass of dry air.
@@ -267,22 +312,31 @@ def mixing_ratio(partial_pressure, total_pressure):
         return epsilon * partial_pressure / (total_pressure - partial_pressure)
 
 
-def vapor_pressure(pressure, mixing_ratio):
-    """Calculates the vapor pressure of a parcel.
+def vapor_pressure(
+    pressure: Union[float, np.ndarray], mixing_ratio: Union[float, np.ndarray]
+) -> np.ndarray:
+    """Calculate water vapor partial pressure from mixing ratio.
+
+    Uses the relationship between mixing ratio and vapor pressure:
+    e = p * w / (ε + w), where ε = 0.622 is the molecular weight ratio.
 
     Args:
-        pressure: Pressure values
-        mixing_ratio: Mixing ratio values in kg/kg
+        pressure: Total atmospheric pressure (hPa).
+        mixing_ratio: Water vapor mixing ratio (kg/kg).
 
     Returns:
-        Vapor pressure values in provided pressure units
+        Water vapor partial pressure (hPa).
+
+    Notes:
+        Mixing ratio is the mass of water vapor per unit mass of dry air.
+        This function inverts the mixing_ratio calculation.
     """
     # Suppress warnings for this specific calculation
     with np.errstate(divide="ignore", invalid="ignore"):
         return pressure * mixing_ratio / (epsilon + mixing_ratio)
 
 
-def saturation_vapor_pressure(temperature):
+def saturation_vapor_pressure(temperature: Union[float, np.ndarray]) -> np.ndarray:
     """Calculate saturation vapor pressure using the Clausius-Clapeyron equation.
 
     Uses the Magnus formula approximation which is accurate for temperatures
@@ -305,34 +359,56 @@ def saturation_vapor_pressure(temperature):
         return sat_press_0c * np.exp(17.67 * temperature / (temperature + 243.5))
 
 
-def exner_function(pressure):
-    """Calculates the Exner function of a parcel.
+def exner_function(pressure: Union[float, np.ndarray]) -> np.ndarray:
+    """Calculate the Exner function for atmospheric pressure.
+
+    The Exner function is a dimensionless pressure variable used in
+    atmospheric thermodynamics: π = (p/p₀)^κ, where κ = Rd/Cp.
 
     Args:
-        pressure: Pressure values in hPa
+        pressure: Atmospheric pressure values (hPa).
 
     Returns:
-        Exner function values
+        Dimensionless Exner function values.
+
+    Notes:
+        The Exner function relates potential temperature to temperature:
+        θ = T/π. Reference pressure p₀ = 1000 hPa.
     """
     return (pressure / p0) ** kappa
 
 
-def get_pressure_height(pressure):
-    """Calculates the pressure and height of a parcel.
+def get_pressure_height(
+    pressure: Union[float, np.ndarray],
+) -> tuple[np.ndarray, np.ndarray]:
+    """Calculate geometric height from atmospheric pressure.
+
+    Uses the hydrostatic equation and standard atmosphere to convert
+    pressure to approximate geometric height above sea level.
 
     Args:
-        pressure: Pressure values in hPa
+        pressure: Atmospheric pressure values (hPa).
 
     Returns:
-        pressure: Pressure values in hPa
-        height: Height values in m
+        tuple containing:
+            - pressure: Input pressure values as array (hPa)
+            - height: Corresponding geometric heights (m above sea level)
+
+    Notes:
+        Uses standard atmosphere temperature lapse rate (6.5 K/km)
+        and sea level conditions (T₀=288K, p₀=1000hPa).
+        Accuracy decreases with altitude due to standard atmosphere assumptions.
     """
     pressure = np.atleast_1d(pressure)
     height = (t0 / gamma) * (1 - (pressure / p0) ** (Rd * gamma / g))
     return pressure, height
 
 
-def potential_temperature(temperature, pressure, units="C"):
+def potential_temperature(
+    temperature: Union[float, np.ndarray],
+    pressure: Union[float, np.ndarray],
+    units: str = "C",
+) -> np.ndarray:
     """Calculates the potential temperature of a parcel.
 
     Args:
@@ -352,7 +428,9 @@ def potential_temperature(temperature, pressure, units="C"):
     return theta
 
 
-def dewpoint_from_vapor_pressure(vapor_pressure):
+def dewpoint_from_vapor_pressure(
+    vapor_pressure: Union[float, np.ndarray],
+) -> np.ndarray:
     """Calculates the dewpoint of a parcel.
 
     Args:
@@ -367,7 +445,9 @@ def dewpoint_from_vapor_pressure(vapor_pressure):
         return 243.5 * val / (17.67 - val)
 
 
-def dry_lapse(pressure, temperature):
+def dry_lapse(
+    pressure: np.ndarray, temperature: Union[float, np.ndarray]
+) -> np.ndarray:
     """Calculates the temperature of a parcel given the dry adiabatic lapse rate.
 
     If pressure is a 1D array, the temperature is calculated for each pressure value.
@@ -386,7 +466,9 @@ def dry_lapse(pressure, temperature):
         return temperature * (pressure / pressure[..., 0:1]) ** kappa
 
 
-def saturation_mixing_ratio(pressure, temperature):
+def saturation_mixing_ratio(
+    pressure: Union[float, np.ndarray], temperature: Union[float, np.ndarray]
+) -> np.ndarray:
     """Calculates the saturation mixing ratio of a parcel.
 
     Args:
@@ -399,7 +481,13 @@ def saturation_mixing_ratio(pressure, temperature):
     return mixing_ratio(saturation_vapor_pressure(temperature), pressure)
 
 
-def _lcl_iter(pressure, pressure_0, mixing_ratio, temperature, nan_mask_list):
+def _lcl_iter(
+    pressure: np.ndarray,
+    pressure_0: np.ndarray,
+    mixing_ratio: np.ndarray,
+    temperature: np.ndarray,
+    nan_mask_list: list[np.ndarray],
+) -> np.ndarray:
     """Iterative function to calculate the LCL pressure."""
     td = (
         dewpoint_from_vapor_pressure(vapor_pressure(pressure / 100, mixing_ratio))
@@ -411,7 +499,11 @@ def _lcl_iter(pressure, pressure_0, mixing_ratio, temperature, nan_mask_list):
     return np.where(np.isnan(pressure_new), pressure, pressure_new)
 
 
-def virtual_temperature_from_dewpoint(pressure, temperature, dewpoint):
+def virtual_temperature_from_dewpoint(
+    pressure: Union[float, np.ndarray],
+    temperature: Union[float, np.ndarray],
+    dewpoint: Union[float, np.ndarray],
+) -> np.ndarray:
     """Calculate virtual temperature from dewpoint.
 
     This function calculates virtual temperature from dewpoint, temperature, and
@@ -432,7 +524,9 @@ def virtual_temperature_from_dewpoint(pressure, temperature, dewpoint):
     return virtual_temperature(temperature, mixing_ratio)
 
 
-def virtual_temperature(temperature, mixing_ratio):
+def virtual_temperature(
+    temperature: Union[float, np.ndarray], mixing_ratio: Union[float, np.ndarray]
+) -> np.ndarray:
     """Calculates the virtual temperature of a parcel.
 
     Args:
@@ -445,8 +539,9 @@ def virtual_temperature(temperature, mixing_ratio):
     return temperature * ((mixing_ratio + epsilon) / (epsilon * (1 + mixing_ratio)))
 
 
-# TODO: update to metpy 1.7 with direct solution
-def lifting_condensation_level(pressure_prof, temp_prof, dew_prof):
+def lifting_condensation_level(
+    pressure_prof: np.ndarray, temp_prof: np.ndarray, dew_prof: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
     """
     Calculates the LCL pressure of a parcel.
 
@@ -487,7 +582,9 @@ def lifting_condensation_level(pressure_prof, temp_prof, dew_prof):
     return calculated_lcl_p, calculated_lcl_td
 
 
-def moist_air_specific_heat_pressure(specific_humidity_prof):
+def moist_air_specific_heat_pressure(
+    specific_humidity_prof: Union[float, np.ndarray],
+) -> np.ndarray:
     """
     Calculates the specific heat of moist air at constant pressure.
 
@@ -500,7 +597,9 @@ def moist_air_specific_heat_pressure(specific_humidity_prof):
     return Cp_d + specific_humidity_prof * (Cp_v - Cp_d)
 
 
-def moist_air_gas_constant(specific_humidity_prof):
+def moist_air_gas_constant(
+    specific_humidity_prof: Union[float, np.ndarray],
+) -> np.ndarray:
     """
     Calculates the gas constant of moist air.
 
@@ -513,7 +612,11 @@ def moist_air_gas_constant(specific_humidity_prof):
     return Rd + specific_humidity_prof * (Rv - Rd)
 
 
-def new_lcl(pressure_prof, temp_prof, dew_prof):
+def new_lcl(
+    pressure_prof: Union[float, np.ndarray],
+    temp_prof: Union[float, np.ndarray],
+    dew_prof: Union[float, np.ndarray],
+) -> tuple[np.ndarray, np.ndarray]:
     """
     Calculates the LCL pressure of a parcel.
 
@@ -553,7 +656,9 @@ def new_lcl(pressure_prof, temp_prof, dew_prof):
     return p_lcl, t_lcl
 
 
-def insert_lcl_level_fast(pressure, temperature, lcl_pressure):
+def insert_lcl_level_fast(
+    pressure: np.ndarray, temperature: np.ndarray, lcl_pressure: np.ndarray
+) -> np.ndarray:
     """Inserts the LCL pressure height into a temperature profile.
 
     Args:
@@ -591,7 +696,9 @@ def insert_lcl_level_fast(pressure, temperature, lcl_pressure):
     lcl_indices = np.where(combined_pressure_flat == lcl_pressure_flat)
 
     # Vectorized interpolation using apply_ufunc
-    def _interp_single_profile(combined_p, pressure_p, temperature_p):
+    def _interp_single_profile(
+        combined_p: np.ndarray, pressure_p: np.ndarray, temperature_p: np.ndarray
+    ) -> np.ndarray:
         return np.interp(combined_p, pressure_p[::-1], temperature_p[::-1])
 
     combined_p_da = xr.DataArray(
@@ -650,16 +757,27 @@ def insert_lcl_level_fast(pressure, temperature, lcl_pressure):
     return result.reshape(combined_pressure.shape)[..., ::-1]
 
 
-def insert_lcl_level(pressure, temperature, lcl_pressure):
-    """Inserts the LCL pressure height into a temperature profile.
-    Deprecated in favor of insert_lcl_level_fast.
+def insert_lcl_level(
+    pressure: np.ndarray, temperature: np.ndarray, lcl_pressure: np.ndarray
+) -> np.ndarray:
+    """Insert LCL level into temperature profile (DEPRECATED).
+
+    **DEPRECATED**: Use insert_lcl_level_fast() instead for better performance.
+
+    Inserts the lifting condensation level (LCL) pressure into an atmospheric
+    temperature profile by interpolating the temperature at the LCL pressure.
+
     Args:
-        pressure: Pressure values in hPa
-        temperature: Temperature values in C
-        lcl_pressure: LCL pressure values in hPa
+        pressure: Atmospheric pressure profile (hPa).
+        temperature: Temperature profile (°C).
+        lcl_pressure: LCL pressure values (hPa).
 
     Returns:
-        Temperature values with LCL pressure height inserted
+        Temperature profile with LCL level inserted (°C).
+
+    Notes:
+        This function has complex multi-dimensional handling logic and
+        is deprecated in favor of the more efficient insert_lcl_level_fast().
     """
     # Insert calculated_lcl_p into pressure_prof and sort
     # First append the LCL pressure to get combined array
@@ -672,7 +790,9 @@ def insert_lcl_level(pressure, temperature, lcl_pressure):
     lcl_indices = np.where(combined_pressure == lcl_pressure)
 
     # Vectorized interpolation using apply_ufunc
-    def _interp_single_profile_3d(combined_p, pressure_p, temperature_p):
+    def _interp_single_profile_3d(
+        combined_p: np.ndarray, pressure_p: np.ndarray, temperature_p: np.ndarray
+    ) -> np.ndarray:
         return np.interp(combined_p, pressure_p[::-1], temperature_p[::-1])[::-1]
 
     combined_p_da = xr.DataArray(
@@ -732,7 +852,7 @@ def insert_lcl_level(pressure, temperature, lcl_pressure):
     return calculated_new_temp
 
 
-def log_interpolate(x, xp, var):
+def log_interpolate(x: np.ndarray, xp: np.ndarray, var: np.ndarray) -> np.ndarray:
     """
     Interpolates data with logarithmic x-scale over a specified axis.
     Assumes all inputs are in descending order and need to be reversed.
@@ -769,14 +889,14 @@ def log_interpolate(x, xp, var):
 
 
 def combine_profiles(
-    calculated_press_lower,
-    calculated_lcl_p,
-    calculated_press_upper,
-    calculated_temp_lower,
-    calculated_lcl_td,
-    calculated_temp_upper,
-    axis=0,
-):
+    calculated_press_lower: np.ndarray,
+    calculated_lcl_p: np.ndarray,
+    calculated_press_upper: np.ndarray,
+    calculated_temp_lower: np.ndarray,
+    calculated_lcl_td: np.ndarray,
+    calculated_temp_upper: np.ndarray,
+    axis: int = 0,
+) -> tuple[np.ndarray, np.ndarray]:
     """Combine pressure and temperature profiles, handling empty arrays."""
 
     # Handle empty upper arrays by reshaping to match lower arrays
@@ -811,7 +931,7 @@ def mixed_parcel(
     ds: xr.Dataset,
     layer_depth: float = 100,
     temperature_units: str = "K",
-):
+) -> tuple[float, np.ndarray, np.ndarray]:
     """Calculates the mixed parcel properties of a dataset.
 
     Args:
@@ -875,7 +995,9 @@ def mixed_parcel(
     )
 
 
-def find_intersection(x, y1, y2):
+def find_intersection(
+    x: np.ndarray, y1: np.ndarray, y2: np.ndarray
+) -> tuple[Optional[np.ndarray], Optional[np.ndarray]]:
     """
     Finds the intersection points of two y-arrays given a common x-array.
 
@@ -900,11 +1022,9 @@ def find_intersection(x, y1, y2):
         return None, None
 
 
-# Next steps are to get lfc translated then keep moving in the cape/cin code.
-# finished cleaning up parcel_profile_with_lcl...next is to reproduce find_intersections
-
-
-def _next_non_masked_element(a, idx):
+def _next_non_masked_element(
+    a: np.ndarray, idx: int
+) -> tuple[Optional[int], Optional[Union[float, np.ndarray]]]:
     """Return the next non masked element of a masked array.
 
     If an array is masked, return the next non-masked element (if the given index is
@@ -933,7 +1053,9 @@ def _next_non_masked_element(a, idx):
         return idx, a[idx]
 
 
-def find_intersections(x, y1, y2, direction="all"):
+def find_intersections(
+    x: np.ndarray, y1: np.ndarray, y2: np.ndarray, direction: str = "all"
+) -> tuple[np.ndarray, np.ndarray]:
     """Finds the intersection points of two y-arrays, given their x-arrays.
 
     Args:
@@ -997,7 +1119,12 @@ def find_intersections(x, y1, y2, direction="all"):
     return intersect_x[mask & duplicate_mask], intersect_y[mask & duplicate_mask]
 
 
-def equilibrium_level(pressure, temperature, dewpoint, parcel_profile):
+def equilibrium_level(
+    pressure: np.ndarray,
+    temperature: np.ndarray,
+    dewpoint: np.ndarray,
+    parcel_profile: np.ndarray,
+) -> tuple[Union[float, np.ndarray], Union[float, np.ndarray]]:
     """Finds the equilibrium level of the parcel profile.
 
     Args:
@@ -1028,7 +1155,12 @@ def equilibrium_level(pressure, temperature, dewpoint, parcel_profile):
         return np.nan, np.nan
 
 
-def level_free_convection(pressure, temperature, dewpoint, parcel_profile):
+def level_free_convection(
+    pressure: np.ndarray,
+    temperature: np.ndarray,
+    dewpoint: np.ndarray,
+    parcel_profile: np.ndarray,
+) -> tuple[Union[float, np.ndarray], Union[float, np.ndarray]]:
     """
     Finds the LFC of the parcel profile.
     Args:
@@ -1071,8 +1203,11 @@ def level_free_convection(pressure, temperature, dewpoint, parcel_profile):
 
 
 def _cape_cin_single_profile(
-    pressure_profile, temperature_profile, dewpoint_profile, parcel_profile_profile
-):
+    pressure_profile: np.ndarray,
+    temperature_profile: np.ndarray,
+    dewpoint_profile: np.ndarray,
+    parcel_profile_profile: np.ndarray,
+) -> tuple[float, float]:
     """Calculate CAPE and CIN for a single atmospheric profile.
 
     This function is designed to be called by apply_ufunc for vectorization.
@@ -1141,7 +1276,12 @@ def _cape_cin_single_profile(
     return cape, cin
 
 
-def mlcape_cin(pressure, temperature, dewpoint, parcel_profile):
+def mlcape_cin(
+    pressure: np.ndarray,
+    temperature: np.ndarray,
+    dewpoint: np.ndarray,
+    parcel_profile: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
     """Calculates the convective available potential energy (CAPE) and convective
     inhibition (CIN) of a dataset.
 
@@ -1284,9 +1424,7 @@ def craven_brooks_significant_severe(
     return cbss
 
 
-def low_level_shear(
-    ds: xr.Dataset,
-) -> xr.DataArray:
+def low_level_shear(ds: xr.Dataset) -> xr.DataArray:
     """Calculates the low level (0-6 km) shear of a dataset (Lepore et al 2021).
 
     Args:
@@ -1482,15 +1620,9 @@ def _run_cape_calculation(
     calculated_new_temp = insert_lcl_level_fast(
         pressure_prof, temp_prof, calculated_lcl_pressure
     )
-    # calculated_new_temp = insert_lcl_level(
-    #     pressure_prof, temp_prof, calculated_lcl_pressure
-    # )
     calculated_new_dewpoint = insert_lcl_level_fast(
         pressure_prof, dew_prof, calculated_lcl_pressure
     )
-    # calculated_new_dewpoint = insert_lcl_level(
-    #     pressure_prof, dew_prof, calculated_lcl_pressure
-    # )
 
     # Get unique values and indices for pressure array
     orig_shape = combined_all_pressure_w_lcl.shape
