@@ -304,11 +304,10 @@ def maybe_derive_variables(
     return dataset
 
 
-def maybe_pull_variables_from_derived_input(
+def maybe_include_variables_from_derived_input(
     incoming_variables: Sequence[Union[str, DerivedVariable, Type[DerivedVariable]]],
 ) -> list[str]:
-    """Pull the required variables from a derived input and add to the list of
-    variables to pull.
+    """Identify and return variables that a derived variable needs to compute.
 
     Args:
         incoming_variables: a list of string and/or derived variables.
@@ -328,9 +327,15 @@ def maybe_pull_variables_from_derived_input(
             # Handle classes that inherit from DerivedVariable
             # Recursively pull required variables from derived variables
             derived_required_variables.extend(
-                maybe_pull_variables_from_derived_input(v.required_variables)
+                maybe_include_variables_from_derived_input(v.required_variables)
             )
 
-    # Remove duplicates by converting to set and back to list
+    # Remove duplicates while preserving order
     all_variables = string_variables + derived_required_variables
-    return list(set(all_variables))
+    seen = set()
+    result = []
+    for var in all_variables:
+        if var not in seen:
+            seen.add(var)
+            result.append(var)
+    return result
