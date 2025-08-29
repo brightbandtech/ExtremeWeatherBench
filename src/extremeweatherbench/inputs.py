@@ -252,16 +252,14 @@ class InputBase(ABC):
             if isinstance(v, type) and issubclass(v, derived.DerivedVariable)
         ]
         if derived_variables:
-            derived_variables = derived_variables[0]
+            derived_variable = derived_variables[0]
         else:
-            derived_variables = None
+            derived_variable = None
 
         # get the optional variables and mapping from the derived variable
-        optional_variables = (
-            getattr(derived_variables, "optional_variables", None) or []
-        )
+        optional_variables = getattr(derived_variable, "optional_variables", None) or []
         optional_variables_mapping = (
-            getattr(derived_variables, "optional_variables_mapping", None) or {}
+            getattr(derived_variable, "optional_variables_mapping", None) or {}
         )
 
         expected_and_maybe_derived_variables = (
