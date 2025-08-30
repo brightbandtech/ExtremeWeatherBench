@@ -71,7 +71,7 @@ hres_forecast = inputs.ZarrForecast(
 ar_metric_list = [
     inputs.EvaluationObject(
         event_type="atmospheric_river",
-        metric=[metrics.SpatialDisplacement],
+        metric_list=[metrics.SpatialDisplacement],
         target=era5_target,
         forecast=hres_forecast,
     ),

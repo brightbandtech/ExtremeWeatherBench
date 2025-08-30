@@ -606,13 +606,13 @@ class TestEvaluationObject:
 
         eval_obj = inputs.EvaluationObject(
             event_type="test_event",
-            metric=[mock_metric],
+            metric_list=[mock_metric],
             target=mock_target,
             forecast=mock_forecast,
         )
 
         assert eval_obj.event_type == "test_event"
-        assert eval_obj.metric == [mock_metric]
+        assert eval_obj.metric_list == [mock_metric]
         assert eval_obj.target == mock_target
         assert eval_obj.forecast == mock_forecast
 

@@ -286,24 +286,25 @@ class ForecastBase(InputBase):
 
 @dataclasses.dataclass
 class EvaluationObject:
-    """A class to store the evaluation object for a metric.
+    """A class to store the evaluation object for a forecast and target pairing.
 
-    A EvaluationObject is a metric evaluation object for all cases in an event.
-    The evaluation is a set of all metrics, target variables, and forecast variables.
+    A EvaluationObject is an evaluation object which contains a forecast, target,
+    and metrics to evaluate. The evaluation is a set of all metrics, target variables,
+    and forecast variables.
 
     Multiple EvaluationObjects can be used to evaluate a single event type.
     This is useful for
-    evaluating distinct Targets or metrics with unique variables to evaluate.
+    evaluating distinct targets or metrics with unique variables to evaluate.
 
     Attributes:
         event_type: The event type to evaluate.
-        metric: A list of BaseMetric objects.
+        metric_list: A list of BaseMetric objects.
         target: A TargetBase object.
         forecast: A ForecastBase object.
     """
 
     event_type: str
-    metric: list["metrics.BaseMetric"]
+    metric_list: list[Union[Callable, "metrics.BaseMetric", "metrics.AppliedMetric"]]
     target: "TargetBase"
     forecast: "ForecastBase"
 
