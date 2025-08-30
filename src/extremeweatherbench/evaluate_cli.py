@@ -140,7 +140,7 @@ def cli_runner(
     # Initialize ExtremeWeatherBench
     ewb = ExtremeWeatherBench(
         cases=cases_dict,
-        evaluation_objects=evaluation_objects,
+        metrics=evaluation_objects,
         cache_dir=cache_dir if cache_dir else None,
     )
 
