@@ -154,7 +154,7 @@ def create_case_operator(
     target_vars: List[str],
     forecast_dataset: xr.Dataset,
     target_dataset: xr.Dataset,
-    mock_metric,
+    mock_metric_list,
 ):
     """Helper to create a CaseOperator with specified variables."""
     # Create datasets that contain the requested variables
@@ -202,7 +202,7 @@ def create_case_operator(
 
     return cases.CaseOperator(
         case_metadata=sample_case,
-        metric=[mock_metric],
+        metric_list=[mock_metric_list],
         target=mock_target,
         forecast=mock_forecast,
     )
@@ -227,7 +227,7 @@ class TestVariablePairingIntegration:
             target_vars=["var_x"],
             forecast_dataset=base_forecast_dataset,
             target_dataset=base_target_dataset,
-            mock_metric=mock_metric,
+            mock_metric_list=mock_metric,
         )
 
         # Execute evaluation
@@ -258,7 +258,7 @@ class TestVariablePairingIntegration:
             target_vars=["var_x", "var_y"],
             forecast_dataset=base_forecast_dataset,
             target_dataset=base_target_dataset,
-            mock_metric=mock_metric,
+            mock_metric_list=mock_metric,
         )
 
         # Execute evaluation
@@ -291,7 +291,7 @@ class TestVariablePairingIntegration:
             target_vars=["var_x", "var_y"],  # Different target variables
             forecast_dataset=base_forecast_dataset,
             target_dataset=base_target_dataset,
-            mock_metric=mock_metric,
+            mock_metric_list=mock_metric,
         )
 
         # Execute evaluation
@@ -324,7 +324,7 @@ class TestVariablePairingIntegration:
             target_vars=["var_x", "var_y"],  # Two target variables
             forecast_dataset=base_forecast_dataset,
             target_dataset=base_target_dataset,
-            mock_metric=mock_metric,
+            mock_metric_list=mock_metric,
         )
 
         # Execute evaluation
@@ -332,9 +332,9 @@ class TestVariablePairingIntegration:
 
         # Verify results
         assert isinstance(result, pd.DataFrame)
-        assert (
-            len(result) == 1
-        ), "Should have exactly one evaluation result (only first pairing)"
+        assert len(result) == 1, (
+            "Should have exactly one evaluation result (only first pairing)"
+        )
 
         # Check that only the first pairing was created: var_a <-> var_x
         assert result["target_variable"].iloc[0] == "var_x"
@@ -354,7 +354,7 @@ class TestVariablePairingIntegration:
             target_vars=["var_x"],  # Single target variable
             forecast_dataset=base_forecast_dataset,
             target_dataset=base_target_dataset,
-            mock_metric=mock_metric,
+            mock_metric_list=mock_metric,
         )
 
         # Execute evaluation
@@ -362,9 +362,9 @@ class TestVariablePairingIntegration:
 
         # Verify results
         assert isinstance(result, pd.DataFrame)
-        assert (
-            len(result) == 1
-        ), "Should have exactly one evaluation result (only first pairing)"
+        assert len(result) == 1, (
+            "Should have exactly one evaluation result (only first pairing)"
+        )
 
         # Check that only the first pairing was created: var_a <-> var_x
         assert result["target_variable"].iloc[0] == "var_x"
@@ -384,7 +384,7 @@ class TestVariablePairingIntegration:
             target_vars=["var_x", "var_y", "var_z"],
             forecast_dataset=base_forecast_dataset,
             target_dataset=base_target_dataset,
-            mock_metric=mock_metric,
+            mock_metric_list=mock_metric,
         )
 
         # Execute evaluation
@@ -418,7 +418,7 @@ class TestVariablePairingIntegration:
             target_vars=[],
             forecast_dataset=base_forecast_dataset,
             target_dataset=base_target_dataset,
-            mock_metric=mock_metric,
+            mock_metric_list=mock_metric,
         )
 
         # Execute evaluation
@@ -452,7 +452,7 @@ class TestVariablePairingIntegration:
             target_vars=["var_x", "var_y"],
             forecast_dataset=base_forecast_dataset,
             target_dataset=base_target_dataset,
-            mock_metric=mock_metric,
+            mock_metric_list=mock_metric,
         )
 
         # Execute evaluation
@@ -510,7 +510,7 @@ class TestExtremeWeatherBenchVariablePairing:
 
         evaluation_obj = inputs.EvaluationObject(
             event_type="test_event",
-            metric=[mock_metric],
+            metric_list=[mock_metric],
             target=mock_target,
             forecast=mock_forecast,
         )
@@ -539,7 +539,7 @@ class TestExtremeWeatherBenchVariablePairing:
         # Create and run ExtremeWeatherBench
         ewb = evaluate.ExtremeWeatherBench(
             cases=cases_dict,
-            metrics=[evaluation_obj],
+            evaluation_objects=[evaluation_obj],
         )
 
         result = ewb.run()
@@ -591,7 +591,7 @@ class TestExtremeWeatherBenchVariablePairing:
 
         evaluation_obj = inputs.EvaluationObject(
             event_type="test_event",
-            metric=[mock_metric],
+            metric_list=[mock_metric],
             target=mock_target,
             forecast=mock_forecast,
         )
@@ -620,7 +620,7 @@ class TestExtremeWeatherBenchVariablePairing:
         # Create and run ExtremeWeatherBench
         ewb = evaluate.ExtremeWeatherBench(
             cases=cases_dict,
-            metrics=[evaluation_obj],
+            evaluation_objects=[evaluation_obj],
         )
 
         result = ewb.run()

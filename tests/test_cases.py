@@ -157,13 +157,13 @@ class TestCaseOperator:
 
         operator = cases.CaseOperator(
             case_metadata=case,
-            metric=mock_metric,
+            metric_list=[mock_metric],
             target=mock_target,
             forecast=mock_forecast,
         )
 
         assert operator.case_metadata == case
-        assert operator.metric == mock_metric
+        assert operator.metric_list == [mock_metric]
         assert operator.target == mock_target
         assert operator.forecast == mock_forecast
 
@@ -281,13 +281,13 @@ class TestBuildCaseOperators:
         # Create mock evaluation objects
         mock_eval_obj1 = Mock()
         mock_eval_obj1.event_type = ["heat_wave"]
-        mock_eval_obj1.metric = Mock()
+        mock_eval_obj1.metric_list = Mock()
         mock_eval_obj1.target = Mock()
         mock_eval_obj1.forecast = Mock()
 
         mock_eval_obj2 = Mock()
         mock_eval_obj2.event_type = ["drought", "heat_wave"]
-        mock_eval_obj2.metric = Mock()
+        mock_eval_obj2.metric_list = Mock()
         mock_eval_obj2.target = Mock()
         mock_eval_obj2.forecast = Mock()
 
@@ -305,7 +305,7 @@ class TestBuildCaseOperators:
         for operator in operators:
             assert isinstance(operator, cases.CaseOperator)
             assert hasattr(operator, "case_metadata")
-            assert hasattr(operator, "metric")
+            assert hasattr(operator, "metric_list")
             assert hasattr(operator, "target")
             assert hasattr(operator, "forecast")
 
@@ -334,7 +334,7 @@ class TestBuildCaseOperators:
         # Create evaluation object that doesn't match storm
         mock_eval_obj = Mock()
         mock_eval_obj.event_type = ["heat_wave", "drought"]
-        mock_eval_obj.metric = Mock()
+        mock_eval_obj.metric_list = Mock()
         mock_eval_obj.target = Mock()
         mock_eval_obj.forecast = Mock()
 
@@ -405,13 +405,13 @@ class TestCasesIntegration:
         # Create mock evaluation objects
         heat_wave_eval = Mock()
         heat_wave_eval.event_type = ["heat_wave"]
-        heat_wave_eval.metric = Mock()
+        heat_wave_eval.metric_list = Mock()
         heat_wave_eval.target = Mock()
         heat_wave_eval.forecast = Mock()
 
         multi_event_eval = Mock()
         multi_event_eval.event_type = ["heat_wave", "drought", "storm"]
-        multi_event_eval.metric = Mock()
+        multi_event_eval.metric_list = Mock()
         multi_event_eval.target = Mock()
         multi_event_eval.forecast = Mock()
 
