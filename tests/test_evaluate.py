@@ -118,7 +118,7 @@ def sample_evaluation_object(mock_target_base, mock_forecast_base, mock_base_met
     """Create a sample EvaluationObject."""
     return inputs.EvaluationObject(
         event_type="heat_wave",
-        metric=[mock_base_metric],
+        metric_list=[mock_base_metric],
         target=mock_target_base,
         forecast=mock_forecast_base,
     )
@@ -131,7 +131,7 @@ def sample_case_operator(
     """Create a sample CaseOperator."""
     return cases.CaseOperator(
         case_metadata=sample_individual_case,
-        metric=mock_base_metric,
+        metric_list=mock_base_metric,
         target=mock_target_base,
         forecast=mock_forecast_base,
     )
@@ -203,11 +203,11 @@ class TestExtremeWeatherBench:
         """Test ExtremeWeatherBench initialization."""
         ewb = evaluate.ExtremeWeatherBench(
             cases=sample_cases_dict,
-            metric_list=[sample_evaluation_object],
+            evaluation_objects=[sample_evaluation_object],
         )
 
         assert ewb.cases == sample_cases_dict
-        assert ewb.metrics == [sample_evaluation_object]
+        assert ewb.evaluation_objects == [sample_evaluation_object]
         assert ewb.cache_dir is None
 
     def test_initialization_with_cache_dir(
@@ -217,7 +217,7 @@ class TestExtremeWeatherBench:
         cache_dir = "/tmp/test_cache"
         ewb = evaluate.ExtremeWeatherBench(
             cases=sample_cases_dict,
-            metric_list=[sample_evaluation_object],
+            evaluation_objects=[sample_evaluation_object],
             cache_dir=cache_dir,
         )
 
@@ -231,7 +231,7 @@ class TestExtremeWeatherBench:
         cache_dir = Path("/tmp/test_cache")
         ewb = evaluate.ExtremeWeatherBench(
             cases=sample_cases_dict,
-            metric_list=[sample_evaluation_object],
+            evaluation_objects=[sample_evaluation_object],
             cache_dir=cache_dir,
         )
 
@@ -250,7 +250,7 @@ class TestExtremeWeatherBench:
 
         ewb = evaluate.ExtremeWeatherBench(
             cases=sample_cases_dict,
-            metric_list=[sample_evaluation_object],
+            evaluation_objects=[sample_evaluation_object],
         )
 
         result = ewb.case_operators
@@ -285,7 +285,7 @@ class TestExtremeWeatherBench:
 
             ewb = evaluate.ExtremeWeatherBench(
                 cases=sample_cases_dict,
-                metric_list=[sample_evaluation_object],
+                evaluation_objects=[sample_evaluation_object],
             )
 
             result = ewb.run()
@@ -322,7 +322,7 @@ class TestExtremeWeatherBench:
 
                 ewb = evaluate.ExtremeWeatherBench(
                     cases=sample_cases_dict,
-                    metric_list=[sample_evaluation_object],
+                    evaluation_objects=[sample_evaluation_object],
                     cache_dir=cache_dir,
                 )
 
@@ -357,7 +357,7 @@ class TestExtremeWeatherBench:
 
             ewb = evaluate.ExtremeWeatherBench(
                 cases=sample_cases_dict,
-                metric_list=[sample_evaluation_object],
+                evaluation_objects=[sample_evaluation_object],
             )
 
             result = ewb.run()
@@ -846,7 +846,7 @@ class TestErrorHandling:
 
         ewb = evaluate.ExtremeWeatherBench(
             cases=empty_cases,
-            metric_list=[sample_evaluation_object],
+            evaluation_objects=[sample_evaluation_object],
         )
 
         with patch("extremeweatherbench.cases.build_case_operators") as mock_build:
@@ -975,7 +975,7 @@ class TestIntegration:
             # Create and run the workflow
             ewb = evaluate.ExtremeWeatherBench(
                 cases=sample_cases_dict,
-                metric_list=[sample_evaluation_object],
+                evaluation_objects=[sample_evaluation_object],
             )
 
             result = ewb.run()
@@ -1063,7 +1063,7 @@ class TestIntegration:
 
                 ewb = evaluate.ExtremeWeatherBench(
                     cases=sample_cases_dict,
-                    metric_list=[eval_obj],
+                    evaluation_objects=[eval_obj],
                 )
 
                 result = ewb.run()

@@ -96,8 +96,9 @@ class ExtremeWeatherBench:
 
     This class is used to run the ExtremeWeatherBench workflow. It is a
     wrapper around the
-    case operators and metrics to create either a serial loop or will return the built
-    case operators to run in parallel as defined by the user.
+    case operators and evaluation objects to create either a serial loop or will return
+    the built case operators to run in parallel as defined by the user.
+
 
     Attributes:
         cases: A dictionary of cases to run.
@@ -452,7 +453,7 @@ def _ensure_output_schema(df: pd.DataFrame, **metadata) -> pd.DataFrame:
         df = _ensure_output_schema(
             metric_df,
             target_variable=target_var,
-            metric=metric.name,
+            metric_list=metric.name,
             target_source=target_ds.attrs["source"],
             forecast_source=forecast_ds.attrs["source"],
             case_id_number=case_id,

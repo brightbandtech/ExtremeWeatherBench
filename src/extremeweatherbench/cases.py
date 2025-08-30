@@ -7,7 +7,7 @@ import dataclasses
 import datetime
 import itertools
 import logging
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING, Callable, Union
 
 import dacite
 
@@ -68,7 +68,7 @@ class CaseOperator:
     """
 
     case_metadata: IndividualCase
-    metric_list: list[Union["metrics.BaseMetric", "metrics.AppliedMetric"]]
+    metric_list: list[Union[Callable, "metrics.BaseMetric", "metrics.AppliedMetric"]]
     target: "inputs.TargetBase"
     forecast: "inputs.ForecastBase"
 

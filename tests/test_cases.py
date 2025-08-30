@@ -157,7 +157,7 @@ class TestCaseOperator:
 
         operator = cases.CaseOperator(
             case_metadata=case,
-            metric=mock_metric,
+            metric_list=[mock_metric],
             target=mock_target,
             forecast=mock_forecast,
         )
@@ -305,7 +305,7 @@ class TestBuildCaseOperators:
         for operator in operators:
             assert isinstance(operator, cases.CaseOperator)
             assert hasattr(operator, "case_metadata")
-            assert hasattr(operator, "metric")
+            assert hasattr(operator, "metric_list")
             assert hasattr(operator, "target")
             assert hasattr(operator, "forecast")
 
