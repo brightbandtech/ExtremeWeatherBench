@@ -255,17 +255,21 @@ def _evaluate_metric_and_return_df(
     Returns:
         A dataframe of the results of the metric evaluation.
     """
+
+    # Normalize variables to their string names
+    forecast_variable = _normalize_variable(forecast_variable)
+    target_variable = _normalize_variable(target_variable)
+
     # TODO: remove this once we have a better way to handle metric
     # instantiation
     if isinstance(metric, type):
         metric = metric()
     logger.info(f"computing metric {metric.name}")
     metric_result = metric.compute_metric(
-        forecast_ds[forecast_variable],
-        target_ds[target_variable],
+        forecast_ds.get(forecast_variable, forecast_ds.data_vars),
+        target_ds.get(target_variable, target_ds.data_vars),
         **kwargs,
     )
-
     # Convert to DataFrame and add metadata, ensuring OUTPUT_COLUMNS compliance
     df = metric_result.to_dataframe(name="value").reset_index()
     # TODO: add functionality for custom metadata columns
@@ -273,6 +277,18 @@ def _evaluate_metric_and_return_df(
         target_variable, metric, target_ds, forecast_ds, case_id_number, event_type
     )
     return _ensure_output_schema(df, **metadata)
+
+
+def _normalize_variable(variable: Union[str, "derived.DerivedVariable"]) -> str:
+    """Convert a variable to its string representation."""
+    if isinstance(variable, str):
+        return variable
+    elif hasattr(variable, "name"):
+        return variable.name
+    else:
+        # This case seems incorrect in original - returning all data_vars
+        # for a single variable doesn't make sense
+        raise ValueError(f"Cannot normalize variable: {variable}")
 
 
 def _build_datasets(
