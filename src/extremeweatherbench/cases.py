@@ -75,13 +75,13 @@ class CaseOperator:
 
 def build_case_operators(
     cases_dict: dict[str, list],
-    metric_evaluation_objects: list["inputs.EvaluationObject"],
+    evaluation_objects: list["inputs.EvaluationObject"],
 ) -> list[CaseOperator]:
     """Build a CaseOperator from the case metadata and metric evaluation objects.
 
     Args:
         cases_dict: The case metadata to use for the case operators.
-        metric_evaluation_objects: The metric evaluation objects to use for the
+        evaluation_objects: The evaluation objects to use for the
             case operators.
 
     Returns:
@@ -100,17 +100,17 @@ def build_case_operators(
 
     # build list of case operators based on information provided in case dict and
     case_operators = []
-    for single_case, metric_evaluation_object in itertools.product(
-        case_metadata_collection.cases, metric_evaluation_objects
+    for single_case, evaluation_object in itertools.product(
+        case_metadata_collection.cases, evaluation_objects
     ):
         # checks if case matches the event type provided in metric eval object
-        if single_case.event_type in metric_evaluation_object.event_type:
+        if single_case.event_type in evaluation_object.event_type:
             case_operators.append(
                 CaseOperator(
                     case_metadata=single_case,
-                    metric_list=metric_evaluation_object.metric_list,
-                    target=metric_evaluation_object.target,
-                    forecast=metric_evaluation_object.forecast,
+                    metric_list=evaluation_object.metric_list,
+                    target=evaluation_object.target,
+                    forecast=evaluation_object.forecast,
                 )
             )
     return case_operators
