@@ -18,7 +18,6 @@
 import logging
 
 # %%
-
 # %%
 from extremeweatherbench import derived, evaluate, inputs, metrics, utils
 
@@ -64,7 +63,7 @@ hres_forecast = inputs.ZarrForecast(
 tc_metric_list = [
     inputs.EvaluationObject(
         event_type="tropical_cyclone",
-        metric=[
+        metric_list=[
             metrics.MAE,
         ],
         target=ibtracs_target,
