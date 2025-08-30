@@ -1,6 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import List, Type, Union
+from typing import Sequence, Type, Union
 
 import numpy as np
 import xarray as xr
@@ -34,7 +34,9 @@ class DerivedVariable(ABC):
             derive the variable from required_variables.
     """
 
-    required_variables: List[str]
+    required_variables: list[str]
+    optional_variables: list[str] = []
+    optional_variables_mapping: dict = {}
 
     @property
     def name(self) -> str:
@@ -65,8 +67,6 @@ class DerivedVariable(ABC):
         """Build the derived variable from the input variables.
 
         This method is used to build the derived variable from the input variables.
-        It checks that the data has the variables required to build the variable,
-        and then derives the variable from the input variables.
 
         Args:
             data: The dataset to build the derived variable from.
@@ -75,14 +75,7 @@ class DerivedVariable(ABC):
         Returns:
             A DataArray with the derived variable.
         """
-        # Log missing variables but continue processing
-        # TODO: add optional variables approach for primary variables that
-        # have a fallback option in derived methods
-        for v in cls.required_variables:
-            if v not in data.data_vars:
-                logger.warning(f"Input variable {v} not found in data")
-
-        return cls.derive_variable(data)
+        return cls.derive_variable(data, **kwargs)
 
 
 class CravenBrooksSignificantSevere(DerivedVariable):
@@ -92,21 +85,22 @@ class CravenBrooksSignificantSevere(DerivedVariable):
 
     required_variables = [
         "air_temperature",
-        "dewpoint_temperature",
         "eastward_wind",
         "northward_wind",
         "specific_humidity",
         "surface_eastward_wind",
         "surface_northward_wind",
-        "air_pressure_at_mean_sea_level",
     ]
     # TODO: add optional variables approach for primary variables that
     # have a fallback option in derived methods
     optional_variables = ["dewpoint_temperature"]
+    optional_variables_mapping = {
+        "dewpoint_temperature": "specific_humidity",
+    }
     name = "craven_brooks_significant_severe"
 
     @classmethod
-    def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
+    def derive_variable(cls, data: xr.Dataset, **kwargs) -> xr.DataArray:
         """Derive the Craven-Brooks significant severe convection index."""
         # create broadcasted pressure variable, output target is always last
         _, data["pressure"] = xr.broadcast(data["air_temperature"], data["level"])
@@ -116,12 +110,19 @@ class CravenBrooksSignificantSevere(DerivedVariable):
                 data["specific_humidity"], data["pressure"]
             )
         cbss = sc.craven_brooks_significant_severe(data)
-        coords = {dim: data.coords[dim] for dim in data.dims if dim != "level"}
+        coords = {
+            dim: data.coords[dim]
+            for dim in data.dims
+            if dim != "level" and dim != "valid_time"
+        }
         return xr.DataArray(
-            cbss,
+            # we take the max over valid_time to account for the max CBSS over the
+            # case
+            cbss.max(dim="valid_time"),
             coords=coords,
             dims=coords.keys(),
             name=cls.name,
+            attrs=data.attrs,
         )
 
 
@@ -349,11 +350,10 @@ def maybe_derive_variables(
     return dataset
 
 
-def maybe_pull_required_variables_from_derived_input(
-    incoming_variables: list[Union[str, DerivedVariable, Type[DerivedVariable]]],
+def maybe_include_variables_from_derived_input(
+    incoming_variables: Sequence[Union[str, DerivedVariable, Type[DerivedVariable]]],
 ) -> list[str]:
-    """Pull the required variables from a derived input and add to the list of
-    variables to pull.
+    """Identify and return variables that a derived variable needs to compute.
 
     Args:
         incoming_variables: a list of string and/or derived variables.
@@ -371,6 +371,17 @@ def maybe_pull_required_variables_from_derived_input(
             derived_required_variables.extend(v.required_variables)
         elif isinstance(v, type) and issubclass(v, DerivedVariable):
             # Handle classes that inherit from DerivedVariable
-            derived_required_variables.extend(v.required_variables)
+            # Recursively pull required variables from derived variables
+            derived_required_variables.extend(
+                maybe_include_variables_from_derived_input(v.required_variables)
+            )
 
-    return string_variables + derived_required_variables
+    # Remove duplicates while preserving order
+    all_variables = string_variables + derived_required_variables
+    seen = set()
+    result = []
+    for var in all_variables:
+        if var not in seen:
+            seen.add(var)
+            result.append(var)
+    return result
