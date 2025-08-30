@@ -1,13 +1,13 @@
 """Classes for defining individual units of case studies for analysis.
 
-Some code similarly structured to WeatherBench (Rasp et al.).
+Some code similarly structured to WeatherBenchX (Rasp et al.).
 """
 
 import dataclasses
 import datetime
 import itertools
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Union
 
 import dacite
 
@@ -62,13 +62,13 @@ class CaseOperator:
 
     Attributes:
         case_metadata: IndividualCase metadata
-        metric: A metric that is intended to be evaluated for the case
+        metric_list: A list of metrics that are intended to be evaluated for the case
         target_config: A TargetConfig object
         forecast_config: A ForecastConfig object
     """
 
     case_metadata: IndividualCase
-    metric: "metrics.BaseMetric"
+    metric_list: list[Union["metrics.BaseMetric", "metrics.AppliedMetric"]]
     target: "inputs.TargetBase"
     forecast: "inputs.ForecastBase"
 
@@ -108,7 +108,7 @@ def build_case_operators(
             case_operators.append(
                 CaseOperator(
                     case_metadata=single_case,
-                    metric=metric_evaluation_object.metric,
+                    metric_list=metric_evaluation_object.metric_list,
                     target=metric_evaluation_object.target,
                     forecast=metric_evaluation_object.forecast,
                 )
