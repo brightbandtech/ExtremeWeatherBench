@@ -284,8 +284,7 @@ def _build_datasets(
     forecast datasets, including preprocessing, variable renaming, and subsetting.
     """
     logger.info("running forecast pipeline")
-    forecast_ds = run_pipeline(case_operator, "forecast")
-
+    forecast_ds = run_pipeline(case_operator.case_metadata, case_operator.forecast)
     # Check if any dimension has zero length
     zero_length_dims = [dim for dim, size in forecast_ds.sizes.items() if size == 0]
     if zero_length_dims:
@@ -297,7 +296,7 @@ def _build_datasets(
         )
         return xr.Dataset(), xr.Dataset()
     logger.info("running target pipeline")
-    target_ds = run_pipeline(case_operator, "target")
+    target_ds = run_pipeline(case_operator.case_metadata, case_operator.target)
     return (forecast_ds, target_ds)
 
 
