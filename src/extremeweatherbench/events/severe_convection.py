@@ -29,10 +29,10 @@ from typing import Optional, Union
 import numpy as np
 import numpy.ma as ma
 import pandas as pd
-import scipy.optimize as so
+import scipy.optimize as so  # type: ignore[import-untyped]
 import xarray as xr
-from scipy.interpolate import interp1d
-from scipy.special import lambertw
+from scipy.interpolate import interp1d  # type: ignore[import-untyped]
+from scipy.special import lambertw  # type: ignore[import-untyped]
 
 # Atmospheric Physics Constants
 # All constants follow standard atmospheric physics values from CODATA and WMO
@@ -236,7 +236,7 @@ def moist_lapse_lookup(
         reference_pressure = np.round(reference_pressure, 2)
 
     # Reshape reference pressure to 1D for indexing
-    reference_pressure_flat = reference_pressure.flatten()
+    reference_pressure_flat = np.atleast_1d(reference_pressure).flatten()
     pressure_indices = moist_lapse_lookup_df.index.get_indexer(
         reference_pressure_flat, method="nearest"
     )
@@ -247,9 +247,8 @@ def moist_lapse_lookup(
     closest_col_indices = np.argmin(temp_diff, axis=1)
 
     # Get the corresponding temperature profiles
-    profiles = np.array(
-        [moist_lapse_lookup_df.iloc[:, idx].values for idx in closest_col_indices]
-    )
+    # Vectorized column extraction - much faster than list comprehension
+    profiles = moist_lapse_lookup_df.iloc[:, closest_col_indices].values.T
     profiles = profiles.reshape(*target_temp.shape, -1)
 
     # Vectorized interpolation using apply_ufunc
@@ -826,9 +825,9 @@ def insert_lcl_level(
     # Insert the interpolated temperature at the LCL pressure point
     # Reshape arrays to handle insertion along pressure dimension
     orig_shape = calculated_new_temp.shape
-    new_shape = list(orig_shape)
-    new_shape[-1] += 1  # Increase the last dimension by 1
-    new_shape = tuple(new_shape)
+    new_shape_list = list(orig_shape)
+    new_shape_list[-1] += 1  # Increase the last dimension by 1
+    new_shape = tuple(new_shape_list)
 
     # Create output array with new shape
     result = np.zeros(new_shape) * np.nan
@@ -1067,56 +1066,96 @@ def find_intersections(
         tuple: A tuple containing two NumPy arrays:
             - intersect_x: x-coordinates of the intersection points.
     """
-    x = np.log(x)
+    # Early exit: need at least 2 points to have intersections
+    if len(x) < 2:
+        return np.array([]), np.array([])
+
+    # Calculate difference between curves
     diff = y1 - y2
 
-    # Determine the point just before the intersection of the lines
-    # Will return multiple points for multiple intersections
-    closest_idx = np.nonzero(np.diff(np.sign(diff)))
+    # Early exit: if all differences have the same sign, no intersections possible
+    # This is much faster than computing np.diff(np.sign(diff))
+    diff_signs = np.sign(diff)
+    # Remove zeros and check if all remaining signs are the same
+    nonzero_signs = diff_signs[diff_signs != 0]
+    if len(nonzero_signs) > 0:
+        first_sign = nonzero_signs[0]
+        if np.all(nonzero_signs == first_sign):
+            return np.array([]), np.array([])
+
+    # Check for sign changes
+    sign_diff = np.diff(np.sign(diff))
+    if not np.any(sign_diff != 0):
+        return np.array([]), np.array([])
+
+    x = np.log(x)
+
+    # Find sign change locations
+    closest_idx = np.nonzero(sign_diff)
+
+    # Early exit: no sign changes found
+    if len(closest_idx[0]) == 0:
+        return np.array([]), np.array([])
+
     next_idx = closest_idx[0] + 1
     sign_change = np.sign(y1[next_idx] - y2[next_idx])
-    # x-values around each intersection
+
+    # Early exit: filter by direction before expensive calculations
+    if direction == "increasing":
+        valid_mask = sign_change > 0
+    elif direction == "decreasing":
+        valid_mask = sign_change < 0
+    elif direction == "all":
+        valid_mask = np.ones(len(closest_idx[0]), dtype=bool)
+    else:
+        raise ValueError(f"Unknown option for direction: {direction}")
+
+    # Early exit: no valid intersections for requested direction
+    if not np.any(valid_mask):
+        return np.array([]), np.array([])
+
+    # Filter indices to only process valid intersections
+    closest_idx = (closest_idx[0][valid_mask],)
+    next_idx = next_idx[valid_mask]
+
     _, x0 = _next_non_masked_element(x, closest_idx)
     _, x1 = _next_non_masked_element(x, next_idx)
 
-    # y-values around each intersection for the first line
     _, y10 = _next_non_masked_element(y1, closest_idx)
     _, y11 = _next_non_masked_element(y1, next_idx)
 
-    # y-values around each intersection for the second line
     _, y20 = _next_non_masked_element(y2, closest_idx)
     _, y21 = _next_non_masked_element(y2, next_idx)
-    # Calculate the x-intersection. This comes from finding the equations of the two
-    # lines, one through (x0, a0) and (x1, a1) and the other through (x0, b0) and (x1,
-    # b1), finding their intersection, and reducing with a bunch of algebra.
-    delta_y0 = y10 - y20
-    delta_y1 = y11 - y21
-    intersect_x = (delta_y1 * x0 - delta_y0 * x1) / (delta_y1 - delta_y0)
 
-    # Calculate the y-intersection of the lines. Just plug the x above into the equation
-    # for the line through the a points. One could solve for y like x above, but this
-    # causes weirder unit behavior and seems a little less good numerically.
-    intersect_y = ((intersect_x - x0) / (x1 - x0)) * (y11 - y10) + y10
+    # Check for None values from masked elements
+
+    none_values = [x0, x1, y10, y11, y20, y21]
+    if any(x is None for x in none_values):
+        return np.array([]), np.array([])
+
+    delta_y0 = y10 - y20  # type: ignore[operator]
+    delta_y1 = y11 - y21  # type: ignore[operator]
+    intersect_x = (delta_y1 * x0 - delta_y0 * x1) / (delta_y1 - delta_y0)  # type: ignore[operator]  # noqa: E501
+
+    intersect_y = ((intersect_x - x0) / (x1 - x0)) * (y11 - y10) + y10  # type: ignore[operator]  # noqa: E501
+
+    # Ensure results are arrays
+    intersect_x = np.atleast_1d(intersect_x)
+    intersect_y = np.atleast_1d(intersect_y)
+
     # If there's no intersections, return
     if len(intersect_x) == 0:
         return intersect_x, intersect_y
 
     intersect_x = np.exp(intersect_x)
 
+    # Remove duplicates (direction filtering already done)
+    if len(intersect_x) <= 1:
+        return intersect_x, intersect_y
+
     # Check for duplicates
     duplicate_mask = np.ediff1d(intersect_x, to_end=1) != 0
-
-    # Make a mask based on the direction of sign change desired
-    if direction == "increasing":
-        mask = sign_change > 0
-    elif direction == "decreasing":
-        mask = sign_change < 0
-    elif direction == "all":
-        return intersect_x[duplicate_mask], intersect_y[duplicate_mask]
-    else:
-        raise ValueError(f"Unknown option for direction: {direction}")
-
-    return intersect_x[mask & duplicate_mask], intersect_y[mask & duplicate_mask]
+    return intersect_x[duplicate_mask], intersect_y[duplicate_mask]
 
 
 def equilibrium_level(
@@ -1171,21 +1210,26 @@ def level_free_convection(
     Returns:
         x: numpy array of LFC pressure values
     """
-    x, y = find_intersections(
-        pressure, parcel_profile, temperature, direction="increasing"
-    )
+
+    # Calculate LCL - cache this result as it's expensive
     lcl_pressure, lcl_temperature_c = new_lcl(
         pressure[0], parcel_profile[0] + 273.15, dewpoint[0] + 273.15
     )
+    if np.all(pressure < lcl_pressure):
+        return np.nan, np.nan
+
+    # Find intersections first - this is the most expensive operation
+    x, y = find_intersections(
+        pressure, parcel_profile, temperature, direction="increasing"
+    )
+
     if len(x) == 0:
-        if np.all(pressure < lcl_pressure):
-            return np.nan, np.nan
-        else:
-            x, y = lcl_pressure, lcl_temperature_c
-        return x, y
+        return lcl_pressure, lcl_temperature_c
     else:
+        # We have intersections - find ones below LCL
         idx = x < lcl_pressure
         if not any(idx):
+            # No intersections below LCL - need to check equilibrium level
             el_pressure, _ = find_intersections(
                 pressure[1:],
                 parcel_profile[1:],
@@ -1195,11 +1239,10 @@ def level_free_convection(
             if len(el_pressure) > 0 and np.min(el_pressure) > lcl_pressure:
                 return np.nan, np.nan
             else:
-                x, y = lcl_pressure, lcl_temperature_c
-                return x, y
+                return lcl_pressure, lcl_temperature_c
         else:
-            x, y = x[idx][0], y[idx][0]
-            return x, y
+            # Return first intersection below LCL
+            return x[idx][0], y[idx][0]
 
 
 def _cape_cin_single_profile(

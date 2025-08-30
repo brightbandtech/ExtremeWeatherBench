@@ -26,8 +26,9 @@ class ExtremeWeatherBench:
 
     This class is used to run the ExtremeWeatherBench workflow. It is a
     wrapper around the
-    case operators and metrics to create either a serial loop or will return the built
-    case operators to run in parallel as defined by the user.
+    case operators and evaluation objects to create either a serial loop or will return
+    the built case operators to run in parallel as defined by the user.
+
 
     Attributes:
         cases: A dictionary of cases to run.
@@ -39,11 +40,11 @@ class ExtremeWeatherBench:
     def __init__(
         self,
         cases: dict[str, list],
-        metrics: list["inputs.EvaluationObject"],
+        evaluation_objects: list["inputs.EvaluationObject"],
         cache_dir: Optional[Union[str, Path]] = None,
     ):
         self.cases = cases
-        self.metrics = metrics
+        self.evaluation_objects = evaluation_objects
         self.cache_dir = Path(cache_dir) if cache_dir else None
 
     # case operators as a property are a convenience method for users to use
@@ -51,7 +52,7 @@ class ExtremeWeatherBench:
     # if desired for a parallel workflow
     @property
     def case_operators(self) -> list["cases.CaseOperator"]:
-        return cases.build_case_operators(self.cases, self.metrics)
+        return cases.build_case_operators(self.cases, self.evaluation_objects)
 
     def run(
         self,
@@ -126,7 +127,7 @@ def compute_case_operator(case_operator: "cases.CaseOperator", **kwargs):
             case_operator.forecast.variables,
             case_operator.target.variables,
         ),
-        case_operator.metric,
+        case_operator.metric_list,
     ):
         # Handle derived variables by extracting their names
         forecast_var = (

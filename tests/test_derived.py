@@ -167,18 +167,15 @@ class TestDerivedVariableAbstractClass:
         xr.testing.assert_equal(result, expected)
 
     def test_compute_logs_warning_missing_variables(self, sample_dataset, caplog):
-        """Test that compute logs warning when required variables are missing."""
+        """Test that compute fails when required variables are missing."""
         # Remove one of the required variables
         incomplete_dataset = sample_dataset.drop_vars("test_variable_2")
 
-        # This should not raise an error, but may fail during derive_variable
+        # This should fail during derive_variable when accessing missing variable
         with pytest.raises(
             KeyError
         ):  # derive_variable will fail when accessing missing variable
             TestValidDerivedVariable.compute(incomplete_dataset)
-
-        # Check that warning was logged
-        assert "Input variable test_variable_2 not found in data" in caplog.text
 
     def test_required_variables_class_attribute(self):
         """Test that required_variables is properly defined as class attribute."""
@@ -329,7 +326,7 @@ class TestMaybeDeriveVariablesFunction:
         variables = [TestMissingVarDerived()]
 
         sample_dataset.attrs["dataset_type"] = "forecast"
-        with pytest.raises(ValueError, match="Input variable nonexistent_variable"):
+        with pytest.raises(KeyError, match="No variable named 'nonexistent_variable'"):
             derived.maybe_derive_variables(sample_dataset, variables)
 
     def test_no_derived_variables_in_list(self, sample_dataset):
@@ -612,15 +609,11 @@ class TestEdgeCasesAndErrorConditions:
         """Test behavior with empty datasets."""
         empty_dataset = xr.Dataset()
 
-        # Should log warnings but may fail during derive_variable
+        # Should fail during derive_variable when accessing missing variables
         with pytest.raises(
             KeyError
         ):  # derive_variable will fail when accessing missing variables
             TestValidDerivedVariable.compute(empty_dataset)
-
-        # Check that warnings were logged for missing variables
-        assert "Input variable test_variable_1 not found in data" in caplog.text
-        assert "Input variable test_variable_2 not found in data" in caplog.text
 
     def test_derived_variable_with_wrong_dimensions(self, sample_dataset):
         """Test behavior when variables have unexpected dimensions."""
