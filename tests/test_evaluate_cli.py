@@ -25,7 +25,7 @@ def suppress_cli_output():
 @pytest.fixture
 def runner():
     """Create a Click test runner with output suppression."""
-    return click.testing.CliRunner(mix_stderr=False)
+    return click.testing.CliRunner()
 
 
 @pytest.fixture
