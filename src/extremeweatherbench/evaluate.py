@@ -223,7 +223,7 @@ def _ensure_output_schema(df: pd.DataFrame, **metadata) -> pd.DataFrame:
 
     # Check for missing columns and warn
     missing_cols = set(OUTPUT_COLUMNS) - set(df.columns)
-    if missing_cols:
+    if missing_cols and missing_cols not in [{"init_time"}, {"lead_time"}]:
         logger.warning(f"Missing expected columns: {missing_cols}")
 
     # Ensure all OUTPUT_COLUMNS are present (missing ones will be NaN)
