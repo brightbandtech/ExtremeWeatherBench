@@ -306,7 +306,7 @@ class TestMaybeMapVariableNames:
         assert result.name == "temp"
 
     @patch(
-        "extremeweatherbench.derived.maybe_pull_required_variables_from_derived_input"
+        "extremeweatherbench.derived.maybe_include_variables_from_derived_input"
     )
     def test_maybe_map_variable_names_polars_lazyframe(
         self, mock_derived, test_input_base, sample_ghcn_dataframe
@@ -335,7 +335,7 @@ class TestMaybeMapVariableNames:
         assert "latitude" in schema.names()
 
     @patch(
-        "extremeweatherbench.derived.maybe_pull_required_variables_from_derived_input"
+        "extremeweatherbench.derived.maybe_include_variables_from_derived_input"
     )
     def test_maybe_map_variable_names_pandas_dataframe(
         self, mock_derived, test_input_base, sample_lsr_dataframe
@@ -438,7 +438,7 @@ class TestMaybeMapVariableNames:
         xr.testing.assert_identical(result, sample_era5_dataset)
 
     @patch(
-        "extremeweatherbench.derived.maybe_pull_required_variables_from_derived_input"
+        "extremeweatherbench.derived.maybe_include_variables_from_derived_input"
     )
     def test_maybe_map_variable_names_with_derived_variables(
         self, mock_derived, test_input_base, sample_era5_dataset
@@ -495,7 +495,7 @@ class TestForecastBase:
     @patch("extremeweatherbench.utils.derive_indices_from_init_time_and_lead_time")
     @patch("extremeweatherbench.utils.convert_init_time_to_valid_time")
     @patch(
-        "extremeweatherbench.derived.maybe_pull_required_variables_from_derived_input"
+        "extremeweatherbench.derived.maybe_include_variables_from_derived_input"
     )
     def test_forecast_base_subset_data_to_case(
         self, mock_derived, mock_convert, mock_derive, sample_forecast_dataset
@@ -1228,7 +1228,7 @@ class TestStandaloneFunctions:
             inputs.open_kerchunk_reference("test.txt")
 
     @patch(
-        "extremeweatherbench.derived.maybe_pull_required_variables_from_derived_input"
+        "extremeweatherbench.derived.maybe_include_variables_from_derived_input"
     )
     def test_zarr_target_subsetter(self, mock_derived, sample_era5_dataset):
         """Test zarr_target_subsetter function."""
@@ -1248,7 +1248,7 @@ class TestStandaloneFunctions:
         assert isinstance(result, xr.Dataset)
 
     @patch(
-        "extremeweatherbench.derived.maybe_pull_required_variables_from_derived_input"
+        "extremeweatherbench.derived.maybe_include_variables_from_derived_input"
     )
     def test_zarr_target_subsetter_missing_variables(
         self, mock_derived, sample_era5_dataset
@@ -1265,7 +1265,7 @@ class TestStandaloneFunctions:
             inputs.zarr_target_subsetter(sample_era5_dataset, mock_case)
 
     @patch(
-        "extremeweatherbench.derived.maybe_pull_required_variables_from_derived_input"
+        "extremeweatherbench.derived.maybe_include_variables_from_derived_input"
     )
     def test_zarr_target_subsetter_no_variables(
         self, mock_derived, sample_era5_dataset
