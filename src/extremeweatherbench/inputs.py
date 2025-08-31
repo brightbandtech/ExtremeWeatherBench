@@ -911,7 +911,8 @@ def zarr_target_subsetter(
             )
         }
     )
-
+    # Note: this will be changed in inputs.py PR to be in an independent function
+    # focused on variable subsetting for the pipeline.
     target_and_maybe_derived_variables = (
         derived.maybe_include_variables_from_derived_input(
             case_operator.target.variables
