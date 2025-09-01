@@ -775,12 +775,17 @@ class TestMetricEvaluation:
         mock_result = xr.DataArray(
             data=[1.5], dims=["lead_time"], coords={"lead_time": [0]}
         )
-        mock_metric_instance = Mock()
-        mock_metric_instance.__class__.__name__ = "TestMetric"
-        mock_metric_instance.compute_metric.return_value = mock_result
-        # The name property should return the class name
-        type(mock_metric_instance).name = property(lambda self: self.__class__.__name__)
-        mock_base_metric.return_value = mock_metric_instance
+
+        # Create a proper mock class that behaves like BaseMetric
+        class TestMetric:
+            @property
+            def name(self):
+                return self.__class__.__name__
+
+            def compute_metric(self, *args, **kwargs):
+                return mock_result
+
+        mock_base_metric.return_value = TestMetric()
 
         result = evaluate._evaluate_metric_and_return_df(
             forecast_ds=sample_forecast_dataset,
@@ -808,12 +813,22 @@ class TestMetricEvaluation:
         mock_result = xr.DataArray(
             data=[2.0], dims=["lead_time"], coords={"lead_time": [6]}
         )
-        mock_metric_instance = Mock()
-        mock_metric_instance.__class__.__name__ = "TestMetric"
-        mock_metric_instance.compute_metric.return_value = mock_result
-        # The name property should return the class name
-        type(mock_metric_instance).name = property(lambda self: self.__class__.__name__)
-        mock_base_metric.return_value = mock_metric_instance
+
+        # Create a proper mock class that tracks calls
+        class TestMetric:
+            def __init__(self):
+                self.compute_metric_calls = []
+
+            @property
+            def name(self):
+                return self.__class__.__name__
+
+            def compute_metric(self, *args, **kwargs):
+                self.compute_metric_calls.append((args, kwargs))
+                return mock_result
+
+        test_metric_instance = TestMetric()
+        mock_base_metric.return_value = test_metric_instance
 
         evaluate._evaluate_metric_and_return_df(
             forecast_ds=sample_forecast_dataset,
@@ -827,8 +842,8 @@ class TestMetricEvaluation:
         )
 
         # Verify that kwargs were passed to compute_metric
-        mock_metric_instance.compute_metric.assert_called_once()
-        call_kwargs = mock_metric_instance.compute_metric.call_args[1]
+        assert len(test_metric_instance.compute_metric_calls) == 1
+        call_args, call_kwargs = test_metric_instance.compute_metric_calls[0]
         assert "threshold" in call_kwargs
         assert call_kwargs["threshold"] == 0.5
 
@@ -879,14 +894,17 @@ class TestErrorHandling:
         self, sample_forecast_dataset, sample_target_dataset, mock_base_metric
     ):
         """Test metric evaluation when computation fails."""
-        mock_metric_instance = Mock()
-        mock_metric_instance.__class__.__name__ = "FailingMetric"
-        mock_metric_instance.compute_metric.side_effect = Exception(
-            "Metric computation failed"
-        )
-        # The name property should return the class name
-        type(mock_metric_instance).name = property(lambda self: self.__class__.__name__)
-        mock_base_metric.return_value = mock_metric_instance
+
+        # Create a proper mock class that raises an exception
+        class FailingMetric:
+            @property
+            def name(self):
+                return self.__class__.__name__
+
+            def compute_metric(self, *args, **kwargs):
+                raise Exception("Metric computation failed")
+
+        mock_base_metric.return_value = FailingMetric()
 
         with pytest.raises(Exception, match="Metric computation failed"):
             evaluate._evaluate_metric_and_return_df(
