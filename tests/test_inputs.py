@@ -501,17 +501,27 @@ class TestForecastBase:
         self, mock_derived, mock_convert, mock_derive, sample_forecast_dataset
     ):
         """Test subset_data_to_case with valid input."""
+        # Create a dataset with valid_time dimension for the mock return
+        forecast_with_valid_time = sample_forecast_dataset.copy()
+        # Convert init_time/lead_time to valid_time for the mock
+        valid_times = pd.date_range("2021-06-20", periods=10, freq="6h")
+        forecast_with_valid_time = forecast_with_valid_time.isel(
+            init_time=0, lead_time=slice(0, 10)
+        ).rename({"lead_time": "valid_time"})
+        forecast_with_valid_time = forecast_with_valid_time.assign_coords(
+            valid_time=valid_times
+        )
+
         # Setup mocks
         mock_derive.return_value = np.array([[0, 1], [0, 1]])
-        mock_convert.return_value = sample_forecast_dataset
+        mock_convert.return_value = forecast_with_valid_time
         mock_derived.return_value = ["surface_air_temperature"]
 
         # Create mock case operator
         mock_case = Mock()
-        mock_case.case_metadata.start_date = pd.Timestamp("2021-06-20")
-        mock_case.case_metadata.end_date = pd.Timestamp("2021-06-22")
-        mock_case.case_metadata.location.mask.return_value = sample_forecast_dataset
-        mock_case.forecast.variables = ["surface_air_temperature"]
+        mock_case.start_date = pd.Timestamp("2021-06-20")
+        mock_case.end_date = pd.Timestamp("2021-06-22")
+        mock_case.location.mask.return_value = forecast_with_valid_time
 
         forecast = inputs.ZarrForecast(
             name="test",
@@ -886,10 +896,9 @@ class TestGHCN:
         """Test GHCN subset_data_to_case."""
         # Create mock case operator
         mock_case = Mock()
-        mock_case.case_metadata.start_date = pd.Timestamp("2021-06-20")
-        mock_case.case_metadata.end_date = pd.Timestamp("2021-06-22")
-        mock_case.case_metadata.location.geopandas.total_bounds = [-120, 30, -90, 50]
-        mock_case.target.variables = ["surface_air_temperature"]
+        mock_case.start_date = pd.Timestamp("2021-06-20")
+        mock_case.end_date = pd.Timestamp("2021-06-22")
+        mock_case.location.geopandas.total_bounds = [-120, 30, -90, 50]
 
         ghcn = inputs.GHCN(
             source="test.parquet",
@@ -988,12 +997,12 @@ class TestLSR:
         """Test LSR subset_data_to_case."""
         # Create mock case operator
         mock_case = Mock()
-        mock_case.case_metadata.start_date = pd.Timestamp("2021-06-20")
-        mock_case.case_metadata.end_date = pd.Timestamp("2021-06-21")
-        mock_case.case_metadata.location.latitude_min = 30
-        mock_case.case_metadata.location.latitude_max = 50
-        mock_case.case_metadata.location.longitude_min = -110
-        mock_case.case_metadata.location.longitude_max = -90
+        mock_case.start_date = pd.Timestamp("2021-06-20")
+        mock_case.end_date = pd.Timestamp("2021-06-21")
+        mock_case.location.latitude_min = 30
+        mock_case.location.latitude_max = 50
+        mock_case.location.longitude_min = -110
+        mock_case.location.longitude_max = -90
 
         lsr = inputs.LSR(
             source="test.parquet",
@@ -1227,59 +1236,45 @@ class TestStandaloneFunctions:
         with pytest.raises(TypeError, match="Unknown kerchunk file type"):
             inputs.open_kerchunk_reference("test.txt")
 
-    @patch(
-        "extremeweatherbench.derived.maybe_pull_required_variables_from_derived_input"
-    )
-    def test_zarr_target_subsetter(self, mock_derived, sample_era5_dataset):
+    def test_zarr_target_subsetter(self, sample_era5_dataset):
         """Test zarr_target_subsetter function."""
-        mock_derived.return_value = ["2m_temperature"]
+        # Create mock case metadata (not case operator)
+        mock_case_metadata = Mock()
+        mock_case_metadata.start_date = pd.Timestamp("2021-06-20")
+        mock_case_metadata.end_date = pd.Timestamp("2021-06-22")
+        mock_case_metadata.location.mask.return_value = sample_era5_dataset
 
-        # Create mock case operator
-        mock_case = Mock()
-        mock_case.case_metadata.start_date = pd.Timestamp("2021-06-20")
-        mock_case.case_metadata.end_date = pd.Timestamp("2021-06-22")
-        mock_case.case_metadata.location.mask.return_value = sample_era5_dataset
-        mock_case.target.variables = ["2m_temperature"]
+        result = inputs.zarr_target_subsetter(sample_era5_dataset, mock_case_metadata)
 
-        result = inputs.zarr_target_subsetter(sample_era5_dataset, mock_case)
-
-        mock_derived.assert_called_once_with(["2m_temperature"])
-        mock_case.case_metadata.location.mask.assert_called_once()
+        mock_case_metadata.location.mask.assert_called_once()
         assert isinstance(result, xr.Dataset)
 
-    @patch(
-        "extremeweatherbench.derived.maybe_pull_required_variables_from_derived_input"
-    )
-    def test_zarr_target_subsetter_missing_variables(
-        self, mock_derived, sample_era5_dataset
-    ):
-        """Test zarr_target_subsetter with missing variables."""
-        mock_derived.return_value = ["nonexistent_variable"]
+    def test_zarr_target_subsetter_missing_time_dimension(self, sample_era5_dataset):
+        """Test zarr_target_subsetter with missing time dimensions."""
+        # Create dataset without time dimensions
+        data_no_time = sample_era5_dataset.drop_dims("time")
 
-        mock_case = Mock()
-        mock_case.case_metadata.start_date = pd.Timestamp("2021-06-20")
-        mock_case.case_metadata.end_date = pd.Timestamp("2021-06-22")
-        mock_case.target.variables = ["nonexistent_variable"]
+        mock_case_metadata = Mock()
+        mock_case_metadata.start_date = pd.Timestamp("2021-06-20")
+        mock_case_metadata.end_date = pd.Timestamp("2021-06-22")
 
-        with pytest.raises(ValueError, match="Variables .* not found in target data"):
-            inputs.zarr_target_subsetter(sample_era5_dataset, mock_case)
+        with pytest.raises(ValueError, match="No suitable time dimension found"):
+            inputs.zarr_target_subsetter(data_no_time, mock_case_metadata)
 
-    @patch(
-        "extremeweatherbench.derived.maybe_pull_required_variables_from_derived_input"
-    )
-    def test_zarr_target_subsetter_no_variables(
-        self, mock_derived, sample_era5_dataset
-    ):
-        """Test zarr_target_subsetter with no variables defined."""
-        mock_derived.return_value = None
+    def test_zarr_target_subsetter_with_valid_time_dimension(self, sample_era5_dataset):
+        """Test zarr_target_subsetter with valid_time dimension."""
+        # Rename time to valid_time to test the dimension detection
+        data_with_valid_time = sample_era5_dataset.rename({"time": "valid_time"})
 
-        mock_case = Mock()
-        mock_case.case_metadata.start_date = pd.Timestamp("2021-06-20")
-        mock_case.case_metadata.end_date = pd.Timestamp("2021-06-22")
-        mock_case.target.variables = None
+        mock_case_metadata = Mock()
+        mock_case_metadata.start_date = pd.Timestamp("2021-06-20")
+        mock_case_metadata.end_date = pd.Timestamp("2021-06-22")
+        mock_case_metadata.location.mask.return_value = data_with_valid_time
 
-        with pytest.raises(ValueError, match="Variables not defined"):
-            inputs.zarr_target_subsetter(sample_era5_dataset, mock_case)
+        result = inputs.zarr_target_subsetter(data_with_valid_time, mock_case_metadata)
+
+        mock_case_metadata.location.mask.assert_called_once()
+        assert isinstance(result, xr.Dataset)
 
     def test_align_forecast_to_point_obs_target(self):
         """Test align_forecast_to_point_obs_target function."""
