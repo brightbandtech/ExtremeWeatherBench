@@ -776,8 +776,10 @@ class TestMetricEvaluation:
             data=[1.5], dims=["lead_time"], coords={"lead_time": [0]}
         )
         mock_metric_instance = Mock()
-        mock_metric_instance.name = "TestMetric"
+        mock_metric_instance.__class__.__name__ = "TestMetric"
         mock_metric_instance.compute_metric.return_value = mock_result
+        # The name property should return the class name
+        type(mock_metric_instance).name = property(lambda self: self.__class__.__name__)
         mock_base_metric.return_value = mock_metric_instance
 
         result = evaluate._evaluate_metric_and_return_df(
@@ -807,8 +809,10 @@ class TestMetricEvaluation:
             data=[2.0], dims=["lead_time"], coords={"lead_time": [6]}
         )
         mock_metric_instance = Mock()
-        mock_metric_instance.name = "TestMetric"
+        mock_metric_instance.__class__.__name__ = "TestMetric"
         mock_metric_instance.compute_metric.return_value = mock_result
+        # The name property should return the class name
+        type(mock_metric_instance).name = property(lambda self: self.__class__.__name__)
         mock_base_metric.return_value = mock_metric_instance
 
         evaluate._evaluate_metric_and_return_df(
@@ -876,10 +880,12 @@ class TestErrorHandling:
     ):
         """Test metric evaluation when computation fails."""
         mock_metric_instance = Mock()
-        mock_metric_instance.name = "FailingMetric"
+        mock_metric_instance.__class__.__name__ = "FailingMetric"
         mock_metric_instance.compute_metric.side_effect = Exception(
             "Metric computation failed"
         )
+        # The name property should return the class name
+        type(mock_metric_instance).name = property(lambda self: self.__class__.__name__)
         mock_base_metric.return_value = mock_metric_instance
 
         with pytest.raises(Exception, match="Metric computation failed"):
