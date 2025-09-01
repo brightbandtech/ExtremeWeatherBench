@@ -262,7 +262,11 @@ def _evaluate_metric_and_return_df(
     Returns:
         A dataframe of the results of the metric evaluation.
     """
-    metric = metric()
+    # TODO: remove this once we have a better way to handle metric
+    # instantiation
+    if isinstance(metric, type):
+        metric = metric()
+
     logger.info(f"computing metric {metric.name}")
     metric_result = metric.compute_metric(
         forecast_ds[forecast_variable],
