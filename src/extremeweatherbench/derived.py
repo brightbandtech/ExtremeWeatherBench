@@ -45,7 +45,7 @@ class DerivedVariable(ABC):
 
     @classmethod
     @abstractmethod
-    def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
+    def derive_variable(cls, data: xr.Dataset, *args, **kwargs) -> xr.DataArray:
         """Derive the variable from the required variables.
 
         The output of the derivation must be a single variable output returned as
@@ -78,6 +78,7 @@ class DerivedVariable(ABC):
 def maybe_derive_variables(
     dataset: xr.Dataset,
     variables: list[Union[str, DerivedVariable, Type[DerivedVariable]]],
+    *args,
     **kwargs,
 ) -> xr.Dataset:
     """Derive variable from the data if it exists in a list of variables.
