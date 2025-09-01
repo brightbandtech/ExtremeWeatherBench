@@ -1007,16 +1007,18 @@ def safely_pull_variables(
 
     Examples:
         >>> ds = xr.Dataset(
-        ...     {"temp": (["x"], [1, 2, 3]), "temperature_2m": (["x"], [4, 5, 6])}
+        ...     {"temp": (["x"], [1, 2, 3]), "dewpoint_temperature": (["x"], [4, 5, 6])}
         ... )
         >>> result = safely_pull_variables(
         ...     ds,
-        ...     variables=["temp"],
+        ...     variables=["specific_humidity", "pressure"],
         ...     optional_variables=["dewpoint_temperature"],
         ...     optional_variables_mapping={
         ...         "dewpoint_temperature": ["specific_humidity", "pressure"]
         ...     },
         ... )
+        >>> list(result.data_vars)
+        ['dewpoint_temperature']
     """
     if optional_variables is None:
         optional_variables = []
