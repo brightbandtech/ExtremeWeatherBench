@@ -1,6 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import numpy as np
 import scores.categorical as cat  # type: ignore[import-untyped]
@@ -14,7 +14,9 @@ logger.setLevel(logging.INFO)
 
 
 # Global cache for transformed contingency managers
-_GLOBAL_CONTINGENCY_CACHE = {}
+_GLOBAL_CONTINGENCY_CACHE: Dict[
+    Tuple[int, int, float, float, str], cat.BasicContingencyManager
+] = {}
 
 
 def get_cached_transformed_manager(
@@ -117,7 +119,7 @@ def CSI(forecast_threshold: float = 0.5, target_threshold: float = 0.5, **kwargs
     """Create a CSI metric.
     Uses global caching for better performance."""
 
-    class CachedCSI(BaseMetric):
+    class CachedCSI:
         def __init__(self):
             self.forecast_threshold = forecast_threshold
             self.target_threshold = target_threshold
@@ -134,8 +136,8 @@ def CSI(forecast_threshold: float = 0.5, target_threshold: float = 0.5, **kwargs
             target: xr.Dataset,
             **kwargs: Any,
         ) -> Any:
-            forecast_threshold = kwargs.get("forecast_threshold")
-            target_threshold = kwargs.get("target_threshold")
+            forecast_threshold = kwargs.get("forecast_threshold", 0.5)
+            target_threshold = kwargs.get("target_threshold", 0.5)
             preserve_dims = kwargs.get("preserve_dims", "lead_time")
 
             transformed = get_cached_transformed_manager(
@@ -168,7 +170,7 @@ def FAR(forecast_threshold: float = 0.5, target_threshold: float = 0.5, **kwargs
     """Create a FAR metric.
     Uses global caching for better performance."""
 
-    class CachedFAR(BaseMetric):
+    class CachedFAR:
         def __init__(self):
             self.forecast_threshold = forecast_threshold
             self.target_threshold = target_threshold
@@ -185,8 +187,8 @@ def FAR(forecast_threshold: float = 0.5, target_threshold: float = 0.5, **kwargs
             target: xr.Dataset,
             **kwargs: Any,
         ) -> Any:
-            forecast_threshold = kwargs.get("forecast_threshold")
-            target_threshold = kwargs.get("target_threshold")
+            forecast_threshold = kwargs.get("forecast_threshold", 0.5)
+            target_threshold = kwargs.get("target_threshold", 0.5)
             preserve_dims = kwargs.get("preserve_dims", "lead_time")
 
             transformed = get_cached_transformed_manager(
@@ -220,7 +222,7 @@ def TP(forecast_threshold: float = 0.5, target_threshold: float = 0.5, **kwargs)
     """Create a True Positive metric.
     Uses global caching for better performance."""
 
-    class CachedTP(BaseMetric):
+    class CachedTP:
         def __init__(self):
             self.forecast_threshold = forecast_threshold
             self.target_threshold = target_threshold
@@ -237,8 +239,8 @@ def TP(forecast_threshold: float = 0.5, target_threshold: float = 0.5, **kwargs)
             target: xr.Dataset,
             **kwargs: Any,
         ) -> Any:
-            forecast_threshold = kwargs.get("forecast_threshold")
-            target_threshold = kwargs.get("target_threshold")
+            forecast_threshold = kwargs.get("forecast_threshold", 0.5)
+            target_threshold = kwargs.get("target_threshold", 0.5)
             preserve_dims = kwargs.get("preserve_dims", "lead_time")
 
             transformed = get_cached_transformed_manager(
@@ -272,7 +274,7 @@ def FP(forecast_threshold: float = 0.5, target_threshold: float = 0.5, **kwargs)
     """Create a False Positive metric.
     Uses global caching for better performance."""
 
-    class CachedFP(BaseMetric):
+    class CachedFP:
         def __init__(self):
             self.forecast_threshold = forecast_threshold
             self.target_threshold = target_threshold
@@ -289,8 +291,8 @@ def FP(forecast_threshold: float = 0.5, target_threshold: float = 0.5, **kwargs)
             target: xr.Dataset,
             **kwargs: Any,
         ) -> Any:
-            forecast_threshold = kwargs.get("forecast_threshold")
-            target_threshold = kwargs.get("target_threshold")
+            forecast_threshold = kwargs.get("forecast_threshold", 0.5)
+            target_threshold = kwargs.get("target_threshold", 0.5)
             preserve_dims = kwargs.get("preserve_dims", "lead_time")
 
             transformed = get_cached_transformed_manager(
@@ -324,7 +326,7 @@ def TN(forecast_threshold: float = 0.5, target_threshold: float = 0.5, **kwargs)
     """Create a True Negative metric.
     Uses global caching for better performance."""
 
-    class CachedTN(BaseMetric):
+    class CachedTN:
         def __init__(self):
             self.forecast_threshold = forecast_threshold
             self.target_threshold = target_threshold
@@ -341,8 +343,8 @@ def TN(forecast_threshold: float = 0.5, target_threshold: float = 0.5, **kwargs)
             target: xr.Dataset,
             **kwargs: Any,
         ) -> Any:
-            forecast_threshold = kwargs.get("forecast_threshold")
-            target_threshold = kwargs.get("target_threshold")
+            forecast_threshold = kwargs.get("forecast_threshold", 0.5)
+            target_threshold = kwargs.get("target_threshold", 0.5)
             preserve_dims = kwargs.get("preserve_dims", "lead_time")
 
             transformed = get_cached_transformed_manager(
@@ -376,7 +378,7 @@ def FN(forecast_threshold: float = 0.5, target_threshold: float = 0.5, **kwargs)
     """Create a False Negative metric.
     Uses global caching for better performance."""
 
-    class CachedFN(BaseMetric):
+    class CachedFN:
         def __init__(self):
             self.forecast_threshold = forecast_threshold
             self.target_threshold = target_threshold
@@ -393,8 +395,8 @@ def FN(forecast_threshold: float = 0.5, target_threshold: float = 0.5, **kwargs)
             target: xr.Dataset,
             **kwargs: Any,
         ) -> Any:
-            forecast_threshold = kwargs.get("forecast_threshold")
-            target_threshold = kwargs.get("target_threshold")
+            forecast_threshold = kwargs.get("forecast_threshold", 0.5)
+            target_threshold = kwargs.get("target_threshold", 0.5)
             preserve_dims = kwargs.get("preserve_dims", "lead_time")
 
             transformed = get_cached_transformed_manager(
@@ -444,7 +446,10 @@ class CachedContingencyManager:
         self._cache_key = None
 
     def get_transformed(
-        self, forecast: xr.Dataset, target: xr.Dataset, preserve_dims: str = None
+        self,
+        forecast: xr.Dataset,
+        target: xr.Dataset,
+        preserve_dims: Optional[str] = None,
     ) -> cat.BasicContingencyManager:
         """Get the transformed contingency manager, using global cache."""
         preserve_dims = preserve_dims or self.preserve_dims
@@ -463,8 +468,8 @@ def create_threshold_metrics(
     forecast_threshold: float = 0.5,
     target_threshold: float = 0.5,
     preserve_dims: str = "lead_time",
-    functions: list = None,
-    instances: list = None,
+    functions: Optional[List[Callable]] = None,
+    instances: Optional[List[Callable]] = None,
 ):
     """Create multiple metrics that share the same cached transformed manager.
 
@@ -508,7 +513,7 @@ def create_threshold_metrics(
 def create_cached_function_metric(cache_manager: CachedContingencyManager, func):
     """Create a metric that uses a cached transformed manager."""
 
-    class CachedFunctionMetric(BaseMetric):
+    class CachedFunctionMetric:
         def __init__(self):
             self.cache_manager = cache_manager
             self.func = func
@@ -526,10 +531,12 @@ def create_cached_function_metric(cache_manager: CachedContingencyManager, func)
             cls,
             forecast: xr.Dataset,
             target: xr.Dataset,
-            cache_manager: CachedContingencyManager = None,
-            func=None,
+            cache_manager: Optional[CachedContingencyManager] = None,
+            func: Optional[Callable] = None,
             **kwargs: Any,
         ) -> Any:
+            if cache_manager is None or func is None:
+                raise ValueError("cache_manager and func must be provided")
             preserve_dims = kwargs.get("preserve_dims", cache_manager.preserve_dims)
             transformed = cache_manager.get_transformed(forecast, target, preserve_dims)
             return func(transformed)
@@ -549,7 +556,7 @@ def create_cached_function_metric(cache_manager: CachedContingencyManager, func)
 def create_cached_instance_metric(cache_manager: CachedContingencyManager, inst):
     """Create an instance metric that uses a cached transformed manager."""
 
-    class CachedInstanceMetric(BaseMetric):
+    class CachedInstanceMetric:
         def __init__(self):
             self.cache_manager = cache_manager
             self.inst = inst
@@ -567,10 +574,12 @@ def create_cached_instance_metric(cache_manager: CachedContingencyManager, inst)
             cls,
             forecast: xr.Dataset,
             target: xr.Dataset,
-            cache_manager: CachedContingencyManager = None,
-            inst=None,
+            cache_manager: Optional[CachedContingencyManager] = None,
+            inst: Optional[Callable] = None,
             **kwargs: Any,
         ) -> Any:
+            if cache_manager is None or inst is None:
+                raise ValueError("cache_manager and inst must be provided")
             preserve_dims = kwargs.get("preserve_dims", cache_manager.preserve_dims)
             transformed = cache_manager.get_transformed(forecast, target, preserve_dims)
             return inst(transformed)
