@@ -26,8 +26,9 @@ class ExtremeWeatherBench:
 
     This class is used to run the ExtremeWeatherBench workflow. It is a
     wrapper around the
-    case operators and metrics to create either a serial loop or will return the built
-    case operators to run in parallel as defined by the user.
+    case operators and evaluation objects to create either a serial loop or will return
+    the built case operators to run in parallel as defined by the user.
+
 
     Attributes:
         cases: A dictionary of cases to run.
@@ -39,11 +40,11 @@ class ExtremeWeatherBench:
     def __init__(
         self,
         cases: dict[str, list],
-        metrics: list["inputs.EvaluationObject"],
+        evaluation_objects: list["inputs.EvaluationObject"],
         cache_dir: Optional[Union[str, Path]] = None,
     ):
         self.cases = cases
-        self.metrics = metrics
+        self.evaluation_objects = evaluation_objects
         self.cache_dir = Path(cache_dir) if cache_dir else None
 
     # case operators as a property are a convenience method for users to use
@@ -51,7 +52,7 @@ class ExtremeWeatherBench:
     # if desired for a parallel workflow
     @property
     def case_operators(self) -> list["cases.CaseOperator"]:
-        return cases.build_case_operators(self.cases, self.metrics)
+        return cases.build_case_operators(self.cases, self.evaluation_objects)
 
     def run(
         self,
@@ -139,7 +140,7 @@ def compute_case_operator(case_operator: "cases.CaseOperator", **kwargs):
             case_operator.forecast.variables,
             case_operator.target.variables,
         ),
-        case_operator.metric,
+        case_operator.metric_list,
     ):
         results.append(
             _evaluate_metric_and_return_df(
@@ -220,7 +221,7 @@ def _ensure_output_schema(df: pd.DataFrame, **metadata) -> pd.DataFrame:
         df = _ensure_output_schema(
             metric_df,
             target_variable=target_var,
-            metric=metric.name,
+            metric_list=metric.name,
             target_source=target_ds.attrs["source"],
             forecast_source=forecast_ds.attrs["source"],
             case_id_number=case_id,
@@ -273,8 +274,11 @@ def _evaluate_metric_and_return_df(
         else:
             variable = variable.name
 
-    # TODO: swap compute_metric to classmethod
-    metric = metric()
+    # TODO: remove this once we have a better way to handle metric
+    # instantiation
+    if isinstance(metric, type):
+        metric = metric()
+
     logger.info(f"computing metric {metric.name}")
     # loads in all variables if no name is provided
     # TODO: expand typing to allow for datasets or rethink logic with inputs like TCs
