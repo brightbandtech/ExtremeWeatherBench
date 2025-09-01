@@ -60,7 +60,7 @@ class DerivedVariable(ABC):
         pass
 
     @classmethod
-    def compute(cls, data: xr.Dataset, **kwargs) -> xr.DataArray:
+    def compute(cls, data: xr.Dataset, *args, **kwargs) -> xr.DataArray:
         """Build the derived variable from the input variables.
 
         This method is used to build the derived variable from the input variables.
@@ -72,7 +72,7 @@ class DerivedVariable(ABC):
         Returns:
             A DataArray with the derived variable.
         """
-        return cls.derive_variable(data, **kwargs)
+        return cls.derive_variable(data, *args, **kwargs)
 
 
 def maybe_derive_variables(
