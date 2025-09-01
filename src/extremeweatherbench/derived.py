@@ -78,7 +78,6 @@ class DerivedVariable(ABC):
 def maybe_derive_variables(
     dataset: xr.Dataset,
     variables: list[Union[str, DerivedVariable, Type[DerivedVariable]]],
-    *args,
     **kwargs,
 ) -> xr.Dataset:
     """Derive variable from the data if it exists in a list of variables.
