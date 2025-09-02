@@ -68,6 +68,22 @@ IBTrACS_metadata_variable_mapping = {
     "MLC_PRES": "mlc_air_pressure_at_mean_sea_level",
 }
 
+cira_metadata_variable_mapping = {
+    "t2": "surface_air_temperature",
+    "u10": "surface_eastward_wind",
+    "v10": "surface_northward_wind",
+    "tcwv": "total_column_water_vapor",
+    "t": "air_temperature",
+    "z": "geopotential",
+    "r": "relative_humidity",
+    "u": "eastward_wind",
+    "v": "northward_wind",
+    "msl": "air_pressure_at_mean_sea_level",
+    "sp": "surface_pressure",
+    "u100": "eastward_wind_at_100_meters",
+    "v100": "northward_wind_at_100_meters",
+}
+
 
 def _default_preprocess(input_data: IncomingDataInput) -> IncomingDataInput:
     """Default forecast preprocess function that does nothing."""

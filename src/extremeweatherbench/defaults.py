@@ -132,7 +132,7 @@ ibtracs_target = inputs.IBTrACS(
 cira_heatwave_forecast = inputs.KerchunkForecast(
     source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
     variables=["surface_air_temperature"],
-    variable_mapping={"t2": "surface_air_temperature"},
+    variable_mapping=inputs.cira_metadata_variable_mapping,
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
     preprocess=_preprocess_bb_cira_forecast_dataset,
 )
@@ -144,11 +144,7 @@ cira_freeze_forecast = inputs.KerchunkForecast(
         "surface_eastward_wind",
         "surface_northward_wind",
     ],
-    variable_mapping={
-        "t2": "surface_air_temperature",
-        "10u": "surface_eastward_wind",
-        "10v": "surface_northward_wind",
-    },
+    variable_mapping=inputs.cira_metadata_variable_mapping,
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
     preprocess=_preprocess_bb_cira_forecast_dataset,
 )
@@ -158,30 +154,14 @@ cira_atmospheric_river_forecast = inputs.KerchunkForecast(
     variables=[
         derived.AtmosphericRiverMask,
     ],
-    variable_mapping={
-        "u_component_of_wind": "eastward_wind",
-        "v_component_of_wind": "northward_wind",
-        "specific_humidity": "specific_humidity",
-        "temperature": "air_temperature",
-        "vertical_integral_of_northward_water_vapour_flux": "northward_water_vapour_flux",  # noqa: E501
-        "vertical_integral_of_eastward_water_vapour_flux": "eastward_water_vapour_flux",
-    },
+    variable_mapping=inputs.cira_metadata_variable_mapping,
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
 )
 
 cira_severe_convection_forecast = inputs.KerchunkForecast(
     source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
     variables=[derived.CravenBrooksSignificantSevere],
-    variable_mapping={
-        "t": "air_temperature",
-        "t2": "surface_air_temperature",
-        "z": "geopotential",
-        "r": "relative_humidity",
-        "u": "eastward_wind",
-        "v": "northward_wind",
-        "10u": "surface_eastward_wind",
-        "10v": "surface_northward_wind",
-    },
+    variable_mapping=inputs.cira_metadata_variable_mapping,
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
 )
 
