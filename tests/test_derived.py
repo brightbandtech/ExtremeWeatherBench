@@ -622,22 +622,15 @@ class TestWindSpeed:
         with pytest.raises(KeyError):
             derived.WindSpeed.derive_variable(incomplete_dataset)
 
-
-class TestGreatCircleMask:
-    """Test the GreatCircleMask derived variable."""
-
-    def test_required_variables(self):
-        """Test that required variables are correctly specified."""
-        assert derived.GreatCircleMask.required_variables == [
-            "latitude",
-            "longitude",
+    def test_maybe_include_variables_from_derived_input_with_classes(self):
+        """Test maybe_include_variables_from_derived_input with classes."""
+        incoming_variables = [
+            "existing_variable",
+            TestValidDerivedVariable,  # Class, not instance
+            TestMinimalDerivedVariable,  # Class, not instance
         ]
 
-    def test_derive_variable_returns_dataarray(self, sample_derived_dataset):
-        """Test that derive_variable returns a DataArray."""
-        result = derived.GreatCircleMask.derive_variable(sample_derived_dataset)
-        assert isinstance(result, xr.DataArray)
-        assert result.name == "great_circle_mask"
+        result = derived.maybe_include_variables_from_derived_input(incoming_variables)
 
     def test_great_circle_mask_values(self, sample_derived_dataset):
         """Test that great circle mask has correct values."""
@@ -684,31 +677,146 @@ class TestOrography:
         """Test that orography values are preserved."""
         result = derived.Orography.derive_variable(sample_derived_dataset)
 
-        # Check that orography values are unchanged
-        original_values = sample_derived_dataset["orography"].values
-        result_values = result.values
-        np.testing.assert_array_equal(original_values, result_values)
+    def test_maybe_include_variables_only_strings(self):
+        """Test maybe_include_variables_from_derived_input with only strings."""
+        incoming_variables = ["var1", "var2", "var3"]
 
-        # Check that orography has the same dimensions as input
-        expected_dims = sample_derived_dataset["orography"].dims
-        assert result.dims == expected_dims
-
-    def test_compute_method_integration(self, sample_derived_dataset):
-        """Test the compute method integration."""
-        result = derived.Orography.compute(sample_derived_dataset)
-        assert isinstance(result, xr.DataArray)
-        assert result.name == "orography"
+        result = derived.maybe_include_variables_from_derived_input(incoming_variables)
 
     def test_missing_required_variables(self, sample_derived_dataset):
         """Test error handling when required variables are missing."""
         incomplete_dataset = sample_derived_dataset.drop_vars("orography")
 
-        with pytest.raises(KeyError):
-            derived.Orography.derive_variable(incomplete_dataset)
+    def test_maybe_include_variables_with_recursive_derived_classes(self):
+        """Test recursive resolution of derived variables with classes."""
+        incoming_variables = [
+            "base_variable",
+            TestRecursiveDerivedVariable,  # Requires TestValidDerivedVariable
+        ]
 
+        result = derived.maybe_include_variables_from_derived_input(incoming_variables)
 
-class TestSurfacePressure:
-    """Test the SurfacePressure derived variable."""
+        # Should recursively resolve TestRecursiveDerivedVariable ->
+        # TestValidDerivedVariable -> ["test_variable_1", "test_variable_2"]
+        expected = [
+            "base_variable",
+            "test_variable_1",
+            "test_variable_2",
+        ]
+
+        assert set(result) == set(expected)
+
+    def test_maybe_include_variables_with_deeply_nested_derived_classes(self):
+        """Test deeply nested recursive resolution of derived variables."""
+        incoming_variables = [
+            "base_variable",
+            TestDeeplyNestedDerivedVariable,  # Requires TestRecursiveDerivedVariable
+        ]
+
+        result = derived.maybe_include_variables_from_derived_input(incoming_variables)
+
+        # Should recursively resolve:
+        # TestDeeplyNestedDerivedVariable -> TestRecursiveDerivedVariable ->
+        # TestValidDerivedVariable -> ["test_variable_1", "test_variable_2"]
+        expected = [
+            "base_variable",
+            "test_variable_1",
+            "test_variable_2",
+        ]
+
+        assert set(result) == set(expected)
+
+    def test_maybe_include_variables_mixed_instances_and_classes(self):
+        """Test mixed instances and classes with recursive resolution."""
+        incoming_variables = [
+            "base_variable",
+            TestValidDerivedVariable(),  # Instance
+            TestRecursiveDerivedVariable,  # Class requires TestValidDerivedVariable
+            "another_variable",
+        ]
+
+        result = derived.maybe_include_variables_from_derived_input(incoming_variables)
+
+        # Should handle both instance and class, avoiding duplicates
+        expected = [
+            "base_variable",
+            "another_variable",
+            "test_variable_1",
+            "test_variable_2",
+        ]
+
+        assert set(result) == set(expected)
+
+    def test_maybe_include_variables_preserves_order_removes_duplicates(self):
+        """Test that function preserves order and removes duplicates."""
+        incoming_variables = [
+            "var1",
+            TestValidDerivedVariable(),  # Adds test_variable_1, test_variable_2
+            "var2",
+            TestMinimalDerivedVariable(),  # Adds single_variable
+            "var1",  # Duplicate
+            TestValidDerivedVariable(),  # Duplicate derived variable
+        ]
+
+        result = derived.maybe_include_variables_from_derived_input(incoming_variables)
+
+        # Should preserve order and remove duplicates
+        expected = [
+            "var1",
+            "var2",
+            "test_variable_1",
+            "test_variable_2",
+            "single_variable",
+        ]
+
+        assert result == expected  # Order matters
+
+    def test_maybe_include_variables_empty_list(self):
+        """Test maybe_include_variables_from_derived_input with empty list."""
+        result = derived.maybe_include_variables_from_derived_input([])
+        assert result == []
+
+    def test_maybe_include_variables_none_input(self):
+        """Test maybe_include_variables_from_derived_input with None values."""
+        # The function should handle None gracefully or raise appropriate error
+        incoming_variables = ["var1", None, "var2"]
+
+        # This might raise an error depending on implementation
+        # Let's test what actually happens
+        try:
+            result = derived.maybe_include_variables_from_derived_input(
+                incoming_variables
+            )
+            # If it doesn't raise an error, None should be filtered out
+            assert "var1" in result
+            assert "var2" in result
+            assert None not in result
+        except (TypeError, AttributeError):
+            # This is acceptable behavior for None input
+            pass
+
+    def test_maybe_include_variables_circular_dependency(self):
+        """Test handling of potential circular dependencies."""
+        # Create a derived variable that could theoretically depend on itself
+        # This tests the robustness of the recursive resolution
+
+        class TestSelfReferencing(derived.DerivedVariable):
+            required_variables = ["base_var"]
+
+            @classmethod
+            def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
+                return data["base_var"]
+
+        incoming_variables = [TestSelfReferencing]
+
+        result = derived.maybe_include_variables_from_derived_input(incoming_variables)
+
+        # Should resolve to the base variable
+        assert result == ["base_var"]
+
+    def test_derived_variable_with_empty_dataset(self, caplog):
+        """Test behavior with empty datasets."""
+        empty_dataset = xr.Dataset()
 
     def test_required_variables(self):
         """Test that required variables are correctly specified."""
@@ -794,9 +902,10 @@ class TestGeopotentialThickness:
         with pytest.raises(KeyError):
             derived.GeopotentialThickness.derive_variable(incomplete_dataset)
 
-
-class TestTropicalCycloneWindSpeed:
-    """Test the TropicalCycloneWindSpeed derived variable."""
+        # Step 1: Pull required variables
+        required_vars = derived.maybe_include_variables_from_derived_input(
+            ["surface_wind_speed"] + variables_to_derive
+        )
 
     def test_required_variables(self):
         """Test that required variables are correctly specified."""

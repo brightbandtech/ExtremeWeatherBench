@@ -1,6 +1,7 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import List, Optional, Sequence, Type, Union, cast
+from collections import OrderedDict
+from typing import List, Sequence, Type, Union, cast
 
 import numpy as np
 import xarray as xr
@@ -33,8 +34,9 @@ class DerivedVariable(ABC):
             derive the variable from required_variables.
     """
 
-    required_variables: List[str | Type["DerivedVariable"]]
-    optional_variables: Optional[List[str | Type["DerivedVariable"]]] = None
+    required_variables: list[str]
+    optional_variables: list[str] = []
+    optional_variables_mapping: dict = {}
 
     @property
     def name(self) -> str:
@@ -65,8 +67,6 @@ class DerivedVariable(ABC):
         """Build the derived variable from the input variables.
 
         This method is used to build the derived variable from the input variables.
-        It calls derive_variable which handles the actual computation and may raise
-        errors if required variables are missing.
 
         Args:
             data: The dataset to build the derived variable from.
@@ -331,11 +331,10 @@ def maybe_derive_variables(
     return dataset
 
 
-def maybe_pull_variables_from_derived_input(
+def maybe_include_variables_from_derived_input(
     incoming_variables: Sequence[Union[str, DerivedVariable, Type[DerivedVariable]]],
-) -> Sequence[str]:
-    """Pull the required variables from a derived input and add to the list of
-    variables to pull.
+) -> list[str]:
+    """Identify and return variables that a derived variable needs to compute.
 
     Args:
         incoming_variables: a list of string and/or derived variables.
@@ -367,11 +366,10 @@ def maybe_pull_variables_from_derived_input(
         elif isinstance(v, type) and issubclass(v, DerivedVariable):
             # Handle classes that inherit from DerivedVariable
             # Recursively pull required variables from derived variables
-            recursive_vars = maybe_pull_variables_from_derived_input(
-                v.required_variables
+            derived_required_variables.extend(
+                maybe_include_variables_from_derived_input(v.required_variables)
             )
-            all_variables.update(recursive_vars)
-        else:
-            all_variables.add(str(v))
 
-    return list(all_variables)
+    # Remove duplicates while preserving order
+    all_variables = string_variables + derived_required_variables
+    return list(OrderedDict.fromkeys(all_variables))

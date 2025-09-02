@@ -262,7 +262,7 @@ class ForecastBase(InputBase):
         # use the list of required variables from the derived variables in the
         # eval to add to the list of variables
         expected_and_maybe_derived_variables = (
-            derived.maybe_pull_variables_from_derived_input(
+            derived.maybe_include_variables_from_derived_input(
                 case_operator.forecast.variables
             )
         )
@@ -935,9 +935,12 @@ def zarr_target_subsetter(
             )
         }
     )
-
+    # Note: this will be changed in inputs.py PR to be in an independent function
+    # focused on variable subsetting for the pipeline.
     target_and_maybe_derived_variables = (
-        derived.maybe_pull_variables_from_derived_input(case_operator.target.variables)
+        derived.maybe_include_variables_from_derived_input(
+            case_operator.target.variables
+        )
     )
     # check that the variables are in the target data
     if target_and_maybe_derived_variables and any(
