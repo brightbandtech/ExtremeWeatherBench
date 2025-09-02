@@ -8,7 +8,6 @@ import xarray as xr
 from scores.continuous import mae, mean_error, rmse  # type: ignore[import-untyped]
 
 from extremeweatherbench import derived, utils
-from extremeweatherbench.calc import calculate_haversine_distance
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -607,6 +606,7 @@ class BaseMetric(ABC):
     """
 
     # default to preserving lead_time in EWB metrics
+    name: str
     preserve_dims: str = "lead_time"
     variables: Optional[list[str | Type["derived.DerivedVariable"]]] = None
 
@@ -632,10 +632,6 @@ class BaseMetric(ABC):
                 self.forecast_variable = self.forecast_variable.name
             if not isinstance(self.target_variable, str):
                 self.target_variable = self.target_variable.name
-
-    @property
-    def name(self) -> str:
-        return self.__class__.__name__
 
     @classmethod
     @abstractmethod
@@ -682,43 +678,29 @@ class AppliedMetric(ABC):
         compute_applied_metric: A required method to compute the metric.
     """
 
-    @property
-    def name(self) -> str:
-        return self.__class__.__name__
+    base_metric: type[BaseMetric]
 
-    @property
-    @abstractmethod
-    def base_metric(self) -> type[BaseMetric]:
-        pass
-
+    @classmethod
     def compute_metric(
-        self,
+        cls,
         forecast: xr.DataArray,
         target: xr.DataArray,
         **kwargs: Any,
     ) -> Any:
-        # TODO: build a spatial dim/time dim separator to allow for spatial and temporal
-        # metrics to be computed separately
-
-        # Filter kwargs for each method
-        applied_metric_kwargs = utils.filter_kwargs_for_callable(
-            kwargs, self._compute_applied_metric
+        # first, compute the inputs to the base metric, a dictionary of forecast and
+        # target
+        applied_result = cls._compute_applied_metric(
+            forecast,
+            target,
+            **utils.filter_kwargs_for_callable(kwargs, cls._compute_applied_metric),
         )
-        base_metric_kwargs = utils.filter_kwargs_for_callable(
-            kwargs, self.base_metric._compute_metric
-        )
+        # then, compute the base metric with the inputs
+        return cls.base_metric.compute_metric(**applied_result)
 
-        # Compute the applied metric first
-        applied_result = self._compute_applied_metric(
-            forecast, target, **applied_metric_kwargs
-        )
-
-        # Then compute the base metric with the applied result
-        return self.base_metric._compute_metric(**applied_result, **base_metric_kwargs)
-
+    @classmethod
     @abstractmethod
     def _compute_applied_metric(
-        self,
+        cls,
         forecast: xr.DataArray,
         target: xr.DataArray,
         **kwargs: Any,
@@ -734,6 +716,8 @@ class AppliedMetric(ABC):
 
 
 class MAE(BaseMetric):
+    name = "mae"
+
     @classmethod
     def _compute_metric(
         cls,
@@ -746,6 +730,8 @@ class MAE(BaseMetric):
 
 
 class ME(BaseMetric):
+    name = "me"
+
     @classmethod
     def _compute_metric(
         cls,
@@ -758,6 +744,8 @@ class ME(BaseMetric):
 
 
 class RMSE(BaseMetric):
+    name = "rmse"
+
     @classmethod
     def _compute_metric(
         cls,
@@ -779,13 +767,15 @@ class EarlySignal(BaseMetric):
     signal detection criteria that can be specified in applied metrics downstream.
     """
 
+    name = "early_signal"
+
     @classmethod
     def _compute_metric(
         cls,
         forecast: xr.Dataset,
         target: xr.Dataset,
-        threshold: float = None,
-        variable: str = None,
+        threshold: Optional[float] = None,
+        variable: Optional[str] = None,
         comparison: str = ">=",
         spatial_aggregation: str = "any",
         **kwargs: Any,
@@ -921,272 +911,9 @@ class EarlySignal(BaseMetric):
         return result
 
 
-class MaximumMAE(AppliedMetric):
-    @property
-    def base_metric(self) -> type[BaseMetric]:
-        return MAE
+class SpatialDisplacement(BaseMetric):
+    name = "spatial_displacement"
 
-    def _compute_applied_metric(
-        self,
-        forecast: xr.DataArray,
-        target: xr.DataArray,
-        tolerance_range: int = 24,
-        **kwargs: Any,
-    ) -> Any:
-        forecast = forecast.compute()
-        target_spatial_mean = target.compute().mean(["latitude", "longitude"])
-        maximum_timestep = target_spatial_mean.idxmax("valid_time").values
-        maximum_value = target_spatial_mean.sel(valid_time=maximum_timestep)
-        forecast_spatial_mean = forecast.mean(["latitude", "longitude"])
-        filtered_max_forecast = forecast_spatial_mean.where(
-            (
-                forecast_spatial_mean.valid_time
-                >= maximum_timestep - np.timedelta64(tolerance_range // 2, "h")
-            )
-            & (
-                forecast_spatial_mean.valid_time
-                <= maximum_timestep + np.timedelta64(tolerance_range // 2, "h")
-            ),
-            drop=True,
-        ).max("valid_time")
-        return {
-            "forecast": filtered_max_forecast,
-            "target": maximum_value,
-            "preserve_dims": self.base_metric().preserve_dims,
-        }
-
-
-class MinimumMAE(AppliedMetric):
-    @property
-    def base_metric(self) -> type[BaseMetric]:
-        return MAE
-
-    def _compute_applied_metric(
-        self,
-        forecast: xr.DataArray,
-        target: xr.DataArray,
-        tolerance_range: int = 24,
-        **kwargs: Any,
-    ) -> Any:
-        forecast = forecast.compute()
-        target_spatial_mean = target.compute().mean(["latitude", "longitude"])
-        minimum_timestep = target_spatial_mean.idxmin("valid_time").values
-        minimum_value = target_spatial_mean.sel(valid_time=minimum_timestep)
-        forecast_spatial_mean = forecast.mean(["latitude", "longitude"])
-        filtered_min_forecast = forecast_spatial_mean.where(
-            (
-                forecast_spatial_mean.valid_time
-                >= minimum_timestep - np.timedelta64(tolerance_range // 2, "h")
-            )
-            & (
-                forecast_spatial_mean.valid_time
-                <= minimum_timestep + np.timedelta64(tolerance_range // 2, "h")
-            ),
-            drop=True,
-        ).min("valid_time")
-        return {
-            "forecast": filtered_min_forecast,
-            "target": minimum_value,
-            "preserve_dims": self.base_metric.preserve_dims,
-        }
-
-
-class MaxMinMAE(AppliedMetric):
-    @property
-    def base_metric(self) -> type[BaseMetric]:
-        return MAE
-
-    def _compute_applied_metric(
-        self,
-        forecast: xr.DataArray,
-        target: xr.DataArray,
-        tolerance_range: int = 24,
-        **kwargs: Any,
-    ) -> Any:
-        forecast = forecast.compute().mean(["latitude", "longitude"])
-        target = target.compute().mean(["latitude", "longitude"])
-        max_min_target_value = (
-            target.groupby("valid_time.dayofyear")
-            .map(
-                utils.min_if_all_timesteps_present,
-                # TODO: calculate num timesteps per day dynamically
-                num_timesteps=utils.determine_timesteps_per_day_resolution(target),
-            )
-            .max()
-        )
-        max_min_target_datetime = target.where(
-            target == max_min_target_value, drop=True
-        ).valid_time.values
-        max_min_target_value = target.sel(valid_time=max_min_target_datetime)
-        subset_forecast = (
-            forecast.where(
-                (
-                    forecast.valid_time
-                    >= (
-                        max_min_target_datetime
-                        - np.timedelta64(tolerance_range // 2, "h")
-                    )
-                )
-                & (
-                    forecast.valid_time
-                    <= (
-                        max_min_target_datetime
-                        + np.timedelta64(tolerance_range // 2, "h")
-                    )
-                ),
-                drop=True,
-            )
-            .groupby("valid_time.dayofyear")
-            .map(
-                utils.min_if_all_timesteps_present_forecast,
-                num_timesteps=utils.determine_timesteps_per_day_resolution(forecast),
-            )
-            .min("dayofyear")
-        )
-
-        return {
-            "forecast": subset_forecast,
-            "target": max_min_target_value,
-            "preserve_dims": self.base_metric().preserve_dims,
-        }
-
-
-class OnsetME(AppliedMetric):
-    @property
-    def base_metric(self) -> type[BaseMetric]:
-        return ME
-
-    preserve_dims: str = "init_time"
-
-    def onset(self, forecast: xr.DataArray) -> xr.DataArray:
-        if (forecast.valid_time.max() - forecast.valid_time.min()).values.astype(
-            "timedelta64[h]"
-        ) >= 48:
-            min_daily_vals = forecast.groupby("valid_time.dayofyear").map(
-                utils.min_if_all_timesteps_present,
-                num_timesteps=utils.determine_timesteps_per_day_resolution(forecast),
-            )
-            if len(min_daily_vals) >= 2:  # Check if we have at least 2 values
-                for i in range(len(min_daily_vals) - 1):
-                    # TODO: CHANGE LOGIC; define forecast heatwave onset
-                    if min_daily_vals[i] >= 288.15 and min_daily_vals[i + 1] >= 288.15:
-                        return xr.DataArray(
-                            forecast.where(
-                                forecast["valid_time"].dt.dayofyear
-                                == min_daily_vals.dayofyear[i],
-                                drop=True,
-                            )
-                            .valid_time[0]
-                            .values
-                        )
-        return xr.DataArray(np.datetime64("NaT", "ns"))
-
-    def _compute_applied_metric(
-        self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
-    ) -> Any:
-        target_time = target.valid_time[0] + np.timedelta64(48, "h")
-        forecast = (
-            forecast.mean(["latitude", "longitude"])
-            .groupby("init_time")
-            .map(self.onset)
-        )
-        return {
-            "forecast": forecast,
-            "target": target_time,
-            "preserve_dims": self.preserve_dims,
-        }
-
-
-class DurationME(AppliedMetric):
-    @property
-    def base_metric(self) -> type[BaseMetric]:
-        return ME
-
-    preserve_dims: str = "init_time"
-
-    def duration(self, forecast: xr.DataArray) -> xr.DataArray:
-        if (forecast.valid_time.max() - forecast.valid_time.min()).values.astype(
-            "timedelta64[h]"
-        ) >= 48:
-            min_daily_vals = forecast.groupby("valid_time.dayofyear").map(
-                utils.min_if_all_timesteps_present,
-                # TODO: calculate num timesteps per day dynamically
-                num_timesteps=4,
-            )
-            # need to determine logic for 2+ consecutive days to find the date
-            # that the heatwave starts
-            if len(min_daily_vals) >= 2:  # Check if we have at least 2 values
-                for i in range(len(min_daily_vals) - 1):
-                    if min_daily_vals[i] >= 288.15 and min_daily_vals[i + 1] >= 288.15:
-                        consecutive_days = np.timedelta64(
-                            2, "D"
-                        )  # Start with 2 since we found first pair
-                        for j in range(i + 2, len(min_daily_vals)):
-                            if min_daily_vals[j] >= 288.15:
-                                consecutive_days += np.timedelta64(1, "D")
-                            else:
-                                break
-                        return xr.DataArray(consecutive_days.astype("timedelta64[ns]"))
-        return xr.DataArray(np.timedelta64("NaT", "ns"))
-
-    def _compute_applied_metric(
-        self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
-    ) -> Any:
-        # Dummy implementation for duration mean error
-        target_duration = target.valid_time[-1] - target.valid_time[0]
-        forecast = (
-            forecast.mean(["latitude", "longitude"])
-            .groupby("init_time")
-            .map(self.duration)
-        )
-        return {
-            "forecast": forecast,
-            "target": target_duration,
-            "preserve_dims": self.preserve_dims,
-        }
-
-
-class LandfallDetection(AppliedMetric):
-    preserve_dims: str = "init_time"
-
-    @property
-    def base_metric(self) -> type[BaseMetric]:
-        return EarlySignal
-
-    def _compute_applied_metric(
-        self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
-    ) -> Any:
-        return {
-            "forecast": forecast,
-            "target": target,
-            "preserve_dims": self.preserve_dims,
-            "threshold": 1,
-            "variable": "atmospheric_river_land_intersection",
-            "comparison": "==",
-            "spatial_aggregation": "any",
-        }
-
-
-class HaversineDistance(BaseMetric):
-    """Metric to calculate the haversine distance between two points on the Earth's
-    surface.
-
-    Args:
-        forecast: The forecast dataset.
-        target: The target dataset.
-    """
-
-    @property
-    def base_metric(self) -> type[BaseMetric]:
-        return MAE
-
-    def _compute_applied_metric(
-        self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
-    ) -> Any:
-        return calculate_haversine_distance(forecast, target)
-
-
-class SpatialDisplacement(AppliedMetric):
     def __init__(
         self,
         forecast_variable: Optional[str | Type["derived.DerivedVariable"]] = None,
@@ -1199,21 +926,18 @@ class SpatialDisplacement(AppliedMetric):
         self.forecast_mask_variable = forecast_mask_variable
         self.target_mask_variable = target_mask_variable
 
-    @property
-    def base_metric(self) -> type[BaseMetric]:
-        return HaversineDistance
-
+    @classmethod
     def _compute_applied_metric(
-        self, forecast: xr.Dataset, target: xr.Dataset, **kwargs: Any
+        cls, forecast: xr.Dataset, target: xr.Dataset, **kwargs: Any
     ) -> Any:
         from scipy.ndimage import center_of_mass, label
 
         # Get the masked data for target and forecast
-        target_masked = target[self.target_variable].where(
-            target[self.target_mask_variable], 0
+        target_masked = target[cls.target_variable].where(
+            target[cls.target_mask_variable], 0
         )
-        forecast_masked = forecast[self.forecast_variable].where(
-            forecast[self.forecast_mask_variable], 0
+        forecast_masked = forecast[cls.forecast_variable].where(
+            forecast[cls.forecast_mask_variable], 0
         )
 
         # Initialize arrays to store results
@@ -1276,47 +1000,242 @@ class SpatialDisplacement(AppliedMetric):
             },
             coords={"lead_time": lead_times, "valid_time": valid_times},
         )
+        return utils.calculate_haversine_distance(forecast_com, target_com)
+
+
+class MaximumMAE(AppliedMetric):
+    name = "maximum_mae"
+    base_metric = MAE
+
+    def _compute_applied_metric(
+        cls,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
+        tolerance_range: int = 24,
+        **kwargs: Any,
+    ) -> Any:
+        forecast = forecast.compute()
+        target_spatial_mean = target.compute().mean(["latitude", "longitude"])
+        maximum_timestep = target_spatial_mean.idxmax("valid_time").values
+        maximum_value = target_spatial_mean.sel(valid_time=maximum_timestep)
+        forecast_spatial_mean = forecast.mean(["latitude", "longitude"])
+        filtered_max_forecast = forecast_spatial_mean.where(
+            (
+                forecast_spatial_mean.valid_time
+                >= maximum_timestep - np.timedelta64(tolerance_range // 2, "h")
+            )
+            & (
+                forecast_spatial_mean.valid_time
+                <= maximum_timestep + np.timedelta64(tolerance_range // 2, "h")
+            ),
+            drop=True,
+        ).max("valid_time")
         return {
-            "forecast": forecast_com,
-            "target": target_com,
+            "forecast": filtered_max_forecast,
+            "target": maximum_value,
+            "preserve_dims": cls.base_metric.preserve_dims,
+        }
+
+
+class MinimumMAE(AppliedMetric):
+    name = "minimum_mae"
+    base_metric = MAE
+
+    def _compute_applied_metric(
+        cls,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
+        tolerance_range: int = 24,
+        **kwargs: Any,
+    ) -> Any:
+        forecast = forecast.compute()
+        target_spatial_mean = target.compute().mean(["latitude", "longitude"])
+        minimum_timestep = target_spatial_mean.idxmin("valid_time").values
+        minimum_value = target_spatial_mean.sel(valid_time=minimum_timestep)
+        forecast_spatial_mean = forecast.mean(["latitude", "longitude"])
+        filtered_min_forecast = forecast_spatial_mean.where(
+            (
+                forecast_spatial_mean.valid_time
+                >= minimum_timestep - np.timedelta64(tolerance_range // 2, "h")
+            )
+            & (
+                forecast_spatial_mean.valid_time
+                <= minimum_timestep + np.timedelta64(tolerance_range // 2, "h")
+            ),
+            drop=True,
+        ).min("valid_time")
+        return {
+            "forecast": filtered_min_forecast,
+            "target": minimum_value,
+            "preserve_dims": cls.base_metric.preserve_dims,
+        }
+
+
+class MaxMinMAE(AppliedMetric):
+    name = "max_min_mae"
+    base_metric = MAE
+
+    def _compute_applied_metric(
+        cls,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
+        tolerance_range: int = 24,
+        **kwargs: Any,
+    ) -> Any:
+        forecast = forecast.compute().mean(["latitude", "longitude"])
+        target = target.compute().mean(["latitude", "longitude"])
+        max_min_target_value = (
+            target.groupby("valid_time.dayofyear")
+            .map(
+                utils.min_if_all_timesteps_present,
+                # TODO: calculate num timesteps per day dynamically
+                num_timesteps=utils.determine_timesteps_per_day_resolution(target),
+            )
+            .max()
+        )
+        max_min_target_datetime = target.where(
+            target == max_min_target_value, drop=True
+        ).valid_time.values
+        max_min_target_value = target.sel(valid_time=max_min_target_datetime)
+        subset_forecast = (
+            forecast.where(
+                (
+                    forecast.valid_time
+                    >= (
+                        max_min_target_datetime
+                        - np.timedelta64(tolerance_range // 2, "h")
+                    )
+                )
+                & (
+                    forecast.valid_time
+                    <= (
+                        max_min_target_datetime
+                        + np.timedelta64(tolerance_range // 2, "h")
+                    )
+                ),
+                drop=True,
+            )
+            .groupby("valid_time.dayofyear")
+            .map(
+                utils.min_if_all_timesteps_present_forecast,
+                num_timesteps=utils.determine_timesteps_per_day_resolution(forecast),
+            )
+            .min("dayofyear")
+        )
+
+        return {
+            "forecast": subset_forecast,
+            "target": max_min_target_value,
+            "preserve_dims": cls.base_metric.preserve_dims,
+        }
+
+
+class OnsetME(AppliedMetric):
+    name = "onset_me"
+    base_metric = ME
+
+    preserve_dims: str = "init_time"
+
+    def onset(cls, forecast: xr.DataArray) -> xr.DataArray:
+        if (forecast.valid_time.max() - forecast.valid_time.min()).values.astype(
+            "timedelta64[h]"
+        ) >= 48:
+            min_daily_vals = forecast.groupby("valid_time.dayofyear").map(
+                utils.min_if_all_timesteps_present,
+                num_timesteps=utils.determine_timesteps_per_day_resolution(forecast),
+            )
+            if len(min_daily_vals) >= 2:  # Check if we have at least 2 values
+                for i in range(len(min_daily_vals) - 1):
+                    # TODO: CHANGE LOGIC; define forecast heatwave onset
+                    if min_daily_vals[i] >= 288.15 and min_daily_vals[i + 1] >= 288.15:
+                        return xr.DataArray(
+                            forecast.where(
+                                forecast["valid_time"].dt.dayofyear
+                                == min_daily_vals.dayofyear[i],
+                                drop=True,
+                            )
+                            .valid_time[0]
+                            .values
+                        )
+        return xr.DataArray(np.datetime64("NaT", "ns"))
+
+    @classmethod
+    def _compute_applied_metric(
+        cls, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
+    ) -> Any:
+        target_time = target.valid_time[0] + np.timedelta64(48, "h")
+        forecast = (
+            forecast.mean(["latitude", "longitude"]).groupby("init_time").map(cls.onset)
+        )
+        return {
+            "forecast": forecast,
+            "target": target_time,
+            "preserve_dims": cls.preserve_dims,
+        }
+
+
+class DurationME(AppliedMetric):
+    name = "duration_me"
+    base_metric = ME
+    preserve_dims: str = "init_time"
+
+    def duration(self, forecast: xr.DataArray) -> xr.DataArray:
+        if (forecast.valid_time.max() - forecast.valid_time.min()).values.astype(
+            "timedelta64[h]"
+        ) >= 48:
+            min_daily_vals = forecast.groupby("valid_time.dayofyear").map(
+                utils.min_if_all_timesteps_present,
+                # TODO: calculate num timesteps per day dynamically
+                num_timesteps=4,
+            )
+            # need to determine logic for 2+ consecutive days to find the date
+            # that the heatwave starts
+            if len(min_daily_vals) >= 2:  # Check if we have at least 2 values
+                for i in range(len(min_daily_vals) - 1):
+                    if min_daily_vals[i] >= 288.15 and min_daily_vals[i + 1] >= 288.15:
+                        consecutive_days = np.timedelta64(
+                            2, "D"
+                        )  # Start with 2 since we found first pair
+                        for j in range(i + 2, len(min_daily_vals)):
+                            if min_daily_vals[j] >= 288.15:
+                                consecutive_days += np.timedelta64(1, "D")
+                            else:
+                                break
+                        return xr.DataArray(consecutive_days.astype("timedelta64[ns]"))
+        return xr.DataArray(np.timedelta64("NaT", "ns"))
+
+    def _compute_applied_metric(
+        self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
+    ) -> Any:
+        # Dummy implementation for duration mean error
+        target_duration = target.valid_time[-1] - target.valid_time[0]
+        forecast = (
+            forecast.mean(["latitude", "longitude"])
+            .groupby("init_time")
+            .map(self.duration)
+        )
+        return {
+            "forecast": forecast,
+            "target": target_duration,
             "preserve_dims": self.preserve_dims,
         }
 
 
-# TODO: complete landfall time mean error implementation
-class LandfallTimeME(AppliedMetric):
-    @property
-    def base_metric(self) -> type[BaseMetric]:
-        return ME
+class LandfallDetection(AppliedMetric):
+    preserve_dims: str = "init_time"
+
+    name = "landfall_detection"
+    base_metric = EarlySignal
 
     def _compute_applied_metric(
         self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
     ) -> Any:
-        # Dummy implementation for landfall time mean error
-        raise NotImplementedError("LandfallTimeME is not implemented yet")
-
-
-# TODO: complete landfall intensity mean absolute error implementation
-class LandfallIntensityMAE(AppliedMetric):
-    @property
-    def base_metric(self) -> type[BaseMetric]:
-        return MAE
-
-    def _compute_applied_metric(
-        self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
-    ) -> Any:
-        # Dummy implementation for landfall intensity mean absolute error
-        raise NotImplementedError("LandfallIntensityMAE is not implemented yet")
-
-
-# TODO: complete lead time detection implementation
-class LeadTimeDetection(AppliedMetric):
-    @property
-    def base_metric(self) -> type[BaseMetric]:
-        return MAE
-
-    def _compute_applied_metric(
-        self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
-    ) -> Any:
-        # Dummy implementation for lead time detection
-        raise NotImplementedError("LeadTimeDetection is not implemented yet")
+        return {
+            "forecast": forecast,
+            "target": target,
+            "preserve_dims": self.preserve_dims,
+            "threshold": 1,
+            "variable": "atmospheric_river_land_intersection",
+            "comparison": "==",
+            "spatial_aggregation": "any",
+        }
