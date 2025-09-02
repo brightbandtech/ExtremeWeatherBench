@@ -289,7 +289,7 @@ def _normalize_variable(variable: Union[str, "derived.DerivedVariable"]) -> str:
     else:
         # This case seems incorrect in original - returning all data_vars
         # for a single variable doesn't make sense
-        raise ValueError(f"Cannot normalize variable: {variable}")
+        raise ValueError(f"Cannot set variable to string: {variable}")
 
 
 def _build_datasets(
