@@ -1,7 +1,7 @@
 import logging
 from abc import ABC, abstractmethod
 from collections import OrderedDict
-from typing import List, Sequence, Type, Union, cast
+from typing import Sequence, Type, Union
 
 import numpy as np
 import xarray as xr
@@ -343,26 +343,13 @@ def maybe_include_variables_from_derived_input(
         A list of variables possibly including derived variables' required
         variables.
     """
-    # Check if all inputs are strings - preserve order in this case
-    if all(isinstance(v, str) for v in incoming_variables):
-        # Type cast to satisfy mypy - we've verified all elements are strings
-        return cast(List[str], list(incoming_variables))
+    string_variables = [v for v in incoming_variables if isinstance(v, str)]
 
-    # Use a set to automatically handle deduplication for mixed types
-    all_variables = set()
-
+    derived_required_variables = []
     for v in incoming_variables:
-        if isinstance(v, str):
-            all_variables.add(v)
-        elif isinstance(v, DerivedVariable):
+        if isinstance(v, DerivedVariable):
             # Handle instances of DerivedVariable
-            for req_var in v.required_variables:
-                if isinstance(req_var, type) and issubclass(req_var, DerivedVariable):
-                    raise NotImplementedError(
-                        "DerivedVariable instances are not supported in "
-                        "required_variables"
-                    )
-                all_variables.add(req_var)
+            derived_required_variables.extend(v.required_variables)
         elif isinstance(v, type) and issubclass(v, DerivedVariable):
             # Handle classes that inherit from DerivedVariable
             # Recursively pull required variables from derived variables
