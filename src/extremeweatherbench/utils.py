@@ -178,7 +178,7 @@ def min_if_all_timesteps_present(
         return xr.DataArray(np.nan)
 
 
-def min_if_all_timesteps_present_forecast(
+def min_if_all_timesteps_present_with_lead_time(
     da: xr.DataArray, num_timesteps
 ) -> xr.DataArray:
     """Return the minimum value of a DataArray if all timesteps of a day are present
@@ -203,26 +203,25 @@ def min_if_all_timesteps_present_forecast(
 
 
 def determine_timesteps_per_day_resolution(
-    ds: xr.Dataset | xr.DataArray,
+    data: xr.Dataset | xr.DataArray,
 ) -> Optional[int]:
     """Determine the number of timesteps per day for a dataset.
 
     Args:
-        ds: The input dataset with a valid_time dimension or coordinate.
+        data: The input data with a valid_time dimension or coordinate.
 
     Returns:
         The number of timesteps per day as an integer.
     """
-    num_timesteps = 24 // np.unique(np.diff(ds.valid_time)).astype(
-        "timedelta64[h]"
-    ).astype(int)
+    num_timesteps = (
+        np.unique(np.diff(data.valid_time)).astype("timedelta64[h]").astype(int)
+    )
     if len(num_timesteps) > 1:
         logger.warning(
-            "Multiple time resolutions found in dataset, skipping"
-            " this iteration, "
-            f"({pd.to_datetime(ds['init_time'].values[0]).strftime('%Y-%m-%d %H:%M')})."
+            "Multiple time resolutions found in dataset, data may be missing in "
+            " forecast or target datasets, "
+            f"({pd.to_datetime(data['init_time'].values[0]).strftime('%Y-%m-%d%H:%M')})"
         )
-        return None
     return num_timesteps[0]
 
 

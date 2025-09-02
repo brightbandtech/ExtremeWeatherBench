@@ -283,11 +283,12 @@ class ForecastBase(InputBase):
 
     def subset_data_to_case(
         self,
-        data: IncomingDataInput,
+        data: Union[xr.Dataset, xr.DataArray],
         case_metadata: "cases.IndividualCase",
     ) -> IncomingDataInput:
-        if not isinstance(data, xr.Dataset):
-            raise ValueError(f"Expected xarray Dataset, got {type(data)}")
+        forecast_resolution = utils.determine_timesteps_per_day_resolution(data)
+
+        data.attrs["forecast_resolution_hours"] = forecast_resolution
 
         # subset time first to avoid OOM masking issues
         subset_time_indices = utils.derive_indices_from_init_time_and_lead_time(
