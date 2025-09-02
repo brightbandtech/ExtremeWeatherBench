@@ -68,6 +68,9 @@ def compute_ivt(data: xr.Dataset) -> xr.Dataset:
     Returns:
         Dataset with IVT components and magnitude
     """
+    if "integrated_vapor_transport" in data.data_vars:
+        return data
+
     # Get required coordinates excluding level dimension
     coords_dict = {dim: data.coords[dim] for dim in data.dims if dim != "level"}
 

@@ -305,9 +305,7 @@ class TestMaybeMapVariableNames:
         assert isinstance(result, xr.DataArray)
         assert result.name == "temp"
 
-    @patch(
-        "extremeweatherbench.derived.maybe_pull_required_variables_from_derived_input"
-    )
+    @patch("extremeweatherbench.derived.maybe_include_variables_from_derived_input")
     def test_maybe_map_variable_names_polars_lazyframe(
         self, mock_derived, test_input_base, sample_ghcn_dataframe
     ):
@@ -334,9 +332,7 @@ class TestMaybeMapVariableNames:
         assert "surface_air_temperature" not in schema.names()
         assert "latitude" in schema.names()
 
-    @patch(
-        "extremeweatherbench.derived.maybe_pull_required_variables_from_derived_input"
-    )
+    @patch("extremeweatherbench.derived.maybe_include_variables_from_derived_input")
     def test_maybe_map_variable_names_pandas_dataframe(
         self, mock_derived, test_input_base, sample_lsr_dataframe
     ):
@@ -437,9 +433,7 @@ class TestMaybeMapVariableNames:
         # Should return data unchanged when variable mapping is empty
         xr.testing.assert_identical(result, sample_era5_dataset)
 
-    @patch(
-        "extremeweatherbench.derived.maybe_pull_required_variables_from_derived_input"
-    )
+    @patch("extremeweatherbench.derived.maybe_include_variables_from_derived_input")
     def test_maybe_map_variable_names_with_derived_variables(
         self, mock_derived, test_input_base, sample_era5_dataset
     ):
@@ -494,9 +488,7 @@ class TestForecastBase:
 
     @patch("extremeweatherbench.utils.derive_indices_from_init_time_and_lead_time")
     @patch("extremeweatherbench.utils.convert_init_time_to_valid_time")
-    @patch(
-        "extremeweatherbench.derived.maybe_pull_required_variables_from_derived_input"
-    )
+    @patch("extremeweatherbench.derived.maybe_include_variables_from_derived_input")
     def test_forecast_base_subset_data_to_case(
         self, mock_derived, mock_convert, mock_derive, sample_forecast_dataset
     ):
@@ -1236,7 +1228,8 @@ class TestStandaloneFunctions:
         with pytest.raises(TypeError, match="Unknown kerchunk file type"):
             inputs.open_kerchunk_reference("test.txt")
 
-    def test_zarr_target_subsetter(self, sample_era5_dataset):
+    @patch("extremeweatherbench.derived.maybe_include_variables_from_derived_input")
+    def test_zarr_target_subsetter(self, mock_derived, sample_era5_dataset):
         """Test zarr_target_subsetter function."""
         # Create mock case metadata (not case operator)
         mock_case_metadata = Mock()
@@ -1249,10 +1242,12 @@ class TestStandaloneFunctions:
         mock_case_metadata.location.mask.assert_called_once()
         assert isinstance(result, xr.Dataset)
 
-    def test_zarr_target_subsetter_missing_time_dimension(self, sample_era5_dataset):
-        """Test zarr_target_subsetter with missing time dimensions."""
-        # Create dataset without time dimensions
-        data_no_time = sample_era5_dataset.drop_dims("time")
+    @patch("extremeweatherbench.derived.maybe_include_variables_from_derived_input")
+    def test_zarr_target_subsetter_missing_variables(
+        self, mock_derived, sample_era5_dataset
+    ):
+        """Test zarr_target_subsetter with missing variables."""
+        mock_derived.return_value = ["nonexistent_variable"]
 
         mock_case_metadata = Mock()
         mock_case_metadata.start_date = pd.Timestamp("2021-06-20")
@@ -1261,10 +1256,12 @@ class TestStandaloneFunctions:
         with pytest.raises(ValueError, match="No suitable time dimension found"):
             inputs.zarr_target_subsetter(data_no_time, mock_case_metadata)
 
-    def test_zarr_target_subsetter_with_valid_time_dimension(self, sample_era5_dataset):
-        """Test zarr_target_subsetter with valid_time dimension."""
-        # Rename time to valid_time to test the dimension detection
-        data_with_valid_time = sample_era5_dataset.rename({"time": "valid_time"})
+    @patch("extremeweatherbench.derived.maybe_include_variables_from_derived_input")
+    def test_zarr_target_subsetter_no_variables(
+        self, mock_derived, sample_era5_dataset
+    ):
+        """Test zarr_target_subsetter with no variables defined."""
+        mock_derived.return_value = None
 
         mock_case_metadata = Mock()
         mock_case_metadata.start_date = pd.Timestamp("2021-06-20")

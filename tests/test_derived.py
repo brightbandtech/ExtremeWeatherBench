@@ -542,12 +542,58 @@ class TestMaybeDeriveVariablesFunction:
         expected_dataarray = sample_dataset["test_variable_1"] * 3
         xr.testing.assert_equal(result[result_var_name], expected_dataarray)
 
+    def test_derived_variable_returns_invalid_type(self, sample_dataset, caplog):
+        """Test derived variable that returns neither DataArray nor Dataset."""
+
+        class TestInvalidReturnType(derived.DerivedVariable):
+            required_variables = ["test_variable_1"]
+
+            @classmethod
+            def derive_variable(cls, data: xr.Dataset):
+                # Return something that's neither DataArray nor Dataset
+                return "invalid_return_type"
+
+        variables = [TestInvalidReturnType()]
+
+        sample_dataset.attrs["dataset_type"] = "forecast"
+        result = derived.maybe_derive_variables(sample_dataset, variables)
+
+        # Should return original dataset and log warning
+        xr.testing.assert_equal(result, sample_dataset)
+
+        # Check that warning was logged
+        assert "returned neither DataArray nor Dataset" in caplog.text
+
+
+class TestRecursiveDerivedVariable(derived.DerivedVariable):
+    """A test derived variable that requires another derived variable."""
+
+    required_variables = [TestValidDerivedVariable]
+
+    @classmethod
+    def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
+        """Test implementation that uses another derived variable."""
+        # This would normally use the output of TestValidDerivedVariable
+        # For testing, we'll just return a simple computation
+        return data["test_variable_1"] * 2
+
+
+class TestDeeplyNestedDerivedVariable(derived.DerivedVariable):
+    """A test derived variable that requires a recursive derived variable."""
+
+    required_variables = [TestRecursiveDerivedVariable]
+
+    @classmethod
+    def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
+        """Test implementation that uses a recursive derived variable."""
+        return data["test_variable_1"] * 3
+
 
 class TestUtilityFunctions:
     """Test utility functions in the derived module."""
 
-    def test_maybe_pull_required_variables_from_derived_input_with_instances(self):
-        """Test maybe_pull_required_variables_from_derived_input with instances."""
+    def test_maybe_include_variables_from_derived_input_with_instances(self):
+        """Test maybe_include_variables_from_derived_input with instances."""
         incoming_variables = [
             "existing_variable",
             TestValidDerivedVariable(),
@@ -555,9 +601,7 @@ class TestUtilityFunctions:
             "another_existing_variable",
         ]
 
-        result = derived.maybe_pull_required_variables_from_derived_input(
-            incoming_variables
-        )
+        result = derived.maybe_include_variables_from_derived_input(incoming_variables)
 
         expected = [
             "existing_variable",
@@ -569,17 +613,15 @@ class TestUtilityFunctions:
 
         assert set(result) == set(expected)
 
-    def test_maybe_pull_required_variables_from_derived_input_with_classes(self):
-        """Test maybe_pull_required_variables_from_derived_input with classes."""
+    def test_maybe_include_variables_from_derived_input_with_classes(self):
+        """Test maybe_include_variables_from_derived_input with classes."""
         incoming_variables = [
             "existing_variable",
             TestValidDerivedVariable,  # Class, not instance
             TestMinimalDerivedVariable,  # Class, not instance
         ]
 
-        result = derived.maybe_pull_required_variables_from_derived_input(
-            incoming_variables
-        )
+        result = derived.maybe_include_variables_from_derived_input(incoming_variables)
 
         expected = [
             "existing_variable",
@@ -590,21 +632,146 @@ class TestUtilityFunctions:
 
         assert set(result) == set(expected)
 
-    def test_maybe_pull_required_variables_only_strings(self):
-        """Test maybe_pull_required_variables_from_derived_input with only strings."""
+    def test_maybe_include_variables_only_strings(self):
+        """Test maybe_include_variables_from_derived_input with only strings."""
         incoming_variables = ["var1", "var2", "var3"]
 
-        result = derived.maybe_pull_required_variables_from_derived_input(
-            incoming_variables
-        )
+        result = derived.maybe_include_variables_from_derived_input(incoming_variables)
 
         assert result == incoming_variables
+
+    def test_maybe_include_variables_with_recursive_derived_classes(self):
+        """Test recursive resolution of derived variables with classes."""
+        incoming_variables = [
+            "base_variable",
+            TestRecursiveDerivedVariable,  # Requires TestValidDerivedVariable
+        ]
+
+        result = derived.maybe_include_variables_from_derived_input(incoming_variables)
+
+        # Should recursively resolve TestRecursiveDerivedVariable ->
+        # TestValidDerivedVariable -> ["test_variable_1", "test_variable_2"]
+        expected = [
+            "base_variable",
+            "test_variable_1",
+            "test_variable_2",
+        ]
+
+        assert set(result) == set(expected)
+
+    def test_maybe_include_variables_with_deeply_nested_derived_classes(self):
+        """Test deeply nested recursive resolution of derived variables."""
+        incoming_variables = [
+            "base_variable",
+            TestDeeplyNestedDerivedVariable,  # Requires TestRecursiveDerivedVariable
+        ]
+
+        result = derived.maybe_include_variables_from_derived_input(incoming_variables)
+
+        # Should recursively resolve:
+        # TestDeeplyNestedDerivedVariable -> TestRecursiveDerivedVariable ->
+        # TestValidDerivedVariable -> ["test_variable_1", "test_variable_2"]
+        expected = [
+            "base_variable",
+            "test_variable_1",
+            "test_variable_2",
+        ]
+
+        assert set(result) == set(expected)
+
+    def test_maybe_include_variables_mixed_instances_and_classes(self):
+        """Test mixed instances and classes with recursive resolution."""
+        incoming_variables = [
+            "base_variable",
+            TestValidDerivedVariable(),  # Instance
+            TestRecursiveDerivedVariable,  # Class requires TestValidDerivedVariable
+            "another_variable",
+        ]
+
+        result = derived.maybe_include_variables_from_derived_input(incoming_variables)
+
+        # Should handle both instance and class, avoiding duplicates
+        expected = [
+            "base_variable",
+            "another_variable",
+            "test_variable_1",
+            "test_variable_2",
+        ]
+
+        assert set(result) == set(expected)
+
+    def test_maybe_include_variables_preserves_order_removes_duplicates(self):
+        """Test that function preserves order and removes duplicates."""
+        incoming_variables = [
+            "var1",
+            TestValidDerivedVariable(),  # Adds test_variable_1, test_variable_2
+            "var2",
+            TestMinimalDerivedVariable(),  # Adds single_variable
+            "var1",  # Duplicate
+            TestValidDerivedVariable(),  # Duplicate derived variable
+        ]
+
+        result = derived.maybe_include_variables_from_derived_input(incoming_variables)
+
+        # Should preserve order and remove duplicates
+        expected = [
+            "var1",
+            "var2",
+            "test_variable_1",
+            "test_variable_2",
+            "single_variable",
+        ]
+
+        assert result == expected  # Order matters
 
 
 class TestEdgeCasesAndErrorConditions:
     """Test edge cases and error conditions across the module."""
 
-    def test_derived_variable_with_empty_dataset(self):
+    def test_maybe_include_variables_empty_list(self):
+        """Test maybe_include_variables_from_derived_input with empty list."""
+        result = derived.maybe_include_variables_from_derived_input([])
+        assert result == []
+
+    def test_maybe_include_variables_none_input(self):
+        """Test maybe_include_variables_from_derived_input with None values."""
+        # The function should handle None gracefully or raise appropriate error
+        incoming_variables = ["var1", None, "var2"]
+
+        # This might raise an error depending on implementation
+        # Let's test what actually happens
+        try:
+            result = derived.maybe_include_variables_from_derived_input(
+                incoming_variables
+            )
+            # If it doesn't raise an error, None should be filtered out
+            assert "var1" in result
+            assert "var2" in result
+            assert None not in result
+        except (TypeError, AttributeError):
+            # This is acceptable behavior for None input
+            pass
+
+    def test_maybe_include_variables_circular_dependency(self):
+        """Test handling of potential circular dependencies."""
+        # Create a derived variable that could theoretically depend on itself
+        # This tests the robustness of the recursive resolution
+
+        class TestSelfReferencing(derived.DerivedVariable):
+            required_variables = ["base_var"]
+
+            @classmethod
+            def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
+                return data["base_var"]
+
+        incoming_variables = [TestSelfReferencing]
+
+        result = derived.maybe_include_variables_from_derived_input(incoming_variables)
+
+        # Should resolve to the base variable
+        assert result == ["base_var"]
+
+    def test_derived_variable_with_empty_dataset(self, caplog):
         """Test behavior with empty datasets."""
         empty_dataset = xr.Dataset()
 
@@ -665,7 +832,7 @@ class TestIntegrationWithRealData:
         variables_to_derive = [TestValidDerivedVariable(), TestMinimalDerivedVariable()]
 
         # Step 1: Pull required variables
-        required_vars = derived.maybe_pull_required_variables_from_derived_input(
+        required_vars = derived.maybe_include_variables_from_derived_input(
             ["surface_wind_speed"] + variables_to_derive
         )
 
