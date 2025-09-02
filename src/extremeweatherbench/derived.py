@@ -4,8 +4,6 @@ from typing import List, Type, Union
 
 import xarray as xr
 
-import extremeweatherbench.events.severe_convection as sc
-
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -78,46 +76,6 @@ class DerivedVariable(ABC):
         # have a fallback option in derived methods
 
         return cls.derive_variable(data)
-
-
-class CravenBrooksSignificantSevere(DerivedVariable):
-    """A derived variable that computes the Craven-Brooks significant severe
-    convection index.
-    """
-
-    required_variables = [
-        "air_temperature",
-        "dewpoint_temperature",
-        "eastward_wind",
-        "northward_wind",
-        "specific_humidity",
-        "surface_eastward_wind",
-        "surface_northward_wind",
-        "air_pressure_at_mean_sea_level",
-    ]
-    # TODO: add optional variables approach for primary variables that
-    # have a fallback option in derived methods
-    optional_variables = ["dewpoint_temperature"]
-    name = "craven_brooks_significant_severe"
-
-    @classmethod
-    def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
-        """Derive the Craven-Brooks significant severe convection index."""
-        # create broadcasted pressure variable, output target is always last
-        _, data["pressure"] = xr.broadcast(data["air_temperature"], data["level"])
-        # calculate dewpoint temperature if not present
-        if "dewpoint_temperature" not in data.data_vars:
-            data["dewpoint_temperature"] = sc.dewpoint_from_specific_humidity(
-                data["specific_humidity"], data["pressure"]
-            )
-        cbss = sc.craven_brooks_significant_severe(data)
-        coords = {dim: data.coords[dim] for dim in data.dims if dim != "level"}
-        return xr.DataArray(
-            cbss,
-            coords=coords,
-            dims=coords.keys(),
-            name=cls.name,
-        )
 
 
 def maybe_derive_variables(
