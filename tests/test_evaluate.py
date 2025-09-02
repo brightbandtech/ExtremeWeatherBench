@@ -681,9 +681,6 @@ class TestPipelineFunctions:
         sample_case_operator.forecast.maybe_map_variable_names.return_value = (
             sample_forecast_dataset
         )
-        sample_case_operator.forecast.maybe_subset_variables.return_value = (
-            sample_forecast_dataset
-        )
         sample_case_operator.forecast.subset_data_to_case.return_value = (
             sample_forecast_dataset
         )
@@ -717,9 +714,6 @@ class TestPipelineFunctions:
         # Mock the pipeline methods
         sample_case_operator.target.open_and_maybe_preprocess_data_from_source.return_value = sample_target_dataset  # noqa: E501
         sample_case_operator.target.maybe_map_variable_names.return_value = (
-            sample_target_dataset
-        )
-        sample_case_operator.target.maybe_subset_variables.return_value = (
             sample_target_dataset
         )
         sample_case_operator.target.subset_data_to_case.return_value = (
@@ -793,10 +787,8 @@ class TestMetricEvaluation:
         mock_result = xr.DataArray(
             data=[1.5], dims=["lead_time"], coords={"lead_time": [0]}
         )
-        mock_metric_instance = Mock()
-        mock_metric_instance.name = "TestMetric"
-        mock_metric_instance.compute_metric.return_value = mock_result
-        mock_base_metric.return_value = mock_metric_instance
+        mock_base_metric.name = "TestMetric"
+        mock_base_metric.compute_metric.return_value = mock_result
 
         result = evaluate._evaluate_metric_and_return_df(
             forecast_ds=sample_forecast_dataset,
@@ -824,10 +816,8 @@ class TestMetricEvaluation:
         mock_result = xr.DataArray(
             data=[2.0], dims=["lead_time"], coords={"lead_time": [6]}
         )
-        mock_metric_instance = Mock()
-        mock_metric_instance.name = "TestMetric"
-        mock_metric_instance.compute_metric.return_value = mock_result
-        mock_base_metric.return_value = mock_metric_instance
+        mock_base_metric.name = "TestMetric"
+        mock_base_metric.compute_metric.return_value = mock_result
 
         evaluate._evaluate_metric_and_return_df(
             forecast_ds=sample_forecast_dataset,
@@ -841,8 +831,8 @@ class TestMetricEvaluation:
         )
 
         # Verify that kwargs were passed to compute_metric
-        mock_metric_instance.compute_metric.assert_called_once()
-        call_kwargs = mock_metric_instance.compute_metric.call_args[1]
+        mock_base_metric.compute_metric.assert_called_once()
+        call_kwargs = mock_base_metric.compute_metric.call_args[1]
         assert "threshold" in call_kwargs
         assert call_kwargs["threshold"] == 0.5
 
@@ -895,12 +885,10 @@ class TestErrorHandling:
         self, sample_forecast_dataset, sample_target_dataset, mock_base_metric
     ):
         """Test metric evaluation when computation fails."""
-        mock_metric_instance = Mock()
-        mock_metric_instance.name = "FailingMetric"
-        mock_metric_instance.compute_metric.side_effect = Exception(
+        mock_base_metric.name = "FailingMetric"
+        mock_base_metric.compute_metric.side_effect = Exception(
             "Metric computation failed"
         )
-        mock_base_metric.return_value = mock_metric_instance
 
         with pytest.raises(Exception, match="Metric computation failed"):
             evaluate._evaluate_metric_and_return_df(
@@ -947,9 +935,6 @@ class TestIntegration:
         sample_evaluation_object.forecast.maybe_map_variable_names.return_value = (
             sample_forecast_dataset
         )
-        sample_evaluation_object.forecast.maybe_subset_variables.return_value = (
-            sample_forecast_dataset
-        )
         sample_evaluation_object.forecast.subset_data_to_case.return_value = (
             sample_forecast_dataset
         )
@@ -964,9 +949,6 @@ class TestIntegration:
             sample_target_dataset
         )
         sample_evaluation_object.target.maybe_map_variable_names.return_value = (
-            sample_target_dataset
-        )
-        sample_evaluation_object.target.maybe_subset_variables.return_value = (
             sample_target_dataset
         )
         sample_evaluation_object.target.subset_data_to_case.return_value = (
@@ -1056,7 +1038,6 @@ class TestIntegration:
                 sample_forecast_dataset
             )
             obj.maybe_map_variable_names.return_value = sample_forecast_dataset
-            obj.maybe_subset_variables.return_value = sample_forecast_dataset
             obj.subset_data_to_case.return_value = sample_forecast_dataset
             obj.maybe_convert_to_dataset.return_value = sample_forecast_dataset
             obj.add_source_to_dataset_attrs.return_value = sample_forecast_dataset
