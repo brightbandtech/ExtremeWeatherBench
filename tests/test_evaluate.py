@@ -1101,7 +1101,7 @@ def sample_tc_case_operator():
 
     case_operator = cases.CaseOperator(
         case_metadata=case_metadata,
-        metric=[mock_metric],
+        metric_list=[mock_metric],
         target=mock_target,
         forecast=mock_forecast,
     )
@@ -1142,10 +1142,10 @@ class TestTropicalCycloneEvaluation:
         )
 
         # Mock the metric computation
-        mock_metric_instance = MagicMock()
+        mock_metric_instance = Mock(spec=metrics.BaseMetric)
         mock_metric_instance.name = "TestMetric"
         mock_metric_instance.compute_metric.return_value = xr.DataArray([1.0])
-        sample_tc_case_operator.metric[0].return_value = mock_metric_instance
+        sample_tc_case_operator.metric_list[0] = mock_metric_instance
 
         # Manually register IBTrACS data since we're bypassing the input pipeline
         case_id_number = str(sample_tc_case_operator.case_metadata.case_id_number)
@@ -1192,7 +1192,7 @@ class TestTropicalCycloneEvaluation:
 
         case_operator = cases.CaseOperator(
             case_metadata=case_metadata,
-            metric=[mock_metric],
+            metric_list=[mock_metric],
             target=mock_target,
             forecast=mock_forecast,
         )
@@ -1213,10 +1213,10 @@ class TestTropicalCycloneEvaluation:
             non_ibtracs_dataset,
         )
 
-        mock_metric_instance = MagicMock()
+        mock_metric_instance = Mock(spec=metrics.BaseMetric)
         mock_metric_instance.name = "TestMetric"
         mock_metric_instance.compute_metric.return_value = xr.DataArray([1.0])
-        case_operator.metric[0].return_value = mock_metric_instance
+        case_operator.metric_list[0] = mock_metric_instance
 
         # Run the evaluation
         evaluate.compute_case_operator(case_operator)
@@ -1247,10 +1247,10 @@ class TestTropicalCycloneEvaluation:
             sample_ibtracs_dataset,
         )
 
-        mock_metric_instance = MagicMock()
+        mock_metric_instance = Mock(spec=metrics.BaseMetric)
         mock_metric_instance.name = "TestMetric"
         mock_metric_instance.compute_metric.return_value = xr.DataArray([1.0])
-        sample_tc_case_operator.metric[0].return_value = mock_metric_instance
+        sample_tc_case_operator.metric_list[0] = mock_metric_instance
 
         with patch("extremeweatherbench.derived.maybe_derive_variables") as mock_derive:
             mock_derive.side_effect = lambda ds, variables, **kwargs: ds
@@ -1532,14 +1532,14 @@ class TestFullTCEvaluationWorkflow:
         )
 
         # Mock metric computation
-        mock_metric_instance = MagicMock()
+        mock_metric_instance = Mock(spec=metrics.BaseMetric)
         mock_metric_instance.name = "TestTCMetric"
         mock_metric_instance.compute_metric.return_value = xr.DataArray(
             [0.5],
             dims=["case"],
             coords={"case": [sample_tc_case_operator.case_metadata.case_id_number]},
         )
-        sample_tc_case_operator.metric[0].return_value = mock_metric_instance
+        sample_tc_case_operator.metric_list[0] = mock_metric_instance
 
         # Manually register IBTrACS data since we're bypassing the input pipeline
         case_id_number = str(sample_tc_case_operator.case_metadata.case_id_number)
