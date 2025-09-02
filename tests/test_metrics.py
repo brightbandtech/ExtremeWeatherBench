@@ -61,31 +61,141 @@ class TestAppliedMetric:
         assert metric.name == "TestConcreteAppliedMetric"
 
 
-class TestBinaryContingencyTable:
-    """Tests for the BinaryContingencyTable metric."""
+class TestCachedMetricFactories:
+    """Tests for the new cached metric factory functions."""
 
-    def test_instantiation(self):
-        """Test that BinaryContingencyTable can be instantiated."""
-        metric = metrics.BinaryContingencyTable()
-        assert isinstance(metric, metrics.BaseMetric)
-        assert metric.name == "BinaryContingencyTable"
+    def test_csi_factory_function(self):
+        """Test CSI factory function creates working metric."""
+        csi_metric = metrics.CSI(forecast_threshold=15000, target_threshold=0.3)
+        assert hasattr(csi_metric, "compute_metric")
+        assert csi_metric.name == "CSI_fcst15000_tgt0.3"
 
-    def test_compute_metric_basic(self):
-        """Test basic computation without checking specific values."""
-        metric = metrics.BinaryContingencyTable()
+    def test_far_factory_function(self):
+        """Test FAR factory function creates working metric."""
+        far_metric = metrics.FAR(forecast_threshold=15000, target_threshold=0.3)
+        assert hasattr(far_metric, "compute_metric")
+        assert far_metric.name == "FAR_fcst15000_tgt0.3"
 
-        # Create simple binary test data
-        forecast = xr.Dataset({"data": (["x", "y"], [[1, 0], [0, 1]])})
-        target = xr.Dataset({"data": (["x", "y"], [[1, 1], [0, 0]])})
+    def test_tp_factory_function(self):
+        """Test TP factory function creates working metric."""
+        tp_metric = metrics.TP(forecast_threshold=15000, target_threshold=0.3)
+        assert hasattr(tp_metric, "compute_metric")
+        assert tp_metric.name == "TP_fcst15000_tgt0.3"
 
-        # Test that it runs without error
-        try:
-            result = metric._compute_metric(forecast, target)
-            # Just check that something is returned
-            assert result is not None
-        except Exception:
-            # If there are parameter issues, at least the class should exist
-            assert isinstance(metric, metrics.BinaryContingencyTable)
+    def test_fp_factory_function(self):
+        """Test FP factory function creates working metric."""
+        fp_metric = metrics.FP(forecast_threshold=15000, target_threshold=0.3)
+        assert hasattr(fp_metric, "compute_metric")
+        assert fp_metric.name == "FP_fcst15000_tgt0.3"
+
+    def test_tn_factory_function(self):
+        """Test TN factory function creates working metric."""
+        tn_metric = metrics.TN(forecast_threshold=15000, target_threshold=0.3)
+        assert hasattr(tn_metric, "compute_metric")
+        assert tn_metric.name == "TN_fcst15000_tgt0.3"
+
+    def test_fn_factory_function(self):
+        """Test FN factory function creates working metric."""
+        fn_metric = metrics.FN(forecast_threshold=15000, target_threshold=0.3)
+        assert hasattr(fn_metric, "compute_metric")
+        assert fn_metric.name == "FN_fcst15000_tgt0.3"
+
+    def test_cached_metrics_computation(self):
+        """Test that cached metrics can compute results."""
+        # Clear cache first
+        metrics.clear_contingency_cache()
+
+        # Create simple test data
+        forecast = xr.Dataset({"data": (["x", "y"], [[15500, 14000], [16000, 14500]])})
+        target = xr.Dataset({"data": (["x", "y"], [[0.4, 0.2], [0.5, 0.25]])})
+
+        # Test all factory functions
+        csi_metric = metrics.CSI(forecast_threshold=15000, target_threshold=0.3)
+        far_metric = metrics.FAR(forecast_threshold=15000, target_threshold=0.3)
+        tp_metric = metrics.TP(forecast_threshold=15000, target_threshold=0.3)
+        fp_metric = metrics.FP(forecast_threshold=15000, target_threshold=0.3)
+
+        # Compute results (should not raise exceptions)
+        csi_result = csi_metric.compute_metric(forecast, target, preserve_dims="x")
+        far_result = far_metric.compute_metric(forecast, target, preserve_dims="x")
+        tp_result = tp_metric.compute_metric(forecast, target, preserve_dims="x")
+        fp_result = fp_metric.compute_metric(forecast, target, preserve_dims="x")
+
+        # All should return xarray objects
+        assert isinstance(csi_result, (xr.Dataset, xr.DataArray))
+        assert isinstance(far_result, (xr.Dataset, xr.DataArray))
+        assert isinstance(tp_result, (xr.Dataset, xr.DataArray))
+        assert isinstance(fp_result, (xr.Dataset, xr.DataArray))
+
+    def test_cache_efficiency(self):
+        """Test that cache is shared across metrics with same thresholds."""
+        # Clear cache first
+        metrics.clear_contingency_cache()
+        initial_cache_size = len(metrics._GLOBAL_CONTINGENCY_CACHE)
+
+        forecast = xr.Dataset({"data": (["x", "y"], [[15500, 14000], [16000, 14500]])})
+        target = xr.Dataset({"data": (["x", "y"], [[0.4, 0.2], [0.5, 0.25]])})
+
+        # Create multiple metrics with same thresholds
+        csi_metric = metrics.CSI(forecast_threshold=15000, target_threshold=0.3)
+        far_metric = metrics.FAR(forecast_threshold=15000, target_threshold=0.3)
+        tp_metric = metrics.TP(forecast_threshold=15000, target_threshold=0.3)
+
+        # First computation should create cache entry
+        csi_metric.compute_metric(forecast, target, preserve_dims="x")
+        cache_size_after_first = len(metrics._GLOBAL_CONTINGENCY_CACHE)
+
+        # Subsequent computations should reuse cache
+        far_metric.compute_metric(forecast, target, preserve_dims="x")
+        tp_metric.compute_metric(forecast, target, preserve_dims="x")
+        cache_size_after_all = len(metrics._GLOBAL_CONTINGENCY_CACHE)
+
+        # Should have exactly one more cache entry than initial
+        assert cache_size_after_first == initial_cache_size + 1
+        assert cache_size_after_all == cache_size_after_first
+
+    def test_mathematical_correctness(self):
+        """Test that ratios sum to 1 and CSI/FAR are mathematically correct."""
+        # Clear cache
+        metrics.clear_contingency_cache()
+
+        # Simple test case for verification
+        forecast = xr.Dataset({"data": (["x", "y"], [[15500, 14000], [16000, 14500]])})
+        target = xr.Dataset({"data": (["x", "y"], [[0.4, 0.2], [0.5, 0.25]])})
+
+        # Get all contingency table components
+        tp_result = metrics.TP(15000, 0.3).compute_metric(
+            forecast, target, preserve_dims="x"
+        )
+        fp_result = metrics.FP(15000, 0.3).compute_metric(
+            forecast, target, preserve_dims="x"
+        )
+        tn_result = metrics.TN(15000, 0.3).compute_metric(
+            forecast, target, preserve_dims="x"
+        )
+        fn_result = metrics.FN(15000, 0.3).compute_metric(
+            forecast, target, preserve_dims="x"
+        )
+
+        # Ratios should sum to 1
+        total = tp_result + fp_result + tn_result + fn_result
+        np.testing.assert_allclose(total["data"].values, [1.0, 1.0], rtol=1e-10)
+
+        # CSI and FAR should be reasonable
+        csi_result = metrics.CSI(15000, 0.3).compute_metric(
+            forecast, target, preserve_dims="x"
+        )
+        far_result = metrics.FAR(15000, 0.3).compute_metric(
+            forecast, target, preserve_dims="x"
+        )
+
+        # CSI should be between 0 and 1
+        assert np.all(csi_result["data"].values >= 0)
+        assert np.all(csi_result["data"].values <= 1)
+
+        # FAR should be between 0 and 1
+        assert np.all(far_result["data"].values >= 0)
+        assert np.all(far_result["data"].values <= 1)
 
 
 class TestMAE:
@@ -507,7 +617,6 @@ class TestMetricIntegration:
     def test_all_base_metrics_have_required_methods(self):
         """Test that all base metric classes have required methods."""
         base_metrics = [
-            metrics.BinaryContingencyTable,
             metrics.MAE,
             metrics.ME,
             metrics.RMSE,
@@ -532,9 +641,11 @@ class TestMetricIntegration:
             # Include incomplete ones too
             metrics.FAR,
             metrics.CSI,
+            metrics.LandfallDisplacement,
+            metrics.LandfallTimeME,
+            metrics.LandfallIntensityMAE,
+            metrics.SpatialDisplacement,
             metrics.LeadTimeDetection,
-            metrics.RegionalHitsMisses,
-            metrics.HitsMisses,
         ]
 
         for metric_class in applied_metrics:
@@ -550,9 +661,8 @@ class TestMetricIntegration:
         assert hasattr(metrics, "BaseMetric")
         assert hasattr(metrics, "AppliedMetric")
 
-        # Test that all expected metric classes exist
+        # Test that all expected metric classes and functions exist
         expected_classes = [
-            "BinaryContingencyTable",
             "MAE",
             "ME",
             "RMSE",
@@ -567,11 +677,26 @@ class TestMetricIntegration:
             "LandfallIntensityMAE",
             "FAR",
             "CSI",
+            "SpatialDisplacement",
             "LeadTimeDetection",
-            "RegionalHitsMisses",
-            "HitsMisses",
+        ]
+
+        # Test that expected factory functions exist
+        expected_functions = [
+            "CSI",
+            "FAR",
+            "TP",
+            "FP",
+            "TN",
+            "FN",
+            "clear_contingency_cache",
+            "get_cached_transformed_manager",
         ]
 
         for class_name in expected_classes:
             assert hasattr(metrics, class_name)
             assert callable(getattr(metrics, class_name))
+
+        for func_name in expected_functions:
+            assert hasattr(metrics, func_name)
+            assert callable(getattr(metrics, func_name))

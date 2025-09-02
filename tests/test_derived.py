@@ -102,8 +102,8 @@ class TestDerivedVariableAbstractClass:
 
         # This should fail during derive_variable when trying to access missing variable
         with pytest.raises(
-            KeyError
-        ):  # derive_variable will fail when accessing missing variable
+            ValueError, match="Input variable test_variable_2 not found in data"
+        ):
             TestValidDerivedVariable.compute(incomplete_dataset)
 
     def test_required_variables_class_attribute(self):
