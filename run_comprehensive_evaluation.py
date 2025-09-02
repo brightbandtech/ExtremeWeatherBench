@@ -512,17 +512,49 @@ def run_comprehensive_evaluation(
         )
         # Get case operators for stats
         case_operators = ewb.case_operators
-        click.echo(f"Built {len(case_operators)} case operators")
+
+        # Count unique case_id_numbers
+        unique_case_ids = set(op.case_metadata.case_id_number for op in case_operators)
+        total_unique_cases = len(unique_case_ids)
+
+        click.echo(
+            f"Built {len(case_operators)} case operators from {total_unique_cases} "
+            "unique cases"
+        )
 
         # Limit cases for testing if specified
         if max_cases:
-            case_operators = case_operators[:max_cases]
-            click.echo(f"Limited to {max_cases} case operators for testing")
+            # When limiting, we want to limit by unique case_id_number, not case
+            # operators
+            limited_case_ids = set()
+            limited_case_operators = []
+
+            for case_operator in case_operators:
+                case_id = case_operator.case_metadata.case_id_number
+                if len(limited_case_ids) < max_cases:
+                    limited_case_ids.add(case_id)
+                    limited_case_operators.append(case_operator)
+                elif case_id in limited_case_ids:
+                    # Include this case operator if its case_id is already in our
+                    # limited set
+                    limited_case_operators.append(case_operator)
+
+            case_operators = limited_case_operators
+            click.echo(
+                f"Limited to {len(limited_case_ids)} unique cases "
+                f"({len(case_operators)} case operators) for testing"
+            )
+
+        # Recalculate unique cases after potential limiting
+        unique_case_ids = set(op.case_metadata.case_id_number for op in case_operators)
+        total_unique_cases = len(unique_case_ids)
 
         # Calculate total metrics for progress tracking
         total_metrics = sum(
             len(op.metric_list) * len(op.forecast.variables) for op in case_operators
         )
+        click.echo(f"Total unique cases: {total_unique_cases}")
+        click.echo(f"Total case operators: {len(case_operators)}")
         click.echo(f"Total metric evaluations to attempt: {total_metrics}")
 
         # Run evaluations using ExtremeWeatherBench
@@ -536,95 +568,82 @@ def run_comprehensive_evaluation(
         # Run the evaluation workflow with comprehensive error handling
         results_df = pd.DataFrame()
 
+        # Use individual case processing for robust error handling
+        click.echo(
+            "Using individual case processing for comprehensive error handling..."
+        )
+
         try:
-            if max_cases:
-                # Create a custom ExtremeWeatherBench instance that will use limited
-                # case operators
-                class LimitedExtremeWeatherBench(ExtremeWeatherBench):
-                    def __init__(self, limited_case_operators, cache_dir=None):
-                        # Don't call super().__init__ to avoid building case operators
-                        self.cache_dir = Path(cache_dir) if cache_dir else None
-                        self._limited_case_operators = limited_case_operators
+            results_list = []
+            total_operations = sum(
+                len(case_op.metric_list) for case_op in case_operators
+            )
 
-                    @property
-                    def case_operators(self):
-                        return self._limited_case_operators
+            with enhanced_logging():
+                with progress_tracker.overall_workflow(
+                    total_operations,
+                    f"Processing {total_unique_cases} unique cases "
+                    f"({len(case_operators)} operators) with "
+                    f"{total_operations} total metrics",
+                ):
+                    for case_operator in case_operators:
+                        case_id = case_operator.case_metadata.case_id_number
+                        case_title = case_operator.case_metadata.title
+                        num_metrics = len(case_operator.metric_list)
 
-                # Create limited EWB instance and run it
-                limited_ewb = LimitedExtremeWeatherBench(case_operators, cache_dir)
-                results_df = limited_ewb.run(**kwargs)
-            else:
-                # Run the full evaluation workflow
-                results_df = ewb.run(**kwargs)
-        except Exception as e:
-            logger.error(f"Error during evaluation workflow: {e}", exc_info=True)
-            click.echo(f"Warning: Evaluation workflow failed with error: {e}")
-            click.echo("Attempting to process individual case operators...")
-
-            # Fallback: try to run case operators individually with progress tracking
-            try:
-                results_list = []
-                total_operations = sum(
-                    len(case_op.metric_list) for case_op in case_operators
-                )
-
-                with enhanced_logging():
-                    with progress_tracker.overall_workflow(
-                        total_operations,
-                        f"Fallback processing {len(case_operators)} "
-                        f"cases with {total_operations} total metrics",
-                    ):
-                        for case_operator in case_operators:
-                            case_id = case_operator.case_metadata.case_id_number
-                            case_title = case_operator.case_metadata.title
-                            num_metrics = len(case_operator.metric_list)
-
+                        try:
+                            with progress_tracker.case_processing(
+                                case_id, f"{case_title}", num_metrics
+                            ) as case_pbar:
+                                with progress_tracker.dask_computation_context():
+                                    result = compute_case_operator(
+                                        case_operator, **kwargs
+                                    )
+                                    if not result.empty:
+                                        results_list.append(result)
+                                case_pbar.update(num_metrics)
+                        except Exception as case_error:
+                            logger.error(
+                                "Error processing case "
+                                f"{case_operator.case_metadata.case_id_number}: "
+                                f"{case_error}"
+                            )
+                            # Record the case-level failure
                             try:
-                                with progress_tracker.case_processing(
-                                    case_id, f"{case_title}", num_metrics
-                                ) as case_pbar:
-                                    with progress_tracker.dask_computation_context():
-                                        result = compute_case_operator(
-                                            case_operator, **kwargs
-                                        )
-                                        if not result.empty:
-                                            results_list.append(result)
-                                    case_pbar.update(num_metrics)
-                            except Exception as case_error:
-                                logger.error(
-                                    "Error processing case "
-                                    f"{case_operator.case_metadata.case_id_number}: "
-                                    f"{case_error}"
+                                results_manager.record_failure(
+                                    case_operator,
+                                    "CASE_LEVEL_ERROR",
+                                    "unknown",
+                                    case_error,
                                 )
-                                # Record the case-level failure
-                                try:
-                                    results_manager.record_failure(
-                                        case_operator,
-                                        "CASE_LEVEL_ERROR",
-                                        "unknown",
-                                        case_error,
-                                    )
-                                except Exception as record_error:
-                                    logger.error(
-                                        f"Failed to record case failure: {record_error}"
-                                    )
-                                continue
+                            except Exception as record_error:
+                                logger.error(
+                                    f"Failed to record case failure: {record_error}"
+                                )
+                            continue
 
-                if results_list:
+            if results_list:
+                results_df = pd.concat(results_list, ignore_index=True)
+                click.echo(f"Processing completed, got {len(results_df)} results")
+            else:
+                click.echo("No successful results from processing")
+
+        except Exception as processing_error:
+            logger.error(
+                f"Error during individual processing: {processing_error}", exc_info=True
+            )
+            click.echo(f"Warning: Processing failed with error: {processing_error}")
+
+            # Still try to concatenate any results we got before the error
+            if results_list:
+                try:
                     results_df = pd.concat(results_list, ignore_index=True)
-                    click.echo(
-                        f"Individual processing completed, got {len(results_df)} "
-                        "results"
+                    click.echo(f"Partial results available: {len(results_df)} results")
+                except Exception as concat_error:
+                    logger.error(
+                        f"Failed to concatenate partial results: {concat_error}"
                     )
-                else:
-                    click.echo("No successful results from individual processing")
-            except Exception as fallback_error:
-                logger.error(
-                    f"Fallback processing also failed: {fallback_error}", exc_info=True
-                )
-                click.echo(
-                    f"Error: Both main and fallback processing failed: {fallback_error}"
-                )
+                    results_df = pd.DataFrame()
         # Process results for our comprehensive evaluation format
         click.echo("Processing results...")
         if not results_df.empty:
