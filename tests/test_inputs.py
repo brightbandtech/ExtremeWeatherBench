@@ -1228,8 +1228,7 @@ class TestStandaloneFunctions:
         with pytest.raises(TypeError, match="Unknown kerchunk file type"):
             inputs.open_kerchunk_reference("test.txt")
 
-    @patch("extremeweatherbench.derived.maybe_include_variables_from_derived_input")
-    def test_zarr_target_subsetter(self, mock_derived, sample_era5_dataset):
+    def test_zarr_target_subsetter(self, sample_era5_dataset):
         """Test zarr_target_subsetter function."""
         # Create mock case metadata (not case operator)
         mock_case_metadata = Mock()
@@ -1242,12 +1241,10 @@ class TestStandaloneFunctions:
         mock_case_metadata.location.mask.assert_called_once()
         assert isinstance(result, xr.Dataset)
 
-    @patch("extremeweatherbench.derived.maybe_include_variables_from_derived_input")
-    def test_zarr_target_subsetter_missing_variables(
-        self, mock_derived, sample_era5_dataset
-    ):
-        """Test zarr_target_subsetter with missing variables."""
-        mock_derived.return_value = ["nonexistent_variable"]
+    def test_zarr_target_subsetter_missing_time_dimension(self, sample_era5_dataset):
+        """Test zarr_target_subsetter with missing time dimensions."""
+        # Create dataset without time dimensions
+        data_no_time = sample_era5_dataset.drop_dims("time")
 
         mock_case_metadata = Mock()
         mock_case_metadata.start_date = pd.Timestamp("2021-06-20")
@@ -1256,12 +1253,10 @@ class TestStandaloneFunctions:
         with pytest.raises(ValueError, match="No suitable time dimension found"):
             inputs.zarr_target_subsetter(data_no_time, mock_case_metadata)
 
-    @patch("extremeweatherbench.derived.maybe_include_variables_from_derived_input")
-    def test_zarr_target_subsetter_no_variables(
-        self, mock_derived, sample_era5_dataset
-    ):
-        """Test zarr_target_subsetter with no variables defined."""
-        mock_derived.return_value = None
+    def test_zarr_target_subsetter_with_valid_time_dimension(self, sample_era5_dataset):
+        """Test zarr_target_subsetter with valid_time dimension."""
+        # Rename time to valid_time to test the dimension detection
+        data_with_valid_time = sample_era5_dataset.rename({"time": "valid_time"})
 
         mock_case_metadata = Mock()
         mock_case_metadata.start_date = pd.Timestamp("2021-06-20")
