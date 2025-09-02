@@ -350,7 +350,6 @@ def run_pipeline(
         # maps variable names to the target data if not already using EWB
         # naming conventions
         .pipe(input_data.maybe_map_variable_names)
-        .pipe(input_data.maybe_subset_variables, variables=input_data.variables)
         # subsets the target data using the caseoperator metadata
         .pipe(
             input_data.subset_data_to_case,
