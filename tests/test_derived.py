@@ -166,7 +166,7 @@ class TestDerivedVariableAbstractClass:
         expected = sample_dataset["test_variable_1"] + sample_dataset["test_variable_2"]
         xr.testing.assert_equal(result, expected)
 
-    def test_compute_raises_error_missing_variables(self, sample_dataset, caplog):
+    def test_compute_raises_error_missing_variables(self, sample_dataset):
         """Test that compute raises error when required variables are missing."""
         # Remove one of the required variables
         incomplete_dataset = sample_dataset.drop_vars("test_variable_2")
