@@ -295,25 +295,30 @@ class ForecastBase(InputBase):
             case_metadata.end_date,
         )
 
-        subset_time_data = data.sel(
-            init_time=data.init_time[np.unique(subset_time_indices[0])]
+        # Use only valid init_time indices, but keep all lead_times
+        unique_init_indices = np.unique(subset_time_indices[0])
+        subset_time_data = data.sel(init_time=data.init_time[unique_init_indices])
+
+        # Create a mask indicating which (init_time, lead_time) combinations
+        # result in valid_times within the case date range
+        valid_combinations_mask = np.zeros(
+            (len(subset_time_data.init_time), len(subset_time_data.lead_time)),
+            dtype=bool,
         )
 
-        # use the list of required variables from the derived variables in the
-        # eval to add to the list of variables
-        expected_and_maybe_derived_variables = (
-            derived.maybe_include_variables_from_derived_input(
-                case_operator.forecast.variables
-            )
+        # Map the valid indices back to the subset data coordinates
+        for i, j in zip(subset_time_indices[0], subset_time_indices[1]):
+            # Find the position of this init_time in the subset data
+            init_pos = np.where(unique_init_indices == i)[0]
+            if len(init_pos) > 0:
+                valid_combinations_mask[init_pos[0], j] = True
+
+        # Add the mask as a coordinate so downstream code can use it
+        subset_time_data = subset_time_data.assign_coords(
+            valid_time_mask=(["init_time", "lead_time"], valid_combinations_mask)
         )
-        try:
-            subset_time_data = subset_time_data[expected_and_maybe_derived_variables]
-        except KeyError:
-            raise KeyError(
-                f"One of the variables {expected_and_maybe_derived_variables} not "
-                f"found in forecast data"
-            )
-        spatiotemporally_subset_data = case_operator.case_metadata.location.mask(
+
+        spatiotemporally_subset_data = case_metadata.location.mask(
             subset_time_data, drop=True
         )
 
