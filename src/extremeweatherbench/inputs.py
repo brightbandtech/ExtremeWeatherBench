@@ -1,6 +1,6 @@
 import dataclasses
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Callable, Optional, Union
+from typing import TYPE_CHECKING, Callable, Optional, TypeAlias, Union
 
 import numpy as np
 import pandas as pd
@@ -12,6 +12,7 @@ from extremeweatherbench import cases, derived, utils
 if TYPE_CHECKING:
     from extremeweatherbench import metrics
 
+IncomingDataInput: TypeAlias = xr.Dataset | xr.DataArray | pl.LazyFrame | pd.DataFrame
 #: Storage/access options for gridded target datasets.
 ARCO_ERA5_FULL_URI = (
     "gs://gcp-public-data-arco-era5/ar/full_37-1h-0p25deg-chunk-1.zarr-v3"
@@ -68,6 +69,11 @@ IBTrACS_metadata_variable_mapping = {
 }
 
 
+def _default_preprocess(input_data: IncomingDataInput) -> IncomingDataInput:
+    """Default forecast preprocess function that does nothing."""
+    return input_data
+
+
 @dataclasses.dataclass
 class InputBase(ABC):
     """An abstract base dataclass for target and forecast data.
@@ -88,11 +94,11 @@ class InputBase(ABC):
     )
     variable_mapping: dict = dataclasses.field(default_factory=dict)
     storage_options: dict = dataclasses.field(default_factory=dict)
-    preprocess: Callable = utils._default_preprocess
+    preprocess: Callable = _default_preprocess
 
     def open_and_maybe_preprocess_data_from_source(
         self,
-    ) -> utils.IncomingDataInput:
+    ) -> IncomingDataInput:
         data = self._open_data_from_source()
         data = self.preprocess(data)
         return data
@@ -106,7 +112,7 @@ class InputBase(ABC):
         self.name = name
 
     @abstractmethod
-    def _open_data_from_source(self) -> utils.IncomingDataInput:
+    def _open_data_from_source(self) -> IncomingDataInput:
         """Open the target data from the source, opting to avoid loading the entire
         dataset into memory if possible.
 
@@ -117,9 +123,9 @@ class InputBase(ABC):
     @abstractmethod
     def subset_data_to_case(
         self,
-        data: utils.IncomingDataInput,
+        data: IncomingDataInput,
         case_metadata: "cases.IndividualCase",
-    ) -> utils.IncomingDataInput:
+    ) -> IncomingDataInput:
         """Subset the target data to the case information provided in IndividualCase.
 
         Time information, spatial bounds, and variables are captured in the case
@@ -137,7 +143,7 @@ class InputBase(ABC):
             The target data with the variables subset to the case metadata.
         """
 
-    def maybe_convert_to_dataset(self, data: utils.IncomingDataInput) -> xr.Dataset:
+    def maybe_convert_to_dataset(self, data: IncomingDataInput) -> xr.Dataset:
         """Convert the target data to an xarray dataset if it is not already.
 
         This method handles the common conversion cases automatically. Override
@@ -158,7 +164,7 @@ class InputBase(ABC):
             # For other data types, try to use a custom conversion method if available
             return self._custom_convert_to_dataset(data)
 
-    def _custom_convert_to_dataset(self, data: utils.IncomingDataInput) -> xr.Dataset:
+    def _custom_convert_to_dataset(self, data: IncomingDataInput) -> xr.Dataset:
         """Hook method for custom conversion logic. Override this method in subclasses
         if you need custom conversion behavior for non-xarray data types.
 
@@ -189,9 +195,7 @@ class InputBase(ABC):
         ds.attrs["source"] = self.name
         return ds
 
-    def maybe_map_variable_names(
-        self, data: utils.IncomingDataInput
-    ) -> utils.IncomingDataInput:
+    def maybe_map_variable_names(self, data: IncomingDataInput) -> IncomingDataInput:
         """Map the variable names to the data, if required.
 
         Args:
@@ -236,9 +240,9 @@ class InputBase(ABC):
 
     def maybe_subset_variables(
         self,
-        data: utils.IncomingDataInput,
+        data: IncomingDataInput,
         variables: list[Union[str, "derived.DerivedVariable"]],
-    ) -> utils.IncomingDataInput:
+    ) -> IncomingDataInput:
         """Subset the variables from the data, if required."""
 
         # get the first derived variable if it exists
@@ -278,9 +282,9 @@ class ForecastBase(InputBase):
 
     def subset_data_to_case(
         self,
-        data: utils.IncomingDataInput,
+        data: IncomingDataInput,
         case_metadata: "cases.IndividualCase",
-    ) -> utils.IncomingDataInput:
+    ) -> IncomingDataInput:
         if not isinstance(data, xr.Dataset):
             raise ValueError(f"Expected xarray Dataset, got {type(data)}")
 
@@ -364,7 +368,7 @@ class KerchunkForecast(ForecastBase):
     name: str = "kerchunk_forecast"
     chunks: Optional[Union[dict, str]] = "auto"
 
-    def _open_data_from_source(self) -> utils.IncomingDataInput:
+    def _open_data_from_source(self) -> IncomingDataInput:
         return open_kerchunk_reference(
             self.source,
             storage_options=self.storage_options,
@@ -379,7 +383,7 @@ class ZarrForecast(ForecastBase):
     name: str = "zarr_forecast"
     chunks: Optional[Union[dict, str]] = "auto"
 
-    def _open_data_from_source(self) -> utils.IncomingDataInput:
+    def _open_data_from_source(self) -> IncomingDataInput:
         return xr.open_zarr(
             self.source,
             storage_options=self.storage_options,
@@ -434,7 +438,7 @@ class ERA5(TargetBase):
     name: str = "ERA5"
     chunks: Optional[Union[dict, str]] = None
 
-    def _open_data_from_source(self) -> utils.IncomingDataInput:
+    def _open_data_from_source(self) -> IncomingDataInput:
         data = xr.open_zarr(
             self.source,
             storage_options=self.storage_options,
@@ -444,9 +448,9 @@ class ERA5(TargetBase):
 
     def subset_data_to_case(
         self,
-        data: utils.IncomingDataInput,
+        data: IncomingDataInput,
         case_metadata: "cases.IndividualCase",
-    ) -> utils.IncomingDataInput:
+    ) -> IncomingDataInput:
         return zarr_target_subsetter(data, case_metadata)
 
     def maybe_align_forecast_to_target(
@@ -483,7 +487,7 @@ class GHCN(TargetBase):
 
     name: str = "GHCN"
 
-    def _open_data_from_source(self) -> utils.IncomingDataInput:
+    def _open_data_from_source(self) -> IncomingDataInput:
         target_data: pl.LazyFrame = pl.scan_parquet(
             self.source, storage_options=self.storage_options
         )
@@ -492,9 +496,9 @@ class GHCN(TargetBase):
 
     def subset_data_to_case(
         self,
-        target_data: utils.IncomingDataInput,
+        target_data: IncomingDataInput,
         case_metadata: "cases.IndividualCase",
-    ) -> utils.IncomingDataInput:
+    ) -> IncomingDataInput:
         if not isinstance(target_data, pl.LazyFrame):
             raise ValueError(f"Expected polars LazyFrame, got {type(target_data)}")
 
@@ -517,7 +521,7 @@ class GHCN(TargetBase):
         )
         return subset_target_data
 
-    def _custom_convert_to_dataset(self, data: utils.IncomingDataInput) -> xr.Dataset:
+    def _custom_convert_to_dataset(self, data: IncomingDataInput) -> xr.Dataset:
         if isinstance(data, pl.LazyFrame):
             data = data.collect().to_pandas()
             data["longitude"] = utils.convert_longitude_to_360(data["longitude"])
@@ -554,7 +558,7 @@ class LSR(TargetBase):
 
     name: str = "local_storm_reports"
 
-    def _open_data_from_source(self) -> utils.IncomingDataInput:
+    def _open_data_from_source(self) -> IncomingDataInput:
         # force LSR to use anon token to prevent google reauth issues for users
         target_data = pd.read_parquet(self.source, storage_options=self.storage_options)
 
@@ -562,9 +566,9 @@ class LSR(TargetBase):
 
     def subset_data_to_case(
         self,
-        target_data: utils.IncomingDataInput,
+        target_data: IncomingDataInput,
         case_metadata: "cases.IndividualCase",
-    ) -> utils.IncomingDataInput:
+    ) -> IncomingDataInput:
         if not isinstance(target_data, pd.DataFrame):
             raise ValueError(f"Expected pandas DataFrame, got {type(target_data)}")
 
@@ -574,26 +578,26 @@ class LSR(TargetBase):
         target_data["valid_time"] = pd.to_datetime(target_data["valid_time"])
 
         # filters to apply to the target data including datetimes and location bounds
-        bounds = case_operator.case_metadata.location.get_bounding_coordinates
+        bounds = case_metadata.location.get_bounding_coordinates
         filters = (
             (target_data["valid_time"] >= case_metadata.start_date)
             & (target_data["valid_time"] <= case_metadata.end_date)
-            & (target_data["latitude"] >= case_metadata.location.latitude_min)
-            & (target_data["latitude"] <= case_metadata.location.latitude_max)
+            & (target_data["latitude"] >= bounds.latitude_min)
+            & (target_data["latitude"] <= bounds.latitude_max)
             & (
                 target_data["longitude"]
-                >= utils.convert_longitude_to_180(case_metadata.location.longitude_min)
+                >= utils.convert_longitude_to_180(bounds.longitude_min)
             )
             & (
                 target_data["longitude"]
-                <= utils.convert_longitude_to_180(case_metadata.location.longitude_max)
+                <= utils.convert_longitude_to_180(bounds.longitude_max)
             )
         )
         subset_target_data = target_data.loc[filters]
 
         return subset_target_data
 
-    def _custom_convert_to_dataset(self, data: utils.IncomingDataInput) -> xr.Dataset:
+    def _custom_convert_to_dataset(self, data: IncomingDataInput) -> xr.Dataset:
         if not isinstance(data, pd.DataFrame):
             raise ValueError(f"Data is not a pandas DataFrame: {type(data)}")
 
@@ -675,17 +679,17 @@ class PPH(TargetBase):
 
     def _open_data_from_source(
         self,
-    ) -> utils.IncomingDataInput:
+    ) -> IncomingDataInput:
         return xr.open_zarr(self.source, storage_options=self.storage_options)
 
     def subset_data_to_case(
         self,
-        target_data: utils.IncomingDataInput,
+        target_data: IncomingDataInput,
         case_metadata: "cases.IndividualCase",
-    ) -> utils.IncomingDataInput:
+    ) -> IncomingDataInput:
         return zarr_target_subsetter(target_data, case_metadata)
 
-    def _custom_convert_to_dataset(self, data: utils.IncomingDataInput) -> xr.Dataset:
+    def _custom_convert_to_dataset(self, data: IncomingDataInput) -> xr.Dataset:
         return data
 
     def maybe_align_forecast_to_target(
@@ -703,7 +707,7 @@ class IBTrACS(TargetBase):
     name: str = "IBTrACS"
     _current_case_id: Optional[str] = dataclasses.field(default=None, init=False)
 
-    def _open_data_from_source(self) -> utils.IncomingDataInput:
+    def _open_data_from_source(self) -> IncomingDataInput:
         # not using storage_options in this case due to NetCDF4Backend not
         # supporting them
         target_data: pl.LazyFrame = pl.scan_csv(
@@ -715,11 +719,11 @@ class IBTrACS(TargetBase):
 
     def subset_data_to_case(
         self,
-        target_data: utils.IncomingDataInput,
+        target_data: IncomingDataInput,
         case_metadata: "cases.IndividualCase",
-    ) -> utils.IncomingDataInput:
+    ) -> IncomingDataInput:
         # Store case_id_number for IBTrACS registration
-        self._current_case_id = str(case_operator.case_metadata.case_id_number)
+        self._current_case_id = str(case_metadata.case_id_number)
 
         if not isinstance(target_data, pl.LazyFrame):
             raise ValueError(f"Expected polars LazyFrame, got {type(target_data)}")
@@ -832,7 +836,7 @@ class IBTrACS(TargetBase):
 
         return subset_target_data
 
-    def _custom_convert_to_dataset(self, data: utils.IncomingDataInput) -> xr.Dataset:
+    def _custom_convert_to_dataset(self, data: IncomingDataInput) -> xr.Dataset:
         if isinstance(data, pl.LazyFrame):
             data = data.collect().to_pandas()
 
@@ -991,12 +995,12 @@ def align_forecast_to_target(
 
 
 def safely_pull_variables(
-    dataset: xr.Dataset,
+    dataset: IncomingDataInput,
     variables: list[str],
     optional_variables: Optional[list[str]] = None,
     optional_variables_mapping: Optional[dict[str, list[str]]] = None,
-) -> xr.Dataset:
-    """Safely pull variables from an xarray dataset, prioritizing optionals.
+) -> IncomingDataInput:
+    """Safely pull variables from any IncomingDataInput type, prioritizing optionals.
 
     This function attempts to extract variables from a dataset, giving
     priority to optional variables when available. If optional variables
@@ -1004,14 +1008,15 @@ def safely_pull_variables(
     the mapping dictionary.
 
     Args:
-        dataset: The xarray dataset to extract variables from.
+        dataset: The dataset to extract variables from (xr.Dataset, xr.DataArray,
+            pl.LazyFrame, or pd.DataFrame).
         variables: List of required variable names to extract.
         optional_variables: List of optional variable names to try first.
         optional_variables_mapping: Dict mapping optional vars to list of
             required vars they can replace.
 
     Returns:
-        xr.Dataset containing the extracted variables.
+        Same type as input dataset containing the extracted variables.
 
     Raises:
         KeyError: If required variables are not present and no suitable
@@ -1037,6 +1042,37 @@ def safely_pull_variables(
     if optional_variables_mapping is None:
         optional_variables_mapping = {}
 
+    # Dispatch to type-specific handlers
+    if isinstance(dataset, xr.Dataset):
+        return _safely_pull_variables_xr_dataset(
+            dataset, variables, optional_variables, optional_variables_mapping
+        )
+    elif isinstance(dataset, xr.DataArray):
+        return _safely_pull_variables_xr_dataarray(
+            dataset, variables, optional_variables, optional_variables_mapping
+        )
+    elif isinstance(dataset, pl.LazyFrame):
+        return _safely_pull_variables_polars_lazyframe(
+            dataset, variables, optional_variables, optional_variables_mapping
+        )
+    elif isinstance(dataset, pd.DataFrame):
+        return _safely_pull_variables_pandas_dataframe(
+            dataset, variables, optional_variables, optional_variables_mapping
+        )
+    else:
+        raise TypeError(
+            f"Unsupported dataset type: {type(dataset)}. "
+            f"Expected one of: xr.Dataset, xr.DataArray, pl.LazyFrame, pd.DataFrame"
+        )
+
+
+def _safely_pull_variables_xr_dataset(
+    dataset: xr.Dataset,
+    variables: list[str],
+    optional_variables: list[str],
+    optional_variables_mapping: dict[str, list[str]],
+) -> xr.Dataset:
+    """Handle variable extraction for xarray Dataset."""
     # Track which variables we've found
     found_variables = []
     required_variables_satisfied = set()
@@ -1074,4 +1110,131 @@ def safely_pull_variables(
         )
 
     # Return dataset with only the found variables
+    return dataset[found_variables]
+
+
+def _safely_pull_variables_xr_dataarray(
+    dataset: xr.DataArray,
+    variables: list[str],
+    optional_variables: list[str],
+    optional_variables_mapping: dict[str, list[str]],
+) -> xr.DataArray:
+    """Handle variable extraction for xarray DataArray."""
+    # For DataArray, the variable is the DataArray itself
+    # Check if the requested variable matches the DataArray name
+    dataarray_name = dataset.name or "unnamed"
+
+    # Check if any of the requested variables match this DataArray
+    if (
+        dataarray_name in variables
+        or dataarray_name in optional_variables
+        or any(
+            dataarray_name in variables
+            for variables in optional_variables_mapping.values()
+        )
+    ):
+        return dataset
+    else:
+        available_vars = [dataarray_name]
+        raise KeyError(
+            f"Required variables {variables} not found in DataArray. "
+            f"Available variable: {available_vars}"
+        )
+
+
+def _safely_pull_variables_polars_lazyframe(
+    dataset: pl.LazyFrame,
+    variables: list[str],
+    optional_variables: list[str],
+    optional_variables_mapping: dict[str, list[str]],
+) -> pl.LazyFrame:
+    """Handle variable extraction for Polars LazyFrame."""
+    # Get column names from LazyFrame
+    available_columns = dataset.columns
+
+    # Track which variables we've found
+    found_variables = []
+    required_variables_satisfied = set()
+
+    # First, check for optional variables and add them if present
+    for opt_var in optional_variables:
+        if opt_var in available_columns:
+            found_variables.append(opt_var)
+            # Check if this optional variable replaces required variables
+            if opt_var in optional_variables_mapping:
+                replaced_vars = optional_variables_mapping[opt_var]
+                # Handle both single string and list of strings
+                if isinstance(replaced_vars, str):
+                    required_variables_satisfied.add(replaced_vars)
+                else:
+                    required_variables_satisfied.update(replaced_vars)
+
+    # Then check for required variables that weren't replaced
+    missing_variables = []
+    for var in variables:
+        if var in required_variables_satisfied:
+            # This required variable was replaced by an optional variable
+            continue
+        elif var in available_columns:
+            found_variables.append(var)
+        else:
+            missing_variables.append(var)
+
+    # Raise error if any required variables are missing
+    if missing_variables:
+        raise KeyError(
+            f"Required variables {missing_variables} not found in LazyFrame. "
+            f"Available columns: {available_columns}"
+        )
+
+    # Return LazyFrame with only the found columns
+    return dataset.select(found_variables)
+
+
+def _safely_pull_variables_pandas_dataframe(
+    dataset: pd.DataFrame,
+    variables: list[str],
+    optional_variables: list[str],
+    optional_variables_mapping: dict[str, list[str]],
+) -> pd.DataFrame:
+    """Handle variable extraction for Pandas DataFrame."""
+    # Get column names from DataFrame
+    available_columns = list(dataset.columns)
+
+    # Track which variables we've found
+    found_variables = []
+    required_variables_satisfied = set()
+
+    # First, check for optional variables and add them if present
+    for opt_var in optional_variables:
+        if opt_var in available_columns:
+            found_variables.append(opt_var)
+            # Check if this optional variable replaces required variables
+            if opt_var in optional_variables_mapping:
+                replaced_vars = optional_variables_mapping[opt_var]
+                # Handle both single string and list of strings
+                if isinstance(replaced_vars, str):
+                    required_variables_satisfied.add(replaced_vars)
+                else:
+                    required_variables_satisfied.update(replaced_vars)
+
+    # Then check for required variables that weren't replaced
+    missing_variables = []
+    for var in variables:
+        if var in required_variables_satisfied:
+            # This required variable was replaced by an optional variable
+            continue
+        elif var in available_columns:
+            found_variables.append(var)
+        else:
+            missing_variables.append(var)
+
+    # Raise error if any required variables are missing
+    if missing_variables:
+        raise KeyError(
+            f"Required variables {missing_variables} not found in DataFrame. "
+            f"Available columns: {available_columns}"
+        )
+
+    # Return DataFrame with only the found columns
     return dataset[found_variables]
