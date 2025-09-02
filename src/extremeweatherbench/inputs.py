@@ -922,28 +922,7 @@ def zarr_target_subsetter(
             )
         }
     )
-    # Note: this will be changed in inputs.py PR to be in an independent function
-    # focused on variable subsetting for the pipeline.
-    target_and_maybe_derived_variables = (
-        derived.maybe_include_variables_from_derived_input(
-            case_operator.target.variables
-        )
-    )
-    # check that the variables are in the target data
-    if target_and_maybe_derived_variables and any(
-        var not in subset_time_data.data_vars
-        for var in target_and_maybe_derived_variables
-    ):
-        raise ValueError(
-            f"Variables {target_and_maybe_derived_variables} not found in target data"
-        )
-    # subset the variables if they exist in the target data
-    elif target_and_maybe_derived_variables:
-        subset_time_variable_data = subset_time_data[target_and_maybe_derived_variables]
-    else:
-        raise ValueError(
-            "Variables not defined. Please list at least one target variable to select."
-        )
+
     # mask the data to the case location
     fully_subset_data = case_metadata.location.mask(subset_time_data, drop=True)
 
