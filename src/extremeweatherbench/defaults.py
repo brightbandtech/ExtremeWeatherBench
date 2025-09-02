@@ -173,7 +173,7 @@ cira_atmospheric_river_forecast = inputs.KerchunkForecast(
 
 cira_severe_convection_forecast = inputs.KerchunkForecast(
     source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
-    variables=[derived.CravenSignificantSevereParameter],
+    variables=[derived.CravenBrooksSignificantSevere],
     variable_mapping={
         "t": "air_temperature",
         "t2": "surface_air_temperature",
