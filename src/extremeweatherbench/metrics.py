@@ -7,7 +7,7 @@ import scores.categorical as cat  # type: ignore[import-untyped]
 import xarray as xr
 from scores.continuous import mae, mean_error, rmse  # type: ignore[import-untyped]
 
-from extremeweatherbench import derived, utils
+from extremeweatherbench import derived, evaluate, utils
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -626,12 +626,10 @@ class BaseMetric(ABC):
                 "Forecast variable must be provided if target variable is provided"
             )
         else:
-            # catch if the user provides a DerivedVariable object instead of a string
-            # or not using the .name attribute
-            if not isinstance(self.forecast_variable, str):
-                self.forecast_variable = self.forecast_variable.name
-            if not isinstance(self.target_variable, str):
-                self.target_variable = self.target_variable.name
+            self.forecast_variable = evaluate._normalize_variable(
+                self.forecast_variable
+            )
+            self.target_variable = evaluate._normalize_variable(self.target_variable)
 
     @classmethod
     @abstractmethod
@@ -1007,6 +1005,7 @@ class MaximumMAE(AppliedMetric):
     name = "maximum_mae"
     base_metric = MAE
 
+    @classmethod
     def _compute_applied_metric(
         cls,
         forecast: xr.DataArray,
@@ -1041,6 +1040,7 @@ class MinimumMAE(AppliedMetric):
     name = "minimum_mae"
     base_metric = MAE
 
+    @classmethod
     def _compute_applied_metric(
         cls,
         forecast: xr.DataArray,
@@ -1075,6 +1075,7 @@ class MaxMinMAE(AppliedMetric):
     name = "max_min_mae"
     base_metric = MAE
 
+    @classmethod
     def _compute_applied_metric(
         cls,
         forecast: xr.DataArray,
@@ -1136,7 +1137,8 @@ class OnsetME(AppliedMetric):
 
     preserve_dims: str = "init_time"
 
-    def onset(cls, forecast: xr.DataArray) -> xr.DataArray:
+    @staticmethod
+    def onset(forecast: xr.DataArray) -> xr.DataArray:
         if (forecast.valid_time.max() - forecast.valid_time.min()).values.astype(
             "timedelta64[h]"
         ) >= 48:
@@ -1179,7 +1181,8 @@ class DurationME(AppliedMetric):
     base_metric = ME
     preserve_dims: str = "init_time"
 
-    def duration(self, forecast: xr.DataArray) -> xr.DataArray:
+    @staticmethod
+    def duration(forecast: xr.DataArray) -> xr.DataArray:
         if (forecast.valid_time.max() - forecast.valid_time.min()).values.astype(
             "timedelta64[h]"
         ) >= 48:
@@ -1204,6 +1207,7 @@ class DurationME(AppliedMetric):
                         return xr.DataArray(consecutive_days.astype("timedelta64[ns]"))
         return xr.DataArray(np.timedelta64("NaT", "ns"))
 
+    @classmethod
     def _compute_applied_metric(
         self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
     ) -> Any:
@@ -1227,6 +1231,7 @@ class LandfallDetection(AppliedMetric):
     name = "landfall_detection"
     base_metric = EarlySignal
 
+    @classmethod
     def _compute_applied_metric(
         self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
     ) -> Any:

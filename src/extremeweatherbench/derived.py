@@ -105,7 +105,7 @@ class AtmosphericRiverMask(DerivedVariable):
     name = "atmospheric_river_mask"
 
     @classmethod
-    def derive_variable(cls, data: xr.Dataset) -> xr.Dataset:
+    def derive_variable(cls, data: xr.Dataset, *args, **kwargs) -> xr.Dataset:
         """Derive the atmospheric river mask using xr.apply_ufunc approach."""
         return ar.compute_atmospheric_river_mask_ufunc(data)
 
