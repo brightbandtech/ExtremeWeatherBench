@@ -1309,19 +1309,6 @@ class LandfallIntensityMAE(AppliedMetric):
         raise NotImplementedError("LandfallIntensityMAE is not implemented yet")
 
 
-# TODO: complete spatial displacement implementation
-class SpatialDisplacement(AppliedMetric):
-    @property
-    def base_metric(self) -> type[BaseMetric]:
-        return MAE
-
-    def _compute_applied_metric(
-        self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
-    ) -> Any:
-        # Dummy implementation for spatial displacement
-        raise NotImplementedError("SpatialDisplacement is not implemented yet")
-
-
 # TODO: complete lead time detection implementation
 class LeadTimeDetection(AppliedMetric):
     @property
