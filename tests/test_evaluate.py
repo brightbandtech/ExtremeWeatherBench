@@ -581,8 +581,7 @@ class TestPipelineFunctions:
                 # Should log a warning
                 mock_warning.assert_called_once()
                 warning_message = mock_warning.call_args[0][0]
-                assert "zero-length dimensions" in warning_message
-                assert "['valid_time']" in warning_message
+                assert "has no data for case time range" in warning_message
                 assert (
                     str(sample_case_operator.case_metadata.case_id_number)
                     in warning_message
@@ -642,10 +641,7 @@ class TestPipelineFunctions:
                 # Should log a warning with both dimensions
                 mock_warning.assert_called_once()
                 warning_message = mock_warning.call_args[0][0]
-                assert "zero-length dimensions" in warning_message
-                # Check that both dimensions are mentioned (order may vary)
-                assert "valid_time" in warning_message
-                assert "latitude" in warning_message
+                assert "no data for case time range" in warning_message
 
     def test_build_datasets_normal_dimensions(self, sample_case_operator):
         """Test _build_datasets when forecast has normal (non-zero) dimensions."""
