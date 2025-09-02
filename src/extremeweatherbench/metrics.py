@@ -1029,7 +1029,7 @@ class MaxMinMAE(AppliedMetric):
                 if dim not in ["valid_time", "lead_time", "time"]
             ]
         )
-        num_timesteps = forecast.attrs["forecast_resolution_hours"]
+        num_timesteps = 24 // forecast.attrs["forecast_resolution_hours"]
         if num_timesteps is None:
             return {
                 "forecast": xr.DataArray(np.nan),
@@ -1092,7 +1092,7 @@ class OnsetME(AppliedMetric):
         if (forecast.valid_time.max() - forecast.valid_time.min()).values.astype(
             "timedelta64[h]"
         ) >= 48:
-            num_timesteps = forecast.attrs["forecast_resolution_hours"]
+            num_timesteps = 24 // forecast.attrs["forecast_resolution_hours"]
             if num_timesteps is None:
                 return xr.DataArray(np.datetime64("NaT", "ns"))
             min_daily_vals = forecast.groupby("valid_time.dayofyear").map(
@@ -1141,7 +1141,7 @@ class DurationME(AppliedMetric):
         if (forecast.valid_time.max() - forecast.valid_time.min()).values.astype(
             "timedelta64[h]"
         ) >= 48:
-            num_timesteps = forecast.attrs["forecast_resolution_hours"]
+            num_timesteps = 24 // forecast.attrs["forecast_resolution_hours"]
             if num_timesteps is None:
                 return xr.DataArray(np.datetime64("NaT", "ns"))
             min_daily_vals = forecast.groupby("valid_time.dayofyear").map(
