@@ -1172,7 +1172,7 @@ class TestTropicalCycloneEvaluation:
         mock_metric_instance = MagicMock()
         mock_metric_instance.name = "TestMetric"
         mock_metric_instance.compute_metric.return_value = xr.DataArray([1.0])
-        sample_tc_case_operator.metric[0].return_value = mock_metric_instance
+        sample_tc_case_operator.metric_list[0].return_value = mock_metric_instance
 
         # Manually register IBTrACS data since we're bypassing the input pipeline
         case_id_number = str(sample_tc_case_operator.case_metadata.case_id_number)
@@ -1243,7 +1243,7 @@ class TestTropicalCycloneEvaluation:
         mock_metric_instance = MagicMock()
         mock_metric_instance.name = "TestMetric"
         mock_metric_instance.compute_metric.return_value = xr.DataArray([1.0])
-        case_operator.metric[0].return_value = mock_metric_instance
+        case_operator.metric_list[0].return_value = mock_metric_instance
 
         # Run the evaluation
         evaluate.compute_case_operator(case_operator)
@@ -1277,7 +1277,7 @@ class TestTropicalCycloneEvaluation:
         mock_metric_instance = MagicMock()
         mock_metric_instance.name = "TestMetric"
         mock_metric_instance.compute_metric.return_value = xr.DataArray([1.0])
-        sample_tc_case_operator.metric[0].return_value = mock_metric_instance
+        sample_tc_case_operator.metric_list[0].return_value = mock_metric_instance
 
         with patch("extremeweatherbench.derived.maybe_derive_variables") as mock_derive:
             mock_derive.side_effect = lambda ds, variables, **kwargs: ds
@@ -1567,7 +1567,7 @@ class TestFullTCEvaluationWorkflow:
             dims=["case"],
             coords={"case": [sample_tc_case_operator.case_metadata.case_id_number]},
         )
-        sample_tc_case_operator.metric[0].return_value = mock_metric_instance
+        sample_tc_case_operator.metric_list[0].return_value = mock_metric_instance
 
         # Manually register IBTrACS data since we're bypassing the input pipeline
         case_id_number = str(sample_tc_case_operator.case_metadata.case_id_number)
