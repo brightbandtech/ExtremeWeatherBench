@@ -1450,6 +1450,158 @@ class LandfallIntensityMAE(BaseMetric):
         )
 
 
+# Severe convection metrics for hits/misses analysis
+class HitsMisses(BaseMetric):
+    """Basic hits and misses metric for point-based severe weather verification.
+
+    This metric computes hits and misses between forecast and observation points
+    within specified spatial and temporal tolerances.
+    """
+
+    name = "hits_misses"
+
+    @classmethod
+    def _compute_metric(
+        cls,
+        forecast: xr.Dataset,
+        target: xr.Dataset,
+        spatial_tolerance_km: float = 40.0,
+        temporal_tolerance_hours: float = 1.0,
+        **kwargs: Any,
+    ) -> xr.DataArray:
+        """Compute hits and misses for point-based verification.
+
+        Args:
+            forecast: Forecast dataset
+            target: Target/observation dataset
+            spatial_tolerance_km: Spatial tolerance in kilometers
+            temporal_tolerance_hours: Temporal tolerance in hours
+            **kwargs: Additional arguments
+
+        Returns:
+            DataArray with hits/misses counts
+        """
+        # This is a simplified implementation
+        # In practice, this would involve complex spatial-temporal matching
+        logger.warning("HitsMisses metric using simplified implementation")
+
+        # For now, return a basic result structure
+        result = xr.DataArray(
+            data=0.0,
+            dims=["metric_type"],
+            coords={"metric_type": ["hits", "misses", "false_alarms"]},
+            name="hits_misses",
+        )
+        return result
+
+
+class RegionalHitsMisses(BaseMetric):
+    """Regional aggregation of hits and misses for severe weather verification.
+
+    This metric aggregates hits/misses statistics over predefined regions
+    for regional forecast verification.
+    """
+
+    name = "regional_hits_misses"
+
+    @classmethod
+    def _compute_metric(
+        cls,
+        forecast: xr.Dataset,
+        target: xr.Dataset,
+        regions: Optional[Dict[str, Dict[str, float]]] = None,
+        **kwargs: Any,
+    ) -> xr.DataArray:
+        """Compute regional hits and misses statistics.
+
+        Args:
+            forecast: Forecast dataset
+            target: Target/observation dataset
+            regions: Dictionary defining regions with lat/lon bounds
+            **kwargs: Additional arguments
+
+        Returns:
+            DataArray with regional hits/misses statistics
+        """
+        logger.warning("RegionalHitsMisses metric using simplified implementation")
+
+        # Default regions if none provided
+        if regions is None:
+            regions = {
+                "central_plains": {
+                    "lat_min": 35,
+                    "lat_max": 45,
+                    "lon_min": -105,
+                    "lon_max": -90,
+                },
+                "southeast": {
+                    "lat_min": 25,
+                    "lat_max": 35,
+                    "lon_min": -90,
+                    "lon_max": -75,
+                },
+            }
+
+        # Create result structure
+        region_names = list(regions.keys())
+        metric_types = ["hits", "misses", "false_alarms", "correct_negatives"]
+
+        result = xr.DataArray(
+            data=np.zeros((len(region_names), len(metric_types))),
+            dims=["region", "metric_type"],
+            coords={"region": region_names, "metric_type": metric_types},
+            name="regional_hits_misses",
+        )
+        return result
+
+
+class SpatialDisplacement(BaseMetric):
+    """Spatial displacement metric for feature-based verification.
+
+    This metric computes the displacement between forecast and observed
+    features (e.g., atmospheric rivers, storm centers).
+    """
+
+    name = "spatial_displacement"
+
+    @classmethod
+    def _compute_metric(
+        cls,
+        forecast: xr.Dataset,
+        target: xr.Dataset,
+        feature_threshold: float = 0.5,
+        **kwargs: Any,
+    ) -> xr.DataArray:
+        """Compute spatial displacement between forecast and target features.
+
+        Args:
+            forecast: Forecast dataset
+            target: Target dataset
+            feature_threshold: Threshold for feature identification
+            **kwargs: Additional arguments
+
+        Returns:
+            DataArray with displacement distances and statistics
+        """
+        logger.warning("SpatialDisplacement metric using simplified implementation")
+
+        # This would involve complex feature detection and matching
+        # For now, return a placeholder result
+        result = xr.DataArray(
+            data=[0.0, 0.0, 0.0],
+            dims=["statistic"],
+            coords={
+                "statistic": [
+                    "mean_displacement_km",
+                    "median_displacement_km",
+                    "max_displacement_km",
+                ]
+            },
+            name="spatial_displacement",
+        )
+        return result
+
+
 # TODO: complete lead time detection implementation
 class LeadTimeDetection(AppliedMetric):
     base_metric = MAE
