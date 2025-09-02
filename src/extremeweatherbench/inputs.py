@@ -983,12 +983,12 @@ def align_forecast_to_target(
 
 
 def safely_pull_variables(
-    dataset: xr.Dataset,
+    dataset: IncomingDataInput,
     variables: list[str],
     optional_variables: Optional[list[str]] = None,
     optional_variables_mapping: Optional[dict[str, list[str]]] = None,
-) -> xr.Dataset:
-    """Safely pull variables from an xarray dataset, prioritizing optionals.
+) -> IncomingDataInput:
+    """Safely pull variables from any IncomingDataInput type, prioritizing optionals.
 
     This function attempts to extract variables from a dataset, giving
     priority to optional variables when available. If optional variables
@@ -996,14 +996,15 @@ def safely_pull_variables(
     the mapping dictionary.
 
     Args:
-        dataset: The xarray dataset to extract variables from.
+        dataset: The dataset to extract variables from (xr.Dataset, xr.DataArray,
+            pl.LazyFrame, or pd.DataFrame).
         variables: List of required variable names to extract.
         optional_variables: List of optional variable names to try first.
         optional_variables_mapping: Dict mapping optional vars to list of
             required vars they can replace.
 
     Returns:
-        xr.Dataset containing the extracted variables.
+        Same type as input dataset containing the extracted variables.
 
     Raises:
         KeyError: If required variables are not present and no suitable
@@ -1029,6 +1030,37 @@ def safely_pull_variables(
     if optional_variables_mapping is None:
         optional_variables_mapping = {}
 
+    # Dispatch to type-specific handlers
+    if isinstance(dataset, xr.Dataset):
+        return _safely_pull_variables_xr_dataset(
+            dataset, variables, optional_variables, optional_variables_mapping
+        )
+    elif isinstance(dataset, xr.DataArray):
+        return _safely_pull_variables_xr_dataarray(
+            dataset, variables, optional_variables, optional_variables_mapping
+        )
+    elif isinstance(dataset, pl.LazyFrame):
+        return _safely_pull_variables_polars_lazyframe(
+            dataset, variables, optional_variables, optional_variables_mapping
+        )
+    elif isinstance(dataset, pd.DataFrame):
+        return _safely_pull_variables_pandas_dataframe(
+            dataset, variables, optional_variables, optional_variables_mapping
+        )
+    else:
+        raise TypeError(
+            f"Unsupported dataset type: {type(dataset)}. "
+            f"Expected one of: xr.Dataset, xr.DataArray, pl.LazyFrame, pd.DataFrame"
+        )
+
+
+def _safely_pull_variables_xr_dataset(
+    dataset: xr.Dataset,
+    variables: list[str],
+    optional_variables: list[str],
+    optional_variables_mapping: dict[str, list[str]],
+) -> xr.Dataset:
+    """Handle variable extraction for xarray Dataset."""
     # Track which variables we've found
     found_variables = []
     required_variables_satisfied = set()
@@ -1066,4 +1098,131 @@ def safely_pull_variables(
         )
 
     # Return dataset with only the found variables
+    return dataset[found_variables]
+
+
+def _safely_pull_variables_xr_dataarray(
+    dataset: xr.DataArray,
+    variables: list[str],
+    optional_variables: list[str],
+    optional_variables_mapping: dict[str, list[str]],
+) -> xr.DataArray:
+    """Handle variable extraction for xarray DataArray."""
+    # For DataArray, the variable is the DataArray itself
+    # Check if the requested variable matches the DataArray name
+    dataarray_name = dataset.name or "unnamed"
+
+    # Check if any of the requested variables match this DataArray
+    if (
+        dataarray_name in variables
+        or dataarray_name in optional_variables
+        or any(
+            dataarray_name in variables
+            for variables in optional_variables_mapping.values()
+        )
+    ):
+        return dataset
+    else:
+        available_vars = [dataarray_name]
+        raise KeyError(
+            f"Required variables {variables} not found in DataArray. "
+            f"Available variable: {available_vars}"
+        )
+
+
+def _safely_pull_variables_polars_lazyframe(
+    dataset: pl.LazyFrame,
+    variables: list[str],
+    optional_variables: list[str],
+    optional_variables_mapping: dict[str, list[str]],
+) -> pl.LazyFrame:
+    """Handle variable extraction for Polars LazyFrame."""
+    # Get column names from LazyFrame
+    available_columns = dataset.columns
+
+    # Track which variables we've found
+    found_variables = []
+    required_variables_satisfied = set()
+
+    # First, check for optional variables and add them if present
+    for opt_var in optional_variables:
+        if opt_var in available_columns:
+            found_variables.append(opt_var)
+            # Check if this optional variable replaces required variables
+            if opt_var in optional_variables_mapping:
+                replaced_vars = optional_variables_mapping[opt_var]
+                # Handle both single string and list of strings
+                if isinstance(replaced_vars, str):
+                    required_variables_satisfied.add(replaced_vars)
+                else:
+                    required_variables_satisfied.update(replaced_vars)
+
+    # Then check for required variables that weren't replaced
+    missing_variables = []
+    for var in variables:
+        if var in required_variables_satisfied:
+            # This required variable was replaced by an optional variable
+            continue
+        elif var in available_columns:
+            found_variables.append(var)
+        else:
+            missing_variables.append(var)
+
+    # Raise error if any required variables are missing
+    if missing_variables:
+        raise KeyError(
+            f"Required variables {missing_variables} not found in LazyFrame. "
+            f"Available columns: {available_columns}"
+        )
+
+    # Return LazyFrame with only the found columns
+    return dataset.select(found_variables)
+
+
+def _safely_pull_variables_pandas_dataframe(
+    dataset: pd.DataFrame,
+    variables: list[str],
+    optional_variables: list[str],
+    optional_variables_mapping: dict[str, list[str]],
+) -> pd.DataFrame:
+    """Handle variable extraction for Pandas DataFrame."""
+    # Get column names from DataFrame
+    available_columns = list(dataset.columns)
+
+    # Track which variables we've found
+    found_variables = []
+    required_variables_satisfied = set()
+
+    # First, check for optional variables and add them if present
+    for opt_var in optional_variables:
+        if opt_var in available_columns:
+            found_variables.append(opt_var)
+            # Check if this optional variable replaces required variables
+            if opt_var in optional_variables_mapping:
+                replaced_vars = optional_variables_mapping[opt_var]
+                # Handle both single string and list of strings
+                if isinstance(replaced_vars, str):
+                    required_variables_satisfied.add(replaced_vars)
+                else:
+                    required_variables_satisfied.update(replaced_vars)
+
+    # Then check for required variables that weren't replaced
+    missing_variables = []
+    for var in variables:
+        if var in required_variables_satisfied:
+            # This required variable was replaced by an optional variable
+            continue
+        elif var in available_columns:
+            found_variables.append(var)
+        else:
+            missing_variables.append(var)
+
+    # Raise error if any required variables are missing
+    if missing_variables:
+        raise KeyError(
+            f"Required variables {missing_variables} not found in DataFrame. "
+            f"Available columns: {available_columns}"
+        )
+
+    # Return DataFrame with only the found columns
     return dataset[found_variables]
