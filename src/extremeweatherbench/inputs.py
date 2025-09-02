@@ -244,7 +244,8 @@ class InputBase(ABC):
         variables: list[Union[str, "derived.DerivedVariable"]],
     ) -> IncomingDataInput:
         """Subset the variables from the data, if required."""
-
+        if isinstance(data, pl.LazyFrame):
+            print("LazyFrame")
         # get the first derived variable if it exists
         derived_variables = [
             v
@@ -1150,12 +1151,11 @@ def _safely_pull_variables_polars_lazyframe(
 ) -> pl.LazyFrame:
     """Handle variable extraction for Polars LazyFrame."""
     # Get column names from LazyFrame
-    available_columns = dataset.columns
+    available_columns = [n for n in dataset.collect_schema()]
 
     # Track which variables we've found
     found_variables = []
     required_variables_satisfied = set()
-
     # First, check for optional variables and add them if present
     for opt_var in optional_variables:
         if opt_var in available_columns:
@@ -1179,6 +1179,11 @@ def _safely_pull_variables_polars_lazyframe(
             found_variables.append(var)
         else:
             missing_variables.append(var)
+
+    # Add invariant base variables to the found variables
+    for base_vars in ["valid_time", "latitude", "longitude", "station"]:
+        if base_vars in available_columns:
+            found_variables.append(base_vars)
 
     # Raise error if any required variables are missing
     if missing_variables:
@@ -1229,6 +1234,10 @@ def _safely_pull_variables_pandas_dataframe(
         else:
             missing_variables.append(var)
 
+    # Add invariant base variables to the found variables
+    for base_vars in ["valid_time", "latitude", "longitude", "station"]:
+        if base_vars in available_columns:
+            found_variables.append(base_vars)
     # Raise error if any required variables are missing
     if missing_variables:
         raise KeyError(
