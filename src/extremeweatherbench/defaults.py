@@ -165,7 +165,7 @@ cira_severe_convection_forecast = inputs.KerchunkForecast(
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
 )
 
-hres_tropical_cyclone_forecast = inputs.KerchunkForecast(
+hres_tropical_cyclone_forecast = inputs.ZarrForecast(
     source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
     variables=[derived.TropicalCycloneTrackVariables],
     variable_mapping={
