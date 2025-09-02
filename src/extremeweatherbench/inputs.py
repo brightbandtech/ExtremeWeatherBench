@@ -286,10 +286,6 @@ class ForecastBase(InputBase):
         data: Union[xr.Dataset, xr.DataArray],
         case_metadata: "cases.IndividualCase",
     ) -> IncomingDataInput:
-        forecast_resolution = utils.determine_timesteps_per_day_resolution(data)
-
-        data.attrs["forecast_resolution_hours"] = forecast_resolution
-
         # subset time first to avoid OOM masking issues
         subset_time_indices = utils.derive_indices_from_init_time_and_lead_time(
             data,
@@ -334,6 +330,10 @@ class ForecastBase(InputBase):
         time_filtered_data = spatiotemporally_subset_data.sel(
             valid_time=slice(case_metadata.start_date, case_metadata.end_date)
         )
+
+        forecast_resolution = utils.determine_timesteps_per_day_resolution(data)
+
+        data.attrs["forecast_resolution_hours"] = forecast_resolution
 
         return time_filtered_data
 

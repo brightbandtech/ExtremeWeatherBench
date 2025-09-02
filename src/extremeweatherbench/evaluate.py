@@ -490,10 +490,18 @@ def _evaluate_metric_and_return_df(
     logger.info(f"computing metric {metric.name}")
     # loads in all variables if no name is provided
     # TODO: expand typing to allow for datasets or rethink logic with inputs like TCs
+    # Prepare data with preserved attributes
+    forecast_metric_input = forecast_ds.get(forecast_variable, forecast_ds.data_vars)
+    target_metric_input = target_ds.get(target_variable, target_ds.data_vars)
+
+    # Propagate dataset attributes to DataArrays
+    if hasattr(forecast_metric_input, "attrs"):
+        forecast_metric_input.attrs.update(forecast_ds.attrs)
+    if hasattr(target_metric_input, "attrs"):
+        target_metric_input.attrs.update(target_ds.attrs)
+
     metric_result = metric.compute_metric(
-        forecast_ds.get(forecast_variable, forecast_ds.data_vars),
-        target_ds.get(target_variable, target_ds.data_vars),
-        **kwargs,
+        forecast_metric_input, target_metric_input, **kwargs
     )
     # Convert to DataFrame and add metadata, ensuring OUTPUT_COLUMNS compliance
     df = metric_result.to_dataframe(name="value").reset_index()
