@@ -15,12 +15,16 @@ from typing import Dict, Optional, Tuple
 
 import click
 import pandas as pd
-from tqdm import tqdm
 
 from extremeweatherbench import defaults
-from extremeweatherbench.cases import build_case_operators
-from extremeweatherbench.evaluate import _build_datasets, _evaluate_metric_and_return_df
+from extremeweatherbench.evaluate import (
+    ExtremeWeatherBench,
+    _build_datasets,
+    _evaluate_metric_and_return_df,
+    compute_case_operator,
+)
 from extremeweatherbench.evaluate_cli import _load_default_cases
+from extremeweatherbench.progress import enhanced_logging, progress_tracker
 
 # Configure logging
 logging.basicConfig(
@@ -200,6 +204,60 @@ class ComprehensiveEvaluationResults:
         with open(self.error_file, "a", newline="") as f:
             writer = csv.writer(f)
             writer.writerow(error_row)
+
+    def add_result(
+        self,
+        case_id: str,
+        event_type: str,
+        metric: str,
+        value,
+        status: str,
+        error_message: str = "",
+    ):
+        """Add a result from the DataFrame processing approach."""
+        self.stats["total_evaluations"] += 1
+
+        if status == "PASS":
+            self.stats["successful_evaluations"] += 1
+        else:
+            self.stats["failed_evaluations"] += 1
+
+        # Update event type stats
+        if event_type not in self.stats["event_type_stats"]:
+            self.stats["event_type_stats"][event_type] = {"pass": 0, "fail": 0}
+
+        if status == "PASS":
+            self.stats["event_type_stats"][event_type]["pass"] += 1
+        else:
+            self.stats["event_type_stats"][event_type]["fail"] += 1
+
+        # Update metric stats
+        if metric not in self.stats["metric_stats"]:
+            self.stats["metric_stats"][metric] = {"pass": 0, "fail": 0}
+
+        if status == "PASS":
+            self.stats["metric_stats"][metric]["pass"] += 1
+        else:
+            self.stats["metric_stats"][metric]["fail"] += 1
+
+        # Write to detailed CSV
+        row = [
+            case_id,
+            event_type,
+            metric,
+            "unknown",  # target_source
+            "unknown",  # forecast_source
+            "unknown",  # target_variable
+            status,
+            error_message,
+            datetime.datetime.now().isoformat(),
+            0,  # lead_time_count
+            1 if status == "PASS" else 0,  # result_rows
+        ]
+
+        with open(self.detailed_file, "a", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(row)
 
     def generate_summary(self):
         """Generate summary statistics and save to CSV."""
@@ -445,17 +503,21 @@ def run_comprehensive_evaluation(
             evaluation_objects = [
                 obj for obj in evaluation_objects if obj.event_type in event_types
             ]
-            click.echo(f"Filtered to {len(evaluation_objects)} evaluation objects")  # noqa: E501
+            click.echo(f"Filtered to {len(evaluation_objects)} evaluation objects")
 
-        # Build case operators
-        click.echo("Building case operators...")
-        case_operators = build_case_operators(cases_dict, evaluation_objects)
+        # Create ExtremeWeatherBench instance
+        click.echo("Initializing ExtremeWeatherBench...")
+        ewb = ExtremeWeatherBench(
+            cases=cases_dict, evaluation_objects=evaluation_objects, cache_dir=cache_dir
+        )
+        # Get case operators for stats
+        case_operators = ewb.case_operators
         click.echo(f"Built {len(case_operators)} case operators")
 
         # Limit cases for testing if specified
         if max_cases:
             case_operators = case_operators[:max_cases]
-            click.echo(f"Limited to {max_cases} cases for testing")
+            click.echo(f"Limited to {max_cases} case operators for testing")
 
         # Calculate total metrics for progress tracking
         total_metrics = sum(
@@ -463,39 +525,169 @@ def run_comprehensive_evaluation(
         )
         click.echo(f"Total metric evaluations to attempt: {total_metrics}")
 
-        # Run evaluations with progress bar
+        # Run evaluations using ExtremeWeatherBench
         click.echo("\nStarting comprehensive evaluation...")
 
         kwargs = {
             "cache_dir": cache_dir,
-            "pre_compute": precompute,
+            "pre_compute": True,  # Always use pre_compute=True as requested
         }
 
-        with tqdm(total=len(case_operators), desc="Evaluating cases") as pbar:
-            for i, case_operator in enumerate(case_operators):
-                try:
-                    eval_result = evaluate_single_case_operator(
-                        case_operator, results_manager, **kwargs
-                    )
+        # Run the evaluation workflow with comprehensive error handling
+        results_df = pd.DataFrame()
 
-                    # Update progress bar description
-                    success_rate = (
-                        eval_result["metrics_successful"]
-                        / max(eval_result["metrics_attempted"], 1)
-                        * 100
-                    )
-                    pbar.set_postfix(
-                        case=eval_result["case_id"], success_rate=f"{success_rate:.1f}%"
-                    )
+        try:
+            if max_cases:
+                # Create a custom ExtremeWeatherBench instance that will use limited
+                # case operators
+                class LimitedExtremeWeatherBench(ExtremeWeatherBench):
+                    def __init__(self, limited_case_operators, cache_dir=None):
+                        # Don't call super().__init__ to avoid building case operators
+                        self.cache_dir = Path(cache_dir) if cache_dir else None
+                        self._limited_case_operators = limited_case_operators
 
-                except Exception as e:
-                    if continue_on_error:
-                        logger.error(f"Failed to evaluate case operator {i}: {e}")  # noqa: E501
+                    @property
+                    def case_operators(self):
+                        return self._limited_case_operators
+
+                # Create limited EWB instance and run it
+                limited_ewb = LimitedExtremeWeatherBench(case_operators, cache_dir)
+                results_df = limited_ewb.run(**kwargs)
+            else:
+                # Run the full evaluation workflow
+                results_df = ewb.run(**kwargs)
+        except Exception as e:
+            logger.error(f"Error during evaluation workflow: {e}", exc_info=True)
+            click.echo(f"Warning: Evaluation workflow failed with error: {e}")
+            click.echo("Attempting to process individual case operators...")
+
+            # Fallback: try to run case operators individually with progress tracking
+            try:
+                results_list = []
+                total_operations = sum(
+                    len(case_op.metric_list) for case_op in case_operators
+                )
+
+                with enhanced_logging():
+                    with progress_tracker.overall_workflow(
+                        total_operations,
+                        f"Fallback processing {len(case_operators)} "
+                        f"cases with {total_operations} total metrics",
+                    ):
+                        for case_operator in case_operators:
+                            case_id = case_operator.case_metadata.case_id_number
+                            case_title = case_operator.case_metadata.title
+                            num_metrics = len(case_operator.metric_list)
+
+                            try:
+                                with progress_tracker.case_processing(
+                                    case_id, f"{case_title}", num_metrics
+                                ) as case_pbar:
+                                    with progress_tracker.dask_computation_context():
+                                        result = compute_case_operator(
+                                            case_operator, **kwargs
+                                        )
+                                        if not result.empty:
+                                            results_list.append(result)
+                                    case_pbar.update(num_metrics)
+                            except Exception as case_error:
+                                logger.error(
+                                    "Error processing case "
+                                    f"{case_operator.case_metadata.case_id_number}: "
+                                    f"{case_error}"
+                                )
+                                # Record the case-level failure
+                                try:
+                                    results_manager.record_failure(
+                                        case_operator,
+                                        "CASE_LEVEL_ERROR",
+                                        "unknown",
+                                        case_error,
+                                    )
+                                except Exception as record_error:
+                                    logger.error(
+                                        f"Failed to record case failure: {record_error}"
+                                    )
+                                continue
+
+                if results_list:
+                    results_df = pd.concat(results_list, ignore_index=True)
+                    click.echo(
+                        f"Individual processing completed, got {len(results_df)} "
+                        "results"
+                    )
+                else:
+                    click.echo("No successful results from individual processing")
+            except Exception as fallback_error:
+                logger.error(
+                    f"Fallback processing also failed: {fallback_error}", exc_info=True
+                )
+                click.echo(
+                    f"Error: Both main and fallback processing failed: {fallback_error}"
+                )
+        # Process results for our comprehensive evaluation format
+        click.echo("Processing results...")
+        if not results_df.empty:
+            try:
+                for _, row in results_df.iterrows():
+                    try:
+                        # Extract relevant data from each result row
+                        case_id = row.get("case_id", "unknown")
+                        event_type = row.get("event_type", "unknown")
+                        metric_name = row.get("metric", "unknown")
+                        metric_value = row.get("value", None)
+                        status = "PASS" if pd.notna(metric_value) else "FAIL"
+                        # Add to results manager
+                        results_manager.add_result(
+                            case_id=case_id,
+                            event_type=event_type,
+                            metric=metric_name,
+                            value=metric_value,
+                            status=status,
+                            error_message=""
+                            if status == "PASS"
+                            else "No value computed",
+                        )
+                    except Exception as row_error:
+                        logger.error(f"Error processing result row: {row_error}")
+                        # Try to add a failure record with whatever data we can extract
+                        try:
+                            safe_case_id = (
+                                str(row.get("case_id", "unknown"))
+                                if hasattr(row, "get")
+                                else "unknown"
+                            )
+                            safe_event_type = (
+                                str(row.get("event_type", "unknown"))
+                                if hasattr(row, "get")
+                                else "unknown"
+                            )
+                            safe_metric = (
+                                str(row.get("metric", "unknown"))
+                                if hasattr(row, "get")
+                                else "unknown"
+                            )
+                            results_manager.add_result(
+                                case_id=safe_case_id,
+                                event_type=safe_event_type,
+                                metric=safe_metric,
+                                value=None,
+                                status="FAIL",
+                                error_message=f"Error processing result: {row_error}",
+                            )
+                        except Exception as safe_error:
+                            logger.error(
+                                f"Failed to record processing error: {safe_error}"
+                            )
                         continue
-                    else:
-                        raise
-
-                pbar.update(1)
+            except Exception as processing_error:
+                logger.error(
+                    f"Error during results processing: {processing_error}",
+                    exc_info=True,
+                )
+                click.echo(f"Warning: Results processing failed: {processing_error}")
+        else:
+            click.echo("No results to process")
 
         # Generate and save summary
         click.echo("\nGenerating summary statistics...")
@@ -535,10 +727,31 @@ def run_comprehensive_evaluation(
     except KeyboardInterrupt:
         click.echo("\n\nEvaluation interrupted by user")
         click.echo("Partial results may be available in output files")
+        # Generate summary with whatever data we have
+        try:
+            summary_df = results_manager.generate_summary()
+            click.echo("Partial results saved")
+        except Exception as summary_error:
+            logger.error(
+                f"Failed to generate summary after interruption: {summary_error}"
+            )
     except Exception as e:
         click.echo(f"\n\nFatal error during evaluation: {e}")
         logger.error(f"Fatal error: {e}", exc_info=True)
-        raise
+        click.echo("Attempting to save any partial results...")
+        try:
+            summary_df = results_manager.generate_summary()
+            click.echo("Partial results saved despite error")
+            # Print file locations
+            click.echo("Results saved to:")
+            click.echo(f"  Detailed results: {results_manager.detailed_file}")
+            click.echo(f"  Summary: {results_manager.summary_file}")
+            click.echo(f"  Errors: {results_manager.error_file}")
+        except Exception as summary_error:
+            logger.error(
+                f"Failed to generate summary after fatal error: {summary_error}"
+            )
+        # Don't re-raise - let the script complete and show what it could accomplish
 
 
 if __name__ == "__main__":
