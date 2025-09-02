@@ -331,9 +331,11 @@ class ForecastBase(InputBase):
             valid_time=slice(case_metadata.start_date, case_metadata.end_date)
         )
 
-        forecast_resolution = utils.determine_timesteps_per_day_resolution(data)
+        forecast_resolution = utils.determine_timesteps_per_day_resolution(
+            time_filtered_data
+        )
 
-        data.attrs["forecast_resolution_hours"] = forecast_resolution
+        time_filtered_data.attrs["forecast_resolution_hours"] = forecast_resolution
 
         return time_filtered_data
 
