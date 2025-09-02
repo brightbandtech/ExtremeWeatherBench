@@ -166,15 +166,14 @@ class TestDerivedVariableAbstractClass:
         expected = sample_dataset["test_variable_1"] + sample_dataset["test_variable_2"]
         xr.testing.assert_equal(result, expected)
 
-    def test_compute_logs_warning_missing_variables(self, sample_dataset, caplog):
-        """Test that compute fails when required variables are missing."""
+    def test_compute_raises_error_missing_variables(self, sample_dataset, caplog):
+        """Test that compute raises error when required variables are missing."""
         # Remove one of the required variables
         incomplete_dataset = sample_dataset.drop_vars("test_variable_2")
 
-        # This should fail during derive_variable when accessing missing variable
         with pytest.raises(
-            KeyError
-        ):  # derive_variable will fail when accessing missing variable
+            ValueError, match="Input variable test_variable_2 not found in data"
+        ):
             TestValidDerivedVariable.compute(incomplete_dataset)
 
     def test_required_variables_class_attribute(self):
@@ -326,7 +325,7 @@ class TestMaybeDeriveVariablesFunction:
         variables = [TestMissingVarDerived()]
 
         sample_dataset.attrs["dataset_type"] = "forecast"
-        with pytest.raises(KeyError, match="No variable named 'nonexistent_variable'"):
+        with pytest.raises(ValueError, match="Input variable nonexistent_variable"):
             derived.maybe_derive_variables(sample_dataset, variables)
 
     def test_no_derived_variables_in_list(self, sample_dataset):
@@ -605,14 +604,11 @@ class TestUtilityFunctions:
 class TestEdgeCasesAndErrorConditions:
     """Test edge cases and error conditions across the module."""
 
-    def test_derived_variable_with_empty_dataset(self, caplog):
+    def test_derived_variable_with_empty_dataset(self):
         """Test behavior with empty datasets."""
         empty_dataset = xr.Dataset()
 
-        # Should fail during derive_variable when accessing missing variables
-        with pytest.raises(
-            KeyError
-        ):  # derive_variable will fail when accessing missing variables
+        with pytest.raises(ValueError, match="Input variable .* not found in data"):
             TestValidDerivedVariable.compute(empty_dataset)
 
     def test_derived_variable_with_wrong_dimensions(self, sample_dataset):
