@@ -159,7 +159,7 @@ class ExtremeWeatherBench:
                 for case_operator in case_operators:
                     case_id = case_operator.case_metadata.case_id_number
                     case_title = case_operator.case_metadata.title
-                    num_metrics = len(case_operator.metric)
+                    num_metrics = len(case_operator.metric_list)
 
                     with progress_tracker.case_processing(
                         case_id, f"{case_title}", num_metrics
@@ -237,7 +237,7 @@ def _compute_case_operator_core(case_operator: "cases.CaseOperator", **kwargs):
     )
 
     for variables, metric_class in itertools.product(
-        variable_pairs, case_operator.metric
+        variable_pairs, case_operator.metric_list
     ):
         forecast_var, target_var = variables
         # Handle derived variables by extracting their names
@@ -328,37 +328,19 @@ def compute_case_operator(case_operator: "cases.CaseOperator", **kwargs):
         zip(
             case_operator.forecast.variables,
             case_operator.target.variables,
-        ),
-        case_operator.metric_list,
+        )
     )
 
     for variables, metric_class in itertools.product(
         variable_pairs, case_operator.metric_list
     ):
+        forecast_var, target_var = variables
+
         # Handle derived variables by extracting their names
         forecast_var = (
-            variables[0].name if hasattr(variables[0], "name") else variables[0]
+            forecast_var.name if hasattr(forecast_var, "name") else forecast_var
         )
-        target_var = (
-            variables[1].name if hasattr(variables[1], "name") else variables[1]
-        )
-        results.append(
-            _evaluate_metric_and_return_df(
-                forecast_ds=aligned_forecast_ds,
-                target_ds=aligned_target_ds,
-                forecast_variable=forecast_var,
-                target_variable=target_var,
-                metric=metric_class,
-                case_id_number=case_operator.case_metadata.case_id_number,
-                event_type=case_operator.case_metadata.event_type,
-                **kwargs,
-            )
-        )
-
-    for variables, metric_class in itertools.product(
-        variable_pairs, case_operator.metric
-    ):
-        forecast_var, target_var = variables
+        target_var = target_var.name if hasattr(target_var, "name") else target_var
 
         # Instantiate the metric if it's a class
         if isinstance(metric_class, type):
