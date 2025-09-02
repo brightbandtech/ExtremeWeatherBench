@@ -1015,6 +1015,7 @@ class MaxMinMAE(AppliedMetric):
         tolerance_range: int = 24,
         **kwargs: Any,
     ) -> Any:
+        forecast_resolution_hours = forecast.attrs["forecast_resolution_hours"]
         forecast = forecast.mean(
             [
                 dim
@@ -1029,7 +1030,7 @@ class MaxMinMAE(AppliedMetric):
                 if dim not in ["valid_time", "lead_time", "time"]
             ]
         )
-        num_timesteps = 24 // forecast.attrs["forecast_resolution_hours"]
+        num_timesteps = 24 // forecast_resolution_hours
         if num_timesteps is None:
             return {
                 "forecast": xr.DataArray(np.nan),
@@ -1088,11 +1089,12 @@ class OnsetME(AppliedMetric):
     name = "onset_me"
 
     @staticmethod
-    def onset(forecast: xr.DataArray) -> xr.DataArray:
+    def onset(forecast: xr.DataArray, **kwargs) -> xr.DataArray:
         if (forecast.valid_time.max() - forecast.valid_time.min()).values.astype(
             "timedelta64[h]"
         ) >= 48:
-            num_timesteps = 24 // forecast.attrs["forecast_resolution_hours"]
+            # get the forecast resolution hours from the kwargs, otherwise default to 6
+            num_timesteps = 24 // kwargs.get("forecast_resolution_hours", 6)
             if num_timesteps is None:
                 return xr.DataArray(np.datetime64("NaT", "ns"))
             min_daily_vals = forecast.groupby("valid_time.dayofyear").map(
@@ -1120,7 +1122,12 @@ class OnsetME(AppliedMetric):
     ) -> Any:
         target_time = target.valid_time[0] + np.timedelta64(48, "h")
         forecast = (
-            forecast.mean(["latitude", "longitude"]).groupby("init_time").map(cls.onset)
+            forecast.mean(["latitude", "longitude"])
+            .groupby("init_time")
+            .map(
+                cls.onset,
+                forecast_resolution_hours=forecast.attrs["forecast_resolution_hours"],
+            )
         )
         return {
             "forecast": forecast,
@@ -1137,11 +1144,12 @@ class DurationME(AppliedMetric):
     name = "duration_me"
 
     @staticmethod
-    def duration(forecast: xr.DataArray) -> xr.DataArray:
+    def duration(forecast: xr.DataArray, **kwargs) -> xr.DataArray:
         if (forecast.valid_time.max() - forecast.valid_time.min()).values.astype(
             "timedelta64[h]"
         ) >= 48:
-            num_timesteps = 24 // forecast.attrs["forecast_resolution_hours"]
+            # get the forecast resolution hours from the kwargs, otherwise default to 6
+            num_timesteps = 24 // kwargs.get("forecast_resolution_hours", 6)
             if num_timesteps is None:
                 return xr.DataArray(np.datetime64("NaT", "ns"))
             min_daily_vals = forecast.groupby("valid_time.dayofyear").map(
@@ -1173,7 +1181,10 @@ class DurationME(AppliedMetric):
         forecast = (
             forecast.mean(["latitude", "longitude"])
             .groupby("init_time")
-            .map(cls.duration)
+            .map(
+                cls.duration,
+                forecast_resolution_hours=forecast.attrs["forecast_resolution_hours"],
+            )
         )
         return {
             "forecast": forecast,
