@@ -351,7 +351,7 @@ class EvaluationObject:
     """
 
     event_type: str
-    metric_list: list[Union[Callable, "metrics.BaseMetric", "metrics.AppliedMetric"]]
+    metric_list: list[Union["metrics.BaseMetric", "metrics.AppliedMetric"]]
     target: "TargetBase"
     forecast: "ForecastBase"
 
