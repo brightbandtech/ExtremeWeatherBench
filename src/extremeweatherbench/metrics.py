@@ -1039,6 +1039,7 @@ class DurationME(AppliedMetric):
 class LeadTimeDetection(AppliedMetric):
     base_metric = MAE
     name = "lead_time_detection"
+    preserve_dims: str = "init_time"
 
     @classmethod
     def _compute_applied_metric(
