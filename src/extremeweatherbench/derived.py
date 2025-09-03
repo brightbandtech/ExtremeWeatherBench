@@ -157,9 +157,9 @@ class TropicalCycloneTrackVariables(DerivedVariable):
         # Check if we should apply IBTrACS filtering
         # First check kwargs, then the global registry
         ibtracs_data = kwargs.get("ibtracs_data", None)
+        case_metadata = kwargs.get("case_metadata", None)
+        case_id_number = case_metadata.case_id_number if case_metadata else None
         if ibtracs_data is None:
-            # Try to get from registry using case_id_number if provided
-            case_id_number = kwargs.get("case_id_number", None)
             if case_id_number is not None:
                 ibtracs_data = tropical_cyclone.get_ibtracs_data(case_id_number)
             else:
