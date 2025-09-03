@@ -1209,7 +1209,7 @@ def maybe_subset_variables(
     )
 
     expected_and_maybe_derived_variables = (
-        derived.maybe_pull_required_variables_from_derived_input(variables)
+        derived.maybe_include_variables_from_derived_input(variables)
     )
     data = safely_pull_variables(
         data,
