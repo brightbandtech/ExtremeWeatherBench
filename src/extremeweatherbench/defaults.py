@@ -243,6 +243,17 @@ BRIGHTBAND_EVALUATION_OBJECTS = [
         forecast=cira_severe_convection_forecast,
     ),
     inputs.EvaluationObject(
+        event_type="severe_convection",
+        metric_list=[
+            metrics.CSI,
+            metrics.FAR,
+            metrics.RegionalHitsMisses,
+            metrics.HitsMisses,
+        ],
+        target=pph_target,
+        forecast=cira_severe_convection_forecast,
+    ),
+    inputs.EvaluationObject(
         event_type="atmospheric_river",
         metric_list=[metrics.CSI, metrics.SpatialDisplacement, metrics.EarlySignal],
         target=era5_atmospheric_river_target,
