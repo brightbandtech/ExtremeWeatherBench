@@ -71,10 +71,9 @@ class DerivedVariable(ABC):
         Returns:
             A DataArray with the derived variable.
         """
-        # Log missing variables but continue processing
-        # TODO: add optional variables approach for primary variables that
-        # have a fallback option in derived methods
-
+        for v in cls.required_variables:
+            if v not in data.data_vars:
+                raise ValueError(f"Input variable {v} not found in data")
         return cls.derive_variable(data)
 
 
