@@ -391,7 +391,7 @@ class TestComputeCaseOperator:
             sample_target_dataset,
         )
         mock_derive_variables.side_effect = (
-            lambda ds, variables: ds  # Return unchanged
+            lambda ds, variables, **kwargs: ds  # Return unchanged
         )
 
         mock_result = pd.DataFrame(
@@ -430,7 +430,7 @@ class TestComputeCaseOperator:
             sample_forecast_dataset,
             sample_target_dataset,
         )
-        mock_derive_variables.side_effect = lambda ds, variables: ds
+        mock_derive_variables.side_effect = lambda ds, variables, **kwargs: ds
 
         sample_case_operator.target.maybe_align_forecast_to_target.return_value = (
             sample_forecast_dataset,
@@ -483,7 +483,7 @@ class TestComputeCaseOperator:
         )
 
         with patch("extremeweatherbench.derived.maybe_derive_variables") as mock_derive:
-            mock_derive.side_effect = lambda ds, variables: ds
+            mock_derive.side_effect = lambda ds, variables, **kwargs: ds
 
             with patch(
                 "extremeweatherbench.evaluate._evaluate_metric_and_return_df"
@@ -548,15 +548,15 @@ class TestPipelineFunctions:
     def test_build_datasets(self, sample_case_operator):
         """Test _build_datasets function."""
         with patch("extremeweatherbench.evaluate.run_pipeline") as mock_run_pipeline:
-            mock_forecast_ds = xr.Dataset(attrs={"source": "forecast"})
-            mock_target_ds = xr.Dataset(attrs={"source": "target"})
-            mock_run_pipeline.side_effect = [mock_forecast_ds, mock_target_ds]
+            mock_forecast_ds = xr.Dataset(attrs={"name": "forecast_source"})
+            mock_target_ds = xr.Dataset(attrs={"name": "target_source"})
+            mock_run_pipeline.side_effect = [mock_target_ds, mock_forecast_ds]
 
             forecast_ds, target_ds = evaluate._build_datasets(sample_case_operator)
 
             assert mock_run_pipeline.call_count == 2
-            assert forecast_ds.attrs["source"] == "forecast"
-            assert target_ds.attrs["source"] == "target"
+            assert forecast_ds.attrs["name"] == "forecast_source"
+            assert target_ds.attrs["name"] == "target_source"
 
     def test_build_datasets_zero_length_dimensions(self, sample_case_operator):
         """Test _build_datasets when forecast has zero-length dimensions."""
@@ -567,7 +567,7 @@ class TestPipelineFunctions:
                 attrs={"source": "forecast"},
             )
             mock_target_ds = xr.Dataset(attrs={"source": "target"})
-            mock_run_pipeline.side_effect = [mock_forecast_ds, mock_target_ds]
+            mock_run_pipeline.side_effect = [mock_target_ds, mock_forecast_ds]
 
             with patch("extremeweatherbench.evaluate.logger.warning") as mock_warning:
                 forecast_ds, target_ds = evaluate._build_datasets(sample_case_operator)
@@ -587,8 +587,8 @@ class TestPipelineFunctions:
                     in warning_message
                 )
 
-                # Should only call run_pipeline once (for forecast), not for target
-                assert mock_run_pipeline.call_count == 1
+                # Should call run_pipeline twice (once for target, once for forecast)
+                assert mock_run_pipeline.call_count == 2
 
     def test_build_datasets_zero_length_warning_content(self, sample_case_operator):
         """Test _build_datasets warning message content when forecast has
@@ -652,7 +652,7 @@ class TestPipelineFunctions:
                 attrs={"source": "forecast"},
             )
             mock_target_ds = xr.Dataset(attrs={"source": "target"})
-            mock_run_pipeline.side_effect = [mock_forecast_ds, mock_target_ds]
+            mock_run_pipeline.side_effect = [mock_target_ds, mock_forecast_ds]
 
             with patch("extremeweatherbench.evaluate.logger.warning") as mock_warning:
                 forecast_ds, target_ds = evaluate._build_datasets(sample_case_operator)
@@ -916,7 +916,7 @@ class TestIntegration:
         sample_target_dataset,
     ):
         """Test a complete end-to-end workflow."""
-        mock_derive_variables.side_effect = lambda ds, variables: ds
+        mock_derive_variables.side_effect = lambda ds, variables, **kwargs: ds
 
         # Setup the evaluation object methods
         sample_evaluation_object.target.maybe_align_forecast_to_target.return_value = (
@@ -1057,7 +1057,7 @@ class TestIntegration:
         )
 
         with patch("extremeweatherbench.derived.maybe_derive_variables") as mock_derive:
-            mock_derive.side_effect = lambda ds, variables: ds
+            mock_derive.side_effect = lambda ds, variables, **kwargs: ds
 
             with patch(
                 "extremeweatherbench.evaluate._evaluate_metric_and_return_df"
