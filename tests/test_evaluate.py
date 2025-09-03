@@ -677,7 +677,6 @@ class TestPipelineFunctions:
         sample_case_operator.forecast.maybe_map_variable_names.return_value = (
             sample_forecast_dataset
         )
-        mock_maybe_subset_variables.return_value = sample_forecast_dataset
         sample_case_operator.forecast.subset_data_to_case.return_value = (
             sample_forecast_dataset
         )
@@ -713,7 +712,6 @@ class TestPipelineFunctions:
         sample_case_operator.target.maybe_map_variable_names.return_value = (
             sample_target_dataset
         )
-        mock_maybe_subset_variables.return_value = sample_target_dataset
         sample_case_operator.target.subset_data_to_case.return_value = (
             sample_target_dataset
         )
