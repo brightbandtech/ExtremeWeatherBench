@@ -108,7 +108,6 @@ ghcn_freeze_target = inputs.GHCN(
 # LSR/PPH target
 lsr_target = inputs.LSR(
     source=inputs.LSR_URI,
-    variables=["local_storm_reports"],
     variable_mapping={},
     storage_options={"remote_options": {"anon": True}},
 )
