@@ -75,9 +75,6 @@ class DerivedVariable(ABC):
         Returns:
             A DataArray with the derived variable.
         """
-        for v in cls.required_variables:
-            if v not in data.data_vars:
-                raise ValueError(f"Input variable {v} not found in data")
         return cls.derive_variable(data, *args, **kwargs)
 
 
