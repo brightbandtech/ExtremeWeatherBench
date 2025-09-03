@@ -865,7 +865,7 @@ class IBTrACS(TargetBase):
         if self._current_case_id is not None:
             from extremeweatherbench.events import tropical_cyclone
 
-            tropical_cyclone.register_ibtracs_data(self._current_case_id, ds)
+            tropical_cyclone.register_ibtracs_data(int(self._current_case_id), ds)
 
         # Store flag indicating this is IBTrACS data
         ds.attrs["is_ibtracs_data"] = True
