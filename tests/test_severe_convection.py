@@ -1064,7 +1064,7 @@ class TestCapeRegression:
         expected_cape = 1890.1
         expected_cin = -87.7
 
-        # Allow small numerical differences (within 2% for optimization tolerance)
+        # Allow small numerical differences (within 2% due to optimizations)
         assert np.isclose(cape[0, 0, 0], expected_cape, rtol=0.02), (
             f"CAPE mismatch: got {cape[0, 0, 0]:.1f}, expected {expected_cape:.1f}"
         )
