@@ -1106,6 +1106,7 @@ class DurationME(AppliedMetric):
 # TODO: complete lead time detection implementation
 class LeadTimeDetection(AppliedMetric):
     base_metric = MAE
+    name = "lead_time_detection"
 
     @classmethod
     def _compute_applied_metric(

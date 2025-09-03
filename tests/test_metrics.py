@@ -20,6 +20,8 @@ class TestBaseMetric:
         """Test that the name property returns the class name."""
 
         class TestConcreteMetric(metrics.BaseMetric):
+            name = "TestConcreteMetric"
+
             @classmethod
             def _compute_metric(cls, forecast, target, **kwargs):
                 return forecast - target
@@ -31,6 +33,8 @@ class TestBaseMetric:
         """Test that compute_metric method exists and is callable."""
 
         class TestConcreteMetric(metrics.BaseMetric):
+            name = "TestConcreteMetric"
+
             @classmethod
             def _compute_metric(cls, forecast, target, **kwargs):
                 return forecast - target
@@ -53,6 +57,7 @@ class TestAppliedMetric:
 
         class TestConcreteAppliedMetric(metrics.AppliedMetric):
             base_metric = metrics.MAE
+            name = "TestConcreteAppliedMetric"
 
             def _compute_applied_metric(self, forecast, target, **kwargs):
                 return {"forecast": forecast, "target": target}
@@ -205,7 +210,7 @@ class TestMAE:
         """Test that MAE can be instantiated."""
         metric = metrics.MAE()
         assert isinstance(metric, metrics.BaseMetric)
-        assert metric.name == "MAE"
+        assert metric.name == "mae"
 
     def test_compute_metric_simple(self):
         """Test MAE computation with simple data."""
@@ -228,7 +233,7 @@ class TestME:
         """Test that ME can be instantiated."""
         metric = metrics.ME()
         assert isinstance(metric, metrics.BaseMetric)
-        assert metric.name == "ME"
+        assert metric.name == "me"
 
     def test_compute_metric_simple(self):
         """Test ME computation with simple data."""
@@ -251,7 +256,7 @@ class TestRMSE:
         """Test that RMSE can be instantiated."""
         metric = metrics.RMSE()
         assert isinstance(metric, metrics.BaseMetric)
-        assert metric.name == "RMSE"
+        assert metric.name == "rmse"
 
     def test_compute_metric_simple(self):
         """Test RMSE computation with simple data."""
@@ -274,7 +279,7 @@ class TestMaximumMAE:
         """Test that MaximumMAE can be instantiated."""
         metric = metrics.MaximumMAE()
         assert isinstance(metric, metrics.AppliedMetric)
-        assert metric.name == "MaximumMAE"
+        assert metric.name == "maximum_mae"
 
     def test_base_metric_property(self):
         """Test that base_metric property returns MAE."""
@@ -313,7 +318,7 @@ class TestMinimumMAE:
         """Test that MinimumMAE can be instantiated."""
         metric = metrics.MinimumMAE()
         assert isinstance(metric, metrics.AppliedMetric)
-        assert metric.name == "MinimumMAE"
+        assert metric.name == "minimum_mae"
 
     def test_base_metric_property(self):
         """Test that base_metric property returns MAE."""
@@ -352,7 +357,7 @@ class TestMaxMinMAE:
         """Test that MaxMinMAE can be instantiated."""
         metric = metrics.MaxMinMAE()
         assert isinstance(metric, metrics.AppliedMetric)
-        assert metric.name == "MaxMinMAE"
+        assert metric.name == "max_min_mae"
 
     def test_base_metric_property(self):
         """Test that base_metric property returns MAE."""
@@ -415,7 +420,7 @@ class TestOnsetME:
         """Test that OnsetME can be instantiated."""
         metric = metrics.OnsetME()
         assert isinstance(metric, metrics.AppliedMetric)
-        assert metric.name == "OnsetME"
+        assert metric.name == "onset_me"
 
     def test_base_metric_property(self):
         """Test that base_metric property returns ME."""
@@ -443,6 +448,7 @@ class TestOnsetME:
                 )
             },
             coords={"init_time": [pd.Timestamp("2020-01-01")], "valid_time": times},
+            attrs={"forecast_resolution_hours": 6},
         ).expand_dims(["latitude", "longitude"])
 
         target = xr.Dataset(
@@ -466,7 +472,7 @@ class TestDurationME:
         """Test that DurationME can be instantiated."""
         metric = metrics.DurationME()
         assert isinstance(metric, metrics.AppliedMetric)
-        assert metric.name == "DurationME"
+        assert metric.name == "duration_me"
 
     def test_base_metric_property(self):
         """Test that base_metric property returns ME."""
@@ -494,6 +500,7 @@ class TestDurationME:
                 )
             },
             coords={"init_time": [pd.Timestamp("2020-01-01")], "valid_time": times},
+            attrs={"forecast_resolution_hours": 6},
         ).expand_dims(["latitude", "longitude"])
 
         target = xr.Dataset(
@@ -516,10 +523,6 @@ class TestIncompleteMetrics:
     def test_all_incomplete_applied_metrics_can_be_instantiated(self):
         """Test that all incomplete applied metric classes can be instantiated."""
         incomplete_applied_metrics = [
-            metrics.LandfallDisplacement,
-            metrics.LandfallTimeME,
-            metrics.LandfallIntensityMAE,
-            metrics.SpatialDisplacement,
             metrics.LeadTimeDetection,
         ]
 
@@ -545,9 +548,6 @@ class TestIncompleteMetrics:
         assignments."""
         # MAE based metrics
         mae_metrics = [
-            metrics.LandfallDisplacement,
-            metrics.LandfallIntensityMAE,
-            metrics.SpatialDisplacement,
             metrics.LeadTimeDetection,
         ]
 
@@ -555,10 +555,8 @@ class TestIncompleteMetrics:
             metric = metric_class()
             assert metric.base_metric == metrics.MAE
 
-        # ME based metrics
-        me_metrics = [
-            metrics.LandfallTimeME,
-        ]
+        # ME based metrics - currently no incomplete ME-based metrics exist
+        me_metrics = []
 
         for metric_class in me_metrics:
             metric = metric_class()
@@ -592,10 +590,6 @@ class TestMetricIntegration:
             metrics.OnsetME,
             metrics.DurationME,
             # Include incomplete ones too
-            metrics.LandfallDisplacement,
-            metrics.LandfallTimeME,
-            metrics.LandfallIntensityMAE,
-            metrics.SpatialDisplacement,
             metrics.LeadTimeDetection,
         ]
 
@@ -623,10 +617,6 @@ class TestMetricIntegration:
             "OnsetME",
             "DurationME",
             "EarlySignal",
-            "LandfallDisplacement",
-            "LandfallTimeME",
-            "LandfallIntensityMAE",
-            "SpatialDisplacement",
             "LeadTimeDetection",
         ]
 
