@@ -1,6 +1,7 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import List, Type, Union
+from collections import OrderedDict
+from typing import Sequence, Type, Union
 
 import numpy as np
 import xarray as xr
@@ -33,7 +34,9 @@ class DerivedVariable(ABC):
             derive the variable from required_variables.
     """
 
-    required_variables: List[str]
+    required_variables: list[str]
+    optional_variables: list[str] = []
+    optional_variables_mapping: dict = {}
 
     @property
     def name(self) -> str:
@@ -64,8 +67,6 @@ class DerivedVariable(ABC):
         """Build the derived variable from the input variables.
 
         This method is used to build the derived variable from the input variables.
-        It checks that the data has the variables required to build the variable,
-        and then derives the variable from the input variables.
 
         Args:
             data: The dataset to build the derived variable from.
@@ -220,6 +221,12 @@ def maybe_derive_variables(
         A dataset with derived variables, if any exist, else the original
         dataset.
     """
+    # If there are no valid times, return the dataset unaltered; saves time as case will
+    # be skipped
+    if len(dataset.valid_time) == 0:
+        logger.debug("No valid times found in the dataset.")
+        return dataset
+
     maybe_derived_variables = [v for v in variables if not isinstance(v, str)]
 
     if not maybe_derived_variables:
@@ -261,11 +268,10 @@ def maybe_derive_variables(
     return dataset
 
 
-def maybe_pull_required_variables_from_derived_input(
-    incoming_variables: list[Union[str, DerivedVariable, Type[DerivedVariable]]],
+def maybe_include_variables_from_derived_input(
+    incoming_variables: Sequence[Union[str, DerivedVariable, Type[DerivedVariable]]],
 ) -> list[str]:
-    """Pull the required variables from a derived input and add to the list of
-    variables to pull.
+    """Identify and return variables that a derived variable needs to compute.
 
     Args:
         incoming_variables: a list of string and/or derived variables.
@@ -283,6 +289,11 @@ def maybe_pull_required_variables_from_derived_input(
             derived_required_variables.extend(v.required_variables)
         elif isinstance(v, type) and issubclass(v, DerivedVariable):
             # Handle classes that inherit from DerivedVariable
-            derived_required_variables.extend(v.required_variables)
+            # Recursively pull required variables from derived variables
+            derived_required_variables.extend(
+                maybe_include_variables_from_derived_input(v.required_variables)
+            )
 
-    return string_variables + derived_required_variables
+    # Remove duplicates while preserving order
+    all_variables = string_variables + derived_required_variables
+    return list(OrderedDict.fromkeys(all_variables))

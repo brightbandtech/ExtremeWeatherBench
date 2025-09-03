@@ -907,7 +907,6 @@ def zarr_target_subsetter(
             )
         }
     )
-
     # mask the data to the case location
     fully_subset_data = case_metadata.location.mask(subset_time_data, drop=True)
 
