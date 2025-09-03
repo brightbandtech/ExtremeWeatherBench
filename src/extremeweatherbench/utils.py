@@ -4,6 +4,7 @@ specialized package."""
 import datetime
 import inspect
 import logging
+import threading
 from importlib import resources
 from pathlib import Path
 from typing import Any, Callable, TypeAlias, Union
@@ -19,6 +20,60 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 IncomingDataInput: TypeAlias = xr.Dataset | xr.DataArray | pl.LazyFrame | pd.DataFrame
+
+
+class ThreadSafeDict:
+    """A thread-safe dictionary.
+
+    This class is a thread-safe dictionary that can be used to store data that is
+    shared between threads, such as caches of data.
+    """
+
+    def __init__(self):
+        self._data = {}
+        self._lock = threading.Lock()
+
+    def __setitem__(self, key, value):
+        with self._lock:
+            self._data[key] = value
+
+    def __getitem__(self, key):
+        with self._lock:
+            return self._data[key]
+
+    def __delitem__(self, key):
+        with self._lock:
+            del self._data[key]
+
+    def __contains__(self, key):
+        with self._lock:
+            return key in self._data
+
+    def get(self, key, default=None):
+        with self._lock:
+            return self._data.get(key, default)
+
+    def clear(self):
+        with self._lock:
+            self._data.clear()
+
+    def __len__(self):
+        with self._lock:
+            return len(self._data)
+
+    def keys(self):
+        with self._lock:
+            return list(self._data.keys())
+            # Return a copy to prevent concurrent modification issues during
+            # iteration
+
+    def values(self):
+        with self._lock:
+            return list(self._data.values())  # Return a copy
+
+    def items(self):
+        with self._lock:
+            return list(self._data.items())  # Return a copy
 
 
 def convert_longitude_to_360(longitude: float) -> float:
