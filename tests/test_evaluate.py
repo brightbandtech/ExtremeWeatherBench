@@ -674,13 +674,17 @@ class TestPipelineFunctions:
                 # Should call run_pipeline twice (for both forecast and target)
                 assert mock_run_pipeline.call_count == 2
 
-    def test_run_pipeline_forecast(self, sample_case_operator, sample_forecast_dataset):
+    @patch("extremeweatherbench.evaluate.inputs.maybe_subset_variables")
+    def test_run_pipeline_forecast(
+        self, mock_maybe_subset_variables, sample_case_operator, sample_forecast_dataset
+    ):
         """Test run_pipeline function for forecast data."""
         # Mock the pipeline methods
         sample_case_operator.forecast.open_and_maybe_preprocess_data_from_source.return_value = sample_forecast_dataset  # noqa: E501
         sample_case_operator.forecast.maybe_map_variable_names.return_value = (
             sample_forecast_dataset
         )
+        mock_maybe_subset_variables.return_value = sample_forecast_dataset
         sample_case_operator.forecast.subset_data_to_case.return_value = (
             sample_forecast_dataset
         )
@@ -696,20 +700,25 @@ class TestPipelineFunctions:
         assert isinstance(result, xr.Dataset)
         sample_case_operator.forecast.open_and_maybe_preprocess_data_from_source.assert_called_once()  # noqa: E501
         sample_case_operator.forecast.maybe_map_variable_names.assert_called_once()
-        # The pipe() method passes the dataset, then case_operator as kwarg
+        mock_maybe_subset_variables.assert_called_once()
+        # The pipe() method passes the dataset, then case_metadata as kwarg
         assert sample_case_operator.forecast.subset_data_to_case.call_count == 1
         call_args = sample_case_operator.forecast.subset_data_to_case.call_args
-        assert call_args[1]["case_operator"] == sample_case_operator
+        assert call_args[1]["case_metadata"] == sample_case_operator.case_metadata
         sample_case_operator.forecast.maybe_convert_to_dataset.assert_called_once()
         sample_case_operator.forecast.add_source_to_dataset_attrs.assert_called_once()
 
-    def test_run_pipeline_target(self, sample_case_operator, sample_target_dataset):
+    @patch("extremeweatherbench.evaluate.inputs.maybe_subset_variables")
+    def test_run_pipeline_target(
+        self, mock_maybe_subset_variables, sample_case_operator, sample_target_dataset
+    ):
         """Test run_pipeline function for target data."""
         # Mock the pipeline methods
         sample_case_operator.target.open_and_maybe_preprocess_data_from_source.return_value = sample_target_dataset  # noqa: E501
         sample_case_operator.target.maybe_map_variable_names.return_value = (
             sample_target_dataset
         )
+        mock_maybe_subset_variables.return_value = sample_target_dataset
         sample_case_operator.target.subset_data_to_case.return_value = (
             sample_target_dataset
         )
@@ -906,8 +915,10 @@ class TestIntegration:
     """Test integration scenarios with real-like data."""
 
     @patch("extremeweatherbench.derived.maybe_derive_variables")
+    @patch("extremeweatherbench.evaluate.inputs.maybe_subset_variables")
     def test_end_to_end_workflow(
         self,
+        mock_maybe_subset_variables,
         mock_derive_variables,
         sample_cases_dict,
         sample_evaluation_object,
@@ -930,6 +941,7 @@ class TestIntegration:
         sample_evaluation_object.forecast.maybe_map_variable_names.return_value = (
             sample_forecast_dataset
         )
+        mock_maybe_subset_variables.return_value = sample_forecast_dataset
         sample_evaluation_object.forecast.subset_data_to_case.return_value = (
             sample_forecast_dataset
         )
@@ -988,8 +1000,13 @@ class TestIntegration:
         assert "case_id_number" in result.columns
         assert "event_type" in result.columns
 
+    @patch("extremeweatherbench.evaluate.inputs.maybe_subset_variables")
     def test_multiple_variables_and_metrics(
-        self, sample_cases_dict, sample_forecast_dataset, sample_target_dataset
+        self,
+        mock_maybe_subset_variables,
+        sample_cases_dict,
+        sample_forecast_dataset,
+        sample_target_dataset,
     ):
         """Test workflow with multiple variables and metrics."""
         # Create multiple metrics
@@ -1026,6 +1043,7 @@ class TestIntegration:
         ]  # Only include variables that exist
 
         # Setup pipeline mocks
+        mock_maybe_subset_variables.return_value = sample_forecast_dataset
         for obj in [eval_obj.target, eval_obj.forecast]:
             obj.open_and_maybe_preprocess_data_from_source.return_value = (
                 sample_forecast_dataset
