@@ -300,6 +300,8 @@ def _build_datasets(
     This method will process through all stages of the pipeline for the target and
     forecast datasets, including preprocessing, variable renaming, and subsetting.
     """
+    logger.info("running target pipeline")
+    target_ds = run_pipeline(case_operator.case_metadata, case_operator.target)
     logger.info("running forecast pipeline")
     forecast_ds = run_pipeline(case_operator.case_metadata, case_operator.forecast)
     # Check if any dimension has zero length
@@ -322,8 +324,6 @@ def _build_datasets(
                 f"to {case_operator.case_metadata.end_date}"
             )
         return xr.Dataset(), xr.Dataset()
-    logger.info("running target pipeline")
-    target_ds = run_pipeline(case_operator.case_metadata, case_operator.target)
     return (forecast_ds, target_ds)
 
 
