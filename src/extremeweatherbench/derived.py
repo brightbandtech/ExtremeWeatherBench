@@ -97,6 +97,11 @@ def maybe_derive_variables(
         A dataset with derived variables, if any exist, else the original
         dataset.
     """
+    # If there are no valid times, return the dataset unaltered; saves time as case will
+    # be skipped
+    if len(dataset.valid_time) == 0:
+        logger.debug("No valid times found in the dataset.")
+        return dataset
 
     maybe_derived_variables = [v for v in variables if not isinstance(v, str)]
 
