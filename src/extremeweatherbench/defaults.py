@@ -155,6 +155,7 @@ cira_atmospheric_river_forecast = inputs.KerchunkForecast(
     ],
     variable_mapping=inputs.cira_metadata_variable_mapping,
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
+    preprocess=_preprocess_bb_cira_forecast_dataset,
 )
 
 cira_severe_convection_forecast = inputs.KerchunkForecast(
@@ -162,6 +163,7 @@ cira_severe_convection_forecast = inputs.KerchunkForecast(
     variables=[derived.CravenBrooksSignificantSevere],
     variable_mapping=inputs.cira_metadata_variable_mapping,
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
+    preprocess=_preprocess_bb_cira_forecast_dataset,
 )
 
 hres_tropical_cyclone_forecast = inputs.ZarrForecast(
