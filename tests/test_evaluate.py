@@ -678,6 +678,9 @@ class TestPipelineFunctions:
         sample_case_operator.forecast.maybe_map_variable_names.return_value = (
             sample_forecast_dataset
         )
+        sample_case_operator.forecast.maybe_subset_variables.return_value = (
+            sample_forecast_dataset
+        )
         sample_case_operator.forecast.subset_data_to_case.return_value = (
             sample_forecast_dataset
         )
@@ -693,10 +696,11 @@ class TestPipelineFunctions:
         assert isinstance(result, xr.Dataset)
         sample_case_operator.forecast.open_and_maybe_preprocess_data_from_source.assert_called_once()  # noqa: E501
         sample_case_operator.forecast.maybe_map_variable_names.assert_called_once()
-        # The pipe() method passes the dataset, then case_operator as kwarg
+        sample_case_operator.forecast.maybe_subset_variables.assert_called_once()
+        # The pipe() method passes the dataset, then case_metadata as kwarg
         assert sample_case_operator.forecast.subset_data_to_case.call_count == 1
         call_args = sample_case_operator.forecast.subset_data_to_case.call_args
-        assert call_args[1]["case_operator"] == sample_case_operator
+        assert call_args[1]["case_metadata"] == sample_case_operator.case_metadata
         sample_case_operator.forecast.maybe_convert_to_dataset.assert_called_once()
         sample_case_operator.forecast.add_source_to_dataset_attrs.assert_called_once()
 
@@ -705,6 +709,9 @@ class TestPipelineFunctions:
         # Mock the pipeline methods
         sample_case_operator.target.open_and_maybe_preprocess_data_from_source.return_value = sample_target_dataset  # noqa: E501
         sample_case_operator.target.maybe_map_variable_names.return_value = (
+            sample_target_dataset
+        )
+        sample_case_operator.target.maybe_subset_variables.return_value = (
             sample_target_dataset
         )
         sample_case_operator.target.subset_data_to_case.return_value = (
@@ -927,6 +934,9 @@ class TestIntegration:
         sample_evaluation_object.forecast.maybe_map_variable_names.return_value = (
             sample_forecast_dataset
         )
+        sample_evaluation_object.forecast.maybe_subset_variables.return_value = (
+            sample_forecast_dataset
+        )
         sample_evaluation_object.forecast.subset_data_to_case.return_value = (
             sample_forecast_dataset
         )
@@ -941,6 +951,9 @@ class TestIntegration:
             sample_target_dataset
         )
         sample_evaluation_object.target.maybe_map_variable_names.return_value = (
+            sample_target_dataset
+        )
+        sample_evaluation_object.target.maybe_subset_variables.return_value = (
             sample_target_dataset
         )
         sample_evaluation_object.target.subset_data_to_case.return_value = (
@@ -1030,6 +1043,7 @@ class TestIntegration:
                 sample_forecast_dataset
             )
             obj.maybe_map_variable_names.return_value = sample_forecast_dataset
+            obj.maybe_subset_variables.return_value = sample_forecast_dataset
             obj.subset_data_to_case.return_value = sample_forecast_dataset
             obj.maybe_convert_to_dataset.return_value = sample_forecast_dataset
             obj.add_source_to_dataset_attrs.return_value = sample_forecast_dataset

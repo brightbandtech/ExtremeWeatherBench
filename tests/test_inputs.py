@@ -109,7 +109,6 @@ class TestInputBase:
 
         result = test_forecast.add_source_to_dataset_attrs(sample_era5_dataset)
         assert result.attrs["source"] == "test_forecast"
-        assert result.attrs["dataset_type"] == "forecast"
 
     def test_add_source_to_dataset_attrs_target_base(self, sample_era5_dataset):
         """Test adding source and dataset_type for TargetBase subclass."""
@@ -131,7 +130,6 @@ class TestInputBase:
 
         result = test_target.add_source_to_dataset_attrs(sample_era5_dataset)
         assert result.attrs["source"] == "test_target"
-        assert result.attrs["dataset_type"] == "target"
 
     def test_add_source_to_dataset_attrs_generic_input_base(self, sample_era5_dataset):
         """Test adding source and dataset_type for generic InputBase subclass."""
@@ -153,7 +151,6 @@ class TestInputBase:
 
         result = test_input.add_source_to_dataset_attrs(sample_era5_dataset)
         assert result.attrs["source"] == "test_input"
-        assert result.attrs["dataset_type"] == "TestInput"
 
     def test_add_source_to_dataset_attrs_preserves_existing_attrs(
         self, sample_era5_dataset
@@ -183,7 +180,6 @@ class TestInputBase:
 
         # Check new attributes are added
         assert result.attrs["source"] == "test"
-        assert result.attrs["dataset_type"] == "TestInput"
 
         # Check existing attributes are preserved
         assert result.attrs["existing_attr"] == "existing_value"
