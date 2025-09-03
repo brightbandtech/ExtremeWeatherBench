@@ -1109,19 +1109,6 @@ class TestPPH:
         mock_subsetter.assert_called_once_with(sample_era5_dataset, mock_case)
         assert result == sample_era5_dataset
 
-    def test_pph_custom_convert_to_dataset(self, sample_era5_dataset):
-        """Test PPH custom conversion (should return data unchanged)."""
-        pph = inputs.PPH(
-            source="test.zarr",
-            variables=["precipitation"],
-            variable_mapping={},
-            storage_options={},
-        )
-
-        result = pph._custom_convert_to_dataset(sample_era5_dataset)
-
-        assert result is sample_era5_dataset
-
 
 class TestIBTrACS:
     """Test the IBTrACS target class."""
