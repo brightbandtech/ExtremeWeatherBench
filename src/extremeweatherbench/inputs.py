@@ -683,9 +683,6 @@ class PPH(TargetBase):
     ) -> IncomingDataInput:
         return zarr_target_subsetter(target_data, case_metadata)
 
-    def _custom_convert_to_dataset(self, data: IncomingDataInput) -> xr.Dataset:
-        return data
-
     def maybe_align_forecast_to_target(
         self,
         forecast_data: xr.Dataset,
