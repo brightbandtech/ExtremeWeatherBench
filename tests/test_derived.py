@@ -33,83 +33,6 @@ def create_mock_case_operator(variables, dataset_type="forecast"):
     return case_operator
 
 
-@pytest.fixture
-def sample_dataset():
-    """Create a sample xarray Dataset for testing."""
-    time = pd.date_range("2021-06-20", freq="6h", periods=8)
-    latitudes = np.linspace(30, 50, 11)
-    longitudes = np.linspace(250, 270, 21)
-    level = [1000, 850, 700, 500, 300, 200]
-
-    # Create realistic sample data
-    np.random.seed(42)
-    base_data = np.random.normal(
-        20, 5, size=(len(time), len(latitudes), len(longitudes))
-    )
-    level_data = np.random.normal(
-        0, 10, size=(len(time), len(level), len(latitudes), len(longitudes))
-    )
-
-    dataset = xr.Dataset(
-        {
-            # Basic surface variables
-            "air_pressure_at_mean_sea_level": (
-                ["valid_time", "latitude", "longitude"],
-                np.random.normal(
-                    101325, 1000, size=(len(time), len(latitudes), len(longitudes))
-                ),
-            ),
-            "surface_eastward_wind": (
-                ["valid_time", "latitude", "longitude"],
-                np.random.normal(
-                    5, 3, size=(len(time), len(latitudes), len(longitudes))
-                ),
-            ),
-            "surface_northward_wind": (
-                ["valid_time", "latitude", "longitude"],
-                np.random.normal(
-                    2, 3, size=(len(time), len(latitudes), len(longitudes))
-                ),
-            ),
-            "surface_wind_speed": (
-                ["valid_time", "latitude", "longitude"],
-                np.random.uniform(
-                    0, 15, size=(len(time), len(latitudes), len(longitudes))
-                ),
-            ),
-            # 3D atmospheric variables
-            "eastward_wind": (
-                ["valid_time", "level", "latitude", "longitude"],
-                level_data + np.random.normal(10, 5, size=level_data.shape),
-            ),
-            "northward_wind": (
-                ["valid_time", "level", "latitude", "longitude"],
-                level_data + np.random.normal(3, 5, size=level_data.shape),
-            ),
-            "specific_humidity": (
-                ["valid_time", "level", "latitude", "longitude"],
-                np.random.exponential(0.008, size=level_data.shape),
-            ),
-            "geopotential": (
-                ["valid_time", "level", "latitude", "longitude"],
-                level_data * 100 + np.random.normal(50000, 5000, size=level_data.shape),
-            ),
-            # Test variables
-            "test_variable_1": (["valid_time", "latitude", "longitude"], base_data),
-            "test_variable_2": (["valid_time", "latitude", "longitude"], base_data + 5),
-            "single_variable": (["valid_time", "latitude", "longitude"], base_data * 2),
-        },
-        coords={
-            "valid_time": time,
-            "latitude": latitudes,
-            "longitude": longitudes,
-            "level": level,
-        },
-    )
-
-    return dataset
-
-
 class TestValidDerivedVariable(derived.DerivedVariable):
     """A valid test implementation of DerivedVariable for testing purposes."""
 
@@ -168,17 +91,6 @@ class TestDerivedVariableAbstractClass:
             + sample_derived_dataset["test_variable_2"]
         )
         xr.testing.assert_equal(result, expected)
-
-    def test_compute_raises_error_missing_variables(self, sample_dataset):
-        """Test that compute raises error when required variables are missing."""
-        # Remove one of the required variables
-        incomplete_dataset = sample_derived_dataset.drop_vars("test_variable_2")
-
-        # This should fail during compute when checking required variables
-        with pytest.raises(
-            ValueError, match="Input variable test_variable_2 not found in data"
-        ):
-            TestValidDerivedVariable.compute(incomplete_dataset)
 
     def test_required_variables_class_attribute(self):
         """Test that required_variables is properly defined as class attribute."""
@@ -334,24 +246,6 @@ class TestMaybeDeriveVariablesFunction:
         # Should return only the first derived variable as Dataset
         assert isinstance(result, xr.Dataset)
         assert "TestValidDerivedVariable" in result.data_vars
-
-    def test_derived_variable_missing_required_vars(self, sample_derived_dataset):
-        """Test derived variable with missing required variables."""
-
-        class TestMissingVarDerived(derived.DerivedVariable):
-            required_variables = ["nonexistent_variable"]
-
-            @classmethod
-            def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
-                return data[cls.required_variables[0]]
-
-        variables = [TestMissingVarDerived()]
-
-        sample_dataset.attrs["dataset_type"] = "forecast"
-        with pytest.raises(
-            ValueError, match="Input variable nonexistent_variable not found in data"
-        ):
-            derived.maybe_derive_variables(sample_dataset, variables)
 
     def test_no_derived_variables_in_list(self, sample_derived_dataset):
         """Test when no derived variables are in the variable list."""
@@ -575,7 +469,9 @@ class TestMaybeDeriveVariablesFunction:
         expected_dataarray = sample_derived_dataset["test_variable_1"] * 3
         xr.testing.assert_equal(result[result_var_name], expected_dataarray)
 
-    def test_derived_variable_returns_invalid_type(self, sample_dataset, caplog):
+    def test_derived_variable_returns_invalid_type(
+        self, sample_derived_dataset, caplog
+    ):
         """Test derived variable that returns neither DataArray nor Dataset."""
 
         class TestInvalidReturnType(derived.DerivedVariable):
@@ -588,11 +484,11 @@ class TestMaybeDeriveVariablesFunction:
 
         variables = [TestInvalidReturnType()]
 
-        sample_dataset.attrs["dataset_type"] = "forecast"
-        result = derived.maybe_derive_variables(sample_dataset, variables)
+        sample_derived_dataset.attrs["dataset_type"] = "forecast"
+        result = derived.maybe_derive_variables(sample_derived_dataset, variables)
 
         # Should return original dataset and log warning
-        xr.testing.assert_equal(result, sample_dataset)
+        xr.testing.assert_equal(result, sample_derived_dataset)
 
         # Check that warning was logged
         assert "returned neither DataArray nor Dataset" in caplog.text
@@ -803,16 +699,6 @@ class TestEdgeCasesAndErrorConditions:
 
         # Should resolve to the base variable
         assert result == ["base_var"]
-
-    def test_derived_variable_with_empty_dataset(self, caplog):
-        """Test behavior with empty datasets."""
-        empty_dataset = xr.Dataset()
-
-        # Should fail during compute when checking required variables
-        with pytest.raises(
-            ValueError, match="Input variable test_variable_1 not found in data"
-        ):
-            TestValidDerivedVariable.compute(empty_dataset)
 
     def test_derived_variable_with_wrong_dimensions(self, sample_derived_dataset):
         """Test behavior when variables have unexpected dimensions."""

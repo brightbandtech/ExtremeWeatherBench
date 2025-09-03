@@ -442,53 +442,53 @@ def sample_derived_dataset():
         {
             # Basic surface variables
             "air_pressure_at_mean_sea_level": (
-                ["time", "latitude", "longitude"],
+                ["valid_time", "latitude", "longitude"],
                 np.random.normal(
                     101325, 1000, size=(len(time), len(latitudes), len(longitudes))
                 ),
             ),
             "surface_eastward_wind": (
-                ["time", "latitude", "longitude"],
+                ["valid_time", "latitude", "longitude"],
                 np.random.normal(
                     5, 3, size=(len(time), len(latitudes), len(longitudes))
                 ),
             ),
             "surface_northward_wind": (
-                ["time", "latitude", "longitude"],
+                ["valid_time", "latitude", "longitude"],
                 np.random.normal(
                     2, 3, size=(len(time), len(latitudes), len(longitudes))
                 ),
             ),
             "surface_wind_speed": (
-                ["time", "latitude", "longitude"],
+                ["valid_time", "latitude", "longitude"],
                 np.random.uniform(
                     0, 15, size=(len(time), len(latitudes), len(longitudes))
                 ),
             ),
             # 3D atmospheric variables
             "eastward_wind": (
-                ["time", "level", "latitude", "longitude"],
+                ["valid_time", "level", "latitude", "longitude"],
                 level_data + np.random.normal(10, 5, size=level_data.shape),
             ),
             "northward_wind": (
-                ["time", "level", "latitude", "longitude"],
+                ["valid_time", "level", "latitude", "longitude"],
                 level_data + np.random.normal(3, 5, size=level_data.shape),
             ),
             "specific_humidity": (
-                ["time", "level", "latitude", "longitude"],
+                ["valid_time", "level", "latitude", "longitude"],
                 np.random.exponential(0.008, size=level_data.shape),
             ),
             "geopotential": (
-                ["time", "level", "latitude", "longitude"],
+                ["valid_time", "level", "latitude", "longitude"],
                 level_data * 100 + np.random.normal(50000, 5000, size=level_data.shape),
             ),
             # Test variables
-            "test_variable_1": (["time", "latitude", "longitude"], base_data),
-            "test_variable_2": (["time", "latitude", "longitude"], base_data + 5),
-            "single_variable": (["time", "latitude", "longitude"], base_data * 2),
+            "test_variable_1": (["valid_time", "latitude", "longitude"], base_data),
+            "test_variable_2": (["valid_time", "latitude", "longitude"], base_data + 5),
+            "single_variable": (["valid_time", "latitude", "longitude"], base_data * 2),
         },
         coords={
-            "time": time,
+            "valid_time": time,
             "latitude": latitudes,
             "longitude": longitudes,
             "level": level,
