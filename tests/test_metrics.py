@@ -20,6 +20,8 @@ class TestBaseMetric:
         """Test that the name property returns the class name."""
 
         class TestConcreteMetric(metrics.BaseMetric):
+            name = "TestConcreteMetric"
+
             @classmethod
             def _compute_metric(cls, forecast, target, **kwargs):
                 return forecast - target
@@ -31,6 +33,8 @@ class TestBaseMetric:
         """Test that compute_metric method exists and is callable."""
 
         class TestConcreteMetric(metrics.BaseMetric):
+            name = "TestConcreteMetric"
+
             @classmethod
             def _compute_metric(cls, forecast, target, **kwargs):
                 return forecast - target
@@ -53,6 +57,7 @@ class TestAppliedMetric:
 
         class TestConcreteAppliedMetric(metrics.AppliedMetric):
             base_metric = metrics.MAE
+            name = "TestConcreteAppliedMetric"
 
             def _compute_applied_metric(self, forecast, target, **kwargs):
                 return {"forecast": forecast, "target": target}
@@ -61,31 +66,212 @@ class TestAppliedMetric:
         assert metric.name == "TestConcreteAppliedMetric"
 
 
-class TestBinaryContingencyTable:
-    """Tests for the BinaryContingencyTable metric."""
+class TestThresholdMetrics:
+    """Tests for ThresholdMetric classes."""
 
-    def test_instantiation(self):
-        """Test that BinaryContingencyTable can be instantiated."""
-        metric = metrics.BinaryContingencyTable()
-        assert isinstance(metric, metrics.BaseMetric)
-        assert metric.name == "BinaryContingencyTable"
+    def test_csi_threshold_metric(self):
+        """Test CSI threshold metric instantiation and properties."""
+        csi_metric = metrics.CSI(forecast_threshold=15000, target_threshold=0.3)
+        assert isinstance(csi_metric, metrics.ThresholdMetric)
+        assert isinstance(csi_metric, metrics.BaseMetric)
+        assert hasattr(csi_metric, "compute_metric")
+        assert hasattr(csi_metric, "__call__")
+        assert csi_metric.name == "critical_success_index"
+        assert csi_metric.forecast_threshold == 15000
+        assert csi_metric.target_threshold == 0.3
 
-    def test_compute_metric_basic(self):
-        """Test basic computation without checking specific values."""
-        metric = metrics.BinaryContingencyTable()
+    def test_far_threshold_metric(self):
+        """Test FAR threshold metric instantiation and properties."""
+        far_metric = metrics.FAR(forecast_threshold=15000, target_threshold=0.3)
+        assert isinstance(far_metric, metrics.ThresholdMetric)
+        assert far_metric.name == "false_alarm_ratio"
+        assert far_metric.forecast_threshold == 15000
+        assert far_metric.target_threshold == 0.3
 
-        # Create simple binary test data
-        forecast = xr.Dataset({"data": (["x", "y"], [[1, 0], [0, 1]])})
-        target = xr.Dataset({"data": (["x", "y"], [[1, 1], [0, 0]])})
+    def test_tp_threshold_metric(self):
+        """Test TP threshold metric instantiation and properties."""
+        tp_metric = metrics.TP(forecast_threshold=15000, target_threshold=0.3)
+        assert isinstance(tp_metric, metrics.ThresholdMetric)
+        assert tp_metric.name == "true_positive"
+        assert tp_metric.forecast_threshold == 15000
+        assert tp_metric.target_threshold == 0.3
 
-        # Test that it runs without error
-        try:
-            result = metric._compute_metric(forecast, target)
-            # Just check that something is returned
-            assert result is not None
-        except Exception:
-            # If there are parameter issues, at least the class should exist
-            assert isinstance(metric, metrics.BinaryContingencyTable)
+    def test_fp_threshold_metric(self):
+        """Test FP threshold metric instantiation and properties."""
+        fp_metric = metrics.FP(forecast_threshold=15000, target_threshold=0.3)
+        assert isinstance(fp_metric, metrics.ThresholdMetric)
+        assert fp_metric.name == "false_positive"
+        assert fp_metric.forecast_threshold == 15000
+        assert fp_metric.target_threshold == 0.3
+
+    def test_tn_threshold_metric(self):
+        """Test TN threshold metric instantiation and properties."""
+        tn_metric = metrics.TN(forecast_threshold=15000, target_threshold=0.3)
+        assert isinstance(tn_metric, metrics.ThresholdMetric)
+        assert tn_metric.name == "true_negative"
+        assert tn_metric.forecast_threshold == 15000
+        assert tn_metric.target_threshold == 0.3
+
+    def test_fn_threshold_metric(self):
+        """Test FN threshold metric instantiation and properties."""
+        fn_metric = metrics.FN(forecast_threshold=15000, target_threshold=0.3)
+        assert isinstance(fn_metric, metrics.ThresholdMetric)
+        assert fn_metric.name == "false_negative"
+        assert fn_metric.forecast_threshold == 15000
+        assert fn_metric.target_threshold == 0.3
+
+    def test_accuracy_threshold_metric(self):
+        """Test Accuracy threshold metric instantiation and properties."""
+        acc_metric = metrics.Accuracy(forecast_threshold=15000, target_threshold=0.3)
+        assert isinstance(acc_metric, metrics.ThresholdMetric)
+        assert acc_metric.name == "accuracy"
+        assert acc_metric.forecast_threshold == 15000
+        assert acc_metric.target_threshold == 0.3
+
+    def test_threshold_metric_dual_interface(self):
+        """Test that both classmethod and instance callable interfaces work."""
+        # Create test data
+        forecast = xr.Dataset({"data": (["x"], [0.6, 0.8])})
+        target = xr.Dataset({"data": (["x"], [0.7, 0.9])})
+
+        # Test classmethod usage
+        csi_class_result = metrics.CSI.compute_metric(
+            forecast,
+            target,
+            forecast_threshold=0.5,
+            target_threshold=0.5,
+            preserve_dims="x",
+        )
+
+        # Test instance callable usage
+        csi_instance = metrics.CSI(forecast_threshold=0.5, target_threshold=0.5)
+        csi_instance_result = csi_instance(forecast, target, preserve_dims="x")
+
+        # Results should be the same type
+        assert isinstance(csi_class_result, type(csi_instance_result))
+
+    def test_threshold_metric_parameter_override(self):
+        """Test that instance call can override configured thresholds."""
+        # Create instance with specific thresholds
+        csi_instance = metrics.CSI(forecast_threshold=0.7, target_threshold=0.8)
+
+        # Create test data
+        forecast = xr.Dataset({"data": (["x"], [0.6, 0.8])})
+        target = xr.Dataset({"data": (["x"], [0.7, 0.9])})
+
+        # Call with different thresholds (should override instance values)
+        result = csi_instance(
+            forecast,
+            target,
+            forecast_threshold=0.5,
+            target_threshold=0.5,
+            preserve_dims="x",
+        )
+
+        # Should not raise an exception
+        assert isinstance(result, (xr.Dataset, xr.DataArray))
+
+    def test_threshold_metric_cannot_instantiate_base_class(self):
+        """Test that ThresholdMetric base class cannot be instantiated directly."""
+        with pytest.raises(TypeError):
+            metrics.ThresholdMetric()
+
+    def test_cached_metrics_computation(self):
+        """Test that cached metrics can compute results."""
+        # Clear cache first
+        metrics.clear_contingency_cache()
+
+        # Create simple test data
+        forecast = xr.Dataset({"data": (["x", "y"], [[15500, 14000], [16000, 14500]])})
+        target = xr.Dataset({"data": (["x", "y"], [[0.4, 0.2], [0.5, 0.25]])})
+
+        # Test all factory functions
+        csi_metric = metrics.CSI(forecast_threshold=15000, target_threshold=0.3)
+        far_metric = metrics.FAR(forecast_threshold=15000, target_threshold=0.3)
+        tp_metric = metrics.TP(forecast_threshold=15000, target_threshold=0.3)
+        fp_metric = metrics.FP(forecast_threshold=15000, target_threshold=0.3)
+
+        # Compute results using callable instances (should not raise exceptions)
+        csi_result = csi_metric(forecast, target, preserve_dims="x")
+        far_result = far_metric(forecast, target, preserve_dims="x")
+        tp_result = tp_metric(forecast, target, preserve_dims="x")
+        fp_result = fp_metric(forecast, target, preserve_dims="x")
+
+        # All should return xarray objects
+        assert isinstance(csi_result, (xr.Dataset, xr.DataArray))
+        assert isinstance(far_result, (xr.Dataset, xr.DataArray))
+        assert isinstance(tp_result, (xr.Dataset, xr.DataArray))
+        assert isinstance(fp_result, (xr.Dataset, xr.DataArray))
+
+    def test_cache_efficiency(self):
+        """Test that cache is shared across metrics with same thresholds."""
+        # Clear cache first
+        metrics.clear_contingency_cache()
+        initial_cache_size = len(metrics._GLOBAL_CONTINGENCY_CACHE)
+
+        forecast = xr.Dataset({"data": (["x", "y"], [[15500, 14000], [16000, 14500]])})
+        target = xr.Dataset({"data": (["x", "y"], [[0.4, 0.2], [0.5, 0.25]])})
+
+        # Create multiple metrics with same thresholds
+        csi_metric = metrics.CSI(forecast_threshold=15000, target_threshold=0.3)
+        far_metric = metrics.FAR(forecast_threshold=15000, target_threshold=0.3)
+        tp_metric = metrics.TP(forecast_threshold=15000, target_threshold=0.3)
+
+        # First computation should create cache entry
+        csi_metric.compute_metric(forecast, target, preserve_dims="x")
+        cache_size_after_first = len(metrics._GLOBAL_CONTINGENCY_CACHE)
+
+        # Subsequent computations should reuse cache
+        far_metric.compute_metric(forecast, target, preserve_dims="x")
+        tp_metric.compute_metric(forecast, target, preserve_dims="x")
+        cache_size_after_all = len(metrics._GLOBAL_CONTINGENCY_CACHE)
+
+        # Should have exactly one more cache entry than initial
+        assert cache_size_after_first == initial_cache_size + 1
+        assert cache_size_after_all == cache_size_after_first
+
+    def test_mathematical_correctness(self):
+        """Test that ratios sum to 1 and CSI/FAR are mathematically correct."""
+        # Clear cache
+        metrics.clear_contingency_cache()
+
+        # Simple test case for verification
+        forecast = xr.Dataset({"data": (["x", "y"], [[15500, 14000], [16000, 14500]])})
+        target = xr.Dataset({"data": (["x", "y"], [[0.4, 0.2], [0.5, 0.25]])})
+
+        # Get all contingency table components
+        tp_result = metrics.TP(15000, 0.3).compute_metric(
+            forecast, target, preserve_dims="x"
+        )
+        fp_result = metrics.FP(15000, 0.3).compute_metric(
+            forecast, target, preserve_dims="x"
+        )
+        tn_result = metrics.TN(15000, 0.3).compute_metric(
+            forecast, target, preserve_dims="x"
+        )
+        fn_result = metrics.FN(15000, 0.3).compute_metric(
+            forecast, target, preserve_dims="x"
+        )
+
+        # Ratios should sum to 1
+        total = tp_result + fp_result + tn_result + fn_result
+        np.testing.assert_allclose(total["data"].values, [1.0, 1.0], rtol=1e-10)
+
+        # CSI and FAR should be reasonable
+        csi_result = metrics.CSI(15000, 0.3).compute_metric(
+            forecast, target, preserve_dims="x"
+        )
+        far_result = metrics.FAR(15000, 0.3).compute_metric(
+            forecast, target, preserve_dims="x"
+        )
+
+        # CSI should be between 0 and 1
+        assert np.all(csi_result["data"].values >= 0)
+        assert np.all(csi_result["data"].values <= 1)
+
+        # FAR should be between 0 and 1
+        assert np.all(far_result["data"].values >= 0)
+        assert np.all(far_result["data"].values <= 1)
 
 
 class TestMAE:
@@ -95,7 +281,7 @@ class TestMAE:
         """Test that MAE can be instantiated."""
         metric = metrics.MAE()
         assert isinstance(metric, metrics.BaseMetric)
-        assert metric.name == "MAE"
+        assert metric.name == "mae"
 
     def test_compute_metric_simple(self):
         """Test MAE computation with simple data."""
@@ -118,7 +304,7 @@ class TestME:
         """Test that ME can be instantiated."""
         metric = metrics.ME()
         assert isinstance(metric, metrics.BaseMetric)
-        assert metric.name == "ME"
+        assert metric.name == "me"
 
     def test_compute_metric_simple(self):
         """Test ME computation with simple data."""
@@ -141,7 +327,7 @@ class TestRMSE:
         """Test that RMSE can be instantiated."""
         metric = metrics.RMSE()
         assert isinstance(metric, metrics.BaseMetric)
-        assert metric.name == "RMSE"
+        assert metric.name == "rmse"
 
     def test_compute_metric_simple(self):
         """Test RMSE computation with simple data."""
@@ -164,7 +350,7 @@ class TestMaximumMAE:
         """Test that MaximumMAE can be instantiated."""
         metric = metrics.MaximumMAE()
         assert isinstance(metric, metrics.AppliedMetric)
-        assert metric.name == "MaximumMAE"
+        assert metric.name == "maximum_mae"
 
     def test_base_metric_property(self):
         """Test that base_metric property returns MAE."""
@@ -203,7 +389,7 @@ class TestMinimumMAE:
         """Test that MinimumMAE can be instantiated."""
         metric = metrics.MinimumMAE()
         assert isinstance(metric, metrics.AppliedMetric)
-        assert metric.name == "MinimumMAE"
+        assert metric.name == "minimum_mae"
 
     def test_base_metric_property(self):
         """Test that base_metric property returns MAE."""
@@ -242,7 +428,7 @@ class TestMaxMinMAE:
         """Test that MaxMinMAE can be instantiated."""
         metric = metrics.MaxMinMAE()
         assert isinstance(metric, metrics.AppliedMetric)
-        assert metric.name == "MaxMinMAE"
+        assert metric.name == "max_min_mae"
 
     def test_base_metric_property(self):
         """Test that base_metric property returns MAE."""
@@ -305,7 +491,7 @@ class TestOnsetME:
         """Test that OnsetME can be instantiated."""
         metric = metrics.OnsetME()
         assert isinstance(metric, metrics.AppliedMetric)
-        assert metric.name == "OnsetME"
+        assert metric.name == "onset_me"
 
     def test_base_metric_property(self):
         """Test that base_metric property returns ME."""
@@ -333,6 +519,7 @@ class TestOnsetME:
                 )
             },
             coords={"init_time": [pd.Timestamp("2020-01-01")], "valid_time": times},
+            attrs={"forecast_resolution_hours": 6},
         ).expand_dims(["latitude", "longitude"])
 
         target = xr.Dataset(
@@ -356,7 +543,7 @@ class TestDurationME:
         """Test that DurationME can be instantiated."""
         metric = metrics.DurationME()
         assert isinstance(metric, metrics.AppliedMetric)
-        assert metric.name == "DurationME"
+        assert metric.name == "duration_me"
 
     def test_base_metric_property(self):
         """Test that base_metric property returns ME."""
@@ -384,6 +571,7 @@ class TestDurationME:
                 )
             },
             coords={"init_time": [pd.Timestamp("2020-01-01")], "valid_time": times},
+            attrs={"forecast_resolution_hours": 6},
         ).expand_dims(["latitude", "longitude"])
 
         target = xr.Dataset(
@@ -405,21 +593,8 @@ class TestIncompleteMetrics:
 
     def test_all_incomplete_applied_metrics_can_be_instantiated(self):
         """Test that all incomplete applied metric classes can be instantiated."""
-        # Separate base metrics from applied metrics since our landfall
-        # metrics are now BaseMetric
-        incomplete_base_metrics = [
-            metrics.LandfallDisplacement,
-            metrics.LandfallTimeME,
-            metrics.LandfallIntensityMAE,
-        ]
-
         incomplete_applied_metrics = [
-            metrics.SpatialDisplacement,
-            metrics.FAR,
-            metrics.CSI,
             metrics.LeadTimeDetection,
-            metrics.RegionalHitsMisses,
-            metrics.HitsMisses,
         ]
 
         # Test BaseMetric landfall classes
@@ -449,22 +624,8 @@ class TestIncompleteMetrics:
     def test_incomplete_metrics_have_appropriate_base_metrics(self):
         """Test that incomplete applied metrics have reasonable base metric
         assignments."""
-        # Binary contingency table based metrics
-        binary_metrics = [
-            metrics.FAR,
-            metrics.CSI,
-            metrics.RegionalHitsMisses,
-            metrics.HitsMisses,
-        ]
-
-        for metric_class in binary_metrics:
-            metric = metric_class()
-            assert metric.base_metric == metrics.BinaryContingencyTable
-
-        # MAE based applied metrics (excluding consolidated landfall metrics
-        # which are now BaseMetric)
+        # MAE based metrics
         mae_metrics = [
-            metrics.SpatialDisplacement,
             metrics.LeadTimeDetection,
         ]
 
@@ -472,88 +633,8 @@ class TestIncompleteMetrics:
             metric = metric_class()
             assert metric.base_metric == metrics.MAE
 
-        # Note: LandfallDisplacement, LandfallTimeME, LandfallIntensityMAE
-        # are now BaseMetric classes. They don't have base_metric properties
-        # since they implement _compute_metric directly
-
-
-class TestConsolidatedLandfallMetrics:
-    """Tests for the new consolidated landfall metrics."""
-
-    def test_landfall_displacement_instantiation(self):
-        """Test that consolidated LandfallDisplacement can be instantiated with
-        different approaches."""
-        # Test default approach
-        metric_default = metrics.LandfallDisplacement()
-        assert metric_default.approach == "first"
-        assert metric_default.aggregation == "mean"
-
-        # Test next approach
-        metric_next = metrics.LandfallDisplacement(approach="next")
-        assert metric_next.approach == "next"
-
-        # Test all approach with different aggregation
-        metric_all = metrics.LandfallDisplacement(approach="all", aggregation="median")
-        assert metric_all.approach == "all"
-        assert metric_all.aggregation == "median"
-
-    def test_landfall_time_me_instantiation(self):
-        """Test that consolidated LandfallTimeME can be instantiated with
-        different options."""
-        # Test default
-        metric_default = metrics.LandfallTimeME()
-        assert metric_default.approach == "first"
-        assert metric_default.units == "hours"
-
-        # Test with days
-        metric_days = metrics.LandfallTimeME(units="days")
-        assert metric_days.units == "days"
-
-        # Test next approach
-        metric_next = metrics.LandfallTimeME(approach="next", aggregation="median")
-        assert metric_next.approach == "next"
-        assert metric_next.aggregation == "median"
-
-    def test_landfall_intensity_mae_instantiation(self):
-        """Test that consolidated LandfallIntensityMAE can be instantiated with
-        different options."""
-        # Test default
-        metric_default = metrics.LandfallIntensityMAE()
-        assert metric_default.approach == "first"
-        assert metric_default.intensity_var == "surface_wind_speed"
-
-        # Test with pressure
-        metric_pressure = metrics.LandfallIntensityMAE(
-            intensity_var="minimum_central_pressure"
-        )
-        assert metric_pressure.intensity_var == "minimum_central_pressure"
-
-        # Test all approach
-        metric_all = metrics.LandfallIntensityMAE(approach="all", aggregation="min")
-        assert metric_all.approach == "all"
-        assert metric_all.aggregation == "min"
-
-    def test_landfall_metrics_parameter_validation(self):
-        """Test parameter validation for consolidated landfall metrics."""
-        # Test invalid approach
-        with pytest.raises(ValueError, match="approach must be one of"):
-            metrics.LandfallDisplacement(approach="invalid")
-
-        # Test invalid aggregation
-        with pytest.raises(ValueError, match="aggregation must be one of"):
-            metrics.LandfallTimeME(aggregation="invalid")
-
-        # Test invalid units
-        with pytest.raises(ValueError, match="units must be one of"):
-            metrics.LandfallTimeME(units="invalid")
-
-    def test_consolidated_metrics_are_base_metrics(self):
-        """Test that consolidated landfall metrics are BaseMetric instances."""
-        landfall_metrics = [
-            metrics.LandfallDisplacement(),
-            metrics.LandfallTimeME(),
-            metrics.LandfallIntensityMAE(),
-        ]
+        # ME based metrics - currently no incomplete ME-based metrics exist
+        me_metrics = []
 
         for metric in landfall_metrics:
             assert isinstance(metric, metrics.BaseMetric)
@@ -584,7 +665,6 @@ class TestMetricIntegration:
     def test_all_base_metrics_have_required_methods(self):
         """Test that all base metric classes have required methods."""
         base_metrics = [
-            metrics.BinaryContingencyTable,
             metrics.MAE,
             metrics.ME,
             metrics.RMSE,
@@ -605,13 +685,8 @@ class TestMetricIntegration:
             metrics.MaxMinMAE,
             metrics.OnsetME,
             metrics.DurationME,
-            # Include incomplete applied metrics (landfall metrics are now BaseMetric)
-            metrics.SpatialDisplacement,
-            metrics.FAR,
-            metrics.CSI,
+            # Include incomplete ones too
             metrics.LeadTimeDetection,
-            metrics.RegionalHitsMisses,
-            metrics.HitsMisses,
         ]
 
         for metric_class in applied_metrics:
@@ -627,9 +702,8 @@ class TestMetricIntegration:
         assert hasattr(metrics, "BaseMetric")
         assert hasattr(metrics, "AppliedMetric")
 
-        # Test that all expected metric classes exist
+        # Test that all expected metric classes and functions exist
         expected_classes = [
-            "BinaryContingencyTable",
             "MAE",
             "ME",
             "RMSE",
@@ -639,17 +713,25 @@ class TestMetricIntegration:
             "OnsetME",
             "DurationME",
             "EarlySignal",
-            "LandfallDisplacement",
-            "LandfallTimeME",
-            "LandfallIntensityMAE",
-            "SpatialDisplacement",
-            "FAR",
-            "CSI",
             "LeadTimeDetection",
-            "RegionalHitsMisses",
-            "HitsMisses",
+        ]
+
+        # Test that expected factory functions exist
+        expected_functions = [
+            "CSI",
+            "FAR",
+            "TP",
+            "FP",
+            "TN",
+            "FN",
+            "clear_contingency_cache",
+            "get_cached_transformed_manager",
         ]
 
         for class_name in expected_classes:
             assert hasattr(metrics, class_name)
             assert callable(getattr(metrics, class_name))
+
+        for func_name in expected_functions:
+            assert hasattr(metrics, func_name)
+            assert callable(getattr(metrics, func_name))
