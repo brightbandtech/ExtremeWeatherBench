@@ -77,12 +77,11 @@ simple_metrics = [
     metrics.FN(forecast_threshold=15000, target_threshold=0.3),
 ]
 
-# Option 2: Create cached metrics that share the same transformed contingency manager
+# Option 2: Create threshold-based metrics with specified thresholds
 cached_metrics = metrics.create_threshold_metrics(
     forecast_threshold=15000,
     target_threshold=0.3,
-    functions=[metrics.csi_function, metrics.far_function, metrics.accuracy_function],
-    instances=[metrics.tp, metrics.fp, metrics.tn, metrics.fn],
+    metrics=["CSI", "FAR", "ACCURACY", "TP", "FP", "TN", "FN"],
 )
 
 # just one for now
