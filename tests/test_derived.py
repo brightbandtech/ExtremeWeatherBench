@@ -82,6 +82,7 @@ class TestDerivedVariableAbstractClass:
         # Remove one of the required variables
         incomplete_dataset = sample_derived_dataset.drop_vars("test_variable_2")
 
+        # This should fail during compute when checking required variables
         with pytest.raises(
             ValueError, match="Input variable test_variable_2 not found in data"
         ):
@@ -255,7 +256,9 @@ class TestMaybeDeriveVariablesFunction:
         variables = [TestMissingVarDerived()]
 
         sample_dataset.attrs["dataset_type"] = "forecast"
-        with pytest.raises(ValueError, match="Input variable nonexistent_variable"):
+        with pytest.raises(
+            ValueError, match="Input variable nonexistent_variable not found in data"
+        ):
             derived.maybe_derive_variables(sample_dataset, variables)
 
     def test_no_derived_variables_in_list(self, sample_derived_dataset):
@@ -546,7 +549,10 @@ class TestEdgeCasesAndErrorConditions:
         """Test behavior with empty datasets."""
         empty_dataset = xr.Dataset()
 
-        with pytest.raises(ValueError, match="Input variable .* not found in data"):
+        # Should fail during compute when checking required variables
+        with pytest.raises(
+            ValueError, match="Input variable test_variable_1 not found in data"
+        ):
             TestValidDerivedVariable.compute(empty_dataset)
 
     def test_derived_variable_with_wrong_dimensions(self, sample_derived_dataset):
