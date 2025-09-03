@@ -497,7 +497,7 @@ def run_comprehensive_evaluation(
         click.echo("\nLoading default evaluation configuration...")
         evaluation_objects = defaults.BRIGHTBAND_EVALUATION_OBJECTS
         cases_dict = _load_default_cases()
-        event_types = "tropical_cyclone"
+        event_types = "severe_convection"
         # Filter evaluation objects by event types if specified
         if event_types:
             evaluation_objects = [
