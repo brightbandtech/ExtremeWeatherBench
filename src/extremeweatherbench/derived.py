@@ -224,14 +224,16 @@ class TropicalCycloneTrackVariables(DerivedVariable):
         # Check if we should apply IBTrACS filtering
         # First check kwargs, then the global registry
         ibtracs_data = kwargs.get("ibtracs_data", None)
+        case_metadata = kwargs.get("case_metadata", None)
+        case_id_number = case_metadata.case_id_number if case_metadata else None
         if ibtracs_data is None:
             # Try to get from registry using case_id_number if provided
-            case_id_number = kwargs.get("case_id_number", None)
             if case_id_number is not None:
                 ibtracs_data = tropical_cyclone.get_ibtracs_data(case_id_number)
             else:
                 raise ValueError("No IBTrACS data provided to constrain TC tracks.")
         # Use IBTrACS-filtered TC detection
+        cyclone_dataset = cyclone_dataset.compute()
         tctracks_ds = tropical_cyclone.create_tctracks_from_dataset_with_ibtracs_filter(
             cyclone_dataset, ibtracs_data
         )
@@ -290,6 +292,10 @@ def maybe_derive_variables(
         A dataset with derived variables, if any exist, else the original
         dataset.
     """
+    if len(dataset.valid_time) == 0:
+        logger.debug("No valid times found in the dataset.")
+        return dataset
+
     maybe_derived_variables = [v for v in variables if not isinstance(v, str)]
 
     if not maybe_derived_variables:

@@ -200,14 +200,6 @@ class InputBase(ABC):
 
     def add_source_to_dataset_attrs(self, ds: xr.Dataset) -> xr.Dataset:
         """Add the name and type of the dataset to the dataset attributes."""
-        # Check if this instance is a ForecastBase or TargetBase subclass
-        if isinstance(self, ForecastBase):
-            ds.attrs["dataset_type"] = "forecast"
-        elif isinstance(self, TargetBase):
-            ds.attrs["dataset_type"] = "target"
-        else:
-            # Fallback to class name for other InputBase subclasses
-            ds.attrs["dataset_type"] = self.__class__.__name__
         ds.attrs["source"] = self.name
         return ds
 
@@ -260,8 +252,8 @@ class InputBase(ABC):
         variables: list[Union[str, "derived.DerivedVariable"]],
     ) -> IncomingDataInput:
         """Subset the variables from the data, if required."""
-        if isinstance(data, pl.LazyFrame):
-            print("LazyFrame")
+        if len(variables) == 0:
+            return data
         # get the first derived variable if it exists
         derived_variables = [
             v
@@ -892,12 +884,11 @@ class IBTrACS(TargetBase):
             The dataset with source attributes added.
         """
         ds = super().add_source_to_dataset_attrs(ds)
-
         # Register IBTrACS data immediately for tropical cyclone filtering
         if self._current_case_id is not None:
             from extremeweatherbench.events import tropical_cyclone
 
-            tropical_cyclone.register_ibtracs_data(self._current_case_id, ds)
+            tropical_cyclone.register_ibtracs_data(int(self._current_case_id), ds)
 
         # Store flag indicating this is IBTrACS data
         ds.attrs["is_ibtracs_data"] = True

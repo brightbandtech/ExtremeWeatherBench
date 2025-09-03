@@ -222,6 +222,9 @@ def determine_timesteps_per_day_resolution(
             " forecast or target datasets, "
             f"({pd.to_datetime(data['init_time'].values[0]).strftime('%Y-%m-%d%H:%M')})"
         )
+    # likely missing any data for valid time
+    if len(num_timesteps) == 0:
+        return None
     return num_timesteps[0]
 
 

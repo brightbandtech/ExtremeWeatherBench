@@ -22,13 +22,6 @@ from tqdm.auto import tqdm
 
 logger = logging.getLogger(__name__)
 
-# Configure tqdm to work properly with logging
-try:
-    tqdm.set_lock_timeout(1)
-except AttributeError:
-    # Fallback for older tqdm versions
-    pass
-
 
 class EWBProgressTracker:
     """Enhanced progress tracking for ExtremeWeatherBench workflows.
