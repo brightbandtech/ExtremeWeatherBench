@@ -1,6 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Tuple, Type
+from typing import Any, Dict, List, Optional, Type
 
 import numpy as np
 import scores.categorical as cat  # type: ignore[import-untyped]
@@ -14,9 +14,7 @@ logger.setLevel(logging.INFO)
 
 
 # Global cache for transformed contingency managers
-_GLOBAL_CONTINGENCY_CACHE: Dict[
-    Tuple[int, int, float, float, str], cat.BasicContingencyManager
-] = {}
+_GLOBAL_CONTINGENCY_CACHE = utils.ThreadSafeDict()  # type: ignore
 
 
 def get_cached_transformed_manager(
@@ -206,9 +204,12 @@ class AppliedMetric(ABC):
         return cls.base_metric.compute_metric(**applied_result)
 
 
-# Threshold-based metrics classes
-class CSI(BaseMetric):
-    """Critical Success Index metric."""
+class ThresholdMetric(BaseMetric):
+    """Base class for threshold-based metrics.
+
+    This class provides common functionality for metrics that require
+    forecast and target thresholds for binarization.
+    """
 
     def __init__(
         self,
@@ -222,9 +223,22 @@ class CSI(BaseMetric):
         self.target_threshold = target_threshold
         self.preserve_dims = preserve_dims
 
-    @property
-    def name(self) -> str:
-        return f"CSI_fcst{self.forecast_threshold}_tgt{self.target_threshold}"
+    def __call__(self, forecast: xr.Dataset, target: xr.Dataset, **kwargs):
+        """Make instances callable using their configured thresholds."""
+        # Use instance attributes as defaults, but allow override from kwargs
+        kwargs.setdefault("forecast_threshold", self.forecast_threshold)
+        kwargs.setdefault("target_threshold", self.target_threshold)
+        kwargs.setdefault("preserve_dims", self.preserve_dims)
+
+        # Call the classmethod with the configured parameters
+        return self.__class__.compute_metric(forecast, target, **kwargs)
+
+
+# Threshold-based metrics classes
+class CSI(ThresholdMetric):
+    """Critical Success Index metric."""
+
+    name = "critical_success_index"
 
     @classmethod
     def _compute_metric(
@@ -246,39 +260,13 @@ class CSI(BaseMetric):
         )
         return transformed.critical_success_index()
 
-    def compute_metric(self, forecast: xr.Dataset, target: xr.Dataset, **kwargs):
-        # Override preserve_dims from kwargs if provided
-        preserve_dims = kwargs.get("preserve_dims", self.preserve_dims)
-        kwargs_filtered = {k: v for k, v in kwargs.items() if k != "preserve_dims"}
 
-        return self._compute_metric(
-            forecast,
-            target,
-            forecast_threshold=self.forecast_threshold,
-            target_threshold=self.target_threshold,
-            preserve_dims=preserve_dims,
-            **kwargs_filtered,
-        )
-
-
-class FAR(BaseMetric):
+class FAR(ThresholdMetric):
     """False Alarm Ratio metric."""
 
-    def __init__(
-        self,
-        forecast_threshold: float = 0.5,
-        target_threshold: float = 0.5,
-        preserve_dims: str = "lead_time",
-        **kwargs,
-    ):
-        super().__init__(**kwargs)
-        self.forecast_threshold = forecast_threshold
-        self.target_threshold = target_threshold
-        self.preserve_dims = preserve_dims
+    name = "false_alarm_ratio"
 
-    @property
-    def name(self) -> str:
-        return f"FAR_fcst{self.forecast_threshold}_tgt{self.target_threshold}"
+    # Inherits __init__ from ThresholdMetric
 
     @classmethod
     def _compute_metric(
@@ -300,39 +288,12 @@ class FAR(BaseMetric):
         )
         return transformed.false_alarm_ratio()
 
-    def compute_metric(self, forecast: xr.Dataset, target: xr.Dataset, **kwargs):
-        # Override preserve_dims from kwargs if provided
-        preserve_dims = kwargs.get("preserve_dims", self.preserve_dims)
-        kwargs_filtered = {k: v for k, v in kwargs.items() if k != "preserve_dims"}
 
-        return self._compute_metric(
-            forecast,
-            target,
-            forecast_threshold=self.forecast_threshold,
-            target_threshold=self.target_threshold,
-            preserve_dims=preserve_dims,
-            **kwargs_filtered,
-        )
-
-
-class TP(BaseMetric):
+class TP(ThresholdMetric):
     """True Positive metric."""
 
-    def __init__(
-        self,
-        forecast_threshold: float = 0.5,
-        target_threshold: float = 0.5,
-        preserve_dims: str = "lead_time",
-        **kwargs,
-    ):
-        super().__init__(**kwargs)
-        self.forecast_threshold = forecast_threshold
-        self.target_threshold = target_threshold
-        self.preserve_dims = preserve_dims
-
-    @property
-    def name(self) -> str:
-        return f"TP_fcst{self.forecast_threshold}_tgt{self.target_threshold}"
+    name = "true_positive"
+    # Inherits __init__ from ThresholdMetric
 
     @classmethod
     def _compute_metric(
@@ -355,39 +316,12 @@ class TP(BaseMetric):
         counts = transformed.get_counts()
         return counts["tp_count"] / counts["total_count"]
 
-    def compute_metric(self, forecast: xr.Dataset, target: xr.Dataset, **kwargs):
-        # Override preserve_dims from kwargs if provided
-        preserve_dims = kwargs.get("preserve_dims", self.preserve_dims)
-        kwargs_filtered = {k: v for k, v in kwargs.items() if k != "preserve_dims"}
 
-        return self._compute_metric(
-            forecast,
-            target,
-            forecast_threshold=self.forecast_threshold,
-            target_threshold=self.target_threshold,
-            preserve_dims=preserve_dims,
-            **kwargs_filtered,
-        )
-
-
-class FP(BaseMetric):
+class FP(ThresholdMetric):
     """False Positive metric."""
 
-    def __init__(
-        self,
-        forecast_threshold: float = 0.5,
-        target_threshold: float = 0.5,
-        preserve_dims: str = "lead_time",
-        **kwargs,
-    ):
-        super().__init__(**kwargs)
-        self.forecast_threshold = forecast_threshold
-        self.target_threshold = target_threshold
-        self.preserve_dims = preserve_dims
-
-    @property
-    def name(self) -> str:
-        return f"FP_fcst{self.forecast_threshold}_tgt{self.target_threshold}"
+    name = "false_positive"
+    # Inherits __init__ from ThresholdMetric
 
     @classmethod
     def _compute_metric(
@@ -410,39 +344,12 @@ class FP(BaseMetric):
         counts = transformed.get_counts()
         return counts["fp_count"] / counts["total_count"]
 
-    def compute_metric(self, forecast: xr.Dataset, target: xr.Dataset, **kwargs):
-        # Override preserve_dims from kwargs if provided
-        preserve_dims = kwargs.get("preserve_dims", self.preserve_dims)
-        kwargs_filtered = {k: v for k, v in kwargs.items() if k != "preserve_dims"}
 
-        return self._compute_metric(
-            forecast,
-            target,
-            forecast_threshold=self.forecast_threshold,
-            target_threshold=self.target_threshold,
-            preserve_dims=preserve_dims,
-            **kwargs_filtered,
-        )
-
-
-class TN(BaseMetric):
+class TN(ThresholdMetric):
     """True Negative metric."""
 
-    def __init__(
-        self,
-        forecast_threshold: float = 0.5,
-        target_threshold: float = 0.5,
-        preserve_dims: str = "lead_time",
-        **kwargs,
-    ):
-        super().__init__(**kwargs)
-        self.forecast_threshold = forecast_threshold
-        self.target_threshold = target_threshold
-        self.preserve_dims = preserve_dims
-
-    @property
-    def name(self) -> str:
-        return f"TN_fcst{self.forecast_threshold}_tgt{self.target_threshold}"
+    name = "true_negative"
+    # Inherits __init__ from ThresholdMetric
 
     @classmethod
     def _compute_metric(
@@ -465,39 +372,12 @@ class TN(BaseMetric):
         counts = transformed.get_counts()
         return counts["tn_count"] / counts["total_count"]
 
-    def compute_metric(self, forecast: xr.Dataset, target: xr.Dataset, **kwargs):
-        # Override preserve_dims from kwargs if provided
-        preserve_dims = kwargs.get("preserve_dims", self.preserve_dims)
-        kwargs_filtered = {k: v for k, v in kwargs.items() if k != "preserve_dims"}
 
-        return self._compute_metric(
-            forecast,
-            target,
-            forecast_threshold=self.forecast_threshold,
-            target_threshold=self.target_threshold,
-            preserve_dims=preserve_dims,
-            **kwargs_filtered,
-        )
-
-
-class FN(BaseMetric):
+class FN(ThresholdMetric):
     """False Negative metric."""
 
-    def __init__(
-        self,
-        forecast_threshold: float = 0.5,
-        target_threshold: float = 0.5,
-        preserve_dims: str = "lead_time",
-        **kwargs,
-    ):
-        super().__init__(**kwargs)
-        self.forecast_threshold = forecast_threshold
-        self.target_threshold = target_threshold
-        self.preserve_dims = preserve_dims
-
-    @property
-    def name(self) -> str:
-        return f"FN_fcst{self.forecast_threshold}_tgt{self.target_threshold}"
+    name = "false_negative"
+    # Inherits __init__ from ThresholdMetric
 
     @classmethod
     def _compute_metric(
@@ -520,39 +400,13 @@ class FN(BaseMetric):
         counts = transformed.get_counts()
         return counts["fn_count"] / counts["total_count"]
 
-    def compute_metric(self, forecast: xr.Dataset, target: xr.Dataset, **kwargs):
-        # Override preserve_dims from kwargs if provided
-        preserve_dims = kwargs.get("preserve_dims", self.preserve_dims)
-        kwargs_filtered = {k: v for k, v in kwargs.items() if k != "preserve_dims"}
 
-        return self._compute_metric(
-            forecast,
-            target,
-            forecast_threshold=self.forecast_threshold,
-            target_threshold=self.target_threshold,
-            preserve_dims=preserve_dims,
-            **kwargs_filtered,
-        )
-
-
-class Accuracy(BaseMetric):
+class Accuracy(ThresholdMetric):
     """Accuracy metric."""
 
-    def __init__(
-        self,
-        forecast_threshold: float = 0.5,
-        target_threshold: float = 0.5,
-        preserve_dims: str = "lead_time",
-        **kwargs,
-    ):
-        super().__init__(**kwargs)
-        self.forecast_threshold = forecast_threshold
-        self.target_threshold = target_threshold
-        self.preserve_dims = preserve_dims
+    name = "accuracy"
 
-    @property
-    def name(self) -> str:
-        return f"ACCURACY_fcst{self.forecast_threshold}_tgt{self.target_threshold}"
+    # Inherits __init__ from ThresholdMetric
 
     @classmethod
     def _compute_metric(
@@ -574,20 +428,6 @@ class Accuracy(BaseMetric):
         )
         return transformed.accuracy()
 
-    def compute_metric(self, forecast: xr.Dataset, target: xr.Dataset, **kwargs):
-        # Override preserve_dims from kwargs if provided
-        preserve_dims = kwargs.get("preserve_dims", self.preserve_dims)
-        kwargs_filtered = {k: v for k, v in kwargs.items() if k != "preserve_dims"}
-
-        return self._compute_metric(
-            forecast,
-            target,
-            forecast_threshold=self.forecast_threshold,
-            target_threshold=self.target_threshold,
-            preserve_dims=preserve_dims,
-            **kwargs_filtered,
-        )
-
 
 def create_threshold_metrics(
     forecast_threshold: float = 0.5,
@@ -607,10 +447,10 @@ def create_threshold_metrics(
         A list of metric objects with the specified thresholds
     """
     if metrics is None:
-        metrics = ["CSI", "FAR", "ACCURACY", "TP", "FP", "TN", "FN"]
+        metrics = ["CSI", "FAR", "Accuracy", "TP", "FP", "TN", "FN"]
 
-    # Mapping of metric names to their classes
-    metric_classes = {
+    # Mapping of metric names to their classes (all threshold-based metrics)
+    metric_classes: Dict[str, Type[ThresholdMetric]] = {
         "CSI": CSI,
         "FAR": FAR,
         "Accuracy": Accuracy,
