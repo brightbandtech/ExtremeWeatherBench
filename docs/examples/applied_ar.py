@@ -79,7 +79,7 @@ ar_metric_list = [
 # %%
 test_ewb = evaluate.ExtremeWeatherBench(
     cases=test_yaml,
-    metrics=ar_metric_list,
+    evaluation_objects=ar_metric_list,
 )
 logger.info("Starting EWB run")
 outputs = test_ewb.run(
