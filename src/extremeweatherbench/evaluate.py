@@ -347,11 +347,11 @@ def run_pipeline(
         # naming conventions
         .pipe(input_data.maybe_map_variable_names)
         # subsets the target data to the variables defined in the input data
-        .pipe(input_data.maybe_subset_variables, variables=input_data.variables)
-        # subsets the target data using the caseoperator metadata
+        .pipe(inputs.maybe_subset_variables, variables=input_data.variables)
+        # subsets the target data using the case metadata
         .pipe(
             input_data.subset_data_to_case,
-            case_operator=case_operator,
+            case_metadata=case_operator.case_metadata,
         )
         # converts the target data to an xarray dataset if it is not already
         .pipe(input_data.maybe_convert_to_dataset)
