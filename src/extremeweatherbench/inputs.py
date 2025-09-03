@@ -237,7 +237,9 @@ class InputBase(ABC):
         variables: list[Union[str, "derived.DerivedVariable"]],
     ) -> IncomingDataInput:
         """Subset the variables from the data, if required."""
-
+        # If there are no variables, return the data unaltered
+        if len(variables) == 0:
+            return data
         # get the first derived variable if it exists
         derived_variables = [
             v
