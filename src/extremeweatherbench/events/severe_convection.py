@@ -1115,23 +1115,31 @@ def find_intersections(
         return np.array([]), np.array([])
 
     # Filter indices to only process valid intersections
-    closest_idx = (closest_idx[0][valid_mask],)
-    next_idx = next_idx[valid_mask]
+    closest_idx_filtered = (closest_idx[0][valid_mask],)
+    next_idx_filtered = next_idx[valid_mask]
 
-    _, x0 = _next_non_masked_element(x, closest_idx)
-    _, x1 = _next_non_masked_element(x, next_idx)
+    # OPTIMIZED: Direct array indexing instead of _next_non_masked_element calls
+    # Extract indices the same way _next_non_masked_element does:
+    # 1. Handle tuple case
+    closest_indices = closest_idx_filtered[0]
+    if hasattr(closest_indices, "__len__") and len(closest_indices) > 0:
+        closest_indices = closest_indices[0]
+    closest_indices = int(closest_indices)
 
-    _, y10 = _next_non_masked_element(y1, closest_idx)
-    _, y11 = _next_non_masked_element(y1, next_idx)
+    # 2. Handle array case for next_idx
+    if hasattr(next_idx_filtered, "__len__") and len(next_idx_filtered) > 0:
+        next_indices = next_idx_filtered[0]
+    else:
+        next_indices = next_idx_filtered
+    next_indices = int(next_indices)
 
-    _, y20 = _next_non_masked_element(y2, closest_idx)
-    _, y21 = _next_non_masked_element(y2, next_idx)
-
-    # Check for None values from masked elements
-
-    none_values = [x0, x1, y10, y11, y20, y21]
-    if any(x is None for x in none_values):
-        return np.array([]), np.array([])
+    # Direct array access (much faster than function calls)
+    x0 = x[closest_indices]
+    x1 = x[next_indices]
+    y10 = y1[closest_indices]
+    y11 = y1[next_indices]
+    y20 = y2[closest_indices]
+    y21 = y2[next_indices]
 
     delta_y0 = y10 - y20  # type: ignore[operator]
     delta_y1 = y11 - y21  # type: ignore[operator]
@@ -1286,17 +1294,29 @@ def _cape_cin_single_profile(
         pressure_profile[1:], y[1:], np.zeros_like(y[1:]), direction="all"
     )
 
-    # Combine pressure and intersection points
-    x = np.concatenate([np.atleast_1d(pressure_profile), x_crossing])
-    y = np.concatenate([np.atleast_1d(y), y_crossing])
+    # OPTIMIZED: Combine, sort, and deduplicate in fewer operations
+    if len(x_crossing) == 0:
+        # No intersections - use original profile directly
+        x = pressure_profile
+        y = y
+    else:
+        # Combine pressure and intersection points
+        x = np.concatenate([pressure_profile, x_crossing])
+        y = np.concatenate([y, y_crossing])
 
-    # Sort and remove duplicates
-    sort_idx = np.argsort(x)
-    x = x[sort_idx]
-    y = y[sort_idx]
-    keep_idx = np.ediff1d(x, to_end=[1]) > 1e-6
-    x = x[keep_idx]
-    y = y[keep_idx]
+        # Sort and remove duplicates in one pass
+        sort_idx = np.argsort(x)
+        x_sorted = x[sort_idx]
+        y_sorted = y[sort_idx]
+
+        # Remove duplicates with single pass
+        if len(x_sorted) > 1:
+            unique_mask = np.concatenate([[True], np.diff(x_sorted) > 1e-6])
+            x = x_sorted[unique_mask]
+            y = y_sorted[unique_mask]
+        else:
+            x = x_sorted
+            y = y_sorted
 
     # Calculate CAPE
     cape_mask = ((x < lfc_pressure) | np.isclose(x, lfc_pressure)) & (
@@ -1324,6 +1344,7 @@ def mlcape_cin(
     temperature: np.ndarray,
     dewpoint: np.ndarray,
     parcel_profile: np.ndarray,
+    pressure_lcl: Optional[np.ndarray] = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Calculates the convective available potential energy (CAPE) and convective
     inhibition (CIN) of a dataset.
@@ -1333,6 +1354,8 @@ def mlcape_cin(
         temperature: numpy array of temperature values in C
         dewpoint: numpy array of dewpoint values in C
         parcel_profile: numpy array of parcel profile values in C
+        pressure_lcl: Optional pre-computed LCL pressure values in hPa.
+                     If None, will compute LCL from surface conditions.
 
     Returns:
         cape: numpy array of CAPE values in J/kg
@@ -1343,10 +1366,11 @@ def mlcape_cin(
         target_shape = pressure.shape[:-1] if pressure.size > 0 else (1,)
         return np.full(target_shape, np.nan), np.full(target_shape, np.nan)
 
-    # Get the LCL pressure for each profile
-    pressure_lcl, _ = new_lcl(
-        pressure[..., 0], temperature[..., 0] + 273.15, dewpoint[..., 0] + 273.15
-    )  # new lcl function takes kelvin
+    # Get the LCL pressure for each profile (use pre-computed if available)
+    if pressure_lcl is None:
+        pressure_lcl, _ = new_lcl(
+            pressure[..., 0], temperature[..., 0] + 273.15, dewpoint[..., 0] + 273.15
+        )  # new lcl function takes kelvin
     below_lcl = pressure > np.expand_dims(pressure_lcl, axis=-1)
     parcel_mixing_ratio = np.where(
         below_lcl,
@@ -1725,10 +1749,12 @@ def _run_cape_calculation(
         return np.full(target_shape, np.nan), np.full(target_shape, np.nan)
 
     # Convert temps back to Celsius
+    # Pass pre-computed LCL to avoid redundant calculation
     cape, cin = mlcape_cin(
         combined_all_pressure_w_lcl,
         calculated_new_temp - 273.15,
         calculated_new_dewpoint - 273.15,
         combined_all_temp_w_lcl - 273.15,
+        pressure_lcl=calculated_lcl_pressure.squeeze(),
     )
     return cape, cin
