@@ -185,13 +185,6 @@ class InputBase(ABC):
     def add_source_to_dataset_attrs(self, ds: xr.Dataset) -> xr.Dataset:
         """Add the name and type of the dataset to the dataset attributes."""
         # Check if this instance is a ForecastBase or TargetBase subclass
-        if isinstance(self, ForecastBase):
-            ds.attrs["dataset_type"] = "forecast"
-        elif isinstance(self, TargetBase):
-            ds.attrs["dataset_type"] = "target"
-        else:
-            # Fallback to class name for other InputBase subclasses
-            ds.attrs["dataset_type"] = self.__class__.__name__
         ds.attrs["source"] = self.name
         return ds
 
@@ -237,41 +230,6 @@ class InputBase(ABC):
             if not isinstance(data, pd.DataFrame)
             else data.rename(columns=output_dict)
         )
-
-    def maybe_subset_variables(
-        self,
-        data: IncomingDataInput,
-        variables: list[Union[str, "derived.DerivedVariable"]],
-    ) -> IncomingDataInput:
-        """Subset the variables from the data, if required."""
-
-        # get the first derived variable if it exists
-        derived_variables = [
-            v
-            for v in variables
-            if isinstance(v, type) and issubclass(v, derived.DerivedVariable)
-        ]
-        if derived_variables:
-            derived_variable = derived_variables[0]
-        else:
-            derived_variable = None
-
-        # get the optional variables and mapping from the derived variable
-        optional_variables = getattr(derived_variable, "optional_variables", None) or []
-        optional_variables_mapping = (
-            getattr(derived_variable, "optional_variables_mapping", None) or {}
-        )
-
-        expected_and_maybe_derived_variables = (
-            derived.maybe_include_variables_from_derived_input(variables)
-        )
-        data = safely_pull_variables(
-            data,
-            expected_and_maybe_derived_variables,
-            optional_variables=optional_variables,
-            optional_variables_mapping=optional_variables_mapping,
-        )
-        return data
 
 
 @dataclasses.dataclass
@@ -356,7 +314,7 @@ class EvaluationObject:
     """
 
     event_type: str
-    metric_list: list[Union[Callable, "metrics.BaseMetric", "metrics.AppliedMetric"]]
+    metric_list: list[Union["metrics.BaseMetric", "metrics.AppliedMetric"]]
     target: "TargetBase"
     forecast: "ForecastBase"
 
@@ -687,9 +645,6 @@ class PPH(TargetBase):
         case_metadata: "cases.IndividualCase",
     ) -> IncomingDataInput:
         return zarr_target_subsetter(target_data, case_metadata)
-
-    def _custom_convert_to_dataset(self, data: IncomingDataInput) -> xr.Dataset:
-        return data
 
     def maybe_align_forecast_to_target(
         self,
@@ -1226,3 +1181,40 @@ def _safely_pull_variables_pandas_dataframe(
 
     # Return DataFrame with only the found columns
     return dataset[found_variables]
+
+
+def maybe_subset_variables(
+    data: IncomingDataInput,
+    variables: list[Union[str, "derived.DerivedVariable"]],
+) -> IncomingDataInput:
+    """Subset the variables from the data, if required."""
+    # If there are no variables, return the data unaltered
+    if len(variables) == 0:
+        return data
+    # get the first derived variable if it exists
+    derived_variables = [
+        v
+        for v in variables
+        if isinstance(v, type) and issubclass(v, derived.DerivedVariable)
+    ]
+    if derived_variables:
+        derived_variable = derived_variables[0]
+    else:
+        derived_variable = None
+
+    # get the optional variables and mapping from the derived variable
+    optional_variables = getattr(derived_variable, "optional_variables", None) or []
+    optional_variables_mapping = (
+        getattr(derived_variable, "optional_variables_mapping", None) or {}
+    )
+
+    expected_and_maybe_derived_variables = (
+        derived.maybe_pull_required_variables_from_derived_input(variables)
+    )
+    data = safely_pull_variables(
+        data,
+        expected_and_maybe_derived_variables,
+        optional_variables=optional_variables,
+        optional_variables_mapping=optional_variables_mapping,
+    )
+    return data

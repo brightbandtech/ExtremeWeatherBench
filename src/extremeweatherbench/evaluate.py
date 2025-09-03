@@ -361,8 +361,8 @@ def run_pipeline(
         # naming conventions
         .pipe(input_data.maybe_map_variable_names)
         # subsets the target data to the variables defined in the input data
-        .pipe(input_data.maybe_subset_variables, variables=input_data.variables)
-        # subsets the target data using the caseoperator metadata
+        .pipe(inputs.maybe_subset_variables, variables=input_data.variables)
+        # subsets the target data using the case metadata
         .pipe(
             input_data.subset_data_to_case,
             case_metadata=case_metadata,
