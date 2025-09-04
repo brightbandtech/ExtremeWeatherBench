@@ -11,16 +11,24 @@ Traditional meteorological evaluation often relies on grid-point-based metrics t
 ExtremeWeatherBench provides a standardized framework for evaluating machine learning models on extreme weather prediction tasks. It includes curated datasets, evaluation metrics, and baseline models specifically designed for extreme weather phenomena such as:
 
 - Heat waves
-- Freeze events (cold snaps)
-- Severe Weather Days
+- Freezes (cold snaps)
+- Severe convection (hail, tornadoes)
 - Tropical cyclones
 - Atmospheric rivers
-- Extreme precipitation events
+
+and is able to be extended with easily added components.
 
 
 ## Features
 
-- **AIWP and Evaluation datasets**: Pre-processed AIWP forecasts ready for analysis and curated global point observations from NCEI's Integrated Surface Dataset (ISD) stored on Brightband's cloud storage
+- **AIWP and Evaluation datasets**: 
+    - Pre-processed AIWP forecasts ready for analysis [Radford et al. 2025](https://journals.ametsoc.org/view/journals/bams/106/1/BAMS-D-24-0057.1.xml) 
+    - Curated global point observations from NCEI's [Global Historical Climatology Network (GHCN)](https://www.ncei.noaa.gov/news/next-generation-climate-dataset-built-seamless-integration)
+    - Performant IBTrACS access via [Polars](https://pola.rs/) for tropical cyclones
+    - Local storm reports for multiple countries, standardized into one source
+    - Practically perfect hindcasts generated from local storm reports via zarr
+    - Distinctive climatologies including 85th and 15th percentile surface temperatures via zarr
+
 - **Standardized evaluation**: Consistent foundational metrics for fair model comparison
-- **Easy to use**: Simple and intuitive API for researchers and practitioners, including a friendly learning curve to build bespoke metrics and integration of other forecast and observational datasets
+- **Easy to use**: Simple and intuitive API for researchers and practitioners, including a friendly learning curve to build bespoke metrics and integration of other forecast and target datasets
 - **Well documented**: Comprehensive documentation with examples
