@@ -1,8 +1,12 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import List, Type, Union
+from collections import OrderedDict
+from typing import Sequence, Type, Union
 
+import numpy as np
 import xarray as xr
+
+from extremeweatherbench.events import tropical_cyclone
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -30,7 +34,9 @@ class DerivedVariable(ABC):
             derive the variable from required_variables.
     """
 
-    required_variables: List[str]
+    required_variables: list[str]
+    optional_variables: list[str] = []
+    optional_variables_mapping: dict = {}
 
     @property
     def name(self) -> str:
@@ -42,7 +48,7 @@ class DerivedVariable(ABC):
 
     @classmethod
     @abstractmethod
-    def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
+    def derive_variable(cls, data: xr.Dataset, *args, **kwargs) -> xr.DataArray:
         """Derive the variable from the required variables.
 
         The output of the derivation must be a single variable output returned as
@@ -57,24 +63,140 @@ class DerivedVariable(ABC):
         pass
 
     @classmethod
-    def compute(cls, data: xr.Dataset, **kwargs) -> xr.DataArray:
+    def compute(cls, data: xr.Dataset, *args, **kwargs) -> xr.DataArray:
         """Build the derived variable from the input variables.
 
         This method is used to build the derived variable from the input variables.
-        It checks that the data has the variables required to build the variable,
-        and then derives the variable from the input variables.
 
         Args:
             data: The dataset to build the derived variable from.
-            **kwargs: Additional keyword arguments to pass to the derived variable.
+            *args: Additional positional arguments to pass to derive_variable.
+            **kwargs: Additional keyword arguments to pass to derive_variable.
 
         Returns:
             A DataArray with the derived variable.
         """
-        for v in cls.required_variables:
-            if v not in data.data_vars:
-                raise ValueError(f"Input variable {v} not found in data")
-        return cls.derive_variable(data)
+        return cls.derive_variable(data, *args, **kwargs)
+
+
+class TropicalCycloneTrackVariables(DerivedVariable):
+    """A derived variable abstract class for tropical cyclone (TC) variables.
+
+    This class serves as a parent for TC-related derived variables and provides
+    shared track computation with caching to avoid reprocessing the same data
+    multiple times across different child classes.
+
+    The track data is computed once and cached, then child classes can extract
+    specific variables (like sea level pressure, wind speed) from the cached
+    track dataset.
+
+    Deriving the track locations using default TempestExtremes criteria:
+    https://doi.org/10.5194/gmd-14-5023-2021
+
+    For forecast data, when IBTrACS data is provided, the valid candidates
+    approach is filtered to only include candidates within 5 great circle
+    degrees of IBTrACS points and within 120 hours of the valid_time.
+    """
+
+    # required variables for TC track identification
+    required_variables = [
+        "air_pressure_at_mean_sea_level",
+        "geopotential",
+        "surface_eastward_wind",
+        "surface_northward_wind",
+    ]
+
+    @classmethod
+    def _get_or_compute_tracks(cls, data: xr.Dataset, *args, **kwargs) -> xr.Dataset:
+        """Get cached track data or compute if not already cached.
+
+        This method handles the caching logic to ensure track computation
+        is only done once per unique dataset.
+
+        Args:
+            data: Input dataset containing required variables
+
+        Returns:
+            3D dataset containing tropical cyclone track information
+        """
+        cache_key = tropical_cyclone._generate_cache_key(data)
+
+        # Return cached result if available
+        if cache_key in tropical_cyclone._TC_TRACK_CACHE:
+            return tropical_cyclone._TC_TRACK_CACHE[cache_key]
+
+        # Compute tracks if not cached
+        def _prepare_wind_data(data: xr.Dataset) -> xr.Dataset:
+            """Prepare wind data by computing wind speed if needed."""
+            # Make a copy to avoid modifying original
+            prepared_data = data.copy()
+
+            has_wind_speed = "surface_wind_speed" in data.data_vars
+            has_wind_components = (
+                "surface_eastward_wind" in data.data_vars
+                and "surface_northward_wind" in data.data_vars
+            )
+
+            # If we don't have wind speed but have components, compute it
+            if not has_wind_speed and has_wind_components:
+                prepared_data["surface_wind_speed"] = np.hypot(
+                    data["surface_eastward_wind"], data["surface_northward_wind"]
+                )
+
+            return prepared_data
+
+        # Prepare the data with wind variables as needed
+        prepared_data = _prepare_wind_data(data)
+
+        # Generates the variables needed for the TC track calculation
+        # (geop. thickness, winds, temps, slp)
+        cyclone_dataset = tropical_cyclone.generate_tc_variables(prepared_data)
+
+        # Check if we should apply IBTrACS filtering
+        # First check kwargs, then the global registry
+        ibtracs_data = kwargs.get("ibtracs_data", None)
+        case_metadata = kwargs.get("case_metadata", None)
+        case_id_number = case_metadata.case_id_number if case_metadata else None
+        if ibtracs_data is None:
+            if case_id_number is not None:
+                ibtracs_data = tropical_cyclone.get_ibtracs_data(case_id_number)
+            else:
+                raise ValueError("No IBTrACS data provided to constrain TC tracks.")
+        # Use IBTrACS-filtered TC detection
+        tctracks_ds = tropical_cyclone.create_tctracks_from_dataset_with_ibtracs_filter(
+            cyclone_dataset, ibtracs_data
+        )
+        # Cache the result
+        tropical_cyclone._TC_TRACK_CACHE[cache_key] = tctracks_ds
+
+        return tctracks_ds
+
+    @classmethod
+    def derive_variable(cls, data: xr.Dataset, *args, **kwargs) -> xr.DataArray:
+        """Derive the TC track variables.
+
+        This base method returns the full track dataset. Child classes should
+        override this method to extract specific variables from the track data.
+
+        Args:
+            data: Input dataset containing required meteorological variables
+
+        Returns:
+            DataArray containing the derived variable
+        """
+        # Get the cached or computed track data
+        tracks_dataset = cls._get_or_compute_tracks(data, *args, **kwargs)
+
+        # Squeeze the dataset to remove the track dimension if only one track is present
+        return tracks_dataset.squeeze()
+
+    @classmethod
+    def clear_cache(cls) -> None:
+        """Clear the global track cache.
+
+        Useful for memory management or when processing completely different datasets.
+        """
+        tropical_cyclone._TC_TRACK_CACHE.clear()
 
 
 def maybe_derive_variables(
@@ -89,7 +211,7 @@ def maybe_derive_variables(
     variable. If there are multiple derived variables, the first one will be used.
 
     Args:
-        ds: The dataset, ideally already subset in case of in memory operations
+        dataset: The dataset, ideally already subset in case of in memory operations
             in the derived variables.
         variables: The potential variables to derive as a list of strings or
             DerivedVariable objects.
@@ -99,6 +221,11 @@ def maybe_derive_variables(
         A dataset with derived variables, if any exist, else the original
         dataset.
     """
+    # If there are no valid times, return the dataset unaltered; saves time as case will
+    # be skipped
+    if len(dataset.valid_time) == 0:
+        logger.debug("No valid times found in the dataset.")
+        return dataset
 
     maybe_derived_variables = [v for v in variables if not isinstance(v, str)]
 
@@ -129,7 +256,6 @@ def maybe_derive_variables(
             output.name = derived_variable.name
         # Merge the derived variable into the dataset
         return output.to_dataset()
-
     elif isinstance(output, xr.Dataset):
         # Check if derived dataset dimensions are compatible for merging
         return output
@@ -142,11 +268,10 @@ def maybe_derive_variables(
     return dataset
 
 
-def maybe_pull_required_variables_from_derived_input(
-    incoming_variables: list[Union[str, DerivedVariable, Type[DerivedVariable]]],
+def maybe_include_variables_from_derived_input(
+    incoming_variables: Sequence[Union[str, DerivedVariable, Type[DerivedVariable]]],
 ) -> list[str]:
-    """Pull the required variables from a derived input and add to the list of
-    variables to pull.
+    """Identify and return variables that a derived variable needs to compute.
 
     Args:
         incoming_variables: a list of string and/or derived variables.
@@ -164,6 +289,11 @@ def maybe_pull_required_variables_from_derived_input(
             derived_required_variables.extend(v.required_variables)
         elif isinstance(v, type) and issubclass(v, DerivedVariable):
             # Handle classes that inherit from DerivedVariable
-            derived_required_variables.extend(v.required_variables)
+            # Recursively pull required variables from derived variables
+            derived_required_variables.extend(
+                maybe_include_variables_from_derived_input(v.required_variables)
+            )
 
-    return string_variables + derived_required_variables
+    # Remove duplicates while preserving order
+    all_variables = string_variables + derived_required_variables
+    return list(OrderedDict.fromkeys(all_variables))
