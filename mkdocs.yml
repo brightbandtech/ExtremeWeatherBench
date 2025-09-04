@@ -23,7 +23,7 @@ nav:
       - Tropical Cyclone Tornadic Outbreaks: events/TCTornadoOutbreaks.md
       - Wind Events: events/WindEvents.md
       - Winter Weather: events/WinterWeather.md
-  - API Reference: $src/extremeweatherbench.*
+  - API Reference: $src:extremeweatherbench/extremeweatherbench.***
   - FAQ: faq.md
   - Contributing: contributing.md
   - License: license.md
