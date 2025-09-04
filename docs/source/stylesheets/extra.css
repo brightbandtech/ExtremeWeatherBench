@@ -59,6 +59,25 @@
     /* Light text for variables/operators */
 }
 
+/* Comments in light mode - bright green for visibility */
+[data-md-color-scheme="bb-light"] .highlight .c,
+[data-md-color-scheme="bb-light"] .highlight .c1,
+[data-md-color-scheme="bb-light"] .highlight .cm,
+[data-md-color-scheme="bb-light"] .highlight .cp,
+[data-md-color-scheme="bb-light"] .highlight .cs {
+    color: #7dd87d !important;
+    /* Bright green for comments */
+    font-style: italic;
+}
+
+/* Boolean values in light mode - lighter purple for visibility */
+[data-md-color-scheme="bb-light"] .highlight .kc,
+[data-md-color-scheme="bb-light"] .highlight .bp {
+    color: #b19cd9 !important;
+    /* Light purple for True/False/None */
+    font-weight: 600;
+}
+
 [data-md-color-scheme="bb-dark"] {
     --md-primary-fg-color: #262620;
     --md-primary-fg-color--light: #dfdfcb;
@@ -127,6 +146,17 @@
 [data-md-color-scheme="bb-dark"] .highlight .p {
     color: #262620 !important;
     /* Dark text for variables/operators */
+}
+
+/* Comments in dark mode - bright orange for visibility */
+[data-md-color-scheme="bb-dark"] .highlight .c,
+[data-md-color-scheme="bb-dark"] .highlight .c1,
+[data-md-color-scheme="bb-dark"] .highlight .cm,
+[data-md-color-scheme="bb-dark"] .highlight .cp,
+[data-md-color-scheme="bb-dark"] .highlight .cs {
+    color: #ff8c42 !important;
+    /* Bright orange for comments */
+    font-style: italic;
 }
 
 /* Logo switching - CORRECTED: dark logo on light page, light logo on dark page */
