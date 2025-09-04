@@ -16,6 +16,7 @@ import pytest
 import xarray as xr
 
 from extremeweatherbench import cases, evaluate, inputs, metrics
+from extremeweatherbench.defaults import OUTPUT_COLUMNS
 from extremeweatherbench.regions import CenteredRegion
 
 # =============================================================================
@@ -114,7 +115,7 @@ def sample_evaluation_object(mock_target_base, mock_forecast_base, mock_base_met
     """Create a sample EvaluationObject."""
     return inputs.EvaluationObject(
         event_type="heat_wave",
-        metric=[mock_base_metric],
+        metric_list=[mock_base_metric],
         target=mock_target_base,
         forecast=mock_forecast_base,
     )
@@ -127,7 +128,7 @@ def sample_case_operator(
     """Create a sample CaseOperator."""
     return cases.CaseOperator(
         case_metadata=sample_individual_case,
-        metric=mock_base_metric,
+        metric_list=mock_base_metric,
         target=mock_target_base,
         forecast=mock_forecast_base,
     )
@@ -199,11 +200,11 @@ class TestExtremeWeatherBench:
         """Test ExtremeWeatherBench initialization."""
         ewb = evaluate.ExtremeWeatherBench(
             cases=sample_cases_dict,
-            metrics=[sample_evaluation_object],
+            evaluation_objects=[sample_evaluation_object],
         )
 
         assert ewb.cases == sample_cases_dict
-        assert ewb.metrics == [sample_evaluation_object]
+        assert ewb.evaluation_objects == [sample_evaluation_object]
         assert ewb.cache_dir is None
 
     def test_initialization_with_cache_dir(
@@ -213,7 +214,7 @@ class TestExtremeWeatherBench:
         cache_dir = "/tmp/test_cache"
         ewb = evaluate.ExtremeWeatherBench(
             cases=sample_cases_dict,
-            metrics=[sample_evaluation_object],
+            evaluation_objects=[sample_evaluation_object],
             cache_dir=cache_dir,
         )
 
@@ -227,7 +228,7 @@ class TestExtremeWeatherBench:
         cache_dir = Path("/tmp/test_cache")
         ewb = evaluate.ExtremeWeatherBench(
             cases=sample_cases_dict,
-            metrics=[sample_evaluation_object],
+            evaluation_objects=[sample_evaluation_object],
             cache_dir=cache_dir,
         )
 
@@ -246,7 +247,7 @@ class TestExtremeWeatherBench:
 
         ewb = evaluate.ExtremeWeatherBench(
             cases=sample_cases_dict,
-            metrics=[sample_evaluation_object],
+            evaluation_objects=[sample_evaluation_object],
         )
 
         result = ewb.case_operators
@@ -281,7 +282,7 @@ class TestExtremeWeatherBench:
 
             ewb = evaluate.ExtremeWeatherBench(
                 cases=sample_cases_dict,
-                metrics=[sample_evaluation_object],
+                evaluation_objects=[sample_evaluation_object],
             )
 
             result = ewb.run()
@@ -318,7 +319,7 @@ class TestExtremeWeatherBench:
 
                 ewb = evaluate.ExtremeWeatherBench(
                     cases=sample_cases_dict,
-                    metrics=[sample_evaluation_object],
+                    evaluation_objects=[sample_evaluation_object],
                     cache_dir=cache_dir,
                 )
 
@@ -353,7 +354,7 @@ class TestExtremeWeatherBench:
 
             ewb = evaluate.ExtremeWeatherBench(
                 cases=sample_cases_dict,
-                metrics=[sample_evaluation_object],
+                evaluation_objects=[sample_evaluation_object],
             )
 
             result = ewb.run()
@@ -389,7 +390,9 @@ class TestComputeCaseOperator:
             sample_forecast_dataset,
             sample_target_dataset,
         )
-        mock_derive_variables.side_effect = lambda ds, vars: ds  # Return unchanged
+        mock_derive_variables.side_effect = (
+            lambda ds, variables: ds  # Return unchanged
+        )
 
         mock_result = pd.DataFrame(
             {
@@ -401,7 +404,7 @@ class TestComputeCaseOperator:
         mock_evaluate_metric.return_value = mock_result
 
         # Setup the case operator mocks - metric should be a list for iteration
-        sample_case_operator.metric = [mock_base_metric]
+        sample_case_operator.metric_list = [mock_base_metric]
         sample_case_operator.target.maybe_align_forecast_to_target.return_value = (
             sample_forecast_dataset,
             sample_target_dataset,
@@ -427,13 +430,13 @@ class TestComputeCaseOperator:
             sample_forecast_dataset,
             sample_target_dataset,
         )
-        mock_derive_variables.side_effect = lambda ds, vars: ds
+        mock_derive_variables.side_effect = lambda ds, variables: ds
 
         sample_case_operator.target.maybe_align_forecast_to_target.return_value = (
             sample_forecast_dataset,
             sample_target_dataset,
         )
-        sample_case_operator.metric = [Mock()]
+        sample_case_operator.metric_list = [Mock()]
 
         with patch(
             "extremeweatherbench.evaluate._compute_and_maybe_cache"
@@ -472,7 +475,7 @@ class TestComputeCaseOperator:
         # Create multiple metrics
         metric_1 = Mock()
         metric_2 = Mock()
-        sample_case_operator.metric = [metric_1, metric_2]
+        sample_case_operator.metric_list = [metric_1, metric_2]
 
         sample_case_operator.target.maybe_align_forecast_to_target.return_value = (
             sample_forecast_dataset,
@@ -480,7 +483,7 @@ class TestComputeCaseOperator:
         )
 
         with patch("extremeweatherbench.derived.maybe_derive_variables") as mock_derive:
-            mock_derive.side_effect = lambda ds, vars: ds
+            mock_derive.side_effect = lambda ds, variables: ds
 
             with patch(
                 "extremeweatherbench.evaluate._evaluate_metric_and_return_df"
@@ -492,6 +495,46 @@ class TestComputeCaseOperator:
                 # Should be called twice (once for each metric)
                 assert mock_evaluate.call_count == 2
                 assert len(result) == 2
+
+    @patch("extremeweatherbench.evaluate._build_datasets")
+    def test_compute_case_operator_empty_forecast_dataset(
+        self, mock_build_datasets, sample_case_operator
+    ):
+        """Test compute_case_operator when _build_datasets returns empty forecast
+        dataset."""
+        # Mock _build_datasets to return empty datasets (simulating zero valid times)
+        empty_forecast_ds = xr.Dataset()
+        empty_target_ds = xr.Dataset()
+        mock_build_datasets.return_value = (empty_forecast_ds, empty_target_ds)
+
+        result = evaluate.compute_case_operator(sample_case_operator)
+
+        # Should return empty DataFrame with correct columns
+        assert isinstance(result, pd.DataFrame)
+        assert len(result) == 0
+        assert list(result.columns) == OUTPUT_COLUMNS
+
+        # _build_datasets should be called, but no further processing should occur
+        mock_build_datasets.assert_called_once_with(sample_case_operator)
+
+    @patch("extremeweatherbench.evaluate._build_datasets")
+    def test_compute_case_operator_empty_target_dataset(
+        self, mock_build_datasets, sample_case_operator, sample_forecast_dataset
+    ):
+        """Test compute_case_operator when _build_datasets returns empty
+        target dataset."""
+        # Mock _build_datasets to return empty target dataset
+        empty_target_ds = xr.Dataset()
+        mock_build_datasets.return_value = (sample_forecast_dataset, empty_target_ds)
+
+        result = evaluate.compute_case_operator(sample_case_operator)
+
+        # Should return empty DataFrame with correct columns
+        assert isinstance(result, pd.DataFrame)
+        assert len(result) == 0
+        assert list(result.columns) == OUTPUT_COLUMNS
+
+        mock_build_datasets.assert_called_once_with(sample_case_operator)
 
 
 # =============================================================================
@@ -515,10 +558,123 @@ class TestPipelineFunctions:
             assert forecast_ds.attrs["source"] == "forecast"
             assert target_ds.attrs["source"] == "target"
 
+    def test_build_datasets_zero_length_dimensions(self, sample_case_operator):
+        """Test _build_datasets when forecast has zero-length dimensions."""
+        with patch("extremeweatherbench.evaluate.run_pipeline") as mock_run_pipeline:
+            # Create a forecast dataset with zero-length valid_time dimension
+            mock_forecast_ds = xr.Dataset(
+                coords={"valid_time": []},  # Empty valid_time coordinate
+                attrs={"source": "forecast"},
+            )
+            mock_target_ds = xr.Dataset(attrs={"source": "target"})
+            mock_run_pipeline.side_effect = [mock_forecast_ds, mock_target_ds]
+
+            with patch("extremeweatherbench.evaluate.logger.warning") as mock_warning:
+                forecast_ds, target_ds = evaluate._build_datasets(sample_case_operator)
+
+                # Should return empty datasets
+                assert len(forecast_ds) == 0
+                assert len(target_ds) == 0
+                assert isinstance(forecast_ds, xr.Dataset)
+                assert isinstance(target_ds, xr.Dataset)
+
+                # Should log a warning
+                mock_warning.assert_called_once()
+                warning_message = mock_warning.call_args[0][0]
+                assert "zero-length dimensions" in warning_message
+                assert "['valid_time']" in warning_message
+                assert (
+                    str(sample_case_operator.case_metadata.case_id_number)
+                    in warning_message
+                )
+
+                # Should only call run_pipeline once (for forecast), not for target
+                assert mock_run_pipeline.call_count == 1
+
+    def test_build_datasets_zero_length_warning_content(self, sample_case_operator):
+        """Test _build_datasets warning message content when forecast has
+        zero-length dimensions."""
+        with patch("extremeweatherbench.evaluate.run_pipeline") as mock_run_pipeline:
+            # Create a forecast dataset with zero-length dimension
+            mock_forecast_ds = xr.Dataset(
+                coords={"lead_time": []}, attrs={"source": "forecast"}
+            )
+            mock_run_pipeline.return_value = mock_forecast_ds
+
+            with patch("extremeweatherbench.evaluate.logger.warning") as mock_warning:
+                forecast_ds, target_ds = evaluate._build_datasets(sample_case_operator)
+
+                # Verify warning message contains expected information
+                mock_warning.assert_called_once()
+                warning_message = mock_warning.call_args[0][0]
+
+                # Check all expected components are in the warning message
+                assert (
+                    f"case {sample_case_operator.case_metadata.case_id_number}"
+                    in warning_message
+                )
+                assert "zero-length dimensions" in warning_message
+                assert "['lead_time']" in warning_message
+                assert (
+                    str(sample_case_operator.case_metadata.start_date)
+                    in warning_message
+                )
+                assert (
+                    str(sample_case_operator.case_metadata.end_date) in warning_message
+                )
+
+    def test_build_datasets_multiple_zero_length_dimensions(self, sample_case_operator):
+        """Test _build_datasets when forecast has multiple zero-length dimensions."""
+        with patch("extremeweatherbench.evaluate.run_pipeline") as mock_run_pipeline:
+            # Create a forecast dataset with multiple zero-length dimensions
+            mock_forecast_ds = xr.Dataset(
+                coords={"valid_time": [], "latitude": []}, attrs={"source": "forecast"}
+            )
+            mock_run_pipeline.return_value = mock_forecast_ds
+
+            with patch("extremeweatherbench.evaluate.logger.warning") as mock_warning:
+                forecast_ds, target_ds = evaluate._build_datasets(sample_case_operator)
+
+                # Should return empty datasets
+                assert len(forecast_ds) == 0
+                assert len(target_ds) == 0
+
+                # Should log a warning with both dimensions
+                mock_warning.assert_called_once()
+                warning_message = mock_warning.call_args[0][0]
+                assert "zero-length dimensions" in warning_message
+                # Check that both dimensions are mentioned (order may vary)
+                assert "valid_time" in warning_message
+                assert "latitude" in warning_message
+
+    def test_build_datasets_normal_dimensions(self, sample_case_operator):
+        """Test _build_datasets when forecast has normal (non-zero) dimensions."""
+        with patch("extremeweatherbench.evaluate.run_pipeline") as mock_run_pipeline:
+            # Create datasets with normal dimensions
+            mock_forecast_ds = xr.Dataset(
+                coords={"valid_time": [1, 2, 3], "latitude": [40, 45, 50]},
+                attrs={"source": "forecast"},
+            )
+            mock_target_ds = xr.Dataset(attrs={"source": "target"})
+            mock_run_pipeline.side_effect = [mock_forecast_ds, mock_target_ds]
+
+            with patch("extremeweatherbench.evaluate.logger.warning") as mock_warning:
+                forecast_ds, target_ds = evaluate._build_datasets(sample_case_operator)
+
+                # Should return the actual datasets
+                assert forecast_ds.attrs["source"] == "forecast"
+                assert target_ds.attrs["source"] == "target"
+
+                # Should not log any warning
+                mock_warning.assert_not_called()
+
+                # Should call run_pipeline twice (for both forecast and target)
+                assert mock_run_pipeline.call_count == 2
+
     def test_run_pipeline_forecast(self, sample_case_operator, sample_forecast_dataset):
         """Test run_pipeline function for forecast data."""
         # Mock the pipeline methods
-        sample_case_operator.forecast.open_and_maybe_preprocess_data_from_source.return_value = sample_forecast_dataset
+        sample_case_operator.forecast.open_and_maybe_preprocess_data_from_source.return_value = sample_forecast_dataset  # noqa: E501
         sample_case_operator.forecast.maybe_map_variable_names.return_value = (
             sample_forecast_dataset
         )
@@ -535,9 +691,9 @@ class TestPipelineFunctions:
         result = evaluate.run_pipeline(sample_case_operator, "forecast")
 
         assert isinstance(result, xr.Dataset)
-        sample_case_operator.forecast.open_and_maybe_preprocess_data_from_source.assert_called_once()
+        sample_case_operator.forecast.open_and_maybe_preprocess_data_from_source.assert_called_once()  # noqa: E501
         sample_case_operator.forecast.maybe_map_variable_names.assert_called_once()
-        # The pipe() method passes the dataset as first argument, then case_operator as kwarg
+        # The pipe() method passes the dataset, then case_operator as kwarg
         assert sample_case_operator.forecast.subset_data_to_case.call_count == 1
         call_args = sample_case_operator.forecast.subset_data_to_case.call_args
         assert call_args[1]["case_operator"] == sample_case_operator
@@ -547,7 +703,7 @@ class TestPipelineFunctions:
     def test_run_pipeline_target(self, sample_case_operator, sample_target_dataset):
         """Test run_pipeline function for target data."""
         # Mock the pipeline methods
-        sample_case_operator.target.open_and_maybe_preprocess_data_from_source.return_value = sample_target_dataset
+        sample_case_operator.target.open_and_maybe_preprocess_data_from_source.return_value = sample_target_dataset  # noqa: E501
         sample_case_operator.target.maybe_map_variable_names.return_value = (
             sample_target_dataset
         )
@@ -564,7 +720,7 @@ class TestPipelineFunctions:
         result = evaluate.run_pipeline(sample_case_operator, "target")
 
         assert isinstance(result, xr.Dataset)
-        sample_case_operator.target.open_and_maybe_preprocess_data_from_source.assert_called_once()
+        sample_case_operator.target.open_and_maybe_preprocess_data_from_source.assert_called_once()  # noqa: E501
 
     def test_run_pipeline_invalid_source(self, sample_case_operator):
         """Test run_pipeline function with invalid input source."""
@@ -687,7 +843,7 @@ class TestErrorHandling:
 
         ewb = evaluate.ExtremeWeatherBench(
             cases=empty_cases,
-            metrics=[sample_evaluation_object],
+            evaluation_objects=[sample_evaluation_object],
         )
 
         with patch("extremeweatherbench.cases.build_case_operators") as mock_build:
@@ -756,7 +912,7 @@ class TestIntegration:
         sample_target_dataset,
     ):
         """Test a complete end-to-end workflow."""
-        mock_derive_variables.side_effect = lambda ds, vars: ds
+        mock_derive_variables.side_effect = lambda ds, variables: ds
 
         # Setup the evaluation object methods
         sample_evaluation_object.target.maybe_align_forecast_to_target.return_value = (
@@ -765,7 +921,9 @@ class TestIntegration:
         )
 
         # Mock the pipeline methods to return our test datasets
-        sample_evaluation_object.forecast.open_and_maybe_preprocess_data_from_source.return_value = sample_forecast_dataset
+        sample_evaluation_object.forecast.open_and_maybe_preprocess_data_from_source.return_value = (  # noqa: E501
+            sample_forecast_dataset
+        )
         sample_evaluation_object.forecast.maybe_map_variable_names.return_value = (
             sample_forecast_dataset
         )
@@ -779,7 +937,9 @@ class TestIntegration:
             sample_forecast_dataset
         )
 
-        sample_evaluation_object.target.open_and_maybe_preprocess_data_from_source.return_value = sample_target_dataset
+        sample_evaluation_object.target.open_and_maybe_preprocess_data_from_source.return_value = (  # noqa: E501
+            sample_target_dataset
+        )
         sample_evaluation_object.target.maybe_map_variable_names.return_value = (
             sample_target_dataset
         )
@@ -814,7 +974,7 @@ class TestIntegration:
             # Create and run the workflow
             ewb = evaluate.ExtremeWeatherBench(
                 cases=sample_cases_dict,
-                metrics=[sample_evaluation_object],
+                evaluation_objects=[sample_evaluation_object],
             )
 
             result = ewb.run()
@@ -849,7 +1009,7 @@ class TestIntegration:
         # Create evaluation object with multiple metrics and variables
         eval_obj = Mock(spec=inputs.EvaluationObject)
         eval_obj.event_type = "heat_wave"
-        eval_obj.metric = [metric_1, metric_2]
+        eval_obj.metric_list = [metric_1, metric_2]
 
         # Mock target and forecast with variables that match our datasets
         eval_obj.target = Mock(spec=inputs.TargetBase)
@@ -893,7 +1053,7 @@ class TestIntegration:
         )
 
         with patch("extremeweatherbench.derived.maybe_derive_variables") as mock_derive:
-            mock_derive.side_effect = lambda ds, vars: ds
+            mock_derive.side_effect = lambda ds, variables: ds
 
             with patch(
                 "extremeweatherbench.evaluate._evaluate_metric_and_return_df"
@@ -902,7 +1062,7 @@ class TestIntegration:
 
                 ewb = evaluate.ExtremeWeatherBench(
                     cases=sample_cases_dict,
-                    metrics=[eval_obj],
+                    evaluation_objects=[eval_obj],
                 )
 
                 result = ewb.run()

@@ -34,7 +34,7 @@ hres_forecast = inputs.ZarrForecast(
 heatwave_metric_list = [
     inputs.EvaluationObject(
         event_type="heat_wave",
-        metric=[
+        metric_list=[
             metrics.MaximumMAE,
             metrics.RMSE,
             metrics.OnsetME,
