@@ -1,6 +1,6 @@
+import datetime
 import os
 import sys
-import datetime
 
 sys.path.insert(
     0, os.path.abspath("../../src/extremeweatherbench")
@@ -9,7 +9,10 @@ sys.path.insert(
 # -- Project information
 utc_now = datetime.datetime.now(datetime.UTC).strftime("%H:%M %d %b %Y")
 project = "ExtremeWeatherBench"
-copyright = f"{datetime.datetime.now(datetime.UTC).strftime('%Y')}, Brightband.    ♻ Updated: {utc_now}"
+copyright = (
+    f"{datetime.datetime.now(datetime.UTC).strftime('%Y')}, "
+    "Brightband.    ♻ Updated: {utc_now}"
+)
 author = "Taylor Mandelbaum"
 
 release = "0.1"

@@ -9,7 +9,9 @@ nav:
   - Usage: usage.md
   - Event Categories:
       - All Case Studies: events/AllCaseStudies.md
-      - Atmospheric Rivers: events/AtmosphericRivers.md
+      - Atmospheric Rivers:
+          - Overview: events/AtmosphericRivers.md
+          - November 2024 West Coast US: events/atmospheric_rivers/november_2024_west_coast_us.md
       - Severe Convection: events/ConvectiveWx.md
       - Derechos: events/Derechos.md
       - Flooding: events/Flooding.md
