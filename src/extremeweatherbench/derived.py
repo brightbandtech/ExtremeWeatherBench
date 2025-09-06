@@ -1,8 +1,11 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import List, Type, Union
+from collections import OrderedDict
+from typing import Sequence, Type, Union
 
 import xarray as xr
+
+import extremeweatherbench.events.atmospheric_river as ar
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -30,7 +33,9 @@ class DerivedVariable(ABC):
             derive the variable from required_variables.
     """
 
-    required_variables: List[str]
+    required_variables: list[str]
+    optional_variables: list[str] = []
+    optional_variables_mapping: dict = {}
 
     @property
     def name(self) -> str:
@@ -42,7 +47,7 @@ class DerivedVariable(ABC):
 
     @classmethod
     @abstractmethod
-    def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
+    def derive_variable(cls, data: xr.Dataset, *args, **kwargs) -> xr.DataArray:
         """Derive the variable from the required variables.
 
         The output of the derivation must be a single variable output returned as
@@ -57,12 +62,10 @@ class DerivedVariable(ABC):
         pass
 
     @classmethod
-    def compute(cls, data: xr.Dataset, **kwargs) -> xr.DataArray:
+    def compute(cls, data: xr.Dataset, *args, **kwargs) -> xr.DataArray:
         """Build the derived variable from the input variables.
 
         This method is used to build the derived variable from the input variables.
-        It checks that the data has the variables required to build the variable,
-        and then derives the variable from the input variables.
 
         Args:
             data: The dataset to build the derived variable from.
@@ -71,10 +74,40 @@ class DerivedVariable(ABC):
         Returns:
             A DataArray with the derived variable.
         """
-        for v in cls.required_variables:
-            if v not in data.data_vars:
-                raise ValueError(f"Input variable {v} not found in data")
-        return cls.derive_variable(data)
+        return cls.derive_variable(data, *args, **kwargs)
+
+
+class AtmosphericRiverMask(DerivedVariable):
+    """A derived variable that computes the atmospheric river mask.
+
+    Calculates the IVT (Integrated Vapor Transport) and its Laplacian from a dataset.IVT
+    is calculated using the method described in Newell et al. 1992 and elsewhere
+    (e.g. Mo 2024).
+
+    The Laplacian of IVT is calculated using a Gaussian blurring kernel with a
+    sigma of 3 grid points, meant to smooth out 0.25 degree grid scale features.
+    """
+
+    required_variables = [
+        "eastward_wind",
+        "northward_wind",
+        "specific_humidity",
+    ]
+    optional_variables = ["integrated_vapor_transport", "surface_standard_pressure"]
+    optional_variables_mapping = {
+        "integrated_vapor_transport": [
+            "eastward_wind",
+            "northward_wind",
+            "specific_humidity",
+        ],
+        "surface_standard_pressure": ["surface_standard_pressure"],
+    }
+    name = "atmospheric_river_mask"
+
+    @classmethod
+    def derive_variable(cls, data: xr.Dataset, *args, **kwargs) -> xr.Dataset:
+        """Derive the atmospheric river mask using xr.apply_ufunc approach."""
+        return ar.compute_atmospheric_river_mask_ufunc(data)
 
 
 def maybe_derive_variables(
@@ -99,6 +132,11 @@ def maybe_derive_variables(
         A dataset with derived variables, if any exist, else the original
         dataset.
     """
+    # If there are no valid times, return the dataset unaltered; saves time as case will
+    # be skipped
+    if len(dataset.valid_time) == 0:
+        logger.debug("No valid times found in the dataset.")
+        return dataset
 
     maybe_derived_variables = [v for v in variables if not isinstance(v, str)]
 
@@ -142,11 +180,10 @@ def maybe_derive_variables(
     return dataset
 
 
-def maybe_pull_required_variables_from_derived_input(
-    incoming_variables: list[Union[str, DerivedVariable, Type[DerivedVariable]]],
+def maybe_include_variables_from_derived_input(
+    incoming_variables: Sequence[Union[str, DerivedVariable, Type[DerivedVariable]]],
 ) -> list[str]:
-    """Pull the required variables from a derived input and add to the list of
-    variables to pull.
+    """Identify and return variables that a derived variable needs to compute.
 
     Args:
         incoming_variables: a list of string and/or derived variables.
@@ -164,6 +201,11 @@ def maybe_pull_required_variables_from_derived_input(
             derived_required_variables.extend(v.required_variables)
         elif isinstance(v, type) and issubclass(v, DerivedVariable):
             # Handle classes that inherit from DerivedVariable
-            derived_required_variables.extend(v.required_variables)
+            # Recursively pull required variables from derived variables
+            derived_required_variables.extend(
+                maybe_include_variables_from_derived_input(v.required_variables)
+            )
 
-    return string_variables + derived_required_variables
+    # Remove duplicates while preserving order
+    all_variables = string_variables + derived_required_variables
+    return list(OrderedDict.fromkeys(all_variables))
