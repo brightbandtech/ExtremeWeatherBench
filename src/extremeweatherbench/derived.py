@@ -146,7 +146,7 @@ def maybe_derive_variables(
 
 
 def maybe_include_variables_from_derived_input(
-    incoming_variables: Sequence[Union[str, DerivedVariable, Type[DerivedVariable]]],
+    incoming_variables: Sequence[Union[str, Type[DerivedVariable]]],
 ) -> list[str]:
     """Identify and return variables that a derived variable needs to compute.
 
