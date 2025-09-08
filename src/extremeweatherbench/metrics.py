@@ -1,6 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Type
+from typing import Any, Optional, Type
 
 import numpy as np
 import scores.categorical as cat  # type: ignore[import-untyped]
