@@ -15,6 +15,9 @@ import xarray as xr
 
 from extremeweatherbench import derived
 
+time_location_variables = ["valid_time", "latitude", "longitude"]
+time_level_location_variables = ["valid_time", "level", "latitude", "longitude"]
+
 
 def create_mock_case_operator(variables, dataset_type="forecast"):
     """Create a mock case operator with specified variables."""
@@ -54,50 +57,50 @@ def sample_dataset():
         {
             # Basic surface variables
             "air_pressure_at_mean_sea_level": (
-                ["valid_time", "latitude", "longitude"],
+                time_location_variables,
                 np.random.normal(
                     101325, 1000, size=(len(time), len(latitudes), len(longitudes))
                 ),
             ),
             "surface_eastward_wind": (
-                ["valid_time", "latitude", "longitude"],
+                time_location_variables,
                 np.random.normal(
                     5, 3, size=(len(time), len(latitudes), len(longitudes))
                 ),
             ),
             "surface_northward_wind": (
-                ["valid_time", "latitude", "longitude"],
+                time_location_variables,
                 np.random.normal(
                     2, 3, size=(len(time), len(latitudes), len(longitudes))
                 ),
             ),
             "surface_wind_speed": (
-                ["valid_time", "latitude", "longitude"],
+                time_location_variables,
                 np.random.uniform(
                     0, 15, size=(len(time), len(latitudes), len(longitudes))
                 ),
             ),
             # 3D atmospheric variables
             "eastward_wind": (
-                ["valid_time", "level", "latitude", "longitude"],
+                time_level_location_variables,
                 level_data + np.random.normal(10, 5, size=level_data.shape),
             ),
             "northward_wind": (
-                ["valid_time", "level", "latitude", "longitude"],
+                time_level_location_variables,
                 level_data + np.random.normal(3, 5, size=level_data.shape),
             ),
             "specific_humidity": (
-                ["valid_time", "level", "latitude", "longitude"],
+                time_level_location_variables,
                 np.random.exponential(0.008, size=level_data.shape),
             ),
             "geopotential": (
-                ["valid_time", "level", "latitude", "longitude"],
+                time_level_location_variables,
                 level_data * 100 + np.random.normal(50000, 5000, size=level_data.shape),
             ),
             # Test variables
-            "test_variable_1": (["valid_time", "latitude", "longitude"], base_data),
-            "test_variable_2": (["valid_time", "latitude", "longitude"], base_data + 5),
-            "single_variable": (["valid_time", "latitude", "longitude"], base_data * 2),
+            "test_variable_1": (time_location_variables, base_data),
+            "test_variable_2": (time_location_variables, base_data + 5),
+            "single_variable": (time_location_variables, base_data * 2),
         },
         coords={
             "valid_time": time,
@@ -806,13 +809,13 @@ class TestEdgeCasesAndErrorConditions:
         large_dataset = xr.Dataset(
             {
                 "test_variable_1": (
-                    ["valid_time", "latitude", "longitude"],
+                    time_location_variables,
                     np.random.normal(
                         0, 1, size=(len(time), len(latitudes), len(longitudes))
                     ),
                 ),
                 "test_variable_2": (
-                    ["valid_time", "latitude", "longitude"],
+                    time_location_variables,
                     np.random.normal(
                         5, 2, size=(len(time), len(latitudes), len(longitudes))
                     ),
