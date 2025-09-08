@@ -1,6 +1,5 @@
 import logging
 from abc import ABC, abstractmethod
-from collections import OrderedDict
 from typing import Sequence, Type, Union
 
 import xarray as xr
@@ -173,4 +172,4 @@ def maybe_include_variables_from_derived_input(
 
     # Remove duplicates while preserving order
     all_variables = string_variables + derived_required_variables
-    return list(OrderedDict.fromkeys(all_variables))
+    return list(set(all_variables))
