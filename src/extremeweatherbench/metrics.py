@@ -235,12 +235,6 @@ class ThresholdMetric(BaseMetric):
 
 
 class MAE(BaseMetric):
-    """Mean absolute error.
-
-    This metric computes the mean absolute error between a forecast and target
-    dataset.
-    """
-
     name = "mae"
 
     @classmethod
@@ -284,14 +278,6 @@ class RMSE(BaseMetric):
 
 # TODO: base metric for identifying signal and complete implementation
 class EarlySignal(BaseMetric):
-    """Metric to identify the earliest signal detection in forecast data.
-
-    This metric finds the first occurrence where a signal is detected based on
-    threshold criteria and returns the corresponding init_time, lead_time, and
-    valid_time information. The metric is designed to be flexible for different
-    signal detection criteria that can be specified in applied metrics downstream.
-    """
-
     name = "early_signal"
 
     @classmethod
