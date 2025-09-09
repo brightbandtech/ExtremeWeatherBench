@@ -624,6 +624,7 @@ class TestUtilityFunctions:
 
     def test_is_derived_variable_with_non_derived_class(self):
         """Test is_derived_variable returns False for non-DerivedVariable classes."""
+
         class NotDerivedVariable:
             pass
 
