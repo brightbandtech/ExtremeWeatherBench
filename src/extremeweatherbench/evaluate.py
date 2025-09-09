@@ -287,9 +287,9 @@ def _evaluate_metric_and_return_df(
 def _normalize_variable(variable: Union[str, Type["derived.DerivedVariable"]]) -> str:
     """Convert a variable to its string representation."""
     if derived.is_derived_variable(variable):
-        return variable.name
+        return variable.name  # type: ignore
     else:
-        return variable
+        return variable  # type: ignore
 
 
 def _build_datasets(
