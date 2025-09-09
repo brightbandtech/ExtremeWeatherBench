@@ -119,7 +119,9 @@ def compute_case_operator(case_operator: "cases.CaseOperator", **kwargs):
             aligned_target_ds,
             cache_dir=kwargs.get("cache_dir", None),
         )
-    logger.info(f"datasets built for case {case_operator.case_metadata.case_id_number}")
+    logger.info(
+        f"Datasets built for case {case_operator.case_metadata.case_id_number}."
+    )
     results = []
     # TODO: determine if derived variables need to be pushed here or at pre-compute
     for variables, metric in itertools.product(
@@ -229,7 +231,7 @@ def _ensure_output_schema(df: pd.DataFrame, **metadata) -> pd.DataFrame:
     # Check for missing columns and warn
     missing_cols = set(OUTPUT_COLUMNS) - set(df.columns)
     if missing_cols and missing_cols not in [{"init_time"}, {"lead_time"}]:
-        logger.warning(f"Missing expected columns: {missing_cols}")
+        logger.warning(f"Missing expected columns: {missing_cols}.")
 
     # Ensure all OUTPUT_COLUMNS are present (missing ones will be NaN)
     # and reorder to match OUTPUT_COLUMNS specification
@@ -269,7 +271,7 @@ def _evaluate_metric_and_return_df(
     # instantiation
     if isinstance(metric, type):
         metric = metric()
-    logger.info(f"computing metric {metric.name}")
+    logger.info(f"Computing metric {metric.name}... ")
     metric_result = metric.compute_metric(
         forecast_ds.get(forecast_variable, forecast_ds.data_vars),
         target_ds.get(target_variable, target_ds.data_vars),
@@ -300,28 +302,28 @@ def _build_datasets(
     This method will process through all stages of the pipeline for the target and
     forecast datasets, including preprocessing, variable renaming, and subsetting.
     """
-    logger.info("running target pipeline")
+    logger.info("Running target pipeline... ")
     target_ds = run_pipeline(case_operator.case_metadata, case_operator.target)
-    logger.info("running forecast pipeline")
+    logger.info("Running forecast pipeline... ")
     forecast_ds = run_pipeline(case_operator.case_metadata, case_operator.forecast)
     # Check if any dimension has zero length
     zero_length_dims = [dim for dim, size in forecast_ds.sizes.items() if size == 0]
     if zero_length_dims:
         if "valid_time" in zero_length_dims:
             logger.warning(
-                f"forecast dataset for case "
+                f"Forecast dataset for case "
                 f"{case_operator.case_metadata.case_id_number} "
                 f"has no data for case time range "
                 f"{case_operator.case_metadata.start_date} to "
-                f"{case_operator.case_metadata.end_date}"
+                f"{case_operator.case_metadata.end_date}."
             )
         else:
             logger.warning(
-                f"forecast dataset for case "
+                f"Forecast dataset for case "
                 f"{case_operator.case_metadata.case_id_number} "
                 f"has zero-length dimensions {zero_length_dims} for case time range "
                 f"{case_operator.case_metadata.start_date} "
-                f"to {case_operator.case_metadata.end_date}"
+                f"to {case_operator.case_metadata.end_date}."
             )
         return xr.Dataset(), xr.Dataset()
     return (forecast_ds, target_ds)
@@ -331,10 +333,10 @@ def _compute_and_maybe_cache(
     *datasets: xr.Dataset, cache_dir: Optional[Union[str, Path]]
 ) -> list[xr.Dataset]:
     """Compute and cache the datasets if caching."""
-    logger.info("computing datasets")
+    logger.info("Computing datasets... ")
     computed_datasets = [dataset.compute() for dataset in datasets]
     if cache_dir:
-        raise NotImplementedError("Caching is not implemented yet")
+        raise NotImplementedError("Caching is not implemented yet.")
         # (computed_dataset.to_netcdf(self.cache_dir) for computed_dataset in
         # computed_datasets)
     return computed_datasets
