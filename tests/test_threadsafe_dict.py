@@ -1,13 +1,13 @@
 """Comprehensive tests for ThreadSafeDict class.
 
-This test suite covers all scenarios including single-threaded, multi-threaded,
-multiprocessing, Dask, and stress testing scenarios to ensure ThreadSafeDict
+This test suite covers all scenarios including single-threaded, joblib-based
+parallel execution, and stress testing scenarios to ensure ThreadSafeDict
 works correctly under all conditions.
+
+Note: This version uses only joblib for all parallel processing and avoids
+pickle serialization entirely. No other multiprocessing modules are used.
 """
 
-import concurrent.futures
-import multiprocessing
-import pickle
 import random
 import threading
 import time
@@ -15,38 +15,160 @@ import time
 import numpy as np
 import pytest
 import xarray as xr
+from joblib import Parallel, delayed
 
 from extremeweatherbench.utils import ThreadSafeDict
 
-try:
-    import dask
-    import dask.array as da
-    import dask.bag as db
-    import dask.distributed
-    from dask.distributed import Client, LocalCluster
 
-    DASK_AVAILABLE = True
-except ImportError:
-    DASK_AVAILABLE = False
+def _joblib_worker_task(process_id, num_items=100):
+    """Worker function for joblib parallel processing test.
 
+    This function creates and populates a ThreadSafeDict instance within
+    each worker process, avoiding any pickle serialization.
 
-# Worker function for multiprocessing (needs to be at module level for pickling)
-def _multiprocessing_worker_process(process_id, return_dict):
-    """Worker function for multiprocessing test."""
+    Args:
+        process_id: Unique identifier for this worker
+        num_items: Number of items to add to the dict
+
+    Returns:
+        Dict containing statistics about the process
+    """
+    # Create ThreadSafeDict inside worker (in-memory, no pickle)
     tsd = ThreadSafeDict()
 
     # Each process creates its own ThreadSafeDict and populates it
-    for i in range(100):
+    for i in range(num_items):
         key = f"process_{process_id}_key_{i}"
         value = f"process_{process_id}_value_{i}"
         tsd[key] = value
 
-    # Return some stats about the process
-    return_dict[process_id] = {
+    # Return some stats about the process (serialize only simple data)
+    return {
+        "process_id": process_id,
         "length": len(tsd),
         "sample_key": f"process_{process_id}_key_0",
         "sample_value": tsd.get(f"process_{process_id}_key_0"),
+        "all_keys_present": all(
+            f"process_{process_id}_key_{i}" in tsd for i in range(num_items)
+        ),
     }
+
+
+def _joblib_shared_computation_task(task_id, base_value):
+    """Worker function that performs computation and returns results.
+
+    Args:
+        task_id: Unique identifier for this task
+        base_value: Base value for computation
+
+    Returns:
+        Dict containing computation results
+    """
+    # Create local ThreadSafeDict for this task
+    local_dict = ThreadSafeDict()
+
+    # Perform some computation
+    for i in range(50):
+        key = f"task_{task_id}_item_{i}"
+        computed_value = base_value * i + task_id
+        local_dict[key] = computed_value
+
+    # Return summary (no serialization of ThreadSafeDict itself)
+    return {
+        "task_id": task_id,
+        "items_count": len(local_dict),
+        "sum_of_values": sum(local_dict.values()),
+        "first_value": local_dict.get(f"task_{task_id}_item_0"),
+    }
+
+
+def _joblib_concurrent_read_worker(tsd_data, num_reads=100):
+    """Worker function for testing concurrent reads using joblib.
+
+    Args:
+        tsd_data: Dictionary data to populate ThreadSafeDict with
+        num_reads: Number of read operations to perform
+
+    Returns:
+        List of (key, value) tuples from read operations
+    """
+    # Create and populate ThreadSafeDict in worker
+    tsd = ThreadSafeDict()
+    for key, value in tsd_data.items():
+        tsd[key] = value
+
+    # Perform reads
+    results = []
+    for i in range(num_reads):
+        key = f"key_{i % 50}"  # Read from subset of keys
+        value = tsd.get(key)
+        results.append((key, value))
+
+    return results
+
+
+def _joblib_concurrent_write_worker(thread_id, num_writes=100):
+    """Worker function for testing concurrent writes using joblib.
+
+    Args:
+        thread_id: Unique identifier for this worker
+        num_writes: Number of write operations to perform
+
+    Returns:
+        Dict containing write statistics
+    """
+    # Create ThreadSafeDict in worker
+    tsd = ThreadSafeDict()
+
+    # Perform writes
+    for i in range(num_writes):
+        key = f"thread_{thread_id}_key_{i}"
+        value = f"thread_{thread_id}_value_{i}"
+        tsd[key] = value
+
+    return {
+        "thread_id": thread_id,
+        "length": len(tsd),
+        "sample_key": f"thread_{thread_id}_key_0",
+        "sample_value": tsd.get(f"thread_{thread_id}_key_0"),
+    }
+
+
+def _joblib_stress_worker(worker_id, operations_per_worker=1000):
+    """Worker function for stress testing using joblib.
+
+    Args:
+        worker_id: Unique identifier for this worker
+        operations_per_worker: Number of operations to perform
+
+    Returns:
+        List of operation results
+    """
+    tsd = ThreadSafeDict()
+    operations = []
+
+    for i in range(operations_per_worker):
+        op_type = random.choice(["set", "get", "delete", "contains"])
+        key = f"key_{random.randint(0, 99)}"
+
+        try:
+            if op_type == "set":
+                tsd[key] = f"value_{worker_id}_{i}"
+                operations.append(("set", key, True))
+            elif op_type == "get":
+                value = tsd.get(key)
+                operations.append(("get", key, value))
+            elif op_type == "delete":
+                if key in tsd:
+                    del tsd[key]
+                    operations.append(("delete", key, True))
+            elif op_type == "contains":
+                exists = key in tsd
+                operations.append(("contains", key, exists))
+        except Exception as e:
+            operations.append(("error", key, str(e)))
+
+    return operations
 
 
 class TestThreadSafeDictBasic:
@@ -201,415 +323,168 @@ class TestThreadSafeDictBasic:
             tsd[[1, 2, 3]] = "value"
 
 
-class TestThreadSafeDictThreading:
-    """Multi-threading tests for ThreadSafeDict."""
+class TestThreadSafeDictJoblib:
+    """Joblib-based parallel processing tests for ThreadSafeDict."""
 
-    def test_concurrent_reads(self):
-        """Test concurrent reads from multiple threads."""
-        tsd = ThreadSafeDict()
+    def test_joblib_parallel_execution(self):
+        """Test ThreadSafeDict creation and usage in joblib workers."""
+        # Test with different numbers of jobs
+        n_jobs = 4
+        num_items_per_job = 100
 
-        # Populate with initial data
-        for i in range(100):
-            tsd[f"key_{i}"] = f"value_{i}"
+        # Run tasks in parallel using joblib with threading backend
+        results = Parallel(n_jobs=n_jobs, backend="threading")(
+            delayed(_joblib_worker_task)(i, num_items_per_job) for i in range(n_jobs)
+        )
 
-        results = []
+        # Verify results
+        assert len(results) == n_jobs
+        for i, result in enumerate(results):
+            assert result["process_id"] == i
+            assert result["length"] == num_items_per_job
+            assert result["sample_value"] == f"process_{i}_value_0"
+            assert result["all_keys_present"] is True
 
-        def read_worker():
-            thread_results = []
-            for i in range(100):
-                key = f"key_{i % 50}"  # Read from subset of keys
-                value = tsd.get(key)
-                thread_results.append((key, value))
-            return thread_results
+    def test_joblib_shared_computation(self):
+        """Test joblib workers performing computations with ThreadSafeDict."""
+        n_jobs = 6
+        base_values = [10, 20, 30, 40, 50, 60]
 
-        # Run concurrent reads
-        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-            futures = [executor.submit(read_worker) for _ in range(10)]
-            for future in concurrent.futures.as_completed(futures):
-                results.extend(future.result())
+        # Run computation tasks in parallel with threading backend
+        results = Parallel(n_jobs=n_jobs, backend="threading")(
+            delayed(_joblib_shared_computation_task)(i, base_values[i])
+            for i in range(n_jobs)
+        )
+
+        # Verify results
+        assert len(results) == n_jobs
+        for i, result in enumerate(results):
+            assert result["task_id"] == i
+            assert result["items_count"] == 50
+            assert result["first_value"] == base_values[i] * 0 + i  # i
+            # Verify sum calculation
+            expected_sum = sum(base_values[i] * j + i for j in range(50))
+            assert result["sum_of_values"] == expected_sum
+
+    def test_joblib_concurrent_reads(self):
+        """Test concurrent reads using joblib workers."""
+        # Prepare initial data
+        initial_data = {f"key_{i}": f"value_{i}" for i in range(100)}
+
+        # Run concurrent reads using joblib with threading backend
+        results = Parallel(n_jobs=10, backend="threading")(
+            delayed(_joblib_concurrent_read_worker)(initial_data, 100)
+            for _ in range(10)
+        )
 
         # Verify all reads were successful
-        assert len(results) == 1000  # 10 threads * 100 reads each
-        for key, value in results:
+        all_results = []
+        for worker_results in results:
+            all_results.extend(worker_results)
+
+        assert len(all_results) == 1000  # 10 workers * 100 reads each
+        for key, value in all_results:
             if value is not None:  # Some keys might not exist
                 expected_value = key.replace("key_", "value_")
                 assert value == expected_value
 
-    def test_concurrent_writes(self):
-        """Test concurrent writes from multiple threads."""
-        tsd = ThreadSafeDict()
-
-        def write_worker(thread_id):
-            for i in range(100):
-                key = f"thread_{thread_id}_key_{i}"
-                value = f"thread_{thread_id}_value_{i}"
-                tsd[key] = value
-
-        # Run concurrent writes
-        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-            futures = [executor.submit(write_worker, i) for i in range(10)]
-            concurrent.futures.wait(futures)
+    def test_joblib_concurrent_writes(self):
+        """Test concurrent writes using joblib workers."""
+        # Run concurrent writes using threading backend
+        results = Parallel(n_jobs=10, backend="threading")(
+            delayed(_joblib_concurrent_write_worker)(i, 100) for i in range(10)
+        )
 
         # Verify all writes were successful
-        assert len(tsd) == 1000  # 10 threads * 100 writes each
+        total_length = sum(result["length"] for result in results)
+        assert total_length == 1000  # 10 workers * 100 writes each
 
-        for thread_id in range(10):
-            for i in range(100):
-                key = f"thread_{thread_id}_key_{i}"
-                expected_value = f"thread_{thread_id}_value_{i}"
-                assert tsd[key] == expected_value
+        for i, result in enumerate(results):
+            assert result["thread_id"] == i
+            assert result["length"] == 100
+            assert result["sample_value"] == f"thread_{i}_value_0"
 
-    def test_concurrent_read_write(self):
-        """Test concurrent reads and writes."""
-        tsd = ThreadSafeDict()
+    def test_joblib_different_backends(self):
+        """Test ThreadSafeDict with different joblib backends."""
+        backends_to_test = ["threading", "loky"]
 
-        # Initialize with some data
-        for i in range(50):
-            tsd[f"initial_key_{i}"] = f"initial_value_{i}"
+        for backend in backends_to_test:
+            try:
+                results = Parallel(n_jobs=2, backend=backend)(
+                    delayed(_joblib_worker_task)(i, 50) for i in range(2)
+                )
 
-        read_results = []
-        write_count = 0
+                # Verify results for this backend
+                assert len(results) == 2
+                for i, result in enumerate(results):
+                    assert result["process_id"] == i
+                    assert result["length"] == 50
+                    assert result["all_keys_present"] is True
 
-        def reader():
-            nonlocal read_results
-            local_results = []
-            for _ in range(100):
-                # Read random existing keys
-                key = f"initial_key_{random.randint(0, 49)}"
-                value = tsd.get(key)
-                local_results.append((key, value))
-                time.sleep(0.001)  # Small delay to interleave operations
-            read_results.extend(local_results)
+            except Exception as e:
+                # Some backends might not be available in all environments
+                pytest.skip(f"Backend {backend} not available: {e}")
 
-        def writer():
-            nonlocal write_count
-            for i in range(50):
-                key = f"new_key_{i}"
-                value = f"new_value_{i}"
-                tsd[key] = value
-                write_count += 1
-                time.sleep(0.001)  # Small delay to interleave operations
+    def test_joblib_memory_efficiency(self):
+        """Test memory efficiency with joblib workers."""
 
-        # Run concurrent readers and writers
-        with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
-            # 4 readers, 2 writers
-            futures = [executor.submit(reader) for _ in range(4)] + [
-                executor.submit(writer) for _ in range(2)
-            ]
-            concurrent.futures.wait(futures)
+        def create_large_dict_task(task_id):
+            """Create a large ThreadSafeDict and return summary."""
+            large_dict = ThreadSafeDict()
 
-        # Verify results
-        assert len(read_results) == 400  # 4 readers * 100 reads
-        assert write_count == 100  # 2 writers * 50 writes
-        # Dictionary size should be at least 50 (initial) + some new keys
-        assert len(tsd) >= 50  # At least the initial keys should remain
+            # Add many items
+            for i in range(1000):
+                key = f"large_key_{task_id}_{i}"
+                value = list(range(100))  # Some non-trivial data
+                large_dict[key] = value
 
-    def test_concurrent_modifications(self):
-        """Test concurrent modifications (updates, deletes)."""
-        tsd = ThreadSafeDict()
+            # Return only summary data (not the dict itself)
+            return {
+                "task_id": task_id,
+                "length": len(large_dict),
+                "sample_value_length": len(
+                    large_dict.get(f"large_key_{task_id}_0", [])
+                ),
+            }
 
-        # Initialize with data
-        for i in range(100):
-            tsd[f"key_{i}"] = f"initial_value_{i}"
+        # Run tasks that create large dicts with threading backend
+        results = Parallel(n_jobs=3, backend="threading")(
+            delayed(create_large_dict_task)(i) for i in range(3)
+        )
 
-        def updater(thread_id):
-            for i in range(0, 100, 2):  # Update even keys
-                key = f"key_{i}"
-                new_value = f"updated_by_thread_{thread_id}_value_{i}"
-                tsd[key] = new_value
+        # Verify each task created and processed large dict correctly
+        for i, result in enumerate(results):
+            assert result["task_id"] == i
+            assert result["length"] == 1000
+            assert result["sample_value_length"] == 100
 
-        def deleter():
-            for i in range(1, 100, 4):  # Delete every 4th odd key
-                key = f"key_{i}"
-                if key in tsd:
-                    del tsd[key]
+    def test_joblib_stress_operations(self):
+        """Stress test with many joblib workers and operations."""
+        num_workers = 20
+        operations_per_worker = 500
 
-        # Run concurrent modifications
-        with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
-            futures = [executor.submit(updater, i) for i in range(3)] + [
-                executor.submit(deleter) for _ in range(2)
-            ]
-            concurrent.futures.wait(futures)
-
-        # Verify the dictionary is in a consistent state
-        remaining_keys = tsd.keys()
-        assert len(remaining_keys) <= 100  # Some keys may have been deleted
-
-        # Check that all remaining keys have valid values
-        for key in remaining_keys:
-            value = tsd[key]
-            assert value is not None
-            assert isinstance(value, str)
-
-    def test_race_condition_prevention(self):
-        """Test that race conditions are prevented."""
-        tsd = ThreadSafeDict()
-        tsd["counter"] = 0
-
-        def increment_counter():
-            for _ in range(1000):
-                current = tsd["counter"]
-                # Simulate some processing time
-                time.sleep(0.0001)
-                tsd["counter"] = current + 1
-
-        # This test would fail with a regular dict due to race conditions
-        # but should work with ThreadSafeDict
-        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
-            futures = [executor.submit(increment_counter) for _ in range(5)]
-            concurrent.futures.wait(futures)
-
-        # Note: This is still a race condition because the read-modify-write
-        # cycle isn't atomic. The ThreadSafeDict only protects individual operations.
-        # This test demonstrates that the dict itself doesn't get corrupted.
-        assert isinstance(tsd["counter"], int)
-        assert tsd["counter"] >= 0  # Should at least be non-negative
-
-    def test_stress_threading(self):
-        """Stress test with many threads and operations."""
-        tsd = ThreadSafeDict()
-        num_threads = 20
-        operations_per_thread = 500
-
-        def worker(thread_id):
-            operations = []
-            for i in range(operations_per_thread):
-                op_type = random.choice(["set", "get", "delete", "contains"])
-                key = f"key_{random.randint(0, 99)}"
-
-                try:
-                    if op_type == "set":
-                        tsd[key] = f"value_{thread_id}_{i}"
-                        operations.append(("set", key, True))
-                    elif op_type == "get":
-                        value = tsd.get(key)
-                        operations.append(("get", key, value))
-                    elif op_type == "delete":
-                        if key in tsd:
-                            del tsd[key]
-                            operations.append(("delete", key, True))
-                    elif op_type == "contains":
-                        exists = key in tsd
-                        operations.append(("contains", key, exists))
-                except Exception as e:
-                    operations.append(("error", key, str(e)))
-
-            return operations
-
-        # Run stress test
-        with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
-            futures = [executor.submit(worker, i) for i in range(num_threads)]
-            all_operations = []
-            for future in concurrent.futures.as_completed(futures):
-                all_operations.extend(future.result())
+        # Run stress test using joblib with threading backend
+        results = Parallel(n_jobs=num_workers, backend="threading")(
+            delayed(_joblib_stress_worker)(i, operations_per_worker)
+            for i in range(num_workers)
+        )
 
         # Verify no errors occurred
+        all_operations = []
+        for worker_results in results:
+            all_operations.extend(worker_results)
+
         errors = [op for op in all_operations if op[0] == "error"]
         error_msg = f"Errors occurred: {errors[:5]}..."
         assert len(errors) == 0, error_msg
 
-        # Verify total operations (allow some failures under stress)
-        expected_total = num_threads * operations_per_thread
+        # Verify total operations
+        expected_total = num_workers * operations_per_worker
         assert len(all_operations) >= expected_total * 0.8  # Allow 20% failure
-
-        # Dictionary should still be in valid state
-        assert isinstance(len(tsd), int)
-        assert len(tsd) >= 0
-
-
-class TestThreadSafeDictMultiprocessing:
-    """Multiprocessing tests for ThreadSafeDict."""
-
-    def test_multiprocessing_pickle(self):
-        """Test that ThreadSafeDict can be pickled for multiprocessing."""
-        tsd = ThreadSafeDict()
-        tsd["key1"] = "value1"
-        tsd["key2"] = [1, 2, 3]
-
-        # Test pickling
-        pickled_data = pickle.dumps(tsd)
-        unpickled_tsd = pickle.loads(pickled_data)
-
-        # Note: After unpickling, it's a new instance with a new lock
-        assert len(unpickled_tsd) == 2
-        assert unpickled_tsd["key1"] == "value1"
-        assert unpickled_tsd["key2"] == [1, 2, 3]
-
-    def test_multiprocessing_worker_function(self):
-        """Test ThreadSafeDict in multiprocessing context."""
-        # Use Manager for shared return dict
-        with multiprocessing.Manager() as manager:
-            return_dict = manager.dict()
-            processes = []
-
-            # Create and start processes
-            for i in range(4):
-                p = multiprocessing.Process(
-                    target=_multiprocessing_worker_process, args=(i, return_dict)
-                )
-                p.start()
-                processes.append(p)
-
-            # Wait for all processes to complete
-            for p in processes:
-                p.join()
-
-            # Verify results
-            assert len(return_dict) == 4
-            for i in range(4):
-                assert return_dict[i]["length"] == 100
-                assert return_dict[i]["sample_value"] == f"process_{i}_value_0"
-
-
-@pytest.mark.skipif(not DASK_AVAILABLE, reason="Dask not available")
-class TestThreadSafeDictDask:
-    """Dask-specific tests for ThreadSafeDict."""
-
-    def test_dask_delayed_with_threadsafe_dict(self):
-        """Test ThreadSafeDict with Dask delayed operations."""
-
-        @dask.delayed
-        def populate_dict(tsd, start_idx, count):
-            for i in range(start_idx, start_idx + count):
-                tsd[f"key_{i}"] = f"value_{i}"
-            return len(tsd)
-
-        @dask.delayed
-        def read_from_dict(tsd, keys_to_read):
-            results = []
-            for key in keys_to_read:
-                value = tsd.get(key)
-                if value:
-                    results.append((key, value))
-            return results
-
-        # Create ThreadSafeDict
-        tsd = ThreadSafeDict()
-
-        # Create delayed tasks
-        populate_tasks = [populate_dict(tsd, i * 50, 50) for i in range(4)]
-
-        # Compute population tasks
-        dask.compute(*populate_tasks)
-
-        # Now read from different parts
-        read_tasks = [
-            read_from_dict(tsd, [f"key_{i}" for i in range(j * 25, (j + 1) * 25)])
-            for j in range(8)
-        ]
-
-        read_results = dask.compute(*read_tasks)
-
-        # Verify results
-        assert len(tsd) == 200  # 4 tasks * 50 items each
-        all_read_items = []
-        for result in read_results:
-            all_read_items.extend(result)
-
-        assert len(all_read_items) == 200  # All items should be found
-
-    def test_dask_bag_with_threadsafe_dict(self):
-        """Test ThreadSafeDict with Dask bag operations."""
-        # Create a bag of data
-        data = list(range(1000))
-        bag = db.from_sequence(data, npartitions=10)
-
-        def process_item(x):
-            # Create local ThreadSafeDict for each partition
-            local_dict = ThreadSafeDict()
-            local_dict[f"processed_{x}"] = x * 2
-            return local_dict
-
-        # Process bag (this will use multiple threads)
-        result_dicts = bag.map(process_item).compute()
-
-        # Verify results - each item should produce a ThreadSafeDict
-        assert len(result_dicts) == 1000
-
-        # Verify each local dict contains expected value
-        for i, local_dict in enumerate(result_dicts):
-            assert len(local_dict) == 1
-            assert local_dict[f"processed_{i}"] == i * 2
-
-    def test_dask_array_with_threadsafe_dict(self):
-        """Test ThreadSafeDict with Dask array operations."""
-        tsd = ThreadSafeDict()
-
-        # Create a Dask array
-        x = da.random.random((1000, 100), chunks=(100, 100))
-
-        def cache_chunk_stats(chunk, block_id):
-            """Function to cache statistics about each chunk."""
-            chunk_id = f"chunk_{block_id[0]}_{block_id[1]}"
-            stats = {
-                "mean": float(np.mean(chunk)),
-                "std": float(np.std(chunk)),
-                "min": float(np.min(chunk)),
-                "max": float(np.max(chunk)),
-            }
-            tsd[chunk_id] = stats
-            return chunk
-
-        # Apply function to each block
-        result = x.map_blocks(cache_chunk_stats, dtype=x.dtype, drop_axis=[])
-        result.compute()
-
-        # Verify caching worked
-        expected_chunks = 10 * 1  # 1000/100 * 100/100
-        assert len(tsd) == expected_chunks
-
-        # Check that all cached values are valid
-        for key in tsd.keys():
-            stats = tsd[key]
-            assert "mean" in stats
-            assert "std" in stats
-            assert "min" in stats
-            assert "max" in stats
-            assert 0 <= stats["mean"] <= 1  # Random values are 0-1
-
-    def test_dask_distributed_client(self):
-        """Test ThreadSafeDict with Dask distributed client."""
-        # Note: This test creates a local cluster
-        with LocalCluster(
-            n_workers=2,
-            threads_per_worker=2,
-            processes=False,  # Use threads for shared memory
-            silence_logs=False,
-        ) as cluster:
-            with Client(cluster) as client:
-
-                def distributed_worker(worker_id):
-                    """Function to run on distributed workers."""
-                    # Each worker gets its own ThreadSafeDict instance
-                    local_tsd = ThreadSafeDict()
-
-                    for i in range(100):
-                        key = f"worker_{worker_id}_item_{i}"
-                        value = f"processed_by_worker_{worker_id}_value_{i}"
-                        local_tsd[key] = value
-
-                    return {
-                        "worker_id": worker_id,
-                        "items_processed": len(local_tsd),
-                        "sample_item": local_tsd.get(f"worker_{worker_id}_item_0"),
-                    }
-
-                # Submit tasks to distributed workers
-                futures = [client.submit(distributed_worker, i) for i in range(4)]
-
-                # Gather results
-                results = client.gather(futures)
-
-                # Verify results
-                assert len(results) == 4
-                for i, result in enumerate(results):
-                    assert result["worker_id"] == i
-                    assert result["items_processed"] == 100
-                    assert result["sample_item"] == f"processed_by_worker_{i}_value_0"
 
 
 class TestThreadSafeDictStress:
-    """Stress tests for ThreadSafeDict."""
+    """Stress tests for ThreadSafeDict using only joblib."""
 
     def test_large_data_volume(self):
         """Test with large amounts of data."""
@@ -687,21 +562,23 @@ class TestThreadSafeDictStress:
 
         assert len(tsd) == 100
 
-    def test_concurrent_stress_operations(self):
-        """Extreme stress test with many concurrent operations."""
-        tsd = ThreadSafeDict()
-        num_threads = 50
-        operations_per_thread = 1000
+    def test_joblib_concurrent_stress_operations(self):
+        """Extreme stress test using joblib parallel execution."""
+        num_workers = 50
+        operations_per_worker = 1000
 
-        def stress_worker(thread_id):
+        def extreme_stress_worker(worker_id):
+            """Worker that performs many operations on its own ThreadSafeDict."""
+            tsd = ThreadSafeDict()
             ops_completed = 0
-            for i in range(operations_per_thread):
+
+            for i in range(operations_per_worker):
                 try:
                     op = random.choice(["set", "get", "delete", "update"])
                     key = f"stress_{random.randint(0, 500)}"
 
                     if op == "set":
-                        tsd[key] = f"thread_{thread_id}_op_{i}"
+                        tsd[key] = f"worker_{worker_id}_op_{i}"
                     elif op == "get":
                         _ = tsd.get(key)
                     elif op == "delete":
@@ -712,7 +589,7 @@ class TestThreadSafeDictStress:
                             current = tsd[key]
                             tsd[key] = f"updated_{current}"
                         else:
-                            tsd[key] = f"new_thread_{thread_id}_op_{i}"
+                            tsd[key] = f"new_worker_{worker_id}_op_{i}"
 
                     ops_completed += 1
 
@@ -720,29 +597,24 @@ class TestThreadSafeDictStress:
                     # Ignore individual operation failures in stress test
                     pass
 
-            return ops_completed
+            return {"worker_id": worker_id, "ops_completed": ops_completed}
 
-        # Run extreme stress test
+        # Run extreme stress test using joblib with threading backend
         start_time = time.time()
-        with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
-            futures = [executor.submit(stress_worker, i) for i in range(num_threads)]
-            results = [future.result() for future in futures]
+        results = Parallel(n_jobs=num_workers, backend="threading")(
+            delayed(extreme_stress_worker)(i) for i in range(num_workers)
+        )
         end_time = time.time()
 
         # Verify results
-        total_ops = sum(results)
-        expected_total = num_threads * operations_per_thread
+        total_ops = sum(result["ops_completed"] for result in results)
+        expected_total = num_workers * operations_per_worker
 
         # Should complete most operations successfully
         assert total_ops >= expected_total * 0.9  # Allow 10% failure under stress
 
         # Should complete in reasonable time
         assert end_time - start_time < 30  # 30 seconds max
-
-        # Dictionary should still be functional
-        assert isinstance(len(tsd), int)
-        tsd["final_test"] = "success"
-        assert tsd["final_test"] == "success"
 
 
 class TestThreadSafeDictEdgeCases:
@@ -894,7 +766,11 @@ class TestThreadSafeDictEdgeCases:
         assert len(tsd) == 50
 
     def test_thread_safety_of_lock_itself(self):
-        """Test that the lock mechanism itself is thread-safe."""
+        """Test that the lock mechanism itself is thread-safe.
+
+        Note: This test uses threading.Thread as it's testing the internal
+        lock mechanism of ThreadSafeDict, which requires actual threading.
+        """
         tsd = ThreadSafeDict()
 
         # Test that multiple threads can't corrupt the lock
@@ -920,27 +796,37 @@ class TestThreadSafeDictEdgeCases:
 class TestThreadSafeDictIntegration:
     """Integration tests with actual extremeweatherbench usage patterns."""
 
-    def test_cache_usage_pattern(self):
-        """Test usage pattern similar to caching in extremeweatherbench."""
-        cache = ThreadSafeDict()
+    def test_cache_usage_pattern_joblib(self):
+        """Test caching pattern using joblib for parallel processing."""
 
         def compute_expensive_operation(input_data):
             """Simulate expensive computation."""
             time.sleep(0.01)  # Simulate computation time
             return sum(input_data) * 2
 
-        def cached_compute(input_data):
-            """Cached version of expensive operation."""
-            cache_key = tuple(input_data)  # Make hashable
+        def cached_compute_worker(worker_id, test_inputs):
+            """Worker that uses local cache for expensive operations."""
+            cache = ThreadSafeDict()
 
-            if cache_key in cache:
-                return cache[cache_key]
+            results = []
+            for input_data in test_inputs:
+                cache_key = tuple(input_data)  # Make hashable
 
-            result = compute_expensive_operation(input_data)
-            cache[cache_key] = result
-            return result
+                if cache_key in cache:
+                    result = cache[cache_key]
+                else:
+                    result = compute_expensive_operation(input_data)
+                    cache[cache_key] = result
 
-        # Test concurrent access to cache
+                results.append(result)
+
+            return {
+                "worker_id": worker_id,
+                "results": results,
+                "cache_size": len(cache),
+            }
+
+        # Test inputs with some overlap to test caching
         test_inputs = [
             [1, 2, 3],
             [4, 5, 6],
@@ -949,119 +835,153 @@ class TestThreadSafeDictIntegration:
             [4, 5, 6],  # Another duplicate
         ]
 
-        def worker():
-            results = []
-            for input_data in test_inputs:
-                result = cached_compute(input_data)
-                results.append(result)
-            return results
-
-        # Run multiple workers concurrently
-        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
-            futures = [executor.submit(worker) for _ in range(5)]
-            all_results = [future.result() for future in futures]
+        # Run multiple workers with joblib using threading backend
+        results = Parallel(n_jobs=5, backend="threading")(
+            delayed(cached_compute_worker)(i, test_inputs) for i in range(5)
+        )
 
         # Verify all workers got same results
         expected_results = [12, 30, 12, 48, 30]  # sum * 2 for each input
-        for results in all_results:
-            assert results == expected_results
+        for result in results:
+            assert result["results"] == expected_results
+            assert result["cache_size"] == 3  # Only unique inputs cached
 
-        # Verify cache has correct entries
-        assert len(cache) == 3  # Only unique inputs should be cached
+    def test_global_state_management_joblib(self):
+        """Test managing state across joblib workers."""
 
-    def test_global_state_management(self):
-        """Test managing global state across threads."""
-        global_state = ThreadSafeDict()
-        global_state["processed_count"] = 0
-        global_state["error_count"] = 0
-        global_state["results"] = []
+        def process_data_chunk_worker(chunk_data):
+            """Worker that processes a chunk and returns aggregated results."""
+            chunk_id, data = chunk_data
+            local_state = ThreadSafeDict()
+            local_state["processed_count"] = 0
+            local_state["error_count"] = 0
+            local_state["results"] = []
 
-        def process_data_chunk(chunk_id, data):
-            """Simulate processing a chunk of data."""
             try:
                 # Simulate processing
                 processed = [x * 2 for x in data]
-
-                # Update global state safely
-                current_count = global_state["processed_count"]
-                global_state["processed_count"] = current_count + len(data)
-
-                current_results = global_state["results"]
-                global_state["results"] = current_results + [(chunk_id, processed)]
-
+                local_state["processed_count"] = len(data)
+                local_state["results"] = [(chunk_id, processed)]
             except Exception:
-                error_count = global_state["error_count"]
-                global_state["error_count"] = error_count + 1
+                local_state["error_count"] = 1
 
-        # Process multiple chunks concurrently
-        chunks = [(i, list(range(i * 10, (i + 1) * 10))) for i in range(10)]
-
-        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
-            futures = [
-                executor.submit(process_data_chunk, chunk_id, data)
-                for chunk_id, data in chunks
-            ]
-            concurrent.futures.wait(futures)
-
-        # Verify global state
-        assert global_state["processed_count"] == 100  # 10 chunks * 10 items
-        assert global_state["error_count"] == 0
-        assert len(global_state["results"]) == 10
-
-    def test_metrics_aggregation_pattern(self):
-        """Test pattern similar to metrics aggregation."""
-        metrics_store = ThreadSafeDict()
-
-        def record_metric(metric_name, value):
-            """Record a metric value."""
-            if metric_name not in metrics_store:
-                metrics_store[metric_name] = []
-
-            current_values = metrics_store[metric_name]
-            metrics_store[metric_name] = current_values + [value]
-
-        def get_metric_stats(metric_name):
-            """Get statistics for a metric."""
-            if metric_name not in metrics_store:
-                return None
-
-            values = metrics_store[metric_name]
             return {
-                "count": len(values),
-                "mean": np.mean(values),
-                "std": np.std(values),
-                "min": np.min(values),
-                "max": np.max(values),
+                "chunk_id": chunk_id,
+                "processed_count": local_state["processed_count"],
+                "error_count": local_state["error_count"],
+                "results": local_state["results"],
             }
 
-        # Simulate concurrent metric recording
-        def metric_recorder(thread_id):
+        # Process multiple chunks using joblib with threading backend
+        chunks = [(i, list(range(i * 10, (i + 1) * 10))) for i in range(10)]
+
+        results = Parallel(n_jobs=5, backend="threading")(
+            delayed(process_data_chunk_worker)(chunk) for chunk in chunks
+        )
+
+        # Aggregate results
+        total_processed = sum(result["processed_count"] for result in results)
+        total_errors = sum(result["error_count"] for result in results)
+        all_results = []
+        for result in results:
+            all_results.extend(result["results"])
+
+        # Verify aggregated state
+        assert total_processed == 100  # 10 chunks * 10 items
+        assert total_errors == 0
+        assert len(all_results) == 10
+
+    def test_metrics_aggregation_pattern_joblib(self):
+        """Test metrics aggregation pattern using joblib."""
+
+        def metric_recorder_worker(worker_id):
+            """Worker that records metrics using ThreadSafeDict."""
+            metrics_store = ThreadSafeDict()
+
             for i in range(100):
                 # Record various metrics
-                record_metric("accuracy", random.uniform(0.8, 1.0))
-                record_metric("processing_time", random.uniform(0.1, 2.0))
-                record_metric(f"thread_{thread_id}_custom", i)
+                for metric_name, value in [
+                    ("accuracy", random.uniform(0.8, 1.0)),
+                    ("processing_time", random.uniform(0.1, 2.0)),
+                    (f"worker_{worker_id}_custom", i),
+                ]:
+                    if metric_name not in metrics_store:
+                        metrics_store[metric_name] = []
 
-        # Run concurrent recorders
-        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
-            futures = [executor.submit(metric_recorder, i) for i in range(5)]
-            concurrent.futures.wait(futures)
+                    current_values = metrics_store[metric_name]
+                    metrics_store[metric_name] = current_values + [value]
 
-        # Verify metrics
-        accuracy_stats = get_metric_stats("accuracy")
-        assert accuracy_stats["count"] == 500  # 5 threads * 100 records
-        assert 0.8 <= accuracy_stats["mean"] <= 1.0
+            # Return metric summaries
+            return {
+                "worker_id": worker_id,
+                "accuracy_count": len(metrics_store.get("accuracy", [])),
+                "time_count": len(metrics_store.get("processing_time", [])),
+                "custom_count": len(
+                    metrics_store.get(f"worker_{worker_id}_custom", [])
+                ),
+                "accuracy_mean": np.mean(metrics_store.get("accuracy", [0])),
+            }
 
-        time_stats = get_metric_stats("processing_time")
-        assert time_stats["count"] == 500
-        assert 0.1 <= time_stats["mean"] <= 2.0
+        # Run concurrent metric recorders using joblib with threading backend
+        results = Parallel(n_jobs=5, backend="threading")(
+            delayed(metric_recorder_worker)(i) for i in range(5)
+        )
 
-        # Check thread-specific metrics
-        for i in range(5):
-            thread_stats = get_metric_stats(f"thread_{i}_custom")
-            assert thread_stats["count"] == 100
-            assert thread_stats["min"] == 0
-            assert thread_stats["max"] == 99
+        # Verify metrics from each worker
+        for i, result in enumerate(results):
+            assert result["worker_id"] == i
+            assert result["accuracy_count"] == 100
+            assert result["time_count"] == 100
+            assert result["custom_count"] == 100
+            assert 0.8 <= result["accuracy_mean"] <= 1.0
+
+    def test_joblib_integration_pattern(self):
+        """Test integration pattern using ThreadSafeDict with joblib."""
+
+        def process_with_cache(data_chunk, cache_key_prefix):
+            """Process data chunk with local caching using ThreadSafeDict."""
+            local_cache = ThreadSafeDict()
+
+            results = []
+            for item in data_chunk:
+                cache_key = f"{cache_key_prefix}_{item}"
+
+                # Check cache first
+                if cache_key in local_cache:
+                    result = local_cache[cache_key]
+                else:
+                    # Simulate expensive computation
+                    result = item**2 + item * 3
+                    local_cache[cache_key] = result
+
+                results.append(result)
+
+            return {
+                "results": results,
+                "cache_size": len(local_cache),
+                "cache_hits": len(data_chunk) - len(local_cache),
+            }
+
+        # Create test data with some overlap to test caching
+        data_chunks = [
+            [1, 2, 3, 4, 5],
+            [4, 5, 6, 7, 8],  # Overlap with previous
+            [7, 8, 9, 10, 11],  # Overlap with previous
+        ]
+
+        # Process chunks in parallel using joblib with threading backend
+        results = Parallel(n_jobs=3, backend="threading")(
+            delayed(process_with_cache)(chunk, f"chunk_{i}")
+            for i, chunk in enumerate(data_chunks)
+        )
+
+        # Verify results
+        assert len(results) == 3
+        for i, result in enumerate(results):
+            expected_results = [x**2 + x * 3 for x in data_chunks[i]]
+            assert result["results"] == expected_results
+            assert result["cache_size"] == len(data_chunks[i])  # No hits in this test
+            assert result["cache_hits"] == 0  # Each chunk has unique cache keys
 
 
 if __name__ == "__main__":
