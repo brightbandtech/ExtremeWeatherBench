@@ -1,6 +1,4 @@
-#!/usr/bin/env python3
-"""
-Streaming GHCN-H data download script that processes files immediately
+"""Streaming GHCN-H data download script that processes files immediately
 to save disk space and skip already processed data.
 """
 
