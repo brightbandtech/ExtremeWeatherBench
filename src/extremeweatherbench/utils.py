@@ -75,6 +75,16 @@ class ThreadSafeDict:
         with self._lock:
             return list(self._data.items())  # Return a copy
 
+    def __getstate__(self):
+        """Custom pickle method to handle the lock."""
+        with self._lock:
+            return {"_data": self._data.copy()}
+
+    def __setstate__(self, state):
+        """Custom unpickle method to recreate the lock."""
+        self._data = state["_data"]
+        self._lock = threading.Lock()
+
 
 def convert_longitude_to_360(longitude: float) -> float:
     """Convert a longitude from the range [-180, 180) to [0, 360)."""
