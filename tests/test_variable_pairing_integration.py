@@ -115,13 +115,13 @@ def base_target_dataset():
 
     return xr.Dataset(
         {
-            "var_x": (["time", "latitude", "longitude"], temp_data),
-            "var_y": (["time", "latitude", "longitude"], pressure_data),
-            "var_z": (["time", "latitude", "longitude"], humidity_data),
-            "var_w": (["time", "latitude", "longitude"], wind_data),
+            "var_x": (["valid_time", "latitude", "longitude"], temp_data),
+            "var_y": (["valid_time", "latitude", "longitude"], pressure_data),
+            "var_z": (["valid_time", "latitude", "longitude"], humidity_data),
+            "var_w": (["valid_time", "latitude", "longitude"], wind_data),
         },
         coords={
-            "time": time,
+            "valid_time": time,
             "latitude": latitude,
             "longitude": longitude,
         },
