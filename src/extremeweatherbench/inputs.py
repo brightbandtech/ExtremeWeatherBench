@@ -884,27 +884,6 @@ def zarr_target_subsetter(
     return fully_subset_data
 
 
-def align_forecast_to_point_obs_target(
-    forecast_data: xr.Dataset,
-    target_data: xr.Dataset,
-) -> tuple[xr.Dataset, xr.Dataset]:
-    lons = xr.DataArray(target_data["longitude"].values, dims="location")
-    lats = xr.DataArray(target_data["latitude"].values, dims="location")
-
-    time_aligned_target_data, time_aligned_forecast_data = xr.align(
-        target_data, forecast_data, exclude=["latitude", "longitude"]
-    )
-
-    time_aligned_forecast_data = time_aligned_forecast_data.interp(
-        latitude=lats, longitude=lons, method="nearest"
-    )
-    # TODO: improve performance on chunks here (PerformanceWarning)
-    time_aligned_forecast_data = time_aligned_forecast_data.set_index(
-        location=("latitude", "longitude")
-    ).unstack("location")
-    return time_aligned_forecast_data, time_aligned_target_data
-
-
 def align_forecast_to_target(
     forecast_data: xr.Dataset,
     target_data: xr.Dataset,

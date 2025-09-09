@@ -220,6 +220,7 @@ class TestInputBase:
 class TestMaybeMapVariableNames:
     """Test the maybe_map_variable_names method across different data types."""
 
+    # TODO: move to conftest
     @pytest.fixture
     def test_input_base(self):
         """Create a concrete test class for InputBase."""
@@ -1258,91 +1259,6 @@ class TestStandaloneFunctions:
 
         mock_case_metadata.location.mask.assert_called_once()
         assert isinstance(result, xr.Dataset)
-
-    def test_align_forecast_to_point_obs_target(self):
-        """Test align_forecast_to_point_obs_target function."""
-        # Create simple test data with overlapping times
-        target_times = pd.date_range("2021-06-20", periods=3, freq="6h")
-        forecast_times = pd.date_range("2021-06-20", periods=5, freq="6h")
-
-        # Create target dataset with location stacked properly
-        target_ds = xr.Dataset(
-            {
-                "temperature": (["valid_time", "location"], np.random.randn(3, 2)),
-                "longitude": (["location"], [-100, -101]),
-                "latitude": (["location"], [40, 41]),
-            },
-            coords={"valid_time": target_times, "location": ["A", "B"]},
-        )
-
-        # Create forecast dataset
-        forecast_ds = xr.Dataset(
-            {
-                "surface_air_temperature": (
-                    ["valid_time", "latitude", "longitude"],
-                    np.random.randn(5, 91, 180),
-                ),
-            },
-            coords={
-                "valid_time": forecast_times,
-                "latitude": np.linspace(-90, 90, 91),
-                "longitude": np.linspace(0, 359, 180),
-            },
-        )
-
-        aligned_forecast, aligned_target = inputs.align_forecast_to_point_obs_target(
-            forecast_ds, target_ds
-        )
-
-        assert isinstance(aligned_target, xr.Dataset)
-        assert isinstance(aligned_forecast, xr.Dataset)
-
-        # Check that both datasets have the same time dimension
-        assert len(aligned_target.valid_time) == len(aligned_forecast.valid_time)
-        assert len(aligned_target.valid_time) > 0  # Should have overlapping times
-
-        # Check that forecast has been interpolated to observation locations
-        assert "latitude" in aligned_forecast.dims
-        assert "longitude" in aligned_forecast.dims
-
-    def test_align_forecast_to_point_obs_target_time_alignment(self):
-        """Test time alignment in align_forecast_to_point_obs_target."""
-        # Create simple target and forecast datasets with overlapping times
-        target_times = pd.date_range("2021-06-20", periods=5, freq="6h")
-        forecast_times = pd.date_range("2021-06-20 06:00", periods=3, freq="6h")
-
-        target_ds = xr.Dataset(
-            {
-                "temperature": (["valid_time", "location"], np.random.randn(5, 2)),
-                "longitude": (["location"], [-100, -101]),
-                "latitude": (["location"], [40, 41]),
-            },
-            coords={"valid_time": target_times, "location": ["A", "B"]},
-        )
-
-        forecast_ds = xr.Dataset(
-            {
-                "surface_air_temperature": (
-                    ["valid_time", "latitude", "longitude"],
-                    np.random.randn(3, 91, 180),
-                ),
-            },
-            coords={
-                "valid_time": forecast_times,
-                "latitude": np.linspace(-90, 90, 91),
-                "longitude": np.linspace(0, 359, 180),
-            },
-        )
-
-        aligned_forecast, aligned_target = inputs.align_forecast_to_point_obs_target(
-            forecast_ds, target_ds
-        )
-
-        # Should have overlapping times only
-        assert len(aligned_target.valid_time) == len(aligned_forecast.valid_time)
-        assert len(aligned_target.valid_time) <= min(
-            len(target_times), len(forecast_times)
-        )
 
 
 class TestConstants:
