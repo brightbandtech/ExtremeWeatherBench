@@ -159,6 +159,7 @@ def maybe_pull_required_variables_from_derived_input(
 
     derived_required_variables = []
     for v in incoming_variables:
+        # TODO: change to is_derived_variable
         if isinstance(v, DerivedVariable):
             # Handle instances of DerivedVariable
             derived_required_variables.extend(v.required_variables)
@@ -167,3 +168,19 @@ def maybe_pull_required_variables_from_derived_input(
             derived_required_variables.extend(v.required_variables)
 
     return string_variables + derived_required_variables
+
+
+def is_derived_variable(variable: Union[str, type[DerivedVariable]]) -> bool:
+    """Checks whether the incoming variable is a string or a DerivedVariable.
+
+    Args:
+        variable: a single string or DerivedVariable object
+
+    Returns:
+        True if the variable is a DerivedVariable object, False otherwise
+    """
+
+    if isinstance(variable, type) and issubclass(variable, DerivedVariable):
+        return True
+    else:
+        return False

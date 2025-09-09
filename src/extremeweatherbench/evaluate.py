@@ -131,10 +131,14 @@ def compute_case_operator(case_operator: "cases.CaseOperator", **kwargs):
     ):
         # Handle derived variables by extracting their names
         forecast_var = (
-            variables[0].name if hasattr(variables[0], "name") else variables[0]
+            variables[0].name
+            if derived.is_derived_variable(variables[0])
+            else variables[0]
         )
         target_var = (
-            variables[1].name if hasattr(variables[1], "name") else variables[1]
+            variables[1].name
+            if derived.is_derived_variable(variables[1])
+            else variables[1]
         )
         results.append(
             _evaluate_metric_and_return_df(
@@ -282,14 +286,10 @@ def _evaluate_metric_and_return_df(
 
 def _normalize_variable(variable: Union[str, "derived.DerivedVariable"]) -> str:
     """Convert a variable to its string representation."""
-    if isinstance(variable, str):
-        return variable
-    elif hasattr(variable, "name"):
+    if derived.is_derived_variable(variable):
         return variable.name
     else:
-        # This case seems incorrect in original - returning all data_vars
-        # for a single variable doesn't make sense
-        raise ValueError(f"Cannot set variable to string: {variable}")
+        return variable
 
 
 def _build_datasets(
