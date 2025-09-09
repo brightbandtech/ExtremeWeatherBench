@@ -600,6 +600,57 @@ class TestUtilityFunctions:
 
         assert result == incoming_variables
 
+    def test_is_derived_variable_with_string(self):
+        """Test is_derived_variable returns False for string inputs."""
+        result = derived.is_derived_variable("regular_string_variable")
+        assert result is False
+
+    def test_is_derived_variable_with_derived_variable_class(self):
+        """Test is_derived_variable returns True for DerivedVariable classes."""
+        result = derived.is_derived_variable(TestValidDerivedVariable)
+        assert result is True
+
+    def test_is_derived_variable_with_minimal_derived_variable_class(self):
+        """Test is_derived_variable returns True for minimal DerivedVariable classes."""
+        result = derived.is_derived_variable(TestMinimalDerivedVariable)
+        assert result is True
+
+    def test_is_derived_variable_with_derived_variable_instance(self):
+        """Test is_derived_variable returns False for DerivedVariable instances."""
+        # The function is designed to work with classes, not instances
+        instance = TestValidDerivedVariable()
+        result = derived.is_derived_variable(instance)
+        assert result is False
+
+    def test_is_derived_variable_with_non_derived_class(self):
+        """Test is_derived_variable returns False for non-DerivedVariable classes."""
+        class NotDerivedVariable:
+            pass
+
+        result = derived.is_derived_variable(NotDerivedVariable)
+        assert result is False
+
+    def test_is_derived_variable_with_builtin_type(self):
+        """Test is_derived_variable returns False for builtin types."""
+        result_int = derived.is_derived_variable(int)
+        result_str = derived.is_derived_variable(str)
+        result_list = derived.is_derived_variable(list)
+
+        assert result_int is False
+        assert result_str is False
+        assert result_list is False
+
+    def test_is_derived_variable_with_none(self):
+        """Test is_derived_variable returns False for None."""
+        result = derived.is_derived_variable(None)
+        assert result is False
+
+    def test_is_derived_variable_with_abstract_base_class(self):
+        """Test is_derived_variable with abstract DerivedVariable class."""
+        # The abstract base class should return True since it's still a subclass
+        result = derived.is_derived_variable(derived.DerivedVariable)
+        assert result is True
+
 
 class TestEdgeCasesAndErrorConditions:
     """Test edge cases and error conditions across the module."""

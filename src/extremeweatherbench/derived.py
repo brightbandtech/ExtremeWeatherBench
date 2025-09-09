@@ -1,6 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import List, Type, Union
+from typing import List, Type, TypeGuard, Union
 
 import xarray as xr
 
@@ -170,7 +170,9 @@ def maybe_pull_required_variables_from_derived_input(
     return string_variables + derived_required_variables
 
 
-def is_derived_variable(variable: Union[str, type[DerivedVariable]]) -> bool:
+def is_derived_variable(
+    variable: Union[str, Type[DerivedVariable]],
+) -> TypeGuard[Type[DerivedVariable]]:
     """Checks whether the incoming variable is a string or a DerivedVariable.
 
     Args:
@@ -180,7 +182,4 @@ def is_derived_variable(variable: Union[str, type[DerivedVariable]]) -> bool:
         True if the variable is a DerivedVariable object, False otherwise
     """
 
-    if isinstance(variable, type) and issubclass(variable, DerivedVariable):
-        return True
-    else:
-        return False
+    return isinstance(variable, type) and issubclass(variable, DerivedVariable)

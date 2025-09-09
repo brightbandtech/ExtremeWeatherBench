@@ -3,7 +3,7 @@
 import itertools
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING, Optional, Type, Union
 
 import pandas as pd
 import xarray as xr
@@ -239,8 +239,8 @@ def _ensure_output_schema(df: pd.DataFrame, **metadata) -> pd.DataFrame:
 def _evaluate_metric_and_return_df(
     forecast_ds: xr.Dataset,
     target_ds: xr.Dataset,
-    forecast_variable: Union[str, "derived.DerivedVariable"],
-    target_variable: Union[str, "derived.DerivedVariable"],
+    forecast_variable: Union[str, Type["derived.DerivedVariable"]],
+    target_variable: Union[str, Type["derived.DerivedVariable"]],
     metric: "metrics.BaseMetric",
     case_id_number: int,
     event_type: str,
@@ -284,7 +284,7 @@ def _evaluate_metric_and_return_df(
     return _ensure_output_schema(df, **metadata)
 
 
-def _normalize_variable(variable: Union[str, "derived.DerivedVariable"]) -> str:
+def _normalize_variable(variable: Union[str, Type["derived.DerivedVariable"]]) -> str:
     """Convert a variable to its string representation."""
     if derived.is_derived_variable(variable):
         return variable.name
