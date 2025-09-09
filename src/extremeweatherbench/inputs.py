@@ -986,27 +986,28 @@ def safely_pull_variables(
         optional_variables_mapping = {}
 
     # Dispatch to type-specific handlers
-    if isinstance(dataset, xr.Dataset):
-        return _safely_pull_variables_xr_dataset(
-            dataset, variables, optional_variables, optional_variables_mapping
-        )
-    elif isinstance(dataset, xr.DataArray):
-        return _safely_pull_variables_xr_dataarray(
-            dataset, variables, optional_variables, optional_variables_mapping
-        )
-    elif isinstance(dataset, pl.LazyFrame):
-        return _safely_pull_variables_polars_lazyframe(
-            dataset, variables, optional_variables, optional_variables_mapping
-        )
-    elif isinstance(dataset, pd.DataFrame):
-        return _safely_pull_variables_pandas_dataframe(
-            dataset, variables, optional_variables, optional_variables_mapping
-        )
-    else:
-        raise TypeError(
-            f"Unsupported dataset type: {type(dataset)}. "
-            f"Expected one of: xr.Dataset, xr.DataArray, pl.LazyFrame, pd.DataFrame"
-        )
+    match dataset:
+        case xr.Dataset():
+            return _safely_pull_variables_xr_dataset(
+                dataset, variables, optional_variables, optional_variables_mapping
+            )
+        case xr.DataArray():
+            return _safely_pull_variables_xr_dataarray(
+                dataset, variables, optional_variables, optional_variables_mapping
+            )
+        case pl.LazyFrame():
+            return _safely_pull_variables_polars_lazyframe(
+                dataset, variables, optional_variables, optional_variables_mapping
+            )
+        case pd.DataFrame():
+            return _safely_pull_variables_pandas_dataframe(
+                dataset, variables, optional_variables, optional_variables_mapping
+            )
+        case _:
+            raise TypeError(
+                f"Unsupported dataset type: {type(dataset)}. "
+                f"Expected one of: xr.Dataset, xr.DataArray, pl.LazyFrame, pd.DataFrame"
+            )
 
 
 def _safely_pull_variables_xr_dataset(
