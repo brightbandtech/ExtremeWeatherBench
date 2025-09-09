@@ -784,10 +784,10 @@ class TestMetricEvaluation:
         mock_result = xr.DataArray(
             data=[1.5], dims=["lead_time"], coords={"lead_time": [0]}
         )
-        mock_metric_instance = Mock()
-        mock_metric_instance.name = "TestMetric"
-        mock_metric_instance.compute_metric.return_value = mock_result
-        mock_base_metric.return_value = mock_metric_instance
+        # Since the new code treats the mock as an already-instantiated metric
+        # we need to set up the mock_base_metric directly
+        mock_base_metric.name = "TestMetric"
+        mock_base_metric.compute_metric.return_value = mock_result
 
         result = evaluate._evaluate_metric_and_return_df(
             forecast_ds=sample_forecast_dataset,
@@ -815,10 +815,10 @@ class TestMetricEvaluation:
         mock_result = xr.DataArray(
             data=[2.0], dims=["lead_time"], coords={"lead_time": [6]}
         )
-        mock_metric_instance = Mock()
-        mock_metric_instance.name = "TestMetric"
-        mock_metric_instance.compute_metric.return_value = mock_result
-        mock_base_metric.return_value = mock_metric_instance
+        # Since the new code treats the mock as an already-instantiated metric
+        # we need to set up the mock_base_metric directly
+        mock_base_metric.name = "TestMetric"
+        mock_base_metric.compute_metric.return_value = mock_result
 
         evaluate._evaluate_metric_and_return_df(
             forecast_ds=sample_forecast_dataset,
@@ -832,8 +832,8 @@ class TestMetricEvaluation:
         )
 
         # Verify that kwargs were passed to compute_metric
-        mock_metric_instance.compute_metric.assert_called_once()
-        call_kwargs = mock_metric_instance.compute_metric.call_args[1]
+        mock_base_metric.compute_metric.assert_called_once()
+        call_kwargs = mock_base_metric.compute_metric.call_args[1]
         assert "threshold" in call_kwargs
         assert call_kwargs["threshold"] == 0.5
 
@@ -884,12 +884,12 @@ class TestErrorHandling:
         self, sample_forecast_dataset, sample_target_dataset, mock_base_metric
     ):
         """Test metric evaluation when computation fails."""
-        mock_metric_instance = Mock()
-        mock_metric_instance.name = "FailingMetric"
-        mock_metric_instance.compute_metric.side_effect = Exception(
+        # Since the new code treats the mock as an already-instantiated metric
+        # we need to set up the mock_base_metric directly
+        mock_base_metric.name = "FailingMetric"
+        mock_base_metric.compute_metric.side_effect = Exception(
             "Metric computation failed"
         )
-        mock_base_metric.return_value = mock_metric_instance
 
         with pytest.raises(Exception, match="Metric computation failed"):
             evaluate._evaluate_metric_and_return_df(

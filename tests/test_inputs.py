@@ -302,9 +302,7 @@ class TestMaybeMapVariableNames:
         assert isinstance(result, xr.DataArray)
         assert result.name == "temp"
 
-    @patch(
-        "extremeweatherbench.derived.maybe_pull_required_variables_from_derived_input"
-    )
+    @patch("extremeweatherbench.derived.maybe_include_variables_from_derived_input")
     def test_maybe_map_variable_names_polars_lazyframe(
         self, mock_derived, test_input_base, sample_ghcn_dataframe
     ):
@@ -331,9 +329,7 @@ class TestMaybeMapVariableNames:
         assert "surface_air_temperature" not in schema.names()
         assert "latitude" in schema.names()
 
-    @patch(
-        "extremeweatherbench.derived.maybe_pull_required_variables_from_derived_input"
-    )
+    @patch("extremeweatherbench.derived.maybe_include_variables_from_derived_input")
     def test_maybe_map_variable_names_pandas_dataframe(
         self, mock_derived, test_input_base, sample_lsr_dataframe
     ):
@@ -434,9 +430,7 @@ class TestMaybeMapVariableNames:
         # Should return data unchanged when variable mapping is empty
         xr.testing.assert_identical(result, sample_era5_dataset)
 
-    @patch(
-        "extremeweatherbench.derived.maybe_pull_required_variables_from_derived_input"
-    )
+    @patch("extremeweatherbench.derived.maybe_include_variables_from_derived_input")
     def test_maybe_map_variable_names_with_derived_variables(
         self, mock_derived, test_input_base, sample_era5_dataset
     ):
@@ -491,9 +485,7 @@ class TestForecastBase:
 
     @patch("extremeweatherbench.utils.derive_indices_from_init_time_and_lead_time")
     @patch("extremeweatherbench.utils.convert_init_time_to_valid_time")
-    @patch(
-        "extremeweatherbench.derived.maybe_pull_required_variables_from_derived_input"
-    )
+    @patch("extremeweatherbench.derived.maybe_include_variables_from_derived_input")
     def test_forecast_base_subset_data_to_case(
         self, mock_derived, mock_convert, mock_derive, sample_forecast_dataset
     ):
