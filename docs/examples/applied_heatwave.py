@@ -66,7 +66,7 @@ hres_forecast = inputs.ZarrForecast(
     storage_options={"remote_options": {"anon": True}},
 )
 
-# Example of one evaluation object for heatwave
+# Create a list of evaluation objects for heatwave
 heatwave_evaluation_object = [
     inputs.EvaluationObject(
         event_type="heat_wave",
@@ -79,7 +79,19 @@ heatwave_evaluation_object = [
         ],
         target=ghcn_target,
         forecast=hres_forecast,
-    )
+    ),
+    inputs.EvaluationObject(
+        event_type="heat_wave",
+        metric_list=[
+            metrics.MaximumMAE,
+            metrics.RMSE,
+            metrics.OnsetME,
+            metrics.DurationME,
+            metrics.MaxMinMAE,
+        ],
+        target=era5_heatwave_target,
+        forecast=hres_forecast,
+    ),
 ]
 
 # Initialize ExtremeWeatherBench
