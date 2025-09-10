@@ -594,8 +594,8 @@ class TestCasesEdgeCases:
             forecast=mock_forecast,
         )
 
-        assert operator.metric == metric_list
-        assert len(operator.metric) == 3
+        assert operator.metric_list == metric_list
+        assert len(operator.metric_list) == 3
 
     def test_build_case_operators_empty_evaluation_objects(self):
         """Test building case operators with empty evaluation objects."""
