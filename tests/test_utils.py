@@ -267,3 +267,125 @@ def test_convert_init_time_to_valid_time():
     assert "lead_time" in result.dims
     # Should have swapped init_time for valid_time in the primary dimension
     assert "init_time" not in result.dims or "valid_time" in result.dims
+
+
+def test_maybe_get_closest_timestamp_to_center_of_valid_times_single_output():
+    """Test passthrough behavior with single output time."""
+    # Create valid_time values (center will be middle value)
+    valid_times = xr.DataArray(
+        pd.date_range("2021-01-01", periods=5, freq="6h"), dims=["valid_time"]
+    )
+
+    # Single output time
+    output_time = xr.DataArray([pd.Timestamp("2021-01-01 06:00")], dims=["time"])
+
+    result = utils.maybe_get_closest_timestamp_to_center_of_valid_times(
+        output_time, valid_times
+    )
+
+    # Should return the same single output time (passthrough)
+    xr.testing.assert_equal(result, output_time)
+
+
+def test_maybe_get_closest_timestamp_to_center_of_valid_times_two_outputs():
+    """Test closest selection with two output times."""
+    # Create valid_time values (center: 2021-01-01 12:00)
+    valid_times = xr.DataArray(
+        pd.date_range("2021-01-01", periods=5, freq="6h"), dims=["valid_time"]
+    )
+
+    # Two output times - one closer to center than the other
+    output_times = xr.DataArray(
+        [
+            pd.Timestamp("2021-01-01 06:00"),  # 6 hours from center
+            pd.Timestamp("2021-01-01 15:00"),  # 3 hours from center
+        ],
+        dims=["time"],
+    )
+
+    result = utils.maybe_get_closest_timestamp_to_center_of_valid_times(
+        output_times, valid_times
+    )
+
+    # Should return the closer one (15:00)
+    expected = xr.DataArray(pd.Timestamp("2021-01-01 15:00"))
+    xr.testing.assert_equal(result, expected)
+
+
+def test_maybe_get_closest_timestamp_to_center_of_valid_times_three_outputs():
+    """Test closest selection with three output times."""
+    # Create valid_time values (center: 2021-01-01 12:00)
+    valid_times = xr.DataArray(
+        pd.date_range("2021-01-01", periods=5, freq="6h"), dims=["valid_time"]
+    )
+
+    # Three output times with varying distances from center
+    output_times = xr.DataArray(
+        [
+            pd.Timestamp("2021-01-01 03:00"),  # 9 hours from center
+            pd.Timestamp("2021-01-01 11:00"),  # 1 hour from center (closest)
+            pd.Timestamp("2021-01-01 18:00"),  # 6 hours from center
+        ],
+        dims=["time"],
+    )
+
+    result = utils.maybe_get_closest_timestamp_to_center_of_valid_times(
+        output_times, valid_times
+    )
+
+    # Should return the closest one (11:00)
+    expected = xr.DataArray(pd.Timestamp("2021-01-01 11:00"))
+    xr.testing.assert_equal(result, expected)
+
+
+def test_maybe_get_closest_timestamp_to_center_of_valid_times_many_outputs():
+    """Test closest selection with many (20) output times."""
+    # Create valid_time values (center: 2021-01-02 12:00)
+    valid_times = xr.DataArray(
+        pd.date_range("2021-01-01", periods=9, freq="6h"), dims=["valid_time"]
+    )
+
+    # 20 output times spread over several days
+    output_times = xr.DataArray(
+        pd.date_range("2021-01-01", periods=20, freq="3h"), dims=["time"]
+    )
+
+    result = utils.maybe_get_closest_timestamp_to_center_of_valid_times(
+        output_times, valid_times
+    )
+
+    # Center time should be valid_times[4] = 2021-01-02 12:00
+    center_time = valid_times.values[4]  # 2021-01-02 12:00
+
+    # Find which output time is actually closest
+    time_diffs = np.abs(output_times - center_time)
+    closest_idx = np.argmin(time_diffs.data)
+    expected = output_times[closest_idx]
+
+    xr.testing.assert_equal(result, expected)
+
+
+def test_maybe_get_closest_timestamp_to_center_of_valid_times_even_valid_times():
+    """Test with even number of valid_times (center calculation)."""
+    # Create even number of valid_time values (center: index 2, 2021-01-01 12:00)
+    valid_times = xr.DataArray(
+        pd.date_range("2021-01-01", periods=4, freq="6h"), dims=["valid_time"]
+    )
+
+    # Multiple output times
+    output_times = xr.DataArray(
+        [
+            pd.Timestamp("2021-01-01 09:00"),  # 3 hours from center
+            pd.Timestamp("2021-01-01 13:00"),  # 1 hour from center (closest)
+            pd.Timestamp("2021-01-01 21:00"),  # 9 hours from center
+        ],
+        dims=["time"],
+    )
+
+    result = utils.maybe_get_closest_timestamp_to_center_of_valid_times(
+        output_times, valid_times
+    )
+
+    # Should return the closest one (13:00)
+    expected = xr.DataArray(pd.Timestamp("2021-01-01 13:00"))
+    xr.testing.assert_equal(result, expected)
