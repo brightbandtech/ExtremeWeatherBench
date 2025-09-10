@@ -589,7 +589,7 @@ class TestCasesEdgeCases:
 
         operator = cases.CaseOperator(
             case_metadata=case,
-            metric=metric_list,
+            metric_list=metric_list,
             target=mock_target,
             forecast=mock_forecast,
         )

@@ -119,7 +119,7 @@ def build_case_operators(
     return case_operators
 
 
-def load_individual_cases(cases: dict[str, list]):
+def load_individual_cases(cases: dict[str, list]) -> IndividualCaseCollection:
     """Load IndividualCase metadata from a dictionary.
 
     Args:
