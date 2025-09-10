@@ -179,7 +179,7 @@ def load_individual_cases_from_yaml(
 
 
 def load_ewb_events_yaml_into_case_collection() -> IndividualCaseCollection:
-    """Load the events yaml file into an IndividualCaseCollection."""
+    """Loads the EWB events yaml file into an IndividualCaseCollection."""
     import extremeweatherbench.data
 
     events_yaml_file = resources.files(extremeweatherbench.data).joinpath("events.yaml")
@@ -190,7 +190,17 @@ def load_ewb_events_yaml_into_case_collection() -> IndividualCaseCollection:
 
 
 def read_incoming_yaml(input_pth: Union[str, Path]) -> dict:
-    """Read events yaml from data into a dictionary."""
+    """Read events yaml from data into a dictionary.
+
+    This function is a wrapper around yaml.safe_load that reads the yaml file directly.
+    It is useful for reading yaml files other than the EWB events.yaml file.
+
+    Args:
+        input_pth: A path to a yaml file containing the case metadata.
+
+    Returns:
+        A dictionary of case metadata.
+    """
     input_pth = Path(input_pth)
     with open(input_pth, "rb") as f:
         yaml_event_case = yaml.safe_load(f)

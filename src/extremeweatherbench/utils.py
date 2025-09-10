@@ -79,7 +79,7 @@ def read_event_yaml(input_pth: str | Path) -> dict:
     """Read events yaml from data."""
     logger.warning(
         "This function is deprecated and will be removed in a future release. "
-        "Please use cases.read_event_yaml instead."
+        "Please use cases.read_incoming_yaml instead."
     )
     input_pth = Path(input_pth)
     with open(input_pth, "rb") as f:
