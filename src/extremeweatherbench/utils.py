@@ -269,3 +269,19 @@ def convert_init_time_to_valid_time(ds: xr.Dataset) -> xr.Dataset:
         ],
         "lead_time",
     )
+
+
+def maybe_get_closest_timestamp_to_center_of_valid_times(
+    output_times: xr.DataArray,
+    valid_time_values: xr.DataArray,
+) -> xr.DataArray:
+    if output_times.size > 1:
+        # This is a temporary fix to handle the case where there are multiple
+        # max/min target values. It's assumed the target value closest to the center
+        # of the forecast valid time is the most relevant.
+        center_time = valid_time_values.values[valid_time_values.size // 2]
+        time_diffs = np.abs(output_times - center_time)
+        closest_idx = np.argmin(time_diffs.data)
+        output_times = output_times[closest_idx]
+    # Pass through the original output times and values if there is only one
+    return output_times
