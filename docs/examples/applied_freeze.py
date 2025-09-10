@@ -54,7 +54,7 @@ ghcn_freeze_target = inputs.GHCN(
     variables=["surface_air_temperature"],
 )
 
-# Define forecast (HRES)
+# Define forecast (FCNv2 CIRA Virtualizarr)
 fcnv2_forecast = inputs.KerchunkForecast(
     source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
     variables=["surface_air_temperature"],
@@ -66,8 +66,8 @@ fcnv2_forecast = inputs.KerchunkForecast(
 )
 
 
-# Create a list of evaluation objects for heatwave
-heatwave_evaluation_object = [
+# Create a list of evaluation objects for freeze
+freeze_evaluation_object = [
     inputs.EvaluationObject(
         event_type="freeze",
         metric_list=[
@@ -93,7 +93,7 @@ heatwave_evaluation_object = [
 # Initialize ExtremeWeatherBench
 test_ewb = evaluate.ExtremeWeatherBench(
     cases=case_yaml,
-    evaluation_objects=heatwave_evaluation_object,
+    evaluation_objects=freeze_evaluation_object,
 )
 
 # Run the workflow
