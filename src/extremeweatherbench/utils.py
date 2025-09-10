@@ -229,8 +229,7 @@ def determine_temporal_resolution(
     if len(num_timesteps) > 1:
         logger.warning(
             "Multiple time resolutions found in dataset, data may be missing in "
-            " forecast or target datasets, "
-            f"({pd.to_datetime(data['init_time'].values[0]).strftime('%Y-%m-%d%H:%M')})"
+            "forecast or target datasets. Returning the highest time resolution."
         )
     # likely missing any data for valid time
     if len(num_timesteps) == 0:
