@@ -62,6 +62,10 @@ def remove_ocean_gridpoints(dataset: xr.Dataset) -> xr.Dataset:
 
 def load_events_yaml():
     """Load the events yaml file."""
+    logger.warning(
+        "This function is deprecated and will be removed in a future release. "
+        "Please use cases.load_ewb_events_yaml_into_case_collection instead."
+    )
     import extremeweatherbench.data
 
     events_yaml_file = resources.files(extremeweatherbench.data).joinpath("events.yaml")
@@ -73,6 +77,10 @@ def load_events_yaml():
 
 def read_event_yaml(input_pth: str | Path) -> dict:
     """Read events yaml from data."""
+    logger.warning(
+        "This function is deprecated and will be removed in a future release. "
+        "Please use cases.read_incoming_yaml instead."
+    )
     input_pth = Path(input_pth)
     with open(input_pth, "rb") as f:
         yaml_event_case = yaml.safe_load(f)
