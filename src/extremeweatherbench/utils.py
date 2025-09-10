@@ -189,7 +189,7 @@ def min_if_all_timesteps_present(
         otherwise the original DataArray.
     """
     timesteps_per_day = 24 / time_resolution_hours
-    if len(da.values) == timesteps_per_day:
+    if da.values.size == timesteps_per_day:
         return da.min()
     else:
         return xr.DataArray(np.nan)
@@ -209,12 +209,12 @@ def min_if_all_timesteps_present_forecast(
         otherwise the original DataArray.
     """
     timesteps_per_day = 24 / time_resolution_hours
-    if len(da.valid_time) == timesteps_per_day:
+    if da.valid_time.size == timesteps_per_day:
         return da.min("valid_time")
     else:
         # Return an array with the same lead_time dimension but filled with NaNs
         return xr.DataArray(
-            np.full(len(da.lead_time), np.nan),
+            np.full(da.lead_time.size, np.nan),
             coords={"lead_time": da.lead_time},
             dims=["lead_time"],
         )
