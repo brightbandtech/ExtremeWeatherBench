@@ -298,8 +298,13 @@ class MaximumMAE(AppliedMetric):
     ) -> dict[str, xr.DataArray]:
         forecast = forecast.compute()
         target_spatial_mean = target.compute().mean(["latitude", "longitude"])
-        maximum_timestep = target_spatial_mean.idxmax("valid_time").values
+        maximum_timestep = target_spatial_mean.idxmax("valid_time")
         maximum_value = target_spatial_mean.sel(valid_time=maximum_timestep)
+
+        # Handle the case where there are >1 resulting target values
+        maximum_timestep = utils.maybe_get_closest_timestamp_to_center_of_valid_times(
+            maximum_timestep, target.valid_time
+        )
         forecast_spatial_mean = forecast.mean(["latitude", "longitude"])
         filtered_max_forecast = forecast_spatial_mean.where(
             (
@@ -334,9 +339,13 @@ class MinimumMAE(AppliedMetric):
     ) -> Any:
         forecast = forecast.compute()
         target_spatial_mean = target.compute().mean(["latitude", "longitude"])
-        minimum_timestep = target_spatial_mean.idxmin("valid_time").values
+        minimum_timestep = target_spatial_mean.idxmin("valid_time")
         minimum_value = target_spatial_mean.sel(valid_time=minimum_timestep)
         forecast_spatial_mean = forecast.mean(["latitude", "longitude"])
+        # Handle the case where there are >1 resulting target values
+        minimum_timestep = utils.maybe_get_closest_timestamp_to_center_of_valid_times(
+            minimum_timestep, target.valid_time
+        )
         filtered_min_forecast = forecast_spatial_mean.where(
             (
                 forecast_spatial_mean.valid_time
@@ -368,7 +377,6 @@ class MaxMinMAE(AppliedMetric):
         tolerance_range: int = 24,
         **kwargs: Any,
     ) -> Any:
-        forecast_resolution_hours = forecast.attrs["forecast_resolution_hours"]
         forecast = forecast.mean(
             [
                 dim
@@ -383,25 +391,25 @@ class MaxMinMAE(AppliedMetric):
                 if dim not in ["valid_time", "lead_time", "time"]
             ]
         )
-        num_timesteps = 24 // forecast_resolution_hours
-        if num_timesteps is None:
-            return {
-                "forecast": xr.DataArray(np.nan),
-                "target": xr.DataArray(np.nan),
-                "preserve_dims": None,
-            }
-
+        time_resolution_hours = utils.determine_temporal_resolution(target)
         max_min_target_value = (
             target.groupby("valid_time.dayofyear")
             .map(
                 utils.min_if_all_timesteps_present,
-                num_timesteps=num_timesteps,
+                time_resolution_hours=time_resolution_hours,
             )
             .max()
         )
         max_min_target_datetime = target.where(
             target == max_min_target_value, drop=True
-        ).valid_time.values
+        ).valid_time
+
+        # Handle the case where there are >1 resulting target values
+        max_min_target_datetime = (
+            utils.maybe_get_closest_timestamp_to_center_of_valid_times(
+                max_min_target_datetime, target.valid_time
+            )
+        )
         max_min_target_value = target.sel(valid_time=max_min_target_datetime)
         subset_forecast = (
             forecast.where(
@@ -423,8 +431,8 @@ class MaxMinMAE(AppliedMetric):
             )
             .groupby("valid_time.dayofyear")
             .map(
-                utils.min_if_all_timesteps_present_with_lead_time,
-                num_timesteps=num_timesteps,
+                utils.min_if_all_timesteps_present_forecast,
+                time_resolution_hours=utils.determine_temporal_resolution(forecast),
             )
             .min("dayofyear")
         )
@@ -452,10 +460,10 @@ class OnsetME(AppliedMetric):
                 return xr.DataArray(np.datetime64("NaT", "ns"))
             min_daily_vals = forecast.groupby("valid_time.dayofyear").map(
                 utils.min_if_all_timesteps_present,
-                num_timesteps=num_timesteps,
+                time_resolution_hours=utils.determine_temporal_resolution(forecast),
             )
-            if len(min_daily_vals) >= 2:  # Check if we have at least 2 values
-                for i in range(len(min_daily_vals) - 1):
+            if min_daily_vals.size >= 2:  # Check if we have at least 2 values
+                for i in range(min_daily_vals.size - 1):
                     # TODO: CHANGE LOGIC; define forecast heatwave onset
                     if min_daily_vals[i] >= 288.15 and min_daily_vals[i + 1] >= 288.15:
                         return xr.DataArray(
@@ -475,12 +483,7 @@ class OnsetME(AppliedMetric):
     ) -> Any:
         target_time = target.valid_time[0] + np.timedelta64(48, "h")
         forecast = (
-            forecast.mean(["latitude", "longitude"])
-            .groupby("init_time")
-            .map(
-                cls.onset,
-                forecast_resolution_hours=forecast.attrs["forecast_resolution_hours"],
-            )
+            forecast.mean(["latitude", "longitude"]).groupby("init_time").map(cls.onset)
         )
         return {
             "forecast": forecast,
@@ -507,17 +510,17 @@ class DurationME(AppliedMetric):
                 return xr.DataArray(np.datetime64("NaT", "ns"))
             min_daily_vals = forecast.groupby("valid_time.dayofyear").map(
                 utils.min_if_all_timesteps_present,
-                num_timesteps=num_timesteps,
+                time_resolution_hours=utils.determine_temporal_resolution(forecast),
             )
             # need to determine logic for 2+ consecutive days to find the date
             # that the heatwave starts
-            if len(min_daily_vals) >= 2:  # Check if we have at least 2 values
-                for i in range(len(min_daily_vals) - 1):
+            if min_daily_vals.size >= 2:  # Check if we have at least 2 values
+                for i in range(min_daily_vals.size - 1):
                     if min_daily_vals[i] >= 288.15 and min_daily_vals[i + 1] >= 288.15:
                         consecutive_days = np.timedelta64(
                             2, "D"
                         )  # Start with 2 since we found first pair
-                        for j in range(i + 2, len(min_daily_vals)):
+                        for j in range(i + 2, min_daily_vals.size):
                             if min_daily_vals[j] >= 288.15:
                                 consecutive_days += np.timedelta64(1, "D")
                             else:

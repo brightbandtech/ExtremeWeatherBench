@@ -178,9 +178,9 @@ def cli_runner(
 
 def _load_default_cases() -> dict:
     """Load default case data for default evaluation objects."""
-    from extremeweatherbench.utils import load_events_yaml
+    from extremeweatherbench.cases import load_ewb_events_yaml_into_case_collection
 
-    return load_events_yaml()
+    return load_ewb_events_yaml_into_case_collection()
 
 
 def _load_config_file(config_path: str) -> tuple:
