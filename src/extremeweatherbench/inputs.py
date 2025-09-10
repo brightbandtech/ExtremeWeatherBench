@@ -19,7 +19,7 @@ ARCO_ERA5_FULL_URI = (
 )
 
 #: Storage/access options for default point target dataset.
-DEFAULT_GHCN_URI = "gs://extremeweatherbench/datasets/ghcnh.parq"
+DEFAULT_GHCN_URI = "gs://extremeweatherbench/datasets/ghcnh_all_2020_2024.parq"
 
 #: Storage/access options for local storm report (LSR) tabular data.
 LSR_URI = "gs://extremeweatherbench/datasets/lsr_01012020_04302025.parq"
