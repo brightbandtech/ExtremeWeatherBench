@@ -180,7 +180,7 @@ def min_if_all_timesteps_present(
         The minimum value of the DataArray if all timesteps are present,
         otherwise the original DataArray.
     """
-    if len(da.values) == num_timesteps:
+    if da.size == num_timesteps:
         return da.min()
     else:
         return xr.DataArray(np.nan)
@@ -199,12 +199,12 @@ def min_if_all_timesteps_present_forecast(
         The minimum value of the DataArray if all timesteps are present,
         otherwise the original DataArray.
     """
-    if len(da.valid_time) == num_timesteps:
+    if da.valid_time.size == num_timesteps:
         return da.min("valid_time")
     else:
         # Return an array with the same lead_time dimension but filled with NaNs
         return xr.DataArray(
-            np.full(len(da.lead_time), np.nan),
+            np.full(da.lead_time.size, np.nan),
             coords={"lead_time": da.lead_time},
             dims=["lead_time"],
         )

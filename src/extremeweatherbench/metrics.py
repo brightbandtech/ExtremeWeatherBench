@@ -330,8 +330,8 @@ class OnsetME(AppliedMetric):
                 utils.min_if_all_timesteps_present,
                 num_timesteps=utils.determine_timesteps_per_day_resolution(forecast),
             )
-            if len(min_daily_vals) >= 2:  # Check if we have at least 2 values
-                for i in range(len(min_daily_vals) - 1):
+            if min_daily_vals.size >= 2:  # Check if we have at least 2 values
+                for i in range(min_daily_vals.size - 1):
                     # TODO: CHANGE LOGIC; define forecast heatwave onset
                     if min_daily_vals[i] >= 288.15 and min_daily_vals[i + 1] >= 288.15:
                         return xr.DataArray(
@@ -379,13 +379,13 @@ class DurationME(AppliedMetric):
             )
             # need to determine logic for 2+ consecutive days to find the date
             # that the heatwave starts
-            if len(min_daily_vals) >= 2:  # Check if we have at least 2 values
-                for i in range(len(min_daily_vals) - 1):
+            if min_daily_vals.size >= 2:  # Check if we have at least 2 values
+                for i in range(min_daily_vals.size - 1):
                     if min_daily_vals[i] >= 288.15 and min_daily_vals[i + 1] >= 288.15:
                         consecutive_days = np.timedelta64(
                             2, "D"
                         )  # Start with 2 since we found first pair
-                        for j in range(i + 2, len(min_daily_vals)):
+                        for j in range(i + 2, min_daily_vals.size):
                             if min_daily_vals[j] >= 288.15:
                                 consecutive_days += np.timedelta64(1, "D")
                             else:
