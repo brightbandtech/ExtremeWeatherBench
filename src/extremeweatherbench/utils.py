@@ -6,7 +6,7 @@ import inspect
 import logging
 from importlib import resources
 from pathlib import Path
-from typing import Any, Callable, TypeAlias, Union
+from typing import Any, Callable, Optional, TypeAlias, Union
 
 import numpy as np
 import pandas as pd  # type: ignore[import-untyped]
@@ -210,25 +210,34 @@ def min_if_all_timesteps_present_forecast(
         )
 
 
-def determine_timesteps_per_day_resolution(
-    ds: xr.Dataset | xr.DataArray,
-) -> int:
-    """Determine the number of timesteps per day for a dataset.
+def determine_temporal_resolution(
+    data: xr.Dataset | xr.DataArray,
+) -> Optional[float]:
+    """Determine the temporal resolution of the data.
 
     Args:
         ds: The input dataset with a valid_time dimension or coordinate.
 
     Returns:
-        The number of timesteps per day as an integer.
+        The temporal resolution of the data as a float in hours.
     """
-    num_timesteps = 24 // np.unique(np.diff(ds.valid_time)).astype(
-        "timedelta64[h]"
-    ).astype(int)
+    num_timesteps = (
+        np.unique(np.diff(data.valid_time)).astype("timedelta64[h]").astype(int)
+    )
     if len(num_timesteps) > 1:
-        raise ValueError(
-            "The number of timesteps per day is not consistent in the dataset."
+        logger.warning(
+            "Multiple time resolutions found in dataset, data may be missing in "
+            " forecast or target datasets, "
+            f"({pd.to_datetime(data['init_time'].values[0]).strftime('%Y-%m-%d%H:%M')})"
         )
-    return num_timesteps[0]
+    # likely missing any data for valid time
+    if len(num_timesteps) == 0:
+        return None
+
+    # return the maximum number of timesteps per day present
+    # this is the most likely to be correct if there are multiple resolutions
+    # present, likely due to missing data
+    return np.max(num_timesteps).astype(float)
 
 
 def convert_init_time_to_valid_time(ds: xr.Dataset) -> xr.Dataset:
