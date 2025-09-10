@@ -37,7 +37,7 @@ def _preprocess_bb_cira_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
 
 # Define targets
 # ERA5 target
-era5_heatwave_target = inputs.ERA5(
+era5_freeze_target = inputs.ERA5(
     source=inputs.ARCO_ERA5_FULL_URI,
     variables=["surface_air_temperature"],
     variable_mapping={
@@ -49,33 +49,34 @@ era5_heatwave_target = inputs.ERA5(
 )
 
 # GHCN target
-ghcn_target = inputs.GHCN(
+ghcn_freeze_target = inputs.GHCN(
     source=inputs.DEFAULT_GHCN_URI,
     variables=["surface_air_temperature"],
 )
 
 # Define forecast (HRES)
-hres_forecast = inputs.KerchunkForecast(
+fcnv2_forecast = inputs.KerchunkForecast(
     source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
     variables=["surface_air_temperature"],
     variable_mapping={
         "t2": "surface_air_temperature",
-        "time": "init_time",
     },
-    storage_options={"remote_options": {"anon": True}},
+    storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
+    preprocess=_preprocess_bb_cira_forecast_dataset,
 )
+
 
 # Create a list of evaluation objects for heatwave
 heatwave_evaluation_object = [
     inputs.EvaluationObject(
-        event_type="heat_wave",
+        event_type="freeze",
         metric_list=[
             metrics.RMSE,
             metrics.OnsetME,
             metrics.DurationME,
         ],
-        target=ghcn_target,
-        forecast=hres_forecast,
+        target=ghcn_freeze_target,
+        forecast=fcnv2_forecast,
     ),
     inputs.EvaluationObject(
         event_type="freeze",
@@ -84,8 +85,8 @@ heatwave_evaluation_object = [
             metrics.OnsetME,
             metrics.DurationME,
         ],
-        target=era5_heatwave_target,
-        forecast=hres_forecast,
+        target=era5_freeze_target,
+        forecast=fcnv2_forecast,
     ),
 ]
 
