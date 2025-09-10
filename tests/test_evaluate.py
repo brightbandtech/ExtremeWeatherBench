@@ -497,6 +497,46 @@ class TestComputeCaseOperator:
                 assert len(result) == 2
 
     @patch("extremeweatherbench.evaluate._build_datasets")
+    def test_compute_case_operator_zero_length_forecast_dataset(
+        self, mock_build_datasets, sample_case_operator
+    ):
+        """Test compute_case_operator when _build_datasets returns empty forecast
+        dataset."""
+        # Mock _build_datasets to return empty datasets (simulating zero valid times)
+        empty_forecast_ds = xr.Dataset(coords={"valid_time": pd.DatetimeIndex([])})
+        empty_target_ds = xr.Dataset(coords={"valid_time": pd.DatetimeIndex([])})
+        mock_build_datasets.return_value = (empty_forecast_ds, empty_target_ds)
+
+        result = evaluate.compute_case_operator(sample_case_operator)
+
+        # Should return empty DataFrame with correct columns
+        assert isinstance(result, pd.DataFrame)
+        assert len(result) == 0
+        assert list(result.columns) == OUTPUT_COLUMNS
+
+        # _build_datasets should be called, but no further processing should occur
+        mock_build_datasets.assert_called_once_with(sample_case_operator)
+
+    @patch("extremeweatherbench.evaluate._build_datasets")
+    def test_compute_case_operator_zero_length_target_dataset(
+        self, mock_build_datasets, sample_case_operator, sample_forecast_dataset
+    ):
+        """Test compute_case_operator when _build_datasets returns empty
+        target dataset."""
+        # Mock _build_datasets to return empty target dataset
+        empty_target_ds = xr.Dataset(coords={"valid_time": pd.DatetimeIndex([])})
+        mock_build_datasets.return_value = (sample_forecast_dataset, empty_target_ds)
+
+        result = evaluate.compute_case_operator(sample_case_operator)
+
+        # Should return empty DataFrame with correct columns
+        assert isinstance(result, pd.DataFrame)
+        assert len(result) == 0
+        assert list(result.columns) == OUTPUT_COLUMNS
+
+        mock_build_datasets.assert_called_once_with(sample_case_operator)
+
+    @patch("extremeweatherbench.evaluate._build_datasets")
     def test_compute_case_operator_empty_forecast_dataset(
         self, mock_build_datasets, sample_case_operator
     ):
