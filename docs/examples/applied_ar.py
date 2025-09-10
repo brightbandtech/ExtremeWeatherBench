@@ -73,7 +73,7 @@ hres_forecast = inputs.ZarrForecast(
 ar_metric_list = [
     inputs.EvaluationObject(
         event_type="atmospheric_river",
-        metric=[
+        metric_list=[
             metrics.MAE,
         ],
         target=era5_target,

@@ -15,6 +15,7 @@
 # ---
 
 # %%
+from importlib import resources
 from typing import Literal
 
 import cartopy.crs as ccrs
@@ -27,6 +28,7 @@ import yaml
 from matplotlib.patches import Rectangle
 
 # %%
+import extremeweatherbench.data
 from extremeweatherbench import inputs, regions, utils
 
 # %% [markdown]
@@ -499,11 +501,7 @@ for single_case in cases_new:
 # %%
 # Load the original events.yaml file
 
-with open(
-    "/home/taylor/code/ExtremeWeatherBench/src/extremeweatherbench/data/events.yaml",
-    "r",
-) as f:
-    events_data = yaml.safe_load(f)
+events_data = utils.load_events_yaml()
 
 cases_old = events_data["cases"]
 
@@ -525,10 +523,11 @@ for case_index, updated_case in updated_cases:
 
 # Write the updated events.yaml file
 events_data["cases"] = cases_old
-with open(
-    "/home/taylor/code/ExtremeWeatherBench/src/extremeweatherbench/data/events.yaml",
-    "w",
-) as f:
-    yaml.dump(events_data, f, default_flow_style=False, sort_keys=False, indent=2)
+# Note: Writing to the events.yaml file in the package data directory
+# This updates the installed package's events.yaml file
+events_yaml_file = resources.files(extremeweatherbench.data).joinpath("events.yaml")
+with resources.as_file(events_yaml_file) as file_path:
+    with open(file_path, "w") as f:
+        yaml.dump(events_data, f, default_flow_style=False, sort_keys=False, indent=2)
 
 print(f"\nUpdated {len(updated_cases)} cases in events.yaml")

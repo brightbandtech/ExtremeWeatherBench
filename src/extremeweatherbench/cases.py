@@ -1,6 +1,6 @@
 """Classes for defining individual units of case studies for analysis.
 
-Some code similarly structured to WeatherBench (Rasp et al.).
+Some code similarly structured to WeatherBenchX (Rasp et al.).
 """
 
 import dataclasses
@@ -9,7 +9,7 @@ import itertools
 import logging
 from importlib import resources
 from pathlib import Path
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING, Callable, Union
 
 import dacite
 import yaml  # type: ignore[import]
@@ -65,26 +65,26 @@ class CaseOperator:
 
     Attributes:
         case_metadata: IndividualCase metadata
-        metric: A metric that is intended to be evaluated for the case
+        metric_list: A list of metrics that are intended to be evaluated for the case
         target_config: A TargetConfig object
         forecast_config: A ForecastConfig object
     """
 
     case_metadata: IndividualCase
-    metric: "metrics.BaseMetric"
+    metric_list: list[Union[Callable, "metrics.BaseMetric", "metrics.AppliedMetric"]]
     target: "inputs.TargetBase"
     forecast: "inputs.ForecastBase"
 
 
 def build_case_operators(
     cases_dict: dict[str, list],
-    metric_evaluation_objects: list["inputs.EvaluationObject"],
+    evaluation_objects: list["inputs.EvaluationObject"],
 ) -> list[CaseOperator]:
     """Build a CaseOperator from the case metadata and metric evaluation objects.
 
     Args:
         cases_dict: The case metadata to use for the case operators.
-        metric_evaluation_objects: The metric evaluation objects to use for the
+        evaluation_objects: The evaluation objects to use for the
             case operators.
 
     Returns:
@@ -103,17 +103,17 @@ def build_case_operators(
 
     # build list of case operators based on information provided in case dict and
     case_operators = []
-    for single_case, metric_evaluation_object in itertools.product(
-        case_metadata_collection.cases, metric_evaluation_objects
+    for single_case, evaluation_object in itertools.product(
+        case_metadata_collection.cases, evaluation_objects
     ):
         # checks if case matches the event type provided in metric eval object
-        if single_case.event_type in metric_evaluation_object.event_type:
+        if single_case.event_type in evaluation_object.event_type:
             case_operators.append(
                 CaseOperator(
                     case_metadata=single_case,
-                    metric=metric_evaluation_object.metric,
-                    target=metric_evaluation_object.target,
-                    forecast=metric_evaluation_object.forecast,
+                    metric_list=evaluation_object.metric_list,
+                    target=evaluation_object.target,
+                    forecast=evaluation_object.forecast,
                 )
             )
     return case_operators
