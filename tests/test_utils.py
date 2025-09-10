@@ -199,16 +199,16 @@ def test_min_if_all_timesteps_present_forecast():
 
 def test_determine_temporal_resolution():
     """Test determining time resolution in hours."""
-    # Create dataset with 6-hourly data (6 hour gaps)
-    times = pd.date_range("2020-01-01", "2020-01-02", freq="6h")[:-1]  # 4 timesteps
+    # Create dataset with 6-hourly resolution
+    times = pd.date_range("2020-01-01", "2020-01-02", freq="6h")[:-1]  # 4 timesteps/day
     ds = xr.Dataset(
         data_vars={"temp": (["valid_time"], [1, 2, 3, 4])}, coords={"valid_time": times}
     )
 
     result = utils.determine_temporal_resolution(ds)
-    assert result == 6  # 6-hour gaps
+    assert result == 6  # 6-hour resolution
 
-    # Test with hourly data (1 hour gaps)
+    # Test with hourly resolution
     times_hourly = pd.date_range("2020-01-01", "2020-01-02", freq="1h")[:-1]
     ds_hourly = xr.Dataset(
         data_vars={"temp": (["valid_time"], range(24))},
@@ -216,7 +216,7 @@ def test_determine_temporal_resolution():
     )
 
     result_hourly = utils.determine_temporal_resolution(ds_hourly)
-    assert result_hourly == 1  # 1-hour gaps
+    assert result_hourly == 1  # 1-hour resolution
 
 
 def test_determine_temporal_resolution_multiple_resolutions():
