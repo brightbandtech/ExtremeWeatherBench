@@ -157,14 +157,14 @@ def test_min_if_all_timesteps_present():
     """Test returning minimum if all timesteps are present."""
     # Test with complete timesteps
     da_complete = xr.DataArray([1, 2, 3, 4], dims=["time"])
-    result_complete = utils.min_if_all_timesteps_present(da_complete, 4)
+    result_complete = utils.min_if_all_timesteps_present(da_complete, 6)
 
     # Should return minimum value
     assert result_complete.values == 1
 
     # Test with incomplete timesteps
     da_incomplete = xr.DataArray([1, 2, 3], dims=["time"])
-    result_incomplete = utils.min_if_all_timesteps_present(da_incomplete, 4)
+    result_incomplete = utils.min_if_all_timesteps_present(da_incomplete, 6)
 
     # Should return NaN
     assert np.isnan(result_incomplete.values)
@@ -178,7 +178,7 @@ def test_min_if_all_timesteps_present_forecast():
         dims=["lead_time", "valid_time"],
         coords={"lead_time": [0, 6], "valid_time": [0, 1, 2]},
     )
-    result_complete = utils.min_if_all_timesteps_present_forecast(da_complete, 3)
+    result_complete = utils.min_if_all_timesteps_present_forecast(da_complete, 8)
 
     # Should return minimum along valid_time dimension
     expected = xr.DataArray([1, 4], dims=["lead_time"], coords={"lead_time": [0, 6]})
@@ -190,7 +190,7 @@ def test_min_if_all_timesteps_present_forecast():
         dims=["lead_time", "valid_time"],
         coords={"lead_time": [0, 6], "valid_time": [0, 1]},
     )
-    result_incomplete = utils.min_if_all_timesteps_present_forecast(da_incomplete, 3)
+    result_incomplete = utils.min_if_all_timesteps_present_forecast(da_incomplete, 8)
 
     # Should return NaN array with same lead_time dimension
     assert len(result_incomplete.lead_time) == 2
@@ -242,10 +242,10 @@ def test_determine_temporal_resolution_multiple_resolutions():
 
     result = utils.determine_temporal_resolution(ds_mixed)
 
-    # Should return 6 (maximum time gap in hours) when multiple resolutions
-    # are present, even though some gaps are only 1 hour
-    # This confirms the function takes the maximum gap, not the minimum
-    assert result == 6
+    # Should return 1 (minimum time gap in hours) when multiple resolutions
+    # are present, even though some gaps are 6 hours
+    # This confirms the function takes the minimum gap, not the maximum
+    assert result == 1
 
 
 def test_convert_init_time_to_valid_time():
