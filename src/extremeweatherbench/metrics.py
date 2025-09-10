@@ -269,12 +269,12 @@ class MaxMinMAE(AppliedMetric):
     ) -> Any:
         forecast = forecast.compute().mean(["latitude", "longitude"])
         target = target.compute().mean(["latitude", "longitude"])
+        time_resolution_hours = utils.determine_temporal_resolution(target)
         max_min_target_value = (
             target.groupby("valid_time.dayofyear")
             .map(
                 utils.min_if_all_timesteps_present,
-                # TODO: calculate num timesteps per day dynamically
-                num_timesteps=utils.determine_timesteps_per_day_resolution(target),
+                time_resolution_hours=time_resolution_hours,
             )
             .max()
         )
@@ -303,7 +303,7 @@ class MaxMinMAE(AppliedMetric):
             .groupby("valid_time.dayofyear")
             .map(
                 utils.min_if_all_timesteps_present_forecast,
-                num_timesteps=utils.determine_timesteps_per_day_resolution(forecast),
+                time_resolution_hours=utils.determine_temporal_resolution(forecast),
             )
             .min("dayofyear")
         )
@@ -328,10 +328,10 @@ class OnsetME(AppliedMetric):
         ) >= 48:
             min_daily_vals = forecast.groupby("valid_time.dayofyear").map(
                 utils.min_if_all_timesteps_present,
-                num_timesteps=utils.determine_timesteps_per_day_resolution(forecast),
+                time_resolution_hours=utils.determine_temporal_resolution(forecast),
             )
-            if len(min_daily_vals) >= 2:  # Check if we have at least 2 values
-                for i in range(len(min_daily_vals) - 1):
+            if min_daily_vals.size >= 2:  # Check if we have at least 2 values
+                for i in range(min_daily_vals.size - 1):
                     # TODO: CHANGE LOGIC; define forecast heatwave onset
                     if min_daily_vals[i] >= 288.15 and min_daily_vals[i + 1] >= 288.15:
                         return xr.DataArray(
@@ -374,18 +374,17 @@ class DurationME(AppliedMetric):
         ) >= 48:
             min_daily_vals = forecast.groupby("valid_time.dayofyear").map(
                 utils.min_if_all_timesteps_present,
-                # TODO: calculate num timesteps per day dynamically
-                num_timesteps=4,
+                time_resolution_hours=utils.determine_temporal_resolution(forecast),
             )
             # need to determine logic for 2+ consecutive days to find the date
             # that the heatwave starts
-            if len(min_daily_vals) >= 2:  # Check if we have at least 2 values
-                for i in range(len(min_daily_vals) - 1):
+            if min_daily_vals.size >= 2:  # Check if we have at least 2 values
+                for i in range(min_daily_vals.size - 1):
                     if min_daily_vals[i] >= 288.15 and min_daily_vals[i + 1] >= 288.15:
                         consecutive_days = np.timedelta64(
                             2, "D"
                         )  # Start with 2 since we found first pair
-                        for j in range(i + 2, len(min_daily_vals)):
+                        for j in range(i + 2, min_daily_vals.size):
                             if min_daily_vals[j] >= 288.15:
                                 consecutive_days += np.timedelta64(1, "D")
                             else:
