@@ -6,7 +6,7 @@ import inspect
 import logging
 from importlib import resources
 from pathlib import Path
-from typing import Any, Callable, TypeAlias, Union
+from typing import Any, Callable, Optional, TypeAlias, Union
 
 import numpy as np
 import pandas as pd  # type: ignore[import-untyped]
@@ -177,7 +177,7 @@ def filter_kwargs_for_callable(kwargs: dict, callable_obj: Callable) -> dict:
 
 def min_if_all_timesteps_present(
     da: xr.DataArray,
-    num_timesteps: int,
+    time_resolution_hours: float,
 ) -> xr.DataArray:
     """Return the minimum value of a DataArray if all timesteps of a day are present.
 
@@ -188,14 +188,15 @@ def min_if_all_timesteps_present(
         The minimum value of the DataArray if all timesteps are present,
         otherwise the original DataArray.
     """
-    if len(da.values) == num_timesteps:
+    timesteps_per_day = 24 / time_resolution_hours
+    if len(da.values) == timesteps_per_day:
         return da.min()
     else:
         return xr.DataArray(np.nan)
 
 
 def min_if_all_timesteps_present_forecast(
-    da: xr.DataArray, num_timesteps
+    da: xr.DataArray, time_resolution_hours: float
 ) -> xr.DataArray:
     """Return the minimum value of a DataArray if all timesteps of a day are present
     given a dataset with lead_time and valid_time dimensions.
@@ -207,7 +208,8 @@ def min_if_all_timesteps_present_forecast(
         The minimum value of the DataArray if all timesteps are present,
         otherwise the original DataArray.
     """
-    if len(da.valid_time) == num_timesteps:
+    timesteps_per_day = 24 / time_resolution_hours
+    if len(da.valid_time) == timesteps_per_day:
         return da.min("valid_time")
     else:
         # Return an array with the same lead_time dimension but filled with NaNs
@@ -218,25 +220,33 @@ def min_if_all_timesteps_present_forecast(
         )
 
 
-def determine_timesteps_per_day_resolution(
-    ds: xr.Dataset | xr.DataArray,
-) -> int:
-    """Determine the number of timesteps per day for a dataset.
+def determine_temporal_resolution(
+    data: xr.Dataset | xr.DataArray,
+) -> Optional[float]:
+    """Determine the temporal resolution of the data.
 
     Args:
-        ds: The input dataset with a valid_time dimension or coordinate.
+        data: The input dataset with a valid_time dimension or coordinate.
 
     Returns:
-        The number of timesteps per day as an integer.
+        The temporal resolution of the data as a float in hours.
     """
-    num_timesteps = 24 // np.unique(np.diff(ds.valid_time)).astype(
-        "timedelta64[h]"
-    ).astype(int)
+    num_timesteps = (
+        np.unique(np.diff(data.valid_time)).astype("timedelta64[h]").astype(int)
+    )
     if len(num_timesteps) > 1:
-        raise ValueError(
-            "The number of timesteps per day is not consistent in the dataset."
+        logger.warning(
+            "Multiple time resolutions found in dataset, data may be missing in "
+            "forecast or target datasets. Returning the highest time resolution."
         )
-    return num_timesteps[0]
+    # likely missing any data for valid time
+    if len(num_timesteps) == 0:
+        return None
+
+    # return the minimum (highest time resolution) in hours
+    # this is the most likely to be correct if there are multiple resolutions
+    # present, likely due to missing data
+    return np.min(num_timesteps).astype(float)
 
 
 def convert_init_time_to_valid_time(ds: xr.Dataset) -> xr.Dataset:
