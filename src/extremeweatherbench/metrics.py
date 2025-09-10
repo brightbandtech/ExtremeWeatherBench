@@ -199,8 +199,13 @@ class MaximumMAE(AppliedMetric):
     ) -> Any:
         forecast = forecast.compute()
         target_spatial_mean = target.compute().mean(["latitude", "longitude"])
-        maximum_timestep = target_spatial_mean.idxmax("valid_time").values
+        maximum_timestep = target_spatial_mean.idxmax("valid_time")
         maximum_value = target_spatial_mean.sel(valid_time=maximum_timestep)
+
+        # Handle the case where there are >1 resulting target values
+        maximum_timestep = utils.maybe_get_closest_timestamp_to_center_of_valid_times(
+            maximum_timestep, target.valid_time
+        )
         forecast_spatial_mean = forecast.mean(["latitude", "longitude"])
         filtered_max_forecast = forecast_spatial_mean.where(
             (
@@ -234,9 +239,13 @@ class MinimumMAE(AppliedMetric):
     ) -> Any:
         forecast = forecast.compute()
         target_spatial_mean = target.compute().mean(["latitude", "longitude"])
-        minimum_timestep = target_spatial_mean.idxmin("valid_time").values
+        minimum_timestep = target_spatial_mean.idxmin("valid_time")
         minimum_value = target_spatial_mean.sel(valid_time=minimum_timestep)
         forecast_spatial_mean = forecast.mean(["latitude", "longitude"])
+        # Handle the case where there are >1 resulting target values
+        minimum_timestep = utils.maybe_get_closest_timestamp_to_center_of_valid_times(
+            minimum_timestep, target.valid_time
+        )
         filtered_min_forecast = forecast_spatial_mean.where(
             (
                 forecast_spatial_mean.valid_time
@@ -280,7 +289,14 @@ class MaxMinMAE(AppliedMetric):
         )
         max_min_target_datetime = target.where(
             target == max_min_target_value, drop=True
-        ).valid_time.values
+        ).valid_time
+
+        # Handle the case where there are >1 resulting target values
+        max_min_target_datetime = (
+            utils.maybe_get_closest_timestamp_to_center_of_valid_times(
+                max_min_target_datetime, target.valid_time
+            )
+        )
         max_min_target_value = target.sel(valid_time=max_min_target_datetime)
         subset_forecast = (
             forecast.where(
