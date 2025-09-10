@@ -7,9 +7,12 @@ import dataclasses
 import datetime
 import itertools
 import logging
+from importlib import resources
+from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Union
 
 import dacite
+import yaml  # type: ignore[import]
 
 from extremeweatherbench import regions
 
@@ -116,14 +119,14 @@ def build_case_operators(
     return case_operators
 
 
-def load_individual_cases(cases: dict[str, list]):
+def load_individual_cases(cases: dict[str, list]) -> IndividualCaseCollection:
     """Load IndividualCase metadata from a dictionary.
 
     Args:
         cases: A dictionary of cases based on the IndividualCase dataclass.
 
     Returns:
-        A list of IndividualCase objects.
+        A collection of IndividualCase objects.
     """
     case_metadata_collection = dacite.from_dict(
         data_class=IndividualCaseCollection,
@@ -134,3 +137,71 @@ def load_individual_cases(cases: dict[str, list]):
     )
 
     return case_metadata_collection
+
+
+def load_individual_cases_from_yaml(
+    yaml_file: Union[str, Path],
+) -> IndividualCaseCollection:
+    """Load IndividualCase metadata directly from a yaml file.
+
+    This function is a wrapper around load_individual_cases that reads the yaml file
+    directly. It is useful for loading cases from a yaml file that is not part of the
+    ExtremeWeatherBench data package. Note that the yaml file must be in the same format
+    as described in the ExtremeWeatherBench documentation; errors will be raised within
+    the dacite.from_dict call if the yaml file otherwise.
+
+    Example of a yaml file:
+
+    ```yaml
+    cases:
+      - case_id_number: 1
+        title: Event 1
+        start_date: 2021-01-01 00:00:00
+        end_date: 2021-01-03 00:00:00
+        location:
+            type: bounded_region
+            parameters:
+                latitude_min: 10.0
+                latitude_max: 55.6
+                longitude_min: 265.0
+                longitude_max: 283.3
+        event_type: tropical_cyclone
+    ```
+
+    Args:
+        yaml_file: A path to a yaml file containing the case metadata.
+
+    Returns:
+        A collection of IndividualCase objects.
+    """
+    yaml_event_case = read_incoming_yaml(yaml_file)
+    return load_individual_cases(yaml_event_case)
+
+
+def load_ewb_events_yaml_into_case_collection() -> IndividualCaseCollection:
+    """Loads the EWB events yaml file into an IndividualCaseCollection."""
+    import extremeweatherbench.data
+
+    events_yaml_file = resources.files(extremeweatherbench.data).joinpath("events.yaml")
+    with resources.as_file(events_yaml_file) as file:
+        yaml_event_case = read_incoming_yaml(file)
+
+    return load_individual_cases(yaml_event_case)
+
+
+def read_incoming_yaml(input_pth: Union[str, Path]) -> dict:
+    """Read events yaml from data into a dictionary.
+
+    This function is a wrapper around yaml.safe_load that reads the yaml file directly.
+    It is useful for reading yaml files other than the EWB events.yaml file.
+
+    Args:
+        input_pth: A path to a yaml file containing the case metadata.
+
+    Returns:
+        A dictionary of case metadata.
+    """
+    input_pth = Path(input_pth)
+    with open(input_pth, "rb") as f:
+        yaml_event_case = yaml.safe_load(f)
+    return yaml_event_case
