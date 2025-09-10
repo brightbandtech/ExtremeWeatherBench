@@ -44,9 +44,7 @@ def configure_root_logger():
 
 logger = logging.getLogger(__name__)
 
-case_yaml = utils.read_event_yaml(
-    "/home/taylor/ExtremeWeatherBench/src/extremeweatherbench/data/events.yaml"
-)
+case_yaml = utils.load_events_yaml()
 test_yaml = {"cases": case_yaml["cases"][:]}
 
 
