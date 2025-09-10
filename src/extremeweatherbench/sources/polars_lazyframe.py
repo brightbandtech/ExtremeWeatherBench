@@ -3,7 +3,7 @@
 import polars as pl
 
 
-def _safely_pull_variables_polars_lazyframe(
+def safely_pull_variables_polars_lazyframe(
     dataset: pl.LazyFrame,
     variables: list[str],
     optional_variables: list[str],

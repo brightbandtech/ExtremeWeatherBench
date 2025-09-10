@@ -3,7 +3,7 @@
 import xarray as xr
 
 
-def _safely_pull_variables_xr_dataarray(
+def safely_pull_variables_xr_dataarray(
     dataset: xr.DataArray,
     variables: list[str],
     optional_variables: list[str],

@@ -966,19 +966,19 @@ def safely_pull_variables(
     # Dispatch to type-specific handlers
     match dataset:
         case xr.Dataset():
-            return sources.xarray_dataset._safely_pull_variables_xr_dataset(
+            return sources.safely_pull_variables_xr_dataset(
                 dataset, variables, optional_variables, optional_variables_mapping
             )
         case xr.DataArray():
-            return sources.xarray_dataarray._safely_pull_variables_xr_dataarray(
+            return sources.safely_pull_variables_xr_dataarray(
                 dataset, variables, optional_variables, optional_variables_mapping
             )
         case pl.LazyFrame():
-            return sources.polars_lazyframe._safely_pull_variables_polars_lazyframe(
+            return sources.safely_pull_variables_polars_lazyframe(
                 dataset, variables, optional_variables, optional_variables_mapping
             )
         case pd.DataFrame():
-            return sources.pandas_dataframe._safely_pull_variables_pandas_dataframe(
+            return sources.safely_pull_variables_pandas_dataframe(
                 dataset, variables, optional_variables, optional_variables_mapping
             )
         case _:

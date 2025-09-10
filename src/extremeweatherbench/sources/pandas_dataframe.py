@@ -3,7 +3,7 @@
 import pandas as pd
 
 
-def _safely_pull_variables_pandas_dataframe(
+def safely_pull_variables_pandas_dataframe(
     dataset: pd.DataFrame,
     variables: list[str],
     optional_variables: list[str],
