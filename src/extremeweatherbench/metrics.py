@@ -269,11 +269,12 @@ class MaxMinMAE(AppliedMetric):
     ) -> Any:
         forecast = forecast.compute().mean(["latitude", "longitude"])
         target = target.compute().mean(["latitude", "longitude"])
+        time_resolution_hours = utils.determine_temporal_resolution(target)
         max_min_target_value = (
             target.groupby("valid_time.dayofyear")
             .map(
                 utils.min_if_all_timesteps_present,
-                time_resolution_hours=utils.determine_temporal_resolution(target),
+                time_resolution_hours=time_resolution_hours,
             )
             .max()
         )
