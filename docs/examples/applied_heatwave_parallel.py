@@ -125,7 +125,7 @@ test_ewb = evaluate.ExtremeWeatherBench(
 case_operators = test_ewb.case_operators
 
 # Get the number of available CPUs for determining n_processes
-n_threads_per_process = 10
+n_threads_per_process = 4
 n_processes = max(1, multiprocessing.cpu_count() // n_threads_per_process)
 
 # Set environment variable to control threads per process
