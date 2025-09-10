@@ -126,7 +126,7 @@ def load_individual_cases(cases: dict[str, list]) -> IndividualCaseCollection:
         cases: A dictionary of cases based on the IndividualCase dataclass.
 
     Returns:
-        A list of IndividualCase objects.
+        A collection of IndividualCase objects.
     """
     case_metadata_collection = dacite.from_dict(
         data_class=IndividualCaseCollection,
@@ -172,7 +172,7 @@ def load_individual_cases_from_yaml(
         yaml_file: A path to a yaml file containing the case metadata.
 
     Returns:
-        A list of IndividualCase objects.
+        A collection of IndividualCase objects.
     """
     yaml_event_case = read_incoming_yaml(yaml_file)
     return load_individual_cases(yaml_event_case)
