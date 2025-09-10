@@ -105,7 +105,8 @@ def compute_case_operator(case_operator: "cases.CaseOperator", **kwargs):
         A concatenated dataframe of the results of the case operator.
     """
     forecast_ds, target_ds = _build_datasets(case_operator)
-    if len(forecast_ds) == 0 or len(target_ds) == 0:
+    # Check if any dimension has zero length
+    if 0 in forecast_ds.sizes.values() or 0 in target_ds.sizes.values():
         return pd.DataFrame(columns=OUTPUT_COLUMNS)
     # spatiotemporally align the target and forecast datasets dependent on the forecast
     aligned_forecast_ds, aligned_target_ds = (

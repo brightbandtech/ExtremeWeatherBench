@@ -503,8 +503,8 @@ class TestComputeCaseOperator:
         """Test compute_case_operator when _build_datasets returns empty forecast
         dataset."""
         # Mock _build_datasets to return empty datasets (simulating zero valid times)
-        empty_forecast_ds = xr.Dataset()
-        empty_target_ds = xr.Dataset()
+        empty_forecast_ds = xr.Dataset(coords={"valid_time": pd.DatetimeIndex([])})
+        empty_target_ds = xr.Dataset(coords={"valid_time": pd.DatetimeIndex([])})
         mock_build_datasets.return_value = (empty_forecast_ds, empty_target_ds)
 
         result = evaluate.compute_case_operator(sample_case_operator)
@@ -524,7 +524,7 @@ class TestComputeCaseOperator:
         """Test compute_case_operator when _build_datasets returns empty
         target dataset."""
         # Mock _build_datasets to return empty target dataset
-        empty_target_ds = xr.Dataset()
+        empty_target_ds = xr.Dataset(coords={"valid_time": pd.DatetimeIndex([])})
         mock_build_datasets.return_value = (sample_forecast_dataset, empty_target_ds)
 
         result = evaluate.compute_case_operator(sample_case_operator)
