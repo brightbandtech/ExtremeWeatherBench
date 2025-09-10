@@ -497,7 +497,7 @@ class GHCN(TargetBase):
         # subset the variables
         if target_variables:
             subset_target_data = subset_target_data.select(all_variables)
-
+        subset_target_data = subset_target_data.sort("valid_time")
         return subset_target_data
 
     def _custom_convert_to_dataset(self, data: utils.IncomingDataInput) -> xr.Dataset:
