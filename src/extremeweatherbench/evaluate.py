@@ -230,8 +230,15 @@ def _ensure_output_schema(df: pd.DataFrame, **metadata) -> pd.DataFrame:
 
     # Check for missing columns and warn
     missing_cols = set(OUTPUT_COLUMNS) - set(df.columns)
-    if missing_cols and missing_cols not in [{"init_time"}, {"lead_time"}]:
-        logger.warning(f"Missing expected columns: {missing_cols}.")
+    if missing_cols:
+        # Filter out init_time and lead_time if the other is available
+        if "init_time" in missing_cols and "lead_time" not in missing_cols:
+            missing_cols = missing_cols - {"init_time"}
+        elif "lead_time" in missing_cols and "init_time" not in missing_cols:
+            missing_cols = missing_cols - {"lead_time"}
+
+        if missing_cols:
+            logger.warning(f"Missing expected columns: {missing_cols}.")
 
     # Ensure all OUTPUT_COLUMNS are present (missing ones will be NaN)
     # and reorder to match OUTPUT_COLUMNS specification
