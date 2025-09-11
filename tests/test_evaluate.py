@@ -873,6 +873,89 @@ class TestMetricEvaluation:
         assert "threshold" in call_kwargs
         assert call_kwargs["threshold"] == 0.5
 
+    def test_evaluate_metric_and_return_df_with_derived_variables(
+        self, mock_base_metric
+    ):
+        """Test _evaluate_metric_and_return_df with derived variables."""
+        # Create datasets with derived variables included
+        forecast_ds = xr.Dataset(
+            {
+                "surface_air_temperature": (
+                    ["init_time", "lead_time", "latitude", "longitude"],
+                    np.random.randn(2, 3, 4, 5) + 280,
+                ),
+                "derived_forecast_var": (
+                    ["init_time", "lead_time", "latitude", "longitude"],
+                    np.random.randn(2, 3, 4, 5) + 285,
+                ),
+            },
+            coords={
+                "init_time": pd.date_range("2021-06-20", periods=2, freq="D"),
+                "lead_time": [0, 6, 12],
+                "latitude": np.linspace(30, 50, 4),
+                "longitude": np.linspace(-120, -90, 5),
+            },
+            attrs={"source": "test_forecast", "forecast_source": "test_forecast"},
+        )
+
+        target_ds = xr.Dataset(
+            {
+                "2m_temperature": (
+                    ["time", "latitude", "longitude"],
+                    np.random.randn(3, 4, 5) + 275,
+                ),
+                "derived_target_var": (
+                    ["time", "latitude", "longitude"],
+                    np.random.randn(3, 4, 5) + 280,
+                ),
+            },
+            coords={
+                "time": pd.date_range("2021-06-20", periods=3, freq="6h"),
+                "latitude": np.linspace(30, 50, 4),
+                "longitude": np.linspace(-120, -90, 5),
+            },
+            attrs={"source": "test_target", "target_source": "test_target"},
+        )
+
+        # Setup the metric mock
+        mock_result = xr.DataArray(
+            data=[2.5], dims=["lead_time"], coords={"lead_time": [0]}
+        )
+        mock_base_metric.name = "TestDerivedMetric"
+        mock_base_metric.compute_metric.return_value = mock_result
+
+        result = evaluate._evaluate_metric_and_return_df(
+            forecast_ds=forecast_ds,
+            target_ds=target_ds,
+            forecast_variable=TestForecastDerivedVariable,
+            target_variable=TestTargetDerivedVariable,
+            metric=mock_base_metric,
+            case_id_number=3,
+            event_type="derived_test",
+        )
+
+        # Verify the result structure
+        assert isinstance(result, pd.DataFrame)
+        assert "value" in result.columns
+        assert "metric" in result.columns
+        assert "target_variable" in result.columns
+        assert "case_id_number" in result.columns
+        assert "event_type" in result.columns
+
+        # Check the values
+        assert result["metric"].iloc[0] == "TestDerivedMetric"
+        assert result["case_id_number"].iloc[0] == 3
+        assert result["event_type"].iloc[0] == "derived_test"
+        assert result["value"].iloc[0] == 2.5
+
+        # Verify that compute_metric was called with the derived variables
+        mock_base_metric.compute_metric.assert_called_once()
+        call_args = mock_base_metric.compute_metric.call_args[0]
+
+        # The variables should be passed as derived variable instances
+        assert isinstance(call_args[0], xr.DataArray)  # forecast data
+        assert isinstance(call_args[1], xr.DataArray)  # target data
+
 
 # =============================================================================
 # Test Error Handling and Edge Cases
@@ -1451,7 +1534,8 @@ class TestEnsureOutputSchema:
 
 
 class TestDerivedVariableForTesting(derived.DerivedVariable):
-    """A concrete derived variable class for testing _normalize_variable."""
+    """A concrete derived variable class for testing
+    _maybe_convert_variable_to_string."""
 
     name = "TestDerivedVar"
     required_variables = ["input_var1", "input_var2"]
@@ -1462,41 +1546,70 @@ class TestDerivedVariableForTesting(derived.DerivedVariable):
         return data["input_var1"] + data["input_var2"]
 
 
-class TestNormalizeVariable:
-    """Test the _normalize_variable function."""
+class TestForecastDerivedVariable(derived.DerivedVariable):
+    """Test derived variable for forecast data."""
 
-    def test_normalize_variable_string_input(self):
-        """Test _normalize_variable with string input."""
-        result = evaluate._normalize_variable("temperature")
+    name = "derived_forecast_var"
+    required_variables = ["surface_air_temperature"]
+
+    @classmethod
+    def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
+        """Simple derivation - just return the temperature variable."""
+        return data["surface_air_temperature"]
+
+
+class TestTargetDerivedVariable(derived.DerivedVariable):
+    """Test derived variable for target data."""
+
+    name = "derived_target_var"
+    required_variables = ["2m_temperature"]
+
+    @classmethod
+    def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
+        """Simple derivation - just return the temperature variable."""
+        return data["2m_temperature"]
+
+
+class TestNormalizeVariable:
+    """Test the _maybe_convert_variable_to_string function."""
+
+    def test_maybe_convert_variable_to_string_string_input(self):
+        """Test _maybe_convert_variable_to_string with string input."""
+        result = evaluate._maybe_convert_variable_to_string("temperature")
         assert result == "temperature"
         assert isinstance(result, str)
 
-    def test_normalize_variable_derived_class_input(self):
-        """Test _normalize_variable with DerivedVariable class input."""
-        result = evaluate._normalize_variable(TestDerivedVariableForTesting)
+    def test_maybe_convert_variable_to_string_derived_class_input(self):
+        """Test _maybe_convert_variable_to_string with DerivedVariable class input."""
+        result = evaluate._maybe_convert_variable_to_string(
+            TestDerivedVariableForTesting
+        )
         assert result == "TestDerivedVar"
         assert isinstance(result, str)
 
-    def test_normalize_variable_derived_instance_input(self):
-        """Test _normalize_variable with DerivedVariable instance input.
+    def test_maybe_convert_variable_to_string_derived_instance_input(self):
+        """Test _maybe_convert_variable_to_string with DerivedVariable instance input.
 
         Note: The function is designed to handle classes, not instances.
         Instances are passed through unchanged (not converted to string).
         """
         instance = TestDerivedVariableForTesting()
-        result = evaluate._normalize_variable(instance)
+        result = evaluate._maybe_convert_variable_to_string(instance)
         # Instance is returned as-is, not converted to string
         assert result == instance
         assert isinstance(result, TestDerivedVariableForTesting)
 
-    def test_normalize_variable_handles_both_types(self):
-        """Test that _normalize_variable handles both incoming types correctly."""
+    def test_maybe_convert_variable_to_string_handles_both_types(self):
+        """Test that _maybe_convert_variable_to_string handles both incoming types
+        correctly."""
         # Test string type
-        string_result = evaluate._normalize_variable("my_variable")
+        string_result = evaluate._maybe_convert_variable_to_string("my_variable")
         assert string_result == "my_variable"
 
         # Test derived variable type
-        derived_result = evaluate._normalize_variable(TestDerivedVariableForTesting)
+        derived_result = evaluate._maybe_convert_variable_to_string(
+            TestDerivedVariableForTesting
+        )
         assert derived_result == "TestDerivedVar"
 
         # Results should be different but both strings

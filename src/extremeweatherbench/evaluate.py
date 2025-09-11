@@ -136,23 +136,12 @@ def compute_case_operator(case_operator: "cases.CaseOperator", **kwargs):
         ),
         case_operator.metric_list,
     ):
-        # Handle derived variables by extracting their names
-        forecast_var = (
-            variables[0].name
-            if derived.is_derived_variable(variables[0])
-            else variables[0]
-        )
-        target_var = (
-            variables[1].name
-            if derived.is_derived_variable(variables[1])
-            else variables[1]
-        )
         results.append(
             _evaluate_metric_and_return_df(
                 forecast_ds=aligned_forecast_ds,
                 target_ds=aligned_target_ds,
-                forecast_variable=forecast_var,
-                target_variable=target_var,
+                forecast_variable=variables[0],
+                target_variable=variables[1],
                 metric=metric,
                 case_id_number=case_operator.case_metadata.case_id_number,
                 event_type=case_operator.case_metadata.event_type,
@@ -283,9 +272,9 @@ def _evaluate_metric_and_return_df(
         A dataframe of the results of the metric evaluation.
     """
 
-    # Normalize variables to their string names
-    forecast_variable = _normalize_variable(forecast_variable)
-    target_variable = _normalize_variable(target_variable)
+    # Normalize variables to their string names if needed
+    forecast_variable = _maybe_convert_variable_to_string(forecast_variable)
+    target_variable = _maybe_convert_variable_to_string(target_variable)
 
     # TODO: remove this once we have a better way to handle metric
     # instantiation
@@ -306,7 +295,9 @@ def _evaluate_metric_and_return_df(
     return _ensure_output_schema(df, **metadata)
 
 
-def _normalize_variable(variable: Union[str, Type["derived.DerivedVariable"]]) -> str:
+def _maybe_convert_variable_to_string(
+    variable: Union[str, Type["derived.DerivedVariable"]],
+) -> str:
     """Convert a variable to its string representation."""
     if derived.is_derived_variable(variable):
         return variable.name  # type: ignore
