@@ -255,6 +255,7 @@ def maybe_derive_variables(
             output.name = derived_variable.name
         # Merge the derived variable into the dataset
         return output.to_dataset()
+
     elif isinstance(output, xr.Dataset):
         # Check if derived dataset dimensions are compatible for merging
         return output
