@@ -28,6 +28,8 @@ from extremeweatherbench.regions import CenteredRegion
 class MockMetric(metrics.BaseMetric):
     """A simple mock metric for testing."""
 
+    name = "MockMetric"
+
     @classmethod
     def _compute_metric(cls, forecast: xr.DataArray, target: xr.DataArray, **kwargs):
         """Return a simple mean absolute difference."""
