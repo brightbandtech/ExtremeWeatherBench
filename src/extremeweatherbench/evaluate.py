@@ -92,8 +92,9 @@ class ExtremeWeatherBench:
 
     This class is used to run the ExtremeWeatherBench workflow. It is a
     wrapper around the
-    case operators and metrics to create either a serial loop or will return the built
-    case operators to run in parallel as defined by the user.
+    case operators and evaluation objects to create either a serial loop or will return
+    the built case operators to run in parallel as defined by the user.
+
 
     Attributes:
         cases: A dictionary of cases to run.
@@ -105,11 +106,11 @@ class ExtremeWeatherBench:
     def __init__(
         self,
         cases: dict[str, list],
-        metrics: list["inputs.EvaluationObject"],
+        evaluation_objects: list["inputs.EvaluationObject"],
         cache_dir: Optional[Union[str, Path]] = None,
     ):
         self.cases = cases
-        self.metrics = metrics
+        self.evaluation_objects = evaluation_objects
         self.cache_dir = Path(cache_dir) if cache_dir else None
 
     # case operators as a property are a convenience method for users to use
@@ -117,7 +118,7 @@ class ExtremeWeatherBench:
     # if desired for a parallel workflow
     @property
     def case_operators(self) -> list["cases.CaseOperator"]:
-        return cases.build_case_operators(self.cases, self.metrics)
+        return cases.build_case_operators(self.cases, self.evaluation_objects)
 
     def run(
         self,
@@ -167,8 +168,14 @@ def compute_case_operator(case_operator: "cases.CaseOperator", **kwargs):
         A concatenated dataframe of the results of the case operator.
     """
     forecast_ds, target_ds = _build_datasets(case_operator)
-    if len(forecast_ds) == 0 or len(target_ds) == 0:
+    # Check if any dimension has zero length
+    if 0 in forecast_ds.sizes.values() or 0 in target_ds.sizes.values():
         return pd.DataFrame(columns=OUTPUT_COLUMNS)
+
+    # Or, check if there aren't any dimensions
+    elif len(forecast_ds.sizes) == 0 or len(target_ds.sizes) == 0:
+        return pd.DataFrame(columns=OUTPUT_COLUMNS)
+
     # spatiotemporally align the target and forecast datasets dependent on the forecast
     aligned_forecast_ds, aligned_target_ds = (
         case_operator.target.maybe_align_forecast_to_target(forecast_ds, target_ds)
@@ -182,13 +189,14 @@ def compute_case_operator(case_operator: "cases.CaseOperator", **kwargs):
             cache_dir=kwargs.get("cache_dir", None),
         )
 
-    aligned_forecast_ds, aligned_target_ds = [
-        derived.maybe_derive_variables(ds, variables)
-        for ds, variables in zip(
-            [aligned_forecast_ds, aligned_target_ds],
-            [case_operator.forecast.variables, case_operator.target.variables],
-        )
-    ]
+    # Derive the variables for the forecast and target datasets independently
+    aligned_forecast_ds = derived.maybe_derive_variables(
+        aligned_forecast_ds, variables=case_operator.forecast.variables
+    )
+    aligned_target_ds = derived.maybe_derive_variables(
+        aligned_target_ds, variables=case_operator.target.variables
+    )
+
     logger.info(f"datasets built for case {case_operator.case_metadata.case_id_number}")
     results = []
     # TODO: determine if derived variables need to be pushed here or at pre-compute
@@ -197,7 +205,7 @@ def compute_case_operator(case_operator: "cases.CaseOperator", **kwargs):
             case_operator.forecast.variables,
             case_operator.target.variables,
         ),
-        case_operator.metric,
+        case_operator.metric_list,
     ):
         results.append(
             _evaluate_metric_and_return_df(
@@ -276,7 +284,7 @@ def _ensure_output_schema(df: pd.DataFrame, **metadata) -> pd.DataFrame:
         df = _ensure_output_schema(
             metric_df,
             target_variable=target_var,
-            metric=metric.name,
+            metric_list=metric.name,
             target_source=target_ds.attrs["source"],
             forecast_source=forecast_ds.attrs["source"],
             case_id_number=case_id,

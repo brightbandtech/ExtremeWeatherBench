@@ -18,7 +18,7 @@ ARCO_ERA5_FULL_URI = (
 )
 
 #: Storage/access options for default point target dataset.
-DEFAULT_GHCN_URI = "gs://extremeweatherbench/datasets/ghcnh.parq"
+DEFAULT_GHCN_URI = "gs://extremeweatherbench/datasets/ghcnh_all_2020_2024.parq"
 
 #: Storage/access options for local storm report (LSR) tabular data.
 LSR_URI = "gs://extremeweatherbench/datasets/lsr_01012020_04302025.parq"
@@ -176,7 +176,15 @@ class InputBase(ABC):
         )
 
     def add_source_to_dataset_attrs(self, ds: xr.Dataset) -> xr.Dataset:
-        """Add the name of the dataset to the dataset attributes."""
+        """Add the name and type of the dataset to the dataset attributes."""
+        # Check if this instance is a ForecastBase or TargetBase subclass
+        if isinstance(self, ForecastBase):
+            ds.attrs["dataset_type"] = "forecast"
+        elif isinstance(self, TargetBase):
+            ds.attrs["dataset_type"] = "target"
+        else:
+            # Fallback to class name for other InputBase subclasses
+            ds.attrs["dataset_type"] = self.__class__.__name__
         ds.attrs["source"] = self.name
         return ds
 
@@ -278,24 +286,25 @@ class ForecastBase(InputBase):
 
 @dataclasses.dataclass
 class EvaluationObject:
-    """A class to store the evaluation object for a metric.
+    """A class to store the evaluation object for a forecast and target pairing.
 
-    A EvaluationObject is a metric evaluation object for all cases in an event.
-    The evaluation is a set of all metrics, target variables, and forecast variables.
+    A EvaluationObject is an evaluation object which contains a forecast, target,
+    and metrics to evaluate. The evaluation is a set of all metrics, target variables,
+    and forecast variables.
 
     Multiple EvaluationObjects can be used to evaluate a single event type.
     This is useful for
-    evaluating distinct Targets or metrics with unique variables to evaluate.
+    evaluating distinct targets or metrics with unique variables to evaluate.
 
     Attributes:
         event_type: The event type to evaluate.
-        metric: A list of BaseMetric objects.
+        metric_list: A list of BaseMetric objects.
         target: A TargetBase object.
         forecast: A ForecastBase object.
     """
 
     event_type: str
-    metric: list["metrics.BaseMetric"]
+    metric_list: list[Union[Callable, "metrics.BaseMetric", "metrics.AppliedMetric"]]
     target: "TargetBase"
     forecast: "ForecastBase"
 
@@ -488,7 +497,7 @@ class GHCN(TargetBase):
         # subset the variables
         if target_variables:
             subset_target_data = subset_target_data.select(all_variables)
-
+        subset_target_data = subset_target_data.sort("valid_time")
         return subset_target_data
 
     def _custom_convert_to_dataset(self, data: utils.IncomingDataInput) -> xr.Dataset:

@@ -115,7 +115,7 @@ def sample_evaluation_object(mock_target_base, mock_forecast_base, mock_base_met
     """Create a sample EvaluationObject."""
     return inputs.EvaluationObject(
         event_type="heat_wave",
-        metric=[mock_base_metric],
+        metric_list=[mock_base_metric],
         target=mock_target_base,
         forecast=mock_forecast_base,
     )
@@ -128,7 +128,7 @@ def sample_case_operator(
     """Create a sample CaseOperator."""
     return cases.CaseOperator(
         case_metadata=sample_individual_case,
-        metric=mock_base_metric,
+        metric_list=mock_base_metric,
         target=mock_target_base,
         forecast=mock_forecast_base,
     )
@@ -200,11 +200,11 @@ class TestExtremeWeatherBench:
         """Test ExtremeWeatherBench initialization."""
         ewb = evaluate.ExtremeWeatherBench(
             cases=sample_cases_dict,
-            metrics=[sample_evaluation_object],
+            evaluation_objects=[sample_evaluation_object],
         )
 
         assert ewb.cases == sample_cases_dict
-        assert ewb.metrics == [sample_evaluation_object]
+        assert ewb.evaluation_objects == [sample_evaluation_object]
         assert ewb.cache_dir is None
 
     def test_initialization_with_cache_dir(
@@ -214,7 +214,7 @@ class TestExtremeWeatherBench:
         cache_dir = "/tmp/test_cache"
         ewb = evaluate.ExtremeWeatherBench(
             cases=sample_cases_dict,
-            metrics=[sample_evaluation_object],
+            evaluation_objects=[sample_evaluation_object],
             cache_dir=cache_dir,
         )
 
@@ -228,7 +228,7 @@ class TestExtremeWeatherBench:
         cache_dir = Path("/tmp/test_cache")
         ewb = evaluate.ExtremeWeatherBench(
             cases=sample_cases_dict,
-            metrics=[sample_evaluation_object],
+            evaluation_objects=[sample_evaluation_object],
             cache_dir=cache_dir,
         )
 
@@ -247,7 +247,7 @@ class TestExtremeWeatherBench:
 
         ewb = evaluate.ExtremeWeatherBench(
             cases=sample_cases_dict,
-            metrics=[sample_evaluation_object],
+            evaluation_objects=[sample_evaluation_object],
         )
 
         result = ewb.case_operators
@@ -282,7 +282,7 @@ class TestExtremeWeatherBench:
 
             ewb = evaluate.ExtremeWeatherBench(
                 cases=sample_cases_dict,
-                metrics=[sample_evaluation_object],
+                evaluation_objects=[sample_evaluation_object],
             )
 
             result = ewb.run()
@@ -319,7 +319,7 @@ class TestExtremeWeatherBench:
 
                 ewb = evaluate.ExtremeWeatherBench(
                     cases=sample_cases_dict,
-                    metrics=[sample_evaluation_object],
+                    evaluation_objects=[sample_evaluation_object],
                     cache_dir=cache_dir,
                 )
 
@@ -354,7 +354,7 @@ class TestExtremeWeatherBench:
 
             ewb = evaluate.ExtremeWeatherBench(
                 cases=sample_cases_dict,
-                metrics=[sample_evaluation_object],
+                evaluation_objects=[sample_evaluation_object],
             )
 
             result = ewb.run()
@@ -390,7 +390,9 @@ class TestComputeCaseOperator:
             sample_forecast_dataset,
             sample_target_dataset,
         )
-        mock_derive_variables.side_effect = lambda ds, vars: ds  # Return unchanged
+        mock_derive_variables.side_effect = (
+            lambda ds, variables: ds  # Return unchanged
+        )
 
         mock_result = pd.DataFrame(
             {
@@ -402,7 +404,7 @@ class TestComputeCaseOperator:
         mock_evaluate_metric.return_value = mock_result
 
         # Setup the case operator mocks - metric should be a list for iteration
-        sample_case_operator.metric = [mock_base_metric]
+        sample_case_operator.metric_list = [mock_base_metric]
         sample_case_operator.target.maybe_align_forecast_to_target.return_value = (
             sample_forecast_dataset,
             sample_target_dataset,
@@ -428,13 +430,13 @@ class TestComputeCaseOperator:
             sample_forecast_dataset,
             sample_target_dataset,
         )
-        mock_derive_variables.side_effect = lambda ds, vars: ds
+        mock_derive_variables.side_effect = lambda ds, variables: ds
 
         sample_case_operator.target.maybe_align_forecast_to_target.return_value = (
             sample_forecast_dataset,
             sample_target_dataset,
         )
-        sample_case_operator.metric = [Mock()]
+        sample_case_operator.metric_list = [Mock()]
 
         with patch(
             "extremeweatherbench.evaluate._compute_and_maybe_cache"
@@ -473,7 +475,7 @@ class TestComputeCaseOperator:
         # Create multiple metrics
         metric_1 = Mock()
         metric_2 = Mock()
-        sample_case_operator.metric = [metric_1, metric_2]
+        sample_case_operator.metric_list = [metric_1, metric_2]
 
         sample_case_operator.target.maybe_align_forecast_to_target.return_value = (
             sample_forecast_dataset,
@@ -481,7 +483,7 @@ class TestComputeCaseOperator:
         )
 
         with patch("extremeweatherbench.derived.maybe_derive_variables") as mock_derive:
-            mock_derive.side_effect = lambda ds, vars: ds
+            mock_derive.side_effect = lambda ds, variables: ds
 
             with patch(
                 "extremeweatherbench.evaluate._evaluate_metric_and_return_df"
@@ -493,6 +495,46 @@ class TestComputeCaseOperator:
                 # Should be called twice (once for each metric)
                 assert mock_evaluate.call_count == 2
                 assert len(result) == 2
+
+    @patch("extremeweatherbench.evaluate._build_datasets")
+    def test_compute_case_operator_zero_length_forecast_dataset(
+        self, mock_build_datasets, sample_case_operator
+    ):
+        """Test compute_case_operator when _build_datasets returns empty forecast
+        dataset."""
+        # Mock _build_datasets to return empty datasets (simulating zero valid times)
+        empty_forecast_ds = xr.Dataset(coords={"valid_time": pd.DatetimeIndex([])})
+        empty_target_ds = xr.Dataset(coords={"valid_time": pd.DatetimeIndex([])})
+        mock_build_datasets.return_value = (empty_forecast_ds, empty_target_ds)
+
+        result = evaluate.compute_case_operator(sample_case_operator)
+
+        # Should return empty DataFrame with correct columns
+        assert isinstance(result, pd.DataFrame)
+        assert len(result) == 0
+        assert list(result.columns) == OUTPUT_COLUMNS
+
+        # _build_datasets should be called, but no further processing should occur
+        mock_build_datasets.assert_called_once_with(sample_case_operator)
+
+    @patch("extremeweatherbench.evaluate._build_datasets")
+    def test_compute_case_operator_zero_length_target_dataset(
+        self, mock_build_datasets, sample_case_operator, sample_forecast_dataset
+    ):
+        """Test compute_case_operator when _build_datasets returns empty
+        target dataset."""
+        # Mock _build_datasets to return empty target dataset
+        empty_target_ds = xr.Dataset(coords={"valid_time": pd.DatetimeIndex([])})
+        mock_build_datasets.return_value = (sample_forecast_dataset, empty_target_ds)
+
+        result = evaluate.compute_case_operator(sample_case_operator)
+
+        # Should return empty DataFrame with correct columns
+        assert isinstance(result, pd.DataFrame)
+        assert len(result) == 0
+        assert list(result.columns) == OUTPUT_COLUMNS
+
+        mock_build_datasets.assert_called_once_with(sample_case_operator)
 
     @patch("extremeweatherbench.evaluate._build_datasets")
     def test_compute_case_operator_empty_forecast_dataset(
@@ -841,7 +883,7 @@ class TestErrorHandling:
 
         ewb = evaluate.ExtremeWeatherBench(
             cases=empty_cases,
-            metrics=[sample_evaluation_object],
+            evaluation_objects=[sample_evaluation_object],
         )
 
         with patch("extremeweatherbench.cases.build_case_operators") as mock_build:
@@ -910,7 +952,7 @@ class TestIntegration:
         sample_target_dataset,
     ):
         """Test a complete end-to-end workflow."""
-        mock_derive_variables.side_effect = lambda ds, vars: ds
+        mock_derive_variables.side_effect = lambda ds, variables: ds
 
         # Setup the evaluation object methods
         sample_evaluation_object.target.maybe_align_forecast_to_target.return_value = (
@@ -972,7 +1014,7 @@ class TestIntegration:
             # Create and run the workflow
             ewb = evaluate.ExtremeWeatherBench(
                 cases=sample_cases_dict,
-                metrics=[sample_evaluation_object],
+                evaluation_objects=[sample_evaluation_object],
             )
 
             result = ewb.run()
@@ -1007,7 +1049,7 @@ class TestIntegration:
         # Create evaluation object with multiple metrics and variables
         eval_obj = Mock(spec=inputs.EvaluationObject)
         eval_obj.event_type = "heat_wave"
-        eval_obj.metric = [metric_1, metric_2]
+        eval_obj.metric_list = [metric_1, metric_2]
 
         # Mock target and forecast with variables that match our datasets
         eval_obj.target = Mock(spec=inputs.TargetBase)
@@ -1051,7 +1093,7 @@ class TestIntegration:
         )
 
         with patch("extremeweatherbench.derived.maybe_derive_variables") as mock_derive:
-            mock_derive.side_effect = lambda ds, vars: ds
+            mock_derive.side_effect = lambda ds, variables: ds
 
             with patch(
                 "extremeweatherbench.evaluate._evaluate_metric_and_return_df"
@@ -1060,7 +1102,7 @@ class TestIntegration:
 
                 ewb = evaluate.ExtremeWeatherBench(
                     cases=sample_cases_dict,
-                    metrics=[eval_obj],
+                    evaluation_objects=[eval_obj],
                 )
 
                 result = ewb.run()

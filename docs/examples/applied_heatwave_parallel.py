@@ -44,9 +44,7 @@ def configure_root_logger():
 
 logger = logging.getLogger(__name__)
 
-case_yaml = utils.read_event_yaml(
-    "/home/taylor/ExtremeWeatherBench/src/extremeweatherbench/data/events.yaml"
-)
+case_yaml = utils.load_events_yaml()
 test_yaml = {"cases": case_yaml["cases"][:]}
 
 
@@ -99,7 +97,7 @@ cira_forecast_config = config.ForecastConfig(
 heatwave_metric_list = [
     config.MetricEvaluationObject(
         event_type="heat_wave",
-        metric=[
+        metric_list=[
             metrics.MaximumMAE,
             metrics.RMSE,
             metrics.OnsetME,
@@ -111,7 +109,7 @@ heatwave_metric_list = [
     ),
     # rs.MetricEvaluationObject(
     #     event_type="heat_wave",
-    #     metric=[
+    #     metric_list=[
     #         crs.MaximumMAE,
     #         crs.RMSE,
     #         crs.OnsetME,
