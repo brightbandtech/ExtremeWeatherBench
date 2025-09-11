@@ -926,12 +926,11 @@ class TestGHCN:
             # Reverse the order to ensure it's unsorted
             unsorted_data = sample_ghcn_dataframe.reverse()
 
-        # Create mock case operator
-        mock_case = Mock()
-        mock_case.case_metadata.start_date = pd.Timestamp("2021-06-20")
-        mock_case.case_metadata.end_date = pd.Timestamp("2021-06-22")
-        mock_case.case_metadata.location.geopandas.total_bounds = [-120, 30, -90, 50]
-        mock_case.target.variables = ["surface_air_temperature"]
+        # Create mock case metadata (not case operator)
+        mock_case_metadata = Mock()
+        mock_case_metadata.start_date = pd.Timestamp("2021-06-20")
+        mock_case_metadata.end_date = pd.Timestamp("2021-06-22")
+        mock_case_metadata.location.geopandas.total_bounds = [-120, 30, -90, 50]
 
         ghcn = inputs.GHCN(
             source="test.parquet",
@@ -941,13 +940,13 @@ class TestGHCN:
         )
 
         # Call subset_data_to_case with unsorted data
-        result = ghcn.subset_data_to_case(unsorted_data.lazy(), mock_case)
+        result = ghcn.subset_data_to_case(unsorted_data.lazy(), mock_case_metadata)
 
         # Collect the result and verify valid_time is sorted
         collected_result = result.collect()
-        assert collected_result[
-            "valid_time"
-        ].is_sorted(), "valid_time column should be sorted"
+        assert collected_result["valid_time"].is_sorted(), (
+            "valid_time column should be sorted"
+        )
 
     def test_ghcn_custom_convert_to_dataset(self, sample_ghcn_dataframe):
         """Test GHCN custom conversion to dataset."""

@@ -472,7 +472,7 @@ class GHCN(TargetBase):
             & (pl.col("latitude") <= case_metadata.location.geopandas.total_bounds[3])
             & (pl.col("longitude") >= case_metadata.location.geopandas.total_bounds[0])
             & (pl.col("longitude") <= case_metadata.location.geopandas.total_bounds[2])
-        )
+        ).sort("valid_time")
         return subset_target_data
 
     def _custom_convert_to_dataset(self, data: IncomingDataInput) -> xr.Dataset:
