@@ -20,10 +20,11 @@ logger.setLevel(logging.INFO)
 
 
 class ThreadSafeDict:
-    """A thread-safe dictionary.
+    """A thread-safe dictionary implementation using locks.
 
-    This class is a thread-safe dictionary that can be used to store data that is
-    shared between threads, such as caches of data.
+    This class provides a thread-safe wrapper around a standard dictionary,
+    ensuring atomic operations for getting, setting, and deleting items.
+    Useful for caching data that needs to be shared between threads safely.
     """
 
     def __init__(self):

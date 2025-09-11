@@ -113,11 +113,11 @@ class InputBase(ABC):
 
     @abstractmethod
     def _open_data_from_source(self) -> IncomingDataInput:
-        """Open the target data from the source, opting to avoid loading the entire
+        """Open the input data from the source, opting to avoid loading the entire
         dataset into memory if possible.
 
         Returns:
-            The target data with a type determined by the user.
+            The input data with a type determined by the user.
         """
 
     @abstractmethod
@@ -126,35 +126,35 @@ class InputBase(ABC):
         data: IncomingDataInput,
         case_metadata: "cases.IndividualCase",
     ) -> IncomingDataInput:
-        """Subset the target data to the case information provided in IndividualCase.
+        """Subset the input data to the case information provided in IndividualCase.
 
         Time information, spatial bounds, and variables are captured in the case
         metadata
         where this method is used to subset.
 
         Args:
-            data: The target data to subset, which should be a xarray dataset,
+            data: The input data to subset, which should be a xarray dataset,
                 xarray dataarray, polars lazyframe, pandas dataframe, or numpy
                 array.
             case_metadata: The case metadata to subset the data to; includes time
                 information, spatial bounds, and variables.
 
         Returns:
-            The target data with the variables subset to the case metadata.
+            The input data with the variables subset to the case metadata.
         """
 
     def maybe_convert_to_dataset(self, data: IncomingDataInput) -> xr.Dataset:
-        """Convert the target data to an xarray dataset if it is not already.
+        """Convert the input data to an xarray dataset if it is not already.
 
         This method handles the common conversion cases automatically. Override
         this method
         only if you need custom conversion logic beyond the standard cases.
 
         Args:
-            data: The target data to convert.
+            data: The input data to convert.
 
         Returns:
-            The target data as an xarray dataset.
+            The input data as an xarray dataset.
         """
         if isinstance(data, xr.Dataset):
             return data
@@ -172,19 +172,18 @@ class InputBase(ABC):
         of custom data types.
 
         Args:
-            data: The target data to convert.
+            data: The input data to convert.
 
         Returns:
-            The target data as an xarray dataset.
+            The input data as an xarray dataset.
         """
         raise NotImplementedError(
             f"Conversion from {type(data)} to xarray.Dataset not implemented. "
-            f"Override _custom_convert_to_dataset in your TargetBase subclass."
+            f"Override _custom_convert_to_dataset in your InputBase subclass."
         )
 
     def add_source_to_dataset_attrs(self, ds: xr.Dataset) -> xr.Dataset:
-        """Add the name and type of the dataset to the dataset attributes."""
-        # Check if this instance is a ForecastBase or TargetBase subclass
+        """Add the name of the source to the dataset attributes."""
         ds.attrs["source"] = self.name
         return ds
 
@@ -385,12 +384,8 @@ class TargetBase(InputBase):
 
 @dataclasses.dataclass
 class ERA5(TargetBase):
-    """Target class for ERA5 gridded data.
-
-    The easiest approach to using this class is to use the ARCO ERA5 dataset provided by
-    Google for a source. Otherwise, either a different zarr source or modifying the
-    open_data_from_source method to open the data using another method is required. If
-    there are multiple variables in the ta
+    """Target class for ERA5 gridded data, ideally using the ARCO ERA5 dataset provided
+    by Google. Otherwise, either a different zarr source for ERA5.
     """
 
     name: str = "ERA5"
@@ -817,8 +812,9 @@ def open_kerchunk_reference(
     schema is identical to the CIRA schema.
 
     Args:
-        file: The path to the kerchunked reference file.
-        remote_protocol: The remote protocol to use.
+        forecast_dir: The path to the kerchunked reference file.
+        storage_options: The storage options to use.
+        chunks: The chunks to use; defaults to "auto".
 
     Returns:
         The opened dataset.
@@ -854,7 +850,16 @@ def zarr_target_subsetter(
     case_metadata: "cases.IndividualCase",
     time_variable: str = "valid_time",
 ) -> xr.Dataset:
-    """Subset a zarr dataset to a case operator."""
+    """Subset a zarr dataset to a case operator.
+
+    Args:
+        data: The dataset to subset.
+        case_metadata: The case metadata to subset the dataset to.
+        time_variable: The time variable to use; defaults to "valid_time".
+
+    Returns:
+        The subset dataset.
+    """
     # Determine the actual time variable in the dataset
     if time_variable not in data.dims:
         if "time" in data.dims:

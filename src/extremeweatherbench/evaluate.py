@@ -363,7 +363,7 @@ def run_pipeline(
         input_data: The input data to run the pipeline on.
 
     Returns:
-        The modified input data with a type determined by the user.
+        The processed input data as an xarray dataset.
     """
     # Open data and process through pipeline steps
     data = (
