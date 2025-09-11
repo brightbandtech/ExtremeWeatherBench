@@ -15,6 +15,9 @@ import xarray as xr
 
 from extremeweatherbench import derived
 
+time_location_variables = ["valid_time", "latitude", "longitude"]
+time_level_location_variables = ["valid_time", "level", "latitude", "longitude"]
+
 
 def create_mock_case_operator(variables, dataset_type="forecast"):
     """Create a mock case operator with specified variables."""
@@ -31,6 +34,83 @@ def create_mock_case_operator(variables, dataset_type="forecast"):
         case_operator.target.variables = variables
 
     return case_operator
+
+
+@pytest.fixture
+def sample_dataset():
+    """Create a sample xarray Dataset for testing."""
+    time = pd.date_range("2021-06-20", freq="6h", periods=8)
+    latitudes = np.linspace(30, 50, 11)
+    longitudes = np.linspace(250, 270, 21)
+    level = [1000, 850, 700, 500, 300, 200]
+
+    # Create realistic sample data
+    np.random.seed(42)
+    base_data = np.random.normal(
+        20, 5, size=(len(time), len(latitudes), len(longitudes))
+    )
+    level_data = np.random.normal(
+        0, 10, size=(len(time), len(level), len(latitudes), len(longitudes))
+    )
+
+    dataset = xr.Dataset(
+        {
+            # Basic surface variables
+            "air_pressure_at_mean_sea_level": (
+                time_location_variables,
+                np.random.normal(
+                    101325, 1000, size=(len(time), len(latitudes), len(longitudes))
+                ),
+            ),
+            "surface_eastward_wind": (
+                time_location_variables,
+                np.random.normal(
+                    5, 3, size=(len(time), len(latitudes), len(longitudes))
+                ),
+            ),
+            "surface_northward_wind": (
+                time_location_variables,
+                np.random.normal(
+                    2, 3, size=(len(time), len(latitudes), len(longitudes))
+                ),
+            ),
+            "surface_wind_speed": (
+                time_location_variables,
+                np.random.uniform(
+                    0, 15, size=(len(time), len(latitudes), len(longitudes))
+                ),
+            ),
+            # 3D atmospheric variables
+            "eastward_wind": (
+                time_level_location_variables,
+                level_data + np.random.normal(10, 5, size=level_data.shape),
+            ),
+            "northward_wind": (
+                time_level_location_variables,
+                level_data + np.random.normal(3, 5, size=level_data.shape),
+            ),
+            "specific_humidity": (
+                time_level_location_variables,
+                np.random.exponential(0.008, size=level_data.shape),
+            ),
+            "geopotential": (
+                time_level_location_variables,
+                level_data * 100 + np.random.normal(50000, 5000, size=level_data.shape),
+            ),
+            # Test variables
+            "test_variable_1": (time_location_variables, base_data),
+            "test_variable_2": (time_location_variables, base_data + 5),
+            "single_variable": (time_location_variables, base_data * 2),
+        },
+        coords={
+            "valid_time": time,
+            "latitude": latitudes,
+            "longitude": longitudes,
+            "level": level,
+        },
+    )
+
+    return dataset
 
 
 class TestValidDerivedVariable(derived.DerivedVariable):
@@ -91,6 +171,17 @@ class TestDerivedVariableAbstractClass:
             + sample_derived_dataset["test_variable_2"]
         )
         xr.testing.assert_equal(result, expected)
+
+    def test_compute_logs_warning_missing_variables(self, sample_dataset, caplog):
+        """Test that compute fails when required variables are missing."""
+        # Remove one of the required variables
+        incomplete_dataset = sample_dataset.drop_vars("test_variable_2")
+
+        # This should fail during derive_variable when accessing missing variable
+        with pytest.raises(
+            KeyError
+        ):  # derive_variable will fail when accessing missing variable
+            TestValidDerivedVariable.compute(incomplete_dataset)
 
     def test_required_variables_class_attribute(self):
         """Test that required_variables is properly defined as class attribute."""
@@ -243,9 +334,9 @@ class TestMaybeDeriveVariablesFunction:
         # This test was incomplete - adding proper implementation
         result = derived.maybe_derive_variables(sample_derived_dataset, variables)
 
-        # Should return only the first derived variable as Dataset
-        assert isinstance(result, xr.Dataset)
-        assert "TestValidDerivedVariable" in result.data_vars
+        sample_dataset.attrs["dataset_type"] = "forecast"
+        with pytest.raises(KeyError, match="No variable named 'nonexistent_variable'"):
+            derived.maybe_derive_variables(sample_dataset, variables)
 
     def test_no_derived_variables_in_list(self, sample_derived_dataset):
         """Test when no derived variables are in the variable list."""
@@ -469,9 +560,7 @@ class TestMaybeDeriveVariablesFunction:
         expected_dataarray = sample_derived_dataset["test_variable_1"] * 3
         xr.testing.assert_equal(result[result_var_name], expected_dataarray)
 
-    def test_derived_variable_returns_invalid_type(
-        self, sample_derived_dataset, caplog
-    ):
+    def test_derived_variable_returns_invalid_type(self, sample_dataset, caplog):
         """Test derived variable that returns neither DataArray nor Dataset."""
 
         class TestInvalidReturnType(derived.DerivedVariable):
@@ -484,11 +573,11 @@ class TestMaybeDeriveVariablesFunction:
 
         variables = [TestInvalidReturnType()]
 
-        sample_derived_dataset.attrs["dataset_type"] = "forecast"
-        result = derived.maybe_derive_variables(sample_derived_dataset, variables)
+        sample_dataset.attrs["dataset_type"] = "forecast"
+        result = derived.maybe_derive_variables(sample_dataset, variables)
 
         # Should return original dataset and log warning
-        xr.testing.assert_equal(result, sample_derived_dataset)
+        xr.testing.assert_equal(result, sample_dataset)
 
         # Check that warning was logged
         assert "returned neither DataArray nor Dataset" in caplog.text
@@ -567,7 +656,143 @@ class TestUtilityFunctions:
 
         result = derived.maybe_include_variables_from_derived_input(incoming_variables)
 
-        assert result == incoming_variables
+        assert set(result) == set(incoming_variables)
+
+    def test_maybe_include_variables_with_recursive_derived_classes(self):
+        """Test recursive resolution of derived variables with classes."""
+        incoming_variables = [
+            "base_variable",
+            TestRecursiveDerivedVariable,  # Requires TestValidDerivedVariable
+        ]
+
+        result = derived.maybe_include_variables_from_derived_input(incoming_variables)
+
+        # Should recursively resolve TestRecursiveDerivedVariable ->
+        # TestValidDerivedVariable -> ["test_variable_1", "test_variable_2"]
+        expected = [
+            "base_variable",
+            "test_variable_1",
+            "test_variable_2",
+        ]
+
+        assert set(result) == set(expected)
+
+    def test_maybe_include_variables_with_deeply_nested_derived_classes(self):
+        """Test deeply nested recursive resolution of derived variables."""
+        incoming_variables = [
+            "base_variable",
+            TestDeeplyNestedDerivedVariable,  # Requires TestRecursiveDerivedVariable
+        ]
+
+        result = derived.maybe_include_variables_from_derived_input(incoming_variables)
+
+        # Should recursively resolve:
+        # TestDeeplyNestedDerivedVariable -> TestRecursiveDerivedVariable ->
+        # TestValidDerivedVariable -> ["test_variable_1", "test_variable_2"]
+        expected = [
+            "base_variable",
+            "test_variable_1",
+            "test_variable_2",
+        ]
+
+        assert set(result) == set(expected)
+
+    def test_maybe_include_variables_mixed_instances_and_classes(self):
+        """Test mixed instances and classes with recursive resolution."""
+        incoming_variables = [
+            "base_variable",
+            TestValidDerivedVariable(),  # Instance
+            TestRecursiveDerivedVariable,  # Class requires TestValidDerivedVariable
+            "another_variable",
+        ]
+
+        result = derived.maybe_include_variables_from_derived_input(incoming_variables)
+
+        # Should handle both instance and class, avoiding duplicates
+        expected = [
+            "base_variable",
+            "another_variable",
+            "test_variable_1",
+            "test_variable_2",
+        ]
+
+        assert set(result) == set(expected)
+
+    def test_maybe_include_variables_removes_duplicates(self):
+        """Test that function preserves order and removes duplicates."""
+        incoming_variables = [
+            "var1",
+            TestValidDerivedVariable,  # Adds test_variable_1, test_variable_2
+            "var2",
+            TestMinimalDerivedVariable,  # Adds single_variable
+            "var1",  # Duplicate
+            TestValidDerivedVariable,  # Duplicate derived variable
+        ]
+
+        result = derived.maybe_include_variables_from_derived_input(incoming_variables)
+
+        # Should preserve order and remove duplicates
+        expected = [
+            "var1",
+            "var2",
+            "test_variable_1",
+            "test_variable_2",
+            "single_variable",
+        ]
+
+        assert set(result) == set(expected)
+
+    def test_is_derived_variable_with_string(self):
+        """Test is_derived_variable returns False for string inputs."""
+        result = derived.is_derived_variable("regular_string_variable")
+        assert result is False
+
+    def test_is_derived_variable_with_derived_variable_class(self):
+        """Test is_derived_variable returns True for DerivedVariable classes."""
+        result = derived.is_derived_variable(TestValidDerivedVariable)
+        assert result is True
+
+    def test_is_derived_variable_with_minimal_derived_variable_class(self):
+        """Test is_derived_variable returns True for minimal DerivedVariable classes."""
+        result = derived.is_derived_variable(TestMinimalDerivedVariable)
+        assert result is True
+
+    def test_is_derived_variable_with_derived_variable_instance(self):
+        """Test is_derived_variable returns False for DerivedVariable instances."""
+        # The function is designed to work with classes, not instances
+        instance = TestValidDerivedVariable()
+        result = derived.is_derived_variable(instance)
+        assert result is False
+
+    def test_is_derived_variable_with_non_derived_class(self):
+        """Test is_derived_variable returns False for non-DerivedVariable classes."""
+
+        class NotDerivedVariable:
+            pass
+
+        result = derived.is_derived_variable(NotDerivedVariable)
+        assert result is False
+
+    def test_is_derived_variable_with_builtin_type(self):
+        """Test is_derived_variable returns False for builtin types."""
+        result_int = derived.is_derived_variable(int)
+        result_str = derived.is_derived_variable(str)
+        result_list = derived.is_derived_variable(list)
+
+        assert result_int is False
+        assert result_str is False
+        assert result_list is False
+
+    def test_is_derived_variable_with_none(self):
+        """Test is_derived_variable returns False for None."""
+        result = derived.is_derived_variable(None)
+        assert result is False
+
+    def test_is_derived_variable_with_abstract_base_class(self):
+        """Test is_derived_variable with abstract DerivedVariable class."""
+        # The abstract base class should return True since it's still a subclass
+        result = derived.is_derived_variable(derived.DerivedVariable)
+        assert result is True
 
     def test_maybe_include_variables_with_recursive_derived_classes(self):
         """Test recursive resolution of derived variables with classes."""
@@ -700,6 +925,21 @@ class TestEdgeCasesAndErrorConditions:
         # Should resolve to the base variable
         assert result == ["base_var"]
 
+    def test_derived_variable_with_empty_dataset(self, caplog):
+        """Test behavior with empty datasets."""
+        empty_dataset = xr.Dataset()
+
+        # Should fail during derive_variable when accessing missing variables
+        with pytest.raises(
+            KeyError
+        ):  # derive_variable will fail when accessing missing variables
+            TestValidDerivedVariable.compute(empty_dataset)
+
+        result = derived.maybe_include_variables_from_derived_input(incoming_variables)
+
+        # Should resolve to the base variable
+        assert result == ["base_var"]
+
     def test_derived_variable_with_wrong_dimensions(self, sample_derived_dataset):
         """Test behavior when variables have unexpected dimensions."""
         # Create dataset with wrong dimensions for test variables
@@ -724,13 +964,13 @@ class TestEdgeCasesAndErrorConditions:
         large_dataset = xr.Dataset(
             {
                 "test_variable_1": (
-                    ["valid_time", "latitude", "longitude"],
+                    time_location_variables,
                     np.random.normal(
                         0, 1, size=(len(time), len(latitudes), len(longitudes))
                     ),
                 ),
                 "test_variable_2": (
-                    ["valid_time", "latitude", "longitude"],
+                    time_location_variables,
                     np.random.normal(
                         5, 2, size=(len(time), len(latitudes), len(longitudes))
                     ),

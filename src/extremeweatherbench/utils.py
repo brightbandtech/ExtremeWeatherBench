@@ -7,7 +7,7 @@ import logging
 import threading
 from importlib import resources
 from pathlib import Path
-from typing import Any, Callable, Union
+from typing import Any, Callable, Optional, Union
 
 import numpy as np
 import pandas as pd  # type: ignore[import-untyped]
@@ -20,10 +20,11 @@ logger.setLevel(logging.INFO)
 
 
 class ThreadSafeDict:
-    """A thread-safe dictionary.
+    """A thread-safe dictionary implementation using locks.
 
-    This class is a thread-safe dictionary that can be used to store data that is
-    shared between threads, such as caches of data.
+    This class provides a thread-safe wrapper around a standard dictionary,
+    ensuring atomic operations for getting, setting, and deleting items.
+    Useful for caching data that needs to be shared between threads safely.
     """
 
     def __init__(self):
@@ -114,6 +115,10 @@ def remove_ocean_gridpoints(dataset: xr.Dataset) -> xr.Dataset:
 
 def load_events_yaml():
     """Load the events yaml file."""
+    logger.warning(
+        "This function is deprecated and will be removed in a future release. "
+        "Please use cases.load_ewb_events_yaml_into_case_collection instead."
+    )
     import extremeweatherbench.data
 
     events_yaml_file = resources.files(extremeweatherbench.data).joinpath("events.yaml")
@@ -125,6 +130,10 @@ def load_events_yaml():
 
 def read_event_yaml(input_pth: str | Path) -> dict:
     """Read events yaml from data."""
+    logger.warning(
+        "This function is deprecated and will be removed in a future release. "
+        "Please use cases.read_incoming_yaml instead."
+    )
     input_pth = Path(input_pth)
     with open(input_pth, "rb") as f:
         yaml_event_case = yaml.safe_load(f)
@@ -216,7 +225,7 @@ def filter_kwargs_for_callable(kwargs: dict, callable_obj: Callable) -> dict:
 
 def min_if_all_timesteps_present(
     da: xr.DataArray,
-    num_timesteps: int,
+    time_resolution_hours: float,
 ) -> xr.DataArray:
     """Return the minimum value of a DataArray if all timesteps of a day are present.
 
@@ -227,14 +236,15 @@ def min_if_all_timesteps_present(
         The minimum value of the DataArray if all timesteps are present,
         otherwise the original DataArray.
     """
-    if len(da.values) == num_timesteps:
+    timesteps_per_day = 24 / time_resolution_hours
+    if da.values.size == timesteps_per_day:
         return da.min()
     else:
         return xr.DataArray(np.nan)
 
 
 def min_if_all_timesteps_present_forecast(
-    da: xr.DataArray, num_timesteps
+    da: xr.DataArray, time_resolution_hours: float
 ) -> xr.DataArray:
     """Return the minimum value of a DataArray if all timesteps of a day are present
     given a dataset with lead_time and valid_time dimensions.
@@ -246,36 +256,45 @@ def min_if_all_timesteps_present_forecast(
         The minimum value of the DataArray if all timesteps are present,
         otherwise the original DataArray.
     """
-    if len(da.valid_time) == num_timesteps:
+    timesteps_per_day = 24 / time_resolution_hours
+    if da.valid_time.size == timesteps_per_day:
         return da.min("valid_time")
     else:
         # Return an array with the same lead_time dimension but filled with NaNs
         return xr.DataArray(
-            np.full(len(da.lead_time), np.nan),
+            np.full(da.lead_time.size, np.nan),
             coords={"lead_time": da.lead_time},
             dims=["lead_time"],
         )
 
 
-def determine_timesteps_per_day_resolution(
-    ds: xr.Dataset | xr.DataArray,
-) -> int:
-    """Determine the number of timesteps per day for a dataset.
+def determine_temporal_resolution(
+    data: xr.Dataset | xr.DataArray,
+) -> Optional[float]:
+    """Determine the temporal resolution of the data.
 
     Args:
-        ds: The input dataset with a valid_time dimension or coordinate.
+        data: The input dataset with a valid_time dimension or coordinate.
 
     Returns:
-        The number of timesteps per day as an integer.
+        The temporal resolution of the data as a float in hours.
     """
-    num_timesteps = 24 // np.unique(np.diff(ds.valid_time)).astype(
-        "timedelta64[h]"
-    ).astype(int)
+    num_timesteps = (
+        np.unique(np.diff(data.valid_time)).astype("timedelta64[h]").astype(int)
+    )
     if len(num_timesteps) > 1:
-        raise ValueError(
-            "The number of timesteps per day is not consistent in the dataset."
+        logger.warning(
+            "Multiple time resolutions found in dataset, data may be missing in "
+            "forecast or target datasets. Returning the highest time resolution."
         )
-    return num_timesteps[0]
+    # likely missing any data for valid time
+    if len(num_timesteps) == 0:
+        return None
+
+    # return the minimum (highest time resolution) in hours
+    # this is the most likely to be correct if there are multiple resolutions
+    # present, likely due to missing data
+    return np.min(num_timesteps).astype(float)
 
 
 def convert_init_time_to_valid_time(ds: xr.Dataset) -> xr.Dataset:
@@ -298,3 +317,19 @@ def convert_init_time_to_valid_time(ds: xr.Dataset) -> xr.Dataset:
         ],
         "lead_time",
     )
+
+
+def maybe_get_closest_timestamp_to_center_of_valid_times(
+    output_times: xr.DataArray,
+    valid_time_values: xr.DataArray,
+) -> xr.DataArray:
+    if output_times.size > 1:
+        # This is a temporary fix to handle the case where there are multiple
+        # max/min target values. It's assumed the target value closest to the center
+        # of the forecast valid time is the most relevant.
+        center_time = valid_time_values.values[valid_time_values.size // 2]
+        time_diffs = np.abs(output_times - center_time)
+        closest_idx = np.argmin(time_diffs.data)
+        output_times = output_times[closest_idx]
+    # Pass through the original output times and values if there is only one
+    return output_times

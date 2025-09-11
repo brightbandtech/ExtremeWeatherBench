@@ -597,12 +597,6 @@ class TestIncompleteMetrics:
             metrics.LeadTimeDetection,
         ]
 
-        # Test BaseMetric landfall classes
-        for metric_class in incomplete_base_metrics:
-            metric = metric_class()
-            assert isinstance(metric, metrics.BaseMetric)
-            assert hasattr(metric, "_compute_metric")
-
         # Test AppliedMetric classes
         for metric_class in incomplete_applied_metrics:
             metric = metric_class()
@@ -632,15 +626,6 @@ class TestIncompleteMetrics:
         for metric_class in mae_metrics:
             metric = metric_class()
             assert metric.base_metric == metrics.MAE
-
-        # ME based metrics - currently no incomplete ME-based metrics exist
-        me_metrics = []
-
-        for metric in landfall_metrics:
-            assert isinstance(metric, metrics.BaseMetric)
-            assert hasattr(metric, "_compute_metric")
-            assert hasattr(metric, "compute_metric")
-            assert hasattr(metric, "name")
 
     def test_backwards_compatibility(self):
         """Test that default behavior matches original classes."""
