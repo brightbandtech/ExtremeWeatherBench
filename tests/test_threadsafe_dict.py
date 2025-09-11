@@ -4,8 +4,8 @@ This test suite covers all scenarios including single-threaded, joblib-based
 parallel execution, and stress testing scenarios to ensure ThreadSafeDict
 works correctly under all conditions.
 
-Note: This version uses only joblib for all parallel processing and avoids
-pickle serialization entirely. No other multiprocessing modules are used.
+Note: This version uses only joblib for all parallel processing.
+No other multiprocessing modules are used.
 """
 
 import random
@@ -24,7 +24,7 @@ def _joblib_worker_task(process_id, num_items=100):
     """Worker function for joblib parallel processing test.
 
     This function creates and populates a ThreadSafeDict instance within
-    each worker process, avoiding any pickle serialization.
+    each worker process.
 
     Args:
         process_id: Unique identifier for this worker
@@ -33,7 +33,7 @@ def _joblib_worker_task(process_id, num_items=100):
     Returns:
         Dict containing statistics about the process
     """
-    # Create ThreadSafeDict inside worker (in-memory, no pickle)
+    # Create ThreadSafeDict inside worker
     tsd = ThreadSafeDict()
 
     # Each process creates its own ThreadSafeDict and populates it
@@ -177,6 +177,8 @@ class TestThreadSafeDictBasic:
     def test_init(self):
         """Test ThreadSafeDict initialization."""
         tsd = ThreadSafeDict()
+
+        # Assert the tsd is empty at initialization
         assert len(tsd) == 0
         assert list(tsd.keys()) == []
         assert list(tsd.values()) == []
