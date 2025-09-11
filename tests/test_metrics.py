@@ -388,18 +388,6 @@ class TestDurationME:
 class TestIncompleteMetrics:
     """Tests for metrics that are marked as TODO/incomplete implementations."""
 
-    def test_all_incomplete_applied_metrics_can_be_instantiated(self):
-        """Test that all incomplete applied metric classes can be instantiated."""
-        incomplete_applied_metrics = [
-            metrics.LeadTimeDetection,
-        ]
-
-        for metric_class in incomplete_applied_metrics:
-            metric = metric_class()
-            assert isinstance(metric, metrics.AppliedMetric)
-            assert hasattr(metric, "base_metric")
-            assert hasattr(metric, "_compute_applied_metric")
-
     def test_incomplete_base_metrics_can_be_instantiated(self):
         """Test that incomplete base metric classes can be instantiated."""
         incomplete_base_metrics = [

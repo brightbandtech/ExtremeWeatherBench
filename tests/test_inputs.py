@@ -1243,7 +1243,7 @@ class TestIBTrACS:
 
         # Clear registry and test registration
         tropical_cyclone._IBTRACS_DATA_REGISTRY.clear()
-        test_case_id = "test_case_456"
+        test_case_id_number = 456
 
         # Create an IBTrACS instance
         ibtracs = IBTrACS(source="dummy", name="test_ibtracs")
@@ -1251,7 +1251,7 @@ class TestIBTrACS:
         # Create a mock case operator
         mock_case_operator = Mock()
         mock_case_operator.case_metadata = Mock()
-        mock_case_operator.case_metadata.case_id_number = test_case_id
+        mock_case_operator.case_metadata.case_id_number = test_case_id_number
 
         # Create test dataset
         test_dataset = xr.Dataset(
@@ -1267,11 +1267,11 @@ class TestIBTrACS:
 
         # Simulate the pipeline: first subset (which stores case_id), then add attrs
         # (which registers)
-        ibtracs._current_case_id = test_case_id  # Simulate subset_data_to_case
+        ibtracs._current_case_id = test_case_id_number  # Simulate subset_data_to_case
         result_dataset = ibtracs.add_source_to_dataset_attrs(test_dataset)
 
         # Verify registration occurred
-        assert test_case_id in tropical_cyclone._IBTRACS_DATA_REGISTRY
+        assert test_case_id_number in tropical_cyclone._IBTRACS_DATA_REGISTRY
         assert result_dataset.attrs["is_ibtracs_data"] is True
 
 
