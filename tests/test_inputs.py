@@ -912,6 +912,43 @@ class TestGHCN:
         with pytest.raises(ValueError, match="Expected polars LazyFrame"):
             ghcn.subset_data_to_case("invalid_data", Mock())
 
+    def test_ghcn_subset_data_to_case_sorted_valid_time(self, sample_ghcn_dataframe):
+        """Test that subset_data_to_case returns sorted valid_time column."""
+
+        # Create unsorted test data by shuffling the sample data
+        unsorted_data = sample_ghcn_dataframe.sample(fraction=1.0, shuffle=True)
+
+        # Verify the data is actually unsorted by checking valid_times
+        is_sorted = unsorted_data["valid_time"].is_sorted()
+
+        # If by chance it's still sorted, manually disorder it
+        if is_sorted:
+            # Reverse the order to ensure it's unsorted
+            unsorted_data = sample_ghcn_dataframe.reverse()
+
+        # Create mock case operator
+        mock_case = Mock()
+        mock_case.case_metadata.start_date = pd.Timestamp("2021-06-20")
+        mock_case.case_metadata.end_date = pd.Timestamp("2021-06-22")
+        mock_case.case_metadata.location.geopandas.total_bounds = [-120, 30, -90, 50]
+        mock_case.target.variables = ["surface_air_temperature"]
+
+        ghcn = inputs.GHCN(
+            source="test.parquet",
+            variables=["surface_air_temperature"],
+            variable_mapping={},
+            storage_options={},
+        )
+
+        # Call subset_data_to_case with unsorted data
+        result = ghcn.subset_data_to_case(unsorted_data.lazy(), mock_case)
+
+        # Collect the result and verify valid_time is sorted
+        collected_result = result.collect()
+        assert collected_result[
+            "valid_time"
+        ].is_sorted(), "valid_time column should be sorted"
+
     def test_ghcn_custom_convert_to_dataset(self, sample_ghcn_dataframe):
         """Test GHCN custom conversion to dataset."""
         ghcn = inputs.GHCN(
