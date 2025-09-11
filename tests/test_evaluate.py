@@ -1383,6 +1383,72 @@ class TestEnsureOutputSchema:
 
         assert list(result.columns) == OUTPUT_COLUMNS
 
+    def test_ensure_output_schema_no_missing_variables(self):
+        """Test _ensure_output_schema when no variables are missing."""
+        # Create a dataframe with all required OUTPUT_COLUMNS already present
+        df = pd.DataFrame(
+            {
+                "value": [1.0, 2.0],
+                "lead_time": [1, 2],
+                "target_variable": ["temperature", "temperature"],
+                "metric": ["TestMetric", "TestMetric"],
+                "target_source": ["test_target", "test_target"],
+                "forecast_source": ["test_forecast", "test_forecast"],
+                "case_id_number": [1, 1],
+                "event_type": ["heat_wave", "heat_wave"],
+            }
+        )
+
+        # Call _ensure_output_schema without any additional metadata
+        result = evaluate._ensure_output_schema(df)
+
+        # Should work without warnings and preserve all columns
+        assert list(result.columns) == OUTPUT_COLUMNS
+        assert len(result) == 2
+        assert result["value"].tolist() == [1.0, 2.0]
+        assert result["lead_time"].tolist() == [1, 2]
+
+    def test_ensure_output_schema_no_missing_with_metadata(self, caplog):
+        """Test _ensure_output_schema when no variables are missing with metadata."""
+        # Create a dataframe with all required OUTPUT_COLUMNS already present
+        df = pd.DataFrame(
+            {
+                "value": [1.5, 2.5],
+                "init_time": pd.to_datetime(["2021-06-20", "2021-06-21"]),
+                "target_variable": ["pressure", "pressure"],
+                "metric": ["NewMetric", "NewMetric"],
+                "target_source": ["obs_target", "obs_target"],
+                "forecast_source": ["model_forecast", "model_forecast"],
+                "case_id_number": [2, 2],
+                "event_type": ["cold_wave", "cold_wave"],
+            }
+        )
+
+        # Add some additional metadata that should overwrite existing values
+        result = evaluate._ensure_output_schema(
+            df,
+            target_variable="updated_pressure",
+            metric="UpdatedMetric",
+            case_id_number=3,
+            event_type="updated_event",
+        )
+
+        # Should work without warnings since no columns are missing
+        warning_messages = [
+            record.message for record in caplog.records if record.levelname == "WARNING"
+        ]
+        missing_warnings = [msg for msg in warning_messages if "Missing" in msg]
+        assert len(missing_warnings) == 0
+
+        # Should preserve structure and update metadata
+        assert list(result.columns) == OUTPUT_COLUMNS
+        assert len(result) == 2
+        assert result["value"].tolist() == [1.5, 2.5]
+        assert all(result["target_variable"] == "updated_pressure")
+        assert all(result["metric"] == "UpdatedMetric")
+        assert all(result["case_id_number"] == 3)
+        assert all(result["event_type"] == "updated_event")
+
 
 class TestDerivedVariableForTesting(derived.DerivedVariable):
     """A concrete derived variable class for testing _normalize_variable."""

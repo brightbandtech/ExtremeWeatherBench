@@ -235,15 +235,23 @@ def _ensure_output_schema(df: pd.DataFrame, **metadata) -> pd.DataFrame:
 
     # Check for missing columns and warn
     missing_cols = set(OUTPUT_COLUMNS) - set(df.columns)
-    if missing_cols:
-        # Filter out init_time and lead_time if the other is available
-        if "init_time" in missing_cols and "lead_time" not in missing_cols:
-            missing_cols = missing_cols - {"init_time"}
-        elif "lead_time" in missing_cols and "init_time" not in missing_cols:
-            missing_cols = missing_cols - {"lead_time"}
 
-        if missing_cols:
-            logger.warning(f"Missing expected columns: {missing_cols}.")
+    # An output requires one of init_time or lead_time. init_time will be present for a
+    # metric that assesses something in an entire model run, such as the onset error of
+    # an event. Lead_time will be present for a metric that assesses something at a
+    # specific forecast hour, such as RMSE. If neither are present, the output is
+    # invalid. Both should not be present for one metric. Thus, one should always be
+    # missing, which is intended behavior.
+    init_time_missing = "init_time" in missing_cols
+    lead_time_missing = "lead_time" in missing_cols
+
+    # Check if exactly one of init_time or lead_time is missing
+    if init_time_missing != lead_time_missing:
+        missing_cols.discard("init_time")
+        missing_cols.discard("lead_time")
+
+    if missing_cols:
+        logger.warning(f"Missing expected columns: {missing_cols}.")
 
     # Ensure all OUTPUT_COLUMNS are present (missing ones will be NaN)
     # and reorder to match OUTPUT_COLUMNS specification
