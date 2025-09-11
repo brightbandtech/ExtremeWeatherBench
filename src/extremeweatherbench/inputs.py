@@ -473,14 +473,13 @@ class GHCN(TargetBase):
             & (pl.col("longitude") >= case_metadata.location.geopandas.total_bounds[0])
             & (pl.col("longitude") <= case_metadata.location.geopandas.total_bounds[2])
         )
-        # convert to Kelvin
-        subset_target_data = subset_target_data.with_columns(
-            pl.col("surface_air_temperature").add(273.15)
-        )
         return subset_target_data
 
     def _custom_convert_to_dataset(self, data: IncomingDataInput) -> xr.Dataset:
         if isinstance(data, pl.LazyFrame):
+            # convert to Kelvin, GHCN data is in Celsius by default
+            if "surface_air_temperature" in data.columns:
+                data = data.with_columns(pl.col("surface_air_temperature").add(273.15))
             data = data.collect().to_pandas()
             data["longitude"] = utils.convert_longitude_to_360(data["longitude"])
 
