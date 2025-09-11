@@ -348,13 +348,270 @@ class TestBuildCaseOperators:
 
     def test_build_case_operators_invalid_cases_dict(self):
         """Test build_case_operators with invalid cases_dict."""
+        import dacite
+
         invalid_cases_dict = {"cases": "not_a_list"}
         mock_eval_obj = Mock()
 
         with pytest.raises(
-            TypeError, match="cases_dict\\['cases'\\] must be a list of cases"
+            dacite.exceptions.WrongTypeError,
+            match="wrong value type",
         ):
             cases.build_case_operators(invalid_cases_dict, [mock_eval_obj])
+
+    def test_build_case_operators_with_individual_case_collection_passthrough(self):
+        """Test build_case_operators with IndividualCaseCollection passthrough."""
+        # Create individual cases directly
+        region1 = CenteredRegion.create_region(
+            latitude=40.0, longitude=-100.0, bounding_box_degrees=5.0
+        )
+        region2 = CenteredRegion.create_region(
+            latitude=35.0, longitude=-105.0, bounding_box_degrees=8.0
+        )
+
+        case1 = cases.IndividualCase(
+            case_id_number=1,
+            title="Heat Wave Case",
+            start_date=datetime.datetime(2021, 1, 1),
+            end_date=datetime.datetime(2021, 1, 15),
+            location=region1,
+            event_type="heat_wave",
+        )
+
+        case2 = cases.IndividualCase(
+            case_id_number=2,
+            title="Drought Case",
+            start_date=datetime.datetime(2021, 6, 1),
+            end_date=datetime.datetime(2021, 6, 15),
+            location=region2,
+            event_type="drought",
+        )
+
+        # Create IndividualCaseCollection directly
+        case_collection = cases.IndividualCaseCollection(cases=[case1, case2])
+
+        # Create mock evaluation objects
+        mock_eval_obj1 = Mock()
+        mock_eval_obj1.event_type = ["heat_wave"]
+        mock_eval_obj1.metric_list = Mock()
+        mock_eval_obj1.target = Mock()
+        mock_eval_obj1.forecast = Mock()
+
+        mock_eval_obj2 = Mock()
+        mock_eval_obj2.event_type = ["drought", "heat_wave"]
+        mock_eval_obj2.metric_list = Mock()
+        mock_eval_obj2.target = Mock()
+        mock_eval_obj2.forecast = Mock()
+
+        evaluation_objects = [mock_eval_obj1, mock_eval_obj2]
+
+        # Test passthrough functionality - pass IndividualCaseCollection directly
+        operators = cases.build_case_operators(case_collection, evaluation_objects)
+
+        # Should create 3 operators:
+        # - Heat wave case with eval_obj1 (matches heat_wave)
+        # - Heat wave case with eval_obj2 (matches heat_wave)
+        # - Drought case with eval_obj2 (matches drought)
+        assert len(operators) == 3
+
+        # Check that all operators are CaseOperator instances
+        for operator in operators:
+            assert isinstance(operator, cases.CaseOperator)
+            assert hasattr(operator, "case_metadata")
+            assert hasattr(operator, "metric_list")
+            assert hasattr(operator, "target")
+            assert hasattr(operator, "forecast")
+
+        # Verify the correct cases were matched
+        heat_wave_operators = [
+            op for op in operators if op.case_metadata.case_id_number == 1
+        ]
+        drought_operators = [
+            op for op in operators if op.case_metadata.case_id_number == 2
+        ]
+
+        assert len(heat_wave_operators) == 2  # Both eval objects match heat_wave
+        assert len(drought_operators) == 1  # Only eval_obj2 matches drought
+
+    def test_build_case_operators_dict_vs_collection_equivalence(self):
+        """Test dict and IndividualCaseCollection inputs produce same results."""
+        # Define cases as dictionary (traditional way)
+        cases_dict = {
+            "cases": [
+                {
+                    "case_id_number": 1,
+                    "title": "Test Heat Wave",
+                    "start_date": datetime.datetime(2021, 7, 1),
+                    "end_date": datetime.datetime(2021, 7, 10),
+                    "location": {
+                        "type": "centered_region",
+                        "parameters": {
+                            "latitude": 42.0,
+                            "longitude": -95.0,
+                            "bounding_box_degrees": 6.0,
+                        },
+                    },
+                    "event_type": "heat_wave",
+                },
+                {
+                    "case_id_number": 2,
+                    "title": "Test Storm",
+                    "start_date": datetime.datetime(2021, 8, 1),
+                    "end_date": datetime.datetime(2021, 8, 5),
+                    "location": {
+                        "type": "bounded_region",
+                        "parameters": {
+                            "latitude_min": 30.0,
+                            "latitude_max": 40.0,
+                            "longitude_min": -100.0,
+                            "longitude_max": -85.0,
+                        },
+                    },
+                    "event_type": "storm",
+                },
+            ]
+        }
+
+        # Create equivalent IndividualCaseCollection
+        region1 = CenteredRegion.create_region(
+            latitude=42.0, longitude=-95.0, bounding_box_degrees=6.0
+        )
+        region2 = BoundingBoxRegion.create_region(
+            latitude_min=30.0,
+            latitude_max=40.0,
+            longitude_min=-100.0,
+            longitude_max=-85.0,
+        )
+
+        case1 = cases.IndividualCase(
+            case_id_number=1,
+            title="Test Heat Wave",
+            start_date=datetime.datetime(2021, 7, 1),
+            end_date=datetime.datetime(2021, 7, 10),
+            location=region1,
+            event_type="heat_wave",
+        )
+
+        case2 = cases.IndividualCase(
+            case_id_number=2,
+            title="Test Storm",
+            start_date=datetime.datetime(2021, 8, 1),
+            end_date=datetime.datetime(2021, 8, 5),
+            location=region2,
+            event_type="storm",
+        )
+
+        case_collection = cases.IndividualCaseCollection(cases=[case1, case2])
+
+        # Create evaluation objects
+        heat_wave_eval = Mock()
+        heat_wave_eval.event_type = ["heat_wave"]
+        heat_wave_eval.metric_list = Mock()
+        heat_wave_eval.target = Mock()
+        heat_wave_eval.forecast = Mock()
+
+        storm_eval = Mock()
+        storm_eval.event_type = ["storm"]
+        storm_eval.metric_list = Mock()
+        storm_eval.target = Mock()
+        storm_eval.forecast = Mock()
+
+        evaluation_objects = [heat_wave_eval, storm_eval]
+
+        # Build operators using dictionary
+        operators_from_dict = cases.build_case_operators(cases_dict, evaluation_objects)
+
+        # Build operators using IndividualCaseCollection (passthrough)
+        operators_from_collection = cases.build_case_operators(
+            case_collection, evaluation_objects
+        )
+
+        # Results should be equivalent
+        assert len(operators_from_dict) == len(operators_from_collection)
+        assert len(operators_from_dict) == 2  # One for each event type
+
+        # Sort operators by case_id_number for comparison
+        dict_ops_sorted = sorted(
+            operators_from_dict, key=lambda x: x.case_metadata.case_id_number
+        )
+        collection_ops_sorted = sorted(
+            operators_from_collection, key=lambda x: x.case_metadata.case_id_number
+        )
+
+        # Compare each operator pair
+        for dict_op, collection_op in zip(dict_ops_sorted, collection_ops_sorted):
+            # Case metadata should be equivalent
+            assert (
+                dict_op.case_metadata.case_id_number
+                == collection_op.case_metadata.case_id_number
+            )
+            assert dict_op.case_metadata.title == collection_op.case_metadata.title
+            assert (
+                dict_op.case_metadata.start_date
+                == collection_op.case_metadata.start_date
+            )
+            assert (
+                dict_op.case_metadata.end_date == collection_op.case_metadata.end_date
+            )
+            assert (
+                dict_op.case_metadata.event_type
+                == collection_op.case_metadata.event_type
+            )
+
+            # Location types should be the same
+            assert isinstance(
+                dict_op.case_metadata.location,
+                type(collection_op.case_metadata.location),
+            )
+
+            # Other attributes should reference the same mock objects
+            assert dict_op.metric_list is collection_op.metric_list
+            assert dict_op.target is collection_op.target
+            assert dict_op.forecast is collection_op.forecast
+
+    def test_build_case_operators_empty_individual_case_collection(self):
+        """Test build_case_operators with empty IndividualCaseCollection."""
+        empty_collection = cases.IndividualCaseCollection(cases=[])
+
+        mock_eval_obj = Mock()
+        mock_eval_obj.event_type = ["heat_wave"]
+        mock_eval_obj.metric_list = Mock()
+        mock_eval_obj.target = Mock()
+        mock_eval_obj.forecast = Mock()
+
+        operators = cases.build_case_operators(empty_collection, [mock_eval_obj])
+
+        # Should create no operators from empty collection
+        assert len(operators) == 0
+
+    def test_build_case_operators_collection_with_no_matching_events(self):
+        """Test IndividualCaseCollection passthrough with no matching event types."""
+        region = CenteredRegion.create_region(
+            latitude=40.0, longitude=-100.0, bounding_box_degrees=5.0
+        )
+
+        flood_case = cases.IndividualCase(
+            case_id_number=1,
+            title="Flood Case",
+            start_date=datetime.datetime(2021, 9, 1),
+            end_date=datetime.datetime(2021, 9, 10),
+            location=region,
+            event_type="flood",
+        )
+
+        case_collection = cases.IndividualCaseCollection(cases=[flood_case])
+
+        # Evaluation object that doesn't match flood
+        mock_eval_obj = Mock()
+        mock_eval_obj.event_type = ["heat_wave", "drought"]
+        mock_eval_obj.metric_list = Mock()
+        mock_eval_obj.target = Mock()
+        mock_eval_obj.forecast = Mock()
+
+        operators = cases.build_case_operators(case_collection, [mock_eval_obj])
+
+        # Should create no operators since event types don't match
+        assert len(operators) == 0
 
 
 class TestLoadIndividualCasesFromYaml:
