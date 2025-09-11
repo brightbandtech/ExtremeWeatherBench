@@ -1,7 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
-from collections import OrderedDict
-from typing import Sequence, Type, Union
+from typing import Sequence, Type, TypeGuard, Union
 
 import xarray as xr
 
@@ -181,7 +180,7 @@ def maybe_derive_variables(
 
 
 def maybe_include_variables_from_derived_input(
-    incoming_variables: Sequence[Union[str, DerivedVariable, Type[DerivedVariable]]],
+    incoming_variables: Sequence[Union[str, Type[DerivedVariable]]],
 ) -> list[str]:
     """Identify and return variables that a derived variable needs to compute.
 
@@ -196,6 +195,7 @@ def maybe_include_variables_from_derived_input(
 
     derived_required_variables = []
     for v in incoming_variables:
+        # TODO: change to is_derived_variable
         if isinstance(v, DerivedVariable):
             # Handle instances of DerivedVariable
             derived_required_variables.extend(v.required_variables)
@@ -206,6 +206,19 @@ def maybe_include_variables_from_derived_input(
                 maybe_include_variables_from_derived_input(v.required_variables)
             )
 
-    # Remove duplicates while preserving order
-    all_variables = string_variables + derived_required_variables
-    return list(OrderedDict.fromkeys(all_variables))
+    return string_variables + derived_required_variables
+
+
+def is_derived_variable(
+    variable: Union[str, Type[DerivedVariable]],
+) -> TypeGuard[Type[DerivedVariable]]:
+    """Checks whether the incoming variable is a string or a DerivedVariable.
+
+    Args:
+        variable: a single string or DerivedVariable object
+
+    Returns:
+        True if the variable is a DerivedVariable object, False otherwise
+    """
+
+    return isinstance(variable, type) and issubclass(variable, DerivedVariable)

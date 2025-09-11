@@ -6,6 +6,7 @@ handling.
 """
 
 import datetime
+import logging
 import tempfile
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -15,7 +16,7 @@ import pandas as pd
 import pytest
 import xarray as xr
 
-from extremeweatherbench import cases, evaluate, inputs, metrics
+from extremeweatherbench import cases, derived, evaluate, inputs, metrics
 from extremeweatherbench.defaults import OUTPUT_COLUMNS
 from extremeweatherbench.regions import CenteredRegion
 
@@ -497,6 +498,46 @@ class TestComputeCaseOperator:
                 assert len(result) == 2
 
     @patch("extremeweatherbench.evaluate._build_datasets")
+    def test_compute_case_operator_zero_length_forecast_dataset(
+        self, mock_build_datasets, sample_case_operator
+    ):
+        """Test compute_case_operator when _build_datasets returns empty forecast
+        dataset."""
+        # Mock _build_datasets to return empty datasets (simulating zero valid times)
+        empty_forecast_ds = xr.Dataset(coords={"valid_time": pd.DatetimeIndex([])})
+        empty_target_ds = xr.Dataset(coords={"valid_time": pd.DatetimeIndex([])})
+        mock_build_datasets.return_value = (empty_forecast_ds, empty_target_ds)
+
+        result = evaluate.compute_case_operator(sample_case_operator)
+
+        # Should return empty DataFrame with correct columns
+        assert isinstance(result, pd.DataFrame)
+        assert len(result) == 0
+        assert list(result.columns) == OUTPUT_COLUMNS
+
+        # _build_datasets should be called, but no further processing should occur
+        mock_build_datasets.assert_called_once_with(sample_case_operator)
+
+    @patch("extremeweatherbench.evaluate._build_datasets")
+    def test_compute_case_operator_zero_length_target_dataset(
+        self, mock_build_datasets, sample_case_operator, sample_forecast_dataset
+    ):
+        """Test compute_case_operator when _build_datasets returns empty
+        target dataset."""
+        # Mock _build_datasets to return empty target dataset
+        empty_target_ds = xr.Dataset(coords={"valid_time": pd.DatetimeIndex([])})
+        mock_build_datasets.return_value = (sample_forecast_dataset, empty_target_ds)
+
+        result = evaluate.compute_case_operator(sample_case_operator)
+
+        # Should return empty DataFrame with correct columns
+        assert isinstance(result, pd.DataFrame)
+        assert len(result) == 0
+        assert list(result.columns) == OUTPUT_COLUMNS
+
+        mock_build_datasets.assert_called_once_with(sample_case_operator)
+
+    @patch("extremeweatherbench.evaluate._build_datasets")
     def test_compute_case_operator_empty_forecast_dataset(
         self, mock_build_datasets, sample_case_operator
     ):
@@ -668,8 +709,13 @@ class TestPipelineFunctions:
                 assert mock_run_pipeline.call_count == 2
 
     @patch("extremeweatherbench.derived.maybe_derive_variables")
+    @patch("extremeweatherbench.evaluate.inputs.maybe_subset_variables")
     def test_run_pipeline_forecast(
-        self, mock_derived, sample_case_operator, sample_forecast_dataset
+        self,
+        mock_maybe_subset_variables,
+        mock_derived,
+        sample_case_operator,
+        sample_forecast_dataset,
     ):
         """Test run_pipeline function for forecast data."""
         # Mock the pipeline methods
@@ -677,6 +723,7 @@ class TestPipelineFunctions:
         sample_case_operator.forecast.maybe_map_variable_names.return_value = (
             sample_forecast_dataset
         )
+        mock_maybe_subset_variables.return_value = sample_forecast_dataset
         sample_case_operator.forecast.subset_data_to_case.return_value = (
             sample_forecast_dataset
         )
@@ -695,6 +742,7 @@ class TestPipelineFunctions:
         assert isinstance(result, xr.Dataset)
         sample_case_operator.forecast.open_and_maybe_preprocess_data_from_source.assert_called_once()  # noqa: E501
         sample_case_operator.forecast.maybe_map_variable_names.assert_called_once()
+        mock_maybe_subset_variables.assert_called_once()
         # The pipe() method passes the dataset, then case_metadata as kwarg
         assert sample_case_operator.forecast.subset_data_to_case.call_count == 1
         call_args = sample_case_operator.forecast.subset_data_to_case.call_args
@@ -703,8 +751,13 @@ class TestPipelineFunctions:
         sample_case_operator.forecast.add_source_to_dataset_attrs.assert_called_once()
 
     @patch("extremeweatherbench.derived.maybe_derive_variables")
+    @patch("extremeweatherbench.evaluate.inputs.maybe_subset_variables")
     def test_run_pipeline_target(
-        self, mock_derived, sample_case_operator, sample_target_dataset
+        self,
+        mock_maybe_subset_variables,
+        mock_derived,
+        sample_case_operator,
+        sample_target_dataset,
     ):
         """Test run_pipeline function for target data."""
         # Mock the pipeline methods
@@ -712,6 +765,7 @@ class TestPipelineFunctions:
         sample_case_operator.target.maybe_map_variable_names.return_value = (
             sample_target_dataset
         )
+        mock_maybe_subset_variables.return_value = sample_target_dataset
         sample_case_operator.target.subset_data_to_case.return_value = (
             sample_target_dataset
         )
@@ -831,6 +885,89 @@ class TestMetricEvaluation:
         call_kwargs = mock_base_metric.compute_metric.call_args[1]
         assert "threshold" in call_kwargs
         assert call_kwargs["threshold"] == 0.5
+
+    def test_evaluate_metric_and_return_df_with_derived_variables(
+        self, mock_base_metric
+    ):
+        """Test _evaluate_metric_and_return_df with derived variables."""
+        # Create datasets with derived variables included
+        forecast_ds = xr.Dataset(
+            {
+                "surface_air_temperature": (
+                    ["init_time", "lead_time", "latitude", "longitude"],
+                    np.random.randn(2, 3, 4, 5) + 280,
+                ),
+                "derived_forecast_var": (
+                    ["init_time", "lead_time", "latitude", "longitude"],
+                    np.random.randn(2, 3, 4, 5) + 285,
+                ),
+            },
+            coords={
+                "init_time": pd.date_range("2021-06-20", periods=2, freq="D"),
+                "lead_time": [0, 6, 12],
+                "latitude": np.linspace(30, 50, 4),
+                "longitude": np.linspace(-120, -90, 5),
+            },
+            attrs={"source": "test_forecast", "forecast_source": "test_forecast"},
+        )
+
+        target_ds = xr.Dataset(
+            {
+                "2m_temperature": (
+                    ["time", "latitude", "longitude"],
+                    np.random.randn(3, 4, 5) + 275,
+                ),
+                "derived_target_var": (
+                    ["time", "latitude", "longitude"],
+                    np.random.randn(3, 4, 5) + 280,
+                ),
+            },
+            coords={
+                "time": pd.date_range("2021-06-20", periods=3, freq="6h"),
+                "latitude": np.linspace(30, 50, 4),
+                "longitude": np.linspace(-120, -90, 5),
+            },
+            attrs={"source": "test_target", "target_source": "test_target"},
+        )
+
+        # Setup the metric mock
+        mock_result = xr.DataArray(
+            data=[2.5], dims=["lead_time"], coords={"lead_time": [0]}
+        )
+        mock_base_metric.name = "TestDerivedMetric"
+        mock_base_metric.compute_metric.return_value = mock_result
+
+        result = evaluate._evaluate_metric_and_return_df(
+            forecast_ds=forecast_ds,
+            target_ds=target_ds,
+            forecast_variable=TestForecastDerivedVariable,
+            target_variable=TestTargetDerivedVariable,
+            metric=mock_base_metric,
+            case_id_number=3,
+            event_type="derived_test",
+        )
+
+        # Verify the result structure
+        assert isinstance(result, pd.DataFrame)
+        assert "value" in result.columns
+        assert "metric" in result.columns
+        assert "target_variable" in result.columns
+        assert "case_id_number" in result.columns
+        assert "event_type" in result.columns
+
+        # Check the values
+        assert result["metric"].iloc[0] == "TestDerivedMetric"
+        assert result["case_id_number"].iloc[0] == 3
+        assert result["event_type"].iloc[0] == "derived_test"
+        assert result["value"].iloc[0] == 2.5
+
+        # Verify that compute_metric was called with the derived variables
+        mock_base_metric.compute_metric.assert_called_once()
+        call_args = mock_base_metric.compute_metric.call_args[0]
+
+        # The variables should be passed as derived variable instances
+        assert isinstance(call_args[0], xr.DataArray)  # forecast data
+        assert isinstance(call_args[1], xr.DataArray)  # target data
 
 
 # =============================================================================
@@ -1082,6 +1219,425 @@ class TestIntegration:
 
                 # Should have results for each metric combination
                 assert len(result) >= 2  # At least 2 metrics * 1 case
+
+
+# =============================================================================
+# Test Schema and Variable Normalization Functions
+# =============================================================================
+
+
+class TestEnsureOutputSchema:
+    """Test the _ensure_output_schema function."""
+
+    def test_ensure_output_schema_init_time_valid_time(self):
+        """Test _ensure_output_schema with init_time and valid_time columns.
+
+        init_time is now in OUTPUT_COLUMNS, valid_time is not and will be dropped.
+        """
+        df = pd.DataFrame(
+            {
+                "value": [1.0, 2.0],
+                "init_time": pd.to_datetime(["2021-06-20", "2021-06-21"]),
+                "valid_time": pd.to_datetime(["2021-06-21", "2021-06-22"]),
+            }
+        )
+
+        result = evaluate._ensure_output_schema(
+            df,
+            target_variable="temperature",
+            metric="TestMetric",
+            case_id_number=1,
+            event_type="heat_wave",
+        )
+
+        # Check all OUTPUT_COLUMNS are present
+        assert list(result.columns) == OUTPUT_COLUMNS
+        # Check metadata was added
+        assert all(result["target_variable"] == "temperature")
+        assert all(result["metric"] == "TestMetric")
+        assert all(result["case_id_number"] == 1)
+        assert all(result["event_type"] == "heat_wave")
+        # Check original columns preserved for those in OUTPUT_COLUMNS
+        assert len(result) == 2
+        assert list(result["value"]) == [1.0, 2.0]
+        # init_time should be preserved (now in OUTPUT_COLUMNS)
+        assert "init_time" in result.columns
+        assert list(result["init_time"]) == [
+            pd.to_datetime("2021-06-20"),
+            pd.to_datetime("2021-06-21"),
+        ]
+        # valid_time should be dropped (not in OUTPUT_COLUMNS)
+        assert "valid_time" not in result.columns
+
+    def test_ensure_output_schema_init_time_only(self):
+        """Test _ensure_output_schema with init_time only.
+
+        init_time is now in OUTPUT_COLUMNS so will be preserved.
+        """
+        df = pd.DataFrame({"value": [1.5], "init_time": pd.to_datetime(["2021-06-20"])})
+
+        result = evaluate._ensure_output_schema(
+            df,
+            target_variable="wind_speed",
+            metric="RMSE",
+            case_id_number=2,
+            event_type="storm",
+        )
+
+        # Check all columns present
+        assert list(result.columns) == OUTPUT_COLUMNS
+        # lead_time should be NaN since not provided and is in OUTPUT_COLUMNS
+        assert pd.isna(result["lead_time"].iloc[0])
+        # init_time should be preserved (now in OUTPUT_COLUMNS)
+        assert "init_time" in result.columns
+        assert result["init_time"].iloc[0] == pd.to_datetime("2021-06-20")
+
+    def test_ensure_output_schema_lead_time_only(self):
+        """Test _ensure_output_schema with lead_time only.
+
+        lead_time is in OUTPUT_COLUMNS so will be preserved.
+        """
+        df = pd.DataFrame({"value": [2.5, 3.0], "lead_time": [6, 12]})
+
+        result = evaluate._ensure_output_schema(
+            df,
+            target_variable="pressure",
+            metric="MAE",
+            case_id_number=3,
+            event_type="freeze",
+        )
+
+        # Check all columns present
+        assert list(result.columns) == OUTPUT_COLUMNS
+        # lead_time should be preserved (it's in OUTPUT_COLUMNS)
+        assert list(result["lead_time"]) == [6, 12]
+        # init_time should be NaN since not provided and is in OUTPUT_COLUMNS
+        assert pd.isna(result["init_time"].iloc[0])
+        # Other OUTPUT_COLUMNS should have NaN for missing source columns
+        assert pd.isna(result["target_source"].iloc[0])
+        assert pd.isna(result["forecast_source"].iloc[0])
+
+    def test_ensure_output_schema_lead_time_valid_time(self):
+        """Test _ensure_output_schema with lead_time and valid_time.
+
+        lead_time is in OUTPUT_COLUMNS, valid_time is not and will be dropped.
+        """
+        df = pd.DataFrame(
+            {
+                "value": [0.8],
+                "lead_time": [24],
+                "valid_time": pd.to_datetime(["2021-06-22"]),
+            }
+        )
+
+        result = evaluate._ensure_output_schema(
+            df,
+            target_variable="humidity",
+            metric="Bias",
+            case_id_number=4,
+            event_type="drought",
+        )
+
+        assert list(result.columns) == OUTPUT_COLUMNS
+        assert result["lead_time"].iloc[0] == 24
+        # init_time should be NaN since not provided and is in OUTPUT_COLUMNS
+        assert pd.isna(result["init_time"].iloc[0])
+        # valid_time should be dropped (not in OUTPUT_COLUMNS)
+        assert "valid_time" not in result.columns
+
+    def test_ensure_output_schema_init_time_temperature(self):
+        """Test _ensure_output_schema with init_time and temperature."""
+        df = pd.DataFrame(
+            {
+                "value": [15.5, 16.2],
+                "init_time": pd.to_datetime(["2021-06-20", "2021-06-21"]),
+                "temperature": [298.15, 299.15],
+            }
+        )
+
+        result = evaluate._ensure_output_schema(
+            df,
+            target_variable="air_temp",
+            metric="Correlation",
+            case_id_number=5,
+            event_type="heat_wave",
+        )
+
+        assert list(result.columns) == OUTPUT_COLUMNS
+        # Custom column should be preserved but not part of OUTPUT_COLUMNS
+        # temperature column should not appear in final result
+        assert "temperature" not in result.columns
+        assert len(result) == 2
+
+    def test_ensure_output_schema_init_time_multiple_variables(self):
+        """Test _ensure_output_schema with init_time and multiple variables."""
+        df = pd.DataFrame(
+            {
+                "value": [1.0, 2.0, 3.0],
+                "init_time": pd.to_datetime(["2021-06-20", "2021-06-21", "2021-06-22"]),
+                "variable1": [10, 11, 12],
+                "variable2": [20, 21, 22],
+                "variable3": [30, 31, 32],
+            }
+        )
+
+        result = evaluate._ensure_output_schema(
+            df,
+            target_variable="composite",
+            metric="MultiMetric",
+            case_id_number=6,
+            event_type="complex",
+        )
+
+        assert list(result.columns) == OUTPUT_COLUMNS
+        # Extra variables should not appear in final result
+        assert "variable1" not in result.columns
+        assert "variable2" not in result.columns
+        assert "variable3" not in result.columns
+        assert len(result) == 3
+
+    def test_ensure_output_schema_lead_time_multiple_variables(self):
+        """Test _ensure_output_schema with lead_time and multiple variables."""
+        df = pd.DataFrame(
+            {
+                "value": [5.0, 6.0],
+                "lead_time": [48, 72],
+                "variable1": [100, 101],
+                "variable2": [200, 201],
+                "variable3": [300, 301],
+            }
+        )
+
+        result = evaluate._ensure_output_schema(
+            df,
+            target_variable="multi_var",
+            metric="EnsembleMetric",
+            case_id_number=7,
+            event_type="ensemble",
+        )
+
+        assert list(result.columns) == OUTPUT_COLUMNS
+        assert list(result["lead_time"]) == [48, 72]
+        assert "variable1" not in result.columns
+        assert len(result) == 2
+
+    def test_ensure_output_schema_missing_columns_warning(self, caplog):
+        """Test that missing columns generate appropriate warnings."""
+        df = pd.DataFrame({"value": [1.0], "some_other_column": [42]})
+
+        with caplog.at_level(logging.WARNING):
+            result = evaluate._ensure_output_schema(
+                df,
+                target_variable="test_var",
+                metric="TestMetric",
+                case_id_number=1,
+                event_type="test",
+            )
+
+        # Should warn about missing columns
+        assert "Missing expected columns" in caplog.text
+        # But still return properly structured DataFrame
+        assert list(result.columns) == OUTPUT_COLUMNS
+        assert result["value"].iloc[0] == 1.0
+
+    def test_ensure_output_schema_no_warning_init_time_when_lead_time_present(
+        self, caplog
+    ):
+        """Test no warning when init_time missing but lead_time present."""
+        df = pd.DataFrame({"value": [1.0], "lead_time": [6]})
+
+        with caplog.at_level(logging.WARNING):
+            result = evaluate._ensure_output_schema(
+                df,
+                target_variable="test_var",
+                metric="TestMetric",
+                case_id_number=1,
+                event_type="test",
+            )
+
+        # Should not warn about missing init_time when lead_time present
+        warning_messages = [
+            record.message for record in caplog.records if record.levelname == "WARNING"
+        ]
+        init_time_warnings = [msg for msg in warning_messages if "init_time" in msg]
+        assert len(init_time_warnings) == 0
+
+        assert list(result.columns) == OUTPUT_COLUMNS
+
+    def test_ensure_output_schema_no_warning_lead_time_when_init_time_present(
+        self, caplog
+    ):
+        """Test no warning when lead_time missing but init_time present."""
+        df = pd.DataFrame({"value": [1.0], "init_time": pd.to_datetime(["2021-06-20"])})
+
+        with caplog.at_level(logging.WARNING):
+            result = evaluate._ensure_output_schema(
+                df,
+                target_variable="test_var",
+                metric="TestMetric",
+                case_id_number=1,
+                event_type="test",
+            )
+
+        # Should not warn about missing lead_time when init_time present
+        warning_messages = [
+            record.message for record in caplog.records if record.levelname == "WARNING"
+        ]
+        lead_time_warnings = [msg for msg in warning_messages if "lead_time" in msg]
+        assert len(lead_time_warnings) == 0
+
+        assert list(result.columns) == OUTPUT_COLUMNS
+
+    def test_ensure_output_schema_no_missing_variables(self):
+        """Test _ensure_output_schema when no variables are missing."""
+        # Create a dataframe with all required OUTPUT_COLUMNS already present
+        df = pd.DataFrame(
+            {
+                "value": [1.0, 2.0],
+                "lead_time": [1, 2],
+                "target_variable": ["temperature", "temperature"],
+                "metric": ["TestMetric", "TestMetric"],
+                "target_source": ["test_target", "test_target"],
+                "forecast_source": ["test_forecast", "test_forecast"],
+                "case_id_number": [1, 1],
+                "event_type": ["heat_wave", "heat_wave"],
+            }
+        )
+
+        # Call _ensure_output_schema without any additional metadata
+        result = evaluate._ensure_output_schema(df)
+
+        # Should work without warnings and preserve all columns
+        assert list(result.columns) == OUTPUT_COLUMNS
+        assert len(result) == 2
+        assert result["value"].tolist() == [1.0, 2.0]
+        assert result["lead_time"].tolist() == [1, 2]
+
+    def test_ensure_output_schema_no_missing_with_metadata(self, caplog):
+        """Test _ensure_output_schema when no variables are missing with metadata."""
+        # Create a dataframe with all required OUTPUT_COLUMNS already present
+        df = pd.DataFrame(
+            {
+                "value": [1.5, 2.5],
+                "init_time": pd.to_datetime(["2021-06-20", "2021-06-21"]),
+                "target_variable": ["pressure", "pressure"],
+                "metric": ["NewMetric", "NewMetric"],
+                "target_source": ["obs_target", "obs_target"],
+                "forecast_source": ["model_forecast", "model_forecast"],
+                "case_id_number": [2, 2],
+                "event_type": ["cold_wave", "cold_wave"],
+            }
+        )
+
+        # Add some additional metadata that should overwrite existing values
+        result = evaluate._ensure_output_schema(
+            df,
+            target_variable="updated_pressure",
+            metric="UpdatedMetric",
+            case_id_number=3,
+            event_type="updated_event",
+        )
+
+        # Should work without warnings since no columns are missing
+        warning_messages = [
+            record.message for record in caplog.records if record.levelname == "WARNING"
+        ]
+        missing_warnings = [msg for msg in warning_messages if "Missing" in msg]
+        assert len(missing_warnings) == 0
+
+        # Should preserve structure and update metadata
+        assert list(result.columns) == OUTPUT_COLUMNS
+        assert len(result) == 2
+        assert result["value"].tolist() == [1.5, 2.5]
+        assert all(result["target_variable"] == "updated_pressure")
+        assert all(result["metric"] == "UpdatedMetric")
+        assert all(result["case_id_number"] == 3)
+        assert all(result["event_type"] == "updated_event")
+
+
+class TestDerivedVariableForTesting(derived.DerivedVariable):
+    """A concrete derived variable class for testing
+    _maybe_convert_variable_to_string."""
+
+    name = "TestDerivedVar"
+    required_variables = ["input_var1", "input_var2"]
+
+    @classmethod
+    def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
+        """Simple derivation for testing."""
+        return data["input_var1"] + data["input_var2"]
+
+
+class TestForecastDerivedVariable(derived.DerivedVariable):
+    """Test derived variable for forecast data."""
+
+    name = "derived_forecast_var"
+    required_variables = ["surface_air_temperature"]
+
+    @classmethod
+    def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
+        """Simple derivation - just return the temperature variable."""
+        return data["surface_air_temperature"]
+
+
+class TestTargetDerivedVariable(derived.DerivedVariable):
+    """Test derived variable for target data."""
+
+    name = "derived_target_var"
+    required_variables = ["2m_temperature"]
+
+    @classmethod
+    def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
+        """Simple derivation - just return the temperature variable."""
+        return data["2m_temperature"]
+
+
+class TestNormalizeVariable:
+    """Test the _maybe_convert_variable_to_string function."""
+
+    def test_maybe_convert_variable_to_string_string_input(self):
+        """Test _maybe_convert_variable_to_string with string input."""
+        result = evaluate._maybe_convert_variable_to_string("temperature")
+        assert result == "temperature"
+        assert isinstance(result, str)
+
+    def test_maybe_convert_variable_to_string_derived_class_input(self):
+        """Test _maybe_convert_variable_to_string with DerivedVariable class input."""
+        result = evaluate._maybe_convert_variable_to_string(
+            TestDerivedVariableForTesting
+        )
+        assert result == "TestDerivedVar"
+        assert isinstance(result, str)
+
+    def test_maybe_convert_variable_to_string_derived_instance_input(self):
+        """Test _maybe_convert_variable_to_string with DerivedVariable instance input.
+
+        Note: The function is designed to handle classes, not instances.
+        Instances are passed through unchanged (not converted to string).
+        """
+        instance = TestDerivedVariableForTesting()
+        result = evaluate._maybe_convert_variable_to_string(instance)
+        # Instance is returned as-is, not converted to string
+        assert result == instance
+        assert isinstance(result, TestDerivedVariableForTesting)
+
+    def test_maybe_convert_variable_to_string_handles_both_types(self):
+        """Test that _maybe_convert_variable_to_string handles both incoming types
+        correctly."""
+        # Test string type
+        string_result = evaluate._maybe_convert_variable_to_string("my_variable")
+        assert string_result == "my_variable"
+
+        # Test derived variable type
+        derived_result = evaluate._maybe_convert_variable_to_string(
+            TestDerivedVariableForTesting
+        )
+        assert derived_result == "TestDerivedVar"
+
+        # Results should be different but both strings
+        assert string_result != derived_result
+        assert isinstance(string_result, str)
+        assert isinstance(derived_result, str)
 
 
 if __name__ == "__main__":
