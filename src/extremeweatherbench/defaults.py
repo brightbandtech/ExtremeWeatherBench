@@ -13,6 +13,7 @@ logging.getLogger("botocore.httpchecksum").setLevel(logging.CRITICAL)
 OUTPUT_COLUMNS = [
     "value",
     "lead_time",
+    "init_time",
     "target_variable",
     "metric",
     "target_source",

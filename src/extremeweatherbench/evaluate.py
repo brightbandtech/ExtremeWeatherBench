@@ -3,7 +3,7 @@
 import itertools
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, Optional, Union
+from typing import TYPE_CHECKING, Optional, Type, Union
 
 import pandas as pd
 import xarray as xr
@@ -24,10 +24,9 @@ logger = logging.getLogger(__name__)
 class ExtremeWeatherBench:
     """A class to run the ExtremeWeatherBench workflow.
 
-    This class is used to run the ExtremeWeatherBench workflow. It is a
-    wrapper around the
-    case operators and evaluation objects to create either a serial loop or will return
-    the built case operators to run in parallel as defined by the user.
+    This class is used to run the ExtremeWeatherBench workflow. It is a wrapper around
+    the case operators and evaluation objects to create either a serial loop or will
+    return the built case operators to run in parallel as defined by the user.
 
 
     Attributes:
@@ -105,9 +104,14 @@ def compute_case_operator(case_operator: "cases.CaseOperator", **kwargs):
         A concatenated dataframe of the results of the case operator.
     """
     forecast_ds, target_ds = _build_datasets(case_operator)
-    if len(forecast_ds) == 0 or len(target_ds) == 0:
+    # Check if any dimension has zero length
+    if 0 in forecast_ds.sizes.values() or 0 in target_ds.sizes.values():
         return pd.DataFrame(columns=OUTPUT_COLUMNS)
-    # spatiotemporally align the target and forecast datasets dependent on the forecast
+
+    # Or, check if there aren't any dimensions
+    elif len(forecast_ds.sizes) == 0 or len(target_ds.sizes) == 0:
+        return pd.DataFrame(columns=OUTPUT_COLUMNS)
+    # spatiotemporally align the target and forecast datasets dependent on the target
     aligned_forecast_ds, aligned_target_ds = (
         case_operator.target.maybe_align_forecast_to_target(forecast_ds, target_ds)
     )
@@ -119,16 +123,9 @@ def compute_case_operator(case_operator: "cases.CaseOperator", **kwargs):
             aligned_target_ds,
             cache_dir=kwargs.get("cache_dir", None),
         )
-
-    # Derive the variables for the forecast and target datasets independently
-    aligned_forecast_ds = derived.maybe_derive_variables(
-        aligned_forecast_ds, variables=case_operator.forecast.variables
+    logger.info(
+        f"Datasets built for case {case_operator.case_metadata.case_id_number}."
     )
-    aligned_target_ds = derived.maybe_derive_variables(
-        aligned_target_ds, variables=case_operator.target.variables
-    )
-
-    logger.info(f"datasets built for case {case_operator.case_metadata.case_id_number}")
     results = []
     # TODO: determine if derived variables need to be pushed here or at pre-compute
     for variables, metric in itertools.product(
@@ -192,8 +189,6 @@ def _extract_standard_metadata(
     return {
         "target_variable": target_variable,
         "metric": metric.name,
-        "target_source": target_ds.attrs["source"],
-        "forecast_source": forecast_ds.attrs["source"],
         "case_id_number": case_id_number,
         "event_type": event_type,
     }
@@ -217,9 +212,7 @@ def _ensure_output_schema(df: pd.DataFrame, **metadata) -> pd.DataFrame:
         df = _ensure_output_schema(
             metric_df,
             target_variable=target_var,
-            metric_list=metric.name,
-            target_source=target_ds.attrs["source"],
-            forecast_source=forecast_ds.attrs["source"],
+            metric=metric.name,
             case_id_number=case_id,
             event_type=event_type
         )
@@ -230,8 +223,23 @@ def _ensure_output_schema(df: pd.DataFrame, **metadata) -> pd.DataFrame:
 
     # Check for missing columns and warn
     missing_cols = set(OUTPUT_COLUMNS) - set(df.columns)
+
+    # An output requires one of init_time or lead_time. init_time will be present for a
+    # metric that assesses something in an entire model run, such as the onset error of
+    # an event. Lead_time will be present for a metric that assesses something at a
+    # specific forecast hour, such as RMSE. If neither are present, the output is
+    # invalid. Both should not be present for one metric. Thus, one should always be
+    # missing, which is intended behavior.
+    init_time_missing = "init_time" in missing_cols
+    lead_time_missing = "lead_time" in missing_cols
+
+    # Check if exactly one of init_time or lead_time is missing
+    if init_time_missing != lead_time_missing:
+        missing_cols.discard("init_time")
+        missing_cols.discard("lead_time")
+
     if missing_cols:
-        logger.warning(f"Missing expected columns: {missing_cols}")
+        logger.warning(f"Missing expected columns: {missing_cols}.")
 
     # Ensure all OUTPUT_COLUMNS are present (missing ones will be NaN)
     # and reorder to match OUTPUT_COLUMNS specification
@@ -241,8 +249,8 @@ def _ensure_output_schema(df: pd.DataFrame, **metadata) -> pd.DataFrame:
 def _evaluate_metric_and_return_df(
     forecast_ds: xr.Dataset,
     target_ds: xr.Dataset,
-    forecast_variable: Union[str, "derived.DerivedVariable"],
-    target_variable: Union[str, "derived.DerivedVariable"],
+    forecast_variable: Union[str, Type["derived.DerivedVariable"]],
+    target_variable: Union[str, Type["derived.DerivedVariable"]],
     metric: "metrics.BaseMetric",
     case_id_number: int,
     event_type: str,
@@ -262,18 +270,21 @@ def _evaluate_metric_and_return_df(
     Returns:
         A dataframe of the results of the metric evaluation.
     """
+
+    # Normalize variables to their string names if needed
+    forecast_variable = _maybe_convert_variable_to_string(forecast_variable)
+    target_variable = _maybe_convert_variable_to_string(target_variable)
+
     # TODO: remove this once we have a better way to handle metric
     # instantiation
     if isinstance(metric, type):
         metric = metric()
-
-    logger.info(f"computing metric {metric.name}")
+    logger.info(f"Computing metric {metric.name}... ")
     metric_result = metric.compute_metric(
-        forecast_ds[forecast_variable],
-        target_ds[target_variable],
+        forecast_ds.get(forecast_variable, forecast_ds.data_vars),
+        target_ds.get(target_variable, target_ds.data_vars),
         **kwargs,
     )
-
     # Convert to DataFrame and add metadata, ensuring OUTPUT_COLUMNS compliance
     df = metric_result.to_dataframe(name="value").reset_index()
     # TODO: add functionality for custom metadata columns
@@ -281,6 +292,16 @@ def _evaluate_metric_and_return_df(
         target_variable, metric, target_ds, forecast_ds, case_id_number, event_type
     )
     return _ensure_output_schema(df, **metadata)
+
+
+def _maybe_convert_variable_to_string(
+    variable: Union[str, Type["derived.DerivedVariable"]],
+) -> str:
+    """Convert a variable to its string representation."""
+    if derived.is_derived_variable(variable):
+        return variable.name  # type: ignore
+    else:
+        return variable  # type: ignore
 
 
 def _build_datasets(
@@ -291,21 +312,30 @@ def _build_datasets(
     This method will process through all stages of the pipeline for the target and
     forecast datasets, including preprocessing, variable renaming, and subsetting.
     """
-    logger.info("running forecast pipeline")
-    forecast_ds = run_pipeline(case_operator, "forecast")
-
+    logger.info("Running target pipeline... ")
+    target_ds = run_pipeline(case_operator.case_metadata, case_operator.target)
+    logger.info("Running forecast pipeline... ")
+    forecast_ds = run_pipeline(case_operator.case_metadata, case_operator.forecast)
     # Check if any dimension has zero length
     zero_length_dims = [dim for dim, size in forecast_ds.sizes.items() if size == 0]
     if zero_length_dims:
-        logger.warning(
-            f"forecast dataset for case {case_operator.case_metadata.case_id_number} "
-            f"has zero-length dimensions {zero_length_dims} for case time range "
-            f"{case_operator.case_metadata.start_date} to "
-            f"{case_operator.case_metadata.end_date}"
-        )
+        if "valid_time" in zero_length_dims:
+            logger.warning(
+                f"Forecast dataset for case "
+                f"{case_operator.case_metadata.case_id_number} "
+                f"has no data for case time range "
+                f"{case_operator.case_metadata.start_date} to "
+                f"{case_operator.case_metadata.end_date}."
+            )
+        else:
+            logger.warning(
+                f"Forecast dataset for case "
+                f"{case_operator.case_metadata.case_id_number} "
+                f"has zero-length dimensions {zero_length_dims} for case time range "
+                f"{case_operator.case_metadata.start_date} "
+                f"to {case_operator.case_metadata.end_date}."
+            )
         return xr.Dataset(), xr.Dataset()
-    logger.info("running target pipeline")
-    target_ds = run_pipeline(case_operator, "target")
     return (forecast_ds, target_ds)
 
 
@@ -313,50 +343,51 @@ def _compute_and_maybe_cache(
     *datasets: xr.Dataset, cache_dir: Optional[Union[str, Path]]
 ) -> list[xr.Dataset]:
     """Compute and cache the datasets if caching."""
-    logger.info("computing datasets")
+    logger.info("Computing datasets... ")
     computed_datasets = [dataset.compute() for dataset in datasets]
     if cache_dir:
-        raise NotImplementedError("Caching is not implemented yet")
+        raise NotImplementedError("Caching is not implemented yet.")
         # (computed_dataset.to_netcdf(self.cache_dir) for computed_dataset in
         # computed_datasets)
     return computed_datasets
 
 
 def run_pipeline(
-    case_operator: "cases.CaseOperator",
-    input_source: Literal["target", "forecast"],
+    case_metadata: "cases.IndividualCase",
+    input_data: "inputs.InputBase",
 ) -> xr.Dataset:
-    """Shared method for running the target pipeline.
+    """Shared method for running an input pipeline.
 
     Args:
-        case_operator: The case operator to run the pipeline on.
-        input_source: The input source to run the pipeline on.
+        case_metadata: The case metadata to run the pipeline on.
+        input_data: The input data to run the pipeline on.
 
     Returns:
-        The target data with a type determined by the user.
+        The processed input data as an xarray dataset.
     """
-
-    if input_source == "target":
-        input_data = case_operator.target
-    elif input_source == "forecast":
-        input_data = case_operator.forecast
-    else:
-        raise ValueError(f"Invalid input source: {input_source}")
-
     # Open data and process through pipeline steps
     data = (
-        # opens data from user-defined source
+        # Opens data from user-defined source
         input_data.open_and_maybe_preprocess_data_from_source()
-        # maps variable names to the target data if not already using EWB
+        # Maps variable names to the input data if not already using EWB
         # naming conventions
         .pipe(input_data.maybe_map_variable_names)
-        # subsets the target data using the caseoperator metadata
+        # subsets the input data to the variables defined in the input data
+        .pipe(inputs.maybe_subset_variables, variables=input_data.variables)
+        # Subsets the input data using case metadata
         .pipe(
             input_data.subset_data_to_case,
-            case_operator=case_operator,
+            case_metadata=case_metadata,
         )
-        # converts the target data to an xarray dataset if it is not already
+        # Converts the input data to an xarray dataset if it is not already
         .pipe(input_data.maybe_convert_to_dataset)
+        # Adds the name of the dataset to the dataset attributes
         .pipe(input_data.add_source_to_dataset_attrs)
+        # Derives variables if needed
+        .pipe(
+            derived.maybe_derive_variables,
+            variables=input_data.variables,
+            case_metadata=case_metadata,
+        )
     )
     return data
