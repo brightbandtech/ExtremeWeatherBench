@@ -1,9 +1,30 @@
 import logging
+import multiprocessing
+import os
 
+import joblib
 import numpy as np
 import xarray as xr
+from tqdm.auto import tqdm
+from tqdm.contrib.logging import logging_redirect_tqdm
 
 from extremeweatherbench import evaluate, inputs, metrics, utils
+
+
+def configure_root_logger():
+    root = logging.getLogger()
+    console_handler = logging.StreamHandler()
+    file_handler = logging.FileHandler("joblib.log")
+    formatter = logging.Formatter(
+        "%(asctime)s %(processName)-10s %(name)s %(levelname)-8s %(message)s"
+    )
+    file_handler.setFormatter(formatter)
+    console_handler.setFormatter(formatter)
+    root.addHandler(file_handler)
+    root.addHandler(console_handler)
+    root.setLevel(logging.DEBUG)
+    return root
+
 
 # Suppress noisy log messages
 logging.getLogger("urllib3.connectionpool").setLevel(logging.CRITICAL)
@@ -85,6 +106,7 @@ fcnv2_forecast = inputs.KerchunkForecast(
     preprocess=_preprocess_bb_cira_forecast_dataset,
 )
 
+
 # Create a list of evaluation objects for freeze
 freeze_evaluation_object = [
     inputs.EvaluationObject(
@@ -117,12 +139,26 @@ test_ewb = evaluate.ExtremeWeatherBench(
     evaluation_objects=freeze_evaluation_object,
 )
 
-# Run the workflow
-outputs = test_ewb.run(
-    # tolerance range is the number of hours before and after the timestamp a
-    # validating occurrence is checked in the forecasts
-    tolerance_range=48,
-)
+# Get case operators
+case_operators = test_ewb.case_operators
 
-# Print the outputs; can be saved if desired
-print(outputs.head())
+# Get the number of available CPUs for determining n_processes
+n_threads_per_process = 4
+n_processes = max(1, multiprocessing.cpu_count() // n_threads_per_process)
+
+# Set environment variable to control threads per process
+os.environ["OMP_NUM_THREADS"] = str(n_threads_per_process)
+os.environ["MKL_NUM_THREADS"] = str(n_threads_per_process)
+os.environ["OPENBLAS_NUM_THREADS"] = str(n_threads_per_process)
+os.environ["NUMEXPR_NUM_THREADS"] = str(n_threads_per_process)
+
+# Use joblib to parallelize with n processes, each with 10 threads
+with logging_redirect_tqdm():
+    results = joblib.Parallel(n_jobs=n_processes, prefer="processes")(
+        joblib.delayed(evaluate.compute_case_operator)(
+            case_op, tolerance_range=48, pre_compute=True
+        )
+        for case_op in tqdm(case_operators)
+    )
+
+print(results)
