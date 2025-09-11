@@ -363,7 +363,7 @@ def run_pipeline(
         input_data: The input data to run the pipeline on.
 
     Returns:
-        The modified input data with a type determined by the user.
+        The processed input data as an xarray dataset.
     """
     # Open data and process through pipeline steps
     data = (
@@ -372,6 +372,8 @@ def run_pipeline(
         # Maps variable names to the input data if not already using EWB
         # naming conventions
         .pipe(input_data.maybe_map_variable_names)
+        # subsets the input data to the variables defined in the input data
+        .pipe(inputs.maybe_subset_variables, variables=input_data.variables)
         # Subsets the input data using case metadata
         .pipe(
             input_data.subset_data_to_case,
@@ -379,6 +381,7 @@ def run_pipeline(
         )
         # Converts the input data to an xarray dataset if it is not already
         .pipe(input_data.maybe_convert_to_dataset)
+        # Adds the name of the dataset to the dataset attributes
         .pipe(input_data.add_source_to_dataset_attrs)
         # Derives variables if needed
         .pipe(

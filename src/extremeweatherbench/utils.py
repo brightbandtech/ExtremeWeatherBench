@@ -7,11 +7,10 @@ import logging
 import threading
 from importlib import resources
 from pathlib import Path
-from typing import Any, Callable, Optional, TypeAlias, Union
+from typing import Any, Callable, Optional, Union
 
 import numpy as np
 import pandas as pd  # type: ignore[import-untyped]
-import polars as pl
 import regionmask
 import xarray as xr
 import yaml  # type: ignore[import]
@@ -19,14 +18,13 @@ import yaml  # type: ignore[import]
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-IncomingDataInput: TypeAlias = xr.Dataset | xr.DataArray | pl.LazyFrame | pd.DataFrame
-
 
 class ThreadSafeDict:
-    """A thread-safe dictionary.
+    """A thread-safe dictionary implementation using locks.
 
-    This class is a thread-safe dictionary that can be used to store data that is
-    shared between threads, such as caches of data.
+    This class provides a thread-safe wrapper around a standard dictionary,
+    ensuring atomic operations for getting, setting, and deleting items.
+    Useful for caching data that needs to be shared between threads safely.
     """
 
     def __init__(self):
@@ -194,11 +192,6 @@ def derive_indices_from_init_time_and_lead_time(
     valid_time_indices = np.asarray(valid_time_mask).nonzero()
 
     return valid_time_indices
-
-
-def _default_preprocess(input_data: IncomingDataInput) -> IncomingDataInput:
-    """Default forecast preprocess function that does nothing."""
-    return input_data
 
 
 def filter_kwargs_for_callable(kwargs: dict, callable_obj: Callable) -> dict:
