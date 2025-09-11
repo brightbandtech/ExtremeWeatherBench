@@ -24,10 +24,9 @@ logger = logging.getLogger(__name__)
 class ExtremeWeatherBench:
     """A class to run the ExtremeWeatherBench workflow.
 
-    This class is used to run the ExtremeWeatherBench workflow. It is a
-    wrapper around the
-    case operators and evaluation objects to create either a serial loop or will return
-    the built case operators to run in parallel as defined by the user.
+    This class is used to run the ExtremeWeatherBench workflow. It is a wrapper around
+    the case operators and evaluation objects to create either a serial loop or will
+    return the built case operators to run in parallel as defined by the user.
 
 
     Attributes:
@@ -357,30 +356,31 @@ def run_pipeline(
     case_metadata: "cases.IndividualCase",
     input_data: "inputs.InputBase",
 ) -> xr.Dataset:
-    """Shared method for running the target pipeline.
+    """Shared method for running an input pipeline.
 
     Args:
-        case_operator: The case operator to run the pipeline on.
-        input_source: The input source to run the pipeline on.
+        case_metadata: The case metadata to run the pipeline on.
+        input_data: The input data to run the pipeline on.
 
     Returns:
-        The target data with a type determined by the user.
+        The modified input data with a type determined by the user.
     """
     # Open data and process through pipeline steps
     data = (
-        # opens data from user-defined source
+        # Opens data from user-defined source
         input_data.open_and_maybe_preprocess_data_from_source()
-        # maps variable names to the target data if not already using EWB
+        # Maps variable names to the input data if not already using EWB
         # naming conventions
         .pipe(input_data.maybe_map_variable_names)
-        # subsets the target data using the caseoperator metadata
+        # Subsets the input data using case metadata
         .pipe(
             input_data.subset_data_to_case,
             case_metadata=case_metadata,
         )
-        # converts the target data to an xarray dataset if it is not already
+        # Converts the input data to an xarray dataset if it is not already
         .pipe(input_data.maybe_convert_to_dataset)
         .pipe(input_data.add_source_to_dataset_attrs)
+        # Derives variables if needed
         .pipe(
             derived.maybe_derive_variables,
             variables=input_data.variables,
