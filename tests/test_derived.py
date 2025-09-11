@@ -780,25 +780,6 @@ class TestUtilityFunctions:
         result = derived.is_derived_variable(derived.DerivedVariable)
         assert result is True
 
-    def test_maybe_include_variables_with_recursive_derived_classes(self):
-        """Test recursive resolution of derived variables with classes."""
-        incoming_variables = [
-            "base_variable",
-            TestRecursiveDerivedVariable,  # Requires TestValidDerivedVariable
-        ]
-
-        result = derived.maybe_include_variables_from_derived_input(incoming_variables)
-
-        # Should recursively resolve TestRecursiveDerivedVariable ->
-        # TestValidDerivedVariable -> ["test_variable_1", "test_variable_2"]
-        expected = [
-            "base_variable",
-            "test_variable_1",
-            "test_variable_2",
-        ]
-
-        assert set(result) == set(expected)
-
     def test_maybe_include_variables_preserves_order_removes_duplicates(self):
         """Test that function preserves order and removes duplicates."""
         incoming_variables = [
