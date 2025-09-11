@@ -135,19 +135,12 @@ def compute_case_operator(case_operator: "cases.CaseOperator", **kwargs):
         ),
         case_operator.metric_list,
     ):
-        # Handle derived variables by extracting their names
-        forecast_var = (
-            variables[0].name if hasattr(variables[0], "name") else variables[0]
-        )
-        target_var = (
-            variables[1].name if hasattr(variables[1], "name") else variables[1]
-        )
         results.append(
             _evaluate_metric_and_return_df(
                 forecast_ds=aligned_forecast_ds,
                 target_ds=aligned_target_ds,
-                forecast_variable=forecast_var,
-                target_variable=target_var,
+                forecast_variable=variables[0],
+                target_variable=variables[1],
                 metric=metric,
                 case_id_number=case_operator.case_metadata.case_id_number,
                 event_type=case_operator.case_metadata.event_type,
