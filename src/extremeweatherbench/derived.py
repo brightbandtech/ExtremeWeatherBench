@@ -136,11 +136,11 @@ class TropicalCycloneTrackVariables(DerivedVariable):
         ibtracs_data = kwargs.get("ibtracs_data", None)
         case_metadata = kwargs.get("case_metadata", None)
         case_id_number = case_metadata.case_id_number if case_metadata else None
-        if ibtracs_data is None:
-            if case_id_number is not None:
-                ibtracs_data = tropical_cyclone.get_ibtracs_data(case_id_number)
-            else:
-                raise ValueError("No IBTrACS data provided to constrain TC tracks.")
+        if ibtracs_data is None and case_id_number is not None:
+            ibtracs_data = tropical_cyclone.get_ibtracs_data(case_id_number)
+        else:
+            raise ValueError("No IBTrACS data provided to constrain TC tracks.")
+
         # Use IBTrACS-filtered TC detection
         tctracks_ds = tropical_cyclone.create_tctracks_from_dataset_with_ibtracs_filter(
             cyclone_dataset, ibtracs_data
