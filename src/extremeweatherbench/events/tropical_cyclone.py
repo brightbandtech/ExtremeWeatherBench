@@ -1362,36 +1362,12 @@ def _create_tctracks_optimized_with_ibtracs(
         return storm_ds
     else:
         # Handle datasets without init_time coordinate
-        # Find the time dimension in the data variables
-        sample_var = cyclone_dataset["air_pressure_at_mean_sea_level"]
-        time_dims = [str(dim) for dim in sample_var.dims if "time" in str(dim)]
-        time_dim = time_dims[0] if time_dims else "time"
+        # Use standard coordinate names
+        time_dim = "valid_time"
+        time_coord = cyclone_dataset.valid_time
 
-        # Find the lead time dimension
-        lead_time_dims = [
-            str(dim)
-            for dim in sample_var.dims
-            if "prediction_timedelta" in str(dim) or "lead" in str(dim)
-        ]
-        lead_time_dim = lead_time_dims[0] if lead_time_dims else "prediction_timedelta"
-
-        # Get the coordinate data
-        if time_dim in cyclone_dataset.coords:
-            time_coord = cyclone_dataset[time_dim]
-        elif "valid_time" in cyclone_dataset.coords:
-            time_coord = cyclone_dataset.valid_time
-            time_dim = "valid_time"
-        else:
-            time_coord = cyclone_dataset.time
-            time_dim = "time"
-
-        if lead_time_dim in cyclone_dataset.coords:
-            lead_time_coord = cyclone_dataset[lead_time_dim]
-        elif "lead_time" in cyclone_dataset.coords:
-            lead_time_coord = cyclone_dataset.lead_time
-            lead_time_dim = "prediction_timedelta"
-        else:
-            lead_time_coord = xr.DataArray([0], dims=["prediction_timedelta"])
+        lead_time_dim = "lead_time"
+        lead_time_coord = cyclone_dataset.lead_time
 
         # Create empty dataset as fallback for now
         return xr.Dataset(
