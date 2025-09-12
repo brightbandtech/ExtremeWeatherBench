@@ -1257,6 +1257,46 @@ def sample_tc_case_operator():
 class TestTropicalCycloneEvaluation:
     """Test tropical cyclone specific evaluation functionality."""
 
+    @pytest.fixture
+    def sample_tc_forecast_dataset():
+        """Create a sample forecast dataset for TC testing."""
+        valid_time = pd.date_range("2023-09-01", periods=3, freq="12h")
+        lead_time = np.array([0, 12, 24, 36], dtype="timedelta64[h]")
+        lat = np.linspace(10, 40, 16)
+        lon = np.linspace(-90, -60, 16)
+
+        # Create realistic meteorological data
+        data_shape = (len(valid_time), len(lat), len(lon), len(lead_time))
+
+        dataset = xr.Dataset(
+            {
+                "air_pressure_at_mean_sea_level": (
+                    ["time", "latitude", "longitude", "lead_time"],
+                    np.random.normal(101325, 1000, data_shape),
+                ),
+                "surface_eastward_wind": (
+                    ["time", "latitude", "longitude", "lead_time"],
+                    np.random.normal(0, 10, data_shape),
+                ),
+                "surface_northward_wind": (
+                    ["time", "latitude", "longitude", "lead_time"],
+                    np.random.normal(0, 10, data_shape),
+                ),
+                "geopotential": (
+                    ["time", "latitude", "longitude", "lead_time"],
+                    np.random.normal(5000, 1000, data_shape) * 9.80665,
+                ),
+            },
+            coords={
+                "valid_time": valid_time,
+                "latitude": lat,
+                "longitude": lon,
+                "lead_time": lead_time,
+            },
+        )
+
+        return dataset
+
     def setup_method(self):
         """Clear registries before each test."""
         tropical_cyclone.clear_ibtracs_registry()
