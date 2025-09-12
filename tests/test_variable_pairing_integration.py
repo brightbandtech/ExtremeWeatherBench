@@ -20,10 +20,6 @@ import xarray as xr
 from extremeweatherbench import cases, evaluate, inputs, metrics
 from extremeweatherbench.regions import CenteredRegion
 
-# =============================================================================
-# Test Fixtures
-# =============================================================================
-
 
 class MockMetric(metrics.BaseMetric):
     """A simple mock metric for testing."""

@@ -1,4 +1,4 @@
-"""Comprehensive tests for extremeweatherbench.inputs module."""
+"""Tests for inputs module."""
 
 from unittest.mock import Mock, patch
 

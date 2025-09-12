@@ -1,12 +1,4 @@
-"""Comprehensive unit tests for the extremeweatherbench.derived module.
-
-This test suite covers:
-- Abstract base class DerivedVariable
-- All concrete derived variable implementations
-- Utility functions for variable derivation
-- Edge cases and error conditions
-- Mock implementations for testing
-"""
+"""Tests for the derived module."""
 
 import numpy as np
 import pandas as pd
@@ -119,7 +111,7 @@ class TestValidDerivedVariable(derived.DerivedVariable):
     required_variables = ["test_variable_1", "test_variable_2"]
 
     @classmethod
-    def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
+    def derive_variable(cls, data: xr.Dataset, **kwargs) -> xr.DataArray:
         """Test implementation that sums two variables."""
         return data[cls.required_variables[0]] + data[cls.required_variables[1]]
 
@@ -130,7 +122,7 @@ class TestMinimalDerivedVariable(derived.DerivedVariable):
     required_variables = ["single_variable"]
 
     @classmethod
-    def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
+    def derive_variable(cls, data: xr.Dataset, **kwargs) -> xr.DataArray:
         """Test implementation that returns the variable unchanged."""
         return data[cls.required_variables[0]]
 
@@ -141,7 +133,7 @@ class TestDerivedVariableWithoutName(derived.DerivedVariable):
     required_variables = ["single_variable"]
 
     @classmethod
-    def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
+    def derive_variable(cls, data: xr.Dataset, **kwargs) -> xr.DataArray:
         """Test implementation that returns DataArray without name."""
         result = data[cls.required_variables[0]]
         result.name = None
@@ -302,7 +294,7 @@ class TestMaybeDeriveVariablesFunction:
                 return cls.derive_variable(data, **kwargs)
 
     def test_prepare_wind_data_helper(self, sample_dataset):
-        """Test the internal _prepare_wind_data helper function."""
+        """Test the prepare_wind_data helper function."""
         # This tests the helper function within derive_variable
         # We need to access it indirectly since it's defined within the method
 

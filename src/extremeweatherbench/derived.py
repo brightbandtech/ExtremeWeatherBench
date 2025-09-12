@@ -206,7 +206,7 @@ def maybe_include_variables_from_derived_input(
                 maybe_include_variables_from_derived_input(v.required_variables)
             )
 
-    return string_variables + derived_required_variables
+    return list(set(string_variables + derived_required_variables))
 
 
 def is_derived_variable(
