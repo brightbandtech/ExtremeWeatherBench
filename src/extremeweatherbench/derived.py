@@ -125,7 +125,7 @@ class TropicalCycloneTrackVariables(DerivedVariable):
             return tropical_cyclone._TC_TRACK_CACHE[cache_key]
 
         # Prepare the data with wind variables as needed
-        prepared_data = calc.maybe_prepare_wind_speed(data)
+        prepared_data = calc.maybe_calculate_wind_speed(data)
 
         # Generates the variables needed for the TC track calculation
         # (geop. thickness, winds, temps, slp)
