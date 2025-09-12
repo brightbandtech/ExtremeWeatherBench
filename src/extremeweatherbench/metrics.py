@@ -232,12 +232,6 @@ class ThresholdMetric(BaseMetric):
 
 
 class MAE(BaseMetric):
-    """Mean absolute error.
-
-    This metric computes the mean absolute error between a forecast and target
-    dataset.
-    """
-
     name = "mae"
 
     @classmethod
