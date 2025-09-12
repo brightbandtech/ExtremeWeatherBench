@@ -1,4 +1,4 @@
-"""Tests for the region-related functionality in regions.py."""
+"""Tests for the regions module."""
 
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -115,7 +115,8 @@ class TestRegionToGeopandas:
         polygon = gdf.geometry.iloc[0]
         assert isinstance(polygon, Polygon)
 
-        # Check bounds (should be 40-50 lat, -125 to -115 lon after conversion to -180 to 180)
+        # Check bounds (should be 40-50 lat, -125 to -115 lon after conversion to
+        # -180 to 180)
         bounds = polygon.bounds  # (minx, miny, maxx, maxy)
         assert abs(bounds[1] - 40.0) < 0.001  # min lat
         assert abs(bounds[3] - 50.0) < 0.001  # max lat
@@ -134,7 +135,8 @@ class TestRegionToGeopandas:
         assert isinstance(gdf, gpd.GeoDataFrame)
         assert len(gdf) == 1
 
-        # Check bounds (should be 42.5-47.5 lat, -125 to -115 lon after conversion to -180 to 180)
+        # Check bounds (should be 42.5-47.5 lat, -125 to -115 lon after conversion to
+        # -180 to 180)
         bounds = gdf.geometry.iloc[0].bounds
         assert abs(bounds[1] - 42.5) < 0.001  # min lat
         assert abs(bounds[3] - 47.5) < 0.001  # max lat

@@ -1,4 +1,4 @@
-"""Tests for the extremeweatherbench.metrics module."""
+"""Tests for the metrics module."""
 
 import numpy as np
 import pandas as pd
@@ -20,6 +20,8 @@ class TestBaseMetric:
         """Test that the name property returns the class name."""
 
         class TestConcreteMetric(metrics.BaseMetric):
+            name = "TestConcreteMetric"
+
             @classmethod
             def _compute_metric(cls, forecast, target, **kwargs):
                 return forecast - target
@@ -31,6 +33,8 @@ class TestBaseMetric:
         """Test that compute_metric method exists and is callable."""
 
         class TestConcreteMetric(metrics.BaseMetric):
+            name = "TestConcreteMetric"
+
             @classmethod
             def _compute_metric(cls, forecast, target, **kwargs):
                 return forecast - target
@@ -53,6 +57,7 @@ class TestAppliedMetric:
 
         class TestConcreteAppliedMetric(metrics.AppliedMetric):
             base_metric = metrics.MAE
+            name = "TestConcreteAppliedMetric"
 
             def _compute_applied_metric(self, forecast, target, **kwargs):
                 return {"forecast": forecast, "target": target}
@@ -61,31 +66,13 @@ class TestAppliedMetric:
         assert metric.name == "TestConcreteAppliedMetric"
 
 
-class TestBinaryContingencyTable:
-    """Tests for the BinaryContingencyTable metric."""
+class TestThresholdMetrics:
+    """Tests for ThresholdMetric classes."""
 
-    def test_instantiation(self):
-        """Test that BinaryContingencyTable can be instantiated."""
-        metric = metrics.BinaryContingencyTable()
-        assert isinstance(metric, metrics.BaseMetric)
-        assert metric.name == "BinaryContingencyTable"
-
-    def test_compute_metric_basic(self):
-        """Test basic computation without checking specific values."""
-        metric = metrics.BinaryContingencyTable()
-
-        # Create simple binary test data
-        forecast = xr.Dataset({"data": (["x", "y"], [[1, 0], [0, 1]])})
-        target = xr.Dataset({"data": (["x", "y"], [[1, 1], [0, 0]])})
-
-        # Test that it runs without error
-        try:
-            result = metric._compute_metric(forecast, target)
-            # Just check that something is returned
-            assert result is not None
-        except Exception:
-            # If there are parameter issues, at least the class should exist
-            assert isinstance(metric, metrics.BinaryContingencyTable)
+    def test_threshold_metric_cannot_instantiate_base_class(self):
+        """Test that ThresholdMetric base class cannot be instantiated directly."""
+        with pytest.raises(TypeError):
+            metrics.ThresholdMetric()
 
 
 class TestMAE:
@@ -95,7 +82,7 @@ class TestMAE:
         """Test that MAE can be instantiated."""
         metric = metrics.MAE()
         assert isinstance(metric, metrics.BaseMetric)
-        assert metric.name == "MAE"
+        assert metric.name == "mae"
 
     def test_compute_metric_simple(self):
         """Test MAE computation with simple data."""
@@ -118,7 +105,7 @@ class TestME:
         """Test that ME can be instantiated."""
         metric = metrics.ME()
         assert isinstance(metric, metrics.BaseMetric)
-        assert metric.name == "ME"
+        assert metric.name == "me"
 
     def test_compute_metric_simple(self):
         """Test ME computation with simple data."""
@@ -141,7 +128,7 @@ class TestRMSE:
         """Test that RMSE can be instantiated."""
         metric = metrics.RMSE()
         assert isinstance(metric, metrics.BaseMetric)
-        assert metric.name == "RMSE"
+        assert metric.name == "rmse"
 
     def test_compute_metric_simple(self):
         """Test RMSE computation with simple data."""
@@ -164,7 +151,7 @@ class TestMaximumMAE:
         """Test that MaximumMAE can be instantiated."""
         metric = metrics.MaximumMAE()
         assert isinstance(metric, metrics.AppliedMetric)
-        assert metric.name == "MaximumMAE"
+        assert metric.name == "maximum_mae"
 
     def test_base_metric_property(self):
         """Test that base_metric property returns MAE."""
@@ -203,7 +190,7 @@ class TestMinimumMAE:
         """Test that MinimumMAE can be instantiated."""
         metric = metrics.MinimumMAE()
         assert isinstance(metric, metrics.AppliedMetric)
-        assert metric.name == "MinimumMAE"
+        assert metric.name == "minimum_mae"
 
     def test_base_metric_property(self):
         """Test that base_metric property returns MAE."""
@@ -242,7 +229,7 @@ class TestMaxMinMAE:
         """Test that MaxMinMAE can be instantiated."""
         metric = metrics.MaxMinMAE()
         assert isinstance(metric, metrics.AppliedMetric)
-        assert metric.name == "MaxMinMAE"
+        assert metric.name == "max_min_mae"
 
     def test_base_metric_property(self):
         """Test that base_metric property returns MAE."""
@@ -293,7 +280,8 @@ class TestMaxMinMAE:
             assert "target" in result
             assert "preserve_dims" in result
         except Exception:
-            # If computation fails due to data structure issues, at least test instantiation works
+            # If computation fails due to data structure issues, at least test
+            # instantiation works
             assert isinstance(metric, metrics.MaxMinMAE)
 
 
@@ -304,7 +292,7 @@ class TestOnsetME:
         """Test that OnsetME can be instantiated."""
         metric = metrics.OnsetME()
         assert isinstance(metric, metrics.AppliedMetric)
-        assert metric.name == "OnsetME"
+        assert metric.name == "onset_me"
 
     def test_base_metric_property(self):
         """Test that base_metric property returns ME."""
@@ -332,6 +320,7 @@ class TestOnsetME:
                 )
             },
             coords={"init_time": [pd.Timestamp("2020-01-01")], "valid_time": times},
+            attrs={"forecast_resolution_hours": 6},
         ).expand_dims(["latitude", "longitude"])
 
         target = xr.Dataset(
@@ -355,7 +344,7 @@ class TestDurationME:
         """Test that DurationME can be instantiated."""
         metric = metrics.DurationME()
         assert isinstance(metric, metrics.AppliedMetric)
-        assert metric.name == "DurationME"
+        assert metric.name == "duration_me"
 
     def test_base_metric_property(self):
         """Test that base_metric property returns ME."""
@@ -383,6 +372,7 @@ class TestDurationME:
                 )
             },
             coords={"init_time": [pd.Timestamp("2020-01-01")], "valid_time": times},
+            attrs={"forecast_resolution_hours": 6},
         ).expand_dims(["latitude", "longitude"])
 
         target = xr.Dataset(
@@ -397,154 +387,3 @@ class TestDurationME:
         assert "forecast" in result
         assert "target" in result
         assert "preserve_dims" in result
-
-
-class TestIncompleteMetrics:
-    """Tests for metrics that are marked as TODO/incomplete implementations."""
-
-    def test_all_incomplete_applied_metrics_can_be_instantiated(self):
-        """Test that all incomplete applied metric classes can be instantiated."""
-        incomplete_applied_metrics = [
-            metrics.LandfallDisplacement,
-            metrics.LandfallTimeME,
-            metrics.LandfallIntensityMAE,
-            metrics.SpatialDisplacement,
-            metrics.FAR,
-            metrics.CSI,
-            metrics.LeadTimeDetection,
-            metrics.RegionalHitsMisses,
-            metrics.HitsMisses,
-        ]
-
-        for metric_class in incomplete_applied_metrics:
-            metric = metric_class()
-            assert isinstance(metric, metrics.AppliedMetric)
-            assert hasattr(metric, "base_metric")
-            assert hasattr(metric, "_compute_applied_metric")
-
-    def test_incomplete_base_metrics_can_be_instantiated(self):
-        """Test that incomplete base metric classes can be instantiated."""
-        incomplete_base_metrics = [
-            metrics.EarlySignal,
-        ]
-
-        for metric_class in incomplete_base_metrics:
-            metric = metric_class()
-            assert isinstance(metric, metrics.BaseMetric)
-            assert hasattr(metric, "_compute_metric")
-
-    def test_incomplete_metrics_have_appropriate_base_metrics(self):
-        """Test that incomplete applied metrics have reasonable base metric
-        assignments."""
-        # Binary contingency table based metrics
-        binary_metrics = [
-            metrics.FAR,
-            metrics.CSI,
-            metrics.RegionalHitsMisses,
-            metrics.HitsMisses,
-        ]
-
-        for metric_class in binary_metrics:
-            metric = metric_class()
-            assert metric.base_metric == metrics.BinaryContingencyTable
-
-        # MAE based metrics
-        mae_metrics = [
-            metrics.LandfallDisplacement,
-            metrics.LandfallIntensityMAE,
-            metrics.SpatialDisplacement,
-            metrics.LeadTimeDetection,
-        ]
-
-        for metric_class in mae_metrics:
-            metric = metric_class()
-            assert metric.base_metric == metrics.MAE
-
-        # ME based metrics
-        me_metrics = [
-            metrics.LandfallTimeME,
-        ]
-
-        for metric_class in me_metrics:
-            metric = metric_class()
-            assert metric.base_metric == metrics.ME
-
-
-class TestMetricIntegration:
-    """Integration tests for metric classes."""
-
-    def test_all_base_metrics_have_required_methods(self):
-        """Test that all base metric classes have required methods."""
-        base_metrics = [
-            metrics.BinaryContingencyTable,
-            metrics.MAE,
-            metrics.ME,
-            metrics.RMSE,
-            metrics.EarlySignal,  # Now a BaseMetric
-        ]
-
-        for metric_class in base_metrics:
-            metric = metric_class()
-            assert hasattr(metric, "_compute_metric")
-            assert hasattr(metric, "compute_metric")
-            assert hasattr(metric, "name")
-
-    def test_all_applied_metrics_have_required_methods(self):
-        """Test that all applied metric classes have required methods."""
-        applied_metrics = [
-            metrics.MaximumMAE,
-            metrics.MinimumMAE,
-            metrics.MaxMinMAE,
-            metrics.OnsetME,
-            metrics.DurationME,
-            # Include incomplete ones too
-            metrics.LandfallDisplacement,
-            metrics.LandfallTimeME,
-            metrics.LandfallIntensityMAE,
-            metrics.SpatialDisplacement,
-            metrics.FAR,
-            metrics.CSI,
-            metrics.LeadTimeDetection,
-            metrics.RegionalHitsMisses,
-            metrics.HitsMisses,
-        ]
-
-        for metric_class in applied_metrics:
-            metric = metric_class()
-            assert hasattr(metric, "_compute_applied_metric")
-            assert hasattr(metric, "compute_metric")
-            assert hasattr(metric, "base_metric")
-            assert hasattr(metric, "name")
-
-    def test_metrics_module_structure(self):
-        """Test the overall structure of the metrics module."""
-        # Test that required classes exist
-        assert hasattr(metrics, "BaseMetric")
-        assert hasattr(metrics, "AppliedMetric")
-
-        # Test that all expected metric classes exist
-        expected_classes = [
-            "BinaryContingencyTable",
-            "MAE",
-            "ME",
-            "RMSE",
-            "MaximumMAE",
-            "MinimumMAE",
-            "MaxMinMAE",
-            "OnsetME",
-            "DurationME",
-            "EarlySignal",
-            "LandfallDisplacement",
-            "LandfallTimeME",
-            "LandfallIntensityMAE",
-            "SpatialDisplacement",
-            "FAR",
-            "CSI",
-            "LeadTimeDetection",
-            "RegionalHitsMisses",
-            "HitsMisses",
-        ]
-
-        for class_name in expected_classes:
-            assert hasattr(metrics, class_name)
-            assert callable(getattr(metrics, class_name))

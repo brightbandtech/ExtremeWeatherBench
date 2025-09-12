@@ -77,29 +77,35 @@ class CaseOperator:
 
 
 def build_case_operators(
-    cases_dict: dict[str, list],
+    cases: Union[dict[str, list], IndividualCaseCollection],
     evaluation_objects: list["inputs.EvaluationObject"],
 ) -> list[CaseOperator]:
     """Build a CaseOperator from the case metadata and metric evaluation objects.
 
     Args:
-        cases_dict: The case metadata to use for the case operators.
-        evaluation_objects: The evaluation objects to use for the
-            case operators.
+        cases: The case metadata to use for the case operators as a dictionary of cases
+            or an IndividualCaseCollection.
+        evaluation_objects: The evaluation objects to apply to the case operators.
 
     Returns:
         A list of CaseOperator objects.
     """
-    if isinstance(cases_dict["cases"], list):
+    # Cases are a dictionary of cases, convert to an IndividualCaseCollection
+    if isinstance(cases, dict):
         case_metadata_collection = dacite.from_dict(
             data_class=IndividualCaseCollection,
-            data=cases_dict,
+            data=cases,
             config=dacite.Config(
                 type_hooks={regions.Region: regions.map_to_create_region},
             ),
         )
+    elif isinstance(cases, IndividualCaseCollection):
+        # Cases are already an IndividualCaseCollection
+        case_metadata_collection = cases
     else:
-        raise TypeError("cases_dict['cases'] must be a list of cases")
+        raise TypeError(
+            "cases must be a dictionary of cases or an IndividualCaseCollection"
+        )
 
     # build list of case operators based on information provided in case dict and
     case_operators = []

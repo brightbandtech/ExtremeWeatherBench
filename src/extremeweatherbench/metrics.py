@@ -1,16 +1,71 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, Optional, Type
 
 import numpy as np
 import scores.categorical as cat  # type: ignore[import-untyped]
 import xarray as xr
 from scores.continuous import mae, mean_error, rmse  # type: ignore[import-untyped]
 
-from extremeweatherbench import utils
+from extremeweatherbench import derived, evaluate, utils
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+
+# Global cache for transformed contingency managers
+_GLOBAL_CONTINGENCY_CACHE = utils.ThreadSafeDict()  # type: ignore
+
+
+def get_cached_transformed_manager(
+    forecast: xr.Dataset,
+    target: xr.Dataset,
+    forecast_threshold: float = 0.5,
+    target_threshold: float = 0.5,
+    preserve_dims: str = "lead_time",
+) -> cat.BasicContingencyManager:
+    """Get cached transformed contingency manager, creating if needed.
+
+    This function provides a global cache that can be used by any metric
+    with the same thresholds and data, regardless of how the metrics are created.
+    """
+    # Create cache key from data content hash and parameters
+    forecast_hash = hash(forecast.to_array().values.tobytes())
+    target_hash = hash(target.to_array().values.tobytes())
+
+    cache_key = (
+        forecast_hash,
+        target_hash,
+        forecast_threshold,
+        target_threshold,
+        preserve_dims,
+    )
+
+    # Return cached result if available
+    if cache_key in _GLOBAL_CONTINGENCY_CACHE:
+        logger.info(f"Cache found for {cache_key}")
+        return _GLOBAL_CONTINGENCY_CACHE[cache_key]
+
+    # Apply thresholds to binarize the data
+    binary_forecast = (forecast >= forecast_threshold).astype(float)
+    binary_target = (target >= target_threshold).astype(float)
+
+    # Create and transform contingency manager
+    binary_contingency_manager = cat.BinaryContingencyManager(
+        binary_forecast, binary_target
+    )
+    transformed = binary_contingency_manager.transform(preserve_dims=preserve_dims)
+
+    # Cache the result
+    _GLOBAL_CONTINGENCY_CACHE[cache_key] = transformed
+
+    return transformed
+
+
+def clear_contingency_cache():
+    """Clear the global contingency manager cache."""
+    global _GLOBAL_CONTINGENCY_CACHE
+    _GLOBAL_CONTINGENCY_CACHE.clear()
 
 
 class BaseMetric(ABC):
@@ -23,11 +78,34 @@ class BaseMetric(ABC):
     """
 
     # default to preserving lead_time in EWB metrics
+    name: str
     preserve_dims: str = "lead_time"
 
-    @property
-    def name(self) -> str:
-        return self.__class__.__name__
+    def __init__(
+        self,
+        forecast_variable: Optional[str | Type["derived.DerivedVariable"]] = None,
+        target_variable: Optional[str | Type["derived.DerivedVariable"]] = None,
+    ):
+        self.forecast_variable = forecast_variable
+        self.target_variable = target_variable
+        # Check if both variables are None - this is allowed
+        if self.forecast_variable is None and self.target_variable is None:
+            pass
+        # If only one is None, raise an error
+        elif self.forecast_variable is None or self.target_variable is None:
+            raise ValueError(
+                "Both forecast_variable and target_variable must be provided, "
+                "or both must be None"
+            )
+        else:
+            # catch if the user provides a DerivedVariable object/class instead of a
+            # string or not using the .name attribute
+            self.forecast_variable = evaluate.maybe_convert_variable_to_string(
+                self.forecast_variable
+            )
+            self.target_variable = evaluate.maybe_convert_variable_to_string(
+                self.target_variable
+            )
 
     @classmethod
     @abstractmethod
@@ -36,13 +114,14 @@ class BaseMetric(ABC):
         forecast: xr.Dataset,
         target: xr.Dataset,
         **kwargs: Any,
-    ) -> Any:
-        """Compute the metric.
+    ) -> xr.DataArray:
+        """Logic to compute, roll up, or otherwise transform the inputs for the base
+        metric.
 
         Args:
             forecast: The forecast dataset.
             target: The target dataset.
-            kwargs: Additional keyword arguments to pass to the metric.
+            kwargs: Additional keyword arguments to pass to the base metric.
         """
         pass
 
@@ -52,70 +131,50 @@ class BaseMetric(ABC):
         forecast: xr.Dataset,
         target: xr.Dataset,
         **kwargs,
-    ):
+    ) -> xr.DataArray:
+        """Compute the metric.
+
+        Args:
+            forecast: The forecast dataset.
+            target: The target dataset.
+            kwargs: Additional keyword arguments to pass to the metric.
+        """
         return cls._compute_metric(
             forecast,
             target,
-            **utils.filter_kwargs_for_callable(kwargs, cls._compute_metric),
+            **kwargs,
         )
 
 
 class AppliedMetric(ABC):
-    """An applied metric is a derivative of a BaseMetric.
+    """An applied metric is a wrapper around a BaseMetric.
 
-    It is a wrapper around one or more BaseMetrics that is intended for more
-    complex rollups or aggregations. Typically, these metrics are used for one
-    event type and are very specific. Temporal onset mean error, case duration
-    mean error, and maximum temperature mean absolute error, are all examples
-    of applied metrics.
+    An AppliedMetric is a wrapper around a BaseMetric that is intended for more complex
+    rollups or aggregations. Typically, these metrics are used for one event
+    type and are very specific.
+
+    Temporal onset mean error, case duration mean error, and maximum temperature mean
+    absolute error are all examples of applied metrics.
 
     Attributes:
-        base_metrics: A list of BaseMetrics to compute.
-        compute_applied_metric: A required method to compute the metric.
+        base_metric: The BaseMetric to wrap.
+        _compute_applied_metric: An abstract method to compute the inputs to the base
+        metric.
+        compute_applied_metric: A method to compute the metric.
     """
 
-    @property
-    def name(self) -> str:
-        return self.__class__.__name__
+    base_metric: type[BaseMetric]
 
-    @property
-    @abstractmethod
-    def base_metric(self) -> type[BaseMetric]:
-        pass
-
-    def compute_metric(
-        self,
-        forecast: xr.DataArray,
-        target: xr.DataArray,
-        **kwargs: Any,
-    ) -> Any:
-        # TODO: build a spatial dim/time dim separator to allow for spatial and temporal
-        # metrics to be computed separately
-
-        # Filter kwargs for each method
-        applied_metric_kwargs = utils.filter_kwargs_for_callable(
-            kwargs, self._compute_applied_metric
-        )
-        base_metric_kwargs = utils.filter_kwargs_for_callable(
-            kwargs, self.base_metric._compute_metric
-        )
-
-        # Compute the applied metric first
-        applied_result = self._compute_applied_metric(
-            forecast, target, **applied_metric_kwargs
-        )
-
-        # Then compute the base metric with the applied result
-        return self.base_metric._compute_metric(**applied_result, **base_metric_kwargs)
-
+    @classmethod
     @abstractmethod
     def _compute_applied_metric(
-        self,
+        cls,
         forecast: xr.DataArray,
         target: xr.DataArray,
         **kwargs: Any,
-    ) -> Any:
-        """Compute the applied metric.
+    ) -> dict[str, xr.DataArray]:
+        """Logic to compute, roll up, or otherwise transform the inputs for the base
+        metric.
 
         Args:
             forecast: The forecast dataset.
@@ -124,22 +183,57 @@ class AppliedMetric(ABC):
         """
         pass
 
-
-class BinaryContingencyTable(BaseMetric):
     @classmethod
-    def _compute_metric(
+    def compute_metric(
         cls,
-        forecast: xr.Dataset,
-        target: xr.Dataset,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
         **kwargs: Any,
-    ) -> Any:
-        preserve_dims = kwargs.get("preserve_dims", "lead_time")
-        return cat.BinaryContingencyManager(
-            forecast, target, preserve_dims=preserve_dims
+    ) -> xr.DataArray:
+        # first, compute the inputs to the base metric, a dictionary of forecast and
+        # target
+        applied_result = cls._compute_applied_metric(
+            forecast,
+            target,
+            **utils.filter_kwargs_for_callable(kwargs, cls._compute_applied_metric),
         )
+        # then, compute the base metric with the inputs
+        return cls.base_metric.compute_metric(**applied_result)
+
+
+class ThresholdMetric(BaseMetric):
+    """Base class for threshold-based metrics.
+
+    This class provides common functionality for metrics that require
+    forecast and target thresholds for binarization.
+    """
+
+    def __init__(
+        self,
+        forecast_threshold: float = 0.5,
+        target_threshold: float = 0.5,
+        preserve_dims: str = "lead_time",
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self.forecast_threshold = forecast_threshold
+        self.target_threshold = target_threshold
+        self.preserve_dims = preserve_dims
+
+    def __call__(self, forecast: xr.Dataset, target: xr.Dataset, **kwargs):
+        """Make instances callable using their configured thresholds."""
+        # Use instance attributes as defaults, but allow override from kwargs
+        kwargs.setdefault("forecast_threshold", self.forecast_threshold)
+        kwargs.setdefault("target_threshold", self.target_threshold)
+        kwargs.setdefault("preserve_dims", self.preserve_dims)
+
+        # Call the classmethod with the configured parameters
+        return self.__class__.compute_metric(forecast, target, **kwargs)
 
 
 class MAE(BaseMetric):
+    name = "mae"
+
     @classmethod
     def _compute_metric(
         cls,
@@ -152,6 +246,8 @@ class MAE(BaseMetric):
 
 
 class ME(BaseMetric):
+    name = "me"
+
     @classmethod
     def _compute_metric(
         cls,
@@ -164,6 +260,8 @@ class ME(BaseMetric):
 
 
 class RMSE(BaseMetric):
+    name = "rmse"
+
     @classmethod
     def _compute_metric(
         cls,
@@ -177,6 +275,8 @@ class RMSE(BaseMetric):
 
 # TODO: base metric for identifying signal and complete implementation
 class EarlySignal(BaseMetric):
+    name = "early_signal"
+
     @classmethod
     def _compute_metric(
         cls, forecast: xr.Dataset, target: xr.Dataset, **kwargs: Any
@@ -186,17 +286,18 @@ class EarlySignal(BaseMetric):
 
 
 class MaximumMAE(AppliedMetric):
-    @property
-    def base_metric(self) -> type[BaseMetric]:
-        return MAE
+    base_metric = MAE
 
+    name = "maximum_mae"
+
+    @classmethod
     def _compute_applied_metric(
-        self,
+        cls,
         forecast: xr.DataArray,
         target: xr.DataArray,
         tolerance_range: int = 24,
-        **kwargs: Any,
-    ) -> Any:
+        **kwargs,
+    ) -> dict[str, xr.DataArray]:
         forecast = forecast.compute()
         target_spatial_mean = target.compute().mean(["latitude", "longitude"])
         maximum_timestep = target_spatial_mean.idxmax("valid_time")
@@ -221,17 +322,18 @@ class MaximumMAE(AppliedMetric):
         return {
             "forecast": filtered_max_forecast,
             "target": maximum_value,
-            "preserve_dims": self.base_metric().preserve_dims,
+            "preserve_dims": cls.base_metric.preserve_dims,
         }
 
 
 class MinimumMAE(AppliedMetric):
-    @property
-    def base_metric(self) -> type[BaseMetric]:
-        return MAE
+    base_metric = MAE
 
+    name = "minimum_mae"
+
+    @classmethod
     def _compute_applied_metric(
-        self,
+        cls,
         forecast: xr.DataArray,
         target: xr.DataArray,
         tolerance_range: int = 24,
@@ -260,24 +362,37 @@ class MinimumMAE(AppliedMetric):
         return {
             "forecast": filtered_min_forecast,
             "target": minimum_value,
-            "preserve_dims": self.base_metric.preserve_dims,
+            "preserve_dims": cls.base_metric.preserve_dims,
         }
 
 
 class MaxMinMAE(AppliedMetric):
-    @property
-    def base_metric(self) -> type[BaseMetric]:
-        return MAE
+    base_metric = MAE
 
+    name = "max_min_mae"
+
+    @classmethod
     def _compute_applied_metric(
-        self,
+        cls,
         forecast: xr.DataArray,
         target: xr.DataArray,
         tolerance_range: int = 24,
         **kwargs: Any,
     ) -> Any:
-        forecast = forecast.compute().mean(["latitude", "longitude"])
-        target = target.compute().mean(["latitude", "longitude"])
+        forecast = forecast.mean(
+            [
+                dim
+                for dim in forecast.dims
+                if dim not in ["valid_time", "lead_time", "time"]
+            ]
+        )
+        target = target.mean(
+            [
+                dim
+                for dim in target.dims
+                if dim not in ["valid_time", "lead_time", "time"]
+            ]
+        )
         time_resolution_hours = utils.determine_temporal_resolution(target)
         max_min_target_value = (
             target.groupby("valid_time.dayofyear")
@@ -327,21 +442,24 @@ class MaxMinMAE(AppliedMetric):
         return {
             "forecast": subset_forecast,
             "target": max_min_target_value,
-            "preserve_dims": self.base_metric().preserve_dims,
+            "preserve_dims": cls.base_metric().preserve_dims,
         }
 
 
 class OnsetME(AppliedMetric):
-    @property
-    def base_metric(self) -> type[BaseMetric]:
-        return ME
-
+    base_metric = ME
     preserve_dims: str = "init_time"
+    name = "onset_me"
 
-    def onset(self, forecast: xr.DataArray) -> xr.DataArray:
+    @staticmethod
+    def onset(forecast: xr.DataArray, **kwargs) -> xr.DataArray:
         if (forecast.valid_time.max() - forecast.valid_time.min()).values.astype(
             "timedelta64[h]"
         ) >= 48:
+            # get the forecast resolution hours from the kwargs, otherwise default to 6
+            num_timesteps = 24 // kwargs.get("forecast_resolution_hours", 6)
+            if num_timesteps is None:
+                return xr.DataArray(np.datetime64("NaT", "ns"))
             min_daily_vals = forecast.groupby("valid_time.dayofyear").map(
                 utils.min_if_all_timesteps_present,
                 time_resolution_hours=utils.determine_temporal_resolution(forecast),
@@ -361,33 +479,37 @@ class OnsetME(AppliedMetric):
                         )
         return xr.DataArray(np.datetime64("NaT", "ns"))
 
+    @classmethod
     def _compute_applied_metric(
-        self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
+        cls, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
     ) -> Any:
         target_time = target.valid_time[0] + np.timedelta64(48, "h")
         forecast = (
-            forecast.mean(["latitude", "longitude"])
-            .groupby("init_time")
-            .map(self.onset)
+            forecast.mean(["latitude", "longitude"]).groupby("init_time").map(cls.onset)
         )
         return {
             "forecast": forecast,
             "target": target_time,
-            "preserve_dims": self.preserve_dims,
+            "preserve_dims": cls.preserve_dims,
         }
 
 
 class DurationME(AppliedMetric):
-    @property
-    def base_metric(self) -> type[BaseMetric]:
-        return ME
+    base_metric = ME
 
     preserve_dims: str = "init_time"
 
-    def duration(self, forecast: xr.DataArray) -> xr.DataArray:
+    name = "duration_me"
+
+    @staticmethod
+    def duration(forecast: xr.DataArray, **kwargs) -> xr.DataArray:
         if (forecast.valid_time.max() - forecast.valid_time.min()).values.astype(
             "timedelta64[h]"
         ) >= 48:
+            # get the forecast resolution hours from the kwargs, otherwise default to 6
+            num_timesteps = 24 // kwargs.get("forecast_resolution_hours", 6)
+            if num_timesteps is None:
+                return xr.DataArray(np.datetime64("NaT", "ns"))
             min_daily_vals = forecast.groupby("valid_time.dayofyear").map(
                 utils.min_if_all_timesteps_present,
                 time_resolution_hours=utils.determine_temporal_resolution(forecast),
@@ -408,135 +530,35 @@ class DurationME(AppliedMetric):
                         return xr.DataArray(consecutive_days.astype("timedelta64[ns]"))
         return xr.DataArray(np.timedelta64("NaT", "ns"))
 
+    @classmethod
     def _compute_applied_metric(
-        self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
+        cls, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
     ) -> Any:
         # Dummy implementation for duration mean error
         target_duration = target.valid_time[-1] - target.valid_time[0]
         forecast = (
             forecast.mean(["latitude", "longitude"])
             .groupby("init_time")
-            .map(self.duration)
+            .map(
+                cls.duration,
+                forecast_resolution_hours=forecast.attrs["forecast_resolution_hours"],
+            )
         )
         return {
             "forecast": forecast,
             "target": target_duration,
-            "preserve_dims": self.preserve_dims,
+            "preserve_dims": cls.preserve_dims,
         }
-
-
-# TODO: fill landfall displacement out
-class LandfallDisplacement(AppliedMetric):
-    @property
-    def base_metric(self) -> type[BaseMetric]:
-        return MAE
-
-    def _compute_applied_metric(
-        self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
-    ) -> Any:
-        # Dummy implementation for landfall displacement
-        raise NotImplementedError("LandfallDisplacement is not implemented yet")
-
-
-# TODO: complete landfall time mean error implementation
-class LandfallTimeME(AppliedMetric):
-    @property
-    def base_metric(self) -> type[BaseMetric]:
-        return ME
-
-    def _compute_applied_metric(
-        self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
-    ) -> Any:
-        # Dummy implementation for landfall time mean error
-        raise NotImplementedError("LandfallTimeME is not implemented yet")
-
-
-# TODO: complete landfall intensity mean absolute error implementation
-class LandfallIntensityMAE(AppliedMetric):
-    @property
-    def base_metric(self) -> type[BaseMetric]:
-        return MAE
-
-    def _compute_applied_metric(
-        self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
-    ) -> Any:
-        # Dummy implementation for landfall intensity mean absolute error
-        raise NotImplementedError("LandfallIntensityMAE is not implemented yet")
-
-
-# TODO: complete spatial displacement implementation
-class SpatialDisplacement(AppliedMetric):
-    @property
-    def base_metric(self) -> type[BaseMetric]:
-        return MAE
-
-    def _compute_applied_metric(
-        self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
-    ) -> Any:
-        # Dummy implementation for spatial displacement
-        raise NotImplementedError("SpatialDisplacement is not implemented yet")
-
-
-# TODO: complete false alarm ratio implementation
-class FAR(AppliedMetric):
-    @property
-    def base_metric(self) -> type[BaseMetric]:
-        return BinaryContingencyTable
-
-    def _compute_applied_metric(
-        self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
-    ) -> Any:
-        # Dummy implementation for False Alarm Rate
-        raise NotImplementedError("FAR is not implemented yet")
-
-
-# TODO: complete CSI implementation
-class CSI(AppliedMetric):
-    @property
-    def base_metric(self) -> type[BaseMetric]:
-        return BinaryContingencyTable
-
-    def _compute_applied_metric(
-        self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
-    ) -> Any:
-        # Dummy implementation for Critical Success Index
-        raise NotImplementedError("CSI is not implemented yet")
 
 
 # TODO: complete lead time detection implementation
 class LeadTimeDetection(AppliedMetric):
-    @property
-    def base_metric(self) -> type[BaseMetric]:
-        return MAE
+    base_metric = MAE
+    name = "lead_time_detection"
 
+    @classmethod
     def _compute_applied_metric(
-        self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
+        cls, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
     ) -> Any:
         # Dummy implementation for lead time detection
         raise NotImplementedError("LeadTimeDetection is not implemented yet")
-
-
-# TODO: complete regional hits and misses implementation
-class RegionalHitsMisses(AppliedMetric):
-    @property
-    def base_metric(self) -> type[BaseMetric]:
-        return BinaryContingencyTable
-
-    def _compute_applied_metric(
-        self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
-    ) -> Any:
-        # Dummy implementation for regional hits and misses
-        raise NotImplementedError("RegionalHitsMisses is not implemented yet")
-
-
-# TODO: complete hits and misses implementation
-class HitsMisses(AppliedMetric):
-    @property
-    def base_metric(self) -> type[BaseMetric]:
-        return BinaryContingencyTable
-
-    def _compute_applied_metric(
-        self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
-    ) -> Any:
-        # Dummy implementation for hits and misses
-        raise NotImplementedError("HitsMisses is not implemented yet")
