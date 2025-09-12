@@ -1443,31 +1443,31 @@ class TestDerivedVariableIntegration:
     )
     @patch("extremeweatherbench.events.tropical_cyclone.generate_tc_variables")
     def test_maybe_derive_variables_with_tc_tracks(
-        self, mock_generate_tc_vars, mock_create_tracks, sample_tc_forecast_dataset
+        self, mock_generate_tc_vars, mock_create_tracks
     ):
         """Test maybe_derive_variables with TC track variables."""
         # Create a dataset that needs TC track derivation
         base_dataset = xr.Dataset(
             {
                 "air_pressure_at_mean_sea_level": (
-                    ["time", "latitude", "longitude"],
+                    ["valid_time", "latitude", "longitude"],
                     np.random.normal(101325, 1000, (2, 10, 10)),
                 ),
                 "surface_eastward_wind": (
-                    ["time", "latitude", "longitude"],
+                    ["valid_time", "latitude", "longitude"],
                     np.random.normal(0, 10, (2, 10, 10)),
                 ),
                 "surface_northward_wind": (
-                    ["time", "latitude", "longitude"],
+                    ["valid_time", "latitude", "longitude"],
                     np.random.normal(0, 10, (2, 10, 10)),
                 ),
                 "geopotential": (
-                    ["time", "latitude", "longitude"],
+                    ["valid_time", "latitude", "longitude"],
                     np.random.normal(5000, 1000, (2, 10, 10)) * 9.80665,
                 ),
             },
             coords={
-                "time": pd.date_range("2023-09-01", periods=2, freq="6h"),
+                "valid_time": pd.date_range("2023-09-01", periods=2, freq="6h"),
                 "latitude": np.linspace(20, 30, 10),
                 "longitude": np.linspace(-80, -70, 10),
             },
