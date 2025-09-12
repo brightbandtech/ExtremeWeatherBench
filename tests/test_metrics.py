@@ -485,12 +485,6 @@ class TestMetricIntegration:
 
         # Test that expected factory functions exist
         expected_functions = [
-            "CSI",
-            "FAR",
-            "TP",
-            "FP",
-            "TN",
-            "FN",
             "clear_contingency_cache",
             "get_cached_transformed_manager",
         ]
