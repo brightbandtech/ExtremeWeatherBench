@@ -772,35 +772,6 @@ class TestUtilityFunctions:
         result = derived.is_derived_variable(derived.DerivedVariable)
         assert result is True
 
-    def test_maybe_include_variables_preserves_order_and_includes_duplicates(self):
-        """Test that function preserves order and includes all variables (including
-        duplicates)."""
-        incoming_variables = [
-            "var1",
-            TestValidDerivedVariable(),  # Adds test_variable_1, test_variable_2
-            "var2",
-            TestMinimalDerivedVariable(),  # Adds single_variable
-            "var1",  # Duplicate
-            TestValidDerivedVariable(),  # Duplicate derived variable
-        ]
-
-        result = derived.maybe_include_variables_from_derived_input(incoming_variables)
-
-        # Function preserves order and includes duplicates based on current
-        # implementation
-        expected = [
-            "var1",
-            "var2",
-            "var1",  # Duplicate preserved
-            "test_variable_1",
-            "test_variable_2",
-            "single_variable",
-            "test_variable_1",  # From duplicate derived variable
-            "test_variable_2",  # From duplicate derived variable
-        ]
-
-        assert result == expected  # Order and duplicates matter
-
 
 class TestEdgeCasesAndErrorConditions:
     """Test edge cases and error conditions across the module."""

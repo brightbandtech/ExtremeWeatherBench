@@ -66,6 +66,15 @@ class TestAppliedMetric:
         assert metric.name == "TestConcreteAppliedMetric"
 
 
+class TestThresholdMetrics:
+    """Tests for ThresholdMetric classes."""
+
+    def test_threshold_metric_cannot_instantiate_base_class(self):
+        """Test that ThresholdMetric base class cannot be instantiated directly."""
+        with pytest.raises(TypeError):
+            metrics.ThresholdMetric()
+
+
 class TestMAE:
     """Tests for the MAE (Mean Absolute Error) metric."""
 
