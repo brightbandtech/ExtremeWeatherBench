@@ -1254,48 +1254,71 @@ def sample_tc_case_operator():
     return case_operator
 
 
+@pytest.fixture
+def sample_tc_forecast_dataset():
+    """Create a sample forecast dataset for TC testing."""
+    valid_time = pd.date_range("2023-09-01", periods=3, freq="12h")
+    lead_time = np.array([0, 12, 24, 36], dtype="timedelta64[h]")
+    lat = np.linspace(10, 40, 16)
+    lon = np.linspace(-90, -60, 16)
+
+    # Create realistic meteorological data
+    data_shape = (len(valid_time), len(lat), len(lon), len(lead_time))
+
+    dataset = xr.Dataset(
+        {
+            "air_pressure_at_mean_sea_level": (
+                ["time", "latitude", "longitude", "lead_time"],
+                np.random.normal(101325, 1000, data_shape),
+            ),
+            "surface_eastward_wind": (
+                ["time", "latitude", "longitude", "lead_time"],
+                np.random.normal(0, 10, data_shape),
+            ),
+            "surface_northward_wind": (
+                ["time", "latitude", "longitude", "lead_time"],
+                np.random.normal(0, 10, data_shape),
+            ),
+            "geopotential": (
+                ["time", "latitude", "longitude", "lead_time"],
+                np.random.normal(5000, 1000, data_shape) * 9.80665,
+            ),
+        },
+        coords={
+            "valid_time": valid_time,
+            "latitude": lat,
+            "longitude": lon,
+            "lead_time": lead_time,
+        },
+    )
+
+    return dataset
+
+
+@pytest.fixture
+def sample_ibtracs_dataset():
+    """Create a sample IBTrACS dataset for testing."""
+    valid_time = pd.date_range("2023-09-01", periods=10, freq="6h")
+
+    dataset = xr.Dataset(
+        {
+            "air_pressure_at_mean_sea_level": (
+                ["valid_time"],
+                np.random.uniform(950, 1010, len(valid_time)),
+            ),
+            "latitude": (["valid_time"], np.linspace(15, 30, len(valid_time))),
+            "longitude": (["valid_time"], np.linspace(-80, -70, len(valid_time))),
+        },
+        coords={"valid_time": valid_time},
+    )
+    dataset.attrs["source"] = "IBTrACS"
+    dataset.attrs["is_ibtracs_data"] = True
+
+    return dataset
+
+
 class TestTropicalCycloneEvaluation:
     """Test tropical cyclone specific evaluation functionality."""
-
-    @pytest.fixture
-    def sample_tc_forecast_dataset():
-        """Create a sample forecast dataset for TC testing."""
-        valid_time = pd.date_range("2023-09-01", periods=3, freq="12h")
-        lead_time = np.array([0, 12, 24, 36], dtype="timedelta64[h]")
-        lat = np.linspace(10, 40, 16)
-        lon = np.linspace(-90, -60, 16)
-
-        # Create realistic meteorological data
-        data_shape = (len(valid_time), len(lat), len(lon), len(lead_time))
-
-        dataset = xr.Dataset(
-            {
-                "air_pressure_at_mean_sea_level": (
-                    ["time", "latitude", "longitude", "lead_time"],
-                    np.random.normal(101325, 1000, data_shape),
-                ),
-                "surface_eastward_wind": (
-                    ["time", "latitude", "longitude", "lead_time"],
-                    np.random.normal(0, 10, data_shape),
-                ),
-                "surface_northward_wind": (
-                    ["time", "latitude", "longitude", "lead_time"],
-                    np.random.normal(0, 10, data_shape),
-                ),
-                "geopotential": (
-                    ["time", "latitude", "longitude", "lead_time"],
-                    np.random.normal(5000, 1000, data_shape) * 9.80665,
-                ),
-            },
-            coords={
-                "valid_time": valid_time,
-                "latitude": lat,
-                "longitude": lon,
-                "lead_time": lead_time,
-            },
-        )
-
-        return dataset
 
     def setup_method(self):
         """Clear registries before each test."""
