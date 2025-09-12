@@ -293,9 +293,17 @@ class TestMaybeDeriveVariablesFunction:
                         raise ValueError(f"Input variable {v} not found in data")
                 return cls.derive_variable(data, **kwargs)
 
-    def test_multiple_derived_variables_only_first_processed(self, sample_dataset):
-        """Test that only the first derived variable is processed."""
-        variables = [TestValidDerivedVariable(), TestMinimalDerivedVariable()]
+    def test_derived_variable_missing_required_vars(self, sample_dataset):
+        """Test derived variable with missing required variables."""
+
+        class TestMissingVarDerived(derived.DerivedVariable):
+            required_variables = ["nonexistent_variable"]
+
+            @classmethod
+            def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
+                return data[cls.required_variables[0]]
+
+        variables = [TestMissingVarDerived()]
 
         # Set dataset type
         sample_dataset.attrs["dataset_type"] = "forecast"
