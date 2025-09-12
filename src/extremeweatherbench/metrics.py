@@ -279,7 +279,6 @@ class RMSE(BaseMetric):
         return rmse(forecast, target, preserve_dims=preserve_dims)
 
 
-# TODO: base metric for identifying signal and complete implementation
 class EarlySignal(BaseMetric):
     """Metric to identify the earliest signal detection in forecast data.
 
