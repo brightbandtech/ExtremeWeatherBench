@@ -514,7 +514,7 @@ def find_peak_ivt_timestamp(
 
 def find_ar_bounds_from_largest_object(
     ar_mask: xr.DataArray,
-    min_area_gridpoints: int = 500,
+    min_area_gridpoints: float = 500,
 ) -> Tuple[float, float, float, float, Optional[Dict]]:
     """Find the geographical bounds of the largest atmospheric river object.
 
@@ -759,7 +759,7 @@ def find_dominant_ar_across_time(
 
     # Track AR objects across time
     time_objects = {}
-    spatial_consistency = {}
+    spatial_consistency: dict = {}
 
     for t, time_val in enumerate(ar_mask_timeseries[time_dim]):
         time_slice = ar_mask_timeseries.isel({time_dim: t})
@@ -1019,13 +1019,13 @@ for event in tqdm(ar_events):  # Process all atmospheric river events
         object_params = {
             k: v for k, v in AR_OBJECT_CONFIG.items() if k in ["min_area_gridpoints"]
         }
-
+        min_gridpoints = object_params["min_area_gridpoints"]
         # Only show debug info for case 104 if needed
         if is_debug_case:
             print(f"  AR pixels at peak time: {ar_mask_at_peak.sum().values}")
 
         left_lon, right_lon, bottom_lat, top_lat, largest_obj_metadata = (
-            find_ar_bounds_from_largest_object(ar_mask_at_peak, **object_params)
+            find_ar_bounds_from_largest_object(ar_mask_at_peak, min_gridpoints)
         )
 
         if np.isnan(left_lon):
