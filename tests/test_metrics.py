@@ -1,4 +1,4 @@
-"""Tests for the extremeweatherbench.metrics module."""
+"""Tests for the metrics module."""
 
 import numpy as np
 import pandas as pd

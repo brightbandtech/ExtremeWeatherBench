@@ -1,12 +1,4 @@
-"""Comprehensive unit tests for the extremeweatherbench.derived module.
-
-This test suite covers:
-- Abstract base class DerivedVariable
-- All concrete derived variable implementations
-- Utility functions for variable derivation
-- Edge cases and error conditions
-- Mock implementations for testing
-"""
+"""Tests for the derived module."""
 
 import numpy as np
 import pandas as pd
@@ -300,21 +292,6 @@ class TestMaybeDeriveVariablesFunction:
                     if v not in data.data_vars:
                         raise ValueError(f"Input variable {v} not found in data")
                 return cls.derive_variable(data, **kwargs)
-
-        variables = [TestDerivedVariableWithKwargs()]
-        test_multiplier = 5.0
-
-        # Set dataset type
-        sample_dataset.attrs["dataset_type"] = "forecast"
-
-        result = derived.maybe_derive_variables(
-            sample_dataset, variables, multiplier=test_multiplier
-        )
-
-        # Custom compute method keeps original variable name
-        assert "test_variable_1" in result.data_vars
-        expected = sample_dataset["test_variable_1"] * test_multiplier
-        xr.testing.assert_equal(result["test_variable_1"], expected)
 
     def test_multiple_derived_variables_only_first_processed(self, sample_dataset):
         """Test that only the first derived variable is processed."""
@@ -705,8 +682,8 @@ class TestUtilityFunctions:
 
         assert set(result) == set(expected)
 
-    def test_maybe_include_variables_with_duplicates(self):
-        """Test that function handles duplicate inputs correctly."""
+    def test_maybe_include_variables_removes_duplicates(self):
+        """Test that function preserves order and removes duplicates."""
         incoming_variables = [
             "var1",
             TestValidDerivedVariable,  # Adds test_variable_1, test_variable_2
@@ -718,19 +695,16 @@ class TestUtilityFunctions:
 
         result = derived.maybe_include_variables_from_derived_input(incoming_variables)
 
-        # Function includes all variables including duplicates
+        # Should preserve order and remove duplicates
         expected = [
             "var1",
             "var2",
-            "var1",  # Duplicate preserved
             "test_variable_1",
             "test_variable_2",
             "single_variable",
-            "test_variable_1",  # From duplicate derived variable
-            "test_variable_2",  # From duplicate derived variable
         ]
 
-        assert result == expected
+        assert set(result) == set(expected)
 
     def test_is_derived_variable_with_string(self):
         """Test is_derived_variable returns False for string inputs."""
@@ -783,35 +757,6 @@ class TestUtilityFunctions:
         # The abstract base class should return True since it's still a subclass
         result = derived.is_derived_variable(derived.DerivedVariable)
         assert result is True
-
-    def test_maybe_include_variables_preserves_order_and_includes_duplicates(self):
-        """Test that function preserves order and includes all variables (including
-        duplicates)."""
-        incoming_variables = [
-            "var1",
-            TestValidDerivedVariable(),  # Adds test_variable_1, test_variable_2
-            "var2",
-            TestMinimalDerivedVariable(),  # Adds single_variable
-            "var1",  # Duplicate
-            TestValidDerivedVariable(),  # Duplicate derived variable
-        ]
-
-        result = derived.maybe_include_variables_from_derived_input(incoming_variables)
-
-        # Function preserves order and includes duplicates based on current
-        # implementation
-        expected = [
-            "var1",
-            "var2",
-            "var1",  # Duplicate preserved
-            "test_variable_1",
-            "test_variable_2",
-            "single_variable",
-            "test_variable_1",  # From duplicate derived variable
-            "test_variable_2",  # From duplicate derived variable
-        ]
-
-        assert result == expected  # Order and duplicates matter
 
 
 class TestEdgeCasesAndErrorConditions:

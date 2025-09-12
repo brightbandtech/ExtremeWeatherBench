@@ -1,4 +1,4 @@
-"""Comprehensive tests for extremeweatherbench.inputs module."""
+"""Tests for inputs module."""
 
 from unittest.mock import Mock, patch
 
@@ -944,9 +944,9 @@ class TestGHCN:
 
         # Collect the result and verify valid_time is sorted
         collected_result = result.collect()
-        assert collected_result[
-            "valid_time"
-        ].is_sorted(), "valid_time column should be sorted"
+        assert collected_result["valid_time"].is_sorted(), (
+            "valid_time column should be sorted"
+        )
 
     def test_ghcn_custom_convert_to_dataset(self, sample_ghcn_dataframe):
         """Test GHCN custom conversion to dataset."""

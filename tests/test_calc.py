@@ -1,5 +1,4 @@
-# tests/test_calc.py
-"""Comprehensive unit tests for the calc module."""
+"""Tests for the calc module."""
 
 import numpy as np
 import pandas as pd
@@ -272,16 +271,19 @@ class TestBasicCalculations:
 class TestWindCalculations:
     """Test wind-related calculations."""
 
-    def test_calculate_wind_speed_from_components(self, sample_calc_dataset):
+    def test_maybe_calculate_wind_speed_from_components(self, sample_calc_dataset):
         """Test wind speed calculation from components."""
-        wind_speed = calc.calculate_wind_speed(sample_calc_dataset)
+        wind_speed = calc.maybe_calculate_wind_speed(sample_calc_dataset)
 
         # Should return a DataArray
-        assert isinstance(wind_speed, xr.DataArray)
-        assert wind_speed.shape == sample_calc_dataset.surface_eastward_wind.shape
+        assert isinstance(wind_speed, xr.Dataset)
+        assert (
+            wind_speed.surface_wind_speed.shape
+            == sample_calc_dataset.surface_eastward_wind.shape
+        )
 
         # All wind speeds should be non-negative
-        assert (wind_speed >= 0).all()
+        assert (wind_speed.surface_wind_speed >= 0).all()
 
         # Check against manual calculation for a point
         u = sample_calc_dataset.surface_eastward_wind.isel(
@@ -291,11 +293,13 @@ class TestWindCalculations:
             time=0, latitude=0, longitude=0
         ).values
         expected = np.sqrt(u**2 + v**2)
-        calculated = wind_speed.isel(time=0, latitude=0, longitude=0).values
+        calculated = wind_speed.surface_wind_speed.isel(
+            time=0, latitude=0, longitude=0
+        ).values
 
         assert abs(calculated - expected) < 1e-10
 
-    def test_calculate_wind_speed_with_existing_wind_speed(self):
+    def test_maybe_calculate_wind_speed_with_existing_wind_speed(self):
         """Test that existing wind speed is returned unchanged."""
         # Create dataset with existing wind speed
         time = pd.date_range("2023-01-01", periods=2, freq="6h")
@@ -322,12 +326,12 @@ class TestWindCalculations:
             coords={"time": time, "latitude": lat, "longitude": lon},
         )
 
-        result = calc.calculate_wind_speed(dataset)
+        result = calc.maybe_calculate_wind_speed(dataset)
 
         # Should return the existing wind speed unchanged
-        xr.testing.assert_equal(result, dataset["surface_wind_speed"])
+        xr.testing.assert_equal(result, dataset)
 
-    def test_calculate_wind_speed_missing_components(self):
+    def test_maybe_calculate_wind_speed_missing_components(self):
         """Test error when wind components are missing."""
         # Create dataset without wind components
         time = pd.date_range("2023-01-01", periods=2, freq="6h")
@@ -344,8 +348,10 @@ class TestWindCalculations:
             coords={"time": time, "latitude": lat, "longitude": lon},
         )
 
-        with pytest.raises(ValueError, match="No suitable wind speed variables found"):
-            calc.calculate_wind_speed(dataset)
+        result = calc.maybe_calculate_wind_speed(dataset)
+
+        # Will return the dataset as is, without the wind speed computed
+        xr.testing.assert_equal(result, dataset)
 
 
 class TestPressureCalculations:
