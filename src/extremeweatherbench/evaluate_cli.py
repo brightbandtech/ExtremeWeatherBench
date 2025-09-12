@@ -130,7 +130,7 @@ def cli_runner(
     # Load evaluation objects
     if default:
         click.echo("Using default Brightband evaluation objects...")
-        evaluation_objects = defaults.BRIGHTBAND_EVALUATION_OBJECTS
+        evaluation_objects = defaults.get_brightband_evaluation_objects()
         cases_dict = _load_default_cases()
     else:
         assert config_file is not None  # for mypy
