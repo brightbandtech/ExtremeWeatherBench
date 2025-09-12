@@ -4,6 +4,9 @@ from typing import Sequence, Type, TypeGuard, Union
 
 import xarray as xr
 
+from extremeweatherbench import calc
+from extremeweatherbench.events import tropical_cyclone
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -73,6 +76,106 @@ class DerivedVariable(ABC):
             A DataArray with the derived variable.
         """
         return cls.derive_variable(data, *args, **kwargs)
+
+
+class TropicalCycloneTrackVariables(DerivedVariable):
+    """A derived variable abstract class for tropical cyclone (TC) variables.
+
+    This class serves as a parent for TC-related derived variables and provides
+    shared track computation with caching to avoid reprocessing the same data
+    multiple times across different child classes.
+
+    The track data is computed once and cached, then child classes can extract
+    specific variables (like sea level pressure, wind speed) from the cached
+    track dataset.
+
+    Deriving the track locations using default TempestExtremes criteria:
+    https://doi.org/10.5194/gmd-14-5023-2021
+
+    For forecast data, when IBTrACS data is provided, the valid candidates
+    approach is filtered to only include candidates within 5 great circle
+    degrees of IBTrACS points and within 120 hours of the valid_time.
+    """
+
+    # required variables for TC track identification
+    required_variables = [
+        "air_pressure_at_mean_sea_level",
+        "geopotential",
+        "surface_eastward_wind",
+        "surface_northward_wind",
+    ]
+
+    @classmethod
+    def _get_or_compute_tracks(cls, data: xr.Dataset, *args, **kwargs) -> xr.Dataset:
+        """Get cached track data or compute if not already cached.
+
+        This method handles the caching logic to ensure track computation
+        is only done once per unique dataset.
+
+        Args:
+            data: Input dataset containing required variables
+
+        Returns:
+            3D dataset containing tropical cyclone track information
+        """
+        cache_key = tropical_cyclone._generate_cache_key(data)
+
+        # Return cached result if available
+        if cache_key in tropical_cyclone._TC_TRACK_CACHE:
+            return tropical_cyclone._TC_TRACK_CACHE[cache_key]
+
+        # Prepare the data with wind variables as needed
+        prepared_data = calc.maybe_calculate_wind_speed(data)
+
+        # Generates the variables needed for the TC track calculation
+        # (geop. thickness, winds, temps, slp)
+        cyclone_dataset = tropical_cyclone.generate_tc_variables(prepared_data)
+
+        # Check if we should apply IBTrACS filtering
+        # First check kwargs, then the global registry
+        ibtracs_data = kwargs.get("ibtracs_data", None)
+        case_metadata = kwargs.get("case_metadata", None)
+        case_id_number = case_metadata.case_id_number if case_metadata else None
+        if ibtracs_data is None and case_id_number is not None:
+            ibtracs_data = tropical_cyclone.get_ibtracs_data(case_id_number)
+        else:
+            raise ValueError("No IBTrACS data provided to constrain TC tracks.")
+
+        # Use IBTrACS-filtered TC detection
+        tctracks_ds = tropical_cyclone.create_tctracks_from_dataset_with_ibtracs_filter(
+            cyclone_dataset, ibtracs_data
+        )
+        # Cache the result
+        tropical_cyclone._TC_TRACK_CACHE[cache_key] = tctracks_ds
+
+        return tctracks_ds
+
+    @classmethod
+    def derive_variable(cls, data: xr.Dataset, *args, **kwargs) -> xr.DataArray:
+        """Derive the TC track variables.
+
+        This base method returns the full track dataset. Child classes should
+        override this method to extract specific variables from the track data.
+
+        Args:
+            data: Input dataset containing required meteorological variables
+
+        Returns:
+            DataArray containing the derived variable
+        """
+        # Get the cached or computed track data
+        tracks_dataset = cls._get_or_compute_tracks(data, *args, **kwargs)
+
+        # Squeeze the dataset to remove the track dimension if only one track is present
+        return tracks_dataset.squeeze()
+
+    @classmethod
+    def clear_cache(cls) -> None:
+        """Clear the global track cache.
+
+        Useful for memory management or when processing completely different datasets.
+        """
+        tropical_cyclone._TC_TRACK_CACHE.clear()
 
 
 def maybe_derive_variables(
