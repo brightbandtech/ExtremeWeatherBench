@@ -68,7 +68,8 @@ class DerivedVariable(ABC):
 
         Args:
             data: The dataset to build the derived variable from.
-            **kwargs: Additional keyword arguments to pass to the derived variable.
+            *args: Additional positional arguments to pass to derive_variable.
+            **kwargs: Additional keyword arguments to pass to derive_variable.
 
         Returns:
             A DataArray with the derived variable.
@@ -195,11 +196,10 @@ def maybe_include_variables_from_derived_input(
 
     derived_required_variables = []
     for v in incoming_variables:
-        # TODO: change to is_derived_variable
         if isinstance(v, DerivedVariable):
             # Handle instances of DerivedVariable
             derived_required_variables.extend(v.required_variables)
-        elif isinstance(v, type) and issubclass(v, DerivedVariable):
+        elif is_derived_variable(v):
             # Handle classes that inherit from DerivedVariable
             # Recursively pull required variables from derived variables
             derived_required_variables.extend(
