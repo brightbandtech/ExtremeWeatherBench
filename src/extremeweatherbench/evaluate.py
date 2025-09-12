@@ -74,8 +74,14 @@ class ExtremeWeatherBench:
         Keyword arguments are passed to the metric computations if there are specific
         requirements needed for metrics such as threshold arguments.
         """
-        # instantiate the cache directory if caching and build it if it does not exist
-        if self.cache_dir:
+        # Caching does not work in parallel mode as of now, so ignore the cache_dir
+        # but raise a warning for the user
+        if self.cache_dir and parallel:
+            logger.warning(
+                "Caching is not supported in parallel mode, ignoring cache_dir"
+            )
+        # Instantiate the cache directory if caching and build it if it does not exist
+        elif self.cache_dir:
             if isinstance(self.cache_dir, str):
                 self.cache_dir = Path(self.cache_dir)
             if not self.cache_dir.exists():
@@ -110,7 +116,7 @@ def _run_case_operators(
     """
     with logging_redirect_tqdm():
         if parallel:
-            return _run_parallel(case_operators, n_jobs, cache_dir, **kwargs)
+            return _run_parallel(case_operators, n_jobs, **kwargs)
         else:
             return _run_serial(case_operators, cache_dir, **kwargs)
 
@@ -139,7 +145,6 @@ def _run_serial(
 def _run_parallel(
     case_operators: list["cases.CaseOperator"],
     n_jobs: Optional[int] = None,
-    cache_dir: Optional[Union[str, Path]] = None,
     **kwargs,
 ):
     """Run the case operators in parallel.
@@ -160,7 +165,7 @@ def _run_parallel(
     if n_jobs is None:
         logger.warning("No number of jobs provided, using all available CPUs.")
     run_results = Parallel(n_jobs=n_jobs)(
-        delayed(compute_case_operator)(case_operator, cache_dir, **kwargs)
+        delayed(compute_case_operator)(case_operator, **kwargs)
         for case_operator in tqdm(case_operators)
     )
     return run_results
