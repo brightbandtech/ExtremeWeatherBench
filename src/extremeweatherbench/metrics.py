@@ -1,6 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Optional, Type
+from typing import Any, Dict, List, Optional, Type
 
 import numpy as np
 import scores.categorical as cat  # type: ignore[import-untyped]
@@ -229,6 +229,241 @@ class ThresholdMetric(BaseMetric):
 
         # Call the classmethod with the configured parameters
         return self.__class__.compute_metric(forecast, target, **kwargs)
+
+
+class CSI(ThresholdMetric):
+    """Critical Success Index metric."""
+
+    name = "critical_success_index"
+
+    @classmethod
+    def _compute_metric(
+        cls,
+        forecast: xr.Dataset,
+        target: xr.Dataset,
+        **kwargs: Any,
+    ) -> Any:
+        forecast_threshold = kwargs.get("forecast_threshold", 0.5)
+        target_threshold = kwargs.get("target_threshold", 0.5)
+        preserve_dims = kwargs.get("preserve_dims", "lead_time")
+
+        transformed = get_cached_transformed_manager(
+            forecast=forecast,
+            target=target,
+            forecast_threshold=forecast_threshold,
+            target_threshold=target_threshold,
+            preserve_dims=preserve_dims,
+        )
+        return transformed.critical_success_index()
+
+
+class FAR(ThresholdMetric):
+    """False Alarm Ratio metric."""
+
+    name = "false_alarm_ratio"
+
+    @classmethod
+    def _compute_metric(
+        cls,
+        forecast: xr.Dataset,
+        target: xr.Dataset,
+        **kwargs: Any,
+    ) -> Any:
+        forecast_threshold = kwargs.get("forecast_threshold", 0.5)
+        target_threshold = kwargs.get("target_threshold", 0.5)
+        preserve_dims = kwargs.get("preserve_dims", "lead_time")
+
+        transformed = get_cached_transformed_manager(
+            forecast=forecast,
+            target=target,
+            forecast_threshold=forecast_threshold,
+            target_threshold=target_threshold,
+            preserve_dims=preserve_dims,
+        )
+        return transformed.false_alarm_ratio()
+
+
+class TP(ThresholdMetric):
+    """True Positive metric."""
+
+    name = "true_positive"
+
+    @classmethod
+    def _compute_metric(
+        cls,
+        forecast: xr.Dataset,
+        target: xr.Dataset,
+        **kwargs: Any,
+    ) -> Any:
+        forecast_threshold = kwargs.get("forecast_threshold", 0.5)
+        target_threshold = kwargs.get("target_threshold", 0.5)
+        preserve_dims = kwargs.get("preserve_dims", "lead_time")
+
+        transformed = get_cached_transformed_manager(
+            forecast=forecast,
+            target=target,
+            forecast_threshold=forecast_threshold,
+            target_threshold=target_threshold,
+            preserve_dims=preserve_dims,
+        )
+        counts = transformed.get_counts()
+        return counts["tp_count"] / counts["total_count"]
+
+
+class FP(ThresholdMetric):
+    """False Positive metric."""
+
+    name = "false_positive"
+
+    @classmethod
+    def _compute_metric(
+        cls,
+        forecast: xr.Dataset,
+        target: xr.Dataset,
+        **kwargs: Any,
+    ) -> Any:
+        forecast_threshold = kwargs.get("forecast_threshold", 0.5)
+        target_threshold = kwargs.get("target_threshold", 0.5)
+        preserve_dims = kwargs.get("preserve_dims", "lead_time")
+
+        transformed = get_cached_transformed_manager(
+            forecast=forecast,
+            target=target,
+            forecast_threshold=forecast_threshold,
+            target_threshold=target_threshold,
+            preserve_dims=preserve_dims,
+        )
+        counts = transformed.get_counts()
+        return counts["fp_count"] / counts["total_count"]
+
+
+class TN(ThresholdMetric):
+    """True Negative metric."""
+
+    name = "true_negative"
+
+    @classmethod
+    def _compute_metric(
+        cls,
+        forecast: xr.Dataset,
+        target: xr.Dataset,
+        **kwargs: Any,
+    ) -> Any:
+        forecast_threshold = kwargs.get("forecast_threshold", 0.5)
+        target_threshold = kwargs.get("target_threshold", 0.5)
+        preserve_dims = kwargs.get("preserve_dims", "lead_time")
+
+        transformed = get_cached_transformed_manager(
+            forecast=forecast,
+            target=target,
+            forecast_threshold=forecast_threshold,
+            target_threshold=target_threshold,
+            preserve_dims=preserve_dims,
+        )
+        counts = transformed.get_counts()
+        return counts["tn_count"] / counts["total_count"]
+
+
+class FN(ThresholdMetric):
+    """False Negative metric."""
+
+    name = "false_negative"
+
+    @classmethod
+    def _compute_metric(
+        cls,
+        forecast: xr.Dataset,
+        target: xr.Dataset,
+        **kwargs: Any,
+    ) -> Any:
+        forecast_threshold = kwargs.get("forecast_threshold", 0.5)
+        target_threshold = kwargs.get("target_threshold", 0.5)
+        preserve_dims = kwargs.get("preserve_dims", "lead_time")
+
+        transformed = get_cached_transformed_manager(
+            forecast=forecast,
+            target=target,
+            forecast_threshold=forecast_threshold,
+            target_threshold=target_threshold,
+            preserve_dims=preserve_dims,
+        )
+        counts = transformed.get_counts()
+        return counts["fn_count"] / counts["total_count"]
+
+
+class Accuracy(ThresholdMetric):
+    """Accuracy metric."""
+
+    name = "accuracy"
+
+    @classmethod
+    def _compute_metric(
+        cls,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
+        **kwargs: Any,
+    ) -> Any:
+        forecast_threshold = kwargs.get("forecast_threshold", 0.5)
+        target_threshold = kwargs.get("target_threshold", 0.5)
+        preserve_dims = kwargs.get("preserve_dims", "lead_time")
+
+        transformed = get_cached_transformed_manager(
+            forecast=forecast,
+            target=target,
+            forecast_threshold=forecast_threshold,
+            target_threshold=target_threshold,
+            preserve_dims=preserve_dims,
+        )
+        return transformed.accuracy()
+
+
+def create_threshold_metrics(
+    forecast_threshold: float = 0.5,
+    target_threshold: float = 0.5,
+    preserve_dims: str = "lead_time",
+    metrics: Optional[List[str]] = None,
+):
+    """Create multiple threshold-based metrics with the specified thresholds.
+
+    Args:
+        forecast_threshold: Threshold for binarizing forecast data
+        target_threshold: Threshold for binarizing target data
+        preserve_dims: Dimensions to preserve during contingency table computation
+        metrics: List of metric names to create (e.g., ['CSI', 'FAR', 'TP'])
+
+    Returns:
+        A list of metric objects with the specified thresholds
+    """
+    if metrics is None:
+        metrics = ["CSI", "FAR", "Accuracy", "TP", "FP", "TN", "FN"]
+
+    # Mapping of metric names to their classes (all threshold-based metrics)
+    metric_classes: Dict[str, Type[ThresholdMetric]] = {
+        "CSI": CSI,
+        "FAR": FAR,
+        "Accuracy": Accuracy,
+        "TP": TP,
+        "FP": FP,
+        "TN": TN,
+        "FN": FN,
+    }
+
+    result_metrics = []
+
+    # Create metrics by instantiating their classes
+    for metric_name in metrics:
+        if metric_name not in metric_classes:
+            raise ValueError(f"Unknown metric: {metric_name}")
+
+        metric_class = metric_classes[metric_name]
+        metric = metric_class(
+            forecast_threshold=forecast_threshold,
+            target_threshold=target_threshold,
+            preserve_dims=preserve_dims,
+        )
+        result_metrics.append(metric)
+
+    return result_metrics
 
 
 class MAE(BaseMetric):
