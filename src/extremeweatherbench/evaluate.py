@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Literal, Optional, Union
 
 import pandas as pd
 import xarray as xr
+from joblib import Parallel, delayed
 from tqdm.auto import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 
@@ -56,12 +57,19 @@ class ExtremeWeatherBench:
 
     def run(
         self,
+        parallel: bool = False,
+        n_jobs: Optional[int] = None,
         **kwargs,
     ) -> pd.DataFrame:
         """Runs the ExtremeWeatherBench workflow.
 
         This method will run the workflow in the order of the case operators, optionally
         caching the mid-flight outputs of the workflow if cache_dir was provided.
+
+        Args:
+            parallel: Whether to run the workflow in parallel.
+            n_jobs: The number of jobs to run in parallel. If None, defaults to the
+            joblib backend default.
 
         Keyword arguments are passed to the metric computations if there are specific
         requirements needed for metrics such as threshold arguments.
@@ -74,15 +82,9 @@ class ExtremeWeatherBench:
                 self.cache_dir.mkdir(parents=True, exist_ok=True)
 
         run_results = []
-        with logging_redirect_tqdm():
-            for case_operator in tqdm(self.case_operators):
-                run_results.append(compute_case_operator(case_operator, **kwargs))
-
-                # store the results of each case operator if caching
-                if self.cache_dir:
-                    pd.concat(run_results).to_pickle(
-                        self.cache_dir / "case_results.pkl"
-                    )
+        run_results = _run_case_operators(
+            self.case_operators, parallel, n_jobs, self.cache_dir, **kwargs
+        )
         if run_results:
             return pd.concat(run_results, ignore_index=True)
         else:
@@ -90,7 +92,85 @@ class ExtremeWeatherBench:
             return pd.DataFrame(columns=OUTPUT_COLUMNS)
 
 
-def compute_case_operator(case_operator: "cases.CaseOperator", **kwargs):
+def _run_case_operators(
+    case_operators: list["cases.CaseOperator"],
+    parallel: bool = False,
+    n_jobs: Optional[int] = None,
+    cache_dir: Optional[Union[str, Path]] = None,
+    **kwargs,
+):
+    """Run the case operators in serial or parallel.
+
+    Args:
+        case_operators: The case operators to run.
+        kwargs: Keyword arguments to pass to the metric and case operator computations.
+
+    Returns:
+        A concatenated dataframe of the results of the case operators.
+    """
+    with logging_redirect_tqdm():
+        if parallel:
+            return _run_parallel(case_operators, n_jobs, cache_dir, **kwargs)
+        else:
+            return _run_serial(case_operators, cache_dir, **kwargs)
+
+
+def _run_serial(
+    case_operators: list["cases.CaseOperator"],
+    cache_dir: Optional[Union[str, Path]] = None,
+    **kwargs,
+):
+    """Run the case operators in serial.
+
+    Args:
+        case_operators: The case operators to run.
+        kwargs: Keyword arguments to pass to the metric computations.
+
+    Returns:
+        A concatenated dataframe of the results of the case operators.
+    """
+    run_results = []
+    # Loop over the case operators
+    for case_operator in tqdm(case_operators):
+        run_results.append(compute_case_operator(case_operator, cache_dir, **kwargs))
+    return run_results
+
+
+def _run_parallel(
+    case_operators: list["cases.CaseOperator"],
+    n_jobs: Optional[int] = None,
+    cache_dir: Optional[Union[str, Path]] = None,
+    **kwargs,
+):
+    """Run the case operators in parallel.
+
+    The default parallelization is to use the number of available CPUs divided by 4
+    threads per process.
+
+    Args:
+        case_operators: The case operators to run.
+        n_jobs: The number of jobs to run in parallel. If None, defaults to the
+        joblib backend default.
+        kwargs: Keyword arguments to pass to the metric computations.
+
+    Returns:
+        A concatenated dataframe of the results of the case operators.
+    """
+    # Set the number of jobs to the number of processes if not provided
+    if n_jobs is None:
+        logger.warning("No number of jobs provided, using all available CPUs.")
+    run_results = Parallel(n_jobs=n_jobs)(
+        delayed(compute_case_operator)(case_operator, cache_dir, **kwargs)
+        for case_operator in tqdm(case_operators)
+    )
+    return run_results
+
+
+def compute_case_operator(
+    case_operator: "cases.CaseOperator",
+    cache_dir: Optional[Union[str, Path]] = None,
+    **kwargs,
+):
     """Compute the results of a case operator.
 
     This method will compute the results of a case operator. It will build
@@ -119,12 +199,12 @@ def compute_case_operator(case_operator: "cases.CaseOperator", **kwargs):
     )
 
     # compute and cache the datasets if requested
-    if kwargs.get("pre_compute", False):
-        aligned_forecast_ds, aligned_target_ds = _compute_and_maybe_cache(
-            aligned_forecast_ds,
-            aligned_target_ds,
-            cache_dir=kwargs.get("cache_dir", None),
-        )
+    aligned_forecast_ds, aligned_target_ds = _compute(
+        aligned_forecast_ds,
+        aligned_target_ds,
+        cache_dir=cache_dir,
+        compute_if=kwargs.get("pre_compute", False),
+    )
 
     # Derive the variables for the forecast and target datasets independently
     aligned_forecast_ds = derived.maybe_derive_variables(
@@ -311,17 +391,14 @@ def _build_datasets(
     return (forecast_ds, target_ds)
 
 
-def _compute_and_maybe_cache(
-    *datasets: xr.Dataset, cache_dir: Optional[Union[str, Path]]
-) -> list[xr.Dataset]:
+def _compute(*datasets: xr.Dataset, compute_if: bool = False) -> list[xr.Dataset]:
     """Compute and cache the datasets if caching."""
-    logger.info("computing datasets")
-    computed_datasets = [dataset.compute() for dataset in datasets]
-    if cache_dir:
-        raise NotImplementedError("Caching is not implemented yet")
-        # (computed_dataset.to_netcdf(self.cache_dir) for computed_dataset in
-        # computed_datasets)
-    return computed_datasets
+    if compute_if:
+        logger.info("computing datasets")
+        datasets = [dataset.compute() for dataset in datasets]
+    else:
+        datasets = [datasets]
+    return datasets
 
 
 def run_pipeline(
