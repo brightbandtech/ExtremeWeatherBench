@@ -502,29 +502,29 @@ def sample_derived_dataset():
 def sample_tc_forecast_dataset():
     """Create a sample forecast dataset for TC testing."""
     valid_time = pd.date_range("2023-09-01", periods=3, freq="12h")
-    prediction_timedelta = np.array([0, 12, 24, 36], dtype="timedelta64[h]")
+    lead_time = np.array([0, 12, 24, 36], dtype="timedelta64[h]")
     lat = np.linspace(10, 40, 16)
     lon = np.linspace(-90, -60, 16)
 
     # Create realistic meteorological data
-    data_shape = (len(valid_time), len(lat), len(lon), len(prediction_timedelta))
+    data_shape = (len(valid_time), len(lat), len(lon), len(lead_time))
 
     dataset = xr.Dataset(
         {
             "air_pressure_at_mean_sea_level": (
-                ["valid_time", "latitude", "longitude", "prediction_timedelta"],
+                ["time", "latitude", "longitude", "lead_time"],
                 np.random.normal(101325, 1000, data_shape),
             ),
             "surface_eastward_wind": (
-                ["valid_time", "latitude", "longitude", "prediction_timedelta"],
+                ["time", "latitude", "longitude", "lead_time"],
                 np.random.normal(0, 10, data_shape),
             ),
             "surface_northward_wind": (
-                ["valid_time", "latitude", "longitude", "prediction_timedelta"],
+                ["time", "latitude", "longitude", "lead_time"],
                 np.random.normal(0, 10, data_shape),
             ),
             "geopotential": (
-                ["valid_time", "latitude", "longitude", "prediction_timedelta"],
+                ["time", "latitude", "longitude", "lead_time"],
                 np.random.normal(5000, 1000, data_shape) * 9.80665,
             ),
         },
@@ -532,7 +532,7 @@ def sample_tc_forecast_dataset():
             "valid_time": valid_time,
             "latitude": lat,
             "longitude": lon,
-            "prediction_timedelta": prediction_timedelta,
+            "lead_time": lead_time,
         },
     )
 
@@ -543,36 +543,36 @@ def sample_tc_forecast_dataset():
 def sample_tc_tracks_dataset():
     """Create a sample TC tracks dataset."""
     time = pd.date_range("2023-09-01", periods=3, freq="12h")
-    prediction_timedelta = np.array([0, 12, 24, 36], dtype="timedelta64[h]")
+    lead_time = np.array([0, 12, 24, 36], dtype="timedelta64[h]")
 
-    data_shape = (len(time), len(prediction_timedelta))
+    data_shape = (len(time), len(lead_time))
 
     dataset = xr.Dataset(
         {
             "tc_slp": (
-                ["time", "prediction_timedelta"],
+                ["time", "lead_time"],
                 np.random.normal(101000, 1000, data_shape),
             ),
             "tc_latitude": (
-                ["time", "prediction_timedelta"],
+                ["time", "lead_time"],
                 np.random.uniform(15, 35, data_shape),
             ),
             "tc_longitude": (
-                ["time", "prediction_timedelta"],
+                ["time", "lead_time"],
                 np.random.uniform(-85, -65, data_shape),
             ),
             "tc_vmax": (
-                ["time", "prediction_timedelta"],
+                ["time", "lead_time"],
                 np.random.uniform(20, 60, data_shape),
             ),
             "track_id": (
-                ["time", "prediction_timedelta"],
+                ["time", "lead_time"],
                 np.random.randint(1, 5, data_shape),
             ),
         },
         coords={
             "time": time,
-            "prediction_timedelta": prediction_timedelta,
+            "lead_time": lead_time,
         },
     )
 

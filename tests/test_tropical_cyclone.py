@@ -61,19 +61,19 @@ def sample_tc_dataset():
     dataset = xr.Dataset(
         {
             "air_pressure_at_mean_sea_level": (
-                ["time", "latitude", "longitude", "prediction_timedelta"],
+                ["time", "latitude", "longitude", "lead_time"],
                 base_pressure,
             ),
             "surface_eastward_wind": (
-                ["time", "latitude", "longitude", "prediction_timedelta"],
+                ["time", "latitude", "longitude", "lead_time"],
                 wind_u,
             ),
             "surface_northward_wind": (
-                ["time", "latitude", "longitude", "prediction_timedelta"],
+                ["time", "latitude", "longitude", "lead_time"],
                 wind_v,
             ),
             "geopotential": (
-                ["time", "latitude", "longitude", "prediction_timedelta"],
+                ["time", "latitude", "longitude", "lead_time"],
                 geopotential,
             ),
         },
@@ -290,19 +290,19 @@ class TestTropicalCycloneDetection:
             mock_result = xr.Dataset(
                 {
                     "tc_slp": (
-                        ["time", "prediction_timedelta"],
+                        ["time", "lead_time"],
                         np.random.normal(101000, 1000, (5, 5)),
                     ),
                     "tc_latitude": (
-                        ["time", "prediction_timedelta"],
+                        ["time", "lead_time"],
                         np.random.uniform(10, 30, (5, 5)),
                     ),
                     "tc_longitude": (
-                        ["time", "prediction_timedelta"],
+                        ["time", "lead_time"],
                         np.random.uniform(-80, -50, (5, 5)),
                     ),
                     "tc_vmax": (
-                        ["time", "prediction_timedelta"],
+                        ["time", "lead_time"],
                         np.random.uniform(20, 50, (5, 5)),
                     ),
                 }

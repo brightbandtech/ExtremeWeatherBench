@@ -1477,19 +1477,19 @@ class TestDerivedVariableIntegration:
         mock_tracks = xr.Dataset(
             {
                 "air_pressure_at_mean_sea_level": (
-                    ["time", "prediction_timedelta"],
+                    ["time", "lead_time"],
                     [[101000, 101010], [101020, 101030]],
                 ),
                 "latitude": (
-                    ["time", "prediction_timedelta"],
+                    ["time", "lead_time"],
                     [[25.0, 25.5], [26.0, 26.5]],
                 ),
                 "longitude": (
-                    ["time", "prediction_timedelta"],
+                    ["time", "lead_time"],
                     [[-75.0, -74.5], [-74.0, -73.5]],
                 ),
                 "surface_wind_speed": (
-                    ["time", "prediction_timedelta"],
+                    ["time", "lead_time"],
                     [[25.0, 26.0], [27.0, 28.0]],
                 ),
             }
