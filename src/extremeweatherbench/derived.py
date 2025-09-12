@@ -264,11 +264,10 @@ def maybe_include_variables_from_derived_input(
 
     derived_required_variables = []
     for v in incoming_variables:
-        # TODO: change to is_derived_variable
         if isinstance(v, DerivedVariable):
             # Handle instances of DerivedVariable
             derived_required_variables.extend(v.required_variables)
-        elif isinstance(v, type) and issubclass(v, DerivedVariable):
+        elif is_derived_variable(v):
             # Handle classes that inherit from DerivedVariable
             # Recursively pull required variables from derived variables
             derived_required_variables.extend(

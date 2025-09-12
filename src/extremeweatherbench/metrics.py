@@ -1,6 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Optional, Type
+from typing import Any, Dict, List, Optional, Type
 
 import numpy as np
 import scores.categorical as cat  # type: ignore[import-untyped]
@@ -234,6 +234,241 @@ class ThresholdMetric(BaseMetric):
         return self.__class__.compute_metric(forecast, target, **kwargs)
 
 
+class CSI(ThresholdMetric):
+    """Critical Success Index metric."""
+
+    name = "critical_success_index"
+
+    @classmethod
+    def _compute_metric(
+        cls,
+        forecast: xr.Dataset,
+        target: xr.Dataset,
+        **kwargs: Any,
+    ) -> Any:
+        forecast_threshold = kwargs.get("forecast_threshold", 0.5)
+        target_threshold = kwargs.get("target_threshold", 0.5)
+        preserve_dims = kwargs.get("preserve_dims", "lead_time")
+
+        transformed = get_cached_transformed_manager(
+            forecast=forecast,
+            target=target,
+            forecast_threshold=forecast_threshold,
+            target_threshold=target_threshold,
+            preserve_dims=preserve_dims,
+        )
+        return transformed.critical_success_index()
+
+
+class FAR(ThresholdMetric):
+    """False Alarm Ratio metric."""
+
+    name = "false_alarm_ratio"
+
+    @classmethod
+    def _compute_metric(
+        cls,
+        forecast: xr.Dataset,
+        target: xr.Dataset,
+        **kwargs: Any,
+    ) -> Any:
+        forecast_threshold = kwargs.get("forecast_threshold", 0.5)
+        target_threshold = kwargs.get("target_threshold", 0.5)
+        preserve_dims = kwargs.get("preserve_dims", "lead_time")
+
+        transformed = get_cached_transformed_manager(
+            forecast=forecast,
+            target=target,
+            forecast_threshold=forecast_threshold,
+            target_threshold=target_threshold,
+            preserve_dims=preserve_dims,
+        )
+        return transformed.false_alarm_ratio()
+
+
+class TP(ThresholdMetric):
+    """True Positive metric."""
+
+    name = "true_positive"
+
+    @classmethod
+    def _compute_metric(
+        cls,
+        forecast: xr.Dataset,
+        target: xr.Dataset,
+        **kwargs: Any,
+    ) -> Any:
+        forecast_threshold = kwargs.get("forecast_threshold", 0.5)
+        target_threshold = kwargs.get("target_threshold", 0.5)
+        preserve_dims = kwargs.get("preserve_dims", "lead_time")
+
+        transformed = get_cached_transformed_manager(
+            forecast=forecast,
+            target=target,
+            forecast_threshold=forecast_threshold,
+            target_threshold=target_threshold,
+            preserve_dims=preserve_dims,
+        )
+        counts = transformed.get_counts()
+        return counts["tp_count"] / counts["total_count"]
+
+
+class FP(ThresholdMetric):
+    """False Positive metric."""
+
+    name = "false_positive"
+
+    @classmethod
+    def _compute_metric(
+        cls,
+        forecast: xr.Dataset,
+        target: xr.Dataset,
+        **kwargs: Any,
+    ) -> Any:
+        forecast_threshold = kwargs.get("forecast_threshold", 0.5)
+        target_threshold = kwargs.get("target_threshold", 0.5)
+        preserve_dims = kwargs.get("preserve_dims", "lead_time")
+
+        transformed = get_cached_transformed_manager(
+            forecast=forecast,
+            target=target,
+            forecast_threshold=forecast_threshold,
+            target_threshold=target_threshold,
+            preserve_dims=preserve_dims,
+        )
+        counts = transformed.get_counts()
+        return counts["fp_count"] / counts["total_count"]
+
+
+class TN(ThresholdMetric):
+    """True Negative metric."""
+
+    name = "true_negative"
+
+    @classmethod
+    def _compute_metric(
+        cls,
+        forecast: xr.Dataset,
+        target: xr.Dataset,
+        **kwargs: Any,
+    ) -> Any:
+        forecast_threshold = kwargs.get("forecast_threshold", 0.5)
+        target_threshold = kwargs.get("target_threshold", 0.5)
+        preserve_dims = kwargs.get("preserve_dims", "lead_time")
+
+        transformed = get_cached_transformed_manager(
+            forecast=forecast,
+            target=target,
+            forecast_threshold=forecast_threshold,
+            target_threshold=target_threshold,
+            preserve_dims=preserve_dims,
+        )
+        counts = transformed.get_counts()
+        return counts["tn_count"] / counts["total_count"]
+
+
+class FN(ThresholdMetric):
+    """False Negative metric."""
+
+    name = "false_negative"
+
+    @classmethod
+    def _compute_metric(
+        cls,
+        forecast: xr.Dataset,
+        target: xr.Dataset,
+        **kwargs: Any,
+    ) -> Any:
+        forecast_threshold = kwargs.get("forecast_threshold", 0.5)
+        target_threshold = kwargs.get("target_threshold", 0.5)
+        preserve_dims = kwargs.get("preserve_dims", "lead_time")
+
+        transformed = get_cached_transformed_manager(
+            forecast=forecast,
+            target=target,
+            forecast_threshold=forecast_threshold,
+            target_threshold=target_threshold,
+            preserve_dims=preserve_dims,
+        )
+        counts = transformed.get_counts()
+        return counts["fn_count"] / counts["total_count"]
+
+
+class Accuracy(ThresholdMetric):
+    """Accuracy metric."""
+
+    name = "accuracy"
+
+    @classmethod
+    def _compute_metric(
+        cls,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
+        **kwargs: Any,
+    ) -> Any:
+        forecast_threshold = kwargs.get("forecast_threshold", 0.5)
+        target_threshold = kwargs.get("target_threshold", 0.5)
+        preserve_dims = kwargs.get("preserve_dims", "lead_time")
+
+        transformed = get_cached_transformed_manager(
+            forecast=forecast,
+            target=target,
+            forecast_threshold=forecast_threshold,
+            target_threshold=target_threshold,
+            preserve_dims=preserve_dims,
+        )
+        return transformed.accuracy()
+
+
+def create_threshold_metrics(
+    forecast_threshold: float = 0.5,
+    target_threshold: float = 0.5,
+    preserve_dims: str = "lead_time",
+    metrics: Optional[List[str]] = None,
+):
+    """Create multiple threshold-based metrics with the specified thresholds.
+
+    Args:
+        forecast_threshold: Threshold for binarizing forecast data
+        target_threshold: Threshold for binarizing target data
+        preserve_dims: Dimensions to preserve during contingency table computation
+        metrics: List of metric names to create (e.g., ['CSI', 'FAR', 'TP'])
+
+    Returns:
+        A list of metric objects with the specified thresholds
+    """
+    if metrics is None:
+        metrics = ["CSI", "FAR", "Accuracy", "TP", "FP", "TN", "FN"]
+
+    # Mapping of metric names to their classes (all threshold-based metrics)
+    metric_classes: Dict[str, Type[ThresholdMetric]] = {
+        "CSI": CSI,
+        "FAR": FAR,
+        "Accuracy": Accuracy,
+        "TP": TP,
+        "FP": FP,
+        "TN": TN,
+        "FN": FN,
+    }
+
+    result_metrics = []
+
+    # Create metrics by instantiating their classes
+    for metric_name in metrics:
+        if metric_name not in metric_classes:
+            raise ValueError(f"Unknown metric: {metric_name}")
+
+        metric_class = metric_classes[metric_name]
+        metric = metric_class(
+            forecast_threshold=forecast_threshold,
+            target_threshold=target_threshold,
+            preserve_dims=preserve_dims,
+        )
+        result_metrics.append(metric)
+
+    return result_metrics
+
+
 class MAE(BaseMetric):
     name = "mae"
 
@@ -274,6 +509,159 @@ class RMSE(BaseMetric):
     ) -> Any:
         preserve_dims = kwargs.get("preserve_dims", "lead_time")
         return rmse(forecast, target, preserve_dims=preserve_dims)
+
+
+class EarlySignal(BaseMetric):
+    """Metric to identify the earliest signal detection in forecast data.
+
+    This metric finds the first occurrence where a signal is detected based on
+    threshold criteria and returns the corresponding init_time, lead_time, and
+    valid_time information. The metric is designed to be flexible for different
+    signal detection criteria that can be specified in applied metrics downstream.
+    """
+
+    name = "early_signal"
+
+    @classmethod
+    def _compute_metric(
+        cls,
+        forecast: xr.Dataset,
+        target: xr.Dataset,
+        threshold: Optional[float] = None,
+        variable: Optional[str] = None,
+        comparison: str = ">=",
+        spatial_aggregation: str = "any",
+        **kwargs: Any,
+    ) -> xr.Dataset:
+        """Compute early signal detection.
+
+        Args:
+            forecast: The forecast dataset with init_time, lead_time, valid_time
+            target: The target dataset (used for reference/validation)
+            threshold: Threshold value for signal detection
+            variable: Variable name to analyze for signal detection
+            comparison: Comparison operator (">=", "<=", ">", "<", "==", "!=")
+            spatial_aggregation: How to aggregate spatially ("any", "all", "mean")
+            **kwargs: Additional arguments
+
+        Returns:
+            Dataset containing earliest detection times with coordinates:
+            - earliest_init_time: First init_time when signal was detected
+            - earliest_lead_time: Corresponding lead_time
+            - earliest_valid_time: Corresponding valid_time
+            - detection_found: Boolean indicating if any detection occurred
+        """
+        if threshold is None or variable is None:
+            # Return structure for when no detection criteria specified
+            return xr.Dataset(
+                {
+                    "earliest_init_time": xr.DataArray(np.datetime64("NaT")),
+                    "earliest_lead_time": xr.DataArray(np.timedelta64("NaT")),
+                    "earliest_valid_time": xr.DataArray(np.datetime64("NaT")),
+                    "detection_found": xr.DataArray(False),
+                }
+            )
+
+        if variable not in forecast.data_vars:
+            raise ValueError(f"Variable '{variable}' not found in forecast dataset")
+
+        data = forecast[variable]
+
+        # Apply threshold comparison
+        comparison_ops = {
+            ">=": lambda x, t: x >= t,
+            "<=": lambda x, t: x <= t,
+            ">": lambda x, t: x > t,
+            "<": lambda x, t: x < t,
+            "==": lambda x, t: x == t,
+            "!=": lambda x, t: x != t,
+        }
+
+        if comparison not in comparison_ops:
+            raise ValueError(f"Comparison '{comparison}' not supported")
+
+        # Create detection mask
+        detection_mask = comparison_ops[comparison](data, threshold)
+
+        # Apply spatial aggregation
+        spatial_dims = [
+            dim
+            for dim in detection_mask.dims
+            if dim not in ["init_time", "lead_time", "valid_time"]
+        ]
+
+        if spatial_dims:
+            if spatial_aggregation == "any":
+                detection_mask = detection_mask.any(spatial_dims)
+            elif spatial_aggregation == "all":
+                detection_mask = detection_mask.all(spatial_dims)
+            elif spatial_aggregation == "mean":
+                detection_mask = detection_mask.mean(spatial_dims) > 0.5
+            else:
+                raise ValueError(
+                    f"Spatial aggregation '{spatial_aggregation}' not supported"
+                )
+
+        # Find earliest detection for each init_time
+        earliest_results = {}
+
+        for init_t in forecast.init_time:
+            init_mask = detection_mask.sel(init_time=init_t)
+
+            # Find first occurrence along lead_time dimension
+            if init_mask.any():
+                # Get the first True index along lead_time
+                first_detection_idx = init_mask.argmax("lead_time")
+                earliest_lead = forecast.lead_time[first_detection_idx]
+                earliest_valid = init_t.values + np.timedelta64(int(earliest_lead), "h")
+
+                earliest_results[init_t.values] = {
+                    "init_time": init_t.values,
+                    "lead_time": earliest_lead.values,
+                    "valid_time": earliest_valid,
+                    "found": True,
+                }
+            else:
+                earliest_results[init_t.values] = {
+                    "init_time": init_t.values,
+                    "lead_time": np.timedelta64("NaT"),
+                    "valid_time": np.datetime64("NaT"),
+                    "found": False,
+                }
+
+        # Convert to xarray Dataset
+        init_times = list(earliest_results.keys())
+        earliest_init_times = [r["init_time"] for r in earliest_results.values()]
+        earliest_lead_times = [r["lead_time"] for r in earliest_results.values()]
+        earliest_valid_times = [r["valid_time"] for r in earliest_results.values()]
+        detection_found = [r["found"] for r in earliest_results.values()]
+
+        result = xr.Dataset(
+            {
+                "earliest_init_time": xr.DataArray(
+                    earliest_init_times,
+                    coords={"init_time": init_times},
+                    dims=["init_time"],
+                ),
+                "earliest_lead_time": xr.DataArray(
+                    earliest_lead_times,
+                    coords={"init_time": init_times},
+                    dims=["init_time"],
+                ),
+                "earliest_valid_time": xr.DataArray(
+                    earliest_valid_times,
+                    coords={"init_time": init_times},
+                    dims=["init_time"],
+                ),
+                "detection_found": xr.DataArray(
+                    detection_found,
+                    coords={"init_time": init_times},
+                    dims=["init_time"],
+                ),
+            }
+        )
+
+        return result
 
 
 class MaximumMAE(AppliedMetric):
