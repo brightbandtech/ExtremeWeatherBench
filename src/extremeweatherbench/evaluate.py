@@ -204,12 +204,12 @@ def compute_case_operator(
     )
 
     # compute and cache the datasets if requested
-    aligned_forecast_ds, aligned_target_ds = _compute(
-        aligned_forecast_ds,
-        aligned_target_ds,
-        cache_dir=cache_dir,
-        compute_if=kwargs.get("pre_compute", False),
-    )
+    if kwargs.get("pre_compute", False):
+        aligned_forecast_ds, aligned_target_ds = _compute_and_maybe_cache(
+            aligned_forecast_ds,
+            aligned_target_ds,
+            cache_dir=kwargs.get("cache_dir", None),
+        )
 
     # Derive the variables for the forecast and target datasets independently
     aligned_forecast_ds = derived.maybe_derive_variables(
@@ -396,14 +396,15 @@ def _build_datasets(
     return (forecast_ds, target_ds)
 
 
-def _compute(*datasets: xr.Dataset, compute_if: bool = False) -> list[xr.Dataset]:
+def _compute_and_maybe_cache(
+    *datasets: xr.Dataset, cache_dir: Optional[Union[str, Path]]
+) -> list[xr.Dataset]:
     """Compute and cache the datasets if caching."""
-    if compute_if:
-        logger.info("computing datasets")
-        datasets = [dataset.compute() for dataset in datasets]
-    else:
-        datasets = [datasets]
-    return datasets
+    logger.info("computing datasets")
+    computed_datasets = [dataset.compute() for dataset in datasets]
+    if cache_dir:
+        raise NotImplementedError("Caching is not implemented yet")
+    return computed_datasets
 
 
 def run_pipeline(
