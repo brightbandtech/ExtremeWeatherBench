@@ -2,9 +2,9 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Sequence, Type, TypeGuard, Union
 
-import numpy as np
 import xarray as xr
 
+from extremeweatherbench import calc
 from extremeweatherbench.events import tropical_cyclone
 
 logging.basicConfig(level=logging.INFO)
@@ -124,28 +124,8 @@ class TropicalCycloneTrackVariables(DerivedVariable):
         if cache_key in tropical_cyclone._TC_TRACK_CACHE:
             return tropical_cyclone._TC_TRACK_CACHE[cache_key]
 
-        # Compute tracks if not cached
-        def _prepare_wind_data(data: xr.Dataset) -> xr.Dataset:
-            """Prepare wind data by computing wind speed if needed."""
-            # Make a copy to avoid modifying original
-            prepared_data = data.copy()
-
-            has_wind_speed = "surface_wind_speed" in data.data_vars
-            has_wind_components = (
-                "surface_eastward_wind" in data.data_vars
-                and "surface_northward_wind" in data.data_vars
-            )
-
-            # If we don't have wind speed but have components, compute it
-            if not has_wind_speed and has_wind_components:
-                prepared_data["surface_wind_speed"] = np.hypot(
-                    data["surface_eastward_wind"], data["surface_northward_wind"]
-                )
-
-            return prepared_data
-
         # Prepare the data with wind variables as needed
-        prepared_data = _prepare_wind_data(data)
+        prepared_data = calc.maybe_prepare_wind_speed(data)
 
         # Generates the variables needed for the TC track calculation
         # (geop. thickness, winds, temps, slp)
