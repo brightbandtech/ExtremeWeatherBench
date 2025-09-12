@@ -804,7 +804,7 @@ class TestEdgeCasesAndErrorConditions:
         # Should resolve to the base variable
         assert result == ["base_var"]
 
-    def test_derived_variable_with_empty_dataset(self):
+    def test_derived_variable_with_empty_dataset(self, caplog):
         """Test behavior with empty datasets."""
         empty_dataset = xr.Dataset()
 
