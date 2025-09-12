@@ -4,26 +4,6 @@ import numpy as np
 import xarray as xr
 
 
-def maybe_prepare_wind_speed(data: xr.Dataset) -> xr.Dataset:
-    """Prepare wind data by computing wind speed if needed."""
-    # Make a copy to avoid modifying original
-    prepared_data = data.copy()
-
-    has_wind_speed = "surface_wind_speed" in data.data_vars
-    has_wind_components = (
-        "surface_eastward_wind" in data.data_vars
-        and "surface_northward_wind" in data.data_vars
-    )
-
-    # If we don't have wind speed but have components, compute it
-    if not has_wind_speed and has_wind_components:
-        prepared_data["surface_wind_speed"] = np.hypot(
-            data["surface_eastward_wind"], data["surface_northward_wind"]
-        )
-
-    return prepared_data
-
-
 def convert_from_cartesian_to_latlon(
     input_point: Union[np.ndarray, tuple[float, float]], ds_mapping: xr.Dataset
 ) -> tuple[float, float]:
