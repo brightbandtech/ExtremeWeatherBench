@@ -305,18 +305,9 @@ class TestMaybeDeriveVariablesFunction:
 
         variables = [TestMissingVarDerived()]
 
-        # Set dataset type
         sample_dataset.attrs["dataset_type"] = "forecast"
-        result = derived.maybe_derive_variables(sample_dataset, variables)
-
-        # Should return only the first derived variable as Dataset
-        assert isinstance(result, xr.Dataset)
-        assert "TestValidDerivedVariable" in result.data_vars
-        # Verify the computed value is correct (from first variable only)
-        expected_value = (
-            sample_dataset["test_variable_1"] + sample_dataset["test_variable_2"]
-        )
-        xr.testing.assert_equal(result["TestValidDerivedVariable"], expected_value)
+        with pytest.raises(KeyError, match="No variable named 'nonexistent_variable'"):
+            derived.maybe_derive_variables(sample_dataset, variables)
 
     def test_no_derived_variables_in_list(self, sample_dataset):
         """Test when no derived variables are in the variable list."""
