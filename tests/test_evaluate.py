@@ -1,9 +1,4 @@
-"""Comprehensive test suite for evaluate.py module.
-
-This test suite covers all the main functionality of the ExtremeWeatherBench evaluation
-workflow, including the ExtremeWeatherBench class, pipeline functions, and error
-handling.
-"""
+"""Tests for evaluate module."""
 
 import datetime
 import logging

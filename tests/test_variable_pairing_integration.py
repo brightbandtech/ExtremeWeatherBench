@@ -20,10 +20,6 @@ import xarray as xr
 from extremeweatherbench import cases, evaluate, inputs, metrics
 from extremeweatherbench.regions import CenteredRegion
 
-# =============================================================================
-# Test Fixtures
-# =============================================================================
-
 
 class MockMetric(metrics.BaseMetric):
     """A simple mock metric for testing."""
@@ -335,9 +331,9 @@ class TestVariablePairingIntegration:
 
         # Verify results
         assert isinstance(result, pd.DataFrame)
-        assert (
-            len(result) == 1
-        ), "Should have exactly one evaluation result (only first pairing)"
+        assert len(result) == 1, (
+            "Should have exactly one evaluation result (only first pairing)"
+        )
 
         # Check that only the first pairing was created: var_a <-> var_x
         assert result["target_variable"].iloc[0] == "var_x"
@@ -365,9 +361,9 @@ class TestVariablePairingIntegration:
 
         # Verify results
         assert isinstance(result, pd.DataFrame)
-        assert (
-            len(result) == 1
-        ), "Should have exactly one evaluation result (only first pairing)"
+        assert len(result) == 1, (
+            "Should have exactly one evaluation result (only first pairing)"
+        )
 
         # Check that only the first pairing was created: var_a <-> var_x
         assert result["target_variable"].iloc[0] == "var_x"

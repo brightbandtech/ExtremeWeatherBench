@@ -1,12 +1,4 @@
-"""Comprehensive unit tests for the extremeweatherbench.derived module.
-
-This test suite covers:
-- Abstract base class DerivedVariable
-- All concrete derived variable implementations
-- Utility functions for variable derivation
-- Edge cases and error conditions
-- Mock implementations for testing
-"""
+"""Tests for the derived module."""
 
 import numpy as np
 import pandas as pd
