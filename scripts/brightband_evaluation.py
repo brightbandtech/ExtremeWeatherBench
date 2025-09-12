@@ -4,25 +4,8 @@ import os
 
 import joblib
 import pandas as pd
-from rich.console import Console
-from rich.progress import BarColumn, Progress, TextColumn
 
-# from tqdm.auto import tqdm
-# from tqdm.contrib.logging import logging_redirect_tqdm
 from extremeweatherbench import cases, defaults, evaluate
-
-# Create a rich console for printing above the progress bar
-console = Console()
-
-# Create a custom progress bar
-progress_bar = Progress(
-    TextColumn("[progress.description]{task.description}"),
-    BarColumn(),
-    TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
-    TextColumn("•"),
-    TextColumn("Elapsed: {task.elapsed}"),
-    console=console,
-)
 
 
 def configure_root_logger():
@@ -68,16 +51,14 @@ os.environ["MKL_NUM_THREADS"] = str(n_threads_per_process)
 os.environ["OPENBLAS_NUM_THREADS"] = str(n_threads_per_process)
 os.environ["NUMEXPR_NUM_THREADS"] = str(n_threads_per_process)
 
-total_tasks = len(case_operators)
-with progress_bar as p:
-    task = p.add_task("[cyan]Processing...", total=total_tasks)
-    # Use joblib to parallelize with n processes, each with 10 threads
-    results = joblib.Parallel(n_jobs=n_processes, prefer="processes")(
-        joblib.delayed(evaluate.compute_case_operator)(
-            case_op, tolerance_range=48, pre_compute=True
-        )
-        for case_op in p.track(case_operators)
+
+# Use joblib to parallelize with n processes, each with 10 threads
+results = joblib.Parallel(n_jobs=n_processes, prefer="processes")(
+    joblib.delayed(evaluate.compute_case_operator)(
+        case_op, tolerance_range=48, pre_compute=True
     )
+    for case_op in case_operators
+)
 
 results = pd.concat(results, ignore_index=True)
 results.to_csv("brightband_evaluation_results.csv", index=False)
