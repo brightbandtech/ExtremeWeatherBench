@@ -1,12 +1,8 @@
-"""Comprehensive tests for ThreadSafeDict class.
+"""Tests forThreadSafeDict class.
 
 This test suite covers all scenarios including single-threaded, joblib-based
 parallel execution, and stress testing scenarios to ensure ThreadSafeDict
-works correctly under all conditions.
-
-Note: This version uses only joblib for all parallel processing.
-No other multiprocessing modules are used.
-"""
+works correctly under those conditions."""
 
 import random
 import threading
