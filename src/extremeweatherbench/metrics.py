@@ -263,8 +263,6 @@ class FAR(ThresholdMetric):
 
     name = "false_alarm_ratio"
 
-    # Inherits __init__ from ThresholdMetric
-
     @classmethod
     def _compute_metric(
         cls,
@@ -290,7 +288,6 @@ class TP(ThresholdMetric):
     """True Positive metric."""
 
     name = "true_positive"
-    # Inherits __init__ from ThresholdMetric
 
     @classmethod
     def _compute_metric(
@@ -318,7 +315,6 @@ class FP(ThresholdMetric):
     """False Positive metric."""
 
     name = "false_positive"
-    # Inherits __init__ from ThresholdMetric
 
     @classmethod
     def _compute_metric(
@@ -346,7 +342,6 @@ class TN(ThresholdMetric):
     """True Negative metric."""
 
     name = "true_negative"
-    # Inherits __init__ from ThresholdMetric
 
     @classmethod
     def _compute_metric(
@@ -374,7 +369,6 @@ class FN(ThresholdMetric):
     """False Negative metric."""
 
     name = "false_negative"
-    # Inherits __init__ from ThresholdMetric
 
     @classmethod
     def _compute_metric(
@@ -403,10 +397,8 @@ class Accuracy(ThresholdMetric):
 
     name = "accuracy"
 
-    # Inherits __init__ from ThresholdMetric
-
     @classmethod
-    def compute_metric(
+    def _compute_metric(
         cls,
         forecast: xr.DataArray,
         target: xr.DataArray,
