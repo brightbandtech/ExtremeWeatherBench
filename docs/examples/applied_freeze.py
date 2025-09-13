@@ -32,16 +32,26 @@ def _preprocess_bb_cira_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
     ds["lead_time"] = np.array(
         [i for i in range(0, 241, 6)], dtype="timedelta64[h]"
     ).astype("timedelta64[ns]")
+    ds["surface_wind_speed"] = np.hypot(ds["u10"], ds["v10"])
+    ds["surface_wind_from_direction"] = (
+        np.degrees(np.arctan2(ds["u10"], ds["v10"])) % 360
+    )
     return ds
 
 
 # Define targets
 # ERA5 target
-era5_heatwave_target = inputs.ERA5(
+era5_freeze_target = inputs.ERA5(
     source=inputs.ARCO_ERA5_FULL_URI,
-    variables=["surface_air_temperature"],
+    variables=[
+        "surface_air_temperature",
+        "surface_eastward_wind",
+        "surface_northward_wind",
+    ],
     variable_mapping={
         "2m_temperature": "surface_air_temperature",
+        "10m_u_component_of_wind": "surface_eastward_wind",
+        "10m_v_component_of_wind": "surface_northward_wind",
         "time": "valid_time",
     },
     storage_options={"remote_options": {"anon": True}},
@@ -49,55 +59,62 @@ era5_heatwave_target = inputs.ERA5(
 )
 
 # GHCN target
-ghcn_target = inputs.GHCN(
+ghcn_freeze_target = inputs.GHCN(
     source=inputs.DEFAULT_GHCN_URI,
-    variables=["surface_air_temperature"],
+    variables=[
+        "surface_air_temperature",
+        "surface_wind_speed",
+        "surface_wind_from_direction",
+    ],
 )
 
-# Define forecast (HRES)
-hres_forecast = inputs.ZarrForecast(
-    source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
-    variables=["surface_air_temperature"],
+# Define forecast (FCNv2 CIRA Virtualizarr)
+fcnv2_forecast = inputs.KerchunkForecast(
+    source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
+    variables=[
+        "surface_air_temperature",
+        "surface_wind_speed",
+        "surface_wind_from_direction",
+    ],
     variable_mapping={
-        "2m_temperature": "surface_air_temperature",
-        "prediction_timedelta": "lead_time",
-        "time": "init_time",
+        "t2": "surface_air_temperature",
+        "u10": "surface_eastward_wind",
+        "v10": "surface_northward_wind",
     },
-    storage_options={"remote_options": {"anon": True}},
+    storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
+    preprocess=_preprocess_bb_cira_forecast_dataset,
 )
 
-# Create a list of evaluation objects for heatwave
-heatwave_evaluation_object = [
+# Create a list of evaluation objects for freeze
+freeze_evaluation_object = [
     inputs.EvaluationObject(
-        event_type="heat_wave",
+        event_type="freeze",
         metric_list=[
-            metrics.MaximumMAE,
             metrics.RMSE,
+            metrics.MinimumMAE,
             metrics.OnsetME,
             metrics.DurationME,
-            metrics.MaxMinMAE,
         ],
-        target=ghcn_target,
-        forecast=hres_forecast,
+        target=ghcn_freeze_target,
+        forecast=fcnv2_forecast,
     ),
     inputs.EvaluationObject(
-        event_type="heat_wave",
+        event_type="freeze",
         metric_list=[
-            metrics.MaximumMAE,
             metrics.RMSE,
+            metrics.MinimumMAE,
             metrics.OnsetME,
             metrics.DurationME,
-            metrics.MaxMinMAE,
         ],
-        target=era5_heatwave_target,
-        forecast=hres_forecast,
+        target=era5_freeze_target,
+        forecast=fcnv2_forecast,
     ),
 ]
 
 # Initialize ExtremeWeatherBench
 test_ewb = evaluate.ExtremeWeatherBench(
     cases=case_yaml,
-    evaluation_objects=heatwave_evaluation_object,
+    evaluation_objects=freeze_evaluation_object,
 )
 
 # Run the workflow
@@ -105,8 +122,6 @@ outputs = test_ewb.run(
     # tolerance range is the number of hours before and after the timestamp a
     # validating occurrence is checked in the forecasts
     tolerance_range=48,
-    # pre-compute the datasets to avoid recomputing them for each metric
-    pre_compute=True,
 )
 
 # Print the outputs; can be saved if desired
