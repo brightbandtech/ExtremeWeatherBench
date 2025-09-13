@@ -4,6 +4,7 @@ from typing import Sequence, Type, TypeGuard, Union
 
 import xarray as xr
 
+import extremeweatherbench.events.atmospheric_river as ar
 import extremeweatherbench.events.severe_convection as sc
 
 logging.basicConfig(level=logging.INFO)
@@ -131,6 +132,39 @@ class CravenBrooksSignificantSevere(DerivedVariable):
             dims=coords.keys(),
             name=cls.name,
         )
+
+
+class AtmosphericRiverMask(DerivedVariable):
+    """A derived variable that computes the atmospheric river mask.
+
+    Calculates the IVT (Integrated Vapor Transport) and its Laplacian from a dataset.IVT
+    is calculated using the method described in Newell et al. 1992 and elsewhere
+    (e.g. Mo 2024).
+
+    The Laplacian of IVT is calculated using a Gaussian blurring kernel with a
+    sigma of 3 grid points, meant to smooth out 0.25 degree grid scale features.
+    """
+
+    required_variables = [
+        "eastward_wind",
+        "northward_wind",
+        "specific_humidity",
+    ]
+    optional_variables = ["integrated_vapor_transport", "surface_standard_pressure"]
+    optional_variables_mapping = {
+        "integrated_vapor_transport": [
+            "eastward_wind",
+            "northward_wind",
+            "specific_humidity",
+        ],
+        "surface_standard_pressure": ["surface_standard_pressure"],
+    }
+    name = "atmospheric_river_mask"
+
+    @classmethod
+    def derive_variable(cls, data: xr.Dataset, *args, **kwargs) -> xr.Dataset:
+        """Derive the atmospheric river mask using xr.apply_ufunc approach."""
+        return ar.compute_atmospheric_river_mask_ufunc(data)
 
 
 def maybe_derive_variables(
