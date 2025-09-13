@@ -49,8 +49,7 @@ class ExtremeWeatherBench:
         self.cache_dir = Path(cache_dir) if cache_dir else None
 
     # case operators as a property are a convenience method for users to use
-    # them outside the class
-    # if desired for a parallel workflow
+    # them outside the class if desired for a parallel workflow
     @property
     def case_operators(self) -> list["cases.CaseOperator"]:
         return cases.build_case_operators(self.cases, self.evaluation_objects)
@@ -66,13 +65,17 @@ class ExtremeWeatherBench:
         This method will run the workflow in the order of the case operators, optionally
         caching the mid-flight outputs of the workflow if cache_dir was provided.
 
+        Keyword arguments are passed to the metric computations if there are specific
+        requirements needed for metrics such as threshold arguments.
+
         Args:
             parallel: Whether to run the workflow in parallel.
+            cache_dir: The directory to cache the mid-flight outputs of the workflow.
             n_jobs: The number of jobs to run in parallel. If None, defaults to the
             joblib backend default.
 
-        Keyword arguments are passed to the metric computations if there are specific
-        requirements needed for metrics such as threshold arguments.
+        Returns:
+            A concatenated dataframe of the evaluation results.
         """
         # Caching does not work in parallel mode as of now, so ignore the cache_dir
         # but raise a warning for the user
@@ -82,8 +85,6 @@ class ExtremeWeatherBench:
             )
         # Instantiate the cache directory if caching and build it if it does not exist
         elif self.cache_dir:
-            if isinstance(self.cache_dir, str):
-                self.cache_dir = Path(self.cache_dir)
             if not self.cache_dir.exists():
                 self.cache_dir.mkdir(parents=True, exist_ok=True)
 
@@ -109,7 +110,11 @@ def _run_case_operators(
 
     Args:
         case_operators: The case operators to run.
-        kwargs: Keyword arguments to pass to the metric and case operator computations.
+        parallel: Whether to run in parallel mode.
+        n_jobs: Number of jobs for parallel execution.
+        cache_dir: Optional directory for caching results.
+        **kwargs: Keyword arguments to pass to the metric and case operator
+            computations.
 
     Returns:
         A concatenated dataframe of the results of the case operators.
@@ -130,7 +135,8 @@ def _run_serial(
 
     Args:
         case_operators: The case operators to run.
-        kwargs: Keyword arguments to pass to the metric computations.
+        cache_dir: Optional directory for caching results.
+        **kwargs: Keyword arguments to pass to the metric computations.
 
     Returns:
         A concatenated dataframe of the results of the case operators.
@@ -165,7 +171,8 @@ def _run_parallel(
     if n_jobs is None:
         logger.warning("No number of jobs provided, using all available CPUs.")
     run_results = Parallel(n_jobs=n_jobs)(
-        delayed(compute_case_operator)(case_operator, **kwargs)
+        # None is the cache_dir, we can't cache in parallel mode
+        delayed(compute_case_operator)(case_operator, None, **kwargs)
         for case_operator in tqdm(case_operators)
     )
     return run_results
@@ -173,7 +180,7 @@ def _run_parallel(
 
 def compute_case_operator(
     case_operator: "cases.CaseOperator",
-    cache_dir: Optional[Union[str, Path]] = None,
+    cache_dir: Optional[Path] = None,
     **kwargs,
 ):
     """Compute the results of a case operator.
