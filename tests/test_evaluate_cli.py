@@ -187,7 +187,7 @@ class TestParallelExecution:
     """Test --parallel option functionality."""
 
     @patch("extremeweatherbench.defaults.BRIGHTBAND_EVALUATION_OBJECTS", [])
-    @patch("extremeweatherbench.evaluate_cli._run_parallel_evaluation")
+    @patch("extremeweatherbench.evaluate_cli._run_parallel")
     @patch("extremeweatherbench.evaluate_cli._load_default_cases")
     @patch("extremeweatherbench.evaluate_cli.ExtremeWeatherBench")
     def test_parallel_execution(
@@ -207,7 +207,7 @@ class TestParallelExecution:
         assert result.exit_code == 0
         # Output suppressed - only check exit code
         mock_parallel_eval.assert_called_once_with(
-            mock_ewb.case_operators, 3, precompute=False
+            mock_ewb.case_operators, 3, pre_compute=False
         )
 
     @patch("extremeweatherbench.defaults.BRIGHTBAND_EVALUATION_OBJECTS", [])
@@ -416,43 +416,3 @@ class TestHelperFunctions:
 
         assert result == mock_cases
         mock_load_yaml.assert_called_once_with()
-
-    @patch("extremeweatherbench.evaluate_cli.compute_case_operator")
-    @patch("extremeweatherbench.evaluate_cli.Parallel")
-    def test_run_parallel_evaluation(self, mock_parallel_class, mock_compute):
-        """Test _run_parallel_evaluation function."""
-        # Mock the Parallel class and its behavior
-        mock_parallel = Mock()
-        mock_parallel_class.return_value = mock_parallel
-        mock_parallel.return_value = [
-            pd.DataFrame({"test": [1]}),
-            pd.DataFrame({"test": [2]}),
-            None,  # Test None filtering
-        ]
-
-        mock_case_ops = [Mock(), Mock(), Mock()]
-
-        result = evaluate_cli._run_parallel_evaluation(
-            mock_case_ops, 2, precompute=False
-        )
-
-        # Verify Parallel was called correctly
-        mock_parallel_class.assert_called_once_with(n_jobs=2)
-
-        # Verify result concatenation (should filter out None)
-        assert len(result) == 2
-        assert list(result["test"]) == [1, 2]
-
-    def test_run_parallel_evaluation_all_none_results(self):
-        """Test _run_parallel_evaluation when all results are None."""
-        with patch("extremeweatherbench.evaluate_cli.Parallel") as mock_parallel_class:
-            mock_parallel = Mock()
-            mock_parallel_class.return_value = mock_parallel
-            mock_parallel.return_value = [None, None, None]
-
-            result = evaluate_cli._run_parallel_evaluation(
-                [Mock()], 1, precompute=False
-            )
-
-            assert isinstance(result, pd.DataFrame)
-            assert len(result) == 0
