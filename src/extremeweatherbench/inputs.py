@@ -997,6 +997,13 @@ def safely_pull_variables(
     if optional_variables_mapping is None:
         optional_variables_mapping = {}
 
+    default_coordinate_variables = [
+        "valid_time",
+        "lead_time",
+        "init_time",
+        "latitude",
+        "longitude",
+    ]
     # Dispatch to type-specific handlers
     match dataset:
         case xr.Dataset():
@@ -1009,11 +1016,17 @@ def safely_pull_variables(
             )
         case pl.LazyFrame():
             return sources.safely_pull_variables_polars_lazyframe(
-                dataset, variables, optional_variables, optional_variables_mapping
+                dataset,
+                variables,
+                optional_variables + default_coordinate_variables,
+                optional_variables_mapping,
             )
         case pd.DataFrame():
             return sources.safely_pull_variables_pandas_dataframe(
-                dataset, variables, optional_variables, optional_variables_mapping
+                dataset,
+                variables + default_coordinate_variables,
+                optional_variables + default_coordinate_variables,
+                optional_variables_mapping,
             )
         case _:
             raise TypeError(

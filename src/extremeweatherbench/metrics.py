@@ -884,32 +884,39 @@ class MaxMinMAE(AppliedMetric):
             )
         )
         max_min_target_value = target.sel(valid_time=max_min_target_datetime)
-        subset_forecast = (
-            forecast.where(
-                (
-                    forecast.valid_time
-                    >= (
-                        max_min_target_datetime
-                        - np.timedelta64(tolerance_range // 2, "h")
+        try:
+            subset_forecast = (
+                forecast.where(
+                    (
+                        forecast.valid_time
+                        >= (
+                            max_min_target_datetime
+                            - np.timedelta64(tolerance_range // 2, "h")
+                        )
                     )
+                    & (
+                        forecast.valid_time
+                        <= (
+                            max_min_target_datetime
+                            + np.timedelta64(tolerance_range // 2, "h")
+                        )
+                    ),
+                    drop=True,
                 )
-                & (
-                    forecast.valid_time
-                    <= (
-                        max_min_target_datetime
-                        + np.timedelta64(tolerance_range // 2, "h")
-                    )
-                ),
-                drop=True,
+                .groupby("valid_time.dayofyear")
+                .map(
+                    utils.min_if_all_timesteps_present_forecast,
+                    time_resolution_hours=utils.determine_temporal_resolution(forecast),
+                )
+                .min("dayofyear")
             )
-            .groupby("valid_time.dayofyear")
-            .map(
-                utils.min_if_all_timesteps_present_forecast,
-                time_resolution_hours=utils.determine_temporal_resolution(forecast),
-            )
-            .min("dayofyear")
-        )
-
+        except ValueError as e:
+            logger.error("Error computing max_min_mae: %s, returning nan", e)
+            return {
+                "forecast": xr.full_like(forecast, np.nan),
+                "target": xr.full_like(target, np.nan),
+                "preserve_dims": cls.base_metric.preserve_dims,
+            }
         return {
             "forecast": subset_forecast,
             "target": max_min_target_value,
@@ -977,10 +984,6 @@ class DurationME(AppliedMetric):
         if (forecast.valid_time.max() - forecast.valid_time.min()).values.astype(
             "timedelta64[h]"
         ) >= 48:
-            # get the forecast resolution hours from the kwargs, otherwise default to 6
-            num_timesteps = 24 // kwargs.get("forecast_resolution_hours", 6)
-            if num_timesteps is None:
-                return xr.DataArray(np.datetime64("NaT", "ns"))
             min_daily_vals = forecast.groupby("valid_time.dayofyear").map(
                 utils.min_if_all_timesteps_present,
                 time_resolution_hours=utils.determine_temporal_resolution(forecast),
@@ -1010,10 +1013,7 @@ class DurationME(AppliedMetric):
         forecast = (
             forecast.mean(["latitude", "longitude"])
             .groupby("init_time")
-            .map(
-                cls.duration,
-                forecast_resolution_hours=forecast.attrs["forecast_resolution_hours"],
-            )
+            .map(cls.duration)
         )
         return {
             "forecast": forecast,

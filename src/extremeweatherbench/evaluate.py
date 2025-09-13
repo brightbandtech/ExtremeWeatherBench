@@ -1,14 +1,15 @@
 """Evaluation routines for use during ExtremeWeatherBench case studies / analyses."""
 
+import functools
 import itertools
 import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional, Type, Union
 
 import pandas as pd
+import tqdm
 import xarray as xr
 from joblib import Parallel, delayed
-from tqdm.auto import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 
 from extremeweatherbench import cases, derived, inputs
@@ -18,8 +19,157 @@ if TYPE_CHECKING:
     from extremeweatherbench import metrics
 
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+def exception_handler(func):
+    """Decorator to handle exceptions in metric evaluation and continue.
+
+    Records case_id_number, event_type, and target dataset name when
+    exceptions occur, then returns an empty DataFrame to allow processing
+    to continue.
+    """
+
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            # Extract the parameters we need for logging
+            # Function signature: _evaluate_metric_and_return_df(
+            #     forecast_ds, target_ds, forecast_variable, target_variable,
+            #     metric, case_id_number, event_type, **kwargs)
+
+            case_id_number = (
+                args[5] if len(args) > 5 else kwargs.get("case_id_number", "Unknown")
+            )
+            event_type = (
+                args[6] if len(args) > 6 else kwargs.get("event_type", "Unknown")
+            )
+
+            # Get target dataset name from attrs
+            target_ds_name = "Unknown"
+            if len(args) > 1:
+                target_ds = args[1]  # target_ds is the second argument
+                if hasattr(target_ds, "attrs") and "name" in target_ds.attrs:
+                    target_ds_name = target_ds.attrs["name"]
+            elif "target_ds" in kwargs:
+                target_ds = kwargs["target_ds"]
+                if hasattr(target_ds, "attrs") and "name" in target_ds.attrs:
+                    target_ds_name = target_ds.attrs["name"]
+
+            # Log the exception with the relevant information
+            logger.error(
+                f"Exception in metric evaluation - "
+                f"case_id_number: {case_id_number}, "
+                f"event_type: {event_type}, "
+                f"target_dataset_name: {target_ds_name}, "
+                f"error: {str(e)}"
+            )
+
+            # Return an empty DataFrame with expected columns to allow
+            # processing to continue
+            return pd.DataFrame(columns=OUTPUT_COLUMNS)
+
+    return wrapper
+
+
+class ParallelTqdm(Parallel):
+    """joblib.Parallel, but with a tqdm progressbar
+
+    Additional parameters:
+    ----------------------
+    total_tasks: int, default: None
+        the number of expected jobs. Used in the tqdm progressbar.
+        If None, try to infer from the length of the called iterator, and
+        fallback to use the number of remaining items as soon as we finish
+        dispatching.
+        Note: use a list instead of an iterator if you want the total_tasks
+        to be inferred from its length.
+
+    desc: str, default: None
+        the description used in the tqdm progressbar.
+
+    disable_progressbar: bool, default: False
+        If True, a tqdm progressbar is not used.
+
+    show_joblib_header: bool, default: False
+        If True, show joblib header before the progressbar.
+
+    Removed parameters:
+    -------------------
+    verbose: will be ignored
+
+
+    Usage:
+    ------
+    >>> from joblib import delayed
+    >>> from time import sleep
+    >>> ParallelTqdm(n_jobs=-1)([delayed(sleep)(0.1) for _ in range(10)])
+    80%|████████  | 8/10 [00:02<00:00,  3.12tasks/s]
+
+    """
+
+    def __init__(
+        self,
+        *,
+        total_tasks: int | None = None,
+        desc: str | None = None,
+        disable_progressbar: bool = False,
+        show_joblib_header: bool = False,
+        **kwargs,
+    ):
+        if "verbose" in kwargs:
+            raise ValueError(
+                "verbose is not supported. "
+                "Use disable_progressbar and show_joblib_header instead."
+            )
+        super().__init__(verbose=(1 if show_joblib_header else 0), **kwargs)
+        self.total_tasks = total_tasks
+        self.desc = desc
+        self.disable_progressbar = disable_progressbar
+        self.progress_bar: tqdm.tqdm | None = None
+
+    def __call__(self, iterable):
+        try:
+            if self.total_tasks is None:
+                # try to infer total_tasks from the length of the called iterator
+                try:
+                    self.total_tasks = len(iterable)
+                except (TypeError, AttributeError):
+                    pass
+            # call parent function
+            return super().__call__(iterable)
+        finally:
+            # close tqdm progress bar
+            if self.progress_bar is not None:
+                self.progress_bar.close()
+
+    __call__.__doc__ = Parallel.__call__.__doc__
+
+    def dispatch_one_batch(self, iterator):
+        # start progress_bar, if not started yet.
+        if self.progress_bar is None:
+            self.progress_bar = tqdm.tqdm(
+                desc=self.desc,
+                total=self.total_tasks,
+                disable=self.disable_progressbar,
+                unit="tasks",
+            )
+        # call parent function
+        return super().dispatch_one_batch(iterator)
+
+    dispatch_one_batch.__doc__ = Parallel.dispatch_one_batch.__doc__
+
+    def print_progress(self):
+        """Display the process of the parallel execution using tqdm"""
+        # if we finish dispatching, find total_tasks from the number of remaining items
+        if self.total_tasks is None and self._original_iterator is None:
+            self.total_tasks = self.n_dispatched_tasks
+            self.progress_bar.total = self.total_tasks
+            self.progress_bar.refresh()
+        # update progressbar
+        self.progress_bar.update(self.n_completed_tasks - self.progress_bar.n)
 
 
 class ExtremeWeatherBench:
@@ -87,13 +237,13 @@ class ExtremeWeatherBench:
             if not self.cache_dir.exists():
                 self.cache_dir.mkdir(parents=True, exist_ok=True)
 
-        run_results = []
         run_results = _run_case_operators(
             self.case_operators, parallel, n_jobs, self.cache_dir, **kwargs
         )
-        if run_results:
-            return pd.concat(run_results, ignore_index=True)
-        else:
+        try:
+            if run_results:
+                return pd.concat(run_results, ignore_index=True)
+        except ValueError:
             # Return empty DataFrame with expected columns
             return pd.DataFrame(columns=OUTPUT_COLUMNS)
 
@@ -104,7 +254,7 @@ def _run_case_operators(
     n_jobs: Optional[int] = None,
     cache_dir: Optional[Path] = None,
     **kwargs,
-):
+) -> list[pd.DataFrame]:
     """Run the case operators in serial or parallel.
 
     Args:
@@ -169,10 +319,12 @@ def _run_parallel(
     # Set the number of jobs to the number of processes if not provided
     if n_jobs is None:
         logger.warning("No number of jobs provided, using all available CPUs.")
-    run_results = Parallel(n_jobs=n_jobs)(
+    run_results = ParallelTqdm(
+        total_tasks=len(case_operators), desc="Case Operators", n_jobs=n_jobs
+    )(
         # None is the cache_dir, we can't cache in parallel mode
         delayed(compute_case_operator)(case_operator, None, **kwargs)
-        for case_operator in tqdm(case_operators)
+        for case_operator in case_operators
     )
     return run_results
 
@@ -247,6 +399,7 @@ def compute_case_operator(
             pd.concat(results, ignore_index=True).to_pickle(cache_path / "results.pkl")
 
     if results:
+        results = [i.dropna(axis=1, how="all") for i in results]
         return pd.concat(results, ignore_index=True)
     else:
         # Return empty DataFrame with expected columns
@@ -338,6 +491,7 @@ def _ensure_output_schema(df: pd.DataFrame, **metadata) -> pd.DataFrame:
     return df.reindex(columns=OUTPUT_COLUMNS)
 
 
+# @exception_handler
 def _evaluate_metric_and_return_df(
     forecast_ds: xr.Dataset,
     target_ds: xr.Dataset,

@@ -9,7 +9,6 @@ import extremeweatherbench.events.severe_convection as sc
 from extremeweatherbench import calc
 from extremeweatherbench.events import tropical_cyclone
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
