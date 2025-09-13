@@ -103,7 +103,7 @@ def _run_case_operators(
     case_operators: list["cases.CaseOperator"],
     parallel: bool = False,
     n_jobs: Optional[int] = None,
-    cache_dir: Optional[Union[str, Path]] = None,
+    cache_dir: Optional[Path] = None,
     **kwargs,
 ):
     """Run the case operators in serial or parallel.
@@ -128,7 +128,7 @@ def _run_case_operators(
 
 def _run_serial(
     case_operators: list["cases.CaseOperator"],
-    cache_dir: Optional[Union[str, Path]] = None,
+    cache_dir: Optional[Path] = None,
     **kwargs,
 ):
     """Run the case operators in serial.
