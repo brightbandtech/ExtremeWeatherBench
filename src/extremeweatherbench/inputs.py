@@ -997,6 +997,8 @@ def safely_pull_variables(
     if optional_variables_mapping is None:
         optional_variables_mapping = {}
 
+    # The core coordinate variables that are always required, even if not dimensions
+    # (e.g. latitude and longitude for xarray datasets)
     default_coordinate_variables = [
         "valid_time",
         "lead_time",
