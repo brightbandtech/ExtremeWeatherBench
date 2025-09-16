@@ -34,6 +34,16 @@ IBTRACS_URI = (
     "climate-stewardship-ibtracs/v04r01/access/csv/ibtracs.ALL.list.v04r01.csv"
 )
 
+# The core coordinate variables that are always required, even if not dimensions
+# (e.g. latitude and longitude for xarray datasets)
+DEFAULT_COORDINATE_VARIABLES = [
+    "valid_time",
+    "lead_time",
+    "init_time",
+    "latitude",
+    "longitude",
+]
+
 IBTrACS_metadata_variable_mapping = {
     "ISO_TIME": "valid_time",
     "NAME": "tc_name",
@@ -1020,14 +1030,14 @@ def safely_pull_variables(
             return sources.safely_pull_variables_polars_lazyframe(
                 dataset,
                 variables,
-                optional_variables + default_coordinate_variables,
+                optional_variables + DEFAULT_COORDINATE_VARIABLES,
                 optional_variables_mapping,
             )
         case pd.DataFrame():
             return sources.safely_pull_variables_pandas_dataframe(
                 dataset,
-                variables + default_coordinate_variables,
-                optional_variables + default_coordinate_variables,
+                variables + DEFAULT_COORDINATE_VARIABLES,
+                optional_variables + DEFAULT_COORDINATE_VARIABLES,
                 optional_variables_mapping,
             )
         case _:
