@@ -31,7 +31,7 @@ def convert_from_cartesian_to_latlon(
 
 
 def calculate_haversine_distance(
-    input_a: Sequence[float],
+    input_a: Sequence[Union[float, xr.DataArray]],
     input_b: Sequence[Union[float, xr.DataArray]],
     units: Literal["km", "kilometers", "deg", "degrees"] = "km",
 ) -> Union[float, xr.DataArray]:
