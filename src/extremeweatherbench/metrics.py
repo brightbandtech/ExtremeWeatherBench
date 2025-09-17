@@ -21,8 +21,8 @@ _GLOBAL_CONTINGENCY_CACHE = utils.ThreadSafeDict()  # type: ignore
 
 
 def get_cached_transformed_manager(
-    forecast: xr.Dataset,
-    target: xr.Dataset,
+    forecast: xr.DataArray,
+    target: xr.DataArray,
     forecast_threshold: float = 0.5,
     target_threshold: float = 0.5,
     preserve_dims: str = "lead_time",
@@ -242,8 +242,8 @@ class CSI(ThresholdMetric):
     @classmethod
     def _compute_metric(
         cls,
-        forecast: xr.Dataset,
-        target: xr.Dataset,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
         **kwargs: Any,
     ) -> Any:
         forecast_threshold = kwargs.get("forecast_threshold", 0.5)
@@ -268,8 +268,8 @@ class FAR(ThresholdMetric):
     @classmethod
     def _compute_metric(
         cls,
-        forecast: xr.Dataset,
-        target: xr.Dataset,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
         **kwargs: Any,
     ) -> Any:
         forecast_threshold = kwargs.get("forecast_threshold", 0.5)
@@ -321,8 +321,8 @@ class FP(ThresholdMetric):
     @classmethod
     def _compute_metric(
         cls,
-        forecast: xr.Dataset,
-        target: xr.Dataset,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
         **kwargs: Any,
     ) -> Any:
         forecast_threshold = kwargs.get("forecast_threshold", 0.5)
@@ -375,8 +375,8 @@ class FN(ThresholdMetric):
     @classmethod
     def _compute_metric(
         cls,
-        forecast: xr.Dataset,
-        target: xr.Dataset,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
         **kwargs: Any,
     ) -> Any:
         forecast_threshold = kwargs.get("forecast_threshold", 0.5)
@@ -475,8 +475,8 @@ class MAE(BaseMetric):
     @classmethod
     def _compute_metric(
         cls,
-        forecast: xr.Dataset,
-        target: xr.Dataset,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
         **kwargs: Any,
     ) -> Any:
         preserve_dims = kwargs.get("preserve_dims", "lead_time")
@@ -489,8 +489,8 @@ class ME(BaseMetric):
     @classmethod
     def _compute_metric(
         cls,
-        forecast: xr.Dataset,
-        target: xr.Dataset,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
         **kwargs: Any,
     ) -> Any:
         preserve_dims = kwargs.get("preserve_dims", "lead_time")
@@ -503,8 +503,8 @@ class RMSE(BaseMetric):
     @classmethod
     def _compute_metric(
         cls,
-        forecast: xr.Dataset,
-        target: xr.Dataset,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
         **kwargs: Any,
     ) -> Any:
         preserve_dims = kwargs.get("preserve_dims", "lead_time")
@@ -527,18 +527,14 @@ class SpatialDisplacement(BaseMetric):
         self.target_mask_variable = target_mask_variable
 
     @classmethod
-    def _compute_applied_metric(
-        cls, forecast: xr.Dataset, target: xr.Dataset, **kwargs: Any
-    ) -> Any:
+    def _compute_metric(
+        cls, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
+    ) -> xr.DataArray:
         from scipy.ndimage import center_of_mass, label
 
         # Get the masked data for target and forecast
-        target_masked = target[cls.target_variable].where(
-            target[cls.target_mask_variable], 0
-        )
-        forecast_masked = forecast[cls.forecast_variable].where(
-            forecast[cls.forecast_mask_variable], 0
-        )
+        target_masked = target.where(target, 0)
+        forecast_masked = forecast.where(forecast, 0)
 
         # Initialize arrays to store results
         lead_times = forecast.lead_time.values
