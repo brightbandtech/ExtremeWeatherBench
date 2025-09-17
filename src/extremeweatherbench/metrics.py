@@ -33,8 +33,8 @@ def get_cached_transformed_manager(
     with the same thresholds and data, regardless of how the metrics are created.
     """
     # Create cache key from data content hash and parameters
-    forecast_hash = hash(forecast.to_array().values.tobytes())
-    target_hash = hash(target.to_array().values.tobytes())
+    forecast_hash = hash(forecast.values.tobytes())
+    target_hash = hash(target.values.tobytes())
 
     cache_key = (
         forecast_hash,
