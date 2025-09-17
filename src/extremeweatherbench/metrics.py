@@ -647,9 +647,9 @@ class EarlySignal(BaseMetric):
             # Return structure for when no detection criteria specified
             return xr.Dataset(
                 {
-                    "earliest_init_time": xr.DataArray(np.datetime64("NaT")),
-                    "earliest_lead_time": xr.DataArray(np.timedelta64("NaT")),
-                    "earliest_valid_time": xr.DataArray(np.datetime64("NaT")),
+                    "earliest_init_time": xr.DataArray(np.datetime64("NaT", "ns")),
+                    "earliest_lead_time": xr.DataArray(np.timedelta64("NaT", "ns")),
+                    "earliest_valid_time": xr.DataArray(np.datetime64("NaT", "ns")),
                     "detection_found": xr.DataArray(False),
                 }
             )
@@ -716,8 +716,8 @@ class EarlySignal(BaseMetric):
             else:
                 earliest_results[init_t.values] = {
                     "init_time": init_t.values,
-                    "lead_time": np.timedelta64("NaT"),
-                    "valid_time": np.datetime64("NaT"),
+                    "lead_time": np.timedelta64("NaT", "ns"),
+                    "valid_time": np.datetime64("NaT", "ns"),
                     "found": False,
                 }
 
