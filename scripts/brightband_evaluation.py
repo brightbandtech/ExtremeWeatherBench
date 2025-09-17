@@ -20,7 +20,6 @@ warnings.filterwarnings("ignore", category=UserWarning, module="joblib")
 
 # Load events yaml
 case_yaml = cases.load_ewb_events_yaml_into_case_collection()
-case_yaml.cases = case_yaml.cases[95:]
 # Initialize ExtremeWeatherBench
 ewb = evaluate.ExtremeWeatherBench(
     cases=case_yaml,
