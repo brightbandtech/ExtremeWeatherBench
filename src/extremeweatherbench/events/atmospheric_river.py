@@ -4,6 +4,10 @@ from scipy.ndimage import binary_dilation, gaussian_filter, label
 from skimage import filters
 
 from extremeweatherbench import calc
+from extremeweatherbench.events.severe_convection import (
+    epsilon,
+    saturation_mixing_ratio,
+)
 
 
 def ar_mask(
@@ -80,6 +84,11 @@ def compute_ivt(data: xr.Dataset) -> xr.Dataset:
             calc.orography(data)
         )
 
+    if "specific_humidity" not in data.data_vars:
+        data["specific_humidity"] = _compute_specific_humidity_from_relative_humidity(
+            data
+        )
+
     # Find the level axis
     level_axis = list(data.dims).index("level")
 
@@ -135,6 +144,27 @@ def compute_ivt(data: xr.Dataset) -> xr.Dataset:
             "integrated_vapor_transport": ivt_magnitude,
         }
     )
+
+
+def _compute_specific_humidity_from_relative_humidity(data: xr.Dataset) -> xr.DataArray:
+    """Compute specific humidity from relative humidity and air temperature."""
+
+    # Compute saturation mixing ratio; air temperature must be in Kelvin;
+    # level must be in hPa
+    sat_mixing_ratio = saturation_mixing_ratio(
+        data["level"], data["air_temperature"] - 273.15
+    )
+
+    # Calculate specific humidity using saturation mixing ratio, epsilon,
+    # and relative humidity
+    mixing_ratio = (
+        epsilon
+        * sat_mixing_ratio
+        * data["relative_humidity"]
+        / (epsilon + sat_mixing_ratio * (1 - data["relative_humidity"]))
+    )
+    specific_humidity = mixing_ratio / (1 + mixing_ratio)
+    return specific_humidity
 
 
 def _compute_laplacian_ufunc(data, sigma):

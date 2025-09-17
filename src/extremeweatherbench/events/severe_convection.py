@@ -34,6 +34,14 @@ import xarray as xr
 from scipy.interpolate import interp1d  # type: ignore[import-untyped]
 from scipy.special import lambertw  # type: ignore[import-untyped]
 
+from extremeweatherbench.calc import (
+    epsilon,
+    mixing_ratio,
+    sat_press_0c,
+    saturation_mixing_ratio,
+    saturation_vapor_pressure,
+)
+
 # Atmospheric Physics Constants
 # All constants follow standard atmospheric physics values from CODATA and WMO
 
@@ -49,7 +57,6 @@ Rd: float = 287.04749097718457  # Specific gas constant for dry air (J/kg/K)
 R: float = 8.314462618  # Universal gas constant (J/mol/K)
 Mw: float = 18.015268  # Molecular weight of water (g/mol)
 Rv: float = (R / Mw) * 1000  # Specific gas constant for water vapor (J/kg/K)
-epsilon: float = 0.6219569100577033  # Ratio of molecular weights (H2O/dry air)
 kappa: float = 0.28571428571428564  # Poisson constant (Rd/Cp_d) for dry air
 
 # Specific heat capacities
@@ -64,7 +71,7 @@ Cp_v: float = (
 # Physical constants
 g: float = 9.81  # Gravitational acceleration (m/s²)
 Lv: float = 2500840  # Latent heat of vaporization of water at 0°C (J/kg)
-sat_press_0c: float = 6.112  # Saturation vapor pressure at 0°C (hPa)
+
 
 # Default calculation parameters
 depth: float = 100  # Default mixed layer depth (hPa)
@@ -286,31 +293,6 @@ def moist_lapse_lookup(
     return interpolated_profiles
 
 
-def mixing_ratio(
-    partial_pressure: Union[float, np.ndarray], total_pressure: Union[float, np.ndarray]
-) -> np.ndarray:
-    """Calculate the mixing ratio of water vapor in air.
-
-    The mixing ratio represents the mass of water vapor per unit mass of dry air.
-    Uses the formula: w = ε * e / (p - e) where ε = 0.622.
-
-    Args:
-        partial_pressure: Water vapor partial pressure in hPa.
-        total_pressure: Total atmospheric pressure in hPa.
-
-    Returns:
-        numpy.ndarray: Mixing ratio in kg/kg (dimensionless).
-
-    Notes:
-        - Mixing ratio is approximately constant with height for unsaturated air
-        - Values typically range from 0 to ~0.025 kg/kg in the atmosphere
-        - ε (epsilon) = 0.622 is the ratio of molecular weights (H2O/dry air)
-    """
-    # Suppress warnings for this specific calculation
-    with np.errstate(divide="ignore", invalid="ignore"):
-        return epsilon * partial_pressure / (total_pressure - partial_pressure)
-
-
 def vapor_pressure(
     pressure: Union[float, np.ndarray], mixing_ratio: Union[float, np.ndarray]
 ) -> np.ndarray:
@@ -333,29 +315,6 @@ def vapor_pressure(
     # Suppress warnings for this specific calculation
     with np.errstate(divide="ignore", invalid="ignore"):
         return pressure * mixing_ratio / (epsilon + mixing_ratio)
-
-
-def saturation_vapor_pressure(temperature: Union[float, np.ndarray]) -> np.ndarray:
-    """Calculate saturation vapor pressure using the Clausius-Clapeyron equation.
-
-    Uses the Magnus formula approximation which is accurate for temperatures
-    between -40°C and +50°C. Formula: es = 6.112 * exp(17.67*T/(T+243.5))
-
-    Args:
-        temperature: Temperature values in Celsius (can be scalar or array).
-
-    Returns:
-        numpy.ndarray: Saturation vapor pressure values in hPa.
-
-    Notes:
-        - Based on the Magnus formula which is accurate within ±0.1% for typical
-          atmospheric temperatures
-        - Saturation vapor pressure increases exponentially with temperature
-        - At 0°C: ~6.11 hPa, at 20°C: ~23.4 hPa, at 30°C: ~42.4 hPa
-    """
-    # Suppress overflow warnings for this calculation
-    with np.errstate(over="ignore", invalid="ignore"):
-        return sat_press_0c * np.exp(17.67 * temperature / (temperature + 243.5))
 
 
 def exner_function(pressure: Union[float, np.ndarray]) -> np.ndarray:
@@ -463,21 +422,6 @@ def dry_lapse(
         return temperature * (pressure / pressure[0]) ** kappa
     else:
         return temperature * (pressure / pressure[..., 0:1]) ** kappa
-
-
-def saturation_mixing_ratio(
-    pressure: Union[float, np.ndarray], temperature: Union[float, np.ndarray]
-) -> np.ndarray:
-    """Calculates the saturation mixing ratio of a parcel.
-
-    Args:
-        pressure: Pressure values in hPa
-        temperature: Temperature values in C
-
-    Returns:
-        Saturation mixing ratio values in kg/kg
-    """
-    return mixing_ratio(saturation_vapor_pressure(temperature), pressure)
 
 
 def _lcl_iter(
