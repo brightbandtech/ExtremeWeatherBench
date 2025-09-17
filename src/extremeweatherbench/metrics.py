@@ -7,7 +7,7 @@ import scores.categorical as cat  # type: ignore[import-untyped]
 import xarray as xr
 from scores.continuous import mae, mean_error, rmse  # type: ignore[import-untyped]
 
-from extremeweatherbench import derived, evaluate, utils
+from extremeweatherbench import calc, derived, evaluate, utils
 from extremeweatherbench.events.tropical_cyclone import (
     compute_landfall_metric,
 )
@@ -545,58 +545,47 @@ class SpatialDisplacement(BaseMetric):
         forecast_lat_com = np.full((len(lead_times), len(valid_times)), np.nan)
         forecast_lon_com = np.full((len(lead_times), len(valid_times)), np.nan)
 
-        # Iterate over all lead_time and valid_time combinations
-        for lt_idx, lead_time in enumerate(forecast.lead_time):
-            for vt_idx, valid_time in enumerate(forecast.valid_time):
-                # Extract 2D slice for this time combination
-                target_slice = target_masked.sel(valid_time=valid_time)
-                forecast_slice = forecast_masked.sel(
-                    lead_time=lead_time, valid_time=valid_time
-                )
+        def compute_center_of_mass_2d(data, lat_coords, lon_coords):
+            """Compute center of mass for 2D data and return lat/lon coordinates."""
+            labels, _ = label(data > 0)
+            if labels.max() > 0:
+                com = center_of_mass(data, labels, 1)
+                lat_com = lat_coords[int(com[0])]
+                lon_com = lon_coords[int(com[1])]
+                return lat_com, lon_com
+            else:
+                return np.nan, np.nan
 
-                # Label connected components and find center of mass
-                target_labels, _ = label(target_slice.values > 0)
-                forecast_labels, _ = label(forecast_slice.values > 0)
-
-                if target_labels.max() > 0:
-                    target_com = center_of_mass(target_slice.values, target_labels, 1)
-                    # Convert indices to actual coordinates
-                    target_lat_com[vt_idx] = target_slice.latitude.values[
-                        int(target_com[0])
-                    ]
-                    target_lon_com[vt_idx] = target_slice.longitude.values[
-                        int(target_com[1])
-                    ]
-
-                if forecast_labels.max() > 0:
-                    forecast_com = center_of_mass(
-                        forecast_slice.values, forecast_labels, 1
-                    )
-                    # Convert indices to actual coordinates
-                    forecast_lat_com[lt_idx, vt_idx] = forecast_slice.latitude.values[
-                        int(forecast_com[0])
-                    ]
-                    forecast_lon_com[lt_idx, vt_idx] = forecast_slice.longitude.values[
-                        int(forecast_com[1])
-                    ]
-
-        # Create properly structured datasets with lead_time and valid_time dimensions
-        target_com = xr.Dataset(
-            {
-                "latitude": (["valid_time"], target_lat_com),
-                "longitude": (["valid_time"], target_lon_com),
-            },
-            coords={"valid_time": valid_times},
+        # Apply the function to target data
+        target_result = xr.apply_ufunc(
+            compute_center_of_mass_2d,
+            target_masked,
+            target.latitude,
+            target.longitude,
+            input_core_dims=[["latitude", "longitude"], ["latitude"], ["longitude"]],
+            output_core_dims=[[], []],
+            vectorize=True,
+            dask="allowed",
         )
+        target_lat_com, target_lon_com = target_result
 
-        forecast_com = xr.Dataset(
-            {
-                "latitude": (["lead_time", "valid_time"], forecast_lat_com),
-                "longitude": (["lead_time", "valid_time"], forecast_lon_com),
-            },
-            coords={"lead_time": lead_times, "valid_time": valid_times},
+        # Apply the function to forecast data
+        forecast_result = xr.apply_ufunc(
+            compute_center_of_mass_2d,
+            forecast_masked,
+            forecast.latitude,
+            forecast.longitude,
+            input_core_dims=[["latitude", "longitude"], ["latitude"], ["longitude"]],
+            output_core_dims=[[], []],
+            vectorize=True,
+            dask="allowed",
         )
-        return utils.calculate_haversine_distance(forecast_com, target_com)
+        forecast_lat_com, forecast_lon_com = forecast_result
+
+        # Convert to xarray DataArray for target center of mass coordinates
+        target_com = xr.concat([target_lat_com, target_lon_com], dim="coord")
+        forecast_com = xr.concat([forecast_lat_com, forecast_lon_com], dim="coord")
+        return calc.calculate_haversine_distance(forecast_com, target_com)
 
 
 class EarlySignal(BaseMetric):
