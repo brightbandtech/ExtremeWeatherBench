@@ -495,7 +495,7 @@ class GHCN(TargetBase):
             except ValueError as e:
                 if "non-unique" in str(e):
                     pass
-                data = data.drop_duplicates().to_xarray()
+                data = data[~data.index.duplicated()].to_xarray()
             return data
         else:
             raise ValueError(f"Data is not a polars LazyFrame: {type(data)}")
