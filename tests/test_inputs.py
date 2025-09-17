@@ -312,8 +312,6 @@ class TestMaybeMapVariableNames:
         self, mock_derived, test_input_base, sample_ghcn_dataframe
     ):
         """Test variable mapping with polars LazyFrame."""
-        import polars as pl
-
         mock_derived.return_value = ["surface_air_temperature", "latitude"]
 
         test_input = test_input_base(
@@ -947,9 +945,9 @@ class TestGHCN:
 
         # Collect the result and verify valid_time is sorted
         collected_result = result.collect()
-        assert collected_result[
-            "valid_time"
-        ].is_sorted(), "valid_time column should be sorted"
+        assert collected_result["valid_time"].is_sorted(), (
+            "valid_time column should be sorted"
+        )
 
     def test_ghcn_custom_convert_to_dataset(self, sample_ghcn_dataframe):
         """Test GHCN custom conversion to dataset."""
@@ -1081,10 +1079,6 @@ class TestGHCN:
             variable_mapping={},
             storage_options={},
         )
-
-        # Create problematic data that will cause an exception during conversion
-        import polars as pl
-
         # Create data with problematic values that might cause xarray conversion issues
         problematic_data = pl.DataFrame(
             {
