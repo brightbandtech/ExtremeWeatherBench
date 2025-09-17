@@ -532,7 +532,22 @@ def _evaluate_metric_and_return_df(
         **kwargs,
     )
     # Convert to DataFrame and add metadata, ensuring OUTPUT_COLUMNS compliance
-    df = metric_result.to_dataframe(name="value").reset_index()
+    try:
+        df = metric_result.to_dataframe(name="value").reset_index()
+    except TypeError:
+        logger.warning(
+            f"Metric {metric.name} returned a non-DataArray object for case "
+            f"{case_id_number} and event type {event_type}. "
+        )
+        df = metric_result.to_dataframe().reset_index()
+    except ValueError:
+        logger.warning(
+            f"Metric {metric.name} returned a scalar object {metric_result} for case "
+            f"{case_id_number} and event type {event_type}. "
+        )
+
+        df = pd.DataFrame(columns=OUTPUT_COLUMNS)
+        df["value"] = metric_result
     # TODO: add functionality for custom metadata columns
     metadata = _extract_standard_metadata(
         target_variable, metric, target_ds, forecast_ds, case_id_number, event_type
