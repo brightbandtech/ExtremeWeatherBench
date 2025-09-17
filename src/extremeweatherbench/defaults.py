@@ -73,6 +73,7 @@ era5_atmospheric_river_target = inputs.ERA5(
         derived.AtmosphericRiverMask,
     ],
     variable_mapping={
+        "time": "valid_time",
         "u_component_of_wind": "eastward_wind",
         "v_component_of_wind": "northward_wind",
         "temperature": "air_temperature",
@@ -174,6 +175,7 @@ cira_atmospheric_river_forecast = inputs.KerchunkForecast(
         "v10": "surface_northward_wind",
     },
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
+    preprocess=_preprocess_bb_cira_forecast_dataset,
 )
 
 cira_tropical_cyclone_forecast = inputs.KerchunkForecast(
@@ -192,6 +194,7 @@ cira_tropical_cyclone_forecast = inputs.KerchunkForecast(
         "v10": "surface_northward_wind",
     },
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
+    preprocess=_preprocess_bb_cira_forecast_dataset,
 )
 # TODO: Re-enable when CravenSignificantSevereParameter is implemented
 # cira_severe_convection_forecast = inputs.KerchunkForecast(
