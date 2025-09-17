@@ -609,7 +609,7 @@ class EarlySignal(BaseMetric):
         comparison: str = ">=",
         spatial_aggregation: str = "any",
         **kwargs: Any,
-    ) -> xr.Dataset:
+    ) -> xr.DataArray:
         """Compute early signal detection.
 
         Args:
@@ -622,21 +622,15 @@ class EarlySignal(BaseMetric):
             **kwargs: Additional arguments
 
         Returns:
-            Dataset containing earliest detection times with coordinates:
-            - earliest_init_time: First init_time when signal was detected
-            - earliest_lead_time: Corresponding lead_time
-            - earliest_valid_time: Corresponding valid_time
-            - detection_found: Boolean indicating if any detection occurred
+            DataArray containing earliest valid times for signal detection.
+            Values are valid_time when signal detected, NaT when no signal.
+            Coordinates: init_time dimension preserved.
         """
         if threshold is None or variable is None:
             # Return structure for when no detection criteria specified
-            return xr.Dataset(
-                {
-                    "earliest_init_time": xr.DataArray(np.datetime64("NaT", "ns")),
-                    "earliest_lead_time": xr.DataArray(np.timedelta64("NaT", "ns")),
-                    "earliest_valid_time": xr.DataArray(np.datetime64("NaT", "ns")),
-                    "detection_found": xr.DataArray(False),
-                }
+            return xr.DataArray(
+                np.datetime64("NaT", "ns"),
+                name="earliest_valid_time",
             )
 
         if variable not in forecast.data_vars:
@@ -706,36 +700,15 @@ class EarlySignal(BaseMetric):
                     "found": False,
                 }
 
-        # Convert to xarray Dataset
+        # Convert to xarray DataArray
         init_times = list(earliest_results.keys())
-        earliest_init_times = [r["init_time"] for r in earliest_results.values()]
-        earliest_lead_times = [r["lead_time"] for r in earliest_results.values()]
         earliest_valid_times = [r["valid_time"] for r in earliest_results.values()]
-        detection_found = [r["found"] for r in earliest_results.values()]
 
-        result = xr.Dataset(
-            {
-                "earliest_init_time": xr.DataArray(
-                    earliest_init_times,
-                    coords={"init_time": init_times},
-                    dims=["init_time"],
-                ),
-                "earliest_lead_time": xr.DataArray(
-                    earliest_lead_times,
-                    coords={"init_time": init_times},
-                    dims=["init_time"],
-                ),
-                "earliest_valid_time": xr.DataArray(
-                    earliest_valid_times,
-                    coords={"init_time": init_times},
-                    dims=["init_time"],
-                ),
-                "detection_found": xr.DataArray(
-                    detection_found,
-                    coords={"init_time": init_times},
-                    dims=["init_time"],
-                ),
-            }
+        result = xr.DataArray(
+            earliest_valid_times,
+            coords={"init_time": init_times},
+            dims=["init_time"],
+            name="earliest_valid_time",
         )
 
         return result
