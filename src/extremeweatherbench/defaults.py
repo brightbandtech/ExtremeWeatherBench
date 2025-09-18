@@ -125,12 +125,8 @@ ghcn_freeze_target = inputs.GHCN(
 # IBTrACS target
 ibtracs_target = inputs.IBTrACS(
     source=inputs.IBTRACS_URI,
-    variables=[derived.TropicalCycloneTrackVariables],
-    variable_mapping={
-        "vmax": "surface_wind_speed",
-        "slp": "air_pressure_at_mean_sea_level",
-    },
-    storage_options={"remote_options": {"anon": True}},
+    variables=[],
+    variable_mapping=inputs.IBTrACS_metadata_variable_mapping,
 )
 
 # Forecast Examples
