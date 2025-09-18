@@ -285,13 +285,15 @@ def _process_all_init_times_vectorized(
 
 
 def _process_entire_dataset_compact(
-    slp_array: np.ndarray,
-    time_array: np.ndarray,
-    init_time_array: np.ndarray,
-    lat_array: np.ndarray,
-    lon_array: np.ndarray,
-    wind_array: np.ndarray,
-    dz_array: Optional[np.ndarray],  # Can be None when no DZ data available
+    slp_array: Union[np.ndarray, xr.DataArray],
+    time_array: Union[np.ndarray, xr.DataArray],
+    init_time_array: Union[np.ndarray, xr.DataArray],
+    lat_array: Union[np.ndarray, xr.DataArray],
+    lon_array: Union[np.ndarray, xr.DataArray],
+    wind_array: Union[np.ndarray, xr.DataArray],
+    dz_array: Union[
+        np.ndarray, xr.DataArray, None
+    ],  # Can be None when no DZ data available
     ibtracs_df: pd.DataFrame,
     max_spatial_distance_degrees: float,
     min_distance: int,
@@ -606,14 +608,14 @@ def _process_entire_dataset_compact(
 
 
 def _convert_detections_to_dataset(
-    n_detections: np.ndarray,
-    lt_indices: np.ndarray,
-    vt_indices: np.ndarray,
-    track_ids: np.ndarray,
-    lats: np.ndarray,
-    lons: np.ndarray,
-    slp_vals: np.ndarray,
-    wind_vals: np.ndarray,
+    n_detections: Union[np.ndarray, xr.DataArray],
+    lt_indices: Union[np.ndarray, xr.DataArray],
+    vt_indices: Union[np.ndarray, xr.DataArray],
+    track_ids: Union[np.ndarray, xr.DataArray],
+    lats: Union[np.ndarray, xr.DataArray],
+    lons: Union[np.ndarray, xr.DataArray],
+    slp_vals: Union[np.ndarray, xr.DataArray],
+    wind_vals: Union[np.ndarray, xr.DataArray],
     original_dataset: xr.Dataset,
     time_coord_name: str,
     non_spatial_dims: list[str],
