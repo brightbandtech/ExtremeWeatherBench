@@ -1,4 +1,3 @@
-import hashlib
 import logging
 import math
 from collections import namedtuple
@@ -337,56 +336,6 @@ def clear_ibtracs_registry() -> None:
     """Clear the IBTrACS data registry."""
     global _IBTRACS_DATA_REGISTRY
     _IBTRACS_DATA_REGISTRY.clear()
-
-
-def _generate_cache_key(data: xr.Dataset) -> str:
-    """Generate a hash key for the dataset to use as cache key."""
-    # Create a hash based on data shape, coordinates, and first/last values
-    # This is a lightweight way to create a unique key without hashing entire arrays
-    key_components = []
-
-    # Add dataset shape and coordinate info
-    for var_name in [
-        "air_pressure_at_mean_sea_level",
-        "geopotential",
-        "surface_eastward_wind",
-        "surface_northward_wind",
-    ]:
-        if var_name in data.data_vars:
-            var = data[var_name]
-            key_components.extend(
-                [
-                    str(var.shape),
-                    str(var.dims),
-                    # Sample a few values for uniqueness (only if dims have size > 0)
-                    str(
-                        float(
-                            var.isel(
-                                {dim: 0 for dim in var.dims if var.sizes[dim] > 0}
-                            ).values
-                        )
-                    )
-                    if all(var.sizes[dim] > 0 for dim in var.dims)
-                    else "empty",
-                    str(
-                        float(
-                            var.isel(
-                                {dim: -1 for dim in var.dims if var.sizes[dim] > 0}
-                            ).values
-                        )
-                    )
-                    if all(var.sizes[dim] > 0 for dim in var.dims)
-                    else "empty",
-                ]
-            )
-
-    # Add time and coordinate info
-    if "time" in data.coords:
-        key_components.extend([str(data.time.values[0]), str(data.time.values[-1])])
-
-    # Create hash
-    key_string = "|".join(key_components)
-    return hashlib.md5(key_string.encode()).hexdigest()
 
 
 def find_furthest_contour_from_point(
@@ -2374,7 +2323,7 @@ def generate_tc_variables(ds: xr.Dataset) -> xr.Dataset:
 
     output_vars = {
         "air_pressure_at_mean_sea_level": ds["air_pressure_at_mean_sea_level"],
-        "surface_wind_speed": calc.calculate_wind_speed(ds),
+        "surface_wind_speed": calc.maybe_calculate_wind_speed(ds)["surface_wind_speed"],
     }
 
     # Only add geopotential thickness if the dataset has level data
