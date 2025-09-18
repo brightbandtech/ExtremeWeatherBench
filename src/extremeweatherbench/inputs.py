@@ -658,12 +658,86 @@ class PPH(TargetBase):
         return align_forecast_to_target(forecast_data, target_data)
 
 
+def _ibtracs_preprocess(data: IncomingDataInput) -> IncomingDataInput:
+    """Preprocess IBTrACS data.
+
+    Preprocessing is done before any variable mapping is applied, thus using the
+    original variable names is required."""
+
+    schema = data.collect_schema()
+    # Convert pressure and surface wind columns to float, replacing " " with null
+    # Get column names that contain "pressure" or "wind"
+    pressure_cols = [col for col in schema if "PRES" in col.lower()]
+    wind_cols = [col for col in schema if "WIND" in col.lower()]
+
+    # Apply transformations to convert " " to null and cast to float
+    subset_target_data = data.with_columns(
+        [
+            pl.when(pl.col(col) == " ")
+            .then(None)
+            .otherwise(pl.col(col))
+            .cast(pl.Float64, strict=False)
+            .alias(col)
+            for col in pressure_cols + wind_cols
+        ]
+    )
+    # Convert knots to m/s
+    subset_target_data = subset_target_data.with_columns(
+        [(pl.col(col) * 0.514444).alias(col) for col in wind_cols]
+    )
+    # Drop rows where ALL columns are null (equivalent to pandas dropna(how="all"))
+    subset_target_data = subset_target_data.filter(
+        ~pl.all_horizontal(pl.all().is_null())
+    )
+
+    # Create unified pressure and wind columns by preferring USA and WMO data
+    # For surface wind speed
+    wind_columns = [col for col in schema if "WIND" in col]
+    wind_priority = ["USA_WIND", "WMO_WIND"] + [
+        col for col in wind_columns if col not in ["USA_WIND", "WMO_WIND"]
+    ]
+
+    # For pressure at mean sea level
+    pressure_columns = [col for col in schema if "PRES" in col]
+    pressure_priority = [
+        "USA_PRES",
+        "WMO_PRES",
+    ] + [
+        col
+        for col in pressure_columns
+        if col
+        not in [
+            "USA_PRES",
+            "WMO_PRES",
+        ]
+    ]
+
+    # Create unified columns using coalesce (equivalent to pandas bfill)
+    subset_target_data = subset_target_data.with_columns(
+        [
+            pl.coalesce(wind_priority).alias("surface_wind_speed"),
+            pl.coalesce(pressure_priority).alias("air_pressure_at_mean_sea_level"),
+        ]
+    )
+
+    # Drop rows where wind speed OR pressure are null (equivalent to pandas
+    # dropna with how="any")
+    subset_target_data = subset_target_data.filter(
+        pl.col("surface_wind_speed").is_not_null()
+        & pl.col("air_pressure_at_mean_sea_level").is_not_null()
+    )
+
+    return subset_target_data
+
+
 @dataclasses.dataclass
 class IBTrACS(TargetBase):
     """Target class for IBTrACS data."""
 
     name: str = "IBTrACS"
     _current_case_id: Optional[str] = dataclasses.field(default=None, init=False)
+    preprocess: Callable = _ibtracs_preprocess
+    input_variables_same_as_forecast: bool = False
 
     def _open_data_from_source(self) -> IncomingDataInput:
         # not using storage_options in this case due to NetCDF4Backend not
@@ -706,70 +780,6 @@ class IBTrACS(TargetBase):
             & (pl.col("SEASON").cast(pl.Int64) == season)
         )
 
-        all_variables = IBTrACS_metadata_variable_mapping.values()
-        # subset the variables
-        subset_target_data = subset_target_data.select(all_variables)
-
-        schema = subset_target_data.collect_schema()
-        # Convert pressure and surface wind columns to float, replacing " " with null
-        # Get column names that contain "pressure" or "wind"
-        pressure_cols = [col for col in schema if "pressure" in col.lower()]
-        wind_cols = [col for col in schema if "wind" in col.lower()]
-
-        # Apply transformations to convert " " to null and cast to float
-        subset_target_data = subset_target_data.with_columns(
-            [
-                pl.when(pl.col(col) == " ")
-                .then(None)
-                .otherwise(pl.col(col))
-                .cast(pl.Float64, strict=False)
-                .alias(col)
-                for col in pressure_cols + wind_cols
-            ]
-        )
-        # Convert knots to m/s
-        subset_target_data = subset_target_data.with_columns(
-            [(pl.col(col) * 0.514444).alias(col) for col in wind_cols]
-        )
-        # Drop rows where ALL columns are null (equivalent to pandas dropna(how="all"))
-        subset_target_data = subset_target_data.filter(
-            ~pl.all_horizontal(pl.all().is_null())
-        )
-
-        # Create unified pressure and wind columns by preferring USA and WMO data
-        # For surface wind speed
-        wind_columns = [col for col in schema if "surface_wind_speed" in col]
-        wind_priority = ["usa_surface_wind_speed", "wmo_surface_wind_speed"] + [
-            col
-            for col in wind_columns
-            if col not in ["usa_surface_wind_speed", "wmo_surface_wind_speed"]
-        ]
-
-        # For pressure at mean sea level
-        pressure_columns = [
-            col for col in schema if "air_pressure_at_mean_sea_level" in col
-        ]
-        pressure_priority = [
-            "usa_air_pressure_at_mean_sea_level",
-            "wmo_air_pressure_at_mean_sea_level",
-        ] + [
-            col
-            for col in pressure_columns
-            if col
-            not in [
-                "usa_air_pressure_at_mean_sea_level",
-                "wmo_air_pressure_at_mean_sea_level",
-            ]
-        ]
-
-        # Create unified columns using coalesce (equivalent to pandas bfill)
-        subset_target_data = subset_target_data.with_columns(
-            [
-                pl.coalesce(wind_priority).alias("surface_wind_speed"),
-                pl.coalesce(pressure_priority).alias("air_pressure_at_mean_sea_level"),
-            ]
-        )
-
         # Select only the columns to keep
         columns_to_keep = [
             "valid_time",
@@ -788,6 +798,7 @@ class IBTrACS(TargetBase):
             pl.col("surface_wind_speed").is_not_null()
             & pl.col("air_pressure_at_mean_sea_level").is_not_null()
         )
+        self._current_case_id = case_metadata.case_id_number
 
         return subset_target_data
 
