@@ -3,6 +3,9 @@ from typing import Literal, Sequence, Union
 import numpy as np
 import xarray as xr
 
+epsilon: float = 0.6219569100577033  # Ratio of molecular weights (H2O/dry air)
+sat_press_0c: float = 6.112  # Saturation vapor pressure at 0°C (hPa)
+
 
 def convert_from_cartesian_to_latlon(
     input_point: Union[np.ndarray, tuple[float, float]], ds_mapping: xr.Dataset
@@ -28,6 +31,69 @@ def convert_from_cartesian_to_latlon(
             latitude=int(input_point[0]), longitude=int(input_point[1])
         ).longitude.values,
     )
+
+
+def mixing_ratio(
+    partial_pressure: Union[float, np.ndarray], total_pressure: Union[float, np.ndarray]
+) -> np.ndarray:
+    """Calculate the mixing ratio of water vapor in air.
+
+    The mixing ratio represents the mass of water vapor per unit mass of dry air.
+    Uses the formula: w = ε * e / (p - e) where ε = 0.622.
+
+    Args:
+        partial_pressure: Water vapor partial pressure in hPa.
+        total_pressure: Total atmospheric pressure in hPa.
+
+    Returns:
+        numpy.ndarray: Mixing ratio in kg/kg (dimensionless).
+
+    Notes:
+        - Mixing ratio is approximately constant with height for unsaturated air
+        - Values typically range from 0 to ~0.025 kg/kg in the atmosphere
+        - ε (epsilon) = 0.622 is the ratio of molecular weights (H2O/dry air)
+    """
+    # Suppress warnings for this specific calculation
+    with np.errstate(divide="ignore", invalid="ignore"):
+        return epsilon * partial_pressure / (total_pressure - partial_pressure)
+
+
+def saturation_vapor_pressure(temperature: Union[float, np.ndarray]) -> np.ndarray:
+    """Calculate saturation vapor pressure using the Clausius-Clapeyron equation.
+
+    Uses the Magnus formula approximation which is accurate for temperatures
+    between -40°C and +50°C. Formula: es = 6.112 * exp(17.67*T/(T+243.5))
+
+    Args:
+        temperature: Temperature values in Celsius (can be scalar or array).
+
+    Returns:
+        numpy.ndarray: Saturation vapor pressure values in hPa.
+
+    Notes:
+        - Based on the Magnus formula which is accurate within ±0.1% for typical
+          atmospheric temperatures
+        - Saturation vapor pressure increases exponentially with temperature
+        - At 0°C: ~6.11 hPa, at 20°C: ~23.4 hPa, at 30°C: ~42.4 hPa
+    """
+    # Suppress overflow warnings for this calculation
+    with np.errstate(over="ignore", invalid="ignore"):
+        return sat_press_0c * np.exp(17.67 * temperature / (temperature + 243.5))
+
+
+def saturation_mixing_ratio(
+    pressure: Union[float, np.ndarray], temperature: Union[float, np.ndarray]
+) -> np.ndarray:
+    """Calculates the saturation mixing ratio of a parcel.
+
+    Args:
+        pressure: Pressure values in hPa
+        temperature: Temperature values in C
+
+    Returns:
+        Saturation mixing ratio values in kg/kg
+    """
+    return mixing_ratio(saturation_vapor_pressure(temperature), pressure)
 
 
 def calculate_haversine_distance(

@@ -93,7 +93,12 @@ class AtmosphericRiverMask(DerivedVariable):
         "northward_wind",
         "specific_humidity",
     ]
-    optional_variables = ["integrated_vapor_transport", "surface_standard_pressure"]
+    optional_variables = [
+        "integrated_vapor_transport",
+        "surface_standard_pressure",
+        "relative_humidity",
+        "air_temperature",
+    ]
     optional_variables_mapping = {
         "integrated_vapor_transport": [
             "eastward_wind",
@@ -101,6 +106,7 @@ class AtmosphericRiverMask(DerivedVariable):
             "specific_humidity",
         ],
         "surface_standard_pressure": ["surface_standard_pressure"],
+        "relative_humidity": ["specific_humidity", "air_temperature"],
     }
     name = "atmospheric_river_mask"
 
