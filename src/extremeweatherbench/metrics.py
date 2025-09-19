@@ -10,7 +10,6 @@ from scores.continuous import mae, mean_error, rmse  # type: ignore[import-untyp
 from extremeweatherbench import utils
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
 
 
 class BaseMetric(ABC):
