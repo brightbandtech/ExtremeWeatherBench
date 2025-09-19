@@ -157,14 +157,14 @@ def test_min_if_all_timesteps_present():
     """Test returning minimum if all timesteps are present."""
     # Test with complete timesteps
     da_complete = xr.DataArray([1, 2, 3, 4], dims=["time"])
-    result_complete = utils.min_if_all_timesteps_present(da_complete, 4)
+    result_complete = utils.min_if_all_timesteps_present(da_complete, 6)
 
     # Should return minimum value
     assert result_complete.values == 1
 
     # Test with incomplete timesteps
     da_incomplete = xr.DataArray([1, 2, 3], dims=["time"])
-    result_incomplete = utils.min_if_all_timesteps_present(da_incomplete, 4)
+    result_incomplete = utils.min_if_all_timesteps_present(da_incomplete, 6)
 
     # Should return NaN
     assert np.isnan(result_incomplete.values)
@@ -178,7 +178,7 @@ def test_min_if_all_timesteps_present_forecast():
         dims=["lead_time", "valid_time"],
         coords={"lead_time": [0, 6], "valid_time": [0, 1, 2]},
     )
-    result_complete = utils.min_if_all_timesteps_present_forecast(da_complete, 3)
+    result_complete = utils.min_if_all_timesteps_present_forecast(da_complete, 8)
 
     # Should return minimum along valid_time dimension
     expected = xr.DataArray([1, 4], dims=["lead_time"], coords={"lead_time": [0, 6]})
@@ -190,33 +190,62 @@ def test_min_if_all_timesteps_present_forecast():
         dims=["lead_time", "valid_time"],
         coords={"lead_time": [0, 6], "valid_time": [0, 1]},
     )
-    result_incomplete = utils.min_if_all_timesteps_present_forecast(da_incomplete, 3)
+    result_incomplete = utils.min_if_all_timesteps_present_forecast(da_incomplete, 8)
 
     # Should return NaN array with same lead_time dimension
     assert len(result_incomplete.lead_time) == 2
     assert np.all(np.isnan(result_incomplete.values))
 
 
-def test_determine_timesteps_per_day_resolution():
-    """Test determining timesteps per day resolution."""
-    # Create dataset with 6-hourly data (4 timesteps per day)
-    times = pd.date_range("2020-01-01", "2020-01-02", freq="6h")[:-1]  # 4 timesteps
+def test_determine_temporal_resolution():
+    """Test determining time resolution in hours."""
+    # Create dataset with 6-hourly resolution
+    times = pd.date_range("2020-01-01", "2020-01-02", freq="6h")[:-1]  # 4 timesteps/day
     ds = xr.Dataset(
         data_vars={"temp": (["valid_time"], [1, 2, 3, 4])}, coords={"valid_time": times}
     )
 
-    result = utils.determine_timesteps_per_day_resolution(ds)
-    assert result == 4
+    result = utils.determine_temporal_resolution(ds)
+    assert result == 6  # 6-hour resolution
 
-    # Test with hourly data (24 timesteps per day)
+    # Test with hourly resolution
     times_hourly = pd.date_range("2020-01-01", "2020-01-02", freq="1h")[:-1]
     ds_hourly = xr.Dataset(
         data_vars={"temp": (["valid_time"], range(24))},
         coords={"valid_time": times_hourly},
     )
 
-    result_hourly = utils.determine_timesteps_per_day_resolution(ds_hourly)
-    assert result_hourly == 24
+    result_hourly = utils.determine_temporal_resolution(ds_hourly)
+    assert result_hourly == 1  # 1-hour resolution
+
+
+def test_determine_temporal_resolution_multiple_resolutions():
+    """Test that max resolution is returned when multiple resolutions exist."""
+    # Create dataset with mixed time resolutions - some 1h gaps, some 6h gaps
+    # This simulates missing data where some timesteps are present at 1h
+    # resolution but others have 6h gaps
+    times_mixed = pd.to_datetime(
+        [
+            "2020-01-01 00:00",  # Start
+            "2020-01-01 01:00",  # 1h gap
+            "2020-01-01 02:00",  # 1h gap
+            "2020-01-01 08:00",  # 6h gap (missing 03:00-07:00)
+            "2020-01-01 09:00",  # 1h gap
+            "2020-01-01 15:00",  # 6h gap (missing 10:00-14:00)
+        ]
+    )
+
+    ds_mixed = xr.Dataset(
+        data_vars={"temp": (["valid_time"], [1, 2, 3, 4, 5, 6])},
+        coords={"valid_time": times_mixed, "init_time": [pd.Timestamp("2020-01-01")]},
+    )
+
+    result = utils.determine_temporal_resolution(ds_mixed)
+
+    # Should return 1 (minimum time gap in hours) when multiple resolutions
+    # are present, even though some gaps are 6 hours
+    # This confirms the function takes the minimum gap, not the maximum
+    assert result == 1
 
 
 def test_convert_init_time_to_valid_time():
@@ -238,3 +267,274 @@ def test_convert_init_time_to_valid_time():
     assert "lead_time" in result.dims
     # Should have swapped init_time for valid_time in the primary dimension
     assert "init_time" not in result.dims or "valid_time" in result.dims
+
+
+def test_maybe_get_closest_timestamp_to_center_of_valid_times_single_output():
+    """Test passthrough behavior with single output time."""
+    # Create valid_time values (center will be middle value)
+    valid_times = xr.DataArray(
+        pd.date_range("2021-01-01", periods=5, freq="6h"), dims=["valid_time"]
+    )
+
+    # Single output time
+    output_time = xr.DataArray([pd.Timestamp("2021-01-01 06:00")], dims=["time"])
+
+    result = utils.maybe_get_closest_timestamp_to_center_of_valid_times(
+        output_time, valid_times
+    )
+
+    # Should return the same single output time (passthrough)
+    xr.testing.assert_equal(result, output_time)
+
+
+def test_maybe_get_closest_timestamp_to_center_of_valid_times_two_outputs():
+    """Test closest selection with two output times."""
+    # Create valid_time values (center: 2021-01-01 12:00)
+    valid_times = xr.DataArray(
+        pd.date_range("2021-01-01", periods=5, freq="6h"), dims=["valid_time"]
+    )
+
+    # Two output times - one closer to center than the other
+    output_times = xr.DataArray(
+        [
+            pd.Timestamp("2021-01-01 06:00"),  # 6 hours from center
+            pd.Timestamp("2021-01-01 15:00"),  # 3 hours from center
+        ],
+        dims=["time"],
+    )
+
+    result = utils.maybe_get_closest_timestamp_to_center_of_valid_times(
+        output_times, valid_times
+    )
+
+    # Should return the closer one (15:00)
+    expected = xr.DataArray(pd.Timestamp("2021-01-01 15:00"))
+    xr.testing.assert_equal(result, expected)
+
+
+def test_maybe_get_closest_timestamp_to_center_of_valid_times_three_outputs():
+    """Test closest selection with three output times."""
+    # Create valid_time values (center: 2021-01-01 12:00)
+    valid_times = xr.DataArray(
+        pd.date_range("2021-01-01", periods=5, freq="6h"), dims=["valid_time"]
+    )
+
+    # Three output times with varying distances from center
+    output_times = xr.DataArray(
+        [
+            pd.Timestamp("2021-01-01 03:00"),  # 9 hours from center
+            pd.Timestamp("2021-01-01 11:00"),  # 1 hour from center (closest)
+            pd.Timestamp("2021-01-01 18:00"),  # 6 hours from center
+        ],
+        dims=["time"],
+    )
+
+    result = utils.maybe_get_closest_timestamp_to_center_of_valid_times(
+        output_times, valid_times
+    )
+
+    # Should return the closest one (11:00)
+    expected = xr.DataArray(pd.Timestamp("2021-01-01 11:00"))
+    xr.testing.assert_equal(result, expected)
+
+
+def test_maybe_get_closest_timestamp_to_center_of_valid_times_many_outputs():
+    """Test closest selection with many (20) output times."""
+    # Create valid_time values (center: 2021-01-02 12:00)
+    valid_times = xr.DataArray(
+        pd.date_range("2021-01-01", periods=9, freq="6h"), dims=["valid_time"]
+    )
+
+    # 20 output times spread over several days
+    output_times = xr.DataArray(
+        pd.date_range("2021-01-01", periods=20, freq="3h"), dims=["time"]
+    )
+
+    result = utils.maybe_get_closest_timestamp_to_center_of_valid_times(
+        output_times, valid_times
+    )
+
+    # Center time should be valid_times[4] = 2021-01-02 12:00
+    center_time = valid_times.values[4]  # 2021-01-02 12:00
+
+    # Find which output time is actually closest
+    time_diffs = np.abs(output_times - center_time)
+    closest_idx = np.argmin(time_diffs.data)
+    expected = output_times[closest_idx]
+
+    xr.testing.assert_equal(result, expected)
+
+
+def test_maybe_get_closest_timestamp_to_center_of_valid_times_even_valid_times():
+    """Test with even number of valid_times (center calculation)."""
+    # Create even number of valid_time values (center: index 2, 2021-01-01 12:00)
+    valid_times = xr.DataArray(
+        pd.date_range("2021-01-01", periods=4, freq="6h"), dims=["valid_time"]
+    )
+
+    # Multiple output times
+    output_times = xr.DataArray(
+        [
+            pd.Timestamp("2021-01-01 09:00"),  # 3 hours from center
+            pd.Timestamp("2021-01-01 13:00"),  # 1 hour from center (closest)
+            pd.Timestamp("2021-01-01 21:00"),  # 9 hours from center
+        ],
+        dims=["time"],
+    )
+
+    result = utils.maybe_get_closest_timestamp_to_center_of_valid_times(
+        output_times, valid_times
+    )
+
+    # Should return the closest one (13:00)
+    expected = xr.DataArray(pd.Timestamp("2021-01-01 13:00"))
+    xr.testing.assert_equal(result, expected)
+
+
+class TestSafeConcat:
+    """Test the _safe_concat helper function."""
+
+    def test_safe_concat_with_non_empty_dataframes(self):
+        """Test _safe_concat with non-empty DataFrames."""
+        df1 = pd.DataFrame({"a": [1, 2], "b": [3, 4]})
+        df2 = pd.DataFrame({"a": [5, 6], "b": [7, 8]})
+        dataframes = [df1, df2]
+
+        result = utils._safe_concat(dataframes)
+
+        # Should concatenate normally
+        assert isinstance(result, pd.DataFrame)
+        assert len(result) == 4
+        assert list(result.columns) == ["a", "b"]
+        assert result["a"].tolist() == [1, 2, 5, 6]
+
+    def test_safe_concat_with_all_empty_dataframes(self):
+        """Test _safe_concat when all DataFrames are empty."""
+        from extremeweatherbench.defaults import OUTPUT_COLUMNS
+
+        df1 = pd.DataFrame()
+        df2 = pd.DataFrame()
+        dataframes = [df1, df2]
+
+        result = utils._safe_concat(dataframes)
+
+        # Should return empty DataFrame with OUTPUT_COLUMNS
+        assert isinstance(result, pd.DataFrame)
+        assert len(result) == 0
+        assert list(result.columns) == OUTPUT_COLUMNS
+
+    def test_safe_concat_with_mixed_empty_and_non_empty(self):
+        """Test _safe_concat with mix of empty and non-empty DataFrames."""
+        df1 = pd.DataFrame()  # Empty
+        df2 = pd.DataFrame({"value": [1.0], "metric": ["test"]})
+        df3 = pd.DataFrame()  # Empty
+        df4 = pd.DataFrame({"value": [2.0], "metric": ["test2"]})
+        dataframes = [df1, df2, df3, df4]
+
+        result = utils._safe_concat(dataframes)
+
+        # Should only concatenate non-empty DataFrames
+        assert isinstance(result, pd.DataFrame)
+        assert len(result) == 2
+        assert result["value"].tolist() == [1.0, 2.0]
+        assert result["metric"].tolist() == ["test", "test2"]
+
+    def test_safe_concat_with_ignore_index_false(self):
+        """Test _safe_concat with ignore_index=False."""
+        df1 = pd.DataFrame({"a": [1, 2]}, index=[0, 1])
+        df2 = pd.DataFrame({"a": [3, 4]}, index=[0, 1])
+        dataframes = [df1, df2]
+
+        result = utils._safe_concat(dataframes, ignore_index=False)
+
+        # Should preserve original indices
+        assert isinstance(result, pd.DataFrame)
+        assert len(result) == 4
+        assert list(result.index) == [0, 1, 0, 1]
+
+    def test_safe_concat_with_ignore_index_true(self):
+        """Test _safe_concat with ignore_index=True (default)."""
+        df1 = pd.DataFrame({"a": [1, 2]}, index=[10, 11])
+        df2 = pd.DataFrame({"a": [3, 4]}, index=[20, 21])
+        dataframes = [df1, df2]
+
+        result = utils._safe_concat(dataframes, ignore_index=True)
+
+        # Should create new sequential index
+        assert isinstance(result, pd.DataFrame)
+        assert len(result) == 4
+        assert list(result.index) == [0, 1, 2, 3]
+
+    def test_safe_concat_with_empty_list(self):
+        """Test _safe_concat with empty list of DataFrames."""
+        from extremeweatherbench.defaults import OUTPUT_COLUMNS
+
+        dataframes = []
+
+        result = utils._safe_concat(dataframes)
+
+        # Should return empty DataFrame with OUTPUT_COLUMNS
+        assert isinstance(result, pd.DataFrame)
+        assert len(result) == 0
+        assert list(result.columns) == OUTPUT_COLUMNS
+
+    def test_safe_concat_prevents_future_warning(self):
+        """Test that _safe_concat prevents the specific pandas FutureWarning."""
+        import warnings
+
+        # Create DataFrames that would trigger the specific FutureWarning
+        # about empty or all-NA entries
+        df1 = pd.DataFrame()  # Empty DataFrame
+        df2 = pd.DataFrame({"a": [1], "b": [2]})
+        df3 = pd.DataFrame({"a": [None], "b": [None]})  # All-NA DataFrame
+        dataframes = [df1, df2, df3]
+
+        # Test that our _safe_concat prevents the warning
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            result = utils._safe_concat(dataframes)
+
+            # Check that no FutureWarnings about concatenation were raised
+            future_warnings = [
+                warning
+                for warning in w
+                if issubclass(warning.category, FutureWarning)
+                and "DataFrame concatenation with empty or all-NA entries"
+                in str(warning.message)
+            ]
+            assert (
+                len(future_warnings) == 0
+            ), f"FutureWarning was raised: {future_warnings}"
+
+        # Should successfully concatenate without warnings
+        assert isinstance(result, pd.DataFrame)
+        assert len(result) >= 1  # Should have at least the non-empty DataFrame
+
+    def test_safe_concat_preserves_dtypes_when_consistent(self):
+        """Test that _safe_concat preserves dtypes when they are consistent."""
+        df1 = pd.DataFrame({"a": [1, 2], "b": [3.0, 4.0]})  # int64, float64
+        df2 = pd.DataFrame({"a": [5, 6], "b": [7.0, 8.0]})  # int64, float64
+        dataframes = [df1, df2]
+
+        result = utils._safe_concat(dataframes)
+
+        # Should preserve original dtypes
+        assert result["a"].dtype == "int64"
+        assert result["b"].dtype == "float64"
+        assert len(result) == 4
+
+    def test_safe_concat_converts_to_object_when_mismatched(self):
+        """Test that _safe_concat converts to object dtype when dtypes mismatch."""
+
+        df1 = pd.DataFrame({"a": [1, 2], "b": [3.0, 4.0]})  # int64, float64
+        df2 = pd.DataFrame(
+            {"a": [pd.Timestamp("2021-01-01")], "b": ["text"]}
+        )  # datetime, object
+        dataframes = [df1, df2]
+
+        result = utils._safe_concat(dataframes)
+
+        # Should convert to object dtypes due to mismatches
+        assert result["a"].dtype == "object"
+        assert result["b"].dtype == "object"
+        assert len(result) == 3

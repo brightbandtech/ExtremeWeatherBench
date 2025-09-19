@@ -10,7 +10,8 @@ import xarray as xr
 from tqdm.auto import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 
-from extremeweatherbench import cases, derived, inputs
+from extremeweatherbench import cases, derived, inputs, utils
+from extremeweatherbench.defaults import OUTPUT_COLUMNS
 
 if TYPE_CHECKING:
     from extremeweatherbench import metrics
@@ -25,8 +26,9 @@ class ExtremeWeatherBench:
 
     This class is used to run the ExtremeWeatherBench workflow. It is a
     wrapper around the
-    case operators and metrics to create either a serial loop or will return the built
-    case operators to run in parallel as defined by the user.
+    case operators and evaluation objects to create either a serial loop or will return
+    the built case operators to run in parallel as defined by the user.
+
 
     Attributes:
         cases: A dictionary of cases to run.
@@ -38,11 +40,11 @@ class ExtremeWeatherBench:
     def __init__(
         self,
         cases: dict[str, list],
-        metrics: list["inputs.EvaluationObject"],
+        evaluation_objects: list["inputs.EvaluationObject"],
         cache_dir: Optional[Union[str, Path]] = None,
     ):
         self.cases = cases
-        self.metrics = metrics
+        self.evaluation_objects = evaluation_objects
         self.cache_dir = Path(cache_dir) if cache_dir else None
 
     # case operators as a property are a convenience method for users to use
@@ -50,7 +52,7 @@ class ExtremeWeatherBench:
     # if desired for a parallel workflow
     @property
     def case_operators(self) -> list["cases.CaseOperator"]:
-        return cases.build_case_operators(self.cases, self.metrics)
+        return cases.build_case_operators(self.cases, self.evaluation_objects)
 
     def run(
         self,
@@ -73,29 +75,16 @@ class ExtremeWeatherBench:
 
         run_results = []
         with logging_redirect_tqdm():
-            for case_operator in tqdm(self.case_operators):
+            for case_operator in tqdm(self.case_operators, desc="Processing cases"):
                 run_results.append(compute_case_operator(case_operator, **kwargs))
 
                 # store the results of each case operator if caching
                 if self.cache_dir:
-                    pd.concat(run_results).to_pickle(
-                        self.cache_dir / "case_results.pkl"
-                    )
-        if run_results:
-            return pd.concat(run_results, ignore_index=True)
-        else:
-            # Return empty DataFrame with expected columns
-            return pd.DataFrame(
-                columns=[
-                    "value",
-                    "target_variable",
-                    "metric",
-                    "target_source",
-                    "forecast_source",
-                    "case_id_number",
-                    "event_type",
-                ]
-            )
+                    concatenated = utils._safe_concat(run_results, ignore_index=False)
+                    if not concatenated.empty:
+                        concatenated.to_pickle(self.cache_dir / "case_results.pkl")
+
+        return utils._safe_concat(run_results, ignore_index=True)
 
 
 def compute_case_operator(case_operator: "cases.CaseOperator", **kwargs):
@@ -113,6 +102,13 @@ def compute_case_operator(case_operator: "cases.CaseOperator", **kwargs):
         A concatenated dataframe of the results of the case operator.
     """
     forecast_ds, target_ds = _build_datasets(case_operator)
+    # Check if any dimension has zero length
+    if 0 in forecast_ds.sizes.values() or 0 in target_ds.sizes.values():
+        return pd.DataFrame(columns=OUTPUT_COLUMNS)
+
+    # Or, check if there aren't any dimensions
+    elif len(forecast_ds.sizes) == 0 or len(target_ds.sizes) == 0:
+        return pd.DataFrame(columns=OUTPUT_COLUMNS)
 
     # spatiotemporally align the target and forecast datasets dependent on the forecast
     aligned_forecast_ds, aligned_target_ds = (
@@ -127,13 +123,14 @@ def compute_case_operator(case_operator: "cases.CaseOperator", **kwargs):
             cache_dir=kwargs.get("cache_dir", None),
         )
 
-    aligned_forecast_ds, aligned_target_ds = [
-        derived.maybe_derive_variables(ds, variables)
-        for ds, variables in zip(
-            [aligned_forecast_ds, aligned_target_ds],
-            [case_operator.forecast.variables, case_operator.target.variables],
-        )
-    ]
+    # Derive the variables for the forecast and target datasets independently
+    aligned_forecast_ds = derived.maybe_derive_variables(
+        aligned_forecast_ds, variables=case_operator.forecast.variables
+    )
+    aligned_target_ds = derived.maybe_derive_variables(
+        aligned_target_ds, variables=case_operator.target.variables
+    )
+
     logger.info(f"datasets built for case {case_operator.case_metadata.case_id_number}")
     results = []
     # TODO: determine if derived variables need to be pushed here or at pre-compute
@@ -142,7 +139,7 @@ def compute_case_operator(case_operator: "cases.CaseOperator", **kwargs):
             case_operator.forecast.variables,
             case_operator.target.variables,
         ),
-        case_operator.metric,
+        case_operator.metric_list,
     ):
         results.append(
             _evaluate_metric_and_return_df(
@@ -161,23 +158,85 @@ def compute_case_operator(case_operator: "cases.CaseOperator", **kwargs):
         cache_dir = kwargs.get("cache_dir", None)
         if cache_dir:
             cache_path = Path(cache_dir) if isinstance(cache_dir, str) else cache_dir
-            pd.concat(results, ignore_index=True).to_pickle(cache_path / "results.pkl")
+            concatenated = utils._safe_concat(results, ignore_index=True)
+            if not concatenated.empty:
+                concatenated.to_pickle(cache_path / "results.pkl")
 
-    if results:
-        return pd.concat(results, ignore_index=True)
-    else:
-        # Return empty DataFrame with expected columns
-        return pd.DataFrame(
-            columns=[
-                "value",
-                "target_variable",
-                "metric",
-                "target_source",
-                "forecast_source",
-                "case_id_number",
-                "event_type",
-            ]
+    return utils._safe_concat(results, ignore_index=True)
+
+
+def _extract_standard_metadata(
+    target_variable: Union[str, "derived.DerivedVariable"],
+    metric: "metrics.BaseMetric",
+    target_ds: xr.Dataset,
+    forecast_ds: xr.Dataset,
+    case_id_number: int,
+    event_type: str,
+) -> dict:
+    """Extract standard metadata for output dataframe.
+
+    This function centralizes the logic for extracting metadata from the
+    evaluation context. Makes it easy to modify how metadata is extracted
+    without changing the schema enforcement logic.
+
+    Args:
+        target_variable: The target variable
+        metric: The metric instance
+        target_ds: Target dataset
+        forecast_ds: Forecast dataset
+        case_id_number: Case ID number
+        event_type: Event type string
+
+    Returns:
+        Dictionary of metadata for the output dataframe
+    """
+    return {
+        "target_variable": target_variable,
+        "metric": metric.name,
+        "target_source": target_ds.attrs["source"],
+        "forecast_source": forecast_ds.attrs["source"],
+        "case_id_number": case_id_number,
+        "event_type": event_type,
+    }
+
+
+def _ensure_output_schema(df: pd.DataFrame, **metadata) -> pd.DataFrame:
+    """Ensure dataframe conforms to OUTPUT_COLUMNS schema.
+
+    This function adds any provided metadata columns to the dataframe and validates
+    that all OUTPUT_COLUMNS are present. Any missing columns will be filled with NaN
+    and a warning will be logged.
+
+    Args:
+        df: Base dataframe (typically with 'value' column from metric result)
+        **metadata: Key-value pairs for metadata columns (e.g., target_variable='temp')
+
+    Returns:
+        DataFrame with columns matching OUTPUT_COLUMNS specification
+
+    Example:
+        df = _ensure_output_schema(
+            metric_df,
+            target_variable=target_var,
+            metric_list=metric.name,
+            target_source=target_ds.attrs["source"],
+            forecast_source=forecast_ds.attrs["source"],
+            case_id_number=case_id,
+            event_type=event_type
         )
+    """
+    # Add metadata columns
+    for col, value in metadata.items():
+        df[col] = value
+
+    # Check for missing columns and warn
+    missing_cols = set(OUTPUT_COLUMNS) - set(df.columns)
+    if missing_cols:
+        logger.warning(f"Missing expected columns: {missing_cols}")
+
+    # Ensure all OUTPUT_COLUMNS are present (missing ones will be NaN)
+    # and reorder to match OUTPUT_COLUMNS specification
+    return df.reindex(columns=OUTPUT_COLUMNS)
 
 
 def _evaluate_metric_and_return_df(
@@ -212,15 +271,13 @@ def _evaluate_metric_and_return_df(
         **kwargs,
     )
 
-    # Convert to DataFrame and add metadata
+    # Convert to DataFrame and add metadata, ensuring OUTPUT_COLUMNS compliance
     df = metric_result.to_dataframe(name="value").reset_index()
-    df["target_variable"] = target_variable
-    df["metric"] = metric.name
-    df["target_source"] = target_ds.attrs["source"]
-    df["forecast_source"] = forecast_ds.attrs["source"]
-    df["case_id_number"] = case_id_number
-    df["event_type"] = event_type
-    return df
+    # TODO: add functionality for custom metadata columns
+    metadata = _extract_standard_metadata(
+        target_variable, metric, target_ds, forecast_ds, case_id_number, event_type
+    )
+    return _ensure_output_schema(df, **metadata)
 
 
 def _build_datasets(
@@ -233,6 +290,17 @@ def _build_datasets(
     """
     logger.info("running forecast pipeline")
     forecast_ds = run_pipeline(case_operator, "forecast")
+
+    # Check if any dimension has zero length
+    zero_length_dims = [dim for dim, size in forecast_ds.sizes.items() if size == 0]
+    if zero_length_dims:
+        logger.warning(
+            f"forecast dataset for case {case_operator.case_metadata.case_id_number} "
+            f"has zero-length dimensions {zero_length_dims} for case time range "
+            f"{case_operator.case_metadata.start_date} to "
+            f"{case_operator.case_metadata.end_date}"
+        )
+        return xr.Dataset(), xr.Dataset()
     logger.info("running target pipeline")
     target_ds = run_pipeline(case_operator, "target")
     return (forecast_ds, target_ds)

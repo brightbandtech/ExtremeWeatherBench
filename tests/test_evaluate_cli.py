@@ -25,7 +25,7 @@ def suppress_cli_output():
 @pytest.fixture
 def runner():
     """Create a Click test runner with output suppression."""
-    return click.testing.CliRunner(mix_stderr=False)
+    return click.testing.CliRunner()
 
 
 @pytest.fixture
@@ -406,7 +406,7 @@ class TestResultsSaving:
 class TestHelperFunctions:
     """Test helper function functionality."""
 
-    @patch("extremeweatherbench.utils.load_events_yaml")
+    @patch("extremeweatherbench.cases.load_ewb_events_yaml_into_case_collection")
     def test_load_default_cases(self, mock_load_yaml):
         """Test _load_default_cases function."""
         mock_cases = {"cases": [{"id": 1}]}
