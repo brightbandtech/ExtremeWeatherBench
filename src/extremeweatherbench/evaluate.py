@@ -18,7 +18,6 @@ if TYPE_CHECKING:
     from extremeweatherbench import metrics
 
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 

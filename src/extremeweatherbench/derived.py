@@ -4,7 +4,6 @@ from typing import List, Type, Union
 
 import xarray as xr
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
