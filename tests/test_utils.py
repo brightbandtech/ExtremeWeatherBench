@@ -389,3 +389,152 @@ def test_maybe_get_closest_timestamp_to_center_of_valid_times_even_valid_times()
     # Should return the closest one (13:00)
     expected = xr.DataArray(pd.Timestamp("2021-01-01 13:00"))
     xr.testing.assert_equal(result, expected)
+
+
+class TestSafeConcat:
+    """Test the _safe_concat helper function."""
+
+    def test_safe_concat_with_non_empty_dataframes(self):
+        """Test _safe_concat with non-empty DataFrames."""
+        df1 = pd.DataFrame({"a": [1, 2], "b": [3, 4]})
+        df2 = pd.DataFrame({"a": [5, 6], "b": [7, 8]})
+        dataframes = [df1, df2]
+
+        result = utils._safe_concat(dataframes)
+
+        # Should concatenate normally
+        assert isinstance(result, pd.DataFrame)
+        assert len(result) == 4
+        assert list(result.columns) == ["a", "b"]
+        assert result["a"].tolist() == [1, 2, 5, 6]
+
+    def test_safe_concat_with_all_empty_dataframes(self):
+        """Test _safe_concat when all DataFrames are empty."""
+        from extremeweatherbench.defaults import OUTPUT_COLUMNS
+
+        df1 = pd.DataFrame()
+        df2 = pd.DataFrame()
+        dataframes = [df1, df2]
+
+        result = utils._safe_concat(dataframes)
+
+        # Should return empty DataFrame with OUTPUT_COLUMNS
+        assert isinstance(result, pd.DataFrame)
+        assert len(result) == 0
+        assert list(result.columns) == OUTPUT_COLUMNS
+
+    def test_safe_concat_with_mixed_empty_and_non_empty(self):
+        """Test _safe_concat with mix of empty and non-empty DataFrames."""
+        df1 = pd.DataFrame()  # Empty
+        df2 = pd.DataFrame({"value": [1.0], "metric": ["test"]})
+        df3 = pd.DataFrame()  # Empty
+        df4 = pd.DataFrame({"value": [2.0], "metric": ["test2"]})
+        dataframes = [df1, df2, df3, df4]
+
+        result = utils._safe_concat(dataframes)
+
+        # Should only concatenate non-empty DataFrames
+        assert isinstance(result, pd.DataFrame)
+        assert len(result) == 2
+        assert result["value"].tolist() == [1.0, 2.0]
+        assert result["metric"].tolist() == ["test", "test2"]
+
+    def test_safe_concat_with_ignore_index_false(self):
+        """Test _safe_concat with ignore_index=False."""
+        df1 = pd.DataFrame({"a": [1, 2]}, index=[0, 1])
+        df2 = pd.DataFrame({"a": [3, 4]}, index=[0, 1])
+        dataframes = [df1, df2]
+
+        result = utils._safe_concat(dataframes, ignore_index=False)
+
+        # Should preserve original indices
+        assert isinstance(result, pd.DataFrame)
+        assert len(result) == 4
+        assert list(result.index) == [0, 1, 0, 1]
+
+    def test_safe_concat_with_ignore_index_true(self):
+        """Test _safe_concat with ignore_index=True (default)."""
+        df1 = pd.DataFrame({"a": [1, 2]}, index=[10, 11])
+        df2 = pd.DataFrame({"a": [3, 4]}, index=[20, 21])
+        dataframes = [df1, df2]
+
+        result = utils._safe_concat(dataframes, ignore_index=True)
+
+        # Should create new sequential index
+        assert isinstance(result, pd.DataFrame)
+        assert len(result) == 4
+        assert list(result.index) == [0, 1, 2, 3]
+
+    def test_safe_concat_with_empty_list(self):
+        """Test _safe_concat with empty list of DataFrames."""
+        from extremeweatherbench.defaults import OUTPUT_COLUMNS
+
+        dataframes = []
+
+        result = utils._safe_concat(dataframes)
+
+        # Should return empty DataFrame with OUTPUT_COLUMNS
+        assert isinstance(result, pd.DataFrame)
+        assert len(result) == 0
+        assert list(result.columns) == OUTPUT_COLUMNS
+
+    def test_safe_concat_prevents_future_warning(self):
+        """Test that _safe_concat prevents the specific pandas FutureWarning."""
+        import warnings
+
+        # Create DataFrames that would trigger the specific FutureWarning
+        # about empty or all-NA entries
+        df1 = pd.DataFrame()  # Empty DataFrame
+        df2 = pd.DataFrame({"a": [1], "b": [2]})
+        df3 = pd.DataFrame({"a": [None], "b": [None]})  # All-NA DataFrame
+        dataframes = [df1, df2, df3]
+
+        # Test that our _safe_concat prevents the warning
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            result = utils._safe_concat(dataframes)
+
+            # Check that no FutureWarnings about concatenation were raised
+            future_warnings = [
+                warning
+                for warning in w
+                if issubclass(warning.category, FutureWarning)
+                and "DataFrame concatenation with empty or all-NA entries"
+                in str(warning.message)
+            ]
+            assert len(future_warnings) == 0, (
+                f"FutureWarning was raised: {future_warnings}"
+            )
+
+        # Should successfully concatenate without warnings
+        assert isinstance(result, pd.DataFrame)
+        assert len(result) >= 1  # Should have at least the non-empty DataFrame
+
+    def test_safe_concat_preserves_dtypes_when_consistent(self):
+        """Test that _safe_concat preserves dtypes when they are consistent."""
+        df1 = pd.DataFrame({"a": [1, 2], "b": [3.0, 4.0]})  # int64, float64
+        df2 = pd.DataFrame({"a": [5, 6], "b": [7.0, 8.0]})  # int64, float64
+        dataframes = [df1, df2]
+
+        result = utils._safe_concat(dataframes)
+
+        # Should preserve original dtypes
+        assert result["a"].dtype == "int64"
+        assert result["b"].dtype == "float64"
+        assert len(result) == 4
+
+    def test_safe_concat_converts_to_object_when_mismatched(self):
+        """Test that _safe_concat converts to object dtype when dtypes mismatch."""
+
+        df1 = pd.DataFrame({"a": [1, 2], "b": [3.0, 4.0]})  # int64, float64
+        df2 = pd.DataFrame(
+            {"a": [pd.Timestamp("2021-01-01")], "b": ["text"]}
+        )  # datetime, object
+        dataframes = [df1, df2]
+
+        result = utils._safe_concat(dataframes)
+
+        # Should convert to object dtypes due to mismatches
+        assert result["a"].dtype == "object"
+        assert result["b"].dtype == "object"
+        assert len(result) == 3
