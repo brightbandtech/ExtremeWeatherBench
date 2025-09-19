@@ -2,6 +2,7 @@ import logging
 
 import numpy as np
 import xarray as xr
+from tqdm.contrib.logging import logging_redirect_tqdm
 
 from extremeweatherbench import evaluate, inputs, metrics, utils
 
@@ -94,18 +95,26 @@ heatwave_evaluation_object = [
     ),
 ]
 
+
 # Initialize ExtremeWeatherBench
-test_ewb = evaluate.ExtremeWeatherBench(
+ewb = evaluate.ExtremeWeatherBench(
     cases=case_yaml,
     evaluation_objects=heatwave_evaluation_object,
 )
 
+
+with logging_redirect_tqdm(loggers=[logger]):
+    results = ewb.run(parallel=True, pre_compute=True)
+results.to_csv("brightband_evaluation_results.csv", index=False)
+
 # Run the workflow
-outputs = test_ewb.run(
+outputs = ewb.run(
     # tolerance range is the number of hours before and after the timestamp a
     # validating occurrence is checked in the forecasts
     tolerance_range=48,
     # pre-compute the datasets to avoid recomputing them for each metric
+    # this works best when incoming data is small (e.g. one variable)
+    # and identical across multiple metrics
     pre_compute=True,
 )
 
