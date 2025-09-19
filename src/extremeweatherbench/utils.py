@@ -16,7 +16,6 @@ import xarray as xr
 import yaml  # type: ignore[import]
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
 
 IncomingDataInput: TypeAlias = xr.Dataset | xr.DataArray | pl.LazyFrame | pd.DataFrame
 

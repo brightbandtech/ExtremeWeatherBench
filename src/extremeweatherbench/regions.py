@@ -16,7 +16,6 @@ from shapely import MultiPolygon, Polygon  # type: ignore[import-untyped]
 from extremeweatherbench import utils
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
 
 
 class Region(ABC):
