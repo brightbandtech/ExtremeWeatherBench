@@ -11,7 +11,7 @@ from joblib import Parallel, delayed
 from tqdm.auto import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 
-from extremeweatherbench import cases, derived, inputs
+from extremeweatherbench import cases, derived, inputs, utils
 from extremeweatherbench.defaults import OUTPUT_COLUMNS
 
 if TYPE_CHECKING:
@@ -93,7 +93,7 @@ class ExtremeWeatherBench:
             self.case_operators, parallel, n_jobs, self.cache_dir, **kwargs
         )
         if run_results:
-            return pd.concat(run_results, ignore_index=True)
+            return utils._safe_concat(run_results, ignore_index=True)
         else:
             # Return empty DataFrame with expected columns
             return pd.DataFrame(columns=OUTPUT_COLUMNS)
@@ -253,13 +253,11 @@ def compute_case_operator(
         cache_dir = kwargs.get("cache_dir", None)
         if cache_dir:
             cache_path = Path(cache_dir) if isinstance(cache_dir, str) else cache_dir
-            pd.concat(results, ignore_index=True).to_pickle(cache_path / "results.pkl")
+            concatenated = utils._safe_concat(results, ignore_index=True)
+            if not concatenated.empty:
+                concatenated.to_pickle(cache_path / "results.pkl")
 
-    if results:
-        return pd.concat(results, ignore_index=True)
-    else:
-        # Return empty DataFrame with expected columns
-        return pd.DataFrame(columns=OUTPUT_COLUMNS)
+    return utils._safe_concat(results, ignore_index=True)
 
 
 def _extract_standard_metadata(
