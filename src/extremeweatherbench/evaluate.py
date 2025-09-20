@@ -169,10 +169,10 @@ def _run_parallel(
     # Set the number of jobs to the number of processes if not provided
     if n_jobs is None:
         logger.warning("No number of jobs provided, using all available CPUs.")
-    run_results = Parallel(n_jobs=n_jobs)(
+    run_results = utils.ParallelTqdm(n_jobs=n_jobs, total_tasks=len(case_operators))(
         # None is the cache_dir, we can't cache in parallel mode
         delayed(compute_case_operator)(case_operator, None, **kwargs)
-        for case_operator in tqdm(case_operators)
+        for case_operator in case_operators
     )
     return run_results
 
