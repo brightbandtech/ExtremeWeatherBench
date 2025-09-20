@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Literal, Optional, Union
 
 import pandas as pd
 import xarray as xr
+from joblib import delayed
 from tqdm.auto import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 
@@ -47,14 +48,15 @@ class ExtremeWeatherBench:
         self.cache_dir = Path(cache_dir) if cache_dir else None
 
     # case operators as a property are a convenience method for users to use
-    # them outside the class
-    # if desired for a parallel workflow
+    # them outside the class if desired for a parallel workflow
     @property
     def case_operators(self) -> list["cases.CaseOperator"]:
         return cases.build_case_operators(self.cases, self.evaluation_objects)
 
     def run(
         self,
+        parallel: bool = False,
+        n_jobs: Optional[int] = None,
         **kwargs,
     ) -> pd.DataFrame:
         """Runs the ExtremeWeatherBench workflow.
@@ -64,29 +66,123 @@ class ExtremeWeatherBench:
 
         Keyword arguments are passed to the metric computations if there are specific
         requirements needed for metrics such as threshold arguments.
+
+        Args:
+            parallel: Whether to run the workflow in parallel.
+            cache_dir: The directory to cache the mid-flight outputs of the workflow.
+            n_jobs: The number of jobs to run in parallel. If None, defaults to the
+            joblib backend default.
+
+        Returns:
+            A concatenated dataframe of the evaluation results.
         """
-        # instantiate the cache directory if caching and build it if it does not exist
-        if self.cache_dir:
-            if isinstance(self.cache_dir, str):
-                self.cache_dir = Path(self.cache_dir)
+        # Caching does not work in parallel mode as of now, so ignore the cache_dir
+        # but let user know
+        if self.cache_dir and parallel:
+            logger.info(
+                "Caching is not supported in parallel mode currently, ignoring "
+                "cache_dir"
+            )
+        # Instantiate the cache directory if caching and build it if it does not exist
+        elif self.cache_dir:
             if not self.cache_dir.exists():
                 self.cache_dir.mkdir(parents=True, exist_ok=True)
 
         run_results = []
+        run_results = _run_case_operators(
+            self.case_operators, parallel, n_jobs, self.cache_dir, **kwargs
+        )
+        if run_results:
+            return utils._safe_concat(run_results, ignore_index=True)
+        else:
+            # Return empty DataFrame with expected columns
+            return pd.DataFrame(columns=OUTPUT_COLUMNS)
+
+
+def _run_case_operators(
+    case_operators: list["cases.CaseOperator"],
+    parallel: bool = False,
+    n_jobs: Optional[int] = None,
+    cache_dir: Optional[Path] = None,
+    **kwargs,
+):
+    """Run the case operators in serial or parallel.
+
+    Args:
+        case_operators: The case operators to run.
+        parallel: Whether to run in parallel mode.
+        n_jobs: Number of jobs for parallel execution.
+        cache_dir: Optional directory for caching results.
+        **kwargs: Keyword arguments to pass to the metric and case operator
+            computations.
+
+    Returns:
+        A concatenated dataframe of the results of the case operators.
+    """
+    if parallel:
+        return _run_parallel(case_operators, n_jobs, **kwargs)
+    else:
         with logging_redirect_tqdm():
-            for case_operator in tqdm(self.case_operators, desc="Processing cases"):
-                run_results.append(compute_case_operator(case_operator, **kwargs))
-
-                # store the results of each case operator if caching
-                if self.cache_dir:
-                    concatenated = utils._safe_concat(run_results, ignore_index=False)
-                    if not concatenated.empty:
-                        concatenated.to_pickle(self.cache_dir / "case_results.pkl")
-
-        return utils._safe_concat(run_results, ignore_index=True)
+            return _run_serial(case_operators, cache_dir, **kwargs)
 
 
-def compute_case_operator(case_operator: "cases.CaseOperator", **kwargs):
+def _run_serial(
+    case_operators: list["cases.CaseOperator"],
+    cache_dir: Optional[Path] = None,
+    **kwargs,
+):
+    """Run the case operators in serial.
+
+    Args:
+        case_operators: The case operators to run.
+        cache_dir: Optional directory for caching results.
+        **kwargs: Keyword arguments to pass to the metric computations.
+
+    Returns:
+        A concatenated dataframe of the results of the case operators.
+    """
+    run_results = []
+    # Loop over the case operators
+    for case_operator in tqdm(case_operators):
+        run_results.append(compute_case_operator(case_operator, cache_dir, **kwargs))
+    return run_results
+
+
+def _run_parallel(
+    case_operators: list["cases.CaseOperator"],
+    n_jobs: Optional[int] = None,
+    **kwargs,
+):
+    """Run the case operators in parallel.
+
+    The default parallelization is to use the number of available CPUs divided by 4
+    threads per process.
+
+    Args:
+        case_operators: The case operators to run.
+        n_jobs: The number of jobs to run in parallel. If None, defaults to the
+        joblib backend default.
+        kwargs: Keyword arguments to pass to the metric computations.
+
+    Returns:
+        A concatenated dataframe of the results of the case operators.
+    """
+    # Set the number of jobs to the number of processes if not provided
+    if n_jobs is None:
+        logger.info("No number of jobs provided, using all available CPUs.")
+    run_results = utils.ParallelTqdm(n_jobs=n_jobs, total_tasks=len(case_operators))(
+        # None is the cache_dir, we can't cache in parallel mode
+        delayed(compute_case_operator)(case_operator, None, **kwargs)
+        for case_operator in case_operators
+    )
+    return run_results
+
+
+def compute_case_operator(
+    case_operator: "cases.CaseOperator",
+    cache_dir: Optional[Path] = None,
+    **kwargs,
+):
     """Compute the results of a case operator.
 
     This method will compute the results of a case operator. It will build
@@ -204,7 +300,7 @@ def _ensure_output_schema(df: pd.DataFrame, **metadata) -> pd.DataFrame:
 
     This function adds any provided metadata columns to the dataframe and validates
     that all OUTPUT_COLUMNS are present. Any missing columns will be filled with NaN
-    and a warning will be logged.
+    and will be logged.
 
     Args:
         df: Base dataframe (typically with 'value' column from metric result)
@@ -231,7 +327,7 @@ def _ensure_output_schema(df: pd.DataFrame, **metadata) -> pd.DataFrame:
     # Check for missing columns and warn
     missing_cols = set(OUTPUT_COLUMNS) - set(df.columns)
     if missing_cols:
-        logger.warning(f"Missing expected columns: {missing_cols}")
+        logger.info(f"Missing expected columns: {missing_cols}")
 
     # Ensure all OUTPUT_COLUMNS are present (missing ones will be NaN)
     # and reorder to match OUTPUT_COLUMNS specification
@@ -293,7 +389,7 @@ def _build_datasets(
     # Check if any dimension has zero length
     zero_length_dims = [dim for dim, size in forecast_ds.sizes.items() if size == 0]
     if zero_length_dims:
-        logger.warning(
+        logger.info(
             f"forecast dataset for case {case_operator.case_metadata.case_id_number} "
             f"has zero-length dimensions {zero_length_dims} for case time range "
             f"{case_operator.case_metadata.start_date} to "
@@ -313,8 +409,6 @@ def _compute_and_maybe_cache(
     computed_datasets = [dataset.compute() for dataset in datasets]
     if cache_dir:
         raise NotImplementedError("Caching is not implemented yet")
-        # (computed_dataset.to_netcdf(self.cache_dir) for computed_dataset in
-        # computed_datasets)
     return computed_datasets
 
 
