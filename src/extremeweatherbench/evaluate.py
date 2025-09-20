@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Literal, Optional, Union
 
 import pandas as pd
 import xarray as xr
-from joblib import Parallel, delayed
+from joblib import delayed
 from tqdm.auto import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 
@@ -77,10 +77,11 @@ class ExtremeWeatherBench:
             A concatenated dataframe of the evaluation results.
         """
         # Caching does not work in parallel mode as of now, so ignore the cache_dir
-        # but raise a warning for the user
+        # but let user know
         if self.cache_dir and parallel:
-            logger.warning(
-                "Caching is not supported in parallel mode, ignoring cache_dir"
+            logger.info(
+                "Caching is not supported in parallel mode currently, ignoring "
+                "cache_dir"
             )
         # Instantiate the cache directory if caching and build it if it does not exist
         elif self.cache_dir:
@@ -118,10 +119,10 @@ def _run_case_operators(
     Returns:
         A concatenated dataframe of the results of the case operators.
     """
-    with logging_redirect_tqdm():
-        if parallel:
-            return _run_parallel(case_operators, n_jobs, **kwargs)
-        else:
+    if parallel:
+        return _run_parallel(case_operators, n_jobs, **kwargs)
+    else:
+        with logging_redirect_tqdm():
             return _run_serial(case_operators, cache_dir, **kwargs)
 
 
@@ -168,7 +169,7 @@ def _run_parallel(
     """
     # Set the number of jobs to the number of processes if not provided
     if n_jobs is None:
-        logger.warning("No number of jobs provided, using all available CPUs.")
+        logger.info("No number of jobs provided, using all available CPUs.")
     run_results = utils.ParallelTqdm(n_jobs=n_jobs, total_tasks=len(case_operators))(
         # None is the cache_dir, we can't cache in parallel mode
         delayed(compute_case_operator)(case_operator, None, **kwargs)
@@ -299,7 +300,7 @@ def _ensure_output_schema(df: pd.DataFrame, **metadata) -> pd.DataFrame:
 
     This function adds any provided metadata columns to the dataframe and validates
     that all OUTPUT_COLUMNS are present. Any missing columns will be filled with NaN
-    and a warning will be logged.
+    and will be logged.
 
     Args:
         df: Base dataframe (typically with 'value' column from metric result)
@@ -326,7 +327,7 @@ def _ensure_output_schema(df: pd.DataFrame, **metadata) -> pd.DataFrame:
     # Check for missing columns and warn
     missing_cols = set(OUTPUT_COLUMNS) - set(df.columns)
     if missing_cols:
-        logger.warning(f"Missing expected columns: {missing_cols}")
+        logger.info(f"Missing expected columns: {missing_cols}")
 
     # Ensure all OUTPUT_COLUMNS are present (missing ones will be NaN)
     # and reorder to match OUTPUT_COLUMNS specification
@@ -388,7 +389,7 @@ def _build_datasets(
     # Check if any dimension has zero length
     zero_length_dims = [dim for dim, size in forecast_ds.sizes.items() if size == 0]
     if zero_length_dims:
-        logger.warning(
+        logger.info(
             f"forecast dataset for case {case_operator.case_metadata.case_id_number} "
             f"has zero-length dimensions {zero_length_dims} for case time range "
             f"{case_operator.case_metadata.start_date} to "
