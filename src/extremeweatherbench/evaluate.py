@@ -10,14 +10,13 @@ import xarray as xr
 from tqdm.auto import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 
-from extremeweatherbench import cases, derived, inputs
+from extremeweatherbench import cases, derived, inputs, utils
 from extremeweatherbench.defaults import OUTPUT_COLUMNS
 
 if TYPE_CHECKING:
     from extremeweatherbench import metrics
 
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -74,19 +73,16 @@ class ExtremeWeatherBench:
 
         run_results = []
         with logging_redirect_tqdm():
-            for case_operator in tqdm(self.case_operators):
+            for case_operator in tqdm(self.case_operators, desc="Processing cases"):
                 run_results.append(compute_case_operator(case_operator, **kwargs))
 
                 # store the results of each case operator if caching
                 if self.cache_dir:
-                    pd.concat(run_results).to_pickle(
-                        self.cache_dir / "case_results.pkl"
-                    )
-        if run_results:
-            return pd.concat(run_results, ignore_index=True)
-        else:
-            # Return empty DataFrame with expected columns
-            return pd.DataFrame(columns=OUTPUT_COLUMNS)
+                    concatenated = utils._safe_concat(run_results, ignore_index=False)
+                    if not concatenated.empty:
+                        concatenated.to_pickle(self.cache_dir / "case_results.pkl")
+
+        return utils._safe_concat(run_results, ignore_index=True)
 
 
 def compute_case_operator(case_operator: "cases.CaseOperator", **kwargs):
@@ -152,13 +148,11 @@ def compute_case_operator(case_operator: "cases.CaseOperator", **kwargs):
         cache_dir = kwargs.get("cache_dir", None)
         if cache_dir:
             cache_path = Path(cache_dir) if isinstance(cache_dir, str) else cache_dir
-            pd.concat(results, ignore_index=True).to_pickle(cache_path / "results.pkl")
+            concatenated = utils._safe_concat(results, ignore_index=True)
+            if not concatenated.empty:
+                concatenated.to_pickle(cache_path / "results.pkl")
 
-    if results:
-        return pd.concat(results, ignore_index=True)
-    else:
-        # Return empty DataFrame with expected columns
-        return pd.DataFrame(columns=OUTPUT_COLUMNS)
+    return utils._safe_concat(results, ignore_index=True)
 
 
 def _extract_standard_metadata(

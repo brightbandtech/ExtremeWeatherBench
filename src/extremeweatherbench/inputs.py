@@ -15,7 +15,6 @@ if TYPE_CHECKING:
 
 IncomingDataInput: TypeAlias = xr.Dataset | xr.DataArray | pl.LazyFrame | pd.DataFrame
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
 
 #: Storage/access options for gridded target datasets.
 ARCO_ERA5_FULL_URI = (
