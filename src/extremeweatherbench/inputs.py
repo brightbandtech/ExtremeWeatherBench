@@ -14,7 +14,6 @@ if TYPE_CHECKING:
     from extremeweatherbench import metrics
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
 
 #: Storage/access options for gridded target datasets.
 ARCO_ERA5_FULL_URI = (
