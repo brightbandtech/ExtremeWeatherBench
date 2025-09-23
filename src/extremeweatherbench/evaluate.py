@@ -55,7 +55,6 @@ class ExtremeWeatherBench:
 
     def run(
         self,
-        parallel: bool = False,
         n_jobs: Optional[int] = None,
         **kwargs,
     ) -> pd.DataFrame:
@@ -68,17 +67,16 @@ class ExtremeWeatherBench:
         requirements needed for metrics such as threshold arguments.
 
         Args:
-            parallel: Whether to run the workflow in parallel.
             cache_dir: The directory to cache the mid-flight outputs of the workflow.
             n_jobs: The number of jobs to run in parallel. If None, defaults to the
-            joblib backend default.
+            joblib backend default value. If 1, the workflow will run in serial.
 
         Returns:
             A concatenated dataframe of the evaluation results.
         """
         # Caching does not work in parallel mode as of now, so ignore the cache_dir
         # but raise a warning for the user
-        if self.cache_dir and parallel:
+        if self.cache_dir and n_jobs != 1:
             logger.warning(
                 "Caching is not supported in parallel mode, ignoring cache_dir"
             )
@@ -89,7 +87,7 @@ class ExtremeWeatherBench:
 
         run_results = []
         run_results = _run_case_operators(
-            self.case_operators, parallel, n_jobs, self.cache_dir, **kwargs
+            self.case_operators, n_jobs, self.cache_dir, **kwargs
         )
         if run_results:
             return utils._safe_concat(run_results, ignore_index=True)
@@ -100,7 +98,6 @@ class ExtremeWeatherBench:
 
 def _run_case_operators(
     case_operators: list["cases.CaseOperator"],
-    parallel: bool = False,
     n_jobs: Optional[int] = None,
     cache_dir: Optional[Path] = None,
     **kwargs,
@@ -119,7 +116,7 @@ def _run_case_operators(
         A concatenated dataframe of the results of the case operators.
     """
     with logging_redirect_tqdm():
-        if parallel:
+        if n_jobs != 1:
             return _run_parallel(case_operators, n_jobs, **kwargs)
         else:
             return _run_serial(case_operators, cache_dir, **kwargs)
@@ -168,7 +165,7 @@ def _run_parallel(
     """
     # Set the number of jobs to the number of processes if not provided
     if n_jobs is None:
-        logger.warning("No number of jobs provided, using all available CPUs.")
+        logger.warning("No number of jobs provided, using joblib backend default.")
     run_results = Parallel(n_jobs=n_jobs)(
         # None is the cache_dir, we can't cache in parallel mode
         delayed(compute_case_operator)(case_operator, None, **kwargs)
