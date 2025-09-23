@@ -925,16 +925,3 @@ class DurationME(AppliedMetric):
             "target": target_duration,
             "preserve_dims": cls.preserve_dims,
         }
-
-
-# TODO: complete lead time detection implementation
-class LeadTimeDetection(AppliedMetric):
-    base_metric = MAE
-    name = "lead_time_detection"
-
-    @classmethod
-    def _compute_applied_metric(
-        cls, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
-    ) -> Any:
-        # Dummy implementation for lead time detection
-        raise NotImplementedError("LeadTimeDetection is not implemented yet")
