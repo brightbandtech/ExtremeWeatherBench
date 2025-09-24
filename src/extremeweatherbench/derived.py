@@ -6,7 +6,6 @@ import xarray as xr
 
 import extremeweatherbench.events.severe_convection as sc
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
