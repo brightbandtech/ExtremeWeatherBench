@@ -3348,3 +3348,267 @@ cases:
         longitude_min: 110.0
         longitude_max: 155.0
     event_type: severe_convection
+  - case_id_number: 285
+    title: April 2023 Midwest
+    start_date: 2023-04-05 12:00:00
+    end_date: 2023-04-06 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 24.0
+        latitude_max: 54.0
+        longitude_min: 245.0
+        longitude_max: 295.0
+    event_type: severe_convection
+  - case_id_number: 286
+    title: March 2023 Midwest + Southeast
+    start_date: 2023-03-31 12:00:00
+    end_date: 2023-04-01 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 24.0
+        latitude_max: 54.0
+        longitude_min: 245.0
+        longitude_max: 295.0
+    event_type: severe_convection
+  - case_id_number: 287
+    title: March 2023 North America
+    start_date: 2023-03-02 12:00:00
+    end_date: 2023-03-03 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 24.0
+        latitude_max: 54.0
+        longitude_min: 245.0
+        longitude_max: 295.0
+    event_type: severe_convection
+  - case_id_number: 288
+    title: February 2023 North America
+    start_date: 2023-02-26 12:00:00
+    end_date: 2023-02-27 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 24.0
+        latitude_max: 54.0
+        longitude_min: 245.0
+        longitude_max: 295.0
+    event_type: severe_convection
+  - case_id_number: 289
+    title: July 2022 Great Plains
+    start_date: 2022-07-22 12:00:00
+    end_date: 2022-07-23 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 24.0
+        latitude_max: 54.0
+        longitude_min: 245.0
+        longitude_max: 295.0
+    event_type: severe_convection
+  - case_id_number: 290
+    title: June 2022 Southwest
+    start_date: 2022-06-07 12:00:00
+    end_date: 2022-06-08 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 24.0
+        latitude_max: 54.0
+        longitude_min: 245.0
+        longitude_max: 295.0
+    event_type: severe_convection
+  - case_id_number: 291
+    title: May 2022 Midwest
+    start_date: 2022-05-12 12:00:00
+    end_date: 2022-05-13 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 24.0
+        latitude_max: 54.0
+        longitude_min: 245.0
+        longitude_max: 295.0
+    event_type: severe_convection
+  - case_id_number: 292
+    title: April 2022 Great Plains
+    start_date: 2022-04-12 12:00:00
+    end_date: 2022-04-13 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 24.0
+        latitude_max: 54.0
+        longitude_min: 245.0
+        longitude_max: 295.0
+    event_type: severe_convection
+  - case_id_number: 293
+    title: April 2022 South
+    start_date: 2022-04-05 12:00:00
+    end_date: 2022-04-06 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 24.0
+        latitude_max: 54.0
+        longitude_min: 245.0
+        longitude_max: 295.0
+    event_type: severe_convection
+  - case_id_number: 294
+    title: December 2021 Midwest
+    start_date: 2021-12-15 12:00:00
+    end_date: 2021-12-16 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 24.0
+        latitude_max: 54.0
+        longitude_min: 245.0
+        longitude_max: 295.0
+    event_type: severe_convection
+  - case_id_number: 295
+    title: December 2021 Great Plains
+    start_date: 2021-12-10 12:00:00
+    end_date: 2021-12-11 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 24.0
+        latitude_max: 54.0
+        longitude_min: 245.0
+        longitude_max: 295.0
+    event_type: severe_convection
+  - case_id_number: 296
+    title: June 2021 Great Plains
+    start_date: 2021-06-18 12:00:00
+    end_date: 2021-06-19 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 24.0
+        latitude_max: 54.0
+        longitude_min: 245.0
+        longitude_max: 295.0
+    event_type: severe_convection
+  - case_id_number: 297
+    title: May 2021 Great Plains
+    start_date: 2021-05-03 12:00:00
+    end_date: 2021-05-05 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 24.0
+        latitude_max: 54.0
+        longitude_min: 245.0
+        longitude_max: 295.0
+    event_type: severe_convection
+  - case_id_number: 298
+    title: March 2021 South
+    start_date: 2021-03-27 12:00:00
+    end_date: 2021-03-28 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 24.0
+        latitude_max: 54.0
+        longitude_min: 245.0
+        longitude_max: 295.0
+    event_type: severe_convection
+  - case_id_number: 299
+    title: March 2021 South
+    start_date: 2021-03-25 12:00:00
+    end_date: 2021-03-26 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 24.0
+        latitude_max: 54.0
+        longitude_min: 245.0
+        longitude_max: 295.0
+    event_type: severe_convection
+  - case_id_number: 300
+    title: April 2020 South
+    start_date: 2020-04-22 12:00:00
+    end_date: 2020-04-23 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 24.0
+        latitude_max: 54.0
+        longitude_min: 245.0
+        longitude_max: 295.0
+    event_type: severe_convection
+  - case_id_number: 301
+    title: April 2020 Southeast
+    start_date: 2020-04-12 12:00:00
+    end_date: 2020-04-13 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 24.0
+        latitude_max: 54.0
+        longitude_min: 245.0
+        longitude_max: 295.0
+    event_type: severe_convection
+  - case_id_number: 302
+    title: April 2020 Midwest
+    start_date: 2020-04-08 12:00:00
+    end_date: 2020-04-09 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 24.0
+        latitude_max: 54.0
+        longitude_min: 245.0
+        longitude_max: 295.0
+    event_type: severe_convection
+  - case_id_number: 303
+    title: March 2020 South
+    start_date: 2020-03-28 12:00:00
+    end_date: 2020-03-29 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 24.0
+        latitude_max: 54.0
+        longitude_min: 245.0
+        longitude_max: 295.0
+    event_type: severe_convection
+  - case_id_number: 304
+    title: March 2020 Southeast
+    start_date: 2020-03-02 12:00:00
+    end_date: 2020-03-03 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 24.0
+        latitude_max: 54.0
+        longitude_min: 245.0
+        longitude_max: 295.0
+    event_type: severe_convection
+  - case_id_number: 305
+    title: February 2020 East
+    start_date: 2020-02-05 12:00:00
+    end_date: 2020-02-07 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 24.0
+        latitude_max: 54.0
+        longitude_min: 245.0
+        longitude_max: 295.0
+    event_type: severe_convection
+  - case_id_number: 306
+    title: January 2020 South
+    start_date: 2020-01-10 12:00:00
+    end_date: 2020-01-12 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 24.0
+        latitude_max: 54.0
+        longitude_min: 245.0
+        longitude_max: 295.0
+    event_type: severe_convection
