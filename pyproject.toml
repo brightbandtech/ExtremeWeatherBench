@@ -44,7 +44,6 @@ dev = [
     "ipywidgets>=8.1.5",
     "isort>=6.0.1",
     "jupyterlab>=4.4.5",
-    "jupytext>=1.17.3",
     "lxml-stubs>=0.5.1",
     "mypy>=1.14.1",
     "pandas-stubs>=2.3.0.250703",
