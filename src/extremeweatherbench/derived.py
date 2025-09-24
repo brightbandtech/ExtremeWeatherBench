@@ -6,7 +6,6 @@ import xarray as xr
 
 import extremeweatherbench.events.atmospheric_river as ar
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 

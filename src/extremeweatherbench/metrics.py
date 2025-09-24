@@ -10,7 +10,6 @@ from scores.continuous import mae, mean_error, rmse  # type: ignore[import-untyp
 from extremeweatherbench import derived, evaluate, utils
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
 
 
 # Global cache for transformed contingency managers
