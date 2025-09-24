@@ -1,4 +1,5 @@
 import dataclasses
+import logging
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Callable, Optional, TypeAlias, Union
 
@@ -13,6 +14,8 @@ if TYPE_CHECKING:
     from extremeweatherbench import metrics
 
 IncomingDataInput: TypeAlias = xr.Dataset | xr.DataArray | pl.LazyFrame | pd.DataFrame
+logger = logging.getLogger(__name__)
+
 #: Storage/access options for gridded target datasets.
 ARCO_ERA5_FULL_URI = (
     "gs://gcp-public-data-arco-era5/ar/full_37-1h-0p25deg-chunk-1.zarr-v3"
@@ -33,6 +36,16 @@ IBTRACS_URI = (
     "https://www.ncei.noaa.gov/data/international-best-track-archive-for-"
     "climate-stewardship-ibtracs/v04r01/access/csv/ibtracs.ALL.list.v04r01.csv"
 )
+
+# The core coordinate variables that are always required, even if not dimensions
+# (e.g. latitude and longitude for xarray datasets)
+DEFAULT_COORDINATE_VARIABLES = [
+    "valid_time",
+    "lead_time",
+    "init_time",
+    "latitude",
+    "longitude",
+]
 
 IBTrACS_metadata_variable_mapping = {
     "ISO_TIME": "valid_time",
@@ -481,11 +494,13 @@ class GHCN(TargetBase):
             data = data.set_index(["valid_time", "latitude", "longitude"])
             # GHCN data can have duplicate values right now, dropping here if it occurs
             try:
-                data = data.to_xarray()
-            except ValueError as e:
-                if "non-unique" in str(e):
-                    pass
-                data = data.drop_duplicates().to_xarray()
+                data = data[~data.index.duplicated()].to_xarray()
+            except Exception as e:
+                logger.warning(
+                    "Error converting GHCN data to xarray: %s, returning empty Dataset",
+                    e,
+                )
+                return xr.Dataset()
             return data
         else:
             raise ValueError(f"Data is not a polars LazyFrame: {type(data)}")
@@ -979,11 +994,17 @@ def safely_pull_variables(
             )
         case pl.LazyFrame():
             return sources.safely_pull_variables_polars_lazyframe(
-                dataset, variables, optional_variables, optional_variables_mapping
+                dataset,
+                variables,
+                optional_variables + DEFAULT_COORDINATE_VARIABLES,
+                optional_variables_mapping,
             )
         case pd.DataFrame():
             return sources.safely_pull_variables_pandas_dataframe(
-                dataset, variables, optional_variables, optional_variables_mapping
+                dataset,
+                variables + DEFAULT_COORDINATE_VARIABLES,
+                optional_variables + DEFAULT_COORDINATE_VARIABLES,
+                optional_variables_mapping,
             )
         case _:
             raise TypeError(
