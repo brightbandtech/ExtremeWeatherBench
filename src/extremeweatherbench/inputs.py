@@ -1,4 +1,5 @@
 import dataclasses
+import logging
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Callable, Optional, TypeAlias, Union
 
@@ -13,6 +14,8 @@ if TYPE_CHECKING:
     from extremeweatherbench import metrics
 
 IncomingDataInput: TypeAlias = xr.Dataset | xr.DataArray | pl.LazyFrame | pd.DataFrame
+logger = logging.getLogger(__name__)
+
 #: Storage/access options for gridded target datasets.
 ARCO_ERA5_FULL_URI = (
     "gs://gcp-public-data-arco-era5/ar/full_37-1h-0p25deg-chunk-1.zarr-v3"
@@ -491,11 +494,13 @@ class GHCN(TargetBase):
             data = data.set_index(["valid_time", "latitude", "longitude"])
             # GHCN data can have duplicate values right now, dropping here if it occurs
             try:
-                data = data.to_xarray()
-            except ValueError as e:
-                if "non-unique" in str(e):
-                    pass
-                data = data.drop_duplicates().to_xarray()
+                data = data[~data.index.duplicated()].to_xarray()
+            except Exception as e:
+                logger.warning(
+                    "Error converting GHCN data to xarray: %s, returning empty Dataset",
+                    e,
+                )
+                return xr.Dataset()
             return data
         else:
             raise ValueError(f"Data is not a polars LazyFrame: {type(data)}")

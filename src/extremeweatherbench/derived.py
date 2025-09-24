@@ -7,7 +7,6 @@ import xarray as xr
 from extremeweatherbench import calc
 from extremeweatherbench.events import tropical_cyclone
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
