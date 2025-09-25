@@ -36,6 +36,56 @@ IBTRACS_URI = (
     "climate-stewardship-ibtracs/v04r01/access/csv/ibtracs.ALL.list.v04r01.csv"
 )
 
+# ERA5 metadata variable mapping
+ERA5_metadata_variable_mapping = {
+    "time": "valid_time",
+    "2m_temperature": "surface_air_temperature",
+    "2m_dewpoint_temperature": "surface_dewpoint_temperature",
+    "temperature": "air_temperature",
+    "dewpoint": "dewpoint_temperature",
+    "2m_relative_humidity": "surface_relative_humidity",
+    "2m_specific_humidity": "surface_specific_humidity",
+    "10m_u_component_of_wind": "surface_eastward_wind",
+    "10m_v_component_of_wind": "surface_northward_wind",
+    "u_component_of_wind": "eastward_wind",
+    "v_component_of_wind": "northward_wind",
+    "specific_humidity": "specific_humidity",
+    "mean_sea_level_pressure": "air_pressure_at_mean_sea_level",
+}
+
+# CIRA MLWP forecasts metadata variable mapping
+CIRA_metadata_variable_mapping = {
+    "time": "valid_time",
+    "t2": "surface_air_temperature",
+    "t": "air_temperature",
+    "q": "specific_humidity",
+    "u": "eastward_wind",
+    "v": "northward_wind",
+    "p": "air_pressure",
+    "z": "geopotential_height",
+    "r": "relative_humidity",
+    "u10": "surface_eastward_wind",
+    "v10": "surface_northward_wind",
+    "u100": "eastward_wind",
+    "v100": "northward_wind",
+}
+
+# HRES forecast (weatherbench2)metadata variable mapping
+HRES_metadata_variable_mapping = {
+    "2m_temperature": "surface_air_temperature",
+    "2m_dewpoint_temperature": "surface_dewpoint_temperature",
+    "temperature": "air_temperature",
+    "dewpoint": "dewpoint_temperature",
+    "10m_u_component_of_wind": "surface_eastward_wind",
+    "10m_v_component_of_wind": "surface_northward_wind",
+    "u_component_of_wind": "eastward_wind",
+    "v_component_of_wind": "northward_wind",
+    "prediction_timedelta": "lead_time",
+    "time": "init_time",
+    "mean_sea_level_pressure": "air_pressure_at_mean_sea_level",
+    "10m_wind_speed": "surface_wind_speed",
+}
+
 IBTrACS_metadata_variable_mapping = {
     "ISO_TIME": "valid_time",
     "NAME": "tc_name",
@@ -389,6 +439,10 @@ class ERA5(TargetBase):
 
     name: str = "ERA5"
     chunks: Optional[Union[dict, str]] = None
+    source: str = ARCO_ERA5_FULL_URI
+    variable_mapping: dict = dataclasses.field(
+        default_factory=lambda: ERA5_metadata_variable_mapping.copy()
+    )
 
     def _open_data_from_source(self) -> utils.IncomingDataInput:
         data = xr.open_zarr(
@@ -438,6 +492,7 @@ class GHCN(TargetBase):
     """
 
     name: str = "GHCN"
+    source: str = DEFAULT_GHCN_URI
 
     def _open_data_from_source(self) -> utils.IncomingDataInput:
         target_data: pl.LazyFrame = pl.scan_parquet(
@@ -541,6 +596,7 @@ class LSR(TargetBase):
     """
 
     name: str = "local_storm_reports"
+    source: str = LSR_URI
 
     def _open_data_from_source(self) -> utils.IncomingDataInput:
         # force LSR to use anon token to prevent google reauth issues for users
@@ -669,6 +725,7 @@ class PPH(TargetBase):
     """Target class for practically perfect hindcast data."""
 
     name: str = "practically_perfect_hindcast"
+    source: str = PPH_URI
 
     def _open_data_from_source(
         self,
@@ -698,6 +755,7 @@ class IBTrACS(TargetBase):
     """Target class for IBTrACS data."""
 
     name: str = "IBTrACS"
+    source: str = IBTRACS_URI
 
     def _open_data_from_source(self) -> utils.IncomingDataInput:
         # not using storage_options in this case due to NetCDF4Backend not
