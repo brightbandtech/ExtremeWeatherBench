@@ -2281,18 +2281,6 @@ cases:
         longitude_max: 167.2
     event_type: tropical_cyclone
   - case_id_number: 196
-    title: Daniel - Europe
-    start_date: 2023-09-02 00:00:00
-    end_date: 2023-09-08 00:00:00
-    location:
-      type: bounded_region
-      parameters:
-        latitude_min: 30.0
-        latitude_max: 45.0
-        longitude_min: 10.0
-        longitude_max: 30.0
-    event_type: tropical_cyclone
-  - case_id_number: 197
     title: Alex
     start_date: 2022-05-31 00:00:00
     end_date: 2022-06-08 00:00:00
@@ -2304,7 +2292,7 @@ cases:
         longitude_min: 270.1
         longitude_max: 300.2
     event_type: tropical_cyclone
-  - case_id_number: 198
+  - case_id_number: 197
     title: Fiona
     start_date: 2022-09-12 00:00:00
     end_date: 2022-09-29 00:00:00
@@ -2316,7 +2304,7 @@ cases:
         longitude_min: 285.9
         longitude_max: 314.4
     event_type: tropical_cyclone
-  - case_id_number: 199
+  - case_id_number: 198
     title: Ian
     start_date: 2022-09-20 00:00:00
     end_date: 2022-10-03 00:00:00
@@ -2328,7 +2316,7 @@ cases:
         longitude_min: 274.0
         longitude_max: 296.0
     event_type: tropical_cyclone
-  - case_id_number: 200
+  - case_id_number: 199
     title: Julia
     start_date: 2022-10-04 00:00:00
     end_date: 2022-10-12 00:00:00
@@ -2340,7 +2328,7 @@ cases:
         longitude_min: 267.8
         longitude_max: 295.8
     event_type: tropical_cyclone
-  - case_id_number: 201
+  - case_id_number: 200
     title: Nicole
     start_date: 2022-11-04 00:00:00
     end_date: 2022-11-13 00:00:00
@@ -2352,7 +2340,7 @@ cases:
         longitude_min: 272.9
         longitude_max: 295.7
     event_type: tropical_cyclone
-  - case_id_number: 202
+  - case_id_number: 201
     title: Agatha
     start_date: 2022-05-25 00:00:00
     end_date: 2022-06-03 00:00:00
@@ -2364,7 +2352,7 @@ cases:
         longitude_min: 258.6
         longitude_max: 267.7
     event_type: tropical_cyclone
-  - case_id_number: 203
+  - case_id_number: 202
     title: Kay
     start_date: 2022-09-02 00:00:00
     end_date: 2022-09-15 00:00:00
@@ -2376,7 +2364,7 @@ cases:
         longitude_min: 235.8
         longitude_max: 261.4
     event_type: tropical_cyclone
-  - case_id_number: 204
+  - case_id_number: 203
     title: Roslyn
     start_date: 2022-10-18 00:00:00
     end_date: 2022-10-26 00:00:00
@@ -2388,7 +2376,7 @@ cases:
         longitude_min: 251.0
         longitude_max: 261.4
     event_type: tropical_cyclone
-  - case_id_number: 205
+  - case_id_number: 204
     title: Megi (Agaton)
     start_date: 2022-04-06 00:00:00
     end_date: 2022-04-15 00:00:00
@@ -2400,7 +2388,7 @@ cases:
         longitude_min: 122.4
         longitude_max: 130.7
     event_type: tropical_cyclone
-  - case_id_number: 206
+  - case_id_number: 205
     title: Hinnamnor (Henry)
     start_date: 2022-08-25 00:00:00
     end_date: 2022-09-10 00:00:00
@@ -2412,7 +2400,7 @@ cases:
         longitude_min: 122.2
         longitude_max: 153.4
     event_type: tropical_cyclone
-  - case_id_number: 207
+  - case_id_number: 206
     title: Muifa (Inday)
     start_date: 2022-09-02 00:00:00
     end_date: 2022-09-18 00:00:00
@@ -2424,7 +2412,7 @@ cases:
         longitude_min: 118.0
         longitude_max: 147.7
     event_type: tropical_cyclone
-  - case_id_number: 208
+  - case_id_number: 207
     title: Nanmadol (Josie)
     start_date: 2022-09-09 00:00:00
     end_date: 2022-09-22 00:00:00
@@ -2436,7 +2424,7 @@ cases:
         longitude_min: 128.0
         longitude_max: 149.7
     event_type: tropical_cyclone
-  - case_id_number: 209
+  - case_id_number: 208
     title: Noru (Karding)
     start_date: 2022-09-19 00:00:00
     end_date: 2022-10-01 00:00:00
@@ -2448,7 +2436,7 @@ cases:
         longitude_min: 101.0
         longitude_max: 136.8
     event_type: tropical_cyclone
-  - case_id_number: 210
+  - case_id_number: 209
     title: Nalgae (Paeng)
     start_date: 2022-10-24 00:00:00
     end_date: 2022-11-05 00:00:00
@@ -2460,7 +2448,7 @@ cases:
         longitude_min: 111.0
         longitude_max: 136.6
     event_type: tropical_cyclone
-  - case_id_number: 211
+  - case_id_number: 210
     title: Sitrang
     start_date: 2022-10-19 00:00:00
     end_date: 2022-10-27 00:00:00
@@ -2472,7 +2460,7 @@ cases:
         longitude_min: 85.8
         longitude_max: 95.6
     event_type: tropical_cyclone
-  - case_id_number: 212
+  - case_id_number: 211
     title: Ana
     start_date: 2022-01-18 00:00:00
     end_date: 2022-01-27 00:00:00
@@ -2484,7 +2472,7 @@ cases:
         longitude_min: 168.8
         longitude_max: 191.7
     event_type: tropical_cyclone
-  - case_id_number: 213
+  - case_id_number: 212
     title: Batsirai
     start_date: 2022-01-22 00:00:00
     end_date: 2022-02-12 00:00:00
@@ -2496,7 +2484,7 @@ cases:
         longitude_min: 38.5
         longitude_max: 94.0
     event_type: tropical_cyclone
-  - case_id_number: 214
+  - case_id_number: 213
     title: Gombe
     start_date: 2022-03-04 00:00:00
     end_date: 2022-03-19 00:00:00
@@ -2508,7 +2496,7 @@ cases:
         longitude_min: 34.2
         longitude_max: 57.6
     event_type: tropical_cyclone
-  - case_id_number: 215
+  - case_id_number: 214
     title: Seth
     start_date: 2021-12-21 00:00:00
     end_date: 2022-01-09 00:00:00
@@ -2520,7 +2508,7 @@ cases:
         longitude_min: 127.3
         longitude_max: 161.5
     event_type: tropical_cyclone
-  - case_id_number: 216
+  - case_id_number: 215
     title: Blas
     start_date: 2022-06-12 00:00:00
     end_date: 2022-06-24 00:00:00
@@ -2532,19 +2520,7 @@ cases:
         longitude_min: 240.9
         longitude_max: 260.3
     event_type: tropical_cyclone
-  - case_id_number: 217
-    title: Apollo
-    start_date: 2021-10-23 00:00:00
-    end_date: 2021-11-03 00:00:00
-    location:
-      type: bounded_region
-      parameters:
-        latitude_min: 30.0
-        latitude_max: 40.0
-        longitude_min: 10.0
-        longitude_max: 25.0
-    event_type: tropical_cyclone
-  - case_id_number: 218
+  - case_id_number: 216
     title: Elsa
     start_date: 2021-06-28 00:00:00
     end_date: 2021-07-12 00:00:00
@@ -2556,7 +2532,7 @@ cases:
         longitude_min: 274.1
         longitude_max: 319.5
     event_type: tropical_cyclone
-  - case_id_number: 219
+  - case_id_number: 217
     title: Fred
     start_date: 2021-08-07 00:00:00
     end_date: 2021-08-22 00:00:00
@@ -2568,7 +2544,7 @@ cases:
         longitude_min: 271.8
         longitude_max: 303.6
     event_type: tropical_cyclone
-  - case_id_number: 220
+  - case_id_number: 218
     title: Grace
     start_date: 2021-08-11 00:00:00
     end_date: 2021-08-23 00:00:00
@@ -2580,7 +2556,7 @@ cases:
         longitude_min: 259.7
         longitude_max: 315.6
     event_type: tropical_cyclone
-  - case_id_number: 221
+  - case_id_number: 219
     title: Henri
     start_date: 2021-08-13 00:00:00
     end_date: 2021-08-26 00:00:00
@@ -2592,7 +2568,7 @@ cases:
         longitude_min: 283.0
         longitude_max: 299.9
     event_type: tropical_cyclone
-  - case_id_number: 222
+  - case_id_number: 220
     title: Ida
     start_date: 2021-08-24 00:00:00
     end_date: 2021-09-06 00:00:00
@@ -2604,7 +2580,7 @@ cases:
         longitude_min: 266.8
         longitude_max: 299.9
     event_type: tropical_cyclone
-  - case_id_number: 223
+  - case_id_number: 221
     title: Larry
     start_date: 2021-08-29 00:00:00
     end_date: 2021-09-13 00:00:00
@@ -2616,7 +2592,7 @@ cases:
         longitude_min: 295.4
         longitude_max: 341.7
     event_type: tropical_cyclone
-  - case_id_number: 224
+  - case_id_number: 222
     title: Nicholas
     start_date: 2021-09-10 00:00:00
     end_date: 2021-09-19 00:00:00
@@ -2628,7 +2604,7 @@ cases:
         longitude_min: 260.9
         longitude_max: 270.8
     event_type: tropical_cyclone
-  - case_id_number: 225
+  - case_id_number: 223
     title: Claudette
     start_date: 2021-06-15 00:00:00
     end_date: 2021-06-25 00:00:00
@@ -2640,7 +2616,7 @@ cases:
         longitude_min: 265.4
         longitude_max: 302.8
     event_type: tropical_cyclone
-  - case_id_number: 226
+  - case_id_number: 224
     title: Nora
     start_date: 2021-08-22 00:00:00
     end_date: 2021-09-01 00:00:00
@@ -2652,7 +2628,7 @@ cases:
         longitude_min: 250.3
         longitude_max: 267.3
     event_type: tropical_cyclone
-  - case_id_number: 227
+  - case_id_number: 225
     title: Olaf
     start_date: 2021-09-04 00:00:00
     end_date: 2021-09-14 00:00:00
@@ -2664,7 +2640,7 @@ cases:
         longitude_min: 242.8
         longitude_max: 256.6
     event_type: tropical_cyclone
-  - case_id_number: 228
+  - case_id_number: 226
     title: Pamela
     start_date: 2021-10-08 00:00:00
     end_date: 2021-10-15 00:00:00
@@ -2676,7 +2652,7 @@ cases:
         longitude_min: 248.4
         longitude_max: 259.9
     event_type: tropical_cyclone
-  - case_id_number: 229
+  - case_id_number: 227
     title: Surigae (Bising)
     start_date: 2021-04-09 00:00:00
     end_date: 2021-05-02 00:00:00
@@ -2688,7 +2664,7 @@ cases:
         longitude_min: 122.5
         longitude_max: 186.8
     event_type: tropical_cyclone
-  - case_id_number: 230
+  - case_id_number: 228
     title: In-fa (Fabian)
     start_date: 2021-07-14 00:00:00
     end_date: 2021-08-02 00:00:00
@@ -2700,7 +2676,7 @@ cases:
         longitude_min: 114.4
         longitude_max: 137.6
     event_type: tropical_cyclone
-  - case_id_number: 231
+  - case_id_number: 229
     title: Kompasu (Maring)
     start_date: 2021-10-05 00:00:00
     end_date: 2021-10-16 00:00:00
@@ -2712,7 +2688,7 @@ cases:
         longitude_min: 103.4
         longitude_max: 136.5
     event_type: tropical_cyclone
-  - case_id_number: 232
+  - case_id_number: 230
     title: Rai
     start_date: 2021-12-09 00:00:00
     end_date: 2021-12-23 00:00:00
@@ -2724,7 +2700,7 @@ cases:
         longitude_min: 108.3
         longitude_max: 147.3
     event_type: tropical_cyclone
-  - case_id_number: 233
+  - case_id_number: 231
     title: Tauktae
     start_date: 2021-05-11 00:00:00
     end_date: 2021-05-21 00:00:00
@@ -2736,7 +2712,7 @@ cases:
         longitude_min: 68.6
         longitude_max: 77.1
     event_type: tropical_cyclone
-  - case_id_number: 234
+  - case_id_number: 232
     title: Yaas
     start_date: 2021-05-21 00:00:00
     end_date: 2021-05-29 00:00:00
@@ -2748,7 +2724,7 @@ cases:
         longitude_min: 82.5
         longitude_max: 92.3
     event_type: tropical_cyclone
-  - case_id_number: 235
+  - case_id_number: 233
     title: Gulab and Shaheen
     start_date: 2021-09-21 00:00:00
     end_date: 2021-10-06 00:00:00
@@ -2760,7 +2736,7 @@ cases:
         longitude_min: 53.7
         longitude_max: 96.5
     event_type: tropical_cyclone
-  - case_id_number: 236
+  - case_id_number: 234
     title: Eloise
     start_date: 2021-01-09 00:00:00
     end_date: 2021-01-26 00:00:00
@@ -2772,7 +2748,7 @@ cases:
         longitude_min: 28.8
         longitude_max: 88.1
     event_type: tropical_cyclone
-  - case_id_number: 237
+  - case_id_number: 235
     title: Amanda and Cristobal
     start_date: 2020-05-28 00:00:00
     end_date: 2020-06-14 00:00:00
@@ -2784,7 +2760,7 @@ cases:
         longitude_min: 265.0
         longitude_max: 283.3
     event_type: tropical_cyclone
-  - case_id_number: 238
+  - case_id_number: 236
     title: Hanna
     start_date: 2020-07-21 00:00:00
     end_date: 2020-07-28 00:00:00
@@ -2796,7 +2772,7 @@ cases:
         longitude_min: 257.2
         longitude_max: 274.2
     event_type: tropical_cyclone
-  - case_id_number: 239
+  - case_id_number: 237
     title: Isaias
     start_date: 2020-07-26 00:00:00
     end_date: 2020-08-07 00:00:00
@@ -2808,7 +2784,7 @@ cases:
         longitude_min: 277.7
         longitude_max: 308.3
     event_type: tropical_cyclone
-  - case_id_number: 240
+  - case_id_number: 238
     title: Laura
     start_date: 2020-08-18 00:00:00
     end_date: 2020-08-31 00:00:00
@@ -2820,7 +2796,7 @@ cases:
         longitude_min: 264.3
         longitude_max: 315.0
     event_type: tropical_cyclone
-  - case_id_number: 241
+  - case_id_number: 239
     title: Nana
     start_date: 2020-08-30 00:00:00
     end_date: 2020-09-06 00:00:00
@@ -2832,7 +2808,7 @@ cases:
         longitude_min: 266.3
         longitude_max: 287.1
     event_type: tropical_cyclone
-  - case_id_number: 242
+  - case_id_number: 240
     title: Paulette
     start_date: 2020-09-05 00:00:00
     end_date: 2020-09-30 00:00:00
@@ -2844,7 +2820,7 @@ cases:
         longitude_min: 292.8
         longitude_max: 345.7
     event_type: tropical_cyclone
-  - case_id_number: 243
+  - case_id_number: 241
     title: Sally
     start_date: 2020-09-09 00:00:00
     end_date: 2020-09-20 00:00:00
@@ -2856,7 +2832,7 @@ cases:
         longitude_min: 269.4
         longitude_max: 283.9
     event_type: tropical_cyclone
-  - case_id_number: 244
+  - case_id_number: 242
     title: Teddy
     start_date: 2020-09-10 00:00:00
     end_date: 2020-09-26 00:00:00
@@ -2868,7 +2844,7 @@ cases:
         longitude_min: 293.4
         longitude_max: 330.9
     event_type: tropical_cyclone
-  - case_id_number: 245
+  - case_id_number: 243
     title: Delta
     start_date: 2020-10-02 00:00:00
     end_date: 2020-10-13 00:00:00
@@ -2880,7 +2856,7 @@ cases:
         longitude_min: 263.9
         longitude_max: 286.1
     event_type: tropical_cyclone
-  - case_id_number: 246
+  - case_id_number: 244
     title: Zeta
     start_date: 2020-10-22 00:00:00
     end_date: 2020-11-01 00:00:00
@@ -2892,7 +2868,7 @@ cases:
         longitude_min: 265.9
         longitude_max: 290.7
     event_type: tropical_cyclone
-  - case_id_number: 247
+  - case_id_number: 245
     title: Eta
     start_date: 2020-10-29 00:00:00
     end_date: 2020-11-16 00:00:00
@@ -2904,7 +2880,7 @@ cases:
         longitude_min: 269.9
         longitude_max: 293.1
     event_type: tropical_cyclone
-  - case_id_number: 248
+  - case_id_number: 246
     title: Iota
     start_date: 2020-11-10 00:00:00
     end_date: 2020-11-20 00:00:00
@@ -2916,7 +2892,7 @@ cases:
         longitude_min: 268.7
         longitude_max: 291.4
     event_type: tropical_cyclone
-  - case_id_number: 249
+  - case_id_number: 247
     title: Genevieve
     start_date: 2020-08-14 00:00:00
     end_date: 2020-08-24 00:00:00
@@ -2928,7 +2904,7 @@ cases:
         longitude_min: 240.3
         longitude_max: 265.8
     event_type: tropical_cyclone
-  - case_id_number: 250
+  - case_id_number: 248
     title: Hagupit (Dindo)
     start_date: 2020-07-29 00:00:00
     end_date: 2020-08-14 00:00:00
@@ -2940,7 +2916,7 @@ cases:
         longitude_min: 117.9
         longitude_max: 182.5
     event_type: tropical_cyclone
-  - case_id_number: 251
+  - case_id_number: 249
     title: Maysak
     start_date: 2020-08-24 00:00:00
     end_date: 2020-09-08 00:00:00
@@ -2952,7 +2928,7 @@ cases:
         longitude_min: 120.7
         longitude_max: 136.2
     event_type: tropical_cyclone
-  - case_id_number: 252
+  - case_id_number: 250
     title: Noul (Leon)
     start_date: 2020-09-12 00:00:00
     end_date: 2020-09-21 00:00:00
@@ -2964,7 +2940,7 @@ cases:
         longitude_min: 98.2
         longitude_max: 129.6
     event_type: tropical_cyclone
-  - case_id_number: 253
+  - case_id_number: 251
     title: Linfa
     start_date: 2020-10-05 00:00:00
     end_date: 2020-10-14 00:00:00
@@ -2976,7 +2952,7 @@ cases:
         longitude_min: 104.6
         longitude_max: 127.1
     event_type: tropical_cyclone
-  - case_id_number: 254
+  - case_id_number: 252
     title: Molave (Quinta)
     start_date: 2020-10-19 00:00:00
     end_date: 2020-10-31 00:00:00
@@ -2988,7 +2964,7 @@ cases:
         longitude_min: 101.8
         longitude_max: 139.8
     event_type: tropical_cyclone
-  - case_id_number: 255
+  - case_id_number: 253
     title: Goni (Rolly)
     start_date: 2020-10-23 00:00:00
     end_date: 2020-11-08 00:00:00
@@ -3000,7 +2976,7 @@ cases:
         longitude_min: 105.6
         longitude_max: 146.2
     event_type: tropical_cyclone
-  - case_id_number: 256
+  - case_id_number: 254
     title: Vamco (Ulysse)
     start_date: 2020-11-06 00:00:00
     end_date: 2020-11-18 00:00:00
@@ -3012,7 +2988,7 @@ cases:
         longitude_min: 101.3
         longitude_max: 137.2
     event_type: tropical_cyclone
-  - case_id_number: 257
+  - case_id_number: 255
     title: Remal
     start_date: 2024-05-23 00:00:00
     end_date: 2024-05-29 00:00:00
@@ -3024,7 +3000,7 @@ cases:
         longitude_min: 86.0
         longitude_max: 92.8
     event_type: tropical_cyclone
-  - case_id_number: 258
+  - case_id_number: 256
     title: Amphan
     start_date: 2020-05-13 00:00:00
     end_date: 2020-05-23 00:00:00
@@ -3036,7 +3012,7 @@ cases:
         longitude_min: 83.8
         longitude_max: 92.4
     event_type: tropical_cyclone
-  - case_id_number: 259
+  - case_id_number: 257
     title: Nisarga
     start_date: 2020-05-29 00:00:00
     end_date: 2020-06-06 00:00:00
@@ -3048,7 +3024,7 @@ cases:
         longitude_min: 68.8
         longitude_max: 79.9
     event_type: tropical_cyclone
-  - case_id_number: 260
+  - case_id_number: 258
     title: Damien
     start_date: 2020-02-01 00:00:00
     end_date: 2020-02-12 00:00:00
@@ -3060,7 +3036,7 @@ cases:
         longitude_min: 113.9
         longitude_max: 131.8
     event_type: tropical_cyclone
-  - case_id_number: 261
+  - case_id_number: 259
     title: Harold
     start_date: 2023-08-19 00:00:00
     end_date: 2023-08-25 00:00:00
@@ -3072,19 +3048,7 @@ cases:
         longitude_min: 152.2
         longitude_max: 214.7
     event_type: tropical_cyclone
-  - case_id_number: 262
-    title: Ianos
-    start_date: 2020-09-16 00:00:00
-    end_date: 2020-09-19 00:00:00
-    location:
-      type: bounded_region
-      parameters:
-        latitude_min: 30.0
-        latitude_max: 40.0
-        longitude_min: 15.0
-        longitude_max: 25.0
-    event_type: tropical_cyclone
-  - case_id_number: 263
+  - case_id_number: 260
     title: January 2020 Australia
     start_date: 2020-01-20 00:00:00
     end_date: 2020-01-21 00:00:00
@@ -3096,7 +3060,7 @@ cases:
         longitude_min: 110.0
         longitude_max: 155.0
     event_type: severe_convection
-  - case_id_number: 264
+  - case_id_number: 261
     title: April 2020 Australia
     start_date: 2020-04-03 00:00:00
     end_date: 2020-04-04 00:00:00
@@ -3108,7 +3072,7 @@ cases:
         longitude_min: 110.0
         longitude_max: 155.0
     event_type: severe_convection
-  - case_id_number: 265
+  - case_id_number: 262
     title: May 2020 Australia
     start_date: 2020-05-31 00:00:00
     end_date: 2020-06-01 00:00:00
@@ -3120,7 +3084,7 @@ cases:
         longitude_min: 110.0
         longitude_max: 155.0
     event_type: severe_convection
-  - case_id_number: 266
+  - case_id_number: 263
     title: September 2020 Australia
     start_date: 2020-09-05 00:00:00
     end_date: 2020-09-06 00:00:00
@@ -3132,7 +3096,7 @@ cases:
         longitude_min: 110.0
         longitude_max: 155.0
     event_type: severe_convection
-  - case_id_number: 267
+  - case_id_number: 264
     title: October 2020 Australia
     start_date: 2020-10-31 00:00:00
     end_date: 2020-11-01 00:00:00
@@ -3144,7 +3108,7 @@ cases:
         longitude_min: 110.0
         longitude_max: 155.0
     event_type: severe_convection
-  - case_id_number: 268
+  - case_id_number: 265
     title: December 2020 Australia
     start_date: 2020-12-05 00:00:00
     end_date: 2020-12-06 00:00:00
@@ -3156,7 +3120,7 @@ cases:
         longitude_min: 110.0
         longitude_max: 155.0
     event_type: severe_convection
-  - case_id_number: 269
+  - case_id_number: 266
     title: September 2021 Australia
     start_date: 2021-09-30 00:00:00
     end_date: 2021-10-01 00:00:00
@@ -3168,7 +3132,7 @@ cases:
         longitude_min: 110.0
         longitude_max: 155.0
     event_type: severe_convection
-  - case_id_number: 270
+  - case_id_number: 267
     title: October 2021 Australia
     start_date: 2021-10-14 00:00:00
     end_date: 2021-10-15 00:00:00
@@ -3180,7 +3144,7 @@ cases:
         longitude_min: 110.0
         longitude_max: 155.0
     event_type: severe_convection
-  - case_id_number: 271
+  - case_id_number: 268
     title: October 2021 Australia
     start_date: 2021-10-18 00:00:00
     end_date: 2021-10-19 00:00:00
@@ -3192,7 +3156,7 @@ cases:
         longitude_min: 110.0
         longitude_max: 155.0
     event_type: severe_convection
-  - case_id_number: 272
+  - case_id_number: 269
     title: October 2021 Australia
     start_date: 2021-10-19 00:00:00
     end_date: 2021-10-20 00:00:00
@@ -3204,7 +3168,7 @@ cases:
         longitude_min: 110.0
         longitude_max: 155.0
     event_type: severe_convection
-  - case_id_number: 273
+  - case_id_number: 270
     title: October 2021 Australia
     start_date: 2021-10-28 00:00:00
     end_date: 2021-10-29 00:00:00
@@ -3216,7 +3180,7 @@ cases:
         longitude_min: 110.0
         longitude_max: 155.0
     event_type: severe_convection
-  - case_id_number: 274
+  - case_id_number: 271
     title: December 2021 Australia
     start_date: 2021-12-03 00:00:00
     end_date: 2021-12-04 00:00:00
@@ -3228,7 +3192,7 @@ cases:
         longitude_min: 110.0
         longitude_max: 155.0
     event_type: severe_convection
-  - case_id_number: 275
+  - case_id_number: 272
     title: December 2021 Australia
     start_date: 2021-12-09 00:00:00
     end_date: 2021-12-10 00:00:00
@@ -3240,7 +3204,7 @@ cases:
         longitude_min: 110.0
         longitude_max: 155.0
     event_type: severe_convection
-  - case_id_number: 276
+  - case_id_number: 273
     title: January 2022 Australia
     start_date: 2022-01-15 00:00:00
     end_date: 2022-01-16 00:00:00
@@ -3252,7 +3216,7 @@ cases:
         longitude_min: 110.0
         longitude_max: 155.0
     event_type: severe_convection
-  - case_id_number: 277
+  - case_id_number: 274
     title: March 2022 Australia
     start_date: 2022-03-04 00:00:00
     end_date: 2022-03-05 00:00:00
@@ -3264,7 +3228,7 @@ cases:
         longitude_min: 110.0
         longitude_max: 155.0
     event_type: severe_convection
-  - case_id_number: 278
+  - case_id_number: 275
     title: December 2022 Australia
     start_date: 2022-12-08 00:00:00
     end_date: 2022-12-09 00:00:00
@@ -3276,7 +3240,7 @@ cases:
         longitude_min: 110.0
         longitude_max: 155.0
     event_type: severe_convection
-  - case_id_number: 279
+  - case_id_number: 276
     title: February 2023 Australia
     start_date: 2023-02-14 00:00:00
     end_date: 2023-02-15 00:00:00
@@ -3288,7 +3252,7 @@ cases:
         longitude_min: 110.0
         longitude_max: 155.0
     event_type: severe_convection
-  - case_id_number: 280
+  - case_id_number: 277
     title: December 2023 Australia
     start_date: 2023-12-12 00:00:00
     end_date: 2023-12-13 00:00:00
@@ -3300,7 +3264,7 @@ cases:
         longitude_min: 110.0
         longitude_max: 155.0
     event_type: severe_convection
-  - case_id_number: 281
+  - case_id_number: 278
     title: December 2023 Australia
     start_date: 2023-12-25 00:00:00
     end_date: 2023-12-26 00:00:00
@@ -3312,7 +3276,7 @@ cases:
         longitude_min: 110.0
         longitude_max: 155.0
     event_type: severe_convection
-  - case_id_number: 282
+  - case_id_number: 279
     title: December 2023 Australia
     start_date: 2023-12-26 00:00:00
     end_date: 2023-12-27 00:00:00
@@ -3324,7 +3288,7 @@ cases:
         longitude_min: 110.0
         longitude_max: 155.0
     event_type: severe_convection
-  - case_id_number: 283
+  - case_id_number: 280
     title: August 2024 Australia
     start_date: 2024-08-25 00:00:00
     end_date: 2024-08-26 00:00:00
@@ -3336,7 +3300,7 @@ cases:
         longitude_min: 110.0
         longitude_max: 155.0
     event_type: severe_convection
-  - case_id_number: 284
+  - case_id_number: 281
     title: October 2024 Australia
     start_date: 2024-10-09 00:00:00
     end_date: 2024-10-10 00:00:00
@@ -3348,7 +3312,7 @@ cases:
         longitude_min: 110.0
         longitude_max: 155.0
     event_type: severe_convection
-  - case_id_number: 285
+  - case_id_number: 282
     title: October 2024 Australia
     start_date: 2024-10-17 00:00:00
     end_date: 2024-10-18 00:00:00
@@ -3360,7 +3324,7 @@ cases:
         longitude_min: 110.0
         longitude_max: 155.0
     event_type: severe_convection
-  - case_id_number: 286
+  - case_id_number: 283
     title: November 2024 Australia
     start_date: 2024-11-01 00:00:00
     end_date: 2024-11-02 00:00:00
@@ -3372,7 +3336,7 @@ cases:
         longitude_min: 110.0
         longitude_max: 155.0
     event_type: severe_convection
-  - case_id_number: 287
+  - case_id_number: 284
     title: November 2024 Australia
     start_date: 2024-11-13 00:00:00
     end_date: 2024-11-14 00:00:00
@@ -3383,4 +3347,268 @@ cases:
         latitude_max: -10.0
         longitude_min: 110.0
         longitude_max: 155.0
+    event_type: severe_convection
+  - case_id_number: 285
+    title: April 2023 Midwest
+    start_date: 2023-04-05 12:00:00
+    end_date: 2023-04-06 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 24.0
+        latitude_max: 54.0
+        longitude_min: 245.0
+        longitude_max: 295.0
+    event_type: severe_convection
+  - case_id_number: 286
+    title: March 2023 Midwest + Southeast
+    start_date: 2023-03-31 12:00:00
+    end_date: 2023-04-01 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 24.0
+        latitude_max: 54.0
+        longitude_min: 245.0
+        longitude_max: 295.0
+    event_type: severe_convection
+  - case_id_number: 287
+    title: March 2023 North America
+    start_date: 2023-03-02 12:00:00
+    end_date: 2023-03-03 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 24.0
+        latitude_max: 54.0
+        longitude_min: 245.0
+        longitude_max: 295.0
+    event_type: severe_convection
+  - case_id_number: 288
+    title: February 2023 North America
+    start_date: 2023-02-26 12:00:00
+    end_date: 2023-02-27 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 24.0
+        latitude_max: 54.0
+        longitude_min: 245.0
+        longitude_max: 295.0
+    event_type: severe_convection
+  - case_id_number: 289
+    title: July 2022 Great Plains
+    start_date: 2022-07-22 12:00:00
+    end_date: 2022-07-23 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 24.0
+        latitude_max: 54.0
+        longitude_min: 245.0
+        longitude_max: 295.0
+    event_type: severe_convection
+  - case_id_number: 290
+    title: June 2022 Southwest
+    start_date: 2022-06-07 12:00:00
+    end_date: 2022-06-08 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 24.0
+        latitude_max: 54.0
+        longitude_min: 245.0
+        longitude_max: 295.0
+    event_type: severe_convection
+  - case_id_number: 291
+    title: May 2022 Midwest
+    start_date: 2022-05-12 12:00:00
+    end_date: 2022-05-13 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 24.0
+        latitude_max: 54.0
+        longitude_min: 245.0
+        longitude_max: 295.0
+    event_type: severe_convection
+  - case_id_number: 292
+    title: April 2022 Great Plains
+    start_date: 2022-04-12 12:00:00
+    end_date: 2022-04-13 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 24.0
+        latitude_max: 54.0
+        longitude_min: 245.0
+        longitude_max: 295.0
+    event_type: severe_convection
+  - case_id_number: 293
+    title: April 2022 South
+    start_date: 2022-04-05 12:00:00
+    end_date: 2022-04-06 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 24.0
+        latitude_max: 54.0
+        longitude_min: 245.0
+        longitude_max: 295.0
+    event_type: severe_convection
+  - case_id_number: 294
+    title: December 2021 Midwest
+    start_date: 2021-12-15 12:00:00
+    end_date: 2021-12-16 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 24.0
+        latitude_max: 54.0
+        longitude_min: 245.0
+        longitude_max: 295.0
+    event_type: severe_convection
+  - case_id_number: 295
+    title: December 2021 Great Plains
+    start_date: 2021-12-10 12:00:00
+    end_date: 2021-12-11 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 24.0
+        latitude_max: 54.0
+        longitude_min: 245.0
+        longitude_max: 295.0
+    event_type: severe_convection
+  - case_id_number: 296
+    title: June 2021 Great Plains
+    start_date: 2021-06-18 12:00:00
+    end_date: 2021-06-19 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 24.0
+        latitude_max: 54.0
+        longitude_min: 245.0
+        longitude_max: 295.0
+    event_type: severe_convection
+  - case_id_number: 297
+    title: May 2021 Great Plains
+    start_date: 2021-05-03 12:00:00
+    end_date: 2021-05-05 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 24.0
+        latitude_max: 54.0
+        longitude_min: 245.0
+        longitude_max: 295.0
+    event_type: severe_convection
+  - case_id_number: 298
+    title: March 2021 South
+    start_date: 2021-03-27 12:00:00
+    end_date: 2021-03-28 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 24.0
+        latitude_max: 54.0
+        longitude_min: 245.0
+        longitude_max: 295.0
+    event_type: severe_convection
+  - case_id_number: 299
+    title: March 2021 South
+    start_date: 2021-03-25 12:00:00
+    end_date: 2021-03-26 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 24.0
+        latitude_max: 54.0
+        longitude_min: 245.0
+        longitude_max: 295.0
+    event_type: severe_convection
+  - case_id_number: 300
+    title: April 2020 South
+    start_date: 2020-04-22 12:00:00
+    end_date: 2020-04-23 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 24.0
+        latitude_max: 54.0
+        longitude_min: 245.0
+        longitude_max: 295.0
+    event_type: severe_convection
+  - case_id_number: 301
+    title: April 2020 Southeast
+    start_date: 2020-04-12 12:00:00
+    end_date: 2020-04-13 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 24.0
+        latitude_max: 54.0
+        longitude_min: 245.0
+        longitude_max: 295.0
+    event_type: severe_convection
+  - case_id_number: 302
+    title: April 2020 Midwest
+    start_date: 2020-04-08 12:00:00
+    end_date: 2020-04-09 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 24.0
+        latitude_max: 54.0
+        longitude_min: 245.0
+        longitude_max: 295.0
+    event_type: severe_convection
+  - case_id_number: 303
+    title: March 2020 South
+    start_date: 2020-03-28 12:00:00
+    end_date: 2020-03-29 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 24.0
+        latitude_max: 54.0
+        longitude_min: 245.0
+        longitude_max: 295.0
+    event_type: severe_convection
+  - case_id_number: 304
+    title: March 2020 Southeast
+    start_date: 2020-03-02 12:00:00
+    end_date: 2020-03-03 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 24.0
+        latitude_max: 54.0
+        longitude_min: 245.0
+        longitude_max: 295.0
+    event_type: severe_convection
+  - case_id_number: 305
+    title: February 2020 East
+    start_date: 2020-02-05 12:00:00
+    end_date: 2020-02-07 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 24.0
+        latitude_max: 54.0
+        longitude_min: 245.0
+        longitude_max: 295.0
+    event_type: severe_convection
+  - case_id_number: 306
+    title: January 2020 South
+    start_date: 2020-01-10 12:00:00
+    end_date: 2020-01-12 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 24.0
+        latitude_max: 54.0
+        longitude_min: 245.0
+        longitude_max: 295.0
     event_type: severe_convection

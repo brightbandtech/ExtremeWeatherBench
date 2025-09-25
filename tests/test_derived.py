@@ -293,21 +293,6 @@ class TestMaybeDeriveVariablesFunction:
                         raise ValueError(f"Input variable {v} not found in data")
                 return cls.derive_variable(data, **kwargs)
 
-    def test_prepare_wind_data_helper(self, sample_dataset):
-        """Test the prepare_wind_data helper function."""
-        # This tests the helper function within derive_variable
-        # We need to access it indirectly since it's defined within the method
-
-        # Test case 1: Dataset has wind speed
-        result1 = sample_dataset.copy()
-        assert "surface_wind_speed" in result1.data_vars
-
-        # Test case 2: Dataset missing wind speed but has components
-        dataset_no_speed = sample_dataset.drop_vars("surface_wind_speed")
-        assert "surface_wind_speed" not in dataset_no_speed.data_vars
-        assert "surface_eastward_wind" in dataset_no_speed.data_vars
-        assert "surface_northward_wind" in dataset_no_speed.data_vars
-
     def test_derived_variable_missing_required_vars(self, sample_dataset):
         """Test derived variable with missing required variables."""
 
