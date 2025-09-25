@@ -936,5 +936,4 @@ class LeadTimeDetection(AppliedMetric):
     def _compute_applied_metric(
         cls, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
     ) -> Any:
-        # Dummy implementation for lead time detection
         raise NotImplementedError("LeadTimeDetection is not implemented yet")
