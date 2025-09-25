@@ -37,28 +37,11 @@ ewb = evaluate.ExtremeWeatherBench(
     cases=case_yaml,
     evaluation_objects=defaults.BRIGHTBAND_EVALUATION_OBJECTS,
 )
-
-# Get case operators
-case_operators = ewb.case_operators
-
-# Get the number of available CPUs for determining n_processes
-n_threads_per_process = 10
+# Get the number of available CPUs for determining n_processes and divide by 4 threads
+# per process; this is optional. Leaving n_jobs blank will use the joblib backend
+# default (which, if loky, is the number of available CPUs).
+n_threads_per_process = 4
 n_processes = max(1, multiprocessing.cpu_count() // n_threads_per_process)
 
-# Set environment variable to control threads per process
-os.environ["OMP_NUM_THREADS"] = str(n_threads_per_process)
-os.environ["MKL_NUM_THREADS"] = str(n_threads_per_process)
-os.environ["OPENBLAS_NUM_THREADS"] = str(n_threads_per_process)
-os.environ["NUMEXPR_NUM_THREADS"] = str(n_threads_per_process)
-
-
-# Use joblib to parallelize with n processes, each with 10 threads
-results = joblib.Parallel(n_jobs=n_processes, prefer="processes")(
-    joblib.delayed(evaluate.compute_case_operator)(
-        case_op, tolerance_range=48, pre_compute=True
-    )
-    for case_op in case_operators
-)
-
-results = pd.concat(results, ignore_index=True)
+results = ewb.run(n_jobs=n_processes, pre_compute=True)
 results.to_csv("brightband_evaluation_results.csv", index=False)
