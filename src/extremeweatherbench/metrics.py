@@ -817,7 +817,7 @@ class MaxMinMAE(AppliedMetric):
         return {
             "forecast": subset_forecast,
             "target": max_min_target_value,
-            "preserve_dims": cls.base_metric().preserve_dims,
+            "preserve_dims": cls.base_metric.preserve_dims,
         }
 
 
@@ -916,7 +916,6 @@ class DurationME(AppliedMetric):
             .groupby("init_time")
             .map(
                 cls.duration,
-                forecast_resolution_hours=forecast.attrs["forecast_resolution_hours"],
             )
         )
         return {
@@ -930,10 +929,10 @@ class DurationME(AppliedMetric):
 class LeadTimeDetection(AppliedMetric):
     base_metric = MAE
     name = "lead_time_detection"
+    preserve_dims: str = "init_time"
 
     @classmethod
     def _compute_applied_metric(
         cls, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
     ) -> Any:
-        # Dummy implementation for lead time detection
         raise NotImplementedError("LeadTimeDetection is not implemented yet")
