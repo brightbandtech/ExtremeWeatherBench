@@ -916,7 +916,6 @@ class DurationME(AppliedMetric):
             .groupby("init_time")
             .map(
                 cls.duration,
-                forecast_resolution_hours=forecast.attrs["forecast_resolution_hours"],
             )
         )
         return {
