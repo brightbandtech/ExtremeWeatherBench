@@ -134,31 +134,16 @@ freeze_evaluation_object = [
 ]
 
 # Initialize ExtremeWeatherBench
-test_ewb = evaluate.ExtremeWeatherBench(
+ewb = evaluate.ExtremeWeatherBench(
     cases=case_yaml,
     evaluation_objects=freeze_evaluation_object,
 )
 
-# Get case operators
-case_operators = test_ewb.case_operators
-
-# Get the number of available CPUs for determining n_processes
+# Get the number of available CPUs for determining n_processes and divide by 4 threads
+# per process; this is optional. Leaving n_jobs blank will use the joblib backend
+# default (which, if loky, is the number of available CPUs).
 n_threads_per_process = 4
 n_processes = max(1, multiprocessing.cpu_count() // n_threads_per_process)
 
-# Set environment variable to control threads per process
-os.environ["OMP_NUM_THREADS"] = str(n_threads_per_process)
-os.environ["MKL_NUM_THREADS"] = str(n_threads_per_process)
-os.environ["OPENBLAS_NUM_THREADS"] = str(n_threads_per_process)
-os.environ["NUMEXPR_NUM_THREADS"] = str(n_threads_per_process)
-
-# Use joblib to parallelize with n processes, each with 10 threads
-with logging_redirect_tqdm():
-    results = joblib.Parallel(n_jobs=n_processes, prefer="processes")(
-        joblib.delayed(evaluate.compute_case_operator)(
-            case_op, tolerance_range=48, pre_compute=True
-        )
-        for case_op in tqdm(case_operators)
-    )
-
-print(results)
+results = ewb.run(n_jobs=n_processes, pre_compute=True)
+results.to_csv("heatwave_evaluation_results.csv", index=False)
