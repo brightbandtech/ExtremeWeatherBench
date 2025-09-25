@@ -820,7 +820,7 @@ class MaxMinMAE(AppliedMetric):
         return {
             "forecast": subset_forecast,
             "target": max_min_target_value,
-            "preserve_dims": cls.base_metric().preserve_dims,
+            "preserve_dims": cls.base_metric.preserve_dims,
         }
 
 
