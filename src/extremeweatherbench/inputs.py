@@ -1,4 +1,5 @@
 import dataclasses
+import logging
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Callable, Optional, TypeAlias, Union
 
@@ -13,6 +14,8 @@ if TYPE_CHECKING:
     from extremeweatherbench import metrics
 
 IncomingDataInput: TypeAlias = xr.Dataset | xr.DataArray | pl.LazyFrame | pd.DataFrame
+logger = logging.getLogger(__name__)
+
 #: Storage/access options for gridded target datasets.
 ARCO_ERA5_FULL_URI = (
     "gs://gcp-public-data-arco-era5/ar/full_37-1h-0p25deg-chunk-1.zarr-v3"
@@ -33,6 +36,65 @@ IBTRACS_URI = (
     "https://www.ncei.noaa.gov/data/international-best-track-archive-for-"
     "climate-stewardship-ibtracs/v04r01/access/csv/ibtracs.ALL.list.v04r01.csv"
 )
+
+# The core coordinate variables that are always required, even if not dimensions
+# (e.g. latitude and longitude for xarray datasets)
+DEFAULT_COORDINATE_VARIABLES = [
+    "valid_time",
+    "lead_time",
+    "init_time",
+    "latitude",
+    "longitude",
+]
+# ERA5 metadata variable mapping
+ERA5_metadata_variable_mapping = {
+    "time": "valid_time",
+    "2m_temperature": "surface_air_temperature",
+    "2m_dewpoint_temperature": "surface_dewpoint_temperature",
+    "temperature": "air_temperature",
+    "dewpoint": "dewpoint_temperature",
+    "2m_relative_humidity": "surface_relative_humidity",
+    "2m_specific_humidity": "surface_specific_humidity",
+    "10m_u_component_of_wind": "surface_eastward_wind",
+    "10m_v_component_of_wind": "surface_northward_wind",
+    "u_component_of_wind": "eastward_wind",
+    "v_component_of_wind": "northward_wind",
+    "specific_humidity": "specific_humidity",
+    "mean_sea_level_pressure": "air_pressure_at_mean_sea_level",
+}
+
+# CIRA MLWP forecasts metadata variable mapping
+CIRA_metadata_variable_mapping = {
+    "time": "valid_time",
+    "t2": "surface_air_temperature",
+    "t": "air_temperature",
+    "q": "specific_humidity",
+    "u": "eastward_wind",
+    "v": "northward_wind",
+    "p": "air_pressure",
+    "z": "geopotential_height",
+    "r": "relative_humidity",
+    "u10": "surface_eastward_wind",
+    "v10": "surface_northward_wind",
+    "u100": "eastward_wind",
+    "v100": "northward_wind",
+}
+
+# HRES forecast (weatherbench2)metadata variable mapping
+HRES_metadata_variable_mapping = {
+    "2m_temperature": "surface_air_temperature",
+    "2m_dewpoint_temperature": "surface_dewpoint_temperature",
+    "temperature": "air_temperature",
+    "dewpoint": "dewpoint_temperature",
+    "10m_u_component_of_wind": "surface_eastward_wind",
+    "10m_v_component_of_wind": "surface_northward_wind",
+    "u_component_of_wind": "eastward_wind",
+    "v_component_of_wind": "northward_wind",
+    "prediction_timedelta": "lead_time",
+    "time": "init_time",
+    "mean_sea_level_pressure": "air_pressure_at_mean_sea_level",
+    "10m_wind_speed": "surface_wind_speed",
+}
 
 IBTrACS_metadata_variable_mapping = {
     "ISO_TIME": "valid_time",
@@ -390,6 +452,10 @@ class ERA5(TargetBase):
 
     name: str = "ERA5"
     chunks: Optional[Union[dict, str]] = None
+    source: str = ARCO_ERA5_FULL_URI
+    variable_mapping: dict = dataclasses.field(
+        default_factory=lambda: ERA5_metadata_variable_mapping.copy()
+    )
 
     def _open_data_from_source(self) -> IncomingDataInput:
         data = xr.open_zarr(
@@ -439,6 +505,7 @@ class GHCN(TargetBase):
     """
 
     name: str = "GHCN"
+    source: str = DEFAULT_GHCN_URI
 
     def _open_data_from_source(self) -> IncomingDataInput:
         target_data: pl.LazyFrame = pl.scan_parquet(
@@ -481,11 +548,13 @@ class GHCN(TargetBase):
             data = data.set_index(["valid_time", "latitude", "longitude"])
             # GHCN data can have duplicate values right now, dropping here if it occurs
             try:
-                data = data.to_xarray()
-            except ValueError as e:
-                if "non-unique" in str(e):
-                    pass
-                data = data.drop_duplicates().to_xarray()
+                data = data[~data.index.duplicated()].to_xarray()
+            except Exception as e:
+                logger.warning(
+                    "Error converting GHCN data to xarray: %s, returning empty Dataset",
+                    e,
+                )
+                return xr.Dataset()
             return data
         else:
             raise ValueError(f"Data is not a polars LazyFrame: {type(data)}")
@@ -509,6 +578,7 @@ class LSR(TargetBase):
     """
 
     name: str = "local_storm_reports"
+    source: str = LSR_URI
 
     def _open_data_from_source(self) -> IncomingDataInput:
         # force LSR to use anon token to prevent google reauth issues for users
@@ -627,6 +697,7 @@ class PPH(TargetBase):
     """Target class for practically perfect hindcast data."""
 
     name: str = "practically_perfect_hindcast"
+    source: str = PPH_URI
 
     def _open_data_from_source(
         self,
@@ -653,6 +724,7 @@ class IBTrACS(TargetBase):
     """Target class for IBTrACS data."""
 
     name: str = "IBTrACS"
+    source: str = IBTRACS_URI
 
     def _open_data_from_source(self) -> IncomingDataInput:
         # not using storage_options in this case due to NetCDF4Backend not
@@ -979,11 +1051,17 @@ def safely_pull_variables(
             )
         case pl.LazyFrame():
             return sources.safely_pull_variables_polars_lazyframe(
-                dataset, variables, optional_variables, optional_variables_mapping
+                dataset,
+                variables,
+                optional_variables + DEFAULT_COORDINATE_VARIABLES,
+                optional_variables_mapping,
             )
         case pd.DataFrame():
             return sources.safely_pull_variables_pandas_dataframe(
-                dataset, variables, optional_variables, optional_variables_mapping
+                dataset,
+                variables + DEFAULT_COORDINATE_VARIABLES,
+                optional_variables + DEFAULT_COORDINATE_VARIABLES,
+                optional_variables_mapping,
             )
         case _:
             raise TypeError(

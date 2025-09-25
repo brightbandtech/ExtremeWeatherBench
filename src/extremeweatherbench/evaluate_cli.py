@@ -6,10 +6,9 @@ from typing import Optional
 
 import click
 import pandas as pd
-from joblib import Parallel, delayed  # type: ignore[import-untyped]
 
 from extremeweatherbench import defaults
-from extremeweatherbench.evaluate import ExtremeWeatherBench, compute_case_operator
+from extremeweatherbench.evaluate import ExtremeWeatherBench, _run_parallel
 
 
 @click.command()
@@ -159,9 +158,7 @@ def cli_runner(
     # Run evaluation
     if parallel > 1:
         click.echo(f"Running evaluation with {parallel} parallel jobs...")
-        results = _run_parallel_evaluation(
-            case_operators, parallel, precompute=precompute
-        )
+        results = _run_parallel(case_operators, parallel, pre_compute=precompute)
     else:
         click.echo("Running evaluation in serial...")
         results = ewb.run(pre_compute=precompute)
@@ -208,23 +205,6 @@ def _load_config_file(config_path: str) -> tuple:
         raise click.ClickException("Config file must define 'cases_dict' dictionary")
 
     return config_module.evaluation_objects, config_module.cases_dict
-
-
-def _run_parallel_evaluation(
-    case_operators, n_jobs: int, precompute: bool = False
-) -> pd.DataFrame:
-    """Run case operators in parallel using joblib."""
-    results = Parallel(n_jobs=n_jobs)(
-        delayed(compute_case_operator)(case_op, pre_compute=precompute)
-        for case_op in case_operators
-    )
-
-    # Filter out None results and concatenate
-    valid_results = [r for r in results if r is not None]
-    if valid_results:
-        return pd.concat(valid_results, ignore_index=True)
-    else:
-        return pd.DataFrame()
 
 
 if __name__ == "__main__":

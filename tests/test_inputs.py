@@ -1,4 +1,4 @@
-"""Comprehensive tests for extremeweatherbench.inputs module."""
+"""Tests for inputs module."""
 
 from unittest.mock import Mock, patch
 
@@ -307,8 +307,6 @@ class TestMaybeMapVariableNames:
         self, mock_derived, test_input_base, sample_ghcn_dataframe
     ):
         """Test variable mapping with polars LazyFrame."""
-        import polars as pl
-
         mock_derived.return_value = ["surface_air_temperature", "latitude"]
 
         test_input = test_input_base(
@@ -975,6 +973,179 @@ class TestGHCN:
 
         with pytest.raises(ValueError, match="Data is not a polars LazyFrame"):
             ghcn._custom_convert_to_dataset("invalid_data")
+
+    def test_ghcn_custom_convert_to_dataset_no_duplicates(self, sample_ghcn_dataframe):
+        """Test GHCN custom conversion with no duplicates (baseline case)."""
+        ghcn = inputs.GHCN(
+            source="test.parquet",
+            variables=["surface_air_temperature"],
+            variable_mapping={},
+            storage_options={},
+        )
+
+        # Ensure data has no duplicates by creating clean sample
+        clean_data = sample_ghcn_dataframe.unique(
+            subset=["valid_time", "latitude", "longitude"]
+        )
+
+        result = ghcn._custom_convert_to_dataset(clean_data.lazy())
+
+        assert isinstance(result, xr.Dataset)
+        assert "valid_time" in result.dims
+        assert "latitude" in result.dims
+        assert "longitude" in result.dims
+        assert "surface_air_temperature" in result.data_vars
+
+        # Should have no NaN values if no duplicates were dropped
+        original_count = len(clean_data)
+        result_count = result.surface_air_temperature.count().item()
+        assert result_count == original_count
+
+    def test_ghcn_custom_convert_to_dataset_single_duplicate(
+        self, sample_ghcn_dataframe
+    ):
+        """Test GHCN custom conversion with single duplicate entry."""
+        ghcn = inputs.GHCN(
+            source="test.parquet",
+            variables=["surface_air_temperature"],
+            variable_mapping={},
+            storage_options={},
+        )
+
+        # Create data with one intentional duplicate
+        clean_data = sample_ghcn_dataframe.unique(
+            subset=["valid_time", "latitude", "longitude"]
+        )
+
+        # Duplicate the first row
+        first_row = clean_data.slice(0, 1)
+        data_with_duplicate = pl.concat([clean_data, first_row])
+
+        result = ghcn._custom_convert_to_dataset(data_with_duplicate.lazy())
+
+        assert isinstance(result, xr.Dataset)
+        assert "surface_air_temperature" in result.data_vars
+
+        # Should have dropped one duplicate, so count should equal original
+        original_count = len(clean_data)
+        result_count = result.surface_air_temperature.count().item()
+        assert result_count == original_count
+
+    def test_ghcn_custom_convert_to_dataset_many_duplicates(
+        self, sample_ghcn_dataframe
+    ):
+        """Test GHCN custom conversion with many duplicate entries."""
+        ghcn = inputs.GHCN(
+            source="test.parquet",
+            variables=["surface_air_temperature"],
+            variable_mapping={},
+            storage_options={},
+        )
+
+        # Create data with multiple duplicates
+        clean_data = sample_ghcn_dataframe.unique(
+            subset=["valid_time", "latitude", "longitude"]
+        )
+
+        # Create multiple duplicates by repeating first 5 rows
+        duplicates = clean_data.slice(0, 5)
+        data_with_many_duplicates = pl.concat(
+            [
+                clean_data,
+                duplicates,  # First set of duplicates
+                duplicates,  # Second set of duplicates
+                duplicates,  # Third set of duplicates
+            ]
+        )
+
+        result = ghcn._custom_convert_to_dataset(data_with_many_duplicates.lazy())
+
+        assert isinstance(result, xr.Dataset)
+        assert "surface_air_temperature" in result.data_vars
+
+        # Should have dropped all duplicates, so count should equal original
+        original_count = len(clean_data)
+        result_count = result.surface_air_temperature.count().item()
+        assert result_count == original_count
+
+    def test_ghcn_custom_convert_to_dataset_exception_handling(self):
+        """Test GHCN custom conversion exception handling returns empty Dataset."""
+        ghcn = inputs.GHCN(
+            source="test.parquet",
+            variables=["surface_air_temperature"],
+            variable_mapping={},
+            storage_options={},
+        )
+        # Create data with problematic values that might cause xarray conversion issues
+        problematic_data = pl.DataFrame(
+            {
+                "valid_time": [None, None],  # None values in index will cause issues
+                "latitude": [40.0, 41.0],
+                "longitude": [-100.0, -101.0],
+                "surface_air_temperature": [273.15, 274.15],
+            }
+        )
+
+        with patch("extremeweatherbench.inputs.logger") as mock_logger:
+            result = ghcn._custom_convert_to_dataset(problematic_data.lazy())
+
+            # Should return empty Dataset on exception
+            assert isinstance(result, xr.Dataset)
+            assert len(result.data_vars) == 0
+            assert len(result.dims) == 0
+
+            # Should have logged a warning
+            mock_logger.warning.assert_called_once()
+            warning_call = mock_logger.warning.call_args[0]
+            assert "Error converting GHCN data to xarray" in warning_call[0]
+
+    def test_ghcn_custom_convert_to_dataset_empty_dataset_downstream_safe(self):
+        """Test that empty Dataset from exception handling doesn't cause downstream
+        problems."""
+        ghcn = inputs.GHCN(
+            source="test.parquet",
+            variables=["surface_air_temperature"],
+            variable_mapping={},
+            storage_options={},
+        )
+
+        # Create empty dataset (simulating exception case)
+        empty_dataset = xr.Dataset()
+
+        # Test that common downstream operations don't fail
+        # These operations should handle empty datasets gracefully
+
+        # Test alignment operations
+        forecast_data = xr.Dataset(
+            {
+                "surface_air_temperature": (
+                    ["valid_time", "latitude", "longitude"],
+                    np.random.randn(5, 3, 3),
+                )
+            },
+            coords={
+                "valid_time": pd.date_range("2021-06-20", periods=5, freq="6h"),
+                "latitude": [40.0, 41.0, 42.0],
+                "longitude": [-100.0, -101.0, -102.0],
+            },
+        )
+
+        # Should not raise an error even with empty target
+        try:
+            aligned_forecast, aligned_target = ghcn.maybe_align_forecast_to_target(
+                forecast_data, empty_dataset
+            )
+            # Operation should complete without error
+            assert isinstance(aligned_forecast, xr.Dataset)
+            assert isinstance(aligned_target, xr.Dataset)
+        except Exception as e:
+            # If it does fail, it should be a controlled failure, not a crash
+            assert "empty" in str(e).lower() or "no data" in str(e).lower()
+
+        # Test that adding attrs works with empty dataset
+        result_with_attrs = ghcn.add_source_to_dataset_attrs(empty_dataset)
+        assert isinstance(result_with_attrs, xr.Dataset)
+        assert result_with_attrs.attrs.get("source") == "GHCN"
 
     @patch("extremeweatherbench.inputs.align_forecast_to_target")
     def test_ghcn_maybe_align_forecast_to_target(

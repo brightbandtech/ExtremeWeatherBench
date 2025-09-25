@@ -1,12 +1,4 @@
-"""Comprehensive unit tests for the extremeweatherbench.derived module.
-
-This test suite covers:
-- Abstract base class DerivedVariable
-- All concrete derived variable implementations
-- Utility functions for variable derivation
-- Edge cases and error conditions
-- Mock implementations for testing
-"""
+"""Tests for the derived module."""
 
 import numpy as np
 import pandas as pd
@@ -119,7 +111,7 @@ class TestValidDerivedVariable(derived.DerivedVariable):
     required_variables = ["test_variable_1", "test_variable_2"]
 
     @classmethod
-    def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
+    def derive_variable(cls, data: xr.Dataset, **kwargs) -> xr.DataArray:
         """Test implementation that sums two variables."""
         return data[cls.required_variables[0]] + data[cls.required_variables[1]]
 
@@ -130,7 +122,7 @@ class TestMinimalDerivedVariable(derived.DerivedVariable):
     required_variables = ["single_variable"]
 
     @classmethod
-    def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
+    def derive_variable(cls, data: xr.Dataset, **kwargs) -> xr.DataArray:
         """Test implementation that returns the variable unchanged."""
         return data[cls.required_variables[0]]
 
@@ -141,7 +133,7 @@ class TestDerivedVariableWithoutName(derived.DerivedVariable):
     required_variables = ["single_variable"]
 
     @classmethod
-    def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
+    def derive_variable(cls, data: xr.Dataset, **kwargs) -> xr.DataArray:
         """Test implementation that returns DataArray without name."""
         result = data[cls.required_variables[0]]
         result.name = None
@@ -300,21 +292,6 @@ class TestMaybeDeriveVariablesFunction:
                     if v not in data.data_vars:
                         raise ValueError(f"Input variable {v} not found in data")
                 return cls.derive_variable(data, **kwargs)
-
-    def test_prepare_wind_data_helper(self, sample_dataset):
-        """Test the internal _prepare_wind_data helper function."""
-        # This tests the helper function within derive_variable
-        # We need to access it indirectly since it's defined within the method
-
-        # Test case 1: Dataset has wind speed
-        result1 = sample_dataset.copy()
-        assert "surface_wind_speed" in result1.data_vars
-
-        # Test case 2: Dataset missing wind speed but has components
-        dataset_no_speed = sample_dataset.drop_vars("surface_wind_speed")
-        assert "surface_wind_speed" not in dataset_no_speed.data_vars
-        assert "surface_eastward_wind" in dataset_no_speed.data_vars
-        assert "surface_northward_wind" in dataset_no_speed.data_vars
 
     def test_derived_variable_missing_required_vars(self, sample_dataset):
         """Test derived variable with missing required variables."""
