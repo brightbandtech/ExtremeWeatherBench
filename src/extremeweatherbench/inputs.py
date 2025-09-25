@@ -389,6 +389,7 @@ class ERA5(TargetBase):
 
     name: str = "ERA5"
     chunks: Optional[Union[dict, str]] = None
+    source: str = ARCO_ERA5_FULL_URI
 
     def _open_data_from_source(self) -> utils.IncomingDataInput:
         data = xr.open_zarr(
@@ -438,6 +439,7 @@ class GHCN(TargetBase):
     """
 
     name: str = "GHCN"
+    source: str = DEFAULT_GHCN_URI
 
     def _open_data_from_source(self) -> utils.IncomingDataInput:
         target_data: pl.LazyFrame = pl.scan_parquet(
@@ -541,6 +543,7 @@ class LSR(TargetBase):
     """
 
     name: str = "local_storm_reports"
+    source: str = LSR_URI
 
     def _open_data_from_source(self) -> utils.IncomingDataInput:
         # force LSR to use anon token to prevent google reauth issues for users
@@ -669,6 +672,7 @@ class PPH(TargetBase):
     """Target class for practically perfect hindcast data."""
 
     name: str = "practically_perfect_hindcast"
+    source: str = PPH_URI
 
     def _open_data_from_source(
         self,
@@ -698,6 +702,7 @@ class IBTrACS(TargetBase):
     """Target class for IBTrACS data."""
 
     name: str = "IBTrACS"
+    source: str = IBTRACS_URI
 
     def _open_data_from_source(self) -> utils.IncomingDataInput:
         # not using storage_options in this case due to NetCDF4Backend not
