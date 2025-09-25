@@ -441,7 +441,9 @@ class ERA5(TargetBase):
     name: str = "ERA5"
     chunks: Optional[Union[dict, str]] = None
     source: str = ARCO_ERA5_FULL_URI
-    variable_mapping: dict = ERA5_metadata_variable_mapping
+    variable_mapping: dict = dataclasses.field(
+        default_factory=ERA5_metadata_variable_mapping
+    )
 
     def _open_data_from_source(self) -> utils.IncomingDataInput:
         data = xr.open_zarr(
