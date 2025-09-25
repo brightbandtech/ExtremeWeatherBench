@@ -41,6 +41,8 @@ ERA5_metadata_variable_mapping = {
     "time": "valid_time",
     "2m_temperature": "surface_air_temperature",
     "2m_dewpoint_temperature": "surface_dewpoint_temperature",
+    "temperature": "air_temperature",
+    "dewpoint": "dewpoint_temperature",
     "2m_relative_humidity": "surface_relative_humidity",
     "2m_specific_humidity": "surface_specific_humidity",
     "10m_u_component_of_wind": "surface_eastward_wind",
@@ -72,6 +74,8 @@ CIRA_metadata_variable_mapping = {
 # HRES forecast (weatherbench2)metadata variable mapping
 HRES_metadata_variable_mapping = {
     "2m_temperature": "surface_air_temperature",
+    "2m_dewpoint_temperature": "surface_dewpoint_temperature",
+    "temperature": "air_temperature",
     "dewpoint": "dewpoint_temperature",
     "10m_u_component_of_wind": "surface_eastward_wind",
     "10m_v_component_of_wind": "surface_northward_wind",
