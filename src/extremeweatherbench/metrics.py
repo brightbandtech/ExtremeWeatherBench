@@ -1028,12 +1028,4 @@ class LeadTimeDetection(AppliedMetric):
     def _compute_applied_metric(
         cls, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
     ) -> Any:
-        return {
-            "forecast": forecast,
-            "target": target,
-            "preserve_dims": cls.preserve_dims,
-            "threshold": 1,
-            "variable": "atmospheric_river_land_intersection",
-            "comparison": "==",
-            "spatial_aggregation": "any",
-        }
+        raise NotImplementedError("LeadTimeDetection is not implemented yet")
