@@ -6,10 +6,12 @@ from extremeweatherbench import cases, evaluate, inputs, metrics
 logger = logging.getLogger("extremeweatherbench")
 logger.setLevel(logging.INFO)
 
+# Load case data from the default events.yaml
+# Users can also define their own cases_dict structure
 case_yaml = cases.load_ewb_events_yaml_into_case_collection()
 
-
-era5_heatwave_target = inputs.ERA5(
+# ERA5 target
+era5_target = inputs.ERA5(
     source=inputs.ARCO_ERA5_FULL_URI,
     variables=["surface_air_temperature"],
     variable_mapping={
@@ -38,7 +40,8 @@ hres_forecast = inputs.ZarrForecast(
     storage_options={"remote_options": {"anon": True}},
 )
 
-# Example of one evaluation object for heatwave
+# Example of two evaluation objects for heatwaves, one for GHCN and one for ERA5
+# evaluated against HRES
 heatwave_evaluation_object = [
     inputs.EvaluationObject(
         event_type="heat_wave",
@@ -61,7 +64,7 @@ heatwave_evaluation_object = [
             metrics.DurationME,
             metrics.MaxMinMAE,
         ],
-        target=era5_heatwave_target,
+        target=era5_target,
         forecast=hres_forecast,
     ),
 ]
@@ -72,10 +75,9 @@ ewb = evaluate.ExtremeWeatherBench(
     evaluation_objects=heatwave_evaluation_object,
 )
 
-# Get case operators
-case_operators = ewb.case_operators
-
-# Get the number of available CPUs for determining n_processes
+# Get the number of available CPUs for determining n_processes and divide by 4 threads
+# per process; this is optional. Leaving n_jobs blank will use the joblib backend
+# default (which, if loky, is the number of available CPUs).
 n_threads_per_process = 4
 n_processes = max(1, multiprocessing.cpu_count() // n_threads_per_process)
 
