@@ -72,6 +72,7 @@ CIRA_metadata_variable_mapping = {
 # HRES forecast (weatherbench2)metadata variable mapping
 HRES_metadata_variable_mapping = {
     "2m_temperature": "surface_air_temperature",
+    "dewpoint": "dewpoint_temperature",
     "10m_u_component_of_wind": "surface_eastward_wind",
     "10m_v_component_of_wind": "surface_northward_wind",
     "u_component_of_wind": "eastward_wind",
