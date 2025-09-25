@@ -8,8 +8,9 @@ import pandas as pd
 from extremeweatherbench import cases, defaults, evaluate
 
 
-def configure_root_logger():
-    root = logging.getLogger()
+def configure_logger(level=logging.INFO):
+    """Configure the logger for the extremeweatherbench package."""
+    logger = logging.getLogger("extremeweatherbench")
     console_handler = logging.StreamHandler()
     file_handler = logging.FileHandler("joblib.log")
     formatter = logging.Formatter(
@@ -17,17 +18,13 @@ def configure_root_logger():
     )
     file_handler.setFormatter(formatter)
     console_handler.setFormatter(formatter)
-    root.addHandler(file_handler)
-    root.addHandler(console_handler)
-    root.setLevel(logging.DEBUG)
-    return root
+    logger.addHandler(file_handler)
+    logger.addHandler(console_handler)
+    logger.setLevel(level)
+    return logger
 
 
-# Suppress noisy log messages
-logging.getLogger("urllib3.connectionpool").setLevel(logging.CRITICAL)
-logging.getLogger("botocore.httpchecksum").setLevel(logging.CRITICAL)
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = configure_logger()
 
 # Load events yaml
 case_yaml = cases.load_ewb_events_yaml_into_case_collection()
