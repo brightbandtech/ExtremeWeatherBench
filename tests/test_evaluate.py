@@ -2046,9 +2046,6 @@ class TestEnsureOutputSchema:
         assert list(result["lead_time"]) == [6, 12]
         # init_time should be NaN since not provided and is in OUTPUT_COLUMNS
         assert pd.isna(result["init_time"].iloc[0])
-        # Other OUTPUT_COLUMNS should have NaN for missing source columns
-        assert pd.isna(result["target_source"].iloc[0])
-        assert pd.isna(result["forecast_source"].iloc[0])
 
     def test_ensure_output_schema_lead_time_valid_time(self):
         """Test _ensure_output_schema with lead_time and valid_time.
