@@ -37,6 +37,15 @@ IBTRACS_URI = (
     "climate-stewardship-ibtracs/v04r01/access/csv/ibtracs.ALL.list.v04r01.csv"
 )
 
+# The core coordinate variables that are always required, even if not dimensions
+# (e.g. latitude and longitude for xarray datasets)
+DEFAULT_COORDINATE_VARIABLES = [
+    "valid_time",
+    "lead_time",
+    "init_time",
+    "latitude",
+    "longitude",
+]
 # ERA5 metadata variable mapping
 ERA5_metadata_variable_mapping = {
     "time": "valid_time",
