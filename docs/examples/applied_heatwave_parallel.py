@@ -12,32 +12,21 @@ case_yaml = cases.load_ewb_events_yaml_into_case_collection()
 
 # ERA5 target
 era5_target = inputs.ERA5(
-    source=inputs.ARCO_ERA5_FULL_URI,
     variables=["surface_air_temperature"],
-    variable_mapping={
-        "2m_temperature": "surface_air_temperature",
-        "time": "valid_time",
-    },
-    storage_options={"remote_options": {"anon": True}},
     chunks=None,
 )
 
 # GHCN target
 ghcn_target = inputs.GHCN(
-    source=inputs.DEFAULT_GHCN_URI,
     variables=["surface_air_temperature"],
 )
 
 # Define forecast (HRES)
 hres_forecast = inputs.ZarrForecast(
+    name="hres_forecast",
     source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
     variables=["surface_air_temperature"],
-    variable_mapping={
-        "2m_temperature": "surface_air_temperature",
-        "prediction_timedelta": "lead_time",
-        "time": "init_time",
-    },
-    storage_options={"remote_options": {"anon": True}},
+    variable_mapping=inputs.HRES_metadata_variable_mapping,
 )
 
 # Example of two evaluation objects for heatwaves, one for GHCN and one for ERA5
@@ -81,5 +70,8 @@ ewb = evaluate.ExtremeWeatherBench(
 n_threads_per_process = 4
 n_processes = max(1, multiprocessing.cpu_count() // n_threads_per_process)
 
+# Run the evaluation using pre_compute to avoid recomputing the datasets for each metric
 results = ewb.run(n_jobs=n_processes, pre_compute=True)
+
+# Save the results to a csv file
 results.to_csv("heatwave_evaluation_results.csv", index=False)

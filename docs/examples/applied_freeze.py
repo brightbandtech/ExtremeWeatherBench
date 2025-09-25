@@ -3,17 +3,11 @@ import logging
 import numpy as np
 import xarray as xr
 
-from extremeweatherbench import evaluate, inputs, metrics, utils
+from extremeweatherbench import evaluate, inputs, metrics, cases
 
-# Suppress noisy log messages
-logging.getLogger("urllib3.connectionpool").setLevel(logging.CRITICAL)
-logging.getLogger("botocore.httpchecksum").setLevel(logging.CRITICAL)
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-# Load events yaml
-case_yaml = utils.load_events_yaml()
-
+# Set the logger level to INFO
+logger = logging.getLogger("extremeweatherbench")
+logger.setLevel(logging.INFO)
 
 # Preprocess function for CIRA data using Brightband kerchunk parquets
 def _preprocess_bb_cira_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
@@ -38,50 +32,41 @@ def _preprocess_bb_cira_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
     )
     return ds
 
+# Load case data from the default events.yaml
+# Users can also define their own cases_dict structure
+case_yaml = cases.load_ewb_events_yaml_into_case_collection()
 
 # Define targets
 # ERA5 target
 era5_freeze_target = inputs.ERA5(
-    source=inputs.ARCO_ERA5_FULL_URI,
     variables=[
         "surface_air_temperature",
         "surface_eastward_wind",
         "surface_northward_wind",
     ],
-    variable_mapping={
-        "2m_temperature": "surface_air_temperature",
-        "10m_u_component_of_wind": "surface_eastward_wind",
-        "10m_v_component_of_wind": "surface_northward_wind",
-        "time": "valid_time",
-    },
-    storage_options={"remote_options": {"anon": True}},
+
     chunks=None,
 )
 
 # GHCN target
 ghcn_freeze_target = inputs.GHCN(
-    source=inputs.DEFAULT_GHCN_URI,
     variables=[
         "surface_air_temperature",
-        "surface_wind_speed",
-        "surface_wind_from_direction",
+        "surface_eastward_wind",
+        "surface_northward_wind",
     ],
 )
 
 # Define forecast (FCNv2 CIRA Virtualizarr)
 fcnv2_forecast = inputs.KerchunkForecast(
+    name="fcnv2_forecast",
     source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
     variables=[
         "surface_air_temperature",
-        "surface_wind_speed",
-        "surface_wind_from_direction",
+        "surface_eastward_wind",
+        "surface_northward_wind",
     ],
-    variable_mapping={
-        "t2": "surface_air_temperature",
-        "u10": "surface_eastward_wind",
-        "v10": "surface_northward_wind",
-    },
-    storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
+    variable_mapping=inputs.CIRA_metadata_variable_mapping,
     preprocess=_preprocess_bb_cira_forecast_dataset,
 )
 
@@ -112,17 +97,17 @@ freeze_evaluation_object = [
 ]
 
 # Initialize ExtremeWeatherBench
-test_ewb = evaluate.ExtremeWeatherBench(
+ewb = evaluate.ExtremeWeatherBench(
     cases=case_yaml,
     evaluation_objects=freeze_evaluation_object,
 )
 
 # Run the workflow
-outputs = test_ewb.run(
+outputs = ewb.run(
     # tolerance range is the number of hours before and after the timestamp a
     # validating occurrence is checked in the forecasts
     tolerance_range=48,
 )
 
 # Print the outputs; can be saved if desired
-print(outputs.head())
+logger.info(outputs.head())
