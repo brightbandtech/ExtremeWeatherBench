@@ -63,7 +63,6 @@ CIRA_metadata_variable_mapping = {
     "v": "northward_wind",
     "p": "air_pressure",
     "z": "geopotential_height",
-    "q": "specific_humidity",
     "r": "relative_humidity",
     "u10": "surface_eastward_wind",
     "v10": "surface_northward_wind",
