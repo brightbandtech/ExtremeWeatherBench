@@ -9,6 +9,7 @@ from extremeweatherbench import evaluate, inputs, metrics, cases
 logger = logging.getLogger("extremeweatherbench")
 logger.setLevel(logging.INFO)
 
+
 # Preprocess function for CIRA data using Brightband kerchunk parquets
 def _preprocess_bb_cira_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
     """An example preprocess function that renames the time coordinate to lead_time,
@@ -32,6 +33,7 @@ def _preprocess_bb_cira_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
     )
     return ds
 
+
 # Load case data from the default events.yaml
 # Users can also define their own cases_dict structure
 case_yaml = cases.load_ewb_events_yaml_into_case_collection()
@@ -44,7 +46,6 @@ era5_freeze_target = inputs.ERA5(
         "surface_eastward_wind",
         "surface_northward_wind",
     ],
-
     chunks=None,
 )
 

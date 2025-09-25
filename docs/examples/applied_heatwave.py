@@ -1,7 +1,5 @@
 import logging
 
-import numpy as np
-import xarray as xr
 
 from extremeweatherbench import evaluate, inputs, metrics, cases
 
