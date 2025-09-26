@@ -24,7 +24,7 @@ class ExtremeWeatherBench:
     """A class to build and run the ExtremeWeatherBench workflow.
 
     This class is used to run the ExtremeWeatherBench workflow. It is ultimately a
-    wrapper around case operators and evaluation objects to create either a parallel or 
+    wrapper around case operators and evaluation objects to create either a parallel or
     serial run to evaluate cases and metrics, returning a concatenated dataframe of the
     results.
 
