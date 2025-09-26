@@ -5,15 +5,19 @@ import logging
 from abc import ABC, abstractmethod
 from collections import namedtuple
 from pathlib import Path
-from typing import Any, Type
+from typing import TYPE_CHECKING, Any, Literal, Mapping, Type, Union
 
 import geopandas as gpd  # type: ignore[import-untyped]
 import numpy as np
+import pandas as pd
 import regionmask
 import xarray as xr
 from shapely import MultiPolygon, Polygon  # type: ignore[import-untyped]
 
 from extremeweatherbench import utils
+
+if TYPE_CHECKING:
+    from extremeweatherbench import cases
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +53,42 @@ class Region(ABC):
             "BoundingCoordinates",
             ["longitude_min", "latitude_min", "longitude_max", "latitude_max"],
         )(*self.geopandas.total_bounds)
+
+    def intersects(self, other: "Region") -> bool:
+        """Check if this region intersects with another region."""
+        return self.geopandas.intersects(other.geopandas).any().any()
+
+    def contains(self, other: "Region") -> bool:
+        """Check if this region completely contains another region."""
+        return self.geopandas.contains(other.geopandas).any().any()
+
+    def area_overlap_fraction(self, other: "Region") -> float:
+        """Calculate fraction of other region's area that overlaps with this region.
+
+        Args:
+            other: The other region (case region) to check
+
+        Returns:
+            Fraction of other region's area within this region (0.0 to 1.0)
+        """
+        # Calculate intersection area between regions
+        intersection = self.geopandas.overlay(other.geopandas, how="intersection")
+        if intersection.empty:
+            return 0.0
+
+        # Convert to equal area projection for accurate area calculation
+        # Using World Mollweide projection (ESRI:54009)
+        intersection_projected = intersection.to_crs("ESRI:54009")
+        other_projected = other.geopandas.to_crs("ESRI:54009")
+
+        # Calculate areas in square meters
+        intersection_area = intersection_projected.geometry.area.sum()
+        other_area = other_projected.geometry.area.sum()
+
+        if other_area == 0:
+            return 0.0
+
+        return intersection_area / other_area
 
 
 class CenteredRegion(Region):
@@ -309,3 +349,147 @@ def _create_geopandas_from_bounds(
             ]
         )
         return gpd.GeoDataFrame(geometry=[polygon], crs="EPSG:4326")
+
+
+class RegionSubsetter:
+    """A utility class for subsetting ExtremeWeatherBench objects by region.
+
+    Attributes:
+        region: The region to subset to. Can be a Region object or a
+            dictionary of bounds with keys "latitude_min", "latitude_max",
+            "longitude_min", and "longitude_max".
+        method: The method to use for subsetting. Options:
+            - "intersects": Include cases where ANY part of a case intersects region
+            - "percent": Include cases where percent of case area overlaps with region.
+            - "all": Only include cases where entirety of a case is within region
+        percent_threshold: Threshold for percent overlap (0.0 to 1.0)
+    """
+
+    def __init__(
+        self,
+        region: Union[Region, Mapping[str, float]],
+        method: Literal["intersects", "percent", "all"] = "intersects",
+        percent_threshold: float = 0.5,
+    ):
+        """Initialize the RegionSubsetter.
+
+        Args:
+            region: The region to subset to. Can be a Region object or a
+                dictionary of bounds with keys "latitude_min", "latitude_max",
+                "longitude_min", and "longitude_max".
+            method: The method to use for subsetting. Options:
+                - "intersects": Include cases where ANY part of a case intersects region
+                - "percent": Include cases where percent of case area overlaps with
+                region
+                - "all": Only include cases where entirety of a case is within region
+            percent_threshold: Threshold for percent overlap (0.0 to 1.0)
+        """
+        # Convert dictionary input to BoundingBoxRegion if needed
+        if isinstance(region, Mapping):
+            self.region = BoundingBoxRegion.create_region(
+                latitude_min=region["latitude_min"],
+                latitude_max=region["latitude_max"],
+                longitude_min=region["longitude_min"],
+                longitude_max=region["longitude_max"],
+            )
+        else:
+            self.region = region
+
+        self.method = method
+        self.percent_threshold = percent_threshold
+
+    def subset_case_collection(
+        self, case_collection: "cases.IndividualCaseCollection"
+    ) -> "cases.IndividualCaseCollection":
+        """Subset an IndividualCaseCollection by region.
+
+        Args:
+            case_collection: The case collection to subset
+
+        Returns:
+            A new IndividualCaseCollection with cases subset to the region
+        """
+        # Avoid circular import
+        from extremeweatherbench import cases
+
+        filtered_cases = []
+
+        for case in case_collection.cases:
+            if self._should_include_case(case):
+                filtered_cases.append(case)
+
+        return cases.IndividualCaseCollection(cases=filtered_cases)
+
+    def _should_include_case(self, case: "cases.IndividualCase") -> bool:
+        """Determine if a case should be included based on the subsetting criteria."""
+        case_location = case.location
+
+        if self.method == "intersects":
+            return self.region.intersects(case_location)
+
+        elif self.method == "all":
+            return self.region.contains(case_location)
+
+        elif self.method == "percent":
+            # Calculate fraction of case area within the region
+            overlap_fraction = self.region.area_overlap_fraction(case_location)
+            return overlap_fraction >= self.percent_threshold
+
+        else:
+            raise ValueError(f"Unknown method: {self.method}")
+
+
+# Convenience functions for direct usage
+def subset_cases_to_region(
+    case_collection: "cases.IndividualCaseCollection",
+    region: Union[Region, Mapping[str, float]],
+    method: Literal["intersects", "percent", "all"] = "intersects",
+    percent_threshold: float = 0.5,
+) -> "cases.IndividualCaseCollection":
+    """Subset an IndividualCaseCollection to a region.
+
+    This is a convenience function that creates a RegionSubsetter and applies it to
+    a case collection.
+
+    Args:
+        case_collection: The case collection to subset
+        region: The region to subset to. Can be a Region object or a
+            dictionary of bounds with keys "latitude_min", "latitude_max",
+            "longitude_min", and "longitude_max".
+        method: The subsetting method for RegionSubsetter
+        percent_threshold: Threshold for percent overlap
+
+    Returns:
+        A new IndividualCaseCollection with cases subset to the region
+    """
+    subsetter = RegionSubsetter(region, method, percent_threshold)
+    return subsetter.subset_case_collection(case_collection)
+
+
+def subset_results_to_region(
+    region: RegionSubsetter,
+    results_df: pd.DataFrame,
+    case_collection: "cases.IndividualCaseCollection",
+) -> pd.DataFrame:
+    """Subset results DataFrame by region using case_id_number.
+
+    This is a convenience function that creates a RegionSubsetter and applies it to
+    the results DataFrame that is output from ExtremeWeatherBench.run().
+
+    Args:
+        region: The region to subset to. Can be a Region object or a
+            dictionary of bounds with keys "latitude_min", "latitude_max",
+            "longitude_min", and "longitude_max".
+        results_df: DataFrame with results from ExtremeWeatherBench.run()
+        case_collection: The original case collection to determine which
+            case_id_numbers correspond to cases in the region
+
+    Returns:
+        Subset DataFrame containing only results for cases in the region
+    """
+    # Get the case IDs that should be included
+    subset_cases = region.subset_case_collection(case_collection)
+    included_case_ids = {case.case_id_number for case in subset_cases.cases}
+
+    # Filter the results DataFrame
+    return results_df[results_df["case_id_number"].isin(included_case_ids)]

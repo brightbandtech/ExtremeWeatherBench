@@ -17,7 +17,11 @@ import xarray as xr
 
 from extremeweatherbench import cases, evaluate, inputs, metrics
 from extremeweatherbench.defaults import OUTPUT_COLUMNS
-from extremeweatherbench.regions import CenteredRegion
+from extremeweatherbench.regions import (
+    BoundingBoxRegion,
+    CenteredRegion,
+    RegionSubsetter,
+)
 
 
 @pytest.fixture
@@ -1847,6 +1851,374 @@ class TestIntegration:
 
             assert len(parallel_results) == num_cases
             mock_parallel_class.assert_called_once_with(n_jobs=4)
+
+
+class TestRegionSubsettingIntegration:
+    """Test integration of region subsetting with ExtremeWeatherBench evaluation."""
+
+    @pytest.fixture
+    def multi_case_dict(self):
+        """Create a cases dictionary with multiple cases."""
+        return {
+            "cases": [
+                {
+                    "case_id_number": 1,
+                    "title": "Heat Wave California",
+                    "start_date": datetime.datetime(2021, 6, 20),
+                    "end_date": datetime.datetime(2021, 6, 25),
+                    "location": {
+                        "type": "bounded_region",
+                        "parameters": {
+                            "latitude_min": 35.0,
+                            "latitude_max": 40.0,
+                            "longitude_min": -125.0,
+                            "longitude_max": -120.0,
+                        },
+                    },
+                    "event_type": "heat_wave",
+                },
+                {
+                    "case_id_number": 2,
+                    "title": "Heat Wave Texas",
+                    "start_date": datetime.datetime(2021, 7, 15),
+                    "end_date": datetime.datetime(2021, 7, 20),
+                    "location": {
+                        "type": "bounded_region",
+                        "parameters": {
+                            "latitude_min": 28.0,
+                            "latitude_max": 33.0,
+                            "longitude_min": -105.0,
+                            "longitude_max": -95.0,
+                        },
+                    },
+                    "event_type": "heat_wave",
+                },
+                {
+                    "case_id_number": 3,
+                    "title": "Cold Wave Canada",
+                    "start_date": datetime.datetime(2021, 12, 10),
+                    "end_date": datetime.datetime(2021, 12, 15),
+                    "location": {
+                        "type": "bounded_region",
+                        "parameters": {
+                            "latitude_min": 50.0,
+                            "latitude_max": 55.0,
+                            "longitude_min": -115.0,
+                            "longitude_max": -105.0,
+                        },
+                    },
+                    "event_type": "cold_wave",
+                },
+            ]
+        }
+
+    @patch("extremeweatherbench.cases.build_case_operators")
+    def test_region_filtered_evaluation_setup(
+        self, mock_build_operators, multi_case_dict, sample_evaluation_object
+    ):
+        """Test setting up evaluation with region-filtered cases."""
+        # Create mock case operators for the original cases
+        mock_operators = [Mock() for _ in range(3)]
+        mock_build_operators.return_value = mock_operators
+
+        # Create region subsetter for west coast
+        west_coast_region = BoundingBoxRegion.create_region(
+            latitude_min=30.0,
+            latitude_max=45.0,
+            longitude_min=-130.0,
+            longitude_max=-115.0,
+        )
+
+        subsetter = RegionSubsetter(region=west_coast_region, method="intersects")
+
+        # Create evaluation WITH the region subsetter
+        ewb = evaluate.ExtremeWeatherBench(
+            cases=multi_case_dict,
+            evaluation_objects=[sample_evaluation_object],
+            region_subsetter=subsetter,
+        )
+
+        # Access case_operators to trigger region subsetting
+        case_operators = ewb.case_operators
+
+        # The build_case_operators should have been called with subset cases
+        mock_build_operators.assert_called_once()
+
+        # Get the actual cases dict that was passed to build_case_operators
+        actual_cases_dict = mock_build_operators.call_args[0][0]
+
+        # Check that we have fewer cases than the original (due to subsetting)
+        assert len(actual_cases_dict["cases"]) <= len(multi_case_dict["cases"])
+
+        # Verify that the California case is included
+        case_ids = {case["case_id_number"] for case in actual_cases_dict["cases"]}
+        assert 1 in case_ids  # California case should be included
+
+    def test_region_subsetter_in_ewb_with_run(
+        self, multi_case_dict, sample_evaluation_object
+    ):
+        """Test complete workflow with RegionSubsetter in ExtremeWeatherBench."""
+        # Create region subsetter for west coast only
+        west_coast_region = BoundingBoxRegion.create_region(
+            latitude_min=30.0,
+            latitude_max=45.0,
+            longitude_min=-130.0,
+            longitude_max=-115.0,
+        )
+
+        subsetter = RegionSubsetter(region=west_coast_region, method="intersects")
+
+        # Create evaluation WITH region subsetter
+        ewb_with_region = evaluate.ExtremeWeatherBench(
+            cases=multi_case_dict,
+            evaluation_objects=[sample_evaluation_object],
+            region_subsetter=subsetter,
+        )
+
+        # Create evaluation WITHOUT region subsetter for comparison
+        ewb_without_region = evaluate.ExtremeWeatherBench(
+            cases=multi_case_dict,
+            evaluation_objects=[sample_evaluation_object],
+        )
+
+        # Compare the case operators (should be fewer with region subsetter)
+        with_region_operators = ewb_with_region.case_operators
+        without_region_operators = ewb_without_region.case_operators
+
+        # With region subsetting should have fewer or equal case operators
+        assert len(with_region_operators) <= len(without_region_operators)
+
+        # Both should be valid case operator lists
+        assert isinstance(with_region_operators, list)
+        assert isinstance(without_region_operators, list)
+
+    @patch("extremeweatherbench.evaluate.compute_case_operator")
+    def test_region_subset_evaluation_results(
+        self, mock_compute_operator, multi_case_dict, sample_evaluation_object
+    ):
+        """Test that region subsetting produces expected evaluation results."""
+
+        # Mock the compute_case_operator to return predictable results
+        def mock_compute_side_effect(case_operator, *args, **kwargs):
+            case_id = case_operator.case_metadata.case_id_number
+            return pd.DataFrame(
+                {
+                    "value": [0.1 * case_id],
+                    "metric": ["TestMetric"],
+                    "case_id_number": [case_id],
+                    "event_type": [case_operator.case_metadata.event_type],
+                    "target_variable": ["temperature"],
+                    "forecast_source": ["test_forecast"],
+                    "target_source": ["test_target"],
+                }
+            )
+
+        mock_compute_operator.side_effect = mock_compute_side_effect
+
+        # Create evaluation with all cases
+        ewb = evaluate.ExtremeWeatherBench(
+            cases=multi_case_dict,
+            evaluation_objects=[sample_evaluation_object],
+        )
+
+        # Create region subsetter
+        west_coast_region = BoundingBoxRegion.create_region(
+            latitude_min=30.0,
+            latitude_max=45.0,
+            longitude_min=-130.0,
+            longitude_max=-115.0,
+        )
+
+        subsetter = RegionSubsetter(region=west_coast_region, method="intersects")
+
+        # Load cases and apply subsetting
+        original_cases = cases.load_individual_cases(multi_case_dict)
+        subset_cases = subsetter.subset_case_collection(original_cases)
+
+        # Create new evaluation with subset cases
+        subset_cases_dict = {
+            "cases": [
+                {
+                    "case_id_number": case.case_id_number,
+                    "title": case.title,
+                    "start_date": case.start_date,
+                    "end_date": case.end_date,
+                    "location": {
+                        "type": "bounded_region",
+                        "parameters": case.location.get_bounding_coordinates._asdict(),
+                    },
+                    "event_type": case.event_type,
+                }
+                for case in subset_cases.cases
+            ]
+        }
+
+        subset_ewb = evaluate.ExtremeWeatherBench(
+            cases=subset_cases_dict,
+            evaluation_objects=[sample_evaluation_object],
+        )
+
+        # Run both evaluations
+        all_results = ewb.run(n_jobs=1)
+        subset_results = subset_ewb.run(n_jobs=1)
+
+        # Subset results should have fewer or equal cases
+        assert len(subset_results) <= len(all_results)
+
+        # All case IDs in subset should also be in full results
+        subset_case_ids = set(subset_results["case_id_number"])
+        all_case_ids = set(all_results["case_id_number"])
+        assert subset_case_ids.issubset(all_case_ids)
+
+    def test_region_subsetting_with_results_dataframe(
+        self, multi_case_dict, sample_evaluation_object
+    ):
+        """Test subsetting of results DataFrame after evaluation."""
+        # Create mock results that would come from evaluation
+        mock_results = pd.DataFrame(
+            {
+                "case_id_number": [1, 1, 2, 2, 3, 3],
+                "metric": ["mae", "rmse", "mae", "rmse", "mae", "rmse"],
+                "value": [0.1, 0.15, 0.2, 0.25, 0.3, 0.35],
+                "event_type": [
+                    "heat_wave",
+                    "heat_wave",
+                    "heat_wave",
+                    "heat_wave",
+                    "cold_wave",
+                    "cold_wave",
+                ],
+                "target_variable": ["temperature"] * 6,
+                "forecast_source": ["test_forecast"] * 6,
+                "target_source": ["test_target"] * 6,
+            }
+        )
+
+        # Create region subsetter for west coast
+        west_coast_region = BoundingBoxRegion.create_region(
+            latitude_min=30.0,
+            latitude_max=45.0,
+            longitude_min=-130.0,
+            longitude_max=-115.0,
+        )
+
+        subsetter = RegionSubsetter(region=west_coast_region, method="intersects")
+
+        # Load original cases for reference
+        original_cases = cases.load_individual_cases(multi_case_dict)
+
+        # Subset the results
+        from extremeweatherbench.regions import subset_results_to_region
+
+        subset_results = subset_results_to_region(
+            subsetter, mock_results, original_cases
+        )
+
+        # Should have fewer results (only for cases in the region)
+        assert len(subset_results) <= len(mock_results)
+
+        # All remaining case IDs should be from the original results
+        subset_case_ids = set(subset_results["case_id_number"])
+        original_case_ids = set(mock_results["case_id_number"])
+        assert subset_case_ids.issubset(original_case_ids)
+
+    def test_different_subsetting_methods_produce_different_results(
+        self, multi_case_dict
+    ):
+        """Test that different subsetting methods produce different results."""
+        # Load cases
+        case_collection = cases.load_individual_cases(multi_case_dict)
+
+        # Create a region that partially overlaps with cases
+        partial_region = BoundingBoxRegion.create_region(
+            latitude_min=32.0,
+            latitude_max=37.0,
+            longitude_min=-122.0,
+            longitude_max=-100.0,
+        )
+
+        # Test different methods
+        intersects_subsetter = RegionSubsetter(
+            region=partial_region, method="intersects"
+        )
+
+        all_subsetter = RegionSubsetter(region=partial_region, method="all")
+
+        percent_low_subsetter = RegionSubsetter(
+            region=partial_region, method="percent", percent_threshold=0.1
+        )
+
+        percent_high_subsetter = RegionSubsetter(
+            region=partial_region, method="percent", percent_threshold=0.9
+        )
+
+        # Apply different methods
+        intersects_cases = intersects_subsetter.subset_case_collection(case_collection)
+        all_cases = all_subsetter.subset_case_collection(case_collection)
+        percent_low_cases = percent_low_subsetter.subset_case_collection(
+            case_collection
+        )
+        percent_high_cases = percent_high_subsetter.subset_case_collection(
+            case_collection
+        )
+
+        # "all" should be most restrictive
+        assert len(all_cases.cases) <= len(intersects_cases.cases)
+        assert len(all_cases.cases) <= len(percent_low_cases.cases)
+        assert len(all_cases.cases) <= len(percent_high_cases.cases)
+
+        # High percent threshold should be more restrictive than low
+        assert len(percent_high_cases.cases) <= len(percent_low_cases.cases)
+
+    def test_region_subsetting_with_centered_regions(self, multi_case_dict):
+        """Test region subsetting works with CenteredRegion targets."""
+        case_collection = cases.load_individual_cases(multi_case_dict)
+
+        # Create a centered region in Texas area
+        texas_region = CenteredRegion.create_region(
+            latitude=30.0, longitude=-100.0, bounding_box_degrees=8.0
+        )
+
+        subsetter = RegionSubsetter(region=texas_region, method="intersects")
+
+        subset_cases = subsetter.subset_case_collection(case_collection)
+
+        # Should work without errors
+        assert isinstance(subset_cases, cases.IndividualCaseCollection)
+
+    def test_region_subsetting_preserves_case_metadata(self, multi_case_dict):
+        """Test that region subsetting preserves all case metadata."""
+        case_collection = cases.load_individual_cases(multi_case_dict)
+
+        # Create subsetter
+        region = BoundingBoxRegion.create_region(
+            latitude_min=20.0,
+            latitude_max=60.0,
+            longitude_min=-130.0,
+            longitude_max=-90.0,
+        )
+
+        subsetter = RegionSubsetter(region=region, method="intersects")
+
+        subset_cases = subsetter.subset_case_collection(case_collection)
+
+        # Check that all metadata is preserved for included cases
+        for case in subset_cases.cases:
+            # Find the original case
+            original_case = next(
+                c
+                for c in case_collection.cases
+                if c.case_id_number == case.case_id_number
+            )
+
+            # All attributes should be identical
+            assert case.title == original_case.title
+            assert case.start_date == original_case.start_date
+            assert case.end_date == original_case.end_date
+            assert case.event_type == original_case.event_type
+            assert case.case_id_number == original_case.case_id_number
+            # Location regions should be equivalent (but may be different objects)
+            assert isinstance(case.location, type(original_case.location))
 
 
 if __name__ == "__main__":

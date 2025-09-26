@@ -15,7 +15,7 @@ from extremeweatherbench import cases, derived, inputs, utils
 from extremeweatherbench.defaults import OUTPUT_COLUMNS
 
 if TYPE_CHECKING:
-    from extremeweatherbench import metrics
+    from extremeweatherbench import metrics, regions
 
 
 logger = logging.getLogger(__name__)
@@ -39,19 +39,75 @@ class ExtremeWeatherBench:
 
     def __init__(
         self,
-        cases: dict[str, list],
+        case_metadata: Union[dict[str, list], "cases.IndividualCaseCollection"],
         evaluation_objects: list["inputs.EvaluationObject"],
         cache_dir: Optional[Union[str, Path]] = None,
+        region_subsetter: Optional["regions.RegionSubsetter"] = None,
     ):
-        self.cases = cases
+        if isinstance(cases, dict):
+            self.case_metadata = cases.load_individual_cases(cases)
+        elif isinstance(cases, cases.IndividualCaseCollection):
+            self.case_metadata = cases
+        else:
+            raise TypeError(
+                "case_metadata must be a dictionary of cases or an "
+                "IndividualCaseCollection"
+            )
         self.evaluation_objects = evaluation_objects
         self.cache_dir = Path(cache_dir) if cache_dir else None
+        self.region_subsetter = region_subsetter
 
     # case operators as a property are a convenience method for users to use
     # them outside the class if desired for a parallel workflow
     @property
     def case_operators(self) -> list["cases.CaseOperator"]:
-        return cases.build_case_operators(self.cases, self.evaluation_objects)
+        """Case operators as a property are a convenience method for users to use
+        them outside the class if desired for a distinct parallel workflow.
+        """
+        # Subset the cases if a region subsetter was provided
+        if self.region_subsetter:
+            # Convert dict to IndividualCaseCollection, subset, then convert back
+            subset_collection = self.region_subsetter.subset_case_collection(
+                self.case_metadata
+            )
+        return cases.build_case_operators(subset_collection, self.evaluation_objects)
+
+    def _region_to_dict(self, region: "regions.Region") -> dict:
+        """Convert a Region object to dictionary format for YAML serialization."""
+        from extremeweatherbench.regions import (
+            BoundingBoxRegion,
+            CenteredRegion,
+            ShapefileRegion,
+        )
+
+        if isinstance(region, BoundingBoxRegion):
+            return {
+                "type": "bounded_region",
+                "parameters": {
+                    "latitude_min": region.latitude_min,
+                    "latitude_max": region.latitude_max,
+                    "longitude_min": region.longitude_min,
+                    "longitude_max": region.longitude_max,
+                },
+            }
+        elif isinstance(region, CenteredRegion):
+            return {
+                "type": "centered_region",
+                "parameters": {
+                    "latitude": region.latitude,
+                    "longitude": region.longitude,
+                    "bounding_box_degrees": region.bounding_box_degrees,
+                },
+            }
+        elif isinstance(region, ShapefileRegion):
+            return {
+                "type": "shapefile_region",
+                "parameters": {
+                    "shapefile_path": str(region.shapefile_path),
+                },
+            }
+        else:
+            raise ValueError(f"Unknown region type: {type(region)}")
 
     def run(
         self,
@@ -84,7 +140,6 @@ class ExtremeWeatherBench:
         elif self.cache_dir:
             if not self.cache_dir.exists():
                 self.cache_dir.mkdir(parents=True, exist_ok=True)
-
         run_results = []
         run_results = _run_case_operators(
             self.case_operators, n_jobs, self.cache_dir, **kwargs
