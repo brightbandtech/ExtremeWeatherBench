@@ -365,6 +365,10 @@ class RegionSubsetter:
         percent_threshold: Threshold for percent overlap (0.0 to 1.0)
     """
 
+    region: Region
+    method: str
+    percent_threshold: float
+
     def __init__(
         self,
         region: Union[Region, Mapping[str, float]],

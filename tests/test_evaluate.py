@@ -191,14 +191,39 @@ def sample_target_dataset():
 class TestExtremeWeatherBench:
     """Test the ExtremeWeatherBench class."""
 
+    def assert_cases_equal(self, actual, expected):
+        """Assert that two IndividualCaseCollection instances are equal."""
+        assert len(actual.cases) == len(expected.cases)
+
+        for actual_case, expected_case in zip(actual.cases, expected.cases):
+            assert actual_case.case_id_number == expected_case.case_id_number
+            assert actual_case.title == expected_case.title
+            assert actual_case.start_date == expected_case.start_date
+            assert actual_case.end_date == expected_case.end_date
+            assert actual_case.event_type == expected_case.event_type
+
+            # Compare region attributes instead of objects
+            assert type(actual_case.location) is type(expected_case.location)
+            if hasattr(actual_case.location, "latitude"):
+                assert actual_case.location.latitude == expected_case.location.latitude
+                assert (
+                    actual_case.location.longitude == expected_case.location.longitude
+                )
+                assert (
+                    actual_case.location.bounding_box_degrees
+                    == expected_case.location.bounding_box_degrees
+                )
+
     def test_initialization(self, sample_cases_dict, sample_evaluation_object):
         """Test ExtremeWeatherBench initialization."""
         ewb = evaluate.ExtremeWeatherBench(
-            cases=sample_cases_dict,
+            case_metadata=sample_cases_dict,
             evaluation_objects=[sample_evaluation_object],
         )
 
-        assert ewb.cases == sample_cases_dict
+        self.assert_cases_equal(
+            ewb.case_metadata, cases.load_individual_cases(sample_cases_dict)
+        )
         assert ewb.evaluation_objects == [sample_evaluation_object]
         assert ewb.cache_dir is None
 
@@ -208,7 +233,7 @@ class TestExtremeWeatherBench:
         """Test ExtremeWeatherBench initialization with cache directory."""
         cache_dir = "/tmp/test_cache"
         ewb = evaluate.ExtremeWeatherBench(
-            cases=sample_cases_dict,
+            case_metadata=sample_cases_dict,
             evaluation_objects=[sample_evaluation_object],
             cache_dir=cache_dir,
         )
@@ -222,7 +247,7 @@ class TestExtremeWeatherBench:
         """Test ExtremeWeatherBench initialization with Path cache directory."""
         cache_dir = Path("/tmp/test_cache")
         ewb = evaluate.ExtremeWeatherBench(
-            cases=sample_cases_dict,
+            case_metadata=sample_cases_dict,
             evaluation_objects=[sample_evaluation_object],
             cache_dir=cache_dir,
         )
@@ -241,15 +266,26 @@ class TestExtremeWeatherBench:
         mock_build_case_operators.return_value = [sample_case_operator]
 
         ewb = evaluate.ExtremeWeatherBench(
-            cases=sample_cases_dict,
+            case_metadata=sample_cases_dict,
             evaluation_objects=[sample_evaluation_object],
         )
 
         result = ewb.case_operators
 
-        mock_build_case_operators.assert_called_once_with(
-            sample_cases_dict, [sample_evaluation_object]
+        # Verify that build_case_operators was called correctly
+        mock_build_case_operators.assert_called_once()
+        call_args = mock_build_case_operators.call_args[0]
+
+        # Check that the first argument (case collection) has the right structure
+        passed_case_collection = call_args[0]
+        self.assert_cases_equal(
+            passed_case_collection, cases.load_individual_cases(sample_cases_dict)
         )
+
+        # Check that the second argument (evaluation objects) is correct
+        assert call_args[1] == [sample_evaluation_object]
+
+        # Check that the result is what the mock returned
         assert result == [sample_case_operator]
 
     @patch("extremeweatherbench.evaluate._run_case_operators")
@@ -278,7 +314,7 @@ class TestExtremeWeatherBench:
             mock_run_case_operators.return_value = mock_result
 
             ewb = evaluate.ExtremeWeatherBench(
-                cases=sample_cases_dict,
+                case_metadata=sample_cases_dict,
                 evaluation_objects=[sample_evaluation_object],
             )
 
@@ -314,7 +350,7 @@ class TestExtremeWeatherBench:
             mock_run_case_operators.return_value = mock_result
 
             ewb = evaluate.ExtremeWeatherBench(
-                cases=sample_cases_dict,
+                case_metadata=sample_cases_dict,
                 evaluation_objects=[sample_evaluation_object],
             )
 
@@ -342,7 +378,7 @@ class TestExtremeWeatherBench:
             mock_run_case_operators.return_value = mock_result
 
             ewb = evaluate.ExtremeWeatherBench(
-                cases=sample_cases_dict,
+                case_metadata=sample_cases_dict,
                 evaluation_objects=[sample_evaluation_object],
             )
 
@@ -366,7 +402,7 @@ class TestExtremeWeatherBench:
             mock_run_case_operators.return_value = []
 
             ewb = evaluate.ExtremeWeatherBench(
-                cases=sample_cases_dict,
+                case_metadata=sample_cases_dict,
                 evaluation_objects=[sample_evaluation_object],
             )
 
@@ -415,7 +451,7 @@ class TestExtremeWeatherBench:
                 mock_compute_case_operator.side_effect = mock_compute_with_caching
 
                 ewb = evaluate.ExtremeWeatherBench(
-                    cases=sample_cases_dict,
+                    case_metadata=sample_cases_dict,
                     evaluation_objects=[sample_evaluation_object],
                     cache_dir=cache_dir,
                 )
@@ -450,7 +486,7 @@ class TestExtremeWeatherBench:
             ]
 
             ewb = evaluate.ExtremeWeatherBench(
-                cases=sample_cases_dict,
+                case_metadata=sample_cases_dict,
                 evaluation_objects=[sample_evaluation_object],
             )
 
@@ -1235,7 +1271,7 @@ class TestErrorHandling:
         empty_cases = {"cases": []}
 
         ewb = evaluate.ExtremeWeatherBench(
-            cases=empty_cases,
+            case_metadata=empty_cases,
             evaluation_objects=[sample_evaluation_object],
         )
 
@@ -1368,7 +1404,7 @@ class TestErrorHandling:
         mock_run_case_operators.side_effect = Exception("Execution failed")
 
         ewb = evaluate.ExtremeWeatherBench(
-            cases=sample_cases_dict,
+            case_metadata=sample_cases_dict,
             evaluation_objects=[sample_evaluation_object],
         )
 
@@ -1492,7 +1528,7 @@ class TestIntegration:
 
             # Create and run the workflow
             ewb = evaluate.ExtremeWeatherBench(
-                cases=sample_cases_dict,
+                case_metadata=sample_cases_dict,
                 evaluation_objects=[sample_evaluation_object],
             )
 
@@ -1580,7 +1616,7 @@ class TestIntegration:
                 mock_eval.return_value = mock_result_df
 
                 ewb = evaluate.ExtremeWeatherBench(
-                    cases=sample_cases_dict,
+                    case_metadata=sample_cases_dict,
                     evaluation_objects=[eval_obj],
                 )
 
@@ -1618,7 +1654,7 @@ class TestIntegration:
         )
 
         ewb = evaluate.ExtremeWeatherBench(
-            cases=sample_cases_dict,
+            case_metadata=sample_cases_dict,
             evaluation_objects=[sample_evaluation_object],
         )
 
@@ -1912,16 +1948,12 @@ class TestRegionSubsettingIntegration:
             ]
         }
 
-    @patch("extremeweatherbench.cases.build_case_operators")
     def test_region_filtered_evaluation_setup(
-        self, mock_build_operators, multi_case_dict, sample_evaluation_object
+        self, multi_case_dict, sample_evaluation_object
     ):
-        """Test setting up evaluation with region-filtered cases."""
-        # Create mock case operators for the original cases
-        mock_operators = [Mock() for _ in range(3)]
-        mock_build_operators.return_value = mock_operators
-
-        # Create region subsetter for west coast
+        """Test that ExtremeWeatherBench with RegionSubsetter filters cases
+        correctly."""
+        # Create region subsetter for west coast only
         west_coast_region = BoundingBoxRegion.create_region(
             latitude_min=30.0,
             latitude_max=45.0,
@@ -1932,27 +1964,91 @@ class TestRegionSubsettingIntegration:
         subsetter = RegionSubsetter(region=west_coast_region, method="intersects")
 
         # Create evaluation WITH the region subsetter
-        ewb = evaluate.ExtremeWeatherBench(
-            cases=multi_case_dict,
+        ewb_with_region = evaluate.ExtremeWeatherBench(
+            case_metadata=multi_case_dict,
             evaluation_objects=[sample_evaluation_object],
             region_subsetter=subsetter,
         )
 
+        # Create evaluation WITHOUT region subsetter for comparison
+        ewb_without_region = evaluate.ExtremeWeatherBench(
+            case_metadata=multi_case_dict,
+            evaluation_objects=[sample_evaluation_object],
+        )
+
         # Access case_operators to trigger region subsetting
-        case_operators = ewb.case_operators
+        filtered_operators = ewb_with_region.case_operators
+        all_operators = ewb_without_region.case_operators
 
-        # The build_case_operators should have been called with subset cases
-        mock_build_operators.assert_called_once()
+        # The filtered evaluation should have fewer or equal case operators
+        assert len(filtered_operators) <= len(all_operators)
 
-        # Get the actual cases dict that was passed to build_case_operators
-        actual_cases_dict = mock_build_operators.call_args[0][0]
+        # Verify that the California case (case_id_number=1) is included
+        # since it intersects with the west coast region
+        filtered_case_ids = {
+            op.case_metadata.case_id_number for op in filtered_operators
+        }
+        all_case_ids = {op.case_metadata.case_id_number for op in all_operators}
 
-        # Check that we have fewer cases than the original (due to subsetting)
-        assert len(actual_cases_dict["cases"]) <= len(multi_case_dict["cases"])
+        # California case should be in filtered results
+        assert 1 in filtered_case_ids
 
-        # Verify that the California case is included
-        case_ids = {case["case_id_number"] for case in actual_cases_dict["cases"]}
-        assert 1 in case_ids  # California case should be included
+        # All filtered case IDs should be a subset of all case IDs
+        assert filtered_case_ids.issubset(all_case_ids)
+
+        # Verify that region subsetting actually happened
+        # (unless all cases happen to be in the region)
+        if len(multi_case_dict["cases"]) > 1:
+            # At least verify the subsetter was applied
+            assert ewb_with_region.region_subsetter is not None
+            assert ewb_without_region.region_subsetter is None
+
+    def test_region_subsetter_actually_filters_cases(
+        self, multi_case_dict, sample_evaluation_object
+    ):
+        """Test that RegionSubsetter actually filters out cases outside the region."""
+        # Create a very restrictive region that should only include California case
+        california_only_region = BoundingBoxRegion.create_region(
+            latitude_min=35.0,
+            latitude_max=40.0,
+            longitude_min=-125.0,
+            longitude_max=-120.0,
+        )
+
+        subsetter = RegionSubsetter(
+            region=california_only_region,
+            method="all",  # Use "all" method to be more restrictive
+        )
+
+        # Create evaluation with restrictive region subsetter
+        ewb_filtered = evaluate.ExtremeWeatherBench(
+            case_metadata=multi_case_dict,
+            evaluation_objects=[sample_evaluation_object],
+            region_subsetter=subsetter,
+        )
+
+        # Create evaluation without filtering
+        ewb_unfiltered = evaluate.ExtremeWeatherBench(
+            case_metadata=multi_case_dict,
+            evaluation_objects=[sample_evaluation_object],
+        )
+
+        # Get case operators
+        filtered_operators = ewb_filtered.case_operators
+        unfiltered_operators = ewb_unfiltered.case_operators
+
+        # Should have fewer filtered operators than unfiltered
+        assert len(filtered_operators) < len(unfiltered_operators)
+
+        # Should have exactly 1 case (California) or 0 cases if none match
+        assert len(filtered_operators) <= 1
+
+        # If we have any filtered cases, they should be the California case
+        if len(filtered_operators) > 0:
+            filtered_case_ids = {
+                op.case_metadata.case_id_number for op in filtered_operators
+            }
+            assert filtered_case_ids == {1}  # Only California case
 
     def test_region_subsetter_in_ewb_with_run(
         self, multi_case_dict, sample_evaluation_object
@@ -1970,14 +2066,14 @@ class TestRegionSubsettingIntegration:
 
         # Create evaluation WITH region subsetter
         ewb_with_region = evaluate.ExtremeWeatherBench(
-            cases=multi_case_dict,
+            case_metadata=multi_case_dict,
             evaluation_objects=[sample_evaluation_object],
             region_subsetter=subsetter,
         )
 
         # Create evaluation WITHOUT region subsetter for comparison
         ewb_without_region = evaluate.ExtremeWeatherBench(
-            cases=multi_case_dict,
+            case_metadata=multi_case_dict,
             evaluation_objects=[sample_evaluation_object],
         )
 
@@ -2017,7 +2113,7 @@ class TestRegionSubsettingIntegration:
 
         # Create evaluation with all cases
         ewb = evaluate.ExtremeWeatherBench(
-            cases=multi_case_dict,
+            case_metadata=multi_case_dict,
             evaluation_objects=[sample_evaluation_object],
         )
 
@@ -2054,7 +2150,7 @@ class TestRegionSubsettingIntegration:
         }
 
         subset_ewb = evaluate.ExtremeWeatherBench(
-            cases=subset_cases_dict,
+            case_metadata=subset_cases_dict,
             evaluation_objects=[sample_evaluation_object],
         )
 

@@ -24,15 +24,17 @@ class ExtremeWeatherBench:
     """A class to build and run the ExtremeWeatherBench workflow.
 
     This class is used to run the ExtremeWeatherBench workflow. It is ultimately a
-    wrapper around case operators and evaluation objects to create either a parallel or
+    wrapper around case operators and evaluation objects to create a parallel or
     serial run to evaluate cases and metrics, returning a concatenated dataframe of the
     results.
 
     Attributes:
-        cases: A dictionary of cases to run.
+        case_metadata: A dictionary of cases or an IndividualCaseCollection to run.
         evaluation_objects: A list of evaluation objects to run.
         cache_dir: An optional directory to cache the mid-flight outputs of the
             workflow for serial runs.
+        region_subsetter: An optional region subsetter to subset the cases that are part
+        of the evaluation to a Region object or a dictionary of lat/lon bounds.
     """
 
     def __init__(
@@ -42,10 +44,10 @@ class ExtremeWeatherBench:
         cache_dir: Optional[Union[str, Path]] = None,
         region_subsetter: Optional["regions.RegionSubsetter"] = None,
     ):
-        if isinstance(cases, dict):
-            self.case_metadata = cases.load_individual_cases(cases)
-        elif isinstance(cases, cases.IndividualCaseCollection):
-            self.case_metadata = cases
+        if isinstance(case_metadata, dict):
+            self.case_metadata = cases.load_individual_cases(case_metadata)
+        elif isinstance(case_metadata, cases.IndividualCaseCollection):
+            self.case_metadata = case_metadata
         else:
             raise TypeError(
                 "case_metadata must be a dictionary of cases or an "
@@ -60,52 +62,16 @@ class ExtremeWeatherBench:
     @property
     def case_operators(self) -> list["cases.CaseOperator"]:
         """Case operators as a property are a convenience method for users to use
-        them outside the class if desired for a distinct parallel workflow.
+        them outside the class if desired for a workflow outside of the class.
         """
         # Subset the cases if a region subsetter was provided
         if self.region_subsetter:
-            # Convert dict to IndividualCaseCollection, subset, then convert back
             subset_collection = self.region_subsetter.subset_case_collection(
                 self.case_metadata
             )
-        return cases.build_case_operators(subset_collection, self.evaluation_objects)
-
-    def _region_to_dict(self, region: "regions.Region") -> dict:
-        """Convert a Region object to dictionary format for YAML serialization."""
-        from extremeweatherbench.regions import (
-            BoundingBoxRegion,
-            CenteredRegion,
-            ShapefileRegion,
-        )
-
-        if isinstance(region, BoundingBoxRegion):
-            return {
-                "type": "bounded_region",
-                "parameters": {
-                    "latitude_min": region.latitude_min,
-                    "latitude_max": region.latitude_max,
-                    "longitude_min": region.longitude_min,
-                    "longitude_max": region.longitude_max,
-                },
-            }
-        elif isinstance(region, CenteredRegion):
-            return {
-                "type": "centered_region",
-                "parameters": {
-                    "latitude": region.latitude,
-                    "longitude": region.longitude,
-                    "bounding_box_degrees": region.bounding_box_degrees,
-                },
-            }
-        elif isinstance(region, ShapefileRegion):
-            return {
-                "type": "shapefile_region",
-                "parameters": {
-                    "shapefile_path": str(region.shapefile_path),
-                },
-            }
         else:
-            raise ValueError(f"Unknown region type: {type(region)}")
+            subset_collection = self.case_metadata
+        return cases.build_case_operators(subset_collection, self.evaluation_objects)
 
     def run(
         self,
