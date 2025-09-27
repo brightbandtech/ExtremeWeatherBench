@@ -17,24 +17,22 @@ from extremeweatherbench.defaults import OUTPUT_COLUMNS
 if TYPE_CHECKING:
     from extremeweatherbench import metrics, regions
 
-
 logger = logging.getLogger(__name__)
 
 
 class ExtremeWeatherBench:
-    """A class to run the ExtremeWeatherBench workflow.
+    """A class to build and run the ExtremeWeatherBench workflow.
 
-    This class is used to run the ExtremeWeatherBench workflow. It is a
-    wrapper around the
-    case operators and evaluation objects to create either a serial loop or will return
-    the built case operators to run in parallel as defined by the user.
-
+    This class is used to run the ExtremeWeatherBench workflow. It is ultimately a
+    wrapper around case operators and evaluation objects to create either a parallel or
+    serial run to evaluate cases and metrics, returning a concatenated dataframe of the
+    results.
 
     Attributes:
         cases: A dictionary of cases to run.
-        metrics: A list of metrics to run.
+        evaluation_objects: A list of evaluation objects to run.
         cache_dir: An optional directory to cache the mid-flight outputs of the
-            workflow.
+            workflow for serial runs.
     """
 
     def __init__(
@@ -57,8 +55,8 @@ class ExtremeWeatherBench:
         self.cache_dir = Path(cache_dir) if cache_dir else None
         self.region_subsetter = region_subsetter
 
-    # case operators as a property are a convenience method for users to use
-    # them outside the class if desired for a parallel workflow
+    # Case operators as a property are a convenience method for users to use
+    # them outside the class if desired for a workflow outside of the class
     @property
     def case_operators(self) -> list["cases.CaseOperator"]:
         """Case operators as a property are a convenience method for users to use
@@ -117,15 +115,12 @@ class ExtremeWeatherBench:
         """Runs the ExtremeWeatherBench workflow.
 
         This method will run the workflow in the order of the case operators, optionally
-        caching the mid-flight outputs of the workflow if cache_dir was provided.
-
-        Keyword arguments are passed to the metric computations if there are specific
-        requirements needed for metrics such as threshold arguments.
+        caching the mid-flight outputs of the workflow if cache_dir was provided for
+        serial runs.
 
         Args:
-            cache_dir: The directory to cache the mid-flight outputs of the workflow.
             n_jobs: The number of jobs to run in parallel. If None, defaults to the
-            joblib backend default value. If 1, the workflow will run in serial.
+            joblib backend default value. If 1, the workflow will run serially.
 
         Returns:
             A concatenated dataframe of the evaluation results.
@@ -140,7 +135,6 @@ class ExtremeWeatherBench:
         elif self.cache_dir:
             if not self.cache_dir.exists():
                 self.cache_dir.mkdir(parents=True, exist_ok=True)
-        run_results = []
         run_results = _run_case_operators(
             self.case_operators, n_jobs, self.cache_dir, **kwargs
         )
@@ -156,20 +150,8 @@ def _run_case_operators(
     n_jobs: Optional[int] = None,
     cache_dir: Optional[Path] = None,
     **kwargs,
-):
-    """Run the case operators in serial or parallel.
-
-    Args:
-        case_operators: The case operators to run.
-        parallel: Whether to run in parallel mode.
-        n_jobs: Number of jobs for parallel execution.
-        cache_dir: Optional directory for caching results.
-        **kwargs: Keyword arguments to pass to the metric and case operator
-            computations.
-
-    Returns:
-        A concatenated dataframe of the results of the case operators.
-    """
+) -> list[pd.DataFrame]:
+    """Run the case operators in parallel or serial."""
     with logging_redirect_tqdm():
         if n_jobs != 1:
             return _run_parallel(case_operators, n_jobs, **kwargs)
@@ -181,17 +163,8 @@ def _run_serial(
     case_operators: list["cases.CaseOperator"],
     cache_dir: Optional[Path] = None,
     **kwargs,
-):
-    """Run the case operators in serial.
-
-    Args:
-        case_operators: The case operators to run.
-        cache_dir: Optional directory for caching results.
-        **kwargs: Keyword arguments to pass to the metric computations.
-
-    Returns:
-        A concatenated dataframe of the results of the case operators.
-    """
+) -> list[pd.DataFrame]:
+    """Run the case operators in serial."""
     run_results = []
     # Loop over the case operators
     for case_operator in tqdm(case_operators):
@@ -203,22 +176,9 @@ def _run_parallel(
     case_operators: list["cases.CaseOperator"],
     n_jobs: Optional[int] = None,
     **kwargs,
-):
-    """Run the case operators in parallel.
+) -> list[pd.DataFrame]:
+    """Run the case operators in parallel."""
 
-    The default parallelization is to use the number of available CPUs divided by 4
-    threads per process.
-
-    Args:
-        case_operators: The case operators to run.
-        n_jobs: The number of jobs to run in parallel. If None, defaults to the
-        joblib backend default.
-        kwargs: Keyword arguments to pass to the metric computations.
-
-    Returns:
-        A concatenated dataframe of the results of the case operators.
-    """
-    # Set the number of jobs to the number of processes if not provided
     if n_jobs is None:
         logger.warning("No number of jobs provided, using joblib backend default.")
     run_results = Parallel(n_jobs=n_jobs)(
@@ -233,7 +193,7 @@ def compute_case_operator(
     case_operator: "cases.CaseOperator",
     cache_dir: Optional[Path] = None,
     **kwargs,
-):
+) -> pd.DataFrame:
     """Compute the results of a case operator.
 
     This method will compute the results of a case operator. It will build
@@ -242,6 +202,8 @@ def compute_case_operator(
 
     Args:
         case_operator: The case operator to compute the results of.
+        cache_dir: The directory to cache the mid-flight outputs of the workflow if
+        in serial mode.
         kwargs: Keyword arguments to pass to the metric computations.
 
     Returns:
@@ -256,12 +218,12 @@ def compute_case_operator(
     elif len(forecast_ds.sizes) == 0 or len(target_ds.sizes) == 0:
         return pd.DataFrame(columns=OUTPUT_COLUMNS)
 
-    # spatiotemporally align the target and forecast datasets dependent on the forecast
+    # Spatiotemporally align the target and forecast datasets dependent on the forecast
     aligned_forecast_ds, aligned_target_ds = (
         case_operator.target.maybe_align_forecast_to_target(forecast_ds, target_ds)
     )
 
-    # compute and cache the datasets if requested
+    # Compute and cache the datasets if requested
     if kwargs.get("pre_compute", False):
         aligned_forecast_ds, aligned_target_ds = _compute_and_maybe_cache(
             aligned_forecast_ds,
@@ -277,7 +239,9 @@ def compute_case_operator(
         aligned_target_ds, variables=case_operator.target.variables
     )
 
-    logger.info(f"datasets built for case {case_operator.case_metadata.case_id_number}")
+    logger.info(
+        "Datasets built for case %s", case_operator.case_metadata.case_id_number
+    )
     results = []
     # TODO: determine if derived variables need to be pushed here or at pre-compute
     for variables, metric in itertools.product(
@@ -300,7 +264,7 @@ def compute_case_operator(
             )
         )
 
-        # cache the results of each metric if caching
+        # Cache the results of each metric if caching
         cache_dir = kwargs.get("cache_dir", None)
         if cache_dir:
             cache_path = Path(cache_dir) if isinstance(cache_dir, str) else cache_dir
@@ -394,7 +358,7 @@ def _evaluate_metric_and_return_df(
     case_id_number: int,
     event_type: str,
     **kwargs,
-):
+) -> pd.DataFrame:
     """Evaluate a metric and return a dataframe of the results.
 
     Args:
@@ -410,7 +374,7 @@ def _evaluate_metric_and_return_df(
         A dataframe of the results of the metric evaluation.
     """
     metric = metric()
-    logger.info(f"computing metric {metric.name}")
+    logger.info("Computing metric %s", metric.name)
     metric_result = metric.compute_metric(
         forecast_ds[forecast_variable],
         target_ds[target_variable],
@@ -434,20 +398,20 @@ def _build_datasets(
     This method will process through all stages of the pipeline for the target and
     forecast datasets, including preprocessing, variable renaming, and subsetting.
     """
-    logger.info("running forecast pipeline")
+    logger.info("Running forecast pipeline...")
     forecast_ds = run_pipeline(case_operator, "forecast")
 
     # Check if any dimension has zero length
     zero_length_dims = [dim for dim, size in forecast_ds.sizes.items() if size == 0]
     if zero_length_dims:
         logger.warning(
-            f"forecast dataset for case {case_operator.case_metadata.case_id_number} "
+            f"Forecast dataset for case {case_operator.case_metadata.case_id_number} "
             f"has zero-length dimensions {zero_length_dims} for case time range "
             f"{case_operator.case_metadata.start_date} to "
             f"{case_operator.case_metadata.end_date}"
         )
         return xr.Dataset(), xr.Dataset()
-    logger.info("running target pipeline")
+    logger.info("Running target pipeline...")
     target_ds = run_pipeline(case_operator, "target")
     return (forecast_ds, target_ds)
 
@@ -456,7 +420,7 @@ def _compute_and_maybe_cache(
     *datasets: xr.Dataset, cache_dir: Optional[Union[str, Path]]
 ) -> list[xr.Dataset]:
     """Compute and cache the datasets if caching."""
-    logger.info("computing datasets")
+    logger.info("Computing datasets...")
     computed_datasets = [dataset.compute() for dataset in datasets]
     if cache_dir:
         raise NotImplementedError("Caching is not implemented yet")
@@ -486,17 +450,17 @@ def run_pipeline(
 
     # Open data and process through pipeline steps
     data = (
-        # opens data from user-defined source
+        # Opens data from user-defined source
         input_data.open_and_maybe_preprocess_data_from_source()
-        # maps variable names to the target data if not already using EWB
+        # Maps variable names to the target data if not already using EWB
         # naming conventions
         .pipe(input_data.maybe_map_variable_names)
-        # subsets the target data using the caseoperator metadata
+        # Subsets the target data using the caseoperator metadata
         .pipe(
             input_data.subset_data_to_case,
             case_operator=case_operator,
         )
-        # converts the target data to an xarray dataset if it is not already
+        # Converts the target data to an xarray dataset if it is not already
         .pipe(input_data.maybe_convert_to_dataset)
         .pipe(input_data.add_source_to_dataset_attrs)
     )
