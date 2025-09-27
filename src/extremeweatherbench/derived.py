@@ -4,6 +4,8 @@ from typing import Sequence, Type, TypeGuard, Union
 
 import xarray as xr
 
+import extremeweatherbench.events.severe_convection as sc
+
 logger = logging.getLogger(__name__)
 
 
@@ -72,6 +74,62 @@ class DerivedVariable(ABC):
             A DataArray with the derived variable.
         """
         return cls.derive_variable(data, *args, **kwargs)
+
+
+class CravenBrooksSignificantSevere(DerivedVariable):
+    """A derived variable that computes the Craven-Brooks significant severe
+    convection index.
+    """
+
+    required_variables = [
+        "air_temperature",
+        "eastward_wind",
+        "northward_wind",
+        "surface_eastward_wind",
+        "surface_northward_wind",
+        "air_pressure_at_mean_sea_level",
+    ]
+    optional_variables = [
+        "dewpoint_temperature",
+        "relative_humidity",
+        "specific_humidity",
+    ]
+    optional_variables_mapping = {
+        "dewpoint_temperature": ["specific_humidity"],
+        "relative_humidity": ["specific_humidity"],
+        "specific_humidity": ["relative_humidity"],
+    }
+    name = "craven_brooks_significant_severe"
+
+    @classmethod
+    def derive_variable(cls, data: xr.Dataset, *args, **kwargs) -> xr.DataArray:
+        """Derive the Craven-Brooks significant severe convection index."""
+        # create broadcasted pressure variable, output target is always last
+        _, data["pressure"] = xr.broadcast(data["air_temperature"], data["level"])
+        # calculate dewpoint temperature if not present
+        if "dewpoint_temperature" not in data.data_vars:
+            # using relative humidity if present
+            if "relative_humidity" in data.data_vars:
+                data["dewpoint_temperature"] = data[
+                    "relative_humidity"
+                ] * sc.saturation_vapor_pressure(data["air_temperature"])
+            # or using specific humidity if present
+            elif "specific_humidity" in data.data_vars:
+                data["dewpoint_temperature"] = sc.dewpoint_from_specific_humidity(
+                    data["specific_humidity"], data["pressure"]
+                )
+            # and if neither are present, raise an error
+            else:
+                raise KeyError("No variable to compute dewpoint temperature.")
+
+        cbss = sc.craven_brooks_significant_severe(data)
+        coords = {dim: data.coords[dim] for dim in data.sizes.keys() if dim != "level"}
+        return xr.DataArray(
+            cbss,
+            coords=coords,
+            dims=coords.keys(),
+            name=cls.name,
+        )
 
 
 def maybe_derive_variables(
