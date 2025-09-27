@@ -61,9 +61,7 @@ class ExtremeWeatherBench:
     # them outside the class if desired for a workflow outside of the class
     @property
     def case_operators(self) -> list["cases.CaseOperator"]:
-        """Case operators as a property are a convenience method for users to use
-        them outside the class if desired for a workflow outside of the class.
-        """
+        """Build the CaseOperator objects from case_metadata and evaluation_objects."""
         # Subset the cases if a region subsetter was provided
         if self.region_subsetter:
             subset_collection = self.region_subsetter.subset_case_collection(
