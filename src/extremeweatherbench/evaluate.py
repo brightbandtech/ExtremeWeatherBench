@@ -53,7 +53,7 @@ class ExtremeWeatherBench:
         self.evaluation_objects = evaluation_objects
         self.cache_dir = Path(cache_dir) if cache_dir else None
 
-    # Case operators as a property can be used as a convenience method for a workflow 
+    # Case operators as a property can be used as a convenience method for a workflow
     # independent of the class.
     @property
     def case_operators(self) -> list["cases.CaseOperator"]:
