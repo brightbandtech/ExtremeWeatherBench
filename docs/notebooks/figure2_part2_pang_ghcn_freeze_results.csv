@@ -1,0 +1,1743 @@
+,value,lead_time,target_variable,metric,target_source,forecast_source,case_id_number,event_type
+0,0.1166102359169372,0 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,31,freeze
+1,2.790285773026312,0 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,31,freeze
+2,0.2717259457236878,0 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,31,freeze
+3,2.146975226151312,0 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,31,freeze
+4,0.3661219546669372,1 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,31,freeze
+5,2.334200567948187,1 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,31,freeze
+6,0.6730320980674378,1 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,31,freeze
+7,6.911287970291937,1 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,31,freeze
+8,6.911318487870062,2 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,31,freeze
+9,2.707186407791937,2 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,31,freeze
+10,0.1946690609580628,2 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,31,freeze
+11,2.843538946854437,2 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,31,freeze
+12,1.0227381656044372,3 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,31,freeze
+13,2.568728155838812,3 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,31,freeze
+14,0.2987034847861878,3 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,31,freeze
+15,2.036898321854437,3 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,31,freeze
+16,0.4693934390419372,4 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,31,freeze
+17,1.4890467593544372,4 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,31,freeze
+18,1.3908970883018128,4 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,31,freeze
+19,2.079622931229437,4 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,31,freeze
+20,0.6991297671669372,5 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,31,freeze
+21,1.9435450503700622,5 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,31,freeze
+22,0.7065709164268128,5 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,31,freeze
+23,1.5833460757606872,5 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,31,freeze
+24,0.4156773617393128,6 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,31,freeze
+25,6.248293585526312,6 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,31,freeze
+26,1.8080164859169372,6 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,31,freeze
+27,3.828554815995062,6 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,31,freeze
+28,1.9528223941200622,7 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,31,freeze
+29,3.960634894120062,7 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,31,freeze
+30,1.2960841128700622,7 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,31,freeze
+31,4.378512091385687,7 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,31,freeze
+32,1.5957056949013122,8 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,31,freeze
+33,6.790285773026312,8 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,31,freeze
+34,5.412142462479437,8 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,31,freeze
+35,7.819063849198187,8 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,31,freeze
+36,4.325747198807562,9 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,31,freeze
+37,9.830111212479437,9 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,31,freeze
+38,4.307650274979437,9 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,31,freeze
+39,0.9942296078330628,9 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,31,freeze
+40,2.403500848067438,10 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,31,freeze
+41,2.062656606145213,0 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,31,freeze
+42,1.6879800629879007,0 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,31,freeze
+43,1.7854868171375378,0 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,31,freeze
+44,1.8669727694399383,0 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,31,freeze
+45,2.163569536091889,1 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,31,freeze
+46,1.9382094489441175,1 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,31,freeze
+47,2.089603245774698,1 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,31,freeze
+48,1.9849225703017201,1 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,31,freeze
+49,2.3428140779957043,2 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,31,freeze
+50,2.060982632020726,2 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,31,freeze
+51,2.1270981262499515,2 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,31,freeze
+52,1.9716633904848455,2 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,31,freeze
+53,2.3445971656317344,3 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,31,freeze
+54,2.1798043686124857,3 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,31,freeze
+55,2.1938742032135052,3 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,31,freeze
+56,2.2234412413808378,3 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,31,freeze
+57,2.557509687676939,4 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,31,freeze
+58,2.5921228923865973,4 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,31,freeze
+59,2.647407004582422,4 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,31,freeze
+60,2.6936610181029335,4 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,31,freeze
+61,3.22950062544266,5 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,31,freeze
+62,3.467837582937749,5 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,31,freeze
+63,3.321927686791331,5 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,31,freeze
+64,3.3648778235416796,5 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,31,freeze
+65,3.4962347910546834,6 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,31,freeze
+66,3.4245890944497144,6 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,31,freeze
+67,3.0976732917267324,6 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,31,freeze
+68,3.520347623779891,6 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,31,freeze
+69,3.739202627955323,7 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,31,freeze
+70,3.933646605912838,7 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,31,freeze
+71,3.7948734062594602,7 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,31,freeze
+72,3.963480067236062,7 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,31,freeze
+73,4.320330249464483,8 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,31,freeze
+74,5.1522497495217525,8 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,31,freeze
+75,5.29474058618312,8 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,31,freeze
+76,5.617300199273077,8 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,31,freeze
+77,6.385794666615109,9 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,31,freeze
+78,7.7419232604441675,9 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,31,freeze
+79,7.783307944335716,9 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,31,freeze
+80,8.514901231577339,9 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,31,freeze
+81,8.589724004932185,10 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,31,freeze
+82,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,31,freeze
+83,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,31,freeze
+84,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,31,freeze
+85,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,31,freeze
+86,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,31,freeze
+87,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,31,freeze
+88,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,31,freeze
+89,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,31,freeze
+90,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,31,freeze
+91,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,31,freeze
+92,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,31,freeze
+93,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,31,freeze
+94,4 days 06:00:00,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,31,freeze
+95,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,31,freeze
+96,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,31,freeze
+97,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,31,freeze
+98,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,31,freeze
+99,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,31,freeze
+100,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,31,freeze
+101,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,31,freeze
+102,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,31,freeze
+103,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,31,freeze
+104,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,31,freeze
+105,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,31,freeze
+106,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,31,freeze
+107,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,31,freeze
+108,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,31,freeze
+109,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,31,freeze
+110,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,31,freeze
+111,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,31,freeze
+112,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,31,freeze
+113,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,31,freeze
+114,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,31,freeze
+115,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,31,freeze
+116,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,31,freeze
+117,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,31,freeze
+118,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,31,freeze
+119,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,31,freeze
+120,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,31,freeze
+121,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,31,freeze
+122,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,31,freeze
+123,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,31,freeze
+124,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,31,freeze
+125,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,31,freeze
+126,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,31,freeze
+127,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,31,freeze
+128,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,31,freeze
+129,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,31,freeze
+130,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,31,freeze
+131,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,31,freeze
+132,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,31,freeze
+133,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,31,freeze
+134,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,31,freeze
+135,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,31,freeze
+136,-14 days +12:00:00,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,31,freeze
+137,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,31,freeze
+138,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,31,freeze
+139,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,31,freeze
+140,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,31,freeze
+141,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,31,freeze
+142,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,31,freeze
+143,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,31,freeze
+144,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,31,freeze
+145,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,31,freeze
+146,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,31,freeze
+147,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,31,freeze
+148,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,31,freeze
+149,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,31,freeze
+150,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,31,freeze
+151,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,31,freeze
+152,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,31,freeze
+153,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,31,freeze
+154,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,31,freeze
+155,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,31,freeze
+156,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,31,freeze
+157,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,31,freeze
+158,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,31,freeze
+159,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,31,freeze
+160,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,31,freeze
+161,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,31,freeze
+162,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,31,freeze
+163,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,31,freeze
+164,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,31,freeze
+165,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,31,freeze
+166,2.8610065252130426,0 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,32,freeze
+167,2.6128680974786676,0 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,32,freeze
+168,2.4235065252130426,0 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,32,freeze
+169,1.8625629216974176,0 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,32,freeze
+170,3.0353534490411676,1 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,32,freeze
+171,2.4497211248224176,1 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,32,freeze
+172,2.9910419256036676,1 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,32,freeze
+173,1.7141254216974176,1 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,32,freeze
+174,2.0034930974786676,2 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,32,freeze
+175,0.6320941716974176,2 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,32,freeze
+176,2.1769244939630426,2 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,32,freeze
+177,0.6752460271661676,2 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,32,freeze
+178,0.9283893377130426,3 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,32,freeze
+179,0.9152667791192926,3 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,32,freeze
+180,2.2031085759942926,3 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,32,freeze
+181,2.2758319646661676,3 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,32,freeze
+182,2.2562396795099176,4 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,32,freeze
+183,2.7694843084161676,4 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,32,freeze
+184,3.2097919256036676,4 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,32,freeze
+185,2.5910785466974176,4 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,32,freeze
+186,0.5961749822442926,5 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,32,freeze
+187,1.0676410466974176,5 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,32,freeze
+188,2.1638629705255426,5 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,32,freeze
+189,3.2515704900567926,5 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,32,freeze
+190,1.2835223943536676,6 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,32,freeze
+191,3.2169330388849176,6 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,32,freeze
+192,2.0110614568536676,6 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,32,freeze
+193,3.5172260076349176,6 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,32,freeze
+194,0.6764667302911676,7 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,32,freeze
+195,1.2128742009942926,7 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,32,freeze
+196,1.6876971990411676,7 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,32,freeze
+197,1.6122882634942926,7 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,32,freeze
+198,3.1127483575994574,8 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,32,freeze
+199,1.8329326837713324,8 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,32,freeze
+200,1.3730022638494574,8 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,32,freeze
+201,0.9210369318182074,8 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,32,freeze
+202,2.3939678400213324,9 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,32,freeze
+203,1.8605510919744574,9 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,32,freeze
+204,0.9800250799005426,9 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,32,freeze
+205,2.7723529607599176,9 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,32,freeze
+206,0.01078912908383245,10 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,32,freeze
+207,3.4812815302743823,0 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,32,freeze
+208,3.6612807641447564,0 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,32,freeze
+209,3.47578047473544,0 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,32,freeze
+210,3.5392702633981763,0 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,32,freeze
+211,3.568068809693878,1 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,32,freeze
+212,3.672672077960484,1 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,32,freeze
+213,3.5698296763493675,1 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,32,freeze
+214,3.5675389330405287,1 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,32,freeze
+215,3.4521536153138226,2 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,32,freeze
+216,3.5795825937566192,2 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,32,freeze
+217,3.521216760451158,2 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,32,freeze
+218,3.5311721259226116,2 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,32,freeze
+219,3.449573517778279,3 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,32,freeze
+220,3.7755650015385696,3 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,32,freeze
+221,3.873604092386935,3 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,32,freeze
+222,3.904305956626174,3 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,32,freeze
+223,3.8206443927775267,4 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,32,freeze
+224,4.06813363122058,4 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,32,freeze
+225,4.090714733812467,4 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,32,freeze
+226,4.223549904653017,4 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,32,freeze
+227,4.085756300181629,5 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,32,freeze
+228,4.53028908311719,5 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,32,freeze
+229,4.7441696693248945,5 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,32,freeze
+230,4.781108206648704,5 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,32,freeze
+231,4.351334712761157,6 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,32,freeze
+232,4.771752211735375,6 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,32,freeze
+233,4.734187547137155,6 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,32,freeze
+234,5.576558994642001,6 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,32,freeze
+235,4.60673905846643,7 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,32,freeze
+236,5.090034867464547,7 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,32,freeze
+237,4.917955643364643,7 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,32,freeze
+238,4.724608346309405,7 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,32,freeze
+239,4.160905673580202,8 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,32,freeze
+240,4.387126579100667,8 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,32,freeze
+241,4.488795415383563,8 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,32,freeze
+242,4.761014163174154,8 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,32,freeze
+243,4.7396269028826845,9 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,32,freeze
+244,5.017163987746421,9 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,32,freeze
+245,5.410420931675271,9 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,32,freeze
+246,5.858596790475575,9 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,32,freeze
+247,5.289090744791704,10 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,32,freeze
+248,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,32,freeze
+249,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,32,freeze
+250,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,32,freeze
+251,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,32,freeze
+252,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,32,freeze
+253,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,32,freeze
+254,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,32,freeze
+255,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,32,freeze
+256,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,32,freeze
+257,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,32,freeze
+258,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,32,freeze
+259,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,32,freeze
+260,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,32,freeze
+261,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,32,freeze
+262,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,32,freeze
+263,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,32,freeze
+264,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,32,freeze
+265,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,32,freeze
+266,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,32,freeze
+267,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,32,freeze
+268,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,32,freeze
+269,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,32,freeze
+270,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,32,freeze
+271,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,32,freeze
+272,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,32,freeze
+273,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,32,freeze
+274,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,32,freeze
+275,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,32,freeze
+276,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,32,freeze
+277,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,32,freeze
+278,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,32,freeze
+279,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,32,freeze
+280,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,32,freeze
+281,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,32,freeze
+282,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,32,freeze
+283,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,32,freeze
+284,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,32,freeze
+285,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,32,freeze
+286,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,32,freeze
+287,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,32,freeze
+288,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,32,freeze
+289,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,32,freeze
+290,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,32,freeze
+291,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,32,freeze
+292,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,32,freeze
+293,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,32,freeze
+294,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,32,freeze
+295,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,32,freeze
+296,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,32,freeze
+297,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,32,freeze
+298,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,32,freeze
+299,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,32,freeze
+300,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,32,freeze
+301,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,32,freeze
+302,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,32,freeze
+303,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,32,freeze
+304,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,32,freeze
+305,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,32,freeze
+306,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,32,freeze
+307,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,32,freeze
+308,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,32,freeze
+309,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,32,freeze
+310,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,32,freeze
+311,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,32,freeze
+312,0.06760864257807953,0 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,33,freeze
+313,0.8907043457031705,0 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,33,freeze
+314,1.0846435546875455,0 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,33,freeze
+315,1.9961730957031705,0 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,33,freeze
+316,0.4669372558594205,1 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,33,freeze
+317,1.1274291992187955,1 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,33,freeze
+318,1.2174865722656705,1 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,33,freeze
+319,2.2333862304687955,1 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,33,freeze
+320,1.1890441894531705,2 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,33,freeze
+321,1.5269042968750455,2 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,33,freeze
+322,1.5363342285156705,2 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,33,freeze
+323,2.8124877929687955,2 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,33,freeze
+324,1.9115478515625455,3 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,33,freeze
+325,2.0317871093750455,3 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,33,freeze
+326,1.9742919921875455,3 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,33,freeze
+327,2.9247924804687955,3 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,33,freeze
+328,2.2158081054687955,4 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,33,freeze
+329,2.3168212890625455,4 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,33,freeze
+330,2.0037109375000455,4 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,33,freeze
+331,2.9421264648437955,4 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,33,freeze
+332,2.1745483398437955,5 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,33,freeze
+333,2.6780883789062955,5 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,33,freeze
+334,2.4535400390625455,5 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,33,freeze
+335,3.5259582519531705,5 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,33,freeze
+336,2.9482299804687955,6 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,33,freeze
+337,3.0679199218750455,6 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,33,freeze
+338,3.1755859375000455,6 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,33,freeze
+339,6.2020141601562955,6 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,33,freeze
+340,5.9102966308594205,7 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,33,freeze
+341,4.8640930175781705,7 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,33,freeze
+342,5.4908935546875455,7 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,33,freeze
+343,7.8011962890625455,7 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,33,freeze
+344,5.7646057128906705,8 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,33,freeze
+345,4.8846313476562955,8 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,33,freeze
+346,5.3364746093750455,8 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,33,freeze
+347,5.5497009277344205,8 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,33,freeze
+348,6.3744079589844205,9 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,33,freeze
+349,5.4013854980469205,9 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,33,freeze
+350,6.1614257812500455,9 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,33,freeze
+351,10.37776489257817,9 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,33,freeze
+352,10.522387695312545,10 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,33,freeze
+353,1.697099957445702,0 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,33,freeze
+354,1.5282739140666275,0 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,33,freeze
+355,1.5846658944080427,0 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,33,freeze
+356,1.6905975000384645,0 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,33,freeze
+357,1.8113760674077157,1 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,33,freeze
+358,1.6168137682843808,1 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,33,freeze
+359,1.749873234491971,1 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,33,freeze
+360,1.8803683788977,1 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,33,freeze
+361,1.8409411117948715,2 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,33,freeze
+362,1.7123412661037396,2 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,33,freeze
+363,1.7915363561507862,2 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,33,freeze
+364,1.9252789929420333,2 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,33,freeze
+365,1.8756863825692707,3 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,33,freeze
+366,1.773299383248617,3 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,33,freeze
+367,1.818998057789886,3 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,33,freeze
+368,1.9096146880376976,3 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,33,freeze
+369,1.9056481806148553,4 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,33,freeze
+370,1.8328994053013181,4 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,33,freeze
+371,1.855646803423723,4 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,33,freeze
+372,1.8992665703719969,4 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,33,freeze
+373,1.9016298653601065,5 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,33,freeze
+374,1.8383415172679825,5 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,33,freeze
+375,1.8949103627398123,5 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,33,freeze
+376,2.10000252925226,5 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,33,freeze
+377,2.1598462427571095,6 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,33,freeze
+378,2.2504458374828613,6 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,33,freeze
+379,2.3585748088752925,6 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,33,freeze
+380,2.4914540141954533,6 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,33,freeze
+381,2.808219099964088,7 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,33,freeze
+382,3.0767599609638965,7 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,33,freeze
+383,3.226158422351325,7 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,33,freeze
+384,3.4425537075567862,7 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,33,freeze
+385,3.5795396320722586,8 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,33,freeze
+386,3.8310264685590085,8 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,33,freeze
+387,3.8560503971037368,8 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,33,freeze
+388,4.246310284180304,8 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,33,freeze
+389,4.182566159441757,9 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,33,freeze
+390,4.3017217726751005,9 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,33,freeze
+391,4.291997996087194,9 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,33,freeze
+392,4.963107914999573,9 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,33,freeze
+393,5.084417784093004,10 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,33,freeze
+394,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,33,freeze
+395,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,33,freeze
+396,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,33,freeze
+397,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,33,freeze
+398,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,33,freeze
+399,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,33,freeze
+400,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,33,freeze
+401,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,33,freeze
+402,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,33,freeze
+403,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,33,freeze
+404,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,33,freeze
+405,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,33,freeze
+406,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,33,freeze
+407,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,33,freeze
+408,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,33,freeze
+409,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,33,freeze
+410,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,33,freeze
+411,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,33,freeze
+412,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,33,freeze
+413,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,33,freeze
+414,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,33,freeze
+415,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,33,freeze
+416,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,33,freeze
+417,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,33,freeze
+418,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,33,freeze
+419,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,33,freeze
+420,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,33,freeze
+421,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,33,freeze
+422,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,33,freeze
+423,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,33,freeze
+424,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,33,freeze
+425,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,33,freeze
+426,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,33,freeze
+427,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,33,freeze
+428,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,33,freeze
+429,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,33,freeze
+430,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,33,freeze
+431,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,33,freeze
+432,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,33,freeze
+433,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,33,freeze
+434,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,33,freeze
+435,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,33,freeze
+436,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,33,freeze
+437,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,33,freeze
+438,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,33,freeze
+439,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,33,freeze
+440,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,33,freeze
+441,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,33,freeze
+442,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,33,freeze
+443,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,33,freeze
+444,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,33,freeze
+445,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,33,freeze
+446,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,33,freeze
+447,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,33,freeze
+448,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,33,freeze
+449,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,33,freeze
+450,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,33,freeze
+451,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,33,freeze
+452,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,33,freeze
+453,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,33,freeze
+454,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,33,freeze
+455,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,33,freeze
+456,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,33,freeze
+457,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,33,freeze
+458,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,33,freeze
+459,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,33,freeze
+460,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,33,freeze
+461,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,33,freeze
+462,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,33,freeze
+463,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,33,freeze
+464,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,33,freeze
+465,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,33,freeze
+466,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,33,freeze
+467,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,33,freeze
+468,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,33,freeze
+469,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,33,freeze
+470,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,33,freeze
+471,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,33,freeze
+472,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,33,freeze
+473,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,33,freeze
+474,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,33,freeze
+475,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,33,freeze
+476,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,33,freeze
+477,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,33,freeze
+478,0.36002948467546503,0 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,35,freeze
+479,2.876054499699535,0 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,35,freeze
+480,0.61714008037859,0 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,35,freeze
+481,2.49308941180891,0 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,35,freeze
+482,0.636945988581715,1 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,35,freeze
+483,2.016618464543285,1 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,35,freeze
+484,1.18214252178484,1 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,35,freeze
+485,2.32115337665266,1 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,35,freeze
+486,0.59461810772234,2 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,35,freeze
+487,1.975663874699535,2 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,35,freeze
+488,1.234419133112965,2 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,35,freeze
+489,2.43382427509016,2 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,35,freeze
+490,0.014268611027659972,3 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,35,freeze
+491,1.715532038762035,3 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,35,freeze
+492,1.13514545147234,3 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,35,freeze
+493,3.20671245868391,3 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,35,freeze
+494,0.51036236102766,4 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,35,freeze
+495,3.687700007512035,4 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,35,freeze
+496,0.10420391376203497,4 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,35,freeze
+497,4.600175593449535,4 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,35,freeze
+498,1.655107234074535,5 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,35,freeze
+499,4.49913189227766,5 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,35,freeze
+500,0.944108698918285,5 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,35,freeze
+501,5.13725445087141,5 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,35,freeze
+502,2.701249812199535,6 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,35,freeze
+503,5.08403179462141,6 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,35,freeze
+504,1.52769634540266,6 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,35,freeze
+505,6.97734234149641,6 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,35,freeze
+506,2.639116023137035,7 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,35,freeze
+507,2.024980280949535,7 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,35,freeze
+508,0.23115703876203497,7 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,35,freeze
+509,3.058854792668285,7 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,35,freeze
+510,2.519120905949535,8 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,35,freeze
+511,6.81730816180891,8 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,35,freeze
+512,3.78996441180891,8 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,35,freeze
+513,6.289750788762035,8 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,35,freeze
+514,4.703202937199535,9 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,35,freeze
+515,1.39665386493391,9 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,35,freeze
+516,0.27070453350359003,9 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,35,freeze
+517,3.970903132512035,9 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,35,freeze
+518,2.64512798602766,10 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,35,freeze
+519,3.2950365122379566,0 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,35,freeze
+520,3.6323939240971765,0 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,35,freeze
+521,3.7439102569466223,0 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,35,freeze
+522,3.6561216800318816,0 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,35,freeze
+523,3.923941985990572,1 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,35,freeze
+524,3.7818732974759173,1 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,35,freeze
+525,3.79742309335056,1 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,35,freeze
+526,3.7460753827618176,1 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,35,freeze
+527,4.101392946910059,2 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,35,freeze
+528,3.9658134053196115,2 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,35,freeze
+529,3.8832001104858205,2 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,35,freeze
+530,3.7482158275344726,2 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,35,freeze
+531,4.283315661562243,3 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,35,freeze
+532,4.095500390025228,3 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,35,freeze
+533,4.0438598946258635,3 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,35,freeze
+534,3.9996553776642725,3 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,35,freeze
+535,4.330562900585233,4 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,35,freeze
+536,4.380160819600851,4 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,35,freeze
+537,4.22125548983975,4 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,35,freeze
+538,4.289851203214468,4 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,35,freeze
+539,4.399272116339196,5 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,35,freeze
+540,4.3687385357815876,5 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,35,freeze
+541,4.468065525537643,5 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,35,freeze
+542,4.633229076427014,5 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,35,freeze
+543,4.917876358096303,6 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,35,freeze
+544,5.019852877886318,6 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,35,freeze
+545,5.488067825835856,6 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,35,freeze
+546,5.591070616904703,6 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,35,freeze
+547,5.858605765616334,7 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,35,freeze
+548,6.281146745917973,7 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,35,freeze
+549,6.633044286153902,7 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,35,freeze
+550,6.891790849715616,7 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,35,freeze
+551,6.937257132202883,8 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,35,freeze
+552,6.835555446578081,8 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,35,freeze
+553,6.592942461276206,8 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,35,freeze
+554,6.426241966169709,8 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,35,freeze
+555,6.669092540729623,9 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,35,freeze
+556,7.265308707303046,9 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,35,freeze
+557,7.420962370358379,9 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,35,freeze
+558,7.330247889496415,9 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,35,freeze
+559,7.231289929427257,10 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,35,freeze
+560,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,35,freeze
+561,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,35,freeze
+562,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,35,freeze
+563,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,35,freeze
+564,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,35,freeze
+565,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,35,freeze
+566,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,35,freeze
+567,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,35,freeze
+568,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,35,freeze
+569,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,35,freeze
+570,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,35,freeze
+571,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,35,freeze
+572,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,35,freeze
+573,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,35,freeze
+574,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,35,freeze
+575,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,35,freeze
+576,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,35,freeze
+577,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,35,freeze
+578,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,35,freeze
+579,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,35,freeze
+580,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,35,freeze
+581,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,35,freeze
+582,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,35,freeze
+583,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,35,freeze
+584,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,35,freeze
+585,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,35,freeze
+586,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,35,freeze
+587,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,35,freeze
+588,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,35,freeze
+589,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,35,freeze
+590,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,35,freeze
+591,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,35,freeze
+592,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,35,freeze
+593,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,35,freeze
+594,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,35,freeze
+595,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,35,freeze
+596,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,35,freeze
+597,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,35,freeze
+598,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,35,freeze
+599,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,35,freeze
+600,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,35,freeze
+601,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,35,freeze
+602,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,35,freeze
+603,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,35,freeze
+604,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,35,freeze
+605,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,35,freeze
+606,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,35,freeze
+607,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,35,freeze
+608,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,35,freeze
+609,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,35,freeze
+610,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,35,freeze
+611,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,35,freeze
+612,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,35,freeze
+613,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,35,freeze
+614,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,35,freeze
+615,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,35,freeze
+616,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,35,freeze
+617,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,35,freeze
+618,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,35,freeze
+619,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,35,freeze
+620,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,35,freeze
+621,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,35,freeze
+622,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,35,freeze
+623,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,35,freeze
+624,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,35,freeze
+625,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,35,freeze
+626,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,35,freeze
+627,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,35,freeze
+628,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,35,freeze
+629,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,35,freeze
+630,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,35,freeze
+631,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,35,freeze
+632,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,35,freeze
+633,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,35,freeze
+634,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,35,freeze
+635,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,35,freeze
+636,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,35,freeze
+637,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,35,freeze
+638,3.97064941406245,0 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,89,freeze
+639,2.318885498046825,0 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,89,freeze
+640,2.94232910156245,0 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,89,freeze
+641,2.0835034179687,0 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,89,freeze
+642,1.6967846679687,1 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,89,freeze
+643,1.61786621093745,1 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,89,freeze
+644,2.5201489257812,1 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,89,freeze
+645,1.443275146484325,1 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,89,freeze
+646,1.80658691406245,2 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,89,freeze
+647,1.91999023437495,2 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,89,freeze
+648,3.2470776367187,2 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,89,freeze
+649,2.179420166015575,2 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,89,freeze
+650,2.5327221679687,3 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,89,freeze
+651,3.1982495117187,3 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,89,freeze
+652,4.88520019531245,3 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,89,freeze
+653,3.206763916015575,3 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,89,freeze
+654,2.8145825195312,4 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,89,freeze
+655,1.621986083984325,4 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,89,freeze
+656,3.477027587890575,4 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,89,freeze
+657,2.2534252929687,4 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,89,freeze
+658,0.546348876953175,5 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,89,freeze
+659,0.28093750000005,5 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,89,freeze
+660,1.432227783203075,5 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,89,freeze
+661,4.75165527343745,5 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,89,freeze
+662,4.87885253906245,6 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,89,freeze
+663,2.991492919921825,6 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,89,freeze
+664,0.8985668945312,6 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,89,freeze
+665,0.15557128906255002,6 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,89,freeze
+666,0.06772583007807498,7 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,89,freeze
+667,2.87995117187495,7 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,89,freeze
+668,3.868873291015575,7 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,89,freeze
+669,0.258765869140575,7 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,89,freeze
+670,2.28118164062505,8 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,89,freeze
+671,4.748985595703175,8 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,89,freeze
+672,4.420677490234425,8 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,89,freeze
+673,5.4732592773438,8 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,89,freeze
+674,6.62712890625005,9 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,89,freeze
+675,8.555260009765675,9 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,89,freeze
+676,9.2861254882813,9 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,89,freeze
+677,9.17058593750005,9 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,89,freeze
+678,9.569481201171925,10 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,89,freeze
+679,2.6973437412434835,0 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,89,freeze
+680,2.5764055808157336,0 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,89,freeze
+681,2.5766207060110857,0 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,89,freeze
+682,2.4774163307223334,0 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,89,freeze
+683,2.591956400610666,1 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,89,freeze
+684,2.3724678821838268,1 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,89,freeze
+685,2.3147660260477596,1 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,89,freeze
+686,2.3607104620130244,1 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,89,freeze
+687,2.6299881181678906,2 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,89,freeze
+688,2.367398190557797,2 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,89,freeze
+689,2.3648305249526267,2 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,89,freeze
+690,2.5030757957060166,2 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,89,freeze
+691,2.677744115798456,3 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,89,freeze
+692,2.4817860983966624,3 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,89,freeze
+693,2.4685396613623865,3 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,89,freeze
+694,2.5503735160120105,3 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,89,freeze
+695,2.752835373028039,4 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,89,freeze
+696,2.760803860680002,4 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,89,freeze
+697,2.9467618851473443,4 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,89,freeze
+698,3.218778205257326,4 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,89,freeze
+699,3.3284648452965038,5 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,89,freeze
+700,3.3398412651535843,5 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,89,freeze
+701,3.4678775891663243,5 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,89,freeze
+702,3.7082169601208816,5 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,89,freeze
+703,3.9796220625266097,6 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,89,freeze
+704,4.08273308155904,6 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,89,freeze
+705,4.184661051475299,6 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,89,freeze
+706,4.2838538244389985,6 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,89,freeze
+707,4.206201282543524,7 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,89,freeze
+708,4.114846645897245,7 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,89,freeze
+709,4.051819808697801,7 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,89,freeze
+710,4.132474681640758,7 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,89,freeze
+711,4.594790405715779,8 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,89,freeze
+712,4.312166750008224,8 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,89,freeze
+713,4.510255675865493,8 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,89,freeze
+714,4.978526261850272,8 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,89,freeze
+715,5.603836394155597,9 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,89,freeze
+716,5.468532090861099,9 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,89,freeze
+717,5.927222384547227,9 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,89,freeze
+718,6.418668618956012,9 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,89,freeze
+719,6.670197117411871,10 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,89,freeze
+720,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,89,freeze
+721,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,89,freeze
+722,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,89,freeze
+723,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,89,freeze
+724,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,89,freeze
+725,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,89,freeze
+726,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,89,freeze
+727,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,89,freeze
+728,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,89,freeze
+729,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,89,freeze
+730,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,89,freeze
+731,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,89,freeze
+732,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,89,freeze
+733,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,89,freeze
+734,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,89,freeze
+735,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,89,freeze
+736,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,89,freeze
+737,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,89,freeze
+738,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,89,freeze
+739,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,89,freeze
+740,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,89,freeze
+741,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,89,freeze
+742,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,89,freeze
+743,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,89,freeze
+744,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,89,freeze
+745,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,89,freeze
+746,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,89,freeze
+747,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,89,freeze
+748,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,89,freeze
+749,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,89,freeze
+750,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,89,freeze
+751,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,89,freeze
+752,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,89,freeze
+753,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,89,freeze
+754,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,89,freeze
+755,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,89,freeze
+756,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,89,freeze
+757,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,89,freeze
+758,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,89,freeze
+759,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,89,freeze
+760,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,89,freeze
+761,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,89,freeze
+762,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,89,freeze
+763,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,89,freeze
+764,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,89,freeze
+765,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,89,freeze
+766,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,89,freeze
+767,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,89,freeze
+768,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,89,freeze
+769,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,89,freeze
+770,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,89,freeze
+771,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,89,freeze
+772,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,89,freeze
+773,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,89,freeze
+774,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,89,freeze
+775,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,89,freeze
+776,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,89,freeze
+777,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,89,freeze
+778,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,89,freeze
+779,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,89,freeze
+780,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,89,freeze
+781,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,89,freeze
+782,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,89,freeze
+783,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,89,freeze
+784,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,89,freeze
+785,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,89,freeze
+786,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,89,freeze
+787,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,89,freeze
+788,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,89,freeze
+789,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,89,freeze
+790,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,89,freeze
+791,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,89,freeze
+792,1.527618408203125,0 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,90,freeze
+793,6.13702392578125,0 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,90,freeze
+794,2.0992431640625,0 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,90,freeze
+795,6.0289306640625,0 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,90,freeze
+796,1.62689208984375,1 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,90,freeze
+797,5.525543212890625,1 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,90,freeze
+798,1.39178466796875,1 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,90,freeze
+799,6.275543212890625,1 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,90,freeze
+800,2.429534912109375,2 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,90,freeze
+801,5.842926025390625,2 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,90,freeze
+802,1.52593994140625,2 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,90,freeze
+803,5.973785400390625,2 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,90,freeze
+804,2.3719482421875,3 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,90,freeze
+805,5.363616943359375,3 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,90,freeze
+806,1.74285888671875,3 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,90,freeze
+807,5.8433837890625,3 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,90,freeze
+808,2.082183837890625,4 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,90,freeze
+809,7.193511962890625,4 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,90,freeze
+810,2.54351806640625,4 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,90,freeze
+811,6.0606689453125,4 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,90,freeze
+812,2.3201904296875,5 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,90,freeze
+813,7.1915283203125,5 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,90,freeze
+814,2.25787353515625,5 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,90,freeze
+815,7.427398681640625,5 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,90,freeze
+816,3.5299072265625,6 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,90,freeze
+817,6.851287841796875,6 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,90,freeze
+818,6.81280517578125,6 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,90,freeze
+819,7.4912109375,6 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,90,freeze
+820,4.442047119140625,7 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,90,freeze
+821,8.1416015625,7 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,90,freeze
+822,4.70294189453125,7 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,90,freeze
+823,4.5667724609375,7 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,90,freeze
+824,1.974334716796875,8 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,90,freeze
+825,7.188995361328125,8 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,90,freeze
+826,3.13677978515625,8 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,90,freeze
+827,14.5052490234375,8 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,90,freeze
+828,18.448699951171875,9 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,90,freeze
+829,,9 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,90,freeze
+830,,9 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,90,freeze
+831,,9 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,90,freeze
+832,,10 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,90,freeze
+833,2.404543808329247,0 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,90,freeze
+834,1.9099978955029844,0 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,90,freeze
+835,2.0420933950489615,0 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,90,freeze
+836,2.102275403248656,0 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,90,freeze
+837,2.702619067881398,1 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,90,freeze
+838,2.132239247119118,1 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,90,freeze
+839,2.368253832764788,1 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,90,freeze
+840,2.1138858350218,1 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,90,freeze
+841,2.9197502459789484,2 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,90,freeze
+842,2.2034160035967814,2 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,90,freeze
+843,2.6552260048782435,2 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,90,freeze
+844,2.413983181935065,2 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,90,freeze
+845,3.2432898981707545,3 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,90,freeze
+846,2.423599512361849,3 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,90,freeze
+847,2.728244248111732,3 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,90,freeze
+848,2.4529343926971596,3 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,90,freeze
+849,3.262762045051144,4 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,90,freeze
+850,2.549259217004863,4 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,90,freeze
+851,3.212423432360322,4 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,90,freeze
+852,2.804684034030426,4 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,90,freeze
+853,3.7082911210696796,5 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,90,freeze
+854,3.0179833981662587,5 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,90,freeze
+855,3.5211609387810614,5 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,90,freeze
+856,3.7381039986623903,5 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,90,freeze
+857,4.419331362435879,6 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,90,freeze
+858,4.411797099882374,6 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,90,freeze
+859,4.916619180630766,6 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,90,freeze
+860,4.4629469089631835,6 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,90,freeze
+861,5.3537772361557465,7 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,90,freeze
+862,5.090874508165765,7 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,90,freeze
+863,5.336971169129556,7 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,90,freeze
+864,4.786731025981039,7 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,90,freeze
+865,5.341220387166507,8 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,90,freeze
+866,5.383243545300051,8 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,90,freeze
+867,4.667832130987035,8 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,90,freeze
+868,5.194527553402216,8 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,90,freeze
+869,5.618175121148247,9 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,90,freeze
+870,5.807548063695041,9 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,90,freeze
+871,7.648013304946008,9 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,90,freeze
+872,6.410007764150345,9 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,90,freeze
+873,6.15483875642048,10 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,90,freeze
+874,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,90,freeze
+875,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,90,freeze
+876,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,90,freeze
+877,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,90,freeze
+878,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,90,freeze
+879,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,90,freeze
+880,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,90,freeze
+881,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,90,freeze
+882,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,90,freeze
+883,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,90,freeze
+884,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,90,freeze
+885,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,90,freeze
+886,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,90,freeze
+887,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,90,freeze
+888,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,90,freeze
+889,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,90,freeze
+890,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,90,freeze
+891,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,90,freeze
+892,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,90,freeze
+893,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,90,freeze
+894,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,90,freeze
+895,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,90,freeze
+896,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,90,freeze
+897,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,90,freeze
+898,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,90,freeze
+899,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,90,freeze
+900,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,90,freeze
+901,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,90,freeze
+902,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,90,freeze
+903,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,90,freeze
+904,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,90,freeze
+905,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,90,freeze
+906,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,90,freeze
+907,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,90,freeze
+908,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,90,freeze
+909,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,90,freeze
+910,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,90,freeze
+911,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,90,freeze
+912,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,90,freeze
+913,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,90,freeze
+914,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,90,freeze
+915,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,90,freeze
+916,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,90,freeze
+917,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,90,freeze
+918,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,90,freeze
+919,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,90,freeze
+920,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,90,freeze
+921,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,90,freeze
+922,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,90,freeze
+923,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,90,freeze
+924,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,90,freeze
+925,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,90,freeze
+926,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,90,freeze
+927,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,90,freeze
+928,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,90,freeze
+929,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,90,freeze
+930,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,90,freeze
+931,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,90,freeze
+932,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,90,freeze
+933,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,90,freeze
+934,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,90,freeze
+935,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,90,freeze
+936,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,90,freeze
+937,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,90,freeze
+938,3.3759582519531364,0 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,92,freeze
+939,3.7703369140625114,0 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,92,freeze
+940,3.0928771972656364,0 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,92,freeze
+941,2.6700866699218864,0 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,92,freeze
+942,2.1931884765625114,1 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,92,freeze
+943,1.5126159667968864,1 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,92,freeze
+944,1.8623779296875114,1 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,92,freeze
+945,1.5303161621093864,1 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,92,freeze
+946,2.8220947265625114,2 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,92,freeze
+947,2.2304199218750114,2 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,92,freeze
+948,2.0683715820312614,2 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,92,freeze
+949,1.5988891601562614,2 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,92,freeze
+950,2.5072753906250114,3 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,92,freeze
+951,1.7210205078125114,3 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,92,freeze
+952,1.6599243164062614,3 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,92,freeze
+953,1.2876403808593864,3 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,92,freeze
+954,2.9974182128906364,4 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,92,freeze
+955,1.9643676757812614,4 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,92,freeze
+956,6.887738037109386,4 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,92,freeze
+957,5.588848876953136,4 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,92,freeze
+958,7.742016601562511,5 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,92,freeze
+959,7.303417968750011,5 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,92,freeze
+960,7.420727539062511,5 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,92,freeze
+961,7.256542968750011,5 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,92,freeze
+962,7.496624755859386,6 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,92,freeze
+963,7.236523437500011,6 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,92,freeze
+964,8.961315917968761,6 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,92,freeze
+965,8.194653320312511,6 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,92,freeze
+966,8.811596679687511,7 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,92,freeze
+967,8.073498535156261,7 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,92,freeze
+968,8.014141845703136,7 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,92,freeze
+969,8.233715820312511,7 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,92,freeze
+970,9.978344726562511,8 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,92,freeze
+971,7.662213134765636,8 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,92,freeze
+972,7.684796142578136,8 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,92,freeze
+973,4.710614013671886,8 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,92,freeze
+974,3.5001342773437614,9 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,92,freeze
+975,2.8716247558593864,9 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,92,freeze
+976,3.5641906738281364,9 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,92,freeze
+977,3.8181274414062614,9 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,92,freeze
+978,5.199139404296886,10 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,92,freeze
+979,1.9031078219406756,0 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,92,freeze
+980,2.031685314961689,0 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,92,freeze
+981,1.7201505496895424,0 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,92,freeze
+982,2.1028922629858,0 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,92,freeze
+983,1.5066257651015722,1 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,92,freeze
+984,2.008784979691907,1 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,92,freeze
+985,1.825056086093263,1 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,92,freeze
+986,2.3730064746097894,1 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,92,freeze
+987,1.9287432242570446,2 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,92,freeze
+988,2.3852821980835057,2 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,92,freeze
+989,2.0205812247385713,2 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,92,freeze
+990,2.4617882380162577,2 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,92,freeze
+991,2.168734273022341,3 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,92,freeze
+992,2.6077464039928007,3 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,92,freeze
+993,2.4864468865297558,3 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,92,freeze
+994,2.985766177403171,3 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,92,freeze
+995,2.936831270134018,4 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,92,freeze
+996,3.503648878554003,4 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,92,freeze
+997,3.637080585260369,4 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,92,freeze
+998,4.227847967181575,4 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,92,freeze
+999,3.9609362818367204,5 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,92,freeze
+1000,4.486998369657338,5 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,92,freeze
+1001,4.0719567188044685,5 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,92,freeze
+1002,4.528372002801775,5 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,92,freeze
+1003,4.455580463632807,6 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,92,freeze
+1004,5.178231934705306,6 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,92,freeze
+1005,4.738049138026063,6 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,92,freeze
+1006,5.495810819810296,6 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,92,freeze
+1007,5.200609978403276,7 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,92,freeze
+1008,5.0871793286561715,7 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,92,freeze
+1009,4.488269282568314,7 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,92,freeze
+1010,5.363126281656956,7 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,92,freeze
+1011,5.458727602771964,8 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,92,freeze
+1012,5.75080522340082,8 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,92,freeze
+1013,5.503056016609202,8 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,92,freeze
+1014,5.936449665023123,8 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,92,freeze
+1015,5.463490335743039,9 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,92,freeze
+1016,5.962651036069696,9 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,92,freeze
+1017,5.975923735353893,9 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,92,freeze
+1018,6.608318794318037,9 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,92,freeze
+1019,6.650382906664525,10 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,92,freeze
+1020,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,92,freeze
+1021,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,92,freeze
+1022,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,92,freeze
+1023,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,92,freeze
+1024,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,92,freeze
+1025,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,92,freeze
+1026,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,92,freeze
+1027,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,92,freeze
+1028,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,92,freeze
+1029,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,92,freeze
+1030,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,92,freeze
+1031,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,92,freeze
+1032,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,92,freeze
+1033,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,92,freeze
+1034,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,92,freeze
+1035,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,92,freeze
+1036,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,92,freeze
+1037,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,92,freeze
+1038,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,92,freeze
+1039,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,92,freeze
+1040,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,92,freeze
+1041,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,92,freeze
+1042,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,92,freeze
+1043,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,92,freeze
+1044,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,92,freeze
+1045,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,92,freeze
+1046,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,92,freeze
+1047,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,92,freeze
+1048,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,92,freeze
+1049,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,92,freeze
+1050,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,92,freeze
+1051,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,92,freeze
+1052,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,92,freeze
+1053,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,92,freeze
+1054,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,92,freeze
+1055,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,92,freeze
+1056,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,92,freeze
+1057,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,92,freeze
+1058,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,92,freeze
+1059,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,92,freeze
+1060,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,92,freeze
+1061,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,92,freeze
+1062,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,92,freeze
+1063,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,92,freeze
+1064,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,92,freeze
+1065,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,92,freeze
+1066,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,92,freeze
+1067,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,92,freeze
+1068,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,92,freeze
+1069,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,92,freeze
+1070,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,92,freeze
+1071,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,92,freeze
+1072,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,92,freeze
+1073,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,92,freeze
+1074,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,92,freeze
+1075,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,92,freeze
+1076,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,92,freeze
+1077,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,92,freeze
+1078,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,92,freeze
+1079,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,92,freeze
+1080,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,92,freeze
+1081,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,92,freeze
+1082,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,92,freeze
+1083,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,92,freeze
+1084,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,92,freeze
+1085,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,92,freeze
+1086,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,92,freeze
+1087,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,92,freeze
+1088,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,92,freeze
+1089,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,92,freeze
+1090,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,92,freeze
+1091,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,92,freeze
+1092,1.6581852839543672,0 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,93,freeze
+1093,1.5065739558293672,0 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,93,freeze
+1094,0.8486149714543672,0 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,93,freeze
+1095,0.7909062312199922,0 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,93,freeze
+1096,2.292554180438742,1 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,93,freeze
+1097,2.016492168719992,1 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,93,freeze
+1098,1.9159367487981172,1 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,93,freeze
+1099,2.086346905048117,1 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,93,freeze
+1100,3.618665020282492,2 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,93,freeze
+1101,3.039136211688742,2 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,93,freeze
+1102,2.014722149188742,2 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,93,freeze
+1103,2.571912090594992,2 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,93,freeze
+1104,2.868603985126242,3 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,93,freeze
+1105,2.353772442157492,3 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,93,freeze
+1106,0.8844731257512422,3 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,93,freeze
+1107,1.2041142390324922,3 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,93,freeze
+1108,2.598828594501242,4 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,93,freeze
+1109,2.055615703876242,4 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,93,freeze
+1110,1.1415837214543672,4 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,93,freeze
+1111,1.3642399714543672,4 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,93,freeze
+1112,3.003888408954367,5 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,93,freeze
+1113,1.8215153620793672,5 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,93,freeze
+1114,2.672559063251242,5 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,93,freeze
+1115,1.1619694636418672,5 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,93,freeze
+1116,3.162823955829367,6 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,93,freeze
+1117,2.513989727313742,6 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,93,freeze
+1118,2.888287823016867,6 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,93,freeze
+1119,1.7989323542668672,6 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,93,freeze
+1120,3.511853496844992,7 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,93,freeze
+1121,2.372571270282492,7 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,93,freeze
+1122,2.017316143329367,7 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,93,freeze
+1123,2.216351787860617,7 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,93,freeze
+1124,4.673138897235617,8 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,93,freeze
+1125,3.986005108173117,8 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,93,freeze
+1126,3.596234600360617,8 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,93,freeze
+1127,2.816968242938742,8 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,93,freeze
+1128,6.449963848407492,9 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,93,freeze
+1129,6.070569317157492,9 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,93,freeze
+1130,7.894604961688742,9 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,93,freeze
+1131,7.822156231219992,9 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,93,freeze
+1132,8.580975811298117,10 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,93,freeze
+1133,2.0434412853253376,0 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,93,freeze
+1134,1.9910074440687389,0 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,93,freeze
+1135,2.2552681037880227,0 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,93,freeze
+1136,2.226175033487547,0 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,93,freeze
+1137,2.362954838130851,1 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,93,freeze
+1138,2.2981189888517153,1 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,93,freeze
+1139,2.515710695234164,1 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,93,freeze
+1140,2.451170040553009,1 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,93,freeze
+1141,2.5489390468993127,2 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,93,freeze
+1142,2.515233903925112,2 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,93,freeze
+1143,2.646111000927797,2 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,93,freeze
+1144,2.6558876372881093,2 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,93,freeze
+1145,2.6738878457842605,3 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,93,freeze
+1146,2.7294959041077305,3 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,93,freeze
+1147,2.8533136148494687,3 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,93,freeze
+1148,2.808388624560626,3 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,93,freeze
+1149,2.700640295929444,4 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,93,freeze
+1150,2.7052590532563983,4 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,93,freeze
+1151,2.694775996003229,4 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,93,freeze
+1152,2.8353032794498025,4 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,93,freeze
+1153,2.7092018524077774,5 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,93,freeze
+1154,2.7880142933069614,5 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,93,freeze
+1155,2.8862528951322997,5 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,93,freeze
+1156,3.0057851497804315,5 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,93,freeze
+1157,2.947567465807092,6 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,93,freeze
+1158,3.149503076428779,6 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,93,freeze
+1159,3.3355674073029338,6 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,93,freeze
+1160,3.5063630452619265,6 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,93,freeze
+1161,3.761953371812493,7 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,93,freeze
+1162,4.170008524876242,7 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,93,freeze
+1163,4.165747839928434,7 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,93,freeze
+1164,4.45274019862392,7 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,93,freeze
+1165,4.038463399692072,8 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,93,freeze
+1166,4.387172080153979,8 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,93,freeze
+1167,4.339196523714286,8 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,93,freeze
+1168,4.431086048140585,8 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,93,freeze
+1169,4.405634043283683,9 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,93,freeze
+1170,5.008237245751755,9 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,93,freeze
+1171,5.104439016992797,9 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,93,freeze
+1172,6.003249468559025,9 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,93,freeze
+1173,5.873274225135162,10 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,93,freeze
+1174,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,93,freeze
+1175,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,93,freeze
+1176,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,93,freeze
+1177,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,93,freeze
+1178,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,93,freeze
+1179,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,93,freeze
+1180,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,93,freeze
+1181,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,93,freeze
+1182,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,93,freeze
+1183,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,93,freeze
+1184,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,93,freeze
+1185,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,93,freeze
+1186,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,93,freeze
+1187,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,93,freeze
+1188,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,93,freeze
+1189,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,93,freeze
+1190,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,93,freeze
+1191,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,93,freeze
+1192,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,93,freeze
+1193,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,93,freeze
+1194,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,93,freeze
+1195,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,93,freeze
+1196,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,93,freeze
+1197,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,93,freeze
+1198,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,93,freeze
+1199,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,93,freeze
+1200,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,93,freeze
+1201,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,93,freeze
+1202,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,93,freeze
+1203,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,93,freeze
+1204,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,93,freeze
+1205,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,93,freeze
+1206,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,93,freeze
+1207,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,93,freeze
+1208,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,93,freeze
+1209,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,93,freeze
+1210,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,93,freeze
+1211,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,93,freeze
+1212,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,93,freeze
+1213,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,93,freeze
+1214,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,93,freeze
+1215,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,93,freeze
+1216,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,93,freeze
+1217,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,93,freeze
+1218,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,93,freeze
+1219,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,93,freeze
+1220,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,93,freeze
+1221,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,93,freeze
+1222,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,93,freeze
+1223,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,93,freeze
+1224,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,93,freeze
+1225,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,93,freeze
+1226,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,93,freeze
+1227,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,93,freeze
+1228,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,93,freeze
+1229,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,93,freeze
+1230,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,93,freeze
+1231,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,93,freeze
+1232,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,93,freeze
+1233,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,93,freeze
+1234,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,93,freeze
+1235,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,93,freeze
+1236,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,93,freeze
+1237,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,93,freeze
+1238,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,93,freeze
+1239,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,93,freeze
+1240,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,93,freeze
+1241,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,93,freeze
+1242,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,93,freeze
+1243,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,93,freeze
+1244,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,93,freeze
+1245,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,93,freeze
+1246,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,93,freeze
+1247,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,93,freeze
+1248,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,93,freeze
+1249,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,93,freeze
+1250,0.6595187100497242,0 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,94,freeze
+1251,0.17034579190340082,0 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,94,freeze
+1252,0.7358126553622242,0 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,94,freeze
+1253,0.23455477627840082,0 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,94,freeze
+1254,0.5385165127840992,1 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,94,freeze
+1255,0.16320467862215082,1 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,94,freeze
+1256,0.4596896084872242,1 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,94,freeze
+1257,0.4969143954190258,1 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,94,freeze
+1258,0.4293856534090992,2 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,94,freeze
+1259,0.07421542080965082,2 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,94,freeze
+1260,0.4916720303622242,2 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,94,freeze
+1261,0.3055996981534008,2 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,94,freeze
+1262,0.6972994717684742,3 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,94,freeze
+1263,0.17657803622159918,3 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,94,freeze
+1264,0.7252230557528492,3 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,94,freeze
+1265,0.6967501553622242,3 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,94,freeze
+1266,0.6686129483309742,4 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,94,freeze
+1267,0.4259982022372242,4 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,94,freeze
+1268,1.0049471768465992,4 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,94,freeze
+1269,0.5363192471590992,4 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,94,freeze
+1270,1.0011324795809742,5 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,94,freeze
+1271,1.5067782315340992,5 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,94,freeze
+1272,0.09524203213777582,5 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,94,freeze
+1273,0.6065335360440258,5 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,94,freeze
+1274,0.4333224209872242,6 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,94,freeze
+1275,0.3486056241122242,6 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,94,freeze
+1276,0.5435519131747242,6 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,94,freeze
+1277,0.06293057528409918,6 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,94,freeze
+1278,2.398349276455974,7 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,94,freeze
+1279,2.094668856534099,7 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,94,freeze
+1280,4.998141756924724,7 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,94,freeze
+1281,3.987185946377849,7 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,94,freeze
+1282,4.200412264737224,8 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,94,freeze
+1283,3.931186190518474,8 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,94,freeze
+1284,4.407809725674724,8 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,94,freeze
+1285,4.299167147549724,8 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,94,freeze
+1286,2.888247958096599,9 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,94,freeze
+1287,2.755557528409099,9 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,94,freeze
+1288,4.922397128018474,9 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,94,freeze
+1289,3.072482577237224,9 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,94,freeze
+1290,1.9103732022372242,10 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,94,freeze
+1291,1.267615842807033,0 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,94,freeze
+1292,1.157223257454781,0 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,94,freeze
+1293,1.3921896514317802,0 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,94,freeze
+1294,1.0530976421999954,0 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,94,freeze
+1295,1.4428488851258805,1 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,94,freeze
+1296,1.1538995160676042,1 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,94,freeze
+1297,1.379218942188391,1 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,94,freeze
+1298,1.0927293011523382,1 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,94,freeze
+1299,1.571645444765896,2 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,94,freeze
+1300,1.223389298627127,2 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,94,freeze
+1301,1.5501379821537533,2 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,94,freeze
+1302,1.2571001466104297,2 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,94,freeze
+1303,1.6941851926716898,3 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,94,freeze
+1304,1.3618620301141726,3 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,94,freeze
+1305,1.6283995502739799,3 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,94,freeze
+1306,1.2468020062712848,3 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,94,freeze
+1307,1.7489277062081656,4 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,94,freeze
+1308,1.4733432767314938,4 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,94,freeze
+1309,1.8797270410360376,4 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,94,freeze
+1310,1.563043950381047,4 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,94,freeze
+1311,1.9853602585992745,5 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,94,freeze
+1312,1.7087368864666101,5 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,94,freeze
+1313,1.8262035621409334,5 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,94,freeze
+1314,1.8004806192259155,5 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,94,freeze
+1315,1.9995106169147827,6 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,94,freeze
+1316,1.7558746816890134,6 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,94,freeze
+1317,2.145204038008984,6 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,94,freeze
+1318,1.9062034640519578,6 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,94,freeze
+1319,2.4342033317225527,7 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,94,freeze
+1320,1.9958292325208034,7 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,94,freeze
+1321,2.3037739394039924,7 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,94,freeze
+1322,2.2822031310681314,7 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,94,freeze
+1323,2.8517689600033878,8 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,94,freeze
+1324,2.787029598345873,8 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,94,freeze
+1325,2.6902911493237296,8 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,94,freeze
+1326,2.6307235115204324,8 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,94,freeze
+1327,3.163967208260011,9 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,94,freeze
+1328,3.018294069413697,9 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,94,freeze
+1329,2.7682535068194065,9 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,94,freeze
+1330,2.6487783079070892,9 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,94,freeze
+1331,3.510614992196588,10 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,94,freeze
+1332,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,94,freeze
+1333,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,94,freeze
+1334,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,94,freeze
+1335,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,94,freeze
+1336,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,94,freeze
+1337,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,94,freeze
+1338,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,94,freeze
+1339,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,94,freeze
+1340,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,94,freeze
+1341,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,94,freeze
+1342,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,94,freeze
+1343,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,94,freeze
+1344,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,94,freeze
+1345,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,94,freeze
+1346,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,94,freeze
+1347,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,94,freeze
+1348,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,94,freeze
+1349,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,94,freeze
+1350,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,94,freeze
+1351,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,94,freeze
+1352,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,94,freeze
+1353,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,94,freeze
+1354,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,94,freeze
+1355,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,94,freeze
+1356,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,94,freeze
+1357,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,94,freeze
+1358,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,94,freeze
+1359,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,94,freeze
+1360,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,94,freeze
+1361,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,94,freeze
+1362,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,94,freeze
+1363,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,94,freeze
+1364,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,94,freeze
+1365,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,94,freeze
+1366,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,94,freeze
+1367,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,94,freeze
+1368,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,94,freeze
+1369,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,94,freeze
+1370,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,94,freeze
+1371,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,94,freeze
+1372,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,94,freeze
+1373,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,94,freeze
+1374,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,94,freeze
+1375,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,94,freeze
+1376,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,94,freeze
+1377,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,94,freeze
+1378,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,94,freeze
+1379,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,94,freeze
+1380,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,94,freeze
+1381,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,94,freeze
+1382,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,94,freeze
+1383,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,94,freeze
+1384,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,94,freeze
+1385,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,94,freeze
+1386,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,94,freeze
+1387,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,94,freeze
+1388,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,94,freeze
+1389,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,94,freeze
+1390,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,94,freeze
+1391,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,94,freeze
+1392,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,94,freeze
+1393,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,94,freeze
+1394,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,94,freeze
+1395,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,94,freeze
+1396,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,94,freeze
+1397,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,94,freeze
+1398,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,94,freeze
+1399,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,94,freeze
+1400,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,94,freeze
+1401,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,94,freeze
+1402,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,94,freeze
+1403,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,94,freeze
+1404,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,94,freeze
+1405,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,94,freeze
+1406,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,94,freeze
+1407,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,94,freeze
+1408,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,94,freeze
+1409,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,94,freeze
+1410,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,94,freeze
+1411,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,94,freeze
+1412,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,94,freeze
+1413,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,94,freeze
+1414,1.4822743733724053,0 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,95,freeze
+1415,0.3799184163411553,0 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,95,freeze
+1416,0.12352498372396781,0 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,95,freeze
+1417,1.3613942464192803,0 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,95,freeze
+1418,0.8226979573567803,1 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,95,freeze
+1419,0.9760487874349053,1 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,95,freeze
+1420,0.6398518880208428,1 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,95,freeze
+1421,1.5594075520833428,1 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,95,freeze
+1422,1.1525624593099053,2 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,95,freeze
+1423,2.252797444661468,2 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,95,freeze
+1424,1.7859090169270928,2 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,95,freeze
+1425,2.478658040364593,2 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,95,freeze
+1426,3.118947347005218,3 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,95,freeze
+1427,2.799428304036468,3 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,95,freeze
+1428,2.0488332112630303,3 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,95,freeze
+1429,2.503468831380218,3 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,95,freeze
+1430,3.236592610677093,4 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,95,freeze
+1431,2.5755971272786553,4 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,95,freeze
+1432,1.7515157063802178,4 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,95,freeze
+1433,3.3202870686849053,4 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,95,freeze
+1434,4.332295735677093,5 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,95,freeze
+1435,2.650777180989593,5 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,95,freeze
+1436,2.153523763020843,5 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,95,freeze
+1437,3.646931966145843,5 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,95,freeze
+1438,5.445302327473968,6 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,95,freeze
+1439,2.960378011067718,6 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,95,freeze
+1440,2.1957753499349053,6 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,95,freeze
+1441,4.036580403645843,6 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,95,freeze
+1442,5.673238118489593,7 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,95,freeze
+1443,4.711263020833343,7 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,95,freeze
+1444,4.885640462239593,7 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,95,freeze
+1445,6.036305745442718,7 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,95,freeze
+1446,9.069264729817718,8 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,95,freeze
+1447,7.489491780598968,8 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,95,freeze
+1448,6.750295003255218,8 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,95,freeze
+1449,11.044484456380218,8 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,95,freeze
+1450,10.131978352864593,9 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,95,freeze
+1451,7.908040364583343,9 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,95,freeze
+1452,8.582997639973968,9 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,95,freeze
+1453,5.852254231770843,9 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,95,freeze
+1454,8.388539632161468,10 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,95,freeze
+1455,2.5748228534956628,0 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,95,freeze
+1456,2.0579739855693635,0 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,95,freeze
+1457,2.304597887608838,0 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,95,freeze
+1458,2.109856118658942,0 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,95,freeze
+1459,2.311139183523628,1 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,95,freeze
+1460,2.096428320021615,1 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,95,freeze
+1461,2.349722413230225,1 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,95,freeze
+1462,2.2081653158025363,1 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,95,freeze
+1463,2.4326952122507626,2 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,95,freeze
+1464,2.3707472166838377,2 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,95,freeze
+1465,2.5654309023596267,2 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,95,freeze
+1466,2.5721289401313396,2 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,95,freeze
+1467,2.625360817667545,3 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,95,freeze
+1468,2.6800192996081753,3 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,95,freeze
+1469,2.844889764590013,3 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,95,freeze
+1470,2.9476690373897507,3 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,95,freeze
+1471,2.9186028536372524,4 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,95,freeze
+1472,3.0603685940694305,4 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,95,freeze
+1473,3.4646757629723917,4 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,95,freeze
+1474,3.3515146784129435,4 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,95,freeze
+1475,3.4776273648644573,5 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,95,freeze
+1476,3.4532913041786317,5 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,95,freeze
+1477,3.7793123435723626,5 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,95,freeze
+1478,3.735997419428206,5 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,95,freeze
+1479,3.878027067885314,6 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,95,freeze
+1480,3.9702745142349465,6 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,95,freeze
+1481,4.239086173579804,6 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,95,freeze
+1482,4.318588177638862,6 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,95,freeze
+1483,4.648075778631799,7 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,95,freeze
+1484,4.851910553768829,7 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,95,freeze
+1485,5.003380804396239,7 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,95,freeze
+1486,4.893540820407884,7 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,95,freeze
+1487,5.347386147724587,8 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,95,freeze
+1488,5.5865499989545615,8 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,95,freeze
+1489,5.629640580849602,8 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,95,freeze
+1490,6.230095344671161,8 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,95,freeze
+1491,6.554485753909949,9 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,95,freeze
+1492,6.759762568840488,9 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,95,freeze
+1493,6.808615784794766,9 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,95,freeze
+1494,7.289545017629652,9 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,95,freeze
+1495,7.575451449645253,10 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,95,freeze
+1496,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,95,freeze
+1497,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,95,freeze
+1498,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,95,freeze
+1499,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,95,freeze
+1500,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,95,freeze
+1501,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,95,freeze
+1502,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,95,freeze
+1503,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,95,freeze
+1504,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,95,freeze
+1505,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,95,freeze
+1506,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,95,freeze
+1507,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,95,freeze
+1508,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,95,freeze
+1509,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,95,freeze
+1510,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,95,freeze
+1511,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,95,freeze
+1512,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,95,freeze
+1513,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,95,freeze
+1514,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,95,freeze
+1515,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,95,freeze
+1516,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,95,freeze
+1517,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,95,freeze
+1518,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,95,freeze
+1519,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,95,freeze
+1520,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,95,freeze
+1521,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,95,freeze
+1522,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,95,freeze
+1523,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,95,freeze
+1524,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,95,freeze
+1525,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,95,freeze
+1526,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,95,freeze
+1527,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,95,freeze
+1528,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,95,freeze
+1529,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,95,freeze
+1530,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,95,freeze
+1531,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,95,freeze
+1532,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,95,freeze
+1533,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,95,freeze
+1534,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,95,freeze
+1535,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,95,freeze
+1536,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,95,freeze
+1537,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,95,freeze
+1538,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,95,freeze
+1539,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,95,freeze
+1540,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,95,freeze
+1541,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,95,freeze
+1542,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,95,freeze
+1543,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,95,freeze
+1544,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,95,freeze
+1545,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,95,freeze
+1546,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,95,freeze
+1547,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,95,freeze
+1548,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,95,freeze
+1549,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,95,freeze
+1550,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,95,freeze
+1551,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,95,freeze
+1552,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,95,freeze
+1553,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,95,freeze
+1554,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,95,freeze
+1555,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,95,freeze
+1556,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,95,freeze
+1557,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,95,freeze
+1558,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,95,freeze
+1559,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,95,freeze
+1560,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,95,freeze
+1561,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,95,freeze
+1562,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,95,freeze
+1563,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,95,freeze
+1564,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,95,freeze
+1565,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,95,freeze
+1566,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,95,freeze
+1567,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,95,freeze
+1568,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,95,freeze
+1569,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,95,freeze
+1570,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,95,freeze
+1571,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,95,freeze
+1572,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,95,freeze
+1573,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,95,freeze
+1574,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,95,freeze
+1575,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,95,freeze
+1576,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,95,freeze
+1577,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,95,freeze
+1578,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,95,freeze
+1579,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,95,freeze
+1580,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,95,freeze
+1581,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,95,freeze
+1582,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,95,freeze
+1583,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,95,freeze
+1584,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,95,freeze
+1585,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,95,freeze
+1586,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,95,freeze
+1587,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,95,freeze
+1588,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,95,freeze
+1589,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,95,freeze
+1590,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,95,freeze
+1591,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,95,freeze
+1592,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,95,freeze
+1593,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,95,freeze
+1594,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,95,freeze
+1595,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,95,freeze
+1596,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,95,freeze
+1597,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,95,freeze
+1598,0.9501794433593886,0 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,96,freeze
+1599,0.19505249023438864,0 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,96,freeze
+1600,0.9239343261718886,0 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,96,freeze
+1601,0.22032104492188864,0 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,96,freeze
+1602,0.9258569335937636,1 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,96,freeze
+1603,0.5135644531250136,1 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,96,freeze
+1604,0.5629724121093886,1 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,96,freeze
+1605,0.41954101562498636,1 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,96,freeze
+1606,0.6757348632812636,2 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,96,freeze
+1607,0.12910522460936136,2 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,96,freeze
+1608,0.6013952636718614,2 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,96,freeze
+1609,1.3317724609374864,2 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,96,freeze
+1610,0.10163818359376364,3 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,96,freeze
+1611,0.022078857421888642,3 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,96,freeze
+1612,0.6117102050781114,3 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,96,freeze
+1613,1.6002661132812364,3 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,96,freeze
+1614,0.03163085937501364,4 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,96,freeze
+1615,0.23371826171876364,4 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,96,freeze
+1616,0.6420434570312636,4 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,96,freeze
+1617,0.22212280273436136,4 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,96,freeze
+1618,1.3605493164062636,5 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,96,freeze
+1619,1.2365563964843886,5 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,96,freeze
+1620,0.6045983886718886,5 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,96,freeze
+1621,0.019760742187486358,5 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,96,freeze
+1622,1.2314904785156386,6 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,96,freeze
+1623,1.5297692871093886,6 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,96,freeze
+1624,3.7560266113281386,6 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,96,freeze
+1625,1.6855004882812636,6 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,96,freeze
+1626,2.2634423828125136,7 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,96,freeze
+1627,1.0048364257812636,7 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,96,freeze
+1628,0.8253015136718886,7 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,96,freeze
+1629,0.5552514648437636,7 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,96,freeze
+1630,0.7402795410156386,8 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,96,freeze
+1631,1.4521630859375136,8 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,96,freeze
+1632,1.8610681152343886,8 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,96,freeze
+1633,2.2261193847656386,8 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,96,freeze
+1634,1.3710473632812636,9 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,96,freeze
+1635,0.33998168945311136,9 days 06:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,96,freeze
+1636,0.34602416992186136,9 days 12:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,96,freeze
+1637,0.6166845703124864,9 days 18:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,96,freeze
+1638,0.21949707031251364,10 days 00:00:00,surface_air_temperature,MinimumMAE,GHCN,kerchunk_forecast,96,freeze
+1639,0.862593031674283,0 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,96,freeze
+1640,0.907569205057248,0 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,96,freeze
+1641,0.9734746421861944,0 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,96,freeze
+1642,1.0286458957722735,0 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,96,freeze
+1643,1.4977558022370439,1 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,96,freeze
+1644,0.982009753638995,1 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,96,freeze
+1645,1.2275716407778767,1 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,96,freeze
+1646,1.0667033646694168,1 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,96,freeze
+1647,1.9134099473200674,2 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,96,freeze
+1648,1.126991315400842,2 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,96,freeze
+1649,1.8615142484901475,2 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,96,freeze
+1650,1.2192704018959821,2 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,96,freeze
+1651,1.9196561212296277,3 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,96,freeze
+1652,1.2322380251884142,3 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,96,freeze
+1653,1.95359979141662,3 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,96,freeze
+1654,1.4898417898864365,3 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,96,freeze
+1655,1.9676742006339751,4 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,96,freeze
+1656,1.4586422913813817,4 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,96,freeze
+1657,2.1274141204209673,4 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,96,freeze
+1658,1.7483547098007952,4 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,96,freeze
+1659,2.2142433520186278,5 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,96,freeze
+1660,1.9169944205427105,5 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,96,freeze
+1661,2.2431537156840626,5 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,96,freeze
+1662,2.1672362826467007,5 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,96,freeze
+1663,2.462322480355374,6 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,96,freeze
+1664,2.0911322430592016,6 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,96,freeze
+1665,2.1191456267699036,6 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,96,freeze
+1666,1.8270435060245913,6 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,96,freeze
+1667,2.0982796382067295,7 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,96,freeze
+1668,1.8531315789498004,7 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,96,freeze
+1669,2.2795013359988796,7 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,96,freeze
+1670,2.030335749944981,7 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,96,freeze
+1671,2.4615485669750106,8 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,96,freeze
+1672,2.106736100832218,8 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,96,freeze
+1673,2.8317611854115676,8 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,96,freeze
+1674,2.82757607078789,8 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,96,freeze
+1675,3.1228315231712935,9 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,96,freeze
+1676,2.59378638210023,9 days 06:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,96,freeze
+1677,3.230720683072111,9 days 12:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,96,freeze
+1678,2.8322578450600653,9 days 18:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,96,freeze
+1679,3.1777658884522575,10 days 00:00:00,surface_air_temperature,RMSE,GHCN,kerchunk_forecast,96,freeze
+1680,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,96,freeze
+1681,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,96,freeze
+1682,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,96,freeze
+1683,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,96,freeze
+1684,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,96,freeze
+1685,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,96,freeze
+1686,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,96,freeze
+1687,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,96,freeze
+1688,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,96,freeze
+1689,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,96,freeze
+1690,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,96,freeze
+1691,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,96,freeze
+1692,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,96,freeze
+1693,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,96,freeze
+1694,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,96,freeze
+1695,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,96,freeze
+1696,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,96,freeze
+1697,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,96,freeze
+1698,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,96,freeze
+1699,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,96,freeze
+1700,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,96,freeze
+1701,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,96,freeze
+1702,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,96,freeze
+1703,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,96,freeze
+1704,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,96,freeze
+1705,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,96,freeze
+1706,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,96,freeze
+1707,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,96,freeze
+1708,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,96,freeze
+1709,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,96,freeze
+1710,,,surface_air_temperature,OnsetME,GHCN,kerchunk_forecast,96,freeze
+1711,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,96,freeze
+1712,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,96,freeze
+1713,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,96,freeze
+1714,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,96,freeze
+1715,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,96,freeze
+1716,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,96,freeze
+1717,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,96,freeze
+1718,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,96,freeze
+1719,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,96,freeze
+1720,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,96,freeze
+1721,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,96,freeze
+1722,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,96,freeze
+1723,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,96,freeze
+1724,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,96,freeze
+1725,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,96,freeze
+1726,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,96,freeze
+1727,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,96,freeze
+1728,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,96,freeze
+1729,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,96,freeze
+1730,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,96,freeze
+1731,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,96,freeze
+1732,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,96,freeze
+1733,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,96,freeze
+1734,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,96,freeze
+1735,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,96,freeze
+1736,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,96,freeze
+1737,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,96,freeze
+1738,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,96,freeze
+1739,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,96,freeze
+1740,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,96,freeze
+1741,,,surface_air_temperature,DurationME,GHCN,kerchunk_forecast,96,freeze
