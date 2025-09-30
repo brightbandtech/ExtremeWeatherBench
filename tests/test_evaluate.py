@@ -2177,10 +2177,11 @@ class TestTropicalCycloneEvaluation:
         sample_tc_forecast_dataset,
         sample_ibtracs_dataset,
     ):
-        """Test that case_metadata is passed to maybe_derive_variables and get_ibtracs_data is called correctly."""
+        """Test that case_metadata is passed to maybe_derive_variables and
+        get_ibtracs_data is called correctly."""
         # Mock the data loading to return our test datasets
-        sample_tc_case_operator.forecast.open_and_maybe_preprocess_data_from_source.return_value = sample_tc_forecast_dataset
-        sample_tc_case_operator.target.open_and_maybe_preprocess_data_from_source.return_value = sample_ibtracs_dataset
+        sample_tc_case_operator.forecast.open_and_maybe_preprocess_data_from_source.return_value = sample_tc_forecast_dataset  # noqa: E501
+        sample_tc_case_operator.target.open_and_maybe_preprocess_data_from_source.return_value = sample_ibtracs_dataset  # noqa: E501
 
         sample_tc_case_operator.target.maybe_align_forecast_to_target.return_value = (
             sample_tc_forecast_dataset,
@@ -2207,16 +2208,19 @@ class TestTropicalCycloneEvaluation:
             # Basic sanity check - we should get a DataFrame back
             assert isinstance(result, pd.DataFrame)
 
-            # Check that IBTrACS data was registered (this proves case_id_number flow works)
+            # Check that IBTrACS data was registered (this proves case_id_number flow
+            # works)
             retrieved_data = tropical_cyclone.get_ibtracs_data(case_id_str)
             assert retrieved_data is not None
 
             print(
-                "✅ Test passed - evaluation completed successfully with proper case_metadata flow"
+                "✅ Test passed - evaluation completed successfully with proper "
+                "case_metadata flow"
             )
 
         except Exception as e:
-            # If there's an error, it might be related to the derived variable processing
+            # If there's an error, it might be related to the derived variable
+            # processing
             print(f"❌ Error during evaluation: {e}")
             raise
         finally:
@@ -2233,7 +2237,7 @@ class TestDerivedVariableIntegration:
         derived.TropicalCycloneTrackVariables.clear_cache()
 
     @patch(
-        "extremeweatherbench.events.tropical_cyclone.create_tctracks_from_dataset_with_ibtracs_filter"
+        "extremeweatherbench.events.tropical_cyclone.create_tctracks_from_dataset_with_ibtracs_filter"  # noqa: E501
     )
     @patch("extremeweatherbench.events.tropical_cyclone.generate_tc_variables")
     def test_maybe_derive_variables_with_tc_tracks(
@@ -2334,7 +2338,8 @@ class TestDerivedVariableIntegration:
 
         result = derived.maybe_include_variables_from_derived_input(incoming_variables)
 
-        # Should include original string variable and all required variables from derived variables
+        # Should include original string variable and all required variables from
+        # derived variables
         expected_vars = [
             "existing_variable",
             "air_pressure_at_mean_sea_level",
