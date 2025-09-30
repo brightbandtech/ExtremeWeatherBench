@@ -115,8 +115,8 @@ ewb_instance = evaluate.ExtremeWeatherBench(
 
 # Execute a parallel run and return the evaluation results as a pandas DataFrame
 heatwave_outputs = ewb_instance.run(
-    n_jobs=-1, # Use number of available CPUs
-    pre_compute=True, # Load case data into memory before metrics are computed. Useful with smaller evaluation datasets with many metrics
+    n_jobs=16, # use 16 processes
+    pre_compute=True, # load case data into memory before metrics are computed. Useful with smaller evaluation datasets with many metrics
 )
 
 # Save the results
