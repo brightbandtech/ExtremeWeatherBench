@@ -1,4 +1,5 @@
 import importlib.util
+import json
 import os
 import pickle
 from pathlib import Path
@@ -7,7 +8,7 @@ from typing import Optional
 import click
 import pandas as pd
 
-from extremeweatherbench import defaults
+from extremeweatherbench import defaults, inputs
 from extremeweatherbench.evaluate import ExtremeWeatherBench, _run_parallel
 
 
@@ -52,6 +53,16 @@ from extremeweatherbench.evaluate import ExtremeWeatherBench, _run_parallel
         "uses more memory)"
     ),
 )
+@click.option(
+    "--forecast-path",
+    type=click.Path(exists=True),
+    help="Path to forecast data file (zarr or kerchunk format)",
+)
+@click.option(
+    "--variable-mapping",
+    type=str,
+    help="JSON string of variable mapping for forecast data",
+)
 def cli_runner(
     default: bool,
     config_file: Optional[str],
@@ -60,16 +71,21 @@ def cli_runner(
     parallel: int,
     save_case_operators: Optional[str],
     precompute: bool,
+    forecast_path: Optional[str],
+    variable_mapping: Optional[str],
 ):
     """ExtremeWeatherBench command line interface.
 
-    This CLI supports two main modes:
+    This CLI supports multiple modes:
 
     1. Default mode (--default): Uses the predefined Brightband evaluation objects for
-       comprehensive weather event evaluation including heat waves, freeze events,
-       severe convection, atmospheric rivers, and tropical cyclones.
+       comprehensive weather event evaluation including heat waves and freeze events
+       with a FourCastNetv2 forecast dataset.
 
-    2. Custom mode (--config-file): Uses a Python config file containing custom
+    2. Default mode with custom forecast (--default --forecast-path --variable-mapping):
+       Uses default evaluation objects but with a custom forecast dataset.
+
+    3. Custom mode (--config-file): Uses a Python config file containing custom
        evaluation objects defined by the user.
 
     The CLI can run evaluations in serial or parallel using joblib, and optionally
@@ -78,6 +94,9 @@ def cli_runner(
     Examples:
         # Use default evaluation objects
         $ ewb --default
+
+        # Use default evaluation with custom forecast
+        $ ewb --default --forecast-path /path/to/forecast.zarr --variable-mapping '{"temp":"surface_air_temperature"}'
 
         # Use custom config file with parallel execution
         $ ewb --config-file my_config.py --parallel 4
@@ -126,10 +145,22 @@ def cli_runner(
     if default and config_file:
         raise click.UsageError("Cannot specify both --default and --config-file")
 
-    # Load evaluation objects
+    # Validate forecast options when using --default
     if default:
-        click.echo("Using default Brightband evaluation objects...")
-        evaluation_objects = defaults.BRIGHTBAND_EVALUATION_OBJECTS
+        if forecast_path and variable_mapping:
+            click.echo("Using default evaluation objects with custom forecast...")
+            evaluation_objects = _create_evaluation_objects_with_custom_forecast(
+                forecast_path, variable_mapping
+            )
+        elif forecast_path or variable_mapping:
+            # Only one forecast option provided
+            raise click.UsageError(
+                "When using --default with custom forecast, both --forecast-path "
+                "and --variable-mapping must be provided"
+            )
+        else:
+            click.echo("Using default Brightband evaluation objects...")
+            evaluation_objects = defaults.BRIGHTBAND_EVALUATION_OBJECTS
         cases_dict = _load_default_cases()
     else:
         assert config_file is not None  # for mypy
@@ -205,6 +236,64 @@ def _load_config_file(config_path: str) -> tuple:
         raise click.ClickException("Config file must define 'cases_dict' dictionary")
 
     return config_module.evaluation_objects, config_module.cases_dict
+
+
+def _create_evaluation_objects_with_custom_forecast(
+    forecast_path: str, variable_mapping_str: str
+) -> list:
+    """Create evaluation objects using custom forecast data.
+    
+    Args:
+        forecast_path: Path to the forecast data file
+        variable_mapping_str: JSON string containing variable mapping
+        
+    Returns:
+        List of evaluation objects with custom forecast
+    """
+    try:
+        variable_mapping = json.loads(variable_mapping_str)
+    except json.JSONDecodeError as e:
+        raise click.ClickException(f"Invalid JSON in --variable-mapping: {e}")
+    
+    # Infer forecast type from file extension
+    forecast_path_obj = Path(forecast_path)
+    extension = forecast_path_obj.suffix.lower()
+    
+    if extension == ".zarr" or forecast_path.endswith(".zarr"):
+        forecast_class = inputs.ZarrForecast
+    elif extension in [".parq", ".parquet", ".json"]:
+        forecast_class = inputs.KerchunkForecast
+    else:
+        raise click.ClickException(
+            f"Cannot infer forecast type from extension '{extension}'. "
+            "Supported extensions: .zarr, .parq, .parquet, .json"
+        )
+    
+    # Get all unique variables from default evaluation objects
+    all_variables = set()
+    for eval_obj in defaults.BRIGHTBAND_EVALUATION_OBJECTS:
+        all_variables.update(eval_obj.forecast.variables)
+    
+    # Create custom forecast object
+    custom_forecast = forecast_class(
+        source=forecast_path,
+        variables=list(all_variables),
+        variable_mapping=variable_mapping,
+        storage_options={},
+    )
+    
+    # Create new evaluation objects with custom forecast
+    evaluation_objects = []
+    for eval_obj in defaults.BRIGHTBAND_EVALUATION_OBJECTS:
+        new_eval_obj = inputs.EvaluationObject(
+            event_type=eval_obj.event_type,
+            metric_list=eval_obj.metric_list,
+            target=eval_obj.target,
+            forecast=custom_forecast,
+        )
+        evaluation_objects.append(new_eval_obj)
+    
+    return evaluation_objects
 
 
 if __name__ == "__main__":
