@@ -1,5 +1,9 @@
 # Extreme Weather Bench (EWB)
 
+**EWB is currently in limited pre-release. Bugs are likely to occur for now.**
+
+**v1.0.0 expected in October 2025.**
+
 [Read our blog post here](https://www.brightband.com/blog/extreme-weather-bench)
 
 As AI weather models are growing in popularity, we need a standardized set of community driven tests that evaluate the models across a wide variety of high-impact hazards. Extreme Weather Bench (EWB) builds on the successful work of WeatherBench and introduces a set of high-impact weather events, spanning across multiple spatial and temporal scales and different parts of the weather spectrum. We provide data to use for testing, standard metrics for evaluation by forecasters worldwide for each of the phenomena, as well as impact-based metrics. EWB is a community system and will be adding additional phenomena, test cases and metrics in collaboration with the worldwide weather and forecast verification community.
@@ -28,7 +32,7 @@ EWB has cases broken down by multiple event types within `src/extremeweatherbenc
 
 # How do I suggest new data, metrics, or otherwise get involved?
 
-Extreme Weather Bench welcomes your involvement!  The success of a benchmark suite rests on community involvement and feedback. There are several ways to get involved:
+We welcome your involvement!  The success of a benchmark suite rests on community involvement and feedback. There are several ways to get involved:
 
 * Get involved in community discussion using the discussion board
 * Submit new code requests using the issues
@@ -59,8 +63,8 @@ Running EWB on sample data (included) is straightforward.
 $ ewb --default
 ```
 **Note**: this will run every event type, case, target source, and metric for the individual event type as they become available (currently heat waves and freezes) for GFS initialized FourCastNetv2. It is expected a full evaluation will take some time, even on a large VM.
-## Using Jupyter Notebook or script:
-
+## Using Jupyter Notebook or a Script:
+ 
 ```python
 from extremeweatherbench import inputs, metrics, evaluate, utils
 
@@ -97,7 +101,7 @@ heatwave_evaluation_list = [
             metrics.MaxMinMAE,
         ],
         target=era5_heatwave_target,
-        forecast=hres_forecast,
+        forecast=fcnv2_forecast,
     ),
 ]
 # Load in the EWB default list of event cases
@@ -110,7 +114,8 @@ ewb_instance = evaluate.ExtremeWeatherBench(
 )
 
 # Execute a parallel run and return the evaluation results as a pandas DataFrame
-heatwave_outputs = ewb_instance.run(n_jobs=-1, # Use number of available CPUs
+heatwave_outputs = ewb_instance.run(
+    n_jobs=-1, # Use number of available CPUs
     pre_compute=True, # Load case data into memory before metrics are computed. Useful with smaller evaluation datasets with many metrics
 )
 
