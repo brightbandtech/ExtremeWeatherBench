@@ -447,6 +447,11 @@ class TestCustomForecastOptions:
         """Return a valid JSON variable mapping string."""
         return '{"t2": "surface_air_temperature", "u10": "surface_eastward_wind"}'
 
+    @pytest.fixture
+    def valid_storage_options(self):
+        """Return a valid JSON storage options string."""
+        return '{"remote_protocol": "s3", "remote_options": {"anon": true}}'
+
     def test_forecast_path_only_fails(self, runner, temp_forecast_files):
         """Test that providing only --forecast-path fails validation."""
         result = runner.invoke(
@@ -498,11 +503,11 @@ class TestCustomForecastOptions:
 
         assert result.exit_code == 0
         mock_create_eval_objects.assert_called_once_with(
-            str(temp_forecast_files["zarr"]), valid_variable_mapping
+            str(temp_forecast_files["zarr"]), valid_variable_mapping, None, None
         )
 
-    def test_nonexistent_forecast_path_fails(self, runner, valid_variable_mapping):
-        """Test that non-existent forecast path fails."""
+    def test_nonexistent_local_forecast_path_fails(self, runner, valid_variable_mapping):
+        """Test that non-existent local forecast path fails."""
         result = runner.invoke(
             evaluate_cli.cli_runner,
             [
@@ -515,6 +520,123 @@ class TestCustomForecastOptions:
         )
         
         assert result.exit_code != 0
+
+    @patch("extremeweatherbench.evaluate_cli._create_evaluation_objects_with_custom_forecast")
+    @patch("extremeweatherbench.evaluate_cli._load_default_cases")
+    @patch("extremeweatherbench.evaluate_cli.ExtremeWeatherBench")
+    def test_remote_url_forecast_path_succeeds(
+        self,
+        mock_ewb_class,
+        mock_load_cases,
+        mock_create_eval_objects,
+        runner,
+        valid_variable_mapping,
+    ):
+        """Test that remote URL forecast paths work."""
+        mock_ewb = Mock()
+        mock_ewb.case_operators = []
+        mock_ewb.run.return_value = pd.DataFrame()
+        mock_ewb_class.return_value = mock_ewb
+        mock_load_cases.return_value = {"cases": []}
+        mock_create_eval_objects.return_value = []
+
+        result = runner.invoke(
+            evaluate_cli.cli_runner,
+            [
+                "--default",
+                "--forecast-path",
+                "gs://extremeweatherbench/FOUR_v200_GFS.parq",
+                "--variable-mapping",
+                valid_variable_mapping,
+            ],
+        )
+
+        assert result.exit_code == 0
+        mock_create_eval_objects.assert_called_once_with(
+            "gs://extremeweatherbench/FOUR_v200_GFS.parq", valid_variable_mapping, None, None
+        )
+
+    @patch("extremeweatherbench.evaluate_cli._create_evaluation_objects_with_custom_forecast")
+    @patch("extremeweatherbench.evaluate_cli._load_default_cases")
+    @patch("extremeweatherbench.evaluate_cli.ExtremeWeatherBench")
+    def test_storage_options_passed_correctly(
+        self,
+        mock_ewb_class,
+        mock_load_cases,
+        mock_create_eval_objects,
+        runner,
+        valid_variable_mapping,
+        valid_storage_options,
+    ):
+        """Test that storage options are passed correctly."""
+        mock_ewb = Mock()
+        mock_ewb.case_operators = []
+        mock_ewb.run.return_value = pd.DataFrame()
+        mock_ewb_class.return_value = mock_ewb
+        mock_load_cases.return_value = {"cases": []}
+        mock_create_eval_objects.return_value = []
+
+        result = runner.invoke(
+            evaluate_cli.cli_runner,
+            [
+                "--default",
+                "--forecast-path",
+                "gs://extremeweatherbench/FOUR_v200_GFS.parq",
+                "--variable-mapping",
+                valid_variable_mapping,
+                "--storage-options",
+                valid_storage_options,
+            ],
+        )
+
+        assert result.exit_code == 0
+        mock_create_eval_objects.assert_called_once_with(
+            "gs://extremeweatherbench/FOUR_v200_GFS.parq", 
+            valid_variable_mapping, 
+            valid_storage_options, 
+            None
+        )
+
+    @patch("extremeweatherbench.evaluate_cli._create_evaluation_objects_with_custom_forecast")
+    @patch("extremeweatherbench.evaluate_cli._load_default_cases")
+    @patch("extremeweatherbench.evaluate_cli.ExtremeWeatherBench")
+    def test_preprocess_function_passed_correctly(
+        self,
+        mock_ewb_class,
+        mock_load_cases,
+        mock_create_eval_objects,
+        runner,
+        temp_forecast_files,
+        valid_variable_mapping,
+    ):
+        """Test that preprocess function is passed correctly."""
+        mock_ewb = Mock()
+        mock_ewb.case_operators = []
+        mock_ewb.run.return_value = pd.DataFrame()
+        mock_ewb_class.return_value = mock_ewb
+        mock_load_cases.return_value = {"cases": []}
+        mock_create_eval_objects.return_value = []
+
+        result = runner.invoke(
+            evaluate_cli.cli_runner,
+            [
+                "--default",
+                "--forecast-path",
+                str(temp_forecast_files["zarr"]),
+                "--variable-mapping",
+                valid_variable_mapping,
+                "--preprocess-function",
+                "extremeweatherbench.defaults._preprocess_bb_cira_forecast_dataset",
+            ],
+        )
+
+        assert result.exit_code == 0
+        mock_create_eval_objects.assert_called_once_with(
+            str(temp_forecast_files["zarr"]), 
+            valid_variable_mapping, 
+            None, 
+            "extremeweatherbench.defaults._preprocess_bb_cira_forecast_dataset"
+        )
 
 
 class TestForecastTypeInference:
@@ -594,6 +716,161 @@ class TestForecastTypeInference:
         
         assert "Cannot infer forecast type" in str(exc_info.value)
         assert ".nc" in str(exc_info.value)
+
+    def test_remote_url_zarr_inference(self):
+        """Test that remote zarr URLs are inferred correctly."""
+        result = evaluate_cli._create_evaluation_objects_with_custom_forecast(
+            "gs://bucket/forecast.zarr",
+            '{"temp": "surface_air_temperature"}'
+        )
+        
+        assert len(result) > 0
+        assert result[0].forecast.__class__.__name__ == "ZarrForecast"
+        assert result[0].forecast.source == "gs://bucket/forecast.zarr"
+
+    def test_remote_url_kerchunk_inference(self):
+        """Test that remote kerchunk URLs are inferred correctly."""
+        result = evaluate_cli._create_evaluation_objects_with_custom_forecast(
+            "gs://extremeweatherbench/FOUR_v200_GFS.parq",
+            '{"t2": "surface_air_temperature"}'
+        )
+        
+        assert len(result) > 0
+        assert result[0].forecast.__class__.__name__ == "KerchunkForecast"
+        assert result[0].forecast.source == "gs://extremeweatherbench/FOUR_v200_GFS.parq"
+
+
+class TestForecastPathValidation:
+    """Test forecast path validation functionality."""
+
+    def test_remote_url_validation_passes(self):
+        """Test that remote URLs pass validation."""
+        # These should not raise exceptions
+        evaluate_cli._validate_forecast_path("gs://bucket/file.zarr")
+        evaluate_cli._validate_forecast_path("s3://bucket/file.parq")
+        evaluate_cli._validate_forecast_path("https://example.com/file.json")
+        evaluate_cli._validate_forecast_path("http://example.com/file.zarr")
+        evaluate_cli._validate_forecast_path("gcs://bucket/file.parq")
+
+    def test_local_file_validation_fails_for_nonexistent(self):
+        """Test that local file validation fails for non-existent files."""
+        with pytest.raises(click.ClickException) as exc_info:
+            evaluate_cli._validate_forecast_path("/nonexistent/file.zarr")
+        
+        assert "Local file does not exist" in str(exc_info.value)
+
+    def test_local_file_validation_passes_for_existing(self, temp_config_dir):
+        """Test that local file validation passes for existing files."""
+        test_file = temp_config_dir / "test.zarr"
+        test_file.touch()
+        
+        # Should not raise exception
+        evaluate_cli._validate_forecast_path(str(test_file))
+
+
+class TestStorageOptionsValidation:
+    """Test storage options JSON validation."""
+
+    @pytest.fixture
+    def temp_zarr_file(self, temp_config_dir):
+        """Create a temporary zarr file."""
+        zarr_file = temp_config_dir / "test.zarr"
+        zarr_file.touch()
+        return zarr_file
+
+    def test_valid_storage_options(self, temp_zarr_file):
+        """Test that valid storage options work."""
+        valid_options = '{"remote_protocol": "s3", "remote_options": {"anon": true}}'
+        
+        result = evaluate_cli._create_evaluation_objects_with_custom_forecast(
+            str(temp_zarr_file), 
+            '{"temp": "surface_air_temperature"}',
+            valid_options
+        )
+        
+        assert len(result) > 0
+        assert result[0].forecast.storage_options == {
+            "remote_protocol": "s3",
+            "remote_options": {"anon": True}
+        }
+
+    def test_empty_storage_options(self, temp_zarr_file):
+        """Test that empty storage options work."""
+        result = evaluate_cli._create_evaluation_objects_with_custom_forecast(
+            str(temp_zarr_file), 
+            '{"temp": "surface_air_temperature"}',
+            None
+        )
+        
+        assert len(result) > 0
+        assert result[0].forecast.storage_options == {}
+
+    def test_invalid_storage_options_json(self, temp_zarr_file):
+        """Test that invalid JSON in storage options raises error."""
+        invalid_options = '{"remote_protocol": "s3", invalid}'
+        
+        with pytest.raises(click.ClickException) as exc_info:
+            evaluate_cli._create_evaluation_objects_with_custom_forecast(
+                str(temp_zarr_file), 
+                '{"temp": "surface_air_temperature"}',
+                invalid_options
+            )
+        
+        assert "Invalid JSON in --storage-options" in str(exc_info.value)
+
+
+class TestPreprocessFunctionValidation:
+    """Test preprocess function loading and validation."""
+
+    def test_valid_preprocess_function_loading(self):
+        """Test loading a valid preprocess function."""
+        func = evaluate_cli._load_preprocess_function(
+            "extremeweatherbench.defaults._preprocess_bb_cira_forecast_dataset"
+        )
+        
+        assert callable(func)
+        assert func.__name__ == "_preprocess_bb_cira_forecast_dataset"
+
+    def test_invalid_preprocess_function_module(self):
+        """Test that invalid module raises error."""
+        with pytest.raises(click.ClickException) as exc_info:
+            evaluate_cli._load_preprocess_function("nonexistent.module.function")
+        
+        assert "Could not load preprocess function" in str(exc_info.value)
+
+    def test_invalid_preprocess_function_name(self):
+        """Test that invalid function name raises error."""
+        with pytest.raises(click.ClickException) as exc_info:
+            evaluate_cli._load_preprocess_function("extremeweatherbench.defaults.nonexistent_function")
+        
+        assert "Could not load preprocess function" in str(exc_info.value)
+
+    def test_invalid_preprocess_function_format(self):
+        """Test that invalid format raises error."""
+        with pytest.raises(click.ClickException) as exc_info:
+            evaluate_cli._load_preprocess_function("invalid_format")
+        
+        assert "Could not load preprocess function" in str(exc_info.value)
+
+    @pytest.fixture
+    def temp_zarr_file(self, temp_config_dir):
+        """Create a temporary zarr file."""
+        zarr_file = temp_config_dir / "test.zarr"
+        zarr_file.touch()
+        return zarr_file
+
+    def test_preprocess_function_integration(self, temp_zarr_file):
+        """Test that preprocess function is properly integrated."""
+        result = evaluate_cli._create_evaluation_objects_with_custom_forecast(
+            str(temp_zarr_file), 
+            '{"temp": "surface_air_temperature"}',
+            None,
+            "extremeweatherbench.defaults._preprocess_bb_cira_forecast_dataset"
+        )
+        
+        assert len(result) > 0
+        assert hasattr(result[0].forecast, "preprocess")
+        assert callable(result[0].forecast.preprocess)
 
 
 class TestVariableMappingValidation:
