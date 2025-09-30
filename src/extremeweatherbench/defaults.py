@@ -195,18 +195,15 @@ def get_brightband_evaluation_objects() -> list[inputs.EvaluationObject]:
             target=ghcn_freeze_target,
             forecast=cira_freeze_forecast,
         ),
-        # TODO: Re-enable when severe convection forecast is implemented
-        # inputs.EvaluationObject(
-        #     event_type="severe_convection",
-        #     metric_list=[
-        #         metrics.CSI,
-        #         metrics.FAR,
-        #         metrics.RegionalHitsMisses,
-        #         metrics.HitsMisses,
-        #     ],
-        #     target=lsr_target,
-        #     forecast=cira_severe_convection_forecast,
-        # ),
+        inputs.EvaluationObject(
+            event_type="severe_convection",
+            metric_list=[
+                metrics.CSI,
+                metrics.FAR,
+            ],
+            target=lsr_target,
+            forecast=cira_severe_convection_forecast,
+        ),
         inputs.EvaluationObject(
             event_type="atmospheric_river",
             metric_list=[metrics.CSI, metrics.SpatialDisplacement, metrics.EarlySignal],
