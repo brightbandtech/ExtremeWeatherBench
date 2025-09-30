@@ -720,17 +720,90 @@ class PPH(TargetBase):
     ) -> tuple[xr.Dataset, xr.Dataset]:
         return align_forecast_to_target(forecast_data, target_data)
 
+def _ibtracs_preprocess(data: IncomingDataInput) -> IncomingDataInput:
+    """Preprocess IBTrACS data.
+
+    Preprocessing is done before any variable mapping is applied, thus using the
+    original variable names is required."""
+
+    schema = data.collect_schema()
+    # Convert pressure and surface wind columns to float, replacing " " with null
+    # Get column names that contain "pressure" or "wind"
+    pressure_cols = [col for col in schema if "PRES" in col.lower()]
+    wind_cols = [col for col in schema if "WIND" in col.lower()]
+
+    # Apply transformations to convert " " to null and cast to float
+    subset_target_data = data.with_columns(
+        [
+            pl.when(pl.col(col) == " ")
+            .then(None)
+            .otherwise(pl.col(col))
+            .cast(pl.Float64, strict=False)
+            .alias(col)
+            for col in pressure_cols + wind_cols
+        ]
+    )
+    # Convert knots to m/s
+    subset_target_data = subset_target_data.with_columns(
+        [(pl.col(col) * 0.514444).alias(col) for col in wind_cols]
+    )
+    # Drop rows where ALL columns are null (equivalent to pandas dropna(how="all"))
+    subset_target_data = subset_target_data.filter(
+        ~pl.all_horizontal(pl.all().is_null())
+    )
+
+    # Create unified pressure and wind columns by preferring USA and WMO data
+    # For surface wind speed
+    wind_columns = [col for col in schema if "WIND" in col]
+    wind_priority = ["USA_WIND", "WMO_WIND"] + [
+        col for col in wind_columns if col not in ["USA_WIND", "WMO_WIND"]
+    ]
+
+    # For pressure at mean sea level
+    pressure_columns = [col for col in schema if "PRES" in col]
+    pressure_priority = [
+        "USA_PRES",
+        "WMO_PRES",
+    ] + [
+        col
+        for col in pressure_columns
+        if col
+        not in [
+            "USA_PRES",
+            "WMO_PRES",
+        ]
+    ]
+
+    # Create unified columns using coalesce (equivalent to pandas bfill)
+    subset_target_data = subset_target_data.with_columns(
+        [
+            pl.coalesce(wind_priority).alias("surface_wind_speed"),
+            pl.coalesce(pressure_priority).alias("air_pressure_at_mean_sea_level"),
+        ]
+    )
+
+    # Drop rows where wind speed OR pressure are null (equivalent to pandas
+    # dropna with how="any")
+    subset_target_data = subset_target_data.filter(
+        pl.col("surface_wind_speed").is_not_null()
+        & pl.col("air_pressure_at_mean_sea_level").is_not_null()
+    )
+
+    return subset_target_data
+
 
 @dataclasses.dataclass
 class IBTrACS(TargetBase):
     """Target class for IBTrACS data."""
 
     name: str = "IBTrACS"
+    _current_case_id: Optional[str] = dataclasses.field(default=None, init=False)
+    preprocess: Callable = _ibtracs_preprocess
+    input_variables_same_as_forecast: bool = False
     source: str = IBTRACS_URI
     variable_mapping: dict = dataclasses.field(
         default_factory=lambda: IBTrACS_metadata_variable_mapping.copy()
     )
-
     def _open_data_from_source(self) -> IncomingDataInput:
         # not using storage_options in this case due to NetCDF4Backend not
         # supporting them
@@ -772,67 +845,6 @@ class IBTrACS(TargetBase):
             & (pl.col("SEASON").cast(pl.Int64) == season)
         )
 
-        all_variables = IBTrACS_metadata_variable_mapping.values()
-        # subset the variables
-        subset_target_data = subset_target_data.select(all_variables)
-
-        schema = subset_target_data.collect_schema()
-        # Convert pressure and surface wind columns to float, replacing " " with null
-        # Get column names that contain "pressure" or "wind"
-        pressure_cols = [col for col in schema if "pressure" in col.lower()]
-        wind_cols = [col for col in schema if "wind" in col.lower()]
-
-        # Apply transformations to convert " " to null and cast to float
-        subset_target_data = subset_target_data.with_columns(
-            [
-                pl.when(pl.col(col) == " ")
-                .then(None)
-                .otherwise(pl.col(col))
-                .cast(pl.Float64, strict=False)
-                .alias(col)
-                for col in pressure_cols + wind_cols
-            ]
-        )
-
-        # Drop rows where ALL columns are null (equivalent to pandas dropna(how="all"))
-        subset_target_data = subset_target_data.filter(
-            ~pl.all_horizontal(pl.all().is_null())
-        )
-
-        # Create unified pressure and wind columns by preferring USA and WMO data
-        # For surface wind speed
-        wind_columns = [col for col in schema if "surface_wind_speed" in col]
-        wind_priority = ["usa_surface_wind_speed", "wmo_surface_wind_speed"] + [
-            col
-            for col in wind_columns
-            if col not in ["usa_surface_wind_speed", "wmo_surface_wind_speed"]
-        ]
-
-        # For pressure at mean sea level
-        pressure_columns = [
-            col for col in schema if "air_pressure_at_mean_sea_level" in col
-        ]
-        pressure_priority = [
-            "usa_air_pressure_at_mean_sea_level",
-            "wmo_air_pressure_at_mean_sea_level",
-        ] + [
-            col
-            for col in pressure_columns
-            if col
-            not in [
-                "usa_air_pressure_at_mean_sea_level",
-                "wmo_air_pressure_at_mean_sea_level",
-            ]
-        ]
-
-        # Create unified columns using coalesce (equivalent to pandas bfill)
-        subset_target_data = subset_target_data.with_columns(
-            [
-                pl.coalesce(wind_priority).alias("surface_wind_speed"),
-                pl.coalesce(pressure_priority).alias("air_pressure_at_mean_sea_level"),
-            ]
-        )
-
         # Select only the columns to keep
         columns_to_keep = [
             "valid_time",
@@ -851,12 +863,13 @@ class IBTrACS(TargetBase):
             pl.col("surface_wind_speed").is_not_null()
             & pl.col("air_pressure_at_mean_sea_level").is_not_null()
         )
+        self._current_case_id = case_metadata.case_id_number
 
         return subset_target_data
 
     def _custom_convert_to_dataset(self, data: IncomingDataInput) -> xr.Dataset:
         if isinstance(data, pl.LazyFrame):
-            data = data.collect().to_pandas()
+            data = data.collect(streaming=True).to_pandas()
 
             # IBTrACS data is in -180 to 180, convert to 0 to 360
             data["longitude"] = utils.convert_longitude_to_360(data["longitude"])
@@ -864,17 +877,43 @@ class IBTrACS(TargetBase):
             # Due to missing data in the IBTrACS dataset, polars doesn't convert
             # the valid_time to a datetime by default
             data["valid_time"] = pd.to_datetime(data["valid_time"])
-            data = data.set_index(["valid_time", "latitude", "longitude"])
+            data = data.set_index(["valid_time"])
 
             try:
-                data = xr.Dataset.from_dataframe(data, sparse=True)
+                data = xr.Dataset.from_dataframe(data)
             except ValueError as e:
                 if "non-unique" in str(e):
                     pass
-                data = xr.Dataset.from_dataframe(data.drop_duplicates(), sparse=True)
+                data = xr.Dataset.from_dataframe(data.drop_duplicates())
             return data
         else:
             raise ValueError(f"Data is not a polars LazyFrame: {type(data)}")
+
+    def add_source_to_dataset_attrs(self, ds: xr.Dataset) -> xr.Dataset:
+        """Add the source name and register IBTrACS data for TC filtering.
+
+        This method extends the base functionality to also register this
+        IBTrACS dataset for use in tropical cyclone filtering operations.
+        The registration happens automatically when IBTrACS data is processed.
+
+        Args:
+            ds: The dataset to add source attributes to.
+
+        Returns:
+            The dataset with source attributes added.
+        """
+        ds = super().add_source_to_dataset_attrs(ds)
+
+        # Register IBTrACS data immediately for tropical cyclone filtering
+        # if self._current_case_id is not None:
+        #     from extremeweatherbench.events import tropical_cyclone
+
+        #     tropical_cyclone.register_ibtracs_data(int(self._current_case_id), ds)
+
+        # Store flag indicating this is IBTrACS data
+        ds.attrs["is_ibtracs_data"] = True
+
+        return ds
 
 
 def open_kerchunk_reference(
