@@ -29,5 +29,5 @@ ewb = evaluate.ExtremeWeatherBench(
 n_threads_per_process = 10
 n_processes = max(1, multiprocessing.cpu_count() // n_threads_per_process)
 with logging_redirect_tqdm(loggers=[logger]):
-    results = ewb.run(parallel=True, n_jobs=n_processes, pre_compute=True)
+    results = ewb.run(n_jobs=n_processes, pre_compute=True)
 results.to_csv("brightband_evaluation_results.csv", index=False)

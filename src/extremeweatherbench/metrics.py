@@ -13,7 +13,6 @@ from extremeweatherbench.events.tropical_cyclone import (
 )
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
 
 
 # Global cache for transformed contingency managers

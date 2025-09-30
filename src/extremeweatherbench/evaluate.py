@@ -10,14 +10,14 @@ import pandas as pd
 import tqdm
 import xarray as xr
 from joblib import Parallel, delayed
+from tqdm.auto import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 
-from extremeweatherbench import cases, derived, inputs
+from extremeweatherbench import cases, derived, inputs, utils
 from extremeweatherbench.defaults import OUTPUT_COLUMNS
 
 if TYPE_CHECKING:
     from extremeweatherbench import metrics
-
 
 logger = logging.getLogger(__name__)
 
@@ -173,18 +173,18 @@ class ParallelTqdm(Parallel):
 
 
 class ExtremeWeatherBench:
-    """A class to run the ExtremeWeatherBench workflow.
+    """A class to build and run the ExtremeWeatherBench workflow.
 
-    This class is used to run the ExtremeWeatherBench workflow. It is a wrapper around
-    the case operators and evaluation objects to create either a serial loop or will
-    return the built case operators to run in parallel as defined by the user.
-
+    This class is used to run the ExtremeWeatherBench workflow. It is ultimately a
+    wrapper around case operators and evaluation objects to create either a parallel or
+    serial run to evaluate cases and metrics, returning a concatenated dataframe of the
+    results.
 
     Attributes:
         cases: A dictionary of cases to run.
-        metrics: A list of metrics to run.
+        evaluation_objects: A list of evaluation objects to run.
         cache_dir: An optional directory to cache the mid-flight outputs of the
-            workflow.
+            workflow for serial runs.
     """
 
     def __init__(
@@ -193,42 +193,45 @@ class ExtremeWeatherBench:
         evaluation_objects: list["inputs.EvaluationObject"],
         cache_dir: Optional[Union[str, Path]] = None,
     ):
+        """Initialize the ExtremeWeatherBench class.
+
+        Args:
+            cases: A dictionary of cases to run.
+            evaluation_objects: A list of evaluation objects to run.
+            cache_dir: An optional directory to cache the mid-flight outputs of the
+                workflow for serial runs.
+        """
         self.cases = cases
         self.evaluation_objects = evaluation_objects
         self.cache_dir = Path(cache_dir) if cache_dir else None
 
-    # case operators as a property are a convenience method for users to use
-    # them outside the class if desired for a parallel workflow
+    # Case operators as a property can be used as a convenience method for a workflow
+    # independent of the class.
     @property
     def case_operators(self) -> list["cases.CaseOperator"]:
         return cases.build_case_operators(self.cases, self.evaluation_objects)
 
     def run(
         self,
-        parallel: bool = False,
         n_jobs: Optional[int] = None,
         **kwargs,
     ) -> pd.DataFrame:
         """Runs the ExtremeWeatherBench workflow.
 
         This method will run the workflow in the order of the case operators, optionally
-        caching the mid-flight outputs of the workflow if cache_dir was provided.
-
-        Keyword arguments are passed to the metric computations if there are specific
-        requirements needed for metrics such as threshold arguments.
+        caching the mid-flight outputs of the workflow if cache_dir was provided for
+        serial runs.
 
         Args:
-            parallel: Whether to run the workflow in parallel.
-            cache_dir: The directory to cache the mid-flight outputs of the workflow.
             n_jobs: The number of jobs to run in parallel. If None, defaults to the
-            joblib backend default.
+            joblib backend default value. If 1, the workflow will run serially.
 
         Returns:
             A concatenated dataframe of the evaluation results.
         """
         # Caching does not work in parallel mode as of now, so ignore the cache_dir
         # but raise a warning for the user
-        if self.cache_dir and parallel:
+        if self.cache_dir and n_jobs != 1:
             logger.warning(
                 "Caching is not supported in parallel mode, ignoring cache_dir"
             )
@@ -238,38 +241,24 @@ class ExtremeWeatherBench:
                 self.cache_dir.mkdir(parents=True, exist_ok=True)
 
         run_results = _run_case_operators(
-            self.case_operators, parallel, n_jobs, self.cache_dir, **kwargs
+            self.case_operators, n_jobs, self.cache_dir, **kwargs
         )
-        try:
-            if run_results:
-                return pd.concat(run_results, ignore_index=True)
-        except ValueError:
+        if run_results:
+            return utils._safe_concat(run_results, ignore_index=True)
+        else:
             # Return empty DataFrame with expected columns
             return pd.DataFrame(columns=OUTPUT_COLUMNS)
 
 
 def _run_case_operators(
     case_operators: list["cases.CaseOperator"],
-    parallel: bool = False,
     n_jobs: Optional[int] = None,
     cache_dir: Optional[Path] = None,
     **kwargs,
 ) -> list[pd.DataFrame]:
-    """Run the case operators in serial or parallel.
-
-    Args:
-        case_operators: The case operators to run.
-        parallel: Whether to run in parallel mode.
-        n_jobs: Number of jobs for parallel execution.
-        cache_dir: Optional directory for caching results.
-        **kwargs: Keyword arguments to pass to the metric and case operator
-            computations.
-
-    Returns:
-        A concatenated dataframe of the results of the case operators.
-    """
+    """Run the case operators in parallel or serial."""
     with logging_redirect_tqdm():
-        if parallel:
+        if n_jobs != 1:
             return _run_parallel(case_operators, n_jobs, **kwargs)
         else:
             return _run_serial(case_operators, cache_dir, **kwargs)
@@ -279,17 +268,8 @@ def _run_serial(
     case_operators: list["cases.CaseOperator"],
     cache_dir: Optional[Path] = None,
     **kwargs,
-):
-    """Run the case operators in serial.
-
-    Args:
-        case_operators: The case operators to run.
-        cache_dir: Optional directory for caching results.
-        **kwargs: Keyword arguments to pass to the metric computations.
-
-    Returns:
-        A concatenated dataframe of the results of the case operators.
-    """
+) -> list[pd.DataFrame]:
+    """Run the case operators in serial."""
     run_results = []
     # Loop over the case operators
     for case_operator in tqdm(case_operators):
@@ -301,30 +281,15 @@ def _run_parallel(
     case_operators: list["cases.CaseOperator"],
     n_jobs: Optional[int] = None,
     **kwargs,
-):
-    """Run the case operators in parallel.
+) -> list[pd.DataFrame]:
+    """Run the case operators in parallel."""
 
-    The default parallelization is to use the number of available CPUs divided by 4
-    threads per process.
-
-    Args:
-        case_operators: The case operators to run.
-        n_jobs: The number of jobs to run in parallel. If None, defaults to the
-        joblib backend default.
-        kwargs: Keyword arguments to pass to the metric computations.
-
-    Returns:
-        A concatenated dataframe of the results of the case operators.
-    """
-    # Set the number of jobs to the number of processes if not provided
     if n_jobs is None:
-        logger.warning("No number of jobs provided, using all available CPUs.")
-    run_results = ParallelTqdm(
-        total_tasks=len(case_operators), desc="Case Operators", n_jobs=n_jobs
-    )(
+        logger.warning("No number of jobs provided, using joblib backend default.")
+    run_results = Parallel(n_jobs=n_jobs)(
         # None is the cache_dir, we can't cache in parallel mode
         delayed(compute_case_operator)(case_operator, None, **kwargs)
-        for case_operator in case_operators
+        for case_operator in tqdm(case_operators)
     )
     return run_results
 
@@ -333,7 +298,7 @@ def compute_case_operator(
     case_operator: "cases.CaseOperator",
     cache_dir: Optional[Path] = None,
     **kwargs,
-):
+) -> pd.DataFrame:
     """Compute the results of a case operator.
 
     This method will compute the results of a case operator. It will build
@@ -342,6 +307,8 @@ def compute_case_operator(
 
     Args:
         case_operator: The case operator to compute the results of.
+        cache_dir: The directory to cache the mid-flight outputs of the workflow if
+        in serial mode.
         kwargs: Keyword arguments to pass to the metric computations.
 
     Returns:
@@ -360,7 +327,7 @@ def compute_case_operator(
         case_operator.target.maybe_align_forecast_to_target(forecast_ds, target_ds)
     )
 
-    # compute and cache the datasets if requested
+    # Compute and cache the datasets if requested
     if kwargs.get("pre_compute", False):
         aligned_forecast_ds, aligned_target_ds = _compute_and_maybe_cache(
             aligned_forecast_ds,
@@ -392,18 +359,15 @@ def compute_case_operator(
             )
         )
 
-        # cache the results of each metric if caching
+        # Cache the results of each metric if caching
         cache_dir = kwargs.get("cache_dir", None)
         if cache_dir:
             cache_path = Path(cache_dir) if isinstance(cache_dir, str) else cache_dir
-            pd.concat(results, ignore_index=True).to_pickle(cache_path / "results.pkl")
+            concatenated = utils._safe_concat(results, ignore_index=True)
+            if not concatenated.empty:
+                concatenated.to_pickle(cache_path / "results.pkl")
 
-    if results:
-        results = [i.dropna(axis=1, how="all") for i in results]
-        return pd.concat(results, ignore_index=True)
-    else:
-        # Return empty DataFrame with expected columns
-        return pd.DataFrame(columns=OUTPUT_COLUMNS)
+    return utils._safe_concat(results, ignore_index=True)
 
 
 def _extract_standard_metadata(
@@ -501,7 +465,7 @@ def _evaluate_metric_and_return_df(
     case_id_number: int,
     event_type: str,
     **kwargs,
-):
+) -> pd.DataFrame:
     """Evaluate a metric and return a dataframe of the results.
 
     Args:
@@ -604,7 +568,7 @@ def _compute_and_maybe_cache(
     *datasets: xr.Dataset, cache_dir: Optional[Union[str, Path]]
 ) -> list[xr.Dataset]:
     """Compute and cache the datasets if caching."""
-    logger.info("Computing datasets... ")
+    logger.info("Computing datasets...")
     computed_datasets = [dataset.compute() for dataset in datasets]
     if cache_dir:
         raise NotImplementedError("Caching is not implemented yet")

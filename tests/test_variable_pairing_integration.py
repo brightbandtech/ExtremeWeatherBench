@@ -433,8 +433,6 @@ class TestVariablePairingIntegration:
             "value",
             "target_variable",
             "metric",
-            "target_source",
-            "forecast_source",
             "case_id_number",
             "event_type",
         ]

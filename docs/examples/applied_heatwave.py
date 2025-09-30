@@ -1,70 +1,35 @@
 import logging
 
-import numpy as np
-import xarray as xr
-from tqdm.contrib.logging import logging_redirect_tqdm
 
-from extremeweatherbench import evaluate, inputs, metrics, utils
+from extremeweatherbench import evaluate, inputs, metrics, cases
 
-# Suppress noisy log messages
-logging.getLogger("urllib3.connectionpool").setLevel(logging.CRITICAL)
-logging.getLogger("botocore.httpchecksum").setLevel(logging.CRITICAL)
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Set the logger level to INFO
+logger = logging.getLogger("extremeweatherbench")
+logger.setLevel(logging.INFO)
 
-# Load events yaml
-case_yaml = utils.load_events_yaml()
-
-
-# Preprocess function for CIRA data using Brightband kerchunk parquets
-def _preprocess_bb_cira_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
-    """An example preprocess function that renames the time coordinate to lead_time,
-    creates a valid_time coordinate, and sets the lead time range and resolution not
-    present in the original dataset.
-
-    Args:
-        ds: The forecast dataset to rename.
-
-    Returns:
-        The renamed forecast dataset.
-    """
-    ds = ds.rename({"time": "lead_time"})
-    # The evaluation configuration is used to set the lead time range and resolution.
-    ds["lead_time"] = np.array(
-        [i for i in range(0, 241, 6)], dtype="timedelta64[h]"
-    ).astype("timedelta64[ns]")
-    return ds
+# Load case data from the default events.yaml
+# Users can also define their own cases_dict structure
+case_yaml = cases.load_ewb_events_yaml_into_case_collection()
 
 
 # Define targets
 # ERA5 target
 era5_heatwave_target = inputs.ERA5(
-    source=inputs.ARCO_ERA5_FULL_URI,
     variables=["surface_air_temperature"],
-    variable_mapping={
-        "2m_temperature": "surface_air_temperature",
-        "time": "valid_time",
-    },
-    storage_options={"remote_options": {"anon": True}},
     chunks=None,
 )
 
 # GHCN target
 ghcn_target = inputs.GHCN(
-    source=inputs.DEFAULT_GHCN_URI,
     variables=["surface_air_temperature"],
 )
 
 # Define forecast (HRES)
 hres_forecast = inputs.ZarrForecast(
+    name="hres_forecast",
     source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
     variables=["surface_air_temperature"],
-    variable_mapping={
-        "2m_temperature": "surface_air_temperature",
-        "prediction_timedelta": "lead_time",
-        "time": "init_time",
-    },
-    storage_options={"remote_options": {"anon": True}},
+    variable_mapping=inputs.HRES_metadata_variable_mapping,
 )
 
 # Create a list of evaluation objects for heatwave
@@ -95,22 +60,16 @@ heatwave_evaluation_object = [
     ),
 ]
 
-
 # Initialize ExtremeWeatherBench
 ewb = evaluate.ExtremeWeatherBench(
     cases=case_yaml,
     evaluation_objects=heatwave_evaluation_object,
 )
 
-
-with logging_redirect_tqdm(loggers=[logger]):
-    results = ewb.run(parallel=True, pre_compute=True)
-results.to_csv("brightband_evaluation_results.csv", index=False)
-
 # Run the workflow
 outputs = ewb.run(
     # tolerance range is the number of hours before and after the timestamp a
-    # validating occurrence is checked in the forecasts
+    # validating occurrence is checked in the forecasts for certain metrics
     tolerance_range=48,
     # pre-compute the datasets to avoid recomputing them for each metric
     # this works best when incoming data is small (e.g. one variable)
@@ -119,4 +78,4 @@ outputs = ewb.run(
 )
 
 # Print the outputs; can be saved if desired
-print(outputs.head())
+logger.info(outputs.head())

@@ -275,10 +275,10 @@ class TestExtremeWeatherBench:
                 evaluation_objects=[sample_evaluation_object],
             )
 
-            result = ewb.run(parallel=False)
+            result = ewb.run(n_jobs=1)
 
             mock_run_case_operators.assert_called_once_with(
-                [sample_case_operator], False, None, None
+                [sample_case_operator], 1, None
             )
             assert isinstance(result, pd.DataFrame)
             assert len(result) == 1
@@ -311,10 +311,10 @@ class TestExtremeWeatherBench:
                 evaluation_objects=[sample_evaluation_object],
             )
 
-            result = ewb.run(parallel=True, n_jobs=2)
+            result = ewb.run(n_jobs=2)
 
             mock_run_case_operators.assert_called_once_with(
-                [sample_case_operator], True, 2, None
+                [sample_case_operator], 2, None
             )
             assert isinstance(result, pd.DataFrame)
             assert len(result) == 1
@@ -339,7 +339,7 @@ class TestExtremeWeatherBench:
                 evaluation_objects=[sample_evaluation_object],
             )
 
-            result = ewb.run(parallel=False, threshold=0.5, pre_compute=True)
+            result = ewb.run(n_jobs=1, threshold=0.5, pre_compute=True)
 
             # Check that kwargs were passed through
             call_args = mock_run_case_operators.call_args
@@ -413,7 +413,7 @@ class TestExtremeWeatherBench:
                     cache_dir=cache_dir,
                 )
 
-                ewb.run()
+                ewb.run(n_jobs=1)
 
                 # Check that cache directory was created
                 assert cache_dir.exists()
@@ -463,9 +463,7 @@ class TestRunCaseOperators:
         mock_results = [pd.DataFrame({"value": [1.0]})]
         mock_run_serial.return_value = mock_results
 
-        result = evaluate._run_case_operators(
-            [sample_case_operator], parallel=False, n_jobs=None
-        )
+        result = evaluate._run_case_operators([sample_case_operator], n_jobs=1)
 
         mock_run_serial.assert_called_once_with([sample_case_operator], None)
         assert result == mock_results
@@ -476,9 +474,7 @@ class TestRunCaseOperators:
         mock_results = [pd.DataFrame({"value": [1.0]})]
         mock_run_parallel.return_value = mock_results
 
-        result = evaluate._run_case_operators(
-            [sample_case_operator], parallel=True, n_jobs=4
-        )
+        result = evaluate._run_case_operators([sample_case_operator], n_jobs=4)
 
         mock_run_parallel.assert_called_once_with([sample_case_operator], 4)
         assert result == mock_results
@@ -493,8 +489,7 @@ class TestRunCaseOperators:
 
         result = evaluate._run_case_operators(
             [sample_case_operator],
-            parallel=False,
-            n_jobs=None,
+            n_jobs=1,
             threshold=0.5,
             pre_compute=True,
         )
@@ -514,7 +509,7 @@ class TestRunCaseOperators:
         mock_run_parallel.return_value = mock_results
 
         result = evaluate._run_case_operators(
-            [sample_case_operator], parallel=True, n_jobs=2, custom_param="test_value"
+            [sample_case_operator], n_jobs=2, custom_param="test_value"
         )
 
         call_args = mock_run_parallel.call_args
@@ -528,7 +523,7 @@ class TestRunCaseOperators:
         with patch("extremeweatherbench.evaluate._run_serial") as mock_serial:
             mock_serial.return_value = []
 
-            result = evaluate._run_case_operators([], parallel=False, n_jobs=None)
+            result = evaluate._run_case_operators([], n_jobs=1)
 
             mock_serial.assert_called_once_with([], None)
             assert result == []
@@ -652,7 +647,7 @@ class TestRunParallel:
 
             # Should warn about using all CPUs
             mock_warning.assert_called_once_with(
-                "No number of jobs provided, using all available CPUs."
+                "No number of jobs provided, using joblib backend default."
             )
 
             # Verify Parallel was called with n_jobs=None
@@ -1392,9 +1387,7 @@ class TestErrorHandling:
         mock_run_serial.side_effect = Exception("Serial execution failed")
 
         with pytest.raises(Exception, match="Serial execution failed"):
-            evaluate._run_case_operators(
-                [sample_case_operator], parallel=False, n_jobs=None
-            )
+            evaluate._run_case_operators([sample_case_operator], n_jobs=1)
 
     @patch("extremeweatherbench.evaluate._run_parallel")
     def test_run_case_operators_parallel_exception(
@@ -1404,9 +1397,7 @@ class TestErrorHandling:
         mock_run_parallel.side_effect = Exception("Parallel execution failed")
 
         with pytest.raises(Exception, match="Parallel execution failed"):
-            evaluate._run_case_operators(
-                [sample_case_operator], parallel=True, n_jobs=2
-            )
+            evaluate._run_case_operators([sample_case_operator], n_jobs=2)
 
     @patch("extremeweatherbench.evaluate.compute_case_operator")
     @patch("tqdm.auto.tqdm")
@@ -1518,31 +1509,6 @@ class TestErrorHandling:
 
         with pytest.raises(ValueError, match="Invalid n_jobs parameter"):
             evaluate._run_parallel([sample_case_operator], n_jobs=-5)
-
-    def test_run_case_operators_invalid_parallel_parameter(self, sample_case_operator):
-        """Test _run_case_operators with invalid parallel parameter type."""
-        # This should work fine since Python is dynamically typed,
-        # but let's test edge case where parallel is not boolean
-        with patch("extremeweatherbench.evaluate._run_serial") as mock_serial:
-            mock_serial.return_value = []
-
-            # Should still route to serial when parallel is falsy
-            result = evaluate._run_case_operators(
-                [sample_case_operator], parallel=0, n_jobs=None
-            )
-
-            mock_serial.assert_called_once()
-
-        with patch("extremeweatherbench.evaluate._run_parallel") as mock_parallel:
-            mock_parallel.return_value = []
-
-            # Should route to parallel when parallel is truthy
-            result = evaluate._run_case_operators(
-                [sample_case_operator], parallel=1, n_jobs=None
-            )
-
-            mock_parallel.assert_called_once()
-            assert isinstance(result, list)
 
 
 class TestIntegration:
@@ -1761,12 +1727,12 @@ class TestIntegration:
 
             # Test serial execution
             mock_compute_case_operator.side_effect = [result_1, result_2]
-            serial_result = ewb.run(parallel=False)
+            serial_result = ewb.run(n_jobs=1)
 
             # Reset mock and test parallel execution
             mock_compute_case_operator.reset_mock()
             mock_compute_case_operator.side_effect = [result_1, result_2]
-            parallel_result = ewb.run(parallel=True, n_jobs=2)
+            parallel_result = ewb.run(n_jobs=2)
 
             # Both should produce valid DataFrames with same structure
             assert isinstance(serial_result, pd.DataFrame)
@@ -1931,10 +1897,10 @@ class TestIntegration:
     def test_empty_case_operators_all_methods(self):
         """Test that all execution methods handle empty case operator lists."""
         # Test _run_case_operators
-        result = evaluate._run_case_operators([], parallel=False, n_jobs=None)
+        result = evaluate._run_case_operators([], n_jobs=1)
         assert result == []
 
-        result = evaluate._run_case_operators([], parallel=True, n_jobs=2)
+        result = evaluate._run_case_operators([], n_jobs=2)
         assert result == []
 
         # Test _run_serial
@@ -2499,9 +2465,6 @@ class TestEnsureOutputSchema:
         assert list(result["lead_time"]) == [6, 12]
         # init_time should be NaN since not provided and is in OUTPUT_COLUMNS
         assert pd.isna(result["init_time"].iloc[0])
-        # Other OUTPUT_COLUMNS should have NaN for missing source columns
-        assert pd.isna(result["target_source"].iloc[0])
-        assert pd.isna(result["forecast_source"].iloc[0])
 
     def test_ensure_output_schema_lead_time_valid_time(self):
         """Test _ensure_output_schema with lead_time and valid_time.
