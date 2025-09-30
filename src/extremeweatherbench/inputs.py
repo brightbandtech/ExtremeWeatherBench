@@ -727,6 +727,9 @@ class IBTrACS(TargetBase):
 
     name: str = "IBTrACS"
     source: str = IBTRACS_URI
+    variable_mapping: dict = dataclasses.field(
+        default_factory=lambda: IBTrACS_metadata_variable_mapping.copy()
+    )
 
     def _open_data_from_source(self) -> IncomingDataInput:
         # not using storage_options in this case due to NetCDF4Backend not
