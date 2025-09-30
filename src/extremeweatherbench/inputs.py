@@ -698,7 +698,9 @@ class PPH(TargetBase):
 
     name: str = "practically_perfect_hindcast"
     source: str = PPH_URI
-
+    variable_mapping: dict = dataclasses.field(
+        default_factory=lambda: IBTrACS_metadata_variable_mapping.copy()
+    )
     def _open_data_from_source(
         self,
     ) -> IncomingDataInput:
