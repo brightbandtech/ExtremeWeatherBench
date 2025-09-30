@@ -151,17 +151,17 @@ def _compute_specific_humidity_from_relative_humidity(data: xr.Dataset) -> xr.Da
 
     # Compute saturation mixing ratio; air temperature must be in Kelvin;
     # level must be in hPa
-    sat_mixing_ratio = saturation_mixing_ratio(
+    sat_mixing_ratio = calc.saturation_mixing_ratio(
         data["level"], data["air_temperature"] - 273.15
     )
 
     # Calculate specific humidity using saturation mixing ratio, epsilon,
     # and relative humidity
     mixing_ratio = (
-        epsilon
+        calc.epsilon
         * sat_mixing_ratio
         * data["relative_humidity"]
-        / (epsilon + sat_mixing_ratio * (1 - data["relative_humidity"]))
+        / (calc.epsilon + sat_mixing_ratio * (1 - data["relative_humidity"]))
     )
     specific_humidity = mixing_ratio / (1 + mixing_ratio)
     return specific_humidity
