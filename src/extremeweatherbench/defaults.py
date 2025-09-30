@@ -13,10 +13,9 @@ logging.getLogger("botocore.httpchecksum").setLevel(logging.CRITICAL)
 OUTPUT_COLUMNS = [
     "value",
     "lead_time",
+    "init_time",
     "target_variable",
     "metric",
-    "target_source",
-    "forecast_source",
     "case_id_number",
     "event_type",
 ]
@@ -130,12 +129,6 @@ ghcn_freeze_target = inputs.GHCN(
 
 ibtracs_target = inputs.IBTrACS(
     source=inputs.IBTRACS_URI,
-    variables=[
-        "surface_wind_speed",
-        "air_pressure_at_mean_sea_level",
-    ],
-    variable_mapping=inputs.IBTrACS_metadata_variable_mapping,
-    storage_options={},
 )
 
 # Forecast Examples
@@ -287,15 +280,12 @@ BRIGHTBAND_EVALUATION_OBJECTS = [
     #     forecast=cira_atmospheric_river_forecast,
     # ),
     # TODO: Re-enable when tropical cyclone forecast is implemented
-    # inputs.EvaluationObject(
-    #     event_type="tropical_cyclone",
-    #     metric_list=[
-    #         metrics.EarlySignal,
-    #         metrics.LandfallDisplacement,
-    #         metrics.LandfallTimeME,
-    #         metrics.LandfallIntensityMAE,
-    #     ],
-    #     target=ibtracs_target,
-    #     forecast=cira_tropical_cyclone_forecast,
-    # ),
+    inputs.EvaluationObject(
+        event_type="tropical_cyclone",
+        metric_list=[
+            metrics.EarlySignal,
+        ],
+        target=ibtracs_target,
+        forecast=cira_tropical_cyclone_forecast,
+    ),
 ]

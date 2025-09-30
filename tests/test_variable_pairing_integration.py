@@ -20,13 +20,11 @@ import xarray as xr
 from extremeweatherbench import cases, evaluate, inputs, metrics
 from extremeweatherbench.regions import CenteredRegion
 
-# =============================================================================
-# Test Fixtures
-# =============================================================================
-
 
 class MockMetric(metrics.BaseMetric):
     """A simple mock metric for testing."""
+
+    name = "MockMetric"
 
     @classmethod
     def _compute_metric(cls, forecast: xr.DataArray, target: xr.DataArray, **kwargs):
@@ -113,13 +111,13 @@ def base_target_dataset():
 
     return xr.Dataset(
         {
-            "var_x": (["time", "latitude", "longitude"], temp_data),
-            "var_y": (["time", "latitude", "longitude"], pressure_data),
-            "var_z": (["time", "latitude", "longitude"], humidity_data),
-            "var_w": (["time", "latitude", "longitude"], wind_data),
+            "var_x": (["valid_time", "latitude", "longitude"], temp_data),
+            "var_y": (["valid_time", "latitude", "longitude"], pressure_data),
+            "var_z": (["valid_time", "latitude", "longitude"], humidity_data),
+            "var_w": (["valid_time", "latitude", "longitude"], wind_data),
         },
         coords={
-            "time": time,
+            "valid_time": time,
             "latitude": latitude,
             "longitude": longitude,
         },
@@ -136,6 +134,7 @@ def create_mock_input(variables: List[str], dataset: xr.Dataset, input_type: str
     # Mock all pipeline methods to return the dataset
     mock_input.open_and_maybe_preprocess_data_from_source.return_value = dataset
     mock_input.maybe_map_variable_names.return_value = dataset
+    mock_input.maybe_subset_variables.return_value = dataset
     mock_input.subset_data_to_case.return_value = dataset
     mock_input.maybe_convert_to_dataset.return_value = dataset
     mock_input.add_source_to_dataset_attrs.return_value = dataset
@@ -434,8 +433,6 @@ class TestVariablePairingIntegration:
             "value",
             "target_variable",
             "metric",
-            "target_source",
-            "forecast_source",
             "case_id_number",
             "event_type",
         ]

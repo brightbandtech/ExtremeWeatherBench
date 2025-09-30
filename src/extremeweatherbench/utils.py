@@ -4,20 +4,73 @@ specialized package."""
 import datetime
 import inspect
 import logging
+import threading
 from importlib import resources
 from pathlib import Path
-from typing import Any, Callable, Optional, TypeAlias, Union
+from typing import Any, Callable, Optional, Union
 
 import numpy as np
 import pandas as pd  # type: ignore[import-untyped]
-import polars as pl
 import regionmask
 import xarray as xr
 import yaml  # type: ignore[import]
 
 logger = logging.getLogger(__name__)
 
-IncomingDataInput: TypeAlias = xr.Dataset | xr.DataArray | pl.LazyFrame | pd.DataFrame
+
+class ThreadSafeDict:
+    """A thread-safe dictionary implementation using locks.
+
+    This class provides a thread-safe wrapper around a standard dictionary,
+    ensuring atomic operations for getting, setting, and deleting items.
+    Useful for caching data that needs to be shared between threads safely.
+    """
+
+    def __init__(self):
+        self._data = {}
+        self._lock = threading.Lock()
+
+    def __setitem__(self, key, value):
+        with self._lock:
+            self._data[key] = value
+
+    def __getitem__(self, key):
+        with self._lock:
+            return self._data[key]
+
+    def __delitem__(self, key):
+        with self._lock:
+            del self._data[key]
+
+    def __contains__(self, key):
+        with self._lock:
+            return key in self._data
+
+    def get(self, key, default=None):
+        with self._lock:
+            return self._data.get(key, default)
+
+    def clear(self):
+        with self._lock:
+            self._data.clear()
+
+    def __len__(self):
+        with self._lock:
+            return len(self._data)
+
+    def keys(self):
+        with self._lock:
+            return list(self._data.keys())
+            # Return a copy to prevent concurrent modification issues during
+            # iteration
+
+    def values(self):
+        with self._lock:
+            return list(self._data.values())  # Return a copy
+
+    def items(self):
+        with self._lock:
+            return list(self._data.items())  # Return a copy
 
 
 def convert_longitude_to_360(longitude: float) -> float:
@@ -138,11 +191,6 @@ def derive_indices_from_init_time_and_lead_time(
     valid_time_indices = np.asarray(valid_time_mask).nonzero()
 
     return valid_time_indices
-
-
-def _default_preprocess(input_data: IncomingDataInput) -> IncomingDataInput:
-    """Default forecast preprocess function that does nothing."""
-    return input_data
 
 
 def filter_kwargs_for_callable(kwargs: dict, callable_obj: Callable) -> dict:
