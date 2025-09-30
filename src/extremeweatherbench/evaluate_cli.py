@@ -9,7 +9,7 @@ import click
 import pandas as pd
 
 from extremeweatherbench import defaults, inputs
-from extremeweatherbench.evaluate import ExtremeWeatherBench, _run_parallel
+from extremeweatherbench.evaluate import ExtremeWeatherBench, _run_parallel, _run_serial
 
 
 @click.command()
@@ -55,13 +55,23 @@ from extremeweatherbench.evaluate import ExtremeWeatherBench, _run_parallel
 )
 @click.option(
     "--forecast-path",
-    type=click.Path(exists=True),
-    help="Path to forecast data file (zarr or kerchunk format)",
+    type=str,
+    help="Path to forecast data file (zarr or kerchunk format, supports local paths and remote URLs)",
 )
 @click.option(
     "--variable-mapping",
     type=str,
     help="JSON string of variable mapping for forecast data",
+)
+@click.option(
+    "--storage-options",
+    type=str,
+    help="JSON string of storage options for remote forecast data access",
+)
+@click.option(
+    "--preprocess-function",
+    type=str,
+    help="Python module path and function name for preprocessing (e.g., 'mymodule.preprocess_func')",
 )
 def cli_runner(
     default: bool,
@@ -73,6 +83,8 @@ def cli_runner(
     precompute: bool,
     forecast_path: Optional[str],
     variable_mapping: Optional[str],
+    storage_options: Optional[str],
+    preprocess_function: Optional[str],
 ):
     """ExtremeWeatherBench command line interface.
 
@@ -97,6 +109,12 @@ def cli_runner(
 
         # Use default evaluation with custom forecast
         $ ewb --default --forecast-path /path/to/forecast.zarr --variable-mapping '{"temp":"surface_air_temperature"}'
+        
+        # Use default evaluation with remote forecast and storage options
+        $ ewb --default --forecast-path gs://bucket/forecast.parq --variable-mapping '{"t2":"surface_air_temperature"}' --storage-options '{"remote_protocol":"s3","remote_options":{"anon":true}}'
+        
+        # Use default evaluation with custom preprocess function
+        $ ewb --default --forecast-path /path/to/forecast.zarr --variable-mapping '{"temp":"surface_air_temperature"}' --preprocess-function mymodule.preprocess_func
 
         # Use custom config file with parallel execution
         $ ewb --config-file my_config.py --parallel 4
@@ -150,10 +168,10 @@ def cli_runner(
         if forecast_path and variable_mapping:
             click.echo("Using default evaluation objects with custom forecast...")
             evaluation_objects = _create_evaluation_objects_with_custom_forecast(
-                forecast_path, variable_mapping
+                forecast_path, variable_mapping, storage_options, preprocess_function
             )
-        elif forecast_path or variable_mapping:
-            # Only one forecast option provided
+        elif forecast_path or variable_mapping or storage_options:
+            # Some forecast options provided but not all required ones
             raise click.UsageError(
                 "When using --default with custom forecast, both --forecast-path "
                 "and --variable-mapping must be provided"
@@ -189,10 +207,10 @@ def cli_runner(
     # Run evaluation
     if parallel > 1:
         click.echo(f"Running evaluation with {parallel} parallel jobs...")
-        results = _run_parallel(case_operators, parallel, pre_compute=precompute)
+        results = ewb.run(n_jobs=parallel, pre_compute=precompute)
     else:
         click.echo("Running evaluation in serial...")
-        results = ewb.run(pre_compute=precompute)
+        results = ewb.run(n_jobs=1, pre_compute=precompute)
 
     # Save results
     output_file = output_path / "evaluation_results.csv"
@@ -238,26 +256,95 @@ def _load_config_file(config_path: str) -> tuple:
     return config_module.evaluation_objects, config_module.cases_dict
 
 
+def _load_preprocess_function(function_str: str):
+    """Load a preprocess function from a module.function string.
+    
+    Args:
+        function_str: String in format 'module.path.function_name'
+        
+    Returns:
+        The loaded function
+        
+    Raises:
+        click.ClickException: If function cannot be loaded
+    """
+    try:
+        module_path, function_name = function_str.rsplit('.', 1)
+        module = importlib.import_module(module_path)
+        func = getattr(module, function_name)
+        return func
+    except (ValueError, ImportError, AttributeError) as e:
+        raise click.ClickException(
+            f"Could not load preprocess function '{function_str}': {e}"
+        )
+
+
+def _validate_forecast_path(forecast_path: str) -> None:
+    """Validate forecast path (local file or remote URL).
+    
+    Args:
+        forecast_path: Path to validate
+        
+    Raises:
+        click.ClickException: If path is invalid
+    """
+    # Check if it's a remote URL
+    if forecast_path.startswith(('http://', 'https://', 'gs://', 's3://', 'gcs://')):
+        # For remote URLs, we can't validate existence, just accept them
+        return
+    
+    # For local paths, check if they exist
+    if not Path(forecast_path).exists():
+        raise click.ClickException(f"Local file does not exist: {forecast_path}")
+
+
 def _create_evaluation_objects_with_custom_forecast(
-    forecast_path: str, variable_mapping_str: str
+    forecast_path: str, 
+    variable_mapping_str: str,
+    storage_options_str: Optional[str] = None,
+    preprocess_function_str: Optional[str] = None
 ) -> list:
     """Create evaluation objects using custom forecast data.
     
     Args:
-        forecast_path: Path to the forecast data file
+        forecast_path: Path to the forecast data file (local or remote)
         variable_mapping_str: JSON string containing variable mapping
+        storage_options_str: Optional JSON string containing storage options
+        preprocess_function_str: Optional module.function string for preprocessing
         
     Returns:
         List of evaluation objects with custom forecast
     """
+    # Validate the forecast path
+    _validate_forecast_path(forecast_path)
+    
     try:
         variable_mapping = json.loads(variable_mapping_str)
     except json.JSONDecodeError as e:
         raise click.ClickException(f"Invalid JSON in --variable-mapping: {e}")
     
+    # Parse storage options
+    storage_options = {}
+    if storage_options_str:
+        try:
+            storage_options = json.loads(storage_options_str)
+        except json.JSONDecodeError as e:
+            raise click.ClickException(f"Invalid JSON in --storage-options: {e}")
+    
+    # Load preprocess function if specified
+    preprocess_func = None
+    if preprocess_function_str:
+        preprocess_func = _load_preprocess_function(preprocess_function_str)
+    
     # Infer forecast type from file extension
-    forecast_path_obj = Path(forecast_path)
-    extension = forecast_path_obj.suffix.lower()
+    # For URLs, get the path part after the last '/'
+    if forecast_path.startswith(('http://', 'https://', 'gs://', 's3://', 'gcs://')):
+        # Extract filename from URL
+        filename = forecast_path.split('/')[-1]
+        extension = Path(filename).suffix.lower()
+    else:
+        # Local path
+        extension = Path(forecast_path).suffix.lower()
     
     if extension == ".zarr" or forecast_path.endswith(".zarr"):
         forecast_class = inputs.ZarrForecast
@@ -275,12 +362,18 @@ def _create_evaluation_objects_with_custom_forecast(
         all_variables.update(eval_obj.forecast.variables)
     
     # Create custom forecast object
-    custom_forecast = forecast_class(
-        source=forecast_path,
-        variables=list(all_variables),
-        variable_mapping=variable_mapping,
-        storage_options={},
-    )
+    forecast_kwargs = {
+        "source": forecast_path,
+        "variables": list(all_variables),
+        "variable_mapping": variable_mapping,
+        "storage_options": storage_options,
+    }
+    
+    # Add preprocess function if provided
+    if preprocess_func is not None:
+        forecast_kwargs["preprocess"] = preprocess_func
+    
+    custom_forecast = forecast_class(**forecast_kwargs)
     
     # Create new evaluation objects with custom forecast
     evaluation_objects = []
