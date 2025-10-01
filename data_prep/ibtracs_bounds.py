@@ -303,6 +303,111 @@ def calculate_storm_bounds(all_storms_df):
     return storm_bounds
 
 
+def calculate_geographic_overlap(case_bounds, storm_bounds):
+    """Calculate geographic overlap between case bounds and storm bounds.
+
+    Args:
+        case_bounds: Dictionary with latitude_min, latitude_max, longitude_min,
+            longitude_max.
+        storm_bounds: Dictionary with latitude_min, latitude_max, longitude_min,
+            longitude_max.
+
+    Returns:
+        Float representing overlap area (0 = no overlap, higher = more overlap).
+    """
+    # Calculate overlapping rectangle
+    lat_overlap = max(
+        0,
+        min(case_bounds["latitude_max"], storm_bounds["latitude_max"])
+        - max(case_bounds["latitude_min"], storm_bounds["latitude_min"]),
+    )
+
+    # Handle longitude wraparound
+    lon_min_case = case_bounds["longitude_min"]
+    lon_max_case = case_bounds["longitude_max"]
+    lon_min_storm = storm_bounds["longitude_min"]
+    lon_max_storm = storm_bounds["longitude_max"]
+
+    # Simple longitude overlap calculation (not handling 180° wraparound)
+    lon_overlap = max(
+        0, min(lon_max_case, lon_max_storm) - max(lon_min_case, lon_min_storm)
+    )
+
+    return lat_overlap * lon_overlap
+
+
+def find_best_storm_by_geography(storm_names, all_storms_df, case_location):
+    """Find the best matching storm based on geographic proximity.
+
+    Args:
+        storm_names: List of storm names to search for.
+        all_storms_df: DataFrame containing all storm data.
+        case_location: Dictionary with case location bounds.
+
+    Returns:
+        Filtered DataFrame with the best matching storm data.
+    """
+    # Get all storms matching the names
+    matching_storms = all_storms_df[all_storms_df["tc_name"].isin(storm_names)]
+
+    if len(matching_storms) == 0:
+        return matching_storms
+
+    # If only one storm_id, return it
+    unique_storm_ids = matching_storms["storm_id"].unique()
+    if len(unique_storm_ids) == 1:
+        return matching_storms
+
+    logger.info(
+        "Multiple storms found for %s, selecting by geographic proximity", storm_names
+    )
+
+    # Calculate bounds for each storm_id
+    best_storm_id = None
+    best_overlap = -1
+
+    case_bounds = {
+        "latitude_min": case_location["latitude_min"],
+        "latitude_max": case_location["latitude_max"],
+        "longitude_min": case_location["longitude_min"],
+        "longitude_max": case_location["longitude_max"],
+    }
+
+    for storm_id in unique_storm_ids:
+        storm_data = matching_storms[matching_storms["storm_id"] == storm_id]
+        storm_bounds = {
+            "latitude_min": storm_data["latitude"].min(),
+            "latitude_max": storm_data["latitude"].max(),
+            "longitude_min": storm_data["longitude"].min(),
+            "longitude_max": storm_data["longitude"].max(),
+        }
+
+        overlap = calculate_geographic_overlap(case_bounds, storm_bounds)
+
+        # Also check hemisphere match (more important than overlap)
+        case_hemisphere = "N" if case_bounds["latitude_min"] >= 0 else "S"
+        storm_hemisphere = "N" if storm_bounds["latitude_min"] >= 0 else "S"
+        hemisphere_match = case_hemisphere == storm_hemisphere
+
+        # Prioritize hemisphere match, then overlap
+        score = (1000 if hemisphere_match else 0) + overlap
+
+        logger.info(
+            "Storm %s: hemisphere=%s, overlap=%.2f, score=%.2f",
+            storm_id,
+            storm_hemisphere,
+            overlap,
+            score,
+        )
+
+        if score > best_overlap:
+            best_overlap = score
+            best_storm_id = storm_id
+
+    logger.info("Selected storm %s with score %.2f", best_storm_id, best_overlap)
+    return matching_storms[matching_storms["storm_id"] == best_storm_id]
+
+
 def find_storm_bounds_for_case(storm_name, storm_bounds, all_storms_df):
     """Find storm bounds for a given case, handling various name formats."""
     found_bounds = None
@@ -407,13 +512,6 @@ def find_storm_bounds_for_case(storm_name, storm_bounds, all_storms_df):
     if found_bounds is not None:
         # Get storm data for this storm to find first and last valid times
         storm_data = all_storms_df[all_storms_df["tc_name"].isin(storm_names)]
-        if len(storm_data) > 0 and storm_data["storm_id"].nunique() > 1:
-            if "HAROLD" in storm_names:
-                storm_data = storm_data[storm_data["valid_time"].dt.year == 2023]
-            elif "ANA" in storm_names:
-                storm_data = storm_data[storm_data["valid_time"].dt.year == 2022]
-            else:
-                logger.warning("Multiple storms found for %s", storm_names)
         if len(storm_data) == 0:
             # Try to find with different name formats
             for key in storm_bounds.keys():
@@ -451,6 +549,19 @@ def update_cases_with_storm_bounds(storm_bounds, all_storms_df):
             found_bounds, storm_data, storm_names = find_storm_bounds_for_case(
                 storm_name, storm_bounds, all_storms_df
             )
+            # If multiple storms found, use geographic proximity to select best one
+            if (
+                storm_data is not None
+                and len(storm_data) > 0
+                and storm_data["storm_id"].nunique() > 1
+            ):
+                logger.info(
+                    "Multiple storms found for %s, using geographic selection",
+                    storm_name,
+                )
+                storm_data = find_best_storm_by_geography(
+                    storm_names, all_storms_df, single_case["location"]["parameters"]
+                )
 
             if found_bounds is not None:
                 # Update the case with IBTrACS bounding box coordinates
