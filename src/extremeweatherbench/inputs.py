@@ -701,6 +701,7 @@ class PPH(TargetBase):
     variable_mapping: dict = dataclasses.field(
         default_factory=lambda: IBTrACS_metadata_variable_mapping.copy()
     )
+
     def _open_data_from_source(
         self,
     ) -> IncomingDataInput:
@@ -835,15 +836,15 @@ class IBTrACS(TargetBase):
             .unique()
         )
 
+        possible_names = utils.extract_tc_names(case_metadata.title)
+
         # Apply the filter to get all data for storms with the same number in
-        # the same season
+        # the same season, matching any of the possible names
         # This maintains the lazy evaluation
+        name_filter = pl.col("tc_name").is_in(possible_names)
         subset_target_data = target_data.join(
             matching_numbers, on="NUMBER", how="inner"
-        ).filter(
-            (pl.col("tc_name") == case_metadata.title.upper())
-            & (pl.col("SEASON").cast(pl.Int64) == season)
-        )
+        ).filter(name_filter & (pl.col("SEASON").cast(pl.Int64) == season))
 
         # Select only the columns to keep
         columns_to_keep = [
