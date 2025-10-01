@@ -2051,8 +2051,8 @@ cases:
     event_type: tropical_cyclone
   - case_id_number: 173
     title: Harold
-    start_date: 2023-08-19 12:00:00
-    end_date: 2023-08-25 12:00:00
+    start_date: 2020-03-30 00:00:00
+    end_date: 2020-04-13 00:00:00
     location:
       type: bounded_region
       parameters:
@@ -2507,8 +2507,8 @@ cases:
     event_type: tropical_cyclone
   - case_id_number: 211
     title: Ana
-    start_date: 2022-01-18 00:00:00
-    end_date: 2022-01-27 12:00:00
+    start_date: 2021-01-26 12:00:00
+    end_date: 2021-02-05 06:00:00
     location:
       type: bounded_region
       parameters:
@@ -2796,7 +2796,7 @@ cases:
   - case_id_number: 235
     title: Amanda and Cristobal
     start_date: 2020-05-28 18:00:00
-    end_date: 2020-06-14 06:00:00
+    end_date: 2020-06-02 12:00:00
     location:
       type: bounded_region
       parameters:
