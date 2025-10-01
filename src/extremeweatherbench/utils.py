@@ -400,3 +400,27 @@ def _safe_concat(
         from extremeweatherbench.defaults import OUTPUT_COLUMNS
 
         return pd.DataFrame(columns=OUTPUT_COLUMNS)
+
+
+# Extract all possible names from the title to handle cases with
+# multiple names in formats: "name1 (name2)" or "name1 and name2"
+def extract_tc_names(title: str) -> list[str]:
+    """Extract tropical cyclone names from case title."""
+    import re
+
+    names = []
+    title_upper = title.upper()
+
+    # Pattern 1: "name1 (name2)" - extract both names
+    paren_match = re.search(r"^(.+?)\s*\((.+?)\)$", title_upper)
+    if paren_match:
+        names.extend([paren_match.group(1).strip(), paren_match.group(2).strip()])
+    # Pattern 2: "name1 and name2" - extract both names
+    elif " AND " in title_upper:
+        parts = title_upper.split(" AND ")
+        names.extend([part.strip() for part in parts])
+    else:
+        # Single name or other format
+        names.append(title_upper)
+
+    return names
