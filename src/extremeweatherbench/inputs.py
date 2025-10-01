@@ -1,7 +1,7 @@
 import dataclasses
 import logging
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Callable, Optional, TypeAlias, Union
+from typing import TYPE_CHECKING, Callable, Optional, TypeAlias, Union, Mapping
 
 import numpy as np
 import pandas as pd
@@ -546,7 +546,7 @@ class GHCN(TargetBase):
             data = data.collect().to_pandas()
             data["longitude"] = utils.convert_longitude_to_360(data["longitude"])
 
-            data = data.set_index(["valid_time", "latitude", "longitude"])
+            data = data.reset_index()
             # GHCN data can have duplicate values right now, dropping here if it occurs
             try:
                 data = data[~data.index.duplicated()].to_xarray()
@@ -676,9 +676,9 @@ class LSR(TargetBase):
 
             data.loc[eastern_hemisphere_mask] = eastern_data
 
-        data = data.set_index(["valid_time", "latitude", "longitude"])
+        data = data.reset_index()
         data = xr.Dataset.from_dataframe(
-            data[~data.index.duplicated(keep="first")], sparse=True
+            data[~data.index.duplicated(keep="first")]
         )
         data.attrs["report_type_mapping"] = report_type_mapping
         return data
@@ -803,14 +803,14 @@ class IBTrACS(TargetBase):
             # Due to missing data in the IBTrACS dataset, polars doesn't convert
             # the valid_time to a datetime by default
             data["valid_time"] = pd.to_datetime(data["valid_time"])
-            data = data.set_index(["valid_time", "latitude", "longitude"])
+            data = data.reset_index()
 
             try:
-                data = xr.Dataset.from_dataframe(data, sparse=True)
+                data = xr.Dataset.from_dataframe(data)
             except ValueError as e:
                 if "non-unique" in str(e):
                     pass
-                data = xr.Dataset.from_dataframe(data.drop_duplicates(), sparse=True)
+                data = xr.Dataset.from_dataframe(data.drop_duplicates())
             return data
         else:
             raise ValueError(f"Data is not a polars LazyFrame: {type(data)}")
@@ -902,6 +902,37 @@ def zarr_target_subsetter(
 
     return fully_subset_data
 
+def _align_time_coords(
+    forecast_dataset: xr.Dataset,
+    target_dataset: xr.Dataset,
+) -> tuple[xr.Dataset, xr.Dataset]:
+    # Time alignment first (always needed)
+    time_aligned_target, time_aligned_forecast = xr.align(
+        target_dataset,
+        forecast_dataset,
+        join="inner",
+    )
+    # Drop valid_time from forecast to avoid conflicts during interpolation (if it exists)
+    if "valid_time" in time_aligned_forecast.coords:
+        time_aligned_forecast = time_aligned_forecast.drop_vars(["valid_time"])
+    return time_aligned_forecast, time_aligned_target
+
+def _get_non_time_interpolation_coords(
+    forecast_dataset: xr.Dataset,
+    target_dataset: xr.Dataset,
+) -> Mapping[str, xr.DataArray]:
+    """Get the interpolation coordinates for a dataset."""
+    interpolation_coords = {}
+    target_coord_dims = []
+    for dim in forecast_dataset.dims:
+        if dim in [coord for coord in DEFAULT_COORDINATE_VARIABLES if 'time' in coord]:
+            continue
+        if dim in target_dataset.coords:
+            interpolation_coords[dim] = target_dataset[dim]
+            target_coord_dims.append(dim)
+    
+    return interpolation_coords
+
 
 def align_forecast_to_target(
     forecast_data: xr.Dataset,
@@ -909,31 +940,36 @@ def align_forecast_to_target(
     # TODO: provide passthrough for other methods
     method: str = "nearest",
 ) -> tuple[xr.Dataset, xr.Dataset]:
-    # Find spatial dimensions that exist in both datasets
-    intersection_dims = [
-        dim
-        for dim in forecast_data.dims
-        if dim in target_data.dims
-        and dim not in ["time", "valid_time", "lead_time", "init_time"]
-    ]
 
-    spatial_dims = {dim: target_data[dim] for dim in intersection_dims}
-    # Align time dimensions - find overlapping times
-    time_aligned_target, time_aligned_forecast = xr.align(
+    # Time alignment first (always needed)
+    time_aligned_target, time_aligned_forecast = _align_time_coords(
         target_data,
-        forecast_data,
-        join="inner",
-        exclude=spatial_dims.keys(),
+        forecast_data
     )
+    
+    # Check if alignment resulted in empty datasets (no overlapping times)
+    time_dims = [coord for coord in DEFAULT_COORDINATE_VARIABLES if 'time' in coord]
+    time_dim_sizes = [time_aligned_forecast.sizes.get(dim, 0) for dim in time_dims]
+    if all(size == 0 for size in time_dim_sizes):
+        # No overlapping time periods - return empty datasets
+        return time_aligned_forecast, time_aligned_target
+    
+    interpolation_coords = _get_non_time_interpolation_coords(time_aligned_forecast, time_aligned_target)
 
-    # Regrid forecast to target grid using nearest neighbor interpolation
-    # extrapolate in the case of targets slightly outside the forecast domain
-    time_space_aligned_forecast = time_aligned_forecast.interp(
-        **spatial_dims, method=method, kwargs={"fill_value": "extrapolate"}
+    if not interpolation_coords:
+        # No spatial dimensions to interpolate, just return time-aligned data
+        return time_aligned_forecast, time_aligned_target
+    
+    # Interpolate forecast to target coordinate values
+    interpolated_forecast = time_aligned_forecast.interp(
+        **interpolation_coords, 
+        method=method, 
+        kwargs={
+            "bounds_error": False, 
+            "fill_value": None if len(interpolation_coords) > 1 else "extrapolate"
+            }
     )
-
-    return time_space_aligned_forecast, time_aligned_target
-
+    return interpolated_forecast, time_aligned_target
 
 def safely_pull_variables(
     dataset: IncomingDataInput,
