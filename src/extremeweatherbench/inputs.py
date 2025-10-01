@@ -923,13 +923,16 @@ def _get_non_time_interpolation_coords(
 ) -> Mapping[str, xr.DataArray]:
     """Get the interpolation coordinates for a dataset."""
     interpolation_coords = {}
-    target_coord_dims = []
     for dim in forecast_dataset.dims:
         if dim in [coord for coord in DEFAULT_COORDINATE_VARIABLES if 'time' in coord]:
             continue
+        # Check if this forecast dimension exists as a coordinate in target
         if dim in target_dataset.coords:
             interpolation_coords[dim] = target_dataset[dim]
-            target_coord_dims.append(dim)
+        # Also check if this forecast dimension exists as a data variable in target
+        # (common with reset_index() approach where lat/lon become data variables)
+        elif dim in target_dataset.data_vars:
+            interpolation_coords[dim] = target_dataset[dim]
     
     return interpolation_coords
 

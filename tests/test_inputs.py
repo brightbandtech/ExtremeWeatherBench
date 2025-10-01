@@ -1773,3 +1773,335 @@ class TestGeneralizedAlignment:
         assert "2m_temperature" in aligned_target.data_vars
         assert len(aligned_forecast.time) == len(aligned_target.time)
         assert np.all(np.isfinite(aligned_forecast["2m_temperature"].values))
+
+
+class TestFixtureAlignment:
+    """Test alignment between sample forecast dataset and various target datasets from fixtures."""
+
+    def test_forecast_to_era5_alignment(self, sample_forecast_dataset, sample_era5_dataset):
+        """Test alignment between forecast dataset and ERA5 dataset."""
+        # ERA5 uses 'time' coordinate, forecast uses init_time/lead_time with valid_time
+        forecast = sample_forecast_dataset
+        target = sample_era5_dataset
+        
+        aligned_forecast, aligned_target = inputs.align_forecast_to_target(forecast, target)
+        
+        # Should successfully align on overlapping times
+        assert isinstance(aligned_forecast, xr.Dataset)
+        assert isinstance(aligned_target, xr.Dataset)
+        
+        # Check that alignment worked - should have common time dimension
+        common_time_dims = set(aligned_forecast.dims) & set(aligned_target.dims)
+        assert len(common_time_dims) > 0, "Should have at least one common time dimension"
+        
+        # Should have interpolated spatially if needed
+        if "latitude" in aligned_forecast.dims and "longitude" in aligned_forecast.dims:
+            assert np.all(np.isfinite(aligned_forecast.surface_air_temperature.values))
+
+    def test_forecast_to_ghcn_alignment(self, sample_forecast_dataset, sample_ghcn_dataframe):
+        """Test alignment between forecast dataset and GHCN station data."""
+        # Convert GHCN dataframe to xarray using the GHCN class
+        ghcn = inputs.GHCN(
+            source="test.parquet",
+            variables=["surface_air_temperature"],
+            variable_mapping={},
+            storage_options={},
+        )
+        
+        # Convert to xarray dataset (this will use reset_index approach)
+        target = ghcn._custom_convert_to_dataset(sample_ghcn_dataframe.lazy())
+        forecast = sample_forecast_dataset
+        
+        aligned_forecast, aligned_target = inputs.align_forecast_to_target(forecast, target)
+        
+        # Should successfully align
+        assert isinstance(aligned_forecast, xr.Dataset)
+        assert isinstance(aligned_target, xr.Dataset)
+        
+        # Target should have 'index' dimension from reset_index approach
+        assert "index" in aligned_target.dims
+        assert "valid_time" in aligned_target.data_vars
+        assert "latitude" in aligned_target.data_vars
+        assert "longitude" in aligned_target.data_vars
+        
+        # Should preserve all GHCN data points
+        assert aligned_target.sizes["index"] == len(sample_ghcn_dataframe)
+        
+        # COORDINATE MATCHING CHECK: Forecast should be interpolated to target locations
+        if "latitude" in aligned_forecast.coords and "longitude" in aligned_forecast.coords:
+            # Forecast coordinates should match target data variable values
+            target_lats = aligned_target.latitude.values
+            target_lons = aligned_target.longitude.values
+            forecast_lats = aligned_forecast.latitude.values
+            forecast_lons = aligned_forecast.longitude.values
+            
+            # Should have same number of points
+            assert len(forecast_lats) == len(target_lats)
+            assert len(forecast_lons) == len(target_lons)
+            
+            # Coordinates should match (within floating point precision)
+            np.testing.assert_array_almost_equal(forecast_lats, target_lats, decimal=5)
+            np.testing.assert_array_almost_equal(forecast_lons, target_lons, decimal=5)
+        
+        # Forecast should be interpolated if spatial alignment occurred
+        if "surface_air_temperature" in aligned_forecast.data_vars:
+            assert np.all(np.isfinite(aligned_forecast.surface_air_temperature.values))
+
+    def test_forecast_to_lsr_alignment(self, sample_forecast_dataset, sample_lsr_dataframe):
+        """Test alignment between forecast dataset and LSR (Local Storm Report) data."""
+        # Convert LSR dataframe to xarray
+        df = sample_lsr_dataframe.copy()
+        df = df.reset_index(drop=True)
+        target = df.to_xarray()
+        forecast = sample_forecast_dataset
+        
+        aligned_forecast, aligned_target = inputs.align_forecast_to_target(forecast, target)
+        
+        # Should successfully align
+        assert isinstance(aligned_forecast, xr.Dataset)
+        assert isinstance(aligned_target, xr.Dataset)
+        
+        # Target should have 'index' dimension from reset_index approach
+        assert "index" in aligned_target.dims
+        assert "valid_time" in aligned_target.data_vars
+        assert "latitude" in aligned_target.data_vars
+        assert "longitude" in aligned_target.data_vars
+        
+        # Should preserve all LSR data points
+        assert aligned_target.sizes["index"] == len(sample_lsr_dataframe)
+        
+        # COORDINATE MATCHING CHECK: Forecast should be interpolated to target locations
+        if "latitude" in aligned_forecast.coords and "longitude" in aligned_forecast.coords:
+            # Forecast coordinates should match target data variable values
+            target_lats = aligned_target.latitude.values
+            target_lons = aligned_target.longitude.values
+            forecast_lats = aligned_forecast.latitude.values
+            forecast_lons = aligned_forecast.longitude.values
+            
+            # Should have same number of points
+            assert len(forecast_lats) == len(target_lats)
+            assert len(forecast_lons) == len(target_lons)
+            
+            # Coordinates should match (within floating point precision)
+            np.testing.assert_array_almost_equal(forecast_lats, target_lats, decimal=5)
+            np.testing.assert_array_almost_equal(forecast_lons, target_lons, decimal=5)
+
+    def test_forecast_to_ibtracs_alignment(self, sample_forecast_dataset, sample_ibtracs_dataframe):
+        """Test alignment between forecast dataset and IBTrACS tropical cyclone data. 
+        
+        Note that this is not the intended approach for the IBTraCS dataset, but it's a 
+        good test of the alignment functionality. Forecasts will need to be run through
+        the tropical cyclone tracker to get datapoints instead of aligning on the 
+        exact locations in IBTrACS.
+        """
+        # Convert IBTrACS dataframe to xarray using the IBTrACS class
+        ibtracs = inputs.IBTrACS(
+            source="test.nc",
+            variables=["surface_wind_speed", "air_pressure_at_mean_sea_level"],
+            variable_mapping={},
+            storage_options={},
+        )
+        
+        # Convert to xarray dataset (this will use reset_index approach)
+        target = ibtracs._custom_convert_to_dataset(sample_ibtracs_dataframe.lazy())
+        forecast = sample_forecast_dataset
+        
+        aligned_forecast, aligned_target = inputs.align_forecast_to_target(forecast, target)
+        
+        # Should successfully align
+        assert isinstance(aligned_forecast, xr.Dataset)
+        assert isinstance(aligned_target, xr.Dataset)
+        
+        # Target should have 'index' dimension from reset_index approach
+        assert "index" in aligned_target.dims
+        assert "valid_time" in aligned_target.data_vars
+        assert "latitude" in aligned_target.data_vars
+        assert "longitude" in aligned_target.data_vars
+        
+        # Should preserve all IBTrACS data points
+        assert aligned_target.sizes["index"] == len(sample_ibtracs_dataframe)
+        
+        # Should have the expected variables
+        assert "surface_wind_speed" in aligned_target.data_vars
+        assert "air_pressure_at_mean_sea_level" in aligned_target.data_vars
+        
+        # COORDINATE MATCHING CHECK: Forecast should be interpolated to target locations
+        if "latitude" in aligned_forecast.coords and "longitude" in aligned_forecast.coords:
+            # Forecast coordinates should match target data variable values
+            target_lats = aligned_target.latitude.values
+            target_lons = aligned_target.longitude.values
+            forecast_lats = aligned_forecast.latitude.values
+            forecast_lons = aligned_forecast.longitude.values
+            
+            # Should have same number of points
+            assert len(forecast_lats) == len(target_lats)
+            assert len(forecast_lons) == len(target_lons)
+            
+            # Coordinates should match (within floating point precision)
+            np.testing.assert_array_almost_equal(forecast_lats, target_lats, decimal=5)
+            np.testing.assert_array_almost_equal(forecast_lons, target_lons, decimal=5)
+
+    def test_all_alignments_preserve_data_integrity(
+        self, 
+        sample_forecast_dataset, 
+        sample_era5_dataset, 
+        sample_ghcn_dataframe, 
+    ):
+        """Test that all alignment operations preserve data integrity."""
+        forecast = sample_forecast_dataset
+        
+        # Test ERA5 alignment
+        aligned_forecast_era5, aligned_target_era5 = inputs.align_forecast_to_target(
+            forecast, sample_era5_dataset
+        )
+        
+        # Should not introduce NaN values in finite data
+        if "2m_temperature" in aligned_target_era5.data_vars:
+            finite_mask = np.isfinite(sample_era5_dataset["2m_temperature"].values)
+            if finite_mask.any():
+                aligned_finite_mask = np.isfinite(aligned_target_era5["2m_temperature"].values)
+                # At least some finite values should remain
+                assert aligned_finite_mask.any()
+        
+        # Test GHCN alignment
+        ghcn = inputs.GHCN(
+            source="test.parquet",
+            variables=["surface_air_temperature"],
+            variable_mapping={},
+            storage_options={},
+        )
+        ghcn_target = ghcn._custom_convert_to_dataset(sample_ghcn_dataframe.lazy())
+        aligned_forecast_ghcn, aligned_target_ghcn = inputs.align_forecast_to_target(
+            forecast, ghcn_target
+        )
+        
+        # Should preserve all GHCN data points
+        assert aligned_target_ghcn.sizes["index"] == len(sample_ghcn_dataframe)
+        
+        # Test that no data corruption occurred
+        original_temp_count = ghcn_target.surface_air_temperature.count().item()
+        aligned_temp_count = aligned_target_ghcn.surface_air_temperature.count().item()
+        assert aligned_temp_count == original_temp_count
+
+    def test_alignment_with_no_overlapping_times(self, sample_forecast_dataset):
+        """Test alignment behavior when there are no overlapping times."""
+        # Create a target with completely different time range
+        target = xr.Dataset(
+            {"temperature": (["valid_time"], [285, 286, 287])},
+            coords={
+                "valid_time": pd.date_range("2025-01-01", periods=3),  # Future dates
+                "latitude": (["valid_time"], [40, 40, 40]),
+                "longitude": (["valid_time"], [260, 260, 260]),
+            },
+        )
+        
+        aligned_forecast, aligned_target = inputs.align_forecast_to_target(
+            sample_forecast_dataset, target
+        )
+        
+        # Should return empty datasets gracefully
+        time_dims = ["valid_time", "time", "init_time", "lead_time"]
+        forecast_time_sizes = [aligned_forecast.sizes.get(dim, 0) for dim in time_dims]
+        target_time_sizes = [aligned_target.sizes.get(dim, 0) for dim in time_dims]
+        
+        # At least one time dimension should be empty
+        assert any(size == 0 for size in forecast_time_sizes + target_time_sizes)
+
+    def test_alignment_performance_reasonable(
+        self, 
+        sample_forecast_dataset, 
+        sample_ghcn_dataframe
+    ):
+        """Test that alignment completes in reasonable time."""
+        import time
+        
+        # Convert GHCN to xarray
+        ghcn = inputs.GHCN(
+            source="test.parquet",
+            variables=["surface_air_temperature"],
+            variable_mapping={},
+            storage_options={},
+        )
+        target = ghcn._custom_convert_to_dataset(sample_ghcn_dataframe.lazy())
+        
+        # Time the alignment operation
+        start_time = time.time()
+        aligned_forecast, aligned_target = inputs.align_forecast_to_target(
+            sample_forecast_dataset, target
+        )
+        end_time = time.time()
+        
+        # Should complete in under 10 seconds (generous threshold)
+        alignment_time = end_time - start_time
+        assert alignment_time < 10.0, f"Alignment took {alignment_time:.2f}s, should be < 10s"
+        
+        # Should still produce valid results
+        assert isinstance(aligned_forecast, xr.Dataset)
+        assert isinstance(aligned_target, xr.Dataset)
+
+    def test_coordinate_matching_verification(
+        self, 
+        sample_forecast_dataset, 
+        sample_ghcn_dataframe
+    ):
+        """Explicitly test that forecast coordinates match target coordinates after alignment."""
+        # Create a subset of GHCN data with known coordinates
+        ghcn_subset = sample_ghcn_dataframe.head(5)  # Just 5 points for clear testing
+        
+        # Convert to xarray
+        ghcn = inputs.GHCN(
+            source="test.parquet",
+            variables=["surface_air_temperature"],
+            variable_mapping={},
+            storage_options={},
+        )
+        target = ghcn._custom_convert_to_dataset(ghcn_subset.lazy())
+        
+        # Get original target coordinates
+        original_target_lats = target.latitude.values
+        original_target_lons = target.longitude.values
+        
+        print(f"Original target coordinates:")
+        print(f"  Latitudes: {original_target_lats}")
+        print(f"  Longitudes: {original_target_lons}")
+        
+        # Align with forecast
+        aligned_forecast, aligned_target = inputs.align_forecast_to_target(
+            sample_forecast_dataset, target
+        )
+        
+        # Verify coordinate matching
+        if "latitude" in aligned_forecast.coords and "longitude" in aligned_forecast.coords:
+            aligned_forecast_lats = aligned_forecast.latitude.values
+            aligned_forecast_lons = aligned_forecast.longitude.values
+            aligned_target_lats = aligned_target.latitude.values
+            aligned_target_lons = aligned_target.longitude.values
+            
+            print(f"After alignment:")
+            print(f"  Forecast latitudes: {aligned_forecast_lats}")
+            print(f"  Target latitudes: {aligned_target_lats}")
+            print(f"  Forecast longitudes: {aligned_forecast_lons}")
+            print(f"  Target longitudes: {aligned_target_lons}")
+            
+            # Coordinates should match exactly
+            np.testing.assert_array_equal(aligned_forecast_lats, aligned_target_lats)
+            np.testing.assert_array_equal(aligned_forecast_lons, aligned_target_lons)
+            
+            # Forecast should be interpolated to target locations
+            # Check that forecast has the same number of spatial points as target
+            if "index" in aligned_forecast.dims:
+                assert aligned_forecast.sizes["index"] == len(original_target_lats)
+            else:
+                # For complex forecast structures, check that spatial dimensions match
+                spatial_size = 1
+                for dim in ["latitude", "longitude"]:
+                    if dim in aligned_forecast.dims:
+                        spatial_size *= aligned_forecast.sizes[dim]
+                assert spatial_size >= len(original_target_lats)
+            
+            # All interpolated values should be finite
+            assert np.all(np.isfinite(aligned_forecast.surface_air_temperature.values))
+            
+            print("✅ Coordinate matching verification passed!")
+        else:
+            pytest.fail("Expected forecast to have latitude/longitude coordinates after alignment")
