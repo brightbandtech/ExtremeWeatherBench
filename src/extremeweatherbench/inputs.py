@@ -97,6 +97,7 @@ HRES_metadata_variable_mapping = {
 }
 
 IBTrACS_metadata_variable_mapping = {
+    "SID": "storm_id",
     "ISO_TIME": "valid_time",
     "NAME": "tc_name",
     "LAT": "latitude",
@@ -698,6 +699,9 @@ class PPH(TargetBase):
 
     name: str = "practically_perfect_hindcast"
     source: str = PPH_URI
+    variable_mapping: dict = dataclasses.field(
+        default_factory=lambda: IBTrACS_metadata_variable_mapping.copy()
+    )
 
     def _open_data_from_source(
         self,
@@ -757,76 +761,15 @@ class IBTrACS(TargetBase):
             .unique()
         )
 
+        possible_names = utils.extract_tc_names(case_metadata.title)
+
         # Apply the filter to get all data for storms with the same number in
-        # the same season
+        # the same season, matching any of the possible names
         # This maintains the lazy evaluation
+        name_filter = pl.col("tc_name").is_in(possible_names)
         subset_target_data = target_data.join(
             matching_numbers, on="NUMBER", how="inner"
-        ).filter(
-            (pl.col("tc_name") == case_metadata.title.upper())
-            & (pl.col("SEASON").cast(pl.Int64) == season)
-        )
-
-        all_variables = IBTrACS_metadata_variable_mapping.values()
-        # subset the variables
-        subset_target_data = subset_target_data.select(all_variables)
-
-        schema = subset_target_data.collect_schema()
-        # Convert pressure and surface wind columns to float, replacing " " with null
-        # Get column names that contain "pressure" or "wind"
-        pressure_cols = [col for col in schema if "pressure" in col.lower()]
-        wind_cols = [col for col in schema if "wind" in col.lower()]
-
-        # Apply transformations to convert " " to null and cast to float
-        subset_target_data = subset_target_data.with_columns(
-            [
-                pl.when(pl.col(col) == " ")
-                .then(None)
-                .otherwise(pl.col(col))
-                .cast(pl.Float64, strict=False)
-                .alias(col)
-                for col in pressure_cols + wind_cols
-            ]
-        )
-
-        # Drop rows where ALL columns are null (equivalent to pandas dropna(how="all"))
-        subset_target_data = subset_target_data.filter(
-            ~pl.all_horizontal(pl.all().is_null())
-        )
-
-        # Create unified pressure and wind columns by preferring USA and WMO data
-        # For surface wind speed
-        wind_columns = [col for col in schema if "surface_wind_speed" in col]
-        wind_priority = ["usa_surface_wind_speed", "wmo_surface_wind_speed"] + [
-            col
-            for col in wind_columns
-            if col not in ["usa_surface_wind_speed", "wmo_surface_wind_speed"]
-        ]
-
-        # For pressure at mean sea level
-        pressure_columns = [
-            col for col in schema if "air_pressure_at_mean_sea_level" in col
-        ]
-        pressure_priority = [
-            "usa_air_pressure_at_mean_sea_level",
-            "wmo_air_pressure_at_mean_sea_level",
-        ] + [
-            col
-            for col in pressure_columns
-            if col
-            not in [
-                "usa_air_pressure_at_mean_sea_level",
-                "wmo_air_pressure_at_mean_sea_level",
-            ]
-        ]
-
-        # Create unified columns using coalesce (equivalent to pandas bfill)
-        subset_target_data = subset_target_data.with_columns(
-            [
-                pl.coalesce(wind_priority).alias("surface_wind_speed"),
-                pl.coalesce(pressure_priority).alias("air_pressure_at_mean_sea_level"),
-            ]
-        )
+        ).filter(name_filter & (pl.col("SEASON").cast(pl.Int64) == season))
 
         # Select only the columns to keep
         columns_to_keep = [
@@ -846,6 +789,7 @@ class IBTrACS(TargetBase):
             pl.col("surface_wind_speed").is_not_null()
             & pl.col("air_pressure_at_mean_sea_level").is_not_null()
         )
+        self._current_case_id = case_metadata.case_id_number
 
         return subset_target_data
 
