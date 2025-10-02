@@ -1,16 +1,14 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Type
+from typing import Any, Dict, List, Optional, Type, Literal
 
 import numpy as np
 import scores.categorical as cat  # type: ignore[import-untyped]
 import xarray as xr
 from scores.continuous import mae, mean_error, rmse  # type: ignore[import-untyped]
 
-from extremeweatherbench import derived, evaluate, utils
-from extremeweatherbench.events.tropical_cyclone import (
-    compute_landfall_metric,
-)
+from extremeweatherbench import derived, evaluate, utils, calc
+from extremeweatherbench.events import tropical_cyclone
 
 logger = logging.getLogger(__name__)
 
@@ -929,6 +927,238 @@ class DurationME(AppliedMetric):
         }
 
 
+# Tropical cyclone metrics helper functions
+def compute_first_landfall_metric(
+    forecast: xr.Dataset,
+    target: xr.Dataset,
+    metric_type: Literal["displacement", "timing", "intensity"],
+    intensity_var: str = "surface_wind_speed",
+):
+    """Compute metric using first landfall approach (classic)."""
+    # Find landfall points
+    forecast_landfall = tropical_cyclone.find_landfall(forecast)
+    target_landfall = tropical_cyclone.find_landfall(target)
+
+    if forecast_landfall is None or target_landfall is None:
+        # Handle case where no landfall is found
+        if "lead_time" in forecast.dims:
+            # Calculate init_times from lead_time and valid_time
+            init_times_calc = forecast.valid_time - forecast.lead_time
+            unique_init_times = np.unique(init_times_calc.values)
+
+            # Create NaN result with init_time dimension
+            return xr.DataArray(
+                np.full(len(unique_init_times), np.nan),
+                dims=["init_time"],
+                coords={"init_time": unique_init_times},
+            )
+        else:
+            return xr.DataArray(np.nan)
+
+    # Compute the specific metric
+    if metric_type == "displacement":
+        return compute_displacement_metric(forecast_landfall, target_landfall)
+    elif metric_type == "timing":
+        return compute_timing_metric(forecast_landfall, target_landfall)
+    elif metric_type == "intensity":
+        return compute_intensity_metric(
+            forecast_landfall, target_landfall, intensity_var
+        )
+    else:
+        raise ValueError(f"Unknown metric_type: {metric_type}")
+
+
+def compute_next_landfall_metric(
+    forecast: xr.Dataset,
+    target: xr.Dataset,
+    metric_type: Literal["displacement", "timing", "intensity"],
+    intensity_var: str = "surface_wind_speed",
+):
+    """Compute metric using next upcoming landfall approach."""
+    # Find all target landfalls
+    target_landfalls = tropical_cyclone.find_all_landfalls(target)
+    if target_landfalls is None:
+        # No target landfalls - return NaN for all init_times
+        if "init_time" in forecast.coords:
+            return xr.DataArray(
+                np.full(len(forecast.init_time), np.nan),
+                dims=["init_time"],
+                coords={"init_time": forecast.init_time},
+            )
+        else:
+            return xr.DataArray(np.nan)
+
+    # Find next landfall for each init_time
+    next_target_landfalls = tropical_cyclone.find_next_landfall_for_init_time(
+        forecast, target_landfalls
+    )
+    if next_target_landfalls is None:
+        # No valid next landfalls
+        if "init_time" in forecast.coords:
+            return xr.DataArray(
+                np.full(len(forecast.init_time), np.nan),
+                dims=["init_time"],
+                coords={"init_time": forecast.init_time},
+            )
+        else:
+            return xr.DataArray(np.nan)
+
+    # Find forecast landfalls
+    forecast_landfalls = tropical_cyclone.find_all_landfalls(forecast)
+    if forecast_landfalls is None:
+        # No forecast landfalls - return NaN
+        return xr.DataArray(
+            np.full(len(next_target_landfalls.init_time), np.nan),
+            dims=["init_time"],
+            coords={"init_time": next_target_landfalls.init_time},
+        )
+
+    # Compute metric for each init_time
+    results = []
+    init_times_out = []
+
+    for i, init_time in enumerate(next_target_landfalls.init_time):
+        target_landfall = next_target_landfalls.isel(init_time=i)
+        target_time = target_landfall.valid_time.values
+
+        # Find forecast landfall for this init_time
+        if "init_time" in forecast_landfalls.dims:
+            # Find matching init_time in forecast landfalls
+            init_time_match = forecast_landfalls.init_time == init_time
+            if not init_time_match.any():
+                results.append(np.nan)
+                init_times_out.append(init_time.values)
+                continue
+
+            forecast_for_init = forecast_landfalls.where(init_time_match, drop=True)
+
+            if len(forecast_for_init.init_time) == 0:
+                results.append(np.nan)
+                init_times_out.append(init_time.values)
+                continue
+
+            # Find forecast landfall closest to target time
+            time_diffs = np.abs(forecast_for_init.valid_time - target_time)
+            closest_idx = time_diffs.argmin()
+            closest_forecast = forecast_for_init.isel(landfall=closest_idx)
+        else:
+            # Single forecast landfall case
+            closest_forecast = forecast_landfalls
+
+        # Calculate the specific metric
+        try:
+            if metric_type == "displacement":
+                result = compute_displacement_metric(closest_forecast, target_landfall)
+            elif metric_type == "timing":
+                result = compute_timing_metric(closest_forecast, target_landfall)
+            elif metric_type == "intensity":
+                result = compute_intensity_metric(
+                    closest_forecast, target_landfall, intensity_var
+                )
+            else:
+                raise ValueError(f"Unknown metric_type: {metric_type}")
+            results.append(float(result.values))
+        except Exception:
+            results.append(np.nan)
+
+        init_times_out.append(init_time.values)
+
+    return xr.DataArray(
+        results, dims=["init_time"], coords={"init_time": init_times_out}
+    )
+
+
+def compute_landfall_selector(
+    approach: Literal["first", "next"],
+    forecast: xr.Dataset,
+    target: xr.Dataset,
+    metric_type: Literal["displacement", "timing", "intensity"],
+    intensity_var: str = "surface_wind_speed",
+):
+    """Select the appropriate landfall metric based on the approach."""
+    if approach == "first":
+        return compute_first_landfall_metric(
+            forecast, target, metric_type, intensity_var
+        )
+    elif approach == "next":
+        return compute_next_landfall_metric(
+            forecast, target, metric_type, intensity_var
+        )
+
+
+def compute_displacement_metric(
+    forecast_landfall: xr.Dataset, target_landfall: xr.Dataset
+):
+    """Compute displacement between forecast and target landfall."""
+    # Check dimensions and compute displacement
+    if "init_time" in forecast_landfall.dims:
+        # Vector case - compute distance for each init_time
+        distances = []
+        for i in range(len(forecast_landfall.init_time)):
+            f_lat = forecast_landfall.latitude.isel(init_time=i).values
+            f_lon = forecast_landfall.longitude.isel(init_time=i).values
+            t_lat = target_landfall.latitude.values  # Target is scalar
+            t_lon = target_landfall.longitude.values
+
+            # Skip if any coordinates are NaN
+            if np.isnan(f_lat) or np.isnan(f_lon) or np.isnan(t_lat) or np.isnan(t_lon):
+                distances.append(np.nan)
+            else:
+                dist = calc.calculate_haversine_distance(
+                    [f_lat, f_lon], [t_lat, t_lon], units="km"
+                )
+                # Ensure we append a scalar value
+                if hasattr(dist, "item"):
+                    distances.append(float(dist.item()))
+                else:
+                    distances.append(float(dist))
+
+        return xr.DataArray(
+            distances,
+            dims=["init_time"],
+            coords={"init_time": forecast_landfall.init_time},
+        )
+    else:
+        # Scalar case
+        return tropical_cyclone.calculate_landfall_distance_km(
+            forecast_landfall, target_landfall
+        )
+
+
+def compute_timing_metric(
+    forecast_landfall: xr.Dataset,
+    target_landfall: xr.Dataset,
+):
+    """Compute timing difference between forecast and target landfall."""
+    # Calculate time difference in hours
+    time_diff_hours = tropical_cyclone.calculate_landfall_time_difference_hours(
+        forecast_landfall, target_landfall
+    )
+
+    return time_diff_hours
+
+
+def compute_intensity_metric(
+    forecast_landfall: xr.Dataset,
+    target_landfall: xr.Dataset,
+    intensity_var: str,
+):
+    """Compute intensity difference between forecast and target landfall."""
+    # Get intensity values
+    if intensity_var not in forecast_landfall.data_vars:
+        raise ValueError(f"Intensity variable '{intensity_var}' not found in forecast")
+    if intensity_var not in target_landfall.data_vars:
+        raise ValueError(f"Intensity variable '{intensity_var}' not found in target")
+
+    forecast_intensity = forecast_landfall[intensity_var]
+    target_intensity = target_landfall[intensity_var]
+
+    # Calculate absolute error
+    intensity_error = np.abs(forecast_intensity - target_intensity)
+
+    return intensity_error
+
+
 class LandfallDisplacement(BaseMetric):
     """Landfall displacement metric with configurable landfall detection
     approaches.
@@ -938,57 +1168,29 @@ class LandfallDisplacement(BaseMetric):
 
     - 'first': Uses the first landfall point for each track
     - 'next': For each init_time, finds the next upcoming landfall in target data
-    - 'all': Considers all landfalls, filtering by init_time and aggregating
 
     Parameters:
-        approach (str): Landfall detection approach ('first', 'next', 'all')
-        aggregation (str): How to aggregate multiple landfalls for 'all'
-                          approach ('mean', 'median', 'min', 'max')
+        approach (str): Landfall detection approach ('first', 'next')
         exclude_post_landfall (bool): Whether to exclude init_times after all landfalls
     """
 
+    approach: Literal["first", "next"] = "first"
     preserve_dims: str = "init_time"
 
     def __init__(
-        self, approach="first", aggregation="mean", exclude_post_landfall=False
+        self,
+        approach: Literal["first", "next"] = "first",
+        exclude_post_landfall: bool = False,
     ):
         """Initialize the landfall displacement metric.
 
         Args:
             approach: Landfall detection approach ('first', 'next', 'all')
-            aggregation: Aggregation method for multiple landfalls ('mean', 'median',
-            'min', 'max')
             exclude_post_landfall: Whether to exclude init_times after all landfalls
         """
         super().__init__()
         self.approach = approach
-        self.aggregation = aggregation
         self.exclude_post_landfall = exclude_post_landfall
-
-        # Validate parameters
-        valid_approaches = ["first", "next", "all"]
-        if approach not in valid_approaches:
-            raise ValueError(
-                f"approach must be one of {valid_approaches}, got {approach}"
-            )
-
-        valid_aggregations = ["mean", "median", "min", "max"]
-        if aggregation not in valid_aggregations:
-            raise ValueError(
-                f"aggregation must be one of {valid_aggregations}, got {aggregation}"
-            )
-
-        # Override compute_metric to inject instance configuration
-        def _instance_compute_metric(forecast, target, **kwargs):
-            kwargs.update(
-                {
-                    "approach": self.approach,
-                    "aggregation": self.aggregation,
-                }
-            )
-            return self.__class__._compute_metric(forecast, target, **kwargs)
-
-        self.compute_metric = _instance_compute_metric
 
     @classmethod
     def _compute_metric(cls, forecast, target, **kwargs: Any) -> Any:
@@ -997,20 +1199,17 @@ class LandfallDisplacement(BaseMetric):
         Args:
             forecast: Forecast TC track dataset
             target: Target/analysis TC track dataset
-            **kwargs: Additional arguments (including approach, aggregation)
+            **kwargs: Additional arguments (including approach)
 
         Returns:
             xarray.DataArray with landfall displacement distance in km
         """
-        approach = kwargs.get("approach", "first")
-        aggregation = kwargs.get("aggregation", "mean")
-
-        return compute_landfall_metric(
-            forecast,
-            target,
+        approach = kwargs.get("approach", cls.approach)
+        return compute_landfall_selector(
+            forecast=forecast,
+            target=target,
             approach=approach,
             metric_type="displacement",
-            aggregation=aggregation,
         )
 
 
@@ -1022,59 +1221,17 @@ class LandfallTimeME(BaseMetric):
 
     - 'first': Uses the first landfall point for each track
     - 'next': For each init_time, finds the next upcoming landfall in target data
-    - 'all': Considers all landfalls, filtering by init_time and aggregating
 
     Parameters:
-        approach (str): Landfall detection approach ('first', 'next', 'all')
-        aggregation (str): How to aggregate multiple landfalls for 'all' approach
-                          ('mean', 'median', 'min', 'max', 'abs_mean')
-        units (str): Time units for the error ('hours', 'days')
+        approach: Landfall detection approach ('first', 'next')
     """
 
+    approach: Literal["first", "next"] = "first"
     preserve_dims: str = "init_time"
 
-    def __init__(self, approach="first", aggregation="mean", units="hours"):
-        """Initialize the landfall timing metric.
-
-        Args:
-            approach: Landfall detection approach ('first', 'next', 'all')
-            aggregation: Aggregation method for multiple landfalls
-            units: Time units for the error ('hours', 'days')
-        """
+    def __init__(self):
+        """Initialize the landfall timing metric."""
         super().__init__()
-        self.approach = approach
-        self.aggregation = aggregation
-        self.units = units
-
-        # Validate parameters
-        valid_approaches = ["first", "next", "all"]
-        if approach not in valid_approaches:
-            raise ValueError(
-                f"approach must be one of {valid_approaches}, got {approach}"
-            )
-
-        valid_aggregations = ["mean", "median", "min", "max", "abs_mean"]
-        if aggregation not in valid_aggregations:
-            raise ValueError(
-                f"aggregation must be one of {valid_aggregations}, got {aggregation}"
-            )
-
-        valid_units = ["hours", "days"]
-        if units not in valid_units:
-            raise ValueError(f"units must be one of {valid_units}, got {units}")
-
-        # Override compute_metric to inject instance configuration
-        def _instance_compute_metric(forecast, target, **kwargs):
-            kwargs.update(
-                {
-                    "approach": self.approach,
-                    "aggregation": self.aggregation,
-                    "units": self.units,
-                }
-            )
-            return self.__class__._compute_metric(forecast, target, **kwargs)
-
-        self.compute_metric = _instance_compute_metric
 
     @classmethod
     def _compute_metric(cls, forecast, target, **kwargs: Any) -> Any:
@@ -1083,26 +1240,21 @@ class LandfallTimeME(BaseMetric):
         Args:
             forecast: Forecast TC track dataset
             target: Target/analysis TC track dataset
-            **kwargs: Additional arguments (including approach, aggregation, units)
+            **kwargs: Additional arguments (including approach, aggregation)
 
         Returns:
-            xarray.DataArray with landfall timing errors in specified units
+            xarray.DataArray with landfall timing errors in hours
         """
-        approach = kwargs.get("approach", "first")
-        aggregation = kwargs.get("aggregation", "mean")
-        units = kwargs.get("units", "hours")
-
-        return compute_landfall_metric(
-            forecast,
-            target,
+        approach = kwargs.get("approach", cls.approach)
+        return compute_landfall_selector(
             approach=approach,
+            forecast=forecast,
+            target=target,
             metric_type="timing",
-            aggregation=aggregation,
-            units=units,
         )
 
 
-class LandfallIntensityMAE(BaseMetric):
+class LandfallIntensityMAE(AppliedMetric):
     """Landfall intensity metric with configurable landfall detection approaches.
 
     This metric computes the mean absolute error between forecast and target intensity
@@ -1110,7 +1262,6 @@ class LandfallIntensityMAE(BaseMetric):
 
     - 'first': Uses the first landfall point for each track
     - 'next': For each init_time, finds the next upcoming landfall in target data
-    - 'all': Considers all landfalls, filtering by init_time and aggregating
 
     Parameters:
         approach (str): Landfall detection approach ('first', 'next', 'all')
@@ -1120,6 +1271,8 @@ class LandfallIntensityMAE(BaseMetric):
         'minimum_central_pressure')
     """
 
+    base_metric = MAE
+    approach: Literal["first", "next"] = "first"
     preserve_dims: str = "init_time"
 
     def __init__(
@@ -1128,40 +1281,13 @@ class LandfallIntensityMAE(BaseMetric):
         """Initialize the landfall intensity metric.
 
         Args:
-            approach: Landfall detection approach ('first', 'next', 'all')
+            approach: Landfall detection approach ('first', 'next')
             aggregation: Aggregation method for multiple landfalls
             intensity_var: Variable to use for intensity
         """
         super().__init__()
         self.approach = approach
-        self.aggregation = aggregation
         self.intensity_var = intensity_var
-
-        # Validate parameters
-        valid_approaches = ["first", "next", "all"]
-        if approach not in valid_approaches:
-            raise ValueError(
-                f"approach must be one of {valid_approaches}, got {approach}"
-            )
-
-        valid_aggregations = ["mean", "median", "min", "max"]
-        if aggregation not in valid_aggregations:
-            raise ValueError(
-                f"aggregation must be one of {valid_aggregations}, got {aggregation}"
-            )
-
-        # Override compute_metric to inject instance configuration
-        def _instance_compute_metric(forecast, target, **kwargs):
-            kwargs.update(
-                {
-                    "approach": self.approach,
-                    "aggregation": self.aggregation,
-                    "intensity_var": self.intensity_var,
-                }
-            )
-            return self.__class__._compute_metric(forecast, target, **kwargs)
-
-        self.compute_metric = _instance_compute_metric
 
     @classmethod
     def _compute_metric(cls, forecast, target, **kwargs: Any) -> Any:
@@ -1177,15 +1303,13 @@ class LandfallIntensityMAE(BaseMetric):
         Returns:
             xarray.DataArray with landfall intensity errors
         """
-        approach = kwargs.get("approach", "first")
-        aggregation = kwargs.get("aggregation", "mean")
+        approach = kwargs.get("approach", cls.approach)
         intensity_var = kwargs.get("intensity_var", "surface_wind_speed")
 
-        return compute_landfall_metric(
-            forecast,
-            target,
+        return compute_landfall_selector(
             approach=approach,
+            forecast=forecast,
+            target=target,
             metric_type="intensity",
-            aggregation=aggregation,
             intensity_var=intensity_var,
         )
