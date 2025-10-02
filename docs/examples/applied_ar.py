@@ -84,5 +84,4 @@ test_ewb = evaluate.ExtremeWeatherBench(
 logger.info("Starting EWB run")
 outputs = test_ewb.run(
     # pre-compute the datasets to avoid recomputing them for each metric
-    pre_compute=True,
 )
