@@ -21,22 +21,22 @@ class TestAtmosphericRiverMask:
         lat = np.linspace(20, 50, 20)  # 0.25 degree spacing
         lon = np.linspace(-130, -100, 20)  # 0.25 degree spacing
         level = [1000, 850, 700, 500, 300, 200]
-        
+
         data_shape_3d = (len(time), len(lat), len(lon))
         data_shape_4d = (len(time), len(level), len(lat), len(lon))
-        
+
         # Create realistic IVT data with some high values
         ivt_data = rng.uniform(100, 300, data_shape_3d)
         # Add some high IVT values to create potential AR features
         ivt_data[0, 5:15, 5:15] = 500  # High IVT region
         ivt_data[1, 8:12, 8:12] = 600  # Another high IVT region
-        
+
         # Create IVT Laplacian data
         ivt_laplacian = rng.uniform(-2, 2, data_shape_3d)
         # Add high Laplacian values corresponding to high IVT regions
         ivt_laplacian[0, 5:15, 5:15] = 3.0
         ivt_laplacian[1, 8:12, 8:12] = 3.5
-        
+
         dataset = xr.Dataset(
             {
                 "integrated_vapor_transport": (
@@ -75,26 +75,26 @@ class TestAtmosphericRiverMask:
                 "level": level,
             },
         )
-        
+
         return dataset
 
     def test_atmospheric_river_mask_basic(self, sample_ar_dataset):
         """Test basic atmospheric river mask functionality."""
         result = atmospheric_river.atmospheric_river_mask(sample_ar_dataset)
-        
+
         # Should return a DataArray
         assert isinstance(result, xr.DataArray)
-        
+
         # Should have correct dimensions (no level dimension)
         expected_dims = ["time", "latitude", "longitude"]
         assert list(result.dims) == expected_dims
-        
+
         # Should have correct shape
         assert result.shape == (3, 20, 20)
-        
+
         # Values should be 0 or 1 (boolean mask)
         assert set(result.values.flatten()).issubset({0, 1})
-        
+
         # Should have some True values where we created high IVT/Laplacian
         # Note: This might be 0 if the size filtering removes the features
         # We'll test with lower thresholds in other tests
@@ -103,21 +103,17 @@ class TestAtmosphericRiverMask:
         """Test atmospheric river mask with custom thresholds."""
         # Test with very high thresholds (should return mostly zeros)
         result_high = atmospheric_river.atmospheric_river_mask(
-            sample_ar_dataset, 
-            laplacian_threshold=10.0, 
-            ivt_threshold=1000.0
+            sample_ar_dataset, laplacian_threshold=10.0, ivt_threshold=1000.0
         )
-        
+
         # Should return mostly zeros with high thresholds
         assert result_high.sum() < result_high.size * 0.1
-        
+
         # Test with very low thresholds (should return more ones)
         result_low = atmospheric_river.atmospheric_river_mask(
-            sample_ar_dataset, 
-            laplacian_threshold=0.1, 
-            ivt_threshold=50.0
+            sample_ar_dataset, laplacian_threshold=0.1, ivt_threshold=50.0
         )
-        
+
         # Should return more ones with low thresholds
         assert result_low.sum() > result_high.sum()
 
@@ -125,16 +121,14 @@ class TestAtmosphericRiverMask:
         """Test atmospheric river mask size filtering."""
         # Test with very large minimum size (should filter out small features)
         result_large_min = atmospheric_river.atmospheric_river_mask(
-            sample_ar_dataset, 
-            min_size_gridpoints=1000
+            sample_ar_dataset, min_size_gridpoints=1000
         )
-        
+
         # Test with small minimum size (should keep more features)
         result_small_min = atmospheric_river.atmospheric_river_mask(
-            sample_ar_dataset, 
-            min_size_gridpoints=10
+            sample_ar_dataset, min_size_gridpoints=10
         )
-        
+
         # Small minimum size should have more features
         assert result_small_min.sum() >= result_large_min.sum()
 
@@ -143,13 +137,13 @@ class TestAtmosphericRiverMask:
         time = pd.date_range("2023-01-01", periods=2, freq="6h")
         lat = np.linspace(20, 50, 10)
         lon = np.linspace(-130, -100, 10)
-        
+
         # Create dataset with some NaN values
         ivt_data = rng.uniform(100, 300, (2, 10, 10))
         ivt_data[0, 5, 5] = np.nan  # Add NaN value
         ivt_laplacian = rng.uniform(-2, 2, (2, 10, 10))
         ivt_laplacian[0, 5, 5] = np.nan  # Add NaN value
-        
+
         dataset = xr.Dataset(
             {
                 "integrated_vapor_transport": (
@@ -167,15 +161,15 @@ class TestAtmosphericRiverMask:
                 "longitude": lon,
             },
         )
-        
+
         result = atmospheric_river.atmospheric_river_mask(dataset)
-        
+
         # Should return a DataArray
         assert isinstance(result, xr.DataArray)
-        
+
         # Should handle NaN values gracefully
         assert not np.isnan(result).any()
-        
+
         # Values should be 0 or 1
         assert set(result.values.flatten()).issubset({0, 1})
 
@@ -190,10 +184,10 @@ class TestComputeIVT:
         lat = np.linspace(20, 50, 10)
         lon = np.linspace(-130, -100, 10)
         level = [1000, 850, 700, 500, 300, 200]
-        
+
         data_shape_4d = (len(time), len(level), len(lat), len(lon))
         data_shape_3d = (len(time), len(lat), len(lon))
-        
+
         dataset = xr.Dataset(
             {
                 "eastward_wind": (
@@ -224,26 +218,26 @@ class TestComputeIVT:
                 "level": level,
             },
         )
-        
+
         return dataset
 
     def test_compute_ivt_basic(self, sample_ivt_dataset):
         """Test basic IVT computation."""
         result = atmospheric_river.compute_ivt(sample_ivt_dataset)
-        
+
         # Should return a DataArray
         assert isinstance(result, xr.DataArray)
-        
+
         # Should have correct dimensions (no level dimension)
         expected_dims = ["time", "latitude", "longitude"]
         assert list(result.dims) == expected_dims
-        
+
         # Should have correct shape
         assert result.shape == (2, 10, 10)
-        
+
         # Values should be positive (IVT magnitude)
         assert (result >= 0).all()
-        
+
         # Values should be reasonable for IVT (typically 0-3000 kg/m/s)
         # Some extreme values may exceed 1000 but should be under 3000
         assert (result < 3000).all()
@@ -260,9 +254,9 @@ class TestComputeIVT:
                 "longitude": sample_ivt_dataset.longitude,
             },
         )
-        
+
         result = atmospheric_river.compute_ivt(sample_ivt_dataset)
-        
+
         # Should return the IVT DataArray
         assert isinstance(result, xr.DataArray)
         assert result.name == "integrated_vapor_transport"
@@ -273,17 +267,17 @@ class TestComputeIVT:
         lat = np.linspace(20, 50, 5)
         lon = np.linspace(-130, -100, 5)
         level = [1000, 850, 700, 500, 300, 200]
-        
+
         data_shape_4d = (len(time), len(level), len(lat), len(lon))
         data_shape_3d = (len(time), len(lat), len(lon))
-        
+
         # Create dataset with some NaN values
         eastward_wind = rng.uniform(-20, 20, data_shape_4d)
         eastward_wind[0, 2, 2, 2] = np.nan  # Add NaN value
-        
+
         northward_wind = rng.uniform(-20, 20, data_shape_4d)
         northward_wind[0, 2, 2, 2] = np.nan  # Add NaN value
-        
+
         dataset = xr.Dataset(
             {
                 "eastward_wind": (
@@ -314,12 +308,12 @@ class TestComputeIVT:
                 "level": level,
             },
         )
-        
+
         result = atmospheric_river.compute_ivt(dataset)
-        
+
         # Should return a DataArray
         assert isinstance(result, xr.DataArray)
-        
+
         # Should handle NaN values gracefully
         # Note: nantrapezoid should handle NaNs, but result might still have NaNs
         # depending on the specific implementation
@@ -330,7 +324,7 @@ class TestComputeIVT:
         lat = np.linspace(20, 50, 5)
         lon = np.linspace(-130, -100, 5)
         level = [1000, 850, 700, 500, 300, 200]
-        
+
         # Create dataset missing required variables
         dataset = xr.Dataset(
             {
@@ -346,7 +340,7 @@ class TestComputeIVT:
                 "level": level,
             },
         )
-        
+
         # Should raise an error when required variables are missing
         with pytest.raises(KeyError):
             atmospheric_river.compute_ivt(dataset)
@@ -358,10 +352,10 @@ class TestComputeIVT:
         lon = np.linspace(-130, -100, 5)
         # Include levels below 200 hPa that should be filtered out
         level = [1000, 850, 700, 500, 300, 200, 150, 100, 50]
-        
+
         data_shape_4d = (len(time), len(level), len(lat), len(lon))
         data_shape_3d = (len(time), len(lat), len(lon))
-        
+
         dataset = xr.Dataset(
             {
                 "eastward_wind": (
@@ -392,25 +386,25 @@ class TestComputeIVT:
                 "level": level,
             },
         )
-        
+
         result = atmospheric_river.compute_ivt(dataset)
-        
+
         # Should return a DataArray
         assert isinstance(result, xr.DataArray)
-        
+
         # Should have correct dimensions (no level dimension)
         expected_dims = ["time", "latitude", "longitude"]
         assert list(result.dims) == expected_dims
-        
+
         # Should have correct shape (no level dimension)
         assert result.shape == (1, 5, 5)
-        
+
         # Values should be positive (IVT magnitude)
         assert (result >= 0).all()
-        
+
         # Values should be reasonable for IVT
         assert (result < 3000).all()
-        
+
         # The computation should work despite having levels below 200 hPa
         # because the function filters them out internally
 
@@ -424,12 +418,12 @@ class TestComputeIVTLaplacian:
         time = pd.date_range("2023-01-01", periods=2, freq="6h")
         lat = np.linspace(20, 50, 10)
         lon = np.linspace(-130, -100, 10)
-        
+
         # Create IVT data with some structure
         ivt_data = rng.uniform(100, 300, (2, 10, 10))
         # Add some structure to make Laplacian more interesting
         ivt_data[0, 3:7, 3:7] = 500  # High IVT region
-        
+
         ivt = xr.DataArray(
             ivt_data,
             dims=["time", "latitude", "longitude"],
@@ -440,25 +434,25 @@ class TestComputeIVTLaplacian:
             },
             name="integrated_vapor_transport",
         )
-        
+
         return ivt
 
     def test_compute_ivt_laplacian_basic(self, sample_ivt_dataarray):
         """Test basic IVT Laplacian computation."""
         result = atmospheric_river.compute_ivt_laplacian(sample_ivt_dataarray)
-        
+
         # Should return a DataArray
         assert isinstance(result, xr.DataArray)
-        
+
         # Should have correct dimensions
         assert list(result.dims) == ["time", "latitude", "longitude"]
-        
+
         # Should have correct shape
         assert result.shape == (2, 10, 10)
-        
+
         # Should have correct name
         assert result.name == "integrated_vapor_transport_laplacian"
-        
+
         # Values should be finite (no NaN or inf)
         assert np.isfinite(result).all()
 
@@ -470,11 +464,11 @@ class TestComputeIVTLaplacian:
         result_large_sigma = atmospheric_river.compute_ivt_laplacian(
             sample_ivt_dataarray, sigma=5.0
         )
-        
+
         # Both should return DataArrays
         assert isinstance(result_small_sigma, xr.DataArray)
         assert isinstance(result_large_sigma, xr.DataArray)
-        
+
         # Different sigma values should produce different results
         assert not np.allclose(result_small_sigma, result_large_sigma)
 
@@ -483,11 +477,11 @@ class TestComputeIVTLaplacian:
         time = pd.date_range("2023-01-01", periods=1, freq="6h")
         lat = np.linspace(20, 50, 5)
         lon = np.linspace(-130, -100, 5)
-        
+
         # Create IVT data with NaN values
         ivt_data = rng.uniform(100, 300, (1, 5, 5))
         ivt_data[0, 2, 2] = np.nan  # Add NaN value
-        
+
         ivt = xr.DataArray(
             ivt_data,
             dims=["time", "latitude", "longitude"],
@@ -498,12 +492,12 @@ class TestComputeIVTLaplacian:
             },
             name="integrated_vapor_transport",
         )
-        
+
         result = atmospheric_river.compute_ivt_laplacian(ivt)
-        
+
         # Should return a DataArray
         assert isinstance(result, xr.DataArray)
-        
+
         # Should handle NaN values gracefully
         # Note: The result might contain NaNs depending on how the filter handles them
 
@@ -517,11 +511,11 @@ class TestFindLandIntersection:
         time = pd.date_range("2023-01-01", periods=2, freq="6h")
         lat = np.linspace(20, 50, 10)
         lon = np.linspace(-130, -100, 10)
-        
+
         # Create AR mask with some True values
         ar_mask_data = np.zeros((2, 10, 10), dtype=int)
         ar_mask_data[0, 3:7, 3:7] = 1  # AR region
-        
+
         ar_mask = xr.DataArray(
             ar_mask_data,
             dims=["time", "latitude", "longitude"],
@@ -531,28 +525,29 @@ class TestFindLandIntersection:
                 "longitude": lon,
             },
         )
-        
+
         return ar_mask
 
     def test_find_land_intersection_basic(self, sample_ar_mask):
         """Test basic land intersection functionality."""
         result = atmospheric_river.find_land_intersection(sample_ar_mask)
-        
+
         # Should return a BinaryContingencyManager
         from scores.categorical import BinaryContingencyManager
+
         assert isinstance(result, BinaryContingencyManager)
-        
+
         # The manager should have the correct data
         # Note: BinaryContingencyManager structure may vary
         # Just check that it's a valid object with some attributes
-        assert hasattr(result, '__class__')
+        assert hasattr(result, "__class__")
 
     def test_find_land_intersection_empty_mask(self):
         """Test land intersection with empty AR mask."""
         time = pd.date_range("2023-01-01", periods=1, freq="6h")
         lat = np.linspace(20, 50, 5)
         lon = np.linspace(-130, -100, 5)
-        
+
         # Create empty AR mask
         ar_mask = xr.DataArray(
             np.zeros((1, 5, 5), dtype=int),
@@ -563,11 +558,12 @@ class TestFindLandIntersection:
                 "longitude": lon,
             },
         )
-        
+
         result = atmospheric_river.find_land_intersection(ar_mask)
-        
+
         # Should still return a BinaryContingencyManager
         from scores.categorical import BinaryContingencyManager
+
         assert isinstance(result, BinaryContingencyManager)
 
 
@@ -581,10 +577,10 @@ class TestBuildMaskAndLandIntersection:
         lat = np.linspace(20, 50, 10)
         lon = np.linspace(-130, -100, 10)
         level = [1000, 850, 700, 500, 300, 200]
-        
+
         data_shape_4d = (len(time), len(level), len(lat), len(lon))
         data_shape_3d = (len(time), len(lat), len(lon))
-        
+
         dataset = xr.Dataset(
             {
                 "eastward_wind": (
@@ -615,30 +611,29 @@ class TestBuildMaskAndLandIntersection:
                 "level": level,
             },
         )
-        
+
         return dataset
 
     def test_build_mask_and_land_intersection_basic(self, sample_full_dataset):
         """Test basic integration functionality."""
-        result = atmospheric_river.build_mask_and_land_intersection(
-            sample_full_dataset
-        )
-        
+        result = atmospheric_river.build_mask_and_land_intersection(sample_full_dataset)
+
         # Should return a Dataset
         assert isinstance(result, xr.Dataset)
-        
+
         # Should contain expected variables
         assert "atmospheric_river_mask" in result.data_vars
         assert "atmospheric_river_land_intersection" in result.data_vars
-        
+
         # Atmospheric river mask should be a DataArray
         ar_mask = result["atmospheric_river_mask"]
         assert isinstance(ar_mask, xr.DataArray)
         assert list(ar_mask.dims) == ["time", "latitude", "longitude"]
-        
+
         # Land intersection should be a DataArray containing a BinaryContingencyManager
         land_intersection = result["atmospheric_river_land_intersection"]
         from scores.categorical import BinaryContingencyManager
+
         # The land intersection is stored as a DataArray containing the manager
         assert isinstance(land_intersection, xr.DataArray)
         # Check that it contains a BinaryContingencyManager object
@@ -651,7 +646,7 @@ class TestBuildMaskAndLandIntersection:
         lat = np.linspace(20, 50, 5)
         lon = np.linspace(-130, -100, 5)
         level = [1000, 850, 700, 500, 300, 200]
-        
+
         # Create dataset missing required variables
         dataset = xr.Dataset(
             {
@@ -667,7 +662,7 @@ class TestBuildMaskAndLandIntersection:
                 "level": level,
             },
         )
-        
+
         # Should raise an error when required variables are missing
         with pytest.raises(KeyError):
             atmospheric_river.build_mask_and_land_intersection(dataset)
@@ -678,17 +673,17 @@ class TestBuildMaskAndLandIntersection:
         lat = np.linspace(20, 50, 5)
         lon = np.linspace(-130, -100, 5)
         level = [1000, 850, 700, 500, 300, 200]
-        
+
         data_shape_4d = (len(time), len(level), len(lat), len(lon))
         data_shape_3d = (len(time), len(lat), len(lon))
-        
+
         # Create dataset with some NaN values
         eastward_wind = rng.uniform(-20, 20, data_shape_4d)
         eastward_wind[0, 2, 2, 2] = np.nan
-        
+
         northward_wind = rng.uniform(-20, 20, data_shape_4d)
         northward_wind[0, 2, 2, 2] = np.nan
-        
+
         dataset = xr.Dataset(
             {
                 "eastward_wind": (
@@ -719,15 +714,15 @@ class TestBuildMaskAndLandIntersection:
                 "level": level,
             },
         )
-        
+
         result = atmospheric_river.build_mask_and_land_intersection(dataset)
-        
+
         # Should return a Dataset
         assert isinstance(result, xr.Dataset)
-        
+
         # Should handle NaN values gracefully
         ar_mask = result["atmospheric_river_mask"]
         assert isinstance(ar_mask, xr.DataArray)
-        
+
         # Values should be 0 or 1 (boolean mask)
         assert set(ar_mask.values.flatten()).issubset({0, 1})

@@ -938,6 +938,7 @@ class LeadTimeDetection(AppliedMetric):
     ) -> Any:
         raise NotImplementedError("LeadTimeDetection is not implemented yet")
 
+
 class SpatialDisplacement(BaseMetric):
     name = "spatial_displacement"
     preserve_dims: str = "lead_time"
@@ -958,10 +959,9 @@ class SpatialDisplacement(BaseMetric):
     def _compute_metric(
         cls, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
     ) -> Any:
-
         def center_of_mass_ufunc(data):
             """ufunc tooling to calculate the center of mass of a 2D array, returning
-            a tuple of the latitude and longitude indices, or np.nan tuple if no 
+            a tuple of the latitude and longitude indices, or np.nan tuple if no
             non-zero values are present.
             """
             labels, _ = label(data > 0)
@@ -975,37 +975,38 @@ class SpatialDisplacement(BaseMetric):
             # Create output arrays with NaN
             lat_coords_out = np.full_like(lat_idx, np.nan)
             lon_coords_out = np.full_like(lon_idx, np.nan)
-            
+
             # Find valid (non-NaN) indices
             valid_mask = ~(np.isnan(lat_idx) | np.isnan(lon_idx))
-            
+
             if valid_mask.any():
                 # Convert to integer indices only where valid
                 int_lat_idx = np.where(valid_mask, lat_idx.astype(int), 0)
                 int_lon_idx = np.where(valid_mask, lon_idx.astype(int), 0)
-                
+
                 # Use advanced indexing to get coordinates
                 lat_coords_out[valid_mask] = lat_coords[int_lat_idx[valid_mask]]
                 lon_coords_out[valid_mask] = lon_coords[int_lon_idx[valid_mask]]
-            
+
             return lat_coords_out, lon_coords_out
-            
+
         target_lat_idx, target_lon_idx = xr.apply_ufunc(
             center_of_mass_ufunc,
             target,
             input_core_dims=[["latitude", "longitude"]],
-            output_core_dims=[[],[]],
+            output_core_dims=[[], []],
             vectorize=True,
-            dask="allowed"
+            dask="allowed",
         )
-
 
         # Process target coordinates
         target_lat_idx = np.round(target_lat_idx)
         target_lon_idx = np.round(target_lon_idx)
         target_lat_coords, target_lon_coords = idx_to_coords(
-            target_lat_idx, target_lon_idx, 
-            target.latitude.values, target.longitude.values
+            target_lat_idx,
+            target_lon_idx,
+            target.latitude.values,
+            target.longitude.values,
         )
         target_coordinates = np.array([target_lat_coords, target_lon_coords])
 
@@ -1014,35 +1015,38 @@ class SpatialDisplacement(BaseMetric):
             center_of_mass_ufunc,
             forecast,
             input_core_dims=[["latitude", "longitude"]],
-            output_core_dims=[[],[]],
+            output_core_dims=[[], []],
             vectorize=True,
-            dask="allowed"
+            dask="allowed",
         )
         forecast_lat_idx = np.round(forecast_lat_idx)
         forecast_lon_idx = np.round(forecast_lon_idx)
         forecast_lat_coords, forecast_lon_coords = idx_to_coords(
-            forecast_lat_idx, forecast_lon_idx,
-            forecast.latitude.values, forecast.longitude.values
+            forecast_lat_idx,
+            forecast_lon_idx,
+            forecast.latitude.values,
+            forecast.longitude.values,
         )
         forecast_coordinates = np.array([forecast_lat_coords, forecast_lon_coords])
 
         # Calculate haversine distance
-        distance = calc.calculate_haversine_distance(forecast_coordinates, target_coordinates)
-        
+        distance = calc.calculate_haversine_distance(
+            forecast_coordinates, target_coordinates
+        )
+
         # Create DataArray with all dimensions
         result = xr.DataArray(
             distance,
-            coords={
-                'lead_time': forecast.lead_time,
-                'valid_time': forecast.valid_time
-            },
-            dims=['lead_time', 'valid_time'],
-            name='spatial_displacement'
+            coords={"lead_time": forecast.lead_time, "valid_time": forecast.valid_time},
+            dims=["lead_time", "valid_time"],
+            name="spatial_displacement",
         )
-        
+
         # Reduce over non-preserved dimensions (valid_time) by taking mean
-        time_dims_to_reduce = [dim for dim in result.dims if dim not in cls.preserve_dims]
+        time_dims_to_reduce = [
+            dim for dim in result.dims if dim not in cls.preserve_dims
+        ]
         if time_dims_to_reduce:
             result = result.mean(dim=time_dims_to_reduce)
-        
+
         return result
