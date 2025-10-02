@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Any, Optional, Type
 import numpy as np
 import scores.categorical as cat  # type: ignore[import-untyped]
 import xarray as xr
+from scipy.ndimage import center_of_mass, label
 from scores.continuous import mae, mean_error, rmse  # type: ignore[import-untyped]
 
 from extremeweatherbench import utils
@@ -547,11 +548,9 @@ class SpatialDisplacement(BaseMetric):
         self.target_mask_variable = target_mask_variable
 
     @classmethod
-    def _compute_applied_metric(
+    def _compute_metric(
         cls, forecast: xr.Dataset, target: xr.Dataset, **kwargs: Any
     ) -> Any:
-        from scipy.ndimage import center_of_mass, label
-
         # Get the masked data for target and forecast
         target_masked = target[cls.target_variable].where(
             target[cls.target_mask_variable], 0
