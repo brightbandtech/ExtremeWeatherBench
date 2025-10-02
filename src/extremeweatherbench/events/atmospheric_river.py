@@ -83,7 +83,7 @@ def compute_ivt(data: xr.Dataset) -> xr.DataArray:
     """
     # Return if integrated_vapor_transport is already in the dataset
     if "integrated_vapor_transport" in data.data_vars:
-        return data
+        return data["integrated_vapor_transport"]
 
     # Get required coordinates excluding level dimension
     coords_dict = {dim: data.coords[dim] for dim in data.dims if dim != "level"}
@@ -217,10 +217,11 @@ def build_mask_and_land_intersection(data: xr.Dataset) -> xr.Dataset:
     ivt_data = compute_ivt(data)
 
     # Compute IVT Laplacian
-    ivt_laplacian = compute_ivt_laplacian(ivt_data["integrated_vapor_transport"])
+    ivt_laplacian = compute_ivt_laplacian(ivt_data)
 
-    # Merge IVT data with Laplacian
-    full_data = xr.merge([ivt_data, ivt_laplacian])
+    # Convert IVT DataArray to Dataset and merge with Laplacian
+    ivt_dataset = ivt_data.to_dataset(name="integrated_vapor_transport")
+    full_data = xr.merge([ivt_dataset, ivt_laplacian])
 
     # Compute AR mask with default parameters
     ar_mask_result = atmospheric_river_mask(full_data)
