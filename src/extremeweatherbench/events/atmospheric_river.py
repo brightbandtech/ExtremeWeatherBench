@@ -1,6 +1,6 @@
 import numpy as np
 import xarray as xr
-from scipy.ndimage import binary_dilation, gaussian_filter, label
+from scipy import ndimage 
 from skimage import filters
 import regionmask
 import scores.categorical as cat
@@ -20,6 +20,10 @@ def atmospheric_river_mask(
     and integrated_vapor_transport_laplacian. The current implementation uses
     standard grid spacing of 0.25 degrees (same as ERA5); users must convert their
     data to this grid spacing before using this function as of v1.0.0.
+
+    Parameter defaults for the mask are based on Newell et al. 1992, Mo 2024, 
+    TempestExtremes v2.1 criteria (Ullrich et al. 2021), and visual inspection of
+    ERA5 outputs.
 
     Args:
         data: The input xarray dataset containing integrated_vapor_transport
@@ -42,14 +46,14 @@ def atmospheric_river_mask(
     # gridpoints (0.25 degrees)
     dilation_radius = dilation_radius * 2 + 1
     struct = np.ones((dilation_radius, dilation_radius))
-    dilated_laplacian = binary_dilation(
+    dilated_laplacian = ndimage.binary_dilation(
         has_high_laplacian, structure=struct, axes=(-2, -1)
     )
     # Combine conditions without tropical restriction initially
     initial_intersection = xr.where(dilated_laplacian & has_high_ivt, 1, 0)
 
     # Label connected components and get their sizes
-    labeled_array, _ = label(initial_intersection)
+    labeled_array, _ = ndimage.label(initial_intersection)
     unique_labels, label_counts = np.unique(labeled_array, return_counts=True)
 
     # Filter by size first (excluding background label 0)
@@ -155,7 +159,7 @@ def _compute_laplacian_ufunc(data, sigma):
     Returns:
         The Laplacian of the DataArray
     """
-    return gaussian_filter(filters.laplace(data), sigma=sigma)
+    return ndimage.gaussian_filter(filters.laplace(data), sigma=sigma)
 
 
 def compute_ivt_laplacian(ivt: xr.DataArray, sigma: float = 3) -> xr.DataArray:
