@@ -368,7 +368,7 @@ class TestPressureCalculations:
         )  # Remove time
 
         # Should be divided by gravity
-        expected = sample_calc_dataset.geopotential_at_surface / 9.80665
+        expected = sample_calc_dataset.geopotential_at_surface / calc.g0
         # Compare one time slice since orography doesn't have time dimension in some
         # cases
         if "time" in orography.dims:
@@ -439,7 +439,7 @@ class TestGeopotentialCalculations:
         bottom_level_geopotential = sample_calc_dataset["geopotential"].sel(level=850)
         expected_thickness = (
             top_level_geopotential - bottom_level_geopotential
-        ) / 9.80665
+        ) / calc.g0
 
         xr.testing.assert_allclose(thickness, expected_thickness)
 
@@ -454,3 +454,244 @@ class TestGeopotentialCalculations:
         # Should have level dimension for multiple top levels
         assert "level" in thickness.dims
         assert len(thickness.level) == 3
+
+
+class TestSpecificHumidityCalculations:
+    """Test specific humidity calculations."""
+
+    def test_compute_specific_humidity_from_relative_humidity_with_level(self):
+        """Test specific humidity calculation with level dimension."""
+        # Create test dataset with level dimension
+        time = pd.date_range("2023-01-01", periods=2, freq="6h")
+        lat = np.linspace(20, 50, 5)
+        lon = np.linspace(-120, -80, 5)
+        level = [1000, 850, 700, 500]
+
+        data_shape_4d = (len(time), len(level), len(lat), len(lon))
+
+        # Create realistic test data
+        dataset = xr.Dataset(
+            {
+                "air_temperature": (
+                    ["time", "level", "latitude", "longitude"],
+                    np.full(data_shape_4d, 288.15),  # 15°C in Kelvin
+                ),
+                "relative_humidity": (
+                    ["time", "level", "latitude", "longitude"],
+                    np.full(data_shape_4d, 0.5),  # 50% relative humidity
+                ),
+            },
+            coords={
+                "time": time,
+                "latitude": lat,
+                "longitude": lon,
+                "level": level,
+            },
+        )
+
+        result = calc.compute_specific_humidity_from_relative_humidity(dataset)
+
+        # Should return a DataArray
+        assert isinstance(result, xr.DataArray)
+
+        # Should have correct dimensions
+        expected_dims = ["time", "level", "latitude", "longitude"]
+        assert list(result.dims) == expected_dims
+
+        # Should have correct shape
+        assert result.shape == data_shape_4d
+
+        # All values should be positive and reasonable for specific humidity
+        assert (result > 0).all()
+        assert (result < 0.1).all()  # Specific humidity typically < 0.1 kg/kg
+
+        # Values should be consistent across spatial dimensions for same conditions
+        assert np.allclose(
+            result.isel(time=0, level=0),
+            result.isel(time=0, level=0, latitude=0, longitude=0),
+        )
+
+    def test_compute_specific_humidity_from_relative_humidity_without_level(self):
+        """Test specific humidity calculation without level dimension."""
+        # Create test dataset without level dimension (surface case)
+        time = pd.date_range("2023-01-01", periods=2, freq="6h")
+        lat = np.linspace(20, 50, 5)
+        lon = np.linspace(-120, -80, 5)
+
+        data_shape_3d = (len(time), len(lat), len(lon))
+
+        dataset = xr.Dataset(
+            {
+                "air_temperature": (
+                    ["time", "latitude", "longitude"],
+                    np.full(data_shape_3d, 288.15),  # 15°C in Kelvin
+                ),
+                "relative_humidity": (
+                    ["time", "latitude", "longitude"],
+                    np.full(data_shape_3d, 0.7),  # 70% relative humidity
+                ),
+            },
+            coords={
+                "time": time,
+                "latitude": lat,
+                "longitude": lon,
+            },
+        )
+
+        result = calc.compute_specific_humidity_from_relative_humidity(dataset)
+
+        # Should return a DataArray
+        assert isinstance(result, xr.DataArray)
+
+        # Should have correct dimensions (no level dimension)
+        expected_dims = ["time", "latitude", "longitude"]
+        assert list(result.dims) == expected_dims
+
+        # Should have correct shape
+        assert result.shape == data_shape_3d
+
+        # All values should be positive and reasonable
+        assert (result > 0).all()
+        assert (result < 0.1).all()
+
+    def test_compute_specific_humidity_known_values(self):
+        """Test specific humidity calculation with known values."""
+        # Test with known atmospheric conditions
+        dataset = xr.Dataset(
+            {
+                "air_temperature": (
+                    ["time", "level", "latitude", "longitude"],
+                    np.array([[[[288.15]]]]),  # 15°C in Kelvin
+                ),
+                "relative_humidity": (
+                    ["time", "level", "latitude", "longitude"],
+                    np.array([[[[0.5]]]]),  # 50% relative humidity
+                ),
+            },
+            coords={
+                "time": ["2023-01-01"],
+                "latitude": [35.0],
+                "longitude": [-100.0],
+                "level": [1000],
+            },
+        )
+
+        result = calc.compute_specific_humidity_from_relative_humidity(dataset)
+
+        # Should return a DataArray
+        assert isinstance(result, xr.DataArray)
+
+        # Get the scalar value
+        specific_humidity = result.values.item()
+
+        # Should be positive
+        assert specific_humidity > 0
+
+        # Should be reasonable for 15°C, 50% RH at 1000 hPa
+        # Expected value should be around 0.005-0.01 kg/kg
+        assert 0.005 < specific_humidity < 0.01
+
+    def test_compute_specific_humidity_temperature_dependence(self):
+        """Test that specific humidity increases with temperature."""
+        # Create datasets with different temperatures
+        base_temp = 288.15  # 15°C
+        temp_diff = 10  # 10°C difference
+
+        dataset_cold = xr.Dataset(
+            {
+                "air_temperature": (
+                    ["time", "level", "latitude", "longitude"],
+                    np.array([[[[base_temp]]]]),
+                ),
+                "relative_humidity": (
+                    ["time", "level", "latitude", "longitude"],
+                    np.array([[[[0.5]]]]),
+                ),
+            },
+            coords={
+                "time": ["2023-01-01"],
+                "latitude": [35.0],
+                "longitude": [-100.0],
+                "level": [1000],
+            },
+        )
+
+        dataset_warm = xr.Dataset(
+            {
+                "air_temperature": (
+                    ["time", "level", "latitude", "longitude"],
+                    np.array([[[[base_temp + temp_diff]]]]),
+                ),
+                "relative_humidity": (
+                    ["time", "level", "latitude", "longitude"],
+                    np.array([[[[0.5]]]]),
+                ),
+            },
+            coords={
+                "time": ["2023-01-01"],
+                "latitude": [35.0],
+                "longitude": [-100.0],
+                "level": [1000],
+            },
+        )
+
+        result_cold = calc.compute_specific_humidity_from_relative_humidity(
+            dataset_cold
+        )
+        result_warm = calc.compute_specific_humidity_from_relative_humidity(
+            dataset_warm
+        )
+
+        # Warmer air should have higher specific humidity at same RH
+        assert result_warm.values.item() > result_cold.values.item()
+
+    def test_compute_specific_humidity_relative_humidity_dependence(self):
+        """Test that specific humidity increases with relative humidity."""
+        # Create datasets with different relative humidities
+        dataset_low_rh = xr.Dataset(
+            {
+                "air_temperature": (
+                    ["time", "level", "latitude", "longitude"],
+                    np.array([[[[288.15]]]]),  # 15°C
+                ),
+                "relative_humidity": (
+                    ["time", "level", "latitude", "longitude"],
+                    np.array([[[[0.3]]]]),  # 30% RH
+                ),
+            },
+            coords={
+                "time": ["2023-01-01"],
+                "latitude": [35.0],
+                "longitude": [-100.0],
+                "level": [1000],
+            },
+        )
+
+        dataset_high_rh = xr.Dataset(
+            {
+                "air_temperature": (
+                    ["time", "level", "latitude", "longitude"],
+                    np.array([[[[288.15]]]]),  # 15°C
+                ),
+                "relative_humidity": (
+                    ["time", "level", "latitude", "longitude"],
+                    np.array([[[[0.8]]]]),  # 80% RH
+                ),
+            },
+            coords={
+                "time": ["2023-01-01"],
+                "latitude": [35.0],
+                "longitude": [-100.0],
+                "level": [1000],
+            },
+        )
+
+        result_low_rh = calc.compute_specific_humidity_from_relative_humidity(
+            dataset_low_rh
+        )
+        result_high_rh = calc.compute_specific_humidity_from_relative_humidity(
+            dataset_high_rh
+        )
+
+        # Higher RH should produce higher specific humidity
+        assert result_high_rh.values.item() > result_low_rh.values.item()

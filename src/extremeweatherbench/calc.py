@@ -5,6 +5,7 @@ import xarray as xr
 
 epsilon: float = 0.6219569100577033  # Ratio of molecular weights (H2O/dry air)
 sat_press_0c: float = 6.112  # Saturation vapor pressure at 0°C (hPa)
+g0: float = 9.80665  # Standard gravity (m/s^2)
 
 
 def convert_from_cartesian_to_latlon(
@@ -82,7 +83,7 @@ def saturation_vapor_pressure(temperature: Union[float, np.ndarray]) -> np.ndarr
 
 
 def saturation_mixing_ratio(
-    pressure: Union[float, np.ndarray], temperature: Union[float, np.ndarray]
+    pressure: Union[float, Sequence[float]], temperature: Union[float, Sequence[float]]
 ) -> np.ndarray:
     """Calculates the saturation mixing ratio of a parcel.
 
@@ -168,7 +169,7 @@ def orography(ds: xr.Dataset) -> xr.DataArray:
         The orography as an xarray DataArray.
     """
     if "geopotential_at_surface" in ds.variables:
-        return ds["geopotential_at_surface"].isel(time=0) / 9.80665
+        return ds["geopotential_at_surface"].isel(time=0) / g0
     else:
         from extremeweatherbench.inputs import ARCO_ERA5_FULL_URI
 
@@ -181,7 +182,7 @@ def orography(ds: xr.Dataset) -> xr.DataArray:
             era5.isel(time=1000000)["geopotential_at_surface"].sel(
                 latitude=ds.latitude, longitude=ds.longitude
             )
-            / 9.80665
+            / g0
         )
 
 
@@ -251,9 +252,7 @@ def generate_geopotential_thickness(
     """
     geopotential_heights = ds[var_name].sel({level_name: top_level_value})
     geopotential_height_bottom = ds[var_name].sel({level_name: bottom_level_value})
-    geopotential_thickness = (
-        geopotential_heights - geopotential_height_bottom
-    ) / 9.80665
+    geopotential_thickness = (geopotential_heights - geopotential_height_bottom) / g0
     geopotential_thickness.attrs = dict(
         description="Geopotential thickness of level and 500 hPa", units="m"
     )
@@ -304,3 +303,34 @@ def nantrapezoid(
         y = np.asarray(y)
         ret = np.add.reduce(d * (y[tuple(slice1)] + y[tuple(slice2)]) / 2.0, axis)
     return ret
+
+
+def compute_specific_humidity_from_relative_humidity(data: xr.Dataset) -> xr.DataArray:
+    """Compute specific humidity from relative humidity and air temperature.
+
+    Args:
+        data: The xarray dataset to compute the specific humidity from containing
+        level (hPa), air_temperature (Kelvin), and relative_humidity. If level is not
+        included in the dataset, assumed to be surface pressure.
+
+    Returns:
+        A DataArray of specific humidity.
+    """
+    if "level" not in data.variables:
+        # Assume standard surface pressure
+        level = 1013.25
+    else:
+        level = data["level"]
+    # Compute saturation mixing ratio; air temperature must be in Kelvin
+    sat_mixing_ratio = saturation_mixing_ratio(level, data["air_temperature"] - 273.15)
+
+    # Calculate specific humidity using saturation mixing ratio, epsilon,
+    # and relative humidity
+    mixing_ratio = (
+        epsilon
+        * sat_mixing_ratio
+        * data["relative_humidity"]
+        / (epsilon + sat_mixing_ratio * (1 - data["relative_humidity"]))
+    )
+    specific_humidity = mixing_ratio / (1 + mixing_ratio)
+    return specific_humidity
