@@ -18,7 +18,6 @@ from skimage.feature import peak_local_max
 from extremeweatherbench import calc, utils
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
 
 
 def create_tctracks_from_dataset_with_ibtracs_filter(
