@@ -8,7 +8,7 @@ import xarray as xr
 from scipy.ndimage import center_of_mass, label
 from scores.continuous import mae, mean_error, rmse  # type: ignore[import-untyped]
 
-from extremeweatherbench import utils
+from extremeweatherbench import calc, utils
 
 if TYPE_CHECKING:
     from extremeweatherbench import derived
@@ -534,6 +534,7 @@ class HitsMisses(AppliedMetric):
 
 class SpatialDisplacement(BaseMetric):
     name = "spatial_displacement"
+    preserve_dims: str = "lead_time"
 
     def __init__(
         self,
@@ -549,74 +550,96 @@ class SpatialDisplacement(BaseMetric):
 
     @classmethod
     def _compute_metric(
-        cls, forecast: xr.Dataset, target: xr.Dataset, **kwargs: Any
+        cls, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
     ) -> Any:
-        # Get the masked data for target and forecast
-        target_masked = target[cls.target_variable].where(
-            target[cls.target_mask_variable], 0
-        )
-        forecast_masked = forecast[cls.forecast_variable].where(
-            forecast[cls.forecast_mask_variable], 0
-        )
+        def center_of_mass_ufunc(data):
+            """ufunc tooling to calculate the center of mass of a 2D array, returning
+            a tuple of the latitude and longitude indices, or np.nan tuple if no
+            non-zero values are present.
+            """
+            labels, _ = label(data > 0)
+            if labels.max() > 0:
+                return center_of_mass(data, labels, 1)
+            else:
+                return (np.nan, np.nan)
 
-        # Initialize arrays to store results
-        lead_times = forecast.lead_time.values
-        valid_times = forecast.valid_time.values
+        def idx_to_coords(lat_idx, lon_idx, lat_coords, lon_coords):
+            """Convert indices to coordinates, handling NaN indices."""
+            # Create output arrays with NaN
+            lat_coords_out = np.full_like(lat_idx, np.nan)
+            lon_coords_out = np.full_like(lon_idx, np.nan)
 
-        target_lat_com = np.full((len(valid_times),), np.nan)
-        target_lon_com = np.full((len(valid_times),), np.nan)
-        forecast_lat_com = np.full((len(lead_times), len(valid_times)), np.nan)
-        forecast_lon_com = np.full((len(lead_times), len(valid_times)), np.nan)
+            # Find valid (non-NaN) indices
+            valid_mask = ~(np.isnan(lat_idx) | np.isnan(lon_idx))
 
-        # Iterate over all lead_time and valid_time combinations
-        for lt_idx, lead_time in enumerate(forecast.lead_time):
-            for vt_idx, valid_time in enumerate(forecast.valid_time):
-                # Extract 2D slice for this time combination
-                target_slice = target_masked.sel(valid_time=valid_time)
-                forecast_slice = forecast_masked.sel(
-                    lead_time=lead_time, valid_time=valid_time
-                )
+            if valid_mask.any():
+                # Convert to integer indices only where valid
+                int_lat_idx = np.where(valid_mask, lat_idx.astype(int), 0)
+                int_lon_idx = np.where(valid_mask, lon_idx.astype(int), 0)
 
-                # Label connected components and find center of mass
-                target_labels, _ = label(target_slice.values > 0)
-                forecast_labels, _ = label(forecast_slice.values > 0)
+                # Use advanced indexing to get coordinates
+                lat_coords_out[valid_mask] = lat_coords[int_lat_idx[valid_mask]]
+                lon_coords_out[valid_mask] = lon_coords[int_lon_idx[valid_mask]]
 
-                if target_labels.max() > 0:
-                    target_com = center_of_mass(target_slice.values, target_labels, 1)
-                    # Convert indices to actual coordinates
-                    target_lat_com[vt_idx] = target_slice.latitude.values[
-                        int(target_com[0])
-                    ]
-                    target_lon_com[vt_idx] = target_slice.longitude.values[
-                        int(target_com[1])
-                    ]
+            return lat_coords_out, lon_coords_out
 
-                if forecast_labels.max() > 0:
-                    forecast_com = center_of_mass(
-                        forecast_slice.values, forecast_labels, 1
-                    )
-                    # Convert indices to actual coordinates
-                    forecast_lat_com[lt_idx, vt_idx] = forecast_slice.latitude.values[
-                        int(forecast_com[0])
-                    ]
-                    forecast_lon_com[lt_idx, vt_idx] = forecast_slice.longitude.values[
-                        int(forecast_com[1])
-                    ]
-
-        # Create properly structured datasets with lead_time and valid_time dimensions
-        target_com = xr.Dataset(
-            {
-                "latitude": (["valid_time"], target_lat_com),
-                "longitude": (["valid_time"], target_lon_com),
-            },
-            coords={"valid_time": valid_times},
+        target_lat_idx, target_lon_idx = xr.apply_ufunc(
+            center_of_mass_ufunc,
+            target,
+            input_core_dims=[["latitude", "longitude"]],
+            output_core_dims=[[], []],
+            vectorize=True,
+            dask="allowed",
         )
 
-        forecast_com = xr.Dataset(
-            {
-                "latitude": (["lead_time", "valid_time"], forecast_lat_com),
-                "longitude": (["lead_time", "valid_time"], forecast_lon_com),
-            },
-            coords={"lead_time": lead_times, "valid_time": valid_times},
+        # Process target coordinates
+        target_lat_idx = np.round(target_lat_idx)
+        target_lon_idx = np.round(target_lon_idx)
+        target_lat_coords, target_lon_coords = idx_to_coords(
+            target_lat_idx,
+            target_lon_idx,
+            target.latitude.values,
+            target.longitude.values,
         )
-        return utils.calculate_haversine_distance(forecast_com, target_com)
+        target_coordinates = np.array([target_lat_coords, target_lon_coords])
+
+        # Process forecast coordinates
+        forecast_lat_idx, forecast_lon_idx = xr.apply_ufunc(
+            center_of_mass_ufunc,
+            forecast,
+            input_core_dims=[["latitude", "longitude"]],
+            output_core_dims=[[], []],
+            vectorize=True,
+            dask="allowed",
+        )
+        forecast_lat_idx = np.round(forecast_lat_idx)
+        forecast_lon_idx = np.round(forecast_lon_idx)
+        forecast_lat_coords, forecast_lon_coords = idx_to_coords(
+            forecast_lat_idx,
+            forecast_lon_idx,
+            forecast.latitude.values,
+            forecast.longitude.values,
+        )
+        forecast_coordinates = np.array([forecast_lat_coords, forecast_lon_coords])
+
+        # Calculate haversine distance
+        distance = calc.calculate_haversine_distance(
+            forecast_coordinates, target_coordinates
+        )
+
+        # Create DataArray with all dimensions
+        result = xr.DataArray(
+            distance,
+            coords={"lead_time": forecast.lead_time, "valid_time": forecast.valid_time},
+            dims=["lead_time", "valid_time"],
+            name="spatial_displacement",
+        )
+
+        # Reduce over non-preserved dimensions (valid_time) by taking mean
+        time_dims_to_reduce = [
+            dim for dim in result.dims if dim not in cls.preserve_dims
+        ]
+        if time_dims_to_reduce:
+            result = result.mean(dim=time_dims_to_reduce)
+
+        return result
