@@ -87,6 +87,7 @@ HRES_metadata_variable_mapping = {
 }
 
 IBTrACS_metadata_variable_mapping = {
+    "SID": "storm_id",
     "ISO_TIME": "valid_time",
     "NAME": "tc_name",
     "LAT": "latitude",
