@@ -1,4 +1,5 @@
 import dataclasses
+import datetime
 import logging
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Callable, Optional, TypeAlias, Union
@@ -984,6 +985,7 @@ def safely_pull_variables(
         optional_variables_mapping = {}
 
     # Dispatch to type-specific handlers
+    # TODO: determine if functools singledispatch is better for these
     match dataset:
         case xr.Dataset():
             return sources.safely_pull_variables_xr_dataset(
@@ -1049,3 +1051,40 @@ def maybe_subset_variables(
         optional_variables_mapping=optional_variables_mapping,
     )
     return data
+
+
+def check_for_valid_times(
+    data: IncomingDataInput,
+    start_date: datetime.datetime,
+    end_date: datetime.datetime,
+) -> bool:
+    """Check if the data has valid times in the given date range.
+
+    Args:
+        data: The data to check.
+        start_date: The start date to check.
+        end_date: The end date to check.
+
+    Returns:
+        True if the data has valid times in the given date range, False otherwise.
+    """
+    match data:
+        case xr.Dataset():
+            return sources.check_for_valid_times_xr_dataset(data, start_date, end_date)
+        case xr.DataArray():
+            return sources.check_for_valid_times_xr_dataarray(
+                data, start_date, end_date
+            )
+        case pl.LazyFrame():
+            return sources.check_for_valid_times_polars_lazyframe(
+                data, start_date, end_date
+            )
+        case pd.DataFrame():
+            return sources.check_for_valid_times_pandas_dataframe(
+                data, start_date, end_date
+            )
+        case _:
+            raise TypeError(
+                f"Unsupported dataset type: {type(data)}. "
+                f"Expected one of: xr.Dataset, xr.DataArray, pl.LazyFrame, pd.DataFrame"
+            )
