@@ -1,4 +1,4 @@
-"""Comprehensive tests for extremeweatherbench.inputs module."""
+"""Tests for inputs module."""
 
 from unittest.mock import Mock, patch
 
@@ -109,7 +109,6 @@ class TestInputBase:
 
         result = test_forecast.add_source_to_dataset_attrs(sample_era5_dataset)
         assert result.attrs["source"] == "test_forecast"
-        assert result.attrs["dataset_type"] == "forecast"
 
     def test_add_source_to_dataset_attrs_target_base(self, sample_era5_dataset):
         """Test adding source and dataset_type for TargetBase subclass."""
@@ -131,7 +130,6 @@ class TestInputBase:
 
         result = test_target.add_source_to_dataset_attrs(sample_era5_dataset)
         assert result.attrs["source"] == "test_target"
-        assert result.attrs["dataset_type"] == "target"
 
     def test_add_source_to_dataset_attrs_generic_input_base(self, sample_era5_dataset):
         """Test adding source and dataset_type for generic InputBase subclass."""
@@ -153,7 +151,6 @@ class TestInputBase:
 
         result = test_input.add_source_to_dataset_attrs(sample_era5_dataset)
         assert result.attrs["source"] == "test_input"
-        assert result.attrs["dataset_type"] == "TestInput"
 
     def test_add_source_to_dataset_attrs_preserves_existing_attrs(
         self, sample_era5_dataset
@@ -183,7 +180,6 @@ class TestInputBase:
 
         # Check new attributes are added
         assert result.attrs["source"] == "test"
-        assert result.attrs["dataset_type"] == "TestInput"
 
         # Check existing attributes are preserved
         assert result.attrs["existing_attr"] == "existing_value"
@@ -224,6 +220,7 @@ class TestInputBase:
 class TestMaybeMapVariableNames:
     """Test the maybe_map_variable_names method across different data types."""
 
+    # TODO: move to conftest
     @pytest.fixture
     def test_input_base(self):
         """Create a concrete test class for InputBase."""
@@ -305,15 +302,11 @@ class TestMaybeMapVariableNames:
         assert isinstance(result, xr.DataArray)
         assert result.name == "temp"
 
-    @patch(
-        "extremeweatherbench.derived.maybe_pull_required_variables_from_derived_input"
-    )
+    @patch("extremeweatherbench.derived.maybe_include_variables_from_derived_input")
     def test_maybe_map_variable_names_polars_lazyframe(
         self, mock_derived, test_input_base, sample_ghcn_dataframe
     ):
         """Test variable mapping with polars LazyFrame."""
-        import polars as pl
-
         mock_derived.return_value = ["surface_air_temperature", "latitude"]
 
         test_input = test_input_base(
@@ -334,9 +327,7 @@ class TestMaybeMapVariableNames:
         assert "surface_air_temperature" not in schema.names()
         assert "latitude" in schema.names()
 
-    @patch(
-        "extremeweatherbench.derived.maybe_pull_required_variables_from_derived_input"
-    )
+    @patch("extremeweatherbench.derived.maybe_include_variables_from_derived_input")
     def test_maybe_map_variable_names_pandas_dataframe(
         self, mock_derived, test_input_base, sample_lsr_dataframe
     ):
@@ -437,9 +428,7 @@ class TestMaybeMapVariableNames:
         # Should return data unchanged when variable mapping is empty
         xr.testing.assert_identical(result, sample_era5_dataset)
 
-    @patch(
-        "extremeweatherbench.derived.maybe_pull_required_variables_from_derived_input"
-    )
+    @patch("extremeweatherbench.derived.maybe_include_variables_from_derived_input")
     def test_maybe_map_variable_names_with_derived_variables(
         self, mock_derived, test_input_base, sample_era5_dataset
     ):
@@ -494,24 +483,32 @@ class TestForecastBase:
 
     @patch("extremeweatherbench.utils.derive_indices_from_init_time_and_lead_time")
     @patch("extremeweatherbench.utils.convert_init_time_to_valid_time")
-    @patch(
-        "extremeweatherbench.derived.maybe_pull_required_variables_from_derived_input"
-    )
+    @patch("extremeweatherbench.derived.maybe_include_variables_from_derived_input")
     def test_forecast_base_subset_data_to_case(
         self, mock_derived, mock_convert, mock_derive, sample_forecast_dataset
     ):
         """Test subset_data_to_case with valid input."""
+        # Create a dataset with valid_time dimension for the mock return
+        forecast_with_valid_time = sample_forecast_dataset.copy()
+        # Convert init_time/lead_time to valid_time for the mock
+        valid_times = pd.date_range("2021-06-20", periods=10, freq="6h")
+        forecast_with_valid_time = forecast_with_valid_time.isel(
+            init_time=0, lead_time=slice(0, 10)
+        ).rename({"lead_time": "valid_time"})
+        forecast_with_valid_time = forecast_with_valid_time.assign_coords(
+            valid_time=valid_times
+        )
+
         # Setup mocks
         mock_derive.return_value = np.array([[0, 1], [0, 1]])
-        mock_convert.return_value = sample_forecast_dataset
+        mock_convert.return_value = forecast_with_valid_time
         mock_derived.return_value = ["surface_air_temperature"]
 
         # Create mock case operator
         mock_case = Mock()
-        mock_case.case_metadata.start_date = pd.Timestamp("2021-06-20")
-        mock_case.case_metadata.end_date = pd.Timestamp("2021-06-22")
-        mock_case.case_metadata.location.mask.return_value = sample_forecast_dataset
-        mock_case.forecast.variables = ["surface_air_temperature"]
+        mock_case.start_date = pd.Timestamp("2021-06-20")
+        mock_case.end_date = pd.Timestamp("2021-06-22")
+        mock_case.location.mask.return_value = forecast_with_valid_time
 
         forecast = inputs.ZarrForecast(
             name="test",
@@ -606,13 +603,13 @@ class TestEvaluationObject:
 
         eval_obj = inputs.EvaluationObject(
             event_type="test_event",
-            metric=[mock_metric],
+            metric_list=[mock_metric],
             target=mock_target,
             forecast=mock_forecast,
         )
 
         assert eval_obj.event_type == "test_event"
-        assert eval_obj.metric == [mock_metric]
+        assert eval_obj.metric_list == [mock_metric]
         assert eval_obj.target == mock_target
         assert eval_obj.forecast == mock_forecast
 
@@ -886,10 +883,9 @@ class TestGHCN:
         """Test GHCN subset_data_to_case."""
         # Create mock case operator
         mock_case = Mock()
-        mock_case.case_metadata.start_date = pd.Timestamp("2021-06-20")
-        mock_case.case_metadata.end_date = pd.Timestamp("2021-06-22")
-        mock_case.case_metadata.location.geopandas.total_bounds = [-120, 30, -90, 50]
-        mock_case.target.variables = ["surface_air_temperature"]
+        mock_case.start_date = pd.Timestamp("2021-06-20")
+        mock_case.end_date = pd.Timestamp("2021-06-22")
+        mock_case.location.geopandas.total_bounds = [-120, 30, -90, 50]
 
         ghcn = inputs.GHCN(
             source="test.parquet",
@@ -913,6 +909,42 @@ class TestGHCN:
 
         with pytest.raises(ValueError, match="Expected polars LazyFrame"):
             ghcn.subset_data_to_case("invalid_data", Mock())
+
+    def test_ghcn_subset_data_to_case_sorted_valid_time(self, sample_ghcn_dataframe):
+        """Test that subset_data_to_case returns sorted valid_time column."""
+
+        # Create unsorted test data by shuffling the sample data
+        unsorted_data = sample_ghcn_dataframe.sample(fraction=1.0, shuffle=True)
+
+        # Verify the data is actually unsorted by checking valid_times
+        is_sorted = unsorted_data["valid_time"].is_sorted()
+
+        # If by chance it's still sorted, manually disorder it
+        if is_sorted:
+            # Reverse the order to ensure it's unsorted
+            unsorted_data = sample_ghcn_dataframe.reverse()
+
+        # Create mock case metadata (not case operator)
+        mock_case_metadata = Mock()
+        mock_case_metadata.start_date = pd.Timestamp("2021-06-20")
+        mock_case_metadata.end_date = pd.Timestamp("2021-06-22")
+        mock_case_metadata.location.geopandas.total_bounds = [-120, 30, -90, 50]
+
+        ghcn = inputs.GHCN(
+            source="test.parquet",
+            variables=["surface_air_temperature"],
+            variable_mapping={},
+            storage_options={},
+        )
+
+        # Call subset_data_to_case with unsorted data
+        result = ghcn.subset_data_to_case(unsorted_data.lazy(), mock_case_metadata)
+
+        # Collect the result and verify valid_time is sorted
+        collected_result = result.collect()
+        assert collected_result[
+            "valid_time"
+        ].is_sorted(), "valid_time column should be sorted"
 
     def test_ghcn_custom_convert_to_dataset(self, sample_ghcn_dataframe):
         """Test GHCN custom conversion to dataset."""
@@ -941,6 +973,179 @@ class TestGHCN:
 
         with pytest.raises(ValueError, match="Data is not a polars LazyFrame"):
             ghcn._custom_convert_to_dataset("invalid_data")
+
+    def test_ghcn_custom_convert_to_dataset_no_duplicates(self, sample_ghcn_dataframe):
+        """Test GHCN custom conversion with no duplicates (baseline case)."""
+        ghcn = inputs.GHCN(
+            source="test.parquet",
+            variables=["surface_air_temperature"],
+            variable_mapping={},
+            storage_options={},
+        )
+
+        # Ensure data has no duplicates by creating clean sample
+        clean_data = sample_ghcn_dataframe.unique(
+            subset=["valid_time", "latitude", "longitude"]
+        )
+
+        result = ghcn._custom_convert_to_dataset(clean_data.lazy())
+
+        assert isinstance(result, xr.Dataset)
+        assert "valid_time" in result.dims
+        assert "latitude" in result.dims
+        assert "longitude" in result.dims
+        assert "surface_air_temperature" in result.data_vars
+
+        # Should have no NaN values if no duplicates were dropped
+        original_count = len(clean_data)
+        result_count = result.surface_air_temperature.count().item()
+        assert result_count == original_count
+
+    def test_ghcn_custom_convert_to_dataset_single_duplicate(
+        self, sample_ghcn_dataframe
+    ):
+        """Test GHCN custom conversion with single duplicate entry."""
+        ghcn = inputs.GHCN(
+            source="test.parquet",
+            variables=["surface_air_temperature"],
+            variable_mapping={},
+            storage_options={},
+        )
+
+        # Create data with one intentional duplicate
+        clean_data = sample_ghcn_dataframe.unique(
+            subset=["valid_time", "latitude", "longitude"]
+        )
+
+        # Duplicate the first row
+        first_row = clean_data.slice(0, 1)
+        data_with_duplicate = pl.concat([clean_data, first_row])
+
+        result = ghcn._custom_convert_to_dataset(data_with_duplicate.lazy())
+
+        assert isinstance(result, xr.Dataset)
+        assert "surface_air_temperature" in result.data_vars
+
+        # Should have dropped one duplicate, so count should equal original
+        original_count = len(clean_data)
+        result_count = result.surface_air_temperature.count().item()
+        assert result_count == original_count
+
+    def test_ghcn_custom_convert_to_dataset_many_duplicates(
+        self, sample_ghcn_dataframe
+    ):
+        """Test GHCN custom conversion with many duplicate entries."""
+        ghcn = inputs.GHCN(
+            source="test.parquet",
+            variables=["surface_air_temperature"],
+            variable_mapping={},
+            storage_options={},
+        )
+
+        # Create data with multiple duplicates
+        clean_data = sample_ghcn_dataframe.unique(
+            subset=["valid_time", "latitude", "longitude"]
+        )
+
+        # Create multiple duplicates by repeating first 5 rows
+        duplicates = clean_data.slice(0, 5)
+        data_with_many_duplicates = pl.concat(
+            [
+                clean_data,
+                duplicates,  # First set of duplicates
+                duplicates,  # Second set of duplicates
+                duplicates,  # Third set of duplicates
+            ]
+        )
+
+        result = ghcn._custom_convert_to_dataset(data_with_many_duplicates.lazy())
+
+        assert isinstance(result, xr.Dataset)
+        assert "surface_air_temperature" in result.data_vars
+
+        # Should have dropped all duplicates, so count should equal original
+        original_count = len(clean_data)
+        result_count = result.surface_air_temperature.count().item()
+        assert result_count == original_count
+
+    def test_ghcn_custom_convert_to_dataset_exception_handling(self):
+        """Test GHCN custom conversion exception handling returns empty Dataset."""
+        ghcn = inputs.GHCN(
+            source="test.parquet",
+            variables=["surface_air_temperature"],
+            variable_mapping={},
+            storage_options={},
+        )
+        # Create data with problematic values that might cause xarray conversion issues
+        problematic_data = pl.DataFrame(
+            {
+                "valid_time": [None, None],  # None values in index will cause issues
+                "latitude": [40.0, 41.0],
+                "longitude": [-100.0, -101.0],
+                "surface_air_temperature": [273.15, 274.15],
+            }
+        )
+
+        with patch("extremeweatherbench.inputs.logger") as mock_logger:
+            result = ghcn._custom_convert_to_dataset(problematic_data.lazy())
+
+            # Should return empty Dataset on exception
+            assert isinstance(result, xr.Dataset)
+            assert len(result.data_vars) == 0
+            assert len(result.dims) == 0
+
+            # Should have logged a warning
+            mock_logger.warning.assert_called_once()
+            warning_call = mock_logger.warning.call_args[0]
+            assert "Error converting GHCN data to xarray" in warning_call[0]
+
+    def test_ghcn_custom_convert_to_dataset_empty_dataset_downstream_safe(self):
+        """Test that empty Dataset from exception handling doesn't cause downstream
+        problems."""
+        ghcn = inputs.GHCN(
+            source="test.parquet",
+            variables=["surface_air_temperature"],
+            variable_mapping={},
+            storage_options={},
+        )
+
+        # Create empty dataset (simulating exception case)
+        empty_dataset = xr.Dataset()
+
+        # Test that common downstream operations don't fail
+        # These operations should handle empty datasets gracefully
+
+        # Test alignment operations
+        forecast_data = xr.Dataset(
+            {
+                "surface_air_temperature": (
+                    ["valid_time", "latitude", "longitude"],
+                    np.random.randn(5, 3, 3),
+                )
+            },
+            coords={
+                "valid_time": pd.date_range("2021-06-20", periods=5, freq="6h"),
+                "latitude": [40.0, 41.0, 42.0],
+                "longitude": [-100.0, -101.0, -102.0],
+            },
+        )
+
+        # Should not raise an error even with empty target
+        try:
+            aligned_forecast, aligned_target = ghcn.maybe_align_forecast_to_target(
+                forecast_data, empty_dataset
+            )
+            # Operation should complete without error
+            assert isinstance(aligned_forecast, xr.Dataset)
+            assert isinstance(aligned_target, xr.Dataset)
+        except Exception as e:
+            # If it does fail, it should be a controlled failure, not a crash
+            assert "empty" in str(e).lower() or "no data" in str(e).lower()
+
+        # Test that adding attrs works with empty dataset
+        result_with_attrs = ghcn.add_source_to_dataset_attrs(empty_dataset)
+        assert isinstance(result_with_attrs, xr.Dataset)
+        assert result_with_attrs.attrs.get("source") == "GHCN"
 
     @patch("extremeweatherbench.inputs.align_forecast_to_target")
     def test_ghcn_maybe_align_forecast_to_target(
@@ -988,12 +1193,12 @@ class TestLSR:
         """Test LSR subset_data_to_case."""
         # Create mock case operator
         mock_case = Mock()
-        mock_case.case_metadata.start_date = pd.Timestamp("2021-06-20")
-        mock_case.case_metadata.end_date = pd.Timestamp("2021-06-21")
-        mock_case.case_metadata.location.latitude_min = 30
-        mock_case.case_metadata.location.latitude_max = 50
-        mock_case.case_metadata.location.longitude_min = -110
-        mock_case.case_metadata.location.longitude_max = -90
+        mock_case.start_date = pd.Timestamp("2021-06-20")
+        mock_case.end_date = pd.Timestamp("2021-06-21")
+        mock_case.location.latitude_min = 30
+        mock_case.location.latitude_max = 50
+        mock_case.location.longitude_min = -110
+        mock_case.location.longitude_max = -90
 
         lsr = inputs.LSR(
             source="test.parquet",
@@ -1103,19 +1308,6 @@ class TestPPH:
 
         mock_subsetter.assert_called_once_with(sample_era5_dataset, mock_case)
         assert result == sample_era5_dataset
-
-    def test_pph_custom_convert_to_dataset(self, sample_era5_dataset):
-        """Test PPH custom conversion (should return data unchanged)."""
-        pph = inputs.PPH(
-            source="test.zarr",
-            variables=["precipitation"],
-            variable_mapping={},
-            storage_options={},
-        )
-
-        result = pph._custom_convert_to_dataset(sample_era5_dataset)
-
-        assert result is sample_era5_dataset
 
 
 class TestIBTrACS:
@@ -1299,144 +1491,45 @@ class TestStandaloneFunctions:
         with pytest.raises(TypeError, match="Unknown kerchunk file type"):
             inputs.open_kerchunk_reference("test.txt")
 
-    @patch(
-        "extremeweatherbench.derived.maybe_pull_required_variables_from_derived_input"
-    )
-    def test_zarr_target_subsetter(self, mock_derived, sample_era5_dataset):
+    def test_zarr_target_subsetter(self, sample_era5_dataset):
         """Test zarr_target_subsetter function."""
-        mock_derived.return_value = ["2m_temperature"]
+        # Create mock case metadata (not case operator)
+        mock_case_metadata = Mock()
+        mock_case_metadata.start_date = pd.Timestamp("2021-06-20")
+        mock_case_metadata.end_date = pd.Timestamp("2021-06-22")
+        mock_case_metadata.location.mask.return_value = sample_era5_dataset
 
-        # Create mock case operator
-        mock_case = Mock()
-        mock_case.case_metadata.start_date = pd.Timestamp("2021-06-20")
-        mock_case.case_metadata.end_date = pd.Timestamp("2021-06-22")
-        mock_case.case_metadata.location.mask.return_value = sample_era5_dataset
-        mock_case.target.variables = ["2m_temperature"]
+        result = inputs.zarr_target_subsetter(sample_era5_dataset, mock_case_metadata)
 
-        result = inputs.zarr_target_subsetter(sample_era5_dataset, mock_case)
-
-        mock_derived.assert_called_once_with(["2m_temperature"])
-        mock_case.case_metadata.location.mask.assert_called_once()
+        mock_case_metadata.location.mask.assert_called_once()
         assert isinstance(result, xr.Dataset)
 
-    @patch(
-        "extremeweatherbench.derived.maybe_pull_required_variables_from_derived_input"
-    )
-    def test_zarr_target_subsetter_missing_variables(
-        self, mock_derived, sample_era5_dataset
-    ):
-        """Test zarr_target_subsetter with missing variables."""
-        mock_derived.return_value = ["nonexistent_variable"]
+    def test_zarr_target_subsetter_missing_time_dimension(self, sample_era5_dataset):
+        """Test zarr_target_subsetter with missing time dimensions."""
+        # Create dataset without time dimensions
+        data_no_time = sample_era5_dataset.drop_dims("time")
 
-        mock_case = Mock()
-        mock_case.case_metadata.start_date = pd.Timestamp("2021-06-20")
-        mock_case.case_metadata.end_date = pd.Timestamp("2021-06-22")
-        mock_case.target.variables = ["nonexistent_variable"]
+        mock_case_metadata = Mock()
+        mock_case_metadata.start_date = pd.Timestamp("2021-06-20")
+        mock_case_metadata.end_date = pd.Timestamp("2021-06-22")
 
-        with pytest.raises(ValueError, match="Variables .* not found in target data"):
-            inputs.zarr_target_subsetter(sample_era5_dataset, mock_case)
+        with pytest.raises(ValueError, match="No suitable time dimension found"):
+            inputs.zarr_target_subsetter(data_no_time, mock_case_metadata)
 
-    @patch(
-        "extremeweatherbench.derived.maybe_pull_required_variables_from_derived_input"
-    )
-    def test_zarr_target_subsetter_no_variables(
-        self, mock_derived, sample_era5_dataset
-    ):
-        """Test zarr_target_subsetter with no variables defined."""
-        mock_derived.return_value = None
+    def test_zarr_target_subsetter_with_valid_time_dimension(self, sample_era5_dataset):
+        """Test zarr_target_subsetter with valid_time dimension."""
+        # Rename time to valid_time to test the dimension detection
+        data_with_valid_time = sample_era5_dataset.rename({"time": "valid_time"})
 
-        mock_case = Mock()
-        mock_case.case_metadata.start_date = pd.Timestamp("2021-06-20")
-        mock_case.case_metadata.end_date = pd.Timestamp("2021-06-22")
-        mock_case.target.variables = None
+        mock_case_metadata = Mock()
+        mock_case_metadata.start_date = pd.Timestamp("2021-06-20")
+        mock_case_metadata.end_date = pd.Timestamp("2021-06-22")
+        mock_case_metadata.location.mask.return_value = data_with_valid_time
 
-        with pytest.raises(ValueError, match="Variables not defined"):
-            inputs.zarr_target_subsetter(sample_era5_dataset, mock_case)
+        result = inputs.zarr_target_subsetter(data_with_valid_time, mock_case_metadata)
 
-    def test_align_forecast_to_point_obs_target(self):
-        """Test align_forecast_to_point_obs_target function."""
-        # Create simple test data with overlapping times
-        target_times = pd.date_range("2021-06-20", periods=3, freq="6h")
-        forecast_times = pd.date_range("2021-06-20", periods=5, freq="6h")
-
-        # Create target dataset with location stacked properly
-        target_ds = xr.Dataset(
-            {
-                "temperature": (["valid_time", "location"], np.random.randn(3, 2)),
-                "longitude": (["location"], [-100, -101]),
-                "latitude": (["location"], [40, 41]),
-            },
-            coords={"valid_time": target_times, "location": ["A", "B"]},
-        )
-
-        # Create forecast dataset
-        forecast_ds = xr.Dataset(
-            {
-                "surface_air_temperature": (
-                    ["valid_time", "latitude", "longitude"],
-                    np.random.randn(5, 91, 180),
-                ),
-            },
-            coords={
-                "valid_time": forecast_times,
-                "latitude": np.linspace(-90, 90, 91),
-                "longitude": np.linspace(0, 359, 180),
-            },
-        )
-
-        aligned_forecast, aligned_target = inputs.align_forecast_to_point_obs_target(
-            forecast_ds, target_ds
-        )
-
-        assert isinstance(aligned_target, xr.Dataset)
-        assert isinstance(aligned_forecast, xr.Dataset)
-
-        # Check that both datasets have the same time dimension
-        assert len(aligned_target.valid_time) == len(aligned_forecast.valid_time)
-        assert len(aligned_target.valid_time) > 0  # Should have overlapping times
-
-        # Check that forecast has been interpolated to observation locations
-        assert "latitude" in aligned_forecast.dims
-        assert "longitude" in aligned_forecast.dims
-
-    def test_align_forecast_to_point_obs_target_time_alignment(self):
-        """Test time alignment in align_forecast_to_point_obs_target."""
-        # Create simple target and forecast datasets with overlapping times
-        target_times = pd.date_range("2021-06-20", periods=5, freq="6h")
-        forecast_times = pd.date_range("2021-06-20 06:00", periods=3, freq="6h")
-
-        target_ds = xr.Dataset(
-            {
-                "temperature": (["valid_time", "location"], np.random.randn(5, 2)),
-                "longitude": (["location"], [-100, -101]),
-                "latitude": (["location"], [40, 41]),
-            },
-            coords={"valid_time": target_times, "location": ["A", "B"]},
-        )
-
-        forecast_ds = xr.Dataset(
-            {
-                "surface_air_temperature": (
-                    ["valid_time", "latitude", "longitude"],
-                    np.random.randn(3, 91, 180),
-                ),
-            },
-            coords={
-                "valid_time": forecast_times,
-                "latitude": np.linspace(-90, 90, 91),
-                "longitude": np.linspace(0, 359, 180),
-            },
-        )
-
-        aligned_forecast, aligned_target = inputs.align_forecast_to_point_obs_target(
-            forecast_ds, target_ds
-        )
-
-        # Should have overlapping times only
-        assert len(aligned_target.valid_time) == len(aligned_forecast.valid_time)
-        assert len(aligned_target.valid_time) <= min(
-            len(target_times), len(forecast_times)
-        )
+        mock_case_metadata.location.mask.assert_called_once()
+        assert isinstance(result, xr.Dataset)
 
 
 class TestConstants:

@@ -20,13 +20,11 @@ import xarray as xr
 from extremeweatherbench import cases, evaluate, inputs, metrics
 from extremeweatherbench.regions import CenteredRegion
 
-# =============================================================================
-# Test Fixtures
-# =============================================================================
-
 
 class MockMetric(metrics.BaseMetric):
     """A simple mock metric for testing."""
+
+    name = "MockMetric"
 
     @classmethod
     def _compute_metric(cls, forecast: xr.DataArray, target: xr.DataArray, **kwargs):
@@ -113,13 +111,13 @@ def base_target_dataset():
 
     return xr.Dataset(
         {
-            "var_x": (["time", "latitude", "longitude"], temp_data),
-            "var_y": (["time", "latitude", "longitude"], pressure_data),
-            "var_z": (["time", "latitude", "longitude"], humidity_data),
-            "var_w": (["time", "latitude", "longitude"], wind_data),
+            "var_x": (["valid_time", "latitude", "longitude"], temp_data),
+            "var_y": (["valid_time", "latitude", "longitude"], pressure_data),
+            "var_z": (["valid_time", "latitude", "longitude"], humidity_data),
+            "var_w": (["valid_time", "latitude", "longitude"], wind_data),
         },
         coords={
-            "time": time,
+            "valid_time": time,
             "latitude": latitude,
             "longitude": longitude,
         },
@@ -136,6 +134,7 @@ def create_mock_input(variables: List[str], dataset: xr.Dataset, input_type: str
     # Mock all pipeline methods to return the dataset
     mock_input.open_and_maybe_preprocess_data_from_source.return_value = dataset
     mock_input.maybe_map_variable_names.return_value = dataset
+    mock_input.maybe_subset_variables.return_value = dataset
     mock_input.subset_data_to_case.return_value = dataset
     mock_input.maybe_convert_to_dataset.return_value = dataset
     mock_input.add_source_to_dataset_attrs.return_value = dataset
@@ -154,7 +153,7 @@ def create_case_operator(
     target_vars: List[str],
     forecast_dataset: xr.Dataset,
     target_dataset: xr.Dataset,
-    mock_metric,
+    mock_metric_list,
 ):
     """Helper to create a CaseOperator with specified variables."""
     # Create datasets that contain the requested variables
@@ -202,7 +201,7 @@ def create_case_operator(
 
     return cases.CaseOperator(
         case_metadata=sample_case,
-        metric=[mock_metric],
+        metric_list=[mock_metric_list],
         target=mock_target,
         forecast=mock_forecast,
     )
@@ -227,7 +226,7 @@ class TestVariablePairingIntegration:
             target_vars=["var_x"],
             forecast_dataset=base_forecast_dataset,
             target_dataset=base_target_dataset,
-            mock_metric=mock_metric,
+            mock_metric_list=mock_metric,
         )
 
         # Execute evaluation
@@ -258,7 +257,7 @@ class TestVariablePairingIntegration:
             target_vars=["var_x", "var_y"],
             forecast_dataset=base_forecast_dataset,
             target_dataset=base_target_dataset,
-            mock_metric=mock_metric,
+            mock_metric_list=mock_metric,
         )
 
         # Execute evaluation
@@ -291,7 +290,7 @@ class TestVariablePairingIntegration:
             target_vars=["var_x", "var_y"],  # Different target variables
             forecast_dataset=base_forecast_dataset,
             target_dataset=base_target_dataset,
-            mock_metric=mock_metric,
+            mock_metric_list=mock_metric,
         )
 
         # Execute evaluation
@@ -324,7 +323,7 @@ class TestVariablePairingIntegration:
             target_vars=["var_x", "var_y"],  # Two target variables
             forecast_dataset=base_forecast_dataset,
             target_dataset=base_target_dataset,
-            mock_metric=mock_metric,
+            mock_metric_list=mock_metric,
         )
 
         # Execute evaluation
@@ -354,7 +353,7 @@ class TestVariablePairingIntegration:
             target_vars=["var_x"],  # Single target variable
             forecast_dataset=base_forecast_dataset,
             target_dataset=base_target_dataset,
-            mock_metric=mock_metric,
+            mock_metric_list=mock_metric,
         )
 
         # Execute evaluation
@@ -384,7 +383,7 @@ class TestVariablePairingIntegration:
             target_vars=["var_x", "var_y", "var_z"],
             forecast_dataset=base_forecast_dataset,
             target_dataset=base_target_dataset,
-            mock_metric=mock_metric,
+            mock_metric_list=mock_metric,
         )
 
         # Execute evaluation
@@ -418,7 +417,7 @@ class TestVariablePairingIntegration:
             target_vars=[],
             forecast_dataset=base_forecast_dataset,
             target_dataset=base_target_dataset,
-            mock_metric=mock_metric,
+            mock_metric_list=mock_metric,
         )
 
         # Execute evaluation
@@ -434,8 +433,6 @@ class TestVariablePairingIntegration:
             "value",
             "target_variable",
             "metric",
-            "target_source",
-            "forecast_source",
             "case_id_number",
             "event_type",
         ]
@@ -452,7 +449,7 @@ class TestVariablePairingIntegration:
             target_vars=["var_x", "var_y"],
             forecast_dataset=base_forecast_dataset,
             target_dataset=base_target_dataset,
-            mock_metric=mock_metric,
+            mock_metric_list=mock_metric,
         )
 
         # Execute evaluation
@@ -510,7 +507,7 @@ class TestExtremeWeatherBenchVariablePairing:
 
         evaluation_obj = inputs.EvaluationObject(
             event_type="test_event",
-            metric=[mock_metric],
+            metric_list=[mock_metric],
             target=mock_target,
             forecast=mock_forecast,
         )
@@ -539,7 +536,7 @@ class TestExtremeWeatherBenchVariablePairing:
         # Create and run ExtremeWeatherBench
         ewb = evaluate.ExtremeWeatherBench(
             cases=cases_dict,
-            metrics=[evaluation_obj],
+            evaluation_objects=[evaluation_obj],
         )
 
         result = ewb.run()
@@ -591,7 +588,7 @@ class TestExtremeWeatherBenchVariablePairing:
 
         evaluation_obj = inputs.EvaluationObject(
             event_type="test_event",
-            metric=[mock_metric],
+            metric_list=[mock_metric],
             target=mock_target,
             forecast=mock_forecast,
         )
@@ -620,7 +617,7 @@ class TestExtremeWeatherBenchVariablePairing:
         # Create and run ExtremeWeatherBench
         ewb = evaluate.ExtremeWeatherBench(
             cases=cases_dict,
-            metrics=[evaluation_obj],
+            evaluation_objects=[evaluation_obj],
         )
 
         result = ewb.run()

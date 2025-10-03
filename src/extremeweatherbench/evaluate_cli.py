@@ -6,13 +6,12 @@ from typing import Optional
 
 import click
 import pandas as pd
-from joblib import Parallel, delayed  # type: ignore[import-untyped]
 
 from extremeweatherbench import defaults
-from extremeweatherbench.evaluate import ExtremeWeatherBench, compute_case_operator
+from extremeweatherbench.evaluate import ExtremeWeatherBench, _run_parallel
 
 
-@click.command(no_args_is_help=True)
+@click.command()
 @click.option(
     "--default",
     is_flag=True,
@@ -92,6 +91,9 @@ def cli_runner(
         # Use precompute for faster execution (higher memory usage)
         $ ewb --default --precompute
     """
+    # Store original output_dir value before setting default
+    original_output_dir = output_dir
+
     # Set default output directory to current working directory
     if output_dir is None:
         output_dir = os.getcwd()
@@ -101,7 +103,25 @@ def cli_runner(
 
     # Validate that either default or config_file is provided
     if not default and not config_file:
-        raise click.UsageError("Either --default or --config-file must be specified")
+        ctx = click.get_current_context()
+        # Check if any non-default arguments were provided
+        args_provided = (
+            original_output_dir is not None
+            or cache_dir is not None
+            or parallel != 1
+            or save_case_operators is not None
+            or precompute
+        )
+
+        if not args_provided:
+            # No arguments provided, show help and exit 0
+            click.echo(ctx.get_help())
+            ctx.exit(0)
+        else:
+            # Some arguments provided but missing required flags, show error
+            raise click.UsageError(
+                "Either --default or --config-file must be specified"
+            )
 
     if default and config_file:
         raise click.UsageError("Cannot specify both --default and --config-file")
@@ -119,7 +139,7 @@ def cli_runner(
     # Initialize ExtremeWeatherBench
     ewb = ExtremeWeatherBench(
         cases=cases_dict,
-        metrics=evaluation_objects,
+        evaluation_objects=evaluation_objects,
         cache_dir=cache_dir if cache_dir else None,
     )
 
@@ -138,9 +158,7 @@ def cli_runner(
     # Run evaluation
     if parallel > 1:
         click.echo(f"Running evaluation with {parallel} parallel jobs...")
-        results = _run_parallel_evaluation(
-            case_operators, parallel, precompute=precompute
-        )
+        results = _run_parallel(case_operators, parallel, pre_compute=precompute)
     else:
         click.echo("Running evaluation in serial...")
         results = ewb.run(pre_compute=precompute)
@@ -157,9 +175,9 @@ def cli_runner(
 
 def _load_default_cases() -> dict:
     """Load default case data for default evaluation objects."""
-    from extremeweatherbench.utils import load_events_yaml
+    from extremeweatherbench.cases import load_ewb_events_yaml_into_case_collection
 
-    return load_events_yaml()
+    return load_ewb_events_yaml_into_case_collection()
 
 
 def _load_config_file(config_path: str) -> tuple:
@@ -187,23 +205,6 @@ def _load_config_file(config_path: str) -> tuple:
         raise click.ClickException("Config file must define 'cases_dict' dictionary")
 
     return config_module.evaluation_objects, config_module.cases_dict
-
-
-def _run_parallel_evaluation(
-    case_operators, n_jobs: int, precompute: bool = False
-) -> pd.DataFrame:
-    """Run case operators in parallel using joblib."""
-    results = Parallel(n_jobs=n_jobs)(
-        delayed(compute_case_operator)(case_op, pre_compute=precompute)
-        for case_op in case_operators
-    )
-
-    # Filter out None results and concatenate
-    valid_results = [r for r in results if r is not None]
-    if valid_results:
-        return pd.concat(valid_results, ignore_index=True)
-    else:
-        return pd.DataFrame()
 
 
 if __name__ == "__main__":
