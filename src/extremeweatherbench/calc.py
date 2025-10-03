@@ -316,13 +316,17 @@ def compute_specific_humidity_from_relative_humidity(data: xr.Dataset) -> xr.Dat
     Returns:
         A DataArray of specific humidity.
     """
-    if "level" not in data.variables:
-        # Assume standard surface pressure
-        level = 1013.25
-    else:
-        level = data["level"]
+
+    # Check that the required variables are in the dataset
+    if "air_temperature" not in data.data_vars:
+        raise ValueError("air_temperature must be in the dataset")
+    if "relative_humidity" not in data.data_vars:
+        raise ValueError("relative_humidity must be in the dataset")
+
     # Compute saturation mixing ratio; air temperature must be in Kelvin
-    sat_mixing_ratio = saturation_mixing_ratio(level, data["air_temperature"] - 273.15)
+    sat_mixing_ratio = saturation_mixing_ratio(
+        data["level"], data["air_temperature"] - 273.15
+    )
 
     # Calculate specific humidity using saturation mixing ratio, epsilon,
     # and relative humidity

@@ -1,9 +1,10 @@
 import numpy as np
-import xarray as xr
-from scipy import ndimage 
-from skimage import filters
 import regionmask
 import scores.categorical as cat
+import xarray as xr
+from scipy import ndimage
+from skimage import filters
+
 from extremeweatherbench import calc
 
 
@@ -21,7 +22,7 @@ def atmospheric_river_mask(
     standard grid spacing of 0.25 degrees (same as ERA5); users must convert their
     data to this grid spacing before using this function as of v1.0.0.
 
-    Parameter defaults for the mask are based on Newell et al. 1992, Mo 2024, 
+    Parameter defaults for the mask are based on Newell et al. 1992, Mo 2024,
     TempestExtremes v2.1 criteria (Ullrich et al. 2021), and visual inspection of
     ERA5 outputs.
 
@@ -95,12 +96,21 @@ def compute_ivt(data: xr.Dataset) -> xr.DataArray:
     # Ensure standard surface pressure is available. Standard surface pressure is
     # used to remove pressure levels below the surface
     if "surface_standard_pressure" not in data.data_vars:
+        # Calculate orography from geopotential at the surface if not available
+        if "orography" not in data.variables:
+            orography = calc.orography(data)
+        else:
+            orography = data["orography"]
         data["surface_standard_pressure"] = calc.calculate_pressure_at_surface(
-            calc.orography(data)
+            orography
         )
 
     # Ensure specific humidity is available
     if "specific_humidity" not in data.data_vars:
+        if "relative_humidity" not in data.data_vars:
+            raise ValueError(
+                "specific_humidity or relative_humidity must be in the dataset"
+            )
         data["specific_humidity"] = (
             calc.compute_specific_humidity_from_relative_humidity(data)
         )
@@ -124,7 +134,7 @@ def compute_ivt(data: xr.Dataset) -> xr.DataArray:
     eastward_ivt = xr.DataArray(
         calc.nantrapezoid(
             data_broadcast["eastward_wind"] * data_broadcast["specific_humidity"],
-            x=data_broadcast.adjusted_level * 100,
+            x=data_broadcast.adjusted_level * 100,  # convert to Pa
             axis=level_axis,
         )
         / calc.g0,
@@ -135,7 +145,7 @@ def compute_ivt(data: xr.Dataset) -> xr.DataArray:
     northward_ivt = xr.DataArray(
         calc.nantrapezoid(
             data_broadcast["northward_wind"] * data_broadcast["specific_humidity"],
-            x=data_broadcast.adjusted_level * 100,
+            x=data_broadcast.adjusted_level * 100,  # convert to Pa
             axis=level_axis,
         )
         / calc.g0,
