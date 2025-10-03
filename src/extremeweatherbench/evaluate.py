@@ -296,7 +296,7 @@ def _ensure_output_schema(df: pd.DataFrame, **metadata) -> pd.DataFrame:
         missing_cols.discard("lead_time")
 
     if missing_cols:
-        logger.warning(f"Missing expected columns: {missing_cols}.")
+        logger.warning("Missing expected columns: %s.", missing_cols)
 
     # Ensure all OUTPUT_COLUMNS are present (missing ones will be NaN)
     # and reorder to match OUTPUT_COLUMNS specification
