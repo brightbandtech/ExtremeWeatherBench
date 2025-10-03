@@ -8,125 +8,23 @@ import pandas as pd
 import requests
 from tqdm.asyncio import tqdm_asyncio
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
-def pull_lsr_data(date: pd.Timestamp) -> pd.DataFrame:
-    """Pull the latest LSR data for a given date. A "date" for LSRs is considered the
-    date starting at 12 UTC to the next day at 11:59 UTC.
-
-    Args:
-        date: A pandas Timestamp object.
-    Returns:
-        df: A pandas DataFrame containing the LSR data with columns lat, lon,
-        report_type, time, and scale.
-    """
-    # Try the filtered URL first, if it fails, try without _filtered
-    url = f"https://www.spc.noaa.gov/climo/reports/{date.strftime('%y%m%d')}_rpts_filtered.csv"  # noqa: E501
-    # Check if the URL exists by attempting to open it
-    response = requests.head(url)
-    if date < pd.Timestamp("2004-02-29"):
-        raise ValueError("LSR data before 2004-02-29 is not available in CSV format")
-    if response.status_code == 404:
-        # If the filtered URL doesn't exist, use the non-filtered version
-        url = (
-            f"https://www.spc.noaa.gov/climo/reports/{date.strftime('%y%m%d')}_rpts.csv"
-        )
-    # Read the CSV file with all columns to identify report types
-    try:
-        df = pd.read_csv(
-            url,
-            delimiter=",",
-            engine="python",
-            names=[
-                "Time",
-                "Scale",
-                "Location",
-                "County",
-                "State",
-                "Lat",
-                "Lon",
-                "Comments",
-            ],
-        )
-    except Exception as e:
-        logger.error("Error pulling LSR data for %s: %s", date, e)
-        return pd.DataFrame()
-    if len(df) == 3:
-        return pd.DataFrame()
-    # Initialize report_type column
-    df["report_type"] = None
-
-    # Find rows with headers and mark subsequent rows with appropriate report type
-    for i, row in df.iterrows():
-        new_i = i + 1
-        if "F_Scale" in row.values:
-            df.loc[new_i:, "report_type"] = "tor"
-        elif "Speed" in row.values:
-            df.loc[new_i:, "report_type"] = "wind"
-        elif "Size" in row.values:
-            df.loc[new_i:, "report_type"] = "hail"
-
-    # Keep only necessary columns
-    df = df[["Lat", "Lon", "report_type", "Time", "Scale"]]
-    # Remove rows that have 'Lat' in the 'Lat' column (these are header rows)
-    df = df[df["Lat"] != "Lat"]
-    time = pd.to_datetime(df["Time"], format="%H%M").dt.time
-    df["Time"] = pd.to_datetime(date.strftime("%Y-%m-%d") + " " + time.astype(str))
-    df = df.rename(
-        columns={
-            "Lat": "latitude",
-            "Lon": "longitude",
-            "Time": "valid_time",
-            "Scale": "scale",
-        }
-    )
-    df["scale"] = df["scale"].replace("UNK", np.nan)
-    df["scale"] = df["scale"].astype(float)
-    return df
-
-
-async def pull_lsr_data_async(
-    session: aiohttp.ClientSession, date: pd.Timestamp
+def _process_lsr_dataframe(
+    content: str, date: pd.Timestamp, adjust_times: bool = False
 ) -> pd.DataFrame:
-    """Async version of pull_lsr_data function.
+    """Process LSR CSV content into a standardized DataFrame.
 
     Args:
-        session: aiohttp ClientSession for making requests
-        date: A pandas Timestamp object.
+        content: Raw CSV content as string
+        date: Date for the LSR data
+        adjust_times: Whether to adjust times for midnight-noon range
     Returns:
-        df: A pandas DataFrame containing the LSR data with columns
-            latitude, longitude, report_type, valid_time, and scale.
+        Processed DataFrame with standardized columns
     """
-    if date < pd.Timestamp("2004-02-29"):
-        raise ValueError("LSR data before 2004-02-29 is not available in CSV format")
-
-    # Try the filtered URL first, if it fails, try without _filtered
-    url = f"https://www.spc.noaa.gov/climo/reports/{date.strftime('%y%m%d')}_rpts_filtered.csv"  # noqa: E501
-
     try:
-        async with session.head(url) as response:
-            if response.status == 404:
-                # If the filtered URL doesn't exist, use the non-filtered version
-                url = f"https://www.spc.noaa.gov/climo/reports/{date.strftime('%y%m%d')}_rpts.csv"  # noqa: E501
-
-        # Read the CSV file with all columns to identify report types
-        async with session.get(url) as response:
-            if response.status != 200:
-                logger.error(
-                    "Error pulling LSR data for %s: HTTP %s", date, response.status
-                )
-                return pd.DataFrame()
-
-            content = await response.text()
-
-    except Exception as e:
-        logger.error("Error pulling LSR data for %s: %s", date, e)
-        return pd.DataFrame()
-
-    try:
-        # Parse CSV content using pandas
         from io import StringIO
 
         df = pd.read_csv(
@@ -148,13 +46,14 @@ async def pull_lsr_data_async(
         logger.error("Error parsing LSR data for %s: %s", date, e)
         return pd.DataFrame()
 
+    # If the dataframe has 3 rows, it is empty
     if len(df) == 3:
         return pd.DataFrame()
 
     # Initialize report_type column
     df["report_type"] = None
 
-    # Find rows with headers and mark subsequent rows with appropriate report type
+    # Find rows with headers and mark subsequent rows with report type
     for i, row in df.iterrows():
         new_i = i + 1
         if "F_Scale" in row.values:
@@ -166,20 +65,24 @@ async def pull_lsr_data_async(
 
     # Keep only necessary columns
     df = df[["Lat", "Lon", "report_type", "Time", "Scale"]]
-    # Remove rows that have 'Lat' in the 'Lat' column (these are header rows)
+    # Remove rows that have 'Lat' in the 'Lat' column (header rows)
     df = df[df["Lat"] != "Lat"]
 
     if len(df) == 0:
         return pd.DataFrame()
 
-    time = (pd.to_datetime(df["Time"], format="%H%M")).dt.time
+    # Convert time and add date
+    time = pd.to_datetime(df["Time"], format="%H%M").dt.time
     df["Time"] = pd.to_datetime(date.strftime("%Y-%m-%d") + " " + time.astype(str))
 
-    # Adjust times between 00:00 and 11:59 to the next date
-    midnight_to_noon_mask = df["Time"].dt.time < pd.Timestamp("12:00").time()
-    df.loc[midnight_to_noon_mask, "Time"] = df.loc[
-        midnight_to_noon_mask, "Time"
-    ] + timedelta(days=1)
+    # Adjust times between 00:00 and 11:59 to the next date if requested
+    if adjust_times:
+        midnight_to_noon_mask = df["Time"].dt.time < pd.Timestamp("12:00").time()
+        df.loc[midnight_to_noon_mask, "Time"] = df.loc[
+            midnight_to_noon_mask, "Time"
+        ] + timedelta(days=1)
+
+    # Rename columns to standard format
     df = df.rename(
         columns={
             "Lat": "latitude",
@@ -188,9 +91,83 @@ async def pull_lsr_data_async(
             "Scale": "scale",
         }
     )
+
+    # Handle unknown scale values
     df.loc[df["scale"] == "UNK", "scale"] = np.nan
     df["scale"] = df["scale"].astype(float)
+
     return df
+
+
+def pull_lsr_data(date: pd.Timestamp) -> pd.DataFrame:
+    """Pull the latest LSR data for a given date. A "date" for LSRs is considered the
+    date starting at 12 UTC to the next day at 11:59 UTC.
+
+    Args:
+        date: A pandas Timestamp object.
+    Returns:
+        A pandas DataFrame containing the LSR data with columns latitude, longitude,
+        report_type, valid_time, and scale.
+    """
+    if date < pd.Timestamp("2004-02-29"):
+        raise ValueError("LSR data before 2004-02-29 is not available in CSV format")
+
+    # Try the filtered URL first, if it fails, try without _filtered
+    url = f"https://www.spc.noaa.gov/climo/reports/{date.strftime('%y%m%d')}_rpts_filtered.csv"  # noqa: E501
+    response = requests.head(url)
+
+    if response.status_code == 404:
+        url = (
+            f"https://www.spc.noaa.gov/climo/reports/{date.strftime('%y%m%d')}_rpts.csv"  # noqa: E501
+        )
+
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
+        content = response.text
+    except Exception as e:
+        logger.error("Error pulling LSR data for %s: %s", date, e)
+        return pd.DataFrame()
+
+    return _process_lsr_dataframe(content, date, adjust_times=False)
+
+
+async def pull_lsr_data_async(
+    session: aiohttp.ClientSession, date: pd.Timestamp
+) -> pd.DataFrame:
+    """Async version of pull_lsr_data function.
+
+    Args:
+        session: aiohttp ClientSession for making requests
+        date: A pandas Timestamp object.
+    Returns:
+        A pandas DataFrame containing the LSR data with columns
+            latitude, longitude, report_type, valid_time, and scale.
+    """
+    if date < pd.Timestamp("2004-02-29"):
+        raise ValueError("LSR data before 2004-02-29 is not available in CSV format")
+
+    # Try the filtered URL first, if it fails, try without _filtered
+    url = f"https://www.spc.noaa.gov/climo/reports/{date.strftime('%y%m%d')}_rpts_filtered.csv"  # noqa: E501
+
+    try:
+        async with session.head(url) as response:
+            if response.status == 404:
+                url = f"https://www.spc.noaa.gov/climo/reports/{date.strftime('%y%m%d')}_rpts.csv"  # noqa: E501
+
+        async with session.get(url) as response:
+            if response.status != 200:
+                logger.error(
+                    "Error pulling LSR data for %s: HTTP %s", date, response.status
+                )
+                return pd.DataFrame()
+            content = await response.text()
+
+    except Exception as e:
+        logger.error("Error pulling LSR data for %s: %s", date, e)
+        return pd.DataFrame()
+
+    return _process_lsr_dataframe(content, date, adjust_times=True)
 
 
 async def download_lsr_data_range(
@@ -259,20 +236,24 @@ async def download_lsr_data_range(
     return combined_df
 
 
+async def download_lsr_data_range_async(start: pd.Timestamp, end: pd.Timestamp):
+    # Change max_concurrent to increase download rate; try to limit to respect
+    # the NOAA server
+    df_range = await download_lsr_data_range(start, end, max_concurrent=5)
+    logger.info("Async date range: %s reports", len(df_range))
+    return df_range
+
+
 if __name__ == "__main__":
+    # Run the async code; define
+    start = pd.Timestamp("2020-01-01")
+    end = pd.Timestamp("2025-09-27")
+    data = asyncio.run(download_lsr_data_range_async(start, end))
 
-    async def download_lsr_data_range_async():
-        start = pd.Timestamp("2020-01-01")
-        end = pd.Timestamp("2025-09-27")
-
-        # Change max_concurrent to increase download rate
-        df_range = await download_lsr_data_range(start, end, max_concurrent=5)
-        logger.info("Async date range: %s reports", len(df_range))
-        return df_range
-
-    # Run the async code
-    data = asyncio.run(download_lsr_data_range_async())
+    # Convert to correct types in case of unexpected issue in async code
     data["latitude"] = data["latitude"].astype(float)
     data["longitude"] = data["longitude"].astype(float)
     data["scale"] = data["scale"].astype(float)
-    data.to_parquet("lsr_01012020_09272025.parq")
+    data["valid_time"] = pd.to_datetime(data["valid_time"])
+    data["report_type"] = data["report_type"].astype(str)
+    data.to_parquet(f"lsr_{start.strftime('%Y%m%d')}_{end.strftime('%Y%m%d')}.parq")
