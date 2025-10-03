@@ -371,27 +371,16 @@ def _build_datasets(
     """
     logger.info("Running target pipeline... ")
     target_ds = run_pipeline(case_operator.case_metadata, case_operator.target)
+
+    # Check if the target dataset has any dimensions, if empty, return empty datasets
+    # as the workflow cannot proceed
+    if len(target_ds.dims) == 0:
+        return xr.Dataset(), xr.Dataset()
     logger.info("Running forecast pipeline... ")
+
+    # Check if the forecast dataset as well
     forecast_ds = run_pipeline(case_operator.case_metadata, case_operator.forecast)
-    # Check if any dimension has zero length
-    zero_length_dims = [dim for dim, size in forecast_ds.sizes.items() if size == 0]
-    if zero_length_dims:
-        if "valid_time" in zero_length_dims:
-            logger.warning(
-                f"Forecast dataset for case "
-                f"{case_operator.case_metadata.case_id_number} "
-                f"has no data for case time range "
-                f"{case_operator.case_metadata.start_date} to "
-                f"{case_operator.case_metadata.end_date}."
-            )
-        else:
-            logger.warning(
-                f"Forecast dataset for case "
-                f"{case_operator.case_metadata.case_id_number} "
-                f"has zero-length dimensions {zero_length_dims} for case time range "
-                f"{case_operator.case_metadata.start_date} "
-                f"to {case_operator.case_metadata.end_date}."
-            )
+    if len(forecast_ds.dims) == 0:
         return xr.Dataset(), xr.Dataset()
     return (forecast_ds, target_ds)
 
@@ -421,28 +410,45 @@ def run_pipeline(
         The processed input data as an xarray dataset.
     """
     # Open data and process through pipeline steps
-    data = (
+    input_data = (
         # Opens data from user-defined source
         input_data.open_and_maybe_preprocess_data_from_source()
         # Maps variable names to the input data if not already using EWB
         # naming conventions
         .pipe(input_data.maybe_map_variable_names)
-        # subsets the input data to the variables defined in the input data
-        .pipe(inputs.maybe_subset_variables, variables=input_data.variables)
-        # Subsets the input data using case metadata
-        .pipe(
-            input_data.subset_data_to_case,
-            case_metadata=case_metadata,
-        )
-        # Converts the input data to an xarray dataset if it is not already
-        .pipe(input_data.maybe_convert_to_dataset)
-        # Adds the name of the dataset to the dataset attributes
-        .pipe(input_data.add_source_to_dataset_attrs)
-        # Derives variables if needed
-        .pipe(
-            derived.maybe_derive_variables,
-            variables=input_data.variables,
-            case_metadata=case_metadata,
-        )
     )
-    return data
+    # Checks if the data has valid times in the given date range. This must come
+    # after maybe_map_variable_names to ensure valid_time is present.
+    if inputs.check_for_valid_times(
+        input_data,
+        case_metadata.start_date,
+        case_metadata.end_date,
+    ):
+        valid_data = (
+            inputs.maybe_subset_variables(
+                input_data,
+                variables=input_data.variables,
+            )
+            .pipe(
+                input_data.subset_data_to_case,
+                case_metadata=case_metadata,
+            )
+            .pipe(input_data.maybe_convert_to_dataset)
+            .pipe(input_data.add_source_to_dataset_attrs)
+            .pipe(
+                derived.maybe_derive_variables,
+                variables=input_data.variables,
+                case_metadata=case_metadata,
+            )
+        )
+        return valid_data
+    else:
+        logger.warning(
+            "Forecast dataset for case %s has no data for case time range %s to %s."
+            % (
+                case_metadata.case_id_number,
+                case_metadata.start_date.strftime("%Y-%m-%d %H:%M:%S"),
+                case_metadata.end_date.strftime("%Y-%m-%d %H:%M:%S"),
+            )
+        )
+        return xr.Dataset()
