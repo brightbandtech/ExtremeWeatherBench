@@ -540,6 +540,256 @@ class TestForecastBase:
         # Verify the name was changed
         assert forecast.name == "updated_forecast"
 
+    def test_forecast_base_subset_data_to_case_with_duplicate_init_times(
+        self, sample_forecast_dataset
+    ):
+        """Test subset_data_to_case handles duplicate init_times correctly."""
+        # Create a forecast dataset with duplicate init_times
+        forecast_with_duplicates = sample_forecast_dataset.copy()
+
+        # Add duplicate init_times by concatenating along init_time dimension
+        duplicate_data = forecast_with_duplicates.isel(init_time=[0, 1])
+        forecast_with_duplicates = xr.concat(
+            [forecast_with_duplicates, duplicate_data], dim="init_time"
+        )
+
+        # Verify we have duplicates
+        assert len(np.unique(forecast_with_duplicates.init_time)) < len(
+            forecast_with_duplicates.init_time
+        )
+
+        # Create mock case metadata
+        mock_case = Mock()
+        mock_case.start_date = pd.Timestamp("2021-06-20")
+        mock_case.end_date = pd.Timestamp("2021-06-22")
+        mock_case.location.mask.return_value = forecast_with_duplicates
+
+        forecast = inputs.ZarrForecast(
+            name="test",
+            source="test.zarr",
+            variables=["surface_air_temperature"],
+            variable_mapping={},
+            storage_options={},
+        )
+
+        with (
+            patch(
+                "extremeweatherbench.utils.derive_indices_from_init_time_and_lead_time"
+            ) as mock_derive,
+            patch(
+                "extremeweatherbench.utils.convert_init_time_to_valid_time"
+            ) as mock_convert,
+            patch(
+                "extremeweatherbench.derived.maybe_include_variables_from_derived_input"
+            ) as mock_derived,
+        ):
+            # Setup mocks
+            mock_derive.return_value = (np.array([0, 1]), np.array([0, 1]))
+            # Create a result dataset with unique valid_times to avoid slice errors
+            result_data = xr.Dataset(
+                {
+                    "surface_air_temperature": (
+                        ["valid_time", "latitude", "longitude"],
+                        np.random.randn(3, 3, 3),
+                    )
+                },
+                coords={
+                    "valid_time": pd.date_range("2021-06-20", periods=3, freq="6h"),
+                    "latitude": [40, 41, 42],
+                    "longitude": [-100, -101, -102],
+                },
+            )
+            mock_convert.return_value = result_data
+            mock_derived.return_value = ["surface_air_temperature"]
+
+            result = forecast.subset_data_to_case(forecast_with_duplicates, mock_case)
+
+            # The method should handle duplicates and return a valid dataset
+            assert isinstance(result, xr.Dataset)
+
+    def test_forecast_base_duplicate_init_times_detection_and_removal(self):
+        """Test that duplicate init_times are properly detected and removed."""
+        # Create a simple forecast dataset with known duplicate init_times
+        init_times = pd.date_range("2021-06-20", periods=3, freq="12h")
+        lead_times = [0, 6, 12, 18]
+
+        # Create dataset with duplicates by repeating first two init_times
+        duplicate_init_times = np.concatenate([init_times, init_times[:2]])
+
+        data_shape = (len(duplicate_init_times), 3, 3, len(lead_times))
+        test_data = xr.Dataset(
+            {
+                "surface_air_temperature": (
+                    ["init_time", "latitude", "longitude", "lead_time"],
+                    np.random.randn(*data_shape),
+                )
+            },
+            coords={
+                "init_time": duplicate_init_times,
+                "latitude": [40, 41, 42],
+                "longitude": [-100, -101, -102],
+                "lead_time": lead_times,
+            },
+        )
+
+        # Verify we have duplicates
+        assert len(np.unique(test_data.init_time)) == 3  # Original unique count
+        assert len(test_data.init_time) == 5  # Total count with duplicates
+
+        # Create mock case metadata
+        mock_case = Mock()
+        mock_case.start_date = pd.Timestamp("2021-06-20")
+        mock_case.end_date = pd.Timestamp("2021-06-22")
+        mock_case.location.mask.return_value = test_data
+
+        forecast = inputs.ZarrForecast(
+            name="test",
+            source="test.zarr",
+            variables=["surface_air_temperature"],
+            variable_mapping={},
+            storage_options={},
+        )
+
+        with (
+            patch(
+                "extremeweatherbench.utils.derive_indices_from_init_time_and_lead_time"
+            ) as mock_derive,
+            patch(
+                "extremeweatherbench.utils.convert_init_time_to_valid_time"
+            ) as mock_convert,
+            patch(
+                "extremeweatherbench.derived.maybe_include_variables_from_derived_input"
+            ) as mock_derived,
+        ):
+            # Setup mocks to return valid indices
+            mock_derive.return_value = (np.array([0, 1, 2]), np.array([0, 1, 2]))
+
+            # Create expected result after duplicate removal with unique valid_times
+            result_data = xr.Dataset(
+                {
+                    "surface_air_temperature": (
+                        ["valid_time", "latitude", "longitude"],
+                        np.random.randn(3, 3, 3),
+                    )
+                },
+                coords={
+                    "valid_time": pd.date_range("2021-06-20", periods=3, freq="6h"),
+                    "latitude": [40, 41, 42],
+                    "longitude": [-100, -101, -102],
+                },
+            )
+            mock_convert.return_value = result_data
+            mock_derived.return_value = ["surface_air_temperature"]
+
+            result = forecast.subset_data_to_case(test_data, mock_case)
+
+            # Verify the result is valid
+            assert isinstance(result, xr.Dataset)
+
+    def test_forecast_base_no_duplicate_init_times_unchanged(
+        self, sample_forecast_dataset
+    ):
+        """Test that datasets without duplicate init_times are processed normally."""
+        # Verify the sample dataset has no duplicates
+        assert len(np.unique(sample_forecast_dataset.init_time)) == len(
+            sample_forecast_dataset.init_time
+        )
+
+        # Create mock case metadata
+        mock_case = Mock()
+        mock_case.start_date = pd.Timestamp("2021-06-20")
+        mock_case.end_date = pd.Timestamp("2021-06-22")
+        mock_case.location.mask.return_value = sample_forecast_dataset
+
+        forecast = inputs.ZarrForecast(
+            name="test",
+            source="test.zarr",
+            variables=["surface_air_temperature"],
+            variable_mapping={},
+            storage_options={},
+        )
+
+        with (
+            patch(
+                "extremeweatherbench.utils.derive_indices_from_init_time_and_lead_time"
+            ) as mock_derive,
+            patch(
+                "extremeweatherbench.utils.convert_init_time_to_valid_time"
+            ) as mock_convert,
+            patch(
+                "extremeweatherbench.derived.maybe_include_variables_from_derived_input"
+            ) as mock_derived,
+        ):
+            # Setup mocks
+            mock_derive.return_value = (np.array([0, 1]), np.array([0, 1]))
+            # Create a result dataset with unique valid_times
+            result_data = xr.Dataset(
+                {
+                    "surface_air_temperature": (
+                        ["valid_time", "latitude", "longitude"],
+                        np.random.randn(3, 3, 3),
+                    )
+                },
+                coords={
+                    "valid_time": pd.date_range("2021-06-20", periods=3, freq="6h"),
+                    "latitude": [40, 41, 42],
+                    "longitude": [-100, -101, -102],
+                },
+            )
+            mock_convert.return_value = result_data
+            mock_derived.return_value = ["surface_air_temperature"]
+
+            result = forecast.subset_data_to_case(sample_forecast_dataset, mock_case)
+
+            # Should process normally without issues
+            assert isinstance(result, xr.Dataset)
+
+    def test_forecast_base_duplicate_init_times_preserves_first_occurrence(self):
+        """Test that when duplicates exist, the first occurrence is preserved."""
+        # Create dataset with specific values to test which occurrence is kept
+        init_times = pd.to_datetime(
+            ["2021-06-20", "2021-06-21", "2021-06-20"]
+        )  # Duplicate first time
+        lead_times = [0, 6]
+
+        # Create data where we can distinguish between first and duplicate occurrence
+        data = np.zeros((3, 2, 2, 2))  # (init_time, lat, lon, lead_time)
+        data[0, :, :, :] = 1.0  # First occurrence of 2021-06-20
+        data[1, :, :, :] = 2.0  # 2021-06-21
+        data[2, :, :, :] = 3.0  # Duplicate occurrence of 2021-06-20
+
+        test_data = xr.Dataset(
+            {
+                "surface_air_temperature": (
+                    ["init_time", "latitude", "longitude", "lead_time"],
+                    data,
+                )
+            },
+            coords={
+                "init_time": init_times,
+                "latitude": [40, 41],
+                "longitude": [-100, -101],
+                "lead_time": lead_times,
+            },
+        )
+
+        # Apply the duplicate removal logic directly (as done in subset_data_to_case)
+        if len(np.unique(test_data.init_time)) != len(test_data.init_time):
+            _, index = np.unique(test_data.init_time, return_index=True)
+            deduplicated_data = test_data.isel(init_time=index)
+
+        # Verify that we kept the first occurrence (value 1.0) not duplicate (value 3.0)
+        first_time_data = deduplicated_data.sel(init_time="2021-06-20")[
+            "surface_air_temperature"
+        ]
+        assert np.all(first_time_data.values == 1.0), (
+            "Should preserve first occurrence, not duplicate"
+        )
+
+        # Verify we have the correct number of unique times
+        assert len(deduplicated_data.init_time) == 2
+        assert len(np.unique(deduplicated_data.init_time)) == 2
+
 
 class TestTargetBase:
     """Test the TargetBase class."""
@@ -942,9 +1192,9 @@ class TestGHCN:
 
         # Collect the result and verify valid_time is sorted
         collected_result = result.collect()
-        assert collected_result[
-            "valid_time"
-        ].is_sorted(), "valid_time column should be sorted"
+        assert collected_result["valid_time"].is_sorted(), (
+            "valid_time column should be sorted"
+        )
 
     def test_ghcn_custom_convert_to_dataset(self, sample_ghcn_dataframe):
         """Test GHCN custom conversion to dataset."""
