@@ -1,12 +1,15 @@
+import datetime
+
 from extremeweatherbench import evaluate, inputs, metrics
+from extremeweatherbench.defaults import preprocess_bb_cira_forecast_dataset
 
 test_case = {
     "cases": [
         {
             "case_id_number": 1,
             "title": "2024 New York City Test",
-            "start_date": "2024-07-10 00:00:00",
-            "end_date": "2024-07-18 00:00:00",
+            "start_date": datetime.datetime(2024, 7, 10, 0, 0, 0),
+            "end_date": datetime.datetime(2024, 7, 18, 0, 0, 0),
             "location": {
                 "type": "bounded_region",
                 "parameters": {
@@ -22,7 +25,6 @@ test_case = {
 }
 
 era5_heatwave_target = inputs.ERA5(
-    source=inputs.ARCO_ERA5_FULL_URI,
     variables=["surface_air_temperature"],
     storage_options={"remote_options": {"anon": True}},
     chunks=None,
@@ -36,19 +38,23 @@ era5_ghcn_target = inputs.GHCN(
 fcnv2_forecast = inputs.KerchunkForecast(
     source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
     variables=["surface_air_temperature"],
+    variable_mapping=inputs.CIRA_metadata_variable_mapping,
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
+    preprocess=preprocess_bb_cira_forecast_dataset,
 )
 
 gc_forecast = inputs.KerchunkForecast(
     source="gs://extremeweatherbench/GRAP_v100_GFS.parq",
     variables=["surface_air_temperature"],
+    variable_mapping=inputs.CIRA_metadata_variable_mapping,
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
+    preprocess=preprocess_bb_cira_forecast_dataset,
 )
 
 heatwave_evaluation_objects = [
     inputs.EvaluationObject(
         event_type="heat_wave",
-        metric=[
+        metric_list=[
             metrics.MaximumMAE,
             metrics.RMSE,
         ],
@@ -57,7 +63,7 @@ heatwave_evaluation_objects = [
     ),
     inputs.EvaluationObject(
         event_type="heat_wave",
-        metric=[
+        metric_list=[
             metrics.MaximumMAE,
             metrics.RMSE,
         ],
