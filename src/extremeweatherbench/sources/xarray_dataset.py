@@ -1,5 +1,8 @@
 """Handle variable extraction for xarray Datasets."""
 
+import datetime
+
+import pandas as pd
 import xarray as xr
 
 
@@ -48,3 +51,15 @@ def safely_pull_variables_xr_dataset(
 
     # Return dataset with only the found variables
     return dataset[found_variables]
+
+
+def check_for_valid_times_xr_dataset(
+    dataset: xr.Dataset, start_date: datetime.datetime, end_date: datetime.datetime
+) -> bool:
+    """Check if the dataset has valid times in the given date range."""
+
+    # Convert the start and end dates to pandas Timestamp objects for xarray's
+    # loc indexing
+    start_ts = pd.Timestamp(start_date)
+    end_ts = pd.Timestamp(end_date)
+    return any(dataset["valid_time"].loc[start_ts:end_ts])

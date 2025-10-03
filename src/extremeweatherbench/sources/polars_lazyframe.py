@@ -1,5 +1,7 @@
 """Handle variable extraction for Polars LazyFrames."""
 
+import datetime
+
 import polars as pl
 
 
@@ -50,3 +52,15 @@ def safely_pull_variables_polars_lazyframe(
 
     # Return LazyFrame with only the found columns
     return dataset.select(found_variables)
+
+
+def check_for_valid_times_polars_lazyframe(
+    dataset: pl.LazyFrame, start_date: datetime.datetime, end_date: datetime.datetime
+) -> bool:
+    """Check if the polars LazyFrame dataset has valid times in the given date range."""
+    # Filter the LazyFrame to only include valid times in the given date range
+    time_filtered_lf = dataset.select(pl.col("valid_time")).filter(
+        (pl.col("valid_time") >= start_date) & (pl.col("valid_time") <= end_date)
+    )
+    # If the filtered LazyFrame has any rows, return True
+    return not time_filtered_lf.collect().is_empty()

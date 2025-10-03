@@ -1,5 +1,7 @@
 """Handle variable extraction for Pandas DataFrames."""
 
+import datetime
+
 import pandas as pd
 
 
@@ -50,3 +52,15 @@ def safely_pull_variables_pandas_dataframe(
 
     # Return DataFrame with only the found columns
     return dataset[found_variables]
+
+
+def check_for_valid_times_pandas_dataframe(
+    dataset: pd.DataFrame, start_date: datetime.datetime, end_date: datetime.datetime
+) -> bool:
+    """Check if the dataset has valid times in the given date range."""
+    # Filter the DataFrame to only include valid times in the given date range
+    time_filtered_df = dataset[
+        (dataset["valid_time"] >= start_date) & (dataset["valid_time"] <= end_date)
+    ]
+    # If the filtered DataFrame has any rows, return True
+    return len(time_filtered_df) > 0
