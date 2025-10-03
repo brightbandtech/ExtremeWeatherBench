@@ -307,6 +307,10 @@ class ForecastBase(InputBase):
     ) -> IncomingDataInput:
         if not isinstance(data, xr.Dataset):
             raise ValueError(f"Expected xarray Dataset, got {type(data)}")
+        # Drop duplicate init_time values
+        if len(np.unique(data.init_time)) != len(data.init_time):
+            _, index = np.unique(data.init_time, return_index=True)
+            data = data.isel(init_time=index)
 
         # subset time first to avoid OOM masking issues
         subset_time_indices = utils.derive_indices_from_init_time_and_lead_time(
@@ -314,6 +318,10 @@ class ForecastBase(InputBase):
             case_metadata.start_date,
             case_metadata.end_date,
         )
+
+        # If there are no valid times, return an empty dataset
+        if len(subset_time_indices[0]) == 0:
+            return xr.Dataset(coords={"valid_time": []})
 
         # Use only valid init_time indices, but keep all lead_times
         unique_init_indices = np.unique(subset_time_indices[0])
