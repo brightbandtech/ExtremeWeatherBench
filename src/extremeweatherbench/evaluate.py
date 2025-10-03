@@ -183,7 +183,7 @@ def compute_case_operator(
             cache_dir=kwargs.get("cache_dir", None),
         )
     logger.info(
-        f"Datasets built for case {case_operator.case_metadata.case_id_number}."
+        "Datasets built for case %s.", case_operator.case_metadata.case_id_number
     )
     results = []
     # TODO: determine if derived variables need to be pushed here or at pre-compute
@@ -336,7 +336,7 @@ def _evaluate_metric_and_return_df(
     # instantiation
     if isinstance(metric, type):
         metric = metric()
-    logger.info(f"Computing metric {metric.name}... ")
+    logger.info("Computing metric %s... ", metric.name)
     metric_result = metric.compute_metric(
         forecast_ds.get(forecast_variable, forecast_ds.data_vars),
         target_ds.get(target_variable, target_ds.data_vars),
