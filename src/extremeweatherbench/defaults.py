@@ -1,9 +1,12 @@
+import itertools
 import logging
+from pathlib import Path
+from typing import Callable, Union
 
 import numpy as np
 import xarray as xr
 
-from extremeweatherbench import inputs
+from extremeweatherbench import derived, inputs, utils
 
 # Suppress noisy log messages
 logging.getLogger("urllib3.connectionpool").setLevel(logging.CRITICAL)
@@ -290,3 +293,117 @@ def get_brightband_evaluation_objects() -> list[inputs.EvaluationObject]:
         #     forecast=cira_tropical_cyclone_forecast,
         # ),
     ]
+
+
+def build_default_forecast_object(
+    forecast_source: Union[Path, str],
+    event_type: str,
+    variable_mapping: dict,
+    storage_options: dict = {},
+    preprocess: Callable = utils._default_preprocess,
+) -> inputs.ForecastBase:
+    """Build a forecast object from a given source.
+
+    Args:
+        forecast_source: The forecast source to use for the forecast object. Can be
+            a path to a local file or a remote URI.
+        variables: The variables to use for the forecast object.
+        variable_mapping: The variable mapping to use for the forecast object.
+        storage_options: The storage options to use for the forecast object.
+        preprocess: The preprocess function to use for the forecast object.
+    """
+    match event_type:
+        case "heat_wave":
+            variables = ["surface_air_temperature"]
+        case "freeze":
+            variables = ["surface_air_temperature"]
+        case "severe_convection":
+            variables = [derived.CravenSignificantSevereParameter]
+        case "atmospheric_river":
+            variables = [derived.AtmosphericRiverMask]
+        case "tropical_cyclone":
+            variables = [derived.TropicalCycloneTrackVariables]
+        case _:
+            raise ValueError(f"Unknown event type: {event_type}")
+    # Convert to string if Path, check file type, and build the forecast object
+    if isinstance(forecast_source, Path):
+        forecast_source = forecast_source.as_posix()
+
+    # Build the forecast object based on the file type
+    if (
+        forecast_source.endswith(".parq")
+        or forecast_source.endswith(".parquet")
+        or forecast_source.endswith(".json")
+    ):
+        return inputs.KerchunkForecast(
+            source=forecast_source,
+            variables=variables,
+            variable_mapping=variable_mapping,
+            storage_options=storage_options,
+            preprocess=preprocess,
+        )
+    elif forecast_source.endswith(".zarr"):
+        return inputs.ZarrForecast(
+            source=forecast_source,
+            variables=variables,
+            variable_mapping=variable_mapping,
+            storage_options=storage_options,
+            preprocess=preprocess,
+        )
+    else:
+        raise ValueError(
+            f"Unknown forecast file type found in forecast path, only "
+            f"parquet, json, and zarr are supported. Found {forecast_source}"
+        )
+
+
+def build_default_evaluation_objects_for_forecast(
+    forecast_source: Union[Path, str],
+    event_types: Union[list[str], str],
+    variable_mapping: dict,
+    storage_options: dict = {},
+    preprocess: Callable = utils._default_preprocess,
+) -> list[inputs.EvaluationObject]:
+    """Get the default evaluation objects for a given forecast source and event
+    types.
+
+    Args:
+        forecast_source: The forecast source to use for the evaluation objects. Can be
+            a path to a local file or a remote URI.
+        event_types: The event types to use for the evaluation objects.
+        variable_mapping: The variable mapping to use for the forecast object. Suggested
+        to use one single mapping dictionary for all variables in the forecast.
+        storage_options: The storage options to use for the forecast object.
+        preprocess: The preprocess function to use for the forecast object.
+    Returns:
+        A list of evaluation objects.
+    """
+
+    # Convert to list if string
+    if isinstance(event_types, str):
+        event_types = [event_types]
+
+    # Convert to string if Path
+    if isinstance(forecast_source, Path):
+        forecast_source = forecast_source.as_posix()
+
+    # Build the evaluation objects by event type. For the default evaluation objects,
+    # check if the event type matches the chosen event types that have already been used
+    # to build the forecast objects.
+    default_evaluation_objects = get_brightband_evaluation_objects()
+    evaluation_objects = []
+    for eval_obj, event_type in itertools.product(
+        default_evaluation_objects, event_types
+    ):
+        if event_type == eval_obj.event_type:
+            # Inject the new forecast object. variable mapping is required between your
+            # forecast and the variables in EWB
+            eval_obj.forecast = build_default_forecast_object(
+                forecast_source=forecast_source,
+                event_type=event_type,
+                variable_mapping=variable_mapping,
+                storage_options=storage_options,
+                preprocess=preprocess,
+            )
+            evaluation_objects.append(eval_obj)
+    return evaluation_objects
