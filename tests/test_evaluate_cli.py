@@ -1,4 +1,4 @@
-"""Unit tests for the rebuilt evaluate_cli.py interface."""
+"""Tests for the evaluate_cli interface."""
 
 import pickle
 import tempfile
