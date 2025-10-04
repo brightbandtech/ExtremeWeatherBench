@@ -1,7 +1,7 @@
 import dataclasses
 import logging
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Callable, Optional, TypeAlias, Union, Mapping
+from typing import TYPE_CHECKING, Callable, Mapping, Optional, TypeAlias, Union
 
 import numpy as np
 import pandas as pd
@@ -685,9 +685,7 @@ class LSR(TargetBase):
             data.loc[eastern_hemisphere_mask] = eastern_data
 
         data = data.reset_index()
-        data = xr.Dataset.from_dataframe(
-            data[~data.index.duplicated(keep="first")]
-        )
+        data = xr.Dataset.from_dataframe(data[~data.index.duplicated(keep="first")])
         data.attrs["report_type_mapping"] = report_type_mapping
         return data
 
@@ -910,6 +908,7 @@ def zarr_target_subsetter(
 
     return fully_subset_data
 
+
 def _align_time_coords(
     forecast_dataset: xr.Dataset,
     target_dataset: xr.Dataset,
@@ -920,10 +919,8 @@ def _align_time_coords(
         forecast_dataset,
         join="inner",
     )
-    # Drop valid_time from forecast to avoid conflicts during interpolation (if it exists)
-    if "valid_time" in time_aligned_forecast.coords:
-        time_aligned_forecast = time_aligned_forecast.drop_vars(["valid_time"])
     return time_aligned_forecast, time_aligned_target
+
 
 def _get_non_time_interpolation_coords(
     forecast_dataset: xr.Dataset,
@@ -932,7 +929,8 @@ def _get_non_time_interpolation_coords(
     """Get the interpolation coordinates for a dataset."""
     interpolation_coords = {}
     for dim in forecast_dataset.dims:
-        if dim in [coord for coord in DEFAULT_COORDINATE_VARIABLES if 'time' in coord]:
+        # Skip time dimensions
+        if dim in [coord for coord in DEFAULT_COORDINATE_VARIABLES if "time" in coord]:
             continue
         # Check if this forecast dimension exists as a coordinate in target
         if dim in target_dataset.coords:
@@ -941,7 +939,7 @@ def _get_non_time_interpolation_coords(
         # (common with reset_index() approach where lat/lon become data variables)
         elif dim in target_dataset.data_vars:
             interpolation_coords[dim] = target_dataset[dim]
-    
+
     return interpolation_coords
 
 
@@ -951,36 +949,37 @@ def align_forecast_to_target(
     # TODO: provide passthrough for other methods
     method: str = "nearest",
 ) -> tuple[xr.Dataset, xr.Dataset]:
-
     # Time alignment first (always needed)
     time_aligned_target, time_aligned_forecast = _align_time_coords(
-        target_data,
-        forecast_data
+        target_data, forecast_data
     )
-    
+
     # Check if alignment resulted in empty datasets (no overlapping times)
-    time_dims = [coord for coord in DEFAULT_COORDINATE_VARIABLES if 'time' in coord]
+    time_dims = [coord for coord in DEFAULT_COORDINATE_VARIABLES if "time" in coord]
     time_dim_sizes = [time_aligned_forecast.sizes.get(dim, 0) for dim in time_dims]
     if all(size == 0 for size in time_dim_sizes):
         # No overlapping time periods - return empty datasets
         return time_aligned_forecast, time_aligned_target
-    
-    interpolation_coords = _get_non_time_interpolation_coords(time_aligned_forecast, time_aligned_target)
+
+    interpolation_coords = _get_non_time_interpolation_coords(
+        time_aligned_forecast, time_aligned_target
+    )
 
     if not interpolation_coords:
         # No spatial dimensions to interpolate, just return time-aligned data
         return time_aligned_forecast, time_aligned_target
-    
+
     # Interpolate forecast to target coordinate values
     interpolated_forecast = time_aligned_forecast.interp(
-        **interpolation_coords, 
-        method=method, 
+        **interpolation_coords,
+        method=method,
         kwargs={
-            "bounds_error": False, 
-            "fill_value": None if len(interpolation_coords) > 1 else "extrapolate"
-            }
+            "bounds_error": False,
+            "fill_value": None if len(interpolation_coords) > 1 else "extrapolate",
+        },
     )
     return interpolated_forecast, time_aligned_target
+
 
 def safely_pull_variables(
     dataset: IncomingDataInput,

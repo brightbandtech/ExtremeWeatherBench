@@ -338,8 +338,8 @@ def _evaluate_metric_and_return_df(
         metric = metric()
     logger.info("Computing metric %s... ", metric.name)
     metric_result = metric.compute_metric(
-        forecast_ds.get(forecast_variable, forecast_ds.data_vars),
-        target_ds.get(target_variable, target_ds.data_vars),
+        forecast_ds,
+        target_ds,
         **kwargs,
     )
     # Convert to DataFrame and add metadata, ensuring OUTPUT_COLUMNS compliance

@@ -674,9 +674,9 @@ class MaximumMAE(AppliedMetric):
         **kwargs,
     ) -> dict[str, xr.DataArray]:
         forecast = forecast.compute()
-        target_spatial_mean = target.compute().mean(["latitude", "longitude"])
-        maximum_timestep = target_spatial_mean.idxmax("valid_time")
-        maximum_value = target_spatial_mean.sel(valid_time=maximum_timestep)
+        target_spatial_mean = target.mean(["latitude", "longitude"])
+        maximum_timestep = target_spatial_mean.argmax()
+        maximum_value = target_spatial_mean.isel(valid_time=maximum_timestep)
 
         # Handle the case where there are >1 resulting target values
         maximum_timestep = utils.maybe_get_closest_timestamp_to_center_of_valid_times(
