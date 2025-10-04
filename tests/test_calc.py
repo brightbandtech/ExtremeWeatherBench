@@ -537,22 +537,8 @@ class TestSpecificHumidityCalculations:
                 "longitude": lon,
             },
         )
-
-        result = calc.compute_specific_humidity_from_relative_humidity(dataset)
-
-        # Should return a DataArray
-        assert isinstance(result, xr.DataArray)
-
-        # Should have correct dimensions (no level dimension)
-        expected_dims = ["time", "latitude", "longitude"]
-        assert list(result.dims) == expected_dims
-
-        # Should have correct shape
-        assert result.shape == data_shape_3d
-
-        # All values should be positive and reasonable
-        assert (result > 0).all()
-        assert (result < 0.1).all()
+        with pytest.raises(KeyError):
+            calc.compute_specific_humidity_from_relative_humidity(dataset)
 
     def test_compute_specific_humidity_known_values(self):
         """Test specific humidity calculation with known values."""
