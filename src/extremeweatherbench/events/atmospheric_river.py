@@ -84,7 +84,7 @@ def compute_ivt(data: xr.Dataset) -> xr.DataArray:
         data: Dataset containing wind and humidity variables
 
     Returns:
-        Dataset with IVT components and magnitude
+        DataArray with integrated vapor transport
     """
     # Return if integrated_vapor_transport is already in the dataset
     if "integrated_vapor_transport" in data.data_vars:
