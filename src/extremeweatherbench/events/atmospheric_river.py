@@ -74,6 +74,7 @@ def atmospheric_river_mask(
     ivt_laplacian_intersection = xr.DataArray(
         xr.where(feature_mask, 1, 0), coords=coords_dict, dims=coords_dict.keys()
     )
+    ivt_laplacian_intersection.name = "atmospheric_river_mask"
     return ivt_laplacian_intersection
 
 
@@ -213,8 +214,11 @@ def find_land_intersection(atmospheric_river_mask: xr.DataArray) -> xr.DataArray
         atmospheric_river_mask.longitude, atmospheric_river_mask.latitude
     )
     mask = mask_parent.where(np.isnan(mask_parent), 1).where(mask_parent == 0, 0)
-    contingency_manager = cat.BinaryContingencyManager(mask, atmospheric_river_mask)
-    return contingency_manager
+    contingency_manager = cat.BinaryContingencyManager(atmospheric_river_mask, mask)
+    # return the true positive mask, where AR is true and land is true
+    land_intersection = contingency_manager.tp
+    land_intersection.name = "atmospheric_river_land_intersection"
+    return land_intersection
 
 
 def build_mask_and_land_intersection(data: xr.Dataset) -> xr.Dataset:
