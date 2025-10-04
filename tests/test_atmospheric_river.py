@@ -532,15 +532,21 @@ class TestFindLandIntersection:
         """Test basic land intersection functionality."""
         result = atmospheric_river.find_land_intersection(sample_ar_mask)
 
-        # Should return a BinaryContingencyManager
-        from scores.categorical import BinaryContingencyManager
+        # Should return a DataArray
+        assert isinstance(result, xr.DataArray)
 
-        assert isinstance(result, BinaryContingencyManager)
+        # Should have correct dimensions
+        expected_dims = ["time", "latitude", "longitude"]
+        assert list(result.dims) == expected_dims
 
-        # The manager should have the correct data
-        # Note: BinaryContingencyManager structure may vary
-        # Just check that it's a valid object with some attributes
-        assert hasattr(result, "__class__")
+        # Should have correct shape
+        assert result.shape == sample_ar_mask.shape
+
+        # Values should be 0 or 1 (binary mask)
+        assert set(result.values.flatten()).issubset({0, 1})
+
+        # Should have the correct name
+        assert result.name == "atmospheric_river_land_intersection"
 
     def test_find_land_intersection_empty_mask(self):
         """Test land intersection with empty AR mask."""
@@ -561,10 +567,21 @@ class TestFindLandIntersection:
 
         result = atmospheric_river.find_land_intersection(ar_mask)
 
-        # Should still return a BinaryContingencyManager
-        from scores.categorical import BinaryContingencyManager
+        # Should return a DataArray
+        assert isinstance(result, xr.DataArray)
 
-        assert isinstance(result, BinaryContingencyManager)
+        # Should have correct dimensions
+        expected_dims = ["time", "latitude", "longitude"]
+        assert list(result.dims) == expected_dims
+
+        # Should have correct shape
+        assert result.shape == ar_mask.shape
+
+        # Values should be 0 or 1 (binary mask)
+        assert set(result.values.flatten()).issubset({0, 1})
+
+        # Should have the correct name
+        assert result.name == "atmospheric_river_land_intersection"
 
 
 class TestBuildMaskAndLandIntersection:
@@ -630,15 +647,14 @@ class TestBuildMaskAndLandIntersection:
         assert isinstance(ar_mask, xr.DataArray)
         assert list(ar_mask.dims) == ["time", "latitude", "longitude"]
 
-        # Land intersection should be a DataArray containing a BinaryContingencyManager
+        # Land intersection should be a DataArray with binary values
         land_intersection = result["atmospheric_river_land_intersection"]
-        from scores.categorical import BinaryContingencyManager
 
-        # The land intersection is stored as a DataArray containing the manager
+        # The land intersection is stored as a DataArray with binary values
         assert isinstance(land_intersection, xr.DataArray)
-        # Check that it contains a BinaryContingencyManager object
-        manager = land_intersection.values.item()
-        assert isinstance(manager, BinaryContingencyManager)
+        assert list(land_intersection.dims) == ["time", "latitude", "longitude"]
+        # Values should be 0 or 1 (binary mask)
+        assert set(land_intersection.values.flatten()).issubset({0, 1})
 
     def test_build_mask_and_land_intersection_missing_variables(self):
         """Test integration with missing required variables."""
