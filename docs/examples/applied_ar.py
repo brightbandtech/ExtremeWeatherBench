@@ -1,34 +1,15 @@
-# ---
-# jupyter:
-#   jupytext:
-#     cell_metadata_filter: -all
-#     custom_cell_magics: kql
-#     text_representation:
-#       extension: .py
-#       format_name: percent
-#       format_version: '1.3'
-#       jupytext_version: 1.11.2
-#   kernelspec:
-#     display_name: .venv
-#     language: python
-#     name: python3
-# ---
-
-# %%
 import logging
 
-# %%
 from extremeweatherbench import derived, evaluate, inputs, metrics, utils
 
 # %%
 logging.getLogger("urllib3.connectionpool").setLevel(logging.CRITICAL)
 logging.getLogger("botocore.httpchecksum").setLevel(logging.CRITICAL)
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
-# %%
 case_yaml = utils.load_events_yaml()
-test_yaml = {
+ar_cases = {
     "cases": [
         n
         for n in case_yaml["cases"]
@@ -36,7 +17,6 @@ test_yaml = {
     ][5:6]
 }
 
-# %%
 era5_target = inputs.ERA5(
     source=inputs.ARCO_ERA5_FULL_URI,
     variables=[
@@ -51,7 +31,6 @@ era5_target = inputs.ERA5(
     storage_options={"remote_options": {"anon": True}},
 )
 
-# %%
 hres_forecast = inputs.ZarrForecast(
     source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
     variables=[
@@ -66,8 +45,6 @@ hres_forecast = inputs.ZarrForecast(
     storage_options={"remote_options": {"anon": True}},
 )
 
-# %%
-# just one for now
 ar_evaluation_objects = [
     inputs.EvaluationObject(
         event_type="atmospheric_river",
@@ -76,12 +53,12 @@ ar_evaluation_objects = [
         forecast=hres_forecast,
     ),
 ]
-# %%
-test_ewb = evaluate.ExtremeWeatherBench(
-    cases=test_yaml,
+
+ar_ewb = evaluate.ExtremeWeatherBench(
+    cases=ar_cases,
     evaluation_objects=ar_evaluation_objects,
 )
 logger.info("Starting EWB run")
-outputs = test_ewb.run(
-    # pre-compute the datasets to avoid recomputing them for each metric
-)
+outputs = ar_ewb.run()
+
+outputs.to_csv("ar_outputs.csv")
