@@ -27,14 +27,14 @@ def atmospheric_river_mask(
     ERA5 outputs.
 
     Args:
-        data: The input xarray dataset containing integrated_vapor_transport
-        and integrated_vapor_transport_laplacian.
-        laplacian_threshold: The threshold for the Laplacian in kg/m^2/s^2.
-        ivt_threshold: The threshold for the IVT in kg/m/s.
-        dilation_radius: The radius for the dilation of the Laplacian in gridpoints.
-        min_size_gridpoints: The minimum size of the atmospheric river in gridpoints.
+        data: the input dataset containing integrated_vapor_transport as a variable and
+        integrated_vapor_transport_laplacian as a variable.
+        laplacian_threshold: the threshold for the Laplacian in kg/m^2/s^2
+        ivt_threshold: the threshold for the IVT in kg/m/s
+        dilation_radius: the radius for the dilation of the Laplacian in gridpoints
+        min_size_gridpoints: the minimum size of the atmospheric river in gridpoints
     Returns:
-        The atmospheric river mask.
+        The atmospheric river mask
     """
     # Get all coordinates except level for the intersection DataArray
     coords_dict = {dim: data.coords[dim] for dim in data.dims if dim != "level"}
@@ -81,10 +81,10 @@ def compute_ivt(data: xr.Dataset) -> xr.DataArray:
     """Compute integrated vapor transport from eastward and northward winds.
 
     Args:
-        data: Dataset containing wind and humidity variables
+        data: dataset containing wind and humidity variables
 
     Returns:
-        DataArray with integrated vapor transport
+        An integrated vapor transport dataarray
     """
     # Return if integrated_vapor_transport is already in the dataset
     if "integrated_vapor_transport" in data.data_vars:
@@ -163,24 +163,24 @@ def _compute_laplacian_ufunc(data, sigma):
     """Compute Laplacian using scipy filters.
 
     Args:
-        data: The DataArray to compute the Laplacian of
-        sigma: The standard deviation for the Gaussian filter
+        data: IVT data to compute the Laplacian of
+        sigma: the standard deviation for the Gaussian filter
 
     Returns:
-        The Laplacian of the DataArray
+        The Laplacian of IVT
     """
     return ndimage.gaussian_filter(filters.laplace(data), sigma=sigma)
 
 
 def compute_ivt_laplacian(ivt: xr.DataArray, sigma: float = 3) -> xr.DataArray:
-    """Compute the Laplacian of IVT using xr.apply_ufunc.
+    """Compute the Laplacian of IVT.
 
     Args:
-        ivt: Integrated vapor transport DataArray
+        ivt: integrated vapor transport DataArray
         sigma: Gaussian filter sigma for smoothing
 
     Returns:
-        Laplacian of IVT
+        The Laplacian of IVT
     """
     # TODO: determine if numba can be used to speed up this computation
     laplacian = xr.apply_ufunc(
@@ -203,10 +203,10 @@ def find_land_intersection(atmospheric_river_mask: xr.DataArray) -> xr.DataArray
     """Find points where an atmospheric river mask intersects with land.
 
     Args:
-        atmospheric_river_mask: xarray DataArray containing boolean mask of AR locations
+        atmospheric_river_mask: a boolean mask of AR locations
 
     Returns:
-        xarray DataArray containing only the points where AR overlaps with land
+        a mask of points where AR overlaps with land
     """
 
     mask_parent = regionmask.defined_regions.natural_earth_v5_0_0.land_110.mask(
@@ -221,7 +221,7 @@ def build_mask_and_land_intersection(data: xr.Dataset) -> xr.Dataset:
     """Calculate atmospheric river mask and land intersection.
 
     Args:
-        data: Dataset containing wind and humidity data. Must contain eastward_wind,
+        data: data with wind and humidity data. Must contain eastward_wind,
         northward_wind, specific_humidity, and level.
 
     Returns:
