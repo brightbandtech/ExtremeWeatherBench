@@ -107,7 +107,11 @@ class AtmosphericRiverMask(DerivedVariable):
         "surface_standard_pressure": ["surface_standard_pressure"],
         "relative_humidity": ["specific_humidity", "air_temperature"],
     }
-    name = "atmospheric_river_mask"
+
+    # Note: this name is used for the intersection between the AR mask and land, not the
+    # mask. The mask is named "atmospheric_river_mask" in the atmospheric_river module.
+    # EWB's atmospheric river event detection uses the intersection for evaluation.
+    name = "atmospheric_river_land_intersection"
 
     @classmethod
     def derive_variable(cls, data: xr.Dataset, *args, **kwargs) -> xr.Dataset:
