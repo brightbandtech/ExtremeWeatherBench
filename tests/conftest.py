@@ -6,6 +6,7 @@ import pandas as pd
 import pytest
 import xarray as xr
 from click.testing import CliRunner
+from extremeweatherbench import calc
 
 
 def make_sample_gridded_obs_dataset():
@@ -391,11 +392,11 @@ def sample_calc_dataset():
             ),
             "geopotential": (
                 ["time", "level", "latitude", "longitude"],
-                np.random.normal(5000, 1000, data_shape_4d) * 9.80665,
+                np.random.normal(5000, 1000, data_shape_4d) * calc.g0,
             ),
             "geopotential_at_surface": (
                 ["time", "latitude", "longitude"],
-                np.random.normal(500, 200, data_shape_3d) * 9.80665,
+                np.random.normal(500, 200, data_shape_3d) * calc.g0,
             ),
             "eastward_wind": (
                 ["time", "level", "latitude", "longitude"],
