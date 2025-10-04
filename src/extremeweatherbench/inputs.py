@@ -46,8 +46,58 @@ DEFAULT_COORDINATE_VARIABLES = [
     "latitude",
     "longitude",
 ]
+# ERA5 metadata variable mapping
+ERA5_metadata_variable_mapping = {
+    "time": "valid_time",
+    "2m_temperature": "surface_air_temperature",
+    "2m_dewpoint_temperature": "surface_dewpoint_temperature",
+    "temperature": "air_temperature",
+    "dewpoint": "dewpoint_temperature",
+    "2m_relative_humidity": "surface_relative_humidity",
+    "2m_specific_humidity": "surface_specific_humidity",
+    "10m_u_component_of_wind": "surface_eastward_wind",
+    "10m_v_component_of_wind": "surface_northward_wind",
+    "u_component_of_wind": "eastward_wind",
+    "v_component_of_wind": "northward_wind",
+    "specific_humidity": "specific_humidity",
+    "mean_sea_level_pressure": "air_pressure_at_mean_sea_level",
+}
+
+# CIRA MLWP forecasts metadata variable mapping
+CIRA_metadata_variable_mapping = {
+    "time": "valid_time",
+    "t2": "surface_air_temperature",
+    "t": "air_temperature",
+    "q": "specific_humidity",
+    "u": "eastward_wind",
+    "v": "northward_wind",
+    "p": "air_pressure",
+    "z": "geopotential_height",
+    "r": "relative_humidity",
+    "u10": "surface_eastward_wind",
+    "v10": "surface_northward_wind",
+    "u100": "100m_eastward_wind",
+    "v100": "100m_northward_wind",
+}
+
+# HRES forecast (weatherbench2)metadata variable mapping
+HRES_metadata_variable_mapping = {
+    "2m_temperature": "surface_air_temperature",
+    "2m_dewpoint_temperature": "surface_dewpoint_temperature",
+    "temperature": "air_temperature",
+    "dewpoint": "dewpoint_temperature",
+    "10m_u_component_of_wind": "surface_eastward_wind",
+    "10m_v_component_of_wind": "surface_northward_wind",
+    "u_component_of_wind": "eastward_wind",
+    "v_component_of_wind": "northward_wind",
+    "prediction_timedelta": "lead_time",
+    "time": "init_time",
+    "mean_sea_level_pressure": "air_pressure_at_mean_sea_level",
+    "10m_wind_speed": "surface_wind_speed",
+}
 
 IBTrACS_metadata_variable_mapping = {
+    "SID": "storm_id",
     "ISO_TIME": "valid_time",
     "NAME": "tc_name",
     "LAT": "latitude",
@@ -257,6 +307,10 @@ class ForecastBase(InputBase):
     ) -> IncomingDataInput:
         if not isinstance(data, xr.Dataset):
             raise ValueError(f"Expected xarray Dataset, got {type(data)}")
+        # Drop duplicate init_time values
+        if len(np.unique(data.init_time)) != len(data.init_time):
+            _, index = np.unique(data.init_time, return_index=True)
+            data = data.isel(init_time=index)
 
         # subset time first to avoid OOM masking issues
         subset_time_indices = utils.derive_indices_from_init_time_and_lead_time(
@@ -264,6 +318,10 @@ class ForecastBase(InputBase):
             case_metadata.start_date,
             case_metadata.end_date,
         )
+
+        # If there are no valid times, return an empty dataset
+        if len(subset_time_indices[0]) == 0:
+            return xr.Dataset(coords={"valid_time": []})
 
         # Use only valid init_time indices, but keep all lead_times
         unique_init_indices = np.unique(subset_time_indices[0])
@@ -403,6 +461,10 @@ class ERA5(TargetBase):
 
     name: str = "ERA5"
     chunks: Optional[Union[dict, str]] = None
+    source: str = ARCO_ERA5_FULL_URI
+    variable_mapping: dict = dataclasses.field(
+        default_factory=lambda: ERA5_metadata_variable_mapping.copy()
+    )
 
     def _open_data_from_source(self) -> IncomingDataInput:
         data = xr.open_zarr(
@@ -452,6 +514,7 @@ class GHCN(TargetBase):
     """
 
     name: str = "GHCN"
+    source: str = DEFAULT_GHCN_URI
 
     def _open_data_from_source(self) -> IncomingDataInput:
         target_data: pl.LazyFrame = pl.scan_parquet(
@@ -524,6 +587,7 @@ class LSR(TargetBase):
     """
 
     name: str = "local_storm_reports"
+    source: str = LSR_URI
 
     def _open_data_from_source(self) -> IncomingDataInput:
         # force LSR to use anon token to prevent google reauth issues for users
@@ -642,6 +706,10 @@ class PPH(TargetBase):
     """Target class for practically perfect hindcast data."""
 
     name: str = "practically_perfect_hindcast"
+    source: str = PPH_URI
+    variable_mapping: dict = dataclasses.field(
+        default_factory=lambda: IBTrACS_metadata_variable_mapping.copy()
+    )
 
     def _open_data_from_source(
         self,
@@ -668,6 +736,7 @@ class IBTrACS(TargetBase):
     """Target class for IBTrACS data."""
 
     name: str = "IBTrACS"
+    source: str = IBTRACS_URI
 
     def _open_data_from_source(self) -> IncomingDataInput:
         # not using storage_options in this case due to NetCDF4Backend not
@@ -700,76 +769,15 @@ class IBTrACS(TargetBase):
             .unique()
         )
 
+        possible_names = utils.extract_tc_names(case_metadata.title)
+
         # Apply the filter to get all data for storms with the same number in
-        # the same season
+        # the same season, matching any of the possible names
         # This maintains the lazy evaluation
+        name_filter = pl.col("tc_name").is_in(possible_names)
         subset_target_data = target_data.join(
             matching_numbers, on="NUMBER", how="inner"
-        ).filter(
-            (pl.col("tc_name") == case_metadata.title.upper())
-            & (pl.col("SEASON").cast(pl.Int64) == season)
-        )
-
-        all_variables = IBTrACS_metadata_variable_mapping.values()
-        # subset the variables
-        subset_target_data = subset_target_data.select(all_variables)
-
-        schema = subset_target_data.collect_schema()
-        # Convert pressure and surface wind columns to float, replacing " " with null
-        # Get column names that contain "pressure" or "wind"
-        pressure_cols = [col for col in schema if "pressure" in col.lower()]
-        wind_cols = [col for col in schema if "wind" in col.lower()]
-
-        # Apply transformations to convert " " to null and cast to float
-        subset_target_data = subset_target_data.with_columns(
-            [
-                pl.when(pl.col(col) == " ")
-                .then(None)
-                .otherwise(pl.col(col))
-                .cast(pl.Float64, strict=False)
-                .alias(col)
-                for col in pressure_cols + wind_cols
-            ]
-        )
-
-        # Drop rows where ALL columns are null (equivalent to pandas dropna(how="all"))
-        subset_target_data = subset_target_data.filter(
-            ~pl.all_horizontal(pl.all().is_null())
-        )
-
-        # Create unified pressure and wind columns by preferring USA and WMO data
-        # For surface wind speed
-        wind_columns = [col for col in schema if "surface_wind_speed" in col]
-        wind_priority = ["usa_surface_wind_speed", "wmo_surface_wind_speed"] + [
-            col
-            for col in wind_columns
-            if col not in ["usa_surface_wind_speed", "wmo_surface_wind_speed"]
-        ]
-
-        # For pressure at mean sea level
-        pressure_columns = [
-            col for col in schema if "air_pressure_at_mean_sea_level" in col
-        ]
-        pressure_priority = [
-            "usa_air_pressure_at_mean_sea_level",
-            "wmo_air_pressure_at_mean_sea_level",
-        ] + [
-            col
-            for col in pressure_columns
-            if col
-            not in [
-                "usa_air_pressure_at_mean_sea_level",
-                "wmo_air_pressure_at_mean_sea_level",
-            ]
-        ]
-
-        # Create unified columns using coalesce (equivalent to pandas bfill)
-        subset_target_data = subset_target_data.with_columns(
-            [
-                pl.coalesce(wind_priority).alias("surface_wind_speed"),
-                pl.coalesce(pressure_priority).alias("air_pressure_at_mean_sea_level"),
-            ]
-        )
+        ).filter(name_filter & (pl.col("SEASON").cast(pl.Int64) == season))
 
         # Select only the columns to keep
         columns_to_keep = [
@@ -789,6 +797,7 @@ class IBTrACS(TargetBase):
             pl.col("surface_wind_speed").is_not_null()
             & pl.col("air_pressure_at_mean_sea_level").is_not_null()
         )
+        self._current_case_id = case_metadata.case_id_number
 
         return subset_target_data
 

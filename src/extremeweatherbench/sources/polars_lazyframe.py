@@ -11,7 +11,7 @@ def safely_pull_variables_polars_lazyframe(
 ) -> pl.LazyFrame:
     """Handle variable extraction for Polars LazyFrame."""
     # Get column names from LazyFrame
-    available_columns = dataset.columns
+    available_columns = dataset.collect_schema().names()
 
     # Track which variables we've found
     found_variables = []
