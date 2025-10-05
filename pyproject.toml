@@ -23,7 +23,7 @@ dependencies = [
     "tqdm>=4.67.1",
     "ujson>=5.10.0",
     "xarray[io]==2025.7.1",
-    "zarr==3.0.9",
+    "zarr==3.1.3",
     "kerchunk[dev]",
     "flox>=0.10.0",
     "click>=8.1.8",
@@ -33,7 +33,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-data-prep = ["fsspec>=2024.12.0"]
+data-prep = [
+    "fsspec>=2024.12.0",
+    "icechunk>=1.1.8",
+    "virtualizarr==2.1.2",
+]
 multiprocessing = ["dask[complete]>=2025.1.0", "distributed>=2025.1.0"]
 
 [dependency-groups]
