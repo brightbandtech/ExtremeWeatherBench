@@ -393,7 +393,6 @@ class EvaluationObject:
 class KerchunkForecast(ForecastBase):
     """Forecast class for kerchunked forecast data."""
 
-    name: str = "kerchunk_forecast"
     chunks: Optional[Union[dict, str]] = "auto"
 
     def _open_data_from_source(self) -> IncomingDataInput:
@@ -408,7 +407,6 @@ class KerchunkForecast(ForecastBase):
 class ZarrForecast(ForecastBase):
     """Forecast class for zarr forecast data."""
 
-    name: str = "zarr_forecast"
     chunks: Optional[Union[dict, str]] = "auto"
 
     def _open_data_from_source(self) -> IncomingDataInput:
