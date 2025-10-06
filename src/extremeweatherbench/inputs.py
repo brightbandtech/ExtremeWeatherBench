@@ -557,7 +557,9 @@ class GHCN(TargetBase):
             data = data.set_index(["valid_time", "latitude", "longitude"])
             # GHCN data can have duplicate values right now, dropping here if it occurs
             try:
-                data = data[~data.index.duplicated()].to_xarray()
+                data = xr.Dataset.from_dataframe(
+                    data[~data.index.duplicated(keep="first")], sparse=True
+                )
             except Exception as e:
                 logger.warning(
                     "Error converting GHCN data to xarray: %s, returning empty Dataset",
