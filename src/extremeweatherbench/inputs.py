@@ -393,7 +393,6 @@ class EvaluationObject:
 class KerchunkForecast(ForecastBase):
     """Forecast class for kerchunked forecast data."""
 
-    name: str = "kerchunk_forecast"
     chunks: Optional[Union[dict, str]] = "auto"
 
     def _open_data_from_source(self) -> IncomingDataInput:
@@ -408,7 +407,6 @@ class KerchunkForecast(ForecastBase):
 class ZarrForecast(ForecastBase):
     """Forecast class for zarr forecast data."""
 
-    name: str = "zarr_forecast"
     chunks: Optional[Union[dict, str]] = "auto"
 
     def _open_data_from_source(self) -> IncomingDataInput:
@@ -557,7 +555,9 @@ class GHCN(TargetBase):
             data = data.set_index(["valid_time", "latitude", "longitude"])
             # GHCN data can have duplicate values right now, dropping here if it occurs
             try:
-                data = data[~data.index.duplicated()].to_xarray()
+                data = xr.Dataset.from_dataframe(
+                    data[~data.index.duplicated(keep="first")], sparse=True
+                )
             except Exception as e:
                 logger.warning(
                     "Error converting GHCN data to xarray: %s, returning empty Dataset",

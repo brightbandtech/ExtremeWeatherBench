@@ -782,9 +782,9 @@ class TestForecastBase:
         first_time_data = deduplicated_data.sel(init_time="2021-06-20")[
             "surface_air_temperature"
         ]
-        assert np.all(first_time_data.values == 1.0), (
-            "Should preserve first occurrence, not duplicate"
-        )
+        assert np.all(
+            first_time_data.values == 1.0
+        ), "Should preserve first occurrence, not duplicate"
 
         # Verify we have the correct number of unique times
         assert len(deduplicated_data.init_time) == 2
@@ -1192,9 +1192,9 @@ class TestGHCN:
 
         # Collect the result and verify valid_time is sorted
         collected_result = result.collect()
-        assert collected_result["valid_time"].is_sorted(), (
-            "valid_time column should be sorted"
-        )
+        assert collected_result[
+            "valid_time"
+        ].is_sorted(), "valid_time column should be sorted"
 
     def test_ghcn_custom_convert_to_dataset(self, sample_ghcn_dataframe):
         """Test GHCN custom conversion to dataset."""

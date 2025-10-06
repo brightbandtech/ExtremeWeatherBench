@@ -1,9 +1,10 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Type
+from typing import Any, Callable, Dict, List, Optional, Type
 
 import numpy as np
 import scores.categorical as cat  # type: ignore[import-untyped]
+import sparse
 import xarray as xr
 from scores.continuous import mae, mean_error, rmse  # type: ignore[import-untyped]
 
@@ -59,6 +60,31 @@ def get_cached_transformed_manager(
     _GLOBAL_CONTINGENCY_CACHE[cache_key] = transformed
 
     return transformed
+
+
+def _reduce_duck_array(
+    da: xr.DataArray, func: Callable, reduce_dims: list[str]
+) -> xr.DataArray:
+    """Reduce the duck array of the data.
+
+    Some data will return as a sparse array, which can also be reduced but requires
+    some additional logic.
+
+    Args:
+        da: The xarray dataarray to reduce.
+        func: The function to reduce the data.
+        reduce_dims: The dimensions to reduce.
+
+    Returns:
+        The reduced xarray dataarray.
+    """
+    if isinstance(da.data, np.ndarray):
+        # Reduce the data by applying func to the dims in reduce_dims
+        return da.reduce(func, dim=reduce_dims)
+    elif isinstance(da.data, sparse.COO):
+        da = utils.stack_sparse_data_from_dims(da, reduce_dims)
+        # Apply the reduce function to the data
+        return da.reduce(func, dim="stacked")
 
 
 def clear_contingency_cache():
@@ -673,8 +699,10 @@ class MaximumMAE(AppliedMetric):
         tolerance_range: int = 24,
         **kwargs,
     ) -> dict[str, xr.DataArray]:
-        forecast = forecast.compute()
-        target_spatial_mean = target.compute().mean(["latitude", "longitude"])
+        forecast = forecast
+        target_spatial_mean = _reduce_duck_array(
+            target, func=np.nanmean, reduce_dims=["latitude", "longitude"]
+        )
         maximum_timestep = target_spatial_mean.idxmax("valid_time")
         maximum_value = target_spatial_mean.sel(valid_time=maximum_timestep)
 
@@ -682,7 +710,9 @@ class MaximumMAE(AppliedMetric):
         maximum_timestep = utils.maybe_get_closest_timestamp_to_center_of_valid_times(
             maximum_timestep, target.valid_time
         )
-        forecast_spatial_mean = forecast.mean(["latitude", "longitude"])
+        forecast_spatial_mean = _reduce_duck_array(
+            forecast, func=np.nanmean, reduce_dims=["latitude", "longitude"]
+        )
         filtered_max_forecast = forecast_spatial_mean.where(
             (
                 forecast_spatial_mean.valid_time
@@ -715,10 +745,14 @@ class MinimumMAE(AppliedMetric):
         **kwargs: Any,
     ) -> Any:
         forecast = forecast.compute()
-        target_spatial_mean = target.compute().mean(["latitude", "longitude"])
+        target_spatial_mean = _reduce_duck_array(
+            target, func=np.nanmean, reduce_dims=["latitude", "longitude"]
+        )
         minimum_timestep = target_spatial_mean.idxmin("valid_time")
         minimum_value = target_spatial_mean.sel(valid_time=minimum_timestep)
-        forecast_spatial_mean = forecast.mean(["latitude", "longitude"])
+        forecast_spatial_mean = _reduce_duck_array(
+            forecast, func=np.nanmean, reduce_dims=["latitude", "longitude"]
+        )
         # Handle the case where there are >1 resulting target values
         minimum_timestep = utils.maybe_get_closest_timestamp_to_center_of_valid_times(
             minimum_timestep, target.valid_time
@@ -754,20 +788,16 @@ class MaxMinMAE(AppliedMetric):
         tolerance_range: int = 24,
         **kwargs: Any,
     ) -> Any:
-        forecast = forecast.mean(
-            [
-                dim
-                for dim in forecast.dims
-                if dim not in ["valid_time", "lead_time", "time"]
-            ]
+        reduce_dims = [
+            dim
+            for dim in forecast.dims
+            if dim not in ["valid_time", "lead_time", "time"]
+        ]
+        forecast = _reduce_duck_array(
+            forecast, func=np.nanmean, reduce_dims=reduce_dims
         )
-        target = target.mean(
-            [
-                dim
-                for dim in target.dims
-                if dim not in ["valid_time", "lead_time", "time"]
-            ]
-        )
+        target = _reduce_duck_array(target, func=np.nanmean, reduce_dims=reduce_dims)
+
         time_resolution_hours = utils.determine_temporal_resolution(target)
         max_min_target_value = (
             target.groupby("valid_time.dayofyear")
@@ -860,7 +890,11 @@ class OnsetME(AppliedMetric):
     ) -> Any:
         target_time = target.valid_time[0] + np.timedelta64(48, "h")
         forecast = (
-            forecast.mean(["latitude", "longitude"]).groupby("init_time").map(cls.onset)
+            _reduce_duck_array(
+                forecast, func=np.nanmean, reduce_dims=["latitude", "longitude"]
+            )
+            .groupby("init_time")
+            .map(cls.onset)
         )
         return {
             "forecast": forecast,
@@ -912,7 +946,9 @@ class DurationME(AppliedMetric):
         # Dummy implementation for duration mean error
         target_duration = target.valid_time[-1] - target.valid_time[0]
         forecast = (
-            forecast.mean(["latitude", "longitude"])
+            _reduce_duck_array(
+                forecast, func=np.nanmean, reduce_dims=["latitude", "longitude"]
+            )
             .groupby("init_time")
             .map(
                 cls.duration,
