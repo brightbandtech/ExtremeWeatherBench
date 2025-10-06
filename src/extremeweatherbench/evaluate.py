@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Optional, Type, Union
 
 import pandas as pd
+import sparse
 import xarray as xr
 from joblib import Parallel, delayed
 from tqdm.auto import tqdm
@@ -248,6 +249,8 @@ def _extract_standard_metadata(
         "metric": metric.name,
         "case_id_number": case_id_number,
         "event_type": event_type,
+        "target_source": target_ds.attrs["source"],
+        "forecast_source": forecast_ds.attrs["source"],
     }
 
 
@@ -342,6 +345,9 @@ def _evaluate_metric_and_return_df(
         target_ds.get(target_variable, target_ds.data_vars),
         **kwargs,
     )
+    # If data is sparse, densify it
+    if isinstance(metric_result.data, sparse.COO):
+        metric_result.data = metric_result.data.maybe_densify()
     # Convert to DataFrame and add metadata, ensuring OUTPUT_COLUMNS compliance
     df = metric_result.to_dataframe(name="value").reset_index()
     # TODO: add functionality for custom metadata columns

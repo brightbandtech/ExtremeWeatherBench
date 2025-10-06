@@ -424,3 +424,43 @@ def extract_tc_names(title: str) -> list[str]:
         names.append(title_upper)
 
     return names
+
+
+def stack_sparse_data_from_dims(
+    da: xr.DataArray, stack_dims: list[str]
+) -> xr.DataArray:
+    """Stack sparse data with n-dimensions.
+
+    In cases where sparse.COO data is in da.data, this function will stack the
+    dimensions and return a densified dataarray using reduce_dims.
+
+    Args:
+        da: An xarray dataarray with sparse.COO data
+        reduce_dims: The dimensions to reduce.
+
+    Returns:
+        The densified xarray dataarray reduced to (time, location).
+    """
+
+    coords = da.data.coords
+    # Get the indices of the dimensions to stack
+    reduce_dim_indices = [da.dims.index(dim) for dim in stack_dims]
+    reduce_dim_names = [da.dims[n] for n in reduce_dim_indices]
+    indices_from_coords = [coords[n] for n in reduce_dim_indices]
+    # Create pairs and get unique combinations
+    idx_pairs = list(zip(*indices_from_coords))
+    unique_idx_pairs = list(set(idx_pairs))
+    # Extract coordinate values for each unique pair
+    # Each pair represents coordinates for the dimensions being reduced
+    coord_values = []
+    for pair in unique_idx_pairs:
+        # Get actual coordinate values for each dimension
+        coord_tuple = tuple(
+            da[dim].values[idx] for dim, idx in zip(reduce_dim_names, pair)
+        )
+        coord_values.append(coord_tuple)
+    # Stack the coordinates and select the coordinates
+    da = da.stack(stacked=reduce_dim_names).sel(stacked=coord_values)
+    # Maybe densify the data if it isn't too large
+    da.data = da.data.maybe_densify()
+    return da
