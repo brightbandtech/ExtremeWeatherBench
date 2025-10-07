@@ -716,11 +716,11 @@ class MaximumMAE(AppliedMetric):
         filtered_max_forecast = forecast_spatial_mean.where(
             (
                 forecast_spatial_mean.valid_time
-                >= maximum_timestep - np.timedelta64(tolerance_range // 2, "h")
+                >= maximum_timestep.data - np.timedelta64(tolerance_range // 2, "h")
             )
             & (
                 forecast_spatial_mean.valid_time
-                <= maximum_timestep + np.timedelta64(tolerance_range // 2, "h")
+                <= maximum_timestep.data + np.timedelta64(tolerance_range // 2, "h")
             ),
             drop=True,
         ).max("valid_time")
@@ -760,11 +760,11 @@ class MinimumMAE(AppliedMetric):
         filtered_min_forecast = forecast_spatial_mean.where(
             (
                 forecast_spatial_mean.valid_time
-                >= minimum_timestep - np.timedelta64(tolerance_range // 2, "h")
+                >= minimum_timestep.data - np.timedelta64(tolerance_range // 2, "h")
             )
             & (
                 forecast_spatial_mean.valid_time
-                <= minimum_timestep + np.timedelta64(tolerance_range // 2, "h")
+                <= minimum_timestep.data + np.timedelta64(tolerance_range // 2, "h")
             ),
             drop=True,
         ).min("valid_time")
@@ -817,20 +817,19 @@ class MaxMinMAE(AppliedMetric):
                 max_min_target_datetime, target.valid_time
             )
         )
-        max_min_target_value = target.sel(valid_time=max_min_target_datetime)
         subset_forecast = (
             forecast.where(
                 (
                     forecast.valid_time
                     >= (
-                        max_min_target_datetime
+                        max_min_target_datetime.data
                         - np.timedelta64(tolerance_range // 2, "h")
                     )
                 )
                 & (
                     forecast.valid_time
                     <= (
-                        max_min_target_datetime
+                        max_min_target_datetime.data
                         + np.timedelta64(tolerance_range // 2, "h")
                     )
                 ),
