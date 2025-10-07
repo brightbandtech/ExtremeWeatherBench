@@ -427,7 +427,7 @@ def extract_tc_names(title: str) -> list[str]:
 
 
 def stack_sparse_data_from_dims(
-    da: xr.DataArray, stack_dims: list[str]
+    da: xr.DataArray, stack_dims: list[str], max_size: int = 100000
 ) -> xr.DataArray:
     """Stack sparse data with n-dimensions.
 
@@ -437,6 +437,7 @@ def stack_sparse_data_from_dims(
     Args:
         da: An xarray dataarray with sparse.COO data
         reduce_dims: The dimensions to reduce.
+        max_size: The maximum size of records to densify; default is 100000.
 
     Returns:
         The densified xarray dataarray reduced to (time, location).
@@ -459,8 +460,11 @@ def stack_sparse_data_from_dims(
             da[dim].values[idx] for dim, idx in zip(reduce_dim_names, pair)
         )
         coord_values.append(coord_tuple)
-    # Stack the coordinates and select the coordinates
+
+    # If the data is empty, return the data densified as an empty dataarray; otherwise,
+    # stack and select the unique coordinates
+    if da.size == 0:
+        return da.data.maybe_densify(max_size=max_size)
+
     da = da.stack(stacked=reduce_dim_names).sel(stacked=coord_values)
-    # Maybe densify the data if it isn't too large
-    da.data = da.data.maybe_densify()
-    return da
+    return da.data.maybe_densify(max_size=max_size)
