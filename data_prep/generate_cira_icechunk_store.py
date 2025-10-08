@@ -1,3 +1,20 @@
+# ---
+# jupyter:
+#   jupytext:
+#     cell_metadata_filter: -all
+#     custom_cell_magics: kql
+#     text_representation:
+#       extension: .py
+#       format_name: percent
+#       format_version: '1.3'
+#       jupytext_version: 1.17.3
+#   kernelspec:
+#     display_name: .venv
+#     language: python
+#     name: python3
+# ---
+
+# %%
 """Generate a icechunk store for all of the the CIRA data.
 
 Data is available at:
@@ -6,31 +23,37 @@ https://noaa-oar-mlwp-data.s3.amazonaws.com/index.html
 Data is generated as of 2025-10-04.
 """
 
+# %%
 import logging
 import re
 import warnings
 from collections import defaultdict
 from typing import Union
 
+# %%
 import fsspec
 import icechunk
 import joblib
+import pandas as pd
 import virtualizarr
 import xarray as xr
 from obstore.store import from_url
 from tqdm.auto import tqdm
 from virtualizarr.registry import ObjectStoreRegistry
 
+# %%
 warnings.filterwarnings(
     "ignore",
     message="Numcodecs codecs are not in the Zarr version 3 specification*",
     category=UserWarning,
 )
 
+# %%
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
+# %%
 def find_broken_files(
     file: str, fs: fsspec.filesystem, min_size: float = 7000000000
 ) -> Union[str, None]:
@@ -50,6 +73,7 @@ def find_broken_files(
     return file
 
 
+# %%
 def remove_virtual_datasets_with_zlib_compression(vds: xr.Dataset):
     """Remove virtual datasets with zlib compression.
 
@@ -64,15 +88,16 @@ def remove_virtual_datasets_with_zlib_compression(vds: xr.Dataset):
     return None
 
 
-def get_cira_data_urls() -> list[str]:
+# %%
+def get_cira_data_urls(fs: fsspec.filesystem) -> list[str]:
     """Get the URLs for all of the the CIRA data."""
 
-    fs = fsspec.filesystem("s3", anon=True)
     flist = fs.glob("s3://noaa-oar-mlwp-data/*FS/**/*.nc")
     flist = sorted(["s3://" + f for f in flist])
     return flist
 
 
+# %%
 def set_up_remote_store_and_registry(
     bucket: str, region: str = "us-east-1"
 ) -> ObjectStoreRegistry:
@@ -90,11 +115,14 @@ def set_up_remote_store_and_registry(
     return registry
 
 
+# %%
 def open_virtual_dataset(
     file: str,
     parser: virtualizarr.parsers.HDFParser,
     registry: virtualizarr.registry.ObjectStoreRegistry,
-) -> xr.Dataset:
+    loadable_variables: list[str] = None,
+    fs: fsspec.filesystem = None,
+) -> Union[xr.Dataset, None]:
     """Open a virtual dataset from a file using virtualizarr.
 
     Args:
@@ -104,9 +132,19 @@ def open_virtual_dataset(
 
     Returns: The virtual dataset as an xarray dataset
     """
-    return virtualizarr.open_virtual_dataset(file, parser=parser, registry=registry)
+    file = find_broken_files(file, fs)
+    if file is None:
+        return None
+    return virtualizarr.open_virtual_dataset(
+        file,
+        parser=parser,
+        registry=registry,
+        loadable_variables=loadable_variables,
+        decode_times=True,
+    )
 
 
+# %%
 def generate_icechunk_store(vdt: xr.DataTree):
     """Generate a icechunk store for all of the the CIRA data."""
     config = icechunk.RepositoryConfig.default()
@@ -146,6 +184,7 @@ def generate_icechunk_store(vdt: xr.DataTree):
     repo.save_config()
 
 
+# %%
 def main():
     """Main function to generate a icechunk store for all of the the CIRA data."""
     # fs_local = fsspec.filesystem("")
@@ -168,11 +207,13 @@ def main():
     all_results = {}
     for model, model_urls in tqdm(grouped_urls.items()):
         print(f"Processing model: {model}")
-        model_urls = [find_broken_files(model_url, fs) for model_url in model_urls[0:5]]
+        model_urls = [find_broken_files(model_url, fs) for model_url in model_urls]
         model_urls = [n for n in model_urls if n is not None]
         results = parallel(
-            joblib.delayed(open_virtual_dataset)(file, parser, registry)
-            for file in model_urls
+            joblib.delayed(open_virtual_dataset)(
+                file, parser, registry, ["time", "latitude", "longitude", "level"]
+            )
+            for file in tqdm(model_urls)
         )
         generator = (n for n in results)
         # all_results[model] = xr.concat(generator, dim="init_time", coords='minimal',
@@ -181,5 +222,73 @@ def main():
     return all_results
 
 
+# %%
 if __name__ == "__main__":
     results = main()
+
+# %%
+pre_icechunk_datatree_dict = {}
+for model in results:
+    model_results = list([n for n in results[model]])
+    combined_model = xr.combine_nested(
+        model_results, concat_dim=["time"], coords="minimal", compat="override"
+    )
+    # Calculate lead_time as time - init_time and reorganize dimensions
+    # (time, level, latitude, longitude, init_time) -> (init_time, lead_time, level, latitude, longitude)
+    init_times = [pd.to_datetime(f.attrs["initialization_time"]) for f in model_results]
+
+    # First assign init_time coordinate
+    init_time_vds = combined_model.assign_coords(init_time=init_times)
+
+    # Create lead_time coordinate by calculating time - init_time for each combination
+    # We'll use xarray's broadcasting capabilities
+    lead_time_coord = init_time_vds.time - init_time_vds.init_time
+
+    # Assign the lead_time coordinate
+    init_time_vds = init_time_vds.assign_coords(lead_time=lead_time_coord)
+
+    # Use stack to combine time and init_time into a single dimension, then unstack to reorganize
+    # This creates the proper dimension structure
+    init_time_vds = init_time_vds.stack(forecast_time=["init_time", "time"])
+    init_time_vds = init_time_vds.unstack("forecast_time")
+
+    # Now rename the time dimension to lead_time and reorder
+    init_time_vds = init_time_vds.rename({"time": "lead_time"})
+    init_time_vds = init_time_vds.transpose(
+        "init_time", "lead_time", "level", "latitude", "longitude"
+    )
+
+    pre_icechunk_datatree_dict[model] = init_time_vds
+
+# %%
+combined_vds = xr.combine_nested(
+    auro_gfs, concat_dim=["time"], coords="minimal", compat="override"
+)
+
+# useful to ensure the new combined init_time dimension has data to reference
+# Calculate lead_time as time - init_time and reorganize dimensions
+# (time, level, latitude, longitude, init_time) -> (init_time, lead_time, level, latitude, longitude)
+init_times = [pd.to_datetime(f.attrs["initialization_time"]) for f in combined_vds]
+
+# First assign init_time coordinate
+init_time_vds = combined_vds.assign_coords(init_time=init_times)
+
+# Create lead_time coordinate by calculating time - init_time for each combination
+# We'll use xarray's broadcasting capabilities
+lead_time_coord = init_time_vds.time - init_time_vds.init_time
+
+# Assign the lead_time coordinate
+init_time_vds = init_time_vds.assign_coords(lead_time=lead_time_coord)
+
+# Use stack to combine time and init_time into a single dimension, then unstack to reorganize
+# This creates the proper dimension structure
+init_time_vds = init_time_vds.stack(forecast_time=["init_time", "time"])
+init_time_vds = init_time_vds.unstack("forecast_time")
+
+# Now rename the time dimension to lead_time and reorder
+init_time_vds = init_time_vds.rename({"time": "lead_time"})
+init_time_vds = init_time_vds.transpose(
+    "init_time", "lead_time", "level", "latitude", "longitude"
+)
+path = ""  # insert local path here
+# xr.combine_nested(auro_gfs, concat_dim="init_time", compat='override',combine_attrs='override')
