@@ -1,4 +1,4 @@
-"""Integration tests for variable pairing in forecast vs target evaluations.
+"""Integration tests.
 
 This test suite validates that the evaluation system correctly pairs forecast and
 target variables using the zip() pairing logic, covering various scenarios:
@@ -14,6 +14,7 @@ from unittest.mock import Mock
 
 import numpy as np
 import pandas as pd
+import polars as pl
 import pytest
 import xarray as xr
 
@@ -207,9 +208,76 @@ def create_case_operator(
     )
 
 
-# =============================================================================
-# Integration Tests
-# =============================================================================
+@pytest.mark.integration
+class TestInputsIntegration:
+    """Integration tests for inputs module."""
+
+    # zarr throws a consolidated metadata warning that
+    # is inconsequential (as of now)
+    @pytest.mark.filterwarnings("ignore::UserWarning")
+    def test_era5_full_workflow_with_zarr(self, temp_zarr_file):
+        """Test complete ERA5 workflow with zarr file."""
+        era5 = inputs.ERA5(
+            variables=["2m_temperature"],
+            variable_mapping={},
+            storage_options={},
+        )
+
+        # Test opening data
+        data = era5._open_data_from_source()
+        assert isinstance(data, xr.Dataset)
+        assert "2m_temperature" in data.data_vars
+
+        # Test conversion
+        dataset = era5.maybe_convert_to_dataset(data)
+        assert isinstance(dataset, xr.Dataset)
+
+    def test_ghcn_full_workflow_with_parquet(self, temp_parquet_file):
+        """Test complete GHCN workflow with parquet file."""
+        ghcn = inputs.GHCN(
+            source=temp_parquet_file,
+            variables=["surface_air_temperature"],
+            variable_mapping={},
+            storage_options={},
+        )
+
+        # Test opening data
+        data = ghcn._open_data_from_source()
+        assert isinstance(data, pl.LazyFrame)
+
+        # Test conversion
+        dataset = ghcn._custom_convert_to_dataset(data)
+        assert isinstance(dataset, xr.Dataset)
+
+    def test_era5_alignment_comprehensive(
+        self, sample_era5_dataset, sample_forecast_with_valid_time
+    ):
+        """Test comprehensive ERA5 alignment scenarios."""
+        era5 = inputs.ERA5(
+            source="test.zarr",
+            variables=["2m_temperature"],
+            variable_mapping={},
+            storage_options={},
+        )
+
+        # Test with matching spatial grids but different time ranges
+        target_subset = sample_era5_dataset.sel(time=slice("2021-06-20", "2021-06-21"))
+        forecast_subset = sample_forecast_with_valid_time.sel(
+            valid_time=slice("2021-06-20 12:00", "2021-06-21 12:00")
+        )
+
+        aligned_forecast, aligned_target = era5.maybe_align_forecast_to_target(
+            forecast_subset, target_subset
+        )
+
+        # Should find overlapping times
+        # Note: dimensions keep their original names after alignment
+        assert len(aligned_target.time) > 0  # Target uses 'time'
+        assert len(aligned_forecast.valid_time) > 0  # Forecast uses 'valid_time'
+
+        # Should have overlapping time periods - but lengths may differ due to
+        # different time ranges. This is expected when target and forecast
+        # have different time coverage
 
 
 class TestVariablePairingIntegration:
@@ -464,11 +532,6 @@ class TestVariablePairingIntegration:
         # with different underlying data patterns
         msg = "Different variable pairings should produce different metric values"
         assert len(set(values)) == 2, msg
-
-
-# =============================================================================
-# Test ExtremeWeatherBench Class with Variable Pairing
-# =============================================================================
 
 
 class TestExtremeWeatherBenchVariablePairing:
