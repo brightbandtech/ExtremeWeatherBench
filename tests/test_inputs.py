@@ -1686,3 +1686,18 @@ class TestInputsIntegration:
         # Should have overlapping time periods - but lengths may differ due to
         # different time ranges. This is expected when target and forecast
         # have different time coverage
+
+
+def test_default_preprocess():
+    """Test default preprocess function."""
+    # Import the function from inputs module since it was moved there
+
+    # Test with xarray Dataset
+    ds = xr.Dataset({"temp": (["x"], [1, 2, 3])})
+    result = inputs._default_preprocess(ds)
+    assert result is ds  # Should return the same object unchanged
+
+    # Test with pandas DataFrame
+    df = pd.DataFrame({"a": [1, 2, 3]})
+    result_df = inputs._default_preprocess(df)
+    assert result_df is df
