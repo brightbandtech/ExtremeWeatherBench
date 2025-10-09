@@ -1,7 +1,7 @@
 import dataclasses
 import logging
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Callable, Optional, Union
+from typing import TYPE_CHECKING, Callable, Optional, TypeAlias, Union
 
 import numpy as np
 import pandas as pd
@@ -120,6 +120,12 @@ IBTrACS_metadata_variable_mapping = {
     "MLC_WIND": "mlc_surface_wind_speed",
     "MLC_PRES": "mlc_air_pressure_at_mean_sea_level",
 }
+IncomingDataInput: TypeAlias = xr.Dataset | xr.DataArray | pl.LazyFrame | pd.DataFrame
+
+
+def _default_preprocess(input_data: IncomingDataInput) -> IncomingDataInput:
+    """Default forecast preprocess function that does nothing."""
+    return input_data
 
 
 @dataclasses.dataclass
@@ -141,11 +147,11 @@ class InputBase(ABC):
     )
     variable_mapping: dict = dataclasses.field(default_factory=dict)
     storage_options: dict = dataclasses.field(default_factory=dict)
-    preprocess: Callable = utils._default_preprocess
+    preprocess: Callable = _default_preprocess
 
     def open_and_maybe_preprocess_data_from_source(
         self,
-    ) -> utils.IncomingDataInput:
+    ) -> IncomingDataInput:
         data = self._open_data_from_source()
         data = self.preprocess(data)
         return data
@@ -159,7 +165,7 @@ class InputBase(ABC):
         self.name = name
 
     @abstractmethod
-    def _open_data_from_source(self) -> utils.IncomingDataInput:
+    def _open_data_from_source(self) -> IncomingDataInput:
         """Open the target data from the source, opting to avoid loading the entire
         dataset into memory if possible.
 
@@ -170,9 +176,9 @@ class InputBase(ABC):
     @abstractmethod
     def subset_data_to_case(
         self,
-        data: utils.IncomingDataInput,
+        data: IncomingDataInput,
         case_operator: "cases.CaseOperator",
-    ) -> utils.IncomingDataInput:
+    ) -> IncomingDataInput:
         """Subset the target data to the case information provided in CaseOperator.
 
         Time information, spatial bounds, and variables are captured in the case
@@ -190,7 +196,7 @@ class InputBase(ABC):
             The target data with the variables subset to the case metadata.
         """
 
-    def maybe_convert_to_dataset(self, data: utils.IncomingDataInput) -> xr.Dataset:
+    def maybe_convert_to_dataset(self, data: IncomingDataInput) -> xr.Dataset:
         """Convert the target data to an xarray dataset if it is not already.
 
         This method handles the common conversion cases automatically. Override
@@ -211,7 +217,7 @@ class InputBase(ABC):
             # For other data types, try to use a custom conversion method if available
             return self._custom_convert_to_dataset(data)
 
-    def _custom_convert_to_dataset(self, data: utils.IncomingDataInput) -> xr.Dataset:
+    def _custom_convert_to_dataset(self, data: IncomingDataInput) -> xr.Dataset:
         """Hook method for custom conversion logic. Override this method in subclasses
         if you need custom conversion behavior for non-xarray data types.
 
@@ -242,9 +248,7 @@ class InputBase(ABC):
         ds.attrs["source"] = self.name
         return ds
 
-    def maybe_map_variable_names(
-        self, data: utils.IncomingDataInput
-    ) -> utils.IncomingDataInput:
+    def maybe_map_variable_names(self, data: IncomingDataInput) -> IncomingDataInput:
         """Map the variable names to the data, if required.
 
         Args:
@@ -296,9 +300,9 @@ class ForecastBase(InputBase):
 
     def subset_data_to_case(
         self,
-        data: utils.IncomingDataInput,
+        data: IncomingDataInput,
         case_operator: "cases.CaseOperator",
-    ) -> utils.IncomingDataInput:
+    ) -> IncomingDataInput:
         if not isinstance(data, xr.Dataset):
             raise ValueError(f"Expected xarray Dataset, got {type(data)}")
 
@@ -370,7 +374,7 @@ class KerchunkForecast(ForecastBase):
     name: str = "kerchunk_forecast"
     chunks: Optional[Union[dict, str]] = "auto"
 
-    def _open_data_from_source(self) -> utils.IncomingDataInput:
+    def _open_data_from_source(self) -> IncomingDataInput:
         return open_kerchunk_reference(
             self.source,
             storage_options=self.storage_options,
@@ -385,7 +389,7 @@ class ZarrForecast(ForecastBase):
     name: str = "zarr_forecast"
     chunks: Optional[Union[dict, str]] = "auto"
 
-    def _open_data_from_source(self) -> utils.IncomingDataInput:
+    def _open_data_from_source(self) -> IncomingDataInput:
         return xr.open_zarr(
             self.source,
             storage_options=self.storage_options,
@@ -445,7 +449,7 @@ class ERA5(TargetBase):
         default_factory=lambda: ERA5_metadata_variable_mapping.copy()
     )
 
-    def _open_data_from_source(self) -> utils.IncomingDataInput:
+    def _open_data_from_source(self) -> IncomingDataInput:
         data = xr.open_zarr(
             self.source,
             storage_options=self.storage_options,
@@ -455,9 +459,9 @@ class ERA5(TargetBase):
 
     def subset_data_to_case(
         self,
-        data: utils.IncomingDataInput,
+        data: IncomingDataInput,
         case_operator: "cases.CaseOperator",
-    ) -> utils.IncomingDataInput:
+    ) -> IncomingDataInput:
         return zarr_target_subsetter(data, case_operator)
 
     def maybe_align_forecast_to_target(
@@ -495,7 +499,7 @@ class GHCN(TargetBase):
     name: str = "GHCN"
     source: str = DEFAULT_GHCN_URI
 
-    def _open_data_from_source(self) -> utils.IncomingDataInput:
+    def _open_data_from_source(self) -> IncomingDataInput:
         target_data: pl.LazyFrame = pl.scan_parquet(
             self.source, storage_options=self.storage_options
         )
@@ -504,9 +508,9 @@ class GHCN(TargetBase):
 
     def subset_data_to_case(
         self,
-        target_data: utils.IncomingDataInput,
+        target_data: IncomingDataInput,
         case_operator: "cases.CaseOperator",
-    ) -> utils.IncomingDataInput:
+    ) -> IncomingDataInput:
         if not isinstance(target_data, pl.LazyFrame):
             raise ValueError(f"Expected polars LazyFrame, got {type(target_data)}")
 
@@ -559,7 +563,7 @@ class GHCN(TargetBase):
         subset_target_data = subset_target_data.sort("valid_time")
         return subset_target_data
 
-    def _custom_convert_to_dataset(self, data: utils.IncomingDataInput) -> xr.Dataset:
+    def _custom_convert_to_dataset(self, data: IncomingDataInput) -> xr.Dataset:
         if isinstance(data, pl.LazyFrame):
             data = data.collect().to_pandas()
             data["longitude"] = utils.convert_longitude_to_360(data["longitude"])
@@ -599,7 +603,7 @@ class LSR(TargetBase):
     name: str = "local_storm_reports"
     source: str = LSR_URI
 
-    def _open_data_from_source(self) -> utils.IncomingDataInput:
+    def _open_data_from_source(self) -> IncomingDataInput:
         # force LSR to use anon token to prevent google reauth issues for users
         target_data = pd.read_parquet(self.source, storage_options=self.storage_options)
 
@@ -607,9 +611,9 @@ class LSR(TargetBase):
 
     def subset_data_to_case(
         self,
-        target_data: utils.IncomingDataInput,
+        target_data: IncomingDataInput,
         case_operator: "cases.CaseOperator",
-    ) -> utils.IncomingDataInput:
+    ) -> IncomingDataInput:
         if not isinstance(target_data, pd.DataFrame):
             raise ValueError(f"Expected pandas DataFrame, got {type(target_data)}")
 
@@ -647,7 +651,7 @@ class LSR(TargetBase):
 
         return subset_target_data
 
-    def _custom_convert_to_dataset(self, data: utils.IncomingDataInput) -> xr.Dataset:
+    def _custom_convert_to_dataset(self, data: IncomingDataInput) -> xr.Dataset:
         if not isinstance(data, pd.DataFrame):
             raise ValueError(f"Data is not a pandas DataFrame: {type(data)}")
 
@@ -730,17 +734,17 @@ class PPH(TargetBase):
 
     def _open_data_from_source(
         self,
-    ) -> utils.IncomingDataInput:
+    ) -> IncomingDataInput:
         return xr.open_zarr(self.source, storage_options=self.storage_options)
 
     def subset_data_to_case(
         self,
-        target_data: utils.IncomingDataInput,
+        target_data: IncomingDataInput,
         case_operator: "cases.CaseOperator",
-    ) -> utils.IncomingDataInput:
+    ) -> IncomingDataInput:
         return zarr_target_subsetter(target_data, case_operator)
 
-    def _custom_convert_to_dataset(self, data: utils.IncomingDataInput) -> xr.Dataset:
+    def _custom_convert_to_dataset(self, data: IncomingDataInput) -> xr.Dataset:
         return data
 
     def maybe_align_forecast_to_target(
@@ -758,7 +762,7 @@ class IBTrACS(TargetBase):
     name: str = "IBTrACS"
     source: str = IBTRACS_URI
 
-    def _open_data_from_source(self) -> utils.IncomingDataInput:
+    def _open_data_from_source(self) -> IncomingDataInput:
         # not using storage_options in this case due to NetCDF4Backend not
         # supporting them
         target_data: pl.LazyFrame = pl.scan_csv(
@@ -770,9 +774,9 @@ class IBTrACS(TargetBase):
 
     def subset_data_to_case(
         self,
-        target_data: utils.IncomingDataInput,
+        target_data: IncomingDataInput,
         case_operator: "cases.CaseOperator",
-    ) -> utils.IncomingDataInput:
+    ) -> IncomingDataInput:
         if not isinstance(target_data, pl.LazyFrame):
             raise ValueError(f"Expected polars LazyFrame, got {type(target_data)}")
 
@@ -881,7 +885,7 @@ class IBTrACS(TargetBase):
 
         return subset_target_data
 
-    def _custom_convert_to_dataset(self, data: utils.IncomingDataInput) -> xr.Dataset:
+    def _custom_convert_to_dataset(self, data: IncomingDataInput) -> xr.Dataset:
         if isinstance(data, pl.LazyFrame):
             data = data.collect().to_pandas()
 
