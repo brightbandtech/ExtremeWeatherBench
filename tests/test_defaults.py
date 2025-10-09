@@ -18,6 +18,8 @@ class TestDefaults:
             "init_time",
             "target_variable",
             "metric",
+            "forecast_source",
+            "target_source",
             "case_id_number",
             "event_type",
         ]
