@@ -467,4 +467,5 @@ def stack_sparse_data_from_dims(
         return da.data.maybe_densify(max_size=max_size)
 
     da = da.stack(stacked=reduce_dim_names).sel(stacked=coord_values)
-    return da.data.maybe_densify(max_size=max_size)
+    da.data = da.data.maybe_densify(max_size=max_size)
+    return da
