@@ -13,7 +13,6 @@ from extremeweatherbench import cases, derived, sources, utils
 if TYPE_CHECKING:
     from extremeweatherbench import metrics
 
-IncomingDataInput: TypeAlias = xr.Dataset | xr.DataArray | pl.LazyFrame | pd.DataFrame
 logger = logging.getLogger(__name__)
 
 #: Storage/access options for gridded target datasets.
@@ -130,6 +129,7 @@ IBTrACS_metadata_variable_mapping = {
     "MLC_WIND": "mlc_surface_wind_speed",
     "MLC_PRES": "mlc_air_pressure_at_mean_sea_level",
 }
+
 IncomingDataInput: TypeAlias = xr.Dataset | xr.DataArray | pl.LazyFrame | pd.DataFrame
 
 
