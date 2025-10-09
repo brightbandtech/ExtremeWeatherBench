@@ -672,7 +672,7 @@ def main():
     logger.info("Found %s atmospheric river events in events.yaml", len(ar_events))
 
     # Show a few examples
-    for i, event in enumerate(ar_events[:3]):
+    for i, event in enumerate(ar_events):
         logger.info("Event %s: %s", i + 1, event["title"])
         logger.info("  Date: %s to %s", event["start_date"], event["end_date"])
         logger.info("  Location: %s", event["location"]["parameters"])
