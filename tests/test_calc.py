@@ -1,3 +1,5 @@
+"""Tests for the calc module."""
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -8,6 +10,24 @@ from extremeweatherbench import calc
 
 class TestBasicCalculations:
     """Test basic calculation functions."""
+
+    def test_convert_from_cartesian_to_latlon(self, sample_calc_dataset):
+        """Test conversion from cartesian to lat/lon coordinates."""
+        # Test with center point
+        point = (8, 10)  # Middle of the grid
+
+        lat, lon = calc.convert_from_cartesian_to_latlon(point, sample_calc_dataset)
+
+        # Should return values within the grid bounds
+        assert 20 <= lat <= 50
+        assert -120 <= lon <= -80
+
+        # Should be close to the center values
+        expected_lat = sample_calc_dataset.latitude.isel(latitude=8).values
+        expected_lon = sample_calc_dataset.longitude.isel(longitude=10).values
+
+        assert abs(lat - expected_lat) < 1e-10
+        assert abs(lon - expected_lon) < 1e-10
 
     def test_calculate_haversine_distance(self):
         """Test haversine distance calculation."""
@@ -226,6 +246,27 @@ class TestBasicCalculations:
         min_distance = distances.isel(latitude=lat_idx, longitude=lon_idx)
         assert min_distance < 500  # Should be within 500km of center
 
+    def test_create_great_circle_mask(self, sample_calc_dataset):
+        """Test creation of great circle mask."""
+        center_point = (35.0, -100.0)  # Somewhere in the middle
+        radius = 5.0  # degrees
+
+        mask = calc.create_great_circle_mask(sample_calc_dataset, center_point, radius)
+
+        # Should return boolean mask
+        assert isinstance(mask, xr.DataArray)
+        assert mask.dtype == bool
+        # Should have shape (lat, lon) since it's a mask over the entire grid
+        expected_shape = (
+            len(sample_calc_dataset.latitude),
+            len(sample_calc_dataset.longitude),
+        )
+        assert mask.shape == expected_shape
+
+        # Some points should be within radius, some outside
+        assert mask.any()  # At least some True values
+        assert not mask.all()  # Not all True values
+
 
 class TestWindCalculations:
     """Test wind-related calculations."""
@@ -311,3 +352,105 @@ class TestWindCalculations:
 
         # Will return the dataset as is, without the wind speed computed
         xr.testing.assert_equal(result, dataset)
+
+
+class TestPressureCalculations:
+    """Test pressure-related calculations."""
+
+    def test_orography_from_surface_geopotential(self, sample_calc_dataset):
+        """Test orography calculation from surface geopotential."""
+        orography = calc.orography(sample_calc_dataset)
+
+        # Should return a DataArray
+        assert isinstance(orography, xr.DataArray)
+        assert (
+            orography.shape == sample_calc_dataset.geopotential_at_surface.shape[1:]
+        )  # Remove time
+
+        # Should be divided by gravity
+        expected = sample_calc_dataset.geopotential_at_surface / 9.80665
+        # Compare one time slice since orography doesn't have time dimension in some
+        # cases
+        if "time" in orography.dims:
+            xr.testing.assert_allclose(orography, expected)
+        else:
+            # If time dimension was removed, compare with first time slice
+            xr.testing.assert_allclose(orography, expected.isel(time=0))
+
+    def test_calculate_pressure_at_surface(self, sample_calc_dataset):
+        """Test surface pressure calculation from orography."""
+        # First get orography
+        orography_data = calc.orography(sample_calc_dataset)
+
+        # Calculate surface pressure
+        surface_pressure = calc.calculate_pressure_at_surface(orography_data)
+
+        # Should return a DataArray
+        assert isinstance(surface_pressure, xr.DataArray)
+        assert surface_pressure.shape == orography_data.shape
+
+        # All pressures should be positive and reasonable
+        assert (surface_pressure > 50000).all()  # > 500 hPa
+        assert (surface_pressure < 105000).all()  # < 1050 hPa
+
+        # Test the formula manually for a point
+        if "time" in orography_data.dims:
+            h = orography_data.isel(time=0, latitude=0, longitude=0).values
+        else:
+            h = orography_data.isel(latitude=0, longitude=0).values
+
+        expected = 101325 * (1 - 2.25577e-5 * h) ** 5.25579
+
+        if "time" in surface_pressure.dims:
+            calculated = surface_pressure.isel(time=0, latitude=0, longitude=0).values
+        else:
+            calculated = surface_pressure.isel(latitude=0, longitude=0).values
+
+        assert abs(calculated - expected) < 1e-6
+
+
+class TestGeopotentialCalculations:
+    """Test geopotential-related calculations."""
+
+    def test_generate_geopotential_thickness_default_levels(self, sample_calc_dataset):
+        """Test geopotential thickness with default levels."""
+        thickness = calc.generate_geopotential_thickness(sample_calc_dataset)
+
+        # Should return a DataArray
+        assert isinstance(thickness, xr.DataArray)
+
+        # Should have proper dimensions (no level dimension)
+        expected_dims = ["time", "latitude", "longitude"]
+        assert list(thickness.dims) == expected_dims
+
+        # Should have proper attributes
+        assert "description" in thickness.attrs
+        assert "units" in thickness.attrs
+        assert thickness.attrs["units"] == "m"
+
+    def test_generate_geopotential_thickness_custom_levels(self, sample_calc_dataset):
+        """Test geopotential thickness with custom levels."""
+        thickness = calc.generate_geopotential_thickness(
+            sample_calc_dataset, top_level_value=200, bottom_level_value=850
+        )
+
+        # Manual calculation for verification
+        top_level_geopotential = sample_calc_dataset["geopotential"].sel(level=200)
+        bottom_level_geopotential = sample_calc_dataset["geopotential"].sel(level=850)
+        expected_thickness = (
+            top_level_geopotential - bottom_level_geopotential
+        ) / 9.80665
+
+        xr.testing.assert_allclose(thickness, expected_thickness)
+
+    def test_generate_geopotential_thickness_multiple_top_levels(
+        self, sample_calc_dataset
+    ):
+        """Test geopotential thickness with multiple top levels."""
+        thickness = calc.generate_geopotential_thickness(
+            sample_calc_dataset, top_level_value=[200, 300, 500], bottom_level_value=850
+        )
+
+        # Should have level dimension for multiple top levels
+        assert "level" in thickness.dims
+        assert len(thickness.level) == 3
