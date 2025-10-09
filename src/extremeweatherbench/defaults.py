@@ -219,50 +219,42 @@ def get_brightband_evaluation_objects() -> list[inputs.EvaluationObject]:
     # Import metrics here to avoid circular import
     from extremeweatherbench import metrics
 
+    heatwave_metric_list = [
+        metrics.MaximumMAE,
+        metrics.RMSE,
+        metrics.OnsetME,
+        metrics.DurationME,
+        metrics.MaxMinMAE,
+    ]
+    freeze_metric_list = [
+        metrics.MinimumMAE,
+        metrics.RMSE,
+        metrics.OnsetME,
+        metrics.DurationME,
+    ]
+
     return [
         inputs.EvaluationObject(
             event_type="heat_wave",
-            metric_list=[
-                metrics.MaximumMAE,
-                metrics.RMSE,
-                metrics.OnsetME,
-                metrics.DurationME,
-                metrics.MaxMinMAE,
-            ],
+            metric_list=heatwave_metric_list,
             target=era5_heatwave_target,
             forecast=cira_heatwave_forecast,
         ),
         inputs.EvaluationObject(
             event_type="heat_wave",
-            metric_list=[
-                metrics.MaximumMAE,
-                metrics.RMSE,
-                metrics.OnsetME,
-                metrics.DurationME,
-                metrics.MaxMinMAE,
-            ],
+            metric_list=heatwave_metric_list,
             target=ghcn_heatwave_target,
             forecast=cira_heatwave_forecast,
         ),
         inputs.EvaluationObject(
             event_type="freeze",
-            metric_list=[
-                metrics.MinimumMAE,
-                metrics.RMSE,
-                metrics.OnsetME,
-                metrics.DurationME,
-            ],
+            metric_list=freeze_metric_list,
             target=era5_freeze_target,
             forecast=cira_freeze_forecast,
         ),
         inputs.EvaluationObject(
             event_type="freeze",
-            metric_list=[
-                metrics.MinimumMAE,
-                metrics.RMSE,
-                metrics.OnsetME,
-                metrics.DurationME,
-            ],
+            metric_list=freeze_metric_list,
             target=ghcn_freeze_target,
             forecast=cira_freeze_forecast,
         ),
