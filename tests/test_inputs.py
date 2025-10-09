@@ -945,9 +945,9 @@ class TestGHCN:
 
         # Collect the result and verify valid_time is sorted
         collected_result = result.collect()
-        assert collected_result[
-            "valid_time"
-        ].is_sorted(), "valid_time column should be sorted"
+        assert collected_result["valid_time"].is_sorted(), (
+            "valid_time column should be sorted"
+        )
 
     def test_ghcn_custom_convert_to_dataset(self, sample_ghcn_dataframe):
         """Test GHCN custom conversion to dataset."""
@@ -1691,14 +1691,13 @@ class TestInputsIntegration:
 def test_default_preprocess():
     """Test default preprocess function."""
     # Import the function from inputs module since it was moved there
-    from extremeweatherbench.inputs import _default_preprocess
 
     # Test with xarray Dataset
     ds = xr.Dataset({"temp": (["x"], [1, 2, 3])})
-    result = _default_preprocess(ds)
+    result = inputs._default_preprocess(ds)
     assert result is ds  # Should return the same object unchanged
 
     # Test with pandas DataFrame
     df = pd.DataFrame({"a": [1, 2, 3]})
-    result_df = _default_preprocess(df)
+    result_df = inputs._default_preprocess(df)
     assert result_df is df
