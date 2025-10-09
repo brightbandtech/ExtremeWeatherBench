@@ -130,6 +130,7 @@ IBTrACS_metadata_variable_mapping = {
     "MLC_WIND": "mlc_surface_wind_speed",
     "MLC_PRES": "mlc_air_pressure_at_mean_sea_level",
 }
+IncomingDataInput: TypeAlias = xr.Dataset | xr.DataArray | pl.LazyFrame | pd.DataFrame
 
 
 def _default_preprocess(input_data: IncomingDataInput) -> IncomingDataInput:

@@ -101,13 +101,15 @@ def orography(ds: xr.Dataset) -> xr.DataArray:
     Returns:
         The orography as an xarray DataArray.
     """
+
     if "geopotential_at_surface" in ds.variables:
         return ds["geopotential_at_surface"].isel(time=0) / 9.80665
     else:
-        from extremeweatherbench.inputs import ARCO_ERA5_FULL_URI
+        # Import inputs here to avoid circular import
+        from extremeweatherbench import inputs
 
         era5 = xr.open_zarr(
-            ARCO_ERA5_FULL_URI,
+            inputs.ARCO_ERA5_FULL_URI,
             chunks=None,
             storage_options=dict(token="anon"),
         )
