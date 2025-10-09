@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Optional, Type, Union
 
 import pandas as pd
+import sparse
 import xarray as xr
 from joblib import Parallel, delayed
 from tqdm.auto import tqdm
@@ -183,7 +184,7 @@ def compute_case_operator(
             cache_dir=kwargs.get("cache_dir", None),
         )
     logger.info(
-        f"Datasets built for case {case_operator.case_metadata.case_id_number}."
+        "Datasets built for case %s.", case_operator.case_metadata.case_id_number
     )
     results = []
     # TODO: determine if derived variables need to be pushed here or at pre-compute
@@ -248,6 +249,8 @@ def _extract_standard_metadata(
         "metric": metric.name,
         "case_id_number": case_id_number,
         "event_type": event_type,
+        "target_source": target_ds.attrs["source"],
+        "forecast_source": forecast_ds.attrs["source"],
     }
 
 
@@ -296,7 +299,7 @@ def _ensure_output_schema(df: pd.DataFrame, **metadata) -> pd.DataFrame:
         missing_cols.discard("lead_time")
 
     if missing_cols:
-        logger.warning(f"Missing expected columns: {missing_cols}.")
+        logger.warning("Missing expected columns: %s.", missing_cols)
 
     # Ensure all OUTPUT_COLUMNS are present (missing ones will be NaN)
     # and reorder to match OUTPUT_COLUMNS specification
@@ -336,12 +339,15 @@ def _evaluate_metric_and_return_df(
     # instantiation
     if isinstance(metric, type):
         metric = metric()
-    logger.info(f"Computing metric {metric.name}... ")
+    logger.info("Computing metric %s... ", metric.name)
     metric_result = metric.compute_metric(
         forecast_ds.get(forecast_variable, forecast_ds.data_vars),
         target_ds.get(target_variable, target_ds.data_vars),
         **kwargs,
     )
+    # If data is sparse, densify it
+    if isinstance(metric_result.data, sparse.COO):
+        metric_result.data = metric_result.data.maybe_densify()
     # Convert to DataFrame and add metadata, ensuring OUTPUT_COLUMNS compliance
     df = metric_result.to_dataframe(name="value").reset_index()
     # TODO: add functionality for custom metadata columns

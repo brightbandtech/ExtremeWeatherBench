@@ -16,6 +16,8 @@ OUTPUT_COLUMNS = [
     "init_time",
     "target_variable",
     "metric",
+    "forecast_source",
+    "target_source",
     "case_id_number",
     "event_type",
 ]
@@ -141,6 +143,7 @@ ghcn_freeze_target = inputs.GHCN(
 # Forecast Examples
 
 cira_heatwave_forecast = inputs.KerchunkForecast(
+    name="FourCastNetv2",
     source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
     variables=["surface_air_temperature"],
     variable_mapping={"t2": "surface_air_temperature"},
@@ -149,6 +152,7 @@ cira_heatwave_forecast = inputs.KerchunkForecast(
 )
 
 cira_freeze_forecast = inputs.KerchunkForecast(
+    name="FourCastNetv2",
     source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
     variables=[
         "surface_air_temperature",
