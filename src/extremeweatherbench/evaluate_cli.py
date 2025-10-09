@@ -67,7 +67,8 @@ def cli_runner(
 
     1. Default mode (--default): Uses the predefined Brightband evaluation objects for
        comprehensive weather event evaluation including heat waves, freeze events,
-       severe convection, atmospheric rivers, and tropical cyclones.
+       [severe convection, atmospheric rivers, and tropical cyclones] (bracketed events
+       are not yet implemented).
 
     2. Custom mode (--config-file): Uses a Python config file containing custom
        evaluation objects defined by the user.
@@ -129,7 +130,7 @@ def cli_runner(
     # Load evaluation objects
     if default:
         click.echo("Using default Brightband evaluation objects...")
-        evaluation_objects = defaults.BRIGHTBAND_EVALUATION_OBJECTS
+        evaluation_objects = defaults.get_brightband_evaluation_objects()
         cases_dict = _load_default_cases()
     else:
         assert config_file is not None  # for mypy
