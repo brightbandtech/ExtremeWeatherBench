@@ -134,17 +134,17 @@ def calculate_pressure_at_surface(orography_da: xr.DataArray) -> xr.DataArray:
 
 
 def maybe_calculate_wind_speed(ds: xr.Dataset) -> xr.DataArray:
-    """Prepare wind data by computing wind speed.
+    """Maybe prepare wind data by computing wind speed.
 
     If the wind speed is not already present, it will be computed from the eastward
-    and northward wind components. If the wind speed is already present, the dataset
-    is returned as is.
+    and northward wind components (u and v). If the wind speed is already present, the
+    dataset is returned as is.
 
     Args:
-        ds: The xarray dataset to prepare the wind data from.
+        ds: The dataset to prepare the wind data from.
 
     Returns:
-        An xarray dataset with the wind speed computed if it is not already present.
+        A dataset with the wind speed computed if it is not already present.
     """
 
     has_wind_speed = "surface_wind_speed" in ds.data_vars
