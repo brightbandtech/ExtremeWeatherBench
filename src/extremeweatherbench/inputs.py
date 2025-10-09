@@ -946,75 +946,77 @@ def align_forecast_to_target(
 
 def safely_pull_variables(
     dataset: IncomingDataInput,
-    variables: list[str],
+    required_variables: list[str],
+    alternative_variables: Optional[dict[str, list[str]]] = None,
     optional_variables: Optional[list[str]] = None,
-    optional_variables_mapping: Optional[dict[str, list[str]]] = None,
 ) -> IncomingDataInput:
-    """Safely pull variables from any IncomingDataInput type, prioritizing optionals.
+    """Safely pull variables from any IncomingDataInput type, prioritizing alternatives.
 
     This function attempts to extract variables from a dataset, giving
-    priority to optional variables when available. If optional variables
-    are present, they can replace the need for required variables through
-    the mapping dictionary.
+    priority to alternative variables when available. If alternative variables
+    are present, they can replace required variables.
 
     Args:
         dataset: The dataset to extract variables from (xr.Dataset, xr.DataArray,
             pl.LazyFrame, or pd.DataFrame).
         variables: List of required variable names to extract.
-        optional_variables: List of optional variable names to try first.
-        optional_variables_mapping: Dict mapping optional vars to list of
-            required vars they can replace.
+        alternative_variables: Dict mapping required vars to list of
+            alternative vars they can be replaced with if not available.
+        optional_variables: List of optional variable names which can avoid
+            loading from elsewhere if available, such as orography.
 
     Returns:
         Same type as input dataset containing the extracted variables.
 
     Raises:
         KeyError: If required variables are not present and no suitable
-            optional variables are available as replacements.
+            alternative variables are available as replacements.
 
     Examples:
         >>> ds = xr.Dataset(
-        ...     {"temp": (["x"], [1, 2, 3]), "dewpoint_temperature": (["x"], [4, 5, 6])}
+        ...     {"air_temperature": (["x"], [1, 2, 3]), "relative_humidity": (["x"], [4, 5, 6])}
         ... )
         >>> result = safely_pull_variables(
         ...     ds,
-        ...     variables=["specific_humidity", "pressure"],
-        ...     optional_variables=["dewpoint_temperature"],
-        ...     optional_variables_mapping={
-        ...         "dewpoint_temperature": ["specific_humidity", "pressure"]
+        ...     required_variables=["specific_humidity", "pressure"],
+        ...     alternative_variables={
+        ...         "specific_humidity": ["relative_humidity", "air_temperature"]
+        ...     },
+        ...     optional_variables=[
+        ...         "orography"
         ...     },
         ... )
         >>> list(result.data_vars)
-        ['dewpoint_temperature']
+        ['relative_humidity', 'air_temperature']
     """
     if optional_variables is None:
         optional_variables = []
-    if optional_variables_mapping is None:
-        optional_variables_mapping = {}
+    if alternative_variables is None:
+        alternative_variables = {}
 
     # Dispatch to type-specific handlers
     match dataset:
         case xr.Dataset():
             return sources.safely_pull_variables_xr_dataset(
-                dataset, variables, optional_variables, optional_variables_mapping
+                dataset, required_variables, alternative_variables, optional_variables
             )
         case xr.DataArray():
             return sources.safely_pull_variables_xr_dataarray(
-                dataset, variables, optional_variables, optional_variables_mapping
+                dataset, required_variables, alternative_variables, optional_variables
             )
         case pl.LazyFrame():
             return sources.safely_pull_variables_polars_lazyframe(
                 dataset,
-                variables,
+                required_variables,
                 optional_variables + DEFAULT_COORDINATE_VARIABLES,
-                optional_variables_mapping,
+                alternative_variables,
             )
         case pd.DataFrame():
             return sources.safely_pull_variables_pandas_dataframe(
                 dataset,
-                variables + DEFAULT_COORDINATE_VARIABLES,
+                required_variables + DEFAULT_COORDINATE_VARIABLES,
                 optional_variables + DEFAULT_COORDINATE_VARIABLES,
-                optional_variables_mapping,
+                alternative_variables,
             )
         case _:
             raise TypeError(
@@ -1044,17 +1046,17 @@ def maybe_subset_variables(
 
     # get the optional variables and mapping from the derived variable
     optional_variables = getattr(derived_variable, "optional_variables", None) or []
-    optional_variables_mapping = (
-        getattr(derived_variable, "optional_variables_mapping", None) or {}
+    alternative_variables = (
+        getattr(derived_variable, "alternative_variables", None) or {}
     )
 
     expected_and_maybe_derived_variables = (
         derived.maybe_include_variables_from_derived_input(variables)
-    )
+    )   
     data = safely_pull_variables(
         data,
         expected_and_maybe_derived_variables,
+        alternative_variables=alternative_variables,
         optional_variables=optional_variables,
-        optional_variables_mapping=optional_variables_mapping,
     )
     return data

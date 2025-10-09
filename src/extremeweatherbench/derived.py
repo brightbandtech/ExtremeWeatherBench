@@ -1,6 +1,7 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import Sequence, Type, TypeGuard, Union
+from typing import Sequence, Type, TypeGuard, Union, Optional, Dict
+from typing_extensions import List
 
 import xarray as xr
 
@@ -13,33 +14,41 @@ class DerivedVariable(ABC):
 
     A DerivedVariable is any variable that requires extra computation than what
     is provided in analysis or forecast data. Some examples include the
-    practically perfect hindcast, MLCAPE, IVT, or atmospheric river masks.
+    practically perfect hindcast, MLCAPE, IVT, or atmospheric river masks. In some
+    cases, a variable is available in some models and not others, so an
+    optional variable or variables may be provided as a mapping. This can be the
+    derived variable itself or a component of the derived variable, such as
+    specific humidity (which would be computed using relative humidity and air
+    temperature).
 
     Attributes:
         name: The name that is used for applications of derived variables.
-            Defaults to the class name.
-        required_variables: A list of variables that are used to build the
+        required_variables: A list of variables that are required to build the
             variable.
-        build: A method that builds the variable from the required variables.
-            Build is used specifically to distinguish from the compute method in
-            xarray, which eagerly processes the data and loads into memory;
-            build is used to lazily process the data and return a dataset that
-            can be used later to compute the variable.
+        alternative_variables: A dictionary of required variable keys and the variables
+            that can be used as alternatives if the required variable is not present.
+        optional_variables: A list of variables that are optional to build the
+            derived variable, i.e. will not fail if not present, but can be included
+            to save on compute time.
         derive_variable: An abstract method that defines the computation to
-            derive the variable from required_variables.
+            derive the variable.
+        compute: A method that builds the derived variable from the input variables.
+        Depending on the implementation, compute may or may not load the data into
+        memory.
+
+    Example:
+        class TestVariable(DerivedVariable):
+            required_variables = ["specific_humidity"]
+            alternative_variables = {"specific_humidity": 
+            ["relative_humidity", "air_temperature"]}
+            optional_variables = ["orography"]
+
     """
 
-    required_variables: list[str]
-    optional_variables: list[str] = []
-    optional_variables_mapping: dict = {}
-
-    @property
-    def name(self) -> str:
-        """A name for the derived variable.
-
-        Defaults to the class name.
-        """
-        return self.__class__.__name__
+    name: str
+    required_variables: List[str]
+    alternative_variables: Optional[Dict[str, List[str]]] = None
+    optional_variables: Optional[List[str]] = None
 
     @classmethod
     @abstractmethod
@@ -62,17 +71,17 @@ class DerivedVariable(ABC):
         """Build the derived variable from the input variables.
 
         This method is used to build the derived variable from the input variables.
+        It checks that the data has the variables required to build the variable,
+        and then derives the variable from the input variables.
 
         Args:
             data: The dataset to build the derived variable from.
-            *args: Additional positional arguments to pass to derive_variable.
-            **kwargs: Additional keyword arguments to pass to derive_variable.
+            **kwargs: Additional keyword arguments to pass to the derived variable.
 
         Returns:
             A DataArray with the derived variable.
         """
         return cls.derive_variable(data, *args, **kwargs)
-
 
 def maybe_derive_variables(
     data: xr.Dataset,
