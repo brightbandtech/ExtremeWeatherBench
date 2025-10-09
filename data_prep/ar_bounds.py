@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
-"""
-Enhanced functions for calculating bounds from AR mask data with object separation.
-
-This script processes atmospheric river events and calculates bounds using
-object-based detection methods.
-"""
+"""Calculate case bounds from AR mask data."""
 
 import logging
 import pickle
