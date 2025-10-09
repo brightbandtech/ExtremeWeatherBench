@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 import pytest
 import xarray as xr
 
@@ -224,3 +225,89 @@ class TestBasicCalculations:
         lon_idx = np.argmin(np.abs(sample_calc_dataset.longitude.values - (-100.0)))
         min_distance = distances.isel(latitude=lat_idx, longitude=lon_idx)
         assert min_distance < 500  # Should be within 500km of center
+
+
+class TestWindCalculations:
+    """Test wind-related calculations."""
+
+    def test_maybe_calculate_wind_speed_from_components(self, sample_calc_dataset):
+        """Test wind speed calculation from components."""
+        wind_speed = calc.maybe_calculate_wind_speed(sample_calc_dataset)
+
+        # Should return a DataArray
+        assert isinstance(wind_speed, xr.Dataset)
+        assert (
+            wind_speed.surface_wind_speed.shape
+            == sample_calc_dataset.surface_eastward_wind.shape
+        )
+
+        # All wind speeds should be non-negative
+        assert (wind_speed.surface_wind_speed >= 0).all()
+
+        # Check against manual calculation for a point
+        u = sample_calc_dataset.surface_eastward_wind.isel(
+            time=0, latitude=0, longitude=0
+        ).values
+        v = sample_calc_dataset.surface_northward_wind.isel(
+            time=0, latitude=0, longitude=0
+        ).values
+        expected = np.sqrt(u**2 + v**2)
+        calculated = wind_speed.surface_wind_speed.isel(
+            time=0, latitude=0, longitude=0
+        ).values
+
+        assert abs(calculated - expected) < 1e-10
+
+    def test_maybe_calculate_wind_speed_with_existing_wind_speed(self):
+        """Test that existing wind speed is returned unchanged."""
+        # Create dataset with existing wind speed
+        time = pd.date_range("2023-01-01", periods=2, freq="6h")
+        lat = np.linspace(30, 40, 5)
+        lon = np.linspace(-100, -90, 5)
+
+        wind_speed_data = np.random.uniform(0, 30, (2, 5, 5))
+
+        dataset = xr.Dataset(
+            {
+                "surface_wind_speed": (
+                    ["time", "latitude", "longitude"],
+                    wind_speed_data,
+                ),
+                "surface_eastward_wind": (
+                    ["time", "latitude", "longitude"],
+                    np.random.normal(0, 10, (2, 5, 5)),
+                ),
+                "surface_northward_wind": (
+                    ["time", "latitude", "longitude"],
+                    np.random.normal(0, 10, (2, 5, 5)),
+                ),
+            },
+            coords={"time": time, "latitude": lat, "longitude": lon},
+        )
+
+        result = calc.maybe_calculate_wind_speed(dataset)
+
+        # Should return the existing wind speed unchanged
+        xr.testing.assert_equal(result, dataset)
+
+    def test_maybe_calculate_wind_speed_missing_components(self):
+        """Test error when wind components are missing."""
+        # Create dataset without wind components
+        time = pd.date_range("2023-01-01", periods=2, freq="6h")
+        lat = np.linspace(30, 40, 5)
+        lon = np.linspace(-100, -90, 5)
+
+        dataset = xr.Dataset(
+            {
+                "air_pressure_at_mean_sea_level": (
+                    ["time", "latitude", "longitude"],
+                    np.random.normal(101325, 1000, (2, 5, 5)),
+                ),
+            },
+            coords={"time": time, "latitude": lat, "longitude": lon},
+        )
+
+        result = calc.maybe_calculate_wind_speed(dataset)
+
+        # Will return the dataset as is, without the wind speed computed
+        xr.testing.assert_equal(result, dataset)
