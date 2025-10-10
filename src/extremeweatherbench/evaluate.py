@@ -420,8 +420,8 @@ def run_pipeline(
     data = input_data.open_and_maybe_preprocess_data_from_source().pipe(
         lambda ds: input_data.maybe_map_variable_names(ds)
     )
-    # Checks if the data has valid times in the given date range. This must come
-    # after maybe_map_variable_names to ensure valid_time is present.
+    # Checks if the data has valid times and spatial overlap. This must come after 
+    # maybe_map_variable_names to ensure variable names are mapped correctly.
     if inputs.check_for_missing_data(
         data,
         case_metadata,
