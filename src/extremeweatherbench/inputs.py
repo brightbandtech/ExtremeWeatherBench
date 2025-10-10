@@ -1,6 +1,6 @@
 import dataclasses
 import logging
-from abc import ABC, abstractmethod
+import abc
 from typing import TYPE_CHECKING, Callable, Optional, TypeAlias, Union
 
 import numpy as np
@@ -139,7 +139,7 @@ def _default_preprocess(input_data: IncomingDataInput) -> IncomingDataInput:
 
 
 @dataclasses.dataclass
-class InputBase(ABC):
+class InputBase(abc.ABC):
     """An abstract base dataclass for target and forecast data.
 
     Attributes:
@@ -175,7 +175,7 @@ class InputBase(ABC):
         """
         self.name = name
 
-    @abstractmethod
+    @abc.abstractmethod
     def _open_data_from_source(self) -> IncomingDataInput:
         """Open the input data from the source, opting to avoid loading the entire
         dataset into memory if possible.
@@ -184,7 +184,7 @@ class InputBase(ABC):
             The input data with a type determined by the user.
         """
 
-    @abstractmethod
+    @abc.abstractmethod
     def subset_data_to_case(
         self,
         data: IncomingDataInput,
@@ -550,7 +550,7 @@ class GHCN(TargetBase):
             # convert to Kelvin, GHCN data is in Celsius by default
             if "surface_air_temperature" in data.collect_schema().names():
                 data = data.with_columns(pl.col("surface_air_temperature").add(273.15))
-            data = data.collect().to_pandas()
+            data = data.collect(engine="streaming").to_pandas()
             data["longitude"] = utils.convert_longitude_to_360(data["longitude"])
 
             data = data.set_index(["valid_time", "latitude", "longitude"])
@@ -804,7 +804,7 @@ class IBTrACS(TargetBase):
 
     def _custom_convert_to_dataset(self, data: IncomingDataInput) -> xr.Dataset:
         if isinstance(data, pl.LazyFrame):
-            data = data.collect().to_pandas()
+            data = data.collect(engine="streaming").to_pandas()
 
             # IBTrACS data is in -180 to 180, convert to 0 to 360
             data["longitude"] = utils.convert_longitude_to_360(data["longitude"])
