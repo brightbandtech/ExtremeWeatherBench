@@ -463,11 +463,9 @@ def stack_sparse_data_from_dims(
         )
         coord_values.append(coord_tuple)
 
-    # If the data is empty, return the data densified as an empty dataarray; otherwise,
-    # stack and select the unique coordinates
-    if da.size == 0:
-        return da.data.maybe_densify(max_size=max_size)
-
-    da = da.stack(stacked=reduce_dim_names).sel(stacked=coord_values)
+    # If the data is not empty, stack and select the unique coordinates; otherwise,
+    # return the data densified as an empty dataarray
+    if da.size != 0:
+        da = da.stack(stacked=reduce_dim_names).sel(stacked=coord_values)
     da.data = da.data.maybe_densify(max_size=max_size)
     return da
