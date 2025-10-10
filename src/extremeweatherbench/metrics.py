@@ -1,12 +1,11 @@
 import logging
-from abc import ABC, abstractmethod
+import abc
 from typing import Any, Callable, Dict, List, Optional, Type
 
 import numpy as np
-import scores.categorical as cat  # type: ignore[import-untyped]
 import sparse
 import xarray as xr
-from scores.continuous import mae, mean_error, rmse  # type: ignore[import-untyped]
+from scores import categorical, continuous  # type: ignore[import-untyped]
 
 from extremeweatherbench import derived, evaluate, utils
 
@@ -23,7 +22,7 @@ def get_cached_transformed_manager(
     forecast_threshold: float = 0.5,
     target_threshold: float = 0.5,
     preserve_dims: str = "lead_time",
-) -> cat.BasicContingencyManager:
+) -> categorical.BasicContingencyManager:
     """Get cached transformed contingency manager, creating if needed.
 
     This function provides a global cache that can be used by any metric
@@ -51,7 +50,7 @@ def get_cached_transformed_manager(
     binary_target = (target >= target_threshold).astype(float)
 
     # Create and transform contingency manager
-    binary_contingency_manager = cat.BinaryContingencyManager(
+    binary_contingency_manager = categorical.BinaryContingencyManager(
         binary_forecast, binary_target
     )
     transformed = binary_contingency_manager.transform(preserve_dims=preserve_dims)
@@ -93,7 +92,7 @@ def clear_contingency_cache():
     _GLOBAL_CONTINGENCY_CACHE.clear()
 
 
-class BaseMetric(ABC):
+class BaseMetric(abc.ABC):
     """A BaseMetric class is an abstract class that defines the foundational interface
     for all metrics.
 
@@ -133,7 +132,7 @@ class BaseMetric(ABC):
             )
 
     @classmethod
-    @abstractmethod
+    @abc.abstractmethod
     def _compute_metric(
         cls,
         forecast: xr.Dataset,
@@ -171,7 +170,7 @@ class BaseMetric(ABC):
         )
 
 
-class AppliedMetric(ABC):
+class AppliedMetric(abc.ABC):
     """An applied metric is a wrapper around a BaseMetric.
 
     An AppliedMetric is a wrapper around a BaseMetric that is intended for more complex
@@ -191,7 +190,7 @@ class AppliedMetric(ABC):
     base_metric: type[BaseMetric]
 
     @classmethod
-    @abstractmethod
+    @abc.abstractmethod
     def _compute_applied_metric(
         cls,
         forecast: xr.DataArray,
@@ -502,7 +501,7 @@ class MAE(BaseMetric):
         **kwargs: Any,
     ) -> Any:
         preserve_dims = kwargs.get("preserve_dims", "lead_time")
-        return mae(forecast, target, preserve_dims=preserve_dims)
+        return continuous.mae(forecast, target, preserve_dims=preserve_dims)
 
 
 class ME(BaseMetric):
@@ -516,7 +515,7 @@ class ME(BaseMetric):
         **kwargs: Any,
     ) -> Any:
         preserve_dims = kwargs.get("preserve_dims", "lead_time")
-        return mean_error(forecast, target, preserve_dims=preserve_dims)
+        return continuous.mean_error(forecast, target, preserve_dims=preserve_dims)
 
 
 class RMSE(BaseMetric):
@@ -530,7 +529,7 @@ class RMSE(BaseMetric):
         **kwargs: Any,
     ) -> Any:
         preserve_dims = kwargs.get("preserve_dims", "lead_time")
-        return rmse(forecast, target, preserve_dims=preserve_dims)
+        return continuous.rmse(forecast, target, preserve_dims=preserve_dims)
 
 
 class EarlySignal(BaseMetric):

@@ -1,6 +1,6 @@
 import dataclasses
 import logging
-from abc import ABC, abstractmethod
+import abc
 from typing import TYPE_CHECKING, Callable, Optional, TypeAlias, Union
 
 import numpy as np
@@ -139,7 +139,7 @@ def _default_preprocess(input_data: IncomingDataInput) -> IncomingDataInput:
 
 
 @dataclasses.dataclass
-class InputBase(ABC):
+class InputBase(abc.ABC):
     """An abstract base dataclass for target and forecast data.
 
     Attributes:
@@ -175,7 +175,7 @@ class InputBase(ABC):
         """
         self.name = name
 
-    @abstractmethod
+    @abc.abstractmethod
     def _open_data_from_source(self) -> IncomingDataInput:
         """Open the input data from the source, opting to avoid loading the entire
         dataset into memory if possible.
@@ -184,7 +184,7 @@ class InputBase(ABC):
             The input data with a type determined by the user.
         """
 
-    @abstractmethod
+    @abc.abstractmethod
     def subset_data_to_case(
         self,
         data: IncomingDataInput,

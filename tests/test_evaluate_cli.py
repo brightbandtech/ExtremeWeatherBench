@@ -74,7 +74,7 @@ class TestDefaultMode:
         return_value=[],
     )
     @patch("extremeweatherbench.evaluate_cli._load_default_cases")
-    @patch("extremeweatherbench.evaluate_cli.ExtremeWeatherBench")
+    @patch("extremeweatherbench.evaluate.ExtremeWeatherBench")
     def test_default_mode_basic(
         self,
         mock_ewb_class,
@@ -106,7 +106,7 @@ class TestDefaultMode:
         return_value=[],
     )
     @patch("extremeweatherbench.evaluate_cli._load_default_cases")
-    @patch("extremeweatherbench.evaluate_cli.ExtremeWeatherBench")
+    @patch("extremeweatherbench.evaluate.ExtremeWeatherBench")
     def test_default_mode_with_cache_dir(
         self,
         mock_ewb_class,
@@ -137,7 +137,7 @@ class TestDefaultMode:
 class TestConfigFileMode:
     """Test --config-file mode functionality."""
 
-    @patch("extremeweatherbench.evaluate_cli.ExtremeWeatherBench")
+    @patch("extremeweatherbench.evaluate.ExtremeWeatherBench")
     def test_config_file_mode_basic(
         self, mock_ewb_class, runner, sample_config_py, temp_config_dir
     ):
@@ -206,9 +206,9 @@ class TestParallelExecution:
         "extremeweatherbench.defaults.get_brightband_evaluation_objects",
         return_value=[],
     )
-    @patch("extremeweatherbench.evaluate_cli._run_parallel")
+    @patch("extremeweatherbench.evaluate._run_parallel")
     @patch("extremeweatherbench.evaluate_cli._load_default_cases")
-    @patch("extremeweatherbench.evaluate_cli.ExtremeWeatherBench")
+    @patch("extremeweatherbench.evaluate.ExtremeWeatherBench")
     def test_parallel_execution(
         self,
         mock_ewb_class,
@@ -239,7 +239,7 @@ class TestParallelExecution:
         return_value=[],
     )
     @patch("extremeweatherbench.evaluate_cli._load_default_cases")
-    @patch("extremeweatherbench.evaluate_cli.ExtremeWeatherBench")
+    @patch("extremeweatherbench.evaluate.ExtremeWeatherBench")
     def test_serial_execution_default(
         self, mock_ewb_class, mock_load_cases, mock_get_brightband, runner
     ):
@@ -265,7 +265,7 @@ class TestCaseOperatorSaving:
         return_value=[],
     )
     @patch("extremeweatherbench.evaluate_cli._load_default_cases")
-    @patch("extremeweatherbench.evaluate_cli.ExtremeWeatherBench")
+    @patch("extremeweatherbench.evaluate.ExtremeWeatherBench")
     def test_save_case_operators(
         self,
         mock_ewb_class,
@@ -307,7 +307,7 @@ class TestCaseOperatorSaving:
         return_value=[],
     )
     @patch("extremeweatherbench.evaluate_cli._load_default_cases")
-    @patch("extremeweatherbench.evaluate_cli.ExtremeWeatherBench")
+    @patch("extremeweatherbench.evaluate.ExtremeWeatherBench")
     def test_save_case_operators_creates_directory(
         self,
         mock_ewb_class,
@@ -360,7 +360,7 @@ class TestValidationAndErrorHandling:
         return_value=[],
     )
     @patch("extremeweatherbench.evaluate_cli._load_default_cases")
-    @patch("extremeweatherbench.evaluate_cli.ExtremeWeatherBench")
+    @patch("extremeweatherbench.evaluate.ExtremeWeatherBench")
     def test_output_directory_creation(
         self,
         mock_ewb_class,
@@ -391,7 +391,7 @@ class TestValidationAndErrorHandling:
         return_value=[],
     )
     @patch("extremeweatherbench.evaluate_cli._load_default_cases")
-    @patch("extremeweatherbench.evaluate_cli.ExtremeWeatherBench")
+    @patch("extremeweatherbench.evaluate.ExtremeWeatherBench")
     def test_default_output_directory(
         self, mock_ewb_class, mock_load_cases, mock_get_brightband, runner
     ):
@@ -418,7 +418,7 @@ class TestResultsSaving:
         return_value=[],
     )
     @patch("extremeweatherbench.evaluate_cli._load_default_cases")
-    @patch("extremeweatherbench.evaluate_cli.ExtremeWeatherBench")
+    @patch("extremeweatherbench.evaluate.ExtremeWeatherBench")
     def test_results_saved_to_csv(
         self,
         mock_ewb_class,
@@ -454,7 +454,7 @@ class TestResultsSaving:
         # CSV reading/verification removed since file writing is mocked
 
     @patch("extremeweatherbench.evaluate_cli._load_default_cases")
-    @patch("extremeweatherbench.evaluate_cli.ExtremeWeatherBench")
+    @patch("extremeweatherbench.evaluate.ExtremeWeatherBench")
     def test_empty_results_handling(self, mock_ewb_class, mock_load_cases, runner):
         """Test handling when no results are returned."""
         mock_ewb = Mock()
