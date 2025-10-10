@@ -107,7 +107,7 @@ def sample_dataset():
 
 class TestValidDerivedVariable(derived.DerivedVariable):
     """A valid test implementation of DerivedVariable for testing purposes."""
-
+    name = "TestValidDerivedVariable"
     required_variables = ["test_variable_1", "test_variable_2"]
 
     @classmethod
@@ -262,17 +262,15 @@ class TestMaybeDeriveVariablesFunction:
         )
         xr.testing.assert_equal(result["TestValidDerivedVariable"], expected_value)
 
-    def test_dataarray_without_name_gets_assigned_name(self, sample_dataset):
-        """Test DataArray without name gets assigned class name with warning."""
+    def test_dataarray_without_name_generates_exception(self, sample_dataset):
+        """Test DataArray without name generates exception."""
+
         variables = [TestDerivedVariableWithoutName()]
-
+        assert not hasattr(variables[0], 'name')
         sample_dataset.attrs["dataset_type"] = "forecast"
-        # Logger warnings are not pytest warnings, so just check functionality
-        result = derived.maybe_derive_variables(sample_dataset, variables)
+        with pytest.raises(AttributeError):
+            derived.maybe_derive_variables(sample_dataset, variables)
 
-        assert isinstance(result, xr.Dataset)
-        # Verify the DataArray got the correct name assigned
-        assert "TestDerivedVariableWithoutName" in result.data_vars
 
     def test_kwargs_passed_to_compute(self, sample_dataset):
         """Test that kwargs are passed to derived variable compute methods."""
