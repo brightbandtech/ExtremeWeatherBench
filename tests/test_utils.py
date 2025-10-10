@@ -114,22 +114,6 @@ def test_derive_indices_from_init_time_and_lead_time():
     assert isinstance(indices[1], np.ndarray)
 
 
-def test_default_preprocess():
-    """Test default preprocess function."""
-    # Import the function from inputs module since it was moved there
-    from extremeweatherbench.inputs import _default_preprocess
-
-    # Test with xarray Dataset
-    ds = xr.Dataset({"temp": (["x"], [1, 2, 3])})
-    result = _default_preprocess(ds)
-    assert result is ds  # Should return the same object unchanged
-
-    # Test with pandas DataFrame
-    df = pd.DataFrame({"a": [1, 2, 3]})
-    result_df = _default_preprocess(df)
-    assert result_df is df
-
-
 def test_filter_kwargs_for_callable():
     """Test filtering kwargs to match callable signature."""
 

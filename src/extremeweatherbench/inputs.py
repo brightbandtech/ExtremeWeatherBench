@@ -14,7 +14,6 @@ from extremeweatherbench import cases, derived, sources, utils
 if TYPE_CHECKING:
     from extremeweatherbench import metrics
 
-IncomingDataInput: TypeAlias = xr.Dataset | xr.DataArray | pl.LazyFrame | pd.DataFrame
 logger = logging.getLogger(__name__)
 
 #: Storage/access options for gridded target datasets.
@@ -131,6 +130,8 @@ IBTrACS_metadata_variable_mapping = {
     "MLC_WIND": "mlc_surface_wind_speed",
     "MLC_PRES": "mlc_air_pressure_at_mean_sea_level",
 }
+
+IncomingDataInput: TypeAlias = xr.Dataset | xr.DataArray | pl.LazyFrame | pd.DataFrame
 
 
 def _default_preprocess(input_data: IncomingDataInput) -> IncomingDataInput:
@@ -308,6 +309,10 @@ class ForecastBase(InputBase):
     ) -> IncomingDataInput:
         if not isinstance(data, xr.Dataset):
             raise ValueError(f"Expected xarray Dataset, got {type(data)}")
+        # Drop duplicate init_time values
+        if len(np.unique(data.init_time)) != len(data.init_time):
+            _, index = np.unique(data.init_time, return_index=True)
+            data = data.isel(init_time=index)
 
         # subset time first to avoid OOM masking issues
         subset_time_indices = utils.derive_indices_from_init_time_and_lead_time(
@@ -315,6 +320,10 @@ class ForecastBase(InputBase):
             case_metadata.start_date,
             case_metadata.end_date,
         )
+
+        # If there are no valid times, return an empty dataset
+        if len(subset_time_indices[0]) == 0:
+            return xr.Dataset(coords={"valid_time": []})
 
         # Use only valid init_time indices, but keep all lead_times
         unique_init_indices = np.unique(subset_time_indices[0])
@@ -386,7 +395,6 @@ class EvaluationObject:
 class KerchunkForecast(ForecastBase):
     """Forecast class for kerchunked forecast data."""
 
-    name: str = "kerchunk_forecast"
     chunks: Optional[Union[dict, str]] = "auto"
 
     def _open_data_from_source(self) -> IncomingDataInput:
@@ -401,7 +409,6 @@ class KerchunkForecast(ForecastBase):
 class ZarrForecast(ForecastBase):
     """Forecast class for zarr forecast data."""
 
-    name: str = "zarr_forecast"
     chunks: Optional[Union[dict, str]] = "auto"
 
     def _open_data_from_source(self) -> IncomingDataInput:
@@ -550,7 +557,9 @@ class GHCN(TargetBase):
             data = data.set_index(["valid_time", "latitude", "longitude"])
             # GHCN data can have duplicate values right now, dropping here if it occurs
             try:
-                data = data[~data.index.duplicated()].to_xarray()
+                data = xr.Dataset.from_dataframe(
+                    data[~data.index.duplicated(keep="first")], sparse=True
+                )
             except Exception as e:
                 logger.warning(
                     "Error converting GHCN data to xarray: %s, returning empty Dataset",
