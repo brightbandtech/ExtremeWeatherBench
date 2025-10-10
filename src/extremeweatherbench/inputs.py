@@ -950,11 +950,11 @@ def safely_pull_variables(
     alternative_variables: Optional[dict[str, list[str]]] = None,
     optional_variables: Optional[list[str]] = None,
 ) -> IncomingDataInput:
-    """Safely pull variables from any IncomingDataInput type, prioritizing alternatives.
+    """Safely pull variables from any IncomingDataInput type, prioritizing required variables.
 
     This function attempts to extract variables from a dataset, giving
-    priority to alternative variables when available. If alternative variables
-    are present, they can replace required variables.
+    priority to required variables when available. If alternative variables
+    are present and required variables are not, they can replace required variables.
 
     Args:
         dataset: The dataset to extract variables from (xr.Dataset, xr.DataArray,
