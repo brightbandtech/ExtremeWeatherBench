@@ -1027,11 +1027,23 @@ def maybe_subset_variables(
     data: IncomingDataInput,
     variables: list[Union[str, "derived.DerivedVariable"]],
 ) -> IncomingDataInput:
-    """Subset the variables from the data, if required."""
+    """Subset the variables from the data, if required.
+
+    If the variables list includes derived variables, extracts their required
+    and optional variables for subsetting.
+
+    Args:
+        data: The dataset to subset (xr.Dataset, xr.DataArray, pl.LazyFrame,
+            or pd.DataFrame).
+        variables: List of variable names and/or derived variable classes.
+
+    Returns:
+        The data subset to only the specified variables.
+    """
     # If there are no variables, return the data unaltered
     if len(variables) == 0:
         return data
-    # get the first derived variable if it exists
+    # Get the first derived variable if it exists
     derived_variables = [
         v
         for v in variables
@@ -1042,7 +1054,7 @@ def maybe_subset_variables(
     else:
         derived_variable = None
 
-    # get the optional variables and mapping from the derived variable
+    # Get the optional variables and mapping from the derived variable
     optional_variables = getattr(derived_variable, "optional_variables", None) or []
     optional_variables_mapping = (
         getattr(derived_variable, "optional_variables_mapping", None) or {}
