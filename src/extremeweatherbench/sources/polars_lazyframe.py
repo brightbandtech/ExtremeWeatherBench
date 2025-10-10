@@ -44,11 +44,11 @@ def safely_pull_variables_polars_lazyframe(
 
     Example:
         >>> import polars as pl
-        >>> df = pl.DataFrame({'temp': [20, 25], 'pressure': [1013, 1015]})
+        >>> df = pl.DataFrame({"temp": [20, 25], "pressure": [1013, 1015]})
         >>> lf = df.lazy()
-        >>> variables = ['temperature']
-        >>> optional = ['temp']
-        >>> mapping = {'temp': 'temperature'}
+        >>> variables = ["temperature"]
+        >>> optional = ["temp"]
+        >>> mapping = {"temp": "temperature"}
         >>> result = safely_pull_variables_polars_lazyframe(
         ...     lf, variables, optional, mapping
         ... )
@@ -125,12 +125,12 @@ def check_for_valid_times_polars_lazyframe(
     Example:
         >>> import polars as pl
         >>> import datetime
-        >>> df = pl.DataFrame({
-        ...     'valid_time': pl.Series(
-        ...         pd.date_range('2023-01-01', periods=5)
-        ...     ),
-        ...     'value': [1, 2, 3, 4, 5]
-        ... })
+        >>> df = pl.DataFrame(
+        ...     {
+        ...         "valid_time": pl.Series(pd.date_range("2023-01-01", periods=5)),
+        ...         "value": [1, 2, 3, 4, 5],
+        ...     }
+        ... )
         >>> lf = df.lazy()
         >>> start = datetime.datetime(2023, 1, 2)
         >>> end = datetime.datetime(2023, 1, 4)
@@ -186,11 +186,13 @@ def check_for_spatial_data_polars_lazyframe(
     Example:
         >>> import polars as pl
         >>> from extremeweatherbench.regions import Region
-        >>> df = pl.DataFrame({
-        ...     'latitude': [40.0, 41.0, 42.0],
-        ...     'longitude': [-74.0, -73.0, -72.0],
-        ...     'value': [1, 2, 3]
-        ... })
+        >>> df = pl.DataFrame(
+        ...     {
+        ...         "latitude": [40.0, 41.0, 42.0],
+        ...         "longitude": [-74.0, -73.0, -72.0],
+        ...         "value": [1, 2, 3],
+        ...     }
+        ... )
         >>> lf = df.lazy()
         >>> region = Region(...)  # Define your region
         >>> check_for_spatial_data_polars_lazyframe(lf, region)

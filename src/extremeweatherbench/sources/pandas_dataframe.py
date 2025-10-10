@@ -41,10 +41,10 @@ def safely_pull_variables_pandas_dataframe(
             and not replaced by optional variables.
 
     Example:
-        >>> df = pd.DataFrame({'temp': [20, 25], 'pressure': [1013, 1015]})
-        >>> variables = ['temperature']
-        >>> optional = ['temp']
-        >>> mapping = {'temp': 'temperature'}
+        >>> df = pd.DataFrame({"temp": [20, 25], "pressure": [1013, 1015]})
+        >>> variables = ["temperature"]
+        >>> optional = ["temp"]
+        >>> mapping = {"temp": "temperature"}
         >>> result = safely_pull_variables_pandas_dataframe(
         ...     df, variables, optional, mapping
         ... )
@@ -118,10 +118,12 @@ def check_for_valid_times_pandas_dataframe(
         the time range check.
 
     Example:
-        >>> df = pd.DataFrame({
-        ...     'valid_time': pd.date_range('2023-01-01', periods=5),
-        ...     'value': [1, 2, 3, 4, 5]
-        ... })
+        >>> df = pd.DataFrame(
+        ...     {
+        ...         "valid_time": pd.date_range("2023-01-01", periods=5),
+        ...         "value": [1, 2, 3, 4, 5],
+        ...     }
+        ... )
         >>> start = datetime.datetime(2023, 1, 2)
         >>> end = datetime.datetime(2023, 1, 4)
         >>> check_for_valid_times_pandas_dataframe(df, start, end)
@@ -172,11 +174,13 @@ def check_for_spatial_data_pandas_dataframe(
     Example:
         >>> import pandas as pd
         >>> from extremeweatherbench.regions import Region
-        >>> df = pd.DataFrame({
-        ...     'latitude': [40.0, 41.0, 42.0],
-        ...     'longitude': [-74.0, -73.0, -72.0],
-        ...     'value': [1, 2, 3]
-        ... })
+        >>> df = pd.DataFrame(
+        ...     {
+        ...         "latitude": [40.0, 41.0, 42.0],
+        ...         "longitude": [-74.0, -73.0, -72.0],
+        ...         "value": [1, 2, 3],
+        ...     }
+        ... )
         >>> region = Region(...)  # Define your region
         >>> check_for_spatial_data_pandas_dataframe(df, region)
         True
