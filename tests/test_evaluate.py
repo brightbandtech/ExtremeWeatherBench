@@ -974,10 +974,6 @@ class TestPipelineFunctions:
         # Set up the mock to return a dataset that will trigger the warning
         # by having no valid times in the date range
         empty_dataset = xr.Dataset()
-        sample_case_operator.target.open_and_maybe_preprocess_data_from_source.return_value = empty_dataset
-        sample_case_operator.target.maybe_map_variable_names.return_value = (
-            empty_dataset
-        )
         sample_case_operator.forecast.open_and_maybe_preprocess_data_from_source.return_value = empty_dataset
         sample_case_operator.forecast.maybe_map_variable_names.return_value = (
             empty_dataset
@@ -1006,10 +1002,6 @@ class TestPipelineFunctions:
         zero-length dimensions."""
         # Set up the mock to return a dataset that will trigger the warning
         empty_dataset = xr.Dataset()
-        sample_case_operator.target.open_and_maybe_preprocess_data_from_source.return_value = empty_dataset
-        sample_case_operator.target.maybe_map_variable_names.return_value = (
-            empty_dataset
-        )
         sample_case_operator.forecast.open_and_maybe_preprocess_data_from_source.return_value = empty_dataset
         sample_case_operator.forecast.maybe_map_variable_names.return_value = (
             empty_dataset
@@ -1035,10 +1027,6 @@ class TestPipelineFunctions:
         """Test _build_datasets when forecast has multiple zero-length dimensions."""
         # Set up the mock to return a dataset that will trigger the warning
         empty_dataset = xr.Dataset()
-        sample_case_operator.target.open_and_maybe_preprocess_data_from_source.return_value = empty_dataset
-        sample_case_operator.target.maybe_map_variable_names.return_value = (
-            empty_dataset
-        )
         sample_case_operator.forecast.open_and_maybe_preprocess_data_from_source.return_value = empty_dataset
         sample_case_operator.forecast.maybe_map_variable_names.return_value = (
             empty_dataset

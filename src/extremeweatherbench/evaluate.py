@@ -384,6 +384,9 @@ def _build_datasets(
     """
     logger.info("Running target pipeline... ")
     target_ds = run_pipeline(case_operator.case_metadata, case_operator.target)
+    # If the target dataset has no dimensions, return empty datasets
+    if len(target_ds.dims) == 0:
+        return xr.Dataset(), xr.Dataset()
     logger.info("Running forecast pipeline... ")
     forecast_ds = run_pipeline(case_operator.case_metadata, case_operator.forecast)
     return (forecast_ds, target_ds)
