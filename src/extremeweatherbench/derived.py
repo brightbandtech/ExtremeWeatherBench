@@ -39,7 +39,7 @@ class DerivedVariable(ABC):
     Example:
         class TestVariable(DerivedVariable):
             required_variables = ["specific_humidity"]
-            alternative_variables = {"specific_humidity": 
+            alternative_variables = {"specific_humidity":
             ["relative_humidity", "air_temperature"]}
             optional_variables = ["orography"]
 
@@ -82,6 +82,7 @@ class DerivedVariable(ABC):
             A DataArray with the derived variable.
         """
         return cls.derive_variable(data, *args, **kwargs)
+
 
 def maybe_derive_variables(
     data: xr.Dataset,

@@ -1,9 +1,11 @@
 """Handle variable extraction for xarray DataArrays."""
+
 import logging
 import xarray as xr
 
 
 logger = logging.getLogger(__name__)
+
 
 def safely_pull_variables_xr_dataarray(
     dataset: xr.DataArray,
@@ -12,8 +14,8 @@ def safely_pull_variables_xr_dataarray(
     optional_variables: list[str],
 ) -> xr.DataArray:
     """Handle variable extraction for xarray DataArray.
-    
-    This operates as a check instead of a pull because the DataArray itself is the 
+
+    This operates as a check instead of a pull because the DataArray itself is the
     variable. If the variable is not found, a warning is passed."""
     # For DataArray, the variable is the DataArray itself
     # Check if the requested variable matches the DataArray name

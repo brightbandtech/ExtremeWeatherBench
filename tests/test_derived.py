@@ -107,6 +107,7 @@ def sample_dataset():
 
 class TestValidDerivedVariable(derived.DerivedVariable):
     """A valid test implementation of DerivedVariable for testing purposes."""
+
     name = "TestValidDerivedVariable"
     required_variables = ["test_variable_1", "test_variable_2"]
 
@@ -266,11 +267,10 @@ class TestMaybeDeriveVariablesFunction:
         """Test DataArray without name generates exception."""
 
         variables = [TestDerivedVariableWithoutName()]
-        assert not hasattr(variables[0], 'name')
+        assert not hasattr(variables[0], "name")
         sample_dataset.attrs["dataset_type"] = "forecast"
         with pytest.raises(AttributeError):
             derived.maybe_derive_variables(sample_dataset, variables)
-
 
     def test_kwargs_passed_to_compute(self, sample_dataset):
         """Test that kwargs are passed to derived variable compute methods."""
@@ -864,13 +864,17 @@ class TestAlternativeVariables:
     def test_alternative_variables_success_same_shape(self, sample_dataset):
         """Test alternative_variables when all alternatives are present with same shape."""
         from extremeweatherbench.inputs import safely_pull_variables
-        
+
         # Remove the required variable so alternatives will be used
         test_dataset = sample_dataset.drop_vars("specific_humidity", errors="ignore")
-        
+
         # Add alternative variables to the dataset
-        level_shape = (len(test_dataset.valid_time), len(test_dataset.level), 
-                      len(test_dataset.latitude), len(test_dataset.longitude))
+        level_shape = (
+            len(test_dataset.valid_time),
+            len(test_dataset.level),
+            len(test_dataset.latitude),
+            len(test_dataset.longitude),
+        )
         test_dataset["relative_humidity"] = (
             time_level_location_variables,
             np.random.uniform(0, 100, size=level_shape),
@@ -890,7 +894,7 @@ class TestAlternativeVariables:
             test_dataset,
             required_variables=["specific_humidity"],
             alternative_variables=alternative_variables,
-            optional_variables=optional_variables
+            optional_variables=optional_variables,
         )
 
         # Should contain the alternative variables
@@ -901,34 +905,41 @@ class TestAlternativeVariables:
     def test_alternative_variables_failure_missing_alternatives(self, sample_dataset):
         """Test alternative_variables when alternatives are not in dataset."""
         from extremeweatherbench.inputs import safely_pull_variables
-        
+
         # Remove the required variable so alternatives will be needed
         test_dataset = sample_dataset.drop_vars("specific_humidity", errors="ignore")
-        
+
         alternative_variables = {
             "specific_humidity": ["relative_humidity", "air_temperature"]
         }
         optional_variables = []
 
         # Test that it fails when neither required nor alternatives are present
-        with pytest.raises(KeyError, match="Required variables specific_humidity nor any of their alternatives"):
+        with pytest.raises(
+            KeyError,
+            match="Required variables specific_humidity nor any of their alternatives",
+        ):
             safely_pull_variables(
                 test_dataset,
                 required_variables=["specific_humidity"],
                 alternative_variables=alternative_variables,
-                optional_variables=optional_variables
+                optional_variables=optional_variables,
             )
 
     def test_alternative_variables_partial_alternatives_failure(self, sample_dataset):
         """Test alternative_variables when only some alternatives are present."""
         from extremeweatherbench.inputs import safely_pull_variables
-        
+
         # Remove the required variable so alternatives will be needed
         test_dataset = sample_dataset.drop_vars("specific_humidity", errors="ignore")
-        
+
         # Add only one of the alternative variables
-        level_shape = (len(test_dataset.valid_time), len(test_dataset.level), 
-                      len(test_dataset.latitude), len(test_dataset.longitude))
+        level_shape = (
+            len(test_dataset.valid_time),
+            len(test_dataset.level),
+            len(test_dataset.latitude),
+            len(test_dataset.longitude),
+        )
         test_dataset["relative_humidity"] = (
             time_level_location_variables,
             np.random.uniform(0, 100, size=level_shape),
@@ -940,21 +951,30 @@ class TestAlternativeVariables:
         optional_variables = []
 
         # Test that it fails when not all alternatives are present
-        with pytest.raises(KeyError, match="Required variables specific_humidity nor any of their alternatives"):
+        with pytest.raises(
+            KeyError,
+            match="Required variables specific_humidity nor any of their alternatives",
+        ):
             safely_pull_variables(
                 test_dataset,
                 required_variables=["specific_humidity"],
                 alternative_variables=alternative_variables,
-                optional_variables=optional_variables
+                optional_variables=optional_variables,
             )
 
-    def test_alternative_variables_required_present_ignores_alternatives(self, sample_dataset):
+    def test_alternative_variables_required_present_ignores_alternatives(
+        self, sample_dataset
+    ):
         """Test that when required variable is present, alternatives are ignored."""
         from extremeweatherbench.inputs import safely_pull_variables
-        
+
         # Add alternative variables
-        level_shape = (len(sample_dataset.valid_time), len(sample_dataset.level), 
-                      len(sample_dataset.latitude), len(sample_dataset.longitude))
+        level_shape = (
+            len(sample_dataset.valid_time),
+            len(sample_dataset.level),
+            len(sample_dataset.latitude),
+            len(sample_dataset.longitude),
+        )
         sample_dataset["relative_humidity"] = (
             time_level_location_variables,
             np.random.uniform(0, 100, size=level_shape),
@@ -974,7 +994,7 @@ class TestAlternativeVariables:
             sample_dataset,
             required_variables=["specific_humidity"],
             alternative_variables=alternative_variables,
-            optional_variables=optional_variables
+            optional_variables=optional_variables,
         )
 
         # Should contain the required variable, not alternatives
@@ -985,13 +1005,19 @@ class TestAlternativeVariables:
     def test_alternative_variables_multiple_required_vars(self, sample_dataset):
         """Test alternative_variables with multiple required variables."""
         from extremeweatherbench.inputs import safely_pull_variables
-        
+
         # Remove the required variables so alternatives will be used
-        test_dataset = sample_dataset.drop_vars(["specific_humidity", "geopotential"], errors="ignore")
-        
+        test_dataset = sample_dataset.drop_vars(
+            ["specific_humidity", "geopotential"], errors="ignore"
+        )
+
         # Add alternative variables
-        level_shape = (len(test_dataset.valid_time), len(test_dataset.level), 
-                      len(test_dataset.latitude), len(test_dataset.longitude))
+        level_shape = (
+            len(test_dataset.valid_time),
+            len(test_dataset.level),
+            len(test_dataset.latitude),
+            len(test_dataset.longitude),
+        )
         test_dataset["pressure_alt"] = (
             time_level_location_variables,
             np.random.normal(1000, 100, size=level_shape),
@@ -1011,7 +1037,7 @@ class TestAlternativeVariables:
 
         alternative_variables = {
             "specific_humidity": ["relative_humidity", "air_temperature"],
-            "geopotential": ["pressure_alt", "temperature_alt"]
+            "geopotential": ["pressure_alt", "temperature_alt"],
         }
         optional_variables = []
 
@@ -1020,7 +1046,7 @@ class TestAlternativeVariables:
             test_dataset,
             required_variables=["specific_humidity", "geopotential"],
             alternative_variables=alternative_variables,
-            optional_variables=optional_variables
+            optional_variables=optional_variables,
         )
 
         # Should contain all the alternative variables
@@ -1038,13 +1064,19 @@ class TestOptionalVariables:
     def test_optional_variables_present_in_dataset(self, sample_dataset):
         """Test optional_variables when they are present in dataset."""
         from extremeweatherbench.inputs import safely_pull_variables
-        
+
         # Add an optional variable
         sample_dataset["orography"] = (
             time_location_variables,
-            np.random.uniform(0, 3000, size=(len(sample_dataset.valid_time), 
-                                            len(sample_dataset.latitude), 
-                                            len(sample_dataset.longitude))),
+            np.random.uniform(
+                0,
+                3000,
+                size=(
+                    len(sample_dataset.valid_time),
+                    len(sample_dataset.latitude),
+                    len(sample_dataset.longitude),
+                ),
+            ),
         )
 
         alternative_variables = {}
@@ -1055,7 +1087,7 @@ class TestOptionalVariables:
             sample_dataset,
             required_variables=["test_variable_1"],
             alternative_variables=alternative_variables,
-            optional_variables=optional_variables
+            optional_variables=optional_variables,
         )
 
         # Should contain both required and optional variables
@@ -1065,7 +1097,7 @@ class TestOptionalVariables:
     def test_optional_variables_missing_from_dataset(self, sample_dataset):
         """Test optional_variables when they are missing from dataset."""
         from extremeweatherbench.inputs import safely_pull_variables
-        
+
         alternative_variables = {}
         optional_variables = ["orography"]
 
@@ -1074,7 +1106,7 @@ class TestOptionalVariables:
             sample_dataset,
             required_variables=["test_variable_1"],
             alternative_variables=alternative_variables,
-            optional_variables=optional_variables
+            optional_variables=optional_variables,
         )
 
         # Should contain only the required variable
@@ -1084,19 +1116,30 @@ class TestOptionalVariables:
     def test_optional_variables_multiple_optional(self, sample_dataset):
         """Test multiple optional_variables."""
         from extremeweatherbench.inputs import safely_pull_variables
-        
+
         # Add some optional variables
         sample_dataset["orography"] = (
             time_location_variables,
-            np.random.uniform(0, 3000, size=(len(sample_dataset.valid_time), 
-                                            len(sample_dataset.latitude), 
-                                            len(sample_dataset.longitude))),
+            np.random.uniform(
+                0,
+                3000,
+                size=(
+                    len(sample_dataset.valid_time),
+                    len(sample_dataset.latitude),
+                    len(sample_dataset.longitude),
+                ),
+            ),
         )
         sample_dataset["land_sea_mask"] = (
             time_location_variables,
-            np.random.choice([0, 1], size=(len(sample_dataset.valid_time), 
-                                         len(sample_dataset.latitude), 
-                                         len(sample_dataset.longitude))),
+            np.random.choice(
+                [0, 1],
+                size=(
+                    len(sample_dataset.valid_time),
+                    len(sample_dataset.latitude),
+                    len(sample_dataset.longitude),
+                ),
+            ),
         )
 
         alternative_variables = {}
@@ -1107,7 +1150,7 @@ class TestOptionalVariables:
             sample_dataset,
             required_variables=["test_variable_1"],
             alternative_variables=alternative_variables,
-            optional_variables=optional_variables
+            optional_variables=optional_variables,
         )
 
         # Should contain required and both optional variables
@@ -1122,13 +1165,17 @@ class TestMixedAlternativeAndOptionalVariables:
     def test_alternative_and_optional_variables_both_present(self, sample_dataset):
         """Test when both alternative and optional variables are present."""
         from extremeweatherbench.inputs import safely_pull_variables
-        
+
         # Remove the required variable so alternatives will be used
         test_dataset = sample_dataset.drop_vars("specific_humidity", errors="ignore")
-        
+
         # Add alternative variables
-        level_shape = (len(test_dataset.valid_time), len(test_dataset.level), 
-                      len(test_dataset.latitude), len(test_dataset.longitude))
+        level_shape = (
+            len(test_dataset.valid_time),
+            len(test_dataset.level),
+            len(test_dataset.latitude),
+            len(test_dataset.longitude),
+        )
         test_dataset["relative_humidity"] = (
             time_level_location_variables,
             np.random.uniform(0, 100, size=level_shape),
@@ -1140,9 +1187,15 @@ class TestMixedAlternativeAndOptionalVariables:
         # Add optional variable
         test_dataset["orography"] = (
             time_location_variables,
-            np.random.uniform(0, 3000, size=(len(test_dataset.valid_time), 
-                                            len(test_dataset.latitude), 
-                                            len(test_dataset.longitude))),
+            np.random.uniform(
+                0,
+                3000,
+                size=(
+                    len(test_dataset.valid_time),
+                    len(test_dataset.latitude),
+                    len(test_dataset.longitude),
+                ),
+            ),
         )
 
         alternative_variables = {
@@ -1155,7 +1208,7 @@ class TestMixedAlternativeAndOptionalVariables:
             test_dataset,
             required_variables=["specific_humidity"],
             alternative_variables=alternative_variables,
-            optional_variables=optional_variables
+            optional_variables=optional_variables,
         )
 
         # Should contain the alternative and optional variables
@@ -1167,13 +1220,17 @@ class TestMixedAlternativeAndOptionalVariables:
     def test_alternative_present_optional_missing(self, sample_dataset):
         """Test when alternatives are present but optional variables are missing."""
         from extremeweatherbench.inputs import safely_pull_variables
-        
+
         # Remove the required variable so alternatives will be used
         test_dataset = sample_dataset.drop_vars("specific_humidity", errors="ignore")
-        
+
         # Add alternative variables
-        level_shape = (len(test_dataset.valid_time), len(test_dataset.level), 
-                      len(test_dataset.latitude), len(test_dataset.longitude))
+        level_shape = (
+            len(test_dataset.valid_time),
+            len(test_dataset.level),
+            len(test_dataset.latitude),
+            len(test_dataset.longitude),
+        )
         test_dataset["relative_humidity"] = (
             time_level_location_variables,
             np.random.uniform(0, 100, size=level_shape),
@@ -1193,7 +1250,7 @@ class TestMixedAlternativeAndOptionalVariables:
             test_dataset,
             required_variables=["specific_humidity"],
             alternative_variables=alternative_variables,
-            optional_variables=optional_variables
+            optional_variables=optional_variables,
         )
 
         # Should contain the alternative variables but not optional
@@ -1205,16 +1262,22 @@ class TestMixedAlternativeAndOptionalVariables:
     def test_alternative_missing_optional_present(self, sample_dataset):
         """Test when alternatives are missing but optional variables are present."""
         from extremeweatherbench.inputs import safely_pull_variables
-        
+
         # Remove the required variable so alternatives will be needed
         test_dataset = sample_dataset.drop_vars("specific_humidity", errors="ignore")
-        
+
         # Add optional variable
         test_dataset["orography"] = (
             time_location_variables,
-            np.random.uniform(0, 3000, size=(len(test_dataset.valid_time), 
-                                            len(test_dataset.latitude), 
-                                            len(test_dataset.longitude))),
+            np.random.uniform(
+                0,
+                3000,
+                size=(
+                    len(test_dataset.valid_time),
+                    len(test_dataset.latitude),
+                    len(test_dataset.longitude),
+                ),
+            ),
         )
 
         alternative_variables = {
@@ -1223,12 +1286,15 @@ class TestMixedAlternativeAndOptionalVariables:
         optional_variables = ["orography"]
 
         # This should fail because required variable is missing and alternatives are not present
-        with pytest.raises(KeyError, match="Required variables specific_humidity nor any of their alternatives"):
+        with pytest.raises(
+            KeyError,
+            match="Required variables specific_humidity nor any of their alternatives",
+        ):
             safely_pull_variables(
                 test_dataset,
                 required_variables=["specific_humidity"],
                 alternative_variables=alternative_variables,
-                optional_variables=optional_variables
+                optional_variables=optional_variables,
             )
 
 
@@ -1238,7 +1304,7 @@ class TestEdgeCasesAlternativeOptionalVariables:
     def test_empty_alternative_variables_dict(self, sample_dataset):
         """Test with empty alternative_variables dictionary."""
         from extremeweatherbench.inputs import safely_pull_variables
-        
+
         alternative_variables = {}
         optional_variables = []
 
@@ -1247,7 +1313,7 @@ class TestEdgeCasesAlternativeOptionalVariables:
             sample_dataset,
             required_variables=["test_variable_1"],
             alternative_variables=alternative_variables,
-            optional_variables=optional_variables
+            optional_variables=optional_variables,
         )
 
         # Should contain only the required variable
@@ -1257,7 +1323,7 @@ class TestEdgeCasesAlternativeOptionalVariables:
     def test_empty_optional_variables_list(self, sample_dataset):
         """Test with empty optional_variables list."""
         from extremeweatherbench.inputs import safely_pull_variables
-        
+
         alternative_variables = {}
         optional_variables = []
 
@@ -1266,7 +1332,7 @@ class TestEdgeCasesAlternativeOptionalVariables:
             sample_dataset,
             required_variables=["test_variable_1"],
             alternative_variables=alternative_variables,
-            optional_variables=optional_variables
+            optional_variables=optional_variables,
         )
 
         # Should contain only the required variable
@@ -1276,13 +1342,13 @@ class TestEdgeCasesAlternativeOptionalVariables:
     def test_none_alternative_variables(self, sample_dataset):
         """Test with None alternative_variables."""
         from extremeweatherbench.inputs import safely_pull_variables
-        
+
         # Test that it works with None alternative variables
         result = safely_pull_variables(
             sample_dataset,
             required_variables=["test_variable_1"],
             alternative_variables=None,
-            optional_variables=None
+            optional_variables=None,
         )
 
         # Should contain only the required variable
@@ -1292,13 +1358,13 @@ class TestEdgeCasesAlternativeOptionalVariables:
     def test_none_optional_variables(self, sample_dataset):
         """Test with None optional_variables."""
         from extremeweatherbench.inputs import safely_pull_variables
-        
+
         # Test that it works with None optional variables
         result = safely_pull_variables(
             sample_dataset,
             required_variables=["test_variable_1"],
             alternative_variables=None,
-            optional_variables=None
+            optional_variables=None,
         )
 
         # Should contain only the required variable
@@ -1308,13 +1374,17 @@ class TestEdgeCasesAlternativeOptionalVariables:
     def test_duplicate_variables_in_alternatives(self, sample_dataset):
         """Test with duplicate variables in alternative_variables."""
         from extremeweatherbench.inputs import safely_pull_variables
-        
+
         # Remove the required variable so alternatives will be used
         test_dataset = sample_dataset.drop_vars("specific_humidity", errors="ignore")
-        
+
         # Add alternative variables
-        level_shape = (len(test_dataset.valid_time), len(test_dataset.level), 
-                      len(test_dataset.latitude), len(test_dataset.longitude))
+        level_shape = (
+            len(test_dataset.valid_time),
+            len(test_dataset.level),
+            len(test_dataset.latitude),
+            len(test_dataset.longitude),
+        )
         test_dataset["relative_humidity"] = (
             time_level_location_variables,
             np.random.uniform(0, 100, size=level_shape),
@@ -1325,7 +1395,11 @@ class TestEdgeCasesAlternativeOptionalVariables:
         )
 
         alternative_variables = {
-            "specific_humidity": ["relative_humidity", "air_temperature", "relative_humidity"]  # Duplicate
+            "specific_humidity": [
+                "relative_humidity",
+                "air_temperature",
+                "relative_humidity",
+            ]  # Duplicate
         }
         optional_variables = []
 
@@ -1334,7 +1408,7 @@ class TestEdgeCasesAlternativeOptionalVariables:
             test_dataset,
             required_variables=["specific_humidity"],
             alternative_variables=alternative_variables,
-            optional_variables=optional_variables
+            optional_variables=optional_variables,
         )
 
         # Should contain the alternative variables (duplicates handled by set)
@@ -1345,22 +1419,32 @@ class TestEdgeCasesAlternativeOptionalVariables:
     def test_shape_mismatch_in_alternatives(self, sample_dataset):
         """Test with shape mismatch in alternative variables."""
         from extremeweatherbench.inputs import safely_pull_variables
-        
+
         # Remove the required variable so alternatives will be used
         test_dataset = sample_dataset.drop_vars("specific_humidity", errors="ignore")
-        
+
         # Add alternative variables with different shapes
-        level_shape = (len(test_dataset.valid_time), len(test_dataset.level), 
-                      len(test_dataset.latitude), len(test_dataset.longitude))
+        level_shape = (
+            len(test_dataset.valid_time),
+            len(test_dataset.level),
+            len(test_dataset.latitude),
+            len(test_dataset.longitude),
+        )
         test_dataset["relative_humidity"] = (
             time_level_location_variables,
             np.random.uniform(0, 100, size=level_shape),
         )
         test_dataset["air_temperature"] = (
             time_location_variables,  # Different shape - no level dimension
-            np.random.normal(280, 20, size=(len(test_dataset.valid_time), 
-                                           len(test_dataset.latitude), 
-                                           len(test_dataset.longitude))),
+            np.random.normal(
+                280,
+                20,
+                size=(
+                    len(test_dataset.valid_time),
+                    len(test_dataset.latitude),
+                    len(test_dataset.longitude),
+                ),
+            ),
         )
 
         alternative_variables = {
@@ -1373,7 +1457,7 @@ class TestEdgeCasesAlternativeOptionalVariables:
             test_dataset,
             required_variables=["specific_humidity"],
             alternative_variables=alternative_variables,
-            optional_variables=optional_variables
+            optional_variables=optional_variables,
         )
 
         # Should contain the alternative variables despite shape mismatch
@@ -1384,37 +1468,43 @@ class TestEdgeCasesAlternativeOptionalVariables:
     def test_alternative_variables_with_empty_list(self, sample_dataset):
         """Test alternative_variables with empty list for a required variable."""
         from extremeweatherbench.inputs import safely_pull_variables
-        
+
         # Remove the required variable so alternatives will be needed
         test_dataset = sample_dataset.drop_vars("specific_humidity", errors="ignore")
-        
+
         alternative_variables = {
             "specific_humidity": []  # Empty list
         }
         optional_variables = []
 
         # This should fail because required variable is missing and alternatives list is empty
-        with pytest.raises(KeyError, match="Required variables specific_humidity nor any of their alternatives"):
+        with pytest.raises(
+            KeyError,
+            match="Required variables specific_humidity nor any of their alternatives",
+        ):
             safely_pull_variables(
                 test_dataset,
                 required_variables=["specific_humidity"],
                 alternative_variables=alternative_variables,
-                optional_variables=optional_variables
+                optional_variables=optional_variables,
             )
 
     def test_required_variable_in_optional_variables(self, sample_dataset):
         """Test when a required variable is also listed in optional_variables."""
         from extremeweatherbench.inputs import safely_pull_variables
-        
+
         alternative_variables = {}
-        optional_variables = ["test_variable_1", "orography"]  # test_variable_1 is both required and optional
+        optional_variables = [
+            "test_variable_1",
+            "orography",
+        ]  # test_variable_1 is both required and optional
 
         # Test that it works when required variable is also in optional list
         result = safely_pull_variables(
             sample_dataset,
             required_variables=["test_variable_1"],
             alternative_variables=alternative_variables,
-            optional_variables=optional_variables
+            optional_variables=optional_variables,
         )
 
         # Should contain the required variable (duplicates handled by set)
@@ -1499,13 +1589,17 @@ class TestIntegrationWithSafelyPullVariables:
     def test_safely_pull_variables_with_alternative_variables(self, sample_dataset):
         """Test safely_pull_variables with alternative_variables."""
         from extremeweatherbench.inputs import safely_pull_variables
-        
+
         # Remove the required variable so alternatives will be used
         test_dataset = sample_dataset.drop_vars("specific_humidity", errors="ignore")
-        
+
         # Add alternative variables
-        level_shape = (len(test_dataset.valid_time), len(test_dataset.level), 
-                      len(test_dataset.latitude), len(test_dataset.longitude))
+        level_shape = (
+            len(test_dataset.valid_time),
+            len(test_dataset.level),
+            len(test_dataset.latitude),
+            len(test_dataset.longitude),
+        )
         test_dataset["relative_humidity"] = (
             time_level_location_variables,
             np.random.uniform(0, 100, size=level_shape),
@@ -1525,7 +1619,7 @@ class TestIntegrationWithSafelyPullVariables:
             test_dataset,
             required_variables=["specific_humidity"],
             alternative_variables=alternative_variables,
-            optional_variables=optional_variables
+            optional_variables=optional_variables,
         )
 
         # Should contain the alternative variables
@@ -1537,13 +1631,19 @@ class TestIntegrationWithSafelyPullVariables:
     def test_safely_pull_variables_with_optional_variables(self, sample_dataset):
         """Test safely_pull_variables with optional_variables."""
         from extremeweatherbench.inputs import safely_pull_variables
-        
+
         # Add optional variable
         sample_dataset["orography"] = (
             time_location_variables,
-            np.random.uniform(0, 3000, size=(len(sample_dataset.valid_time), 
-                                            len(sample_dataset.latitude), 
-                                            len(sample_dataset.longitude))),
+            np.random.uniform(
+                0,
+                3000,
+                size=(
+                    len(sample_dataset.valid_time),
+                    len(sample_dataset.latitude),
+                    len(sample_dataset.longitude),
+                ),
+            ),
         )
 
         alternative_variables = {}
@@ -1554,7 +1654,7 @@ class TestIntegrationWithSafelyPullVariables:
             sample_dataset,
             required_variables=["test_variable_1"],
             alternative_variables=alternative_variables,
-            optional_variables=optional_variables
+            optional_variables=optional_variables,
         )
 
         # Should contain both required and optional variables
@@ -1564,34 +1664,41 @@ class TestIntegrationWithSafelyPullVariables:
     def test_safely_pull_variables_missing_alternatives_failure(self, sample_dataset):
         """Test safely_pull_variables failure when alternatives are missing."""
         from extremeweatherbench.inputs import safely_pull_variables
-        
+
         # Remove the required variable so alternatives will be needed
         test_dataset = sample_dataset.drop_vars("specific_humidity", errors="ignore")
-        
+
         alternative_variables = {
             "specific_humidity": ["relative_humidity", "air_temperature"]
         }
         optional_variables = []
 
         # Test that it fails when neither required nor alternatives are present
-        with pytest.raises(KeyError, match="Required variables specific_humidity nor any of their alternatives"):
+        with pytest.raises(
+            KeyError,
+            match="Required variables specific_humidity nor any of their alternatives",
+        ):
             safely_pull_variables(
                 test_dataset,
                 required_variables=["specific_humidity"],
                 alternative_variables=alternative_variables,
-                optional_variables=optional_variables
+                optional_variables=optional_variables,
             )
 
     def test_safely_pull_variables_mixed_scenario(self, sample_dataset):
         """Test safely_pull_variables with both alternative and optional variables."""
         from extremeweatherbench.inputs import safely_pull_variables
-        
+
         # Remove the required variable so alternatives will be used
         test_dataset = sample_dataset.drop_vars("specific_humidity", errors="ignore")
-        
+
         # Add alternative variables
-        level_shape = (len(test_dataset.valid_time), len(test_dataset.level), 
-                      len(test_dataset.latitude), len(test_dataset.longitude))
+        level_shape = (
+            len(test_dataset.valid_time),
+            len(test_dataset.level),
+            len(test_dataset.latitude),
+            len(test_dataset.longitude),
+        )
         test_dataset["relative_humidity"] = (
             time_level_location_variables,
             np.random.uniform(0, 100, size=level_shape),
@@ -1603,9 +1710,15 @@ class TestIntegrationWithSafelyPullVariables:
         # Add optional variable
         test_dataset["orography"] = (
             time_location_variables,
-            np.random.uniform(0, 3000, size=(len(test_dataset.valid_time), 
-                                            len(test_dataset.latitude), 
-                                            len(test_dataset.longitude))),
+            np.random.uniform(
+                0,
+                3000,
+                size=(
+                    len(test_dataset.valid_time),
+                    len(test_dataset.latitude),
+                    len(test_dataset.longitude),
+                ),
+            ),
         )
 
         alternative_variables = {
@@ -1618,7 +1731,7 @@ class TestIntegrationWithSafelyPullVariables:
             test_dataset,
             required_variables=["specific_humidity"],
             alternative_variables=alternative_variables,
-            optional_variables=optional_variables
+            optional_variables=optional_variables,
         )
 
         # Should contain the alternative and optional variables
@@ -1627,13 +1740,19 @@ class TestIntegrationWithSafelyPullVariables:
         assert "orography" in result.data_vars
         assert "specific_humidity" not in result.data_vars  # Not present in original
 
-    def test_safely_pull_variables_required_present_ignores_alternatives(self, sample_dataset):
+    def test_safely_pull_variables_required_present_ignores_alternatives(
+        self, sample_dataset
+    ):
         """Test that required variables take precedence over alternatives."""
         from extremeweatherbench.inputs import safely_pull_variables
-        
+
         # Add alternative variables
-        level_shape = (len(sample_dataset.valid_time), len(sample_dataset.level), 
-                      len(sample_dataset.latitude), len(sample_dataset.longitude))
+        level_shape = (
+            len(sample_dataset.valid_time),
+            len(sample_dataset.level),
+            len(sample_dataset.latitude),
+            len(sample_dataset.longitude),
+        )
         sample_dataset["relative_humidity"] = (
             time_level_location_variables,
             np.random.uniform(0, 100, size=level_shape),
@@ -1653,7 +1772,7 @@ class TestIntegrationWithSafelyPullVariables:
             sample_dataset,
             required_variables=["specific_humidity"],
             alternative_variables=alternative_variables,
-            optional_variables=optional_variables
+            optional_variables=optional_variables,
         )
 
         # Should contain the required variable, not alternatives
@@ -1664,13 +1783,17 @@ class TestIntegrationWithSafelyPullVariables:
     def test_safely_pull_variables_partial_alternatives_failure(self, sample_dataset):
         """Test safely_pull_variables failure when only some alternatives are present."""
         from extremeweatherbench.inputs import safely_pull_variables
-        
+
         # Remove the required variable so alternatives will be needed
         test_dataset = sample_dataset.drop_vars("specific_humidity", errors="ignore")
-        
+
         # Add only one of the alternative variables
-        level_shape = (len(test_dataset.valid_time), len(test_dataset.level), 
-                      len(test_dataset.latitude), len(test_dataset.longitude))
+        level_shape = (
+            len(test_dataset.valid_time),
+            len(test_dataset.level),
+            len(test_dataset.latitude),
+            len(test_dataset.longitude),
+        )
         test_dataset["relative_humidity"] = (
             time_level_location_variables,
             np.random.uniform(0, 100, size=level_shape),
@@ -1682,18 +1805,21 @@ class TestIntegrationWithSafelyPullVariables:
         optional_variables = []
 
         # Test that it fails when not all alternatives are present
-        with pytest.raises(KeyError, match="Required variables specific_humidity nor any of their alternatives"):
+        with pytest.raises(
+            KeyError,
+            match="Required variables specific_humidity nor any of their alternatives",
+        ):
             safely_pull_variables(
                 test_dataset,
                 required_variables=["specific_humidity"],
                 alternative_variables=alternative_variables,
-                optional_variables=optional_variables
+                optional_variables=optional_variables,
             )
 
     def test_safely_pull_variables_empty_optional_variables(self, sample_dataset):
         """Test safely_pull_variables with empty optional_variables."""
         from extremeweatherbench.inputs import safely_pull_variables
-        
+
         alternative_variables = {}
         optional_variables = []
 
@@ -1702,7 +1828,7 @@ class TestIntegrationWithSafelyPullVariables:
             sample_dataset,
             required_variables=["test_variable_1"],
             alternative_variables=alternative_variables,
-            optional_variables=optional_variables
+            optional_variables=optional_variables,
         )
 
         # Should contain only the required variable
@@ -1712,13 +1838,13 @@ class TestIntegrationWithSafelyPullVariables:
     def test_safely_pull_variables_none_parameters(self, sample_dataset):
         """Test safely_pull_variables with None parameters."""
         from extremeweatherbench.inputs import safely_pull_variables
-        
+
         # Test that it works with None parameters
         result = safely_pull_variables(
             sample_dataset,
             required_variables=["test_variable_1"],
             alternative_variables=None,
-            optional_variables=None
+            optional_variables=None,
         )
 
         # Should contain only the required variable

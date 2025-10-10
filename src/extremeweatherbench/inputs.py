@@ -974,7 +974,10 @@ def safely_pull_variables(
 
     Examples:
         >>> ds = xr.Dataset(
-        ...     {"air_temperature": (["x"], [1, 2, 3]), "relative_humidity": (["x"], [4, 5, 6])}
+        ...     {
+        ...         "air_temperature": (["x"], [1, 2, 3]),
+        ...         "relative_humidity": (["x"], [4, 5, 6]),
+        ...     }
         ... )
         >>> result = safely_pull_variables(
         ...     ds,
@@ -1052,7 +1055,7 @@ def maybe_subset_variables(
 
     expected_and_maybe_derived_variables = (
         derived.maybe_include_variables_from_derived_input(variables)
-    )   
+    )
     data = safely_pull_variables(
         data,
         expected_and_maybe_derived_variables,

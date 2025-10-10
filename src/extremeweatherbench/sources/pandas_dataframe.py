@@ -8,7 +8,6 @@ def safely_pull_variables_pandas_dataframe(
     variables: list[str],
     alternative_variables: dict[str, list[str]],
     optional_variables: list[str],
-
 ) -> pd.DataFrame:
     """Handle variable extraction for Pandas DataFrame."""
     # Get column names from DataFrame
@@ -28,15 +27,15 @@ def safely_pull_variables_pandas_dataframe(
     for opt_var in optional_variables:
         if opt_var in available_columns:
             found_variables.append(opt_var)
-    
 
     # Now, check for alternative variables and add them if present
     for req_var in alternative_variables:
         # If the required variable is not found, check if all of its alternatives are
         if req_var not in found_variables:
             if all(
-                alt_var in available_columns for alt_var in alternative_variables[req_var]
-                ):
+                alt_var in available_columns
+                for alt_var in alternative_variables[req_var]
+            ):
                 # If all of the alternatives are found, add them to the found variables
                 found_variables += alternative_variables[req_var]
             else:
