@@ -550,7 +550,7 @@ class GHCN(TargetBase):
             # convert to Kelvin, GHCN data is in Celsius by default
             if "surface_air_temperature" in data.collect_schema().names():
                 data = data.with_columns(pl.col("surface_air_temperature").add(273.15))
-            data = data.collect().to_pandas()
+            data = data.collect(engine="streaming").to_pandas()
             data["longitude"] = utils.convert_longitude_to_360(data["longitude"])
 
             data = data.set_index(["valid_time", "latitude", "longitude"])
@@ -804,7 +804,7 @@ class IBTrACS(TargetBase):
 
     def _custom_convert_to_dataset(self, data: IncomingDataInput) -> xr.Dataset:
         if isinstance(data, pl.LazyFrame):
-            data = data.collect().to_pandas()
+            data = data.collect(engine="streaming").to_pandas()
 
             # IBTrACS data is in -180 to 180, convert to 0 to 360
             data["longitude"] = utils.convert_longitude_to_360(data["longitude"])
