@@ -61,14 +61,13 @@ def mock_target_base():
     mock_target = Mock(spec=inputs.TargetBase)
     mock_target.name = "MockTarget"
     mock_target.variables = ["2m_temperature"]
-    
+
     # Create a dataset with time coordinate for valid_times check
     time_coords = pd.date_range("2021-06-20", periods=5, freq="6h")
     mock_dataset = xr.Dataset(
-        coords={"time": time_coords},
-        attrs={"source": "mock_target"}
+        coords={"time": time_coords}, attrs={"source": "mock_target"}
     )
-    
+
     mock_target.open_and_maybe_preprocess_data_from_source.return_value = mock_dataset
     mock_target.maybe_map_variable_names.return_value = mock_dataset
     mock_target.subset_data_to_case.return_value = mock_dataset
@@ -87,15 +86,15 @@ def mock_forecast_base():
     mock_forecast = Mock(spec=inputs.ForecastBase)
     mock_forecast.name = "MockForecast"
     mock_forecast.variables = ["surface_air_temperature"]
-    
+
     # Create a dataset with init_time coordinate for valid_times check
     init_time_coords = pd.date_range("2021-06-20", periods=3, freq="24h")
     lead_time_coords = [0, 6, 12, 18]
     mock_dataset = xr.Dataset(
         coords={"init_time": init_time_coords, "lead_time": lead_time_coords},
-        attrs={"source": "mock_forecast"}
+        attrs={"source": "mock_forecast"},
     )
-    
+
     mock_forecast.open_and_maybe_preprocess_data_from_source.return_value = mock_dataset
     mock_forecast.maybe_map_variable_names.return_value = mock_dataset
     mock_forecast.subset_data_to_case.return_value = mock_dataset
@@ -957,12 +956,10 @@ class TestPipelineFunctions:
         """Test _build_datasets function."""
         with patch("extremeweatherbench.evaluate.run_pipeline") as mock_run_pipeline:
             mock_forecast_ds = xr.Dataset(
-                coords={"valid_time": [1, 2, 3]},
-                attrs={"name": "forecast_source"}
+                coords={"valid_time": [1, 2, 3]}, attrs={"name": "forecast_source"}
             )
             mock_target_ds = xr.Dataset(
-                coords={"time": [1, 2, 3]},
-                attrs={"name": "target_source"}
+                coords={"time": [1, 2, 3]}, attrs={"name": "target_source"}
             )
             mock_run_pipeline.side_effect = [mock_target_ds, mock_forecast_ds]
 
@@ -978,10 +975,14 @@ class TestPipelineFunctions:
         # by having no valid times in the date range
         empty_dataset = xr.Dataset()
         sample_case_operator.target.open_and_maybe_preprocess_data_from_source.return_value = empty_dataset
-        sample_case_operator.target.maybe_map_variable_names.return_value = empty_dataset
+        sample_case_operator.target.maybe_map_variable_names.return_value = (
+            empty_dataset
+        )
         sample_case_operator.forecast.open_and_maybe_preprocess_data_from_source.return_value = empty_dataset
-        sample_case_operator.forecast.maybe_map_variable_names.return_value = empty_dataset
-        
+        sample_case_operator.forecast.maybe_map_variable_names.return_value = (
+            empty_dataset
+        )
+
         with patch("extremeweatherbench.evaluate.logger.warning") as mock_warning:
             forecast_ds, target_ds = evaluate._build_datasets(sample_case_operator)
 
@@ -1006,9 +1007,13 @@ class TestPipelineFunctions:
         # Set up the mock to return a dataset that will trigger the warning
         empty_dataset = xr.Dataset()
         sample_case_operator.target.open_and_maybe_preprocess_data_from_source.return_value = empty_dataset
-        sample_case_operator.target.maybe_map_variable_names.return_value = empty_dataset
+        sample_case_operator.target.maybe_map_variable_names.return_value = (
+            empty_dataset
+        )
         sample_case_operator.forecast.open_and_maybe_preprocess_data_from_source.return_value = empty_dataset
-        sample_case_operator.forecast.maybe_map_variable_names.return_value = empty_dataset
+        sample_case_operator.forecast.maybe_map_variable_names.return_value = (
+            empty_dataset
+        )
 
         with patch("extremeweatherbench.evaluate.logger.warning") as mock_warning:
             forecast_ds, target_ds = evaluate._build_datasets(sample_case_operator)
@@ -1023,22 +1028,21 @@ class TestPipelineFunctions:
                 in warning_message
             )
             assert "has no data for case time range" in warning_message
-            assert (
-                str(sample_case_operator.case_metadata.start_date)
-                in warning_message
-            )
-            assert (
-                str(sample_case_operator.case_metadata.end_date) in warning_message
-                )
+            assert str(sample_case_operator.case_metadata.start_date) in warning_message
+            assert str(sample_case_operator.case_metadata.end_date) in warning_message
 
     def test_build_datasets_multiple_zero_length_dimensions(self, sample_case_operator):
         """Test _build_datasets when forecast has multiple zero-length dimensions."""
         # Set up the mock to return a dataset that will trigger the warning
         empty_dataset = xr.Dataset()
         sample_case_operator.target.open_and_maybe_preprocess_data_from_source.return_value = empty_dataset
-        sample_case_operator.target.maybe_map_variable_names.return_value = empty_dataset
+        sample_case_operator.target.maybe_map_variable_names.return_value = (
+            empty_dataset
+        )
         sample_case_operator.forecast.open_and_maybe_preprocess_data_from_source.return_value = empty_dataset
-        sample_case_operator.forecast.maybe_map_variable_names.return_value = empty_dataset
+        sample_case_operator.forecast.maybe_map_variable_names.return_value = (
+            empty_dataset
+        )
 
         with patch("extremeweatherbench.evaluate.logger.warning") as mock_warning:
             forecast_ds, target_ds = evaluate._build_datasets(sample_case_operator)
@@ -1066,7 +1070,7 @@ class TestPipelineFunctions:
             )
             mock_target_ds = xr.Dataset(
                 coords={"time": [1, 2, 3], "latitude": [40, 45, 50]},
-                attrs={"source": "target"}
+                attrs={"source": "target"},
             )
             mock_run_pipeline.side_effect = [mock_target_ds, mock_forecast_ds]
 

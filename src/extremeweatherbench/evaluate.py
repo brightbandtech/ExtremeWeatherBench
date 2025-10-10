@@ -414,9 +414,8 @@ def run_pipeline(
         The processed input data as an xarray dataset.
     """
     # Open data and process through pipeline steps
-    data = (
-        input_data.open_and_maybe_preprocess_data_from_source()
-        .pipe(lambda ds: input_data.maybe_map_variable_names(ds))
+    data = input_data.open_and_maybe_preprocess_data_from_source().pipe(
+        lambda ds: input_data.maybe_map_variable_names(ds)
     )
     # Checks if the data has valid times in the given date range. This must come
     # after maybe_map_variable_names to ensure valid_time is present.
@@ -429,9 +428,7 @@ def run_pipeline(
                 data,
                 variables=input_data.variables,
             )
-            .pipe(
-                lambda ds: input_data.subset_data_to_case(ds, case_metadata)
-            )
+            .pipe(lambda ds: input_data.subset_data_to_case(ds, case_metadata))
             .pipe(input_data.maybe_convert_to_dataset)
             .pipe(input_data.add_source_to_dataset_attrs)
             .pipe(

@@ -4,8 +4,10 @@ import datetime
 from typing import TYPE_CHECKING
 import pandas as pd
 from extremeweatherbench import utils
+
 if TYPE_CHECKING:
     from extremeweatherbench import regions
+
 
 def safely_pull_variables_pandas_dataframe(
     dataset: pd.DataFrame,
@@ -14,17 +16,17 @@ def safely_pull_variables_pandas_dataframe(
     optional_variables_mapping: dict[str, list[str]],
 ) -> pd.DataFrame:
     """Handle variable extraction for Pandas DataFrame.
-    
+
     Args:
         dataset: The pandas DataFrame to extract variables from.
         variables: List of required variable names to extract.
         optional_variables: List of optional variable names to extract.
         optional_variables_mapping: Dictionary mapping optional variables to
             the required variables they replace.
-    
+
     Returns:
         The DataFrame containing only the found columns.
-        
+
     Raises:
         KeyError: If any required variables are missing from the DataFrame.
     """
@@ -74,12 +76,12 @@ def check_for_valid_times_pandas_dataframe(
     dataset: pd.DataFrame, start_date: datetime.datetime, end_date: datetime.datetime
 ) -> bool:
     """Check if the DataFrame has valid times in the given date range.
-    
+
     Args:
         dataset: The pandas DataFrame to check for valid times.
         start_date: The start date of the time range to check.
         end_date: The end date of the time range to check.
-    
+
     Returns:
         True if the DataFrame has any times within the specified range,
         False otherwise.
@@ -94,9 +96,10 @@ def check_for_valid_times_pandas_dataframe(
             ]
             # If the filtered DataFrame has any rows, return True
             return len(time_filtered_df) > 0
-    
+
     # If no time column found, return False
     return False
+
 
 def check_for_spatial_data_pandas_dataframe(
     dataset: pd.DataFrame,
@@ -106,21 +109,23 @@ def check_for_spatial_data_pandas_dataframe(
     # Check if DataFrame has latitude and longitude columns
     lat_cols = ["latitude", "lat"]
     lon_cols = ["longitude", "lon"]
-    
+
     lat_col = utils.check_for_vars(lat_cols, dataset.columns)
     lon_col = utils.check_for_vars(lon_cols, dataset.columns)
-    
+
     if lat_col is None or lon_col is None:
         return False
     coords = location.get_bounding_coordinates
     # Get location bounds
     lat_min, lat_max = coords.latitude_min, coords.latitude_max
     lon_min, lon_max = coords.longitude_min, coords.longitude_max
-    
+
     # Check if there are any data points within the location bounds
     filtered_data = dataset[
-        (dataset[lat_col] >= lat_min) & (dataset[lat_col] <= lat_max) &
-        (dataset[lon_col] >= lon_min) & (dataset[lon_col] <= lon_max)
+        (dataset[lat_col] >= lat_min)
+        & (dataset[lat_col] <= lat_max)
+        & (dataset[lon_col] >= lon_min)
+        & (dataset[lon_col] <= lon_max)
     ]
-    
+
     return len(filtered_data) > 0

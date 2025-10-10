@@ -470,13 +470,14 @@ def stack_sparse_data_from_dims(
     da.data = da.data.maybe_densify(max_size=max_size)
     return da
 
+
 def check_for_vars(variable_list: list[str], source: Sequence) -> Optional[str]:
     """Check if the variable is in the source.
-    
+
     Args:
         variable_list: The list of variables to check for.
         source: The source to check for the variables.
-    
+
     Returns:
         The variable if it is in the source, otherwise None.
     """
