@@ -7,7 +7,7 @@ import logging
 import threading
 from importlib import resources
 from pathlib import Path
-from typing import Any, Callable, Optional, Union
+from typing import Any, Callable, Optional, Union, Sequence
 
 import numpy as np
 import pandas as pd  # type: ignore[import-untyped]
@@ -469,3 +469,18 @@ def stack_sparse_data_from_dims(
     da = da.stack(stacked=reduce_dim_names).sel(stacked=coord_values)
     da.data = da.data.maybe_densify(max_size=max_size)
     return da
+
+def check_for_vars(variable_list: list[str], source: Sequence) -> Optional[str]:
+    """Check if the variable is in the source.
+    
+    Args:
+        variable_list: The list of variables to check for.
+        source: The source to check for the variables.
+    
+    Returns:
+        The variable if it is in the source, otherwise None.
+    """
+    for variable in variable_list:
+        if variable in source:
+            return variable
+    return None

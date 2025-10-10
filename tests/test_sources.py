@@ -9,18 +9,22 @@ import pytest
 import xarray as xr
 
 from extremeweatherbench.sources.pandas_dataframe import (
+    check_for_spatial_data_pandas_dataframe,
     check_for_valid_times_pandas_dataframe,
     safely_pull_variables_pandas_dataframe,
 )
 from extremeweatherbench.sources.polars_lazyframe import (
+    check_for_spatial_data_polars_lazyframe,
     check_for_valid_times_polars_lazyframe,
     safely_pull_variables_polars_lazyframe,
 )
 from extremeweatherbench.sources.xarray_dataarray import (
+    check_for_spatial_data_xr_dataarray,
     check_for_valid_times_xr_dataarray,
     safely_pull_variables_xr_dataarray,
 )
 from extremeweatherbench.sources.xarray_dataset import (
+    check_for_spatial_data_xr_dataset,
     check_for_valid_times_xr_dataset,
     safely_pull_variables_xr_dataset,
 )
@@ -145,6 +149,88 @@ class TestPandasDataFrameModule:
         result = check_for_valid_times_pandas_dataframe(df, start_date, end_date)
         assert result is False
 
+    def test_check_for_spatial_data_with_latitude_longitude(self):
+        """Test check_for_spatial_data when DataFrame has latitude and longitude columns."""
+        from extremeweatherbench.regions import BoundingBoxRegion
+        
+        # Create DataFrame with spatial data
+        data = {
+            "latitude": [40.0, 41.0, 42.0, 43.0],
+            "longitude": [-74.0, -73.0, -72.0, -71.0],
+            "temperature": [20.0, 21.0, 22.0, 23.0],
+        }
+        df = pd.DataFrame(data)
+        
+        # Create region that overlaps with data
+        region = BoundingBoxRegion(
+            latitude_min=39.5, latitude_max=43.5,
+            longitude_min=-74.5, longitude_max=-70.5
+        )
+        
+        result = check_for_spatial_data_pandas_dataframe(df, region)
+        assert result is True
+
+    def test_check_for_spatial_data_with_lat_lon(self):
+        """Test check_for_spatial_data when DataFrame has lat and lon columns."""
+        from extremeweatherbench.regions import BoundingBoxRegion
+        
+        # Create DataFrame with spatial data using 'lat' and 'lon'
+        data = {
+            "lat": [40.0, 41.0, 42.0, 43.0],
+            "lon": [-74.0, -73.0, -72.0, -71.0],
+            "temperature": [20.0, 21.0, 22.0, 23.0],
+        }
+        df = pd.DataFrame(data)
+        
+        # Create region that overlaps with data
+        region = BoundingBoxRegion(
+            latitude_min=39.5, latitude_max=43.5,
+            longitude_min=-74.5, longitude_max=-70.5
+        )
+        
+        result = check_for_spatial_data_pandas_dataframe(df, region)
+        assert result is True
+
+    def test_check_for_spatial_data_no_spatial_columns(self):
+        """Test check_for_spatial_data when DataFrame has no spatial columns."""
+        from extremeweatherbench.regions import BoundingBoxRegion
+        
+        # Create DataFrame without spatial data
+        data = {
+            "temperature": [20.0, 21.0, 22.0, 23.0],
+            "pressure": [1013.0, 1014.0, 1015.0, 1016.0],
+        }
+        df = pd.DataFrame(data)
+        
+        region = BoundingBoxRegion(
+            latitude_min=39.5, latitude_max=43.5,
+            longitude_min=-74.5, longitude_max=-70.5
+        )
+        
+        result = check_for_spatial_data_pandas_dataframe(df, region)
+        assert result is False
+
+    def test_check_for_spatial_data_no_overlap(self):
+        """Test check_for_spatial_data when data is outside region bounds."""
+        from extremeweatherbench.regions import BoundingBoxRegion
+        
+        # Create DataFrame with spatial data outside region
+        data = {
+            "latitude": [50.0, 51.0, 52.0, 53.0],  # Outside region
+            "longitude": [-80.0, -79.0, -78.0, -77.0],  # Outside region
+            "temperature": [20.0, 21.0, 22.0, 23.0],
+        }
+        df = pd.DataFrame(data)
+        
+        # Create region that doesn't overlap with data
+        region = BoundingBoxRegion(
+            latitude_min=39.5, latitude_max=43.5,
+            longitude_min=-74.5, longitude_max=-70.5
+        )
+        
+        result = check_for_spatial_data_pandas_dataframe(df, region)
+        assert result is False
+
 
 class TestPolarsLazyFrameModule:
     """Tests for polars_lazyframe module."""
@@ -251,6 +337,92 @@ class TestPolarsLazyFrameModule:
         end_date = datetime.datetime(2021, 2, 10)  # Outside range
 
         result = check_for_valid_times_polars_lazyframe(lf, start_date, end_date)
+        assert result is False
+
+    def test_check_for_spatial_data_with_latitude_longitude(self):
+        """Test check_for_spatial_data when LazyFrame has latitude and longitude columns."""
+        from extremeweatherbench.regions import BoundingBoxRegion
+        
+        # Create LazyFrame with spatial data
+        data = {
+            "latitude": [40.0, 41.0, 42.0, 43.0],
+            "longitude": [-74.0, -73.0, -72.0, -71.0],
+            "temperature": [20.0, 21.0, 22.0, 23.0],
+        }
+        df = pl.DataFrame(data)
+        lf = df.lazy()
+        
+        # Create region that overlaps with data
+        region = BoundingBoxRegion(
+            latitude_min=39.5, latitude_max=43.5,
+            longitude_min=-74.5, longitude_max=-70.5
+        )
+        
+        result = check_for_spatial_data_polars_lazyframe(lf, region)
+        assert result is True
+
+    def test_check_for_spatial_data_with_lat_lon(self):
+        """Test check_for_spatial_data when LazyFrame has lat and lon columns."""
+        from extremeweatherbench.regions import BoundingBoxRegion
+        
+        # Create LazyFrame with spatial data using 'lat' and 'lon'
+        data = {
+            "lat": [40.0, 41.0, 42.0, 43.0],
+            "lon": [-74.0, -73.0, -72.0, -71.0],
+            "temperature": [20.0, 21.0, 22.0, 23.0],
+        }
+        df = pl.DataFrame(data)
+        lf = df.lazy()
+        
+        # Create region that overlaps with data
+        region = BoundingBoxRegion(
+            latitude_min=39.5, latitude_max=43.5,
+            longitude_min=-74.5, longitude_max=-70.5
+        )
+        
+        result = check_for_spatial_data_polars_lazyframe(lf, region)
+        assert result is True
+
+    def test_check_for_spatial_data_no_spatial_columns(self):
+        """Test check_for_spatial_data when LazyFrame has no spatial columns."""
+        from extremeweatherbench.regions import BoundingBoxRegion
+        
+        # Create LazyFrame without spatial data
+        data = {
+            "temperature": [20.0, 21.0, 22.0, 23.0],
+            "pressure": [1013.0, 1014.0, 1015.0, 1016.0],
+        }
+        df = pl.DataFrame(data)
+        lf = df.lazy()
+        
+        region = BoundingBoxRegion(
+            latitude_min=39.5, latitude_max=43.5,
+            longitude_min=-74.5, longitude_max=-70.5
+        )
+        
+        result = check_for_spatial_data_polars_lazyframe(lf, region)
+        assert result is False
+
+    def test_check_for_spatial_data_no_overlap(self):
+        """Test check_for_spatial_data when data is outside region bounds."""
+        from extremeweatherbench.regions import BoundingBoxRegion
+        
+        # Create LazyFrame with spatial data outside region
+        data = {
+            "latitude": [50.0, 51.0, 52.0, 53.0],  # Outside region
+            "longitude": [-80.0, -79.0, -78.0, -77.0],  # Outside region
+            "temperature": [20.0, 21.0, 22.0, 23.0],
+        }
+        df = pl.DataFrame(data)
+        lf = df.lazy()
+        
+        # Create region that doesn't overlap with data
+        region = BoundingBoxRegion(
+            latitude_min=39.5, latitude_max=43.5,
+            longitude_min=-74.5, longitude_max=-70.5
+        )
+        
+        result = check_for_spatial_data_polars_lazyframe(lf, region)
         assert result is False
 
 
@@ -366,6 +538,102 @@ class TestXarrayDataArrayModule:
         result = check_for_valid_times_xr_dataarray(
             sample_dataarray, start_date, end_date
         )
+        assert result is False
+
+    def test_check_for_spatial_data_with_latitude_longitude(self):
+        """Test check_for_spatial_data when DataArray has latitude and longitude dimensions."""
+        from extremeweatherbench.regions import BoundingBoxRegion
+        
+        # Create DataArray with spatial data
+        data = np.random.randn(4, 4)  # 4x4 spatial grid
+        da = xr.DataArray(
+            data,
+            dims=["latitude", "longitude"],
+            coords={
+                "latitude": [40.0, 41.0, 42.0, 43.0],
+                "longitude": [-74.0, -73.0, -72.0, -71.0],
+            },
+            name="temperature",
+        )
+        
+        # Create region that overlaps with data
+        region = BoundingBoxRegion(
+            latitude_min=39.5, latitude_max=43.5,
+            longitude_min=-74.5, longitude_max=-70.5
+        )
+        
+        result = check_for_spatial_data_xr_dataarray(da, region)
+        assert result is True
+
+    def test_check_for_spatial_data_with_lat_lon(self):
+        """Test check_for_spatial_data when DataArray has lat and lon dimensions."""
+        from extremeweatherbench.regions import BoundingBoxRegion
+        
+        # Create DataArray with spatial data using 'lat' and 'lon'
+        data = np.random.randn(4, 4)  # 4x4 spatial grid
+        da = xr.DataArray(
+            data,
+            dims=["lat", "lon"],
+            coords={
+                "lat": [40.0, 41.0, 42.0, 43.0],
+                "lon": [-74.0, -73.0, -72.0, -71.0],
+            },
+            name="temperature",
+        )
+        
+        # Create region that overlaps with data
+        region = BoundingBoxRegion(
+            latitude_min=39.5, latitude_max=43.5,
+            longitude_min=-74.5, longitude_max=-70.5
+        )
+        
+        result = check_for_spatial_data_xr_dataarray(da, region)
+        assert result is True
+
+    def test_check_for_spatial_data_no_spatial_dimensions(self):
+        """Test check_for_spatial_data when DataArray has no spatial dimensions."""
+        from extremeweatherbench.regions import BoundingBoxRegion
+        
+        # Create DataArray without spatial data
+        data = np.random.randn(10)  # 1D array
+        da = xr.DataArray(
+            data,
+            dims=["time"],
+            coords={"time": pd.date_range("2021-01-01", periods=10, freq="1D")},
+            name="temperature",
+        )
+        
+        region = BoundingBoxRegion(
+            latitude_min=39.5, latitude_max=43.5,
+            longitude_min=-74.5, longitude_max=-70.5
+        )
+        
+        result = check_for_spatial_data_xr_dataarray(da, region)
+        assert result is False
+
+    def test_check_for_spatial_data_no_overlap(self):
+        """Test check_for_spatial_data when data is outside region bounds."""
+        from extremeweatherbench.regions import BoundingBoxRegion
+        
+        # Create DataArray with spatial data outside region
+        data = np.random.randn(4, 4)  # 4x4 spatial grid
+        da = xr.DataArray(
+            data,
+            dims=["latitude", "longitude"],
+            coords={
+                "latitude": [50.0, 51.0, 52.0, 53.0],  # Outside region
+                "longitude": [-80.0, -79.0, -78.0, -77.0],  # Outside region
+            },
+            name="temperature",
+        )
+        
+        # Create region that doesn't overlap with data
+        region = BoundingBoxRegion(
+            latitude_min=39.5, latitude_max=43.5,
+            longitude_min=-74.5, longitude_max=-70.5
+        )
+        
+        result = check_for_spatial_data_xr_dataarray(da, region)
         assert result is False
 
 
@@ -498,4 +766,92 @@ class TestXarrayDatasetModule:
         end_date = datetime.datetime(2021, 2, 10)  # Outside range
 
         result = check_for_valid_times_xr_dataset(sample_dataset, start_date, end_date)
+        assert result is False
+
+    def test_check_for_spatial_data_with_latitude_longitude(self):
+        """Test check_for_spatial_data when Dataset has latitude and longitude coordinates."""
+        from extremeweatherbench.regions import BoundingBoxRegion
+        
+        # Create Dataset with spatial data
+        data = np.random.randn(4, 4)  # 4x4 spatial grid
+        ds = xr.Dataset(
+            {"temperature": (["latitude", "longitude"], data)},
+            coords={
+                "latitude": [40.0, 41.0, 42.0, 43.0],
+                "longitude": [-74.0, -73.0, -72.0, -71.0],
+            },
+        )
+        
+        # Create region that overlaps with data
+        region = BoundingBoxRegion(
+            latitude_min=39.5, latitude_max=43.5,
+            longitude_min=-74.5, longitude_max=-70.5
+        )
+        
+        result = check_for_spatial_data_xr_dataset(ds, region)
+        assert result is True
+
+    def test_check_for_spatial_data_with_lat_lon(self):
+        """Test check_for_spatial_data when Dataset has lat and lon coordinates."""
+        from extremeweatherbench.regions import BoundingBoxRegion
+        
+        # Create Dataset with spatial data using 'lat' and 'lon'
+        data = np.random.randn(4, 4)  # 4x4 spatial grid
+        ds = xr.Dataset(
+            {"temperature": (["lat", "lon"], data)},
+            coords={
+                "lat": [40.0, 41.0, 42.0, 43.0],
+                "lon": [-74.0, -73.0, -72.0, -71.0],
+            },
+        )
+        
+        # Create region that overlaps with data
+        region = BoundingBoxRegion(
+            latitude_min=39.5, latitude_max=43.5,
+            longitude_min=-74.5, longitude_max=-70.5
+        )
+        
+        result = check_for_spatial_data_xr_dataset(ds, region)
+        assert result is True
+
+    def test_check_for_spatial_data_no_spatial_coordinates(self):
+        """Test check_for_spatial_data when Dataset has no spatial coordinates."""
+        from extremeweatherbench.regions import BoundingBoxRegion
+        
+        # Create Dataset without spatial data
+        data = np.random.randn(10)  # 1D array
+        ds = xr.Dataset(
+            {"temperature": (["time"], data)},
+            coords={"time": pd.date_range("2021-01-01", periods=10, freq="1D")},
+        )
+        
+        region = BoundingBoxRegion(
+            latitude_min=39.5, latitude_max=43.5,
+            longitude_min=-74.5, longitude_max=-70.5
+        )
+        
+        result = check_for_spatial_data_xr_dataset(ds, region)
+        assert result is False
+
+    def test_check_for_spatial_data_no_overlap(self):
+        """Test check_for_spatial_data when data is outside region bounds."""
+        from extremeweatherbench.regions import BoundingBoxRegion
+        
+        # Create Dataset with spatial data outside region
+        data = np.random.randn(4, 4)  # 4x4 spatial grid
+        ds = xr.Dataset(
+            {"temperature": (["latitude", "longitude"], data)},
+            coords={
+                "latitude": [50.0, 51.0, 52.0, 53.0],  # Outside region
+                "longitude": [-80.0, -79.0, -78.0, -77.0],  # Outside region
+            },
+        )
+        
+        # Create region that doesn't overlap with data
+        region = BoundingBoxRegion(
+            latitude_min=39.5, latitude_max=43.5,
+            longitude_min=-74.5, longitude_max=-70.5
+        )
+        
+        result = check_for_spatial_data_xr_dataset(ds, region)
         assert result is False

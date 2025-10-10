@@ -12,7 +12,7 @@ import xarray as xr
 from extremeweatherbench import cases, derived, sources, utils
 
 if TYPE_CHECKING:
-    from extremeweatherbench import metrics
+    from extremeweatherbench import metrics, regions
 
 logger = logging.getLogger(__name__)
 
@@ -1061,7 +1061,21 @@ def maybe_subset_variables(
     )
     return data
 
+def check_for_missing_data(
+    data: IncomingDataInput,
+    case_metadata: "cases.IndividualCase",
+) -> bool:
+    """Check if the data has missing data in the given date range."""
 
+    # First check if the data has valid times in the given date range
+    if not check_for_valid_times(data, case_metadata.start_date, case_metadata.end_date):
+        return False
+    # Then check if the data has spatial data for the given location
+    elif not check_for_spatial_data(data, case_metadata.location):
+        return False
+    else:
+        return True
+    
 def check_for_valid_times(
     data: IncomingDataInput,
     start_date: datetime.datetime,
@@ -1091,6 +1105,32 @@ def check_for_valid_times(
         case pd.DataFrame():
             return sources.check_for_valid_times_pandas_dataframe(
                 data, start_date, end_date
+            )
+        case _:
+            raise TypeError(
+                f"Unsupported dataset type: {type(data)}. "
+                f"Expected one of: xr.Dataset, xr.DataArray, pl.LazyFrame, pd.DataFrame"
+            )
+
+def check_for_spatial_data(
+    data: IncomingDataInput,
+    location: "regions.Region",
+) -> bool:
+    """Check if the data has spatial data for the given location."""
+    match data:
+        case xr.Dataset():
+            return sources.check_for_spatial_data_xr_dataset(data, location)
+        case xr.DataArray():
+            return sources.check_for_spatial_data_xr_dataarray(
+                data, location
+            )
+        case pl.LazyFrame():
+            return sources.check_for_spatial_data_polars_lazyframe(
+                data, location
+            )
+        case pd.DataFrame():
+            return sources.check_for_spatial_data_pandas_dataframe(
+                data, location
             )
         case _:
             raise TypeError(

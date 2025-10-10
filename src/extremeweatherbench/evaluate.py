@@ -374,20 +374,18 @@ def _build_datasets(
 
     This method will process through all stages of the pipeline for the target and
     forecast datasets, including preprocessing, variable renaming, and subsetting.
+
+    Args:
+        case_operator: The case operator containing metadata and input sources.
+
+    Returns:
+        A tuple containing (forecast_dataset, target_dataset). If either dataset
+        has no dimensions, both will be empty datasets.
     """
     logger.info("Running target pipeline... ")
     target_ds = run_pipeline(case_operator.case_metadata, case_operator.target)
-
-    # Check if the target dataset has any dimensions, if empty, return empty datasets
-    # as the workflow cannot proceed
-    if len(target_ds.dims) == 0:
-        return xr.Dataset(), xr.Dataset()
     logger.info("Running forecast pipeline... ")
-
-    # Check if the forecast dataset as well
     forecast_ds = run_pipeline(case_operator.case_metadata, case_operator.forecast)
-    if len(forecast_ds.dims) == 0:
-        return xr.Dataset(), xr.Dataset()
     return (forecast_ds, target_ds)
 
 
@@ -416,35 +414,32 @@ def run_pipeline(
         The processed input data as an xarray dataset.
     """
     # Open data and process through pipeline steps
-    input_data = (
-        # Opens data from user-defined source
+    data = (
         input_data.open_and_maybe_preprocess_data_from_source()
-        # Maps variable names to the input data if not already using EWB
-        # naming conventions
-        .pipe(input_data.maybe_map_variable_names)
+        .pipe(lambda ds: input_data.maybe_map_variable_names(ds))
     )
     # Checks if the data has valid times in the given date range. This must come
     # after maybe_map_variable_names to ensure valid_time is present.
-    if inputs.check_for_valid_times(
-        input_data,
-        case_metadata.start_date,
-        case_metadata.end_date,
+    if inputs.check_for_missing_data(
+        data,
+        case_metadata,
     ):
         valid_data = (
             inputs.maybe_subset_variables(
-                input_data,
+                data,
                 variables=input_data.variables,
             )
             .pipe(
-                input_data.subset_data_to_case,
-                case_metadata=case_metadata,
+                lambda ds: input_data.subset_data_to_case(ds, case_metadata)
             )
             .pipe(input_data.maybe_convert_to_dataset)
             .pipe(input_data.add_source_to_dataset_attrs)
             .pipe(
-                derived.maybe_derive_variables,
-                variables=input_data.variables,
-                case_metadata=case_metadata,
+                lambda ds: derived.maybe_derive_variables(
+                    ds,
+                    variables=input_data.variables,
+                    case_metadata=case_metadata,
+                )
             )
         )
         return valid_data
