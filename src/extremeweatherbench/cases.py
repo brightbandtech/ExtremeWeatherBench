@@ -9,7 +9,7 @@ import itertools
 import logging
 from importlib import resources
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable, Union
+from typing import TYPE_CHECKING, Callable, Literal, Sequence, Union
 
 import dacite
 import yaml  # type: ignore[import]
@@ -51,6 +51,67 @@ class IndividualCaseCollection:
     """A collection of IndividualCases."""
 
     cases: list[IndividualCase]
+
+    def select_cases(
+        self,
+        by: Literal["event_type", "case_id_number", "title", "location"],
+        value: Union[str, int, regions.Region, Sequence[float], datetime.datetime],
+        inplace: bool = False,
+    ) -> list[IndividualCase]:
+        """Select cases from the collection based on the given criteria.
+
+        Args:
+            by: The field to select cases by.
+            value: The value to select cases by.
+                - event_type: The event type to select cases by.
+                - case_id_number: The case id number to select cases by.
+                - title: The title to select cases by.
+                - location: The location to select cases by.
+                    - Region: The Region object to select cases by.
+                    - tuple or list: The bounding coordinates in the order
+                    longitude_min, latitude_min, longitude_max, latitude_max.
+            inplace: Whether to modify the collection in place or return a new
+            collection. Defaults to False.
+
+        Returns:
+            A list of IndividualCase objects.
+        """
+        match by:
+            case "event_type":
+                cases = [case for case in self.cases if case.event_type == value]
+            case "location":
+                if isinstance(value, regions.Region):
+                    cases = [
+                        case
+                        for case in self.cases
+                        if case.location.geopandas.geometry.union_all().intersects(
+                            value.geopandas.geometry.union_all()
+                        )
+                    ]
+                elif isinstance(value, (tuple, list)):
+                    longitude_min, latitude_min, longitude_max, latitude_max = value
+                    value_region = regions.BoundingBoxRegion(
+                        latitude_min=latitude_min,
+                        latitude_max=latitude_max,
+                        longitude_min=longitude_min,
+                        longitude_max=longitude_max,
+                    )
+                    cases = [
+                        case
+                        for case in self.cases
+                        if case.location.geopandas.geometry.union_all().intersects(
+                            value_region.geopandas.geometry.union_all()
+                        )
+                    ]
+            case "case_id_number":
+                cases = [case for case in self.cases if case.case_id_number == value]
+            case "title":
+                cases = [case for case in self.cases if case.title == value]
+            case _:
+                raise ValueError(f"Invalid field to select cases by: {by}")
+        if inplace:
+            self.cases = cases
+        return cases
 
 
 @dataclasses.dataclass
