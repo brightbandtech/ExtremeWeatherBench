@@ -60,17 +60,18 @@ class ThreadSafeDict:
 
     def keys(self):
         with self._lock:
+            # Return a copy to prevent concurrent modification during iteration
             return list(self._data.keys())
-            # Return a copy to prevent concurrent modification issues during
-            # iteration
 
     def values(self):
         with self._lock:
-            return list(self._data.values())  # Return a copy
+            # Return a copy to prevent concurrent modification during iteration
+            return list(self._data.values())
 
     def items(self):
         with self._lock:
-            return list(self._data.items())  # Return a copy
+            # Return a copy to prevent concurrent modification during iteration
+            return list(self._data.items())
 
 
 def convert_longitude_to_360(longitude: float) -> float:

@@ -1,6 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Dict, List, Optional, Type
+from typing import Any, Callable, Optional, Type
 
 import numpy as np
 import scores.categorical as cat  # type: ignore[import-untyped]
@@ -123,8 +123,7 @@ class BaseMetric(ABC):
                 "or both must be None"
             )
         else:
-            # catch if the user provides a DerivedVariable object/class instead of a
-            # string or not using the .name attribute
+            # Convert DerivedVariable object/class to string using .name
             self.forecast_variable = evaluate.maybe_convert_variable_to_string(
                 self.forecast_variable
             )
@@ -215,14 +214,13 @@ class AppliedMetric(ABC):
         target: xr.DataArray,
         **kwargs: Any,
     ) -> xr.DataArray:
-        # first, compute the inputs to the base metric, a dictionary of forecast and
-        # target
+        # Compute inputs to the base metric (forecast and target dict)
         applied_result = cls._compute_applied_metric(
             forecast,
             target,
             **utils.filter_kwargs_for_callable(kwargs, cls._compute_applied_metric),
         )
-        # then, compute the base metric with the inputs
+        # Compute the base metric with the inputs
         return cls.base_metric.compute_metric(**applied_result)
 
 
@@ -446,7 +444,7 @@ def create_threshold_metrics(
     forecast_threshold: float = 0.5,
     target_threshold: float = 0.5,
     preserve_dims: str = "lead_time",
-    metrics: Optional[List[str]] = None,
+    metrics: Optional[list[str]] = None,
 ):
     """Create multiple threshold-based metrics with the specified thresholds.
 
@@ -463,7 +461,7 @@ def create_threshold_metrics(
         metrics = ["CSI", "FAR", "Accuracy", "TP", "FP", "TN", "FN"]
 
     # Mapping of metric names to their classes (all threshold-based metrics)
-    metric_classes: Dict[str, Type[ThresholdMetric]] = {
+    metric_classes: dict[str, Type[ThresholdMetric]] = {
         "CSI": CSI,
         "FAR": FAR,
         "Accuracy": Accuracy,
