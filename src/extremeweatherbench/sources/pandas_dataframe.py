@@ -15,8 +15,6 @@ def safely_pull_variables_pandas_dataframe(
 
     # Track which variables we've found
     found_variables = []
-    # Track which variables we've found
-    found_variables = []
 
     # First, check for required variables and add them if present
     for vars in variables:
