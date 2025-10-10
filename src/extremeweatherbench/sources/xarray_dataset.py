@@ -28,7 +28,7 @@ def safely_pull_variables_xr_dataset(
     for req_var in alternative_variables:
         # If the required variable is not found, check if all of its alternatives are
         if req_var not in found_variables:
-            if all(
+            if alternative_variables[req_var] and all(
                 alt_var in dataset.data_vars for alt_var in alternative_variables[req_var]
                 ):
                 # If all of the alternatives are found, add them to the found variables
