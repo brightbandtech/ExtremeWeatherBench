@@ -19,7 +19,10 @@ era5_target = inputs.ERA5(
 
 # Define forecast (HRES)
 hres_forecast = inputs.ZarrForecast(
+    source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
+    name="HRES",
     variables=[derived.AtmosphericRiverMask],
+    variable_mapping=inputs.HRES_metadata_variable_mapping,
 )
 
 # Create a list of evaluation objects for atmospheric river
