@@ -5,12 +5,11 @@ from typing import Any, Callable, Optional, Type
 import numpy as np
 import sparse
 import xarray as xr
+from scipy import ndimage
 from scores import categorical, continuous  # type: ignore[import-untyped]
 
 from extremeweatherbench import calc, derived, evaluate, utils
-from extremeweatherbench.events.tropical_cyclone import (
-    compute_landfall_metric,
-)
+from extremeweatherbench.events import tropical_cyclone
 
 logger = logging.getLogger(__name__)
 
@@ -533,83 +532,6 @@ class RMSE(BaseMetric):
         return continuous.rmse(forecast, target, preserve_dims=preserve_dims)
 
 
-class SpatialDisplacement(BaseMetric):
-    name = "spatial_displacement"
-
-    def __init__(
-        self,
-        forecast_variable: Optional[str | Type["derived.DerivedVariable"]] = None,
-        target_variable: Optional[str | Type["derived.DerivedVariable"]] = None,
-        forecast_mask_variable: Optional[str | Type["derived.DerivedVariable"]] = None,
-        target_mask_variable: Optional[str | Type["derived.DerivedVariable"]] = None,
-    ):
-        self.forecast_variable = forecast_variable
-        self.target_variable = target_variable
-        self.forecast_mask_variable = forecast_mask_variable
-        self.target_mask_variable = target_mask_variable
-
-    @classmethod
-    def _compute_metric(
-        cls, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
-    ) -> xr.DataArray:
-        from scipy.ndimage import center_of_mass, label
-
-        # Get the masked data for target and forecast
-        target_masked = target.where(target, 0)
-        forecast_masked = forecast.where(forecast, 0)
-
-        # Initialize arrays to store results
-        lead_times = forecast.lead_time.values
-        valid_times = forecast.valid_time.values
-
-        target_lat_com = np.full((len(valid_times),), np.nan)
-        target_lon_com = np.full((len(valid_times),), np.nan)
-        forecast_lat_com = np.full((len(lead_times), len(valid_times)), np.nan)
-        forecast_lon_com = np.full((len(lead_times), len(valid_times)), np.nan)
-
-        def compute_center_of_mass_2d(data, lat_coords, lon_coords):
-            """Compute center of mass for 2D data and return lat/lon coordinates."""
-            labels, _ = label(data > 0)
-            if labels.max() > 0:
-                com = center_of_mass(data, labels, 1)
-                lat_com = lat_coords[int(com[0])]
-                lon_com = lon_coords[int(com[1])]
-                return lat_com, lon_com
-            else:
-                return np.nan, np.nan
-
-        # Apply the function to target data
-        target_result = xr.apply_ufunc(
-            compute_center_of_mass_2d,
-            target_masked,
-            target.latitude,
-            target.longitude,
-            input_core_dims=[["latitude", "longitude"], ["latitude"], ["longitude"]],
-            output_core_dims=[[], []],
-            vectorize=True,
-            dask="allowed",
-        )
-        target_lat_com, target_lon_com = target_result
-
-        # Apply the function to forecast data
-        forecast_result = xr.apply_ufunc(
-            compute_center_of_mass_2d,
-            forecast_masked,
-            forecast.latitude,
-            forecast.longitude,
-            input_core_dims=[["latitude", "longitude"], ["latitude"], ["longitude"]],
-            output_core_dims=[[], []],
-            vectorize=True,
-            dask="allowed",
-        )
-        forecast_lat_com, forecast_lon_com = forecast_result
-
-        # Convert to xarray DataArray for target center of mass coordinates
-        target_com = xr.concat([target_lat_com, target_lon_com], dim="coord")
-        forecast_com = xr.concat([forecast_lat_com, forecast_lon_com], dim="coord")
-        return calc.calculate_haversine_distance(forecast_com, target_com)
-
-
 class EarlySignal(BaseMetric):
     """Metric to identify the earliest signal detection in forecast data.
 
@@ -1080,7 +1002,7 @@ class LandfallDisplacement(BaseMetric):
         approach = kwargs.get("approach", "first")
         aggregation = kwargs.get("aggregation", "mean")
 
-        return compute_landfall_metric(
+        return tropical_cyclone.compute_landfall_metric(
             forecast,
             target,
             approach=approach,
@@ -1167,7 +1089,7 @@ class LandfallTimeME(BaseMetric):
         aggregation = kwargs.get("aggregation", "mean")
         units = kwargs.get("units", "hours")
 
-        return compute_landfall_metric(
+        return tropical_cyclone.compute_landfall_metric(
             forecast,
             target,
             approach=approach,
@@ -1256,7 +1178,7 @@ class LandfallIntensityMAE(BaseMetric):
         aggregation = kwargs.get("aggregation", "mean")
         intensity_var = kwargs.get("intensity_var", "surface_wind_speed")
 
-        return compute_landfall_metric(
+        return tropical_cyclone.compute_landfall_metric(
             forecast,
             target,
             approach=approach,
@@ -1264,3 +1186,121 @@ class LandfallIntensityMAE(BaseMetric):
             aggregation=aggregation,
             intensity_var=intensity_var,
         )
+
+    def _compute_applied_metric(
+        cls, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
+    ) -> Any:
+        raise NotImplementedError("LeadTimeDetection is not implemented yet")
+
+
+class SpatialDisplacement(BaseMetric):
+    name = "spatial_displacement"
+    preserve_dims: str = "lead_time"
+
+    def __init__(
+        self,
+        forecast_variable: Optional[str | Type["derived.DerivedVariable"]] = None,
+        target_variable: Optional[str | Type["derived.DerivedVariable"]] = None,
+        forecast_mask_variable: Optional[str | Type["derived.DerivedVariable"]] = None,
+        target_mask_variable: Optional[str | Type["derived.DerivedVariable"]] = None,
+    ):
+        self.forecast_variable = forecast_variable
+        self.target_variable = target_variable
+        self.forecast_mask_variable = forecast_mask_variable
+        self.target_mask_variable = target_mask_variable
+
+    @classmethod
+    def _compute_metric(
+        cls, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
+    ) -> Any:
+        def center_of_mass_ufunc(data):
+            """ufunc tooling to calculate the center of mass of a 2D array, returning
+            a tuple of the latitude and longitude indices, or np.nan tuple if no
+            non-zero values are present.
+            """
+            labels, _ = ndimage.label(data > 0)
+            if labels.max() > 0:
+                return ndimage.center_of_mass(data, labels, 1)
+            else:
+                return (np.nan, np.nan)
+
+        def idx_to_coords(lat_idx, lon_idx, lat_coords, lon_coords):
+            """Convert indices to coordinates, handling NaN indices."""
+            # Create output arrays with NaN
+            lat_coords_out = np.full_like(lat_idx, np.nan)
+            lon_coords_out = np.full_like(lon_idx, np.nan)
+
+            # Find valid (non-NaN) indices
+            valid_mask = ~(np.isnan(lat_idx) | np.isnan(lon_idx))
+
+            if valid_mask.any():
+                # Convert to integer indices only where valid
+                int_lat_idx = np.where(valid_mask, lat_idx.astype(int), 0)
+                int_lon_idx = np.where(valid_mask, lon_idx.astype(int), 0)
+
+                # Use advanced indexing to get coordinates
+                lat_coords_out[valid_mask] = lat_coords[int_lat_idx[valid_mask]]
+                lon_coords_out[valid_mask] = lon_coords[int_lon_idx[valid_mask]]
+
+            return lat_coords_out, lon_coords_out
+
+        target_lat_idx, target_lon_idx = xr.apply_ufunc(
+            center_of_mass_ufunc,
+            target,
+            input_core_dims=[["latitude", "longitude"]],
+            output_core_dims=[[], []],
+            vectorize=True,
+            dask="allowed",
+        )
+
+        # Process target coordinates
+        target_lat_idx = np.round(target_lat_idx)
+        target_lon_idx = np.round(target_lon_idx)
+        target_lat_coords, target_lon_coords = idx_to_coords(
+            target_lat_idx,
+            target_lon_idx,
+            target.latitude.values,
+            target.longitude.values,
+        )
+        target_coordinates = np.array([target_lat_coords, target_lon_coords])
+
+        # Process forecast coordinates
+        forecast_lat_idx, forecast_lon_idx = xr.apply_ufunc(
+            center_of_mass_ufunc,
+            forecast,
+            input_core_dims=[["latitude", "longitude"]],
+            output_core_dims=[[], []],
+            vectorize=True,
+            dask="allowed",
+        )
+        forecast_lat_idx = np.round(forecast_lat_idx)
+        forecast_lon_idx = np.round(forecast_lon_idx)
+        forecast_lat_coords, forecast_lon_coords = idx_to_coords(
+            forecast_lat_idx,
+            forecast_lon_idx,
+            forecast.latitude.values,
+            forecast.longitude.values,
+        )
+        forecast_coordinates = np.array([forecast_lat_coords, forecast_lon_coords])
+
+        # Calculate haversine distance
+        distance = calc.calculate_haversine_distance(
+            forecast_coordinates, target_coordinates
+        )
+
+        # Create DataArray with all dimensions
+        result = xr.DataArray(
+            distance,
+            coords={"lead_time": forecast.lead_time, "valid_time": forecast.valid_time},
+            dims=["lead_time", "valid_time"],
+            name="spatial_displacement",
+        )
+
+        # Reduce over non-preserved dimensions (valid_time) by taking mean
+        time_dims_to_reduce = [
+            dim for dim in result.dims if dim not in cls.preserve_dims
+        ]
+        if time_dims_to_reduce:
+            result = result.mean(dim=time_dims_to_reduce)
+
+        return result

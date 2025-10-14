@@ -1,74 +1,29 @@
-# ---
-# jupyter:
-#   jupytext:
-#     cell_metadata_filter: -all
-#     custom_cell_magics: kql
-#     text_representation:
-#       extension: .py
-#       format_name: percent
-#       format_version: '1.3'
-#       jupytext_version: 1.11.2
-#   kernelspec:
-#     display_name: .venv
-#     language: python
-#     name: python3
-# ---
-
-# %%
 import logging
 
-# %%
-from extremeweatherbench import derived, evaluate, inputs, metrics, utils
+from extremeweatherbench import cases, derived, evaluate, inputs, metrics
 
 # %%
-logging.getLogger("urllib3.connectionpool").setLevel(logging.CRITICAL)
-logging.getLogger("botocore.httpchecksum").setLevel(logging.CRITICAL)
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
-# %%
-case_yaml = utils.load_events_yaml()
-test_yaml = {
-    "cases": [
-        n
-        for n in case_yaml["cases"]
-        if n["start_date"].year < 2023 and n["event_type"] == "atmospheric_river"
-    ][5:6]
-}
+# Set the logger level to INFO
+logger = logging.getLogger("extremeweatherbench")
+logger.setLevel(logging.INFO)
 
-# %%
+# Load case data from the default events.yaml
+# Users can also define their own cases_dict structure
+case_yaml = cases.load_ewb_events_yaml_into_case_collection()
+
+# Define ERA5 target
 era5_target = inputs.ERA5(
-    source=inputs.ARCO_ERA5_FULL_URI,
-    variables=[
-        derived.AtmosphericRiverMask,
-    ],
-    variable_mapping={
-        "specific_humidity": "specific_humidity",
-        "u_component_of_wind": "eastward_wind",
-        "v_component_of_wind": "northward_wind",
-        "time": "valid_time",
-    },
-    storage_options={"remote_options": {"anon": True}},
+    variables=[derived.AtmosphericRiverMask],
 )
 
-# %%
+# Define forecast (HRES)
 hres_forecast = inputs.ZarrForecast(
-    source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
-    variables=[
-        derived.AtmosphericRiverMask,
-    ],
-    variable_mapping={
-        "u_component_of_wind": "eastward_wind",
-        "v_component_of_wind": "northward_wind",
-        "prediction_timedelta": "lead_time",
-        "time": "init_time",
-    },
-    storage_options={"remote_options": {"anon": True}},
+    variables=[derived.AtmosphericRiverMask],
 )
 
-# %%
-# just one for now
-ar_metric_list = [
+# Create a list of evaluation objects for atmospheric river
+ar_evaluation_objects = [
     inputs.EvaluationObject(
         event_type="atmospheric_river",
         metric_list=[metrics.SpatialDisplacement],
@@ -76,13 +31,16 @@ ar_metric_list = [
         forecast=hres_forecast,
     ),
 ]
-# %%
-test_ewb = evaluate.ExtremeWeatherBench(
-    cases=test_yaml,
-    evaluation_objects=ar_metric_list,
+
+# Initialize ExtremeWeatherBench; will only run on cases with event_type
+# atmospheric_river
+ar_ewb = evaluate.ExtremeWeatherBench(
+    cases=case_yaml,
+    evaluation_objects=ar_evaluation_objects,
 )
-logger.info("Starting EWB run")
-outputs = test_ewb.run(
-    # pre-compute the datasets to avoid recomputing them for each metric
-    pre_compute=True,
-)
+
+# Run the workflow using all available CPUs
+outputs = ar_ewb.run(n_jobs=-1)
+
+# Save the evaluationoutputs to a csv file
+outputs.to_csv("ar_outputs.csv")
