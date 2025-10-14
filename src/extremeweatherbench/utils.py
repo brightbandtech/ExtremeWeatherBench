@@ -2,11 +2,11 @@
 specialized package."""
 
 import datetime
+import importlib
 import inspect
 import logging
-import threading
-import importlib
 import pathlib
+import threading
 from typing import Any, Callable, Optional, Union
 
 import numpy as np

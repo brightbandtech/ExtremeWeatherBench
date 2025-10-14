@@ -320,13 +320,13 @@ class TestTropicalCycloneDetection:
 class TestDistanceCalculations:
     """Test distance calculation functions."""
 
-    def test_calculate_great_circle_distance_vectorized(self):
+    def test_calculate_great_circle_distance(self):
         """Test vectorized great circle distance calculation."""
         # Test known distance: equator to North Pole = 90 degrees = pi/2 radians
         lat1, lon1 = 0.0, 0.0
         lat2, lon2 = 90.0, 0.0
 
-        distance = tropical_cyclone._calculate_great_circle_distance_vectorized(
+        distance = tropical_cyclone._calculate_great_circle_distance(
             lat1, lon1, lat2, lon2
         )
 
@@ -350,14 +350,12 @@ class TestDistanceCalculations:
         lat1, lon1 = 25.0, -80.0
         lat2, lon2 = 30.0, -75.0
 
-        dist_vectorized = tropical_cyclone._calculate_great_circle_distance_vectorized(
-            lat1, lon1, lat2, lon2
-        )
+        dist = tropical_cyclone._calculate_great_circle_distance(lat1, lon1, lat2, lon2)
         dist_scalar = tropical_cyclone._calculate_great_circle_distance(
             lat1, lon1, lat2, lon2
         )
 
-        assert abs(dist_vectorized - dist_scalar) < 1e-10
+        assert abs(dist - dist_scalar) < 1e-10
 
 
 class TestUtilityFunctions:
@@ -386,7 +384,7 @@ class TestUtilityFunctions:
         value = tropical_cyclone._safe_extract_value(array_1d)
         assert value == 42.0
 
-    def test_create_spatial_mask_vectorized(self):
+    def test_create_spatial_mask(self):
         """Test vectorized spatial mask creation."""
         lat_coords = np.array([20.0, 25.0, 30.0])
         lon_coords = np.array([-80.0, -75.0, -70.0])
@@ -398,7 +396,7 @@ class TestUtilityFunctions:
 
         max_distance = 5.0
 
-        mask = tropical_cyclone._create_spatial_mask_vectorized(
+        mask = tropical_cyclone._create_spatial_mask(
             lat_coords, lon_coords, nearby_ibtracs, max_distance
         )
 
@@ -903,9 +901,9 @@ class TestConsolidatedLandfallFunctionality:
         )
 
     def test_find_all_landfalls_function_exists(self):
-        """Test that the find_all_landfalls_xarray function exists."""
-        assert hasattr(tropical_cyclone, "find_all_landfalls_xarray")
-        assert callable(tropical_cyclone.find_all_landfalls_xarray)
+        """Test that the find_all_landfalls function exists."""
+        assert hasattr(tropical_cyclone, "find_all_landfalls")
+        assert callable(tropical_cyclone.find_all_landfalls)
 
     def test_consolidated_landfall_metrics_exist(self):
         """Test that the consolidated landfall metrics exist and can be instantiated."""
@@ -957,15 +955,19 @@ class TestConsolidatedLandfallFunctionality:
 
         # Test the consolidated metrics
         try:
-            from extremeweatherbench import metrics
+            from extremeweatherbench.metrics import (
+                LandfallDisplacement,
+                LandfallTimeME,
+                LandfallIntensityMAE,
+            )
 
             # Test all approaches
             metrics_to_test = [
-                metrics.LandfallDisplacement(approach="first"),
-                metrics.LandfallDisplacement(approach="next"),
-                metrics.LandfallDisplacement(approach="all"),
-                metrics.LandfallTimeME(approach="first"),
-                metrics.LandfallIntensityMAE(approach="first"),
+                LandfallDisplacement(approach="first"),
+                LandfallDisplacement(approach="next"),
+                LandfallDisplacement(approach="all"),
+                LandfallTimeME(approach="first"),
+                LandfallIntensityMAE(approach="first"),
             ]
 
             for metric in metrics_to_test:
