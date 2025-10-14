@@ -168,13 +168,15 @@ def orography(ds: xr.Dataset) -> xr.DataArray:
     Returns:
         The orography as an xarray DataArray.
     """
+
     if "geopotential_at_surface" in ds.variables:
         return ds["geopotential_at_surface"].isel(time=0) / g0
     else:
-        from extremeweatherbench.inputs import ARCO_ERA5_FULL_URI
+        # Import inputs here to avoid circular import
+        from extremeweatherbench import inputs
 
         era5 = xr.open_zarr(
-            ARCO_ERA5_FULL_URI,
+            inputs.ARCO_ERA5_FULL_URI,
             chunks=None,
             storage_options=dict(token="anon"),
         )
@@ -201,17 +203,17 @@ def calculate_pressure_at_surface(orography_da: xr.DataArray) -> xr.DataArray:
 
 
 def maybe_calculate_wind_speed(ds: xr.Dataset) -> xr.DataArray:
-    """Prepare wind data by computing wind speed.
+    """Maybe prepare wind data by computing wind speed.
 
     If the wind speed is not already present, it will be computed from the eastward
-    and northward wind components. If the wind speed is already present, the dataset
-    is returned as is.
+    and northward wind components (u and v). If the wind speed is already present, the
+    dataset is returned as is.
 
     Args:
-        ds: The xarray dataset to prepare the wind data from.
+        ds: The dataset to prepare the wind data from.
 
     Returns:
-        An xarray dataset with the wind speed computed if it is not already present.
+        A dataset with the wind speed computed if it is not already present.
     """
 
     has_wind_speed = "surface_wind_speed" in ds.data_vars

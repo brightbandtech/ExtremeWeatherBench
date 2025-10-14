@@ -5,8 +5,8 @@ import datetime
 import inspect
 import logging
 import threading
-from importlib import resources
-from pathlib import Path
+import importlib
+import pathlib
 from typing import Any, Callable, Optional, Union
 
 import numpy as np
@@ -60,17 +60,18 @@ class ThreadSafeDict:
 
     def keys(self):
         with self._lock:
+            # Return a copy to prevent concurrent modification during iteration
             return list(self._data.keys())
-            # Return a copy to prevent concurrent modification issues during
-            # iteration
 
     def values(self):
         with self._lock:
-            return list(self._data.values())  # Return a copy
+            # Return a copy to prevent concurrent modification during iteration
+            return list(self._data.values())
 
     def items(self):
         with self._lock:
-            return list(self._data.items())  # Return a copy
+            # Return a copy to prevent concurrent modification during iteration
+            return list(self._data.items())
 
 
 def convert_longitude_to_360(longitude: float) -> float:
@@ -120,20 +121,22 @@ def load_events_yaml():
     )
     import extremeweatherbench.data
 
-    events_yaml_file = resources.files(extremeweatherbench.data).joinpath("events.yaml")
-    with resources.as_file(events_yaml_file) as file:
+    events_yaml_file = importlib.resources.files(extremeweatherbench.data).joinpath(
+        "events.yaml"
+    )
+    with importlib.resources.as_file(events_yaml_file) as file:
         yaml_event_case = read_event_yaml(file)
 
     return yaml_event_case
 
 
-def read_event_yaml(input_pth: str | Path) -> dict:
+def read_event_yaml(input_pth: str | pathlib.Path) -> dict:
     """Read events yaml from data."""
     logger.warning(
         "This function is deprecated and will be removed in a future release. "
         "Please use cases.read_incoming_yaml instead."
     )
-    input_pth = Path(input_pth)
+    input_pth = pathlib.Path(input_pth)
     with open(input_pth, "rb") as f:
         yaml_event_case = yaml.safe_load(f)
     return yaml_event_case
@@ -424,3 +427,46 @@ def extract_tc_names(title: str) -> list[str]:
         names.append(title_upper)
 
     return names
+
+
+def stack_sparse_data_from_dims(
+    da: xr.DataArray, stack_dims: list[str], max_size: int = 100000
+) -> xr.DataArray:
+    """Stack sparse data with n-dimensions.
+
+    In cases where sparse.COO data is in da.data, this function will stack the
+    dimensions and return a densified dataarray using reduce_dims.
+
+    Args:
+        da: An xarray dataarray with sparse.COO data
+        reduce_dims: The dimensions to reduce.
+        max_size: The maximum size of records to densify; default is 100000.
+
+    Returns:
+        The densified xarray dataarray reduced to (time, location).
+    """
+
+    coords = da.data.coords
+    # Get the indices of the dimensions to stack
+    reduce_dim_indices = [da.dims.index(dim) for dim in stack_dims]
+    reduce_dim_names = [da.dims[n] for n in reduce_dim_indices]
+    indices_from_coords = [coords[n] for n in reduce_dim_indices]
+    # Create pairs and get unique combinations
+    idx_pairs = list(zip(*indices_from_coords))
+    unique_idx_pairs = list(set(idx_pairs))
+    # Extract coordinate values for each unique pair
+    # Each pair represents coordinates for the dimensions being reduced
+    coord_values = []
+    for pair in unique_idx_pairs:
+        # Get actual coordinate values for each dimension
+        coord_tuple = tuple(
+            da[dim].values[idx] for dim, idx in zip(reduce_dim_names, pair)
+        )
+        coord_values.append(coord_tuple)
+
+    # If the data is not empty, stack and select the unique coordinates; otherwise,
+    # return the data densified as an empty dataarray
+    if da.size != 0:
+        da = da.stack(stacked=reduce_dim_names).sel(stacked=coord_values)
+    da.data = da.data.maybe_densify(max_size=max_size)
+    return da

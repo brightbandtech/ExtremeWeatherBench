@@ -1,7 +1,6 @@
 import logging
 import multiprocessing
 
-
 from extremeweatherbench import cases, defaults, evaluate
 
 
@@ -29,7 +28,7 @@ case_yaml = cases.load_ewb_events_yaml_into_case_collection()
 # Initialize ExtremeWeatherBench
 ewb = evaluate.ExtremeWeatherBench(
     cases=case_yaml,
-    evaluation_objects=defaults.BRIGHTBAND_EVALUATION_OBJECTS,
+    evaluation_objects=defaults.get_brightband_evaluation_objects(),
 )
 # Get the number of available CPUs for determining n_processes and divide by 4 threads
 # per process; this is optional. Leaving n_jobs blank will use the joblib backend
