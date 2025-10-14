@@ -8,9 +8,9 @@ from typing import TYPE_CHECKING, Optional, Type, Union
 
 import pandas as pd
 import sparse
-import tqdm
 import xarray as xr
 from joblib import Parallel, delayed
+from tqdm.auto import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 
 from extremeweatherbench import cases, derived, inputs, utils

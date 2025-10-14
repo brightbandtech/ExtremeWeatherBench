@@ -30,27 +30,19 @@ logger.info(f"Testing with {len(test_yaml['cases'])} atmospheric river case(s)")
 # ERA5 target with minimal chunking for speed
 # Note: Using basic variables since IntegratedVaporTransport is not yet implemented
 era5_target = inputs.ERA5(
-    source=inputs.ARCO_ERA5_FULL_URI,
     variables=[
         "specific_humidity",
         "eastward_wind",
         "northward_wind",
         "surface_air_temperature",
     ],
-    variable_mapping={
-        "specific_humidity": "specific_humidity",
-        "u_component_of_wind": "eastward_wind",
-        "v_component_of_wind": "northward_wind",
-        "2m_temperature": "surface_air_temperature",
-        "time": "valid_time",
-    },
-    storage_options={"remote_options": {"anon": True}},
-    chunks={"time": 24, "latitude": 180, "longitude": 360},  # Smaller chunks
+    chunks=None,
 )
 
 # HRES forecast with reduced lead times for speed
 # Note: Using basic variables since IntegratedVaporTransport is not yet implemented
 hres_forecast = inputs.ZarrForecast(
+    name="HRES",
     source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
     variables=[
         "surface_air_temperature",
@@ -59,27 +51,16 @@ hres_forecast = inputs.ZarrForecast(
         "eastward_wind",
         "northward_wind",
     ],
-    variable_mapping={
-        "2m_temperature": "surface_air_temperature",
-        "10m_u_component_of_wind": "surface_eastward_wind",
-        "10m_v_component_of_wind": "surface_northward_wind",
-        "u_component_of_wind": "eastward_wind",
-        "v_component_of_wind": "northward_wind",
-        "prediction_timedelta": "lead_time",
-        "time": "init_time",
-        "lead_time": "prediction_timedelta",
-        "mean_sea_level_pressure": "air_pressure_at_mean_sea_level",
-        "10m_wind_speed": "surface_wind_speed",
-    },
+    variable_mapping=inputs.HRES_metadata_variable_mapping,
     storage_options={"remote_options": {"anon": True}},
-    chunks={"prediction_timedelta": 10, "latitude": 180, "longitude": 360},
+    chunks="auto",
 )
 
 # Use only MAE metric for speed
 ar_metric_list = [
     inputs.EvaluationObject(
         event_type="atmospheric_river",
-        metric=[metrics.MAE],
+        metric_list=[metrics.MAE],
         target=era5_target,
         forecast=hres_forecast,
     ),
@@ -88,13 +69,12 @@ ar_metric_list = [
 # Run evaluation
 test_ewb = evaluate.ExtremeWeatherBench(
     cases=test_yaml,
-    metrics=ar_metric_list,
+    evaluation_objects=ar_metric_list,
 )
 
 logger.info("Starting miniaturized EWB atmospheric river evaluation")
 outputs = test_ewb.run(
-    tolerance_range=24,  # Reduced tolerance for speed
-    pre_compute=True,
+    n_jobs=40,
 )
 
 logger.info("Atmospheric river evaluation completed successfully")

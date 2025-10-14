@@ -121,6 +121,7 @@ cira_freeze_forecast = inputs.KerchunkForecast(
 )
 
 cira_atmospheric_river_forecast = inputs.KerchunkForecast(
+    name="FourCastNetv2",
     source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
     variables=[
         derived.AtmosphericRiverMask,
@@ -131,6 +132,7 @@ cira_atmospheric_river_forecast = inputs.KerchunkForecast(
 )
 
 cira_tropical_cyclone_forecast = inputs.KerchunkForecast(
+    name="FourCastNetv2",
     source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
     variables=[
         derived.TropicalCycloneTrackVariables,
@@ -140,6 +142,7 @@ cira_tropical_cyclone_forecast = inputs.KerchunkForecast(
     preprocess=_preprocess_bb_cira_forecast_dataset,
 )
 cira_severe_convection_forecast = inputs.KerchunkForecast(
+    name="FourCastNetv2",
     source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
     variables=[derived.CravenBrooksSignificantSevere],
     variable_mapping=inputs.CIRA_metadata_variable_mapping,
