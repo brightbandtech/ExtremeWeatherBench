@@ -1,5 +1,5 @@
 import logging
-from abc import ABC, abstractmethod
+import abc
 from typing import Sequence, Type, TypeGuard, Union
 
 import xarray as xr
@@ -7,7 +7,7 @@ import xarray as xr
 logger = logging.getLogger(__name__)
 
 
-class DerivedVariable(ABC):
+class DerivedVariable(abc.ABC):
     """An abstract base class defining the interface for ExtremeWeatherBench
     derived variables.
 
@@ -42,7 +42,7 @@ class DerivedVariable(ABC):
         return self.__class__.__name__
 
     @classmethod
-    @abstractmethod
+    @abc.abstractmethod
     def derive_variable(cls, data: xr.Dataset, *args, **kwargs) -> xr.DataArray:
         """Derive the variable from the required variables.
 

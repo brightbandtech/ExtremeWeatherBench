@@ -1,7 +1,6 @@
 import logging
 
-
-from extremeweatherbench import evaluate, inputs, metrics, cases
+from extremeweatherbench import cases, evaluate, inputs, metrics
 
 # Set the logger level to INFO
 logger = logging.getLogger("extremeweatherbench")
@@ -32,29 +31,24 @@ hres_forecast = inputs.ZarrForecast(
     variable_mapping=inputs.HRES_metadata_variable_mapping,
 )
 
+metrics_list = [
+    metrics.MaximumMAE,
+    metrics.RMSE,
+    metrics.OnsetME,
+    metrics.DurationME,
+    metrics.MaxMinMAE,
+]
 # Create a list of evaluation objects for heatwave
 heatwave_evaluation_object = [
     inputs.EvaluationObject(
         event_type="heat_wave",
-        metric_list=[
-            metrics.MaximumMAE,
-            metrics.RMSE,
-            metrics.OnsetME,
-            metrics.DurationME,
-            metrics.MaxMinMAE,
-        ],
+        metric_list=metrics_list,
         target=ghcn_target,
         forecast=hres_forecast,
     ),
     inputs.EvaluationObject(
         event_type="heat_wave",
-        metric_list=[
-            metrics.MaximumMAE,
-            metrics.RMSE,
-            metrics.OnsetME,
-            metrics.DurationME,
-            metrics.MaxMinMAE,
-        ],
+        metric_list=metrics_list,
         target=era5_heatwave_target,
         forecast=hres_forecast,
     ),
@@ -70,8 +64,10 @@ ewb = evaluate.ExtremeWeatherBench(
 outputs = ewb.run(
     # tolerance range is the number of hours before and after the timestamp a
     # validating occurrence is checked in the forecasts for certain metrics
+    # such as minimum temperature MAE
     tolerance_range=48,
-    # pre-compute the datasets to avoid recomputing them for each metric
+    # precompute the datasets before metrics are calculated, to avoid IO costs loading
+    # them into memory for each metric
     pre_compute=True,
 )
 

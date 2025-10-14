@@ -18,7 +18,7 @@ era5_heatwave_target = inputs.ERA5(
 
 # Define forecasts
 fcnv2_forecast = inputs.KerchunkForecast(
-    name="custom_forecast",
+    name="fcnv2_forecast",
     source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
     variables=["surface_air_temperature"],
     variable_mapping=inputs.CIRA_metadata_variable_mapping,

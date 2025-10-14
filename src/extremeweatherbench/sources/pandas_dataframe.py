@@ -9,7 +9,22 @@ def safely_pull_variables_pandas_dataframe(
     optional_variables: list[str],
     optional_variables_mapping: dict[str, list[str]],
 ) -> pd.DataFrame:
-    """Handle variable extraction for Pandas DataFrame."""
+    """Extract variables from a Pandas DataFrame, prioritizing optionals.
+
+    Args:
+        dataset: The DataFrame to extract variables from.
+        variables: List of required variable names to extract.
+        optional_variables: List of optional variable names to try first.
+        optional_variables_mapping: Dict mapping optional vars to list of
+            required vars they can replace.
+
+    Returns:
+        DataFrame containing only the extracted variables.
+
+    Raises:
+        KeyError: If required variables are missing and no suitable optional
+            variables are available as replacements.
+    """
     # Get column names from DataFrame
     available_columns = list(dataset.columns)
 

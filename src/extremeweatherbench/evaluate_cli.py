@@ -1,14 +1,13 @@
 import importlib.util
 import os
 import pickle
-from pathlib import Path
+import pathlib
 from typing import Optional
 
 import click
 import pandas as pd
 
-from extremeweatherbench import defaults
-from extremeweatherbench.evaluate import ExtremeWeatherBench, _run_parallel
+from extremeweatherbench import defaults, evaluate
 
 
 @click.command()
@@ -67,7 +66,8 @@ def cli_runner(
 
     1. Default mode (--default): Uses the predefined Brightband evaluation objects for
        comprehensive weather event evaluation including heat waves, freeze events,
-       severe convection, atmospheric rivers, and tropical cyclones.
+       [severe convection, atmospheric rivers, and tropical cyclones] (bracketed events
+       are not yet implemented).
 
     2. Custom mode (--config-file): Uses a Python config file containing custom
        evaluation objects defined by the user.
@@ -98,7 +98,7 @@ def cli_runner(
     if output_dir is None:
         output_dir = os.getcwd()
 
-    output_path = Path(output_dir)
+    output_path = pathlib.Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
     # Validate that either default or config_file is provided
@@ -129,7 +129,7 @@ def cli_runner(
     # Load evaluation objects
     if default:
         click.echo("Using default Brightband evaluation objects...")
-        evaluation_objects = defaults.BRIGHTBAND_EVALUATION_OBJECTS
+        evaluation_objects = defaults.get_brightband_evaluation_objects()
         cases_dict = _load_default_cases()
     else:
         assert config_file is not None  # for mypy
@@ -137,7 +137,7 @@ def cli_runner(
         evaluation_objects, cases_dict = _load_config_file(config_file)
 
     # Initialize ExtremeWeatherBench
-    ewb = ExtremeWeatherBench(
+    ewb = evaluate.ExtremeWeatherBench(
         cases=cases_dict,
         evaluation_objects=evaluation_objects,
         cache_dir=cache_dir if cache_dir else None,
@@ -149,7 +149,7 @@ def cli_runner(
 
     # Save case operators if requested
     if save_case_operators:
-        save_path = Path(save_case_operators)
+        save_path = pathlib.Path(save_case_operators)
         save_path.parent.mkdir(parents=True, exist_ok=True)
         with open(save_path, "wb") as f:
             pickle.dump(case_operators, f)
@@ -158,7 +158,9 @@ def cli_runner(
     # Run evaluation
     if parallel > 1:
         click.echo(f"Running evaluation with {parallel} parallel jobs...")
-        results = _run_parallel(case_operators, parallel, pre_compute=precompute)
+        results = evaluate._run_parallel(
+            case_operators, parallel, pre_compute=precompute
+        )
     else:
         click.echo("Running evaluation in serial...")
         results = ewb.run(pre_compute=precompute)
@@ -187,7 +189,7 @@ def _load_config_file(config_path: str) -> tuple:
     - evaluation_objects: List of EvaluationObject instances
     - cases_dict: Dictionary containing case data
     """
-    config_path_obj = Path(config_path)
+    config_path_obj = pathlib.Path(config_path)
 
     # Load the config module
     spec = importlib.util.spec_from_file_location("config", str(config_path_obj))
