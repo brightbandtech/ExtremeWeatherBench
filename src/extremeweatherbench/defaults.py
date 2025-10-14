@@ -201,35 +201,34 @@ def get_brightband_evaluation_objects() -> list[inputs.EvaluationObject]:
             forecast=cira_freeze_forecast,
         ),
         # TODO: Re-enable when severe convection forecast is implemented
-        # inputs.EvaluationObject(
-        #     event_type="severe_convection",
-        #     metric_list=[
-        #         metrics.CSI,
-        #         metrics.FAR,
-        #         metrics.RegionalHitsMisses,
-        #         metrics.HitsMisses,
-        #     ],
-        #     target=lsr_target,
-        #     forecast=cira_severe_convection_forecast,
-        # ),
+        inputs.EvaluationObject(
+            event_type="severe_convection",
+            metric_list=[
+                metrics.CSI,
+                metrics.FAR,
+                metrics.RegionalHitsMisses,
+                metrics.HitsMisses,
+            ],
+            target=lsr_target,
+            forecast=cira_severe_convection_forecast,
+        ),
         # TODO: Re-enable when atmospheric river forecast is implemented
-        # inputs.EvaluationObject(
-        #     event_type="atmospheric_river",
-        #     metric_list=[metrics.CSI, metrics.SpatialDisplacement,
-        #  metrics.EarlySignal],
-        #     target=era5_atmospheric_river_target,
-        #     forecast=cira_atmospheric_river_forecast,
-        # ),
+        inputs.EvaluationObject(
+            event_type="atmospheric_river",
+            metric_list=[metrics.CSI, metrics.SpatialDisplacement, metrics.EarlySignal],
+            target=era5_atmospheric_river_target,
+            forecast=cira_atmospheric_river_forecast,
+        ),
         # TODO: Re-enable when tropical cyclone forecast is implemented
-        # inputs.EvaluationObject(
-        #     event_type="tropical_cyclone",
-        #     metric_list=[
-        #         metrics.EarlySignal,
-        #         metrics.LandfallDisplacement,
-        #         metrics.LandfallTimeME,
-        #         metrics.LandfallIntensityMAE,
-        #     ],
-        #     target=ibtracs_target,
-        #     forecast=cira_tropical_cyclone_forecast,
-        # ),
+        inputs.EvaluationObject(
+            event_type="tropical_cyclone",
+            metric_list=[
+                metrics.EarlySignal,
+                metrics.LandfallDisplacement,
+                metrics.LandfallTimeME,
+                metrics.LandfallIntensityMAE,
+            ],
+            target=ibtracs_target,
+            forecast=cira_tropical_cyclone_forecast,
+        ),
     ]
