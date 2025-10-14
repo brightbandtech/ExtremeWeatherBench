@@ -7,16 +7,18 @@ import geopandas as gpd
 import numpy as np
 import pandas as pd
 import pytest
-import xarray as xr
 import shapely
-from extremeweatherbench import utils, regions
+import xarray as xr
+
+from extremeweatherbench import regions, utils
 
 
 class TestRegionClasses:
     """Test the regions.Region base class and its subclasses."""
 
     def test_region_base_class(self):
-        """Test that regions.Region is an abstract base class that cannot be instantiated."""
+        """Test that regions.Region is an abstract base class that cannot be
+        instantiated."""
         # regions.Region is now abstract and cannot be instantiated
         with pytest.raises(TypeError, match="Can't instantiate abstract class"):
             regions.Region()
@@ -770,7 +772,8 @@ class TestGetBoundingCoordinates:
         assert abs(coords.longitude_max - (-115.0)) < 0.001
 
     def test_centered_region_bounding_coordinates_tuple_box(self):
-        """Test regions.CenteredRegion.get_bounding_coordinates with tuple bounding box."""
+        """Test regions.CenteredRegion.get_bounding_coordinates with tuple bounding
+        box."""
         region = regions.CenteredRegion.create_region(
             latitude=45.0, longitude=-120.0, bounding_box_degrees=(5.0, 10.0)
         )
