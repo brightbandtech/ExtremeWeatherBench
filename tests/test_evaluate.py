@@ -2,8 +2,8 @@
 
 import datetime
 import logging
-import tempfile
 import pathlib
+import tempfile
 from unittest import mock
 
 import numpy as np
@@ -13,11 +13,11 @@ import xarray as xr
 
 from extremeweatherbench import (
     cases,
+    defaults,
     derived,
     evaluate,
     inputs,
     metrics,
-    defaults,
     regions,
 )
 
@@ -1984,18 +1984,14 @@ class TestIntegration:
             mock_parallel_class.assert_called_once_with(n_jobs=4)
 
 
-# =============================================================================
-# Test Schema and Variable Normalization Functions
-# =============================================================================
-
-
 class TestEnsureOutputSchema:
     """Test the _ensure_output_schema function."""
 
     def test_ensure_output_schema_init_time_valid_time(self):
         """Test _ensure_output_schema with init_time and valid_time columns.
 
-        init_time is now in defaults.OUTPUT_COLUMNS, valid_time is not and will be dropped.
+        init_time is now in defaults.OUTPUT_COLUMNS, valid_time is not and will be
+        dropped.
         """
         df = pd.DataFrame(
             {
