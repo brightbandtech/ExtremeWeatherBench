@@ -313,10 +313,6 @@ def find_peak_ivt_timestamp(
                 # Calculate aggregate IVT only over land areas
                 ivt_land_only = ivt_in_central_ar.where(land_mask > 0)
                 aggregate_ivt = ivt_land_only.sum().values
-
-            else:
-                # Skip this timestamp - no significant land coverage
-                aggregate_ivt = 0.0
         else:
             # No land mask provided, use all central AR pixels
             aggregate_ivt = ivt_in_central_ar.sum().values
@@ -668,7 +664,6 @@ def main():
         for event in events_yaml["cases"]
         if event["event_type"] == "atmospheric_river"
     ]
-    ar_events = [n for n in ar_events if n["case_id_number"] == 107]
     logger.info("Found %s atmospheric river events in events.yaml", len(ar_events))
 
     # Show a few examples
