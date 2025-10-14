@@ -34,11 +34,15 @@ jobs:
       - name: Generate Coverage Report
         run: uv run coverage report -m
 
+      - name: Run miniaturized setup verification
+        run: uv run python tests/applied/verify_setup.py
+
+      - name: Run offline miniaturized tests
+        run: uv run pytest tests/applied/test_miniaturized_integration.py::TestMiniaturizedScriptsOffline -v
+
   pre-commit:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-python@v3
       - uses: pre-commit/action@v3.0.1
-
-      

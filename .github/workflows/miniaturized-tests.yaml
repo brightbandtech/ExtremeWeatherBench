@@ -1,0 +1,129 @@
+name: miniaturized-tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    # Run miniaturized tests daily at 6 AM UTC
+    - cron: "0 6 * * *"
+
+jobs:
+  # Always run offline tests (no external dependencies)
+  test-offline:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python env with uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "0.5.6"
+          enable-cache: true
+
+      - name: "Set up Python"
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: "pyproject.toml"
+
+      - name: Install the project
+        run: uv sync --all-extras --dev
+
+      - name: Run setup verification (offline)
+        run: uv run python tests/applied/verify_setup.py
+
+      - name: Run offline miniaturized tests
+        run: uv run pytest tests/applied/test_miniaturized_integration.py::TestMiniaturizedScriptsOffline -v
+
+  # Run integration tests with mock auth or real auth if available
+  test-integration:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python env with uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "0.5.6"
+          enable-cache: true
+
+      - name: "Set up Python"
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: "pyproject.toml"
+
+      - name: Install the project
+        run: uv sync --all-extras --dev
+
+      # Set up Google Cloud auth if secrets are available
+      - name: Authenticate to Google Cloud
+        if: ${{ vars.GCP_PROJECT_ID != '' }}
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        if: ${{ vars.GCP_PROJECT_ID != '' }}
+        uses: google-github-actions/setup-gcloud@v2
+
+      # Run integration tests with auth if available, skip if not
+      - name: Run miniaturized heatwave test (if auth available)
+        if: ${{ vars.GCP_PROJECT_ID != '' }}
+        run: |
+          echo "Running miniaturized heatwave test with authentication..."
+          timeout 10m uv run python tests/applied/mini_applied_heatwave.py
+        continue-on-error: false
+
+      - name: Run integration tests (pytest with auth detection)
+        run: |
+          echo "Running pytest integration tests..."
+          uv run pytest tests/applied/test_miniaturized_integration.py -v \
+            --tb=short -x
+        continue-on-error: true
+
+      - name: Report test results
+        if: always()
+        run: |
+          echo "Integration test job completed."
+          echo "Some tests may have been skipped due to missing authentication."
+          echo "This is expected in most CI environments."
+
+  # Optional: Run with self-hosted runner if available (for full auth)
+  test-with-auth:
+    runs-on: self-hosted
+    if: ${{ github.repository_owner == 'your-org' }} # Replace with actual org
+    strategy:
+      matrix:
+        python-version: ["3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python env with uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "0.5.6"
+          enable-cache: true
+
+      - name: "Set up Python"
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: "pyproject.toml"
+
+      - name: Install the project
+        run: uv sync --all-extras --dev
+
+      - name: Run all miniaturized tests (with auth)
+        run: |
+          echo "Running all miniaturized tests with authentication..."
+          timeout 20m uv run python tests/applied/mini_applied_all.py
+
+      - name: Run pytest integration tests (all)
+        run: |
+          uv run pytest tests/applied/test_miniaturized_integration.py -v

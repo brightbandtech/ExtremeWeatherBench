@@ -1,13 +1,13 @@
-import logging
 import abc
+import logging
 from typing import Sequence, Type, TypeGuard, Union
 
 import xarray as xr
 
 import extremeweatherbench.events.atmospheric_river as ar
 import extremeweatherbench.events.severe_convection as sc
+import extremeweatherbench.events.tropical_cyclone as tc
 from extremeweatherbench import calc
-from extremeweatherbench.events import tropical_cyclone
 
 logger = logging.getLogger(__name__)
 
@@ -224,18 +224,18 @@ class TropicalCycloneTrackVariables(DerivedVariable):
         Returns:
             3D dataset containing tropical cyclone track information
         """
-        cache_key = tropical_cyclone._generate_cache_key(data)
+        cache_key = tc._generate_cache_key(data)
 
         # Return cached result if available
-        if cache_key in tropical_cyclone._TC_TRACK_CACHE:
-            return tropical_cyclone._TC_TRACK_CACHE[cache_key]
+        if cache_key in tc._TC_TRACK_CACHE:
+            return tc._TC_TRACK_CACHE[cache_key]
 
         # Prepare the data with wind variables as needed
         prepared_data = calc.maybe_calculate_wind_speed(data)
 
         # Generates the variables needed for the TC track calculation
         # (geop. thickness, winds, temps, slp)
-        cyclone_dataset = tropical_cyclone.generate_tc_variables(prepared_data)
+        cyclone_dataset = tc.generate_tc_variables(prepared_data)
 
         # Check if we should apply IBTrACS filtering
         # First check kwargs, then the global registry
@@ -243,16 +243,16 @@ class TropicalCycloneTrackVariables(DerivedVariable):
         case_metadata = kwargs.get("case_metadata", None)
         case_id_number = case_metadata.case_id_number if case_metadata else None
         if ibtracs_data is None and case_id_number is not None:
-            ibtracs_data = tropical_cyclone.get_ibtracs_data(case_id_number)
+            ibtracs_data = tc.get_ibtracs_data(case_id_number)
         else:
             raise ValueError("No IBTrACS data provided to constrain TC tracks.")
 
         # Use IBTrACS-filtered TC detection
-        tctracks_ds = tropical_cyclone.create_tctracks_from_dataset_with_ibtracs_filter(
+        tctracks_ds = tc.create_tctracks_from_dataset_with_ibtracs_filter(
             cyclone_dataset, ibtracs_data
         )
         # Cache the result
-        tropical_cyclone._TC_TRACK_CACHE[cache_key] = tctracks_ds
+        tc._TC_TRACK_CACHE[cache_key] = tctracks_ds
 
         return tctracks_ds
 
@@ -281,7 +281,7 @@ class TropicalCycloneTrackVariables(DerivedVariable):
 
         Useful for memory management or when processing completely different datasets.
         """
-        tropical_cyclone._TC_TRACK_CACHE.clear()
+        tc._TC_TRACK_CACHE.clear()
 
 
 def maybe_derive_variables(
