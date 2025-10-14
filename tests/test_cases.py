@@ -1045,3 +1045,298 @@ class TestCasesIntegration:
                 assert isinstance(
                     operator.case_metadata.location, regions.BoundingBoxRegion
                 )
+
+
+class TestSelectCases:
+    """Test the select_cases method of IndividualCaseCollection."""
+
+    def create_test_collection(self):
+        """Helper to create a test case collection."""
+        region1 = regions.BoundingBoxRegion.create_region(
+            latitude_min=30.0,
+            latitude_max=40.0,
+            longitude_min=-110.0,
+            longitude_max=-100.0,
+        )
+        region2 = regions.BoundingBoxRegion.create_region(
+            latitude_min=35.0,
+            latitude_max=45.0,
+            longitude_min=-105.0,
+            longitude_max=-95.0,
+        )
+        region3 = regions.CenteredRegion.create_region(
+            latitude=50.0, longitude=-120.0, bounding_box_degrees=5.0
+        )
+
+        case1 = cases.IndividualCase(
+            case_id_number=1,
+            title="Southern Heat Wave",
+            start_date=datetime.datetime(2021, 6, 1),
+            end_date=datetime.datetime(2021, 6, 15),
+            location=region1,
+            event_type="heat_wave",
+        )
+
+        case2 = cases.IndividualCase(
+            case_id_number=2,
+            title="Central Drought",
+            start_date=datetime.datetime(2021, 7, 1),
+            end_date=datetime.datetime(2021, 7, 31),
+            location=region2,
+            event_type="drought",
+        )
+
+        case3 = cases.IndividualCase(
+            case_id_number=3,
+            title="Northern Storm",
+            start_date=datetime.datetime(2021, 8, 1),
+            end_date=datetime.datetime(2021, 8, 10),
+            location=region3,
+            event_type="storm",
+        )
+
+        return cases.IndividualCaseCollection(cases=[case1, case2, case3])
+
+    def test_select_by_event_type(self):
+        """Test selecting cases by event type."""
+        collection = self.create_test_collection()
+
+        selected = collection.select_cases(by="event_type", value="heat_wave")
+
+        assert len(selected) == 1
+        assert selected[0].case_id_number == 1
+        assert selected[0].event_type == "heat_wave"
+
+    def test_select_by_case_id_number(self):
+        """Test selecting cases by case ID number."""
+        collection = self.create_test_collection()
+
+        selected = collection.select_cases(by="case_id_number", value=2)
+
+        assert len(selected) == 1
+        assert selected[0].case_id_number == 2
+        assert selected[0].title == "Central Drought"
+
+    def test_select_by_title(self):
+        """Test selecting cases by title."""
+        collection = self.create_test_collection()
+
+        selected = collection.select_cases(by="title", value="Northern Storm")
+
+        assert len(selected) == 1
+        assert selected[0].case_id_number == 3
+        assert selected[0].title == "Northern Storm"
+
+    def test_select_by_region_object_overlapping(self):
+        """Test selecting cases by Region that overlaps with cases."""
+        collection = self.create_test_collection()
+
+        # Create a region that overlaps with case1 and case2
+        search_region = regions.BoundingBoxRegion.create_region(
+            latitude_min=32.0,
+            latitude_max=38.0,
+            longitude_min=-108.0,
+            longitude_max=-98.0,
+        )
+
+        selected = collection.select_cases(by="location", value=search_region)
+
+        # Should select cases 1 and 2 (both overlap with search_region)
+        assert len(selected) == 2
+        case_ids = [case.case_id_number for case in selected]
+        assert 1 in case_ids
+        assert 2 in case_ids
+
+    def test_select_by_region_object_no_overlap(self):
+        """Test selecting cases by Region that doesn't overlap."""
+        collection = self.create_test_collection()
+
+        # Create a region that doesn't overlap with any cases
+        search_region = regions.BoundingBoxRegion.create_region(
+            latitude_min=10.0,
+            latitude_max=20.0,
+            longitude_min=-80.0,
+            longitude_max=-70.0,
+        )
+
+        selected = collection.select_cases(by="location", value=search_region)
+
+        assert len(selected) == 0
+
+    def test_select_by_region_object_single_match(self):
+        """Test selecting cases by Region matching single case."""
+        collection = self.create_test_collection()
+
+        # Create a region that only overlaps with case3
+        search_region = regions.CenteredRegion.create_region(
+            latitude=50.0, longitude=-120.0, bounding_box_degrees=3.0
+        )
+
+        selected = collection.select_cases(by="location", value=search_region)
+
+        assert len(selected) == 1
+        assert selected[0].case_id_number == 3
+
+    def test_select_by_tuple_coordinates_overlapping(self):
+        """Test selecting cases by tuple of coordinates."""
+        collection = self.create_test_collection()
+
+        # Tuple format: longitude_min, lat_min, lon_max, lat_max
+        search_coords = (-108.0, 32.0, -98.0, 38.0)
+
+        selected = collection.select_cases(by="location", value=search_coords)
+
+        # Should select cases 1 and 2
+        assert len(selected) == 2
+        case_ids = [case.case_id_number for case in selected]
+        assert 1 in case_ids
+        assert 2 in case_ids
+
+    def test_select_by_list_coordinates_overlapping(self):
+        """Test selecting cases by list of coordinates."""
+        collection = self.create_test_collection()
+
+        # List format: longitude_min, lat_min, lon_max, lat_max
+        search_coords = [-108.0, 32.0, -98.0, 38.0]
+
+        selected = collection.select_cases(by="location", value=search_coords)
+
+        # Should select cases 1 and 2
+        assert len(selected) == 2
+        case_ids = [case.case_id_number for case in selected]
+        assert 1 in case_ids
+        assert 2 in case_ids
+
+    def test_select_by_coordinates_no_overlap(self):
+        """Test selecting cases by coordinates that don't overlap."""
+        collection = self.create_test_collection()
+
+        # Coordinates far from any cases
+        search_coords = (-80.0, 10.0, -70.0, 20.0)
+
+        selected = collection.select_cases(by="location", value=search_coords)
+
+        assert len(selected) == 0
+
+    def test_select_by_coordinates_contains_case(self):
+        """Test selecting when search region contains a case."""
+        collection = self.create_test_collection()
+
+        # Large region that contains case1
+        search_coords = (-115.0, 25.0, -95.0, 45.0)
+
+        selected = collection.select_cases(by="location", value=search_coords)
+
+        # Should select cases 1 and 2 (both within or overlapping)
+        assert len(selected) >= 1
+        case_ids = [case.case_id_number for case in selected]
+        assert 1 in case_ids
+
+    def test_select_by_coordinates_contained_by_case(self):
+        """Test selecting when search region is contained by a case."""
+        collection = self.create_test_collection()
+
+        # Small region inside case1's bounds
+        search_coords = (-107.0, 32.0, -103.0, 36.0)
+
+        selected = collection.select_cases(by="location", value=search_coords)
+
+        # Should select case1 (contains the search region)
+        assert len(selected) >= 1
+        case_ids = [case.case_id_number for case in selected]
+        assert 1 in case_ids
+
+    def test_select_inplace_false(self):
+        """Test select_cases without modifying original collection."""
+        collection = self.create_test_collection()
+        original_length = len(collection.cases)
+
+        selected = collection.select_cases(
+            by="event_type", value="heat_wave", inplace=False
+        )
+
+        # Collection should be unchanged
+        assert len(collection.cases) == original_length
+        # But returned list should be filtered
+        assert len(selected) == 1
+
+    def test_select_inplace_true(self):
+        """Test select_cases modifying collection in place."""
+        collection = self.create_test_collection()
+
+        selected = collection.select_cases(
+            by="event_type", value="drought", inplace=True
+        )
+
+        # Collection should be modified
+        assert len(collection.cases) == 1
+        assert collection.cases[0].event_type == "drought"
+        # Returned list should match
+        assert len(selected) == 1
+        assert selected[0].event_type == "drought"
+
+    def test_select_invalid_field_raises_error(self):
+        """Test that selecting by invalid field raises ValueError."""
+        collection = self.create_test_collection()
+
+        with pytest.raises(ValueError, match="Invalid field to select"):
+            collection.select_cases(by="invalid_field", value="something")
+
+    def test_select_empty_result_set(self):
+        """Test selecting with criteria that match nothing."""
+        collection = self.create_test_collection()
+
+        selected = collection.select_cases(by="event_type", value="nonexistent_type")
+
+        assert len(selected) == 0
+        assert isinstance(selected, list)
+
+    def test_select_all_cases_by_large_region(self):
+        """Test selecting all cases with very large region."""
+        collection = self.create_test_collection()
+
+        # Very large region that encompasses everything
+        large_region = regions.BoundingBoxRegion.create_region(
+            latitude_min=0.0,
+            latitude_max=90.0,
+            longitude_min=-180.0,
+            longitude_max=-50.0,
+        )
+
+        selected = collection.select_cases(by="location", value=large_region)
+
+        # Should select all 3 cases
+        assert len(selected) == 3
+
+    def test_select_by_region_edge_touching(self):
+        """Test selection when regions share an edge."""
+        region1 = regions.BoundingBoxRegion.create_region(
+            latitude_min=30.0,
+            latitude_max=40.0,
+            longitude_min=-110.0,
+            longitude_max=-100.0,
+        )
+
+        case1 = cases.IndividualCase(
+            case_id_number=1,
+            title="Edge Case",
+            start_date=datetime.datetime(2021, 6, 1),
+            end_date=datetime.datetime(2021, 6, 15),
+            location=region1,
+            event_type="test",
+        )
+
+        collection = cases.IndividualCaseCollection(cases=[case1])
+
+        # Region sharing an edge (touches at longitude=-100.0)
+        edge_region = regions.BoundingBoxRegion.create_region(
+            latitude_min=30.0,
+            latitude_max=40.0,
+            longitude_min=-100.0,
+            longitude_max=-90.0,
+        )
+
+        selected = collection.select_cases(by="location", value=edge_region)
+
+        # Should select the case (edges touching count as intersecting)
+        assert len(selected) == 1
