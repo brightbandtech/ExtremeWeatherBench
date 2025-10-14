@@ -16,6 +16,8 @@ OUTPUT_COLUMNS = [
     "init_time",
     "target_variable",
     "metric",
+    "forecast_source",
+    "target_source",
     "case_id_number",
     "event_type",
 ]
@@ -97,6 +99,7 @@ ibtracs_target = inputs.IBTrACS()
 # Forecast Examples
 
 cira_heatwave_forecast = inputs.KerchunkForecast(
+    name="FourCastNetv2",
     source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
     variables=["surface_air_temperature"],
     variable_mapping=inputs.CIRA_metadata_variable_mapping,
@@ -105,6 +108,7 @@ cira_heatwave_forecast = inputs.KerchunkForecast(
 )
 
 cira_freeze_forecast = inputs.KerchunkForecast(
+    name="FourCastNetv2",
     source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
     variables=[
         "surface_air_temperature",
@@ -147,78 +151,85 @@ cira_severe_convection_forecast = inputs.KerchunkForecast(
 def get_brightband_evaluation_objects() -> list[inputs.EvaluationObject]:
     """Get the default Brightband list of evaluation objects.
 
-    This function defers the import of metrics to avoid circular imports.
+    This is a function which will update as new event types are added to the project
+    prior to feature completion.
+
+    Returns:
+        A list of EvaluationObject instances matching the complete Brightband eval
+        routine.
     """
     # Import metrics here to avoid circular import
     from extremeweatherbench import metrics
 
+    heatwave_metric_list = [
+        metrics.MaximumMAE,
+        metrics.RMSE,
+        metrics.OnsetME,
+        metrics.DurationME,
+        metrics.MaxMinMAE,
+    ]
+    freeze_metric_list = [
+        metrics.MinimumMAE,
+        metrics.RMSE,
+        metrics.OnsetME,
+        metrics.DurationME,
+    ]
+
     return [
         inputs.EvaluationObject(
             event_type="heat_wave",
-            metric_list=[
-                metrics.MaximumMAE,
-                metrics.RMSE,
-                metrics.OnsetME,
-                metrics.DurationME,
-                metrics.MaxMinMAE,
-            ],
+            metric_list=heatwave_metric_list,
             target=era5_heatwave_target,
             forecast=cira_heatwave_forecast,
         ),
         inputs.EvaluationObject(
             event_type="heat_wave",
-            metric_list=[
-                metrics.MaximumMAE,
-                metrics.RMSE,
-                metrics.MaxMinMAE,
-            ],
+            metric_list=heatwave_metric_list,
             target=ghcn_heatwave_target,
             forecast=cira_heatwave_forecast,
         ),
         inputs.EvaluationObject(
             event_type="freeze",
-            metric_list=[
-                metrics.MinimumMAE,
-                metrics.RMSE,
-                metrics.OnsetME,
-                metrics.DurationME,
-            ],
+            metric_list=freeze_metric_list,
             target=era5_freeze_target,
             forecast=cira_freeze_forecast,
         ),
         inputs.EvaluationObject(
             event_type="freeze",
-            metric_list=[
-                metrics.MinimumMAE,
-                metrics.RMSE,
-            ],
+            metric_list=freeze_metric_list,
             target=ghcn_freeze_target,
             forecast=cira_freeze_forecast,
         ),
-        inputs.EvaluationObject(
-            event_type="severe_convection",
-            metric_list=[
-                metrics.CSI,
-                metrics.FAR,
-            ],
-            target=lsr_target,
-            forecast=cira_severe_convection_forecast,
-        ),
-        inputs.EvaluationObject(
-            event_type="atmospheric_river",
-            metric_list=[metrics.CSI, metrics.SpatialDisplacement, metrics.EarlySignal],
-            target=era5_atmospheric_river_target,
-            forecast=cira_atmospheric_river_forecast,
-        ),
-        inputs.EvaluationObject(
-            event_type="tropical_cyclone",
-            metric_list=[
-                metrics.EarlySignal,
-                metrics.LandfallDisplacement,
-                metrics.LandfallTimeME,
-                metrics.LandfallIntensityMAE,
-            ],
-            target=ibtracs_target,
-            forecast=cira_tropical_cyclone_forecast,
-        ),
+        # TODO: Re-enable when severe convection forecast is implemented
+        # inputs.EvaluationObject(
+        #     event_type="severe_convection",
+        #     metric_list=[
+        #         metrics.CSI,
+        #         metrics.FAR,
+        #         metrics.RegionalHitsMisses,
+        #         metrics.HitsMisses,
+        #     ],
+        #     target=lsr_target,
+        #     forecast=cira_severe_convection_forecast,
+        # ),
+        # TODO: Re-enable when atmospheric river forecast is implemented
+        # inputs.EvaluationObject(
+        #     event_type="atmospheric_river",
+        #     metric_list=[metrics.CSI, metrics.SpatialDisplacement,
+        #  metrics.EarlySignal],
+        #     target=era5_atmospheric_river_target,
+        #     forecast=cira_atmospheric_river_forecast,
+        # ),
+        # TODO: Re-enable when tropical cyclone forecast is implemented
+        # inputs.EvaluationObject(
+        #     event_type="tropical_cyclone",
+        #     metric_list=[
+        #         metrics.EarlySignal,
+        #         metrics.LandfallDisplacement,
+        #         metrics.LandfallTimeME,
+        #         metrics.LandfallIntensityMAE,
+        #     ],
+        #     target=ibtracs_target,
+        #     forecast=cira_tropical_cyclone_forecast,
+        # ),
     ]

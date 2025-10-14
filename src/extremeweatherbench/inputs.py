@@ -1,6 +1,6 @@
+import abc
 import dataclasses
 import logging
-from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Callable, Optional, TypeAlias, Union
 
 import numpy as np
@@ -13,7 +13,6 @@ from extremeweatherbench import cases, derived, sources, utils
 if TYPE_CHECKING:
     from extremeweatherbench import metrics
 
-IncomingDataInput: TypeAlias = xr.Dataset | xr.DataArray | pl.LazyFrame | pd.DataFrame
 logger = logging.getLogger(__name__)
 
 #: Storage/access options for gridded target datasets.
@@ -76,8 +75,8 @@ CIRA_metadata_variable_mapping = {
     "r": "relative_humidity",
     "u10": "surface_eastward_wind",
     "v10": "surface_northward_wind",
-    "u100": "eastward_wind",
-    "v100": "northward_wind",
+    "u100": "100m_eastward_wind",
+    "v100": "100m_northward_wind",
 }
 
 # HRES forecast (weatherbench2)metadata variable mapping
@@ -97,6 +96,7 @@ HRES_metadata_variable_mapping = {
 }
 
 IBTrACS_metadata_variable_mapping = {
+    "SID": "storm_id",
     "ISO_TIME": "valid_time",
     "NAME": "tc_name",
     "LAT": "latitude",
@@ -130,6 +130,8 @@ IBTrACS_metadata_variable_mapping = {
     "MLC_PRES": "mlc_air_pressure_at_mean_sea_level",
 }
 
+IncomingDataInput: TypeAlias = xr.Dataset | xr.DataArray | pl.LazyFrame | pd.DataFrame
+
 
 def _default_preprocess(input_data: IncomingDataInput) -> IncomingDataInput:
     """Default forecast preprocess function that does nothing."""
@@ -137,7 +139,7 @@ def _default_preprocess(input_data: IncomingDataInput) -> IncomingDataInput:
 
 
 @dataclasses.dataclass
-class InputBase(ABC):
+class InputBase(abc.ABC):
     """An abstract base dataclass for target and forecast data.
 
     Attributes:
@@ -173,7 +175,7 @@ class InputBase(ABC):
         """
         self.name = name
 
-    @abstractmethod
+    @abc.abstractmethod
     def _open_data_from_source(self) -> IncomingDataInput:
         """Open the input data from the source, opting to avoid loading the entire
         dataset into memory if possible.
@@ -182,7 +184,7 @@ class InputBase(ABC):
             The input data with a type determined by the user.
         """
 
-    @abstractmethod
+    @abc.abstractmethod
     def subset_data_to_case(
         self,
         data: IncomingDataInput,
@@ -306,6 +308,10 @@ class ForecastBase(InputBase):
     ) -> IncomingDataInput:
         if not isinstance(data, xr.Dataset):
             raise ValueError(f"Expected xarray Dataset, got {type(data)}")
+        # Drop duplicate init_time values
+        if len(np.unique(data.init_time)) != len(data.init_time):
+            _, index = np.unique(data.init_time, return_index=True)
+            data = data.isel(init_time=index)
 
         # subset time first to avoid OOM masking issues
         subset_time_indices = utils.derive_indices_from_init_time_and_lead_time(
@@ -313,6 +319,10 @@ class ForecastBase(InputBase):
             case_metadata.start_date,
             case_metadata.end_date,
         )
+
+        # If there are no valid times, return an empty dataset
+        if len(subset_time_indices[0]) == 0:
+            return xr.Dataset(coords={"valid_time": []})
 
         # Use only valid init_time indices, but keep all lead_times
         unique_init_indices = np.unique(subset_time_indices[0])
@@ -384,7 +394,6 @@ class EvaluationObject:
 class KerchunkForecast(ForecastBase):
     """Forecast class for kerchunked forecast data."""
 
-    name: str = "kerchunk_forecast"
     chunks: Optional[Union[dict, str]] = "auto"
 
     def _open_data_from_source(self) -> IncomingDataInput:
@@ -399,7 +408,6 @@ class KerchunkForecast(ForecastBase):
 class ZarrForecast(ForecastBase):
     """Forecast class for zarr forecast data."""
 
-    name: str = "zarr_forecast"
     chunks: Optional[Union[dict, str]] = "auto"
 
     def _open_data_from_source(self) -> IncomingDataInput:
@@ -542,13 +550,15 @@ class GHCN(TargetBase):
             # convert to Kelvin, GHCN data is in Celsius by default
             if "surface_air_temperature" in data.collect_schema().names():
                 data = data.with_columns(pl.col("surface_air_temperature").add(273.15))
-            data = data.collect().to_pandas()
+            data = data.collect(engine="streaming").to_pandas()
             data["longitude"] = utils.convert_longitude_to_360(data["longitude"])
 
             data = data.set_index(["valid_time", "latitude", "longitude"])
             # GHCN data can have duplicate values right now, dropping here if it occurs
             try:
-                data = data[~data.index.duplicated()].to_xarray()
+                data = xr.Dataset.from_dataframe(
+                    data[~data.index.duplicated(keep="first")], sparse=True
+                )
             except Exception as e:
                 logger.warning(
                     "Error converting GHCN data to xarray: %s, returning empty Dataset",
@@ -698,6 +708,9 @@ class PPH(TargetBase):
 
     name: str = "practically_perfect_hindcast"
     source: str = PPH_URI
+    variable_mapping: dict = dataclasses.field(
+        default_factory=lambda: IBTrACS_metadata_variable_mapping.copy()
+    )
 
     def _open_data_from_source(
         self,
@@ -832,15 +845,15 @@ class IBTrACS(TargetBase):
             .unique()
         )
 
+        possible_names = utils.extract_tc_names(case_metadata.title)
+
         # Apply the filter to get all data for storms with the same number in
-        # the same season
+        # the same season, matching any of the possible names
         # This maintains the lazy evaluation
+        name_filter = pl.col("tc_name").is_in(possible_names)
         subset_target_data = target_data.join(
             matching_numbers, on="NUMBER", how="inner"
-        ).filter(
-            (pl.col("tc_name") == case_metadata.title.upper())
-            & (pl.col("SEASON").cast(pl.Int64) == season)
-        )
+        ).filter(name_filter & (pl.col("SEASON").cast(pl.Int64) == season))
 
         # Select only the columns to keep
         columns_to_keep = [
@@ -866,7 +879,7 @@ class IBTrACS(TargetBase):
 
     def _custom_convert_to_dataset(self, data: IncomingDataInput) -> xr.Dataset:
         if isinstance(data, pl.LazyFrame):
-            data = data.collect().to_pandas()
+            data = data.collect(engine="streaming").to_pandas()
 
             # IBTrACS data is in -180 to 180, convert to 0 to 360
             data["longitude"] = utils.convert_longitude_to_360(data["longitude"])
@@ -1115,11 +1128,23 @@ def maybe_subset_variables(
     data: IncomingDataInput,
     variables: list[Union[str, "derived.DerivedVariable"]],
 ) -> IncomingDataInput:
-    """Subset the variables from the data, if required."""
+    """Subset the variables from the data, if required.
+
+    If the variables list includes derived variables, extracts their required
+    and optional variables for subsetting.
+
+    Args:
+        data: The dataset to subset (xr.Dataset, xr.DataArray, pl.LazyFrame,
+            or pd.DataFrame).
+        variables: List of variable names and/or derived variable classes.
+
+    Returns:
+        The data subset to only the specified variables.
+    """
     # If there are no variables, return the data unaltered
     if len(variables) == 0:
         return data
-    # get the first derived variable if it exists
+    # Get the first derived variable if it exists
     derived_variables = [
         v
         for v in variables
@@ -1130,7 +1155,7 @@ def maybe_subset_variables(
     else:
         derived_variable = None
 
-    # get the optional variables and mapping from the derived variable
+    # Get the optional variables and mapping from the derived variable
     optional_variables = getattr(derived_variable, "optional_variables", None) or []
     optional_variables_mapping = (
         getattr(derived_variable, "optional_variables_mapping", None) or {}

@@ -1,11 +1,11 @@
+import abc
 import logging
-from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Type
+from typing import Any, Callable, Optional, Type
 
 import numpy as np
-import scores.categorical as cat  # type: ignore[import-untyped]
+import sparse
 import xarray as xr
-from scores.continuous import mae, mean_error, rmse  # type: ignore[import-untyped]
+from scores import categorical, continuous  # type: ignore[import-untyped]
 
 from extremeweatherbench import calc, derived, evaluate, utils
 from extremeweatherbench.events.tropical_cyclone import (
@@ -25,7 +25,7 @@ def get_cached_transformed_manager(
     forecast_threshold: float = 0.5,
     target_threshold: float = 0.5,
     preserve_dims: str = "lead_time",
-) -> cat.BasicContingencyManager:
+) -> categorical.BasicContingencyManager:
     """Get cached transformed contingency manager, creating if needed.
 
     This function provides a global cache that can be used by any metric
@@ -53,7 +53,7 @@ def get_cached_transformed_manager(
     binary_target = (target >= target_threshold).astype(float)
 
     # Create and transform contingency manager
-    binary_contingency_manager = cat.BinaryContingencyManager(
+    binary_contingency_manager = categorical.BinaryContingencyManager(
         binary_forecast, binary_target
     )
     transformed = binary_contingency_manager.transform(preserve_dims=preserve_dims)
@@ -64,13 +64,38 @@ def get_cached_transformed_manager(
     return transformed
 
 
+def _reduce_duck_array(
+    da: xr.DataArray, func: Callable, reduce_dims: list[str]
+) -> xr.DataArray:
+    """Reduce the duck array of the data.
+
+    Some data will return as a sparse array, which can also be reduced but requires
+    some additional logic.
+
+    Args:
+        da: The xarray dataarray to reduce.
+        func: The function to reduce the data.
+        reduce_dims: The dimensions to reduce.
+
+    Returns:
+        The reduced xarray dataarray.
+    """
+    if isinstance(da.data, np.ndarray):
+        # Reduce the data by applying func to the dims in reduce_dims
+        return da.reduce(func, dim=reduce_dims)
+    elif isinstance(da.data, sparse.COO):
+        da = utils.stack_sparse_data_from_dims(da, reduce_dims)
+        # Apply the reduce function to the data
+        return da.reduce(func, dim="stacked")
+
+
 def clear_contingency_cache():
     """Clear the global contingency manager cache."""
     global _GLOBAL_CONTINGENCY_CACHE
     _GLOBAL_CONTINGENCY_CACHE.clear()
 
 
-class BaseMetric(ABC):
+class BaseMetric(abc.ABC):
     """A BaseMetric class is an abstract class that defines the foundational interface
     for all metrics.
 
@@ -100,8 +125,7 @@ class BaseMetric(ABC):
                 "or both must be None"
             )
         else:
-            # catch if the user provides a DerivedVariable object/class instead of a
-            # string or not using the .name attribute
+            # Convert DerivedVariable object/class to string using .name
             self.forecast_variable = evaluate.maybe_convert_variable_to_string(
                 self.forecast_variable
             )
@@ -110,7 +134,7 @@ class BaseMetric(ABC):
             )
 
     @classmethod
-    @abstractmethod
+    @abc.abstractmethod
     def _compute_metric(
         cls,
         forecast: xr.Dataset,
@@ -148,7 +172,7 @@ class BaseMetric(ABC):
         )
 
 
-class AppliedMetric(ABC):
+class AppliedMetric(abc.ABC):
     """An applied metric is a wrapper around a BaseMetric.
 
     An AppliedMetric is a wrapper around a BaseMetric that is intended for more complex
@@ -168,7 +192,7 @@ class AppliedMetric(ABC):
     base_metric: type[BaseMetric]
 
     @classmethod
-    @abstractmethod
+    @abc.abstractmethod
     def _compute_applied_metric(
         cls,
         forecast: xr.DataArray,
@@ -192,14 +216,13 @@ class AppliedMetric(ABC):
         target: xr.DataArray,
         **kwargs: Any,
     ) -> xr.DataArray:
-        # first, compute the inputs to the base metric, a dictionary of forecast and
-        # target
+        # Compute inputs to the base metric (forecast and target dict)
         applied_result = cls._compute_applied_metric(
             forecast,
             target,
             **utils.filter_kwargs_for_callable(kwargs, cls._compute_applied_metric),
         )
-        # then, compute the base metric with the inputs
+        # Compute the base metric with the inputs
         return cls.base_metric.compute_metric(**applied_result)
 
 
@@ -423,7 +446,7 @@ def create_threshold_metrics(
     forecast_threshold: float = 0.5,
     target_threshold: float = 0.5,
     preserve_dims: str = "lead_time",
-    metrics: Optional[List[str]] = None,
+    metrics: Optional[list[str]] = None,
 ):
     """Create multiple threshold-based metrics with the specified thresholds.
 
@@ -440,7 +463,7 @@ def create_threshold_metrics(
         metrics = ["CSI", "FAR", "Accuracy", "TP", "FP", "TN", "FN"]
 
     # Mapping of metric names to their classes (all threshold-based metrics)
-    metric_classes: Dict[str, Type[ThresholdMetric]] = {
+    metric_classes: dict[str, Type[ThresholdMetric]] = {
         "CSI": CSI,
         "FAR": FAR,
         "Accuracy": Accuracy,
@@ -479,7 +502,7 @@ class MAE(BaseMetric):
         **kwargs: Any,
     ) -> Any:
         preserve_dims = kwargs.get("preserve_dims", "lead_time")
-        return mae(forecast, target, preserve_dims=preserve_dims)
+        return continuous.mae(forecast, target, preserve_dims=preserve_dims)
 
 
 class ME(BaseMetric):
@@ -493,7 +516,7 @@ class ME(BaseMetric):
         **kwargs: Any,
     ) -> Any:
         preserve_dims = kwargs.get("preserve_dims", "lead_time")
-        return mean_error(forecast, target, preserve_dims=preserve_dims)
+        return continuous.mean_error(forecast, target, preserve_dims=preserve_dims)
 
 
 class RMSE(BaseMetric):
@@ -507,7 +530,7 @@ class RMSE(BaseMetric):
         **kwargs: Any,
     ) -> Any:
         preserve_dims = kwargs.get("preserve_dims", "lead_time")
-        return rmse(forecast, target, preserve_dims=preserve_dims)
+        return continuous.rmse(forecast, target, preserve_dims=preserve_dims)
 
 
 class SpatialDisplacement(BaseMetric):
@@ -726,8 +749,10 @@ class MaximumMAE(AppliedMetric):
         tolerance_range: int = 24,
         **kwargs,
     ) -> dict[str, xr.DataArray]:
-        forecast = forecast.compute()
-        target_spatial_mean = target.compute().mean(["latitude", "longitude"])
+        forecast = forecast
+        target_spatial_mean = _reduce_duck_array(
+            target, func=np.nanmean, reduce_dims=["latitude", "longitude"]
+        )
         maximum_timestep = target_spatial_mean.idxmax("valid_time")
         maximum_value = target_spatial_mean.sel(valid_time=maximum_timestep)
 
@@ -735,15 +760,17 @@ class MaximumMAE(AppliedMetric):
         maximum_timestep = utils.maybe_get_closest_timestamp_to_center_of_valid_times(
             maximum_timestep, target.valid_time
         )
-        forecast_spatial_mean = forecast.mean(["latitude", "longitude"])
+        forecast_spatial_mean = _reduce_duck_array(
+            forecast, func=np.nanmean, reduce_dims=["latitude", "longitude"]
+        )
         filtered_max_forecast = forecast_spatial_mean.where(
             (
                 forecast_spatial_mean.valid_time
-                >= maximum_timestep - np.timedelta64(tolerance_range // 2, "h")
+                >= maximum_timestep.data - np.timedelta64(tolerance_range // 2, "h")
             )
             & (
                 forecast_spatial_mean.valid_time
-                <= maximum_timestep + np.timedelta64(tolerance_range // 2, "h")
+                <= maximum_timestep.data + np.timedelta64(tolerance_range // 2, "h")
             ),
             drop=True,
         ).max("valid_time")
@@ -768,10 +795,14 @@ class MinimumMAE(AppliedMetric):
         **kwargs: Any,
     ) -> Any:
         forecast = forecast.compute()
-        target_spatial_mean = target.compute().mean(["latitude", "longitude"])
+        target_spatial_mean = _reduce_duck_array(
+            target, func=np.nanmean, reduce_dims=["latitude", "longitude"]
+        )
         minimum_timestep = target_spatial_mean.idxmin("valid_time")
         minimum_value = target_spatial_mean.sel(valid_time=minimum_timestep)
-        forecast_spatial_mean = forecast.mean(["latitude", "longitude"])
+        forecast_spatial_mean = _reduce_duck_array(
+            forecast, func=np.nanmean, reduce_dims=["latitude", "longitude"]
+        )
         # Handle the case where there are >1 resulting target values
         minimum_timestep = utils.maybe_get_closest_timestamp_to_center_of_valid_times(
             minimum_timestep, target.valid_time
@@ -779,11 +810,11 @@ class MinimumMAE(AppliedMetric):
         filtered_min_forecast = forecast_spatial_mean.where(
             (
                 forecast_spatial_mean.valid_time
-                >= minimum_timestep - np.timedelta64(tolerance_range // 2, "h")
+                >= minimum_timestep.data - np.timedelta64(tolerance_range // 2, "h")
             )
             & (
                 forecast_spatial_mean.valid_time
-                <= minimum_timestep + np.timedelta64(tolerance_range // 2, "h")
+                <= minimum_timestep.data + np.timedelta64(tolerance_range // 2, "h")
             ),
             drop=True,
         ).min("valid_time")
@@ -807,20 +838,16 @@ class MaxMinMAE(AppliedMetric):
         tolerance_range: int = 24,
         **kwargs: Any,
     ) -> Any:
-        forecast = forecast.mean(
-            [
-                dim
-                for dim in forecast.dims
-                if dim not in ["valid_time", "lead_time", "time"]
-            ]
+        reduce_dims = [
+            dim
+            for dim in forecast.dims
+            if dim not in ["valid_time", "lead_time", "time"]
+        ]
+        forecast = _reduce_duck_array(
+            forecast, func=np.nanmean, reduce_dims=reduce_dims
         )
-        target = target.mean(
-            [
-                dim
-                for dim in target.dims
-                if dim not in ["valid_time", "lead_time", "time"]
-            ]
-        )
+        target = _reduce_duck_array(target, func=np.nanmean, reduce_dims=reduce_dims)
+
         time_resolution_hours = utils.determine_temporal_resolution(target)
         max_min_target_value = (
             target.groupby("valid_time.dayofyear")
@@ -840,16 +867,13 @@ class MaxMinMAE(AppliedMetric):
                 max_min_target_datetime, target.valid_time
             )
         )
-        max_min_target_value = target.sel(valid_time=max_min_target_datetime)
-        try:
-            subset_forecast = (
-                forecast.where(
-                    (
-                        forecast.valid_time
-                        >= (
-                            max_min_target_datetime
-                            - np.timedelta64(tolerance_range // 2, "h")
-                        )
+        subset_forecast = (
+            forecast.where(
+                (
+                    forecast.valid_time
+                    >= (
+                        max_min_target_datetime.data
+                        - np.timedelta64(tolerance_range // 2, "h")
                     )
                     & (
                         forecast.valid_time
@@ -860,12 +884,19 @@ class MaxMinMAE(AppliedMetric):
                     ),
                     drop=True,
                 )
-                .groupby("valid_time.dayofyear")
-                .map(
-                    utils.min_if_all_timesteps_present_forecast,
-                    time_resolution_hours=utils.determine_temporal_resolution(forecast),
-                )
-                .min("dayofyear")
+                & (
+                    forecast.valid_time
+                    <= (
+                        max_min_target_datetime.data
+                        + np.timedelta64(tolerance_range // 2, "h")
+                    )
+                ),
+                drop=True,
+            )
+            .groupby("valid_time.dayofyear")
+            .map(
+                utils.min_if_all_timesteps_present_forecast,
+                time_resolution_hours=utils.determine_temporal_resolution(forecast),
             )
         except ValueError as e:
             logger.error("Error computing max_min_mae: %s, returning nan", e)
@@ -920,7 +951,11 @@ class OnsetME(AppliedMetric):
     ) -> Any:
         target_time = target.valid_time[0] + np.timedelta64(48, "h")
         forecast = (
-            forecast.mean(["latitude", "longitude"]).groupby("init_time").map(cls.onset)
+            _reduce_duck_array(
+                forecast, func=np.nanmean, reduce_dims=["latitude", "longitude"]
+            )
+            .groupby("init_time")
+            .map(cls.onset)
         )
         return {
             "forecast": forecast,
@@ -968,7 +1003,9 @@ class DurationME(AppliedMetric):
         # Dummy implementation for duration mean error
         target_duration = target.valid_time[-1] - target.valid_time[0]
         forecast = (
-            forecast.mean(["latitude", "longitude"])
+            _reduce_duck_array(
+                forecast, func=np.nanmean, reduce_dims=["latitude", "longitude"]
+            )
             .groupby("init_time")
             .map(cls.duration)
         )

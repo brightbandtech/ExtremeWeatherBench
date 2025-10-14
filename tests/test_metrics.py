@@ -288,13 +288,17 @@ class TestMAE:
         metric = metrics.MAE()
 
         # Create simple test data where MAE should be 1.0
-        forecast = xr.Dataset({"temp": (["lead_time"], [2.0, 4.0, 6.0])})
-        target = xr.Dataset({"temp": (["lead_time"], [1.0, 3.0, 5.0])})
+        forecast = xr.DataArray(
+            data=[2.0, 4.0, 6.0], dims=["lead_time"], coords={"lead_time": [0, 1, 2]}
+        )
+        target = xr.DataArray(
+            data=[1.0, 3.0, 5.0], dims=["lead_time"], coords={"lead_time": [0, 1, 2]}
+        )
 
         result = metric._compute_metric(forecast, target)
 
         # Should return an xarray object
-        assert isinstance(result, (xr.Dataset, xr.DataArray))
+        assert isinstance(result, xr.DataArray)
 
 
 class TestME:
@@ -311,13 +315,17 @@ class TestME:
         metric = metrics.ME()
 
         # Create test data with known bias
-        forecast = xr.Dataset({"temp": (["lead_time"], [3.0, 5.0, 7.0])})
-        target = xr.Dataset({"temp": (["lead_time"], [1.0, 3.0, 5.0])})
+        forecast = xr.DataArray(
+            data=[3.0, 5.0, 7.0], dims=["lead_time"], coords={"lead_time": [0, 1, 2]}
+        )
+        target = xr.DataArray(
+            data=[1.0, 3.0, 5.0], dims=["lead_time"], coords={"lead_time": [0, 1, 2]}
+        )
 
         result = metric._compute_metric(forecast, target)
 
         # Should return an xarray object
-        assert isinstance(result, (xr.Dataset, xr.DataArray))
+        assert isinstance(result, xr.DataArray)
 
 
 class TestRMSE:
@@ -334,13 +342,17 @@ class TestRMSE:
         metric = metrics.RMSE()
 
         # Create test data
-        forecast = xr.Dataset({"temp": (["lead_time"], [3.0, 1.0, 5.0])})
-        target = xr.Dataset({"temp": (["lead_time"], [0.0, 0.0, 0.0])})
+        forecast = xr.DataArray(
+            data=[3.0, 1.0, 5.0], dims=["lead_time"], coords={"lead_time": [0, 1, 2]}
+        )
+        target = xr.DataArray(
+            data=[0.0, 0.0, 0.0], dims=["lead_time"], coords={"lead_time": [0, 1, 2]}
+        )
 
         result = metric._compute_metric(forecast, target)
 
         # Should return an xarray object
-        assert isinstance(result, (xr.Dataset, xr.DataArray))
+        assert isinstance(result, xr.DataArray)
 
 
 class TestMaximumMAE:
@@ -462,12 +474,12 @@ class TestMaxMinMAE:
             ]
         )
 
-        forecast = xr.Dataset(
-            {"temp": (["valid_time"], temp_data + 1)}, coords={"valid_time": times}
+        forecast = xr.DataArray(
+            data=temp_data + 1, dims=["valid_time"], coords={"valid_time": times}
         ).expand_dims(["latitude", "longitude"])
 
-        target = xr.Dataset(
-            {"temp": (["valid_time"], temp_data)}, coords={"valid_time": times}
+        target = xr.DataArray(
+            data=temp_data, dims=["valid_time"], coords={"valid_time": times}
         ).expand_dims(["latitude", "longitude"])
 
         # Test should not crash - actual computation might be complex
@@ -511,19 +523,16 @@ class TestOnsetME:
         # Create minimal test data
         times = pd.date_range("2020-01-01", periods=8, freq="6h")
 
-        forecast = xr.Dataset(
-            {
-                "temp": (
-                    ["init_time", "valid_time"],
-                    [[280, 285, 290, 291, 289, 286, 284, 282]],
-                )
-            },
+        forecast = xr.DataArray(
+            data=[[280, 285, 290, 291, 289, 286, 284, 282]],
+            dims=["init_time", "valid_time"],
             coords={"init_time": [pd.Timestamp("2020-01-01")], "valid_time": times},
             attrs={"forecast_resolution_hours": 6},
         ).expand_dims(["latitude", "longitude"])
 
-        target = xr.Dataset(
-            {"temp": (["valid_time"], [280, 285, 290, 291, 289, 286, 284, 282])},
+        target = xr.DataArray(
+            data=[280, 285, 290, 291, 289, 286, 284, 282],
+            dims=["valid_time"],
             coords={"valid_time": times},
         ).expand_dims(["latitude", "longitude"])
 
@@ -563,19 +572,16 @@ class TestDurationME:
         # Create minimal test data
         times = pd.date_range("2020-01-01", periods=8, freq="6h")
 
-        forecast = xr.Dataset(
-            {
-                "temp": (
-                    ["init_time", "valid_time"],
-                    [[280, 285, 290, 291, 289, 286, 284, 282]],
-                )
-            },
+        forecast = xr.DataArray(
+            data=[[280, 285, 290, 291, 289, 286, 284, 282]],
+            dims=["init_time", "valid_time"],
             coords={"init_time": [pd.Timestamp("2020-01-01")], "valid_time": times},
             attrs={"forecast_resolution_hours": 6},
         ).expand_dims(["latitude", "longitude"])
 
-        target = xr.Dataset(
-            {"temp": (["valid_time"], [280, 285, 290, 291, 289, 286, 284, 282])},
+        target = xr.DataArray(
+            data=[280, 285, 290, 291, 289, 286, 284, 282],
+            dims=["valid_time"],
             coords={"valid_time": times},
         ).expand_dims(["latitude", "longitude"])
 
