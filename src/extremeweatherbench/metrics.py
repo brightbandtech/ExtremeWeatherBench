@@ -875,14 +875,6 @@ class MaxMinMAE(AppliedMetric):
                         max_min_target_datetime.data
                         - np.timedelta64(tolerance_range // 2, "h")
                     )
-                    & (
-                        forecast.valid_time
-                        <= (
-                            max_min_target_datetime
-                            + np.timedelta64(tolerance_range // 2, "h")
-                        )
-                    ),
-                    drop=True,
                 )
                 & (
                     forecast.valid_time
@@ -898,13 +890,9 @@ class MaxMinMAE(AppliedMetric):
                 utils.min_if_all_timesteps_present_forecast,
                 time_resolution_hours=utils.determine_temporal_resolution(forecast),
             )
-        except ValueError as e:
-            logger.error("Error computing max_min_mae: %s, returning nan", e)
-            return {
-                "forecast": xr.full_like(forecast, np.nan),
-                "target": xr.full_like(target, np.nan),
-                "preserve_dims": cls.base_metric.preserve_dims,
-            }
+            .min("dayofyear")
+        )
+
         return {
             "forecast": subset_forecast,
             "target": max_min_target_value,
