@@ -1,6 +1,6 @@
 import logging
 
-from extremeweatherbench import derived, evaluate, inputs, metrics, cases
+from extremeweatherbench import cases, derived, evaluate, inputs, metrics
 
 # %%
 
@@ -32,7 +32,7 @@ ar_evaluation_objects = [
     ),
 ]
 
-# Initialize ExtremeWeatherBench; will only run on cases with event_type 
+# Initialize ExtremeWeatherBench; will only run on cases with event_type
 # atmospheric_river
 ar_ewb = evaluate.ExtremeWeatherBench(
     cases=case_yaml,

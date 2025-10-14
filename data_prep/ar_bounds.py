@@ -8,8 +8,6 @@ from typing import Dict, Optional, Tuple
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 import matplotlib.pyplot as plt
-import matplotlib.animation as animation
-import matplotlib.colors as mcolors
 import numpy as np
 import pandas as pd
 import regionmask
@@ -691,7 +689,6 @@ def main():
     }
 
     for event in tqdm(ar_events):  # Process all atmospheric river events
-
         case_id = event.get("case_id_number", "unknown")
         logger.info("\nProcessing: %s (Case %s)", event["title"], case_id)
         # Create a case object for this event
@@ -734,19 +731,15 @@ def main():
         ar_mask = ar.atmospheric_river_mask(full_data)
 
         logger.info("  AR mask shape: %s", ar_mask.shape)
-        logger.info(
-            "  Total AR grid points across all time: %s", ar_mask.sum().values
-        )
+        logger.info("  Total AR grid points across all time: %s", ar_mask.sum().values)
 
         # Generate land mask using the same approach as find_land_intersection
         logger.info("  Generating land mask...")
         try:
             # Use the same approach as find_land_intersection but just get the land
             # mask
-            mask_parent = (
-                regionmask.defined_regions.natural_earth_v5_0_0.land_110.mask(
-                    ar_mask.longitude, ar_mask.latitude
-                )
+            mask_parent = regionmask.defined_regions.natural_earth_v5_0_0.land_110.mask(
+                ar_mask.longitude, ar_mask.latitude
             )
             land_mask = mask_parent.where(np.isnan(mask_parent), 1).where(
                 mask_parent == 0, 0
@@ -865,15 +858,6 @@ def main():
             largest_obj_metadata=largest_obj_metadata,
         )
 
-        # Create AR mask animation
-        logger.info("  Creating AR mask animation...")
-        plot_ar_mask_animation(
-            case_id=event["case_id_number"],
-            title=event["title"],
-            ivt_data=ivt_da,
-            ar_mask=ar_mask,
-        )
-
         ar_bounds_results_enhanced.append(
             {
                 "case_id": event["case_id_number"],
@@ -915,6 +899,6 @@ def main():
         with open(pickle_file_path, "wb") as f:
             pickle.dump(ar_bounds_results_enhanced, f)
 
+
 if __name__ == "__main__":
     main()
-    # swap latitude and longitude in genrate_extent's center point
