@@ -332,7 +332,7 @@ class ForecastBase(InputBase):
                 f"found in forecast data"
             )
         spatiotemporally_subset_data = case_operator.case_metadata.location.mask(
-            subset_time_data, drop=True
+            subset_time_data
         )
 
         # convert from init_time/lead_time to init_time/valid_time
@@ -1002,7 +1002,7 @@ def zarr_target_subsetter(
         )
     # mask the data to the case location
     fully_subset_data = case_operator.case_metadata.location.mask(
-        subset_time_variable_data, drop=True
+        subset_time_variable_data
     )
 
     return fully_subset_data
