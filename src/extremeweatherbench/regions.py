@@ -1,46 +1,38 @@
 """Region classes and utilities for the ExtremeWeatherBench package."""
 
+import abc
 import dataclasses
 import logging
-from abc import ABC, abstractmethod
+import pathlib
 from collections import namedtuple
-from pathlib import Path
 from typing import Any, Type
 
 import geopandas as gpd  # type: ignore[import-untyped]
 import numpy as np
 import regionmask
+import shapely  # type: ignore[import-untyped]
 import xarray as xr
-from shapely import MultiPolygon, Polygon  # type: ignore[import-untyped]
 
 from extremeweatherbench import utils
 
 logger = logging.getLogger(__name__)
 
 
-class Region(ABC):
+class Region(abc.ABC):
     """Base class for different region representations."""
 
     @classmethod
-    @abstractmethod
+    @abc.abstractmethod
     def create_region(cls, *args, **kwargs) -> "Region":
         """Abstract factory method to create a region; subclasses must implement with
         their own, specialized arguments."""
         pass
 
     @property
-    @abstractmethod
+    @abc.abstractmethod
     def geopandas(self) -> gpd.GeoDataFrame:
         """Return representation of this Region as a GeoDataFrame."""
         pass
-
-    def mask(self, dataset: xr.Dataset, drop: bool = False) -> xr.Dataset:
-        """Mask a dataset to the region."""
-        mask = regionmask.mask_geopandas(
-            self.geopandas, dataset.longitude, dataset.latitude
-        )
-        mask_array = ~np.isnan(mask)
-        return dataset.where(mask_array, drop=drop)
 
     @property
     def get_bounding_coordinates(self) -> tuple[Any, ...]:
@@ -49,6 +41,27 @@ class Region(ABC):
             "BoundingCoordinates",
             ["longitude_min", "latitude_min", "longitude_max", "latitude_max"],
         )(*self.geopandas.total_bounds)
+
+    def mask(self, dataset: xr.Dataset) -> xr.Dataset:
+        """Mask a dataset to the region."""
+        # If the lats are monotonically decreasing, reverse the slice (max, min)
+        longitude_min, latitude_min, longitude_max, latitude_max = (
+            self.geopandas.total_bounds
+        )
+        latitude_order = dataset.latitude.values.argsort()
+        if latitude_order[0] > latitude_order[-1]:
+            dataset = dataset.sel(
+                latitude=slice(latitude_max, latitude_min),
+                longitude=slice(longitude_min, longitude_max),
+            )
+        else:
+            # If monotonically increasing, slice normally (min, max)
+            dataset = dataset.sel(
+                latitude=slice(latitude_min, latitude_max),
+                longitude=slice(longitude_min, longitude_max),
+            )
+
+        return dataset
 
 
 class CenteredRegion(Region):
@@ -179,11 +192,11 @@ class ShapefileRegion(Region):
     def __repr__(self):
         return f"{self.__class__.__name__}(shapefile_path={self.shapefile_path})"
 
-    def __init__(self, shapefile_path: str | Path):
-        self.shapefile_path = Path(shapefile_path)
+    def __init__(self, shapefile_path: str | pathlib.Path):
+        self.shapefile_path = pathlib.Path(shapefile_path)
 
     @classmethod
-    def create_region(cls, shapefile_path: str | Path) -> "ShapefileRegion":
+    def create_region(cls, shapefile_path: str | pathlib.Path) -> "ShapefileRegion":
         """Create a ShapefileRegion with the given parameters."""
         return cls(shapefile_path=str(shapefile_path))
 
@@ -195,6 +208,31 @@ class ShapefileRegion(Region):
         except Exception as e:
             logger.error(f"Error reading shapefile: {e}")
             raise ValueError(f"Error reading shapefile: {e}")
+
+    def mask(self, dataset: xr.Dataset, drop: bool = False) -> xr.Dataset:
+        """Mask a dataset to the region."""
+        longitude_min, latitude_min, longitude_max, latitude_max = (
+            self.geopandas.total_bounds
+        )
+        try:
+            dataset = dataset.sel(
+                latitude=slice(latitude_min, latitude_max),
+                longitude=slice(longitude_min, longitude_max),
+                drop=drop,
+            )
+        except Exception:
+            # If the latitude slice fails, try the reverse
+            dataset = dataset.sel(
+                latitude=slice(latitude_max, latitude_min),
+                longitude=slice(longitude_min, longitude_max),
+                drop=drop,
+            )
+        # Subset dataset after cutting out a box to minimize memory pressure
+        mask = regionmask.mask_geopandas(
+            self.geopandas, dataset.longitude, dataset.latitude
+        )
+        mask_array = ~np.isnan(mask)
+        return dataset.where(mask_array, drop=drop)
 
 
 # Registry of region types that can be extended by users
@@ -276,7 +314,7 @@ def _create_geopandas_from_bounds(
 
     if crosses_antimeridian:
         # Create two polygons: one for each side of the antimeridian
-        polygon1 = Polygon(
+        polygon1 = shapely.Polygon(
             [
                 (lon_min, latitude_min),
                 (180, latitude_min),
@@ -285,7 +323,7 @@ def _create_geopandas_from_bounds(
                 (lon_min, latitude_min),
             ]
         )
-        polygon2 = Polygon(
+        polygon2 = shapely.Polygon(
             [
                 (-180, latitude_min),
                 (lon_max, latitude_min),
@@ -295,11 +333,11 @@ def _create_geopandas_from_bounds(
             ]
         )
         # Use a MultiPolygon or combine the geometries
-        multi_polygon = MultiPolygon([polygon1, polygon2])
+        multi_polygon = shapely.MultiPolygon([polygon1, polygon2])
         return gpd.GeoDataFrame(geometry=[multi_polygon], crs="EPSG:4326")
     else:
         # Normal case - no antimeridian crossing
-        polygon = Polygon(
+        polygon = shapely.Polygon(
             [
                 (lon_min, latitude_min),
                 (lon_max, latitude_min),
