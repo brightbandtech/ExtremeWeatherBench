@@ -47,7 +47,7 @@ class Region(abc.ABC):
             ["longitude_min", "latitude_min", "longitude_max", "latitude_max"],
         )(*self.geopandas.total_bounds)
 
-    def mask(self, dataset: xr.Dataset) -> xr.Dataset:
+    def mask(self, dataset: xr.Dataset, drop: bool = False) -> xr.Dataset:
         """Mask a dataset to the region.
 
         Args:
@@ -56,6 +56,10 @@ class Region(abc.ABC):
         Returns:
             The subset dataset.
         """
+        if drop:
+            logger.info(
+                "drop is no longer used and will be removed in a future version."
+            )
         # If the lats are monotonically decreasing, reverse the slice (max, min)
         longitude_min, latitude_min, longitude_max, latitude_max = (
             self.geopandas.total_bounds
