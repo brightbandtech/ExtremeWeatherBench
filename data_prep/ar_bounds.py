@@ -7,20 +7,26 @@ from typing import Dict, Optional, Tuple
 
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
+import joblib
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import regionmask
 import xarray as xr
+from dask.distributed import Client
 from matplotlib.patches import Rectangle
 from scipy.ndimage import center_of_mass, label
-from tqdm.auto import tqdm
+from tqdm.dask import TqdmCallback
 
 from extremeweatherbench import cases, derived, inputs, regions, utils
 from extremeweatherbench.events import atmospheric_river as ar
 
+logging.basicConfig()
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+cb = TqdmCallback(desc="global")
+cb.register()
 
 
 def calculate_end_point(
@@ -296,7 +302,7 @@ def find_peak_ivt_timestamp(
 
         # Only consider IVT values where central AR mask is active
         ivt_in_central_ar = ivt_slice.where(central_ar_mask > 0)
-
+        aggregate_ivt = 0.0
         # Check if this central AR has significant land coverage
         if land_mask is not None:
             # Count AR pixels over land
@@ -562,16 +568,9 @@ def create_case_summary_plot(
         crs=ccrs.PlateCarree(),
     )
 
-    # Plot 3: Bounds comparison
-    ax3 = plt.subplot(1, 3, 3, projection=ccrs.PlateCarree())
-    ax3.add_feature(cfeature.COASTLINE, linewidth=0.5)
-    ax3.add_feature(cfeature.BORDERS, linewidth=0.3, alpha=0.7)
-    ax3.add_feature(cfeature.OCEAN, color="lightblue", alpha=0.3)
-    ax3.add_feature(cfeature.LAND, color="white", alpha=0.8)
-
     # Plot AR mask as background
     ar_peak.plot(
-        ax=ax3,
+        ax=ax2,
         transform=ccrs.PlateCarree(),
         cmap="Reds",
         alpha=0.3,
@@ -594,7 +593,7 @@ def create_case_summary_plot(
         alpha=0.3,
         transform=ccrs.PlateCarree(),
     )
-    ax3.add_patch(ar_rect)
+    ax2.add_patch(ar_rect)
 
     # Plot buffered bounds (dashed green)
     buff_width = buffered_bounds.longitude_max - buffered_bounds.longitude_min
@@ -611,19 +610,7 @@ def create_case_summary_plot(
         alpha=0.8,
         transform=ccrs.PlateCarree(),
     )
-    ax3.add_patch(buff_rect)
-
-    ax3.set_title("AR Bounds\nBlue: AR Object, Green: +250km Buffer")
-    ax3.set_extent(
-        [
-            min(ar_bounds["longitude_min"], buffered_bounds.longitude_min) - 5,
-            max(ar_bounds["longitude_max"], buffered_bounds.longitude_max) + 5,
-            min(ar_bounds["latitude_min"], buffered_bounds.latitude_min) - 5,
-            max(ar_bounds["latitude_max"], buffered_bounds.latitude_max) + 5,
-        ],
-        crs=ccrs.PlateCarree(),
-    )
-
+    ax2.add_patch(buff_rect)
     # Add overall title with statistics
     stats_text = f"Peak IVT: {peak_ivt_value:.0f} kg/m/s"
     if largest_obj_metadata:
@@ -637,40 +624,221 @@ def create_case_summary_plot(
     # Save plot
     plot_filename = f"case_{case_id:03d}_summary.png"
     plt.savefig(plot_filename, dpi=200, bbox_inches="tight")
-    plt.close()  # Close to save memory
-
+    plt.close(fig)  # Close to save memory
     logger.info("    Saved summary plot: %s", plot_filename)
+
+
+def process_ar_event(
+    single_case: cases.IndividualCase, era5_ar: inputs.ERA5, AR_OBJECT_CONFIG: Dict
+) -> dict:
+    """Process an atmospheric river event."""
+    logger.info(
+        "\nProcessing: %s (Case %s)", single_case.title, single_case.case_id_number
+    )
+    # Create a case object for this event
+    case_collection = cases.load_individual_cases({"cases": [single_case]})
+    case = case_collection.cases[0]
+
+    # Expand the case location by 10 degrees on all edges
+    original_location = case.location
+    expanded_location = regions.BoundingBoxRegion(
+        latitude_min=original_location.latitude_min - 10,
+        latitude_max=original_location.latitude_max + 10,
+        longitude_min=original_location.longitude_min - 10,
+        longitude_max=original_location.longitude_max + 10,
+    )
+    case.location = expanded_location
+
+    # Load ERA5 data for this case
+    era5_data = era5_ar.open_and_maybe_preprocess_data_from_source()
+    era5_data = era5_ar.maybe_map_variable_names(era5_data)
+    era5_data = era5_data.sel(
+        valid_time=era5_data.valid_time.dt.hour.isin([0, 6, 12, 18])
+    )
+    era5_data = inputs.maybe_subset_variables(era5_data, variables=era5_ar.variables)
+    era5_subset = era5_ar.subset_data_to_case(era5_data, case)
+    era5_subset = era5_subset.chunk()
+    # Compute IVT first
+    logger.info("  Computing IVT...")
+    ivt_da = ar.compute_ivt(era5_subset)
+    ivt_da.name = "integrated_vapor_transport"
+    # Compute IVT Laplacian
+    ivt_laplacian = ar.compute_ivt_laplacian(ivt_da)
+    ivt_laplacian.name = "integrated_vapor_transport_laplacian"
+
+    # Merge all data
+    full_data = xr.merge([era5_subset, ivt_da, ivt_laplacian])
+
+    # Compute AR mask
+    ar_mask = ar.atmospheric_river_mask(full_data)
+
+    logger.info("  AR mask shape: %s", ar_mask.shape)
+    logger.info("  Total AR grid points across all time: %s", ar_mask.sum().values)
+
+    # Generate land mask using the same approach as find_land_intersection
+    logger.info("  Generating land mask...")
+    try:
+        # Use the same approach as find_land_intersection but just get the land
+        # mask
+        mask_parent = regionmask.defined_regions.natural_earth_v5_0_0.land_110.mask(
+            ar_mask.longitude, ar_mask.latitude
+        )
+        land_mask = mask_parent.where(np.isnan(mask_parent), 1).where(
+            mask_parent == 0, 0
+        )
+
+        total_land_pixels = land_mask.sum().values
+        total_pixels = land_mask.size
+        land_percentage = 100 * total_land_pixels / total_pixels
+
+        logger.info(
+            "    Generated land mask: %s/%s land pixels (%.1f%%)",
+            total_land_pixels,
+            total_pixels,
+            land_percentage,
+        )
+
+    except Exception as e:
+        logger.warning("    Warning: Could not generate land mask: %s", e)
+        land_mask = None
+
+    # Method 1: Find timestamp with highest aggregate IVT over land
+    logger.info("  Finding peak IVT timestamp...")
+
+    peak_time_idx, peak_ivt_value = find_peak_ivt_timestamp(
+        ivt_da,
+        ar_mask,
+        land_mask=land_mask,
+    )
+
+    peak_time = ar_mask.valid_time.isel(valid_time=peak_time_idx).values
+    logger.info(
+        "  Peak IVT at time index %s: %.0f kg/m/s",
+        peak_time_idx,
+        peak_ivt_value,
+    )
+    logger.info("  Peak time: %s", pd.to_datetime(peak_time).strftime("%Y-%m-%d %H:%M"))
+
+    # Use AR mask at peak time for bounds calculation
+    ar_mask_at_peak = ar_mask.isel(valid_time=peak_time_idx)
+
+    # Extract minimum gridpoints parameter
+    min_gridpoints = AR_OBJECT_CONFIG["min_area_gridpoints"]
+
+    left_lon, right_lon, bottom_lat, top_lat, largest_obj_metadata = (
+        find_ar_bounds_from_largest_object(ar_mask_at_peak, min_gridpoints)
+    )
+
+    if np.isnan(left_lon):
+        logger.warning(
+            "  Warning: No valid AR objects detected for %s", single_case.title
+        )
+        logger.info("  AR pixels at peak timestamp: %s", ar_mask_at_peak.sum().values)
+        logger.info(
+            "  Object filtering criteria: min_area_gridpoints=%s",
+            min_gridpoints,
+        )
+        return {
+            "case_id": single_case.case_id_number,
+            "title": single_case.title,
+            "start_date": single_case.start_date,
+            "end_date": single_case.end_date,
+            "original_bounds": single_case.location,
+        }
+
+    logger.info(
+        "  Largest object bounds: %.1f-%.1f°, %.1f-%.1f°",
+        left_lon,
+        right_lon,
+        bottom_lat,
+        top_lat,
+    )
+
+    if largest_obj_metadata:
+        area = largest_obj_metadata["area"]
+        total = largest_obj_metadata["total_objects"]
+        logger.info(
+            "  Object properties: area=%s gridpoints, total_objects=%s",
+            area,
+            total,
+        )
+
+    # Calculate bounds with 250km buffer (using largest object bounds)
+    bounds_with_buffer = calculate_extent_bounds(
+        left_lon, right_lon, bottom_lat, top_lat, extent_buffer=250
+    )
+
+    lon_min = bounds_with_buffer.longitude_min
+    lon_max = bounds_with_buffer.longitude_max
+    lat_min = bounds_with_buffer.latitude_min
+    lat_max = bounds_with_buffer.latitude_max
+    logger.info(
+        "  Buffered bounds: %.1f-%.1f°, %.1f-%.1f°",
+        lon_min,
+        lon_max,
+        lat_min,
+        lat_max,
+    )
+
+    # Create summary plot for this case
+    logger.info("  Creating summary plot...")
+    ar_bounds_dict = {
+        "latitude_min": bottom_lat,
+        "latitude_max": top_lat,
+        "longitude_min": left_lon,
+        "longitude_max": right_lon,
+    }
+
+    create_case_summary_plot(
+        case_id=single_case.case_id_number,
+        title=single_case.title,
+        ivt_data=ivt_da,
+        ar_mask=ar_mask,
+        peak_time_idx=peak_time_idx,
+        peak_ivt_value=peak_ivt_value,
+        ar_bounds=ar_bounds_dict,
+        buffered_bounds=bounds_with_buffer,
+        largest_obj_metadata=largest_obj_metadata,
+    )
+    return {
+        "case_id": single_case.case_id_number,
+        "title": single_case.title,
+        "start_date": single_case.start_date,
+        "end_date": single_case.end_date,
+        "original_bounds": single_case.location,
+        "ar_largest_object_bounds": {
+            "latitude_min": bottom_lat,
+            "latitude_max": top_lat,
+            "longitude_min": left_lon,
+            "longitude_max": right_lon,
+        },
+        "buffered_bounds": {
+            "latitude_min": bounds_with_buffer.latitude_min,
+            "latitude_max": bounds_with_buffer.latitude_max,
+            "longitude_min": bounds_with_buffer.longitude_min,
+            "longitude_max": bounds_with_buffer.longitude_max,
+        },
+        "bounds_region": bounds_with_buffer,
+        "largest_object_metadata": largest_obj_metadata,
+        "peak_time_idx": peak_time_idx,
+        "peak_ivt_value": peak_ivt_value,
+        "peak_timestamp": ar_mask.valid_time.isel(valid_time=peak_time_idx).values,
+        "ar_config": AR_OBJECT_CONFIG,
+    }
 
 
 def main():
     """Main execution function for AR bounds processing."""
     # Setup ERA5 data source for atmospheric river detection
-    ERA5_AR = inputs.ERA5(
-        source=inputs.ARCO_ERA5_FULL_URI,
-        variables=[derived.AtmosphericRiverMask],
-        variable_mapping={
-            "specific_humidity": "specific_humidity",
-            "u_component_of_wind": "eastward_wind",
-            "v_component_of_wind": "northward_wind",
-            "time": "valid_time",
-        },
-        storage_options={"remote_options": {"anon": True}},
-    )
-
+    client = Client()
+    print(client)
+    print(client.dashboard_link)
+    era5_ar = inputs.ERA5(variables=[derived.AtmosphericRiverMask])
+    parallel = True
     # Load atmospheric river events from the events.yaml file
-    events_yaml = utils.load_events_yaml()
-    ar_events = [
-        event
-        for event in events_yaml["cases"]
-        if event["event_type"] == "atmospheric_river"
-    ]
+    events_yaml = cases.load_ewb_events_yaml_into_case_collection()
+    ar_events = events_yaml.select_cases(by="event_type", value="atmospheric_river")
     logger.info("Found %s atmospheric river events in events.yaml", len(ar_events))
-
-    # Show a few examples
-    for i, event in enumerate(ar_events):
-        logger.info("Event %s: %s", i + 1, event["title"])
-        logger.info("  Date: %s to %s", event["start_date"], event["end_date"])
-        logger.info("  Location: %s", event["location"]["parameters"])
 
     # Process each atmospheric river event with enhanced object-based bounds calculation
     ar_bounds_results_enhanced = []
@@ -682,209 +850,20 @@ def main():
         # shapes
         "consistency_weight": 0.3,  # Weight for temporal consistency vs size
     }
-
-    for event in tqdm(ar_events):  # Process all atmospheric river events
-        case_id = event.get("case_id_number", "unknown")
-        logger.info("\nProcessing: %s (Case %s)", event["title"], case_id)
-        # Create a case object for this event
-        case_collection = cases.load_individual_cases({"cases": [event]})
-        case = case_collection.cases[0]
-
-        # Expand the case location by 20 degrees on all edges
-        original_location = case.location
-        expanded_location = regions.BoundingBoxRegion(
-            latitude_min=original_location.latitude_min - 20,
-            latitude_max=original_location.latitude_max + 20,
-            longitude_min=original_location.longitude_min - 20,
-            longitude_max=original_location.longitude_max + 20,
-        )
-        case.location = expanded_location
-
-        # Load ERA5 data for this case
-        era5_data = ERA5_AR.open_and_maybe_preprocess_data_from_source()
-        era5_data = ERA5_AR.maybe_map_variable_names(era5_data)
-        era5_data = era5_data.sel(
-            valid_time=era5_data.valid_time.dt.hour.isin([0, 6, 12, 18])
-        )
-        era5_data = inputs.maybe_subset_variables(
-            era5_data, variables=ERA5_AR.variables
-        )
-        era5_subset = ERA5_AR.subset_data_to_case(era5_data, case)
-
-        # Compute IVT first
-        logger.info("  Computing IVT...")
-        ivt_da = ar.compute_ivt(era5_subset)
-        ivt_da.name = "integrated_vapor_transport"
-        # Compute IVT Laplacian
-        ivt_laplacian = ar.compute_ivt_laplacian(ivt_da)
-        ivt_laplacian.name = "integrated_vapor_transport_laplacian"
-
-        # Merge all data
-        full_data = xr.merge([era5_subset, ivt_da, ivt_laplacian])
-
-        # Compute AR mask
-        ar_mask = ar.atmospheric_river_mask(full_data)
-
-        logger.info("  AR mask shape: %s", ar_mask.shape)
-        logger.info("  Total AR grid points across all time: %s", ar_mask.sum().values)
-
-        # Generate land mask using the same approach as find_land_intersection
-        logger.info("  Generating land mask...")
-        try:
-            # Use the same approach as find_land_intersection but just get the land
-            # mask
-            mask_parent = regionmask.defined_regions.natural_earth_v5_0_0.land_110.mask(
-                ar_mask.longitude, ar_mask.latitude
+    if parallel:
+        with joblib.parallel_backend("dask"):
+            ar_bounds_results_enhanced = joblib.Parallel(n_jobs=len(ar_events))(
+                joblib.delayed(process_ar_event)(single_case, era5_ar, AR_OBJECT_CONFIG)
+                for single_case in ar_events
             )
-            land_mask = mask_parent.where(np.isnan(mask_parent), 1).where(
-                mask_parent == 0, 0
-            )
-
-            total_land_pixels = land_mask.sum().values
-            total_pixels = land_mask.size
-            land_percentage = 100 * total_land_pixels / total_pixels
-
-            logger.info(
-                "    Generated land mask: %s/%s land pixels (%.1f%%)",
-                total_land_pixels,
-                total_pixels,
-                land_percentage,
-            )
-
-        except Exception as e:
-            logger.warning("    Warning: Could not generate land mask: %s", e)
-            land_mask = None
-
-        # Method 1: Find timestamp with highest aggregate IVT over land
-        logger.info("  Finding peak IVT timestamp...")
-
-        peak_time_idx, peak_ivt_value = find_peak_ivt_timestamp(
-            ivt_da,
-            ar_mask,
-            land_mask=land_mask,
-        )
-
-        peak_time = ar_mask.valid_time.isel(valid_time=peak_time_idx).values
-        logger.info(
-            "  Peak IVT at time index %s: %.0f kg/m/s",
-            peak_time_idx,
-            peak_ivt_value,
-        )
-        logger.info(
-            "  Peak time: %s", pd.to_datetime(peak_time).strftime("%Y-%m-%d %H:%M")
-        )
-
-        # Use AR mask at peak time for bounds calculation
-        ar_mask_at_peak = ar_mask.isel(valid_time=peak_time_idx)
-
-        # Extract minimum gridpoints parameter
-        min_gridpoints = AR_OBJECT_CONFIG["min_area_gridpoints"]
-
-        left_lon, right_lon, bottom_lat, top_lat, largest_obj_metadata = (
-            find_ar_bounds_from_largest_object(ar_mask_at_peak, min_gridpoints)
-        )
-
-        if np.isnan(left_lon):
-            logger.warning(
-                "  Warning: No valid AR objects detected for %s", event["title"]
-            )
-            logger.info(
-                "  AR pixels at peak timestamp: %s", ar_mask_at_peak.sum().values
-            )
-            logger.info(
-                "  Object filtering criteria: min_area_gridpoints=%s",
-                min_gridpoints,
-            )
-            # The default criteria are now relaxed, so no fallback needed
-            continue
-
-        logger.info(
-            "  Largest object bounds: %.1f-%.1f°, %.1f-%.1f°",
-            left_lon,
-            right_lon,
-            bottom_lat,
-            top_lat,
-        )
-
-        if largest_obj_metadata:
-            area = largest_obj_metadata["area"]
-            total = largest_obj_metadata["total_objects"]
-            logger.info(
-                "  Object properties: area=%s gridpoints, total_objects=%s",
-                area,
-                total,
-            )
-
-        # Calculate bounds with 250km buffer (using largest object bounds)
-        bounds_with_buffer = calculate_extent_bounds(
-            left_lon, right_lon, bottom_lat, top_lat, extent_buffer=250
-        )
-
-        lon_min = bounds_with_buffer.longitude_min
-        lon_max = bounds_with_buffer.longitude_max
-        lat_min = bounds_with_buffer.latitude_min
-        lat_max = bounds_with_buffer.latitude_max
-        logger.info(
-            "  Buffered bounds: %.1f-%.1f°, %.1f-%.1f°",
-            lon_min,
-            lon_max,
-            lat_min,
-            lat_max,
-        )
-
-        # Create summary plot for this case
-        logger.info("  Creating summary plot...")
-        ar_bounds_dict = {
-            "latitude_min": bottom_lat,
-            "latitude_max": top_lat,
-            "longitude_min": left_lon,
-            "longitude_max": right_lon,
-        }
-
-        create_case_summary_plot(
-            case_id=event["case_id_number"],
-            title=event["title"],
-            ivt_data=ivt_da,
-            ar_mask=ar_mask,
-            peak_time_idx=peak_time_idx,
-            peak_ivt_value=peak_ivt_value,
-            ar_bounds=ar_bounds_dict,
-            buffered_bounds=bounds_with_buffer,
-            largest_obj_metadata=largest_obj_metadata,
-        )
-
-        ar_bounds_results_enhanced.append(
-            {
-                "case_id": event["case_id_number"],
-                "title": event["title"],
-                "start_date": event["start_date"],
-                "end_date": event["end_date"],
-                "original_bounds": event["location"]["parameters"],
-                "ar_largest_object_bounds": {
-                    "latitude_min": bottom_lat,
-                    "latitude_max": top_lat,
-                    "longitude_min": left_lon,
-                    "longitude_max": right_lon,
-                },
-                "buffered_bounds": {
-                    "latitude_min": bounds_with_buffer.latitude_min,
-                    "latitude_max": bounds_with_buffer.latitude_max,
-                    "longitude_min": bounds_with_buffer.longitude_min,
-                    "longitude_max": bounds_with_buffer.longitude_max,
-                },
-                "bounds_region": bounds_with_buffer,
-                "largest_object_metadata": largest_obj_metadata,
-                "peak_time_idx": peak_time_idx,
-                "peak_ivt_value": peak_ivt_value,
-                "peak_timestamp": ar_mask.valid_time.isel(
-                    valid_time=peak_time_idx
-                ).values,
-                "ar_config": AR_OBJECT_CONFIG,
-            }
-        )
+    else:
+        ar_bounds_results_enhanced = [
+            process_ar_event(single_case, era5_ar, AR_OBJECT_CONFIG)
+            for single_case in ar_events
+        ]
 
     logger.info(
-        "\nSuccessfully processed %s events with enhanced method",
+        "\nSuccessfully processed %s events",
         len(ar_bounds_results_enhanced),
     )
 
