@@ -36,14 +36,26 @@ class Region(abc.ABC):
 
     @property
     def get_bounding_coordinates(self) -> tuple[Any, ...]:
-        """Get the bounding coordinates of the region."""
+        """Get the bounding coordinates of the region.
+
+        Returns:
+            A named tuple with longitude_min, latitude_min, longitude_max, and
+            latitude_max.
+        """
         return namedtuple(
             "BoundingCoordinates",
             ["longitude_min", "latitude_min", "longitude_max", "latitude_max"],
         )(*self.geopandas.total_bounds)
 
     def mask(self, dataset: xr.Dataset) -> xr.Dataset:
-        """Mask a dataset to the region."""
+        """Mask a dataset to the region.
+
+        Args:
+            dataset: The dataset to mask.
+
+        Returns:
+            The subset dataset.
+        """
         # If the lats are monotonically decreasing, reverse the slice (max, min)
         longitude_min, latitude_min, longitude_max, latitude_max = (
             self.geopandas.total_bounds
@@ -96,7 +108,14 @@ class CenteredRegion(Region):
     def create_region(
         cls, latitude: float, longitude: float, bounding_box_degrees: float | tuple
     ) -> "CenteredRegion":
-        """Create a CenteredRegion with the given parameters."""
+        """Create a CenteredRegion with the given parameters.
+
+        Args:
+            latitude: The latitude of the center point.
+            longitude: The longitude of the center point.
+            bounding_box_degrees: The size of the bounding box in degrees or tuple of
+                (lat_degrees, lon_degrees).
+        """
 
         return cls(
             latitude=latitude,
@@ -106,7 +125,11 @@ class CenteredRegion(Region):
 
     @property
     def geopandas(self) -> gpd.GeoDataFrame:
-        """Return representation of this Region as a GeoDataFrame."""
+        """Return representation of this Region as a GeoDataFrame.
+
+        Returns:
+            A GeoDataFrame representing the region.
+        """
         if isinstance(self.bounding_box_degrees, tuple):
             bounding_box_degrees = tuple(self.bounding_box_degrees)
             latitude_min = self.latitude - bounding_box_degrees[0] / 2
@@ -172,7 +195,11 @@ class BoundingBoxRegion(Region):
 
     @property
     def geopandas(self) -> gpd.GeoDataFrame:
-        """Return representation of this Region as a GeoDataFrame."""
+        """Return representation of this Region as a GeoDataFrame.
+
+        Returns:
+            A GeoDataFrame representing the region.
+        """
         return _create_geopandas_from_bounds(
             self.longitude_min, self.longitude_max, self.latitude_min, self.latitude_max
         )
@@ -186,7 +213,7 @@ class ShapefileRegion(Region):
     on instantiation.
 
     Attributes:
-        shapefile_path: Path to the shapefile
+        shapefile_path: Local or remote path to the .shp shapefile
     """
 
     def __repr__(self):
@@ -202,7 +229,11 @@ class ShapefileRegion(Region):
 
     @property
     def geopandas(self) -> gpd.GeoDataFrame:
-        """Return representation of this Region as a GeoDataFrame."""
+        """Return representation of this Region as a GeoDataFrame.
+
+        Returns:
+            A GeoDataFrame representing the region.
+        """
         try:
             return gpd.read_file(self.shapefile_path)
         except Exception as e:
@@ -210,7 +241,15 @@ class ShapefileRegion(Region):
             raise ValueError(f"Error reading shapefile: {e}")
 
     def mask(self, dataset: xr.Dataset, drop: bool = False) -> xr.Dataset:
-        """Mask a dataset to the region."""
+        """Mask a dataset to the region.
+
+        Args:
+            dataset: The dataset to mask.
+            drop: Whether to drop NaN values outside the region. Defaults to False.
+
+        Returns:
+            The subset dataset.
+        """
         longitude_min, latitude_min, longitude_max, latitude_max = (
             self.geopandas.total_bounds
         )
