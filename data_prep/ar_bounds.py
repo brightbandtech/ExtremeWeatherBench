@@ -16,7 +16,6 @@ import xarray as xr
 from dask.distributed import Client
 from matplotlib.patches import Rectangle
 from scipy.ndimage import center_of_mass, label
-from tqdm.dask import TqdmCallback
 
 from extremeweatherbench import cases, derived, inputs, regions, utils
 from extremeweatherbench.events import atmospheric_river as ar
@@ -24,9 +23,6 @@ from extremeweatherbench.events import atmospheric_river as ar
 logging.basicConfig()
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
-
-cb = TqdmCallback(desc="global")
-cb.register()
 
 
 def calculate_end_point(
