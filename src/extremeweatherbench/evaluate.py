@@ -5,15 +5,14 @@ import logging
 import pathlib
 from typing import TYPE_CHECKING, Optional, Type, Union
 
+import joblib
 import pandas as pd
 import sparse
 import xarray as xr
-from joblib import delayed
 from tqdm.auto import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 
-from extremeweatherbench import cases, derived, inputs, utils
-from extremeweatherbench.defaults import OUTPUT_COLUMNS
+from extremeweatherbench import cases, defaults, derived, inputs, utils
 
 if TYPE_CHECKING:
     from extremeweatherbench import metrics
@@ -96,7 +95,7 @@ class ExtremeWeatherBench:
             return utils._safe_concat(run_results, ignore_index=True)
         else:
             # Return empty DataFrame with expected columns
-            return pd.DataFrame(columns=OUTPUT_COLUMNS)
+            return pd.DataFrame(columns=defaults.OUTPUT_COLUMNS)
 
 
 def _run_case_operators(
@@ -135,11 +134,9 @@ def _run_parallel(
 
     if n_jobs is None:
         logger.warning("No number of jobs provided, using joblib backend default.")
-    run_results = utils.ParallelTqdm(
-        n_jobs=n_jobs, total_tasks=len(case_operators), desc="Case Operators"
-    )(
+    run_results = joblib.Parallel(n_jobs=n_jobs)(
         # None is the cache_dir, we can't cache in parallel mode
-        delayed(compute_case_operator)(case_operator, None, **kwargs)
+        joblib.delayed(compute_case_operator)(case_operator, None, **kwargs)
         for case_operator in case_operators
     )
     return run_results
@@ -168,11 +165,11 @@ def compute_case_operator(
     forecast_ds, target_ds = _build_datasets(case_operator)
     # Check if any dimension has zero length
     if 0 in forecast_ds.sizes.values() or 0 in target_ds.sizes.values():
-        return pd.DataFrame(columns=OUTPUT_COLUMNS)
+        return pd.DataFrame(columns=defaults.OUTPUT_COLUMNS)
 
     # Or, check if there aren't any dimensions
     elif len(forecast_ds.sizes) == 0 or len(target_ds.sizes) == 0:
-        return pd.DataFrame(columns=OUTPUT_COLUMNS)
+        return pd.DataFrame(columns=defaults.OUTPUT_COLUMNS)
     # spatiotemporally align the target and forecast datasets dependent on the target
     aligned_forecast_ds, aligned_target_ds = (
         case_operator.target.maybe_align_forecast_to_target(forecast_ds, target_ds)
@@ -286,7 +283,7 @@ def _ensure_output_schema(df: pd.DataFrame, **metadata) -> pd.DataFrame:
         df[col] = value
 
     # Check for missing columns and warn
-    missing_cols = set(OUTPUT_COLUMNS) - set(df.columns)
+    missing_cols = set(defaults.OUTPUT_COLUMNS) - set(df.columns)
 
     # An output requires one of init_time or lead_time. init_time will be present for a
     # metric that assesses something in an entire model run, such as the onset error of
@@ -307,7 +304,7 @@ def _ensure_output_schema(df: pd.DataFrame, **metadata) -> pd.DataFrame:
 
     # Ensure all OUTPUT_COLUMNS are present (missing ones will be NaN)
     # and reorder to match OUTPUT_COLUMNS specification
-    return df.reindex(columns=OUTPUT_COLUMNS)
+    return df.reindex(columns=defaults.OUTPUT_COLUMNS)
 
 
 def _evaluate_metric_and_return_df(
