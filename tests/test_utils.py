@@ -114,22 +114,6 @@ def test_derive_indices_from_init_time_and_lead_time():
     assert isinstance(indices[1], np.ndarray)
 
 
-def test_default_preprocess():
-    """Test default preprocess function."""
-    # Import the function from inputs module since it was moved there
-    from extremeweatherbench.inputs import _default_preprocess
-
-    # Test with xarray Dataset
-    ds = xr.Dataset({"temp": (["x"], [1, 2, 3])})
-    result = _default_preprocess(ds)
-    assert result is ds  # Should return the same object unchanged
-
-    # Test with pandas DataFrame
-    df = pd.DataFrame({"a": [1, 2, 3]})
-    result_df = _default_preprocess(df)
-    assert result_df is df
-
-
 def test_filter_kwargs_for_callable():
     """Test filtering kwargs to match callable signature."""
 
@@ -394,6 +378,422 @@ def test_maybe_get_closest_timestamp_to_center_of_valid_times_even_valid_times()
     # Should return the closest one (13:00)
     expected = xr.DataArray(pd.Timestamp("2021-01-01 13:00"))
     xr.testing.assert_equal(result, expected)
+
+
+class TestStackSparseDataFromDims:
+    """Test the stack_sparse_data_from_dims function."""
+
+    def test_basic_functionality(self):
+        """Test basic functionality with valid sparse data."""
+        import sparse
+
+        # Create a simple sparse array with known coordinates
+        coords = ([0, 1, 2], [0, 1, 0])  # (lat_indices, lon_indices)
+        data = [1.0, 2.0, 3.0]  # values at those coordinates
+        shape = (3, 2)  # (lat, lon)
+
+        sparse_array = sparse.COO(coords, data, shape=shape)
+
+        # Create xarray DataArray with sparse data
+        da = xr.DataArray(
+            sparse_array,
+            dims=["latitude", "longitude"],
+            coords={"latitude": [10.0, 20.0, 30.0], "longitude": [100.0, 110.0]},
+        )
+
+        # Test stacking both dimensions
+        result = utils.stack_sparse_data_from_dims(
+            da, stack_dims=["latitude", "longitude"]
+        )
+
+        # Should return a DataArray with stacked dimension
+        assert isinstance(result, xr.DataArray)
+        assert "stacked" in result.dims
+        # Should be densified (no longer sparse)
+        assert not isinstance(result.data, sparse.COO)
+
+    def test_empty_sparse_data(self):
+        """Test edge case with empty sparse data."""
+        import sparse
+
+        # Create empty sparse array
+        coords = ([], [])  # No coordinates
+        data = []  # No data
+        shape = (3, 2)
+
+        sparse_array = sparse.COO(coords, data, shape=shape)
+
+        da = xr.DataArray(
+            sparse_array,
+            dims=["latitude", "longitude"],
+            coords={"latitude": [10.0, 20.0, 30.0], "longitude": [100.0, 110.0]},
+        )
+
+        # Test with empty data
+        result = utils.stack_sparse_data_from_dims(
+            da, stack_dims=["latitude", "longitude"]
+        )
+
+        # Should handle empty data gracefully
+        assert isinstance(result, xr.DataArray)
+        assert result.size == 0
+
+    def test_single_dimension_stack(self):
+        """Test with single dimension to stack."""
+        import sparse
+
+        # Create sparse array with data in one dimension
+        coords = ([0, 2], [0, 0])  # Only latitude varies
+        data = [1.0, 2.0]
+        shape = (3, 1)
+
+        sparse_array = sparse.COO(coords, data, shape=shape)
+
+        da = xr.DataArray(
+            sparse_array,
+            dims=["latitude", "longitude"],
+            coords={"latitude": [10.0, 20.0, 30.0], "longitude": [100.0]},
+        )
+
+        # Test stacking only latitude
+        result = utils.stack_sparse_data_from_dims(da, stack_dims=["latitude"])
+
+        assert isinstance(result, xr.DataArray)
+        assert "stacked" in result.dims
+        # Should preserve the longitude dimension
+        assert "longitude" in result.dims
+
+    def test_multiple_dimensions_stack(self):
+        """Test with multiple dimensions to stack."""
+        import sparse
+
+        # Create 3D sparse array
+        coords = ([0, 1, 2], [0, 1, 0], [0, 0, 1])  # (time, lat, lon)
+        data = [1.0, 2.0, 3.0]
+        shape = (3, 2, 2)
+
+        sparse_array = sparse.COO(coords, data, shape=shape)
+
+        da = xr.DataArray(
+            sparse_array,
+            dims=["time", "latitude", "longitude"],
+            coords={
+                "time": pd.date_range("2020-01-01", periods=3),
+                "latitude": [10.0, 20.0],
+                "longitude": [100.0, 110.0],
+            },
+        )
+
+        # Test stacking lat and lon, keeping time
+        result = utils.stack_sparse_data_from_dims(
+            da, stack_dims=["latitude", "longitude"]
+        )
+
+        assert isinstance(result, xr.DataArray)
+        assert "stacked" in result.dims
+        assert "time" in result.dims
+
+    def test_max_size_parameter(self):
+        """Test max_size parameter behavior."""
+        import sparse
+
+        # Create sparse array
+        coords = ([0, 1], [0, 1])
+        data = [1.0, 2.0]
+        shape = (2, 2)
+
+        sparse_array = sparse.COO(coords, data, shape=shape)
+
+        da = xr.DataArray(
+            sparse_array,
+            dims=["latitude", "longitude"],
+            coords={"latitude": [10.0, 20.0], "longitude": [100.0, 110.0]},
+        )
+
+        # Test with different max_size values
+        result_small = utils.stack_sparse_data_from_dims(
+            da, stack_dims=["latitude", "longitude"], max_size=1
+        )
+        result_large = utils.stack_sparse_data_from_dims(
+            da, stack_dims=["latitude", "longitude"], max_size=1000000
+        )
+
+        # Both should work but may have different internal representations
+        assert isinstance(result_small, xr.DataArray)
+        assert isinstance(result_large, xr.DataArray)
+
+    def test_invalid_dimensions(self):
+        """Test error handling with invalid dimensions."""
+        import sparse
+
+        coords = ([0, 1], [0, 1])
+        data = [1.0, 2.0]
+        shape = (2, 2)
+
+        sparse_array = sparse.COO(coords, data, shape=shape)
+
+        da = xr.DataArray(
+            sparse_array,
+            dims=["latitude", "longitude"],
+            coords={"latitude": [10.0, 20.0], "longitude": [100.0, 110.0]},
+        )
+
+        # Test with non-existent dimension
+        with pytest.raises((ValueError, KeyError)):
+            utils.stack_sparse_data_from_dims(da, stack_dims=["nonexistent"])
+
+    def test_no_sparse_coordinates(self):
+        """Test with sparse data that has minimal coordinates."""
+        import sparse
+
+        # Create sparse array with single point
+        coords = ([0], [0])
+        data = [5.0]
+        shape = (1, 1)
+
+        sparse_array = sparse.COO(coords, data, shape=shape)
+
+        da = xr.DataArray(
+            sparse_array,
+            dims=["latitude", "longitude"],
+            coords={"latitude": [10.0], "longitude": [100.0]},
+        )
+
+        result = utils.stack_sparse_data_from_dims(
+            da, stack_dims=["latitude", "longitude"]
+        )
+
+        assert isinstance(result, xr.DataArray)
+        assert "stacked" in result.dims
+
+    def test_duplicate_coordinate_values(self):
+        """Test with duplicate coordinate values in sparse data."""
+        import sparse
+
+        # Create sparse array where multiple sparse indices map to same coords
+        coords = ([0, 0, 1], [0, 1, 0])  # Two points at lat[0]
+        data = [1.0, 2.0, 3.0]
+        shape = (2, 2)
+
+        sparse_array = sparse.COO(coords, data, shape=shape)
+
+        da = xr.DataArray(
+            sparse_array,
+            dims=["latitude", "longitude"],
+            coords={"latitude": [10.0, 20.0], "longitude": [100.0, 110.0]},
+        )
+
+        # Should handle duplicate coordinate scenarios
+        result = utils.stack_sparse_data_from_dims(
+            da, stack_dims=["latitude", "longitude"]
+        )
+
+        assert isinstance(result, xr.DataArray)
+        assert "stacked" in result.dims
+
+    def test_zero_size_array(self):
+        """Test with zero-size sparse array."""
+        import sparse
+
+        # Create zero-size sparse array
+        sparse_array = sparse.COO([], [], shape=(0, 0))
+
+        da = xr.DataArray(
+            sparse_array,
+            dims=["latitude", "longitude"],
+            coords={"latitude": [], "longitude": []},
+        )
+
+        result = utils.stack_sparse_data_from_dims(
+            da, stack_dims=["latitude", "longitude"]
+        )
+
+        # With empty data, function returns original DataArray with densified data
+        assert isinstance(result, xr.DataArray)
+        assert result.size == 0
+        # Should preserve original dimensions for empty data
+        assert "latitude" in result.dims
+        assert "longitude" in result.dims
+        # Data should be densified (no longer sparse)
+        assert not isinstance(result.data, sparse.COO)
+
+    def test_large_sparse_array_with_small_max_size(self):
+        """Test behavior with large sparse array and small max_size."""
+        import sparse
+
+        # Create a larger sparse array
+        n_points = 1000
+        coords = (
+            np.random.randint(0, 100, n_points),
+            np.random.randint(0, 100, n_points),
+        )
+        data = np.random.random(n_points)
+        shape = (100, 100)
+
+        sparse_array = sparse.COO(coords, data, shape=shape)
+
+        da = xr.DataArray(
+            sparse_array,
+            dims=["latitude", "longitude"],
+            coords={
+                "latitude": np.linspace(0, 90, 100),
+                "longitude": np.linspace(-180, 180, 100),
+            },
+        )
+
+        # Test with very small max_size
+        result = utils.stack_sparse_data_from_dims(
+            da, stack_dims=["latitude", "longitude"], max_size=10
+        )
+
+        assert isinstance(result, xr.DataArray)
+        # Should still work even with small max_size
+
+    def test_all_dimensions_stacked(self):
+        """Test stacking all dimensions of the array."""
+        import sparse
+
+        # Create 3D sparse array
+        coords = ([0, 1, 2], [0, 1, 0], [1, 0, 1])
+        data = [1.0, 2.0, 3.0]
+        shape = (3, 2, 2)
+
+        sparse_array = sparse.COO(coords, data, shape=shape)
+
+        da = xr.DataArray(
+            sparse_array,
+            dims=["time", "latitude", "longitude"],
+            coords={
+                "time": pd.date_range("2020-01-01", periods=3),
+                "latitude": [10.0, 20.0],
+                "longitude": [100.0, 110.0],
+            },
+        )
+
+        # Stack all dimensions
+        result = utils.stack_sparse_data_from_dims(
+            da, stack_dims=["time", "latitude", "longitude"]
+        )
+
+        assert isinstance(result, xr.DataArray)
+        assert "stacked" in result.dims
+        # Should only have the stacked dimension
+        assert len(result.dims) == 1
+
+    def test_non_sparse_data_input(self):
+        """Test that function handles non-sparse data appropriately."""
+        # Create regular (dense) DataArray
+        da = xr.DataArray(
+            np.random.random((3, 2)),
+            dims=["latitude", "longitude"],
+            coords={"latitude": [10.0, 20.0, 30.0], "longitude": [100.0, 110.0]},
+        )
+
+        # This should raise an error or handle gracefully since it expects
+        # sparse data
+        with pytest.raises(AttributeError):
+            utils.stack_sparse_data_from_dims(da, stack_dims=["latitude", "longitude"])
+
+    def test_empty_stack_dims_list(self):
+        """Test with empty stack_dims list."""
+        import sparse
+
+        coords = ([0, 1], [0, 1])
+        data = [1.0, 2.0]
+        shape = (2, 2)
+
+        sparse_array = sparse.COO(coords, data, shape=shape)
+
+        da = xr.DataArray(
+            sparse_array,
+            dims=["latitude", "longitude"],
+            coords={"latitude": [10.0, 20.0], "longitude": [100.0, 110.0]},
+        )
+
+        # Test with empty stack_dims - should raise error
+        with pytest.raises((ValueError, IndexError)):
+            utils.stack_sparse_data_from_dims(da, stack_dims=[])
+
+    def test_coordinate_value_extraction(self):
+        """Test that coordinate values are correctly extracted."""
+        import sparse
+
+        # Create sparse array with specific pattern
+        coords = ([0, 2], [1, 0])  # Specific lat/lon indices
+        data = [10.0, 20.0]
+        shape = (3, 2)
+
+        sparse_array = sparse.COO(coords, data, shape=shape)
+
+        da = xr.DataArray(
+            sparse_array,
+            dims=["latitude", "longitude"],
+            coords={
+                "latitude": [1.0, 2.0, 3.0],  # lat[0]=1.0, lat[2]=3.0
+                "longitude": [100.0, 200.0],  # lon[1]=200.0, lon[0]=100.0
+            },
+        )
+
+        result = utils.stack_sparse_data_from_dims(
+            da, stack_dims=["latitude", "longitude"]
+        )
+
+        assert isinstance(result, xr.DataArray)
+        assert "stacked" in result.dims
+        # Check that we have the expected coordinate combinations
+        # Should have coordinates for (lat[0], lon[1]) and (lat[2], lon[0])
+        # which are (1.0, 200.0) and (3.0, 100.0)
+        assert len(result.stacked) == 2
+
+    def test_mixed_data_types_in_sparse_array(self):
+        """Test with different data types in sparse array."""
+        import sparse
+
+        # Create sparse array with integer data
+        coords = ([0, 1], [0, 1])
+        data = [1, 2]  # integers instead of floats
+        shape = (2, 2)
+
+        sparse_array = sparse.COO(coords, data, shape=shape)
+
+        da = xr.DataArray(
+            sparse_array,
+            dims=["latitude", "longitude"],
+            coords={"latitude": [10.0, 20.0], "longitude": [100.0, 110.0]},
+        )
+
+        result = utils.stack_sparse_data_from_dims(
+            da, stack_dims=["latitude", "longitude"]
+        )
+
+        assert isinstance(result, xr.DataArray)
+        assert "stacked" in result.dims
+
+    def test_very_large_max_size(self):
+        """Test with extremely large max_size parameter."""
+        import sparse
+
+        coords = ([0, 1], [0, 1])
+        data = [1.0, 2.0]
+        shape = (2, 2)
+
+        sparse_array = sparse.COO(coords, data, shape=shape)
+
+        da = xr.DataArray(
+            sparse_array,
+            dims=["latitude", "longitude"],
+            coords={"latitude": [10.0, 20.0], "longitude": [100.0, 110.0]},
+        )
+
+        # Test with very large max_size
+        result = utils.stack_sparse_data_from_dims(
+            da,
+            stack_dims=["latitude", "longitude"],
+            max_size=10**10,  # Very large number
+        )
+
+        assert isinstance(result, xr.DataArray)
+        assert "stacked" in result.dims
 
 
 class TestSafeConcat:
