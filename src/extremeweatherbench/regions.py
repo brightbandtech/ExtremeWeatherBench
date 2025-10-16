@@ -274,8 +274,7 @@ class ShapefileRegion(Region):
         mask = regionmask.mask_geopandas(
             self.geopandas, dataset.longitude, dataset.latitude
         )
-        mask_array = ~np.isnan(mask)
-        return dataset.where(mask_array, drop=drop)
+        return dataset.where(~np.isnan(mask), drop=drop)
 
 
 # Registry of region types that can be extended by users
