@@ -1,8 +1,9 @@
 import abc
 import logging
-from typing import Any, Callable, Optional, Type
+from typing import Any, Callable, Literal, Optional, Type
 
 import numpy as np
+import pandas as pd
 import sparse
 import xarray as xr
 from scores import categorical, continuous  # type: ignore[import-untyped]
@@ -130,10 +131,9 @@ class BaseMetric(abc.ABC):
                 self.target_variable
             )
 
-    @classmethod
     @abc.abstractmethod
     def _compute_metric(
-        cls,
+        self,
         forecast: xr.Dataset,
         target: xr.Dataset,
         **kwargs: Any,
@@ -148,9 +148,8 @@ class BaseMetric(abc.ABC):
         """
         pass
 
-    @classmethod
     def compute_metric(
-        cls,
+        self,
         forecast: xr.Dataset,
         target: xr.Dataset,
         **kwargs,
@@ -162,9 +161,9 @@ class BaseMetric(abc.ABC):
             target: The target dataset.
             kwargs: Additional keyword arguments to pass to the metric.
         """
-        return cls._compute_metric(
-            forecast,
-            target,
+        return self._compute_metric(
+            forecast=forecast,
+            target=target,
             **kwargs,
         )
 
@@ -188,10 +187,9 @@ class AppliedMetric(abc.ABC):
 
     base_metric: type[BaseMetric]
 
-    @classmethod
     @abc.abstractmethod
     def _compute_applied_metric(
-        cls,
+        self,
         forecast: xr.DataArray,
         target: xr.DataArray,
         **kwargs: Any,
@@ -206,21 +204,20 @@ class AppliedMetric(abc.ABC):
         """
         pass
 
-    @classmethod
     def compute_metric(
-        cls,
+        self,
         forecast: xr.DataArray,
         target: xr.DataArray,
         **kwargs: Any,
     ) -> xr.DataArray:
         # Compute inputs to the base metric (forecast and target dict)
-        applied_result = cls._compute_applied_metric(
-            forecast,
-            target,
-            **utils.filter_kwargs_for_callable(kwargs, cls._compute_applied_metric),
+        applied_result = self._compute_applied_metric(
+            forecast=forecast,
+            target=target,
+            **utils.filter_kwargs_for_callable(kwargs, self._compute_applied_metric),
         )
         # Compute the base metric with the inputs
-        return cls.base_metric.compute_metric(**applied_result)
+        return self.base_metric.compute_metric(**applied_result)
 
 
 class ThresholdMetric(BaseMetric):
@@ -258,9 +255,8 @@ class CSI(ThresholdMetric):
 
     name = "critical_success_index"
 
-    @classmethod
     def _compute_metric(
-        cls,
+        self,
         forecast: xr.Dataset,
         target: xr.Dataset,
         **kwargs: Any,
@@ -284,9 +280,8 @@ class FAR(ThresholdMetric):
 
     name = "false_alarm_ratio"
 
-    @classmethod
     def _compute_metric(
-        cls,
+        self,
         forecast: xr.Dataset,
         target: xr.Dataset,
         **kwargs: Any,
@@ -310,9 +305,8 @@ class TP(ThresholdMetric):
 
     name = "true_positive"
 
-    @classmethod
     def _compute_metric(
-        cls,
+        self,
         forecast: xr.Dataset,
         target: xr.Dataset,
         **kwargs: Any,
@@ -337,9 +331,8 @@ class FP(ThresholdMetric):
 
     name = "false_positive"
 
-    @classmethod
     def _compute_metric(
-        cls,
+        self,
         forecast: xr.Dataset,
         target: xr.Dataset,
         **kwargs: Any,
@@ -364,9 +357,8 @@ class TN(ThresholdMetric):
 
     name = "true_negative"
 
-    @classmethod
     def _compute_metric(
-        cls,
+        self,
         forecast: xr.Dataset,
         target: xr.Dataset,
         **kwargs: Any,
@@ -391,9 +383,8 @@ class FN(ThresholdMetric):
 
     name = "false_negative"
 
-    @classmethod
     def _compute_metric(
-        cls,
+        self,
         forecast: xr.Dataset,
         target: xr.Dataset,
         **kwargs: Any,
@@ -418,9 +409,8 @@ class Accuracy(ThresholdMetric):
 
     name = "accuracy"
 
-    @classmethod
     def _compute_metric(
-        cls,
+        self,
         forecast: xr.DataArray,
         target: xr.DataArray,
         **kwargs: Any,
@@ -491,9 +481,8 @@ def create_threshold_metrics(
 class MAE(BaseMetric):
     name = "mae"
 
-    @classmethod
     def _compute_metric(
-        cls,
+        self,
         forecast: xr.Dataset,
         target: xr.Dataset,
         **kwargs: Any,
@@ -505,9 +494,8 @@ class MAE(BaseMetric):
 class ME(BaseMetric):
     name = "me"
 
-    @classmethod
     def _compute_metric(
-        cls,
+        self,
         forecast: xr.Dataset,
         target: xr.Dataset,
         **kwargs: Any,
@@ -519,9 +507,8 @@ class ME(BaseMetric):
 class RMSE(BaseMetric):
     name = "rmse"
 
-    @classmethod
     def _compute_metric(
-        cls,
+        self,
         forecast: xr.Dataset,
         target: xr.Dataset,
         **kwargs: Any,
@@ -541,9 +528,8 @@ class EarlySignal(BaseMetric):
 
     name = "early_signal"
 
-    @classmethod
     def _compute_metric(
-        cls,
+        self,
         forecast: xr.Dataset,
         target: xr.Dataset,
         threshold: Optional[float] = None,
@@ -684,13 +670,12 @@ class EarlySignal(BaseMetric):
 
 
 class MaximumMAE(AppliedMetric):
-    base_metric = MAE
+    base_metric = MAE()
 
     name = "maximum_mae"
 
-    @classmethod
     def _compute_applied_metric(
-        cls,
+        self,
         forecast: xr.DataArray,
         target: xr.DataArray,
         tolerance_range: int = 24,
@@ -724,18 +709,17 @@ class MaximumMAE(AppliedMetric):
         return {
             "forecast": filtered_max_forecast,
             "target": maximum_value,
-            "preserve_dims": cls.base_metric.preserve_dims,
+            "preserve_dims": self.base_metric.preserve_dims,
         }
 
 
 class MinimumMAE(AppliedMetric):
-    base_metric = MAE
+    base_metric = MAE()
 
     name = "minimum_mae"
 
-    @classmethod
     def _compute_applied_metric(
-        cls,
+        self,
         forecast: xr.DataArray,
         target: xr.DataArray,
         tolerance_range: int = 24,
@@ -768,18 +752,17 @@ class MinimumMAE(AppliedMetric):
         return {
             "forecast": filtered_min_forecast,
             "target": minimum_value,
-            "preserve_dims": cls.base_metric.preserve_dims,
+            "preserve_dims": self.base_metric.preserve_dims,
         }
 
 
 class MaxMinMAE(AppliedMetric):
-    base_metric = MAE
+    base_metric = MAE()
 
     name = "max_min_mae"
 
-    @classmethod
     def _compute_applied_metric(
-        cls,
+        self,
         forecast: xr.DataArray,
         target: xr.DataArray,
         tolerance_range: int = 24,
@@ -843,17 +826,16 @@ class MaxMinMAE(AppliedMetric):
         return {
             "forecast": subset_forecast,
             "target": max_min_target_value,
-            "preserve_dims": cls.base_metric.preserve_dims,
+            "preserve_dims": self.base_metric.preserve_dims,
         }
 
 
 class OnsetME(AppliedMetric):
-    base_metric = ME
+    base_metric = ME()
     preserve_dims: str = "init_time"
     name = "onset_me"
 
-    @staticmethod
-    def onset(forecast: xr.DataArray, **kwargs) -> xr.DataArray:
+    def onset(self, forecast: xr.DataArray, **kwargs) -> xr.DataArray:
         if (forecast.valid_time.max() - forecast.valid_time.min()).values.astype(
             "timedelta64[h]"
         ) >= 48:
@@ -880,9 +862,8 @@ class OnsetME(AppliedMetric):
                         )
         return xr.DataArray(np.datetime64("NaT", "ns"))
 
-    @classmethod
     def _compute_applied_metric(
-        cls, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
+        self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
     ) -> Any:
         target_time = target.valid_time[0] + np.timedelta64(48, "h")
         forecast = (
@@ -890,81 +871,153 @@ class OnsetME(AppliedMetric):
                 forecast, func=np.nanmean, reduce_dims=["latitude", "longitude"]
             )
             .groupby("init_time")
-            .map(cls.onset)
+            .map(self.onset)
         )
         return {
             "forecast": forecast,
             "target": target_time,
-            "preserve_dims": cls.preserve_dims,
-        }
-
-
-class DurationME(AppliedMetric):
-    base_metric = ME
-
-    preserve_dims: str = "init_time"
-
-    name = "duration_me"
-
-    @staticmethod
-    def duration(forecast: xr.DataArray, **kwargs) -> xr.DataArray:
-        if (forecast.valid_time.max() - forecast.valid_time.min()).values.astype(
-            "timedelta64[h]"
-        ) >= 48:
-            # get the forecast resolution hours from the kwargs, otherwise default to 6
-            num_timesteps = 24 // kwargs.get("forecast_resolution_hours", 6)
-            if num_timesteps is None:
-                return xr.DataArray(np.datetime64("NaT", "ns"))
-            min_daily_vals = forecast.groupby("valid_time.dayofyear").map(
-                utils.min_if_all_timesteps_present,
-                time_resolution_hours=utils.determine_temporal_resolution(forecast),
-            )
-            # need to determine logic for 2+ consecutive days to find the date
-            # that the heatwave starts
-            if min_daily_vals.size >= 2:  # Check if we have at least 2 values
-                for i in range(min_daily_vals.size - 1):
-                    if min_daily_vals[i] >= 288.15 and min_daily_vals[i + 1] >= 288.15:
-                        consecutive_days = np.timedelta64(
-                            2, "D"
-                        )  # Start with 2 since we found first pair
-                        for j in range(i + 2, min_daily_vals.size):
-                            if min_daily_vals[j] >= 288.15:
-                                consecutive_days += np.timedelta64(1, "D")
-                            else:
-                                break
-                        return xr.DataArray(consecutive_days.astype("timedelta64[ns]"))
-        return xr.DataArray(np.timedelta64("NaT", "ns"))
-
-    @classmethod
-    def _compute_applied_metric(
-        cls, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
-    ) -> Any:
-        # Dummy implementation for duration mean error
-        target_duration = target.valid_time[-1] - target.valid_time[0]
-        forecast = (
-            _reduce_duck_array(
-                forecast, func=np.nanmean, reduce_dims=["latitude", "longitude"]
-            )
-            .groupby("init_time")
-            .map(
-                cls.duration,
-            )
-        )
-        return {
-            "forecast": forecast,
-            "target": target_duration,
-            "preserve_dims": cls.preserve_dims,
+            "preserve_dims": self.preserve_dims,
         }
 
 
 # TODO: complete lead time detection implementation
 class LeadTimeDetection(AppliedMetric):
-    base_metric = MAE
+    base_metric = MAE()
     name = "lead_time_detection"
     preserve_dims: str = "init_time"
 
-    @classmethod
     def _compute_applied_metric(
-        cls, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
+        self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
     ) -> Any:
         raise NotImplementedError("LeadTimeDetection is not implemented yet")
+
+
+class HeatwaveDurationME(AppliedMetric):
+    """Compute the duration of a case's event.
+    This metric computes the mean error between the forecast and target heatwave
+    durations.
+
+    Args:
+        climatology: The climatology dataset for the heatwave criteria.
+
+    Returns:
+        The mean error between the forecast and target heatwave durations.
+    """
+
+    preserve_dims: str = "init_time"
+    criteria_sign: Literal[">", ">=", "<", "<=", "=="] = ">="
+    name = "heatwave_duration_me"
+
+    def __init__(
+        self,
+        climatology: xr.DataArray,
+    ):
+        self.climatology = climatology
+
+    @property
+    def base_metric(self) -> type[BaseMetric]:
+        return ME()
+
+    def _compute_applied_metric(
+        self,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
+    ) -> Any:
+        """Compute spatially averaged heatwave duration mean error.
+
+        Args:
+            forecast: Forecast dataset with dims (init_time, lead_time, valid_time)
+            target: Target dataset with dims (valid_time)
+
+        Returns:
+            Mean error between forecast and target heatwave durations
+        """
+        climatology_time = convert_day_yearofday_to_time(
+            self.climatology, forecast.valid_time.dt.year.values[0]
+        )
+        climatology_time = climatology_time.interp_like(
+            target, method="nearest", kwargs={"fill_value": "extrapolate"}
+        )
+        climatology_time = climatology_time.compute()
+        forecast = forecast.compute()
+        target = target.compute()
+        forecast_mask = create_comparison_mask(
+            forecast, climatology_time, self.criteria_sign
+        )
+        # Calculate target duration (count of timesteps exceeding climatology)
+        target_mask = create_comparison_mask(
+            target, climatology_time, self.criteria_sign
+        )
+
+        # Track NaN locations in forecast data
+        forecast_valid_mask = ~forecast.isnull()
+
+        # Apply valid data mask (exclude NaN positions in forecast)
+        forecast_mask_final = forecast_mask.where(forecast_valid_mask)
+        target_mask_final = target_mask.where(forecast_valid_mask)
+
+        # Sum to get durations (NaN values are excluded by default)
+        forecast_duration = forecast_mask_final.groupby(self.preserve_dims).sum()
+        target_duration = target_mask_final.groupby(self.preserve_dims).sum()
+        # Compute mean error using the base metric
+        return {
+            "forecast": forecast_duration,
+            "target": target_duration,
+            "preserve_dims": self.preserve_dims,
+        }
+
+
+def create_comparison_mask(
+    data: xr.DataArray,
+    criteria: xr.DataArray,
+    sign: str = ">=",
+) -> xr.DataArray:
+    """Create comparison mask based on sign.
+
+    Args:
+        data: Input data array
+        criteria: Criteria to compare against
+        sign: Comparison operator (">", ">=", "<", "<=", "==")
+
+    Returns:
+        Boolean mask where condition is met
+    """
+    match sign:
+        case ">=":
+            return data >= criteria
+        case ">":
+            return data > criteria
+        case "<=":
+            return data <= criteria
+        case "<":
+            return data < criteria
+        case "==":
+            return data == criteria
+        case _:
+            raise ValueError(f"Unsupported sign: {sign}")
+
+
+def convert_day_yearofday_to_time(dataset: xr.Dataset, year: int) -> xr.Dataset:
+    """Convert dayofyear and hour coordinates in an xarray Dataset to a new time
+    coordinate.
+
+    Args:
+        dataset: The input xarray dataset.
+        year: The base year to use for the time coordinate.
+
+    Returns:
+        The dataset with a new time coordinate.
+    """
+    # Create a new time coordinate by combining dayofyear and hour
+    time_dim = pd.date_range(
+        start=f"{year}-01-01",
+        periods=len(dataset["dayofyear"]) * len(dataset["hour"]),
+        freq="6h",
+    )
+    dataset = dataset.stack(valid_time=("dayofyear", "hour")).drop(
+        ["dayofyear", "hour"]
+    )
+    # Assign the new time coordinate to the dataset
+    dataset = dataset.assign_coords(valid_time=time_dim)
+
+    return dataset

@@ -1,11 +1,12 @@
+import abc
 import dataclasses
 import logging
-import abc
 from typing import TYPE_CHECKING, Callable, Optional, TypeAlias, Union
 
 import numpy as np
 import pandas as pd
 import polars as pl
+import sparse
 import xarray as xr
 
 from extremeweatherbench import cases, derived, sources, utils
@@ -940,7 +941,14 @@ def align_forecast_to_target(
     time_space_aligned_forecast = time_aligned_forecast.interp(
         **spatial_dims, method=method, kwargs={"fill_value": "extrapolate"}
     )
-
+    # # If any of the target variables are sparse, make forecast sparse as well
+    for variable in time_aligned_target.data_vars:
+        if isinstance(time_aligned_target[variable].data, sparse.COO):
+            time_space_aligned_forecast[variable].data = sparse.COO(
+                target_data[variable].data.coords,
+                time_space_aligned_forecast[variable].data,
+                shape=time_space_aligned_forecast[variable].data.shape,
+            )
     return time_space_aligned_forecast, time_aligned_target
 
 

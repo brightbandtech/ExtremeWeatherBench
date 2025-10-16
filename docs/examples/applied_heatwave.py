@@ -1,7 +1,11 @@
 import logging
+import time
+
+import xarray as xr
 
 from extremeweatherbench import cases, evaluate, inputs, metrics
 
+start_time = time.time()
 # Set the logger level to INFO
 logger = logging.getLogger("extremeweatherbench")
 logger.setLevel(logging.INFO)
@@ -9,7 +13,7 @@ logger.setLevel(logging.INFO)
 # Load case data from the default events.yaml
 # Users can also define their own cases_dict structure
 case_yaml = cases.load_ewb_events_yaml_into_case_collection()
-
+case_yaml.select_cases(by="case_id_number", value=1, inplace=True)
 
 # Define targets
 # ERA5 target
@@ -31,12 +35,16 @@ hres_forecast = inputs.ZarrForecast(
     variable_mapping=inputs.HRES_metadata_variable_mapping,
 )
 
+climatology = xr.open_zarr(
+    "gs://extremeweatherbench/datasets/surface_air_temperature_1990_2019_climatology.zarr",  # noqa: E501
+    storage_options={"anon": True},
+    chunks="auto",
+)
+climatology = climatology["2m_temperature"].sel(quantile=0.85)
 metrics_list = [
+    metrics.HeatwaveDurationME(climatology),
     metrics.MaximumMAE,
     metrics.RMSE,
-    metrics.OnsetME,
-    metrics.DurationME,
-    metrics.MaxMinMAE,
 ]
 # Create a list of evaluation objects for heatwave
 heatwave_evaluation_object = [
@@ -62,6 +70,7 @@ ewb = evaluate.ExtremeWeatherBench(
 
 # Run the workflow
 outputs = ewb.run(
+    n_jobs=1,
     # tolerance range is the number of hours before and after the timestamp a
     # validating occurrence is checked in the forecasts for certain metrics
     # such as minimum temperature MAE
@@ -70,6 +79,7 @@ outputs = ewb.run(
     # them into memory for each metric
     pre_compute=True,
 )
-
+outputs.to_csv("outputs.csv")
 # Print the outputs; can be saved if desired
-logger.info(outputs.head())
+logger.info(f"Time taken: {time.time() - start_time} seconds")
+print(f"Time taken: {time.time() - start_time} seconds")
