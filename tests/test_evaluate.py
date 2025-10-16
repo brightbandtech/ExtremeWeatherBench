@@ -2,18 +2,24 @@
 
 import datetime
 import logging
+import pathlib
 import tempfile
-from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest import mock
 
 import numpy as np
 import pandas as pd
 import pytest
 import xarray as xr
 
-from extremeweatherbench import cases, derived, evaluate, inputs, metrics
-from extremeweatherbench.defaults import OUTPUT_COLUMNS
-from extremeweatherbench.regions import CenteredRegion
+from extremeweatherbench import (
+    cases,
+    defaults,
+    derived,
+    evaluate,
+    inputs,
+    metrics,
+    regions,
+)
 
 
 @pytest.fixture
@@ -24,7 +30,7 @@ def sample_individual_case():
         title="Test Heat Wave",
         start_date=datetime.datetime(2021, 6, 20),
         end_date=datetime.datetime(2021, 6, 25),
-        location=CenteredRegion(
+        location=regions.CenteredRegion(
             latitude=45.0, longitude=-120.0, bounding_box_degrees=5.0
         ),
         event_type="heat_wave",
@@ -58,7 +64,7 @@ def sample_cases_dict(sample_individual_case):
 @pytest.fixture
 def mock_target_base():
     """Create a mock TargetBase object."""
-    mock_target = Mock(spec=inputs.TargetBase)
+    mock_target = mock.Mock(spec=inputs.TargetBase)
     mock_target.name = "MockTarget"
     mock_target.variables = ["2m_temperature"]
     mock_target.open_and_maybe_preprocess_data_from_source.return_value = xr.Dataset()
@@ -78,7 +84,7 @@ def mock_target_base():
 @pytest.fixture
 def mock_forecast_base():
     """Create a mock ForecastBase object."""
-    mock_forecast = Mock(spec=inputs.ForecastBase)
+    mock_forecast = mock.Mock(spec=inputs.ForecastBase)
     mock_forecast.name = "MockForecast"
     mock_forecast.variables = ["surface_air_temperature"]
     mock_forecast.open_and_maybe_preprocess_data_from_source.return_value = xr.Dataset()
@@ -94,7 +100,7 @@ def mock_forecast_base():
 @pytest.fixture
 def mock_base_metric():
     """Create a mock BaseMetric object."""
-    mock_metric = Mock(spec=metrics.BaseMetric)
+    mock_metric = mock.Mock(spec=metrics.BaseMetric)
     mock_metric.name = "MockMetric"
     mock_metric.compute_metric.return_value = xr.DataArray(
         data=[1.0], dims=["lead_time"], coords={"lead_time": [0]}
@@ -206,13 +212,13 @@ class TestExtremeWeatherBench:
         )
 
         # Cache dir should be converted to Path object
-        assert ewb.cache_dir == Path(cache_dir)
+        assert ewb.cache_dir == pathlib.Path(cache_dir)
 
     def test_initialization_with_path_cache_dir(
         self, sample_cases_dict, sample_evaluation_object
     ):
         """Test ExtremeWeatherBench initialization with Path cache directory."""
-        cache_dir = Path("/tmp/test_cache")
+        cache_dir = pathlib.Path("/tmp/test_cache")
         ewb = evaluate.ExtremeWeatherBench(
             cases=sample_cases_dict,
             evaluation_objects=[sample_evaluation_object],
@@ -221,7 +227,7 @@ class TestExtremeWeatherBench:
 
         assert ewb.cache_dir == cache_dir
 
-    @patch("extremeweatherbench.cases.build_case_operators")
+    @mock.patch("extremeweatherbench.cases.build_case_operators")
     def test_case_operators_property(
         self,
         mock_build_case_operators,
@@ -244,7 +250,7 @@ class TestExtremeWeatherBench:
         )
         assert result == [sample_case_operator]
 
-    @patch("extremeweatherbench.evaluate._run_case_operators")
+    @mock.patch("extremeweatherbench.evaluate._run_case_operators")
     def test_run_serial(
         self,
         mock_run_case_operators,
@@ -254,7 +260,7 @@ class TestExtremeWeatherBench:
     ):
         """Test the run method executes serially."""
         # Mock the case operators property
-        with patch.object(
+        with mock.patch.object(
             evaluate.ExtremeWeatherBench, "case_operators", new=[sample_case_operator]
         ):
             # Mock _run_case_operators to return a list of DataFrames
@@ -282,7 +288,7 @@ class TestExtremeWeatherBench:
             assert isinstance(result, pd.DataFrame)
             assert len(result) == 1
 
-    @patch("extremeweatherbench.evaluate._run_case_operators")
+    @mock.patch("extremeweatherbench.evaluate._run_case_operators")
     def test_run_parallel(
         self,
         mock_run_case_operators,
@@ -291,7 +297,7 @@ class TestExtremeWeatherBench:
         sample_case_operator,
     ):
         """Test the run method executes in parallel."""
-        with patch.object(
+        with mock.patch.object(
             evaluate.ExtremeWeatherBench, "case_operators", new=[sample_case_operator]
         ):
             mock_result = [
@@ -318,7 +324,7 @@ class TestExtremeWeatherBench:
             assert isinstance(result, pd.DataFrame)
             assert len(result) == 1
 
-    @patch("extremeweatherbench.evaluate._run_case_operators")
+    @mock.patch("extremeweatherbench.evaluate._run_case_operators")
     def test_run_with_kwargs(
         self,
         mock_run_case_operators,
@@ -327,7 +333,7 @@ class TestExtremeWeatherBench:
         sample_case_operator,
     ):
         """Test the run method passes kwargs correctly."""
-        with patch.object(
+        with mock.patch.object(
             evaluate.ExtremeWeatherBench, "case_operators", new=[sample_case_operator]
         ):
             mock_result = [pd.DataFrame({"value": [1.0]})]
@@ -346,7 +352,7 @@ class TestExtremeWeatherBench:
             assert call_args[1]["pre_compute"] is True
             assert isinstance(result, pd.DataFrame)
 
-    @patch("extremeweatherbench.evaluate._run_case_operators")
+    @mock.patch("extremeweatherbench.evaluate._run_case_operators")
     def test_run_empty_results(
         self,
         mock_run_case_operators,
@@ -354,7 +360,7 @@ class TestExtremeWeatherBench:
         sample_evaluation_object,
     ):
         """Test the run method handles empty results."""
-        with patch.object(evaluate.ExtremeWeatherBench, "case_operators", new=[]):
+        with mock.patch.object(evaluate.ExtremeWeatherBench, "case_operators", new=[]):
             mock_run_case_operators.return_value = []
 
             ewb = evaluate.ExtremeWeatherBench(
@@ -366,9 +372,9 @@ class TestExtremeWeatherBench:
 
             assert isinstance(result, pd.DataFrame)
             assert len(result) == 0
-            assert list(result.columns) == OUTPUT_COLUMNS
+            assert list(result.columns) == defaults.OUTPUT_COLUMNS
 
-    @patch("extremeweatherbench.evaluate.compute_case_operator")
+    @mock.patch("extremeweatherbench.evaluate.compute_case_operator")
     def test_run_with_caching(
         self,
         mock_compute_case_operator,
@@ -378,9 +384,9 @@ class TestExtremeWeatherBench:
     ):
         """Test the run method with caching enabled."""
         with tempfile.TemporaryDirectory() as temp_dir:
-            cache_dir = Path(temp_dir)
+            cache_dir = pathlib.Path(temp_dir)
 
-            with patch.object(
+            with mock.patch.object(
                 evaluate.ExtremeWeatherBench,
                 "case_operators",
                 new=[sample_case_operator],
@@ -397,7 +403,7 @@ class TestExtremeWeatherBench:
                 def mock_compute_with_caching(case_operator, cache_dir_arg, **kwargs):
                     if cache_dir_arg:
                         cache_path = (
-                            Path(cache_dir_arg)
+                            pathlib.Path(cache_dir_arg)
                             if isinstance(cache_dir_arg, str)
                             else cache_dir_arg
                         )
@@ -421,16 +427,16 @@ class TestExtremeWeatherBench:
                 cache_file = cache_dir / "case_results.pkl"
                 assert cache_file.exists()
 
-    @patch("extremeweatherbench.evaluate.compute_case_operator")
+    @mock.patch("extremeweatherbench.evaluate.compute_case_operator")
     def test_run_multiple_cases(
         self, mock_compute_case_operator, sample_cases_dict, sample_evaluation_object
     ):
         """Test the run method with multiple case operators."""
         # Create multiple case operators
-        case_operator_1 = Mock()
-        case_operator_2 = Mock()
+        case_operator_1 = mock.Mock()
+        case_operator_2 = mock.Mock()
 
-        with patch.object(
+        with mock.patch.object(
             evaluate.ExtremeWeatherBench,
             "case_operators",
             new=[case_operator_1, case_operator_2],
@@ -456,7 +462,7 @@ class TestExtremeWeatherBench:
 class TestRunCaseOperators:
     """Test the _run_case_operators function."""
 
-    @patch("extremeweatherbench.evaluate._run_serial")
+    @mock.patch("extremeweatherbench.evaluate._run_serial")
     def test_run_case_operators_serial(self, mock_run_serial, sample_case_operator):
         """Test _run_case_operators routes to serial execution."""
         mock_results = [pd.DataFrame({"value": [1.0]})]
@@ -467,7 +473,7 @@ class TestRunCaseOperators:
         mock_run_serial.assert_called_once_with([sample_case_operator], None)
         assert result == mock_results
 
-    @patch("extremeweatherbench.evaluate._run_parallel")
+    @mock.patch("extremeweatherbench.evaluate._run_parallel")
     def test_run_case_operators_parallel(self, mock_run_parallel, sample_case_operator):
         """Test _run_case_operators routes to parallel execution."""
         mock_results = [pd.DataFrame({"value": [1.0]})]
@@ -478,7 +484,7 @@ class TestRunCaseOperators:
         mock_run_parallel.assert_called_once_with([sample_case_operator], 4)
         assert result == mock_results
 
-    @patch("extremeweatherbench.evaluate._run_serial")
+    @mock.patch("extremeweatherbench.evaluate._run_serial")
     def test_run_case_operators_with_kwargs(
         self, mock_run_serial, sample_case_operator
     ):
@@ -499,7 +505,7 @@ class TestRunCaseOperators:
         assert call_args[1]["pre_compute"] is True
         assert isinstance(result, list)
 
-    @patch("extremeweatherbench.evaluate._run_parallel")
+    @mock.patch("extremeweatherbench.evaluate._run_parallel")
     def test_run_case_operators_parallel_with_kwargs(
         self, mock_run_parallel, sample_case_operator
     ):
@@ -519,7 +525,7 @@ class TestRunCaseOperators:
 
     def test_run_case_operators_empty_list(self):
         """Test _run_case_operators with empty case operator list."""
-        with patch("extremeweatherbench.evaluate._run_serial") as mock_serial:
+        with mock.patch("extremeweatherbench.evaluate._run_serial") as mock_serial:
             mock_serial.return_value = []
 
             result = evaluate._run_case_operators([], n_jobs=1)
@@ -531,8 +537,8 @@ class TestRunCaseOperators:
 class TestRunSerial:
     """Test the _run_serial function."""
 
-    @patch("extremeweatherbench.evaluate.compute_case_operator")
-    @patch("tqdm.auto.tqdm")
+    @mock.patch("extremeweatherbench.evaluate.compute_case_operator")
+    @mock.patch("tqdm.auto.tqdm")
     def test_run_serial_basic(
         self, mock_tqdm, mock_compute_case_operator, sample_case_operator
     ):
@@ -548,12 +554,12 @@ class TestRunSerial:
         assert len(result) == 1
         assert result[0].equals(mock_result)
 
-    @patch("extremeweatherbench.evaluate.compute_case_operator")
-    @patch("tqdm.auto.tqdm")
+    @mock.patch("extremeweatherbench.evaluate.compute_case_operator")
+    @mock.patch("tqdm.auto.tqdm")
     def test_run_serial_multiple_cases(self, mock_tqdm, mock_compute_case_operator):
         """Test _run_serial with multiple case operators."""
-        case_op_1 = Mock()
-        case_op_2 = Mock()
+        case_op_1 = mock.Mock()
+        case_op_2 = mock.Mock()
         case_operators = [case_op_1, case_op_2]
 
         mock_tqdm.return_value = case_operators
@@ -569,8 +575,8 @@ class TestRunSerial:
         assert result[0]["case_id_number"].iloc[0] == 1
         assert result[1]["case_id_number"].iloc[0] == 2
 
-    @patch("extremeweatherbench.evaluate.compute_case_operator")
-    @patch("tqdm.auto.tqdm")
+    @mock.patch("extremeweatherbench.evaluate.compute_case_operator")
+    @mock.patch("tqdm.auto.tqdm")
     def test_run_serial_with_kwargs(
         self, mock_tqdm, mock_compute_case_operator, sample_case_operator
     ):
@@ -598,19 +604,19 @@ class TestRunSerial:
 class TestRunParallel:
     """Test the _run_parallel function."""
 
-    @patch("extremeweatherbench.evaluate.Parallel")
-    @patch("extremeweatherbench.evaluate.delayed")
-    @patch("tqdm.auto.tqdm")
+    @mock.patch("extremeweatherbench.utils.ParallelTqdm")
+    @mock.patch("joblib.delayed")
+    @mock.patch("tqdm.auto.tqdm")
     def test_run_parallel_basic(
         self, mock_tqdm, mock_delayed, mock_parallel_class, sample_case_operator
     ):
         """Test basic _run_parallel functionality."""
         # Setup mocks
         mock_tqdm.return_value = [sample_case_operator]
-        mock_delayed_func = Mock()
+        mock_delayed_func = mock.Mock()
         mock_delayed.return_value = mock_delayed_func
 
-        mock_parallel_instance = Mock()
+        mock_parallel_instance = mock.Mock()
         mock_parallel_class.return_value = mock_parallel_instance
         mock_result = [pd.DataFrame({"value": [1.0], "case_id_number": [1]})]
         mock_parallel_instance.return_value = mock_result
@@ -625,23 +631,23 @@ class TestRunParallel:
 
         assert result == mock_result
 
-    @patch("extremeweatherbench.evaluate.Parallel")
-    @patch("extremeweatherbench.evaluate.delayed")
-    @patch("tqdm.auto.tqdm")
+    @mock.patch("extremeweatherbench.utils.ParallelTqdm")
+    @mock.patch("joblib.delayed")
+    @mock.patch("tqdm.auto.tqdm")
     def test_run_parallel_with_none_n_jobs(
         self, mock_tqdm, mock_delayed, mock_parallel_class, sample_case_operator
     ):
         """Test _run_parallel with n_jobs=None (should use all CPUs)."""
         mock_tqdm.return_value = [sample_case_operator]
-        mock_delayed_func = Mock()
+        mock_delayed_func = mock.Mock()
         mock_delayed.return_value = mock_delayed_func
 
-        mock_parallel_instance = Mock()
+        mock_parallel_instance = mock.Mock()
         mock_parallel_class.return_value = mock_parallel_instance
         mock_result = [pd.DataFrame({"value": [1.0]})]
         mock_parallel_instance.return_value = mock_result
 
-        with patch("extremeweatherbench.evaluate.logger.warning") as mock_warning:
+        with mock.patch("extremeweatherbench.evaluate.logger.warning") as mock_warning:
             result = evaluate._run_parallel([sample_case_operator], n_jobs=None)
 
             # Should warn about using all CPUs
@@ -653,22 +659,22 @@ class TestRunParallel:
             mock_parallel_class.assert_called_once_with(n_jobs=None)
             assert isinstance(result, list)
 
-    @patch("extremeweatherbench.evaluate.Parallel")
-    @patch("extremeweatherbench.evaluate.delayed")
-    @patch("tqdm.auto.tqdm")
+    @mock.patch("extremeweatherbench.utils.ParallelTqdm")
+    @mock.patch("joblib.delayed")
+    @mock.patch("tqdm.auto.tqdm")
     def test_run_parallel_multiple_cases(
         self, mock_tqdm, mock_delayed, mock_parallel_class
     ):
         """Test _run_parallel with multiple case operators."""
-        case_op_1 = Mock()
-        case_op_2 = Mock()
+        case_op_1 = mock.Mock()
+        case_op_2 = mock.Mock()
         case_operators = [case_op_1, case_op_2]
 
         mock_tqdm.return_value = case_operators
-        mock_delayed_func = Mock()
+        mock_delayed_func = mock.Mock()
         mock_delayed.return_value = mock_delayed_func
 
-        mock_parallel_instance = Mock()
+        mock_parallel_instance = mock.Mock()
         mock_parallel_class.return_value = mock_parallel_instance
         mock_result = [
             pd.DataFrame({"value": [1.0], "case_id_number": [1]}),
@@ -682,18 +688,18 @@ class TestRunParallel:
         assert result[0]["case_id_number"].iloc[0] == 1
         assert result[1]["case_id_number"].iloc[0] == 2
 
-    @patch("extremeweatherbench.evaluate.Parallel")
-    @patch("extremeweatherbench.evaluate.delayed")
-    @patch("tqdm.auto.tqdm")
+    @mock.patch("extremeweatherbench.utils.ParallelTqdm")
+    @mock.patch("joblib.delayed")
+    @mock.patch("tqdm.auto.tqdm")
     def test_run_parallel_with_kwargs(
         self, mock_tqdm, mock_delayed, mock_parallel_class, sample_case_operator
     ):
         """Test _run_parallel passes kwargs correctly."""
         mock_tqdm.return_value = [sample_case_operator]
-        mock_delayed_func = Mock()
+        mock_delayed_func = mock.Mock()
         mock_delayed.return_value = mock_delayed_func
 
-        mock_parallel_instance = Mock()
+        mock_parallel_instance = mock.Mock()
         mock_parallel_class.return_value = mock_parallel_instance
         mock_result = [pd.DataFrame({"value": [1.0]})]
         mock_parallel_instance.return_value = mock_result
@@ -717,10 +723,12 @@ class TestRunParallel:
 
     def test_run_parallel_empty_list(self):
         """Test _run_parallel with empty case operator list."""
-        with patch("extremeweatherbench.evaluate.Parallel") as mock_parallel_class:
-            with patch("tqdm.auto.tqdm") as mock_tqdm:
+        with mock.patch(
+            "extremeweatherbench.utils.ParallelTqdm"
+        ) as mock_parallel_class:
+            with mock.patch("tqdm.auto.tqdm") as mock_tqdm:
                 mock_tqdm.return_value = []
-                mock_parallel_instance = Mock()
+                mock_parallel_instance = mock.Mock()
                 mock_parallel_class.return_value = mock_parallel_instance
                 mock_parallel_instance.return_value = []
 
@@ -732,9 +740,9 @@ class TestRunParallel:
 class TestComputeCaseOperator:
     """Test the compute_case_operator function."""
 
-    @patch("extremeweatherbench.evaluate._build_datasets")
-    @patch("extremeweatherbench.derived.maybe_derive_variables")
-    @patch("extremeweatherbench.evaluate._evaluate_metric_and_return_df")
+    @mock.patch("extremeweatherbench.evaluate._build_datasets")
+    @mock.patch("extremeweatherbench.derived.maybe_derive_variables")
+    @mock.patch("extremeweatherbench.evaluate._evaluate_metric_and_return_df")
     def test_compute_case_operator_basic(
         self,
         mock_evaluate_metric,
@@ -775,8 +783,8 @@ class TestComputeCaseOperator:
         mock_build_datasets.assert_called_once_with(sample_case_operator)
         assert isinstance(result, pd.DataFrame)
 
-    @patch("extremeweatherbench.evaluate._build_datasets")
-    @patch("extremeweatherbench.derived.maybe_derive_variables")
+    @mock.patch("extremeweatherbench.evaluate._build_datasets")
+    @mock.patch("extremeweatherbench.derived.maybe_derive_variables")
     def test_compute_case_operator_with_precompute(
         self,
         mock_derive_variables,
@@ -796,9 +804,9 @@ class TestComputeCaseOperator:
             sample_forecast_dataset,
             sample_target_dataset,
         )
-        sample_case_operator.metric_list = [Mock()]
+        sample_case_operator.metric_list = [mock.Mock()]
 
-        with patch(
+        with mock.patch(
             "extremeweatherbench.evaluate._compute_and_maybe_cache"
         ) as mock_compute_cache:
             mock_compute_cache.return_value = [
@@ -806,7 +814,7 @@ class TestComputeCaseOperator:
                 sample_target_dataset,
             ]
 
-            with patch(
+            with mock.patch(
                 "extremeweatherbench.evaluate._evaluate_metric_and_return_df"
             ) as mock_evaluate:
                 mock_evaluate.return_value = pd.DataFrame({"value": [1.0]})
@@ -818,7 +826,7 @@ class TestComputeCaseOperator:
                 mock_compute_cache.assert_called_once()
                 assert isinstance(result, pd.DataFrame)
 
-    @patch("extremeweatherbench.evaluate._build_datasets")
+    @mock.patch("extremeweatherbench.evaluate._build_datasets")
     def test_compute_case_operator_multiple_metrics(
         self,
         mock_build_datasets,
@@ -833,8 +841,8 @@ class TestComputeCaseOperator:
         )
 
         # Create multiple metrics
-        metric_1 = Mock()
-        metric_2 = Mock()
+        metric_1 = mock.Mock()
+        metric_2 = mock.Mock()
         sample_case_operator.metric_list = [metric_1, metric_2]
 
         sample_case_operator.target.maybe_align_forecast_to_target.return_value = (
@@ -842,10 +850,12 @@ class TestComputeCaseOperator:
             sample_target_dataset,
         )
 
-        with patch("extremeweatherbench.derived.maybe_derive_variables") as mock_derive:
+        with mock.patch(
+            "extremeweatherbench.derived.maybe_derive_variables"
+        ) as mock_derive:
             mock_derive.side_effect = lambda ds, variables, **kwargs: ds
 
-            with patch(
+            with mock.patch(
                 "extremeweatherbench.evaluate._evaluate_metric_and_return_df"
             ) as mock_evaluate:
                 mock_evaluate.return_value = pd.DataFrame({"value": [1.0]})
@@ -856,7 +866,7 @@ class TestComputeCaseOperator:
                 assert mock_evaluate.call_count == 2
                 assert len(result) == 2
 
-    @patch("extremeweatherbench.evaluate._build_datasets")
+    @mock.patch("extremeweatherbench.evaluate._build_datasets")
     def test_compute_case_operator_zero_length_forecast_dataset(
         self, mock_build_datasets, sample_case_operator
     ):
@@ -872,12 +882,12 @@ class TestComputeCaseOperator:
         # Should return empty DataFrame with correct columns
         assert isinstance(result, pd.DataFrame)
         assert len(result) == 0
-        assert list(result.columns) == OUTPUT_COLUMNS
+        assert list(result.columns) == defaults.OUTPUT_COLUMNS
 
         # _build_datasets should be called, but no further processing should occur
         mock_build_datasets.assert_called_once_with(sample_case_operator)
 
-    @patch("extremeweatherbench.evaluate._build_datasets")
+    @mock.patch("extremeweatherbench.evaluate._build_datasets")
     def test_compute_case_operator_zero_length_target_dataset(
         self, mock_build_datasets, sample_case_operator, sample_forecast_dataset
     ):
@@ -892,11 +902,11 @@ class TestComputeCaseOperator:
         # Should return empty DataFrame with correct columns
         assert isinstance(result, pd.DataFrame)
         assert len(result) == 0
-        assert list(result.columns) == OUTPUT_COLUMNS
+        assert list(result.columns) == defaults.OUTPUT_COLUMNS
 
         mock_build_datasets.assert_called_once_with(sample_case_operator)
 
-    @patch("extremeweatherbench.evaluate._build_datasets")
+    @mock.patch("extremeweatherbench.evaluate._build_datasets")
     def test_compute_case_operator_empty_forecast_dataset(
         self, mock_build_datasets, sample_case_operator
     ):
@@ -912,12 +922,12 @@ class TestComputeCaseOperator:
         # Should return empty DataFrame with correct columns
         assert isinstance(result, pd.DataFrame)
         assert len(result) == 0
-        assert list(result.columns) == OUTPUT_COLUMNS
+        assert list(result.columns) == defaults.OUTPUT_COLUMNS
 
         # _build_datasets should be called, but no further processing should occur
         mock_build_datasets.assert_called_once_with(sample_case_operator)
 
-    @patch("extremeweatherbench.evaluate._build_datasets")
+    @mock.patch("extremeweatherbench.evaluate._build_datasets")
     def test_compute_case_operator_empty_target_dataset(
         self, mock_build_datasets, sample_case_operator, sample_forecast_dataset
     ):
@@ -932,7 +942,7 @@ class TestComputeCaseOperator:
         # Should return empty DataFrame with correct columns
         assert isinstance(result, pd.DataFrame)
         assert len(result) == 0
-        assert list(result.columns) == OUTPUT_COLUMNS
+        assert list(result.columns) == defaults.OUTPUT_COLUMNS
 
         mock_build_datasets.assert_called_once_with(sample_case_operator)
 
@@ -942,7 +952,9 @@ class TestPipelineFunctions:
 
     def test_build_datasets(self, sample_case_operator):
         """Test _build_datasets function."""
-        with patch("extremeweatherbench.evaluate.run_pipeline") as mock_run_pipeline:
+        with mock.patch(
+            "extremeweatherbench.evaluate.run_pipeline"
+        ) as mock_run_pipeline:
             mock_forecast_ds = xr.Dataset(attrs={"name": "forecast_source"})
             mock_target_ds = xr.Dataset(attrs={"name": "target_source"})
             mock_run_pipeline.side_effect = [mock_target_ds, mock_forecast_ds]
@@ -955,7 +967,9 @@ class TestPipelineFunctions:
 
     def test_build_datasets_zero_length_dimensions(self, sample_case_operator):
         """Test _build_datasets when forecast has zero-length dimensions."""
-        with patch("extremeweatherbench.evaluate.run_pipeline") as mock_run_pipeline:
+        with mock.patch(
+            "extremeweatherbench.evaluate.run_pipeline"
+        ) as mock_run_pipeline:
             # Create a forecast dataset with zero-length valid_time dimension
             mock_forecast_ds = xr.Dataset(
                 coords={"valid_time": []},  # Empty valid_time coordinate
@@ -964,7 +978,9 @@ class TestPipelineFunctions:
             mock_target_ds = xr.Dataset(attrs={"source": "target"})
             mock_run_pipeline.side_effect = [mock_target_ds, mock_forecast_ds]
 
-            with patch("extremeweatherbench.evaluate.logger.warning") as mock_warning:
+            with mock.patch(
+                "extremeweatherbench.evaluate.logger.warning"
+            ) as mock_warning:
                 forecast_ds, target_ds = evaluate._build_datasets(sample_case_operator)
 
                 # Should return empty datasets
@@ -988,14 +1004,18 @@ class TestPipelineFunctions:
     def test_build_datasets_zero_length_warning_content(self, sample_case_operator):
         """Test _build_datasets warning message content when forecast has
         zero-length dimensions."""
-        with patch("extremeweatherbench.evaluate.run_pipeline") as mock_run_pipeline:
+        with mock.patch(
+            "extremeweatherbench.evaluate.run_pipeline"
+        ) as mock_run_pipeline:
             # Create a forecast dataset with zero-length dimension
             mock_forecast_ds = xr.Dataset(
                 coords={"lead_time": []}, attrs={"source": "forecast"}
             )
             mock_run_pipeline.return_value = mock_forecast_ds
 
-            with patch("extremeweatherbench.evaluate.logger.warning") as mock_warning:
+            with mock.patch(
+                "extremeweatherbench.evaluate.logger.warning"
+            ) as mock_warning:
                 forecast_ds, target_ds = evaluate._build_datasets(sample_case_operator)
 
                 # Verify warning message contains expected information
@@ -1019,14 +1039,18 @@ class TestPipelineFunctions:
 
     def test_build_datasets_multiple_zero_length_dimensions(self, sample_case_operator):
         """Test _build_datasets when forecast has multiple zero-length dimensions."""
-        with patch("extremeweatherbench.evaluate.run_pipeline") as mock_run_pipeline:
+        with mock.patch(
+            "extremeweatherbench.evaluate.run_pipeline"
+        ) as mock_run_pipeline:
             # Create a forecast dataset with multiple zero-length dimensions
             mock_forecast_ds = xr.Dataset(
                 coords={"valid_time": [], "latitude": []}, attrs={"source": "forecast"}
             )
             mock_run_pipeline.return_value = mock_forecast_ds
 
-            with patch("extremeweatherbench.evaluate.logger.warning") as mock_warning:
+            with mock.patch(
+                "extremeweatherbench.evaluate.logger.warning"
+            ) as mock_warning:
                 forecast_ds, target_ds = evaluate._build_datasets(sample_case_operator)
 
                 # Should return empty datasets
@@ -1040,7 +1064,9 @@ class TestPipelineFunctions:
 
     def test_build_datasets_normal_dimensions(self, sample_case_operator):
         """Test _build_datasets when forecast has normal (non-zero) dimensions."""
-        with patch("extremeweatherbench.evaluate.run_pipeline") as mock_run_pipeline:
+        with mock.patch(
+            "extremeweatherbench.evaluate.run_pipeline"
+        ) as mock_run_pipeline:
             # Create datasets with normal dimensions
             mock_forecast_ds = xr.Dataset(
                 coords={"valid_time": [1, 2, 3], "latitude": [40, 45, 50]},
@@ -1049,7 +1075,9 @@ class TestPipelineFunctions:
             mock_target_ds = xr.Dataset(attrs={"source": "target"})
             mock_run_pipeline.side_effect = [mock_target_ds, mock_forecast_ds]
 
-            with patch("extremeweatherbench.evaluate.logger.warning") as mock_warning:
+            with mock.patch(
+                "extremeweatherbench.evaluate.logger.warning"
+            ) as mock_warning:
                 forecast_ds, target_ds = evaluate._build_datasets(sample_case_operator)
 
                 # Should return the actual datasets
@@ -1062,8 +1090,8 @@ class TestPipelineFunctions:
                 # Should call run_pipeline twice (for both forecast and target)
                 assert mock_run_pipeline.call_count == 2
 
-    @patch("extremeweatherbench.derived.maybe_derive_variables")
-    @patch("extremeweatherbench.evaluate.inputs.maybe_subset_variables")
+    @mock.patch("extremeweatherbench.derived.maybe_derive_variables")
+    @mock.patch("extremeweatherbench.evaluate.inputs.maybe_subset_variables")
     def test_run_pipeline_forecast(
         self,
         mock_maybe_subset_variables,
@@ -1104,8 +1132,8 @@ class TestPipelineFunctions:
         sample_case_operator.forecast.maybe_convert_to_dataset.assert_called_once()
         sample_case_operator.forecast.add_source_to_dataset_attrs.assert_called_once()
 
-    @patch("extremeweatherbench.derived.maybe_derive_variables")
-    @patch("extremeweatherbench.evaluate.inputs.maybe_subset_variables")
+    @mock.patch("extremeweatherbench.derived.maybe_derive_variables")
+    @mock.patch("extremeweatherbench.evaluate.inputs.maybe_subset_variables")
     def test_run_pipeline_target(
         self,
         mock_maybe_subset_variables,
@@ -1165,7 +1193,7 @@ class TestPipelineFunctions:
         """Test _compute_and_maybe_cache with cache directory (should raise
         NotImplementedError)."""
         with tempfile.TemporaryDirectory() as temp_dir:
-            cache_dir = Path(temp_dir)
+            cache_dir = pathlib.Path(temp_dir)
 
             with pytest.raises(
                 NotImplementedError, match="Caching is not implemented yet"
@@ -1331,7 +1359,7 @@ class TestErrorHandling:
             evaluation_objects=[sample_evaluation_object],
         )
 
-        with patch("extremeweatherbench.cases.build_case_operators") as mock_build:
+        with mock.patch("extremeweatherbench.cases.build_case_operators") as mock_build:
             mock_build.return_value = []
 
             result = ewb.run()
@@ -1342,7 +1370,7 @@ class TestErrorHandling:
 
     def test_compute_case_operator_exception_handling(self, sample_case_operator):
         """Test exception handling in compute_case_operator."""
-        with patch("extremeweatherbench.evaluate._build_datasets") as mock_build:
+        with mock.patch("extremeweatherbench.evaluate._build_datasets") as mock_build:
             mock_build.side_effect = Exception("Data loading failed")
 
             with pytest.raises(Exception, match="Data loading failed"):
@@ -1378,7 +1406,7 @@ class TestErrorHandling:
                 event_type="heat_wave",
             )
 
-    @patch("extremeweatherbench.evaluate._run_serial")
+    @mock.patch("extremeweatherbench.evaluate._run_serial")
     def test_run_case_operators_serial_exception(
         self, mock_run_serial, sample_case_operator
     ):
@@ -1388,7 +1416,7 @@ class TestErrorHandling:
         with pytest.raises(Exception, match="Serial execution failed"):
             evaluate._run_case_operators([sample_case_operator], n_jobs=1)
 
-    @patch("extremeweatherbench.evaluate._run_parallel")
+    @mock.patch("extremeweatherbench.evaluate._run_parallel")
     def test_run_case_operators_parallel_exception(
         self, mock_run_parallel, sample_case_operator
     ):
@@ -1398,8 +1426,8 @@ class TestErrorHandling:
         with pytest.raises(Exception, match="Parallel execution failed"):
             evaluate._run_case_operators([sample_case_operator], n_jobs=2)
 
-    @patch("extremeweatherbench.evaluate.compute_case_operator")
-    @patch("tqdm.auto.tqdm")
+    @mock.patch("extremeweatherbench.evaluate.compute_case_operator")
+    @mock.patch("tqdm.auto.tqdm")
     def test_run_serial_case_operator_exception(
         self, mock_tqdm, mock_compute_case_operator, sample_case_operator
     ):
@@ -1410,27 +1438,27 @@ class TestErrorHandling:
         with pytest.raises(Exception, match="Case operator failed"):
             evaluate._run_serial([sample_case_operator])
 
-    @patch("extremeweatherbench.evaluate.Parallel")
-    @patch("extremeweatherbench.evaluate.delayed")
-    @patch("tqdm.auto.tqdm")
+    @mock.patch("extremeweatherbench.utils.ParallelTqdm")
+    @mock.patch("joblib.delayed")
+    @mock.patch("tqdm.auto.tqdm")
     def test_run_parallel_joblib_exception(
         self, mock_tqdm, mock_delayed, mock_parallel_class, sample_case_operator
     ):
         """Test _run_parallel handles joblib Parallel exceptions."""
         mock_tqdm.return_value = [sample_case_operator]
-        mock_delayed_func = Mock()
+        mock_delayed_func = mock.Mock()
         mock_delayed.return_value = mock_delayed_func
 
-        mock_parallel_instance = Mock()
+        mock_parallel_instance = mock.Mock()
         mock_parallel_class.return_value = mock_parallel_instance
         mock_parallel_instance.side_effect = Exception("Joblib parallel failed")
 
         with pytest.raises(Exception, match="Joblib parallel failed"):
             evaluate._run_parallel([sample_case_operator], n_jobs=2)
 
-    @patch("extremeweatherbench.evaluate.Parallel")
-    @patch("extremeweatherbench.evaluate.delayed")
-    @patch("tqdm.auto.tqdm")
+    @mock.patch("extremeweatherbench.utils.ParallelTqdm")
+    @mock.patch("joblib.delayed")
+    @mock.patch("tqdm.auto.tqdm")
     def test_run_parallel_delayed_function_exception(
         self, mock_tqdm, mock_delayed, mock_parallel_class, sample_case_operator
     ):
@@ -1445,14 +1473,14 @@ class TestErrorHandling:
             # This will consume the generator and trigger the delayed call
             list(generator)
 
-        mock_parallel_instance = Mock()
+        mock_parallel_instance = mock.Mock()
         mock_parallel_class.return_value = mock_parallel_instance
         mock_parallel_instance.side_effect = consume_generator
 
         with pytest.raises(Exception, match="Delayed function creation failed"):
             evaluate._run_parallel([sample_case_operator], n_jobs=2)
 
-    @patch("extremeweatherbench.evaluate._run_case_operators")
+    @mock.patch("extremeweatherbench.evaluate._run_case_operators")
     def test_run_method_exception_propagation(
         self, mock_run_case_operators, sample_cases_dict, sample_evaluation_object
     ):
@@ -1467,13 +1495,13 @@ class TestErrorHandling:
         with pytest.raises(Exception, match="Execution failed"):
             ewb.run()
 
-    @patch("extremeweatherbench.evaluate.compute_case_operator")
-    @patch("tqdm.auto.tqdm")
+    @mock.patch("extremeweatherbench.evaluate.compute_case_operator")
+    @mock.patch("tqdm.auto.tqdm")
     def test_run_serial_partial_failure(self, mock_tqdm, mock_compute_case_operator):
         """Test _run_serial behavior when some case operators fail."""
-        case_op_1 = Mock()
-        case_op_2 = Mock()
-        case_op_3 = Mock()
+        case_op_1 = mock.Mock()
+        case_op_2 = mock.Mock()
+        case_op_3 = mock.Mock()
         case_operators = [case_op_1, case_op_2, case_op_3]
 
         mock_tqdm.return_value = case_operators
@@ -1492,15 +1520,15 @@ class TestErrorHandling:
         # Should have tried only the first two
         assert mock_compute_case_operator.call_count == 2
 
-    @patch("extremeweatherbench.evaluate.Parallel")
-    @patch("extremeweatherbench.evaluate.delayed")
-    @patch("tqdm.auto.tqdm")
+    @mock.patch("extremeweatherbench.utils.ParallelTqdm")
+    @mock.patch("joblib.delayed")
+    @mock.patch("tqdm.auto.tqdm")
     def test_run_parallel_invalid_n_jobs(
         self, mock_tqdm, mock_delayed, mock_parallel_class, sample_case_operator
     ):
         """Test _run_parallel with invalid n_jobs parameter."""
         mock_tqdm.return_value = [sample_case_operator]
-        mock_delayed_func = Mock()
+        mock_delayed_func = mock.Mock()
         mock_delayed.return_value = mock_delayed_func
 
         # Mock Parallel to raise ValueError for invalid n_jobs
@@ -1513,8 +1541,8 @@ class TestErrorHandling:
 class TestIntegration:
     """Test integration scenarios with real-like data."""
 
-    @patch("extremeweatherbench.derived.maybe_derive_variables")
-    @patch("extremeweatherbench.evaluate.inputs.maybe_subset_variables")
+    @mock.patch("extremeweatherbench.derived.maybe_derive_variables")
+    @mock.patch("extremeweatherbench.evaluate.inputs.maybe_subset_variables")
     def test_end_to_end_workflow(
         self,
         mock_maybe_subset_variables,
@@ -1580,7 +1608,7 @@ class TestIntegration:
             }
         )
 
-        with patch(
+        with mock.patch(
             "extremeweatherbench.evaluate._evaluate_metric_and_return_df"
         ) as mock_eval:
             mock_eval.return_value = mock_result_df
@@ -1601,7 +1629,7 @@ class TestIntegration:
         assert "case_id_number" in result.columns
         assert "event_type" in result.columns
 
-    @patch("extremeweatherbench.evaluate.inputs.maybe_subset_variables")
+    @mock.patch("extremeweatherbench.evaluate.inputs.maybe_subset_variables")
     def test_multiple_variables_and_metrics(
         self,
         mock_maybe_subset_variables,
@@ -1611,14 +1639,14 @@ class TestIntegration:
     ):
         """Test workflow with multiple variables and metrics."""
         # Create multiple metrics
-        metric_1 = Mock(spec=metrics.BaseMetric)
+        metric_1 = mock.Mock(spec=metrics.BaseMetric)
         metric_1.name = "Metric1"
         metric_1.return_value.name = "Metric1"
         metric_1.return_value.compute_metric.return_value = xr.DataArray(
             data=[1.0], dims=["lead_time"], coords={"lead_time": [0]}
         )
 
-        metric_2 = Mock(spec=metrics.BaseMetric)
+        metric_2 = mock.Mock(spec=metrics.BaseMetric)
         metric_2.name = "Metric2"
         metric_2.return_value.name = "Metric2"
         metric_2.return_value.compute_metric.return_value = xr.DataArray(
@@ -1626,18 +1654,18 @@ class TestIntegration:
         )
 
         # Create evaluation object with multiple metrics and variables
-        eval_obj = Mock(spec=inputs.EvaluationObject)
+        eval_obj = mock.Mock(spec=inputs.EvaluationObject)
         eval_obj.event_type = "heat_wave"
         eval_obj.metric_list = [metric_1, metric_2]
 
         # Mock target and forecast with variables that match our datasets
-        eval_obj.target = Mock(spec=inputs.TargetBase)
+        eval_obj.target = mock.Mock(spec=inputs.TargetBase)
         eval_obj.target.name = "MultiTarget"
         eval_obj.target.variables = [
             "2m_temperature"
         ]  # Only include variables that exist
 
-        eval_obj.forecast = Mock(spec=inputs.ForecastBase)
+        eval_obj.forecast = mock.Mock(spec=inputs.ForecastBase)
         eval_obj.forecast.name = "MultiForecast"
         eval_obj.forecast.variables = [
             "surface_air_temperature"
@@ -1672,10 +1700,12 @@ class TestIntegration:
             }
         )
 
-        with patch("extremeweatherbench.derived.maybe_derive_variables") as mock_derive:
+        with mock.patch(
+            "extremeweatherbench.derived.maybe_derive_variables"
+        ) as mock_derive:
             mock_derive.side_effect = lambda ds, variables, **kwargs: ds
 
-            with patch(
+            with mock.patch(
                 "extremeweatherbench.evaluate._evaluate_metric_and_return_df"
             ) as mock_eval:
                 mock_eval.return_value = mock_result_df
@@ -1690,14 +1720,14 @@ class TestIntegration:
                 # Should have results for each metric combination
                 assert len(result) >= 2  # At least 2 metrics * 1 case
 
-    @patch("extremeweatherbench.evaluate.compute_case_operator")
+    @mock.patch("extremeweatherbench.evaluate.compute_case_operator")
     def test_serial_vs_parallel_results_consistency(
         self, mock_compute_case_operator, sample_cases_dict, sample_evaluation_object
     ):
         """Test that serial and parallel execution produce identical results."""
         # Setup mock case operators
-        case_op_1 = Mock()
-        case_op_2 = Mock()
+        case_op_1 = mock.Mock()
+        case_op_2 = mock.Mock()
         case_operators = [case_op_1, case_op_2]
 
         # Define consistent results
@@ -1723,7 +1753,7 @@ class TestIntegration:
             evaluation_objects=[sample_evaluation_object],
         )
 
-        with patch("extremeweatherbench.cases.build_case_operators") as mock_build:
+        with mock.patch("extremeweatherbench.cases.build_case_operators") as mock_build:
             mock_build.return_value = case_operators
 
             # Test serial execution
@@ -1742,13 +1772,13 @@ class TestIntegration:
             assert len(parallel_result) == 2
             assert list(serial_result.columns) == list(parallel_result.columns)
 
-    @patch("extremeweatherbench.evaluate.compute_case_operator")
+    @mock.patch("extremeweatherbench.evaluate.compute_case_operator")
     def test_execution_method_performance_comparison(self, mock_compute_case_operator):
         """Test that both execution methods handle the same workload."""
         import time
 
         # Create many case operators to simulate realistic workload
-        case_operators = [Mock() for _ in range(10)]
+        case_operators = [mock.Mock() for _ in range(10)]
 
         # Mock results
         mock_results = [
@@ -1774,8 +1804,10 @@ class TestIntegration:
         serial_call_count = mock_compute_case_operator.call_count
         mock_compute_case_operator.side_effect = mock_results
 
-        with patch("extremeweatherbench.evaluate.Parallel") as mock_parallel_class:
-            mock_parallel_instance = Mock()
+        with mock.patch(
+            "extremeweatherbench.utils.ParallelTqdm"
+        ) as mock_parallel_class:
+            mock_parallel_instance = mock.Mock()
             mock_parallel_class.return_value = mock_parallel_instance
             mock_parallel_instance.return_value = mock_results
 
@@ -1794,10 +1826,10 @@ class TestIntegration:
         assert serial_time >= 0
         assert parallel_time >= 0
 
-    @patch("extremeweatherbench.evaluate.compute_case_operator")
+    @mock.patch("extremeweatherbench.evaluate.compute_case_operator")
     def test_mixed_execution_parameters(self, mock_compute_case_operator):
         """Test various parameter combinations for execution methods."""
-        case_operators = [Mock(), Mock()]
+        case_operators = [mock.Mock(), mock.Mock()]
         mock_results = [
             pd.DataFrame({"value": [1.0], "case_id_number": [1]}),
             pd.DataFrame({"value": [2.0], "case_id_number": [2]}),
@@ -1827,10 +1859,10 @@ class TestIntegration:
                 assert mock_compute_case_operator.call_count == 2
             else:
                 # Mock parallel execution to avoid serialization issues
-                with patch(
-                    "extremeweatherbench.evaluate.Parallel"
+                with mock.patch(
+                    "extremeweatherbench.utils.ParallelTqdm"
                 ) as mock_parallel_class:
-                    mock_parallel_instance = Mock()
+                    mock_parallel_instance = mock.Mock()
                     mock_parallel_class.return_value = mock_parallel_instance
                     mock_parallel_instance.return_value = mock_results
 
@@ -1847,7 +1879,7 @@ class TestIntegration:
 
     def test_execution_method_kwargs_propagation(self):
         """Test that kwargs are properly propagated through execution methods."""
-        case_operator = Mock()
+        case_operator = mock.Mock()
 
         # Mock compute_case_operator to capture kwargs
         def mock_compute_with_kwargs(case_op, cache_dir, **kwargs):
@@ -1857,7 +1889,7 @@ class TestIntegration:
 
         mock_compute_with_kwargs.captured_kwargs = {}
 
-        with patch(
+        with mock.patch(
             "extremeweatherbench.evaluate.compute_case_operator",
             side_effect=mock_compute_with_kwargs,
         ):
@@ -1872,10 +1904,12 @@ class TestIntegration:
             assert isinstance(result, list)
 
             # Test parallel kwargs propagation
-            with patch("extremeweatherbench.evaluate.Parallel") as mock_parallel_class:
-                with patch("extremeweatherbench.evaluate.delayed") as mock_delayed:
+            with mock.patch(
+                "extremeweatherbench.utils.ParallelTqdm"
+            ) as mock_parallel_class:
+                with mock.patch("joblib.delayed") as mock_delayed:
                     mock_delayed.return_value = mock_compute_with_kwargs
-                    mock_parallel_instance = Mock()
+                    mock_parallel_instance = mock.Mock()
                     mock_parallel_class.return_value = mock_parallel_instance
                     mock_parallel_instance.return_value = [
                         pd.DataFrame({"value": [1.0]})
@@ -1909,20 +1943,22 @@ class TestIntegration:
         assert result == []
 
         # Test _run_parallel
-        with patch("extremeweatherbench.evaluate.Parallel") as mock_parallel_class:
-            mock_parallel_instance = Mock()
+        with mock.patch(
+            "extremeweatherbench.utils.ParallelTqdm"
+        ) as mock_parallel_class:
+            mock_parallel_instance = mock.Mock()
             mock_parallel_class.return_value = mock_parallel_instance
             mock_parallel_instance.return_value = []
 
             result = evaluate._run_parallel([], n_jobs=2)
             assert result == []
 
-    @patch("extremeweatherbench.evaluate.compute_case_operator")
+    @mock.patch("extremeweatherbench.evaluate.compute_case_operator")
     def test_large_case_operator_list_handling(self, mock_compute_case_operator):
         """Test handling of large numbers of case operators."""
         # Create a large list of case operators
         num_cases = 100
-        case_operators = [Mock() for _ in range(num_cases)]
+        case_operators = [mock.Mock() for _ in range(num_cases)]
 
         # Create mock results
         mock_results = [
@@ -1943,8 +1979,10 @@ class TestIntegration:
         mock_compute_case_operator.reset_mock()
         mock_compute_case_operator.side_effect = mock_results
 
-        with patch("extremeweatherbench.evaluate.Parallel") as mock_parallel_class:
-            mock_parallel_instance = Mock()
+        with mock.patch(
+            "extremeweatherbench.utils.ParallelTqdm"
+        ) as mock_parallel_class:
+            mock_parallel_instance = mock.Mock()
             mock_parallel_class.return_value = mock_parallel_instance
             mock_parallel_instance.return_value = mock_results
 
@@ -1954,18 +1992,14 @@ class TestIntegration:
             mock_parallel_class.assert_called_once_with(n_jobs=4)
 
 
-# =============================================================================
-# Test Schema and Variable Normalization Functions
-# =============================================================================
-
-
 class TestEnsureOutputSchema:
     """Test the _ensure_output_schema function."""
 
     def test_ensure_output_schema_init_time_valid_time(self):
         """Test _ensure_output_schema with init_time and valid_time columns.
 
-        init_time is now in OUTPUT_COLUMNS, valid_time is not and will be dropped.
+        init_time is now in defaults.OUTPUT_COLUMNS, valid_time is not and will be
+        dropped.
         """
         df = pd.DataFrame(
             {
@@ -1983,29 +2017,29 @@ class TestEnsureOutputSchema:
             event_type="heat_wave",
         )
 
-        # Check all OUTPUT_COLUMNS are present
-        assert list(result.columns) == OUTPUT_COLUMNS
+        # Check all defaults.OUTPUT_COLUMNS are present
+        assert list(result.columns) == defaults.OUTPUT_COLUMNS
         # Check metadata was added
         assert all(result["target_variable"] == "temperature")
         assert all(result["metric"] == "TestMetric")
         assert all(result["case_id_number"] == 1)
         assert all(result["event_type"] == "heat_wave")
-        # Check original columns preserved for those in OUTPUT_COLUMNS
+        # Check original columns preserved for those in defaults.OUTPUT_COLUMNS
         assert len(result) == 2
         assert list(result["value"]) == [1.0, 2.0]
-        # init_time should be preserved (now in OUTPUT_COLUMNS)
+        # init_time should be preserved (now in defaults.OUTPUT_COLUMNS)
         assert "init_time" in result.columns
         assert list(result["init_time"]) == [
             pd.to_datetime("2021-06-20"),
             pd.to_datetime("2021-06-21"),
         ]
-        # valid_time should be dropped (not in OUTPUT_COLUMNS)
+        # valid_time should be dropped (not in defaults.OUTPUT_COLUMNS)
         assert "valid_time" not in result.columns
 
     def test_ensure_output_schema_init_time_only(self):
         """Test _ensure_output_schema with init_time only.
 
-        init_time is now in OUTPUT_COLUMNS so will be preserved.
+        init_time is now in defaults.OUTPUT_COLUMNS so will be preserved.
         """
         df = pd.DataFrame({"value": [1.5], "init_time": pd.to_datetime(["2021-06-20"])})
 
@@ -2018,17 +2052,17 @@ class TestEnsureOutputSchema:
         )
 
         # Check all columns present
-        assert list(result.columns) == OUTPUT_COLUMNS
-        # lead_time should be NaN since not provided and is in OUTPUT_COLUMNS
+        assert list(result.columns) == defaults.OUTPUT_COLUMNS
+        # lead_time should be NaN since not provided and is in defaults.OUTPUT_COLUMNS
         assert pd.isna(result["lead_time"].iloc[0])
-        # init_time should be preserved (now in OUTPUT_COLUMNS)
+        # init_time should be preserved (now in defaults.OUTPUT_COLUMNS)
         assert "init_time" in result.columns
         assert result["init_time"].iloc[0] == pd.to_datetime("2021-06-20")
 
     def test_ensure_output_schema_lead_time_only(self):
         """Test _ensure_output_schema with lead_time only.
 
-        lead_time is in OUTPUT_COLUMNS so will be preserved.
+        lead_time is in defaults.OUTPUT_COLUMNS so will be preserved.
         """
         df = pd.DataFrame({"value": [2.5, 3.0], "lead_time": [6, 12]})
 
@@ -2041,16 +2075,16 @@ class TestEnsureOutputSchema:
         )
 
         # Check all columns present
-        assert list(result.columns) == OUTPUT_COLUMNS
-        # lead_time should be preserved (it's in OUTPUT_COLUMNS)
+        assert list(result.columns) == defaults.OUTPUT_COLUMNS
+        # lead_time should be preserved (it's in defaults.OUTPUT_COLUMNS)
         assert list(result["lead_time"]) == [6, 12]
-        # init_time should be NaN since not provided and is in OUTPUT_COLUMNS
+        # init_time should be NaN since not provided and is in defaults.OUTPUT_COLUMNS
         assert pd.isna(result["init_time"].iloc[0])
 
     def test_ensure_output_schema_lead_time_valid_time(self):
         """Test _ensure_output_schema with lead_time and valid_time.
 
-        lead_time is in OUTPUT_COLUMNS, valid_time is not and will be dropped.
+        lead_time is in defaults.OUTPUT_COLUMNS, valid_time is not and will be dropped.
         """
         df = pd.DataFrame(
             {
@@ -2068,11 +2102,11 @@ class TestEnsureOutputSchema:
             event_type="drought",
         )
 
-        assert list(result.columns) == OUTPUT_COLUMNS
+        assert list(result.columns) == defaults.OUTPUT_COLUMNS
         assert result["lead_time"].iloc[0] == 24
-        # init_time should be NaN since not provided and is in OUTPUT_COLUMNS
+        # init_time should be NaN since not provided and is in defaults.OUTPUT_COLUMNS
         assert pd.isna(result["init_time"].iloc[0])
-        # valid_time should be dropped (not in OUTPUT_COLUMNS)
+        # valid_time should be dropped (not in defaults.OUTPUT_COLUMNS)
         assert "valid_time" not in result.columns
 
     def test_ensure_output_schema_init_time_temperature(self):
@@ -2093,8 +2127,8 @@ class TestEnsureOutputSchema:
             event_type="heat_wave",
         )
 
-        assert list(result.columns) == OUTPUT_COLUMNS
-        # Custom column should be preserved but not part of OUTPUT_COLUMNS
+        assert list(result.columns) == defaults.OUTPUT_COLUMNS
+        # Custom column should be preserved but not part of defaults.OUTPUT_COLUMNS
         # temperature column should not appear in final result
         assert "temperature" not in result.columns
         assert len(result) == 2
@@ -2119,7 +2153,7 @@ class TestEnsureOutputSchema:
             event_type="complex",
         )
 
-        assert list(result.columns) == OUTPUT_COLUMNS
+        assert list(result.columns) == defaults.OUTPUT_COLUMNS
         # Extra variables should not appear in final result
         assert "variable1" not in result.columns
         assert "variable2" not in result.columns
@@ -2146,7 +2180,7 @@ class TestEnsureOutputSchema:
             event_type="ensemble",
         )
 
-        assert list(result.columns) == OUTPUT_COLUMNS
+        assert list(result.columns) == defaults.OUTPUT_COLUMNS
         assert list(result["lead_time"]) == [48, 72]
         assert "variable1" not in result.columns
         assert len(result) == 2
@@ -2167,7 +2201,7 @@ class TestEnsureOutputSchema:
         # Should warn about missing columns
         assert "Missing expected columns" in caplog.text
         # But still return properly structured DataFrame
-        assert list(result.columns) == OUTPUT_COLUMNS
+        assert list(result.columns) == defaults.OUTPUT_COLUMNS
         assert result["value"].iloc[0] == 1.0
 
     def test_ensure_output_schema_no_warning_init_time_when_lead_time_present(
@@ -2192,7 +2226,7 @@ class TestEnsureOutputSchema:
         init_time_warnings = [msg for msg in warning_messages if "init_time" in msg]
         assert len(init_time_warnings) == 0
 
-        assert list(result.columns) == OUTPUT_COLUMNS
+        assert list(result.columns) == defaults.OUTPUT_COLUMNS
 
     def test_ensure_output_schema_no_warning_lead_time_when_init_time_present(
         self, caplog
@@ -2216,11 +2250,11 @@ class TestEnsureOutputSchema:
         lead_time_warnings = [msg for msg in warning_messages if "lead_time" in msg]
         assert len(lead_time_warnings) == 0
 
-        assert list(result.columns) == OUTPUT_COLUMNS
+        assert list(result.columns) == defaults.OUTPUT_COLUMNS
 
     def test_ensure_output_schema_no_missing_variables(self):
         """Test _ensure_output_schema when no variables are missing."""
-        # Create a dataframe with all required OUTPUT_COLUMNS already present
+        # Create a dataframe with all required defaults.OUTPUT_COLUMNS already present
         df = pd.DataFrame(
             {
                 "value": [1.0, 2.0],
@@ -2238,14 +2272,14 @@ class TestEnsureOutputSchema:
         result = evaluate._ensure_output_schema(df)
 
         # Should work without warnings and preserve all columns
-        assert list(result.columns) == OUTPUT_COLUMNS
+        assert list(result.columns) == defaults.OUTPUT_COLUMNS
         assert len(result) == 2
         assert result["value"].tolist() == [1.0, 2.0]
         assert result["lead_time"].tolist() == [1, 2]
 
     def test_ensure_output_schema_no_missing_with_metadata(self, caplog):
         """Test _ensure_output_schema when no variables are missing with metadata."""
-        # Create a dataframe with all required OUTPUT_COLUMNS already present
+        # Create a dataframe with all required defaults.OUTPUT_COLUMNS already present
         df = pd.DataFrame(
             {
                 "value": [1.5, 2.5],
@@ -2276,7 +2310,7 @@ class TestEnsureOutputSchema:
         assert len(missing_warnings) == 0
 
         # Should preserve structure and update metadata
-        assert list(result.columns) == OUTPUT_COLUMNS
+        assert list(result.columns) == defaults.OUTPUT_COLUMNS
         assert len(result) == 2
         assert result["value"].tolist() == [1.5, 2.5]
         assert all(result["target_variable"] == "updated_pressure")

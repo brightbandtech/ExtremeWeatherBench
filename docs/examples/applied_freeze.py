@@ -3,7 +3,7 @@ import logging
 import numpy as np
 import xarray as xr
 
-from extremeweatherbench import evaluate, inputs, metrics, cases
+from extremeweatherbench import cases, evaluate, inputs, metrics
 
 # Set the logger level to INFO
 logger = logging.getLogger("extremeweatherbench")
@@ -71,33 +71,29 @@ fcnv2_forecast = inputs.KerchunkForecast(
     preprocess=_preprocess_bb_cira_forecast_dataset,
 )
 
+metrics_list = [
+    metrics.RMSE,
+    metrics.MinimumMAE,
+    metrics.OnsetME,
+    metrics.DurationME,
+]
 # Create a list of evaluation objects for freeze
 freeze_evaluation_object = [
     inputs.EvaluationObject(
         event_type="freeze",
-        metric_list=[
-            metrics.RMSE,
-            metrics.MinimumMAE,
-            metrics.OnsetME,
-            metrics.DurationME,
-        ],
+        metric_list=metrics_list,
         target=ghcn_freeze_target,
         forecast=fcnv2_forecast,
     ),
     inputs.EvaluationObject(
         event_type="freeze",
-        metric_list=[
-            metrics.RMSE,
-            metrics.MinimumMAE,
-            metrics.OnsetME,
-            metrics.DurationME,
-        ],
+        metric_list=metrics_list,
         target=era5_freeze_target,
         forecast=fcnv2_forecast,
     ),
 ]
 
-# Initialize ExtremeWeatherBench
+# Initialize ExtremeWeatherBench runner instance
 ewb = evaluate.ExtremeWeatherBench(
     cases=case_yaml,
     evaluation_objects=freeze_evaluation_object,
@@ -106,8 +102,12 @@ ewb = evaluate.ExtremeWeatherBench(
 # Run the workflow
 outputs = ewb.run(
     # tolerance range is the number of hours before and after the timestamp a
-    # validating occurrence is checked in the forecasts
+    # validating occurrence is checked in the forecasts for certain metrics
+    # such as minimum temperature MAE
     tolerance_range=48,
+    # precompute is false by default, but can be set to True to avoid IO costs loading
+    # the datasets into memory for each metric
+    pre_compute=False,
 )
 
 # Print the outputs; can be saved if desired

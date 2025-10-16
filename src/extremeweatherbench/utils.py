@@ -2,18 +2,20 @@
 specialized package."""
 
 import datetime
+import importlib
 import inspect
 import logging
+import pathlib
 import threading
-from importlib import resources
-from pathlib import Path
 from typing import Any, Callable, Optional, Union
 
 import numpy as np
 import pandas as pd  # type: ignore[import-untyped]
 import regionmask
+import tqdm
 import xarray as xr
 import yaml  # type: ignore[import]
+from joblib import Parallel
 
 logger = logging.getLogger(__name__)
 
@@ -60,17 +62,18 @@ class ThreadSafeDict:
 
     def keys(self):
         with self._lock:
+            # Return a copy to prevent concurrent modification during iteration
             return list(self._data.keys())
-            # Return a copy to prevent concurrent modification issues during
-            # iteration
 
     def values(self):
         with self._lock:
-            return list(self._data.values())  # Return a copy
+            # Return a copy to prevent concurrent modification during iteration
+            return list(self._data.values())
 
     def items(self):
         with self._lock:
-            return list(self._data.items())  # Return a copy
+            # Return a copy to prevent concurrent modification during iteration
+            return list(self._data.items())
 
 
 def convert_longitude_to_360(longitude: float) -> float:
@@ -120,20 +123,22 @@ def load_events_yaml():
     )
     import extremeweatherbench.data
 
-    events_yaml_file = resources.files(extremeweatherbench.data).joinpath("events.yaml")
-    with resources.as_file(events_yaml_file) as file:
+    events_yaml_file = importlib.resources.files(extremeweatherbench.data).joinpath(
+        "events.yaml"
+    )
+    with importlib.resources.as_file(events_yaml_file) as file:
         yaml_event_case = read_event_yaml(file)
 
     return yaml_event_case
 
 
-def read_event_yaml(input_pth: str | Path) -> dict:
+def read_event_yaml(input_pth: str | pathlib.Path) -> dict:
     """Read events yaml from data."""
     logger.warning(
         "This function is deprecated and will be removed in a future release. "
         "Please use cases.read_incoming_yaml instead."
     )
-    input_pth = Path(input_pth)
+    input_pth = pathlib.Path(input_pth)
     with open(input_pth, "rb") as f:
         yaml_event_case = yaml.safe_load(f)
     return yaml_event_case
@@ -461,10 +466,102 @@ def stack_sparse_data_from_dims(
         )
         coord_values.append(coord_tuple)
 
-    # If the data is empty, return the data densified as an empty dataarray; otherwise,
-    # stack and select the unique coordinates
-    if da.size == 0:
-        return da.data.maybe_densify(max_size=max_size)
+    # If the data is not empty, stack and select the unique coordinates; otherwise,
+    # return the data densified as an empty dataarray
+    if da.size != 0:
+        da = da.stack(stacked=reduce_dim_names).sel(stacked=coord_values)
+    da.data = da.data.maybe_densify(max_size=max_size)
+    return da
 
-    da = da.stack(stacked=reduce_dim_names).sel(stacked=coord_values)
-    return da.data.maybe_densify(max_size=max_size)
+
+class ParallelTqdm(Parallel):
+    """joblib.Parallel, but with a tqdm progressbar
+    From: https://gist.github.com/tsvikas/5f859a484e53d4ef93400751d0a116de
+    Attributes:
+        total_tasks: int, default: None
+            the number of expected jobs. Used in the tqdm progressbar.
+            If None, try to infer from the length of the called iterator, and
+            fallback to use the number of remaining items as soon as we finish
+            dispatching.
+            Note: use a list instead of an iterator if you want the total_tasks
+            to be inferred from its length.
+
+        desc: str, default: None
+            the description used in the tqdm progressbar.
+
+        disable_progressbar: bool, default: False
+            If True, a tqdm progressbar is not used.
+
+        show_joblib_header: bool, default: False
+            If True, show joblib header before the progressbar.
+
+
+
+    Example:
+    >>> from joblib import delayed
+    >>> from time import sleep
+    >>> ParallelTqdm(n_jobs=-1)([delayed(sleep)(0.1) for _ in range(10)])
+    80%|████████  | 8/10 [00:02<00:00,  3.12tasks/s]
+
+    """
+
+    def __init__(
+        self,
+        *,
+        total_tasks: int | None = None,
+        desc: str | None = None,
+        disable_progressbar: bool = False,
+        show_joblib_header: bool = False,
+        **kwargs,
+    ):
+        if "verbose" in kwargs:
+            raise ValueError(
+                "verbose is not supported. "
+                "Use disable_progressbar and show_joblib_header instead."
+            )
+        super().__init__(verbose=(1 if show_joblib_header else 0), **kwargs)
+        self.total_tasks = total_tasks
+        self.desc = desc
+        self.disable_progressbar = disable_progressbar
+        self.progress_bar: tqdm.tqdm | None = None
+
+    def __call__(self, iterable):
+        try:
+            if self.total_tasks is None:
+                # try to infer total_tasks from the length of the called iterator
+                try:
+                    self.total_tasks = len(iterable)
+                except (TypeError, AttributeError):
+                    pass
+            # call parent function
+            return super().__call__(iterable)
+        finally:
+            # close tqdm progress bar
+            if self.progress_bar is not None:
+                self.progress_bar.close()
+
+    __call__.__doc__ = Parallel.__call__.__doc__
+
+    def dispatch_one_batch(self, iterator):
+        # start progress_bar, if not started yet.
+        if self.progress_bar is None:
+            self.progress_bar = tqdm.tqdm(
+                desc=self.desc,
+                total=self.total_tasks,
+                disable=self.disable_progressbar,
+                unit="tasks",
+            )
+        # call parent function
+        return super().dispatch_one_batch(iterator)
+
+    dispatch_one_batch.__doc__ = Parallel.dispatch_one_batch.__doc__
+
+    def print_progress(self):
+        """Display the process of the parallel execution using tqdm"""
+        # if we finish dispatching, find total_tasks from the number of remaining items
+        if self.total_tasks is None and self._original_iterator is None:
+            self.total_tasks = self.n_dispatched_tasks
+            self.progress_bar.total = self.total_tasks
+            self.progress_bar.refresh()
+        # update progressbar
+        self.progress_bar.update(self.n_completed_tasks - self.progress_bar.n)
