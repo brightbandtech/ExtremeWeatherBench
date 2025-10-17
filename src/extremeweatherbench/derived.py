@@ -4,6 +4,8 @@ from typing import Sequence, Type, TypeGuard, Union
 
 import xarray as xr
 
+import extremeweatherbench.events.atmospheric_river as ar
+
 logger = logging.getLogger(__name__)
 
 
@@ -72,6 +74,49 @@ class DerivedVariable(abc.ABC):
             A DataArray with the derived variable.
         """
         return cls.derive_variable(data, *args, **kwargs)
+
+
+class AtmosphericRiverMask(DerivedVariable):
+    """A derived variable that computes the atmospheric river mask.
+
+    Calculates the IVT (Integrated Vapor Transport) and its Laplacian from a dataset.IVT
+    is calculated using the method described in Newell et al. 1992 and elsewhere
+    (e.g. Mo 2024).
+
+    The Laplacian of IVT is calculated using a Gaussian blurring kernel with a
+    sigma of 3 grid points, meant to smooth out 0.25 degree grid scale features.
+    """
+
+    required_variables = [
+        "eastward_wind",
+        "northward_wind",
+        "specific_humidity",
+    ]
+    optional_variables = [
+        "integrated_vapor_transport",
+        "surface_standard_pressure",
+        "relative_humidity",
+        "air_temperature",
+    ]
+    optional_variables_mapping = {
+        "integrated_vapor_transport": [
+            "eastward_wind",
+            "northward_wind",
+            "specific_humidity",
+        ],
+        "surface_standard_pressure": ["surface_standard_pressure"],
+        "relative_humidity": ["specific_humidity", "air_temperature"],
+    }
+
+    # Note: this name is used for the intersection between the AR mask and land, not the
+    # mask. The mask is named "atmospheric_river_mask" in the atmospheric_river module.
+    # EWB's atmospheric river event detection uses the intersection for evaluation.
+    name = "atmospheric_river_land_intersection"
+
+    @classmethod
+    def derive_variable(cls, data: xr.Dataset, *args, **kwargs) -> xr.Dataset:
+        """Derive the atmospheric river mask using xr.apply_ufunc approach."""
+        return ar.build_mask_and_land_intersection(data)
 
 
 def maybe_derive_variables(
