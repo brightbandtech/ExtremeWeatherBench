@@ -15,7 +15,7 @@ from extremeweatherbench import cases, derived, inputs, utils
 from extremeweatherbench.defaults import OUTPUT_COLUMNS
 
 if TYPE_CHECKING:
-    from extremeweatherbench import metrics
+    from extremeweatherbench import metrics, regions
 
 logger = logging.getLogger(__name__)
 
@@ -24,40 +24,52 @@ class ExtremeWeatherBench:
     """A class to build and run the ExtremeWeatherBench workflow.
 
     This class is used to run the ExtremeWeatherBench workflow. It is ultimately a
-    wrapper around case operators and evaluation objects to create either a parallel or
+    wrapper around case operators and evaluation objects to create a parallel or
     serial run to evaluate cases and metrics, returning a concatenated dataframe of the
     results.
 
     Attributes:
-        cases: A dictionary of cases to run.
+        case_metadata: A dictionary of cases or an IndividualCaseCollection to run.
         evaluation_objects: A list of evaluation objects to run.
         cache_dir: An optional directory to cache the mid-flight outputs of the
             workflow for serial runs.
+        region_subsetter: An optional region subsetter to subset the cases that are part
+        of the evaluation to a Region object or a dictionary of lat/lon bounds.
     """
 
     def __init__(
         self,
-        cases: dict[str, list],
+        case_metadata: Union[dict[str, list], "cases.IndividualCaseCollection"],
         evaluation_objects: list["inputs.EvaluationObject"],
         cache_dir: Optional[Union[str, Path]] = None,
+        region_subsetter: Optional["regions.RegionSubsetter"] = None,
     ):
-        """Initialize the ExtremeWeatherBench class.
-
-        Args:
-            cases: A dictionary of cases to run.
-            evaluation_objects: A list of evaluation objects to run.
-            cache_dir: An optional directory to cache the mid-flight outputs of the
-                workflow for serial runs.
-        """
-        self.cases = cases
+        if isinstance(case_metadata, dict):
+            self.case_metadata = cases.load_individual_cases(case_metadata)
+        elif isinstance(case_metadata, cases.IndividualCaseCollection):
+            self.case_metadata = case_metadata
+        else:
+            raise TypeError(
+                "case_metadata must be a dictionary of cases or an "
+                "IndividualCaseCollection"
+            )
         self.evaluation_objects = evaluation_objects
         self.cache_dir = Path(cache_dir) if cache_dir else None
+        self.region_subsetter = region_subsetter
 
     # Case operators as a property are a convenience method for users to use
     # them outside the class if desired for a workflow outside of the class
     @property
     def case_operators(self) -> list["cases.CaseOperator"]:
-        return cases.build_case_operators(self.cases, self.evaluation_objects)
+        """Build the CaseOperator objects from case_metadata and evaluation_objects."""
+        # Subset the cases if a region subsetter was provided
+        if self.region_subsetter:
+            subset_collection = self.region_subsetter.subset_case_collection(
+                self.case_metadata
+            )
+        else:
+            subset_collection = self.case_metadata
+        return cases.build_case_operators(subset_collection, self.evaluation_objects)
 
     def run(
         self,
@@ -87,7 +99,6 @@ class ExtremeWeatherBench:
         elif self.cache_dir:
             if not self.cache_dir.exists():
                 self.cache_dir.mkdir(parents=True, exist_ok=True)
-
         run_results = _run_case_operators(
             self.case_operators, n_jobs, self.cache_dir, **kwargs
         )
