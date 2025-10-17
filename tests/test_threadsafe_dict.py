@@ -11,9 +11,9 @@ import time
 import numpy as np
 import pytest
 import xarray as xr
-from joblib import Parallel, delayed
+import joblib
 
-from extremeweatherbench.utils import ThreadSafeDict
+from extremeweatherbench import utils
 
 
 def _joblib_worker_task(process_id, num_items=100):
@@ -30,7 +30,7 @@ def _joblib_worker_task(process_id, num_items=100):
         Dict containing statistics about the process
     """
     # Create ThreadSafeDict inside worker
-    tsd = ThreadSafeDict()
+    tsd = utils.ThreadSafeDict()
 
     # Each process creates its own ThreadSafeDict and populates it
     for i in range(num_items):
@@ -61,7 +61,7 @@ def _joblib_shared_computation_task(task_id, base_value):
         Dict containing computation results
     """
     # Create local ThreadSafeDict for this task
-    local_dict = ThreadSafeDict()
+    local_dict = utils.ThreadSafeDict()
 
     # Perform some computation
     for i in range(50):
@@ -89,7 +89,7 @@ def _joblib_concurrent_read_worker(tsd_data, num_reads=100):
         List of (key, value) tuples from read operations
     """
     # Create and populate ThreadSafeDict in worker
-    tsd = ThreadSafeDict()
+    tsd = utils.ThreadSafeDict()
     for key, value in tsd_data.items():
         tsd[key] = value
 
@@ -114,7 +114,7 @@ def _joblib_concurrent_write_worker(thread_id, num_writes=100):
         Dict containing write statistics
     """
     # Create ThreadSafeDict in worker
-    tsd = ThreadSafeDict()
+    tsd = utils.ThreadSafeDict()
 
     # Perform writes
     for i in range(num_writes):
@@ -140,7 +140,7 @@ def _joblib_stress_worker(worker_id, operations_per_worker=1000):
     Returns:
         List of operation results
     """
-    tsd = ThreadSafeDict()
+    tsd = utils.ThreadSafeDict()
     operations = []
 
     for i in range(operations_per_worker):
@@ -172,7 +172,7 @@ class TestThreadSafeDictBasic:
 
     def test_init(self):
         """Test ThreadSafeDict initialization."""
-        tsd = ThreadSafeDict()
+        tsd = utils.ThreadSafeDict()
 
         # Assert the tsd is empty at initialization
         assert len(tsd) == 0
@@ -182,7 +182,7 @@ class TestThreadSafeDictBasic:
 
     def test_setitem_getitem(self):
         """Test setting and getting items."""
-        tsd = ThreadSafeDict()
+        tsd = utils.ThreadSafeDict()
 
         # Test basic set/get
         tsd["key1"] = "value1"
@@ -200,7 +200,7 @@ class TestThreadSafeDictBasic:
 
     def test_delitem(self):
         """Test deleting items."""
-        tsd = ThreadSafeDict()
+        tsd = utils.ThreadSafeDict()
         tsd["key1"] = "value1"
         tsd["key2"] = "value2"
 
@@ -214,7 +214,7 @@ class TestThreadSafeDictBasic:
 
     def test_contains(self):
         """Test __contains__ method."""
-        tsd = ThreadSafeDict()
+        tsd = utils.ThreadSafeDict()
         tsd["key1"] = "value1"
 
         assert "key1" in tsd
@@ -223,7 +223,7 @@ class TestThreadSafeDictBasic:
 
     def test_get(self):
         """Test get method with default values."""
-        tsd = ThreadSafeDict()
+        tsd = utils.ThreadSafeDict()
         tsd["key1"] = "value1"
 
         assert tsd.get("key1") == "value1"
@@ -233,7 +233,7 @@ class TestThreadSafeDictBasic:
 
     def test_len(self):
         """Test length method."""
-        tsd = ThreadSafeDict()
+        tsd = utils.ThreadSafeDict()
         assert len(tsd) == 0
 
         tsd["key1"] = "value1"
@@ -247,7 +247,7 @@ class TestThreadSafeDictBasic:
 
     def test_clear(self):
         """Test clear method."""
-        tsd = ThreadSafeDict()
+        tsd = utils.ThreadSafeDict()
         tsd["key1"] = "value1"
         tsd["key2"] = "value2"
 
@@ -258,7 +258,7 @@ class TestThreadSafeDictBasic:
 
     def test_keys_values_items(self):
         """Test keys, values, and items methods."""
-        tsd = ThreadSafeDict()
+        tsd = utils.ThreadSafeDict()
         tsd["a"] = 1
         tsd["b"] = 2
         tsd["c"] = 3
@@ -284,7 +284,7 @@ class TestThreadSafeDictBasic:
 
     def test_complex_data_types(self):
         """Test with complex data types."""
-        tsd = ThreadSafeDict()
+        tsd = utils.ThreadSafeDict()
 
         # Test with various data types
         data_types = {
@@ -311,7 +311,7 @@ class TestThreadSafeDictBasic:
 
     def test_unhashable_keys_error(self):
         """Test that unhashable keys raise appropriate errors."""
-        tsd = ThreadSafeDict()
+        tsd = utils.ThreadSafeDict()
 
         # These should raise TypeError
         with pytest.raises(TypeError):
@@ -331,8 +331,9 @@ class TestThreadSafeDictJoblib:
         num_items_per_job = 100
 
         # Run tasks in parallel using joblib with threading backend
-        results = Parallel(n_jobs=n_jobs, backend="threading")(
-            delayed(_joblib_worker_task)(i, num_items_per_job) for i in range(n_jobs)
+        results = joblib.Parallel(n_jobs=n_jobs, backend="threading")(
+            joblib.delayed(_joblib_worker_task)(i, num_items_per_job)
+            for i in range(n_jobs)
         )
 
         # Verify results
@@ -349,8 +350,8 @@ class TestThreadSafeDictJoblib:
         base_values = [10, 20, 30, 40, 50, 60]
 
         # Run computation tasks in parallel with threading backend
-        results = Parallel(n_jobs=n_jobs, backend="threading")(
-            delayed(_joblib_shared_computation_task)(i, base_values[i])
+        results = joblib.Parallel(n_jobs=n_jobs, backend="threading")(
+            joblib.delayed(_joblib_shared_computation_task)(i, base_values[i])
             for i in range(n_jobs)
         )
 
@@ -370,8 +371,8 @@ class TestThreadSafeDictJoblib:
         initial_data = {f"key_{i}": f"value_{i}" for i in range(100)}
 
         # Run concurrent reads using joblib with threading backend
-        results = Parallel(n_jobs=10, backend="threading")(
-            delayed(_joblib_concurrent_read_worker)(initial_data, 100)
+        results = joblib.Parallel(n_jobs=10, backend="threading")(
+            joblib.delayed(_joblib_concurrent_read_worker)(initial_data, 100)
             for _ in range(10)
         )
 
@@ -389,8 +390,8 @@ class TestThreadSafeDictJoblib:
     def test_joblib_concurrent_writes(self):
         """Test concurrent writes using joblib workers."""
         # Run concurrent writes using threading backend
-        results = Parallel(n_jobs=10, backend="threading")(
-            delayed(_joblib_concurrent_write_worker)(i, 100) for i in range(10)
+        results = joblib.Parallel(n_jobs=10, backend="threading")(
+            joblib.delayed(_joblib_concurrent_write_worker)(i, 100) for i in range(10)
         )
 
         # Verify all writes were successful
@@ -408,8 +409,8 @@ class TestThreadSafeDictJoblib:
 
         for backend in backends_to_test:
             try:
-                results = Parallel(n_jobs=2, backend=backend)(
-                    delayed(_joblib_worker_task)(i, 50) for i in range(2)
+                results = joblib.Parallel(n_jobs=2, backend=backend)(
+                    joblib.delayed(_joblib_worker_task)(i, 50) for i in range(2)
                 )
 
                 # Verify results for this backend
@@ -428,7 +429,7 @@ class TestThreadSafeDictJoblib:
 
         def create_large_dict_task(task_id):
             """Create a large ThreadSafeDict and return summary."""
-            large_dict = ThreadSafeDict()
+            large_dict = utils.ThreadSafeDict()
 
             # Add many items
             for i in range(1000):
@@ -446,8 +447,8 @@ class TestThreadSafeDictJoblib:
             }
 
         # Run tasks that create large dicts with threading backend
-        results = Parallel(n_jobs=3, backend="threading")(
-            delayed(create_large_dict_task)(i) for i in range(3)
+        results = joblib.Parallel(n_jobs=3, backend="threading")(
+            joblib.delayed(create_large_dict_task)(i) for i in range(3)
         )
 
         # Verify each task created and processed large dict correctly
@@ -462,8 +463,8 @@ class TestThreadSafeDictJoblib:
         operations_per_worker = 500
 
         # Run stress test using joblib with threading backend
-        results = Parallel(n_jobs=num_workers, backend="threading")(
-            delayed(_joblib_stress_worker)(i, operations_per_worker)
+        results = joblib.Parallel(n_jobs=num_workers, backend="threading")(
+            joblib.delayed(_joblib_stress_worker)(i, operations_per_worker)
             for i in range(num_workers)
         )
 
@@ -486,7 +487,7 @@ class TestThreadSafeDictStress:
 
     def test_large_data_volume(self):
         """Test with large amounts of data."""
-        tsd = ThreadSafeDict()
+        tsd = utils.ThreadSafeDict()
 
         # Insert large amount of data
         num_items = 10000
@@ -512,7 +513,7 @@ class TestThreadSafeDictStress:
 
     def test_rapid_operations(self):
         """Test rapid fire operations."""
-        tsd = ThreadSafeDict()
+        tsd = utils.ThreadSafeDict()
         num_operations = 50000
 
         start_time = time.time()
@@ -541,7 +542,7 @@ class TestThreadSafeDictStress:
 
     def test_memory_efficiency(self):
         """Test memory efficiency under load."""
-        tsd = ThreadSafeDict()
+        tsd = utils.ThreadSafeDict()
 
         # Add many items
         for i in range(10000):
@@ -567,7 +568,7 @@ class TestThreadSafeDictStress:
 
         def extreme_stress_worker(worker_id):
             """Worker that performs many operations on its own ThreadSafeDict."""
-            tsd = ThreadSafeDict()
+            tsd = utils.ThreadSafeDict()
             ops_completed = 0
 
             for i in range(operations_per_worker):
@@ -599,8 +600,8 @@ class TestThreadSafeDictStress:
 
         # Run extreme stress test using joblib with threading backend
         start_time = time.time()
-        results = Parallel(n_jobs=num_workers, backend="threading")(
-            delayed(extreme_stress_worker)(i) for i in range(num_workers)
+        results = joblib.Parallel(n_jobs=num_workers, backend="threading")(
+            joblib.delayed(extreme_stress_worker)(i) for i in range(num_workers)
         )
         end_time = time.time()
 
@@ -620,7 +621,7 @@ class TestThreadSafeDictEdgeCases:
 
     def test_none_values(self):
         """Test handling None values."""
-        tsd = ThreadSafeDict()
+        tsd = utils.ThreadSafeDict()
 
         tsd["none_key"] = None
         assert tsd["none_key"] is None
@@ -630,7 +631,7 @@ class TestThreadSafeDictEdgeCases:
 
     def test_zero_and_false_values(self):
         """Test handling falsy values."""
-        tsd = ThreadSafeDict()
+        tsd = utils.ThreadSafeDict()
 
         falsy_values = {
             "zero": 0,
@@ -648,7 +649,7 @@ class TestThreadSafeDictEdgeCases:
 
     def test_large_objects(self):
         """Test with large objects."""
-        tsd = ThreadSafeDict()
+        tsd = utils.ThreadSafeDict()
 
         # Large numpy array
         large_array = np.random.random((1000, 1000))
@@ -664,7 +665,7 @@ class TestThreadSafeDictEdgeCases:
 
     def test_special_key_types(self):
         """Test with various key types."""
-        tsd = ThreadSafeDict()
+        tsd = utils.ThreadSafeDict()
 
         special_keys = {
             42: "integer_key",
@@ -681,7 +682,7 @@ class TestThreadSafeDictEdgeCases:
 
     def test_unicode_and_special_characters(self):
         """Test with unicode and special characters."""
-        tsd = ThreadSafeDict()
+        tsd = utils.ThreadSafeDict()
 
         unicode_data = {
             "emoji_key_🚀": "rocket_value",
@@ -698,7 +699,7 @@ class TestThreadSafeDictEdgeCases:
 
     def test_circular_references(self):
         """Test handling objects with circular references."""
-        tsd = ThreadSafeDict()
+        tsd = utils.ThreadSafeDict()
 
         # Create objects with circular references
         obj1 = {"name": "obj1"}
@@ -720,7 +721,7 @@ class TestThreadSafeDictEdgeCases:
 
     def test_exception_during_operations(self):
         """Test behavior when exceptions occur during operations."""
-        tsd = ThreadSafeDict()
+        tsd = utils.ThreadSafeDict()
 
         # Test KeyError for missing keys
         with pytest.raises(KeyError):
@@ -740,7 +741,7 @@ class TestThreadSafeDictEdgeCases:
 
     def test_iteration_during_modification(self):
         """Test that iteration methods return safe copies."""
-        tsd = ThreadSafeDict()
+        tsd = utils.ThreadSafeDict()
 
         # Populate dict
         for i in range(100):
@@ -769,7 +770,7 @@ class TestThreadSafeDictEdgeCases:
         Note: This test uses threading.Thread as it's testing the internal
         lock mechanism of ThreadSafeDict, which requires actual threading.
         """
-        tsd = ThreadSafeDict()
+        tsd = utils.ThreadSafeDict()
 
         # Test that multiple threads can't corrupt the lock
         def lock_stress_test():
@@ -804,7 +805,7 @@ class TestThreadSafeDictIntegration:
 
         def cached_compute_worker(worker_id, test_inputs):
             """Worker that uses local cache for expensive operations."""
-            cache = ThreadSafeDict()
+            cache = utils.ThreadSafeDict()
 
             results = []
             for input_data in test_inputs:
@@ -834,8 +835,8 @@ class TestThreadSafeDictIntegration:
         ]
 
         # Run multiple workers with joblib using threading backend
-        results = Parallel(n_jobs=5, backend="threading")(
-            delayed(cached_compute_worker)(i, test_inputs) for i in range(5)
+        results = joblib.Parallel(n_jobs=5, backend="threading")(
+            joblib.delayed(cached_compute_worker)(i, test_inputs) for i in range(5)
         )
 
         # Verify all workers got same results
@@ -850,7 +851,7 @@ class TestThreadSafeDictIntegration:
         def process_data_chunk_worker(chunk_data):
             """Worker that processes a chunk and returns aggregated results."""
             chunk_id, data = chunk_data
-            local_state = ThreadSafeDict()
+            local_state = utils.ThreadSafeDict()
             local_state["processed_count"] = 0
             local_state["error_count"] = 0
             local_state["results"] = []
@@ -873,8 +874,8 @@ class TestThreadSafeDictIntegration:
         # Process multiple chunks using joblib with threading backend
         chunks = [(i, list(range(i * 10, (i + 1) * 10))) for i in range(10)]
 
-        results = Parallel(n_jobs=5, backend="threading")(
-            delayed(process_data_chunk_worker)(chunk) for chunk in chunks
+        results = joblib.Parallel(n_jobs=5, backend="threading")(
+            joblib.delayed(process_data_chunk_worker)(chunk) for chunk in chunks
         )
 
         # Aggregate results
@@ -894,7 +895,7 @@ class TestThreadSafeDictIntegration:
 
         def metric_recorder_worker(worker_id):
             """Worker that records metrics using ThreadSafeDict."""
-            metrics_store = ThreadSafeDict()
+            metrics_store = utils.ThreadSafeDict()
 
             for i in range(100):
                 # Record various metrics
@@ -921,8 +922,8 @@ class TestThreadSafeDictIntegration:
             }
 
         # Run concurrent metric recorders using joblib with threading backend
-        results = Parallel(n_jobs=5, backend="threading")(
-            delayed(metric_recorder_worker)(i) for i in range(5)
+        results = joblib.Parallel(n_jobs=5, backend="threading")(
+            joblib.delayed(metric_recorder_worker)(i) for i in range(5)
         )
 
         # Verify metrics from each worker
@@ -938,7 +939,7 @@ class TestThreadSafeDictIntegration:
 
         def process_with_cache(data_chunk, cache_key_prefix):
             """Process data chunk with local caching using ThreadSafeDict."""
-            local_cache = ThreadSafeDict()
+            local_cache = utils.ThreadSafeDict()
 
             results = []
             for item in data_chunk:
@@ -968,8 +969,8 @@ class TestThreadSafeDictIntegration:
         ]
 
         # Process chunks in parallel using joblib with threading backend
-        results = Parallel(n_jobs=3, backend="threading")(
-            delayed(process_with_cache)(chunk, f"chunk_{i}")
+        results = joblib.Parallel(n_jobs=3, backend="threading")(
+            joblib.delayed(process_with_cache)(chunk, f"chunk_{i}")
             for i, chunk in enumerate(data_chunks)
         )
 

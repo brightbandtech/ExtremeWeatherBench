@@ -10,7 +10,7 @@ target variables using the zip() pairing logic, covering various scenarios:
 
 import datetime
 from typing import List
-from unittest.mock import Mock
+from unittest import mock
 
 import numpy as np
 import pandas as pd
@@ -18,8 +18,7 @@ import polars as pl
 import pytest
 import xarray as xr
 
-from extremeweatherbench import cases, evaluate, inputs, metrics
-from extremeweatherbench.regions import CenteredRegion
+from extremeweatherbench import cases, evaluate, inputs, metrics, regions
 
 
 class MockMetric(metrics.BaseMetric):
@@ -54,7 +53,7 @@ def sample_case():
         title="Variable Pairing Test",
         start_date=datetime.datetime(2021, 6, 20),
         end_date=datetime.datetime(2021, 6, 25),
-        location=CenteredRegion(
+        location=regions.CenteredRegion(
             latitude=45.0, longitude=-120.0, bounding_box_degrees=5.0
         ),
         event_type="test_event",
@@ -128,7 +127,7 @@ def base_target_dataset():
 
 def create_mock_input(variables: List[str], dataset: xr.Dataset, input_type: str):
     """Helper to create mock forecast or target inputs."""
-    mock_input = Mock()
+    mock_input = mock.Mock()
     mock_input.name = f"Mock{input_type.title()}"
     mock_input.variables = variables
 
@@ -143,7 +142,7 @@ def create_mock_input(variables: List[str], dataset: xr.Dataset, input_type: str
     if input_type == "target":
         # This should return (aligned_forecast, aligned_target)
         # We'll update this in create_case_operator
-        mock_input.maybe_align_forecast_to_target = Mock()
+        mock_input.maybe_align_forecast_to_target = mock.Mock()
 
     return mock_input
 
@@ -598,7 +597,7 @@ class TestExtremeWeatherBenchVariablePairing:
 
         # Create and run ExtremeWeatherBench
         ewb = evaluate.ExtremeWeatherBench(
-            cases=cases_dict,
+            case_metadata=cases_dict,
             evaluation_objects=[evaluation_obj],
         )
 
@@ -679,7 +678,7 @@ class TestExtremeWeatherBenchVariablePairing:
 
         # Create and run ExtremeWeatherBench
         ewb = evaluate.ExtremeWeatherBench(
-            cases=cases_dict,
+            case_metadata=cases_dict,
             evaluation_objects=[evaluation_obj],
         )
 

@@ -2,21 +2,20 @@
 
 import itertools
 import logging
-from pathlib import Path
+import pathlib
 from typing import TYPE_CHECKING, Optional, Type, Union
 
+import joblib
 import pandas as pd
 import sparse
 import xarray as xr
-from joblib import Parallel, delayed
 from tqdm.auto import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 
-from extremeweatherbench import cases, derived, inputs, utils
-from extremeweatherbench.defaults import OUTPUT_COLUMNS
+from extremeweatherbench import cases, defaults, derived, inputs, utils
 
 if TYPE_CHECKING:
-    from extremeweatherbench import metrics
+    from extremeweatherbench import metrics, regions
 
 logger = logging.getLogger(__name__)
 
@@ -25,40 +24,52 @@ class ExtremeWeatherBench:
     """A class to build and run the ExtremeWeatherBench workflow.
 
     This class is used to run the ExtremeWeatherBench workflow. It is ultimately a
-    wrapper around case operators and evaluation objects to create either a parallel or
+    wrapper around case operators and evaluation objects to create a parallel or
     serial run to evaluate cases and metrics, returning a concatenated dataframe of the
     results.
 
     Attributes:
-        cases: A dictionary of cases to run.
+        case_metadata: A dictionary of cases or an IndividualCaseCollection to run.
         evaluation_objects: A list of evaluation objects to run.
         cache_dir: An optional directory to cache the mid-flight outputs of the
             workflow for serial runs.
+        region_subsetter: An optional region subsetter to subset the cases that are part
+        of the evaluation to a Region object or a dictionary of lat/lon bounds.
     """
 
     def __init__(
         self,
-        cases: dict[str, list],
+        case_metadata: Union[dict[str, list], "cases.IndividualCaseCollection"],
         evaluation_objects: list["inputs.EvaluationObject"],
-        cache_dir: Optional[Union[str, Path]] = None,
+        cache_dir: Optional[Union[str, pathlib.Path]] = None,
+        region_subsetter: Optional["regions.RegionSubsetter"] = None,
     ):
-        """Initialize the ExtremeWeatherBench class.
-
-        Args:
-            cases: A dictionary of cases to run.
-            evaluation_objects: A list of evaluation objects to run.
-            cache_dir: An optional directory to cache the mid-flight outputs of the
-                workflow for serial runs.
-        """
-        self.cases = cases
+        if isinstance(case_metadata, dict):
+            self.case_metadata = cases.load_individual_cases(case_metadata)
+        elif isinstance(case_metadata, cases.IndividualCaseCollection):
+            self.case_metadata = case_metadata
+        else:
+            raise TypeError(
+                "case_metadata must be a dictionary of cases or an "
+                "IndividualCaseCollection"
+            )
         self.evaluation_objects = evaluation_objects
-        self.cache_dir = Path(cache_dir) if cache_dir else None
+        self.cache_dir = pathlib.Path(cache_dir) if cache_dir else None
+        self.region_subsetter = region_subsetter
 
     # Case operators as a property can be used as a convenience method for a workflow
     # independent of the class.
     @property
     def case_operators(self) -> list["cases.CaseOperator"]:
-        return cases.build_case_operators(self.cases, self.evaluation_objects)
+        """Build the CaseOperator objects from case_metadata and evaluation_objects."""
+        # Subset the cases if a region subsetter was provided
+        if self.region_subsetter:
+            subset_collection = self.region_subsetter.subset_case_collection(
+                self.case_metadata
+            )
+        else:
+            subset_collection = self.case_metadata
+        return cases.build_case_operators(subset_collection, self.evaluation_objects)
 
     def run(
         self,
@@ -88,7 +99,6 @@ class ExtremeWeatherBench:
         elif self.cache_dir:
             if not self.cache_dir.exists():
                 self.cache_dir.mkdir(parents=True, exist_ok=True)
-
         run_results = _run_case_operators(
             self.case_operators, n_jobs, self.cache_dir, **kwargs
         )
@@ -96,13 +106,13 @@ class ExtremeWeatherBench:
             return utils._safe_concat(run_results, ignore_index=True)
         else:
             # Return empty DataFrame with expected columns
-            return pd.DataFrame(columns=OUTPUT_COLUMNS)
+            return pd.DataFrame(columns=defaults.OUTPUT_COLUMNS)
 
 
 def _run_case_operators(
     case_operators: list["cases.CaseOperator"],
     n_jobs: Optional[int] = None,
-    cache_dir: Optional[Path] = None,
+    cache_dir: Optional[pathlib.Path] = None,
     **kwargs,
 ) -> list[pd.DataFrame]:
     """Run the case operators in parallel or serial."""
@@ -115,7 +125,7 @@ def _run_case_operators(
 
 def _run_serial(
     case_operators: list["cases.CaseOperator"],
-    cache_dir: Optional[Path] = None,
+    cache_dir: Optional[pathlib.Path] = None,
     **kwargs,
 ) -> list[pd.DataFrame]:
     """Run the case operators in serial."""
@@ -135,17 +145,17 @@ def _run_parallel(
 
     if n_jobs is None:
         logger.warning("No number of jobs provided, using joblib backend default.")
-    run_results = Parallel(n_jobs=n_jobs)(
+    run_results = joblib.Parallel(n_jobs=n_jobs)(
         # None is the cache_dir, we can't cache in parallel mode
-        delayed(compute_case_operator)(case_operator, None, **kwargs)
-        for case_operator in tqdm(case_operators)
+        joblib.delayed(compute_case_operator)(case_operator, None, **kwargs)
+        for case_operator in case_operators
     )
     return run_results
 
 
 def compute_case_operator(
     case_operator: "cases.CaseOperator",
-    cache_dir: Optional[Path] = None,
+    cache_dir: Optional[pathlib.Path] = None,
     **kwargs,
 ) -> pd.DataFrame:
     """Compute the results of a case operator.
@@ -166,11 +176,11 @@ def compute_case_operator(
     forecast_ds, target_ds = _build_datasets(case_operator)
     # Check if any dimension has zero length
     if 0 in forecast_ds.sizes.values() or 0 in target_ds.sizes.values():
-        return pd.DataFrame(columns=OUTPUT_COLUMNS)
+        return pd.DataFrame(columns=defaults.OUTPUT_COLUMNS)
 
     # Or, check if there aren't any dimensions
     elif len(forecast_ds.sizes) == 0 or len(target_ds.sizes) == 0:
-        return pd.DataFrame(columns=OUTPUT_COLUMNS)
+        return pd.DataFrame(columns=defaults.OUTPUT_COLUMNS)
     # spatiotemporally align the target and forecast datasets dependent on the target
     aligned_forecast_ds, aligned_target_ds = (
         case_operator.target.maybe_align_forecast_to_target(forecast_ds, target_ds)
@@ -202,8 +212,7 @@ def compute_case_operator(
                 forecast_variable=variables[0],
                 target_variable=variables[1],
                 metric=metric,
-                case_id_number=case_operator.case_metadata.case_id_number,
-                event_type=case_operator.case_metadata.event_type,
+                case_operator=case_operator,
                 **kwargs,
             )
         )
@@ -211,7 +220,9 @@ def compute_case_operator(
         # Cache the results of each metric if caching
         cache_dir = kwargs.get("cache_dir", None)
         if cache_dir:
-            cache_path = Path(cache_dir) if isinstance(cache_dir, str) else cache_dir
+            cache_path = (
+                pathlib.Path(cache_dir) if isinstance(cache_dir, str) else cache_dir
+            )
             concatenated = utils._safe_concat(results, ignore_index=True)
             if not concatenated.empty:
                 concatenated.to_pickle(cache_path / "results.pkl")
@@ -222,10 +233,7 @@ def compute_case_operator(
 def _extract_standard_metadata(
     target_variable: Union[str, "derived.DerivedVariable"],
     metric: "metrics.BaseMetric",
-    target_ds: xr.Dataset,
-    forecast_ds: xr.Dataset,
-    case_id_number: int,
-    event_type: str,
+    case_operator: "cases.CaseOperator",
 ) -> dict:
     """Extract standard metadata for output dataframe.
 
@@ -236,10 +244,7 @@ def _extract_standard_metadata(
     Args:
         target_variable: The target variable
         metric: The metric instance
-        target_ds: Target dataset
-        forecast_ds: Forecast dataset
-        case_id_number: Case ID number
-        event_type: Event type string
+        case_operator: The CaseOperator holding associated case metadata
 
     Returns:
         Dictionary of metadata for the output dataframe
@@ -247,10 +252,10 @@ def _extract_standard_metadata(
     return {
         "target_variable": target_variable,
         "metric": metric.name,
-        "case_id_number": case_id_number,
-        "event_type": event_type,
-        "target_source": target_ds.attrs["source"],
-        "forecast_source": forecast_ds.attrs["source"],
+        "target_source": case_operator.target.name,
+        "forecast_source": case_operator.forecast.name,
+        "case_id_number": case_operator.case_metadata.case_id_number,
+        "event_type": case_operator.case_metadata.event_type,
     }
 
 
@@ -282,7 +287,7 @@ def _ensure_output_schema(df: pd.DataFrame, **metadata) -> pd.DataFrame:
         df[col] = value
 
     # Check for missing columns and warn
-    missing_cols = set(OUTPUT_COLUMNS) - set(df.columns)
+    missing_cols = set(defaults.OUTPUT_COLUMNS) - set(df.columns)
 
     # An output requires one of init_time or lead_time. init_time will be present for a
     # metric that assesses something in an entire model run, such as the onset error of
@@ -303,7 +308,7 @@ def _ensure_output_schema(df: pd.DataFrame, **metadata) -> pd.DataFrame:
 
     # Ensure all OUTPUT_COLUMNS are present (missing ones will be NaN)
     # and reorder to match OUTPUT_COLUMNS specification
-    return df.reindex(columns=OUTPUT_COLUMNS)
+    return df.reindex(columns=defaults.OUTPUT_COLUMNS)
 
 
 def _evaluate_metric_and_return_df(
@@ -312,8 +317,7 @@ def _evaluate_metric_and_return_df(
     forecast_variable: Union[str, Type["derived.DerivedVariable"]],
     target_variable: Union[str, Type["derived.DerivedVariable"]],
     metric: "metrics.BaseMetric",
-    case_id_number: int,
-    event_type: str,
+    case_operator: "cases.CaseOperator",
     **kwargs,
 ) -> pd.DataFrame:
     """Evaluate a metric and return a dataframe of the results.
@@ -351,9 +355,7 @@ def _evaluate_metric_and_return_df(
     # Convert to DataFrame and add metadata, ensuring OUTPUT_COLUMNS compliance
     df = metric_result.to_dataframe(name="value").reset_index()
     # TODO: add functionality for custom metadata columns
-    metadata = _extract_standard_metadata(
-        target_variable, metric, target_ds, forecast_ds, case_id_number, event_type
-    )
+    metadata = _extract_standard_metadata(target_variable, metric, case_operator)
     return _ensure_output_schema(df, **metadata)
 
 
@@ -403,7 +405,7 @@ def _build_datasets(
 
 
 def _compute_and_maybe_cache(
-    *datasets: xr.Dataset, cache_dir: Optional[Union[str, Path]]
+    *datasets: xr.Dataset, cache_dir: Optional[Union[str, pathlib.Path]]
 ) -> list[xr.Dataset]:
     """Compute and cache the datasets if caching."""
     logger.info("Computing datasets...")

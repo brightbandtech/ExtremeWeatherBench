@@ -1,6 +1,6 @@
 import dataclasses
 import logging
-from abc import ABC, abstractmethod
+import abc
 from typing import TYPE_CHECKING, Callable, Optional, TypeAlias, Union
 
 import numpy as np
@@ -139,7 +139,7 @@ def _default_preprocess(input_data: IncomingDataInput) -> IncomingDataInput:
 
 
 @dataclasses.dataclass
-class InputBase(ABC):
+class InputBase(abc.ABC):
     """An abstract base dataclass for target and forecast data.
 
     Attributes:
@@ -157,7 +157,7 @@ class InputBase(ABC):
         default_factory=list
     )
     variable_mapping: dict = dataclasses.field(default_factory=dict)
-    storage_options: dict = dataclasses.field(default_factory=dict)
+    storage_options: Optional[dict] = None
     preprocess: Callable = _default_preprocess
 
     def open_and_maybe_preprocess_data_from_source(
@@ -175,7 +175,7 @@ class InputBase(ABC):
         """
         self.name = name
 
-    @abstractmethod
+    @abc.abstractmethod
     def _open_data_from_source(self) -> IncomingDataInput:
         """Open the input data from the source, opting to avoid loading the entire
         dataset into memory if possible.
@@ -184,7 +184,7 @@ class InputBase(ABC):
             The input data with a type determined by the user.
         """
 
-    @abstractmethod
+    @abc.abstractmethod
     def subset_data_to_case(
         self,
         data: IncomingDataInput,
@@ -395,6 +395,7 @@ class KerchunkForecast(ForecastBase):
     """Forecast class for kerchunked forecast data."""
 
     chunks: Optional[Union[dict, str]] = "auto"
+    storage_options: dict = dataclasses.field(default_factory=dict)
 
     def _open_data_from_source(self) -> IncomingDataInput:
         return open_kerchunk_reference(
@@ -1032,11 +1033,23 @@ def maybe_subset_variables(
     data: IncomingDataInput,
     variables: list[Union[str, "derived.DerivedVariable"]],
 ) -> IncomingDataInput:
-    """Subset the variables from the data, if required."""
+    """Subset the variables from the data, if required.
+
+    If the variables list includes derived variables, extracts their required
+    and optional variables for subsetting.
+
+    Args:
+        data: The dataset to subset (xr.Dataset, xr.DataArray, pl.LazyFrame,
+            or pd.DataFrame).
+        variables: List of variable names and/or derived variable classes.
+
+    Returns:
+        The data subset to only the specified variables.
+    """
     # If there are no variables, return the data unaltered
     if len(variables) == 0:
         return data
-    # get the first derived variable if it exists
+    # Get the first derived variable if it exists
     derived_variables = [
         v
         for v in variables
@@ -1047,7 +1060,7 @@ def maybe_subset_variables(
     else:
         derived_variable = None
 
-    # get the optional variables and mapping from the derived variable
+    # Get the optional variables and mapping from the derived variable
     optional_variables = getattr(derived_variable, "optional_variables", None) or []
     alternative_variables = (
         getattr(derived_variable, "alternative_variables", None) or {}

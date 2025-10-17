@@ -9,7 +9,22 @@ def safely_pull_variables_polars_lazyframe(
     alternative_variables: dict[str, list[str]],
     optional_variables: list[str],
 ) -> pl.LazyFrame:
-    """Handle variable extraction for Polars LazyFrame."""
+    """Extract variables from a Polars LazyFrame, prioritizing optionals.
+
+    Args:
+        dataset: The LazyFrame to extract variables from.
+        variables: List of required variable names to extract.
+        optional_variables: List of optional variable names to try first.
+        optional_variables_mapping: Dict mapping optional vars to list of
+            required vars they can replace.
+
+    Returns:
+        LazyFrame containing only the extracted variables.
+
+    Raises:
+        KeyError: If required variables are missing and no suitable optional
+            variables are available as replacements.
+    """
     # Get column names from LazyFrame
     available_columns = dataset.collect_schema().names()
 
