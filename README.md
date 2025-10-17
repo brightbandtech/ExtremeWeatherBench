@@ -109,7 +109,7 @@ cases = utils.load_events_yaml()
 
 # Create the evaluation class, with cases and evaluation objects declared
 ewb_instance = evaluate.ExtremeWeatherBench(
-    cases=cases,
+    case_metadata=cases,
     evaluation_objects=heatwave_evaluation_list,
 )
 
