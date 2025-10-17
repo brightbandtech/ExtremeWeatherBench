@@ -157,7 +157,7 @@ class InputBase(abc.ABC):
         default_factory=list
     )
     variable_mapping: dict = dataclasses.field(default_factory=dict)
-    storage_options: dict = dataclasses.field(default_factory=dict)
+    storage_options: Optional[dict] = None
     preprocess: Callable = _default_preprocess
 
     def open_and_maybe_preprocess_data_from_source(
@@ -395,6 +395,7 @@ class KerchunkForecast(ForecastBase):
     """Forecast class for kerchunked forecast data."""
 
     chunks: Optional[Union[dict, str]] = "auto"
+    storage_options: dict = dataclasses.field(default_factory=dict)
 
     def _open_data_from_source(self) -> IncomingDataInput:
         return open_kerchunk_reference(
