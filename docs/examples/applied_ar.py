@@ -38,7 +38,7 @@ ar_evaluation_objects = [
 # Initialize ExtremeWeatherBench; will only run on cases with event_type
 # atmospheric_river
 ar_ewb = evaluate.ExtremeWeatherBench(
-    cases=case_yaml,
+    case_metadata=case_yaml,
     evaluation_objects=ar_evaluation_objects,
 )
 
