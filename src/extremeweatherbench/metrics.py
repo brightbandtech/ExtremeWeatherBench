@@ -935,12 +935,28 @@ class HeatwaveDurationME(AppliedMetric):
         climatology_time = convert_day_yearofday_to_time(
             self.climatology, forecast.valid_time.dt.year.values[0]
         )
-        climatology_time = climatology_time.interp_like(
-            target, method="nearest", kwargs={"fill_value": "extrapolate"}
-        )
-        climatology_time = climatology_time.compute()
-        forecast = forecast.compute()
-        target = target.compute()
+        spatial_dims = [
+            dim
+            for dim in forecast.dims
+            if dim not in ["init_time", "lead_time", "valid_time"]
+        ]
+        # If target is sparse, stack the data and interpolate the climatology to the
+        # target grid
+        # otherwise, interpolate the climatology to the target grid
+        if isinstance(target.data, sparse.COO):
+            forecast = utils.stack_sparse_data_from_dims(forecast, spatial_dims)
+            target = utils.stack_sparse_data_from_dims(target, spatial_dims)
+
+            climatology_time = climatology_time.interp(
+                latitude=target["stacked"]["latitude"],
+                longitude=target["stacked"]["longitude"],
+                method="nearest",
+                kwargs={"fill_value": None},
+            )
+        else:
+            climatology_time = climatology_time.interp_like(
+                target, method="nearest", kwargs={"fill_value": None}
+            )
         forecast_mask = create_comparison_mask(
             forecast, climatology_time, self.criteria_sign
         )
@@ -954,12 +970,21 @@ class HeatwaveDurationME(AppliedMetric):
 
         # Apply valid data mask (exclude NaN positions in forecast)
         forecast_mask_final = forecast_mask.where(forecast_valid_mask)
-        target_mask_final = target_mask.where(forecast_valid_mask)
+        try:
+            target_mask_final = target_mask.where(forecast_valid_mask)
+        # If sparse, will need to expand_dims first as transpose is not supported
+        except AttributeError:
+            print("target_mask is sparse")
+            target_mask_final = target_mask.expand_dims(dim={"lead_time": 41}).where(
+                forecast_valid_mask
+            )
 
         # Sum to get durations (NaN values are excluded by default)
         forecast_duration = forecast_mask_final.groupby(self.preserve_dims).sum()
         target_duration = target_mask_final.groupby(self.preserve_dims).sum()
         # Compute mean error using the base metric
+
+        # TODO: product of time resolution hours and duration
         return {
             "forecast": forecast_duration,
             "target": target_duration,

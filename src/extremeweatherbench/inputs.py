@@ -944,10 +944,10 @@ def align_forecast_to_target(
     # # If any of the target variables are sparse, make forecast sparse as well
     for variable in time_aligned_target.data_vars:
         if isinstance(time_aligned_target[variable].data, sparse.COO):
-            time_space_aligned_forecast[variable].data = sparse.COO(
-                target_data[variable].data.coords,
-                time_space_aligned_forecast[variable].data,
-                shape=time_space_aligned_forecast[variable].data.shape,
+            time_space_aligned_forecast[variable] = (
+                utils.map_sparse_array_to_dense_array(
+                    time_aligned_target, time_space_aligned_forecast, variable
+                )
             )
     return time_space_aligned_forecast, time_aligned_target
 
