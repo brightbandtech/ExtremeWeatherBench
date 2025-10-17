@@ -27,7 +27,7 @@ case_yaml = cases.load_ewb_events_yaml_into_case_collection()
 
 # Initialize ExtremeWeatherBench
 ewb = evaluate.ExtremeWeatherBench(
-    cases=case_yaml,
+    case_metadata=case_yaml,
     evaluation_objects=defaults.get_brightband_evaluation_objects(),
 )
 # Get the number of available CPUs for determining n_processes and divide by 4 threads

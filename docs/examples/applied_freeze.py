@@ -95,7 +95,7 @@ freeze_evaluation_object = [
 
 # Initialize ExtremeWeatherBench runner instance
 ewb = evaluate.ExtremeWeatherBench(
-    cases=case_yaml,
+    case_metadata=case_yaml,
     evaluation_objects=freeze_evaluation_object,
 )
 
