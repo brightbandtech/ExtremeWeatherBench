@@ -111,13 +111,12 @@ class TestRegionToGeopandas:
         polygon = gdf.geometry.iloc[0]
         assert isinstance(polygon, shapely.Polygon)
 
-        # Check bounds (should be 40-50 lat, -125 to -115 lon after conversion to
-        # -180 to 180)
+        # Check bounds (should be 40-50 lat, -125 to -115 lon after conversion)
         bounds = polygon.bounds  # (minx, miny, maxx, maxy)
         assert abs(bounds[1] - 40.0) < 0.001  # min lat
         assert abs(bounds[3] - 50.0) < 0.001  # max lat
-        assert abs(bounds[0] - (-125.0)) < 0.001  # min lon (converted to -180 to 180)
-        assert abs(bounds[2] - (-115.0)) < 0.001  # max lon (converted to -180 to 180)
+        assert abs(bounds[0] - (-125.0)) < 0.001  # min lon (converted)
+        assert abs(bounds[2] - (-115.0)) < 0.001  # max lon (converted)
 
     def test_centered_region_to_geopandas_tuple_box(self):
         """Test regions.CenteredRegion.geopandas with tuple bounding box."""
@@ -131,13 +130,12 @@ class TestRegionToGeopandas:
         assert isinstance(gdf, gpd.GeoDataFrame)
         assert len(gdf) == 1
 
-        # Check bounds (should be 42.5-47.5 lat, -125 to -115 lon after conversion to
-        # -180 to 180)
+        # Check bounds (should be 42.5-47.5 lat, -125 to -115 lon after conversion)
         bounds = gdf.geometry.iloc[0].bounds
         assert abs(bounds[1] - 42.5) < 0.001  # min lat
         assert abs(bounds[3] - 47.5) < 0.001  # max lat
-        assert abs(bounds[0] - (-125.0)) < 0.001  # min lon (converted to -180 to 180)
-        assert abs(bounds[2] - (-115.0)) < 0.001  # max lon (converted to -180 to 180)
+        assert abs(bounds[0] - (-125.0)) < 0.001  # min lon (converted)
+        assert abs(bounds[2] - (-115.0)) < 0.001  # max lon (converted)
 
     def test_bounding_box_region_to_geopandas(self):
         """Test regions.BoundingBoxRegion.geopandas."""
@@ -987,3 +985,551 @@ class TestRegionIntegration:
         subset = individual_case.location.mask(dataset, drop=False)
         assert len(subset.latitude) == len(dataset.latitude)
         assert len(subset.longitude) == len(dataset.longitude)
+
+
+class TestRegionGeometricOperations:
+    """Test geometric operations on regions."""
+
+    def test_region_intersects(self):
+        """Test the intersects method."""
+        # Create two overlapping regions
+        region1 = regions.BoundingBoxRegion.create_region(
+            latitude_min=40.0,
+            latitude_max=50.0,
+            longitude_min=-125.0,
+            longitude_max=-115.0,
+        )
+        region2 = regions.BoundingBoxRegion.create_region(
+            latitude_min=45.0,
+            latitude_max=55.0,
+            longitude_min=-120.0,
+            longitude_max=-110.0,
+        )
+
+        # They should intersect
+        assert region1.intersects(region2)
+        assert region2.intersects(region1)
+
+        # Test non-overlapping regions
+        region3 = regions.BoundingBoxRegion.create_region(
+            latitude_min=60.0,
+            latitude_max=70.0,
+            longitude_min=-125.0,
+            longitude_max=-115.0,
+        )
+
+        assert not region1.intersects(region3)
+        assert not region3.intersects(region1)
+
+    def test_region_contains(self):
+        """Test the contains method."""
+        # Create a larger region
+        large_region = regions.BoundingBoxRegion.create_region(
+            latitude_min=40.0,
+            latitude_max=60.0,
+            longitude_min=-130.0,
+            longitude_max=-110.0,
+        )
+
+        # Create a smaller region inside it
+        small_region = regions.BoundingBoxRegion.create_region(
+            latitude_min=45.0,
+            latitude_max=55.0,
+            longitude_min=-125.0,
+            longitude_max=-115.0,
+        )
+
+        # Large should contain small, but not vice versa
+        assert large_region.contains(small_region)
+        assert not small_region.contains(large_region)
+
+    def test_area_overlap_fraction(self):
+        """Test the area_overlap_fraction method."""
+        # Create two regions with known overlap
+        region1 = regions.BoundingBoxRegion.create_region(
+            latitude_min=40.0,
+            latitude_max=50.0,
+            longitude_min=-125.0,
+            longitude_max=-115.0,
+        )
+        region2 = regions.BoundingBoxRegion.create_region(
+            latitude_min=45.0,
+            latitude_max=55.0,
+            longitude_min=-120.0,
+            longitude_max=-110.0,
+        )
+
+        # Calculate overlap fraction
+        overlap_fraction = region1.area_overlap_fraction(region2)
+
+        # Should be between 0 and 1
+        assert 0.0 <= overlap_fraction <= 1.0
+
+        # Test with non-overlapping regions
+        region3 = regions.BoundingBoxRegion.create_region(
+            latitude_min=60.0,
+            latitude_max=70.0,
+            longitude_min=-125.0,
+            longitude_max=-115.0,
+        )
+
+        overlap_fraction_none = region1.area_overlap_fraction(region3)
+        assert overlap_fraction_none == 0.0
+
+        # Test region with itself (should be 1.0)
+        self_overlap = region1.area_overlap_fraction(region1)
+        assert abs(self_overlap - 1.0) < 0.01  # Allow small numerical error
+
+
+class TestRegionSubsetter:
+    """Test the  regions.RegionSubsetter class."""
+
+    @pytest.fixture
+    def target_region(self):
+        """Create a target region for subsetting."""
+        return regions.BoundingBoxRegion.create_region(
+            latitude_min=40.0,
+            latitude_max=50.0,
+            longitude_min=-125.0,
+            longitude_max=-115.0,
+        )
+
+    @pytest.fixture
+    def sample_cases(self):
+        """Create sample individual cases for testing."""
+        from extremeweatherbench import cases
+
+        # Case that intersects with target region
+        intersecting_case = cases.IndividualCase(
+            case_id_number=1,
+            title="Intersecting Case",
+            start_date=pd.Timestamp("2021-01-01"),
+            end_date=pd.Timestamp("2021-01-03"),
+            location=regions.BoundingBoxRegion.create_region(
+                latitude_min=45.0,
+                latitude_max=55.0,
+                longitude_min=-120.0,
+                longitude_max=-110.0,
+            ),
+            event_type="heat_wave",
+        )
+
+        # Case completely within target region
+        contained_case = cases.IndividualCase(
+            case_id_number=2,
+            title="Contained Case",
+            start_date=pd.Timestamp("2021-02-01"),
+            end_date=pd.Timestamp("2021-02-03"),
+            location=regions.BoundingBoxRegion.create_region(
+                latitude_min=42.0,
+                latitude_max=48.0,
+                longitude_min=-123.0,
+                longitude_max=-117.0,
+            ),
+            event_type="cold_wave",
+        )
+
+        # Case outside target region
+        outside_case = cases.IndividualCase(
+            case_id_number=3,
+            title="Outside Case",
+            start_date=pd.Timestamp("2021-03-01"),
+            end_date=pd.Timestamp("2021-03-03"),
+            location=regions.BoundingBoxRegion.create_region(
+                latitude_min=60.0,
+                latitude_max=70.0,
+                longitude_min=-125.0,
+                longitude_max=-115.0,
+            ),
+            event_type="snow_storm",
+        )
+
+        return cases.IndividualCaseCollection(
+            cases=[intersecting_case, contained_case, outside_case]
+        )
+
+    def test_subsetter_initialization_with_region(self, target_region):
+        """Test  regions.RegionSubsetter initialization with Region object."""
+        subsetter = regions.RegionSubsetter(
+            region=target_region, method="intersects", percent_threshold=0.5
+        )
+
+        assert subsetter.region == target_region
+        assert subsetter.method == "intersects"
+        assert subsetter.percent_threshold == 0.5
+
+    def test_subsetter_initialization_with_dict(self):
+        """Test  regions.RegionSubsetter initialization with dictionary."""
+        region_dict = {
+            "latitude_min": 40.0,
+            "latitude_max": 50.0,
+            "longitude_min": -125.0,
+            "longitude_max": -115.0,
+        }
+
+        subsetter = regions.RegionSubsetter(
+            region=region_dict, method="percent", percent_threshold=0.75
+        )
+
+        assert isinstance(subsetter.region, regions.BoundingBoxRegion)
+        assert subsetter.method == "percent"
+        assert subsetter.percent_threshold == 0.75
+
+    def test_subset_case_collection_intersects(self, target_region, sample_cases):
+        """Test subsetting with intersects method."""
+        subsetter = regions.RegionSubsetter(region=target_region, method="intersects")
+
+        subset_cases = subsetter.subset_case_collection(sample_cases)
+
+        # Should include intersecting and contained cases, but not outside
+        assert len(subset_cases.cases) == 2
+        case_ids = {case.case_id_number for case in subset_cases.cases}
+        assert case_ids == {1, 2}  # intersecting and contained
+
+    def test_subset_case_collection_all(self, target_region, sample_cases):
+        """Test subsetting with all method."""
+        subsetter = regions.RegionSubsetter(region=target_region, method="all")
+
+        subset_cases = subsetter.subset_case_collection(sample_cases)
+
+        # Should only include contained case
+        assert len(subset_cases.cases) == 1
+        assert subset_cases.cases[0].case_id_number == 2  # contained case
+
+    def test_subset_case_collection_percent(self, target_region, sample_cases):
+        """Test subsetting with percent method."""
+        subsetter = regions.RegionSubsetter(
+            region=target_region, method="percent", percent_threshold=0.5
+        )
+
+        subset_cases = subsetter.subset_case_collection(sample_cases)
+
+        # This depends on the actual overlap, but should include at least the contained
+        # case
+        case_ids = {case.case_id_number for case in subset_cases.cases}
+        assert 2 in case_ids  # contained case should always be included
+
+    def test_subset_case_collection_different_thresholds(
+        self, target_region, sample_cases
+    ):
+        """Test subsetting with different percent thresholds."""
+        # Low threshold - should include more cases
+        low_threshold_subsetter = regions.RegionSubsetter(
+            region=target_region, method="percent", percent_threshold=0.1
+        )
+
+        low_threshold_cases = low_threshold_subsetter.subset_case_collection(
+            sample_cases
+        )
+
+        # High threshold - should include fewer cases
+        high_threshold_subsetter = regions.RegionSubsetter(
+            region=target_region, method="percent", percent_threshold=0.9
+        )
+
+        high_threshold_cases = high_threshold_subsetter.subset_case_collection(
+            sample_cases
+        )
+
+        # Low threshold should include at least as many as high threshold
+        assert len(low_threshold_cases.cases) >= len(high_threshold_cases.cases)
+
+    def test_subset_results_to_region(self, target_region, sample_cases):
+        """Test subsetting results DataFrame."""
+        # Create a mock results DataFrame
+        results_df = pd.DataFrame(
+            {
+                "case_id_number": [1, 2, 3, 1, 2, 3],
+                "metric": ["mae", "mae", "mae", "rmse", "rmse", "rmse"],
+                "value": [0.1, 0.2, 0.3, 0.4, 0.5, 0.6],
+                "lead_time": [0, 0, 0, 6, 6, 6],
+            }
+        )
+
+        subsetter = regions.RegionSubsetter(region=target_region, method="intersects")
+
+        subset_results = regions.subset_results_to_region(
+            subsetter, results_df, sample_cases
+        )
+
+        # Should only include results for cases 1 and 2 (intersecting and contained)
+        assert len(subset_results) == 4  # 2 cases * 2 metrics
+        case_ids = set(subset_results["case_id_number"])
+        assert case_ids == {1, 2}
+
+    def test_invalid_method_raises_error(self, target_region):
+        """Test that invalid method raises ValueError."""
+        subsetter = regions.RegionSubsetter(region=target_region, method="intersects")
+
+        # Manually set invalid method to test error handling
+        subsetter.method = "invalid_method"
+
+        from extremeweatherbench import cases
+
+        dummy_case = cases.IndividualCase(
+            case_id_number=1,
+            title="Test",
+            start_date=pd.Timestamp("2021-01-01"),
+            end_date=pd.Timestamp("2021-01-02"),
+            location=target_region,
+            event_type="test",
+        )
+
+        with pytest.raises(ValueError, match="Unknown method"):
+            subsetter._should_include_case(dummy_case)
+
+
+class TestConvenienceFunctions:
+    """Test convenience functions for region subsetting."""
+
+    @pytest.fixture
+    def sample_case_collection(self):
+        """Create a sample case collection."""
+        from extremeweatherbench import cases
+
+        case1 = cases.IndividualCase(
+            case_id_number=1,
+            title="Case 1",
+            start_date=pd.Timestamp("2021-01-01"),
+            end_date=pd.Timestamp("2021-01-03"),
+            location=regions.BoundingBoxRegion.create_region(
+                latitude_min=45.0,
+                latitude_max=55.0,
+                longitude_min=-120.0,
+                longitude_max=-110.0,
+            ),
+            event_type="heat_wave",
+        )
+
+        case2 = cases.IndividualCase(
+            case_id_number=2,
+            title="Case 2",
+            start_date=pd.Timestamp("2021-02-01"),
+            end_date=pd.Timestamp("2021-02-03"),
+            location=regions.BoundingBoxRegion.create_region(
+                latitude_min=60.0,
+                latitude_max=70.0,
+                longitude_min=-125.0,
+                longitude_max=-115.0,
+            ),
+            event_type="cold_wave",
+        )
+
+        return cases.IndividualCaseCollection(cases=[case1, case2])
+
+    def test_subset_cases_to_region_with_region_object(self, sample_case_collection):
+        """Test subset_cases_to_region with Region object."""
+        target_region = regions.BoundingBoxRegion.create_region(
+            latitude_min=40.0,
+            latitude_max=50.0,
+            longitude_min=-125.0,
+            longitude_max=-115.0,
+        )
+
+        subset_cases = regions.subset_cases_to_region(
+            sample_case_collection, target_region, method="intersects"
+        )
+
+        # Should include case 1 (intersects) but not case 2 (outside)
+        assert len(subset_cases.cases) == 1
+        assert subset_cases.cases[0].case_id_number == 1
+
+    def test_subset_cases_to_region_with_dict(self, sample_case_collection):
+        """Test subset_cases_to_region with dictionary."""
+        region_dict = {
+            "latitude_min": 40.0,
+            "latitude_max": 50.0,
+            "longitude_min": -125.0,
+            "longitude_max": -115.0,
+        }
+
+        subset_cases = regions.subset_cases_to_region(
+            sample_case_collection, region_dict, method="intersects"
+        )
+
+        assert len(subset_cases.cases) == 1
+        assert subset_cases.cases[0].case_id_number == 1
+
+    def test_subset_cases_to_region_with_percent_method(self, sample_case_collection):
+        """Test subset_cases_to_region with percent method."""
+        target_region = regions.BoundingBoxRegion.create_region(
+            latitude_min=40.0,
+            latitude_max=50.0,
+            longitude_min=-125.0,
+            longitude_max=-115.0,
+        )
+
+        subset_cases = regions.subset_cases_to_region(
+            sample_case_collection,
+            target_region,
+            method="percent",
+            percent_threshold=0.3,
+        )
+
+        # Results depend on actual area overlap calculations
+        assert isinstance(subset_cases, type(sample_case_collection))
+
+    def test_subset_cases_to_region_all_method(self, sample_case_collection):
+        """Test subset_cases_to_region with all method."""
+        # Create a region that contains case 1 completely
+        large_region = regions.BoundingBoxRegion.create_region(
+            latitude_min=40.0,
+            latitude_max=60.0,
+            longitude_min=-130.0,
+            longitude_max=-100.0,
+        )
+
+        subset_cases = regions.subset_cases_to_region(
+            sample_case_collection, large_region, method="all"
+        )
+
+        # Should include case 1 which is completely within the large region
+        assert len(subset_cases.cases) >= 1
+
+    def test_subset_results_to_region_convenience(self, sample_case_collection):
+        """Test subset_results_to_region convenience function."""
+        # Create mock results
+        results_df = pd.DataFrame(
+            {
+                "case_id_number": [1, 2, 1, 2],
+                "metric": ["mae", "mae", "rmse", "rmse"],
+                "value": [0.1, 0.2, 0.3, 0.4],
+            }
+        )
+
+        target_region = regions.BoundingBoxRegion.create_region(
+            latitude_min=40.0,
+            latitude_max=50.0,
+            longitude_min=-125.0,
+            longitude_max=-115.0,
+        )
+
+        subsetter = regions.RegionSubsetter(region=target_region, method="intersects")
+
+        subset_results = regions.subset_results_to_region(
+            subsetter, results_df, sample_case_collection
+        )
+
+        # Should only include results for case 1
+        assert len(subset_results) == 2  # 1 case * 2 metrics
+        assert all(subset_results["case_id_number"] == 1)
+
+
+class TestRegionSubsettingEdgeCases:
+    """Test edge cases for region subsetting."""
+
+    def test_empty_case_collection(self):
+        """Test subsetting with empty case collection."""
+        from extremeweatherbench import cases
+
+        empty_collection = cases.IndividualCaseCollection(cases=[])
+        target_region = regions.BoundingBoxRegion.create_region(
+            latitude_min=40.0,
+            latitude_max=50.0,
+            longitude_min=-125.0,
+            longitude_max=-115.0,
+        )
+
+        subsetter = regions.RegionSubsetter(region=target_region, method="intersects")
+
+        subset_cases = subsetter.subset_case_collection(empty_collection)
+        assert len(subset_cases.cases) == 0
+
+    def test_very_small_regions(self):
+        """Test subsetting with very small regions."""
+        from extremeweatherbench import cases
+
+        # Create a very small case region
+        tiny_case = cases.IndividualCase(
+            case_id_number=1,
+            title="Tiny Case",
+            start_date=pd.Timestamp("2021-01-01"),
+            end_date=pd.Timestamp("2021-01-02"),
+            location=regions.BoundingBoxRegion.create_region(
+                latitude_min=45.0,
+                latitude_max=45.1,
+                longitude_min=-120.0,
+                longitude_max=-119.9,
+            ),
+            event_type="test",
+        )
+
+        case_collection = cases.IndividualCaseCollection(cases=[tiny_case])
+
+        # Create a target region that should intersect
+        target_region = regions.BoundingBoxRegion.create_region(
+            latitude_min=44.9,
+            latitude_max=45.2,
+            longitude_min=-120.1,
+            longitude_max=-119.8,
+        )
+
+        subsetter = regions.RegionSubsetter(region=target_region, method="intersects")
+
+        subset_cases = subsetter.subset_case_collection(case_collection)
+        assert len(subset_cases.cases) == 1
+
+    def test_antimeridian_crossing_regions(self):
+        """Test subsetting with regions that cross the antimeridian."""
+        from extremeweatherbench import cases
+
+        # Create a case near the dateline
+        dateline_case = cases.IndividualCase(
+            case_id_number=1,
+            title="Dateline Case",
+            start_date=pd.Timestamp("2021-01-01"),
+            end_date=pd.Timestamp("2021-01-02"),
+            location=regions.CenteredRegion.create_region(
+                latitude=45.0,
+                longitude=175.0,  # Near dateline
+                bounding_box_degrees=10.0,
+            ),
+            event_type="test",
+        )
+
+        case_collection = cases.IndividualCaseCollection(cases=[dateline_case])
+
+        # Create a target region that might cross antimeridian
+        target_region = regions.CenteredRegion.create_region(
+            latitude=45.0,
+            longitude=180.0,  # At dateline
+            bounding_box_degrees=15.0,
+        )
+
+        subsetter = regions.RegionSubsetter(region=target_region, method="intersects")
+
+        # Should handle antimeridian crossing gracefully
+        subset_cases = subsetter.subset_case_collection(case_collection)
+        assert isinstance(subset_cases, cases.IndividualCaseCollection)
+
+    def test_polar_regions(self):
+        """Test subsetting with polar regions."""
+        from extremeweatherbench import cases
+
+        # Create a case near the North Pole
+        polar_case = cases.IndividualCase(
+            case_id_number=1,
+            title="Polar Case",
+            start_date=pd.Timestamp("2021-01-01"),
+            end_date=pd.Timestamp("2021-01-02"),
+            location=regions.CenteredRegion.create_region(
+                latitude=85.0, longitude=0.0, bounding_box_degrees=10.0
+            ),
+            event_type="test",
+        )
+
+        case_collection = cases.IndividualCaseCollection(cases=[polar_case])
+
+        # Create a target region at high latitudes
+        target_region = regions.BoundingBoxRegion.create_region(
+            latitude_min=80.0,
+            latitude_max=90.0,
+            longitude_min=-30.0,
+            longitude_max=30.0,
+        )
+
+        subsetter = regions.RegionSubsetter(region=target_region, method="intersects")
+
+        # Should handle polar coordinates gracefully
+        subset_cases = subsetter.subset_case_collection(case_collection)
+        assert isinstance(subset_cases, cases.IndividualCaseCollection)

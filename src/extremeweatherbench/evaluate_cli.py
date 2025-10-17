@@ -1,7 +1,7 @@
 import importlib.util
 import os
-import pickle
 import pathlib
+import pickle
 from typing import Optional
 
 import click
@@ -138,7 +138,7 @@ def cli_runner(
 
     # Initialize ExtremeWeatherBench
     ewb = evaluate.ExtremeWeatherBench(
-        cases=cases_dict,
+        case_metadata=cases_dict,
         evaluation_objects=evaluation_objects,
         cache_dir=cache_dir if cache_dir else None,
     )
