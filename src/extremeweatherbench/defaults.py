@@ -129,16 +129,9 @@ ghcn_freeze_target = inputs.GHCN(
 
 # IBTrACS target
 
-# TODO: Re-enable when IBTrACS target is implemented
-# ibtracs_target = inputs.IBTrACS(
-#     source=inputs.IBTRACS_URI,
-#     variables=[derived.TCTrackVariables],
-#     variable_mapping={
-#         "vmax": "surface_wind_speed",
-#         "slp": "air_pressure_at_mean_sea_level",
-#     },
-#     storage_options={"remote_options": {"anon": True}},
-# )
+ibtracs_target = inputs.IBTrACS(
+    source=inputs.IBTRACS_URI,
+)
 
 # Forecast Examples
 
@@ -168,6 +161,25 @@ cira_freeze_forecast = inputs.KerchunkForecast(
     preprocess=_preprocess_bb_cira_forecast_dataset,
 )
 
+cira_tropical_cyclone_forecast = inputs.KerchunkForecast(
+    name="FourCastNetv2",
+    source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
+    variables=[
+        "surface_wind_speed",
+        "air_pressure_at_mean_sea_level",
+    ],
+    variable_mapping={
+        "t": "air_temperature",
+        "t2": "surface_air_temperature",
+        "z": "geopotential",
+        "r": "relative_humidity",
+        "u": "eastward_wind",
+        "v": "northward_wind",
+        "10u": "surface_eastward_wind",
+        "10v": "surface_northward_wind",
+    },
+    storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
+)
 # TODO: Re-enable when atmospheric river forecast is implemented
 # cira_atmospheric_river_forecast = inputs.KerchunkForecast(
 #     source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
@@ -278,16 +290,12 @@ def get_brightband_evaluation_objects() -> list[inputs.EvaluationObject]:
         #     target=era5_atmospheric_river_target,
         #     forecast=cira_atmospheric_river_forecast,
         # ),
-        # TODO: Re-enable when tropical cyclone forecast is implemented
-        # inputs.EvaluationObject(
-        #     event_type="tropical_cyclone",
-        #     metric_list=[
-        #         metrics.EarlySignal,
-        #         metrics.LandfallDisplacement,
-        #         metrics.LandfallTimeME,
-        #         metrics.LandfallIntensityMAE,
-        #     ],
-        #     target=ibtracs_target,
-        #     forecast=cira_tropical_cyclone_forecast,
-        # ),
+        inputs.EvaluationObject(
+            event_type="tropical_cyclone",
+            metric_list=[
+                metrics.EarlySignal,
+            ],
+            target=ibtracs_target,
+            forecast=cira_tropical_cyclone_forecast,
+        ),
     ]
