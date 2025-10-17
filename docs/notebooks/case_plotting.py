@@ -14,6 +14,10 @@ from shapely.geometry import Polygon
 import shapely
 from matplotlib.patches import Patch
 from extremeweatherbench import evaluate, utils, cases, defaults
+import matplotlib.colors as mcolors
+import xarray as xr
+import matplotlib.dates as mdates
+
 
 def get_polygon_from_bounding_box(bounding_box):
     """Convert a bounding box tuple to a shapely Polygon."""
@@ -30,7 +34,7 @@ def get_polygon_from_bounding_box(bounding_box):
         ]
     )
 
-def plot_polygon(polygon, ax, color='yellow', alpha=0.5, my_zorder=1):
+def plot_polygon(polygon, ax, color='yellow', alpha=0.5, my_zorder=1, linewidth=2):
     """Plot a shapely Polygon on a Cartopy axis."""
     if polygon is None:
         return
@@ -40,13 +44,13 @@ def plot_polygon(polygon, ax, color='yellow', alpha=0.5, my_zorder=1):
         facecolor=color,
         edgecolor=color,
         alpha=alpha,
-        linewidth=2,
+        linewidth=linewidth,
         zorder=my_zorder,
         transform=ccrs.PlateCarree()
     )
     ax.add_patch(patch)
 
-def plot_polygon_outline(polygon, ax, color='yellow', alpha=0.5, my_zorder=1):
+def plot_polygon_outline(polygon, ax, color='yellow', alpha=0.5, my_zorder=1, linewidth=2):
     """Plot a shapely Polygon outline on a Cartopy axis."""
     if polygon is None:
         return
@@ -56,7 +60,7 @@ def plot_polygon_outline(polygon, ax, color='yellow', alpha=0.5, my_zorder=1):
         facecolor='none',
         edgecolor=color,
         alpha=alpha,
-        linewidth=2,
+        linewidth=linewidth,
         zorder=my_zorder,
         transform=ccrs.PlateCarree()
     )
@@ -196,7 +200,7 @@ def plot_all_cases(ewb_cases, event_type=None, filename=None, bounding_box=None,
     if filename is not None:
         plt.savefig(filename, transparent=False, bbox_inches='tight', dpi=300)
 
-    
+# main plotting function for plotting all cases
 def plot_all_cases_and_obs(ewb_cases, event_type=None, filename=None, bounding_box=None, targets=None, show_orig_pph=False, case_id=None):
     """A function to plot all cases (outlined) and observations (filled) on a world map.
     Args:
@@ -227,6 +231,7 @@ def plot_all_cases_and_obs(ewb_cases, event_type=None, filename=None, bounding_b
     ax.add_feature(cfeature.LAND, edgecolor='black')
     ax.add_feature(cfeature.LAKES, edgecolor='black', facecolor='white')
     ax.add_feature(cfeature.RIVERS, edgecolor='black')
+    ax.add_feature(cfeature.OCEAN, edgecolor='black', facecolor='white', zorder=10)
 
     # Add gridlines
     gl = ax.gridlines(draw_labels=True, linewidth=0.5, color='gray', alpha=0.5, linestyle='--')
@@ -257,7 +262,7 @@ def plot_all_cases_and_obs(ewb_cases, event_type=None, filename=None, bounding_b
 
     # Initialize counts for each event type
     counts_by_type = dict({'freeze': 0, 'heat_wave': 0, 'severe_convection': 0, 'atmospheric_river': 0, 'tropical_cyclone': 0})
-    zorders = {'freeze': 10, 'heat_wave': 9, 'atmospheric_river': 2, 'tropical_cyclone': 1, 'severe_convection': 0}
+    zorders = {'freeze': 9, 'heat_wave': 8, 'atmospheric_river': 2, 'tropical_cyclone': 10, 'severe_convection': 0}
     alphas = {'freeze': 1, 'heat_wave': 1, 'atmospheric_river': 1, 'tropical_cyclone': 1, 'severe_convection': 1}
 
     # Plot boxes for each case
@@ -285,19 +290,26 @@ def plot_all_cases_and_obs(ewb_cases, event_type=None, filename=None, bounding_b
             # instead we have multi-polygon patches if it wraps around and we need to plot each polygon separately
             if isinstance(indiv_case.location.geopandas.geometry.iloc[0], shapely.geometry.MultiPolygon):
                 for poly in indiv_case.location.geopandas.geometry.iloc[0].geoms:
-                    plot_polygon_outline(poly, ax, color=color, alpha=alphas[indiv_event_type], my_zorder=zorders[indiv_event_type])
+                    plot_polygon_outline(poly, ax, color=color, alpha=alphas[indiv_event_type], my_zorder=zorders[indiv_event_type], linewidth=1)
             else:
                 plot_polygon_outline(indiv_case.location.geopandas.geometry.iloc[0], ax, color=color, 
-                                        alpha=alphas[indiv_event_type], my_zorder=zorders[indiv_event_type])
+                                        alpha=alphas[indiv_event_type], my_zorder=zorders[indiv_event_type], linewidth=1)
                 
             # grab the target data for this case
             my_target_info = [n[1] for n in targets if n[0] == indiv_case.case_id_number and n[1].attrs['source'] != 'ERA5']
 
-            # make a scatter plot of the target points (for hot/cold events)
+            # make a scatter plot of the target points (for hot/cold/tc events)
             if (indiv_event_type in ['heat_wave', 'freeze', 'tropical_cyclone'] and len(my_target_info) > 0):
-                # Get the sparse array data
+                # Get the data from my_target_info
                 data = my_target_info[0]
-                data = utils.stack_sparse_data_from_dims(data['surface_air_temperature'],['latitude','longitude'])
+                
+                # sparse array for GHCN data
+                if indiv_event_type in ['heat_wave', 'freeze']:
+                    try:
+                        data = utils.stack_sparse_data_from_dims(data['surface_air_temperature'],['latitude','longitude'])
+                    except Exception as e:
+                        print(f"Error stacking sparse data for {indiv_case.case_id_number} from dimensions latitude, longitude: {e}. This is likely because the data is not available for this case.")
+                        continue
                 try:
                     lat_values = data['latitude'].values
                     lon_values = data['longitude'].values
@@ -408,7 +420,9 @@ def plot_all_cases_and_obs(ewb_cases, event_type=None, filename=None, bounding_b
             Patch(facecolor=event_colors['tropical_cyclone'], alpha=0.9, label='Tropical Cyclone (n = %d)' % counts_by_type['tropical_cyclone']),
         ]
     # Create a larger legend by specifying a larger font size in the prop dictionary
-    ax.legend(handles=legend_elements, loc='lower left', framealpha=1, frameon=True, borderpad=0.5, handletextpad=0.8, handlelength=2.5)
+    legend = ax.legend(handles=legend_elements, loc='lower left', framealpha=1, frameon=True, borderpad=0.5, handletextpad=0.8, handlelength=2.5)
+    legend.set_zorder(10)
+
     if (event_type is None):
         title = 'ExtremeWeatherBench Cases (n = %d)' % sum(counts_by_type.values())
     else:
@@ -419,3 +433,302 @@ def plot_all_cases_and_obs(ewb_cases, event_type=None, filename=None, bounding_b
     # save if there is a filename specified (otherwise the user just wants to see the plot)
     if filename is not None:
         plt.savefig(filename, transparent=False, bbox_inches='tight', dpi=300)
+
+
+def plot_boxes(box_list, box_names, title, filename=None):
+    # plot all cases on one giant world map
+    fig = plt.figure(figsize=(15, 10))
+    ax = plt.axes(projection=ccrs.PlateCarree())
+    ax.set_global()
+        
+    # Add coastlines and gridlines
+    ax.coastlines()
+    ax.add_feature(cfeature.BORDERS, linestyle=':')
+    ax.add_feature(cfeature.LAND, edgecolor='black')
+    ax.add_feature(cfeature.LAKES, edgecolor='black', facecolor='white')
+    ax.add_feature(cfeature.RIVERS, edgecolor='black')
+
+    # Add gridlines
+    gl = ax.gridlines(draw_labels=True, linewidth=0.5, color='black', alpha=1, linestyle='--')
+    gl.top_labels = False
+    gl.right_labels = False
+    gl.xformatter = LongitudeFormatter()
+    gl.yformatter = LatitudeFormatter()
+
+    # Define colors for each event type
+    # use seaborn color palette for colorblind friendly colors
+    sns_palette = sns.color_palette("tab10")
+    sns.set_style("whitegrid")
+
+    # Plot boxes for each case
+    for box in box_list:
+        plot_polygon_outline(box, ax, color='blue', alpha=1)
+
+    plt.legend(loc='lower left', fontsize=12)
+    ax.set_title(title, loc='left', fontsize=20)
+    
+    # save if there is a filename specified (otherwise the user just wants to see the plot)
+    if filename is not None:
+        plt.savefig(filename, transparent=False, bbox_inches='tight', dpi=300)
+
+def celsius_colormap_and_normalize() -> tuple[mcolors.Colormap, mcolors.Normalize]:
+    """Gets the colormap and normalization for 2m temperature.
+
+    Uses a custom colormap for temperature in Celsius.
+
+    Returns:
+        A tuple (cmap, norm) for plotting.
+    """
+    lo_colors = [
+        "#E4C7F4",
+        "#E53885",
+        "#C17CBE",
+        "#694396",
+        "#CBCCE9",
+        "#6361BD",
+        "#77FBFE",
+    ]
+    hi_colors = [
+        "#8CE9B0",
+        "#479F31",
+        "#F0F988",
+        "#AD311B",
+        "#ECB9F1",
+        "#7F266F",
+    ]
+    colors = lo_colors + hi_colors
+
+    # Calculate the position where we want the 0C jump
+    lo = -67.8  
+    hi = 54.4  
+    threshold = 0  
+    threshold_pos = (threshold - lo) / (hi - lo)  # normalize 0°C position to [0,1]
+
+    # Create positions for colors with a small gap around zero_pos
+    positions = np.concatenate(
+        [
+            np.linspace(
+                0, threshold_pos - 0.02, len(lo_colors)
+            ),  # Colors up to white
+            # [threshold_pos],  # White position
+            np.linspace(
+                threshold_pos + 0.02, 1, len(hi_colors)
+            ),  # Colors after white
+        ]
+    )
+
+    return mcolors.LinearSegmentedColormap.from_list(
+        "temp_colormap", list(zip(positions, colors))
+    ), mcolors.Normalize(vmin=lo, vmax=hi)
+
+
+def convert_day_yearofday_to_time(dataset: xr.Dataset, year: int) -> xr.Dataset:
+    """Convert dayofyear and hour coordinates in an xarray Dataset to a new time
+    coordinate.
+
+    Args:
+        dataset: The input xarray dataset.
+        year: The base year to use for the time coordinate.
+
+    Returns:
+        The dataset with a new time coordinate.
+    """
+    # Create a new time coordinate by combining dayofyear and hour
+    time_dim = pd.date_range(
+        start=f"{year}-01-01",
+        periods=len(dataset["dayofyear"]) * len(dataset["hour"]),
+        freq="6h",
+    )
+    dataset = dataset.stack(time=("dayofyear", "hour"))
+    # Assign the new time coordinate to the dataset
+    dataset = (dataset.drop_vars(['time', 'dayofyear', 'hour'])
+               .assign_coords(time=time_dim))
+
+    return dataset
+
+def generate_heatwave_dataset(
+    era5: xr.Dataset,
+    climatology: xr.Dataset,
+    single_case: cases.IndividualCase,
+):
+    """Calculate the times where regional average of temperature is above the climatology.
+    
+    Args:
+        era5: ERA5 dataset containing 2m_temperature
+        climatology: BB climatology containing surface_temperature_85th_percentile
+        single_case: cases.IndividualCase object with associated metadata
+    """
+    era5_case = era5[["2m_temperature"]].sel(
+        time=slice(single_case.start_date, single_case.end_date)
+    )
+    subset_climatology = convert_day_yearofday_to_time(
+        climatology, np.unique(era5_case.time.dt.year.values)[0]
+    )
+    merged_dataset = xr.merge(
+        [
+            subset_climatology.rename(
+                {"2m_temperature": "surface_temperature_85th_percentile"}
+            ),
+            era5_case,
+        ],
+        join="inner",
+    )
+    if (
+        single_case.location.longitude_min < 0 or 
+        single_case.location.longitude_min > 180 
+        ) and (
+        single_case.location.longitude_max > 0 and
+        single_case.location.longitude_max < 180
+            ):
+                merged_dataset = utils.convert_longitude_to_180(merged_dataset)
+    merged_dataset = merged_dataset.sel(
+        latitude=slice(single_case.location.latitude_max, single_case.location.latitude_min),
+        longitude=slice(single_case.location.longitude_min, single_case.location.longitude_max),
+    )
+    return merged_dataset
+
+def generate_heatwave_plots(
+    heatwave_dataset: xr.Dataset,
+    single_case: cases.IndividualCase,
+):
+    """Plot the max timestep of the heatwave event and the average regional temperature time series
+    on separate plots.
+    
+    Args:
+        heatwave_dataset: contains 2m_temperature, surface_temperature_85th_percentile,
+        time, latitude, longitude
+        single_case: cases.IndividualCase object with associated metadata
+    """
+    time_based_heatwave_dataset = heatwave_dataset.mean(["latitude", "longitude"])
+    # Plot 1: Min timestep of the heatwave event
+    fig1, ax1 = plt.subplots(
+        figsize=(12, 6), subplot_kw={"projection": ccrs.PlateCarree()}
+    )
+    # Select the timestep with the maximum spatially averagedtemperature
+    subset_timestep = (
+        time_based_heatwave_dataset['time'][time_based_heatwave_dataset["2m_temperature"]
+        .argmax()]
+    )
+    # Mask places where temperature >= 85th percentile climatology
+    temp_data = heatwave_dataset["2m_temperature"] - 273.15
+    climatology_data = heatwave_dataset["surface_temperature_85th_percentile"] - 273.15
+    
+    # Create mask for values where temp > climatology (heatwave condition)
+    mask = temp_data > climatology_data
+    
+    # Apply mask to temperature data
+    masked_temp = temp_data.where(mask)
+    cmap, norm = celsius_colormap_and_normalize()
+    im = (
+        masked_temp
+        .sel(time=subset_timestep)
+        .plot(
+            ax=ax1,
+            transform=ccrs.PlateCarree(),
+            cmap=cmap,
+            norm=norm,
+            add_colorbar=False,
+        )
+    )
+    (
+        temp_data
+        .sel(time=subset_timestep)
+        .plot.contour(
+            ax=ax1,
+            levels=[0],
+            colors='r',
+            linewidths=0.75,
+            ls=':',
+            transform=ccrs.PlateCarree(),
+        )
+    )   
+    # Add coastlines and gridlines
+    ax1.coastlines()
+    ax1.add_feature(cfeature.BORDERS, linestyle=":")
+    ax1.add_feature(cfeature.LAND, edgecolor="black")
+    ax1.add_feature(cfeature.LAKES, edgecolor="black")
+    ax1.add_feature(cfeature.RIVERS, edgecolor=[ 0.59375 , 0.71484375, 0.8828125 ],alpha=0.5)
+    ax1.add_feature(cfeature.STATES, edgecolor="grey")
+    # Add gridlines
+    gl = ax1.gridlines(draw_labels=True,alpha=0.25)
+    gl.top_labels = False
+    gl.right_labels = False
+    gl.xformatter = LongitudeFormatter()
+    gl.yformatter = LatitudeFormatter()
+    gl.xlabel_style = {"size": 12, "color": "k"}
+    gl.ylabel_style = {"size": 12, "color": "k"}
+    ax1.set_title('') # clears the default xarray title
+    ax1.set_title(
+        f"Temperature Where > 85th Percentile Climatology\n"
+        f"{single_case.title}, Case ID {single_case.case_id_number}\n"
+        f"{heatwave_dataset['time'].sel(time=subset_timestep).dt.strftime('%Y-%m-%d %Hz').values}", 
+        loc='left'
+    )
+    # Add the location coordinate as a dot on the map
+    ax1.tick_params(axis='y', which='major', labelsize=12)
+    # Create a colorbar with the same height as the plot
+    divider = make_axes_locatable(ax1)
+    cax = divider.append_axes("right", size="5%", pad=0.1, axes_class=plt.Axes)
+    cbar = fig1.colorbar(im, cax=cax, label="Temp > 85th Percentile (C)")
+    cbar.set_label("Temperature (C)", size=14)
+    cbar.ax.tick_params(labelsize=12)
+
+    plt.tight_layout()
+    plt.savefig(f"case_{single_case.case_id_number}_spatial.png",transparent=True)
+    plt.show()
+
+    # Plot 2: Average regional temperature time series
+    fig2, ax2 = plt.subplots(figsize=(10, 6))
+    lss = ["-.", "-"]
+    lc = ["k", "tab:red"]
+    lws = [0.75, 1.5]
+    for i, variable in enumerate(time_based_heatwave_dataset):
+        (time_based_heatwave_dataset[variable] - 273.15).plot(
+            ax=ax2, label=variable, lw=lws[i], ls=lss[i], c=lc[i]
+        )
+    ax2.legend(fontsize=12)
+    mask = (
+        time_based_heatwave_dataset["2m_temperature"]
+        < time_based_heatwave_dataset["surface_temperature_85th_percentile"]
+    )
+    start = None
+    for i, val in enumerate(mask.values):
+        if val and start is None:
+            start = time_based_heatwave_dataset.time[i].values
+        elif not val and start is not None:
+            ax2.axvspan(
+                start,
+                time_based_heatwave_dataset.time[i].values,
+                color="red",
+                alpha=0.1,
+            )
+            start = None
+    if start is not None:
+        ax2.axvspan(
+            start, time_based_heatwave_dataset.time[-1].values, color="red", alpha=0.1
+        )
+    ax2.set_title('')
+    ax2.set_title("Spatially Averaged Heatwave Event vs 85th Percentile Climatology", 
+    fontsize=14, loc='left')
+    ax2.set_ylabel("Temperature (C)", fontsize=12)
+    ax2.set_xlabel("Time", fontsize=12)
+    ax2.tick_params(axis="x", labelsize=12)
+    ax2.xaxis.set_major_formatter(mdates.DateFormatter("%b %d"))
+    ax2.xaxis.set_tick_params(rotation=45, labelsize=10, pad=0.0001,)
+    ax2.tick_params(axis="y", labelsize=12)
+    
+    # Create legend handles including the axvspan
+    from matplotlib.patches import Patch
+    legend_elements = [
+        plt.Line2D([0], [0], color='k', linestyle='-.', linewidth=0.75, 
+                   label='2m Temperature, 85th Percentile'),
+        plt.Line2D([0], [0], color='tab:red', linestyle='-', linewidth=1.5, 
+                   label='2m Temperature'),
+        Patch(facecolor='red', alpha=0.1, label='Above 85th Percentile')
+    ]
+    ax2.legend(handles=legend_elements, fontsize=12)
+    
+    ax2.tick_params(axis='y', which='major', labelsize=12)
+    plt.tight_layout()
+    plt.savefig(f"case_{single_case.case_id_number}_timeseries.png",transparent=True)
+    plt.show()
