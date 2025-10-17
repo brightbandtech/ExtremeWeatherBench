@@ -886,7 +886,12 @@ class TestGHCN:
         mock_case = Mock()
         mock_case.case_metadata.start_date = pd.Timestamp("2021-06-20")
         mock_case.case_metadata.end_date = pd.Timestamp("2021-06-22")
-        mock_case.case_metadata.location.geopandas.total_bounds = [-120, 30, -90, 50]
+        mock_case.case_metadata.location.as_geopandas().total_bounds = [
+            -120,
+            30,
+            -90,
+            50,
+        ]
         mock_case.target.variables = ["surface_air_temperature"]
 
         ghcn = inputs.GHCN(
@@ -930,7 +935,12 @@ class TestGHCN:
         mock_case = Mock()
         mock_case.case_metadata.start_date = pd.Timestamp("2021-06-20")
         mock_case.case_metadata.end_date = pd.Timestamp("2021-06-22")
-        mock_case.case_metadata.location.geopandas.total_bounds = [-120, 30, -90, 50]
+        mock_case.case_metadata.location.as_geopandas().total_bounds = [
+            -120,
+            30,
+            -90,
+            50,
+        ]
         mock_case.target.variables = ["surface_air_temperature"]
 
         ghcn = inputs.GHCN(

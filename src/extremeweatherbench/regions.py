@@ -1,15 +1,13 @@
 """Region classes and utilities for the ExtremeWeatherBench package."""
 
 import abc
-import dataclasses
 import logging
 import pathlib
-from collections import namedtuple
-from typing import Any, Type
+from typing import Type
 
 import geopandas as gpd  # type: ignore[import-untyped]
 import numpy as np
-import regionmask
+import regionmask  # type: ignore[import-untyped]
 import shapely  # type: ignore[import-untyped]
 import xarray as xr
 
@@ -28,24 +26,10 @@ class Region(abc.ABC):
         their own, specialized arguments."""
         pass
 
-    @property
     @abc.abstractmethod
-    def geopandas(self) -> gpd.GeoDataFrame:
+    def as_geopandas(self) -> gpd.GeoDataFrame:
         """Return representation of this Region as a GeoDataFrame."""
         pass
-
-    @property
-    def get_bounding_coordinates(self) -> tuple[Any, ...]:
-        """Get the bounding coordinates of the region.
-
-        Returns:
-            A named tuple with longitude_min, latitude_min, longitude_max, and
-            latitude_max.
-        """
-        return namedtuple(
-            "BoundingCoordinates",
-            ["longitude_min", "latitude_min", "longitude_max", "latitude_max"],
-        )(*self.geopandas.total_bounds)
 
     def mask(self, dataset: xr.Dataset, drop: bool = False) -> xr.Dataset:
         """Mask a dataset to the region.
@@ -62,20 +46,12 @@ class Region(abc.ABC):
             )
         # If the lats are monotonically decreasing, reverse the slice (max, min)
         longitude_min, latitude_min, longitude_max, latitude_max = (
-            self.geopandas.total_bounds
+            self.as_geopandas().total_bounds
         )
-        latitude_order = dataset.latitude.values.argsort()
-        if latitude_order[0] > latitude_order[-1]:
-            dataset = dataset.sel(
-                latitude=slice(latitude_max, latitude_min),
-                longitude=slice(longitude_min, longitude_max),
-            )
-        else:
-            # If monotonically increasing, slice normally (min, max)
-            dataset = dataset.sel(
-                latitude=slice(latitude_min, latitude_max),
-                longitude=slice(longitude_min, longitude_max),
-            )
+        dataset = dataset.sel(
+            latitude=slice(latitude_max, latitude_min),
+            longitude=slice(longitude_min, longitude_max),
+        )
 
         return dataset
 
@@ -127,8 +103,7 @@ class CenteredRegion(Region):
             bounding_box_degrees=bounding_box_degrees,
         )
 
-    @property
-    def geopandas(self) -> gpd.GeoDataFrame:
+    def as_geopandas(self) -> gpd.GeoDataFrame:
         """Return representation of this Region as a GeoDataFrame.
 
         Returns:
@@ -197,8 +172,7 @@ class BoundingBoxRegion(Region):
             longitude_max=longitude_max,
         )
 
-    @property
-    def geopandas(self) -> gpd.GeoDataFrame:
+    def as_geopandas(self) -> gpd.GeoDataFrame:
         """Return representation of this Region as a GeoDataFrame.
 
         Returns:
@@ -209,7 +183,6 @@ class BoundingBoxRegion(Region):
         )
 
 
-@dataclasses.dataclass
 class ShapefileRegion(Region):
     """A region defined by a shapefile.
 
@@ -231,8 +204,7 @@ class ShapefileRegion(Region):
         """Create a ShapefileRegion with the given parameters."""
         return cls(shapefile_path=str(shapefile_path))
 
-    @property
-    def geopandas(self) -> gpd.GeoDataFrame:
+    def as_geopandas(self) -> gpd.GeoDataFrame:
         """Return representation of this Region as a GeoDataFrame.
 
         Returns:
@@ -255,24 +227,16 @@ class ShapefileRegion(Region):
             The subset dataset.
         """
         longitude_min, latitude_min, longitude_max, latitude_max = (
-            self.geopandas.total_bounds
+            self.as_geopandas().total_bounds
         )
-        try:
-            dataset = dataset.sel(
-                latitude=slice(latitude_min, latitude_max),
-                longitude=slice(longitude_min, longitude_max),
-                drop=drop,
-            )
-        except Exception:
-            # If the latitude slice fails, try the reverse
-            dataset = dataset.sel(
-                latitude=slice(latitude_max, latitude_min),
-                longitude=slice(longitude_min, longitude_max),
-                drop=drop,
-            )
+        dataset = dataset.sel(
+            latitude=slice(latitude_max, latitude_min),
+            longitude=slice(longitude_min, longitude_max),
+            drop=drop,
+        )
         # Subset dataset after cutting out a box to minimize memory pressure
         mask = regionmask.mask_geopandas(
-            self.geopandas, dataset.longitude, dataset.latitude
+            self.as_geopandas(), dataset.longitude, dataset.latitude
         )
         return dataset.where(~np.isnan(mask), drop=drop)
 

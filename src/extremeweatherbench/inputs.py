@@ -524,19 +524,19 @@ class GHCN(TargetBase):
             & (pl.col("valid_time") <= time_max)
             & (
                 pl.col("latitude")
-                >= case_operator.case_metadata.location.geopandas.total_bounds[1]
+                >= case_operator.case_metadata.location.as_geopandas().total_bounds[1]
             )
             & (
                 pl.col("latitude")
-                <= case_operator.case_metadata.location.geopandas.total_bounds[3]
+                <= case_operator.case_metadata.location.as_geopandas().total_bounds[3]
             )
             & (
                 pl.col("longitude")
-                >= case_operator.case_metadata.location.geopandas.total_bounds[0]
+                >= case_operator.case_metadata.location.as_geopandas().total_bounds[0]
             )
             & (
                 pl.col("longitude")
-                <= case_operator.case_metadata.location.geopandas.total_bounds[2]
+                <= case_operator.case_metadata.location.as_geopandas().total_bounds[2]
             )
         )
         # convert to Kelvin
