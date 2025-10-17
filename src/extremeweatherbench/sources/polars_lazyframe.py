@@ -17,9 +17,7 @@ def safely_pull_variables_polars_lazyframe(
     found_variables = []
 
     # First, check for required variables and add them if present
-    for vars in variables:
-        if vars in available_columns:
-            found_variables.append(vars)
+    found_variables = [var for var in variables if var in available_columns]
 
     # Then, check for optional variables and add them if present
     for opt_var in optional_variables:
