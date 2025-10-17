@@ -1628,6 +1628,7 @@ class TestInputsIntegration:
             source=temp_zarr_file,
             variables=["2m_temperature"],
             variable_mapping={},
+            storage_options=None,
         )
 
         # Test opening data
