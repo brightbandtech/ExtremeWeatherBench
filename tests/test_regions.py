@@ -1,50 +1,41 @@
-"""Tests for the region-related functionality in regions.py."""
+"""Tests for the regions module."""
 
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest import mock
 
 import geopandas as gpd
 import numpy as np
 import pandas as pd
 import pytest
+import shapely
 import xarray as xr
-from shapely import MultiPolygon, Polygon
 
-from extremeweatherbench import utils
-from extremeweatherbench.regions import (
-    BoundingBoxRegion,
-    CenteredRegion,
-    Region,
-    RegionSubsetter,
-    ShapefileRegion,
-    map_to_create_region,
-    subset_cases_to_region,
-    subset_results_to_region,
-)
+from extremeweatherbench import regions, utils
 
 
 class TestRegionClasses:
-    """Test the Region base class and its subclasses."""
+    """Test the regions.Region base class and its subclasses."""
 
     def test_region_base_class(self):
-        """Test that Region is an abstract base class that cannot be instantiated."""
-        # Region is now abstract and cannot be instantiated
+        """Test that regions.Region is an abstract base class that cannot be
+        instantiated."""
+        # regions.Region is now abstract and cannot be instantiated
         with pytest.raises(TypeError, match="Can't instantiate abstract class"):
-            Region()
+            regions.Region()
 
     def test_centered_region_creation(self):
-        """Test CenteredRegion creation with valid parameters."""
-        region = CenteredRegion.create_region(
+        """Test regions.CenteredRegion creation with valid parameters."""
+        region = regions.CenteredRegion.create_region(
             latitude=45.0, longitude=-120.0, bounding_box_degrees=10.0
         )
         assert region.latitude == 45.0
         assert region.longitude == -120.0
         assert region.bounding_box_degrees == 10.0
-        assert isinstance(region, Region)
+        assert isinstance(region, regions.Region)
 
     def test_centered_region_with_tuple_bounding_box(self):
-        """Test CenteredRegion creation with tuple bounding box."""
-        region = CenteredRegion.create_region(
+        """Test regions.CenteredRegion creation with tuple bounding box."""
+        region = regions.CenteredRegion.create_region(
             latitude=45.0, longitude=-120.0, bounding_box_degrees=(5.0, 10.0)
         )
         assert region.latitude == 45.0
@@ -52,8 +43,8 @@ class TestRegionClasses:
         assert region.bounding_box_degrees == (5.0, 10.0)
 
     def test_bounding_box_region_creation(self):
-        """Test BoundingBoxRegion creation with valid parameters."""
-        region = BoundingBoxRegion.create_region(
+        """Test regions.BoundingBoxRegion creation with valid parameters."""
+        region = regions.BoundingBoxRegion.create_region(
             latitude_min=40.0,
             latitude_max=50.0,
             longitude_min=-125.0,
@@ -63,34 +54,36 @@ class TestRegionClasses:
         assert region.latitude_max == 50.0
         assert region.longitude_min == -125.0
         assert region.longitude_max == -115.0
-        assert isinstance(region, Region)
+        assert isinstance(region, regions.Region)
 
     def test_shapefile_region_creation(self):
-        """Test ShapefileRegion creation with valid path."""
-        with patch("geopandas.read_file") as mock_read:
-            mock_read.return_value = Mock()
-            region = ShapefileRegion.create_region(
+        """Test regions.ShapefileRegion creation with valid path."""
+        with mock.patch("geopandas.read_file") as mock_read:
+            mock_read.return_value = mock.Mock()
+            region = regions.ShapefileRegion.create_region(
                 shapefile_path="/path/to/shapefile.shp"
             )
             assert region.shapefile_path == Path("/path/to/shapefile.shp")
-            assert isinstance(region, Region)
+            assert isinstance(region, regions.Region)
 
             # build_region should be called when geopandas is accessed
             _ = region.geopandas
             mock_read.assert_called_once_with(Path("/path/to/shapefile.shp"))
 
     def test_shapefile_region_with_string_path(self):
-        """Test ShapefileRegion creation with string path."""
-        with patch("geopandas.read_file") as mock_read:
-            mock_read.return_value = Mock()
-            region = ShapefileRegion.create_region(shapefile_path="shapefile.shp")
+        """Test regions.ShapefileRegion creation with string path."""
+        with mock.patch("geopandas.read_file") as mock_read:
+            mock_read.return_value = mock.Mock()
+            region = regions.ShapefileRegion.create_region(
+                shapefile_path="shapefile.shp"
+            )
             assert region.shapefile_path == Path("shapefile.shp")
 
     def test_shapefile_region_read_error(self):
-        """Test ShapefileRegion creation with invalid shapefile."""
-        with patch("geopandas.read_file") as mock_read:
+        """Test regions.ShapefileRegion creation with invalid shapefile."""
+        with mock.patch("geopandas.read_file") as mock_read:
             mock_read.side_effect = Exception("File not found")
-            region = ShapefileRegion.create_region(
+            region = regions.ShapefileRegion.create_region(
                 shapefile_path="/path/to/shapefile.shp"
             )
 
@@ -100,11 +93,11 @@ class TestRegionClasses:
 
 
 class TestRegionToGeopandas:
-    """Test the to_geopandas() method for all Region subclasses."""
+    """Test the to_geopandas() method for all regions.Region subclasses."""
 
     def test_centered_region_to_geopandas_single_box(self):
-        """Test CenteredRegion.geopandas with single bounding box."""
-        region = CenteredRegion.create_region(
+        """Test regions.CenteredRegion.geopandas with single bounding box."""
+        region = regions.CenteredRegion.create_region(
             latitude=45.0, longitude=-120.0, bounding_box_degrees=10.0
         )
 
@@ -116,7 +109,7 @@ class TestRegionToGeopandas:
 
         # Verify the polygon coordinates
         polygon = gdf.geometry.iloc[0]
-        assert isinstance(polygon, Polygon)
+        assert isinstance(polygon, shapely.Polygon)
 
         # Check bounds (should be 40-50 lat, -125 to -115 lon after conversion)
         bounds = polygon.bounds  # (minx, miny, maxx, maxy)
@@ -126,8 +119,8 @@ class TestRegionToGeopandas:
         assert abs(bounds[2] - (-115.0)) < 0.001  # max lon (converted)
 
     def test_centered_region_to_geopandas_tuple_box(self):
-        """Test CenteredRegion.geopandas with tuple bounding box."""
-        region = CenteredRegion.create_region(
+        """Test regions.CenteredRegion.geopandas with tuple bounding box."""
+        region = regions.CenteredRegion.create_region(
             latitude=45.0, longitude=-120.0, bounding_box_degrees=(5.0, 10.0)
         )
 
@@ -145,8 +138,8 @@ class TestRegionToGeopandas:
         assert abs(bounds[2] - (-115.0)) < 0.001  # max lon (converted)
 
     def test_bounding_box_region_to_geopandas(self):
-        """Test BoundingBoxRegion.geopandas."""
-        region = BoundingBoxRegion.create_region(
+        """Test regions.BoundingBoxRegion.geopandas."""
+        region = regions.BoundingBoxRegion.create_region(
             latitude_min=40.0,
             latitude_max=50.0,
             longitude_min=-125.0,
@@ -161,7 +154,7 @@ class TestRegionToGeopandas:
 
         # Verify the polygon coordinates
         polygon = gdf.geometry.iloc[0]
-        assert isinstance(polygon, Polygon)
+        assert isinstance(polygon, shapely.Polygon)
 
         # Check bounds (longitude should be converted to -180 to 180)
         bounds = polygon.bounds
@@ -171,13 +164,13 @@ class TestRegionToGeopandas:
         assert abs(bounds[2] - (-115.0)) < 0.001  # max lon (converted to -180 to 180)
 
     def test_shapefile_region_to_geopandas(self):
-        """Test ShapefileRegion.geopandas."""
+        """Test regions.ShapefileRegion.geopandas."""
         # Create a mock GeoDataFrame
-        mock_polygon = Polygon([(0, 0), (1, 0), (1, 1), (0, 1), (0, 0)])
+        mock_polygon = shapely.Polygon([(0, 0), (1, 0), (1, 1), (0, 1), (0, 0)])
         mock_gdf = gpd.GeoDataFrame(geometry=[mock_polygon], crs="EPSG:4326")
 
-        with patch("geopandas.read_file", return_value=mock_gdf):
-            region = ShapefileRegion.create_region(
+        with mock.patch("geopandas.read_file", return_value=mock_gdf):
+            region = regions.ShapefileRegion.create_region(
                 shapefile_path="/path/to/shapefile.shp"
             )
 
@@ -190,22 +183,22 @@ class TestRegionToGeopandas:
 
     def test_region_to_geopandas_edge_cases(self):
         """Test geopandas with edge cases."""
-        # Test CenteredRegion at poles
-        polar_region = CenteredRegion.create_region(
+        # Test regions.CenteredRegion at poles
+        polar_region = regions.CenteredRegion.create_region(
             latitude=85.0, longitude=0.0, bounding_box_degrees=10.0
         )
         polar_gdf = polar_region.geopandas
         assert isinstance(polar_gdf, gpd.GeoDataFrame)
 
-        # Test CenteredRegion crossing the dateline
-        dateline_region = CenteredRegion.create_region(
+        # Test regions.CenteredRegion crossing the dateline
+        dateline_region = regions.CenteredRegion.create_region(
             latitude=45.0, longitude=175.0, bounding_box_degrees=10.0
         )
         dateline_gdf = dateline_region.geopandas
         assert isinstance(dateline_gdf, gpd.GeoDataFrame)
 
         # Test with very small bounding box
-        small_region = BoundingBoxRegion.create_region(
+        small_region = regions.BoundingBoxRegion.create_region(
             latitude_min=44.9,
             latitude_max=45.1,
             longitude_min=-120.1,
@@ -217,7 +210,7 @@ class TestRegionToGeopandas:
     def test_region_to_geopandas_longitude_conversion(self):
         """Test that longitudes are properly converted to -180 to 180 range."""
         # Test with negative longitudes
-        region_neg = CenteredRegion.create_region(
+        region_neg = regions.CenteredRegion.create_region(
             latitude=45.0, longitude=-120.0, bounding_box_degrees=10.0
         )
         gdf_neg = region_neg.geopandas
@@ -226,7 +219,7 @@ class TestRegionToGeopandas:
         assert bounds_neg[2] <= 180  # max lon should be <= 180
 
         # Test with positive longitudes
-        region_pos = CenteredRegion.create_region(
+        region_pos = regions.CenteredRegion.create_region(
             latitude=45.0, longitude=120.0, bounding_box_degrees=10.0
         )
         gdf_pos = region_pos.geopandas
@@ -236,7 +229,7 @@ class TestRegionToGeopandas:
 
 
 class TestRegionMask:
-    """Test the mask() method for all Region subclasses."""
+    """Test the mask() method for all regions.Region subclasses."""
 
     @pytest.fixture
     def sample_dataset(self):
@@ -250,8 +243,8 @@ class TestRegionMask:
         )
 
     def test_centered_region_mask(self, sample_dataset):
-        """Test CenteredRegion.mask() method."""
-        region = CenteredRegion.create_region(
+        """Test regions.CenteredRegion.mask() method."""
+        region = regions.CenteredRegion.create_region(
             latitude=45.0, longitude=-120.0, bounding_box_degrees=10.0
         )
 
@@ -266,8 +259,8 @@ class TestRegionMask:
         assert np.any(np.isnan(masked_dataset.temperature.values))
 
     def test_bounding_box_region_mask(self, sample_dataset):
-        """Test BoundingBoxRegion.mask() method."""
-        region = BoundingBoxRegion.create_region(
+        """Test regions.BoundingBoxRegion.mask() method."""
+        region = regions.BoundingBoxRegion.create_region(
             latitude_min=40.0,
             latitude_max=50.0,
             longitude_min=-125.0,
@@ -282,12 +275,14 @@ class TestRegionMask:
         assert np.any(np.isnan(masked_dataset.temperature.values))
 
     def test_shapefile_region_mask(self, sample_dataset):
-        """Test ShapefileRegion.mask() method."""
-        mock_polygon = Polygon([(240, 40), (250, 40), (250, 50), (240, 50), (240, 40)])
+        """Test regions.ShapefileRegion.mask() method."""
+        mock_polygon = shapely.Polygon(
+            [(240, 40), (250, 40), (250, 50), (240, 50), (240, 40)]
+        )
         mock_gdf = gpd.GeoDataFrame(geometry=[mock_polygon], crs="EPSG:4326")
 
-        with patch("geopandas.read_file", return_value=mock_gdf):
-            region = ShapefileRegion.create_region(
+        with mock.patch("geopandas.read_file", return_value=mock_gdf):
+            region = regions.ShapefileRegion.create_region(
                 shapefile_path="/path/to/shapefile.shp"
             )
 
@@ -301,10 +296,10 @@ class TestRegionMask:
     def test_region_mask_consistency(self, sample_dataset):
         """Test that different region types produce consistent mask behavior."""
         # Create regions with similar coverage
-        centered = CenteredRegion.create_region(
+        centered = regions.CenteredRegion.create_region(
             latitude=45.0, longitude=-120.0, bounding_box_degrees=10.0
         )
-        bbox = BoundingBoxRegion.create_region(
+        bbox = regions.BoundingBoxRegion.create_region(
             latitude_min=40.0,
             latitude_max=50.0,
             longitude_min=-125.0,
@@ -322,39 +317,39 @@ class TestRegionMask:
 
 
 class TestRegionInheritance:
-    """Test that all region types properly inherit from Region."""
+    """Test that all region types properly inherit from regions.Region."""
 
     def test_region_inheritance(self):
-        """Test that all region types properly inherit from Region."""
-        # Test CenteredRegion
-        centered = CenteredRegion.create_region(
+        """Test that all region types properly inherit from regions.Region."""
+        # Test regions.CenteredRegion
+        centered = regions.CenteredRegion.create_region(
             latitude=45.0, longitude=-120.0, bounding_box_degrees=10.0
         )
-        assert isinstance(centered, Region)
+        assert isinstance(centered, regions.Region)
 
-        # Test BoundingBoxRegion
-        bbox = BoundingBoxRegion.create_region(
+        # Test regions.BoundingBoxRegion
+        bbox = regions.BoundingBoxRegion.create_region(
             latitude_min=40.0,
             latitude_max=50.0,
             longitude_min=-125.0,
             longitude_max=-115.0,
         )
-        assert isinstance(bbox, Region)
+        assert isinstance(bbox, regions.Region)
 
-        # Test ShapefileRegion
-        with patch("geopandas.read_file", return_value=Mock()):
-            shapefile = ShapefileRegion.create_region(
+        # Test regions.ShapefileRegion
+        with mock.patch("geopandas.read_file", return_value=mock.Mock()):
+            shapefile = regions.ShapefileRegion.create_region(
                 shapefile_path="/path/to/shapefile.shp"
             )
-            assert isinstance(shapefile, Region)
+            assert isinstance(shapefile, regions.Region)
 
     def test_region_methods_consistency(self):
         """Test that all region types have consistent method behavior."""
         # Create regions with similar coverage
-        centered = CenteredRegion.create_region(
+        centered = regions.CenteredRegion.create_region(
             latitude=45.0, longitude=-120.0, bounding_box_degrees=10.0
         )
-        bbox = BoundingBoxRegion.create_region(
+        bbox = regions.BoundingBoxRegion.create_region(
             latitude_min=40.0,
             latitude_max=50.0,
             longitude_min=-125.0,
@@ -375,8 +370,8 @@ class TestCreateRegion:
     """Test the create_region factory function."""
 
     def test_create_centered_region(self):
-        """Test creating a CenteredRegion via factory function."""
-        region = map_to_create_region(
+        """Test creating a regions.CenteredRegion via factory function."""
+        region = regions.map_to_create_region(
             {
                 "type": "centered_region",
                 "parameters": {
@@ -386,14 +381,14 @@ class TestCreateRegion:
                 },
             }
         )
-        assert isinstance(region, CenteredRegion)
+        assert isinstance(region, regions.CenteredRegion)
         assert region.latitude == 45.0
         assert region.longitude == -120.0
         assert region.bounding_box_degrees == 10.0
 
     def test_create_centered_region_with_tuple(self):
-        """Test creating a CenteredRegion with tuple bounding box."""
-        region = map_to_create_region(
+        """Test creating a regions.CenteredRegion with tuple bounding box."""
+        region = regions.map_to_create_region(
             {
                 "type": "centered_region",
                 "parameters": {
@@ -403,12 +398,12 @@ class TestCreateRegion:
                 },
             }
         )
-        assert isinstance(region, CenteredRegion)
+        assert isinstance(region, regions.CenteredRegion)
         assert region.bounding_box_degrees == (5.0, 10.0)
 
     def test_create_bounding_box_region(self):
-        """Test creating a BoundingBoxRegion via factory function."""
-        region = map_to_create_region(
+        """Test creating a regions.BoundingBoxRegion via factory function."""
+        region = regions.map_to_create_region(
             {
                 "type": "bounded_region",
                 "parameters": {
@@ -419,30 +414,30 @@ class TestCreateRegion:
                 },
             }
         )
-        assert isinstance(region, BoundingBoxRegion)
+        assert isinstance(region, regions.BoundingBoxRegion)
         assert region.latitude_min == 40.0
         assert region.latitude_max == 50.0
         assert region.longitude_min == -125.0
         assert region.longitude_max == -115.0
 
     def test_create_shapefile_region(self):
-        """Test creating a ShapefileRegion via factory function."""
-        with patch("geopandas.read_file") as mock_read:
-            mock_read.return_value = Mock()
-            region = map_to_create_region(
+        """Test creating a regions.ShapefileRegion via factory function."""
+        with mock.patch("geopandas.read_file") as mock_read:
+            mock_read.return_value = mock.Mock()
+            region = regions.map_to_create_region(
                 {
                     "type": "shapefile_region",
                     "parameters": {"shapefile_path": "/path/to/shapefile.shp"},
                 }
             )
-            assert isinstance(region, ShapefileRegion)
+            assert isinstance(region, regions.ShapefileRegion)
             assert region.shapefile_path == Path("/path/to/shapefile.shp")
 
     def test_create_region_invalid_parameters(self):
         """Test create_region with invalid parameter combinations."""
-        # Missing required parameters for CenteredRegion
+        # Missing required parameters for regions.CenteredRegion
         with pytest.raises(TypeError, match="missing 1 required positional argument"):
-            map_to_create_region(
+            regions.map_to_create_region(
                 {
                     "type": "centered_region",
                     "parameters": {"latitude": 45.0, "longitude": -120.0},
@@ -450,11 +445,11 @@ class TestCreateRegion:
             )
             # Missing bounding_box_degrees
 
-        # Missing required parameters for BoundingBoxRegion
+        # Missing required parameters for regions.BoundingBoxRegion
         with pytest.raises(
             TypeError, match="missing 1 required positional argument: 'longitude_max'"
         ):
-            map_to_create_region(
+            regions.map_to_create_region(
                 {
                     "type": "bounded_region",
                     "parameters": {
@@ -471,7 +466,7 @@ class TestCreateRegion:
             TypeError,
             match="got an unexpected keyword argument 'longitude_min'",
         ):
-            map_to_create_region(
+            regions.map_to_create_region(
                 {
                     "type": "centered_region",
                     "parameters": {"latitude": 45.0, "longitude_min": -125.0},
@@ -480,9 +475,9 @@ class TestCreateRegion:
 
     def test_create_region_priority_order(self):
         """Test that shapefile_path takes priority over other parameters."""
-        with patch("geopandas.read_file") as mock_read:
-            mock_read.return_value = Mock()
-            region = map_to_create_region(
+        with mock.patch("geopandas.read_file") as mock_read:
+            mock_read.return_value = mock.Mock()
+            region = regions.map_to_create_region(
                 {
                     "type": "shapefile_region",
                     "parameters": {
@@ -490,15 +485,15 @@ class TestCreateRegion:
                     },
                 }
             )
-            # Should create ShapefileRegion, not CenteredRegion
-            assert isinstance(region, ShapefileRegion)
+            # Should create regions.ShapefileRegion, not regions.CenteredRegion
+            assert isinstance(region, regions.ShapefileRegion)
 
 
 class TestMapToCreateRegion:
-    """Test the map_to_create_region function."""
+    """Test the regions.map_to_create_region function."""
 
     def test_map_to_create_region_centered(self):
-        """Test mapping dictionary to CenteredRegion."""
+        """Test mapping dictionary to regions.CenteredRegion."""
         kwargs = {
             "type": "centered_region",
             "parameters": {
@@ -507,14 +502,14 @@ class TestMapToCreateRegion:
                 "bounding_box_degrees": 10.0,
             },
         }
-        region = map_to_create_region(kwargs)
-        assert isinstance(region, CenteredRegion)
+        region = regions.map_to_create_region(kwargs)
+        assert isinstance(region, regions.CenteredRegion)
         assert region.latitude == 45.0
         assert region.longitude == -120.0
         assert region.bounding_box_degrees == 10.0
 
     def test_map_to_create_region_bounding_box(self):
-        """Test mapping dictionary to BoundingBoxRegion."""
+        """Test mapping dictionary to regions.BoundingBoxRegion."""
         kwargs = {
             "type": "bounded_region",
             "parameters": {
@@ -524,21 +519,21 @@ class TestMapToCreateRegion:
                 "longitude_max": -115.0,
             },
         }
-        region = map_to_create_region(kwargs)
-        assert isinstance(region, BoundingBoxRegion)
+        region = regions.map_to_create_region(kwargs)
+        assert isinstance(region, regions.BoundingBoxRegion)
         assert region.latitude_min == 40.0
         assert region.latitude_max == 50.0
 
     def test_map_to_create_region_shapefile(self):
-        """Test mapping dictionary to ShapefileRegion."""
-        with patch("geopandas.read_file") as mock_read:
-            mock_read.return_value = Mock()
+        """Test mapping dictionary to regions.ShapefileRegion."""
+        with mock.patch("geopandas.read_file") as mock_read:
+            mock_read.return_value = mock.Mock()
             kwargs = {
                 "type": "shapefile_region",
                 "parameters": {"shapefile_path": "/path/to/shapefile.shp"},
             }
-            region = map_to_create_region(kwargs)
-            assert isinstance(region, ShapefileRegion)
+            region = regions.map_to_create_region(kwargs)
+            assert isinstance(region, regions.ShapefileRegion)
             assert region.shapefile_path == Path("/path/to/shapefile.shp")
 
 
@@ -615,7 +610,7 @@ class TestCreateGeopandasFromBounds:
         assert len(gdf) == 1
 
         polygon = gdf.geometry.iloc[0]
-        assert isinstance(polygon, Polygon)
+        assert isinstance(polygon, shapely.Polygon)
 
         # Check bounds - should be converted to -180 to 180 range
         bounds = polygon.bounds
@@ -639,8 +634,8 @@ class TestCreateGeopandasFromBounds:
         assert len(gdf) == 1
 
         geometry = gdf.geometry.iloc[0]
-        # Should be a MultiPolygon for antimeridian crossing
-        assert isinstance(geometry, MultiPolygon)
+        # Should be a Multishapely.Polygon for antimeridian crossing
+        assert isinstance(geometry, shapely.MultiPolygon)
 
         # Check that we have two polygons
         assert len(geometry.geoms) == 2
@@ -660,7 +655,7 @@ class TestCreateGeopandasFromBounds:
         assert len(gdf) == 1
 
         polygon = gdf.geometry.iloc[0]
-        assert isinstance(polygon, Polygon)
+        assert isinstance(polygon, shapely.Polygon)
 
         # Check bounds - should be converted to -180 to 180 range
         bounds = polygon.bounds
@@ -695,8 +690,8 @@ class TestCreateGeopandasFromBounds:
         )
 
         geometry = gdf.geometry.iloc[0]
-        # Should be a MultiPolygon
-        assert isinstance(geometry, MultiPolygon)
+        # Should be a Multishapely.Polygon
+        assert isinstance(geometry, shapely.MultiPolygon)
         assert len(geometry.geoms) == 2
 
     def test_edge_case_0_degree_longitude(self):
@@ -711,8 +706,8 @@ class TestCreateGeopandasFromBounds:
         )
 
         geometry = gdf.geometry.iloc[0]
-        # Should be a single Polygon (no antimeridian crossing)
-        assert isinstance(geometry, Polygon)
+        # Should be a single shapely.Polygon (no antimeridian crossing)
+        assert isinstance(geometry, shapely.Polygon)
 
     def test_polar_regions(self):
         """Test with regions near the poles."""
@@ -730,7 +725,7 @@ class TestCreateGeopandasFromBounds:
 
         geometry = gdf.geometry.iloc[0]
         # After conversion to -180 to 180, 360 becomes 0, so no antimeridian crossing
-        assert isinstance(geometry, Polygon)
+        assert isinstance(geometry, shapely.Polygon)
 
     def test_small_region(self):
         """Test with a very small region."""
@@ -744,7 +739,7 @@ class TestCreateGeopandasFromBounds:
         assert len(gdf) == 1
 
         polygon = gdf.geometry.iloc[0]
-        assert isinstance(polygon, Polygon)
+        assert isinstance(polygon, shapely.Polygon)
 
         bounds = polygon.bounds
         assert abs(bounds[0] - 45.0) < 0.001
@@ -752,11 +747,11 @@ class TestCreateGeopandasFromBounds:
 
 
 class TestGetBoundingCoordinates:
-    """Test the get_bounding_coordinates method for all Region subclasses."""
+    """Test the get_bounding_coordinates method for all regions.Region subclasses."""
 
     def test_centered_region_bounding_coordinates(self):
-        """Test CenteredRegion.get_bounding_coordinates method."""
-        region = CenteredRegion.create_region(
+        """Test regions.CenteredRegion.get_bounding_coordinates method."""
+        region = regions.CenteredRegion.create_region(
             latitude=45.0, longitude=-120.0, bounding_box_degrees=10.0
         )
 
@@ -775,8 +770,9 @@ class TestGetBoundingCoordinates:
         assert abs(coords.longitude_max - (-115.0)) < 0.001
 
     def test_centered_region_bounding_coordinates_tuple_box(self):
-        """Test CenteredRegion.get_bounding_coordinates with tuple bounding box."""
-        region = CenteredRegion.create_region(
+        """Test regions.CenteredRegion.get_bounding_coordinates with tuple bounding
+        box."""
+        region = regions.CenteredRegion.create_region(
             latitude=45.0, longitude=-120.0, bounding_box_degrees=(5.0, 10.0)
         )
 
@@ -789,8 +785,8 @@ class TestGetBoundingCoordinates:
         assert abs(coords.longitude_max - (-115.0)) < 0.001
 
     def test_bounding_box_region_bounding_coordinates(self):
-        """Test BoundingBoxRegion.get_bounding_coordinates method."""
-        region = BoundingBoxRegion.create_region(
+        """Test regions.BoundingBoxRegion.get_bounding_coordinates method."""
+        region = regions.BoundingBoxRegion.create_region(
             latitude_min=40.0,
             latitude_max=50.0,
             longitude_min=-125.0,
@@ -806,13 +802,15 @@ class TestGetBoundingCoordinates:
         assert abs(coords.longitude_max - (-115.0)) < 0.001
 
     def test_shapefile_region_bounding_coordinates(self):
-        """Test ShapefileRegion.get_bounding_coordinates method."""
+        """Test regions.ShapefileRegion.get_bounding_coordinates method."""
         # Create a mock polygon with known bounds
-        mock_polygon = Polygon([(240, 40), (250, 40), (250, 50), (240, 50), (240, 40)])
+        mock_polygon = shapely.Polygon(
+            [(240, 40), (250, 40), (250, 50), (240, 50), (240, 40)]
+        )
         mock_gdf = gpd.GeoDataFrame(geometry=[mock_polygon], crs="EPSG:4326")
 
-        with patch("geopandas.read_file", return_value=mock_gdf):
-            region = ShapefileRegion.create_region(
+        with mock.patch("geopandas.read_file", return_value=mock_gdf):
+            region = regions.ShapefileRegion.create_region(
                 shapefile_path="/path/to/shapefile.shp"
             )
 
@@ -827,7 +825,7 @@ class TestGetBoundingCoordinates:
     def test_bounding_coordinates_antimeridian_crossing(self):
         """Test get_bounding_coordinates with antimeridian crossing."""
         # Create a region that truly crosses the antimeridian (longitude spans > 180°)
-        region = CenteredRegion.create_region(
+        region = regions.CenteredRegion.create_region(
             latitude=45.0,
             longitude=175.0,
             bounding_box_degrees=20.0,  # 165° to 185° crosses antimeridian
@@ -845,7 +843,7 @@ class TestGetBoundingCoordinates:
         """Test get_bounding_coordinates for region near but not crossing
         antimeridian."""
         # Create a region that goes exactly to 180° but doesn't cross it
-        region = CenteredRegion.create_region(
+        region = regions.CenteredRegion.create_region(
             latitude=45.0,
             longitude=175.0,
             bounding_box_degrees=10.0,  # 170° to 180°, no crossing
@@ -862,7 +860,7 @@ class TestGetBoundingCoordinates:
     def test_bounding_coordinates_longitude_conversion(self):
         """Test that bounding coordinates properly handle longitude conversion."""
         # Test with positive longitude that should be converted
-        region = CenteredRegion.create_region(
+        region = regions.CenteredRegion.create_region(
             latitude=45.0,
             longitude=200.0,
             bounding_box_degrees=10.0,  # 200° = -160°
@@ -884,7 +882,7 @@ class TestGetBoundingCoordinates:
     def test_bounding_coordinates_edge_cases(self):
         """Test get_bounding_coordinates with edge cases."""
         # Test very small region
-        small_region = BoundingBoxRegion.create_region(
+        small_region = regions.BoundingBoxRegion.create_region(
             latitude_min=44.99,
             latitude_max=45.01,
             longitude_min=-120.01,
@@ -895,7 +893,7 @@ class TestGetBoundingCoordinates:
         assert coords.longitude_max > coords.longitude_min
 
         # Test polar region
-        polar_region = CenteredRegion.create_region(
+        polar_region = regions.CenteredRegion.create_region(
             latitude=85.0, longitude=0.0, bounding_box_degrees=10.0
         )
         polar_coords = polar_region.get_bounding_coordinates
@@ -904,7 +902,7 @@ class TestGetBoundingCoordinates:
 
     def test_bounding_coordinates_return_type(self):
         """Test that get_bounding_coordinates returns correct type."""
-        region = CenteredRegion.create_region(
+        region = regions.CenteredRegion.create_region(
             latitude=45.0, longitude=-120.0, bounding_box_degrees=10.0
         )
 
@@ -944,10 +942,10 @@ class TestRegionIntegration:
             },
         }
 
-        # Test that map_to_create_region works correctly
-        region = map_to_create_region(region_data)
+        # Test that regions.map_to_create_region works correctly
+        region = regions.map_to_create_region(region_data)
 
-        assert isinstance(region, CenteredRegion)
+        assert isinstance(region, regions.CenteredRegion)
         assert region.latitude == 45.0
         assert region.longitude == -120.0
         assert region.bounding_box_degrees == 10.0
@@ -956,7 +954,7 @@ class TestRegionIntegration:
         """Test that regions work correctly with IndividualCase."""
         from extremeweatherbench import cases
 
-        region = CenteredRegion.create_region(
+        region = regions.CenteredRegion.create_region(
             latitude=45.0, longitude=-120.0, bounding_box_degrees=10.0
         )
 
@@ -995,13 +993,13 @@ class TestRegionGeometricOperations:
     def test_region_intersects(self):
         """Test the intersects method."""
         # Create two overlapping regions
-        region1 = BoundingBoxRegion.create_region(
+        region1 = regions.BoundingBoxRegion.create_region(
             latitude_min=40.0,
             latitude_max=50.0,
             longitude_min=-125.0,
             longitude_max=-115.0,
         )
-        region2 = BoundingBoxRegion.create_region(
+        region2 = regions.BoundingBoxRegion.create_region(
             latitude_min=45.0,
             latitude_max=55.0,
             longitude_min=-120.0,
@@ -1013,7 +1011,7 @@ class TestRegionGeometricOperations:
         assert region2.intersects(region1)
 
         # Test non-overlapping regions
-        region3 = BoundingBoxRegion.create_region(
+        region3 = regions.BoundingBoxRegion.create_region(
             latitude_min=60.0,
             latitude_max=70.0,
             longitude_min=-125.0,
@@ -1026,7 +1024,7 @@ class TestRegionGeometricOperations:
     def test_region_contains(self):
         """Test the contains method."""
         # Create a larger region
-        large_region = BoundingBoxRegion.create_region(
+        large_region = regions.BoundingBoxRegion.create_region(
             latitude_min=40.0,
             latitude_max=60.0,
             longitude_min=-130.0,
@@ -1034,7 +1032,7 @@ class TestRegionGeometricOperations:
         )
 
         # Create a smaller region inside it
-        small_region = BoundingBoxRegion.create_region(
+        small_region = regions.BoundingBoxRegion.create_region(
             latitude_min=45.0,
             latitude_max=55.0,
             longitude_min=-125.0,
@@ -1048,13 +1046,13 @@ class TestRegionGeometricOperations:
     def test_area_overlap_fraction(self):
         """Test the area_overlap_fraction method."""
         # Create two regions with known overlap
-        region1 = BoundingBoxRegion.create_region(
+        region1 = regions.BoundingBoxRegion.create_region(
             latitude_min=40.0,
             latitude_max=50.0,
             longitude_min=-125.0,
             longitude_max=-115.0,
         )
-        region2 = BoundingBoxRegion.create_region(
+        region2 = regions.BoundingBoxRegion.create_region(
             latitude_min=45.0,
             latitude_max=55.0,
             longitude_min=-120.0,
@@ -1068,7 +1066,7 @@ class TestRegionGeometricOperations:
         assert 0.0 <= overlap_fraction <= 1.0
 
         # Test with non-overlapping regions
-        region3 = BoundingBoxRegion.create_region(
+        region3 = regions.BoundingBoxRegion.create_region(
             latitude_min=60.0,
             latitude_max=70.0,
             longitude_min=-125.0,
@@ -1084,12 +1082,12 @@ class TestRegionGeometricOperations:
 
 
 class TestRegionSubsetter:
-    """Test the RegionSubsetter class."""
+    """Test the  regions.RegionSubsetter class."""
 
     @pytest.fixture
     def target_region(self):
         """Create a target region for subsetting."""
-        return BoundingBoxRegion.create_region(
+        return regions.BoundingBoxRegion.create_region(
             latitude_min=40.0,
             latitude_max=50.0,
             longitude_min=-125.0,
@@ -1107,7 +1105,7 @@ class TestRegionSubsetter:
             title="Intersecting Case",
             start_date=pd.Timestamp("2021-01-01"),
             end_date=pd.Timestamp("2021-01-03"),
-            location=BoundingBoxRegion.create_region(
+            location=regions.BoundingBoxRegion.create_region(
                 latitude_min=45.0,
                 latitude_max=55.0,
                 longitude_min=-120.0,
@@ -1122,7 +1120,7 @@ class TestRegionSubsetter:
             title="Contained Case",
             start_date=pd.Timestamp("2021-02-01"),
             end_date=pd.Timestamp("2021-02-03"),
-            location=BoundingBoxRegion.create_region(
+            location=regions.BoundingBoxRegion.create_region(
                 latitude_min=42.0,
                 latitude_max=48.0,
                 longitude_min=-123.0,
@@ -1137,7 +1135,7 @@ class TestRegionSubsetter:
             title="Outside Case",
             start_date=pd.Timestamp("2021-03-01"),
             end_date=pd.Timestamp("2021-03-03"),
-            location=BoundingBoxRegion.create_region(
+            location=regions.BoundingBoxRegion.create_region(
                 latitude_min=60.0,
                 latitude_max=70.0,
                 longitude_min=-125.0,
@@ -1151,8 +1149,8 @@ class TestRegionSubsetter:
         )
 
     def test_subsetter_initialization_with_region(self, target_region):
-        """Test RegionSubsetter initialization with Region object."""
-        subsetter = RegionSubsetter(
+        """Test  regions.RegionSubsetter initialization with Region object."""
+        subsetter = regions.RegionSubsetter(
             region=target_region, method="intersects", percent_threshold=0.5
         )
 
@@ -1161,7 +1159,7 @@ class TestRegionSubsetter:
         assert subsetter.percent_threshold == 0.5
 
     def test_subsetter_initialization_with_dict(self):
-        """Test RegionSubsetter initialization with dictionary."""
+        """Test  regions.RegionSubsetter initialization with dictionary."""
         region_dict = {
             "latitude_min": 40.0,
             "latitude_max": 50.0,
@@ -1169,17 +1167,17 @@ class TestRegionSubsetter:
             "longitude_max": -115.0,
         }
 
-        subsetter = RegionSubsetter(
+        subsetter = regions.RegionSubsetter(
             region=region_dict, method="percent", percent_threshold=0.75
         )
 
-        assert isinstance(subsetter.region, BoundingBoxRegion)
+        assert isinstance(subsetter.region, regions.BoundingBoxRegion)
         assert subsetter.method == "percent"
         assert subsetter.percent_threshold == 0.75
 
     def test_subset_case_collection_intersects(self, target_region, sample_cases):
         """Test subsetting with intersects method."""
-        subsetter = RegionSubsetter(region=target_region, method="intersects")
+        subsetter = regions.RegionSubsetter(region=target_region, method="intersects")
 
         subset_cases = subsetter.subset_case_collection(sample_cases)
 
@@ -1190,7 +1188,7 @@ class TestRegionSubsetter:
 
     def test_subset_case_collection_all(self, target_region, sample_cases):
         """Test subsetting with all method."""
-        subsetter = RegionSubsetter(region=target_region, method="all")
+        subsetter = regions.RegionSubsetter(region=target_region, method="all")
 
         subset_cases = subsetter.subset_case_collection(sample_cases)
 
@@ -1200,7 +1198,7 @@ class TestRegionSubsetter:
 
     def test_subset_case_collection_percent(self, target_region, sample_cases):
         """Test subsetting with percent method."""
-        subsetter = RegionSubsetter(
+        subsetter = regions.RegionSubsetter(
             region=target_region, method="percent", percent_threshold=0.5
         )
 
@@ -1216,7 +1214,7 @@ class TestRegionSubsetter:
     ):
         """Test subsetting with different percent thresholds."""
         # Low threshold - should include more cases
-        low_threshold_subsetter = RegionSubsetter(
+        low_threshold_subsetter = regions.RegionSubsetter(
             region=target_region, method="percent", percent_threshold=0.1
         )
 
@@ -1225,7 +1223,7 @@ class TestRegionSubsetter:
         )
 
         # High threshold - should include fewer cases
-        high_threshold_subsetter = RegionSubsetter(
+        high_threshold_subsetter = regions.RegionSubsetter(
             region=target_region, method="percent", percent_threshold=0.9
         )
 
@@ -1248,9 +1246,11 @@ class TestRegionSubsetter:
             }
         )
 
-        subsetter = RegionSubsetter(region=target_region, method="intersects")
+        subsetter = regions.RegionSubsetter(region=target_region, method="intersects")
 
-        subset_results = subset_results_to_region(subsetter, results_df, sample_cases)
+        subset_results = regions.subset_results_to_region(
+            subsetter, results_df, sample_cases
+        )
 
         # Should only include results for cases 1 and 2 (intersecting and contained)
         assert len(subset_results) == 4  # 2 cases * 2 metrics
@@ -1259,7 +1259,7 @@ class TestRegionSubsetter:
 
     def test_invalid_method_raises_error(self, target_region):
         """Test that invalid method raises ValueError."""
-        subsetter = RegionSubsetter(region=target_region, method="intersects")
+        subsetter = regions.RegionSubsetter(region=target_region, method="intersects")
 
         # Manually set invalid method to test error handling
         subsetter.method = "invalid_method"
@@ -1292,7 +1292,7 @@ class TestConvenienceFunctions:
             title="Case 1",
             start_date=pd.Timestamp("2021-01-01"),
             end_date=pd.Timestamp("2021-01-03"),
-            location=BoundingBoxRegion.create_region(
+            location=regions.BoundingBoxRegion.create_region(
                 latitude_min=45.0,
                 latitude_max=55.0,
                 longitude_min=-120.0,
@@ -1306,7 +1306,7 @@ class TestConvenienceFunctions:
             title="Case 2",
             start_date=pd.Timestamp("2021-02-01"),
             end_date=pd.Timestamp("2021-02-03"),
-            location=BoundingBoxRegion.create_region(
+            location=regions.BoundingBoxRegion.create_region(
                 latitude_min=60.0,
                 latitude_max=70.0,
                 longitude_min=-125.0,
@@ -1319,14 +1319,14 @@ class TestConvenienceFunctions:
 
     def test_subset_cases_to_region_with_region_object(self, sample_case_collection):
         """Test subset_cases_to_region with Region object."""
-        target_region = BoundingBoxRegion.create_region(
+        target_region = regions.BoundingBoxRegion.create_region(
             latitude_min=40.0,
             latitude_max=50.0,
             longitude_min=-125.0,
             longitude_max=-115.0,
         )
 
-        subset_cases = subset_cases_to_region(
+        subset_cases = regions.subset_cases_to_region(
             sample_case_collection, target_region, method="intersects"
         )
 
@@ -1343,7 +1343,7 @@ class TestConvenienceFunctions:
             "longitude_max": -115.0,
         }
 
-        subset_cases = subset_cases_to_region(
+        subset_cases = regions.subset_cases_to_region(
             sample_case_collection, region_dict, method="intersects"
         )
 
@@ -1352,14 +1352,14 @@ class TestConvenienceFunctions:
 
     def test_subset_cases_to_region_with_percent_method(self, sample_case_collection):
         """Test subset_cases_to_region with percent method."""
-        target_region = BoundingBoxRegion.create_region(
+        target_region = regions.BoundingBoxRegion.create_region(
             latitude_min=40.0,
             latitude_max=50.0,
             longitude_min=-125.0,
             longitude_max=-115.0,
         )
 
-        subset_cases = subset_cases_to_region(
+        subset_cases = regions.subset_cases_to_region(
             sample_case_collection,
             target_region,
             method="percent",
@@ -1372,14 +1372,14 @@ class TestConvenienceFunctions:
     def test_subset_cases_to_region_all_method(self, sample_case_collection):
         """Test subset_cases_to_region with all method."""
         # Create a region that contains case 1 completely
-        large_region = BoundingBoxRegion.create_region(
+        large_region = regions.BoundingBoxRegion.create_region(
             latitude_min=40.0,
             latitude_max=60.0,
             longitude_min=-130.0,
             longitude_max=-100.0,
         )
 
-        subset_cases = subset_cases_to_region(
+        subset_cases = regions.subset_cases_to_region(
             sample_case_collection, large_region, method="all"
         )
 
@@ -1397,16 +1397,16 @@ class TestConvenienceFunctions:
             }
         )
 
-        target_region = BoundingBoxRegion.create_region(
+        target_region = regions.BoundingBoxRegion.create_region(
             latitude_min=40.0,
             latitude_max=50.0,
             longitude_min=-125.0,
             longitude_max=-115.0,
         )
 
-        subsetter = RegionSubsetter(region=target_region, method="intersects")
+        subsetter = regions.RegionSubsetter(region=target_region, method="intersects")
 
-        subset_results = subset_results_to_region(
+        subset_results = regions.subset_results_to_region(
             subsetter, results_df, sample_case_collection
         )
 
@@ -1423,14 +1423,14 @@ class TestRegionSubsettingEdgeCases:
         from extremeweatherbench import cases
 
         empty_collection = cases.IndividualCaseCollection(cases=[])
-        target_region = BoundingBoxRegion.create_region(
+        target_region = regions.BoundingBoxRegion.create_region(
             latitude_min=40.0,
             latitude_max=50.0,
             longitude_min=-125.0,
             longitude_max=-115.0,
         )
 
-        subsetter = RegionSubsetter(region=target_region, method="intersects")
+        subsetter = regions.RegionSubsetter(region=target_region, method="intersects")
 
         subset_cases = subsetter.subset_case_collection(empty_collection)
         assert len(subset_cases.cases) == 0
@@ -1445,7 +1445,7 @@ class TestRegionSubsettingEdgeCases:
             title="Tiny Case",
             start_date=pd.Timestamp("2021-01-01"),
             end_date=pd.Timestamp("2021-01-02"),
-            location=BoundingBoxRegion.create_region(
+            location=regions.BoundingBoxRegion.create_region(
                 latitude_min=45.0,
                 latitude_max=45.1,
                 longitude_min=-120.0,
@@ -1457,14 +1457,14 @@ class TestRegionSubsettingEdgeCases:
         case_collection = cases.IndividualCaseCollection(cases=[tiny_case])
 
         # Create a target region that should intersect
-        target_region = BoundingBoxRegion.create_region(
+        target_region = regions.BoundingBoxRegion.create_region(
             latitude_min=44.9,
             latitude_max=45.2,
             longitude_min=-120.1,
             longitude_max=-119.8,
         )
 
-        subsetter = RegionSubsetter(region=target_region, method="intersects")
+        subsetter = regions.RegionSubsetter(region=target_region, method="intersects")
 
         subset_cases = subsetter.subset_case_collection(case_collection)
         assert len(subset_cases.cases) == 1
@@ -1479,7 +1479,7 @@ class TestRegionSubsettingEdgeCases:
             title="Dateline Case",
             start_date=pd.Timestamp("2021-01-01"),
             end_date=pd.Timestamp("2021-01-02"),
-            location=CenteredRegion.create_region(
+            location=regions.CenteredRegion.create_region(
                 latitude=45.0,
                 longitude=175.0,  # Near dateline
                 bounding_box_degrees=10.0,
@@ -1490,13 +1490,13 @@ class TestRegionSubsettingEdgeCases:
         case_collection = cases.IndividualCaseCollection(cases=[dateline_case])
 
         # Create a target region that might cross antimeridian
-        target_region = CenteredRegion.create_region(
+        target_region = regions.CenteredRegion.create_region(
             latitude=45.0,
             longitude=180.0,  # At dateline
             bounding_box_degrees=15.0,
         )
 
-        subsetter = RegionSubsetter(region=target_region, method="intersects")
+        subsetter = regions.RegionSubsetter(region=target_region, method="intersects")
 
         # Should handle antimeridian crossing gracefully
         subset_cases = subsetter.subset_case_collection(case_collection)
@@ -1512,7 +1512,7 @@ class TestRegionSubsettingEdgeCases:
             title="Polar Case",
             start_date=pd.Timestamp("2021-01-01"),
             end_date=pd.Timestamp("2021-01-02"),
-            location=CenteredRegion.create_region(
+            location=regions.CenteredRegion.create_region(
                 latitude=85.0, longitude=0.0, bounding_box_degrees=10.0
             ),
             event_type="test",
@@ -1521,14 +1521,14 @@ class TestRegionSubsettingEdgeCases:
         case_collection = cases.IndividualCaseCollection(cases=[polar_case])
 
         # Create a target region at high latitudes
-        target_region = BoundingBoxRegion.create_region(
+        target_region = regions.BoundingBoxRegion.create_region(
             latitude_min=80.0,
             latitude_max=90.0,
             longitude_min=-30.0,
             longitude_max=30.0,
         )
 
-        subsetter = RegionSubsetter(region=target_region, method="intersects")
+        subsetter = regions.RegionSubsetter(region=target_region, method="intersects")
 
         # Should handle polar coordinates gracefully
         subset_cases = subsetter.subset_case_collection(case_collection)
