@@ -11,6 +11,7 @@ import sparse
 import xarray as xr
 from tqdm.auto import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
+from tqdm.dask import TqdmCallback
 
 from extremeweatherbench import cases, defaults, derived, inputs, utils
 
@@ -89,6 +90,7 @@ class ExtremeWeatherBench:
         Returns:
             A concatenated dataframe of the evaluation results.
         """
+        logger.info("Running ExtremeWeatherBench workflow...")
         # Caching does not work in parallel mode as of now, so ignore the cache_dir
         # but raise a warning for the user
         if self.cache_dir and n_jobs != 1:
@@ -117,7 +119,10 @@ def _run_case_operators(
 ) -> list[pd.DataFrame]:
     """Run the case operators in parallel or serial."""
     with logging_redirect_tqdm():
-        if n_jobs != 1:
+        # If there are less than 2 case operators, run in serial (joblib will hang
+        # indefinitely)
+        if n_jobs != 1 and len(case_operators) >= 2:
+            logger.info("Running case operators in parallel...")
             return _run_parallel(case_operators, n_jobs, **kwargs)
         else:
             return _run_serial(case_operators, cache_dir, **kwargs)
@@ -145,11 +150,18 @@ def _run_parallel(
 
     if n_jobs is None:
         logger.warning("No number of jobs provided, using joblib backend default.")
-    run_results = joblib.Parallel(n_jobs=n_jobs)(
-        # None is the cache_dir, we can't cache in parallel mode
-        joblib.delayed(compute_case_operator)(case_operator, None, **kwargs)
-        for case_operator in case_operators
+    parallel_config = kwargs.get(
+        "parallel_config", {"backend": "threading", "n_jobs": n_jobs}
     )
+    # TODO: return a generator and compute at a higher level
+    with joblib.parallel_config(
+        **parallel_config,
+    ):
+        run_results = utils.ParallelTqdm(total_tasks=len(case_operators))(
+            # None is the cache_dir, we can't cache in parallel mode
+            joblib.delayed(compute_case_operator)(case_operator, None, **kwargs)
+            for case_operator in case_operators
+        )
     return run_results
 
 
@@ -173,6 +185,9 @@ def compute_case_operator(
     Returns:
         A concatenated dataframe of the results of the case operator.
     """
+    logger.info(
+        "Computing case operator %s...", case_operator.case_metadata.case_id_number
+    )
     forecast_ds, target_ds = _build_datasets(case_operator)
     # Check if any dimension has zero length
     if 0 in forecast_ds.sizes.values() or 0 in target_ds.sizes.values():
@@ -378,9 +393,17 @@ def _build_datasets(
     forecast datasets, including preprocessing, variable renaming, and subsetting.
     """
     logger.info("Running target pipeline... ")
-    target_ds = run_pipeline(case_operator.case_metadata, case_operator.target)
+    with TqdmCallback(
+        desc=f"Running target pipeline for case "
+        f"{case_operator.case_metadata.case_id_number}"
+    ):
+        target_ds = run_pipeline(case_operator.case_metadata, case_operator.target)
     logger.info("Running forecast pipeline... ")
-    forecast_ds = run_pipeline(case_operator.case_metadata, case_operator.forecast)
+    with TqdmCallback(
+        desc=f"Running forecast pipeline for case "
+        f"{case_operator.case_metadata.case_id_number}"
+    ):
+        forecast_ds = run_pipeline(case_operator.case_metadata, case_operator.forecast)
     # Check if any dimension has zero length
     zero_length_dims = [dim for dim, size in forecast_ds.sizes.items() if size == 0]
     if zero_length_dims:
