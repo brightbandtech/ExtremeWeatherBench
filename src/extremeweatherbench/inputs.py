@@ -178,6 +178,7 @@ class InputBase(ABC):
         self,
         data: IncomingDataInput,
         case_operator: "cases.CaseOperator",
+        **kwargs,
     ) -> IncomingDataInput:
         """Subset the target data to the case information provided in CaseOperator.
 
@@ -302,7 +303,9 @@ class ForecastBase(InputBase):
         self,
         data: IncomingDataInput,
         case_operator: "cases.CaseOperator",
+        **kwargs,
     ) -> IncomingDataInput:
+        drop = kwargs.get("drop", False)
         if not isinstance(data, xr.Dataset):
             raise ValueError(f"Expected xarray Dataset, got {type(data)}")
 
@@ -332,7 +335,7 @@ class ForecastBase(InputBase):
                 f"found in forecast data"
             )
         spatiotemporally_subset_data = case_operator.case_metadata.location.mask(
-            subset_time_data, drop=True
+            subset_time_data, drop=drop
         )
 
         # convert from init_time/lead_time to init_time/valid_time
@@ -462,8 +465,10 @@ class ERA5(TargetBase):
         self,
         data: IncomingDataInput,
         case_operator: "cases.CaseOperator",
+        **kwargs,
     ) -> IncomingDataInput:
-        return zarr_target_subsetter(data, case_operator)
+        drop = kwargs.get("drop", False)
+        return zarr_target_subsetter(data, case_operator, drop=drop)
 
     def maybe_align_forecast_to_target(
         self,
@@ -511,6 +516,7 @@ class GHCN(TargetBase):
         self,
         data: IncomingDataInput,
         case_operator: "cases.CaseOperator",
+        **kwargs,
     ) -> IncomingDataInput:
         if not isinstance(data, pl.LazyFrame):
             raise ValueError(f"Expected polars LazyFrame, got {type(data)}")
@@ -525,19 +531,19 @@ class GHCN(TargetBase):
             & (pl.col("valid_time") <= time_max)
             & (
                 pl.col("latitude")
-                >= case_operator.case_metadata.location.geopandas.total_bounds[1]
+                >= case_operator.case_metadata.location.as_geopandas().total_bounds[1]
             )
             & (
                 pl.col("latitude")
-                <= case_operator.case_metadata.location.geopandas.total_bounds[3]
+                <= case_operator.case_metadata.location.as_geopandas().total_bounds[3]
             )
             & (
                 pl.col("longitude")
-                >= case_operator.case_metadata.location.geopandas.total_bounds[0]
+                >= case_operator.case_metadata.location.as_geopandas().total_bounds[0]
             )
             & (
                 pl.col("longitude")
-                <= case_operator.case_metadata.location.geopandas.total_bounds[2]
+                <= case_operator.case_metadata.location.as_geopandas().total_bounds[2]
             )
         )
         # convert to Kelvin
@@ -614,6 +620,7 @@ class LSR(TargetBase):
         self,
         data: IncomingDataInput,
         case_operator: "cases.CaseOperator",
+        **kwargs,
     ) -> IncomingDataInput:
         if not isinstance(data, pd.DataFrame):
             raise ValueError(f"Expected pandas DataFrame, got {type(data)}")
@@ -736,8 +743,10 @@ class PPH(TargetBase):
         self,
         data: IncomingDataInput,
         case_operator: "cases.CaseOperator",
+        **kwargs,
     ) -> IncomingDataInput:
-        return zarr_target_subsetter(data, case_operator)
+        drop = kwargs.get("drop", False)
+        return zarr_target_subsetter(data, case_operator, drop=drop)
 
     def _custom_convert_to_dataset(self, data: IncomingDataInput) -> xr.Dataset:
         return data
@@ -771,7 +780,9 @@ class IBTrACS(TargetBase):
         self,
         data: IncomingDataInput,
         case_operator: "cases.CaseOperator",
+        **kwargs,
     ) -> IncomingDataInput:
+        # Note: drop parameter not applicable for polars LazyFrame data
         if not isinstance(data, pl.LazyFrame):
             raise ValueError(f"Expected polars LazyFrame, got {type(data)}")
 
@@ -951,6 +962,7 @@ def zarr_target_subsetter(
     data: xr.Dataset,
     case_operator: "cases.CaseOperator",
     time_variable: str = "valid_time",
+    drop: bool = False,
 ) -> xr.Dataset:
     """Subset a zarr dataset to a case operator."""
     # Determine the actual time variable in the dataset
@@ -997,7 +1009,7 @@ def zarr_target_subsetter(
         )
     # mask the data to the case location
     fully_subset_data = case_operator.case_metadata.location.mask(
-        subset_time_variable_data, drop=True
+        subset_time_variable_data, drop=drop
     )
 
     return fully_subset_data
