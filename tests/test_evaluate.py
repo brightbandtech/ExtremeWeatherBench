@@ -1202,7 +1202,11 @@ class TestMetricEvaluation:
     """Test metric evaluation functionality."""
 
     def test_evaluate_metric_and_return_df(
-        self, sample_forecast_dataset, sample_target_dataset, mock_base_metric
+        self,
+        sample_forecast_dataset,
+        sample_target_dataset,
+        sample_case_operator,
+        mock_base_metric,
     ):
         """Test _evaluate_metric_and_return_df function."""
         # Setup the metric mock
@@ -1213,15 +1217,13 @@ class TestMetricEvaluation:
         mock_metric_instance.name = "TestMetric"
         mock_metric_instance.compute_metric.return_value = mock_result
         mock_base_metric.return_value = mock_metric_instance
-
         result = evaluate._evaluate_metric_and_return_df(
             forecast_ds=sample_forecast_dataset,
             target_ds=sample_target_dataset,
             forecast_variable="surface_air_temperature",
             target_variable="2m_temperature",
             metric=mock_base_metric,
-            case_id_number=1,
-            event_type="heat_wave",
+            case_operator=sample_case_operator,
         )
 
         assert isinstance(result, pd.DataFrame)
@@ -1234,7 +1236,11 @@ class TestMetricEvaluation:
         assert result["event_type"].iloc[0] == "heat_wave"
 
     def test_evaluate_metric_and_return_df_with_kwargs(
-        self, sample_forecast_dataset, sample_target_dataset, mock_base_metric
+        self,
+        sample_forecast_dataset,
+        sample_target_dataset,
+        sample_case_operator,
+        mock_base_metric,
     ):
         """Test _evaluate_metric_and_return_df with additional kwargs."""
         mock_result = xr.DataArray(
@@ -1251,8 +1257,7 @@ class TestMetricEvaluation:
             forecast_variable="surface_air_temperature",
             target_variable="2m_temperature",
             metric=mock_base_metric,
-            case_id_number=2,
-            event_type="freeze",
+            case_operator=sample_case_operator,
             threshold=0.5,  # Additional kwarg
         )
 
@@ -1301,7 +1306,11 @@ class TestErrorHandling:
             evaluate.run_pipeline(sample_case_operator, "forecast")
 
     def test_evaluate_metric_computation_failure(
-        self, sample_forecast_dataset, sample_target_dataset, mock_base_metric
+        self,
+        sample_forecast_dataset,
+        sample_target_dataset,
+        sample_case_operator,
+        mock_base_metric,
     ):
         """Test metric evaluation when computation fails."""
         mock_metric_instance = Mock()
@@ -1318,8 +1327,7 @@ class TestErrorHandling:
                 forecast_variable="surface_air_temperature",
                 target_variable="2m_temperature",
                 metric=mock_base_metric,
-                case_id_number=1,
-                event_type="heat_wave",
+                case_operator=sample_case_operator,
             )
 
     @patch("extremeweatherbench.evaluate._run_serial")
