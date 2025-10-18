@@ -17,6 +17,7 @@ from extremeweatherbench import evaluate, utils, cases, defaults
 import matplotlib.colors as mcolors
 import xarray as xr
 import matplotlib.dates as mdates
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 
 def get_polygon_from_bounding_box(bounding_box):
@@ -718,7 +719,6 @@ def generate_heatwave_plots(
     ax2.tick_params(axis="y", labelsize=12)
     
     # Create legend handles including the axvspan
-    from matplotlib.patches import Patch
     legend_elements = [
         plt.Line2D([0], [0], color='k', linestyle='-.', linewidth=0.75, 
                    label='2m Temperature, 85th Percentile'),
