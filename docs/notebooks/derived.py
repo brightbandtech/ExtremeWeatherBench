@@ -6,8 +6,7 @@ import logging
 
 import numpy as np
 import xarray as xr
-
-from docs.notebooks import calc
+import calc
 
 np.set_printoptions(suppress=True)
 logger = logging.getLogger(__name__)
