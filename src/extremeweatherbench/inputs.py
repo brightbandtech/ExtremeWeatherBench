@@ -178,6 +178,7 @@ class InputBase(ABC):
         self,
         data: IncomingDataInput,
         case_operator: "cases.CaseOperator",
+        **kwargs,
     ) -> IncomingDataInput:
         """Subset the target data to the case information provided in CaseOperator.
 
@@ -461,8 +462,10 @@ class ERA5(TargetBase):
         self,
         data: IncomingDataInput,
         case_operator: "cases.CaseOperator",
+        **kwargs,
     ) -> IncomingDataInput:
-        return zarr_target_subsetter(data, case_operator)
+        drop = kwargs.get("drop", False)
+        return zarr_target_subsetter(data, case_operator, drop=drop)
 
     def maybe_align_forecast_to_target(
         self,
@@ -510,7 +513,9 @@ class GHCN(TargetBase):
         self,
         target_data: IncomingDataInput,
         case_operator: "cases.CaseOperator",
+        **kwargs,
     ) -> IncomingDataInput:
+        # Note: drop parameter not applicable for polars LazyFrame data
         if not isinstance(target_data, pl.LazyFrame):
             raise ValueError(f"Expected polars LazyFrame, got {type(target_data)}")
 
@@ -613,7 +618,9 @@ class LSR(TargetBase):
         self,
         target_data: IncomingDataInput,
         case_operator: "cases.CaseOperator",
+        **kwargs,
     ) -> IncomingDataInput:
+        # Note: drop parameter not applicable for pandas DataFrame data
         if not isinstance(target_data, pd.DataFrame):
             raise ValueError(f"Expected pandas DataFrame, got {type(target_data)}")
 
@@ -741,8 +748,10 @@ class PPH(TargetBase):
         self,
         target_data: IncomingDataInput,
         case_operator: "cases.CaseOperator",
+        **kwargs,
     ) -> IncomingDataInput:
-        return zarr_target_subsetter(target_data, case_operator)
+        drop = kwargs.get("drop", False)
+        return zarr_target_subsetter(target_data, case_operator, drop=drop)
 
     def _custom_convert_to_dataset(self, data: IncomingDataInput) -> xr.Dataset:
         return data
@@ -776,7 +785,9 @@ class IBTrACS(TargetBase):
         self,
         target_data: IncomingDataInput,
         case_operator: "cases.CaseOperator",
+        **kwargs,
     ) -> IncomingDataInput:
+        # Note: drop parameter not applicable for polars LazyFrame data
         if not isinstance(target_data, pl.LazyFrame):
             raise ValueError(f"Expected polars LazyFrame, got {type(target_data)}")
 
@@ -956,6 +967,7 @@ def zarr_target_subsetter(
     data: xr.Dataset,
     case_operator: "cases.CaseOperator",
     time_variable: str = "valid_time",
+    drop: bool = False,
 ) -> xr.Dataset:
     """Subset a zarr dataset to a case operator."""
     # Determine the actual time variable in the dataset
@@ -1002,7 +1014,7 @@ def zarr_target_subsetter(
         )
     # mask the data to the case location
     fully_subset_data = case_operator.case_metadata.location.mask(
-        subset_time_variable_data
+        subset_time_variable_data, drop=drop
     )
 
     return fully_subset_data
