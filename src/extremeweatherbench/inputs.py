@@ -146,7 +146,7 @@ class InputBase(ABC):
         default_factory=list
     )
     variable_mapping: dict = dataclasses.field(default_factory=dict)
-    storage_options: dict = dataclasses.field(default_factory=dict)
+    storage_options: Optional[dict] = None
     preprocess: Callable = _default_preprocess
 
     def open_and_maybe_preprocess_data_from_source(
@@ -303,7 +303,9 @@ class ForecastBase(InputBase):
         self,
         data: IncomingDataInput,
         case_operator: "cases.CaseOperator",
+        **kwargs,
     ) -> IncomingDataInput:
+        drop = kwargs.get("drop", False)
         if not isinstance(data, xr.Dataset):
             raise ValueError(f"Expected xarray Dataset, got {type(data)}")
 
@@ -333,7 +335,7 @@ class ForecastBase(InputBase):
                 f"found in forecast data"
             )
         spatiotemporally_subset_data = case_operator.case_metadata.location.mask(
-            subset_time_data
+            subset_time_data, drop=drop
         )
 
         # convert from init_time/lead_time to init_time/valid_time
@@ -374,6 +376,7 @@ class KerchunkForecast(ForecastBase):
 
     name: str = "kerchunk_forecast"
     chunks: Optional[Union[dict, str]] = "auto"
+    storage_options: dict = dataclasses.field(default_factory=dict)
 
     def _open_data_from_source(self) -> IncomingDataInput:
         return open_kerchunk_reference(
@@ -511,20 +514,19 @@ class GHCN(TargetBase):
 
     def subset_data_to_case(
         self,
-        target_data: IncomingDataInput,
+        data: IncomingDataInput,
         case_operator: "cases.CaseOperator",
         **kwargs,
     ) -> IncomingDataInput:
-        # Note: drop parameter not applicable for polars LazyFrame data
-        if not isinstance(target_data, pl.LazyFrame):
-            raise ValueError(f"Expected polars LazyFrame, got {type(target_data)}")
+        if not isinstance(data, pl.LazyFrame):
+            raise ValueError(f"Expected polars LazyFrame, got {type(data)}")
 
         # Create filter expressions for LazyFrame
         time_min = case_operator.case_metadata.start_date - pd.Timedelta(days=2)
         time_max = case_operator.case_metadata.end_date + pd.Timedelta(days=2)
 
         # Apply filters using proper polars expressions
-        subset_target_data = target_data.filter(
+        subset_target_data = data.filter(
             (pl.col("valid_time") >= time_min)
             & (pl.col("valid_time") <= time_max)
             & (
@@ -616,45 +618,38 @@ class LSR(TargetBase):
 
     def subset_data_to_case(
         self,
-        target_data: IncomingDataInput,
+        data: IncomingDataInput,
         case_operator: "cases.CaseOperator",
         **kwargs,
     ) -> IncomingDataInput:
-        # Note: drop parameter not applicable for pandas DataFrame data
-        if not isinstance(target_data, pd.DataFrame):
-            raise ValueError(f"Expected pandas DataFrame, got {type(target_data)}")
+        if not isinstance(data, pd.DataFrame):
+            raise ValueError(f"Expected pandas DataFrame, got {type(data)}")
 
         # latitude, longitude are strings by default, convert to float
-        target_data["latitude"] = target_data["latitude"].astype(float)
-        target_data["longitude"] = target_data["longitude"].astype(float)
-        target_data["valid_time"] = pd.to_datetime(target_data["valid_time"])
+        data["latitude"] = data["latitude"].astype(float)
+        data["longitude"] = data["longitude"].astype(float)
+        data["valid_time"] = pd.to_datetime(data["valid_time"])
 
         # filters to apply to the target data including datetimes and location bounds
         filters = (
-            (target_data["valid_time"] >= case_operator.case_metadata.start_date)
-            & (target_data["valid_time"] <= case_operator.case_metadata.end_date)
+            (data["valid_time"] >= case_operator.case_metadata.start_date)
+            & (data["valid_time"] <= case_operator.case_metadata.end_date)
+            & (data["latitude"] >= case_operator.case_metadata.location.latitude_min)
+            & (data["latitude"] <= case_operator.case_metadata.location.latitude_max)
             & (
-                target_data["latitude"]
-                >= case_operator.case_metadata.location.latitude_min
-            )
-            & (
-                target_data["latitude"]
-                <= case_operator.case_metadata.location.latitude_max
-            )
-            & (
-                target_data["longitude"]
+                data["longitude"]
                 >= utils.convert_longitude_to_180(
                     case_operator.case_metadata.location.longitude_min
                 )
             )
             & (
-                target_data["longitude"]
+                data["longitude"]
                 <= utils.convert_longitude_to_180(
                     case_operator.case_metadata.location.longitude_max
                 )
             )
         )
-        subset_target_data = target_data.loc[filters]
+        subset_target_data = data.loc[filters]
 
         return subset_target_data
 
@@ -746,12 +741,12 @@ class PPH(TargetBase):
 
     def subset_data_to_case(
         self,
-        target_data: IncomingDataInput,
+        data: IncomingDataInput,
         case_operator: "cases.CaseOperator",
         **kwargs,
     ) -> IncomingDataInput:
         drop = kwargs.get("drop", False)
-        return zarr_target_subsetter(target_data, case_operator, drop=drop)
+        return zarr_target_subsetter(data, case_operator, drop=drop)
 
     def _custom_convert_to_dataset(self, data: IncomingDataInput) -> xr.Dataset:
         return data
@@ -783,13 +778,13 @@ class IBTrACS(TargetBase):
 
     def subset_data_to_case(
         self,
-        target_data: IncomingDataInput,
+        data: IncomingDataInput,
         case_operator: "cases.CaseOperator",
         **kwargs,
     ) -> IncomingDataInput:
         # Note: drop parameter not applicable for polars LazyFrame data
-        if not isinstance(target_data, pl.LazyFrame):
-            raise ValueError(f"Expected polars LazyFrame, got {type(target_data)}")
+        if not isinstance(data, pl.LazyFrame):
+            raise ValueError(f"Expected polars LazyFrame, got {type(data)}")
 
         # Get the season (year) from the case start date, cast as string as
         # polars is interpreting the schema as strings
@@ -799,7 +794,7 @@ class IBTrACS(TargetBase):
 
         # Create a subquery to find all storm numbers in the same season
         matching_numbers = (
-            target_data.filter(pl.col("SEASON").cast(pl.Int64) == season)
+            data.filter(pl.col("SEASON").cast(pl.Int64) == season)
             .select("NUMBER")
             .unique()
         )
@@ -807,7 +802,7 @@ class IBTrACS(TargetBase):
         # Apply the filter to get all data for storms with the same number in
         # the same season
         # This maintains the lazy evaluation
-        subset_target_data = target_data.join(
+        subset_target_data = data.join(
             matching_numbers, on="NUMBER", how="inner"
         ).filter(
             (pl.col("tc_name") == case_operator.case_metadata.title.upper())

@@ -222,8 +222,7 @@ def compute_case_operator(
                 forecast_variable=variables[0],
                 target_variable=variables[1],
                 metric=metric,
-                case_id_number=case_operator.case_metadata.case_id_number,
-                event_type=case_operator.case_metadata.event_type,
+                case_operator=case_operator,
                 **kwargs,
             )
         )
@@ -242,10 +241,7 @@ def compute_case_operator(
 def _extract_standard_metadata(
     target_variable: Union[str, "derived.DerivedVariable"],
     metric: "metrics.BaseMetric",
-    target_ds: xr.Dataset,
-    forecast_ds: xr.Dataset,
-    case_id_number: int,
-    event_type: str,
+    case_operator: "cases.CaseOperator",
 ) -> dict:
     """Extract standard metadata for output dataframe.
 
@@ -256,10 +252,7 @@ def _extract_standard_metadata(
     Args:
         target_variable: The target variable
         metric: The metric instance
-        target_ds: Target dataset
-        forecast_ds: Forecast dataset
-        case_id_number: Case ID number
-        event_type: Event type string
+        case_operator: The CaseOperator holding associated case metadata
 
     Returns:
         Dictionary of metadata for the output dataframe
@@ -267,10 +260,10 @@ def _extract_standard_metadata(
     return {
         "target_variable": target_variable,
         "metric": metric.name,
-        "target_source": target_ds.attrs["source"],
-        "forecast_source": forecast_ds.attrs["source"],
-        "case_id_number": case_id_number,
-        "event_type": event_type,
+        "target_source": case_operator.target.name,
+        "forecast_source": case_operator.forecast.name,
+        "case_id_number": case_operator.case_metadata.case_id_number,
+        "event_type": case_operator.case_metadata.event_type,
     }
 
 
@@ -319,8 +312,7 @@ def _evaluate_metric_and_return_df(
     forecast_variable: Union[str, "derived.DerivedVariable"],
     target_variable: Union[str, "derived.DerivedVariable"],
     metric: "metrics.BaseMetric",
-    case_id_number: int,
-    event_type: str,
+    case_operator: "cases.CaseOperator",
     **kwargs,
 ) -> pd.DataFrame:
     """Evaluate a metric and return a dataframe of the results.
@@ -348,9 +340,7 @@ def _evaluate_metric_and_return_df(
     # Convert to DataFrame and add metadata, ensuring OUTPUT_COLUMNS compliance
     df = metric_result.to_dataframe(name="value").reset_index()
     # TODO: add functionality for custom metadata columns
-    metadata = _extract_standard_metadata(
-        target_variable, metric, target_ds, forecast_ds, case_id_number, event_type
-    )
+    metadata = _extract_standard_metadata(target_variable, metric, case_operator)
     return _ensure_output_schema(df, **metadata)
 
 

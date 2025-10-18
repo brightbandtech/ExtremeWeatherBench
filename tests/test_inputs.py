@@ -25,6 +25,60 @@ class TestInputBase:
                 storage_options={},
             )
 
+    def test_input_base_requires_name(self):
+        """Test that InputBase fails without name parameter."""
+
+        class TestInput(inputs.InputBase):
+            def _open_data_from_source(self):
+                return None
+
+            def subset_data_to_case(self, data, case_operator):
+                return data
+
+        with pytest.raises(TypeError):
+            TestInput(
+                source="test",
+                variables=["test"],
+                variable_mapping={},
+                storage_options={},
+            )
+
+    def test_forecast_base_requires_name(self):
+        """Test that ForecastBase fails without name parameter."""
+
+        class TestForecast(inputs.ForecastBase):
+            def _open_data_from_source(self):
+                return None
+
+            def subset_data_to_case(self, data, case_operator):
+                return data
+
+        with pytest.raises(TypeError):
+            TestForecast(
+                source="test",
+                variables=["test"],
+                variable_mapping={},
+                storage_options={},
+            )
+
+    def test_target_base_requires_name(self):
+        """Test that TargetBase fails without name parameter."""
+
+        class TestTarget(inputs.TargetBase):
+            def _open_data_from_source(self):
+                return None
+
+            def subset_data_to_case(self, data, case_operator):
+                return data
+
+        with pytest.raises(TypeError):
+            TestTarget(
+                source="test",
+                variables=["test"],
+                variable_mapping={},
+                storage_options={},
+            )
+
     def test_maybe_convert_to_dataset_with_dataset(self, sample_era5_dataset):
         """Test maybe_convert_to_dataset with xarray Dataset input."""
 
@@ -729,7 +783,9 @@ class TestERA5:
 
         result = era5.subset_data_to_case(sample_era5_dataset, mock_case)
 
-        mock_subsetter.assert_called_once_with(sample_era5_dataset, mock_case)
+        mock_subsetter.assert_called_once_with(
+            sample_era5_dataset, mock_case, drop=False
+        )
         assert result == sample_era5_dataset
 
     def test_era5_maybe_align_forecast_to_target_same_grid(
@@ -1319,7 +1375,9 @@ class TestPPH:
 
         result = pph.subset_data_to_case(sample_era5_dataset, mock_case)
 
-        mock_subsetter.assert_called_once_with(sample_era5_dataset, mock_case)
+        mock_subsetter.assert_called_once_with(
+            sample_era5_dataset, mock_case, drop=False
+        )
         assert result == sample_era5_dataset
 
     def test_pph_custom_convert_to_dataset(self, sample_era5_dataset):
@@ -1638,7 +1696,7 @@ class TestInputsIntegration:
             source=temp_zarr_file,
             variables=["2m_temperature"],
             variable_mapping={},
-            storage_options={},
+            storage_options=None,
         )
 
         # Test opening data
