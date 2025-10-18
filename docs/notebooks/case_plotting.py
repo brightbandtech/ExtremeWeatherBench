@@ -291,10 +291,10 @@ def plot_all_cases_and_obs(ewb_cases, event_type=None, filename=None, bounding_b
             # instead we have multi-polygon patches if it wraps around and we need to plot each polygon separately
             if isinstance(indiv_case.location.geopandas.geometry.iloc[0], shapely.geometry.MultiPolygon):
                 for poly in indiv_case.location.geopandas.geometry.iloc[0].geoms:
-                    plot_polygon_outline(poly, ax, color=color, alpha=alphas[indiv_event_type], my_zorder=zorders[indiv_event_type], linewidth=1)
+                    plot_polygon_outline(poly, ax, color=color, alpha=alphas[indiv_event_type], my_zorder=zorders[indiv_event_type], linewidth=0.8)
             else:
                 plot_polygon_outline(indiv_case.location.geopandas.geometry.iloc[0], ax, color=color, 
-                                        alpha=alphas[indiv_event_type], my_zorder=zorders[indiv_event_type], linewidth=1)
+                                        alpha=alphas[indiv_event_type], my_zorder=zorders[indiv_event_type], linewidth=0.8)
                 
             # grab the target data for this case
             my_target_info = [n[1] for n in targets if n[0] == indiv_case.case_id_number and n[1].attrs['source'] != 'ERA5']
