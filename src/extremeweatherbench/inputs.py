@@ -1,7 +1,7 @@
+import abc
 import dataclasses
 import datetime
 import logging
-from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Callable, Optional, TypeAlias, Union
 
 import numpy as np
@@ -140,7 +140,7 @@ def _default_preprocess(input_data: IncomingDataInput) -> IncomingDataInput:
 
 
 @dataclasses.dataclass
-class InputBase(ABC):
+class InputBase(abc.ABC):
     """An abstract base dataclass for target and forecast data.
 
     Attributes:
@@ -158,7 +158,7 @@ class InputBase(ABC):
         default_factory=list
     )
     variable_mapping: dict = dataclasses.field(default_factory=dict)
-    storage_options: dict = dataclasses.field(default_factory=dict)
+    storage_options: Optional[dict] = None
     preprocess: Callable = _default_preprocess
 
     def open_and_maybe_preprocess_data_from_source(
@@ -176,7 +176,7 @@ class InputBase(ABC):
         """
         self.name = name
 
-    @abstractmethod
+    @abc.abstractmethod
     def _open_data_from_source(self) -> IncomingDataInput:
         """Open the input data from the source, opting to avoid loading the entire
         dataset into memory if possible.
@@ -185,7 +185,7 @@ class InputBase(ABC):
             The input data with a type determined by the user.
         """
 
-    @abstractmethod
+    @abc.abstractmethod
     def subset_data_to_case(
         self,
         data: IncomingDataInput,
@@ -396,6 +396,7 @@ class KerchunkForecast(ForecastBase):
     """Forecast class for kerchunked forecast data."""
 
     chunks: Optional[Union[dict, str]] = "auto"
+    storage_options: dict = dataclasses.field(default_factory=dict)
 
     def _open_data_from_source(self) -> IncomingDataInput:
         return open_kerchunk_reference(
@@ -525,18 +526,18 @@ class GHCN(TargetBase):
 
     def subset_data_to_case(
         self,
-        target_data: IncomingDataInput,
+        data: IncomingDataInput,
         case_metadata: "cases.IndividualCase",
     ) -> IncomingDataInput:
-        if not isinstance(target_data, pl.LazyFrame):
-            raise ValueError(f"Expected polars LazyFrame, got {type(target_data)}")
+        if not isinstance(data, pl.LazyFrame):
+            raise ValueError(f"Expected polars LazyFrame, got {type(data)}")
 
         # Create filter expressions for LazyFrame
         time_min = case_metadata.start_date - pd.Timedelta(days=2)
         time_max = case_metadata.end_date + pd.Timedelta(days=2)
 
         # Apply filters using proper polars expressions
-        subset_target_data = target_data.filter(
+        subset_target_data = data.filter(
             (pl.col("valid_time") >= time_min)
             & (pl.col("valid_time") <= time_max)
             & (pl.col("latitude") >= case_metadata.location.geopandas.total_bounds[1])
@@ -551,7 +552,7 @@ class GHCN(TargetBase):
             # convert to Kelvin, GHCN data is in Celsius by default
             if "surface_air_temperature" in data.collect_schema().names():
                 data = data.with_columns(pl.col("surface_air_temperature").add(273.15))
-            data = data.collect().to_pandas()
+            data = data.collect(engine="streaming").to_pandas()
             data["longitude"] = utils.convert_longitude_to_360(data["longitude"])
 
             data = data.set_index(["valid_time", "latitude", "longitude"])
@@ -599,33 +600,33 @@ class LSR(TargetBase):
 
     def subset_data_to_case(
         self,
-        target_data: IncomingDataInput,
+        data: IncomingDataInput,
         case_metadata: "cases.IndividualCase",
     ) -> IncomingDataInput:
-        if not isinstance(target_data, pd.DataFrame):
-            raise ValueError(f"Expected pandas DataFrame, got {type(target_data)}")
+        if not isinstance(data, pd.DataFrame):
+            raise ValueError(f"Expected pandas DataFrame, got {type(data)}")
 
         # latitude, longitude are strings by default, convert to float
-        target_data["latitude"] = target_data["latitude"].astype(float)
-        target_data["longitude"] = target_data["longitude"].astype(float)
-        target_data["valid_time"] = pd.to_datetime(target_data["valid_time"])
+        data["latitude"] = data["latitude"].astype(float)
+        data["longitude"] = data["longitude"].astype(float)
+        data["valid_time"] = pd.to_datetime(data["valid_time"])
 
         # filters to apply to the target data including datetimes and location bounds
         filters = (
-            (target_data["valid_time"] >= case_metadata.start_date)
-            & (target_data["valid_time"] <= case_metadata.end_date)
-            & (target_data["latitude"] >= case_metadata.location.latitude_min)
-            & (target_data["latitude"] <= case_metadata.location.latitude_max)
+            (data["valid_time"] >= case_metadata.start_date)
+            & (data["valid_time"] <= case_metadata.end_date)
+            & (data["latitude"] >= case_metadata.location.latitude_min)
+            & (data["latitude"] <= case_metadata.location.latitude_max)
             & (
-                target_data["longitude"]
+                data["longitude"]
                 >= utils.convert_longitude_to_180(case_metadata.location.longitude_min)
             )
             & (
-                target_data["longitude"]
+                data["longitude"]
                 <= utils.convert_longitude_to_180(case_metadata.location.longitude_max)
             )
         )
-        subset_target_data = target_data.loc[filters]
+        subset_target_data = data.loc[filters]
 
         return subset_target_data
 
@@ -720,10 +721,10 @@ class PPH(TargetBase):
 
     def subset_data_to_case(
         self,
-        target_data: IncomingDataInput,
+        data: IncomingDataInput,
         case_metadata: "cases.IndividualCase",
     ) -> IncomingDataInput:
-        return zarr_target_subsetter(target_data, case_metadata)
+        return zarr_target_subsetter(data, case_metadata)
 
     def maybe_align_forecast_to_target(
         self,
@@ -752,11 +753,11 @@ class IBTrACS(TargetBase):
 
     def subset_data_to_case(
         self,
-        target_data: IncomingDataInput,
+        data: IncomingDataInput,
         case_metadata: "cases.IndividualCase",
     ) -> IncomingDataInput:
-        if not isinstance(target_data, pl.LazyFrame):
-            raise ValueError(f"Expected polars LazyFrame, got {type(target_data)}")
+        if not isinstance(data, pl.LazyFrame):
+            raise ValueError(f"Expected polars LazyFrame, got {type(data)}")
 
         # Get the season (year) from the case start date, cast as string as
         # polars is interpreting the schema as strings
@@ -766,7 +767,7 @@ class IBTrACS(TargetBase):
 
         # Create a subquery to find all storm numbers in the same season
         matching_numbers = (
-            target_data.filter(pl.col("SEASON").cast(pl.Int64) == season)
+            data.filter(pl.col("SEASON").cast(pl.Int64) == season)
             .select("NUMBER")
             .unique()
         )
@@ -777,7 +778,7 @@ class IBTrACS(TargetBase):
         # the same season, matching any of the possible names
         # This maintains the lazy evaluation
         name_filter = pl.col("tc_name").is_in(possible_names)
-        subset_target_data = target_data.join(
+        subset_target_data = data.join(
             matching_numbers, on="NUMBER", how="inner"
         ).filter(name_filter & (pl.col("SEASON").cast(pl.Int64) == season))
 
@@ -805,7 +806,7 @@ class IBTrACS(TargetBase):
 
     def _custom_convert_to_dataset(self, data: IncomingDataInput) -> xr.Dataset:
         if isinstance(data, pl.LazyFrame):
-            data = data.collect().to_pandas()
+            data = data.collect(engine="streaming").to_pandas()
 
             # IBTrACS data is in -180 to 180, convert to 0 to 360
             data["longitude"] = utils.convert_longitude_to_360(data["longitude"])
@@ -1029,11 +1030,23 @@ def maybe_subset_variables(
     data: IncomingDataInput,
     variables: list[Union[str, "derived.DerivedVariable"]],
 ) -> IncomingDataInput:
-    """Subset the variables from the data, if required."""
+    """Subset the variables from the data, if required.
+
+    If the variables list includes derived variables, extracts their required
+    and optional variables for subsetting.
+
+    Args:
+        data: The dataset to subset (xr.Dataset, xr.DataArray, pl.LazyFrame,
+            or pd.DataFrame).
+        variables: List of variable names and/or derived variable classes.
+
+    Returns:
+        The data subset to only the specified variables.
+    """
     # If there are no variables, return the data unaltered
     if len(variables) == 0:
         return data
-    # get the first derived variable if it exists
+    # Get the first derived variable if it exists
     derived_variables = [
         v
         for v in variables
@@ -1044,7 +1057,7 @@ def maybe_subset_variables(
     else:
         derived_variable = None
 
-    # get the optional variables and mapping from the derived variable
+    # Get the optional variables and mapping from the derived variable
     optional_variables = getattr(derived_variable, "optional_variables", None) or []
     optional_variables_mapping = (
         getattr(derived_variable, "optional_variables_mapping", None) or {}

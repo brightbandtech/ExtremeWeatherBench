@@ -2,7 +2,9 @@
 
 import datetime
 from typing import TYPE_CHECKING
+
 import polars as pl
+
 from extremeweatherbench import utils
 
 if TYPE_CHECKING:

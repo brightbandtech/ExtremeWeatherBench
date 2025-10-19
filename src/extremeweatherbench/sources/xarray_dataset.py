@@ -2,8 +2,10 @@
 
 import datetime
 from typing import TYPE_CHECKING
+
 import pandas as pd
 import xarray as xr
+
 from extremeweatherbench import utils
 
 if TYPE_CHECKING:
