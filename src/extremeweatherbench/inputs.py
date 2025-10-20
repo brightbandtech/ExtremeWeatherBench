@@ -756,10 +756,7 @@ def _ibtracs_preprocess(data: IncomingDataInput) -> IncomingDataInput:
             for col in pressure_cols + wind_cols
         ]
     )
-    # Convert knots to m/s
-    subset_target_data = subset_target_data.with_columns(
-        [(pl.col(col) * 0.514444).alias(col) for col in wind_cols]
-    )
+
     # Drop rows where ALL columns are null (equivalent to pandas dropna(how="all"))
     subset_target_data = subset_target_data.filter(
         ~pl.all_horizontal(pl.all().is_null())
@@ -801,7 +798,13 @@ def _ibtracs_preprocess(data: IncomingDataInput) -> IncomingDataInput:
         pl.col("surface_wind_speed").is_not_null()
         & pl.col("air_pressure_at_mean_sea_level").is_not_null()
     )
-
+    # Cast to float64 and convert knots to m/s
+    subset_target_data = subset_target_data.with_columns(
+        [
+            pl.col("surface_wind_speed").cast(pl.Float64) * 0.514444,
+            pl.col("air_pressure_at_mean_sea_level").cast(pl.Float64),
+        ]
+    )
     return subset_target_data
 
 
@@ -810,6 +813,12 @@ class IBTrACS(TargetBase):
     """Target class for IBTrACS data."""
 
     name: str = "IBTrACS"
+    _current_case_id: Optional[str] = dataclasses.field(default=None, init=False)
+    preprocess: Callable = _ibtracs_preprocess
+    variable_mapping: dict = dataclasses.field(
+        default_factory=lambda: IBTrACS_metadata_variable_mapping.copy()
+    )
+    input_variables_same_as_forecast: bool = False
     source: str = IBTRACS_URI
 
     def _open_data_from_source(self) -> IncomingDataInput:
@@ -865,12 +874,6 @@ class IBTrACS(TargetBase):
 
         subset_target_data = subset_target_data.select(columns_to_keep)
 
-        # Drop rows where wind speed OR pressure are null (equivalent to pandas
-        # dropna with how="any")
-        subset_target_data = subset_target_data.filter(
-            pl.col("surface_wind_speed").is_not_null()
-            & pl.col("air_pressure_at_mean_sea_level").is_not_null()
-        )
         self._current_case_id = case_metadata.case_id_number
 
         return subset_target_data
@@ -916,7 +919,7 @@ class IBTrACS(TargetBase):
         if self._current_case_id is not None:
             from extremeweatherbench.events import tropical_cyclone
 
-            tropical_cyclone.register_ibtracs_data(int(self._current_case_id), ds)
+            tropical_cyclone.register_tc_track_data(int(self._current_case_id), ds)
 
         # Store flag indicating this is IBTrACS data
         ds.attrs["is_ibtracs_data"] = True

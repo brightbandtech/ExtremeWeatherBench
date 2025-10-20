@@ -1,26 +1,24 @@
-"""Tropical cyclone track creation from a cyclone dataset with IBTrACS proximity
-filtering.
+"""Tropical cyclone track creation from a gridded dataset with tropical cyclone track
+data proximity filtering.
 
 The function flow is as follows:
 
-1. create_tctracks_from_dataset_with_ibtracs_filter
-2. _create_tctracks_optimized_with_ibtracs
-3. _process_all_init_times
-4. _process_entire_dataset
-5. _convert_detections_to_dataset
-6. compute_landfall_metric
-7. _compute_first_landfall_metric
-8. _compute_next_landfall_metric
-9. _compute_all_landfalls_metric
-10. _compute_displacement_metric
-11. _compute_timing_metric
-12. _compute_intensity_metric
+1. create_tctracks_from_dataset_with_tc_track_data_filter
+2. process_all_init_times
+3. _process_entire_dataset
+4. _convert_detections_to_dataset
+5. compute_landfall_metric
+6. _compute_first_landfall_metric
+7. _compute_next_landfall_metric
+8. _compute_all_landfalls_metric
+9. _compute_displacement_metric
+10. _compute_timing_metric
+11. _compute_intensity_metric
 
 """
 
 import hashlib
 import logging
-import math
 from collections import namedtuple
 from itertools import product
 from typing import Dict, Optional, Sequence, Union
@@ -40,46 +38,49 @@ from extremeweatherbench import calc, utils
 logger = logging.getLogger(__name__)
 
 
-def create_tctracks_from_dataset_with_ibtracs_filter(
-    cyclone_dataset: xr.Dataset,
-    ibtracs_data: xr.Dataset,
+def create_tctracks_from_dataset_with_tc_track_data_filter(
+    gridded_dataset: xr.Dataset,
+    tc_track_data: xr.Dataset,
     slp_contour_magnitude: float = 200,
     dz_contour_magnitude: float = -6,
     min_distance: int = 5,
     max_spatial_distance_degrees: float = 5.0,
-    max_temporal_hours: float = 120,
+    max_temporal_hours: float = 48,
     use_contour_validation: bool = True,
     min_track_length: int = 10,
     exclude_post_landfall_init_times: bool = True,
 ) -> xr.Dataset:
-    """Create storm tracks from a cyclone dataset with IBTrACS proximity filtering.
+    """Create storm tracks from a gridded dataset with tropical cyclone track data
+    proximity filtering.
 
     For forecast data, this function only considers TC candidates that are within
-    5 great circle degrees of IBTrACS points and within 120 hours of the
-    valid_time.
+    min_distance great circle degrees of tropical cyclone track data points and within
+    max_temporal_hours of the valid_time.
 
     Args:
-        cyclone_dataset: The cyclone dataset.
-        ibtracs_data: IBTrACS dataset with valid_time, latitude, longitude.
+        gridded_dataset: The gridded dataset.
+        tc_track_data: The tropical cyclone track dataset with valid_time, latitude,
+            longitude.
         slp_contour_magnitude: The SLP contour magnitude.
         dz_contour_magnitude: The DZ contour magnitude.
         min_distance: The minimum distance between TCs.
         max_spatial_distance_degrees: Maximum great circle distance from
-            IBTrACS points.
-        max_temporal_hours: Maximum time difference from IBTrACS valid times.
+            tc_track_data points.
+        max_temporal_hours: Maximum time difference from tropical cyclone track data
+            valid_time.
         use_contour_validation: Whether to use contour validation.
         min_track_length: Minimum number of points required for a track to be
             included in results (default: 10).
         exclude_post_landfall_init_times: Whether to exclude init_times that occur
-            after all IBTrACS landfall events (default: True).
+            after all tropical cyclone track data landfall events (default: True).
 
     Returns:
         An xarray Dataset with detected storm tracks.
     """
-    # Filter out init_times that occur after all IBTrACS landfalls
+    # Filter out init_times that occur after all tropical cyclone track data landfalls
     if exclude_post_landfall_init_times:
         filtered_dataset = _filter_post_landfall_init_times(
-            cyclone_dataset, ibtracs_data
+            gridded_dataset, tc_track_data
         )
 
         # If no valid init_times remain, return empty dataset
@@ -94,17 +95,17 @@ def create_tctracks_from_dataset_with_ibtracs_filter(
             return _create_empty_tracks_dataset()
 
         # Update the cyclone dataset to be filtered_dataset
-        cyclone_dataset = filtered_dataset
+        gridded_dataset = filtered_dataset
 
-    # Convert IBTrACS to pandas for easier temporal filtering and generate TC tracks
-    # using _create_tctracks_optimized_with_ibtracs
-    ibtracs_df = ibtracs_data.to_dataframe().reset_index()
-    ibtracs_df["valid_time"] = pd.to_datetime(ibtracs_df["valid_time"])
+    # Convert tropical cyclone track data to pandas for easier temporal filtering and
+    # generate TC tracks using process_all_init_times
+    tc_track_data_df = tc_track_data.to_dataframe().reset_index()
+    tc_track_data_df["valid_time"] = pd.to_datetime(tc_track_data_df["valid_time"])
     logger.info("Generating TC tracks")
-    if "init_time" in cyclone_dataset.coords:
-        return _create_tctracks_optimized_with_ibtracs(
-            cyclone_dataset,
-            ibtracs_df,
+    if "init_time" in gridded_dataset.coords:
+        return process_all_init_times(
+            gridded_dataset,
+            tc_track_data_df,
             slp_contour_magnitude,
             dz_contour_magnitude,
             min_distance,
@@ -117,8 +118,8 @@ def create_tctracks_from_dataset_with_ibtracs_filter(
     else:
         time_dim = "time"
         lead_time_dim = "lead_time"
-        time_coord = cyclone_dataset.time
-        lead_time_coord = cyclone_dataset.lead_time
+        time_coord = gridded_dataset.time
+        lead_time_coord = gridded_dataset.lead_time
         return xr.Dataset(
             {
                 "tc_slp": (
@@ -145,43 +146,9 @@ def create_tctracks_from_dataset_with_ibtracs_filter(
         )
 
 
-def _create_tctracks_optimized_with_ibtracs(
-    cyclone_dataset: xr.Dataset,
-    ibtracs_df: pd.DataFrame,
-    slp_contour_magnitude: float,
-    dz_contour_magnitude: float,
-    min_distance: int,
-    max_spatial_distance_degrees: float,
-    max_temporal_hours: float,
-    use_contour_validation: bool = True,
-    min_track_length: int = 10,
-) -> xr.Dataset:
-    """Optimized TC track creation using apply_ufunc and IBTrACS filtering.
-
-    This version combines peak detection with optional contour validation.
-    If geopotential_thickness data is available and use_contour_validation=True,
-    detected peaks are validated using TempestExtremes-style SLP and DZ contour
-    criteria for improved track quality.
-    """
-
-    # Create a combined dataset for vectorized processing
-    storm_ds = _process_all_init_times(
-        cyclone_dataset,
-        ibtracs_df,
-        max_temporal_hours,
-        max_spatial_distance_degrees,
-        min_distance,
-        slp_contour_magnitude,
-        dz_contour_magnitude,
-        use_contour_validation,
-        min_track_length,
-    )
-    return storm_ds
-
-
-def _process_all_init_times(
-    cyclone_dataset: xr.Dataset,
-    ibtracs_df: pd.DataFrame,
+def process_all_init_times(
+    gridded_dataset: xr.Dataset,
+    tc_track_data_df: pd.DataFrame,
     max_temporal_hours: float,
     max_spatial_distance_degrees: float,
     min_distance: int,
@@ -192,21 +159,23 @@ def _process_all_init_times(
 ) -> xr.Dataset:
     """Process all init_times using a single vectorized apply_ufunc call."""
 
-    slp = cyclone_dataset["air_pressure_at_mean_sea_level"]
+    slp = gridded_dataset["air_pressure_at_mean_sea_level"]
     time_coord = slp.valid_time
     init_time_coord = slp.init_time
 
     # Determine the correct input core dims based on actual data dimensions
     spatial_dims = ["latitude", "longitude"]
     non_spatial_dims = [dim for dim in slp.dims if dim not in spatial_dims]
-    ibtracs_df = ibtracs_df[
-        pd.to_datetime(ibtracs_df["valid_time"]).isin(pd.to_datetime(time_coord.values))
+    tc_track_data_df = tc_track_data_df[
+        pd.to_datetime(tc_track_data_df["valid_time"]).isin(
+            pd.to_datetime(time_coord.values)
+        )
     ]
     # Get wind speed data
-    wind_speed = cyclone_dataset["surface_wind_speed"]
+    wind_speed = gridded_dataset["surface_wind_speed"]
 
     # Get geopotential thickness data if available
-    dz = cyclone_dataset.get("geopotential_thickness", None)
+    dz = gridded_dataset.get("geopotential_thickness", None)
 
     # OPTIMIZED: Single apply_ufunc call that returns compact detection results
     input_vars = [
@@ -239,7 +208,7 @@ def _process_all_init_times(
         _process_entire_dataset,
         *input_vars,
         kwargs={
-            "ibtracs_df": ibtracs_df,
+            "tc_track_data_df": tc_track_data_df,
             "max_spatial_distance_degrees": max_spatial_distance_degrees,
             "min_distance": min_distance,
             "max_temporal_hours": max_temporal_hours,
@@ -287,7 +256,7 @@ def _process_all_init_times(
         lons,
         slp_vals,
         wind_vals,
-        cyclone_dataset,  # Pass the full dataset to access all coordinates
+        gridded_dataset,  # Pass the full dataset to access all coordinates
     )
 
 
@@ -301,7 +270,7 @@ def _process_entire_dataset(
     dz_array: Union[
         np.ndarray, xr.DataArray, None
     ],  # Can be None when no DZ data available
-    ibtracs_df: pd.DataFrame,
+    tc_track_data_df: pd.DataFrame,
     max_spatial_distance_degrees: float,
     min_distance: int,
     max_temporal_hours: float,
@@ -329,8 +298,9 @@ def _process_entire_dataset(
         lon_array: Longitude coordinate array
         wind_array: Wind speed array (lead_time, valid_time, lat, lon)
         dz_array: Geopotential thickness array (lead_time, valid_time, lat, lon)
-        ibtracs_df: IBTrACS dataframe for filtering
-        max_spatial_distance_degrees: Max spatial distance for IBTrACS filtering
+        tc_track_data_df: tropical cyclone track dataframe for filtering
+        max_spatial_distance_degrees: Max spatial distance for tropical cyclone track
+            data filtering
         min_distance: Minimum distance between detected peaks
         max_temporal_hours: Maximum temporal window from init_time
         slp_contour_magnitude: SLP contour threshold for validation
@@ -410,11 +380,12 @@ def _process_entire_dataset(
             dz_slice = dz_array[lt_idx, vt_idx, :, :] if dz_array is not None else None
             current_valid_time = pd.Timestamp(current_valid_time)
 
-            # Apply IBTrACS filtering with optional contour validation
+            # Apply tropical cyclone track data filtering with optional contour
+            # validation
             peaks = _find_peaks_for_time_slice(
                 slp_slice,
                 current_valid_time,
-                ibtracs_df,
+                tc_track_data_df,
                 min_distance,
                 lat_array,
                 lon_array,
@@ -445,11 +416,10 @@ def _process_entire_dataset(
                     best_distance = float("inf")
 
                     for peak_idx in unassigned_peaks:
-                        distance = _calculate_great_circle_distance(
-                            peak_lats[peak_idx],
-                            peak_lons[peak_idx],
-                            last_pos["lat"],
-                            last_pos["lon"],
+                        distance = calc.calculate_haversine_distance(
+                            [peak_lats[peak_idx], peak_lons[peak_idx]],
+                            [last_pos["lat"], last_pos["lon"]],
+                            units="deg",
                         )
                         if distance <= 8.0 and distance < best_distance:
                             best_distance = distance
@@ -726,36 +696,38 @@ Location = namedtuple("Location", ["latitude", "longitude"])
 # Global cache for TC track data to avoid recomputation across child classes
 _TC_TRACK_CACHE: Dict[str, xr.Dataset] = {}
 
-# Global registry for IBTrACS data to be used in TC filtering
+# Global registry for tropical cyclone track data to be used in TC filtering
 _IBTRACS_DATA_REGISTRY: Dict[str, xr.Dataset] = {}
 
 
-def register_ibtracs_data(case_id: str, ibtracs_data: xr.Dataset) -> None:
-    """Register IBTrACS data for a specific case to be used in TC filtering.
+def register_tc_track_data(case_id: str, tc_track_data: xr.Dataset) -> None:
+    """Register tropical cyclone track data for a specific case to be used in TC
+    filtering.
 
     Args:
         case_id: Unique identifier for the case.
-        ibtracs_data: IBTrACS dataset with valid_time, latitude, longitude.
+        tc_track_data: tropical cyclone track dataset with valid_time, latitude,
+            longitude.
     """
     global _IBTRACS_DATA_REGISTRY
-    _IBTRACS_DATA_REGISTRY[case_id] = ibtracs_data
+    _IBTRACS_DATA_REGISTRY[case_id] = tc_track_data
 
 
-def get_ibtracs_data(case_id: str) -> Optional[xr.Dataset]:
-    """Get registered IBTrACS data for a specific case.
+def get_tc_track_data(case_id: str) -> Optional[xr.Dataset]:
+    """Get registered tropical cyclone track data for a specific case.
 
     Args:
         case_id: Unique identifier for the case.
 
     Returns:
-        IBTrACS dataset if available, None otherwise.
+        tropical cyclone track dataset if available, None otherwise.
     """
     global _IBTRACS_DATA_REGISTRY
     return _IBTRACS_DATA_REGISTRY.get(case_id, None)
 
 
-def clear_ibtracs_registry() -> None:
-    """Clear the IBTrACS data registry."""
+def clear_tc_track_data_registry() -> None:
+    """Clear the tropical cyclone track data registry."""
     global _IBTRACS_DATA_REGISTRY
     _IBTRACS_DATA_REGISTRY.clear()
 
@@ -886,7 +858,9 @@ def find_valid_contour_from_point(
     )
     point_latlon = calc.convert_from_cartesian_to_latlon(point, ds_mapping)
     gc_distance_contour_distance = calc.calculate_haversine_distance(
-        gc_distance_point_latlon, point_latlon, units="degrees"
+        [gc_distance_point_latlon[0], gc_distance_point_latlon[1]],
+        [point_latlon[0], point_latlon[1]],
+        units="degrees",
     )
     # Ensure we return a float
     if isinstance(gc_distance_contour_distance, xr.DataArray):
@@ -989,7 +963,7 @@ def _safe_extract_value(
 def _find_peaks_for_time_slice(
     slp_slice: np.ndarray,
     current_valid_time: pd.Timestamp,
-    ibtracs_df: pd.DataFrame,
+    tc_track_data_df: pd.DataFrame,
     min_distance: int,
     lat_coords: Optional[np.ndarray] = None,
     lon_coords: Optional[np.ndarray] = None,
@@ -999,16 +973,16 @@ def _find_peaks_for_time_slice(
     dz_contour_magnitude: float = -6,
     use_contour_validation: bool = True,
 ) -> np.ndarray:
-    """Find peaks for a single time slice with IBTrACS filtering."""
+    """Find peaks for a single time slice with tropical cyclone track data filtering."""
 
-    # Filter IBTrACS data temporally
+    # Filter tropical cyclone track data temporally
     time_diff = np.abs(
-        (ibtracs_df["valid_time"] - current_valid_time).dt.total_seconds() / 3600
+        (tc_track_data_df["valid_time"] - current_valid_time).dt.total_seconds() / 3600
     )
     temporal_mask = time_diff <= 0
-    nearby_ibtracs = ibtracs_df[temporal_mask]
+    nearby_tc_track_data = tc_track_data_df[temporal_mask]
 
-    if len(nearby_ibtracs) == 0:
+    if len(nearby_tc_track_data) == 0:
         return np.array([])
 
     # Check for valid data
@@ -1027,7 +1001,7 @@ def _find_peaks_for_time_slice(
         return np.array([])
 
     spatial_mask = _create_spatial_mask(
-        lat_coords, lon_coords, nearby_ibtracs, max_spatial_distance_degrees
+        lat_coords, lon_coords, nearby_tc_track_data, max_spatial_distance_degrees
     )
 
     # Combine spatial and pressure masks
@@ -1101,7 +1075,7 @@ def _find_peaks_for_time_slice(
 def _create_spatial_mask(
     lat_coords: np.ndarray,
     lon_coords: np.ndarray,
-    nearby_ibtracs: pd.DataFrame,
+    nearby_tc_track_data: pd.DataFrame,
     max_distance_degrees: float,
 ):
     """Create spatial mask using vectorized distance calculation."""
@@ -1112,14 +1086,17 @@ def _create_spatial_mask(
     # Initialize mask
     spatial_mask = np.zeros_like(lat_grid, dtype=bool)
 
-    # For each IBTrACS point, compute distances to all grid points vectorized
-    for _, ibtracs_row in nearby_ibtracs.iterrows():
-        ibtracs_lat = ibtracs_row["latitude"]
-        ibtracs_lon = ibtracs_row["longitude"]
+    # For each tropical cyclone track data point, compute distances to all grid points
+    # vectorized
+    for _, tc_track_data_row in nearby_tc_track_data.iterrows():
+        tc_track_data_lat = tc_track_data_row["latitude"]
+        tc_track_data_lon = tc_track_data_row["longitude"]
 
         # Vectorized distance calculation
-        distances = _calculate_great_circle_distance(
-            lat_grid, lon_grid, ibtracs_lat, ibtracs_lon
+        distances = calc.calculate_haversine_distance(
+            [lat_grid, lon_grid],
+            [tc_track_data_lat, tc_track_data_lon],
+            units="degrees",
         )
 
         # Update mask where distance is within threshold
@@ -1128,52 +1105,29 @@ def _create_spatial_mask(
     return spatial_mask
 
 
-def _calculate_great_circle_distance(lat1, lon1, lat2, lon2):
-    """Calculate great circle distance in degrees using haversine formula."""
-    # Convert to radians
-    lat1_rad = math.radians(lat1)
-    lon1_rad = math.radians(lon1)
-    lat2_rad = math.radians(lat2)
-    lon2_rad = math.radians(lon2)
-
-    # Haversine formula
-    dlat = lat2_rad - lat1_rad
-    dlon = lon2_rad - lon1_rad
-
-    a = (
-        math.sin(dlat / 2) ** 2
-        + math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(dlon / 2) ** 2
-    )
-    c = 2 * math.asin(math.sqrt(a))
-
-    # Convert back to degrees (Earth radius = 6371 km, 1 degree ≈ 111 km)
-    distance_degrees = math.degrees(c)
-
-    return distance_degrees
-
-
 def _filter_post_landfall_init_times(
-    cyclone_dataset: xr.Dataset, ibtracs_data: xr.Dataset
+    cyclone_dataset: xr.Dataset, tc_track_data: xr.Dataset
 ) -> Optional[xr.Dataset]:
     """
-    Filter out init_times that occur after all IBTrACS landfall events.
+    Filter out init_times that occur after all tropical cyclone track data landfall
+    events.
 
     Args:
         cyclone_dataset: Forecast dataset with init_time dimension
-        ibtracs_data: IBTrACS dataset
+        tc_track_data: tropical cyclone track dataset
 
     Returns:
         Filtered dataset with only valid init_times, or None if no valid init_times
     """
-    # Find all IBTrACS landfalls
-    ibtracs_landfalls = find_all_landfalls(ibtracs_data)
+    # Find all tropical cyclone track data landfalls
+    tc_track_data_landfalls = find_all_landfalls(tc_track_data)
 
-    if ibtracs_landfalls is None:
-        # No IBTrACS landfalls detected, keep all init_times
+    if tc_track_data_landfalls is None:
+        # No tropical cyclone track data landfalls detected, keep all init_times
         return cyclone_dataset
 
-    # Get all IBTrACS landfall times
-    landfall_times = ibtracs_landfalls.valid_time.values
+    # Get all tropical cyclone track data landfall times
+    landfall_times = tc_track_data_landfalls.valid_time.values
     latest_landfall = np.max(landfall_times)
 
     # Convert cyclone_dataset to have init_time coordinate if it doesn't already
@@ -1219,7 +1173,7 @@ def find_landfall(track_dataset: xr.Dataset) -> Optional[xr.Dataset]:
     by linearly interpolating between track points using pure xarray operations.
 
     Based on the original find_landfall function, handles two cases:
-    1. IBTrACS data: single track with valid_time dimension
+    1. Tropical cyclone track data: single track with valid_time dimension
     2. Forecast data: tracks with lead_time, valid_time dimensions processed by
     init_time
 
@@ -1227,7 +1181,7 @@ def find_landfall(track_dataset: xr.Dataset) -> Optional[xr.Dataset]:
         track_dataset: xarray Dataset containing track data with variables:
                       - latitude, longitude, surface_wind_speed,
                         air_pressure_at_mean_sea_level
-                      Case 1: (valid_time,) for IBTrACS
+                      Case 1: (valid_time,) for tropical cyclone track data
                       Case 2: (lead_time, valid_time) for forecasts
 
     Returns:
@@ -1238,9 +1192,9 @@ def find_landfall(track_dataset: xr.Dataset) -> Optional[xr.Dataset]:
     land = natural_earth(category="physical", name="land", resolution="10m")
     land_geom = list(Reader(land).geometries())[0]
 
-    # Case 1: IBTrACS data with valid_time dimension
+    # Case 1: tropical cyclone track data with valid_time dimension
     if "valid_time" in track_dataset.dims and "lead_time" not in track_dataset.dims:
-        return _find_landfall_ibtracs(track_dataset, land_geom)
+        return _find_landfall_tc_track_data(track_dataset, land_geom)
 
     # Case 2: Forecast data with lead_time and valid_time dimensions
     elif "lead_time" in track_dataset.dims and "valid_time" in track_dataset.dims:
@@ -1249,7 +1203,8 @@ def find_landfall(track_dataset: xr.Dataset) -> Optional[xr.Dataset]:
     else:
         raise ValueError(
             f"Unsupported track dataset structure. Expected either "
-            f"(valid_time,) for IBTrACS or (lead_time, valid_time) for forecasts. "
+            f"(valid_time,) for tropical cyclone track data or (lead_time, valid_time) "
+            "for forecasts. "
             f"Got dimensions: {list(track_dataset.dims)}"
         )
 
@@ -1327,7 +1282,7 @@ def find_all_landfalls(track_dataset: xr.Dataset) -> Optional[xr.Dataset]:
         track_dataset: xarray Dataset containing track data with variables:
                       - latitude, longitude, surface_wind_speed,
                         air_pressure_at_mean_sea_level
-                      Case 1: (valid_time,) for IBTrACS
+                      Case 1: (valid_time,) for tropical cyclone track data
                       Case 2: (lead_time, valid_time) for forecasts
 
     Returns:
@@ -1345,9 +1300,9 @@ def find_all_landfalls(track_dataset: xr.Dataset) -> Optional[xr.Dataset]:
     # Add a small buffer (0.1 degrees ~11km) to catch near-coastal points
     land_geom = land_geom.buffer(0.1)
 
-    # Case 1: IBTrACS data with valid_time dimension
+    # Case 1: tropical cyclone track data with valid_time dimension
     if "valid_time" in track_dataset.dims and "lead_time" not in track_dataset.dims:
-        return _find_all_landfalls_ibtracs(track_dataset, land_geom)
+        return _find_all_landfalls_tc_track_data(track_dataset, land_geom)
 
     # Case 2: Forecast data with lead_time and valid_time dimensions
     elif "lead_time" in track_dataset.dims and "valid_time" in track_dataset.dims:
@@ -1356,16 +1311,17 @@ def find_all_landfalls(track_dataset: xr.Dataset) -> Optional[xr.Dataset]:
     else:
         raise ValueError(
             f"Unsupported track dataset structure. Expected either "
-            f"(valid_time,) for IBTrACS or (lead_time, valid_time) for forecasts. "
+            f"(valid_time,) for tropical cyclone track data or (lead_time, valid_time) "
+            "for forecasts. "
             f"Got dimensions: {list(track_dataset.dims)}"
         )
 
 
-def _find_landfall_ibtracs(
+def _find_landfall_tc_track_data(
     track_dataset: xr.Dataset, land_geom
 ) -> Optional[xr.Dataset]:
-    """Find landfall for IBTrACS data (single track with valid_time dimension).
-    Based on the original find_landfall function.
+    """Find landfall for tropical cyclone track data (single track with valid_time
+    dimension).
     """
     # Filter out NaN values and sort by time
     valid_mask = (
@@ -1459,11 +1415,12 @@ def _find_landfall_ibtracs(
     )
 
 
-def _find_all_landfalls_ibtracs(
+def _find_all_landfalls_tc_track_data(
     track_dataset: xr.Dataset, land_geom: Polygon
 ) -> Optional[xr.Dataset]:
-    """Find ALL landfall points for IBTrACS data (single track with valid_time
-    dimension)."""
+    """Find all landfall points for tropical cyclone track data (single track with
+    valid_time dimension).
+    """
     # Filter out NaN values and sort by time
     valid_mask = (
         ~np.isnan(track_dataset["latitude"])
@@ -1902,7 +1859,7 @@ def _find_landfall_intersection_point(lon1, lat1, lon2, lat2, land_geom):
 
 
 def _find_all_landfalls_optimized(lats, lons, vmax, slp, times, land_geom):
-    """Optimized detection for ALL true landfall points along pre-processed coordinate
+    """Optimized detection for all true landfall points along pre-processed coordinate
     arrays.
 
     Only detects ocean to land linestrings.
@@ -2035,8 +1992,8 @@ def calculate_landfall_distance_km(
 
     # Use xarray operations to handle multi-dimensional case
     distance_degrees = calc.calculate_haversine_distance(
-        (landfall1.latitude, landfall1.longitude),
-        (landfall2.latitude, landfall2.longitude),
+        [landfall1.latitude, landfall1.longitude],
+        [landfall2.latitude, landfall2.longitude],
         units="degrees",
     )
 
@@ -2058,7 +2015,7 @@ def generate_tc_variables(ds: xr.Dataset) -> xr.Dataset:
 
     output_vars = {
         "air_pressure_at_mean_sea_level": ds["air_pressure_at_mean_sea_level"],
-        "surface_wind_speed": calc.calculate_wind_speed(ds),
+        "surface_wind_speed": calc.maybe_calculate_wind_speed(ds)["surface_wind_speed"],
     }
 
     # Only add geopotential thickness if the dataset has level data

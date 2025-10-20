@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 # %%
 case_yaml = cases.load_ewb_events_yaml_into_case_collection()
-case_yaml.select_cases(by="case_id_number", value=200)
+case_yaml.select_cases(by="case_id_number", value=211, inplace=True)
 
 # %%
 ibtracs_target = inputs.IBTrACS()
@@ -64,6 +64,6 @@ test_ewb = evaluate.ExtremeWeatherBench(
 )
 logger.info("Starting EWB run")
 outputs = test_ewb.run(
-    n_jobs=24,
+    n_jobs=1,
 )
 outputs.to_csv("tc_metric_test_results.csv")

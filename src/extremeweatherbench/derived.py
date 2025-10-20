@@ -1,5 +1,5 @@
-import logging
 import abc
+import logging
 from typing import Sequence, Type, TypeGuard, Union
 
 import xarray as xr
@@ -91,9 +91,9 @@ class TropicalCycloneTrackVariables(DerivedVariable):
     Deriving the track locations using default TempestExtremes criteria:
     https://doi.org/10.5194/gmd-14-5023-2021
 
-    For forecast data, when IBTrACS data is provided, the valid candidates
+    For forecast data, when track data data is provided, the valid candidates
     approach is filtered to only include candidates within 5 great circle
-    degrees of IBTrACS points and within 120 hours of the valid_time.
+    degrees of track data points and within 48 hours of the valid_time.
     """
 
     # required variables for TC track identification
@@ -136,19 +136,20 @@ class TropicalCycloneTrackVariables(DerivedVariable):
         # (geop. thickness, winds, temps, slp)
         cyclone_dataset = tropical_cyclone.generate_tc_variables(prepared_data)
 
-        # Check if we should apply IBTrACS filtering
+        # Check if we should apply track data filtering
         # First check kwargs, then the global registry
-        ibtracs_data = kwargs.get("ibtracs_data", None)
+        tc_track_data = kwargs.get("tc_track_data", None)
         case_metadata = kwargs.get("case_metadata", None)
         case_id_number = case_metadata.case_id_number if case_metadata else None
-        if ibtracs_data is None and case_id_number is not None:
-            ibtracs_data = tropical_cyclone.get_ibtracs_data(case_id_number)
+        if tc_track_data is None and case_id_number is not None:
+            tc_track_data = tropical_cyclone.get_tc_track_data(case_id_number)
         else:
-            raise ValueError("No IBTrACS data provided to constrain TC tracks.")
+            raise ValueError("No track data data provided to constrain TC tracks.")
 
-        # Use IBTrACS-filtered TC detection
-        tctracks_ds = tropical_cyclone.create_tctracks_from_dataset_with_ibtracs_filter(
-            cyclone_dataset, ibtracs_data
+        tctracks_ds = (
+            tropical_cyclone.create_tctracks_from_dataset_with_tc_track_data_filter(
+                cyclone_dataset, tc_track_data
+            )
         )
         # Cache the result
         tropical_cyclone._TC_TRACK_CACHE[cache_key] = tctracks_ds
