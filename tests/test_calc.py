@@ -36,7 +36,7 @@ class TestBasicCalculations:
         point_a = [0.0, 0.0]  # Equator, prime meridian
         point_b = [90.0, 0.0]  # North pole
 
-        distance = calc.calculate_haversine_distance(point_a, point_b, units="deg")
+        distance = calc.haversine_distance(point_a, point_b, units="deg")
 
         # Should be 90 degrees (quarter of great circle)
         assert abs(distance - 90.0) < 0.1
@@ -46,7 +46,7 @@ class TestBasicCalculations:
         point_a = [30.0, -100.0]
         point_b = [sample_calc_dataset.latitude, sample_calc_dataset.longitude]
 
-        distances = calc.calculate_haversine_distance(point_a, point_b, units="deg")
+        distances = calc.haversine_distance(point_a, point_b, units="deg")
 
         # Should return an xarray DataArray
         assert isinstance(distances, xr.DataArray)
@@ -64,7 +64,7 @@ class TestBasicCalculations:
         point_a = [0.0, 0.0]  # Equator, prime meridian
         point_b = [90.0, 0.0]  # North pole
 
-        distance = calc.calculate_haversine_distance(point_a, point_b, units="km")
+        distance = calc.haversine_distance(point_a, point_b, units="km")
 
         # Should be approximately 10,018 km (quarter of great circle)
         # Earth's circumference is ~40,075 km, so quarter is ~10,018 km
@@ -75,7 +75,7 @@ class TestBasicCalculations:
         point_a = [30.0, -100.0]
         point_b = [sample_calc_dataset.latitude, sample_calc_dataset.longitude]
 
-        distances = calc.calculate_haversine_distance(point_a, point_b, units="km")
+        distances = calc.haversine_distance(point_a, point_b, units="km")
 
         # Should return an xarray DataArray
         assert isinstance(distances, xr.DataArray)
@@ -98,19 +98,19 @@ class TestBasicCalculations:
         # Test identical points (distance should be 0)
         point_a = [40.0, -74.0]
         point_b = [40.0, -74.0]
-        distance = calc.calculate_haversine_distance(point_a, point_b)
+        distance = calc.haversine_distance(point_a, point_b)
         assert abs(distance) < 1e-10
 
         # Test antipodal points (should be ~20015 km, half Earth's circumference)
         point_a = [0.0, 0.0]  # Equator, prime meridian
         point_b = [0.0, 180.0]  # Equator, opposite side
-        distance = calc.calculate_haversine_distance(point_a, point_b, units="km")
+        distance = calc.haversine_distance(point_a, point_b, units="km")
         assert abs(distance - 20015.1) < 50.0
 
         # Test North/South pole distance
         point_a = [90.0, 0.0]  # North pole
         point_b = [-90.0, 0.0]  # South pole
-        distance = calc.calculate_haversine_distance(point_a, point_b, units="km")
+        distance = calc.haversine_distance(point_a, point_b, units="km")
         assert abs(distance - 20003.9) < 50.0
 
     def test_calculate_haversine_distance_known_cities(self):
@@ -118,19 +118,19 @@ class TestBasicCalculations:
         # New York City to Los Angeles (approximate distance ~3944 km)
         nyc = [40.7128, -74.0060]
         la = [34.0522, -118.2437]
-        distance = calc.calculate_haversine_distance(nyc, la, units="km")
+        distance = calc.haversine_distance(nyc, la, units="km")
         assert abs(distance - 3944) < 20  # Allow 100km tolerance
 
         # London to Paris (approximate distance ~344 km)
         london = [51.5074, -0.1278]
         paris = [48.8566, 2.3522]
-        distance = calc.calculate_haversine_distance(london, paris, units="km")
+        distance = calc.haversine_distance(london, paris, units="km")
         assert abs(distance - 344) < 20  # Allow 20km tolerance
 
         # Sydney to Melbourne (approximate distance ~713 km)
         sydney = [-33.8688, 151.2093]
         melbourne = [-37.8136, 144.9631]
-        distance = calc.calculate_haversine_distance(sydney, melbourne, units="km")
+        distance = calc.haversine_distance(sydney, melbourne, units="km")
         assert abs(distance - 713) < 20  # Allow 30km tolerance
 
     def test_calculate_haversine_distance_units_conversion(self):
@@ -138,20 +138,16 @@ class TestBasicCalculations:
         point_a = [0.0, 0.0]
         point_b = [1.0, 0.0]  # 1 degree north
 
-        distance_km = calc.calculate_haversine_distance(point_a, point_b, units="km")
-        distance_deg = calc.calculate_haversine_distance(point_a, point_b, units="deg")
+        distance_km = calc.haversine_distance(point_a, point_b, units="km")
+        distance_deg = calc.haversine_distance(point_a, point_b, units="deg")
 
         # 1 degree should be approximately 111.32 km
         assert abs(distance_km - 111.32) < 5.0
         assert abs(distance_deg - 1.0) < 0.01
 
         # Test with "kilometers" and "degrees" spelled out
-        distance_km_long = calc.calculate_haversine_distance(
-            point_a, point_b, units="kilometers"
-        )
-        distance_deg_long = calc.calculate_haversine_distance(
-            point_a, point_b, units="degrees"
-        )
+        distance_km_long = calc.haversine_distance(point_a, point_b, units="kilometers")
+        distance_deg_long = calc.haversine_distance(point_a, point_b, units="degrees")
 
         assert abs(distance_km_long - distance_km) < 1e-10
         assert abs(distance_deg_long - distance_deg) < 1e-10
@@ -162,7 +158,7 @@ class TestBasicCalculations:
         point_a = np.array([40.0, -74.0])
         point_b = np.array([34.0, -118.0])
 
-        distance = calc.calculate_haversine_distance(point_a, point_b, units="km")
+        distance = calc.haversine_distance(point_a, point_b, units="km")
         assert isinstance(distance, (float, np.ndarray))
         assert distance > 0
 
@@ -172,7 +168,7 @@ class TestBasicCalculations:
         point_a = [30.0, -100.0]
         point_b = [lats, lons]
 
-        distances = calc.calculate_haversine_distance(point_a, point_b, units="km")
+        distances = calc.haversine_distance(point_a, point_b, units="km")
         assert isinstance(distances, np.ndarray)
         assert distances.shape == (3,)
         assert all(d > 0 for d in distances)
@@ -184,18 +180,18 @@ class TestBasicCalculations:
 
         # Test invalid units
         with pytest.raises(ValueError, match="Invalid units"):
-            calc.calculate_haversine_distance(point_a, point_b, units="miles")
+            calc.haversine_distance(point_a, point_b, units="miles")
 
         with pytest.raises(ValueError, match="Invalid units"):
-            calc.calculate_haversine_distance(point_a, point_b, units="invalid")
+            calc.haversine_distance(point_a, point_b, units="invalid")
 
     def test_calculate_haversine_distance_symmetry(self):
         """Test that distance calculation is symmetric."""
         point_a = [40.7128, -74.0060]  # NYC
         point_b = [34.0522, -118.2437]  # LA
 
-        distance_ab = calc.calculate_haversine_distance(point_a, point_b)
-        distance_ba = calc.calculate_haversine_distance(point_b, point_a)
+        distance_ab = calc.haversine_distance(point_a, point_b)
+        distance_ba = calc.haversine_distance(point_b, point_a)
 
         assert abs(distance_ab - distance_ba) < 1e-10
 
@@ -204,18 +200,18 @@ class TestBasicCalculations:
         # Test at latitude boundaries
         point_a = [90.0, 0.0]  # North pole
         point_b = [89.9, 0.0]  # Near north pole
-        distance = calc.calculate_haversine_distance(point_a, point_b, units="km")
+        distance = calc.haversine_distance(point_a, point_b, units="km")
         assert distance > 0 and distance < 20  # Should be small distance
 
         point_a = [-90.0, 0.0]  # South pole
         point_b = [-89.9, 0.0]  # Near south pole
-        distance = calc.calculate_haversine_distance(point_a, point_b, units="km")
+        distance = calc.haversine_distance(point_a, point_b, units="km")
         assert distance > 0 and distance < 20  # Should be small distance
 
         # Test longitude wraparound (179° to -179° should be 2° apart)
         point_a = [0.0, 179.0]
         point_b = [0.0, -179.0]
-        distance = calc.calculate_haversine_distance(point_a, point_b, units="deg")
+        distance = calc.haversine_distance(point_a, point_b, units="deg")
         assert abs(distance - 2.0) < 0.1
 
     def test_calculate_haversine_distance_large_datasets(self, sample_calc_dataset):
@@ -224,9 +220,7 @@ class TestBasicCalculations:
         center_point = [35.0, -100.0]
         grid_point = [sample_calc_dataset.latitude, sample_calc_dataset.longitude]
 
-        distances = calc.calculate_haversine_distance(
-            center_point, grid_point, units="km"
-        )
+        distances = calc.haversine_distance(center_point, grid_point, units="km")
 
         # Should return an xarray DataArray with proper shape
         assert isinstance(distances, xr.DataArray)
@@ -253,7 +247,7 @@ class TestBasicCalculations:
         point_a = [40.0, -74.0]
         point_b = [40.0, -74.0]  # Same point, should return scalar 0
 
-        distance = calc.calculate_haversine_distance(point_a, point_b)
+        distance = calc.haversine_distance(point_a, point_b)
 
         # Should be a scalar (float), not a dataset
         assert isinstance(distance, (float, np.floating))
@@ -301,7 +295,7 @@ class TestBasicCalculations:
 
         # Mock the haversine distance to return a scalar
         with unittest.mock.patch(
-            "extremeweatherbench.calc.calculate_haversine_distance"
+            "extremeweatherbench.calc.haversine_distance"
         ) as mock_distance:
             mock_distance.return_value = 2.0  # Return scalar instead of DataArray
 
@@ -431,7 +425,7 @@ class TestPressureCalculations:
         orography_data = calc.orography(sample_calc_dataset)
 
         # Calculate surface pressure
-        surface_pressure = calc.calculate_pressure_at_surface(orography_data)
+        surface_pressure = calc.pressure_at_surface(orography_data)
 
         # Should return a DataArray
         assert isinstance(surface_pressure, xr.DataArray)
@@ -500,9 +494,9 @@ class TestPressureCalculations:
 class TestGeopotentialCalculations:
     """Test geopotential-related calculations."""
 
-    def test_generate_geopotential_thickness_default_levels(self, sample_calc_dataset):
+    def test_geopotential_thickness_default_levels(self, sample_calc_dataset):
         """Test geopotential thickness with default levels."""
-        thickness = calc.generate_geopotential_thickness(sample_calc_dataset)
+        thickness = calc.geopotential_thickness(sample_calc_dataset)
 
         # Should return a DataArray
         assert isinstance(thickness, xr.DataArray)
@@ -516,9 +510,9 @@ class TestGeopotentialCalculations:
         assert "units" in thickness.attrs
         assert thickness.attrs["units"] == "m"
 
-    def test_generate_geopotential_thickness_custom_levels(self, sample_calc_dataset):
+    def test_geopotential_thickness_custom_levels(self, sample_calc_dataset):
         """Test geopotential thickness with custom levels."""
-        thickness = calc.generate_geopotential_thickness(
+        thickness = calc.geopotential_thickness(
             sample_calc_dataset, top_level_value=200, bottom_level_value=850
         )
 
@@ -531,11 +525,9 @@ class TestGeopotentialCalculations:
 
         xr.testing.assert_allclose(thickness, expected_thickness)
 
-    def test_generate_geopotential_thickness_multiple_top_levels(
-        self, sample_calc_dataset
-    ):
+    def test_geopotential_thickness_multiple_top_levels(self, sample_calc_dataset):
         """Test geopotential thickness with multiple top levels."""
-        thickness = calc.generate_geopotential_thickness(
+        thickness = calc.geopotential_thickness(
             sample_calc_dataset, top_level_value=[200, 300, 500], bottom_level_value=850
         )
 

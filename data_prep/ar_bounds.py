@@ -657,7 +657,13 @@ def process_ar_event(
     era5_subset = era5_subset.chunk()
     # Compute IVT first
     logger.info("  Computing IVT...")
-    ivt_da = ar.compute_ivt(era5_subset)
+    era5_subset = ar.maybe_build_atmospheric_river_variables(era5_subset)
+    ivt_da = ar.compute_ivt(
+        specific_humidity=era5_subset["specific_humidity"],
+        eastward_wind=era5_subset["eastward_wind"],
+        northward_wind=era5_subset["northward_wind"],
+        levels=era5_subset["adjusted_level"],
+    )
     ivt_da.name = "integrated_vapor_transport"
     # Compute IVT Laplacian
     ivt_laplacian = ar.compute_ivt_laplacian(ivt_da)

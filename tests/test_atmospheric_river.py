@@ -5,6 +5,7 @@ import pandas as pd
 import pytest
 import xarray as xr
 
+from extremeweatherbench import calc
 from extremeweatherbench.events import atmospheric_river
 
 # Set random seed for reproducible tests
@@ -219,11 +220,18 @@ class TestComputeIVT:
             },
         )
 
+        # Build required atmospheric river variables
+        dataset = atmospheric_river._maybe_build_atmospheric_river_variables(dataset)
         return dataset
 
     def test_compute_ivt_basic(self, sample_ivt_dataset):
         """Test basic IVT computation."""
-        result = atmospheric_river.compute_ivt(sample_ivt_dataset)
+        result = atmospheric_river.compute_ivt(
+            specific_humidity=sample_ivt_dataset["specific_humidity"],
+            eastward_wind=sample_ivt_dataset["eastward_wind"],
+            northward_wind=sample_ivt_dataset["northward_wind"],
+            levels=sample_ivt_dataset["adjusted_level"],
+        )
 
         # Should return a DataArray
         assert isinstance(result, xr.DataArray)
@@ -241,25 +249,6 @@ class TestComputeIVT:
         # Values should be reasonable for IVT (typically 0-3000 kg/m/s)
         # Some extreme values may exceed 1000 but should be under 3000
         assert (result < 3000).all()
-
-    def test_compute_ivt_existing_ivt(self, sample_ivt_dataset):
-        """Test compute_ivt when IVT already exists in dataset."""
-        # Add existing IVT to dataset
-        sample_ivt_dataset["integrated_vapor_transport"] = xr.DataArray(
-            rng.uniform(100, 500, (2, 10, 10)),
-            dims=["time", "latitude", "longitude"],
-            coords={
-                "time": sample_ivt_dataset.time,
-                "latitude": sample_ivt_dataset.latitude,
-                "longitude": sample_ivt_dataset.longitude,
-            },
-        )
-
-        result = atmospheric_river.compute_ivt(sample_ivt_dataset)
-
-        # Should return the IVT DataArray
-        assert isinstance(result, xr.DataArray)
-        assert result.name == "integrated_vapor_transport"
 
     def test_compute_ivt_nan_handling(self):
         """Test compute_ivt with NaN values."""
@@ -308,8 +297,13 @@ class TestComputeIVT:
                 "level": level,
             },
         )
-
-        result = atmospheric_river.compute_ivt(dataset)
+        dataset = atmospheric_river._maybe_build_atmospheric_river_variables(dataset)
+        result = atmospheric_river.compute_ivt(
+            specific_humidity=dataset["specific_humidity"],
+            eastward_wind=dataset["eastward_wind"],
+            northward_wind=dataset["northward_wind"],
+            levels=dataset["adjusted_level"],
+        )
 
         # Should return a DataArray
         assert isinstance(result, xr.DataArray)
@@ -325,14 +319,10 @@ class TestComputeIVT:
         lon = np.linspace(-130, -100, 5)
         level = [1000, 850, 700, 500, 300, 200]
 
-        # Create dataset missing required variables
-        dataset = xr.Dataset(
-            {
-                "air_temperature": (
-                    ["time", "level", "latitude", "longitude"],
-                    rng.uniform(250, 300, (1, 6, 5, 5)),
-                ),
-            },
+        # Create some valid DataArrays
+        eastward_wind = xr.DataArray(
+            rng.uniform(-20, 20, (1, 6, 5, 5)),
+            dims=["time", "level", "latitude", "longitude"],
             coords={
                 "time": time,
                 "latitude": lat,
@@ -341,9 +331,16 @@ class TestComputeIVT:
             },
         )
 
-        # Should raise an error when required variables are missing
-        with pytest.raises(KeyError):
-            atmospheric_river.compute_ivt(dataset)
+        levels = xr.DataArray(level, dims=["level"], coords={"level": level})
+
+        # Should raise an error when required variables are missing (None values)
+        with pytest.raises((TypeError, AttributeError)):
+            atmospheric_river.compute_ivt(
+                specific_humidity=None,
+                eastward_wind=eastward_wind,
+                northward_wind=eastward_wind,
+                levels=levels,
+            )
 
     def test_compute_ivt_low_pressure_levels(self):
         """Test compute_ivt with levels below 200 hPa (should be filtered out)."""
@@ -387,7 +384,15 @@ class TestComputeIVT:
             },
         )
 
-        result = atmospheric_river.compute_ivt(dataset)
+        # Build required atmospheric river variables
+        dataset = atmospheric_river._maybe_build_atmospheric_river_variables(dataset)
+
+        result = atmospheric_river.compute_ivt(
+            specific_humidity=dataset["specific_humidity"],
+            eastward_wind=dataset["eastward_wind"],
+            northward_wind=dataset["northward_wind"],
+            levels=dataset["adjusted_level"],
+        )
 
         # Should return a DataArray
         assert isinstance(result, xr.DataArray)
@@ -406,7 +411,7 @@ class TestComputeIVT:
         assert (result < 3000).all()
 
         # The computation should work despite having levels below 200 hPa
-        # because the function filters them out internally
+        # because _maybe_build_atmospheric_river_variables filters them out
 
 
 class TestComputeIVTLaplacian:
@@ -530,7 +535,7 @@ class TestFindLandIntersection:
 
     def test_find_land_intersection_basic(self, sample_ar_mask):
         """Test basic land intersection functionality."""
-        result = atmospheric_river.find_land_intersection(sample_ar_mask)
+        result = calc.find_land_intersection(sample_ar_mask)
 
         # Should return a DataArray
         assert isinstance(result, xr.DataArray)
@@ -545,8 +550,7 @@ class TestFindLandIntersection:
         # Values should be 0 or 1 (binary mask)
         assert set(result.values.flatten()).issubset({0, 1})
 
-        # Should have the correct name
-        assert result.name == "atmospheric_river_land_intersection"
+        # Function works correctly (name is set by calling function if needed)
 
     def test_find_land_intersection_empty_mask(self):
         """Test land intersection with empty AR mask."""
@@ -565,7 +569,7 @@ class TestFindLandIntersection:
             },
         )
 
-        result = atmospheric_river.find_land_intersection(ar_mask)
+        result = calc.find_land_intersection(ar_mask)
 
         # Should return a DataArray
         assert isinstance(result, xr.DataArray)
@@ -580,8 +584,7 @@ class TestFindLandIntersection:
         # Values should be 0 or 1 (binary mask)
         assert set(result.values.flatten()).issubset({0, 1})
 
-        # Should have the correct name
-        assert result.name == "atmospheric_river_land_intersection"
+        # Function works correctly (name is set by calling function if needed)
 
 
 class TestBuildMaskAndLandIntersection:
@@ -633,7 +636,9 @@ class TestBuildMaskAndLandIntersection:
 
     def test_build_mask_and_land_intersection_basic(self, sample_full_dataset):
         """Test basic integration functionality."""
-        result = atmospheric_river.build_mask_and_land_intersection(sample_full_dataset)
+        result = atmospheric_river.build_atmospheric_river_mask_and_land_intersection(
+            sample_full_dataset
+        )
 
         # Should return a Dataset
         assert isinstance(result, xr.Dataset)
@@ -681,7 +686,9 @@ class TestBuildMaskAndLandIntersection:
 
         # Should raise an error when required variables are missing
         with pytest.raises(KeyError):
-            atmospheric_river.build_mask_and_land_intersection(dataset)
+            atmospheric_river.build_atmospheric_river_mask_and_land_intersection(
+                dataset
+            )
 
     def test_build_mask_and_land_intersection_nan_handling(self):
         """Test integration with NaN values."""
@@ -731,7 +738,9 @@ class TestBuildMaskAndLandIntersection:
             },
         )
 
-        result = atmospheric_river.build_mask_and_land_intersection(dataset)
+        result = atmospheric_river.build_atmospheric_river_mask_and_land_intersection(
+            dataset
+        )
 
         # Should return a Dataset
         assert isinstance(result, xr.Dataset)

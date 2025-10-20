@@ -1062,9 +1062,7 @@ class SpatialDisplacement(BaseMetric):
         forecast_coordinates = np.array([forecast_lat_coords, forecast_lon_coords])
 
         # Calculate haversine distance
-        distance = calc.calculate_haversine_distance(
-            forecast_coordinates, target_coordinates
-        )
+        distance = calc.haversine_distance(forecast_coordinates, target_coordinates)
 
         # Create DataArray with all dimensions
         result = xr.DataArray(

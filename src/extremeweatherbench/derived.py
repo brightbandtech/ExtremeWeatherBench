@@ -1,5 +1,5 @@
-import logging
 import abc
+import logging
 from typing import Sequence, Type, TypeGuard, Union
 
 import xarray as xr
@@ -116,7 +116,7 @@ class AtmosphericRiverMask(DerivedVariable):
     @classmethod
     def derive_variable(cls, data: xr.Dataset, *args, **kwargs) -> xr.Dataset:
         """Derive the atmospheric river mask using xr.apply_ufunc approach."""
-        return ar.build_mask_and_land_intersection(data)
+        return ar.build_atmospheric_river_mask_and_land_intersection(data)
 
 
 def maybe_derive_variables(
