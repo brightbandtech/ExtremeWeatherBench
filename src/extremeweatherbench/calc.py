@@ -1,6 +1,7 @@
 from typing import Literal, Sequence, Union
 
 import numpy as np
+import numpy.typing as npt
 import xarray as xr
 
 epsilon: float = 0.6219569100577033  # Ratio of molecular weights (H2O/dry air)
@@ -35,12 +36,11 @@ def convert_from_cartesian_to_latlon(
 
 
 def mixing_ratio(
-    partial_pressure: Union[float, np.ndarray], total_pressure: Union[float, np.ndarray]
-) -> np.ndarray:
+    partial_pressure: float | npt.NDArray, total_pressure: float | npt.NDArray
+) -> float | npt.NDArray[np.float64]:
     """Calculate the mixing ratio of water vapor in air.
 
-    The mixing ratio represents the mass of water vapor per unit mass of dry air.
-    Uses the formula: w = ε * e / (p - e) where ε = 0.622.
+    Uses the formula: $w = (\epsilon * e) / (p - e)$ where $\epsilon = 0.622$.
 
     Args:
         partial_pressure: Water vapor partial pressure in hPa.
@@ -59,11 +59,15 @@ def mixing_ratio(
         return epsilon * partial_pressure / (total_pressure - partial_pressure)
 
 
-def saturation_vapor_pressure(temperature: Union[float, np.ndarray]) -> np.ndarray:
+def saturation_vapor_pressure(
+    temperature: float | npt.NDArray,
+) -> npt.NDArray[np.float64]:
     """Calculate saturation vapor pressure using the Clausius-Clapeyron equation.
 
     Uses the Magnus formula approximation which is accurate for temperatures
-    between -40°C and +50°C. Formula: es = 6.112 * exp(17.67*T/(T+243.5))
+    between -40°C and +50°C. Formula:
+
+    $$e_ = 6.112 \times \exp\left(\frac{17.67*T}{T+243.5}\right)$$
 
     Args:
         temperature: Temperature values in Celsius (can be scalar or array).
@@ -83,8 +87,8 @@ def saturation_vapor_pressure(temperature: Union[float, np.ndarray]) -> np.ndarr
 
 
 def saturation_mixing_ratio(
-    pressure: Union[float, Sequence[float]], temperature: Union[float, Sequence[float]]
-) -> np.ndarray:
+    pressure: float | npt.NDArray, temperature: float | npt.NDArray
+) -> npt.NDArray[np.float64]:
     """Calculates the saturation mixing ratio of a parcel.
 
     Args:
@@ -97,12 +101,13 @@ def saturation_mixing_ratio(
     return mixing_ratio(saturation_vapor_pressure(temperature), pressure)
 
 
-def calculate_haversine_distance(
+def haversine_distance(
     input_a: Sequence[float],
     input_b: Sequence[Union[float, xr.DataArray]],
     units: Literal["km", "kilometers", "deg", "degrees"] = "km",
 ) -> Union[float, xr.DataArray]:
-    """Calculate the great-circle distance between two points on the Earth's surface.
+    """Calculate the great-circle/haversine distance between two points on the Earth's
+    surface.
 
     Args:
         input_a: The first point, represented as an ndarray of shape (2,n) in
@@ -146,7 +151,7 @@ def create_great_circle_mask(
         Boolean mask where True indicates points within the radius.
     """
 
-    distance = calculate_haversine_distance(
+    distance = haversine_distance(
         latlon_point, (ds.latitude, ds.longitude), units="deg"
     )
     # Create mask as xarray DataArray
@@ -188,7 +193,7 @@ def orography(ds: xr.Dataset) -> xr.DataArray:
         )
 
 
-def calculate_pressure_at_surface(orography_da: xr.DataArray) -> xr.DataArray:
+def pressure_at_surface(orography_da: xr.DataArray) -> xr.DataArray:
     """Calculate the pressure at the surface, based on orography.
 
     The dataarray is orography (geopotential at the surface/g0).
@@ -231,7 +236,7 @@ def maybe_calculate_wind_speed(ds: xr.Dataset) -> xr.DataArray:
     return ds
 
 
-def generate_geopotential_thickness(
+def geopotential_thickness(
     ds: xr.Dataset,
     var_name: str = "geopotential",
     level_name: str = "level",
@@ -307,36 +312,29 @@ def nantrapezoid(
     return ret
 
 
-def compute_specific_humidity_from_relative_humidity(data: xr.Dataset) -> xr.DataArray:
+def specific_humidity_from_relative_humidity(
+    air_temperature: xr.DataArray, relative_humidity: xr.DataArray, levels: xr.DataArray
+) -> xr.DataArray:
     """Compute specific humidity from relative humidity and air temperature.
 
     Args:
         data: The xarray dataset to compute the specific humidity from containing
-        level (hPa), air_temperature (Kelvin), and relative_humidity. If level is not
+        levels (hPa), air_temperature (Kelvin), and relative_humidity. If level is not
         included in the dataset, assumed to be surface pressure.
 
     Returns:
         A DataArray of specific humidity.
     """
-
-    # Check that the required variables are in the dataset
-    if "air_temperature" not in data.data_vars:
-        raise ValueError("air_temperature must be in the dataset")
-    if "relative_humidity" not in data.data_vars:
-        raise ValueError("relative_humidity must be in the dataset")
-
     # Compute saturation mixing ratio; air temperature must be in Kelvin
-    sat_mixing_ratio = saturation_mixing_ratio(
-        data["level"], data["air_temperature"] - 273.15
-    )
+    sat_mixing_ratio = saturation_mixing_ratio(levels, air_temperature - 273.15)
 
     # Calculate specific humidity using saturation mixing ratio, epsilon,
     # and relative humidity
     mixing_ratio = (
         epsilon
         * sat_mixing_ratio
-        * data["relative_humidity"]
-        / (epsilon + sat_mixing_ratio * (1 - data["relative_humidity"]))
+        * relative_humidity
+        / (epsilon + sat_mixing_ratio * (1 - relative_humidity))
     )
     specific_humidity = mixing_ratio / (1 + mixing_ratio)
     return specific_humidity
