@@ -103,7 +103,7 @@ class CravenBrooksSignificantSevere(DerivedVariable):
 
     @classmethod
     def derive_variable(cls, data: xr.Dataset, *args, **kwargs) -> xr.DataArray:
-        """Derive the Craven-Brooks significant severe convection index."""
+        """Derive the Craven-Brooks significant severe parameter."""
         # create broadcasted pressure variable, output target is always last
         _, data["pressure"] = xr.broadcast(data["air_temperature"], data["level"])
         # calculate dewpoint temperature if not present
