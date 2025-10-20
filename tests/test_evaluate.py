@@ -2149,18 +2149,16 @@ class TestRegionSubsettingIntegration:
                     "location": {
                         "type": "bounded_region",
                         "parameters": {
-                            "latitude_min": case.location.as_geopandas().total_bounds[
-                                1
-                            ],
-                            "latitude_max": case.location.as_geopandas().total_bounds[
-                                3
-                            ],
-                            "longitude_min": case.location.as_geopandas().total_bounds[
-                                0
-                            ],
-                            "longitude_max": case.location.as_geopandas().total_bounds[
-                                2
-                            ],
+                            key: bound
+                            for key, bound in zip(
+                                [
+                                    "latitude_min",
+                                    "latitude_max",
+                                    "longitude_min",
+                                    "longitude_max",
+                                ],
+                                case.location.as_geopandas().total_bounds,
+                            )
                         },
                     },
                     "event_type": case.event_type,
