@@ -84,9 +84,9 @@ class IndividualCaseCollection:
                     cases = [
                         case
                         for case in self.cases
-                        if case.location.geopandas.geometry.union_all().intersects(
-                            value.geopandas.geometry.union_all()
-                        )
+                        if case.location.as_geopandas()
+                        .geometry.union_all()
+                        .intersects(value.as_geopandas().geometry.union_all())
                     ]
                 elif isinstance(value, (tuple, list)):
                     longitude_min, latitude_min, longitude_max, latitude_max = value
@@ -99,9 +99,9 @@ class IndividualCaseCollection:
                     cases = [
                         case
                         for case in self.cases
-                        if case.location.geopandas.geometry.union_all().intersects(
-                            value_region.geopandas.geometry.union_all()
-                        )
+                        if case.location.as_geopandas()
+                        .geometry.union_all()
+                        .intersects(value_region.as_geopandas().geometry.union_all())
                     ]
             case "case_id_number":
                 cases = [case for case in self.cases if case.case_id_number == value]
