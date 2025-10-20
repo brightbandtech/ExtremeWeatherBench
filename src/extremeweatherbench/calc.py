@@ -1,7 +1,9 @@
-from typing import Literal, Sequence, Union
+from typing import Literal, Optional, Sequence, Union
 
 import numpy as np
 import numpy.typing as npt
+import regionmask
+import scores.categorical as categorical
 import xarray as xr
 
 epsilon: float = 0.6219569100577033  # Ratio of molecular weights (H2O/dry air)
@@ -338,3 +340,27 @@ def specific_humidity_from_relative_humidity(
     )
     specific_humidity = mixing_ratio / (1 + mixing_ratio)
     return specific_humidity
+
+
+def find_land_intersection(
+    mask: xr.DataArray, land_mask: Optional[xr.DataArray] = None
+) -> xr.DataArray:
+    """Find points where a data mask intersects with a land mask.
+
+    Args:
+        mask: a boolean mask of data locations that includes latitude and longitude
+        land_mask: a boolean mask of land locations
+
+    Returns:
+        a mask of points where AR overlaps with land
+    """
+    if land_mask is None:
+        land_mask = regionmask.defined_regions.natural_earth_v5_0_0.land_110.mask(
+            mask.longitude, mask.latitude
+        )
+        land_mask = land_mask.where(np.isnan(land_mask), 1).where(land_mask == 0, 0)
+
+    # Use the scores.categorical library to compute the binary mask (true positives)
+    contingency_manager = categorical.BinaryContingencyManager(mask, land_mask)
+    # return the true positive mask, where mask is true and land is true
+    return contingency_manager.tp
