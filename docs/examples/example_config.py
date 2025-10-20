@@ -8,25 +8,20 @@ Usage:
 """
 
 from extremeweatherbench import inputs, metrics
-from extremeweatherbench.utils import load_events_yaml
+from extremeweatherbench.cases import load_ewb_events_yaml_into_case_collection
 
 # Define targets (observation data)
 era5_heatwave_target = inputs.ERA5(
-    source=inputs.ARCO_ERA5_FULL_URI,
     variables=["surface_air_temperature"],
-    variable_mapping={
-        "2m_temperature": "surface_air_temperature",
-        "time": "valid_time",
-    },
-    storage_options={"remote_options": {"anon": True}},
+    chunks=None,
 )
 
 # Define forecasts
-custom_forecast = inputs.KerchunkForecast(
+fcnv2_forecast = inputs.KerchunkForecast(
+    name="fcnv2_forecast",
     source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
     variables=["surface_air_temperature"],
-    variable_mapping={"t2": "surface_air_temperature"},
-    storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
+    variable_mapping=inputs.CIRA_metadata_variable_mapping,
 )
 
 # Define evaluation objects
@@ -40,13 +35,13 @@ evaluation_objects = [
             metrics.DurationME,
         ],
         target=era5_heatwave_target,
-        forecast=custom_forecast,
+        forecast=fcnv2_forecast,
     ),
 ]
 
 # Load case data from the default events.yaml
 # Users can also define their own cases_dict structure
-cases_dict = load_events_yaml()
+cases_dict = load_ewb_events_yaml_into_case_collection()
 
 # Alternatively, users could define custom cases like this:
 # cases_dict = {
