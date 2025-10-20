@@ -19,7 +19,7 @@ import logging
 
 # %%
 # %%
-from extremeweatherbench import derived, evaluate, inputs, metrics, utils
+from extremeweatherbench import cases, derived, evaluate, inputs, metrics
 
 # %%
 logging.getLogger("urllib3.connectionpool").setLevel(logging.CRITICAL)
@@ -28,40 +28,27 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # %%
-case_yaml = utils.load_events_yaml()
-test_yaml = {"cases": [case_yaml["cases"][200]]}
+case_yaml = cases.load_ewb_events_yaml_into_case_collection()
+case_yaml.select_cases(by="case_id_number", value=200)
 
 # %%
-ibtracs_target = inputs.IBTrACS(
-    source=inputs.IBTRACS_URI,
-    variable_mapping=inputs.IBTrACS_metadata_variable_mapping,
-)
+ibtracs_target = inputs.IBTrACS()
 
 # %%
 hres_forecast = inputs.ZarrForecast(
+    name="hres_forecast",
     source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
     variables=[derived.TropicalCycloneTrackVariables],
-    variable_mapping={
-        "2m_temperature": "surface_air_temperature",
-        "10m_u_component_of_wind": "surface_eastward_wind",
-        "10m_v_component_of_wind": "surface_northward_wind",
-        "u_component_of_wind": "eastward_wind",
-        "v_component_of_wind": "northward_wind",
-        "prediction_timedelta": "lead_time",
-        "time": "init_time",
-        "lead_time": "prediction_timedelta",
-        "mean_sea_level_pressure": "air_pressure_at_mean_sea_level",
-        "10m_wind_speed": "surface_wind_speed",
-    },
+    variable_mapping=inputs.HRES_metadata_variable_mapping,
     storage_options={"remote_options": {"anon": True}},
 )
 
 # %%
 # just one for now
-tc_metric_list = [
+tc_evaluation_object = [
     inputs.EvaluationObject(
         event_type="tropical_cyclone",
-        metric=[
+        metric_list=[
             metrics.LandfallTimeME,
             metrics.LandfallIntensityMAE,
             metrics.LandfallDisplacement,
@@ -72,13 +59,11 @@ tc_metric_list = [
 ]
 # %%
 test_ewb = evaluate.ExtremeWeatherBench(
-    cases=test_yaml,
-    metrics=tc_metric_list,
+    case_metadata=case_yaml,
+    evaluation_objects=tc_evaluation_object,
 )
 logger.info("Starting EWB run")
 outputs = test_ewb.run(
-    # tolerance range is the number of hours before and after the timestamp a
-    # validating occurrence is checked in the forecasts
-    tolerance_range=48,
+    n_jobs=24,
 )
 outputs.to_csv("tc_metric_test_results.csv")
