@@ -5,11 +5,11 @@ import logging
 import pathlib
 from typing import TYPE_CHECKING, Literal, Mapping, Type, Union
 
-import geopandas as gpd  # type: ignore[import-untyped]
+import geopandas as gpd
 import numpy as np
-import pandas as pd  # type: ignore[import-untyped]
-import regionmask  # type: ignore[import-untyped]
-import shapely  # type: ignore[import-untyped]
+import pandas as pd
+import regionmask
+import shapely
 import xarray as xr
 
 from extremeweatherbench import utils
@@ -46,13 +46,14 @@ class Region(abc.ABC):
             The subset dataset.
         """
         import warnings
+
         ...
 
         if drop:
             warnings.warn(
                 "`drop` is no longer used and will be removed in a future version.",
                 DeprecationWarning,
-                stacklevel=2
+                stacklevel=2,
             )
         longitude_min, latitude_min, longitude_max, latitude_max = (
             self.as_geopandas().total_bounds
