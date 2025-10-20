@@ -63,7 +63,8 @@ def convert_aus_lsr_to_bb_lsr(aus_lsr: pd.DataFrame) -> pd.DataFrame:
         modified_aus_lsr["Hail size"] * 0.393701 * 100, 0
     )
 
-    # merge hail size and Fujita scale into scale column, replacing NaNs with the other column
+    # merge hail size and Fujita scale into scale column, replacing NaNs with the other
+    # column
     modified_aus_lsr["scale"] = modified_aus_lsr["hail_size"].fillna(
         modified_aus_lsr["Fujita scale"]
     )
