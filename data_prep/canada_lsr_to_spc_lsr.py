@@ -23,7 +23,7 @@ from extremeweatherbench import inputs
 
 # %%
 lsr = inputs.LSR(
-    source='gs://extremeweatherbench/datasets/lsr_01012020_09272025.parq',
+    source="gs://extremeweatherbench/datasets/lsr_01012020_09272025.parq",
     variables=["report"],
     variable_mapping={"report": "reports"},
     storage_options={"anon": True},
@@ -64,15 +64,17 @@ def convert_can_lsr_to_bb_lsr(can_lsr: pd.DataFrame) -> pd.DataFrame:
     )
     # Convert EF scale strings to numeric values
     damage_mapping = {
-        'ef0': 0,
-        'default_ef0': 0,
-        'ef1': 1,
-        'ef2': 2,
-        'ef3': 3,
-        'ef4': 4,
-        'ef5': 5
+        "ef0": 0,
+        "default_ef0": 0,
+        "ef1": 1,
+        "ef2": 2,
+        "ef3": 3,
+        "ef4": 4,
+        "ef5": 5,
     }
-    modified_can_lsr["Damage"] = modified_can_lsr["Damage"].map(damage_mapping).astype(float)
+    modified_can_lsr["Damage"] = (
+        modified_can_lsr["Damage"].map(damage_mapping).astype(float)
+    )
     # merge hail size and Fujita scale into scale column, replacing NaNs with the other
     # column
     modified_can_lsr["scale"] = modified_can_lsr["hail_size"].fillna(
@@ -100,4 +102,4 @@ combined_lsr_df = combined_lsr_df.sort_values(by="valid_time")
 combined_lsr_df
 
 # %%
-combined_lsr_df.to_csv('combined_canada_australia_lsr_01012020_09272025.parq')
+combined_lsr_df.to_parquet("combined_canada_australia_us_lsr_01012020_09272025.parq")
