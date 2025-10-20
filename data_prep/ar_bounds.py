@@ -211,7 +211,7 @@ def find_largest_ar_object(ar_mask: xr.DataArray, **object_kwargs) -> Optional[D
     return largest_obj
 
 
-def find_peak_ivt_timestamp(
+def find_timestamp_peak_field(
     ivt_data: xr.DataArray,
     ar_mask: xr.DataArray,
     land_mask: Optional[xr.DataArray] = None,
@@ -480,6 +480,7 @@ def create_case_summary_plot(
     ar_bounds: Dict,
     buffered_bounds: regions.Region,
     largest_obj_metadata: Optional[Dict] = None,
+    extent_modifier_degrees: float = 5,
 ) -> None:
     """Create a summary plot for each AR case showing IVT, mask, and bounds.
 
@@ -528,10 +529,10 @@ def create_case_summary_plot(
     )
     ax1.set_extent(
         [
-            float(ivt_peak.longitude.min()) - 5,
-            float(ivt_peak.longitude.max()) + 5,
-            float(ivt_peak.latitude.min()) - 5,
-            float(ivt_peak.latitude.max()) + 5,
+            float(ivt_peak.longitude.min()) - extent_modifier_degrees,
+            float(ivt_peak.longitude.max()) + extent_modifier_degrees,
+            float(ivt_peak.latitude.min()) - extent_modifier_degrees,
+            float(ivt_peak.latitude.max()) + extent_modifier_degrees,
         ],
         crs=ccrs.PlateCarree(),
     )
@@ -673,7 +674,7 @@ def process_ar_event(
 
     # Generate land mask using the same approach as find_land_intersection
     logger.info("  Generating land mask...")
-    try:
+    if ar_mask.longitude.size > 0 and ar_mask.latitude.size > 0:
         # Use the same approach as find_land_intersection but just get the land
         # mask
         mask_parent = regionmask.defined_regions.natural_earth_v5_0_0.land_110.mask(
@@ -682,26 +683,28 @@ def process_ar_event(
         land_mask = mask_parent.where(np.isnan(mask_parent), 1).where(
             mask_parent == 0, 0
         )
-
         total_land_pixels = land_mask.sum().values
-        total_pixels = land_mask.size
-        land_percentage = 100 * total_land_pixels / total_pixels
+        if total_land_pixels > 0:
+            total_pixels = land_mask.size
+            land_percentage = 100 * total_land_pixels / total_pixels
 
-        logger.info(
-            "    Generated land mask: %s/%s land pixels (%.1f%%)",
-            total_land_pixels,
-            total_pixels,
-            land_percentage,
+            logger.info(
+                "    Generated land mask: %s/%s land pixels (%.1f%%)",
+                total_land_pixels,
+                total_pixels,
+                land_percentage,
+            )
+
+    else:
+        logger.warning(
+            "    Warning: Could not generate land mask because AR mask is empty"
         )
-
-    except Exception as e:
-        logger.warning("    Warning: Could not generate land mask: %s", e)
         land_mask = None
 
     # Method 1: Find timestamp with highest aggregate IVT over land
     logger.info("  Finding peak IVT timestamp...")
 
-    peak_time_idx, peak_ivt_value = find_peak_ivt_timestamp(
+    peak_time_idx, peak_ivt_value = find_timestamp_peak_field(
         ivt_da,
         ar_mask,
         land_mask=land_mask,
