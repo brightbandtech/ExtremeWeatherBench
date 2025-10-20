@@ -33,6 +33,7 @@ def atmospheric_river_mask(
         ivt_threshold: the threshold for the IVT in kg/m/s
         dilation_radius: the radius for the dilation of the Laplacian in gridpoints
         min_size_gridpoints: the minimum size of the atmospheric river in gridpoints
+
     Returns:
         The atmospheric river mask
     """
