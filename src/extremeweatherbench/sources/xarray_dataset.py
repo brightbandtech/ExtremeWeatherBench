@@ -9,7 +9,22 @@ def safely_pull_variables_xr_dataset(
     optional_variables: list[str],
     optional_variables_mapping: dict[str, list[str]],
 ) -> xr.Dataset:
-    """Handle variable extraction for xarray Dataset."""
+    """Extract variables from an xarray Dataset, prioritizing optionals.
+
+    Args:
+        dataset: The Dataset to extract variables from.
+        variables: List of required variable names to extract.
+        optional_variables: List of optional variable names to try first.
+        optional_variables_mapping: Dict mapping optional vars to list of
+            required vars they can replace.
+
+    Returns:
+        Dataset containing only the extracted variables.
+
+    Raises:
+        KeyError: If required variables are missing and no suitable optional
+            variables are available as replacements.
+    """
     # Track which variables we've found
     found_variables = []
     required_variables_satisfied = set()

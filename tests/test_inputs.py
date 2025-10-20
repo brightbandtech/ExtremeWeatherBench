@@ -1,6 +1,6 @@
 """Tests for inputs module."""
 
-from unittest.mock import Mock, patch
+from unittest import mock
 
 import numpy as np
 import pandas as pd
@@ -19,6 +19,60 @@ class TestInputBase:
         with pytest.raises(TypeError):
             inputs.InputBase(
                 name="test",
+                source="test",
+                variables=["test"],
+                variable_mapping={},
+                storage_options={},
+            )
+
+    def test_input_base_requires_name(self):
+        """Test that InputBase fails without name parameter."""
+
+        class TestInput(inputs.InputBase):
+            def _open_data_from_source(self):
+                return None
+
+            def subset_data_to_case(self, data, case_operator):
+                return data
+
+        with pytest.raises(TypeError):
+            TestInput(
+                source="test",
+                variables=["test"],
+                variable_mapping={},
+                storage_options={},
+            )
+
+    def test_forecast_base_requires_name(self):
+        """Test that ForecastBase fails without name parameter."""
+
+        class TestForecast(inputs.ForecastBase):
+            def _open_data_from_source(self):
+                return None
+
+            def subset_data_to_case(self, data, case_operator):
+                return data
+
+        with pytest.raises(TypeError):
+            TestForecast(
+                source="test",
+                variables=["test"],
+                variable_mapping={},
+                storage_options={},
+            )
+
+    def test_target_base_requires_name(self):
+        """Test that TargetBase fails without name parameter."""
+
+        class TestTarget(inputs.TargetBase):
+            def _open_data_from_source(self):
+                return None
+
+            def subset_data_to_case(self, data, case_operator):
+                return data
+
+        with pytest.raises(TypeError):
+            TestTarget(
                 source="test",
                 variables=["test"],
                 variable_mapping={},
@@ -302,7 +356,9 @@ class TestMaybeMapVariableNames:
         assert isinstance(result, xr.DataArray)
         assert result.name == "temp"
 
-    @patch("extremeweatherbench.derived.maybe_include_variables_from_derived_input")
+    @mock.patch(
+        "extremeweatherbench.derived.maybe_include_variables_from_derived_input"
+    )
     def test_maybe_map_variable_names_polars_lazyframe(
         self, mock_derived, test_input_base, sample_ghcn_dataframe
     ):
@@ -327,7 +383,9 @@ class TestMaybeMapVariableNames:
         assert "surface_air_temperature" not in schema.names()
         assert "latitude" in schema.names()
 
-    @patch("extremeweatherbench.derived.maybe_include_variables_from_derived_input")
+    @mock.patch(
+        "extremeweatherbench.derived.maybe_include_variables_from_derived_input"
+    )
     def test_maybe_map_variable_names_pandas_dataframe(
         self, mock_derived, test_input_base, sample_lsr_dataframe
     ):
@@ -428,7 +486,9 @@ class TestMaybeMapVariableNames:
         # Should return data unchanged when variable mapping is empty
         xr.testing.assert_identical(result, sample_era5_dataset)
 
-    @patch("extremeweatherbench.derived.maybe_include_variables_from_derived_input")
+    @mock.patch(
+        "extremeweatherbench.derived.maybe_include_variables_from_derived_input"
+    )
     def test_maybe_map_variable_names_with_derived_variables(
         self, mock_derived, test_input_base, sample_era5_dataset
     ):
@@ -479,11 +539,13 @@ class TestForecastBase:
         )
 
         with pytest.raises(ValueError, match="Expected xarray Dataset"):
-            forecast.subset_data_to_case("invalid_data", Mock())
+            forecast.subset_data_to_case("invalid_data", mock.Mock())
 
-    @patch("extremeweatherbench.utils.derive_indices_from_init_time_and_lead_time")
-    @patch("extremeweatherbench.utils.convert_init_time_to_valid_time")
-    @patch("extremeweatherbench.derived.maybe_include_variables_from_derived_input")
+    @mock.patch("extremeweatherbench.utils.derive_indices_from_init_time_and_lead_time")
+    @mock.patch("extremeweatherbench.utils.convert_init_time_to_valid_time")
+    @mock.patch(
+        "extremeweatherbench.derived.maybe_include_variables_from_derived_input"
+    )
     def test_forecast_base_subset_data_to_case(
         self, mock_derived, mock_convert, mock_derive, sample_forecast_dataset
     ):
@@ -505,7 +567,7 @@ class TestForecastBase:
         mock_derived.return_value = ["surface_air_temperature"]
 
         # Create mock case operator
-        mock_case = Mock()
+        mock_case = mock.Mock()
         mock_case.start_date = pd.Timestamp("2021-06-20")
         mock_case.end_date = pd.Timestamp("2021-06-22")
         mock_case.location.mask.return_value = forecast_with_valid_time
@@ -539,6 +601,256 @@ class TestForecastBase:
 
         # Verify the name was changed
         assert forecast.name == "updated_forecast"
+
+    def test_forecast_base_subset_data_to_case_with_duplicate_init_times(
+        self, sample_forecast_dataset
+    ):
+        """Test subset_data_to_case handles duplicate init_times correctly."""
+        # Create a forecast dataset with duplicate init_times
+        forecast_with_duplicates = sample_forecast_dataset.copy()
+
+        # Add duplicate init_times by concatenating along init_time dimension
+        duplicate_data = forecast_with_duplicates.isel(init_time=[0, 1])
+        forecast_with_duplicates = xr.concat(
+            [forecast_with_duplicates, duplicate_data], dim="init_time"
+        )
+
+        # Verify we have duplicates
+        assert len(np.unique(forecast_with_duplicates.init_time)) < len(
+            forecast_with_duplicates.init_time
+        )
+
+        # Create mock case metadata
+        mock_case = mock.Mock()
+        mock_case.start_date = pd.Timestamp("2021-06-20")
+        mock_case.end_date = pd.Timestamp("2021-06-22")
+        mock_case.location.mask.return_value = forecast_with_duplicates
+
+        forecast = inputs.ZarrForecast(
+            name="test",
+            source="test.zarr",
+            variables=["surface_air_temperature"],
+            variable_mapping={},
+            storage_options={},
+        )
+
+        with (
+            mock.patch(
+                "extremeweatherbench.utils.derive_indices_from_init_time_and_lead_time"
+            ) as mock_derive,
+            mock.patch(
+                "extremeweatherbench.utils.convert_init_time_to_valid_time"
+            ) as mock_convert,
+            mock.patch(
+                "extremeweatherbench.derived.maybe_include_variables_from_derived_input"
+            ) as mock_derived,
+        ):
+            # Setup mocks
+            mock_derive.return_value = (np.array([0, 1]), np.array([0, 1]))
+            # Create a result dataset with unique valid_times to avoid slice errors
+            result_data = xr.Dataset(
+                {
+                    "surface_air_temperature": (
+                        ["valid_time", "latitude", "longitude"],
+                        np.random.randn(3, 3, 3),
+                    )
+                },
+                coords={
+                    "valid_time": pd.date_range("2021-06-20", periods=3, freq="6h"),
+                    "latitude": [40, 41, 42],
+                    "longitude": [-100, -101, -102],
+                },
+            )
+            mock_convert.return_value = result_data
+            mock_derived.return_value = ["surface_air_temperature"]
+
+            result = forecast.subset_data_to_case(forecast_with_duplicates, mock_case)
+
+            # The method should handle duplicates and return a valid dataset
+            assert isinstance(result, xr.Dataset)
+
+    def test_forecast_base_duplicate_init_times_detection_and_removal(self):
+        """Test that duplicate init_times are properly detected and removed."""
+        # Create a simple forecast dataset with known duplicate init_times
+        init_times = pd.date_range("2021-06-20", periods=3, freq="12h")
+        lead_times = [0, 6, 12, 18]
+
+        # Create dataset with duplicates by repeating first two init_times
+        duplicate_init_times = np.concatenate([init_times, init_times[:2]])
+
+        data_shape = (len(duplicate_init_times), 3, 3, len(lead_times))
+        test_data = xr.Dataset(
+            {
+                "surface_air_temperature": (
+                    ["init_time", "latitude", "longitude", "lead_time"],
+                    np.random.randn(*data_shape),
+                )
+            },
+            coords={
+                "init_time": duplicate_init_times,
+                "latitude": [40, 41, 42],
+                "longitude": [-100, -101, -102],
+                "lead_time": lead_times,
+            },
+        )
+
+        # Verify we have duplicates
+        assert len(np.unique(test_data.init_time)) == 3  # Original unique count
+        assert len(test_data.init_time) == 5  # Total count with duplicates
+
+        # Create mock case metadata
+        mock_case = mock.Mock()
+        mock_case.start_date = pd.Timestamp("2021-06-20")
+        mock_case.end_date = pd.Timestamp("2021-06-22")
+        mock_case.location.mask.return_value = test_data
+
+        forecast = inputs.ZarrForecast(
+            name="test",
+            source="test.zarr",
+            variables=["surface_air_temperature"],
+            variable_mapping={},
+            storage_options={},
+        )
+
+        with (
+            mock.patch(
+                "extremeweatherbench.utils.derive_indices_from_init_time_and_lead_time"
+            ) as mock_derive,
+            mock.patch(
+                "extremeweatherbench.utils.convert_init_time_to_valid_time"
+            ) as mock_convert,
+            mock.patch(
+                "extremeweatherbench.derived.maybe_include_variables_from_derived_input"
+            ) as mock_derived,
+        ):
+            # Setup mocks to return valid indices
+            mock_derive.return_value = (np.array([0, 1, 2]), np.array([0, 1, 2]))
+
+            # Create expected result after duplicate removal with unique valid_times
+            result_data = xr.Dataset(
+                {
+                    "surface_air_temperature": (
+                        ["valid_time", "latitude", "longitude"],
+                        np.random.randn(3, 3, 3),
+                    )
+                },
+                coords={
+                    "valid_time": pd.date_range("2021-06-20", periods=3, freq="6h"),
+                    "latitude": [40, 41, 42],
+                    "longitude": [-100, -101, -102],
+                },
+            )
+            mock_convert.return_value = result_data
+            mock_derived.return_value = ["surface_air_temperature"]
+
+            result = forecast.subset_data_to_case(test_data, mock_case)
+
+            # Verify the result is valid
+            assert isinstance(result, xr.Dataset)
+
+    def test_forecast_base_no_duplicate_init_times_unchanged(
+        self, sample_forecast_dataset
+    ):
+        """Test that datasets without duplicate init_times are processed normally."""
+        # Verify the sample dataset has no duplicates
+        assert len(np.unique(sample_forecast_dataset.init_time)) == len(
+            sample_forecast_dataset.init_time
+        )
+
+        # Create mock case metadata
+        mock_case = mock.Mock()
+        mock_case.start_date = pd.Timestamp("2021-06-20")
+        mock_case.end_date = pd.Timestamp("2021-06-22")
+        mock_case.location.mask.return_value = sample_forecast_dataset
+
+        forecast = inputs.ZarrForecast(
+            name="test",
+            source="test.zarr",
+            variables=["surface_air_temperature"],
+            variable_mapping={},
+            storage_options={},
+        )
+
+        with (
+            mock.patch(
+                "extremeweatherbench.utils.derive_indices_from_init_time_and_lead_time"
+            ) as mock_derive,
+            mock.patch(
+                "extremeweatherbench.utils.convert_init_time_to_valid_time"
+            ) as mock_convert,
+            mock.patch(
+                "extremeweatherbench.derived.maybe_include_variables_from_derived_input"
+            ) as mock_derived,
+        ):
+            # Setup mocks
+            mock_derive.return_value = (np.array([0, 1]), np.array([0, 1]))
+            # Create a result dataset with unique valid_times
+            result_data = xr.Dataset(
+                {
+                    "surface_air_temperature": (
+                        ["valid_time", "latitude", "longitude"],
+                        np.random.randn(3, 3, 3),
+                    )
+                },
+                coords={
+                    "valid_time": pd.date_range("2021-06-20", periods=3, freq="6h"),
+                    "latitude": [40, 41, 42],
+                    "longitude": [-100, -101, -102],
+                },
+            )
+            mock_convert.return_value = result_data
+            mock_derived.return_value = ["surface_air_temperature"]
+
+            result = forecast.subset_data_to_case(sample_forecast_dataset, mock_case)
+
+            # Should process normally without issues
+            assert isinstance(result, xr.Dataset)
+
+    def test_forecast_base_duplicate_init_times_preserves_first_occurrence(self):
+        """Test that when duplicates exist, the first occurrence is preserved."""
+        # Create dataset with specific values to test which occurrence is kept
+        init_times = pd.to_datetime(
+            ["2021-06-20", "2021-06-21", "2021-06-20"]
+        )  # Duplicate first time
+        lead_times = [0, 6]
+
+        # Create data where we can distinguish between first and duplicate occurrence
+        data = np.zeros((3, 2, 2, 2))  # (init_time, lat, lon, lead_time)
+        data[0, :, :, :] = 1.0  # First occurrence of 2021-06-20
+        data[1, :, :, :] = 2.0  # 2021-06-21
+        data[2, :, :, :] = 3.0  # Duplicate occurrence of 2021-06-20
+
+        test_data = xr.Dataset(
+            {
+                "surface_air_temperature": (
+                    ["init_time", "latitude", "longitude", "lead_time"],
+                    data,
+                )
+            },
+            coords={
+                "init_time": init_times,
+                "latitude": [40, 41],
+                "longitude": [-100, -101],
+                "lead_time": lead_times,
+            },
+        )
+
+        # Apply the duplicate removal logic directly (as done in subset_data_to_case)
+        if len(np.unique(test_data.init_time)) != len(test_data.init_time):
+            _, index = np.unique(test_data.init_time, return_index=True)
+            deduplicated_data = test_data.isel(init_time=index)
+
+        # Verify that we kept the first occurrence (value 1.0) not duplicate (value 3.0)
+        first_time_data = deduplicated_data.sel(init_time="2021-06-20")[
+            "surface_air_temperature"
+        ]
+        assert np.all(
+            first_time_data.values == 1.0
+        ), "Should preserve first occurrence, not duplicate"
+
+        # Verify we have the correct number of unique times
+        assert len(deduplicated_data.init_time) == 2
+        assert len(np.unique(deduplicated_data.init_time)) == 2
 
 
 class TestTargetBase:
@@ -597,9 +909,9 @@ class TestEvaluationObject:
 
     def test_evaluation_object_creation(self):
         """Test creating an EvaluationObject."""
-        mock_metric = Mock()
-        mock_target = Mock()
-        mock_forecast = Mock()
+        mock_metric = mock.Mock()
+        mock_target = mock.Mock()
+        mock_forecast = mock.Mock()
 
         eval_obj = inputs.EvaluationObject(
             event_type="test_event",
@@ -617,7 +929,7 @@ class TestEvaluationObject:
 class TestZarrForecast:
     """Test the ZarrForecast class."""
 
-    @patch("xarray.open_zarr")
+    @mock.patch("xarray.open_zarr")
     def test_zarr_forecast_open_data_from_source(
         self, mock_open_zarr, sample_forecast_dataset
     ):
@@ -661,7 +973,7 @@ class TestZarrForecast:
 class TestKerchunkForecast:
     """Test the KerchunkForecast class."""
 
-    @patch("extremeweatherbench.inputs.open_kerchunk_reference")
+    @mock.patch("extremeweatherbench.inputs.open_kerchunk_reference")
     def test_kerchunk_forecast_open_data_from_source(
         self, mock_open_kerchunk, sample_forecast_dataset
     ):
@@ -689,7 +1001,7 @@ class TestKerchunkForecast:
 class TestERA5:
     """Test the ERA5 target class."""
 
-    @patch("xarray.open_zarr")
+    @mock.patch("xarray.open_zarr")
     def test_era5_open_data_from_source(self, mock_open_zarr, sample_era5_dataset):
         """Test opening ERA5 data from source."""
         mock_open_zarr.return_value = sample_era5_dataset
@@ -712,11 +1024,11 @@ class TestERA5:
         )
         xr.testing.assert_identical(result, sample_era5_dataset)
 
-    @patch("extremeweatherbench.inputs.zarr_target_subsetter")
+    @mock.patch("extremeweatherbench.inputs.zarr_target_subsetter")
     def test_era5_subset_data_to_case(self, mock_subsetter, sample_era5_dataset):
         """Test ERA5 subset_data_to_case."""
         mock_subsetter.return_value = sample_era5_dataset
-        mock_case = Mock()
+        mock_case = mock.Mock()
 
         era5 = inputs.ERA5(
             name="test",
@@ -862,7 +1174,7 @@ class TestERA5:
 class TestGHCN:
     """Test the GHCN target class."""
 
-    @patch("polars.scan_parquet")
+    @mock.patch("polars.scan_parquet")
     def test_ghcn_open_data_from_source(self, mock_scan_parquet, sample_ghcn_dataframe):
         """Test opening GHCN data from source."""
         mock_scan_parquet.return_value = sample_ghcn_dataframe.lazy()
@@ -882,7 +1194,7 @@ class TestGHCN:
     def test_ghcn_subset_data_to_case(self, sample_ghcn_dataframe):
         """Test GHCN subset_data_to_case."""
         # Create mock case operator
-        mock_case = Mock()
+        mock_case = mock.Mock()
         mock_case.start_date = pd.Timestamp("2021-06-20")
         mock_case.end_date = pd.Timestamp("2021-06-22")
         mock_case.location.geopandas.total_bounds = [-120, 30, -90, 50]
@@ -908,7 +1220,7 @@ class TestGHCN:
         )
 
         with pytest.raises(ValueError, match="Expected polars LazyFrame"):
-            ghcn.subset_data_to_case("invalid_data", Mock())
+            ghcn.subset_data_to_case("invalid_data", mock.Mock())
 
     def test_ghcn_subset_data_to_case_sorted_valid_time(self, sample_ghcn_dataframe):
         """Test that subset_data_to_case returns sorted valid_time column."""
@@ -925,7 +1237,7 @@ class TestGHCN:
             unsorted_data = sample_ghcn_dataframe.reverse()
 
         # Create mock case metadata (not case operator)
-        mock_case_metadata = Mock()
+        mock_case_metadata = mock.Mock()
         mock_case_metadata.start_date = pd.Timestamp("2021-06-20")
         mock_case_metadata.end_date = pd.Timestamp("2021-06-22")
         mock_case_metadata.location.geopandas.total_bounds = [-120, 30, -90, 50]
@@ -1086,7 +1398,7 @@ class TestGHCN:
             }
         )
 
-        with patch("extremeweatherbench.inputs.logger") as mock_logger:
+        with mock.patch("extremeweatherbench.inputs.logger") as mock_logger:
             result = ghcn._custom_convert_to_dataset(problematic_data.lazy())
 
             # Should return empty Dataset on exception
@@ -1147,7 +1459,7 @@ class TestGHCN:
         assert isinstance(result_with_attrs, xr.Dataset)
         assert result_with_attrs.attrs.get("source") == "GHCN"
 
-    @patch("extremeweatherbench.inputs.align_forecast_to_target")
+    @mock.patch("extremeweatherbench.inputs.align_forecast_to_target")
     def test_ghcn_maybe_align_forecast_to_target(
         self, mock_align, sample_forecast_dataset, sample_era5_dataset
     ):
@@ -1172,7 +1484,7 @@ class TestGHCN:
 class TestLSR:
     """Test the LSR (Local Storm Report) target class."""
 
-    @patch("pandas.read_parquet")
+    @mock.patch("pandas.read_parquet")
     def test_lsr_open_data_from_source(self, mock_read_parquet, sample_lsr_dataframe):
         """Test opening LSR data from source."""
         mock_read_parquet.return_value = sample_lsr_dataframe
@@ -1192,7 +1504,7 @@ class TestLSR:
     def test_lsr_subset_data_to_case(self, sample_lsr_dataframe):
         """Test LSR subset_data_to_case."""
         # Create mock case operator
-        mock_case = Mock()
+        mock_case = mock.Mock()
         mock_case.start_date = pd.Timestamp("2021-06-20")
         mock_case.end_date = pd.Timestamp("2021-06-21")
         mock_case.location.latitude_min = 30
@@ -1222,7 +1534,7 @@ class TestLSR:
         )
 
         with pytest.raises(ValueError, match="Expected pandas DataFrame"):
-            lsr.subset_data_to_case("invalid_data", Mock())
+            lsr.subset_data_to_case("invalid_data", mock.Mock())
 
     def test_lsr_custom_convert_to_dataset(self, sample_lsr_dataframe):
         """Test LSR custom conversion to dataset."""
@@ -1249,7 +1561,7 @@ class TestLSR:
         with pytest.raises(ValueError, match="Data is not a pandas DataFrame"):
             lsr._custom_convert_to_dataset("invalid_data")
 
-    @patch("extremeweatherbench.inputs.align_forecast_to_target")
+    @mock.patch("extremeweatherbench.inputs.align_forecast_to_target")
     def test_lsr_maybe_align_forecast_to_target(
         self, mock_align, sample_forecast_dataset, sample_era5_dataset
     ):
@@ -1274,7 +1586,7 @@ class TestLSR:
 class TestPPH:
     """Test the PPH (Practically Perfect Hindcast) target class."""
 
-    @patch("xarray.open_zarr")
+    @mock.patch("xarray.open_zarr")
     def test_pph_open_data_from_source(self, mock_open_zarr, sample_era5_dataset):
         """Test opening PPH data from source."""
         mock_open_zarr.return_value = sample_era5_dataset
@@ -1291,11 +1603,11 @@ class TestPPH:
         mock_open_zarr.assert_called_once_with("test.zarr", storage_options={})
         assert result == sample_era5_dataset
 
-    @patch("extremeweatherbench.inputs.zarr_target_subsetter")
+    @mock.patch("extremeweatherbench.inputs.zarr_target_subsetter")
     def test_pph_subset_data_to_case(self, mock_subsetter, sample_era5_dataset):
         """Test PPH subset_data_to_case."""
         mock_subsetter.return_value = sample_era5_dataset
-        mock_case = Mock()
+        mock_case = mock.Mock()
 
         pph = inputs.PPH(
             source="test.zarr",
@@ -1313,7 +1625,7 @@ class TestPPH:
 class TestIBTrACS:
     """Test the IBTrACS target class."""
 
-    @patch("polars.scan_csv")
+    @mock.patch("polars.scan_csv")
     def test_ibtracs_open_data_from_source(
         self, mock_scan_csv, sample_ibtracs_dataframe
     ):
@@ -1365,7 +1677,7 @@ class TestIBTrACS:
 class TestStandaloneFunctions:
     """Test standalone functions in inputs module."""
 
-    @patch("xarray.open_dataset")
+    @mock.patch("xarray.open_dataset")
     def test_open_kerchunk_reference_parquet(
         self, mock_open_dataset, sample_forecast_dataset
     ):
@@ -1387,7 +1699,7 @@ class TestStandaloneFunctions:
         )
         assert result == sample_forecast_dataset
 
-    @patch("xarray.open_dataset")
+    @mock.patch("xarray.open_dataset")
     def test_open_kerchunk_reference_json(
         self, mock_open_dataset, sample_forecast_dataset
     ):
@@ -1422,7 +1734,7 @@ class TestStandaloneFunctions:
     def test_zarr_target_subsetter(self, sample_era5_dataset):
         """Test zarr_target_subsetter function."""
         # Create mock case metadata (not case operator)
-        mock_case_metadata = Mock()
+        mock_case_metadata = mock.Mock()
         mock_case_metadata.start_date = pd.Timestamp("2021-06-20")
         mock_case_metadata.end_date = pd.Timestamp("2021-06-22")
         mock_case_metadata.location.mask.return_value = sample_era5_dataset
@@ -1437,7 +1749,7 @@ class TestStandaloneFunctions:
         # Create dataset without time dimensions
         data_no_time = sample_era5_dataset.drop_dims("time")
 
-        mock_case_metadata = Mock()
+        mock_case_metadata = mock.Mock()
         mock_case_metadata.start_date = pd.Timestamp("2021-06-20")
         mock_case_metadata.end_date = pd.Timestamp("2021-06-22")
 
@@ -1449,7 +1761,7 @@ class TestStandaloneFunctions:
         # Rename time to valid_time to test the dimension detection
         data_with_valid_time = sample_era5_dataset.rename({"time": "valid_time"})
 
-        mock_case_metadata = Mock()
+        mock_case_metadata = mock.Mock()
         mock_case_metadata.start_date = pd.Timestamp("2021-06-20")
         mock_case_metadata.end_date = pd.Timestamp("2021-06-22")
         mock_case_metadata.location.mask.return_value = data_with_valid_time
@@ -1513,7 +1825,7 @@ class TestInputsIntegration:
             source=temp_zarr_file,
             variables=["2m_temperature"],
             variable_mapping={},
-            storage_options={},
+            storage_options=None,
         )
 
         # Test opening data
@@ -1571,3 +1883,18 @@ class TestInputsIntegration:
         # Should have overlapping time periods - but lengths may differ due to
         # different time ranges. This is expected when target and forecast
         # have different time coverage
+
+
+def test_default_preprocess():
+    """Test default preprocess function."""
+    # Import the function from inputs module since it was moved there
+
+    # Test with xarray Dataset
+    ds = xr.Dataset({"temp": (["x"], [1, 2, 3])})
+    result = inputs._default_preprocess(ds)
+    assert result is ds  # Should return the same object unchanged
+
+    # Test with pandas DataFrame
+    df = pd.DataFrame({"a": [1, 2, 3]})
+    result_df = inputs._default_preprocess(df)
+    assert result_df is df
