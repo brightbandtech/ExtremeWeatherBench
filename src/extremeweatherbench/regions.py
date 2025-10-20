@@ -1,18 +1,16 @@
 """Region classes and utilities for the ExtremeWeatherBench package."""
 
-import dataclasses
+import abc
 import logging
-from abc import ABC, abstractmethod
-from collections import namedtuple
-from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, Mapping, Type, Union
+import pathlib
+from typing import TYPE_CHECKING, Literal, Mapping, Type, Union
 
-import geopandas as gpd  # type: ignore[import-untyped]
+import geopandas as gpd
 import numpy as np
 import pandas as pd
 import regionmask
+import shapely
 import xarray as xr
-from shapely import MultiPolygon, Polygon  # type: ignore[import-untyped]
 
 from extremeweatherbench import utils
 
@@ -22,45 +20,72 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class Region(ABC):
+class Region(abc.ABC):
     """Base class for different region representations."""
 
     @classmethod
-    @abstractmethod
+    @abc.abstractmethod
     def create_region(cls, *args, **kwargs) -> "Region":
         """Abstract factory method to create a region; subclasses must implement with
         their own, specialized arguments."""
         pass
 
-    @property
-    @abstractmethod
-    def geopandas(self) -> gpd.GeoDataFrame:
+    @abc.abstractmethod
+    def as_geopandas(self) -> gpd.GeoDataFrame:
         """Return representation of this Region as a GeoDataFrame."""
         pass
 
     def mask(self, dataset: xr.Dataset, drop: bool = False) -> xr.Dataset:
-        """Mask a dataset to the region."""
-        mask = regionmask.mask_geopandas(
-            self.geopandas, dataset.longitude, dataset.latitude
-        )
-        mask_array = ~np.isnan(mask)
-        return dataset.where(mask_array, drop=drop)
+        """Mask a dataset to the region.
 
-    @property
-    def get_bounding_coordinates(self) -> tuple[Any, ...]:
-        """Get the bounding coordinates of the region."""
-        return namedtuple(
-            "BoundingCoordinates",
-            ["longitude_min", "latitude_min", "longitude_max", "latitude_max"],
-        )(*self.geopandas.total_bounds)
+        Args:
+            dataset: The dataset to mask.
+            drop: Whether to drop coordinates outside the region bounds.
+
+        Returns:
+            The subset dataset.
+        """
+        import warnings
+
+        ...
+
+        if drop:
+            warnings.warn(
+                "`drop` is no longer used and will be removed in a future version.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+        longitude_min, latitude_min, longitude_max, latitude_max = (
+            self.as_geopandas().total_bounds
+        )
+
+        # Handle longitude convention mismatch between dataset and region bounds
+        dataset_lon_min = float(dataset.longitude.min())
+        dataset_lon_max = float(dataset.longitude.max())
+
+        # Check if dataset uses 0-360 convention while region uses -180/+180
+        if (
+            dataset_lon_min >= 0
+            and dataset_lon_max <= 360
+            and (longitude_min < 0 or longitude_max < 0)
+        ):
+            # Convert region bounds to 0-360 convention
+            longitude_min = utils.convert_longitude_to_360(longitude_min)
+            longitude_max = utils.convert_longitude_to_360(longitude_max)
+        dataset = dataset.sel(
+            latitude=slice(latitude_max, latitude_min),
+            longitude=slice(longitude_min, longitude_max),
+        )
+
+        return dataset
 
     def intersects(self, other: "Region") -> bool:
         """Check if this region intersects with another region."""
-        return self.geopandas.intersects(other.geopandas).any().any()
+        return self.as_geopandas().intersects(other.as_geopandas()).any().any()
 
     def contains(self, other: "Region") -> bool:
         """Check if this region completely contains another region."""
-        return self.geopandas.contains(other.geopandas).any().any()
+        return self.as_geopandas().contains(other.as_geopandas()).any().any()
 
     def area_overlap_fraction(self, other: "Region") -> float:
         """Calculate fraction of other region's area that overlaps with this region.
@@ -72,14 +97,16 @@ class Region(ABC):
             Fraction of other region's area within this region (0.0 to 1.0)
         """
         # Calculate intersection area between regions
-        intersection = self.geopandas.overlay(other.geopandas, how="intersection")
+        intersection = self.as_geopandas().overlay(
+            other.as_geopandas(), how="intersection"
+        )
         if intersection.empty:
             return 0.0
 
         # Convert to equal area projection for accurate area calculation
         # Using World Mollweide projection (ESRI:54009)
         intersection_projected = intersection.to_crs("ESRI:54009")
-        other_projected = other.geopandas.to_crs("ESRI:54009")
+        other_projected = other.as_geopandas().to_crs("ESRI:54009")
 
         # Calculate areas in square meters
         intersection_area = intersection_projected.geometry.area.sum()
@@ -123,7 +150,14 @@ class CenteredRegion(Region):
     def create_region(
         cls, latitude: float, longitude: float, bounding_box_degrees: float | tuple
     ) -> "CenteredRegion":
-        """Create a CenteredRegion with the given parameters."""
+        """Create a CenteredRegion with the given parameters.
+
+        Args:
+            latitude: The latitude of the center point.
+            longitude: The longitude of the center point.
+            bounding_box_degrees: The size of the bounding box in degrees or tuple of
+                (lat_degrees, lon_degrees).
+        """
 
         return cls(
             latitude=latitude,
@@ -131,9 +165,12 @@ class CenteredRegion(Region):
             bounding_box_degrees=bounding_box_degrees,
         )
 
-    @property
-    def geopandas(self) -> gpd.GeoDataFrame:
-        """Return representation of this Region as a GeoDataFrame."""
+    def as_geopandas(self) -> gpd.GeoDataFrame:
+        """Return representation of this Region as a GeoDataFrame.
+
+        Returns:
+            A GeoDataFrame representing the region.
+        """
         if isinstance(self.bounding_box_degrees, tuple):
             bounding_box_degrees = tuple(self.bounding_box_degrees)
             latitude_min = self.latitude - bounding_box_degrees[0] / 2
@@ -197,15 +234,17 @@ class BoundingBoxRegion(Region):
             longitude_max=longitude_max,
         )
 
-    @property
-    def geopandas(self) -> gpd.GeoDataFrame:
-        """Return representation of this Region as a GeoDataFrame."""
+    def as_geopandas(self) -> gpd.GeoDataFrame:
+        """Return representation of this Region as a GeoDataFrame.
+
+        Returns:
+            A GeoDataFrame representing the region.
+        """
         return _create_geopandas_from_bounds(
             self.longitude_min, self.longitude_max, self.latitude_min, self.latitude_max
         )
 
 
-@dataclasses.dataclass
 class ShapefileRegion(Region):
     """A region defined by a shapefile.
 
@@ -213,28 +252,55 @@ class ShapefileRegion(Region):
     on instantiation.
 
     Attributes:
-        shapefile_path: Path to the shapefile
+        shapefile_path: Local or remote path to the .shp shapefile
     """
 
     def __repr__(self):
         return f"{self.__class__.__name__}(shapefile_path={self.shapefile_path})"
 
-    def __init__(self, shapefile_path: str | Path):
-        self.shapefile_path = Path(shapefile_path)
+    def __init__(self, shapefile_path: str | pathlib.Path):
+        self.shapefile_path = pathlib.Path(shapefile_path)
 
     @classmethod
-    def create_region(cls, shapefile_path: str | Path) -> "ShapefileRegion":
+    def create_region(cls, shapefile_path: str | pathlib.Path) -> "ShapefileRegion":
         """Create a ShapefileRegion with the given parameters."""
         return cls(shapefile_path=str(shapefile_path))
 
-    @property
-    def geopandas(self) -> gpd.GeoDataFrame:
-        """Return representation of this Region as a GeoDataFrame."""
+    def as_geopandas(self) -> gpd.GeoDataFrame:
+        """Return representation of this Region as a GeoDataFrame.
+
+        Returns:
+            A GeoDataFrame representing the region.
+        """
         try:
             return gpd.read_file(self.shapefile_path)
         except Exception as e:
             logger.error(f"Error reading shapefile: {e}")
             raise ValueError(f"Error reading shapefile: {e}")
+
+    def mask(self, dataset: xr.Dataset, drop: bool = False) -> xr.Dataset:
+        """Mask a dataset to the region.
+
+        Args:
+            dataset: The dataset to mask.
+            drop: Whether to drop NaN values outside the region. Defaults to False.
+
+        Returns:
+            The subset dataset.
+        """
+        longitude_min, latitude_min, longitude_max, latitude_max = (
+            self.as_geopandas().total_bounds
+        )
+        dataset = dataset.sel(
+            latitude=slice(latitude_max, latitude_min),
+            longitude=slice(longitude_min, longitude_max),
+            drop=drop,
+        )
+        # Subset dataset after cutting out a box to minimize memory pressure
+        mask = regionmask.mask_geopandas(
+            self.as_geopandas(), dataset.longitude, dataset.latitude
+        )
+        return dataset.where(~np.isnan(mask), drop=drop)
 
 
 # Registry of region types that can be extended by users
@@ -316,7 +382,7 @@ def _create_geopandas_from_bounds(
 
     if crosses_antimeridian:
         # Create two polygons: one for each side of the antimeridian
-        polygon1 = Polygon(
+        polygon1 = shapely.Polygon(
             [
                 (lon_min, latitude_min),
                 (180, latitude_min),
@@ -325,7 +391,7 @@ def _create_geopandas_from_bounds(
                 (lon_min, latitude_min),
             ]
         )
-        polygon2 = Polygon(
+        polygon2 = shapely.Polygon(
             [
                 (-180, latitude_min),
                 (lon_max, latitude_min),
@@ -335,11 +401,11 @@ def _create_geopandas_from_bounds(
             ]
         )
         # Use a MultiPolygon or combine the geometries
-        multi_polygon = MultiPolygon([polygon1, polygon2])
+        multi_polygon = shapely.MultiPolygon([polygon1, polygon2])
         return gpd.GeoDataFrame(geometry=[multi_polygon], crs="EPSG:4326")
     else:
         # Normal case - no antimeridian crossing
-        polygon = Polygon(
+        polygon = shapely.Polygon(
             [
                 (lon_min, latitude_min),
                 (lon_max, latitude_min),

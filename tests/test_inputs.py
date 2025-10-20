@@ -783,7 +783,9 @@ class TestERA5:
 
         result = era5.subset_data_to_case(sample_era5_dataset, mock_case)
 
-        mock_subsetter.assert_called_once_with(sample_era5_dataset, mock_case)
+        mock_subsetter.assert_called_once_with(
+            sample_era5_dataset, mock_case, drop=False
+        )
         assert result == sample_era5_dataset
 
     def test_era5_maybe_align_forecast_to_target_same_grid(
@@ -940,7 +942,12 @@ class TestGHCN:
         mock_case = Mock()
         mock_case.case_metadata.start_date = pd.Timestamp("2021-06-20")
         mock_case.case_metadata.end_date = pd.Timestamp("2021-06-22")
-        mock_case.case_metadata.location.geopandas.total_bounds = [-120, 30, -90, 50]
+        mock_case.case_metadata.location.as_geopandas().total_bounds = [
+            -120,
+            30,
+            -90,
+            50,
+        ]
         mock_case.target.variables = ["surface_air_temperature"]
 
         ghcn = inputs.GHCN(
@@ -984,7 +991,12 @@ class TestGHCN:
         mock_case = Mock()
         mock_case.case_metadata.start_date = pd.Timestamp("2021-06-20")
         mock_case.case_metadata.end_date = pd.Timestamp("2021-06-22")
-        mock_case.case_metadata.location.geopandas.total_bounds = [-120, 30, -90, 50]
+        mock_case.case_metadata.location.as_geopandas().total_bounds = [
+            -120,
+            30,
+            -90,
+            50,
+        ]
         mock_case.target.variables = ["surface_air_temperature"]
 
         ghcn = inputs.GHCN(
@@ -1363,7 +1375,9 @@ class TestPPH:
 
         result = pph.subset_data_to_case(sample_era5_dataset, mock_case)
 
-        mock_subsetter.assert_called_once_with(sample_era5_dataset, mock_case)
+        mock_subsetter.assert_called_once_with(
+            sample_era5_dataset, mock_case, drop=False
+        )
         assert result == sample_era5_dataset
 
     def test_pph_custom_convert_to_dataset(self, sample_era5_dataset):
