@@ -28,7 +28,7 @@ LSR_URI = "gs://extremeweatherbench/datasets/combined_canada_australia_us_lsr_01
 
 PPH_URI = (
     "gs://extremeweatherbench/datasets/"
-    "practically_perfect_hindcast_20200104_20250430.zarr"
+    "practically_perfect_hindcast_20200104_20250927.zarr"
 )
 
 IBTRACS_URI = (
