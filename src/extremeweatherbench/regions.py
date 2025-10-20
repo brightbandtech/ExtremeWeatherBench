@@ -45,9 +45,14 @@ class Region(abc.ABC):
         Returns:
             The subset dataset.
         """
+        import warnings
+        ...
+
         if drop:
-            logger.info(
-                "drop is no longer used and will be removed in a future version."
+            warnings.warn(
+                "`drop` is no longer used and will be removed in a future version.",
+                DeprecationWarning,
+                stacklevel=2
             )
         longitude_min, latitude_min, longitude_max, latitude_max = (
             self.as_geopandas().total_bounds
