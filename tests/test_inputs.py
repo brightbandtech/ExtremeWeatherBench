@@ -1040,7 +1040,9 @@ class TestERA5:
 
         result = era5.subset_data_to_case(sample_era5_dataset, mock_case)
 
-        mock_subsetter.assert_called_once_with(sample_era5_dataset, mock_case)
+        mock_subsetter.assert_called_once_with(
+            sample_era5_dataset, mock_case, drop=False
+        )
         assert result == sample_era5_dataset
 
     def test_era5_maybe_align_forecast_to_target_same_grid(
@@ -1197,7 +1199,11 @@ class TestGHCN:
         mock_case = mock.Mock()
         mock_case.start_date = pd.Timestamp("2021-06-20")
         mock_case.end_date = pd.Timestamp("2021-06-22")
-        mock_case.location.geopandas.total_bounds = [-120, 30, -90, 50]
+
+        # Mock the as_geopandas() method to return an object with total_bounds
+        mock_geopandas = mock.Mock()
+        mock_geopandas.total_bounds = [-120, 30, -90, 50]
+        mock_case.location.as_geopandas.return_value = mock_geopandas
 
         ghcn = inputs.GHCN(
             source="test.parquet",
@@ -1205,7 +1211,7 @@ class TestGHCN:
             variable_mapping={},
             storage_options={},
         )
-
+        mock_case.target.variables = ["surface_air_temperature"]
         result = ghcn.subset_data_to_case(sample_ghcn_dataframe.lazy(), mock_case)
 
         assert isinstance(result, pl.LazyFrame)
@@ -1240,7 +1246,11 @@ class TestGHCN:
         mock_case_metadata = mock.Mock()
         mock_case_metadata.start_date = pd.Timestamp("2021-06-20")
         mock_case_metadata.end_date = pd.Timestamp("2021-06-22")
-        mock_case_metadata.location.geopandas.total_bounds = [-120, 30, -90, 50]
+
+        # Mock the as_geopandas() method to return an object with total_bounds
+        mock_geopandas = mock.Mock()
+        mock_geopandas.total_bounds = [-120, 30, -90, 50]
+        mock_case_metadata.location.as_geopandas.return_value = mock_geopandas
 
         ghcn = inputs.GHCN(
             source="test.parquet",
@@ -1248,7 +1258,7 @@ class TestGHCN:
             variable_mapping={},
             storage_options={},
         )
-
+        mock_case_metadata.target.variables = ["surface_air_temperature"]
         # Call subset_data_to_case with unsorted data
         result = ghcn.subset_data_to_case(unsorted_data.lazy(), mock_case_metadata)
 
@@ -1618,7 +1628,9 @@ class TestPPH:
 
         result = pph.subset_data_to_case(sample_era5_dataset, mock_case)
 
-        mock_subsetter.assert_called_once_with(sample_era5_dataset, mock_case)
+        mock_subsetter.assert_called_once_with(
+            sample_era5_dataset, mock_case, drop=False
+        )
         assert result == sample_era5_dataset
 
 

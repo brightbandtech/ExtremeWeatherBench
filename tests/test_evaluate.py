@@ -2694,7 +2694,6 @@ class TestRegionSubsettingIntegration:
         # Load cases and apply subsetting
         original_cases = cases.load_individual_cases(multi_case_dict)
         subset_cases = subsetter.subset_case_collection(original_cases)
-
         # Create new evaluation with subset cases
         subset_cases_dict = {
             "cases": [
@@ -2705,7 +2704,18 @@ class TestRegionSubsettingIntegration:
                     "end_date": case.end_date,
                     "location": {
                         "type": "bounded_region",
-                        "parameters": case.location.get_bounding_coordinates._asdict(),
+                        "parameters": {
+                            key: bound
+                            for key, bound in zip(
+                                [
+                                    "latitude_min",
+                                    "latitude_max",
+                                    "longitude_min",
+                                    "longitude_max",
+                                ],
+                                case.location.as_geopandas().total_bounds,
+                            )
+                        },
                     },
                     "event_type": case.event_type,
                 }

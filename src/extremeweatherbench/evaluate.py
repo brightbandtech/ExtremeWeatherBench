@@ -173,7 +173,7 @@ def compute_case_operator(
     Returns:
         A concatenated dataframe of the results of the case operator.
     """
-    forecast_ds, target_ds = _build_datasets(case_operator)
+    forecast_ds, target_ds = _build_datasets(case_operator, **kwargs)
     # Check if any dimension has zero length
     if 0 in forecast_ds.sizes.values() or 0 in target_ds.sizes.values():
         return pd.DataFrame(columns=defaults.OUTPUT_COLUMNS)
@@ -371,16 +371,28 @@ def _maybe_convert_variable_to_string(
 
 def _build_datasets(
     case_operator: "cases.CaseOperator",
+    **kwargs,
 ) -> tuple[xr.Dataset, xr.Dataset]:
     """Build the target and forecast datasets for a case operator.
 
     This method will process through all stages of the pipeline for the target and
     forecast datasets, including preprocessing, variable renaming, and subsetting.
+
+    Args:
+        case_operator: The case operator to build datasets for.
+        **kwargs: Additional keyword arguments to pass to pipeline steps.
+
+    Returns:
+        A tuple of (forecast_dataset, target_dataset).
     """
     logger.info("Running target pipeline... ")
-    target_ds = run_pipeline(case_operator.case_metadata, case_operator.target)
+    target_ds = run_pipeline(
+        case_operator.case_metadata, case_operator.target, **kwargs
+    )
     logger.info("Running forecast pipeline... ")
-    forecast_ds = run_pipeline(case_operator.case_metadata, case_operator.forecast)
+    forecast_ds = run_pipeline(
+        case_operator.case_metadata, case_operator.forecast, **kwargs
+    )
     # Check if any dimension has zero length
     zero_length_dims = [dim for dim, size in forecast_ds.sizes.items() if size == 0]
     if zero_length_dims:
@@ -418,12 +430,14 @@ def _compute_and_maybe_cache(
 def run_pipeline(
     case_metadata: "cases.IndividualCase",
     input_data: "inputs.InputBase",
+    **kwargs,
 ) -> xr.Dataset:
     """Shared method for running an input pipeline.
 
     Args:
         case_metadata: The case metadata to run the pipeline on.
         input_data: The input data to run the pipeline on.
+        **kwargs: Additional keyword arguments to pass to pipeline steps.
 
     Returns:
         The processed input data as an xarray dataset.
@@ -441,6 +455,7 @@ def run_pipeline(
         .pipe(
             input_data.subset_data_to_case,
             case_metadata=case_metadata,
+            **kwargs,
         )
         # Converts the input data to an xarray dataset if it is not already
         .pipe(input_data.maybe_convert_to_dataset)
