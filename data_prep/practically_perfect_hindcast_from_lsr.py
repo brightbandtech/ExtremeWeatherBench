@@ -36,7 +36,7 @@ def sparse_practically_perfect_hindcast(
     da: xr.DataArray,
     resolution: float = 0.25,
     # 1 is wind, 2 is hail, 3 is tornado
-    sigma: float = 3,
+    sigma: float = 5,
 ) -> xr.Dataset:
     """Compute the Practically Perfect Hindcast (PPH) using storm report data
     using latitude/longitude grid spacing instead of the NCEP 212 Eta Lambert
@@ -49,7 +49,7 @@ def sparse_practically_perfect_hindcast(
         resolution: The resolution of the grid in degrees to use. Default is
             0.25 degrees.
         sigma: The standard deviation of the gaussian filter to use. Default
-            is 1.5.
+            is 5.
 
     Returns:
         pph: An xarray Dataset containing the PPH and storm report data.
@@ -98,17 +98,11 @@ def sparse_practically_perfect_hindcast(
     # Normalize longitudes to [0, 360)
     coords_df["longitude"] = utils.convert_longitude_to_360(coords_df["longitude"])
 
-    # Underreporting adjustment
+    # Underreporting adjustment; 10 for hail and tornado globally
     mapped_coords_df = coords_df.copy()
-    if any(coords_df.longitude < 180):
-        mapped_coords_df["report_type"] = coords_df["report_type"].map(
-            {0: 0, 1: 0, 2: 50, 3: 10}
-        )
-        sigma = 5
-    else:
-        mapped_coords_df["report_type"] = coords_df["report_type"].map(
-            {0: 0, 1: 0, 2: 2, 3: 3}
-        )
+    mapped_coords_df["report_type"] = coords_df["report_type"].map(
+        {0: 0, 1: 0, 2: 10, 3: 10}
+    )
 
     if len(mapped_coords_df) == 0:
         return None
@@ -270,7 +264,7 @@ def plot_pph_contours(dt: datetime, da: xr.DataArray):
 
     # Add title
     plt.title(
-        f"Practically Perfect Hindcast - {pd.to_datetime(dt).strftime('%Y-%m-%d %H:%M UTC')}, N={n_points}"
+        f"Practically Perfect Hindcast - {pd.to_datetime(dt).strftime('%Y-%m-%d %H:%M UTC')}, N={n_points}"  # noqa: E501
     )
 
     plt.tight_layout()
@@ -327,7 +321,7 @@ if len(hail_reports) > 0:
 
 ax.legend()
 plt.title(
-    f"Test Regridded Data & Storm Reports - {pd.to_datetime(filtered_valid_times[865]).strftime('%Y-%m-%d %H:%M UTC')}"
+    f"Test Regridded Data & Storm Reports - {pd.to_datetime(filtered_valid_times[865]).strftime('%Y-%m-%d %H:%M UTC')}"  # noqa: E501
 )
 plt.tight_layout()
 
@@ -342,4 +336,4 @@ pph_dense.name = "practically_perfect_hindcast"
 
 # %%
 # will become dataset on load
-pph_dense.to_zarr("practically_perfect_hindcast_20200104_20250430.zarr", mode="w")
+pph_dense.to_zarr("practically_perfect_hindcast_20200104_20250927.zarr", mode="w")
