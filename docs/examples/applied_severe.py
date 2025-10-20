@@ -1,54 +1,29 @@
 import logging
 
-import numpy as np
-import pandas as pd
-import xarray as xr
-
-from extremeweatherbench import derived, evaluate, inputs, metrics, utils
+from extremeweatherbench import cases, derived, evaluate, inputs, metrics, regions
 
 logging.getLogger("urllib3.connectionpool").setLevel(logging.CRITICAL)
 logging.getLogger("botocore.httpchecksum").setLevel(logging.CRITICAL)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-case_yaml = utils.load_events_yaml()
-test_yaml = {
-    "cases": [
-        n
-        for n in case_yaml["cases"]
-        if n["event_type"] == "severe_convection"
-        and pd.to_datetime(n["start_date"]).year <= 2022
-    ][0:1]
-}
+case_yaml = cases.load_ewb_events_yaml_into_case_collection()
+case_yaml.select_cases("event_type", "severe_convection", inplace=True)
+case_yaml.select_cases("case_id_number", 305, inplace=True)
 
-
-def _preprocess_bb_cira_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
-    """An example preprocess function that renames the time coordinate to lead_time,
-    creates a valid_time coordinate, and sets the lead time range and resolution not
-    present in the original dataset.
-
-    Args:
-        ds: The forecast dataset to rename.
-
-    Returns:
-        The renamed forecast dataset.
-    """
-    ds = ds.rename({"time": "lead_time"})
-    # The evaluation configuration is used to set the lead time range and resolution.
-    ds["lead_time"] = np.array(
-        [i for i in range(0, 241, 6)], dtype="timedelta64[h]"
-    ).astype("timedelta64[ns]")
-    return ds
-
+case_yaml.location = regions.BoundingBoxRegion(
+    latitude_min=30.0,
+    latitude_max=42.0,
+    longitude_min=265.0,
+    longitude_max=290.0,
+)
 
 pph_target = inputs.PPH(
-    source=inputs.PPH_URI,
     variables=["practically_perfect_hindcast"],
-    variable_mapping={},
-    storage_options={"remote_options": {"anon": True}},
 )
 
 hres_forecast = inputs.ZarrForecast(
+    name="hres_forecast",
     source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
     variables=[derived.CravenBrooksSignificantSevere],
     variable_mapping={
@@ -77,28 +52,19 @@ simple_metrics = [
     metrics.FN(forecast_threshold=15000, target_threshold=0.3),
 ]
 
-# Option 2: Create cached metrics that share the same transformed contingency manager
-cached_metrics = metrics.create_threshold_metrics(
-    forecast_threshold=15000,
-    target_threshold=0.3,
-    functions=[metrics.csi_function, metrics.far_function, metrics.accuracy_function],
-    instances=[metrics.tp, metrics.fp, metrics.tn, metrics.fn],
-)
-
 # just one for now
-severe_convection_metric_list = [
+severe_convection_evaluation_objects = [
     inputs.EvaluationObject(
         event_type="severe_convection",
-        metric=simple_metrics,  # These will use global cache automatically
+        metric_list=simple_metrics,  # These will use global cache automatically
         target=pph_target,
         forecast=hres_forecast,
     ),
 ]
 
 test_ewb = evaluate.ExtremeWeatherBench(
-    cases=test_yaml,
-    metrics=severe_convection_metric_list,
+    case_metadata=case_yaml, evaluation_objects=severe_convection_evaluation_objects
 )
 logger.info("Starting EWB run")
-outputs = test_ewb.run(pre_compute=True)
+outputs = test_ewb.run(n_jobs=1)
 outputs.to_csv("applied_severe_results.csv")
