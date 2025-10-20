@@ -112,8 +112,10 @@ def compute_ivt(data: xr.Dataset) -> xr.DataArray:
             raise ValueError(
                 "specific_humidity or relative_humidity must be in the dataset"
             )
-        data["specific_humidity"] = (
-            calc.compute_specific_humidity_from_relative_humidity(data)
+        data["specific_humidity"] = calc.specific_humidity_from_relative_humidity(
+            air_temperature=data["air_temperature"],
+            relative_humidity=data["relative_humidity"],
+            levels=data["level"],
         )
 
     # Find the level axis

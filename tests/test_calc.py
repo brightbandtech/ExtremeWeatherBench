@@ -547,7 +547,7 @@ class TestGeopotentialCalculations:
 class TestSpecificHumidityCalculations:
     """Test specific humidity calculations."""
 
-    def test_compute_specific_humidity_from_relative_humidity_with_level(self):
+    def test_specific_humidity_from_relative_humidity_with_level(self):
         """Test specific humidity calculation with level dimension."""
         # Create test dataset with level dimension
         time = pd.date_range("2023-01-01", periods=2, freq="6h")
@@ -577,7 +577,11 @@ class TestSpecificHumidityCalculations:
             },
         )
 
-        result = calc.compute_specific_humidity_from_relative_humidity(dataset)
+        result = calc.specific_humidity_from_relative_humidity(
+            air_temperature=dataset["air_temperature"],
+            relative_humidity=dataset["relative_humidity"],
+            levels=dataset["level"],
+        )
 
         # Should return a DataArray
         assert isinstance(result, xr.DataArray)
@@ -599,7 +603,7 @@ class TestSpecificHumidityCalculations:
             result.isel(time=0, level=0, latitude=0, longitude=0),
         )
 
-    def test_compute_specific_humidity_from_relative_humidity_without_level(self):
+    def test_specific_humidity_from_relative_humidity_without_level(self):
         """Test specific humidity calculation without level dimension."""
         # Create test dataset without level dimension (surface case)
         time = pd.date_range("2023-01-01", periods=2, freq="6h")
@@ -626,7 +630,11 @@ class TestSpecificHumidityCalculations:
             },
         )
         with pytest.raises(KeyError):
-            calc.compute_specific_humidity_from_relative_humidity(dataset)
+            calc.specific_humidity_from_relative_humidity(
+                air_temperature=dataset["air_temperature"],
+                relative_humidity=dataset["relative_humidity"],
+                levels=dataset["level"],
+            )
 
     def test_compute_specific_humidity_known_values(self):
         """Test specific humidity calculation with known values."""
@@ -650,7 +658,11 @@ class TestSpecificHumidityCalculations:
             },
         )
 
-        result = calc.compute_specific_humidity_from_relative_humidity(dataset)
+        result = calc.specific_humidity_from_relative_humidity(
+            air_temperature=dataset["air_temperature"],
+            relative_humidity=dataset["relative_humidity"],
+            levels=dataset["level"],
+        )
 
         # Should return a DataArray
         assert isinstance(result, xr.DataArray)
@@ -709,11 +721,15 @@ class TestSpecificHumidityCalculations:
             },
         )
 
-        result_cold = calc.compute_specific_humidity_from_relative_humidity(
-            dataset_cold
+        result_cold = calc.specific_humidity_from_relative_humidity(
+            air_temperature=dataset_cold["air_temperature"],
+            relative_humidity=dataset_cold["relative_humidity"],
+            levels=dataset_cold["level"],
         )
-        result_warm = calc.compute_specific_humidity_from_relative_humidity(
-            dataset_warm
+        result_warm = calc.specific_humidity_from_relative_humidity(
+            air_temperature=dataset_warm["air_temperature"],
+            relative_humidity=dataset_warm["relative_humidity"],
+            levels=dataset_warm["level"],
         )
 
         # Warmer air should have higher specific humidity at same RH
@@ -760,11 +776,15 @@ class TestSpecificHumidityCalculations:
             },
         )
 
-        result_low_rh = calc.compute_specific_humidity_from_relative_humidity(
-            dataset_low_rh
+        result_low_rh = calc.specific_humidity_from_relative_humidity(
+            air_temperature=dataset_low_rh["air_temperature"],
+            relative_humidity=dataset_low_rh["relative_humidity"],
+            levels=dataset_low_rh["level"],
         )
-        result_high_rh = calc.compute_specific_humidity_from_relative_humidity(
-            dataset_high_rh
+        result_high_rh = calc.specific_humidity_from_relative_humidity(
+            air_temperature=dataset_high_rh["air_temperature"],
+            relative_humidity=dataset_high_rh["relative_humidity"],
+            levels=dataset_high_rh["level"],
         )
 
         # Higher RH should produce higher specific humidity
