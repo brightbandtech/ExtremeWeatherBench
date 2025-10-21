@@ -40,7 +40,7 @@ def convert_from_cartesian_to_latlon(
 def mixing_ratio(
     partial_pressure: float | npt.NDArray, total_pressure: float | npt.NDArray
 ) -> float | npt.NDArray[np.float64]:
-    """Calculate the mixing ratio of water vapor in air.
+    r"""Calculate the mixing ratio of water vapor in air.
 
     Uses the formula: $w = (\epsilon * e) / (p - e)$ where $\epsilon = 0.622$.
 
@@ -64,7 +64,7 @@ def mixing_ratio(
 def saturation_vapor_pressure(
     temperature: float | npt.NDArray,
 ) -> npt.NDArray[np.float64]:
-    """Calculate saturation vapor pressure using the Clausius-Clapeyron equation.
+    r"""Calculate saturation vapor pressure using the Clausius-Clapeyron equation.
 
     Uses the Magnus formula approximation which is accurate for temperatures
     between -40°C and +50°C. Formula:
