@@ -15,7 +15,7 @@ from tqdm.contrib.logging import logging_redirect_tqdm
 from extremeweatherbench import cases, defaults, derived, inputs, utils
 
 if TYPE_CHECKING:
-    from extremeweatherbench import metrics
+    from extremeweatherbench import metrics, regions
 
 logger = logging.getLogger(__name__)
 
@@ -24,40 +24,52 @@ class ExtremeWeatherBench:
     """A class to build and run the ExtremeWeatherBench workflow.
 
     This class is used to run the ExtremeWeatherBench workflow. It is ultimately a
-    wrapper around case operators and evaluation objects to create either a parallel or
+    wrapper around case operators and evaluation objects to create a parallel or
     serial run to evaluate cases and metrics, returning a concatenated dataframe of the
     results.
 
     Attributes:
-        cases: A dictionary of cases to run.
+        case_metadata: A dictionary of cases or an IndividualCaseCollection to run.
         evaluation_objects: A list of evaluation objects to run.
         cache_dir: An optional directory to cache the mid-flight outputs of the
             workflow for serial runs.
+        region_subsetter: An optional region subsetter to subset the cases that are part
+        of the evaluation to a Region object or a dictionary of lat/lon bounds.
     """
 
     def __init__(
         self,
-        cases: dict[str, list],
+        case_metadata: Union[dict[str, list], "cases.IndividualCaseCollection"],
         evaluation_objects: list["inputs.EvaluationObject"],
         cache_dir: Optional[Union[str, pathlib.Path]] = None,
+        region_subsetter: Optional["regions.RegionSubsetter"] = None,
     ):
-        """Initialize the ExtremeWeatherBench class.
-
-        Args:
-            cases: A dictionary of cases to run.
-            evaluation_objects: A list of evaluation objects to run.
-            cache_dir: An optional directory to cache the mid-flight outputs of the
-                workflow for serial runs.
-        """
-        self.cases = cases
+        if isinstance(case_metadata, dict):
+            self.case_metadata = cases.load_individual_cases(case_metadata)
+        elif isinstance(case_metadata, cases.IndividualCaseCollection):
+            self.case_metadata = case_metadata
+        else:
+            raise TypeError(
+                "case_metadata must be a dictionary of cases or an "
+                "IndividualCaseCollection"
+            )
         self.evaluation_objects = evaluation_objects
         self.cache_dir = pathlib.Path(cache_dir) if cache_dir else None
+        self.region_subsetter = region_subsetter
 
     # Case operators as a property can be used as a convenience method for a workflow
     # independent of the class.
     @property
     def case_operators(self) -> list["cases.CaseOperator"]:
-        return cases.build_case_operators(self.cases, self.evaluation_objects)
+        """Build the CaseOperator objects from case_metadata and evaluation_objects."""
+        # Subset the cases if a region subsetter was provided
+        if self.region_subsetter:
+            subset_collection = self.region_subsetter.subset_case_collection(
+                self.case_metadata
+            )
+        else:
+            subset_collection = self.case_metadata
+        return cases.build_case_operators(subset_collection, self.evaluation_objects)
 
     def run(
         self,
@@ -87,7 +99,6 @@ class ExtremeWeatherBench:
         elif self.cache_dir:
             if not self.cache_dir.exists():
                 self.cache_dir.mkdir(parents=True, exist_ok=True)
-
         run_results = _run_case_operators(
             self.case_operators, n_jobs, self.cache_dir, **kwargs
         )
@@ -162,7 +173,7 @@ def compute_case_operator(
     Returns:
         A concatenated dataframe of the results of the case operator.
     """
-    forecast_ds, target_ds = _build_datasets(case_operator)
+    forecast_ds, target_ds = _build_datasets(case_operator, **kwargs)
     # Check if any dimension has zero length
     if 0 in forecast_ds.sizes.values() or 0 in target_ds.sizes.values():
         return pd.DataFrame(columns=defaults.OUTPUT_COLUMNS)
@@ -201,8 +212,7 @@ def compute_case_operator(
                 forecast_variable=variables[0],
                 target_variable=variables[1],
                 metric=metric,
-                case_id_number=case_operator.case_metadata.case_id_number,
-                event_type=case_operator.case_metadata.event_type,
+                case_operator=case_operator,
                 **kwargs,
             )
         )
@@ -223,10 +233,7 @@ def compute_case_operator(
 def _extract_standard_metadata(
     target_variable: Union[str, "derived.DerivedVariable"],
     metric: "metrics.BaseMetric",
-    target_ds: xr.Dataset,
-    forecast_ds: xr.Dataset,
-    case_id_number: int,
-    event_type: str,
+    case_operator: "cases.CaseOperator",
 ) -> dict:
     """Extract standard metadata for output dataframe.
 
@@ -237,10 +244,7 @@ def _extract_standard_metadata(
     Args:
         target_variable: The target variable
         metric: The metric instance
-        target_ds: Target dataset
-        forecast_ds: Forecast dataset
-        case_id_number: Case ID number
-        event_type: Event type string
+        case_operator: The CaseOperator holding associated case metadata
 
     Returns:
         Dictionary of metadata for the output dataframe
@@ -248,10 +252,10 @@ def _extract_standard_metadata(
     return {
         "target_variable": target_variable,
         "metric": metric.name,
-        "case_id_number": case_id_number,
-        "event_type": event_type,
-        "target_source": target_ds.attrs["source"],
-        "forecast_source": forecast_ds.attrs["source"],
+        "target_source": case_operator.target.name,
+        "forecast_source": case_operator.forecast.name,
+        "case_id_number": case_operator.case_metadata.case_id_number,
+        "event_type": case_operator.case_metadata.event_type,
     }
 
 
@@ -313,8 +317,7 @@ def _evaluate_metric_and_return_df(
     forecast_variable: Union[str, Type["derived.DerivedVariable"]],
     target_variable: Union[str, Type["derived.DerivedVariable"]],
     metric: "metrics.BaseMetric",
-    case_id_number: int,
-    event_type: str,
+    case_operator: "cases.CaseOperator",
     **kwargs,
 ) -> pd.DataFrame:
     """Evaluate a metric and return a dataframe of the results.
@@ -352,9 +355,7 @@ def _evaluate_metric_and_return_df(
     # Convert to DataFrame and add metadata, ensuring OUTPUT_COLUMNS compliance
     df = metric_result.to_dataframe(name="value").reset_index()
     # TODO: add functionality for custom metadata columns
-    metadata = _extract_standard_metadata(
-        target_variable, metric, target_ds, forecast_ds, case_id_number, event_type
-    )
+    metadata = _extract_standard_metadata(target_variable, metric, case_operator)
     return _ensure_output_schema(df, **metadata)
 
 
@@ -370,16 +371,28 @@ def _maybe_convert_variable_to_string(
 
 def _build_datasets(
     case_operator: "cases.CaseOperator",
+    **kwargs,
 ) -> tuple[xr.Dataset, xr.Dataset]:
     """Build the target and forecast datasets for a case operator.
 
     This method will process through all stages of the pipeline for the target and
     forecast datasets, including preprocessing, variable renaming, and subsetting.
+
+    Args:
+        case_operator: The case operator to build datasets for.
+        **kwargs: Additional keyword arguments to pass to pipeline steps.
+
+    Returns:
+        A tuple of (forecast_dataset, target_dataset).
     """
     logger.info("Running target pipeline... ")
-    target_ds = run_pipeline(case_operator.case_metadata, case_operator.target)
+    target_ds = run_pipeline(
+        case_operator.case_metadata, case_operator.target, **kwargs
+    )
     logger.info("Running forecast pipeline... ")
-    forecast_ds = run_pipeline(case_operator.case_metadata, case_operator.forecast)
+    forecast_ds = run_pipeline(
+        case_operator.case_metadata, case_operator.forecast, **kwargs
+    )
     # Check if any dimension has zero length
     zero_length_dims = [dim for dim, size in forecast_ds.sizes.items() if size == 0]
     if zero_length_dims:
@@ -417,12 +430,14 @@ def _compute_and_maybe_cache(
 def run_pipeline(
     case_metadata: "cases.IndividualCase",
     input_data: "inputs.InputBase",
+    **kwargs,
 ) -> xr.Dataset:
     """Shared method for running an input pipeline.
 
     Args:
         case_metadata: The case metadata to run the pipeline on.
         input_data: The input data to run the pipeline on.
+        **kwargs: Additional keyword arguments to pass to pipeline steps.
 
     Returns:
         The processed input data as an xarray dataset.
@@ -440,6 +455,7 @@ def run_pipeline(
         .pipe(
             input_data.subset_data_to_case,
             case_metadata=case_metadata,
+            **kwargs,
         )
         # Converts the input data to an xarray dataset if it is not already
         .pipe(input_data.maybe_convert_to_dataset)

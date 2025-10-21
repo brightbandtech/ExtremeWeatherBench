@@ -64,7 +64,7 @@ heatwave_evaluation_object = [
 
 # Initialize ExtremeWeatherBench
 ewb = evaluate.ExtremeWeatherBench(
-    cases=case_yaml,
+    case_metadata=case_yaml,
     evaluation_objects=heatwave_evaluation_object,
 )
 

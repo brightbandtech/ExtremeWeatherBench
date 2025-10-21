@@ -25,6 +25,60 @@ class TestInputBase:
                 storage_options={},
             )
 
+    def test_input_base_requires_name(self):
+        """Test that InputBase fails without name parameter."""
+
+        class TestInput(inputs.InputBase):
+            def _open_data_from_source(self):
+                return None
+
+            def subset_data_to_case(self, data, case_operator):
+                return data
+
+        with pytest.raises(TypeError):
+            TestInput(
+                source="test",
+                variables=["test"],
+                variable_mapping={},
+                storage_options={},
+            )
+
+    def test_forecast_base_requires_name(self):
+        """Test that ForecastBase fails without name parameter."""
+
+        class TestForecast(inputs.ForecastBase):
+            def _open_data_from_source(self):
+                return None
+
+            def subset_data_to_case(self, data, case_operator):
+                return data
+
+        with pytest.raises(TypeError):
+            TestForecast(
+                source="test",
+                variables=["test"],
+                variable_mapping={},
+                storage_options={},
+            )
+
+    def test_target_base_requires_name(self):
+        """Test that TargetBase fails without name parameter."""
+
+        class TestTarget(inputs.TargetBase):
+            def _open_data_from_source(self):
+                return None
+
+            def subset_data_to_case(self, data, case_operator):
+                return data
+
+        with pytest.raises(TypeError):
+            TestTarget(
+                source="test",
+                variables=["test"],
+                variable_mapping={},
+                storage_options={},
+            )
+
     def test_maybe_convert_to_dataset_with_dataset(self, sample_era5_dataset):
         """Test maybe_convert_to_dataset with xarray Dataset input."""
 
@@ -986,7 +1040,9 @@ class TestERA5:
 
         result = era5.subset_data_to_case(sample_era5_dataset, mock_case)
 
-        mock_subsetter.assert_called_once_with(sample_era5_dataset, mock_case)
+        mock_subsetter.assert_called_once_with(
+            sample_era5_dataset, mock_case, drop=False
+        )
         assert result == sample_era5_dataset
 
     def test_era5_maybe_align_forecast_to_target_same_grid(
@@ -1143,7 +1199,11 @@ class TestGHCN:
         mock_case = mock.Mock()
         mock_case.start_date = pd.Timestamp("2021-06-20")
         mock_case.end_date = pd.Timestamp("2021-06-22")
-        mock_case.location.geopandas.total_bounds = [-120, 30, -90, 50]
+
+        # Mock the as_geopandas() method to return an object with total_bounds
+        mock_geopandas = mock.Mock()
+        mock_geopandas.total_bounds = [-120, 30, -90, 50]
+        mock_case.location.as_geopandas.return_value = mock_geopandas
 
         ghcn = inputs.GHCN(
             source="test.parquet",
@@ -1151,7 +1211,7 @@ class TestGHCN:
             variable_mapping={},
             storage_options={},
         )
-
+        mock_case.target.variables = ["surface_air_temperature"]
         result = ghcn.subset_data_to_case(sample_ghcn_dataframe.lazy(), mock_case)
 
         assert isinstance(result, pl.LazyFrame)
@@ -1186,7 +1246,11 @@ class TestGHCN:
         mock_case_metadata = mock.Mock()
         mock_case_metadata.start_date = pd.Timestamp("2021-06-20")
         mock_case_metadata.end_date = pd.Timestamp("2021-06-22")
-        mock_case_metadata.location.geopandas.total_bounds = [-120, 30, -90, 50]
+
+        # Mock the as_geopandas() method to return an object with total_bounds
+        mock_geopandas = mock.Mock()
+        mock_geopandas.total_bounds = [-120, 30, -90, 50]
+        mock_case_metadata.location.as_geopandas.return_value = mock_geopandas
 
         ghcn = inputs.GHCN(
             source="test.parquet",
@@ -1194,7 +1258,7 @@ class TestGHCN:
             variable_mapping={},
             storage_options={},
         )
-
+        mock_case_metadata.target.variables = ["surface_air_temperature"]
         # Call subset_data_to_case with unsorted data
         result = ghcn.subset_data_to_case(unsorted_data.lazy(), mock_case_metadata)
 
@@ -1564,7 +1628,9 @@ class TestPPH:
 
         result = pph.subset_data_to_case(sample_era5_dataset, mock_case)
 
-        mock_subsetter.assert_called_once_with(sample_era5_dataset, mock_case)
+        mock_subsetter.assert_called_once_with(
+            sample_era5_dataset, mock_case, drop=False
+        )
         assert result == sample_era5_dataset
 
 
@@ -1756,3 +1822,91 @@ class TestConstants:
         assert mapping["ISO_TIME"] == "valid_time"
         assert mapping["LAT"] == "latitude"
         assert mapping["LON"] == "longitude"
+
+
+@pytest.mark.integration
+class TestInputsIntegration:
+    """Integration tests for inputs module."""
+
+    # zarr throws a consolidated metadata warning that
+    # is inconsequential (as of now)
+    @pytest.mark.filterwarnings("ignore::UserWarning")
+    def test_era5_full_workflow_with_zarr(self, temp_zarr_file):
+        """Test complete ERA5 workflow with zarr file."""
+        era5 = inputs.ERA5(
+            source=temp_zarr_file,
+            variables=["2m_temperature"],
+            variable_mapping={},
+            storage_options=None,
+        )
+
+        # Test opening data
+        data = era5._open_data_from_source()
+        assert isinstance(data, xr.Dataset)
+        assert "2m_temperature" in data.data_vars
+
+        # Test conversion
+        dataset = era5.maybe_convert_to_dataset(data)
+        assert isinstance(dataset, xr.Dataset)
+
+    def test_ghcn_full_workflow_with_parquet(self, temp_parquet_file):
+        """Test complete GHCN workflow with parquet file."""
+        ghcn = inputs.GHCN(
+            source=temp_parquet_file,
+            variables=["surface_air_temperature"],
+            variable_mapping={},
+            storage_options={},
+        )
+
+        # Test opening data
+        data = ghcn._open_data_from_source()
+        assert isinstance(data, pl.LazyFrame)
+
+        # Test conversion
+        dataset = ghcn._custom_convert_to_dataset(data)
+        assert isinstance(dataset, xr.Dataset)
+
+    def test_era5_alignment_comprehensive(
+        self, sample_era5_dataset, sample_forecast_with_valid_time
+    ):
+        """Test comprehensive ERA5 alignment scenarios."""
+        era5 = inputs.ERA5(
+            source="test.zarr",
+            variables=["2m_temperature"],
+            variable_mapping={},
+            storage_options={},
+        )
+
+        # Test with matching spatial grids but different time ranges
+        target_subset = sample_era5_dataset.sel(time=slice("2021-06-20", "2021-06-21"))
+        forecast_subset = sample_forecast_with_valid_time.sel(
+            valid_time=slice("2021-06-20 12:00", "2021-06-21 12:00")
+        )
+
+        aligned_forecast, aligned_target = era5.maybe_align_forecast_to_target(
+            forecast_subset, target_subset
+        )
+
+        # Should find overlapping times
+        # Note: dimensions keep their original names after alignment
+        assert len(aligned_target.time) > 0  # Target uses 'time'
+        assert len(aligned_forecast.valid_time) > 0  # Forecast uses 'valid_time'
+
+        # Should have overlapping time periods - but lengths may differ due to
+        # different time ranges. This is expected when target and forecast
+        # have different time coverage
+
+
+def test_default_preprocess():
+    """Test default preprocess function."""
+    # Import the function from inputs module since it was moved there
+
+    # Test with xarray Dataset
+    ds = xr.Dataset({"temp": (["x"], [1, 2, 3])})
+    result = inputs._default_preprocess(ds)
+    assert result is ds  # Should return the same object unchanged
+
+    # Test with pandas DataFrame
+    df = pd.DataFrame({"a": [1, 2, 3]})
+    result_df = inputs._default_preprocess(df)
+    assert result_df is df
