@@ -197,10 +197,10 @@ def compute_case_operator(
 
     # Derive the variables for the forecast and target datasets independently
     aligned_forecast_ds = derived.maybe_derive_variables(
-        aligned_forecast_ds, variables=case_operator.forecast.variables
+        aligned_forecast_ds, variables=list(case_operator.forecast.variables)
     )
     aligned_target_ds = derived.maybe_derive_variables(
-        aligned_target_ds, variables=case_operator.target.variables
+        aligned_target_ds, variables=list(case_operator.target.variables)
     )
 
     logger.info(
@@ -240,7 +240,7 @@ def compute_case_operator(
 
 def _extract_standard_metadata(
     target_variable: Union[str, "derived.DerivedVariable"],
-    metric: "metrics.BaseMetric",
+    metric: Union["metrics.BaseMetric", "metrics.AppliedMetric"],
     case_operator: "cases.CaseOperator",
 ) -> dict:
     """Extract standard metadata for output dataframe.
@@ -311,7 +311,7 @@ def _evaluate_metric_and_return_df(
     target_ds: xr.Dataset,
     forecast_variable: Union[str, "derived.DerivedVariable"],
     target_variable: Union[str, "derived.DerivedVariable"],
-    metric: "metrics.BaseMetric",
+    metric: Union[type["metrics.BaseMetric"], type["metrics.AppliedMetric"]],
     case_operator: "cases.CaseOperator",
     **kwargs,
 ) -> pd.DataFrame:
@@ -329,9 +329,10 @@ def _evaluate_metric_and_return_df(
     Returns:
         A dataframe of the results of the metric evaluation.
     """
-    metric = metric()
-    logger.info("Computing metric %s", metric.name)
-    metric_result = metric.compute_metric(
+    metric_instance = metric()
+    logger.info("Computing metric %s", metric_instance.name)
+
+    metric_result = metric_instance.compute_metric(
         forecast_ds[forecast_variable],
         target_ds[target_variable],
         **kwargs,
@@ -340,7 +341,9 @@ def _evaluate_metric_and_return_df(
     # Convert to DataFrame and add metadata, ensuring OUTPUT_COLUMNS compliance
     df = metric_result.to_dataframe(name="value").reset_index()
     # TODO: add functionality for custom metadata columns
-    metadata = _extract_standard_metadata(target_variable, metric, case_operator)
+    metadata = _extract_standard_metadata(
+        target_variable, metric_instance, case_operator
+    )
     return _ensure_output_schema(df, **metadata)
 
 
@@ -404,7 +407,7 @@ def run_pipeline(
     Returns:
         The target data with a type determined by the user.
     """
-
+    input_data: inputs.InputBase
     if input_source == "target":
         input_data = case_operator.target
     elif input_source == "forecast":

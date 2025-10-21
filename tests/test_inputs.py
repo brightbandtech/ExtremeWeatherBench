@@ -1264,10 +1264,13 @@ class TestLSR:
         mock_case = Mock()
         mock_case.case_metadata.start_date = pd.Timestamp("2021-06-20")
         mock_case.case_metadata.end_date = pd.Timestamp("2021-06-21")
-        mock_case.case_metadata.location.latitude_min = 30
-        mock_case.case_metadata.location.latitude_max = 50
-        mock_case.case_metadata.location.longitude_min = -110
-        mock_case.case_metadata.location.longitude_max = -90
+        # Mock as_geopandas().total_bounds; [min_lon, min_lat, max_lon, max_lat]
+        mock_case.case_metadata.location.as_geopandas.return_value.total_bounds = [
+            -110,
+            30,
+            -90,
+            50,
+        ]
 
         lsr = inputs.LSR(
             source="test.parquet",
