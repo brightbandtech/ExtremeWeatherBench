@@ -7,7 +7,7 @@ from typing import Optional
 import click
 import pandas as pd
 
-from extremeweatherbench import defaults, evaluate, utils
+from extremeweatherbench import cases, defaults, evaluate, utils
 
 
 @click.command()
@@ -182,9 +182,8 @@ def cli_runner(
 
 def _load_default_cases():
     """Load default case data for default evaluation objects."""
-    from extremeweatherbench.cases import load_ewb_events_yaml_into_case_collection
 
-    return load_ewb_events_yaml_into_case_collection()
+    return cases.load_ewb_events_yaml_into_case_collection()
 
 
 def _load_config_file(config_path: str) -> tuple:
