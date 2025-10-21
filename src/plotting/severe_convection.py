@@ -9,13 +9,13 @@ import logging
 from typing import Dict, List, Optional, Tuple
 
 import cartopy.crs as ccrs
-import cartopy.feature as cfeature
-import cartopy.mpl.ticker
 import matplotlib.colors as colors
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import xarray as xr
+
+from . import plotting
 
 logger = logging.getLogger(__name__)
 
@@ -53,77 +53,16 @@ def setup_pph_colormap_and_levels() -> Tuple[
     return pph_cmap, pph_norm, pph_levels
 
 
-def convert_longitude_for_plotting(lon_data: np.ndarray) -> np.ndarray:
-    """Convert longitude from 0-360 to -180-180 for plotting.
-
-    Args:
-        lon_data: Longitude array in 0-360 format.
-
-    Returns:
-        Longitude array in -180-180 format.
-    """
-    return np.where(lon_data > 180, lon_data - 360, lon_data)
+# Use plotting.convert_longitude_for_plotting instead
 
 
-def add_geographic_features(ax, alpha: float = 0.7) -> None:
-    """Add standard geographic features to a cartopy axis.
-
-    Args:
-        ax: Cartopy axis to add features to.
-        alpha: Transparency for some features.
-    """
-    ax.add_feature(cfeature.COASTLINE, linewidth=0.8)
-    ax.add_feature(cfeature.BORDERS, linewidth=0.5)
-    ax.add_feature(cfeature.STATES, linewidth=0.5, alpha=alpha)
-    ax.add_feature(cfeature.LAKES, alpha=0.3)
-    ax.add_feature(cfeature.RIVERS, alpha=0.3)
+# Use plotting.add_geographic_features instead
 
 
-def setup_gridlines(ax, show_left_labels: bool = True) -> None:
-    """Setup gridlines with custom formatting.
-
-    Args:
-        ax: Cartopy axis to add gridlines to.
-        show_left_labels: Whether to show labels on the left side.
-    """
-    gl = ax.gridlines(
-        draw_labels=True,
-        alpha=0.5,
-        linestyle="--",
-        x_inline=False,
-        y_inline=False,
-        crs=ccrs.PlateCarree(),
-    )
-    gl.top_labels = False
-    gl.right_labels = False
-    gl.xformatter = cartopy.mpl.ticker.LongitudeFormatter(
-        dms=False, number_format="02.1f"
-    )
-    gl.yformatter = cartopy.mpl.ticker.LatitudeFormatter(number_format="02.1f")
-    if not show_left_labels:
-        gl.left_labels = False
+# Use plotting.setup_gridlines instead
 
 
-def convert_bbox_longitude(bbox: Dict[str, float]) -> Tuple[float, float]:
-    """Convert bounding box longitude from 0-360 to -180-180.
-
-    Args:
-        bbox: Bounding box dictionary with longitude_min/max keys.
-
-    Returns:
-        Tuple of (lon_min, lon_max) in -180-180 format.
-    """
-    lon_min = (
-        bbox["longitude_min"] - 360
-        if bbox["longitude_min"] > 180
-        else bbox["longitude_min"]
-    )
-    lon_max = (
-        bbox["longitude_max"] - 360
-        if bbox["longitude_max"] > 180
-        else bbox["longitude_max"]
-    )
-    return lon_min, lon_max
+# Use plotting.convert_bbox_longitude instead
 
 
 def plot_storm_reports(
@@ -141,61 +80,13 @@ def plot_storm_reports(
     Returns:
         List of legend elements for the plotted reports.
     """
-    legend_elements = []
-
-    if tornado_reports is not None and len(tornado_reports) > 0:
-        ax.scatter(
-            tornado_reports["longitude"],
-            tornado_reports["latitude"],
-            c="k",
-            s=20,
-            alpha=0.8,
-            transform=ccrs.PlateCarree(),
-            marker="^",
-            edgecolors="k",
-            linewidths=1,
-            zorder=10,
-        )
-        legend_elements.append(
-            plt.Line2D(
-                [0],
-                [0],
-                marker="^",
-                color="w",
-                markerfacecolor="k",
-                markersize=8,
-                markeredgecolor="k",
-                label="Tornado Reports",
-            )
-        )
-
-    if hail_reports is not None and len(hail_reports) > 0:
-        ax.scatter(
-            hail_reports["longitude"],
-            hail_reports["latitude"],
-            c="green",
-            s=20,
-            alpha=0.8,
-            transform=ccrs.PlateCarree(),
-            marker="s",
-            edgecolors="darkgreen",
-            linewidths=1,
-            zorder=10,
-        )
-        legend_elements.append(
-            plt.Line2D(
-                [0],
-                [0],
-                marker="s",
-                color="w",
-                markerfacecolor="green",
-                markersize=8,
-                markeredgecolor="darkgreen",
-                label="Hail Reports",
-            )
-        )
-
-    return legend_elements
+    # Use general plotting functions
+    plotting.plot_storm_reports_on_axis(
+        ax, tornado_reports=tornado_reports, hail_reports=hail_reports
+    )
+    return plotting.create_storm_report_legend_elements(
+        tornado_reports=tornado_reports, hail_reports=hail_reports
+    )
 
 
 def plot_pph_contours(
@@ -280,7 +171,7 @@ def plot_cbss_forecast_panel(
     cbss_lt = cbss_data.sel(lead_time=lead_time_td, method="nearest")
 
     # Convert longitude for plotting
-    lon_data = convert_longitude_for_plotting(cbss_lt.longitude.values)
+    lon_data = plotting.convert_longitude_for_plotting(cbss_lt.longitude.values)
 
     # Plot CBSS values
     im = ax.contourf(
@@ -312,20 +203,20 @@ def plot_cbss_forecast_panel(
         plot_pph_contours(ax, pph_data, pph_cmap, pph_norm, pph_levels)
 
     # Add geographic features
-    add_geographic_features(ax)
+    plotting.add_geographic_features(ax)
 
     # Plot storm reports
     plot_storm_reports(ax, tornado_reports, hail_reports)
 
     # Set extent
-    lon_min, lon_max = convert_bbox_longitude(bbox)
+    lon_min, lon_max = plotting.convert_bbox_longitude(bbox)
     ax.set_extent(
         [lon_min, lon_max, bbox["latitude_min"], bbox["latitude_max"]],
         crs=ccrs.PlateCarree(),
     )
 
     # Add gridlines
-    setup_gridlines(ax)
+    plotting.setup_gridlines(ax)
 
     # Set title
     valid_time = target_date + lead_time_td
@@ -408,7 +299,7 @@ def plot_cbss_forecast_multipanel(
         ax = axes[i]
 
         # Convert longitude for plotting
-        lon_data = convert_longitude_for_plotting(cbss_lt.longitude.values)
+        lon_data = plotting.convert_longitude_for_plotting(cbss_lt.longitude.values)
 
         # Plot CBSS values
         im = ax.contourf(
@@ -441,7 +332,7 @@ def plot_cbss_forecast_multipanel(
                 all_legend_elements.extend(pph_legend)
 
         # Add geographic features
-        add_geographic_features(ax)
+        plotting.add_geographic_features(ax)
 
         # Plot storm reports
         report_legend = plot_storm_reports(ax, tornado_reports, hail_reports)
@@ -449,14 +340,14 @@ def plot_cbss_forecast_multipanel(
             all_legend_elements.extend(report_legend)
 
         # Set extent
-        lon_min, lon_max = convert_bbox_longitude(bbox)
+        lon_min, lon_max = plotting.convert_bbox_longitude(bbox)
         ax.set_extent(
             [lon_min, lon_max, bbox["latitude_min"], bbox["latitude_max"]],
             crs=ccrs.PlateCarree(),
         )
 
         # Add gridlines
-        setup_gridlines(ax, show_left_labels=(i == 0))
+        plotting.setup_gridlines(ax, show_left_labels=(i == 0))
 
         # Set title
         valid_time = target_date + lead_time_td
