@@ -32,15 +32,15 @@ class BaseMetric(ABC):
     @abstractmethod
     def _compute_metric(
         cls,
-        forecast: xr.Dataset,
-        target: xr.Dataset,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
         **kwargs: Any,
     ) -> Any:
         """Compute the metric.
 
         Args:
-            forecast: The forecast dataset.
-            target: The target dataset.
+            forecast: The forecast DataArray.
+            target: The target DataArray.
             kwargs: Additional keyword arguments to pass to the metric.
         """
         pass
@@ -48,8 +48,8 @@ class BaseMetric(ABC):
     @classmethod
     def compute_metric(
         cls,
-        forecast: xr.Dataset,
-        target: xr.Dataset,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
         **kwargs,
     ):
         return cls._compute_metric(
@@ -128,8 +128,8 @@ class BinaryContingencyTable(BaseMetric):
     @classmethod
     def _compute_metric(
         cls,
-        forecast: xr.Dataset,
-        target: xr.Dataset,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
         **kwargs: Any,
     ) -> Any:
         preserve_dims = kwargs.get("preserve_dims", "lead_time")
@@ -142,8 +142,8 @@ class MAE(BaseMetric):
     @classmethod
     def _compute_metric(
         cls,
-        forecast: xr.Dataset,
-        target: xr.Dataset,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
         **kwargs: Any,
     ) -> Any:
         preserve_dims = kwargs.get("preserve_dims", "lead_time")
@@ -154,8 +154,8 @@ class ME(BaseMetric):
     @classmethod
     def _compute_metric(
         cls,
-        forecast: xr.Dataset,
-        target: xr.Dataset,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
         **kwargs: Any,
     ) -> Any:
         preserve_dims = kwargs.get("preserve_dims", "lead_time")
@@ -166,8 +166,8 @@ class RMSE(BaseMetric):
     @classmethod
     def _compute_metric(
         cls,
-        forecast: xr.Dataset,
-        target: xr.Dataset,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
         **kwargs: Any,
     ) -> Any:
         preserve_dims = kwargs.get("preserve_dims", "lead_time")
@@ -178,7 +178,7 @@ class RMSE(BaseMetric):
 class EarlySignal(BaseMetric):
     @classmethod
     def _compute_metric(
-        cls, forecast: xr.Dataset, target: xr.Dataset, **kwargs: Any
+        cls, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
     ) -> Any:
         # Dummy implementation for early signal
         raise NotImplementedError("EarlySignal is not implemented yet")

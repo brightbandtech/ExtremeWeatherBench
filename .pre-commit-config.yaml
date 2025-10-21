@@ -14,6 +14,7 @@ repos:
     rev: v1.5.1
     hooks:
       - id: mypy
+        exclude: ^(tests/.*|docs/.*|htmlcov/.*)
         args: [--enable-incomplete-feature=Unpack, --ignore-missing-imports]
         additional_dependencies:
           [tqdm-stubs, types-requests, types-ujson, types-pyyaml]
