@@ -218,7 +218,6 @@ def get_brightband_evaluation_objects() -> list[inputs.EvaluationObject]:
         routine.
     """
     # Import metrics here to avoid circular import
-
     from extremeweatherbench import metrics
 
     heatwave_metric_list: list[
