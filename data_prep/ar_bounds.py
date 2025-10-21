@@ -557,10 +557,10 @@ def create_case_summary_plot(
     ax2.set_title("AR Mask at Peak Time")
     ax2.set_extent(
         [
-            float(ar_peak.longitude.min()) - 5,
-            float(ar_peak.longitude.max()) + 5,
-            float(ar_peak.latitude.min()) - 5,
-            float(ar_peak.latitude.max()) + 5,
+            float(ar_peak.longitude.min()) - extent_modifier_degrees,
+            float(ar_peak.longitude.max()) + extent_modifier_degrees,
+            float(ar_peak.latitude.min()) - extent_modifier_degrees,
+            float(ar_peak.latitude.max()) + extent_modifier_degrees,
         ],
         crs=ccrs.PlateCarree(),
     )
@@ -626,7 +626,10 @@ def create_case_summary_plot(
 
 
 def process_ar_event(
-    single_case: cases.IndividualCase, era5_ar: inputs.ERA5, AR_OBJECT_CONFIG: Dict
+    single_case: cases.IndividualCase,
+    era5_ar: inputs.ERA5,
+    AR_OBJECT_CONFIG: Dict,
+    extent_modifier_degrees: float = 5,
 ) -> dict:
     """Process an atmospheric river event."""
     logger.info(
@@ -635,14 +638,16 @@ def process_ar_event(
     # Create a case object for this event
     case_collection = cases.load_individual_cases({"cases": [single_case]})
     case = case_collection.cases[0]
+    case.start_date = case.start_date - pd.Timedelta(days=3)
+    case.end_date = case.end_date + pd.Timedelta(days=3)
 
     # Expand the case location by 10 degrees on all edges
     original_location = case.location
     expanded_location = regions.BoundingBoxRegion(
-        latitude_min=original_location.latitude_min - 10,
-        latitude_max=original_location.latitude_max + 10,
-        longitude_min=original_location.longitude_min - 10,
-        longitude_max=original_location.longitude_max + 10,
+        latitude_min=original_location.latitude_min - extent_modifier_degrees,
+        latitude_max=original_location.latitude_max + extent_modifier_degrees,
+        longitude_min=original_location.longitude_min - extent_modifier_degrees,
+        longitude_max=original_location.longitude_max + extent_modifier_degrees,
     )
     case.location = expanded_location
 
@@ -657,7 +662,7 @@ def process_ar_event(
     era5_subset = era5_subset.chunk()
     # Compute IVT first
     logger.info("  Computing IVT...")
-    era5_subset = ar.maybe_build_atmospheric_river_variables(era5_subset)
+    era5_subset = ar._maybe_build_atmospheric_river_variables(era5_subset)
     ivt_da = ar.compute_ivt(
         specific_humidity=era5_subset["specific_humidity"],
         eastward_wind=era5_subset["eastward_wind"],
