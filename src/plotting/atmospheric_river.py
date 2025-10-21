@@ -11,6 +11,8 @@ import xarray as xr
 
 from extremeweatherbench import utils
 
+from . import plotting
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
@@ -41,13 +43,11 @@ def plot_ar_mask_animation(
     # Leave space for colorbar on right, but center the main plot area
     fig.subplots_adjust(left=0.08, right=0.98, top=0.92, bottom=0.05)
     ax = plt.axes(projection=ccrs.PlateCarree())
-    ax.coastlines()
-    gl = ax.gridlines(draw_labels=True)
-    gl.right_labels = False
-    gl.top_labels = False
+    # Use general plotting functions for geographic features
+    plotting.add_geographic_features(ax, include_land_ocean=True, land_ocean_alpha=0.1)
+    # Override borders with custom linestyle
     ax.add_feature(cfeature.BORDERS, linestyle=":")
-    ax.add_feature(cfeature.LAND, alpha=0.1)
-    ax.add_feature(cfeature.OCEAN, alpha=0.1)
+    plotting.setup_gridlines(ax, show_top_labels=False, show_right_labels=False)
 
     # Set extent to match ax2 domain (same as AR mask extent + 5 degrees)
     first_ar_slice = ar_mask.isel({time_dim: 0})
@@ -128,14 +128,13 @@ def plot_ar_mask_animation(
         # Clear all previous plots
         ax.clear()
 
-        # Re-add features
-        ax.coastlines()
-        gl = ax.gridlines(draw_labels=True)
-        gl.right_labels = False
-        gl.top_labels = False
+        # Re-add features using general plotting functions
+        plotting.add_geographic_features(
+            ax, include_land_ocean=True, land_ocean_alpha=0.1
+        )
+        # Override borders with custom linestyle
         ax.add_feature(cfeature.BORDERS, linestyle=":")
-        ax.add_feature(cfeature.LAND, alpha=0.1)
-        ax.add_feature(cfeature.OCEAN, alpha=0.1)
+        plotting.setup_gridlines(ax, show_top_labels=False, show_right_labels=False)
 
         # Reset extent
         ax.set_extent(
