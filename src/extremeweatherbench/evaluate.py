@@ -173,7 +173,7 @@ def compute_case_operator(
     Returns:
         A concatenated dataframe of the results of the case operator.
     """
-    forecast_ds, target_ds = _build_datasets(case_operator)
+    forecast_ds, target_ds = _build_datasets(case_operator, **kwargs)
     # Check if any dimension has zero length
     if 0 in forecast_ds.sizes.values() or 0 in target_ds.sizes.values():
         return pd.DataFrame(columns=defaults.OUTPUT_COLUMNS)
@@ -371,6 +371,7 @@ def _maybe_convert_variable_to_string(
 
 def _build_datasets(
     case_operator: "cases.CaseOperator",
+    **kwargs,
 ) -> tuple[xr.Dataset, xr.Dataset]:
     """Build the target and forecast datasets for a case operator.
 
@@ -379,18 +380,42 @@ def _build_datasets(
 
     Args:
         case_operator: The case operator containing metadata and input sources.
-
+        **kwargs: Additional keyword arguments to pass to pipeline steps.
     Returns:
         A tuple containing (forecast_dataset, target_dataset). If either dataset
         has no dimensions, both will be empty datasets.
     """
     logger.info("Running target pipeline... ")
-    target_ds = run_pipeline(case_operator.case_metadata, case_operator.target)
+    target_ds = run_pipeline(
+        case_operator.case_metadata, case_operator.target, **kwargs
+    )
     # If the target dataset has no dimensions, return empty datasets
     if len(target_ds.dims) == 0:
         return xr.Dataset(), xr.Dataset()
     logger.info("Running forecast pipeline... ")
-    forecast_ds = run_pipeline(case_operator.case_metadata, case_operator.forecast)
+    forecast_ds = run_pipeline(
+        case_operator.case_metadata, case_operator.forecast, **kwargs
+    )
+    # Check if any dimension has zero length
+    zero_length_dims = [dim for dim, size in forecast_ds.sizes.items() if size == 0]
+    if zero_length_dims:
+        if "valid_time" in zero_length_dims:
+            logger.warning(
+                f"Forecast dataset for case "
+                f"{case_operator.case_metadata.case_id_number} "
+                f"has no data for case time range "
+                f"{case_operator.case_metadata.start_date} to "
+                f"{case_operator.case_metadata.end_date}."
+            )
+        else:
+            logger.warning(
+                f"Forecast dataset for case "
+                f"{case_operator.case_metadata.case_id_number} "
+                f"has zero-length dimensions {zero_length_dims} for case time range "
+                f"{case_operator.case_metadata.start_date} "
+                f"to {case_operator.case_metadata.end_date}."
+            )
+        return xr.Dataset(), xr.Dataset()
     return (forecast_ds, target_ds)
 
 
@@ -408,12 +433,14 @@ def _compute_and_maybe_cache(
 def run_pipeline(
     case_metadata: "cases.IndividualCase",
     input_data: "inputs.InputBase",
+    **kwargs,
 ) -> xr.Dataset:
     """Shared method for running an input pipeline.
 
     Args:
         case_metadata: The case metadata to run the pipeline on.
         input_data: The input data to run the pipeline on.
+        **kwargs: Additional keyword arguments to pass to pipeline steps.
 
     Returns:
         The processed input data as an xarray dataset.
@@ -439,7 +466,9 @@ def run_pipeline(
                 variables=input_data.variables,
                 source_module=source_module,
             )
-            .pipe(lambda ds: input_data.subset_data_to_case(ds, case_metadata))
+            .pipe(
+                lambda ds: input_data.subset_data_to_case(ds, case_metadata, **kwargs)
+            )
             .pipe(input_data.maybe_convert_to_dataset)
             .pipe(input_data.add_source_to_dataset_attrs)
             .pipe(
