@@ -8,25 +8,11 @@ import polars as pl
 import pytest
 import xarray as xr
 
-from extremeweatherbench.sources.pandas_dataframe import (
-    check_for_spatial_data_pandas_dataframe,
-    check_for_valid_times_pandas_dataframe,
-    safely_pull_variables_pandas_dataframe,
-)
-from extremeweatherbench.sources.polars_lazyframe import (
-    check_for_spatial_data_polars_lazyframe,
-    check_for_valid_times_polars_lazyframe,
-    safely_pull_variables_polars_lazyframe,
-)
-from extremeweatherbench.sources.xarray_dataarray import (
-    check_for_spatial_data_xr_dataarray,
-    check_for_valid_times_xr_dataarray,
-    safely_pull_variables_xr_dataarray,
-)
-from extremeweatherbench.sources.xarray_dataset import (
-    check_for_spatial_data_xr_dataset,
-    check_for_valid_times_xr_dataset,
-    safely_pull_variables_xr_dataset,
+from extremeweatherbench.sources import (
+    pandas_dataframe,
+    polars_lazyframe,
+    xarray_dataarray,
+    xarray_dataset,
 )
 
 
@@ -38,6 +24,10 @@ class TestPandasDataFrameModule:
         """Create a sample DataFrame for testing."""
         data = {
             "valid_time": pd.date_range("2021-01-01", periods=10, freq="1D"),
+            "lead_time": pd.timedelta_range("0 hours", periods=10, freq="1h"),
+            "init_time": pd.date_range("2021-01-01", periods=10, freq="1D"),
+            "latitude": np.random.uniform(30, 50, 10),
+            "longitude": np.random.uniform(-120, -70, 10),
             "temperature": np.random.randn(10),
             "pressure": np.random.randn(10),
             "humidity": np.random.randn(10),
@@ -51,11 +41,19 @@ class TestPandasDataFrameModule:
         optional_variables = []
         optional_variables_mapping = {}
 
-        result = safely_pull_variables_pandas_dataframe(
+        result = pandas_dataframe.safely_pull_variables(
             sample_dataframe, variables, optional_variables, optional_variables_mapping
         )
 
-        assert list(result.columns) == variables
+        # Coordinate variables are automatically added for pandas DataFrames
+        expected_columns = variables + [
+            "valid_time",
+            "lead_time",
+            "init_time",
+            "latitude",
+            "longitude",
+        ]
+        assert sorted(result.columns) == sorted(expected_columns)
         assert len(result) == len(sample_dataframe)
 
     def test_safely_pull_variables_with_optional(self, sample_dataframe):
@@ -64,11 +62,18 @@ class TestPandasDataFrameModule:
         optional_variables = ["humidity", "nonexistent"]
         optional_variables_mapping = {}
 
-        result = safely_pull_variables_pandas_dataframe(
+        result = pandas_dataframe.safely_pull_variables(
             sample_dataframe, variables, optional_variables, optional_variables_mapping
         )
 
-        expected_columns = ["humidity", "temperature"]
+        # Coordinate variables are automatically added for pandas DataFrames
+        expected_columns = ["humidity", "temperature"] + [
+            "valid_time",
+            "lead_time",
+            "init_time",
+            "latitude",
+            "longitude",
+        ]
         assert sorted(result.columns) == sorted(expected_columns)
 
     def test_safely_pull_variables_with_mapping(self, sample_dataframe):
@@ -80,11 +85,18 @@ class TestPandasDataFrameModule:
             "pressure": "press",
         }
 
-        result = safely_pull_variables_pandas_dataframe(
+        result = pandas_dataframe.safely_pull_variables(
             sample_dataframe, variables, optional_variables, optional_variables_mapping
         )
 
-        expected_columns = ["temperature", "pressure"]
+        # Coordinate variables are automatically added for pandas DataFrames
+        expected_columns = ["temperature", "pressure"] + [
+            "valid_time",
+            "lead_time",
+            "init_time",
+            "latitude",
+            "longitude",
+        ]
         assert sorted(result.columns) == sorted(expected_columns)
 
     def test_safely_pull_variables_with_mapping_list(self, sample_dataframe):
@@ -95,12 +107,19 @@ class TestPandasDataFrameModule:
             "wind_speed": ["temp", "press"],
         }
 
-        result = safely_pull_variables_pandas_dataframe(
+        result = pandas_dataframe.safely_pull_variables(
             sample_dataframe, variables, optional_variables, optional_variables_mapping
         )
 
-        expected_columns = ["wind_speed"]
-        assert list(result.columns) == expected_columns
+        # Coordinate variables are automatically added for pandas DataFrames
+        expected_columns = ["wind_speed"] + [
+            "valid_time",
+            "lead_time",
+            "init_time",
+            "latitude",
+            "longitude",
+        ]
+        assert sorted(result.columns) == sorted(expected_columns)
 
     def test_safely_pull_variables_missing_required(self, sample_dataframe):
         """Test error when required variables are missing."""
@@ -109,7 +128,7 @@ class TestPandasDataFrameModule:
         optional_variables_mapping = {}
 
         with pytest.raises(KeyError, match="Required variables.*not found"):
-            safely_pull_variables_pandas_dataframe(
+            pandas_dataframe.safely_pull_variables(
                 sample_dataframe,
                 variables,
                 optional_variables,
@@ -124,7 +143,7 @@ class TestPandasDataFrameModule:
         start_date = datetime.datetime(2021, 1, 3)
         end_date = datetime.datetime(2021, 1, 7)
 
-        result = check_for_valid_times_pandas_dataframe(df, start_date, end_date)
+        result = pandas_dataframe.check_for_valid_times(df, start_date, end_date)
         assert result is True
 
     def test_check_for_valid_times_one_date_missing(self):
@@ -135,7 +154,7 @@ class TestPandasDataFrameModule:
         start_date = datetime.datetime(2021, 1, 3)
         end_date = datetime.datetime(2021, 1, 10)  # Outside range
 
-        result = check_for_valid_times_pandas_dataframe(df, start_date, end_date)
+        result = pandas_dataframe.check_for_valid_times(df, start_date, end_date)
         assert result is True  # Should still return True if any data in range
 
     def test_check_for_valid_times_neither_date_in_dataset(self):
@@ -146,11 +165,12 @@ class TestPandasDataFrameModule:
         start_date = datetime.datetime(2021, 2, 1)  # Outside range
         end_date = datetime.datetime(2021, 2, 10)  # Outside range
 
-        result = check_for_valid_times_pandas_dataframe(df, start_date, end_date)
+        result = pandas_dataframe.check_for_valid_times(df, start_date, end_date)
         assert result is False
 
     def test_check_for_spatial_data_with_latitude_longitude(self):
-        """Test check_for_spatial_data when DataFrame has latitude and longitude columns."""
+        """Test check_for_spatial_data when DataFrame has latitude and longitude
+        columns."""
         from extremeweatherbench.regions import BoundingBoxRegion
 
         # Create DataFrame with spatial data
@@ -169,7 +189,7 @@ class TestPandasDataFrameModule:
             longitude_max=-70.5,
         )
 
-        result = check_for_spatial_data_pandas_dataframe(df, region)
+        result = pandas_dataframe.check_for_spatial_data(df, region)
         assert result is True
 
     def test_check_for_spatial_data_with_lat_lon(self):
@@ -192,7 +212,7 @@ class TestPandasDataFrameModule:
             longitude_max=-70.5,
         )
 
-        result = check_for_spatial_data_pandas_dataframe(df, region)
+        result = pandas_dataframe.check_for_spatial_data(df, region)
         assert result is True
 
     def test_check_for_spatial_data_no_spatial_columns(self):
@@ -213,7 +233,7 @@ class TestPandasDataFrameModule:
             longitude_max=-70.5,
         )
 
-        result = check_for_spatial_data_pandas_dataframe(df, region)
+        result = pandas_dataframe.check_for_spatial_data(df, region)
         assert result is False
 
     def test_check_for_spatial_data_no_overlap(self):
@@ -236,7 +256,7 @@ class TestPandasDataFrameModule:
             longitude_max=-70.5,
         )
 
-        result = check_for_spatial_data_pandas_dataframe(df, region)
+        result = pandas_dataframe.check_for_spatial_data(df, region)
         assert result is False
 
 
@@ -248,6 +268,10 @@ class TestPolarsLazyFrameModule:
         """Create a sample LazyFrame for testing."""
         data = {
             "valid_time": pd.date_range("2021-01-01", periods=10, freq="1D"),
+            "lead_time": pd.timedelta_range("0 hours", periods=10, freq="1h"),
+            "init_time": pd.date_range("2021-01-01", periods=10, freq="1D"),
+            "latitude": np.random.uniform(30, 50, 10),
+            "longitude": np.random.uniform(-120, -70, 10),
             "temperature": np.random.randn(10),
             "pressure": np.random.randn(10),
             "humidity": np.random.randn(10),
@@ -262,11 +286,19 @@ class TestPolarsLazyFrameModule:
         optional_variables = []
         optional_variables_mapping = {}
 
-        result = safely_pull_variables_polars_lazyframe(
+        result = polars_lazyframe.safely_pull_variables(
             sample_lazyframe, variables, optional_variables, optional_variables_mapping
         )
 
-        assert sorted(result.columns) == sorted(variables)
+        # For polars LazyFrames, coordinate variables are added to optional only
+        expected_columns = variables + [
+            "valid_time",
+            "lead_time",
+            "init_time",
+            "latitude",
+            "longitude",
+        ]
+        assert sorted(result.columns) == sorted(expected_columns)
 
     def test_safely_pull_variables_with_optional(self, sample_lazyframe):
         """Test variable extraction with optional variables."""
@@ -274,11 +306,18 @@ class TestPolarsLazyFrameModule:
         optional_variables = ["humidity", "nonexistent"]
         optional_variables_mapping = {}
 
-        result = safely_pull_variables_polars_lazyframe(
+        result = polars_lazyframe.safely_pull_variables(
             sample_lazyframe, variables, optional_variables, optional_variables_mapping
         )
 
-        expected_columns = ["humidity", "temperature"]
+        # For polars LazyFrames, coordinate variables are added to optional only
+        expected_columns = ["humidity", "temperature"] + [
+            "valid_time",
+            "lead_time",
+            "init_time",
+            "latitude",
+            "longitude",
+        ]
         assert sorted(result.columns) == sorted(expected_columns)
 
     def test_safely_pull_variables_with_mapping(self, sample_lazyframe):
@@ -290,11 +329,18 @@ class TestPolarsLazyFrameModule:
             "pressure": "press",
         }
 
-        result = safely_pull_variables_polars_lazyframe(
+        result = polars_lazyframe.safely_pull_variables(
             sample_lazyframe, variables, optional_variables, optional_variables_mapping
         )
 
-        expected_columns = ["temperature", "pressure"]
+        # For polars LazyFrames, coordinate variables are added to optional only
+        expected_columns = ["temperature", "pressure"] + [
+            "valid_time",
+            "lead_time",
+            "init_time",
+            "latitude",
+            "longitude",
+        ]
         assert sorted(result.columns) == sorted(expected_columns)
 
     def test_safely_pull_variables_missing_required(self, sample_lazyframe):
@@ -304,7 +350,7 @@ class TestPolarsLazyFrameModule:
         optional_variables_mapping = {}
 
         with pytest.raises(KeyError, match="Required variables.*not found"):
-            safely_pull_variables_polars_lazyframe(
+            polars_lazyframe.safely_pull_variables(
                 sample_lazyframe,
                 variables,
                 optional_variables,
@@ -320,7 +366,7 @@ class TestPolarsLazyFrameModule:
         start_date = datetime.datetime(2021, 1, 3)
         end_date = datetime.datetime(2021, 1, 7)
 
-        result = check_for_valid_times_polars_lazyframe(lf, start_date, end_date)
+        result = polars_lazyframe.check_for_valid_times(lf, start_date, end_date)
         assert result is True
 
     def test_check_for_valid_times_one_date_missing(self):
@@ -332,7 +378,7 @@ class TestPolarsLazyFrameModule:
         start_date = datetime.datetime(2021, 1, 3)
         end_date = datetime.datetime(2021, 1, 10)  # Outside range
 
-        result = check_for_valid_times_polars_lazyframe(lf, start_date, end_date)
+        result = polars_lazyframe.check_for_valid_times(lf, start_date, end_date)
         assert result is True  # Should still return True if any data in range
 
     def test_check_for_valid_times_neither_date_in_dataset(self):
@@ -344,11 +390,12 @@ class TestPolarsLazyFrameModule:
         start_date = datetime.datetime(2021, 2, 1)  # Outside range
         end_date = datetime.datetime(2021, 2, 10)  # Outside range
 
-        result = check_for_valid_times_polars_lazyframe(lf, start_date, end_date)
+        result = polars_lazyframe.check_for_valid_times(lf, start_date, end_date)
         assert result is False
 
     def test_check_for_spatial_data_with_latitude_longitude(self):
-        """Test check_for_spatial_data when LazyFrame has latitude and longitude columns."""
+        """Test check_for_spatial_data when LazyFrame has latitude and longitude
+        columns."""
         from extremeweatherbench.regions import BoundingBoxRegion
 
         # Create LazyFrame with spatial data
@@ -368,7 +415,7 @@ class TestPolarsLazyFrameModule:
             longitude_max=-70.5,
         )
 
-        result = check_for_spatial_data_polars_lazyframe(lf, region)
+        result = polars_lazyframe.check_for_spatial_data(lf, region)
         assert result is True
 
     def test_check_for_spatial_data_with_lat_lon(self):
@@ -392,7 +439,7 @@ class TestPolarsLazyFrameModule:
             longitude_max=-70.5,
         )
 
-        result = check_for_spatial_data_polars_lazyframe(lf, region)
+        result = polars_lazyframe.check_for_spatial_data(lf, region)
         assert result is True
 
     def test_check_for_spatial_data_no_spatial_columns(self):
@@ -414,7 +461,7 @@ class TestPolarsLazyFrameModule:
             longitude_max=-70.5,
         )
 
-        result = check_for_spatial_data_polars_lazyframe(lf, region)
+        result = polars_lazyframe.check_for_spatial_data(lf, region)
         assert result is False
 
     def test_check_for_spatial_data_no_overlap(self):
@@ -438,7 +485,7 @@ class TestPolarsLazyFrameModule:
             longitude_max=-70.5,
         )
 
-        result = check_for_spatial_data_polars_lazyframe(lf, region)
+        result = polars_lazyframe.check_for_spatial_data(lf, region)
         assert result is False
 
 
@@ -468,7 +515,7 @@ class TestXarrayDataArrayModule:
         optional_variables = []
         optional_variables_mapping = {}
 
-        result = safely_pull_variables_xr_dataarray(
+        result = xarray_dataarray.safely_pull_variables(
             sample_dataarray, variables, optional_variables, optional_variables_mapping
         )
 
@@ -481,7 +528,7 @@ class TestXarrayDataArrayModule:
         optional_variables = ["temperature"]
         optional_variables_mapping = {}
 
-        result = safely_pull_variables_xr_dataarray(
+        result = xarray_dataarray.safely_pull_variables(
             sample_dataarray, variables, optional_variables, optional_variables_mapping
         )
 
@@ -495,7 +542,7 @@ class TestXarrayDataArrayModule:
         optional_variables_mapping = {}
 
         with pytest.raises(KeyError, match="Required variables.*not found"):
-            safely_pull_variables_xr_dataarray(
+            xarray_dataarray.safely_pull_variables(
                 sample_dataarray,
                 variables,
                 optional_variables,
@@ -520,7 +567,7 @@ class TestXarrayDataArrayModule:
         optional_variables = []
         optional_variables_mapping = {}
 
-        result = safely_pull_variables_xr_dataarray(
+        result = xarray_dataarray.safely_pull_variables(
             da, variables, optional_variables, optional_variables_mapping
         )
 
@@ -531,7 +578,7 @@ class TestXarrayDataArrayModule:
         start_date = datetime.datetime(2021, 1, 3)
         end_date = datetime.datetime(2021, 1, 7)
 
-        result = check_for_valid_times_xr_dataarray(
+        result = xarray_dataarray.check_for_valid_times(
             sample_dataarray, start_date, end_date
         )
         assert result is True
@@ -541,7 +588,7 @@ class TestXarrayDataArrayModule:
         start_date = datetime.datetime(2021, 1, 3)
         end_date = datetime.datetime(2021, 1, 15)  # Outside range
 
-        result = check_for_valid_times_xr_dataarray(
+        result = xarray_dataarray.check_for_valid_times(
             sample_dataarray, start_date, end_date
         )
         assert result is True  # Should still return True if any data in range
@@ -551,13 +598,14 @@ class TestXarrayDataArrayModule:
         start_date = datetime.datetime(2021, 2, 1)  # Outside range
         end_date = datetime.datetime(2021, 2, 10)  # Outside range
 
-        result = check_for_valid_times_xr_dataarray(
+        result = xarray_dataarray.check_for_valid_times(
             sample_dataarray, start_date, end_date
         )
         assert result is False
 
     def test_check_for_spatial_data_with_latitude_longitude(self):
-        """Test check_for_spatial_data when DataArray has latitude and longitude dimensions."""
+        """Test check_for_spatial_data when DataArray has latitude and longitude
+        sdimensions."""
         from extremeweatherbench.regions import BoundingBoxRegion
 
         # Create DataArray with spatial data
@@ -580,7 +628,7 @@ class TestXarrayDataArrayModule:
             longitude_max=-70.5,
         )
 
-        result = check_for_spatial_data_xr_dataarray(da, region)
+        result = xarray_dataarray.check_for_spatial_data(da, region)
         assert result is True
 
     def test_check_for_spatial_data_with_lat_lon(self):
@@ -607,7 +655,7 @@ class TestXarrayDataArrayModule:
             longitude_max=-70.5,
         )
 
-        result = check_for_spatial_data_xr_dataarray(da, region)
+        result = xarray_dataarray.check_for_spatial_data(da, region)
         assert result is True
 
     def test_check_for_spatial_data_no_spatial_dimensions(self):
@@ -630,7 +678,7 @@ class TestXarrayDataArrayModule:
             longitude_max=-70.5,
         )
 
-        result = check_for_spatial_data_xr_dataarray(da, region)
+        result = xarray_dataarray.check_for_spatial_data(da, region)
         assert result is False
 
     def test_check_for_spatial_data_no_overlap(self):
@@ -657,7 +705,7 @@ class TestXarrayDataArrayModule:
             longitude_max=-70.5,
         )
 
-        result = check_for_spatial_data_xr_dataarray(da, region)
+        result = xarray_dataarray.check_for_spatial_data(da, region)
         assert result is False
 
 
@@ -702,7 +750,7 @@ class TestXarrayDatasetModule:
         optional_variables = []
         optional_variables_mapping = {}
 
-        result = safely_pull_variables_xr_dataset(
+        result = xarray_dataset.safely_pull_variables(
             sample_dataset, variables, optional_variables, optional_variables_mapping
         )
 
@@ -716,7 +764,7 @@ class TestXarrayDatasetModule:
         optional_variables = ["humidity", "nonexistent"]
         optional_variables_mapping = {}
 
-        result = safely_pull_variables_xr_dataset(
+        result = xarray_dataset.safely_pull_variables(
             sample_dataset, variables, optional_variables, optional_variables_mapping
         )
 
@@ -732,7 +780,7 @@ class TestXarrayDatasetModule:
             "pressure": "press",
         }
 
-        result = safely_pull_variables_xr_dataset(
+        result = xarray_dataset.safely_pull_variables(
             sample_dataset, variables, optional_variables, optional_variables_mapping
         )
 
@@ -747,7 +795,7 @@ class TestXarrayDatasetModule:
             "wind_speed": ["temp", "press"],
         }
 
-        result = safely_pull_variables_xr_dataset(
+        result = xarray_dataset.safely_pull_variables(
             sample_dataset, variables, optional_variables, optional_variables_mapping
         )
 
@@ -761,7 +809,7 @@ class TestXarrayDatasetModule:
         optional_variables_mapping = {}
 
         with pytest.raises(KeyError, match="Required variables.*not found"):
-            safely_pull_variables_xr_dataset(
+            xarray_dataset.safely_pull_variables(
                 sample_dataset,
                 variables,
                 optional_variables,
@@ -773,7 +821,9 @@ class TestXarrayDatasetModule:
         start_date = datetime.datetime(2021, 1, 3)
         end_date = datetime.datetime(2021, 1, 7)
 
-        result = check_for_valid_times_xr_dataset(sample_dataset, start_date, end_date)
+        result = xarray_dataset.check_for_valid_times(
+            sample_dataset, start_date, end_date
+        )
         assert result is True
 
     def test_check_for_valid_times_one_date_missing(self, sample_dataset):
@@ -781,7 +831,9 @@ class TestXarrayDatasetModule:
         start_date = datetime.datetime(2021, 1, 3)
         end_date = datetime.datetime(2021, 1, 15)  # Outside range
 
-        result = check_for_valid_times_xr_dataset(sample_dataset, start_date, end_date)
+        result = xarray_dataset.check_for_valid_times(
+            sample_dataset, start_date, end_date
+        )
         assert result is True  # Should still return True if any data in range
 
     def test_check_for_valid_times_neither_date_in_dataset(self, sample_dataset):
@@ -789,11 +841,14 @@ class TestXarrayDatasetModule:
         start_date = datetime.datetime(2021, 2, 1)  # Outside range
         end_date = datetime.datetime(2021, 2, 10)  # Outside range
 
-        result = check_for_valid_times_xr_dataset(sample_dataset, start_date, end_date)
+        result = xarray_dataset.check_for_valid_times(
+            sample_dataset, start_date, end_date
+        )
         assert result is False
 
     def test_check_for_spatial_data_with_latitude_longitude(self):
-        """Test check_for_spatial_data when Dataset has latitude and longitude coordinates."""
+        """Test check_for_spatial_data when Dataset has latitude and longitude
+        coordinates."""
         from extremeweatherbench.regions import BoundingBoxRegion
 
         # Create Dataset with spatial data
@@ -814,7 +869,7 @@ class TestXarrayDatasetModule:
             longitude_max=-70.5,
         )
 
-        result = check_for_spatial_data_xr_dataset(ds, region)
+        result = xarray_dataset.check_for_spatial_data(ds, region)
         assert result is True
 
     def test_check_for_spatial_data_with_lat_lon(self):
@@ -839,7 +894,7 @@ class TestXarrayDatasetModule:
             longitude_max=-70.5,
         )
 
-        result = check_for_spatial_data_xr_dataset(ds, region)
+        result = xarray_dataset.check_for_spatial_data(ds, region)
         assert result is True
 
     def test_check_for_spatial_data_no_spatial_coordinates(self):
@@ -860,7 +915,7 @@ class TestXarrayDatasetModule:
             longitude_max=-70.5,
         )
 
-        result = check_for_spatial_data_xr_dataset(ds, region)
+        result = xarray_dataset.check_for_spatial_data(ds, region)
         assert result is False
 
     def test_check_for_spatial_data_no_overlap(self):
@@ -885,5 +940,5 @@ class TestXarrayDatasetModule:
             longitude_max=-70.5,
         )
 
-        result = check_for_spatial_data_xr_dataset(ds, region)
+        result = xarray_dataset.check_for_spatial_data(ds, region)
         assert result is False

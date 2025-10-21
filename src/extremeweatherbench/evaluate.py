@@ -12,7 +12,7 @@ import xarray as xr
 from tqdm.auto import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 
-from extremeweatherbench import cases, defaults, derived, inputs, utils
+from extremeweatherbench import cases, defaults, derived, inputs, sources, utils
 
 if TYPE_CHECKING:
     from extremeweatherbench import metrics, regions
@@ -422,16 +422,22 @@ def run_pipeline(
     data = input_data.open_and_maybe_preprocess_data_from_source().pipe(
         lambda ds: input_data.maybe_map_variable_names(ds)
     )
+
+    # Get the appropriate source module for the data type
+    source_module = sources.get_backend_module(type(data))
+
     # Checks if the data has valid times and spatial overlap. This must come after
     # maybe_map_variable_names to ensure variable names are mapped correctly.
     if inputs.check_for_missing_data(
         data,
         case_metadata,
+        source_module=source_module,
     ):
         valid_data = (
             inputs.maybe_subset_variables(
                 data,
                 variables=input_data.variables,
+                source_module=source_module,
             )
             .pipe(lambda ds: input_data.subset_data_to_case(ds, case_metadata))
             .pipe(input_data.maybe_convert_to_dataset)

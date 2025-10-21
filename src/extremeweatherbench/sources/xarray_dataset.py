@@ -12,8 +12,8 @@ if TYPE_CHECKING:
     from extremeweatherbench import regions
 
 
-def safely_pull_variables_xr_dataset(
-    dataset: xr.Dataset,
+def safely_pull_variables(
+    data: xr.Dataset,
     variables: list[str],
     optional_variables: list[str],
     optional_variables_mapping: dict[str, list[str]],
@@ -21,7 +21,7 @@ def safely_pull_variables_xr_dataset(
     """Handle variable extraction for xarray Dataset.
 
     Args:
-        dataset: The xarray Dataset to extract variables from.
+        data: The xarray Dataset to extract variables from.
         variables: List of required variable names to extract.
         optional_variables: List of optional variable names to extract.
         optional_variables_mapping: Dictionary mapping optional variables to
@@ -39,7 +39,7 @@ def safely_pull_variables_xr_dataset(
 
     # First, check for optional variables and add them if present
     for opt_var in optional_variables:
-        if opt_var in dataset.data_vars:
+        if opt_var in data.data_vars:
             found_variables.append(opt_var)
             # Check if this optional variable replaces required variables
             if opt_var in optional_variables_mapping:
@@ -56,30 +56,32 @@ def safely_pull_variables_xr_dataset(
         if var in required_variables_satisfied:
             # This required variable was replaced by an optional variable
             continue
-        elif var in dataset.data_vars:
+        elif var in data.data_vars:
             found_variables.append(var)
         else:
             missing_variables.append(var)
 
     # Raise error if any required variables are missing
     if missing_variables:
-        available_vars = list(dataset.data_vars.keys())
+        available_vars = list(data.data_vars.keys())
         raise KeyError(
             f"Required variables {missing_variables} not found in dataset. "
             f"Available variables: {available_vars}"
         )
 
     # Return dataset with only the found variables
-    return dataset[found_variables]
+    return data[found_variables]
 
 
-def check_for_valid_times_xr_dataset(
-    dataset: xr.Dataset, start_date: datetime.datetime, end_date: datetime.datetime
+def check_for_valid_times(
+    data: xr.Dataset,
+    start_date: datetime.datetime,
+    end_date: datetime.datetime,
 ) -> bool:
     """Check if the dataset has valid times in the given date range.
 
     Args:
-        dataset: The xarray Dataset to check for valid times.
+        data: The xarray Dataset to check for valid times.
         start_date: The start date of the time range to check.
         end_date: The end date of the time range to check.
 
@@ -96,21 +98,18 @@ def check_for_valid_times_xr_dataset(
     # Try different time dimension names
     time_dims = ["valid_time", "time", "init_time"]
     for time_dim in time_dims:
-        if time_dim in dataset.coords:
-            return any(dataset[time_dim].loc[start_ts:end_ts])
+        if time_dim in data.coords:
+            return any(data[time_dim].loc[start_ts:end_ts])
 
     # If no time dimension found, return False
     return False
 
 
-def check_for_spatial_data_xr_dataset(
-    dataset: xr.Dataset,
-    location: "regions.Region",
-) -> bool:
+def check_for_spatial_data(data: xr.Dataset, location: "regions.Region") -> bool:
     """Check if the Dataset has spatial data for the given location.
 
     Args:
-        dataset: The xarray Dataset to check for spatial data.
+        data: The xarray Dataset to check for spatial data.
         location: The region to check for spatial overlap.
 
     Returns:
@@ -121,8 +120,8 @@ def check_for_spatial_data_xr_dataset(
     lat_dims = ["latitude", "lat"]
     lon_dims = ["longitude", "lon"]
 
-    lat_dim = utils.check_for_vars(lat_dims, list(dataset.coords.keys()))
-    lon_dim = utils.check_for_vars(lon_dims, list(dataset.coords.keys()))
+    lat_dim = utils.check_for_vars(lat_dims, list(data.coords.keys()))
+    lon_dim = utils.check_for_vars(lon_dims, list(data.coords.keys()))
 
     if lat_dim is None or lon_dim is None:
         return False
@@ -132,20 +131,20 @@ def check_for_spatial_data_xr_dataset(
     lon_min, lon_max = coords.longitude_min, coords.longitude_max
 
     # Check if reversing the latitude range still returns no data
-    if len(dataset.sel({lat_dim: slice(lat_min, lat_max)})) == 0:
-        if len(dataset.sel({lat_dim: slice(lat_max, lat_min)})) == 0:
+    if len(data.sel({lat_dim: slice(lat_min, lat_max)})) == 0:
+        if len(data.sel({lat_dim: slice(lat_max, lat_min)})) == 0:
             # If reversing the latitude range still returns no data, return False
             return False
         else:
             # If latitude has data, check longitude
-            dataset = dataset.sel(
+            data = data.sel(
                 {lat_dim: slice(lat_max, lat_min), lon_dim: slice(lon_min, lon_max)}
             )
     else:
         # Check longitude if latitude > 0
-        dataset = dataset.sel(
+        data = data.sel(
             {lat_dim: slice(lat_min, lat_max), lon_dim: slice(lon_min, lon_max)}
         )
 
     # Check if any data remains after spatial filtering
-    return sum(dataset.sizes.values()) > 0
+    return sum(data.sizes.values()) > 0

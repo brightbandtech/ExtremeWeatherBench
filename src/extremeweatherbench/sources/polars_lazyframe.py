@@ -5,14 +5,14 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
-from extremeweatherbench import utils
+from extremeweatherbench import defaults, utils
 
 if TYPE_CHECKING:
     from extremeweatherbench import regions
 
 
-def safely_pull_variables_polars_lazyframe(
-    dataset: pl.LazyFrame,
+def safely_pull_variables(
+    data: pl.LazyFrame,
     variables: list[str],
     optional_variables: list[str],
     optional_variables_mapping: dict[str, list[str]],
@@ -25,7 +25,7 @@ def safely_pull_variables_polars_lazyframe(
     The function works with LazyFrames, so operations are deferred until execution.
 
     Args:
-        dataset: The Polars LazyFrame to extract variables from.
+        data: The Polars LazyFrame to extract variables from.
         variables: List of required variable names to extract. These must be
             present in the LazyFrame unless replaced by optional variables.
         optional_variables: List of optional variable names to extract. These
@@ -51,23 +51,25 @@ def safely_pull_variables_polars_lazyframe(
         >>> variables = ["temperature"]
         >>> optional = ["temp"]
         >>> mapping = {"temp": "temperature"}
-        >>> result = safely_pull_variables_polars_lazyframe(
-        ...     lf, variables, optional, mapping
-        ... )
+        >>> result = safely_pull_variables(lf, variables, optional, mapping)
         >>> result.collect().columns
         ['temp']
     """
-    # Get column names from LazyFrame
-    available_columns = dataset.collect_schema().names()
+    # For polars LazyFrames, automatically add coordinate variables
+    # to optional variables only (not required)
+    optional_variables = optional_variables + defaults.DEFAULT_COORDINATE_VARIABLES
 
-    # Track which variables we've found
-    found_variables = []
+    # Get column names from LazyFrame
+    available_columns = data.collect_schema().names()
+
+    # Track which variables we've found (use set to avoid duplicates)
+    found_variables = set()
     required_variables_satisfied = set()
 
     # First, check for optional variables and add them if present
     for opt_var in optional_variables:
         if opt_var in available_columns:
-            found_variables.append(opt_var)
+            found_variables.add(opt_var)
             # Check if this optional variable replaces required variables
             if opt_var in optional_variables_mapping:
                 replaced_vars = optional_variables_mapping[opt_var]
@@ -84,7 +86,7 @@ def safely_pull_variables_polars_lazyframe(
             # This required variable was replaced by an optional variable
             continue
         elif var in available_columns:
-            found_variables.append(var)
+            found_variables.add(var)
         else:
             missing_variables.append(var)
 
@@ -96,11 +98,13 @@ def safely_pull_variables_polars_lazyframe(
         )
 
     # Return LazyFrame with only the found columns
-    return dataset.select(found_variables)
+    return data.select(list(found_variables))
 
 
-def check_for_valid_times_polars_lazyframe(
-    dataset: pl.LazyFrame, start_date: datetime.datetime, end_date: datetime.datetime
+def check_for_valid_times(
+    data: pl.LazyFrame,
+    start_date: datetime.datetime,
+    end_date: datetime.datetime,
 ) -> bool:
     """Check if the LazyFrame contains any data within the specified time range.
 
@@ -110,7 +114,7 @@ def check_for_valid_times_polars_lazyframe(
     The function uses lazy evaluation for efficiency.
 
     Args:
-        dataset: The Polars LazyFrame to check for valid times. Should contain
+        data: The Polars LazyFrame to check for valid times. Should contain
             at least one time column with datetime data.
         start_date: The start date of the time range to check (inclusive).
         end_date: The end date of the time range to check (inclusive).
@@ -136,17 +140,17 @@ def check_for_valid_times_polars_lazyframe(
         >>> lf = df.lazy()
         >>> start = datetime.datetime(2023, 1, 2)
         >>> end = datetime.datetime(2023, 1, 4)
-        >>> check_for_valid_times_polars_lazyframe(lf, start, end)
+        >>> check_for_valid_times(lf, start, end)
         True
     """
     # Try different time column names
     time_cols = ["valid_time", "time", "init_time"]
-    available_columns = dataset.collect_schema().names()
+    available_columns = data.collect_schema().names()
 
     for time_col in time_cols:
         if time_col in available_columns:
             # Filter the LazyFrame to only include valid times in the given date range
-            time_filtered_lf = dataset.select(pl.col(time_col)).filter(
+            time_filtered_lf = data.select(pl.col(time_col)).filter(
                 (pl.col(time_col) >= start_date) & (pl.col(time_col) <= end_date)
             )
             # If the filtered LazyFrame has any rows, return True
@@ -156,8 +160,8 @@ def check_for_valid_times_polars_lazyframe(
     return False
 
 
-def check_for_spatial_data_polars_lazyframe(
-    dataset: pl.LazyFrame,
+def check_for_spatial_data(
+    data: pl.LazyFrame,
     location: "regions.Region",
 ) -> bool:
     """Check if the LazyFrame contains spatial data within the specified region.
@@ -168,7 +172,7 @@ def check_for_spatial_data_polars_lazyframe(
     efficiency when checking spatial bounds.
 
     Args:
-        dataset: The Polars LazyFrame to check for spatial data. Should contain
+        data: The Polars LazyFrame to check for spatial data. Should contain
             latitude and longitude columns with coordinate data.
         location: A Region object that defines the geographic area to check
             against. Must have a get_bounding_coordinates method that returns
@@ -197,14 +201,14 @@ def check_for_spatial_data_polars_lazyframe(
         ... )
         >>> lf = df.lazy()
         >>> region = Region(...)  # Define your region
-        >>> check_for_spatial_data_polars_lazyframe(lf, region)
+        >>> check_for_spatial_data(lf, region)
         True
     """
     # Check if LazyFrame has latitude and longitude columns
     lat_cols = ["latitude", "lat"]
     lon_cols = ["longitude", "lon"]
 
-    available_columns = dataset.collect_schema().names()
+    available_columns = data.collect_schema().names()
 
     lat_col = utils.check_for_vars(lat_cols, available_columns)
     lon_col = utils.check_for_vars(lon_cols, available_columns)
@@ -217,7 +221,7 @@ def check_for_spatial_data_polars_lazyframe(
     lon_min, lon_max = coords.longitude_min, coords.longitude_max
 
     # Check if there are any data points within the location bounds
-    filtered_data = dataset.filter(
+    filtered_data = data.filter(
         (pl.col(lat_col) >= lat_min)
         & (pl.col(lat_col) <= lat_max)
         & (pl.col(lon_col) >= lon_min)

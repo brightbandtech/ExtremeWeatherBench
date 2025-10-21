@@ -21,6 +21,15 @@ OUTPUT_COLUMNS = [
     "case_id_number",
     "event_type",
 ]
+# The core coordinate variables that are always required, even if not dimensions
+# (e.g. latitude and longitude for xarray datasets)
+DEFAULT_COORDINATE_VARIABLES = [
+    "valid_time",
+    "lead_time",
+    "init_time",
+    "latitude",
+    "longitude",
+]
 
 
 def _preprocess_bb_cira_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
