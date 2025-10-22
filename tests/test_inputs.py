@@ -1560,6 +1560,35 @@ class TestStandaloneFunctions:
         with pytest.raises(ValueError, match="Variables not defined"):
             inputs.zarr_target_subsetter(sample_era5_dataset, mock_case)
 
+    @patch(
+        "extremeweatherbench.derived.maybe_pull_required_variables_from_derived_input"
+    )
+    def test_zarr_target_subsetter_chunks_unchunked_data(
+        self, mock_derived, sample_era5_dataset
+    ):
+        """Test zarr_target_subsetter chunks data when it has no chunks."""
+        mock_derived.return_value = ["2m_temperature"]
+
+        # Create mock case operator
+        mock_case = Mock()
+        mock_case.case_metadata.start_date = pd.Timestamp("2021-06-20")
+        mock_case.case_metadata.end_date = pd.Timestamp("2021-06-22")
+        mock_case.target.variables = ["2m_temperature"]
+
+        # Create unchunked dataset (no chunks attribute)
+        unchunked_data = sample_era5_dataset.copy()
+        # Ensure the dataset has no chunks by loading it
+        unchunked_data = unchunked_data.load()
+
+        # Mock the mask method to return unchunked data
+        mock_case.case_metadata.location.mask.return_value = unchunked_data
+
+        result = inputs.zarr_target_subsetter(unchunked_data, mock_case)
+
+        # Verify that the result has chunks (was chunked by the function)
+        assert result.chunks is not None
+        assert isinstance(result, xr.Dataset)
+
     def test_align_forecast_to_point_obs_target(self):
         """Test align_forecast_to_point_obs_target function."""
         # Create simple test data with overlapping times
