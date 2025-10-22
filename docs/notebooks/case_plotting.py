@@ -140,7 +140,7 @@ def plot_all_cases(ewb_cases, event_type=None, filename=None, bounding_box=None,
 
         # check if the case is inside the bounding box
         if bounding_box is not None:
-            if (not shapely.intersects(indiv_case.location.geopandas.geometry[0], bounding_box_polygon)):
+            if (not shapely.intersects(indiv_case.location.as_geopandas().geometry[0], bounding_box_polygon)):
                 #print(f"Skipping case {indiv_case.case_id_number} as it is outside the bounding box.")
                 continue
 
@@ -152,20 +152,20 @@ def plot_all_cases(ewb_cases, event_type=None, filename=None, bounding_box=None,
             if (fill_boxes):
                 # to handle wrapping around the prime meridian, we can't use geopandas plot (and besides it is slow)
                 # instead we have multi-polygon patches if it wraps around and we need to plot each polygon separately
-                if isinstance(indiv_case.location.geopandas.geometry.iloc[0], shapely.geometry.MultiPolygon):
-                    for poly in indiv_case.location.geopandas.geometry.iloc[0].geoms:
+                if isinstance(indiv_case.location.as_geopandas().geometry.iloc[0], shapely.geometry.MultiPolygon):
+                    for poly in indiv_case.location.as_geopandas().geometry.iloc[0].geoms:
                         plot_polygon(poly, ax, color=color, alpha=alphas[indiv_event_type], my_zorder=zorders[indiv_event_type])
                 else:
-                    plot_polygon(indiv_case.location.geopandas.geometry.iloc[0], ax, color=color, 
+                    plot_polygon(indiv_case.location.as_geopandas().geometry.iloc[0], ax, color=color, 
                                 alpha=alphas[indiv_event_type], my_zorder=zorders[indiv_event_type])
             else:
                 # to handle wrapping around the prime meridian, we can't use geopandas plot (and besides it is slow)
                 # instead we have multi-polygon patches if it wraps around and we need to plot each polygon separately
-                if isinstance(indiv_case.location.geopandas.geometry.iloc[0], shapely.geometry.MultiPolygon):
-                    for poly in indiv_case.location.geopandas.geometry.iloc[0].geoms:
+                if isinstance(indiv_case.location.as_geopandas().geometry.iloc[0], shapely.geometry.MultiPolygon):
+                    for poly in indiv_case.location.as_geopandas().geometry.iloc[0].geoms:
                         plot_polygon_outline(poly, ax, color=color, alpha=box_alphas[indiv_event_type], my_zorder=zorders[indiv_event_type])
                 else:
-                    plot_polygon_outline(indiv_case.location.geopandas.geometry.iloc[0], ax, color=color, 
+                    plot_polygon_outline(indiv_case.location.as_geopandas().geometry.iloc[0], ax, color=color, 
                                 alpha=box_alphas[indiv_event_type], my_zorder=zorders[indiv_event_type])
 
 
@@ -289,11 +289,11 @@ def plot_all_cases_and_obs(ewb_cases, event_type=None, filename=None, bounding_b
         if (indiv_event_type == event_type or event_type is None):
             # to handle wrapping around the prime meridian, we can't use geopandas plot (and besides it is slow)
             # instead we have multi-polygon patches if it wraps around and we need to plot each polygon separately
-            if isinstance(indiv_case.location.geopandas.geometry.iloc[0], shapely.geometry.MultiPolygon):
-                for poly in indiv_case.location.geopandas.geometry.iloc[0].geoms:
+            if isinstance(indiv_case.location.as_geopandas().geometry.iloc[0], shapely.geometry.MultiPolygon):
+                for poly in indiv_case.location.as_geopandas().geometry.iloc[0].geoms:
                     plot_polygon_outline(poly, ax, color=color, alpha=alphas[indiv_event_type], my_zorder=zorders[indiv_event_type], linewidth=0.8)
             else:
-                plot_polygon_outline(indiv_case.location.geopandas.geometry.iloc[0], ax, color=color, 
+                plot_polygon_outline(indiv_case.location.as_geopandas().geometry.iloc[0], ax, color=color, 
                                         alpha=alphas[indiv_event_type], my_zorder=zorders[indiv_event_type], linewidth=0.8)
                 
             # grab the target data for this case
@@ -690,7 +690,7 @@ def generate_heatwave_plots(
     ax2.legend(fontsize=12)
     mask = (
         time_based_heatwave_dataset["2m_temperature"]
-        < time_based_heatwave_dataset["surface_temperature_85th_percentile"]
+        > time_based_heatwave_dataset["surface_temperature_85th_percentile"]
     )
     start = None
     for i, val in enumerate(mask.values):
