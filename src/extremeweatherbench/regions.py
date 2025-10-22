@@ -59,20 +59,6 @@ class Region(abc.ABC):
             region_latitude_max,
         ) = self.as_geopandas().total_bounds
 
-        # Handle longitude convention mismatch between dataset and region bounds
-        dataset_lon_min = float(dataset.longitude.min())
-        dataset_lon_max = float(dataset.longitude.max())
-
-        # Check if dataset uses 0-360 convention while region uses -180/+180
-        if (
-            dataset_lon_min >= 0
-            and dataset_lon_max <= 360
-            and (region_longitude_min < 0 or region_longitude_max < 0)
-        ):
-            # Convert region bounds to 0-360 convention
-            region_longitude_min = utils.convert_longitude_to_360(region_longitude_min)
-            region_longitude_max = utils.convert_longitude_to_360(region_longitude_max)
-
         # Avoids slice() which is susceptible to differences in coord order
         latitude_da = dataset.latitude.where(
             np.logical_and(

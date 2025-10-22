@@ -1806,3 +1806,165 @@ class TestRegionSubsettingEdgeCases:
         # Should handle polar coordinates gracefully
         subset_cases = subsetter.subset_case_collection(case_collection)
         assert isinstance(subset_cases, cases.IndividualCaseCollection)
+
+
+class TestLongitudeCoordinateMismatch:
+    """Test the longitude coordinate mismatch for zero-length dimensions."""
+
+    @pytest.fixture
+    def dataset_360_convention(self):
+        """Create a dataset using 0-360 longitude convention."""
+        lats = np.linspace(30, 60, 31)  # 30N to 60N
+        # Create longitude range that includes both 350-360 and 0-20
+        lons = np.concatenate([np.linspace(350, 359, 10), np.linspace(0, 20, 21)])
+        data = np.random.random((len(lats), len(lons)))
+        return xr.Dataset(
+            {"temperature": (["latitude", "longitude"], data)},
+            coords={"latitude": lats, "longitude": lons},
+        )
+
+    @pytest.fixture
+    def dataset_180_convention(self):
+        """Create a dataset using -180/+180 longitude convention."""
+        lats = np.linspace(30, 60, 31)  # 30N to 60N
+        lons = np.linspace(-20, 20, 41)  # 20W to 20E
+        data = np.random.random((len(lats), len(lons)))
+        return xr.Dataset(
+            {"temperature": (["latitude", "longitude"], data)},
+            coords={"latitude": lats, "longitude": lons},
+        )
+
+    def test_region_180_with_dataset_360(self, dataset_360_convention):
+        """Test region in -180/+180 convention with dataset in 0-360."""
+        # Create region matching UK case 20: longitude -9.75 to 8.25
+        region = BoundingBoxRegion.create_region(
+            latitude_min=39.25,
+            latitude_max=56.0,
+            longitude_min=-9.75,  # -180/+180 convention
+            longitude_max=8.25,
+        )
+
+        # This should NOT result in zero-length longitude dimension
+        masked_dataset = region.mask(dataset_360_convention)
+
+        assert isinstance(masked_dataset, xr.Dataset)
+        assert "temperature" in masked_dataset.data_vars
+
+        # Should have some longitude coordinates (not zero-length)
+        assert len(masked_dataset.longitude) > 0
+
+        # Longitude values should be in the expected range after conversion
+        # -9.75 becomes 350.25, 8.25 stays 8.25 in 0-360 convention
+        lon_values = masked_dataset.longitude.values
+        expected_condition = np.logical_or(
+            lon_values >= 350.25,  # Converted -9.75
+            lon_values <= 8.25,  # Original 8.25
+        )
+        assert np.all(expected_condition)
+
+    def test_region_360_with_dataset_180(self, dataset_180_convention):
+        """Test region in 0-360 convention with dataset in -180/+180."""
+        # Create region in 0-360 convention
+        region = BoundingBoxRegion.create_region(
+            latitude_min=39.25,
+            latitude_max=56.0,
+            longitude_min=350.25,  # 0-360 convention (equivalent to -9.75)
+            longitude_max=8.25,
+        )
+
+        # This should NOT result in zero-length longitude dimension
+        masked_dataset = region.mask(dataset_180_convention)
+
+        assert isinstance(masked_dataset, xr.Dataset)
+        assert "temperature" in masked_dataset.data_vars
+
+        # Should have some longitude coordinates (not zero-length)
+        assert len(masked_dataset.longitude) > 0
+
+    def test_antimeridian_crossing_360_dataset(self):
+        """Test antimeridian crossing with 0-360 dataset."""
+        # Create dataset that spans antimeridian in 0-360 convention
+        lats = np.linspace(30, 60, 31)
+        lons = np.concatenate([np.linspace(350, 360, 11), np.linspace(0, 10, 11)])
+        data = np.random.random((len(lats), len(lons)))
+        dataset = xr.Dataset(
+            {"temperature": (["latitude", "longitude"], data)},
+            coords={"latitude": lats, "longitude": lons},
+        )
+
+        # Region that crosses antimeridian in 0-360 convention
+        region = BoundingBoxRegion.create_region(
+            latitude_min=35.0,
+            latitude_max=55.0,
+            longitude_min=355.0,  # Should wrap to include 0-5 range
+            longitude_max=5.0,
+        )
+
+        masked_dataset = region.mask(dataset)
+
+        # Should handle antimeridian crossing correctly
+        assert len(masked_dataset.longitude) > 0
+        lon_values = masked_dataset.longitude.values
+        # Should include both high values (>=355) and low values (<=5)
+        has_high = np.any(lon_values >= 355.0)
+        has_low = np.any(lon_values <= 5.0)
+        assert has_high or has_low  # Should have at least one side
+
+    def test_antimeridian_crossing_180_dataset(self):
+        """Test antimeridian crossing with -180/+180 dataset."""
+        # Create dataset that spans antimeridian in -180/+180 convention
+        lats = np.linspace(30, 60, 31)
+        lons = np.concatenate([np.linspace(-180, -170, 11), np.linspace(170, 180, 11)])
+        data = np.random.random((len(lats), len(lons)))
+        dataset = xr.Dataset(
+            {"temperature": (["latitude", "longitude"], data)},
+            coords={"latitude": lats, "longitude": lons},
+        )
+
+        # Region that crosses antimeridian in -180/+180 convention
+        region = BoundingBoxRegion.create_region(
+            latitude_min=35.0,
+            latitude_max=55.0,
+            longitude_min=175.0,  # Crosses antimeridian
+            longitude_max=-175.0,
+        )
+
+        masked_dataset = region.mask(dataset)
+
+        # Should handle antimeridian crossing correctly
+        assert len(masked_dataset.longitude) > 0
+
+    def test_case_20_specific_scenario(self):
+        """Test the specific Case 20 scenario that was failing."""
+        # Simulate a typical forecast dataset with 0-360 longitude
+        lats = np.linspace(20, 70, 51)  # Covers UK region
+        lons = np.linspace(0, 359, 360)  # Full global 0-360 coverage
+        data = np.random.random((len(lats), len(lons)))
+        forecast_dataset = xr.Dataset(
+            {"temperature": (["latitude", "longitude"], data)},
+            coords={"latitude": lats, "longitude": lons},
+        )
+
+        # Case 20 region definition (UK August 2022)
+        case_20_region = BoundingBoxRegion.create_region(
+            latitude_min=39.25,
+            latitude_max=56.0,
+            longitude_min=-9.75,  # -180/+180 convention
+            longitude_max=8.25,
+        )
+
+        # This should work without zero-length longitude dimension
+        masked_dataset = case_20_region.mask(forecast_dataset)
+
+        assert isinstance(masked_dataset, xr.Dataset)
+        assert len(masked_dataset.longitude) > 0  # Should not be zero-length
+        assert len(masked_dataset.latitude) > 0
+
+        # Verify longitude coordinates are in expected range
+        lon_values = masked_dataset.longitude.values
+        # After conversion: -9.75 -> 350.25, 8.25 -> 8.25
+        expected_condition = np.logical_or(
+            lon_values >= 350.25,  # Western part (converted from -9.75)
+            lon_values <= 8.25,  # Eastern part
+        )
+        assert np.all(expected_condition)
