@@ -206,16 +206,14 @@ def _maybe_build_atmospheric_river_variables(data: xr.Dataset) -> xr.Dataset:
             levels=data["level"],
         )
 
-    # Transform all data to the same shape
-    _, level_broadcast, sfc_pres_broadcast = xr.broadcast(
-        data, data["level"], data["surface_standard_pressure"]
-    )
-
+    # Broadcast level to match all dimensions including valid_time
     # Only include levels > 200 hPa (levels lower than 200 hPa have negligible
     # moisture)
+    level_broadcasted = data["level"].broadcast_like(data)
     data["adjusted_level"] = xr.where(
-        (level_broadcast * 100 < sfc_pres_broadcast) & (data["level"] > 200),
-        data["level"],
+        (level_broadcasted * 100 < data["surface_standard_pressure"])
+        & (level_broadcasted > 200),
+        level_broadcasted,
         np.nan,
     )
     return data
@@ -262,5 +260,6 @@ def build_atmospheric_river_mask_and_land_intersection(data: xr.Dataset) -> xr.D
         {
             "atmospheric_river_mask": ar_mask_result,
             "atmospheric_river_land_intersection": land_intersection,
+            "integrated_vapor_transport": ivt_data,
         }
     )
