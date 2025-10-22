@@ -732,3 +732,191 @@ def generate_heatwave_plots(
     plt.tight_layout()
     plt.savefig(f"case_{single_case.case_id_number}_timeseries.png",transparent=True)
     plt.show()
+
+
+def generate_freeze_dataset(
+    era5: xr.Dataset,
+    climatology: xr.Dataset,
+    single_case: cases.IndividualCase,
+):
+    """Calculate the times where regional average of temperature is below the climatology.
+    
+    Args:
+        era5: ERA5 dataset containing 2m_temperature
+        climatology: BB climatology containing surface_temperature_15th_percentile
+        single_case: cases.IndividualCase object with associated metadata
+    """
+    era5_case = era5[["2m_temperature"]].sel(
+        time=slice(single_case.start_date, single_case.end_date)
+    )
+    subset_climatology = convert_day_yearofday_to_time(
+        climatology, np.unique(era5_case.time.dt.year.values)[0]
+    )
+    merged_dataset = xr.merge(
+        [
+            subset_climatology.rename(
+                {"2m_temperature": "surface_temperature_15th_percentile"}
+            ),
+            era5_case,
+        ],
+        join="inner",
+    )
+    if (
+        single_case.location.longitude_min < 0 or 
+        single_case.location.longitude_min > 180 
+        ) and (
+        single_case.location.longitude_max > 0 and
+        single_case.location.longitude_max < 180
+            ):
+                merged_dataset = utils.convert_longitude_to_180(merged_dataset)
+    merged_dataset = merged_dataset.sel(
+        latitude=slice(single_case.location.latitude_max, single_case.location.latitude_min),
+        longitude=slice(single_case.location.longitude_min, single_case.location.longitude_max),
+    )
+    return merged_dataset
+
+def generate_freeze_plots(
+    freeze_dataset: xr.Dataset,
+    single_case: cases.IndividualCase,
+):
+    """Plot the max timestep of the freeze event and the average regional temperature time series
+    on separate plots.
+    
+    Args:
+        freeze_dataset: contains 2m_temperature, surface_temperature_15th_percentile,
+        time, latitude, longitude
+        single_case: cases.IndividualCase object with associated metadata
+    """
+    time_based_freeze_dataset = freeze_dataset.mean(["latitude", "longitude"])
+    # Plot 1: Min timestep of the freeze event
+    fig1, ax1 = plt.subplots(
+        figsize=(12, 6), subplot_kw={"projection": ccrs.PlateCarree()}
+    )
+    # Select the timestep with the maximum spatially averagedtemperature
+    subset_timestep = (
+        time_based_freeze_dataset['time'][time_based_freeze_dataset["2m_temperature"]
+        .argmin()]
+    )
+    # Mask places where temperature >= 15th percentile climatology
+    temp_data = freeze_dataset["2m_temperature"] - 273.15
+    climatology_data = freeze_dataset["surface_temperature_15th_percentile"] - 273.15
+    
+    # Create mask for values where temp < climatology (freeze condition)
+    mask = temp_data < climatology_data
+    
+    # Apply mask to temperature data
+    masked_temp = temp_data.where(mask)
+    cmap, norm = celsius_colormap_and_normalize()
+    im = (
+        masked_temp
+        .sel(time=subset_timestep)
+        .plot(
+            ax=ax1,
+            transform=ccrs.PlateCarree(),
+            cmap=cmap,
+            norm=norm,
+            add_colorbar=False,
+        )
+    )
+    (
+        temp_data
+        .sel(time=subset_timestep)
+        .plot.contour(
+            ax=ax1,
+            levels=[0],
+            colors='r',
+            linewidths=0.75,
+            ls=':',
+            transform=ccrs.PlateCarree(),
+        )
+    )   
+    # Add coastlines and gridlines
+    ax1.coastlines()
+    ax1.add_feature(cfeature.BORDERS, linestyle=":")
+    ax1.add_feature(cfeature.LAND, edgecolor="black")
+    ax1.add_feature(cfeature.LAKES, edgecolor="black")
+    ax1.add_feature(cfeature.RIVERS, edgecolor=[ 0.59375 , 0.71484375, 0.8828125 ],alpha=0.5)
+    ax1.add_feature(cfeature.STATES, edgecolor="grey")
+    # Add gridlines
+    gl = ax1.gridlines(draw_labels=True,alpha=0.25)
+    gl.top_labels = False
+    gl.right_labels = False
+    gl.xformatter = LongitudeFormatter()
+    gl.yformatter = LatitudeFormatter()
+    gl.xlabel_style = {"size": 12, "color": "k"}
+    gl.ylabel_style = {"size": 12, "color": "k"}
+    ax1.set_title('') # clears the default xarray title
+    ax1.set_title(
+        f"Temperature Where < 15th Percentile Climatology\n"
+        f"{single_case.title}, Case ID {single_case.case_id_number}\n"
+        f"{freeze_dataset['time'].sel(time=subset_timestep).dt.strftime('%Y-%m-%d %Hz').values}", 
+        loc='left'
+    )
+    # Add the location coordinate as a dot on the map
+    ax1.tick_params(axis='y', which='major', labelsize=12)
+    # Create a colorbar with the same height as the plot
+    divider = make_axes_locatable(ax1)
+    cax = divider.append_axes("right", size="5%", pad=0.1, axes_class=plt.Axes)
+    cbar = fig1.colorbar(im, cax=cax, label="Temp < 15th Percentile (C)")
+    cbar.set_label("Temperature (C)", size=14)
+    cbar.ax.tick_params(labelsize=12)
+
+    plt.tight_layout()
+    plt.savefig(f"case_{single_case.case_id_number}_spatial.png",transparent=True)
+    plt.show()
+
+    # Plot 2: Average regional temperature time series
+    fig2, ax2 = plt.subplots(figsize=(10, 6))
+    lss = ["-.", "-"]
+    lc = ["k", "tab:red"]
+    lws = [0.75, 1.5]
+    for i, variable in enumerate(time_based_freeze_dataset):
+        (time_based_freeze_dataset[variable] - 273.15).plot(
+            ax=ax2, label=variable, lw=lws[i], ls=lss[i], c=lc[i]
+        )
+    ax2.legend(fontsize=12)
+    mask = (
+        time_based_freeze_dataset["2m_temperature"]
+        < time_based_freeze_dataset["surface_temperature_15th_percentile"]
+    )
+    start = None
+    for i, val in enumerate(mask.values):
+        if val and start is None:
+            start = time_based_freeze_dataset.time[i].values
+        elif not val and start is not None:
+            ax2.axvspan(
+                start,
+                time_based_freeze_dataset.time[i].values,
+                color="red",
+                alpha=0.1,
+            )
+            start = None
+    if start is not None:
+        ax2.axvspan(
+            start, time_based_freeze_dataset.time[-1].values, color="red", alpha=0.1
+        )
+    ax2.set_title('')
+    ax2.set_title("Spatially Averaged Freeze Event vs 15th Percentile Climatology", 
+    fontsize=14, loc='left')
+    ax2.set_ylabel("Temperature (C)", fontsize=12)
+    ax2.set_xlabel("Time", fontsize=12)
+    ax2.tick_params(axis="x", labelsize=12)
+    ax2.xaxis.set_major_formatter(mdates.DateFormatter("%b %d"))
+    ax2.xaxis.set_tick_params(rotation=45, labelsize=10, pad=0.0001,)
+    ax2.tick_params(axis="y", labelsize=12)
+    
+    # Create legend handles including the axvspan
+    from matplotlib.patches import Patch
+    legend_elements = [
+        plt.Line2D([0], [0], color='k', linestyle='-.', linewidth=0.75, 
+                   label='2m Temperature, 15th Percentile'),
+        plt.Line2D([0], [0], color='tab:red', linestyle='-', linewidth=1.5, 
+                   label='2m Temperature'),
+        Patch(facecolor='red', alpha=0.1, label='Below 15th Percentile')
+    ]
+    ax2.legend(handles=legend_elements, fontsize=12)
+    
+    ax2.tick_params(axis='y', which='major', labelsize=12)
+    plt.tight_layout()
+    plt.savefig(f"case_{single_case.case_id_number}_timeseries.png",transparent=True)
+    plt.show()
