@@ -997,9 +997,8 @@ class SpatialDisplacement(BaseMetric):
             a tuple of the latitude and longitude indices, or np.nan tuple if no
             non-zero values are present.
             """
-            labels, _ = ndimage.label(data > 0)
-            if labels.max() > 0:
-                return ndimage.center_of_mass(data, labels, 1)
+            if (data > 0).any():
+                return ndimage.center_of_mass(data)
             else:
                 return (np.nan, np.nan)
 
