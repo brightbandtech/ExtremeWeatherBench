@@ -1410,10 +1410,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: -46.2
-        latitude_max: -26.8
-        longitude_min: 131.9
-        longitude_max: 158.1
+        latitude_min: -53.2
+        latitude_max: -20.0
+        longitude_min: 116.4
+        longitude_max: 166.6
     event_type: atmospheric_river
   - case_id_number: 119
     title: October 2022 Victoria
@@ -1422,10 +1422,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: -46.2
-        latitude_max: -26.8
-        longitude_min: 131.9
-        longitude_max: 158.1
+        latitude_min: -53.2
+        latitude_max: -13.8
+        longitude_min: 116.4
+        longitude_max: 166.6
     event_type: atmospheric_river
   - case_id_number: 120
     title: November 2022 California
