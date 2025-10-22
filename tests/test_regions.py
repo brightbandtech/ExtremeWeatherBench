@@ -1261,7 +1261,7 @@ class TestRegionIntegration:
 
 
 class TestRegionGeometricOperations:
-    """Test geometric operations on regions."""
+    """Test geometric operations on"""
 
     def test_region_intersects(self):
         """Test the intersects method."""
@@ -1355,7 +1355,7 @@ class TestRegionGeometricOperations:
 
 
 class TestRegionSubsetter:
-    """Test the  regions.RegionSubsetter class."""
+    """Test the regions.RegionSubsetter class."""
 
     @pytest.fixture
     def target_region(self):
@@ -1422,7 +1422,7 @@ class TestRegionSubsetter:
         )
 
     def test_subsetter_initialization_with_region(self, target_region):
-        """Test  regions.RegionSubsetter initialization with Region object."""
+        """Test regions.RegionSubsetter initialization with Region object."""
         subsetter = regions.RegionSubsetter(
             region=target_region, method="intersects", percent_threshold=0.5
         )
@@ -1432,7 +1432,7 @@ class TestRegionSubsetter:
         assert subsetter.percent_threshold == 0.5
 
     def test_subsetter_initialization_with_dict(self):
-        """Test  regions.RegionSubsetter initialization with dictionary."""
+        """Test regions.RegionSubsetter initialization with dictionary."""
         region_dict = {
             "latitude_min": 40.0,
             "latitude_max": 50.0,
@@ -1709,7 +1709,7 @@ class TestRegionSubsettingEdgeCases:
         assert len(subset_cases.cases) == 0
 
     def test_very_small_regions(self):
-        """Test subsetting with very small regions."""
+        """Test subsetting with very small"""
         from extremeweatherbench import cases
 
         # Create a very small case region
@@ -1776,7 +1776,7 @@ class TestRegionSubsettingEdgeCases:
         assert isinstance(subset_cases, cases.IndividualCaseCollection)
 
     def test_polar_regions(self):
-        """Test subsetting with polar regions."""
+        """Test subsetting with polar"""
         from extremeweatherbench import cases
 
         # Create a case near the North Pole
@@ -1808,6 +1808,83 @@ class TestRegionSubsettingEdgeCases:
         assert isinstance(subset_cases, cases.IndividualCaseCollection)
 
 
+class TestAdjustBoundsToDatasetConvention:
+    """Test the _adjust_bounds_to_dataset_convention helper function."""
+
+    @pytest.fixture
+    def dataset_360(self):
+        """Create a dataset using 0-360 longitude convention."""
+        lats = np.linspace(30, 60, 31)
+        lons = np.linspace(0, 359, 360)
+        data = np.random.random((len(lats), len(lons)))
+        return xr.Dataset(
+            {"temperature": (["latitude", "longitude"], data)},
+            coords={"latitude": lats, "longitude": lons},
+        )
+
+    @pytest.fixture
+    def dataset_180(self):
+        """Create a dataset using -180/+180 longitude convention."""
+        lats = np.linspace(30, 60, 31)
+        lons = np.linspace(-180, 179, 360)
+        data = np.random.random((len(lats), len(lons)))
+        return xr.Dataset(
+            {"temperature": (["latitude", "longitude"], data)},
+            coords={"latitude": lats, "longitude": lons},
+        )
+
+    def test_adjust_180_to_360(self, dataset_360):
+        """Test adjusting -180/+180 bounds to 0-360 dataset."""
+        # Region bounds in -180/+180 convention (from geopandas)
+        region_bounds = (-9.75, 39.25, 8.25, 56.0)
+
+        (
+            lon_min,
+            lat_min,
+            lon_max,
+            lat_max,
+        ) = regions._adjust_bounds_to_dataset_convention(region_bounds, dataset_360)
+
+        # Should convert to 0-360
+        assert lon_min == 350.25  # -9.75 becomes 350.25
+        assert lon_max == 8.25  # 8.25 stays 8.25
+        assert lat_min == 39.25  # Latitude unchanged
+        assert lat_max == 56.0  # Latitude unchanged
+
+    def test_no_adjustment_for_180_dataset(self, dataset_180):
+        """Test that -180/+180 bounds stay unchanged for -180/+180 dataset."""
+        # Region bounds already in -180/+180 (from geopandas)
+        region_bounds = (-9.75, 39.25, 8.25, 56.0)
+
+        (
+            lon_min,
+            lat_min,
+            lon_max,
+            lat_max,
+        ) = regions._adjust_bounds_to_dataset_convention(region_bounds, dataset_180)
+
+        # Should stay unchanged
+        assert lon_min == -9.75
+        assert lon_max == 8.25
+        assert lat_min == 39.25
+        assert lat_max == 56.0
+
+    def test_adjust_full_range_to_360(self, dataset_360):
+        """Test adjusting larger range to 0-360."""
+        region_bounds = (-120.0, 30.0, -100.0, 50.0)
+
+        (
+            lon_min,
+            lat_min,
+            lon_max,
+            lat_max,
+        ) = regions._adjust_bounds_to_dataset_convention(region_bounds, dataset_360)
+
+        # Should convert to 0-360
+        assert lon_min == 240.0  # -120 becomes 240
+        assert lon_max == 260.0  # -100 becomes 260
+
+
 class TestLongitudeCoordinateMismatch:
     """Test the longitude coordinate mismatch for zero-length dimensions."""
 
@@ -1835,7 +1912,12 @@ class TestLongitudeCoordinateMismatch:
         )
 
     def test_region_180_with_dataset_360(self, dataset_360_convention):
-        """Test region in -180/+180 convention with dataset in 0-360."""
+        """Test region in -180/+180 convention with dataset in 0-360.
+
+        This test verifies that the normalize_region_bounds_to_dataset
+        function correctly converts region bounds to match the dataset's
+        longitude convention, preventing zero-length dimensions.
+        """
         # Create region matching UK case 20: longitude -9.75 to 8.25
         region = regions.BoundingBoxRegion.create_region(
             latitude_min=39.25,
