@@ -606,7 +606,6 @@ def create_case_summary_plot(
     case_id: int,
     title: str,
     ivt_data: xr.DataArray,
-    ar_mask: xr.DataArray,
     composite_ar_mask: xr.DataArray,
     composite_land_intersection: xr.DataArray,
     peak_time_idx: int,
@@ -622,7 +621,6 @@ def create_case_summary_plot(
         case_id: Case ID number.
         title: Event title.
         ivt_data: Integrated vapor transport data.
-        ar_mask: AR mask data (with time dimension).
         composite_ar_mask: Composite AR mask (max over time).
         composite_land_intersection: Composite land intersection.
         peak_time_idx: Time index of peak IVT.
@@ -854,7 +852,9 @@ def process_ar_event(
     full_data = xr.merge([era5_subset, ivt_da, ivt_laplacian])
 
     # Compute AR mask
-    ar_mask = ar.atmospheric_river_mask(full_data)
+    ar_mask = ar.atmospheric_river_mask(
+        full_data, min_size_gridpoints=AR_OBJECT_CONFIG["min_area_gridpoints"]
+    )
 
     logger.info("  AR mask shape: %s", ar_mask.shape)
     logger.info("  Total AR grid points across all time: %s", ar_mask.sum().values)
@@ -924,14 +924,11 @@ def process_ar_event(
         composite_land_intersection.sum().values,
     )
 
-    # Extract minimum gridpoints parameter
-    min_gridpoints = AR_OBJECT_CONFIG["min_area_gridpoints"]
-
     # Find bounds using composite mask & expand to contiguous AR
     left_lon, right_lon, bottom_lat, top_lat, largest_obj_metadata = (
         find_ar_bounds_from_largest_object(
             composite_ar_mask,
-            min_gridpoints,
+            AR_OBJECT_CONFIG["min_area_gridpoints"],
             land_intersection=composite_land_intersection,
             expand_to_contiguous=True,
         )
@@ -944,7 +941,7 @@ def process_ar_event(
         logger.info("  Composite AR pixels: %s", composite_ar_mask.sum().values)
         logger.info(
             "  Object filtering criteria: min_area_gridpoints=%s",
-            min_gridpoints,
+            AR_OBJECT_CONFIG["min_area_gridpoints"],
         )
         return {
             "case_id": single_case.case_id_number,
@@ -1001,7 +998,6 @@ def process_ar_event(
         case_id=single_case.case_id_number,
         title=single_case.title,
         ivt_data=ivt_da,
-        ar_mask=ar_mask,
         composite_ar_mask=composite_ar_mask,
         composite_land_intersection=composite_land_intersection,
         peak_time_idx=peak_time_idx,
@@ -1059,7 +1055,7 @@ def main():
 
     # Configuration for AR object filtering
     AR_OBJECT_CONFIG = {
-        "min_area_gridpoints": 300,  # Minimum size in grid points
+        "min_area_gridpoints": 500,  # Minimum size in grid points
         # Removed shape constraints (aspect ratio and circularity) to allow more AR
         # shapes
     }
