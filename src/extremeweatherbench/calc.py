@@ -209,7 +209,7 @@ def pressure_at_surface(orography_da: xr.DataArray) -> xr.DataArray:
     return 101325 * (1 - 2.25577e-5 * orography_da) ** 5.25579
 
 
-def maybe_calculate_wind_speed(ds: xr.Dataset) -> xr.DataArray:
+def maybe_calculate_wind_speed(ds: xr.Dataset) -> xr.Dataset:
     """Maybe prepare wind data by computing wind speed.
 
     If the wind speed is not already present, it will be computed from the eastward

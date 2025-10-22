@@ -190,7 +190,7 @@ def maybe_derive_variables(
 
 
 def maybe_include_variables_from_derived_input(
-    incoming_variables: Sequence[Union[str, Type[DerivedVariable]]],
+    incoming_variables: Sequence[Union[str, DerivedVariable]],
 ) -> list[str]:
     """Identify and return variables that a derived variable needs to compute.
 
@@ -231,3 +231,13 @@ def is_derived_variable(
     """
 
     return isinstance(variable, type) and issubclass(variable, DerivedVariable)
+
+
+def _maybe_convert_variable_to_string(
+    variable: Union[str, Type[DerivedVariable]],
+) -> str:
+    """Convert a variable to its string representation."""
+    if is_derived_variable(variable):
+        return variable.name  # type: ignore
+    else:
+        return variable  # type: ignore

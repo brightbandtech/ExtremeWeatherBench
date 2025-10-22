@@ -3,6 +3,7 @@
 import abc
 import logging
 import pathlib
+import warnings
 from typing import TYPE_CHECKING, Literal, Mapping, Type, Union
 
 import geopandas as gpd
@@ -45,36 +46,38 @@ class Region(abc.ABC):
         Returns:
             The subset dataset.
         """
-        import warnings
-
-        ...
-
         if drop:
             warnings.warn(
                 "`drop` is no longer used and will be removed in a future version.",
                 DeprecationWarning,
                 stacklevel=2,
             )
-        longitude_min, latitude_min, longitude_max, latitude_max = (
-            self.as_geopandas().total_bounds
+        (
+            region_longitude_min,
+            region_latitude_min,
+            region_longitude_max,
+            region_latitude_max,
+        ) = self.as_geopandas().total_bounds
+
+        # Avoids slice() which is susceptible to differences in coord order
+        latitude_da = dataset.latitude.where(
+            np.logical_and(
+                dataset.latitude >= region_latitude_min,
+                dataset.latitude <= region_latitude_max,
+            ),
+            drop=True,
         )
 
-        # Handle longitude convention mismatch between dataset and region bounds
-        dataset_lon_min = float(dataset.longitude.min())
-        dataset_lon_max = float(dataset.longitude.max())
-
-        # Check if dataset uses 0-360 convention while region uses -180/+180
-        if (
-            dataset_lon_min >= 0
-            and dataset_lon_max <= 360
-            and (longitude_min < 0 or longitude_max < 0)
-        ):
-            # Convert region bounds to 0-360 convention
-            longitude_min = utils.convert_longitude_to_360(longitude_min)
-            longitude_max = utils.convert_longitude_to_360(longitude_max)
+        longitude_da = dataset.longitude.where(
+            np.logical_and(
+                dataset.longitude >= region_longitude_min,
+                dataset.longitude <= region_longitude_max,
+            ),
+            drop=True,
+        )
         dataset = dataset.sel(
-            latitude=slice(latitude_max, latitude_min),
-            longitude=slice(longitude_min, longitude_max),
+            latitude=latitude_da,
+            longitude=longitude_da,
         )
 
         return dataset
