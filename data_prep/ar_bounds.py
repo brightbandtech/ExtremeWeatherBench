@@ -24,6 +24,10 @@ logging.basicConfig()
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
+# Constants for AR object identification and filtering
+MIN_AR_OBJECT_SIZE = 50  # Min pixels for AR object to be considered
+MIN_LAND_PIXELS_FOR_PEAK = 10  # Min land pixels required for peak selection
+
 
 def calculate_end_point(
     start_lat: float, start_lon: float, bearing: float, distance_km: float
@@ -160,12 +164,6 @@ def identify_ar_objects(
         centroid_lat = ar_mask.latitude.values[int(centroid_lat_idx)]
         centroid_lon = ar_mask.longitude.values[int(centroid_lon_idx)]
 
-        # Only apply size filter - no shape constraints
-        if area < min_area_gridpoints:
-            # Remove objects that are too small
-            labeled_array[obj_mask] = 0
-            continue
-
         object_properties[obj_id] = {
             "area": area,
             "lat_span": lat_span,
@@ -211,6 +209,64 @@ def find_largest_ar_object(ar_mask: xr.DataArray, **object_kwargs) -> Optional[D
     return largest_obj
 
 
+def find_central_ar_object(
+    ar_slice: xr.DataArray,
+    center_lat: float,
+    center_lon: float,
+    min_object_size: int = MIN_AR_OBJECT_SIZE,
+) -> Optional[int]:
+    """Find AR object label closest to map center.
+
+    Args:
+        ar_slice: AR mask slice for single timestep (2D).
+        center_lat: Map center latitude for distance calculation.
+        center_lon: Map center longitude for distance calculation.
+        min_object_size: Minimum size in pixels for valid AR object.
+
+    Returns:
+        Label of closest AR object, or None if no valid objects found.
+    """
+    if ar_slice.sum() == 0:
+        return None
+
+    labeled_array, num_objects = label(ar_slice.values > 0)
+
+    if num_objects == 0:
+        return None
+
+    min_distance = float("inf")
+    closest_object_label = None
+
+    for obj_label in range(1, num_objects + 1):
+        # Get coordinates of this AR object
+        obj_coords = np.where(labeled_array == obj_label)
+        lat_indices, lon_indices = obj_coords
+
+        # Apply size filter first
+        obj_size = len(lat_indices)
+        if obj_size < min_object_size:
+            continue  # Skip tiny objects
+
+        # Convert to actual coordinates
+        obj_lats = ar_slice.latitude.values[lat_indices]
+        obj_lons = ar_slice.longitude.values[lon_indices]
+
+        # Calculate centroid of this AR object
+        obj_center_lat = np.mean(obj_lats)
+        obj_center_lon = np.mean(obj_lons)
+
+        # Calculate distance to map center
+        lat_diff = obj_center_lat - center_lat
+        lon_diff = obj_center_lon - center_lon
+        distance = np.sqrt(lat_diff**2 + lon_diff**2)
+
+        if distance < min_distance:
+            min_distance = distance
+            closest_object_label = obj_label
+
+    return closest_object_label
+
+
 def find_timestamp_peak_field(
     ivt_data: xr.DataArray,
     ar_mask: xr.DataArray,
@@ -239,60 +295,21 @@ def find_timestamp_peak_field(
         ivt_slice = ivt_data.isel({time_dim: t})
         ar_slice = ar_mask.isel({time_dim: t})
 
-        # Find AR objects and filter to the one closest to center
-        if ar_slice.sum() > 0:  # Only process if there are AR pixels
-            labeled_array, num_objects = label(ar_slice.values > 0)
+        # Find central AR object (closest to map center)
+        closest_object_label = find_central_ar_object(ar_slice, center_lat, center_lon)
 
-            if num_objects > 0:
-                # Find which AR object is closest to map center
-                # Apply minimum size filter first to avoid selecting tiny fragments
-                min_distance = float("inf")
-                closest_object_label = None
-                min_object_size = 50  # Minimum 50 pixels to be considered
-
-                for obj_label in range(1, num_objects + 1):
-                    # Get coordinates of this AR object
-                    obj_coords = np.where(labeled_array == obj_label)
-                    lat_indices, lon_indices = obj_coords
-
-                    # Apply size filter first
-                    obj_size = len(lat_indices)
-                    if obj_size < min_object_size:
-                        continue  # Skip tiny objects
-
-                    # Convert to actual coordinates
-                    obj_lats = ar_slice.latitude.values[lat_indices]
-                    obj_lons = ar_slice.longitude.values[lon_indices]
-
-                    # Calculate centroid of this AR object
-                    obj_center_lat = np.mean(obj_lats)
-                    obj_center_lon = np.mean(obj_lons)
-
-                    # Calculate distance to map center
-                    lat_diff = obj_center_lat - center_lat
-                    lon_diff = obj_center_lon - center_lon
-                    distance = np.sqrt(lat_diff**2 + lon_diff**2)
-
-                    if distance < min_distance:
-                        min_distance = distance
-                        closest_object_label = obj_label
-
-                # Create mask for only the closest AR object
-                if closest_object_label is not None:
-                    closest_mask_array = labeled_array == closest_object_label
-                    central_ar_mask = xr.where(
-                        xr.DataArray(
-                            closest_mask_array,
-                            dims=ar_slice.dims,
-                            coords=ar_slice.coords,
-                        ),
-                        1,
-                        0,
-                    )
-                else:
-                    central_ar_mask = xr.zeros_like(ar_slice)
-            else:
-                central_ar_mask = xr.zeros_like(ar_slice)
+        if closest_object_label is not None:
+            labeled_array, _ = label(ar_slice.values > 0)
+            closest_mask_array = labeled_array == closest_object_label
+            central_ar_mask = xr.where(
+                xr.DataArray(
+                    closest_mask_array,
+                    dims=ar_slice.dims,
+                    coords=ar_slice.coords,
+                ),
+                1,
+                0,
+            )
         else:
             central_ar_mask = xr.zeros_like(ar_slice)
 
@@ -304,21 +321,15 @@ def find_timestamp_peak_field(
             # Count AR pixels over land
             ar_over_land = central_ar_mask.where(land_mask > 0)
             land_ar_pixels = ar_over_land.sum().values
-            central_pixels = central_ar_mask.sum().values
-            land_pct = (
-                100 * land_ar_pixels / central_pixels if central_pixels > 0 else 0
-            )
 
             # Only consider this timestamp if AR has reasonable land coverage
-            # (at least 10 pixels over land)
-            if land_ar_pixels >= 10:
+            if land_ar_pixels >= MIN_LAND_PIXELS_FOR_PEAK:
                 # Calculate aggregate IVT only over land areas
                 ivt_land_only = ivt_in_central_ar.where(land_mask > 0)
                 aggregate_ivt = ivt_land_only.sum().values
         else:
             # No land mask provided, use all central AR pixels
             aggregate_ivt = ivt_in_central_ar.sum().values
-            central_pixels = central_ar_mask.sum().values
 
         if not np.isnan(aggregate_ivt) and aggregate_ivt > 0:
             aggregate_ivt_values.append(float(aggregate_ivt))
@@ -335,45 +346,22 @@ def find_timestamp_peak_field(
             ivt_slice = ivt_data.isel({time_dim: t})
             ar_slice = ar_mask.isel({time_dim: t})
 
-            if ar_slice.sum() > 0:
-                labeled_array, num_objects = label(ar_slice.values > 0)
-                if num_objects > 0:
-                    # Find central AR again
-                    min_distance = float("inf")
-                    closest_obj = None
-                    center_lat = float(ar_mask.latitude.mean())
-                    center_lon = float(ar_mask.longitude.mean())
+            # Find central AR object using helper function
+            closest_obj = find_central_ar_object(ar_slice, center_lat, center_lon)
 
-                    for obj_label in range(1, num_objects + 1):
-                        obj_coords = np.where(labeled_array == obj_label)
-                        lat_indices, lon_indices = obj_coords
-                        obj_lats = ar_slice.latitude.values[lat_indices]
-                        obj_lons = ar_slice.longitude.values[lon_indices]
-                        obj_center_lat = np.mean(obj_lats)
-                        obj_center_lon = np.mean(obj_lons)
-                        lat_diff = obj_center_lat - center_lat
-                        lon_diff = obj_center_lon - center_lon
-                        distance = np.sqrt(lat_diff**2 + lon_diff**2)
-                        if distance < min_distance:
-                            min_distance = distance
-                            closest_obj = obj_label
-
-                    if closest_obj is not None:
-                        central_mask = labeled_array == closest_obj
-                        ivt_central = ivt_slice.where(
-                            xr.DataArray(
-                                central_mask, dims=ar_slice.dims, coords=ar_slice.coords
-                            )
-                            > 0
-                        )
-                        fallback_ivt = ivt_central.sum().values
-                        fallback_ivt_values.append(
-                            float(fallback_ivt) if not np.isnan(fallback_ivt) else 0.0
-                        )
-                    else:
-                        fallback_ivt_values.append(0.0)
-                else:
-                    fallback_ivt_values.append(0.0)
+            if closest_obj is not None:
+                labeled_array, _ = label(ar_slice.values > 0)
+                central_mask = labeled_array == closest_obj
+                ivt_central = ivt_slice.where(
+                    xr.DataArray(
+                        central_mask, dims=ar_slice.dims, coords=ar_slice.coords
+                    )
+                    > 0
+                )
+                fallback_ivt = ivt_central.sum().values
+                fallback_ivt_values.append(
+                    float(fallback_ivt) if not np.isnan(fallback_ivt) else 0.0
+                )
             else:
                 fallback_ivt_values.append(0.0)
 
@@ -400,56 +388,177 @@ def find_timestamp_peak_field(
         )
         # Check land coverage at peak time
         peak_ar_slice = ar_mask.isel({time_dim: peak_time_idx})
-        if peak_ar_slice.sum() > 0:
+        closest_object_label = find_central_ar_object(
+            peak_ar_slice, center_lat, center_lon
+        )
+
+        if closest_object_label is not None:
             labeled_array, _ = label(peak_ar_slice.values > 0)
-            # Find central AR again for verification
-            center_lat = float(ar_mask.latitude.mean())
-            center_lon = float(ar_mask.longitude.mean())
-            min_distance = float("inf")
-            closest_object_label = None
-
-            for obj_label in range(1, labeled_array.max() + 1):
-                obj_coords = np.where(labeled_array == obj_label)
-                lat_indices, lon_indices = obj_coords
-                obj_lats = peak_ar_slice.latitude.values[lat_indices]
-                obj_lons = peak_ar_slice.longitude.values[lon_indices]
-                obj_center_lat = np.mean(obj_lats)
-                obj_center_lon = np.mean(obj_lons)
-                lat_diff = obj_center_lat - center_lat
-                lon_diff = obj_center_lon - center_lon
-                distance = np.sqrt(lat_diff**2 + lon_diff**2)
-                if distance < min_distance:
-                    min_distance = distance
-                    closest_object_label = obj_label
-
-            if closest_object_label is not None:
-                peak_central_mask = labeled_array == closest_object_label
-                peak_ar_over_land = peak_central_mask & (land_mask.values > 0)
-                land_pixels = np.sum(peak_ar_over_land)
-                total_pixels = np.sum(peak_central_mask)
-                land_pct = 100 * land_pixels / total_pixels if total_pixels > 0 else 0
-                logger.info(
-                    "    Peak time AR land coverage: %s/%s pixels (%.1f%%)",
-                    land_pixels,
-                    total_pixels,
-                    land_pct,
-                )
+            peak_central_mask = labeled_array == closest_object_label
+            peak_ar_over_land = peak_central_mask & (land_mask.values > 0)
+            land_pixels = np.sum(peak_ar_over_land)
+            total_pixels = np.sum(peak_central_mask)
+            land_pct = 100 * land_pixels / total_pixels if total_pixels > 0 else 0
+            logger.info(
+                "    Peak time AR land coverage: %s/%s pixels (%.1f%%)",
+                land_pixels,
+                total_pixels,
+                land_pct,
+            )
 
     return peak_time_idx, peak_ivt_value
+
+
+def create_composite_ar_mask(
+    ar_mask: xr.DataArray,
+    land_intersection: Optional[xr.DataArray] = None,
+) -> Tuple[xr.DataArray, Optional[xr.DataArray]]:
+    """Create composite AR masks by taking maximum over time.
+
+    Args:
+        ar_mask: Binary AR mask with time dimension.
+        land_intersection: Optional land intersection mask with time dim.
+
+    Returns:
+        Tuple of (composite_ar_mask, composite_land_intersection).
+    """
+    time_dim = "valid_time" if "valid_time" in ar_mask.dims else "time"
+
+    # Create composite by taking max over time dimension
+    composite_mask = ar_mask.max(dim=time_dim)
+
+    composite_land = None
+    if land_intersection is not None:
+        composite_land = land_intersection.max(dim=time_dim)
+
+    return composite_mask, composite_land
+
+
+def expand_bounds_to_contiguous_ar(
+    ar_mask: xr.DataArray,
+    land_intersection: xr.DataArray,
+    initial_bounds: Dict[str, float],
+    object_id: int,
+    labeled_array: np.ndarray,
+) -> Tuple[float, float, float, float]:
+    """Expand bounds to include all contiguous AR over land.
+
+    Args:
+        ar_mask: Composite AR mask (2D, no time dimension).
+        land_intersection: Composite land intersection (2D).
+        initial_bounds: Initial bounds from largest object.
+        object_id: Label ID of the main AR object.
+        labeled_array: Labeled array identifying separate AR objects.
+
+    Returns:
+        Expanded (left_lon, right_lon, bottom_lat, top_lat).
+    """
+    lats = ar_mask.latitude.values
+    lons = ar_mask.longitude.values
+
+    # Start with initial bounds
+    left_lon = initial_bounds["lon_min"]
+    right_lon = initial_bounds["lon_max"]
+    bottom_lat = initial_bounds["lat_min"]
+    top_lat = initial_bounds["lat_max"]
+
+    # Convert to indices
+    lat_indices = np.where((lats >= bottom_lat) & (lats <= top_lat))[0]
+    lon_indices = np.where((lons >= left_lon) & (lons <= right_lon))[0]
+
+    if len(lat_indices) == 0 or len(lon_indices) == 0:
+        return left_lon, right_lon, bottom_lat, top_lat
+
+    min_lat_idx = lat_indices[0]
+    max_lat_idx = lat_indices[-1]
+    min_lon_idx = lon_indices[0]
+    max_lon_idx = lon_indices[-1]
+
+    # Expand in each direction while AR-land is contiguous
+    land_data = land_intersection.values
+
+    # Expand East (increase longitude)
+    for lon_idx in range(max_lon_idx + 1, len(lons)):
+        # Check if this column has AR over land
+        expanded = max_lat_idx + 1
+        column = land_data[min_lat_idx:expanded, lon_idx]
+        if column.sum() > 0:
+            # Check if contiguous (labeled same as main object)
+            column_labels = labeled_array[min_lat_idx:expanded, lon_idx]
+            if np.any(column_labels == object_id):
+                max_lon_idx = lon_idx
+            else:
+                break
+        else:
+            break
+
+    # Expand West (decrease longitude)
+    for lon_idx in range(min_lon_idx - 1, -1, -1):
+        expanded = max_lat_idx + 1
+        column = land_data[min_lat_idx:expanded, lon_idx]
+        if column.sum() > 0:
+            column_labels = labeled_array[min_lat_idx:expanded, lon_idx]
+            if np.any(column_labels == object_id):
+                min_lon_idx = lon_idx
+            else:
+                break
+        else:
+            break
+
+    # Expand North (increase latitude index, but lat decreases)
+    for lat_idx in range(max_lat_idx + 1, len(lats)):
+        expanded = max_lon_idx + 1
+        row = land_data[lat_idx, min_lon_idx:expanded]
+        if row.sum() > 0:
+            row_labels = labeled_array[lat_idx, min_lon_idx:expanded]
+            if np.any(row_labels == object_id):
+                max_lat_idx = lat_idx
+            else:
+                break
+        else:
+            break
+
+    # Expand South (decrease latitude index, but lat increases)
+    for lat_idx in range(min_lat_idx - 1, -1, -1):
+        expanded = max_lon_idx + 1
+        row = land_data[lat_idx, min_lon_idx:expanded]
+        if row.sum() > 0:
+            row_labels = labeled_array[lat_idx, min_lon_idx:expanded]
+            if np.any(row_labels == object_id):
+                min_lat_idx = lat_idx
+            else:
+                break
+        else:
+            break
+
+    # Convert back to coordinates
+    left_lon = lons[min_lon_idx]
+    right_lon = lons[max_lon_idx]
+
+    # Latitude arrays can be ordered N->S or S->N, ensure correct order
+    lat_values = [lats[min_lat_idx], lats[max_lat_idx]]
+    bottom_lat = min(lat_values)
+    top_lat = max(lat_values)
+
+    return left_lon, right_lon, bottom_lat, top_lat
 
 
 def find_ar_bounds_from_largest_object(
     ar_mask: xr.DataArray,
     min_area_gridpoints: float = 500,
+    land_intersection: Optional[xr.DataArray] = None,
+    expand_to_contiguous: bool = True,
 ) -> Tuple[float, float, float, float, Optional[Dict]]:
-    """Find the geographical bounds of the largest atmospheric river object.
+    """Find geographical bounds of largest AR object.
 
     Args:
-        ar_mask: Binary mask where 1 indicates atmospheric river presence.
-        min_area_gridpoints: Minimum area in grid points for valid AR object.
+        ar_mask: Binary mask where 1 indicates AR presence.
+        min_area_gridpoints: Minimum area in grid points.
+        land_intersection: Optional land intersection for expansion.
+        expand_to_contiguous: If True, expand to capture contiguous AR.
 
     Returns:
-        left_lon, right_lon, bottom_lat, top_lat bounds and object metadata.
+        left_lon, right_lon, bottom_lat, top_lat bounds & metadata.
     """
     largest_obj = find_largest_ar_object(
         ar_mask,
@@ -461,11 +570,34 @@ def find_ar_bounds_from_largest_object(
         return np.nan, np.nan, np.nan, np.nan, None
 
     bounds = largest_obj["bounds"]
+    left_lon = bounds["lon_min"]
+    right_lon = bounds["lon_max"]
+    bottom_lat = bounds["lat_min"]
+    top_lat = bounds["lat_max"]
+
+    # Expand bounds to capture contiguous AR over land
+    if expand_to_contiguous and land_intersection is not None:
+        left_lon, right_lon, bottom_lat, top_lat = expand_bounds_to_contiguous_ar(
+            ar_mask,
+            land_intersection,
+            bounds,
+            largest_obj["object_id"],
+            largest_obj["labeled_array"],
+        )
+
+        # Update metadata with expanded bounds
+        largest_obj["expanded_bounds"] = {
+            "lat_min": bottom_lat,
+            "lat_max": top_lat,
+            "lon_min": left_lon,
+            "lon_max": right_lon,
+        }
+
     return (
-        bounds["lon_min"],
-        bounds["lon_max"],
-        bounds["lat_min"],
-        bounds["lat_max"],
+        left_lon,
+        right_lon,
+        bottom_lat,
+        top_lat,
         largest_obj,
     )
 
@@ -475,6 +607,8 @@ def create_case_summary_plot(
     title: str,
     ivt_data: xr.DataArray,
     ar_mask: xr.DataArray,
+    composite_ar_mask: xr.DataArray,
+    composite_land_intersection: xr.DataArray,
     peak_time_idx: int,
     peak_ivt_value: float,
     ar_bounds: Dict,
@@ -482,25 +616,26 @@ def create_case_summary_plot(
     largest_obj_metadata: Optional[Dict] = None,
     extent_modifier_degrees: float = 5,
 ) -> None:
-    """Create a summary plot for each AR case showing IVT, mask, and bounds.
+    """Create summary plot showing composite AR approach and bounds.
 
     Args:
         case_id: Case ID number.
         title: Event title.
         ivt_data: Integrated vapor transport data.
-        ar_mask: AR mask data.
+        ar_mask: AR mask data (with time dimension).
+        composite_ar_mask: Composite AR mask (max over time).
+        composite_land_intersection: Composite land intersection.
         peak_time_idx: Time index of peak IVT.
         peak_ivt_value: Peak IVT value.
-        ar_bounds: AR bounds dictionary.
+        ar_bounds: AR bounds dictionary (expanded bounds).
         buffered_bounds: Buffered bounds region.
-        largest_obj_metadata: Metadata about the largest object.
+        largest_obj_metadata: Metadata about largest object.
     """
     # Get the time dimension name
     time_dim = "valid_time" if "valid_time" in ivt_data.dims else "time"
 
     # Extract data at peak time
     ivt_peak = ivt_data.isel({time_dim: peak_time_idx})
-    ar_peak = ar_mask.isel({time_dim: peak_time_idx})
     peak_time = ivt_data[time_dim].isel({time_dim: peak_time_idx}).values
 
     # Create figure with cartopy subplots
@@ -537,15 +672,15 @@ def create_case_summary_plot(
         crs=ccrs.PlateCarree(),
     )
 
-    # Plot 2: AR mask at peak time
+    # Plot 2: Composite AR mask (max over time)
     ax2 = plt.subplot(1, 3, 2, projection=ccrs.PlateCarree())
     ax2.add_feature(cfeature.COASTLINE, linewidth=0.5)
     ax2.add_feature(cfeature.BORDERS, linewidth=0.3, alpha=0.7)
     ax2.add_feature(cfeature.OCEAN, color="lightblue", alpha=0.3)
     ax2.add_feature(cfeature.LAND, color="white", alpha=0.8)
 
-    # Plot AR mask
-    ar_peak.plot(
+    # Plot composite AR mask
+    composite_ar_mask.plot(
         ax=ax2,
         transform=ccrs.PlateCarree(),
         cmap="Reds",
@@ -554,29 +689,54 @@ def create_case_summary_plot(
         vmax=1,
     )
 
-    ax2.set_title("AR Mask at Peak Time")
+    ax2.set_title("Composite AR Mask\n(Max over time)")
     ax2.set_extent(
         [
-            float(ar_peak.longitude.min()) - extent_modifier_degrees,
-            float(ar_peak.longitude.max()) + extent_modifier_degrees,
-            float(ar_peak.latitude.min()) - extent_modifier_degrees,
-            float(ar_peak.latitude.max()) + extent_modifier_degrees,
+            float(composite_ar_mask.longitude.min()) - extent_modifier_degrees,
+            float(composite_ar_mask.longitude.max()) + extent_modifier_degrees,
+            float(composite_ar_mask.latitude.min()) - extent_modifier_degrees,
+            float(composite_ar_mask.latitude.max()) + extent_modifier_degrees,
         ],
         crs=ccrs.PlateCarree(),
     )
 
-    # Plot AR mask as background
-    ar_peak.plot(
-        ax=ax2,
+    # Plot 3: Composite land intersection with bounds overlay
+    ax3 = plt.subplot(1, 3, 3, projection=ccrs.PlateCarree())
+    ax3.add_feature(cfeature.COASTLINE, linewidth=0.5)
+    ax3.add_feature(cfeature.BORDERS, linewidth=0.3, alpha=0.7)
+    ax3.add_feature(cfeature.OCEAN, color="lightblue", alpha=0.3)
+    ax3.add_feature(cfeature.LAND, color="white", alpha=0.8)
+
+    # Plot land intersection
+    composite_land_intersection.plot(
+        ax=ax3,
         transform=ccrs.PlateCarree(),
-        cmap="Reds",
-        alpha=0.3,
+        cmap="Oranges",
         add_colorbar=False,
         vmin=0,
         vmax=1,
     )
 
-    # Plot AR bounds (solid blue)
+    # Plot initial bounds (if available, dashed blue)
+    if largest_obj_metadata and "bounds" in largest_obj_metadata:
+        init_bounds = largest_obj_metadata["bounds"]
+        init_width = init_bounds["lon_max"] - init_bounds["lon_min"]
+        init_height = init_bounds["lat_max"] - init_bounds["lat_min"]
+
+        init_rect = Rectangle(
+            (init_bounds["lon_min"], init_bounds["lat_min"]),
+            init_width,
+            init_height,
+            linewidth=2,
+            edgecolor="blue",
+            facecolor="none",
+            linestyle=":",
+            alpha=0.7,
+            transform=ccrs.PlateCarree(),
+        )
+        ax3.add_patch(init_rect)
+
+    # Plot expanded AR bounds (solid blue)
     ar_width = ar_bounds["longitude_max"] - ar_bounds["longitude_min"]
     ar_height = ar_bounds["latitude_max"] - ar_bounds["latitude_min"]
 
@@ -590,7 +750,7 @@ def create_case_summary_plot(
         alpha=0.3,
         transform=ccrs.PlateCarree(),
     )
-    ax2.add_patch(ar_rect)
+    ax3.add_patch(ar_rect)
 
     # Plot buffered bounds (dashed green)
     buff_width = buffered_bounds.longitude_max - buffered_bounds.longitude_min
@@ -607,7 +767,23 @@ def create_case_summary_plot(
         alpha=0.8,
         transform=ccrs.PlateCarree(),
     )
-    ax2.add_patch(buff_rect)
+    ax3.add_patch(buff_rect)
+
+    ax3.set_title("AR-Land Intersection\nwith Bounds")
+    lon_min = float(composite_land_intersection.longitude.min())
+    lon_max = float(composite_land_intersection.longitude.max())
+    lat_min = float(composite_land_intersection.latitude.min())
+    lat_max = float(composite_land_intersection.latitude.max())
+    ax3.set_extent(
+        [
+            lon_min - extent_modifier_degrees,
+            lon_max + extent_modifier_degrees,
+            lat_min - extent_modifier_degrees,
+            lat_max + extent_modifier_degrees,
+        ],
+        crs=ccrs.PlateCarree(),
+    )
+
     # Add overall title with statistics
     stats_text = f"Peak IVT: {peak_ivt_value:.0f} kg/m/s"
     if largest_obj_metadata:
@@ -683,11 +859,18 @@ def process_ar_event(
     logger.info("  AR mask shape: %s", ar_mask.shape)
     logger.info("  Total AR grid points across all time: %s", ar_mask.sum().values)
 
-    # Generate land mask using the same approach as find_land_intersection
+    # Compute land intersection
+    logger.info("  Computing land intersection...")
+    from extremeweatherbench import calc
+
+    land_intersection = calc.find_land_intersection(ar_mask)
+    logger.info(
+        "  Total AR-land intersection points: %s", land_intersection.sum().values
+    )
+
+    # Generate land mask for peak time finding
     logger.info("  Generating land mask...")
     if ar_mask.longitude.size > 0 and ar_mask.latitude.size > 0:
-        # Use the same approach as find_land_intersection but just get the land
-        # mask
         mask_parent = regionmask.defined_regions.natural_earth_v5_0_0.land_110.mask(
             ar_mask.longitude, ar_mask.latitude
         )
@@ -707,12 +890,10 @@ def process_ar_event(
             )
 
     else:
-        logger.warning(
-            "    Warning: Could not generate land mask because AR mask is empty"
-        )
+        logger.warning("    Warning: Could not generate land mask; AR mask empty")
         land_mask = None
 
-    # Method 1: Find timestamp with highest aggregate IVT over land
+    # Find timestamp with highest aggregate IVT (for plotting/reference)
     logger.info("  Finding peak IVT timestamp...")
 
     peak_time_idx, peak_ivt_value = find_timestamp_peak_field(
@@ -729,21 +910,38 @@ def process_ar_event(
     )
     logger.info("  Peak time: %s", pd.to_datetime(peak_time).strftime("%Y-%m-%d %H:%M"))
 
-    # Use AR mask at peak time for bounds calculation
-    ar_mask_at_peak = ar_mask.isel(valid_time=peak_time_idx)
+    # Create composite AR mask over entire time range (max)
+    logger.info("  Creating composite AR mask over time...")
+    composite_ar_mask, composite_land_intersection = create_composite_ar_mask(
+        ar_mask, land_intersection
+    )
+
+    logger.info(
+        "  Composite AR mask has %s grid points", composite_ar_mask.sum().values
+    )
+    logger.info(
+        "  Composite land intersection has %s grid points",
+        composite_land_intersection.sum().values,
+    )
 
     # Extract minimum gridpoints parameter
     min_gridpoints = AR_OBJECT_CONFIG["min_area_gridpoints"]
 
+    # Find bounds using composite mask & expand to contiguous AR
     left_lon, right_lon, bottom_lat, top_lat, largest_obj_metadata = (
-        find_ar_bounds_from_largest_object(ar_mask_at_peak, min_gridpoints)
+        find_ar_bounds_from_largest_object(
+            composite_ar_mask,
+            min_gridpoints,
+            land_intersection=composite_land_intersection,
+            expand_to_contiguous=True,
+        )
     )
 
     if np.isnan(left_lon):
         logger.warning(
             "  Warning: No valid AR objects detected for %s", single_case.title
         )
-        logger.info("  AR pixels at peak timestamp: %s", ar_mask_at_peak.sum().values)
+        logger.info("  Composite AR pixels: %s", composite_ar_mask.sum().values)
         logger.info(
             "  Object filtering criteria: min_area_gridpoints=%s",
             min_gridpoints,
@@ -757,7 +955,7 @@ def process_ar_event(
         }
 
     logger.info(
-        "  Largest object bounds: %.1f-%.1f°, %.1f-%.1f°",
+        "  Expanded AR bounds: %.1f-%.1f°E, %.1f-%.1f°N",
         left_lon,
         right_lon,
         bottom_lat,
@@ -804,6 +1002,8 @@ def process_ar_event(
         title=single_case.title,
         ivt_data=ivt_da,
         ar_mask=ar_mask,
+        composite_ar_mask=composite_ar_mask,
+        composite_land_intersection=composite_land_intersection,
         peak_time_idx=peak_time_idx,
         peak_ivt_value=peak_ivt_value,
         ar_bounds=ar_bounds_dict,
@@ -839,12 +1039,16 @@ def process_ar_event(
 
 def main():
     """Main execution function for AR bounds processing."""
-    # Setup ERA5 data source for atmospheric river detection
     client = Client()
-    print(client)
-    print(client.dashboard_link)
+
+    # In case the client progress is useful to view
+    logger.info(client)
+    logger.info(client.dashboard_link)
+
+    # Setup ERA5 data source for atmospheric river detection
     era5_ar = inputs.ERA5(variables=[derived.AtmosphericRiverMask])
     parallel = True
+
     # Load atmospheric river events from the events.yaml file
     events_yaml = cases.load_ewb_events_yaml_into_case_collection()
     ar_events = events_yaml.select_cases(by="event_type", value="atmospheric_river")
@@ -858,7 +1062,6 @@ def main():
         "min_area_gridpoints": 300,  # Minimum size in grid points
         # Removed shape constraints (aspect ratio and circularity) to allow more AR
         # shapes
-        "consistency_weight": 0.3,  # Weight for temporal consistency vs size
     }
     if parallel:
         with joblib.parallel_backend("dask"):
@@ -867,21 +1070,21 @@ def main():
                 for single_case in ar_events
             )
     else:
+        # Run in serial using a list comprehension
         ar_bounds_results_enhanced = [
             process_ar_event(single_case, era5_ar, AR_OBJECT_CONFIG)
             for single_case in ar_events
         ]
-
     logger.info(
         "\nSuccessfully processed %s events",
         len(ar_bounds_results_enhanced),
     )
 
-    # Save the enhanced atmospheric river bounds results
-    if ar_bounds_results_enhanced:
-        pickle_file_path = "ar_bounds_results_enhanced.pkl"
-        with open(pickle_file_path, "wb") as f:
-            pickle.dump(ar_bounds_results_enhanced, f)
+    # Save the enhanced atmospheric river bounds results; "bounded_region" is the final
+    # region that is used for the events coordinates
+    pickle_file_path = "ar_bounds_results_enhanced.pkl"
+    with open(pickle_file_path, "wb") as f:
+        pickle.dump(ar_bounds_results_enhanced, f)
 
 
 if __name__ == "__main__":
