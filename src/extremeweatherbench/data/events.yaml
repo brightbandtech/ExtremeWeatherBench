@@ -1158,10 +1158,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 35.0
-        latitude_max: 50.0
-        longitude_min: 230.0
-        longitude_max: 245.0
+        latitude_min: 27.8
+        latitude_max: 54.2
+        longitude_min: 222.4
+        longitude_max: 245.3
     event_type: atmospheric_river
   - case_id_number: 98
     title: October 2024 British Columbia
@@ -1170,10 +1170,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 40.0
-        latitude_max: 55.0
-        longitude_min: 225.0
-        longitude_max: 245.0
+        latitude_min: 32.8
+        latitude_max: 56.0
+        longitude_min: 217.3
+        longitude_max: 247.0
     event_type: atmospheric_river
   - case_id_number: 99
     title: September 2024 SW Alaska and British Columbia
@@ -1182,10 +1182,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 45.0
-        latitude_max: 60.0
-        longitude_min: 220.0
-        longitude_max: 240.0
+        latitude_min: 37.8
+        latitude_max: 62.2
+        longitude_min: 212.1
+        longitude_max: 247.9
     event_type: atmospheric_river
   - case_id_number: 100
     title: October 2024 Bosnia
@@ -1194,10 +1194,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 42.0
-        latitude_max: 46.0
-        longitude_min: 16.0
-        longitude_max: 20.0
+        latitude_min: 34.8
+        latitude_max: 50.5
+        longitude_min: 8.2
+        longitude_max: 27.8
     event_type: atmospheric_river
   - case_id_number: 101
     title: April 2024 Eastern Australia
@@ -1206,10 +1206,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: -38.0
-        latitude_max: -25.0
-        longitude_min: 140.0
-        longitude_max: 155.0
+        latitude_min: -45.2
+        latitude_max: -17.8
+        longitude_min: 139.7
+        longitude_max: 163.1
     event_type: atmospheric_river
   - case_id_number: 102
     title: April 2024 Persian Gulf
@@ -1218,10 +1218,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 24.0
-        latitude_max: 30.0
-        longitude_min: 48.0
-        longitude_max: 58.0
+        latitude_min: 16.8
+        latitude_max: 31.2
+        longitude_min: 45.6
+        longitude_max: 65.4
     event_type: atmospheric_river
   - case_id_number: 103
     title: February 2024 Pacific Northwest
@@ -1230,10 +1230,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 40.0
-        latitude_max: 50.0
-        longitude_min: 235.0
-        longitude_max: 250.0
+        latitude_min: 35.8
+        latitude_max: 51.2
+        longitude_min: 227.1
+        longitude_max: 240.9
     event_type: atmospheric_river
   - case_id_number: 104
     title: February 2024 California
@@ -1242,10 +1242,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 32.0
-        latitude_max: 42.0
-        longitude_min: 235.0
-        longitude_max: 245.0
+        latitude_min: 24.8
+        latitude_max: 49.2
+        longitude_min: 227.5
+        longitude_max: 243.3
     event_type: atmospheric_river
   - case_id_number: 105
     title: February 2024 California
@@ -1254,10 +1254,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 32.0
-        latitude_max: 42.0
-        longitude_min: 235.0
-        longitude_max: 245.0
+        latitude_min: 24.8
+        latitude_max: 49.2
+        longitude_min: 227.5
+        longitude_max: 252.5
     event_type: atmospheric_river
   - case_id_number: 106
     title: January 2024 Alaska to California
@@ -1266,10 +1266,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 32.0
-        latitude_max: 65.0
-        longitude_min: 210.0
-        longitude_max: 245.0
+        latitude_min: 24.8
+        latitude_max: 62.5
+        longitude_min: 202.5
+        longitude_max: 249.3
     event_type: atmospheric_river
   - case_id_number: 107
     title: January 2024 California and Arizona
@@ -1278,10 +1278,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 32.0
-        latitude_max: 38.0
-        longitude_min: 240.0
-        longitude_max: 250.0
+        latitude_min: 24.8
+        latitude_max: 45.2
+        longitude_min: 232.5
+        longitude_max: 249.5
     event_type: atmospheric_river
   - case_id_number: 108
     title: December 2023 East Coast Cyclone
@@ -1290,10 +1290,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 25.0
-        latitude_max: 45.0
-        longitude_min: 275.0
-        longitude_max: 295.0
+        latitude_min: 17.8
+        latitude_max: 52.2
+        longitude_min: 267.6
+        longitude_max: 302.4
     event_type: atmospheric_river
   - case_id_number: 109
     title: June 2023 Northwest Cloudband
@@ -1302,10 +1302,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: -28.0
-        latitude_max: -15.0
-        longitude_min: 120.0
-        longitude_max: 140.0
+        latitude_min: -35.2
+        latitude_max: -7.8
+        longitude_min: 113.6
+        longitude_max: 147.7
     event_type: atmospheric_river
   - case_id_number: 110
     title: April 2023 Middle East
@@ -1314,10 +1314,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 20.0
-        latitude_max: 40.0
-        longitude_min: 30.0
-        longitude_max: 60.0
+        latitude_min: 17.5
+        latitude_max: 40.2
+        longitude_min: 22.6
+        longitude_max: 55.1
     event_type: atmospheric_river
   - case_id_number: 111
     title: March 2023 California and Arizona
@@ -1326,10 +1326,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 32.0
-        latitude_max: 38.0
-        longitude_min: 240.0
-        longitude_max: 250.0
+        latitude_min: 24.8
+        latitude_max: 45.2
+        longitude_min: 232.5
+        longitude_max: 252.5
     event_type: atmospheric_river
   - case_id_number: 112
     title: March 2023 California
@@ -1338,10 +1338,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 32.0
-        latitude_max: 42.0
-        longitude_min: 235.0
-        longitude_max: 245.0
+        latitude_min: 24.8
+        latitude_max: 46.2
+        longitude_min: 227.5
+        longitude_max: 252.5
     event_type: atmospheric_river
   - case_id_number: 113
     title: February 2023 Pacific Northwest
@@ -1350,10 +1350,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 40.0
-        latitude_max: 50.0
-        longitude_min: 235.0
-        longitude_max: 250.0
+        latitude_min: 41.3
+        latitude_max: 55.7
+        longitude_min: 226.9
+        longitude_max: 240.8
     event_type: atmospheric_river
   - case_id_number: 114
     title: December 2022 - January 2023 California
@@ -1362,10 +1362,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 32.0
-        latitude_max: 42.0
-        longitude_min: 235.0
-        longitude_max: 245.0
+        latitude_min: 24.8
+        latitude_max: 49.2
+        longitude_min: 227.5
+        longitude_max: 252.5
     event_type: atmospheric_river
   - case_id_number: 115
     title: December 2022 California
@@ -1374,10 +1374,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 32.0
-        latitude_max: 42.0
-        longitude_min: 235.0
-        longitude_max: 245.0
+        latitude_min: 25.0
+        latitude_max: 56.2
+        longitude_min: 220.0
+        longitude_max: 252.8
     event_type: atmospheric_river
   - case_id_number: 116
     title: December 2022 Oregon and California
@@ -1386,10 +1386,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 32.0
-        latitude_max: 45.0
-        longitude_min: 235.0
-        longitude_max: 245.0
+        latitude_min: 29.3
+        latitude_max: 50.0
+        longitude_min: 227.4
+        longitude_max: 243.6
     event_type: atmospheric_river
   - case_id_number: 117
     title: November 2022 - December 2022 California
@@ -1398,10 +1398,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 32.0
-        latitude_max: 42.0
-        longitude_min: 235.0
-        longitude_max: 245.0
+        latitude_min: 27.3
+        latitude_max: 42.2
+        longitude_min: 227.4
+        longitude_max: 243.3
     event_type: atmospheric_river
   - case_id_number: 118
     title: October 2022 Victoria
@@ -1410,10 +1410,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: -39.0
-        latitude_max: -34.0
-        longitude_min: 140.0
-        longitude_max: 150.0
+        latitude_min: -46.2
+        latitude_max: -26.8
+        longitude_min: 131.9
+        longitude_max: 158.1
     event_type: atmospheric_river
   - case_id_number: 119
     title: October 2022 Victoria
@@ -1422,10 +1422,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: -39.0
-        latitude_max: -34.0
-        longitude_min: 140.0
-        longitude_max: 150.0
+        latitude_min: -46.2
+        latitude_max: -26.8
+        longitude_min: 131.9
+        longitude_max: 158.1
     event_type: atmospheric_river
   - case_id_number: 120
     title: November 2022 California
@@ -1434,10 +1434,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 32.0
-        latitude_max: 42.0
-        longitude_min: 235.0
-        longitude_max: 245.0
+        latitude_min: 33.0
+        latitude_max: 49.2
+        longitude_min: 227.2
+        longitude_max: 247.8
     event_type: atmospheric_river
   - case_id_number: 121
     title: November 2022 Pacific Northwest
@@ -1446,10 +1446,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 40.0
-        latitude_max: 50.0
-        longitude_min: 235.0
-        longitude_max: 250.0
+        latitude_min: 33.0
+        latitude_max: 54.5
+        longitude_min: 227.2
+        longitude_max: 247.8
     event_type: atmospheric_river
   - case_id_number: 122
     title: August 2022 Japan
@@ -1458,10 +1458,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 35.0
-        latitude_max: 45.0
-        longitude_min: 130.0
-        longitude_max: 145.0
+        latitude_min: 27.8
+        latitude_max: 52.2
+        longitude_min: 122.4
+        longitude_max: 152.6
     event_type: atmospheric_river
   - case_id_number: 123
     title: June 2022 Pacific Northwest, Wyoming, and Montana
@@ -1470,10 +1470,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 40.0
-        latitude_max: 50.0
-        longitude_min: 235.0
-        longitude_max: 255.0
+        latitude_min: 32.8
+        latitude_max: 57.2
+        longitude_min: 227.3
+        longitude_max: 262.7
     event_type: atmospheric_river
   - case_id_number: 124
     title: March 2022 East Antarctica
@@ -1482,10 +1482,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: -90.0
-        latitude_max: -70.0
-        longitude_min: 60.0
-        longitude_max: 160.0
+        latitude_min: -71.0
+        latitude_max: -62.8
+        longitude_min: 101.3
+        longitude_max: 146.9
     event_type: atmospheric_river
   - case_id_number: 125
     title: February 2022 Southeast QLD / Northern NSW
@@ -1494,10 +1494,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: -30.0
-        latitude_max: -25.0
-        longitude_min: 150.0
-        longitude_max: 155.0
+        latitude_min: -37.2
+        latitude_max: -17.8
+        longitude_min: 142.3
+        longitude_max: 162.7
     event_type: atmospheric_river
   - case_id_number: 126
     title: February 2022 Pacific Northwest
@@ -1506,10 +1506,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 40.0
-        latitude_max: 50.0
-        longitude_min: 235.0
-        longitude_max: 250.0
+        latitude_min: 34.8
+        latitude_max: 55.7
+        longitude_min: 227.2
+        longitude_max: 247.3
     event_type: atmospheric_river
   - case_id_number: 127
     title: January 2022 Norway and Sweden
@@ -1518,10 +1518,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 58.0
-        latitude_max: 65.0
-        longitude_min: 5.0
-        longitude_max: 20.0
+        latitude_min: 50.8
+        latitude_max: 72.2
+        longitude_min: 356.3
+        longitude_max: 28.7
     event_type: atmospheric_river
   - case_id_number: 128
     title: January 2022 Colorado
@@ -1530,10 +1530,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 37.0
-        latitude_max: 41.0
-        longitude_min: 251.0
-        longitude_max: 258.0
+        latitude_min: 29.8
+        latitude_max: 39.2
+        longitude_min: 251.3
+        longitude_max: 265.7
     event_type: atmospheric_river
   - case_id_number: 129
     title: January 2022 Pacific Northwest
@@ -1542,10 +1542,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 40.0
-        latitude_max: 50.0
-        longitude_min: 235.0
-        longitude_max: 250.0
+        latitude_min: 32.8
+        latitude_max: 57.2
+        longitude_min: 227.3
+        longitude_max: 245.7
     event_type: atmospheric_river
   - case_id_number: 130
     title: December 2021 - January 2022 Western US
@@ -1554,10 +1554,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 32.0
+        latitude_min: 24.8
         latitude_max: 50.0
-        longitude_min: 235.0
-        longitude_max: 255.0
+        longitude_min: 227.5
+        longitude_max: 262.5
     event_type: atmospheric_river
   - case_id_number: 131
     title: December 2021 Pacific NW
@@ -1566,10 +1566,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 40.0
-        latitude_max: 50.0
-        longitude_min: 235.0
-        longitude_max: 250.0
+        latitude_min: 32.8
+        latitude_max: 53.5
+        longitude_min: 227.3
+        longitude_max: 243.7
     event_type: atmospheric_river
   - case_id_number: 132
     title: November 2021 Pacific Northwest
@@ -1578,10 +1578,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 40.0
-        latitude_max: 50.0
-        longitude_min: 235.0
-        longitude_max: 250.0
+        latitude_min: 32.8
+        latitude_max: 56.2
+        longitude_min: 227.3
+        longitude_max: 257.7
     event_type: atmospheric_river
   - case_id_number: 133
     title: October 2021 California
@@ -1590,10 +1590,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 32.0
-        latitude_max: 42.0
-        longitude_min: 235.0
-        longitude_max: 245.0
+        latitude_min: 26.3
+        latitude_max: 49.2
+        longitude_min: 227.4
+        longitude_max: 251.1
     event_type: atmospheric_river
   - case_id_number: 134
     title: September 2021 Pacific Northwest
@@ -1602,10 +1602,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 40.0
-        latitude_max: 50.0
-        longitude_min: 235.0
-        longitude_max: 250.0
+        latitude_min: 33.5
+        latitude_max: 57.2
+        longitude_min: 227.2
+        longitude_max: 257.8
     event_type: atmospheric_river
   - case_id_number: 135
     title: June 2021 Bloomington Indiana
@@ -1614,10 +1614,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 39.0
-        latitude_max: 40.0
-        longitude_min: 273.0
-        longitude_max: 274.0
+        latitude_min: 31.8
+        latitude_max: 47.2
+        longitude_min: 265.3
+        longitude_max: 281.7
     event_type: atmospheric_river
   - case_id_number: 136
     title: June 2021 Alaska Trans-Pacific
@@ -1626,10 +1626,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 55.0
-        latitude_max: 70.0
-        longitude_min: 190.0
-        longitude_max: 230.0
+        latitude_min: 47.8
+        latitude_max: 63.7
+        longitude_min: 181.5
+        longitude_max: 238.5
     event_type: atmospheric_river
   - case_id_number: 137
     title: March 2021 Sydney
@@ -1638,10 +1638,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: -34.0
-        latitude_max: -33.0
-        longitude_min: 150.0
-        longitude_max: 152.0
+        latitude_min: -41.2
+        latitude_max: -25.8
+        longitude_min: 142.1
+        longitude_max: 159.9
     event_type: atmospheric_river
   - case_id_number: 138
     title: February 2021 Pacific Northwest
@@ -1650,10 +1650,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 40.0
-        latitude_max: 50.0
-        longitude_min: 235.0
-        longitude_max: 250.0
+        latitude_min: 34.5
+        latitude_max: 56.2
+        longitude_min: 227.2
+        longitude_max: 241.3
     event_type: atmospheric_river
   - case_id_number: 139
     title: January 2021 Pacific NW
@@ -1662,10 +1662,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 40.0
-        latitude_max: 50.0
-        longitude_min: 235.0
-        longitude_max: 250.0
+        latitude_min: 32.8
+        latitude_max: 56.2
+        longitude_min: 227.3
+        longitude_max: 252.0
     event_type: atmospheric_river
   - case_id_number: 140
     title: January 2021 Pacific Northwest
@@ -1674,10 +1674,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 40.0
-        latitude_max: 50.0
-        longitude_min: 235.0
-        longitude_max: 250.0
+        latitude_min: 32.8
+        latitude_max: 56.2
+        longitude_min: 227.3
+        longitude_max: 241.7
     event_type: atmospheric_river
   - case_id_number: 141
     title: December 2020 Pacific Northwest
@@ -1686,10 +1686,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 40.0
-        latitude_max: 50.0
-        longitude_min: 235.0
-        longitude_max: 250.0
+        latitude_min: 32.8
+        latitude_max: 55.5
+        longitude_min: 227.3
+        longitude_max: 247.0
     event_type: atmospheric_river
   - case_id_number: 142
     title: December 2020 Western US
@@ -1698,10 +1698,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 32.0
-        latitude_max: 50.0
-        longitude_min: 235.0
-        longitude_max: 255.0
+        latitude_min: 30.0
+        latitude_max: 55.5
+        longitude_min: 227.3
+        longitude_max: 246.9
     event_type: atmospheric_river
   - case_id_number: 143
     title: December 2020 Alaska
@@ -1710,10 +1710,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 55.0
-        latitude_max: 65.0
-        longitude_min: 200.0
-        longitude_max: 230.0
+        latitude_min: 47.8
+        latitude_max: 63.2
+        longitude_min: 191.5
+        longitude_max: 238.5
     event_type: atmospheric_river
   - case_id_number: 144
     title: November 2020 Western US
@@ -1722,10 +1722,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 32.0
-        latitude_max: 50.0
-        longitude_min: 235.0
-        longitude_max: 255.0
+        latitude_min: 28.8
+        latitude_max: 54.7
+        longitude_min: 227.4
+        longitude_max: 243.9
     event_type: atmospheric_river
   - case_id_number: 145
     title: October 2020 Western Alps
@@ -1734,10 +1734,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 44.0
-        latitude_max: 47.0
-        longitude_min: 5.0
-        longitude_max: 9.0
+        latitude_min: 36.8
+        latitude_max: 54.2
+        longitude_min: 357.1
+        longitude_max: 16.9
     event_type: atmospheric_river
   - case_id_number: 146
     title: September 2020 Pacific Northwest
@@ -1746,10 +1746,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 40.0
-        latitude_max: 50.0
-        longitude_min: 235.0
-        longitude_max: 250.0
+        latitude_min: 34.8
+        latitude_max: 57.2
+        longitude_min: 227.2
+        longitude_max: 257.8
     event_type: atmospheric_river
   - case_id_number: 147
     title: September 2020 Pacific Northwest
@@ -1758,10 +1758,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 40.0
-        latitude_max: 50.0
-        longitude_min: 235.0
-        longitude_max: 250.0
+        latitude_min: 32.8
+        latitude_max: 53.5
+        longitude_min: 227.3
+        longitude_max: 240.5
     event_type: atmospheric_river
   - case_id_number: 148
     title: May 2020 Western US
@@ -1770,10 +1770,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 32.0
-        latitude_max: 50.0
-        longitude_min: 235.0
-        longitude_max: 255.0
+        latitude_min: 28.0
+        latitude_max: 54.0
+        longitude_min: 227.4
+        longitude_max: 241.6
     event_type: atmospheric_river
   - case_id_number: 149
     title: March 2020 Southwestern US
@@ -1782,10 +1782,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 30.0
-        latitude_max: 40.0
-        longitude_min: 240.0
-        longitude_max: 255.0
+        latitude_min: 22.8
+        latitude_max: 39.2
+        longitude_min: 232.5
+        longitude_max: 262.5
     event_type: atmospheric_river
   - case_id_number: 150
     title: February 2020 Southwestern US
@@ -1794,10 +1794,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 30.0
-        latitude_max: 40.0
-        longitude_min: 240.0
-        longitude_max: 255.0
+        latitude_min: 22.8
+        latitude_max: 36.0
+        longitude_min: 235.8
+        longitude_max: 262.5
     event_type: atmospheric_river
   - case_id_number: 151
     title: February 2020 Western US
@@ -1806,10 +1806,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 32.0
-        latitude_max: 50.0
-        longitude_min: 235.0
-        longitude_max: 255.0
+        latitude_min: 38.8
+        latitude_max: 55.2
+        longitude_min: 227.0
+        longitude_max: 250.7
     event_type: atmospheric_river
   - case_id_number: 152
     title: January 2020 Pacific Northwest
@@ -1818,10 +1818,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 40.0
-        latitude_max: 50.0
-        longitude_min: 235.0
-        longitude_max: 250.0
+        latitude_min: 32.8
+        latitude_max: 56.7
+        longitude_min: 227.3
+        longitude_max: 250.5
     event_type: atmospheric_river
   - case_id_number: 153
     title: Milton
