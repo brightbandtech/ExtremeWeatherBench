@@ -1837,7 +1837,7 @@ class TestLongitudeCoordinateMismatch:
     def test_region_180_with_dataset_360(self, dataset_360_convention):
         """Test region in -180/+180 convention with dataset in 0-360."""
         # Create region matching UK case 20: longitude -9.75 to 8.25
-        region = BoundingBoxRegion.create_region(
+        region = regions.BoundingBoxRegion.create_region(
             latitude_min=39.25,
             latitude_max=56.0,
             longitude_min=-9.75,  # -180/+180 convention
@@ -1865,7 +1865,7 @@ class TestLongitudeCoordinateMismatch:
     def test_region_360_with_dataset_180(self, dataset_180_convention):
         """Test region in 0-360 convention with dataset in -180/+180."""
         # Create region in 0-360 convention
-        region = BoundingBoxRegion.create_region(
+        region = regions.BoundingBoxRegion.create_region(
             latitude_min=39.25,
             latitude_max=56.0,
             longitude_min=350.25,  # 0-360 convention (equivalent to -9.75)
@@ -1893,7 +1893,7 @@ class TestLongitudeCoordinateMismatch:
         )
 
         # Region that crosses antimeridian in 0-360 convention
-        region = BoundingBoxRegion.create_region(
+        region = regions.BoundingBoxRegion.create_region(
             latitude_min=35.0,
             latitude_max=55.0,
             longitude_min=355.0,  # Should wrap to include 0-5 range
@@ -1922,7 +1922,7 @@ class TestLongitudeCoordinateMismatch:
         )
 
         # Region that crosses antimeridian in -180/+180 convention
-        region = BoundingBoxRegion.create_region(
+        region = regions.BoundingBoxRegion.create_region(
             latitude_min=35.0,
             latitude_max=55.0,
             longitude_min=175.0,  # Crosses antimeridian
@@ -1946,7 +1946,7 @@ class TestLongitudeCoordinateMismatch:
         )
 
         # Case 20 region definition (UK August 2022)
-        case_20_region = BoundingBoxRegion.create_region(
+        case_20_region = regions.BoundingBoxRegion.create_region(
             latitude_min=39.25,
             latitude_max=56.0,
             longitude_min=-9.75,  # -180/+180 convention
