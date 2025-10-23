@@ -12,10 +12,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import regionmask
+import scipy.ndimage as ndimage
 import xarray as xr
 from dask.distributed import Client
 from matplotlib.patches import Rectangle
-from scipy.ndimage import center_of_mass, label
 
 from extremeweatherbench import cases, derived, inputs, regions, utils
 from extremeweatherbench.events import atmospheric_river as ar
@@ -127,7 +127,7 @@ def identify_ar_objects(
     mask_data = ar_mask.values.astype(bool)
 
     # Label connected components
-    labeled_array, num_objects = label(mask_data)
+    labeled_array, num_objects = ndimage.label(mask_data)
 
     # Analyze each object
     object_properties = {}
@@ -160,7 +160,7 @@ def identify_ar_objects(
         lon_span = np.max(lons) - np.min(lons)
 
         # Calculate centroid
-        centroid_lat_idx, centroid_lon_idx = center_of_mass(obj_mask)
+        centroid_lat_idx, centroid_lon_idx = ndimage.center_of_mass(obj_mask)
         centroid_lat = ar_mask.latitude.values[int(centroid_lat_idx)]
         centroid_lon = ar_mask.longitude.values[int(centroid_lon_idx)]
 
@@ -229,7 +229,7 @@ def find_central_ar_object(
     if ar_slice.sum() == 0:
         return None
 
-    labeled_array, num_objects = label(ar_slice.values > 0)
+    labeled_array, num_objects = ndimage.label(ar_slice.values > 0)
 
     if num_objects == 0:
         return None
@@ -299,7 +299,7 @@ def find_timestamp_peak_field(
         closest_object_label = find_central_ar_object(ar_slice, center_lat, center_lon)
 
         if closest_object_label is not None:
-            labeled_array, _ = label(ar_slice.values > 0)
+            labeled_array, _ = ndimage.label(ar_slice.values > 0)
             closest_mask_array = labeled_array == closest_object_label
             central_ar_mask = xr.where(
                 xr.DataArray(
@@ -350,7 +350,7 @@ def find_timestamp_peak_field(
             closest_obj = find_central_ar_object(ar_slice, center_lat, center_lon)
 
             if closest_obj is not None:
-                labeled_array, _ = label(ar_slice.values > 0)
+                labeled_array, _ = ndimage.label(ar_slice.values > 0)
                 central_mask = labeled_array == closest_obj
                 ivt_central = ivt_slice.where(
                     xr.DataArray(
@@ -393,7 +393,7 @@ def find_timestamp_peak_field(
         )
 
         if closest_object_label is not None:
-            labeled_array, _ = label(peak_ar_slice.values > 0)
+            labeled_array, _ = ndimage.label(peak_ar_slice.values > 0)
             peak_central_mask = labeled_array == closest_object_label
             peak_ar_over_land = peak_central_mask & (land_mask.values > 0)
             land_pixels = np.sum(peak_ar_over_land)
