@@ -7,7 +7,8 @@ from extremeweatherbench import calc
 
 
 def atmospheric_river_mask(
-    data: xr.Dataset,
+    ivt: xr.DataArray,
+    ivt_laplacian: xr.DataArray,
     laplacian_threshold: float = 2.5,
     ivt_threshold: float = 400,
     dilation_radius: int = 8,
@@ -37,13 +38,11 @@ def atmospheric_river_mask(
     """
 
     # Get all coordinates except level for the intersection DataArray
-    coords_dict = {dim: data.coords[dim] for dim in data.dims if dim != "level"}
+    coords_dict = {dim: ivt.coords[dim] for dim in ivt.dims if dim != "level"}
 
     # Create boolean masks for each condition
-    has_high_laplacian = (
-        np.abs(data["integrated_vapor_transport_laplacian"]) >= laplacian_threshold
-    )
-    has_high_ivt = data["integrated_vapor_transport"] >= ivt_threshold
+    has_high_laplacian = np.abs(ivt_laplacian) >= laplacian_threshold
+    has_high_ivt = ivt >= ivt_threshold
 
     # For the Laplacian condition, we want to check if there's a value >= 2.5 within 8
     # gridpoints (0.25 degrees)
@@ -74,11 +73,11 @@ def atmospheric_river_mask(
     feature_mask = np.isin(labeled_array, valid_features)
 
     # Final result with size threshold and centroid restriction applied
-    ivt_laplacian_intersection = xr.DataArray(
+    ar_mask = xr.DataArray(
         xr.where(feature_mask, 1, 0), coords=coords_dict, dims=coords_dict.keys()
     )
-    ivt_laplacian_intersection.name = "atmospheric_river_mask"
-    return ivt_laplacian_intersection
+    ar_mask.name = "atmospheric_river_mask"
+    return ar_mask
 
 
 def compute_ivt(
@@ -247,11 +246,8 @@ def build_atmospheric_river_mask_and_land_intersection(data: xr.Dataset) -> xr.D
     # Compute IVT Laplacian
     ivt_laplacian = compute_ivt_laplacian(ivt=ivt_data, sigma=3)
 
-    # Convert IVT DataArray to Dataset and merge with Laplacian
-    full_data = xr.merge([ivt_data, ivt_laplacian])
-
     # Compute AR mask with default parameters
-    ar_mask_result = atmospheric_river_mask(data=full_data)
+    ar_mask_result = atmospheric_river_mask(ivt=ivt_data, ivt_laplacian=ivt_laplacian)
 
     # Compute land intersection
     land_intersection = calc.find_land_intersection(ar_mask_result)
