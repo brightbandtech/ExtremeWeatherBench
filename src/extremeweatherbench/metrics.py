@@ -18,8 +18,8 @@ _GLOBAL_CONTINGENCY_CACHE = utils.ThreadSafeDict()  # type: ignore
 
 
 def get_cached_transformed_manager(
-    forecast: xr.Dataset,
-    target: xr.Dataset,
+    forecast: xr.DataArray,
+    target: xr.DataArray,
     forecast_threshold: float = 0.5,
     target_threshold: float = 0.5,
     preserve_dims: str = "lead_time",
@@ -30,8 +30,8 @@ def get_cached_transformed_manager(
     with the same thresholds and data, regardless of how the metrics are created.
     """
     # Create cache key from data content hash and parameters
-    forecast_hash = hash(forecast.to_array().values.tobytes())
-    target_hash = hash(target.to_array().values.tobytes())
+    forecast_hash = hash(forecast.data.tobytes())
+    target_hash = hash(target.data.tobytes())
 
     cache_key = (
         forecast_hash,
@@ -263,8 +263,8 @@ class CSI(ThresholdMetric):
     @classmethod
     def _compute_metric(
         cls,
-        forecast: xr.Dataset,
-        target: xr.Dataset,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
         **kwargs: Any,
     ) -> Any:
         forecast_threshold = kwargs.get("forecast_threshold", 0.5)
@@ -289,8 +289,8 @@ class FAR(ThresholdMetric):
     @classmethod
     def _compute_metric(
         cls,
-        forecast: xr.Dataset,
-        target: xr.Dataset,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
         **kwargs: Any,
     ) -> Any:
         forecast_threshold = kwargs.get("forecast_threshold", 0.5)
@@ -315,8 +315,8 @@ class TP(ThresholdMetric):
     @classmethod
     def _compute_metric(
         cls,
-        forecast: xr.Dataset,
-        target: xr.Dataset,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
         **kwargs: Any,
     ) -> Any:
         forecast_threshold = kwargs.get("forecast_threshold", 0.5)
@@ -342,8 +342,8 @@ class FP(ThresholdMetric):
     @classmethod
     def _compute_metric(
         cls,
-        forecast: xr.Dataset,
-        target: xr.Dataset,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
         **kwargs: Any,
     ) -> Any:
         forecast_threshold = kwargs.get("forecast_threshold", 0.5)
@@ -369,8 +369,8 @@ class TN(ThresholdMetric):
     @classmethod
     def _compute_metric(
         cls,
-        forecast: xr.Dataset,
-        target: xr.Dataset,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
         **kwargs: Any,
     ) -> Any:
         forecast_threshold = kwargs.get("forecast_threshold", 0.5)
@@ -532,61 +532,63 @@ class RMSE(BaseMetric):
         return continuous.rmse(forecast, target, preserve_dims=preserve_dims)
 
 
-class EarlySignal(BaseMetric):
-    """Metric to identify the earliest signal detection in forecast data.
+class Signal(BaseMetric):
+    """Metric to detect signal presence in forecast data.
 
-    This metric finds the first occurrence where a signal is detected based on
-    threshold criteria and returns the corresponding init_time, lead_time, and
-    valid_time information. The metric is designed to be flexible for different
-    signal detection criteria that can be specified in applied metrics downstream.
+    Returns a boolean DataArray indicating whether threshold criteria are met
+    for each (init_time, lead_time) combination. The metric is flexible for
+    different signal detection criteria specified via threshold, comparison,
+    and spatial_aggregation parameters.
     """
 
-    name = "early_signal"
+    name = "signal"
+
+    def __init__(self, **kwargs: Any):
+        super().__init__(**kwargs)
+        self.threshold = kwargs.get("threshold", None)
+        self.comparison = kwargs.get("comparison", ">=")
+        self.spatial_aggregation = kwargs.get("spatial_aggregation", "any")
 
     @classmethod
     def _compute_metric(
         cls,
-        forecast: xr.Dataset,
-        target: xr.Dataset,
-        threshold: Optional[float] = None,
-        variable: Optional[str] = None,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
+        threshold: Optional[float] = 0.5,
         comparison: str = ">=",
         spatial_aggregation: str = "any",
         **kwargs: Any,
-    ) -> xr.Dataset:
+    ) -> xr.DataArray:
         """Compute early signal detection.
 
         Args:
             forecast: The forecast dataset with init_time, lead_time, valid_time
             target: The target dataset (used for reference/validation)
             threshold: Threshold value for signal detection
-            variable: Variable name to analyze for signal detection
             comparison: Comparison operator (">=", "<=", ">", "<", "==", "!=")
             spatial_aggregation: How to aggregate spatially ("any", "all", "mean")
             **kwargs: Additional arguments
 
         Returns:
-            Dataset containing earliest detection times with coordinates:
-            - earliest_init_time: First init_time when signal was detected
-            - earliest_lead_time: Corresponding lead_time
-            - earliest_valid_time: Corresponding valid_time
-            - detection_found: Boolean indicating if any detection occurred
+            Boolean DataArray with dims [init_time, lead_time] indicating
+            whether criteria are met for each init_time and lead_time pair.
         """
-        if threshold is None or variable is None:
-            # Return structure for when no detection criteria specified
-            return xr.Dataset(
-                {
-                    "earliest_init_time": xr.DataArray(np.datetime64("NaT")),
-                    "earliest_lead_time": xr.DataArray(np.timedelta64("NaT")),
-                    "earliest_valid_time": xr.DataArray(np.datetime64("NaT")),
-                    "detection_found": xr.DataArray(False),
-                }
+        if threshold is None:
+            # Return False for all when no detection criteria specified
+            dims = ["init_time", "lead_time"]
+            coords = {
+                "init_time": forecast.valid_time - forecast.lead_time,
+                "lead_time": forecast.lead_time,
+            }
+            if "valid_time" in forecast.dims:
+                dims.append("valid_time")
+                coords["valid_time"] = forecast.valid_time
+            return xr.DataArray(
+                False,
+                dims=dims,
+                coords=coords,
+                name="early_signal",
             )
-
-        if variable not in forecast.data_vars:
-            raise ValueError(f"Variable '{variable}' not found in forecast dataset")
-
-        data = forecast[variable]
 
         # Apply threshold comparison
         comparison_ops = {
@@ -602,7 +604,7 @@ class EarlySignal(BaseMetric):
             raise ValueError(f"Comparison '{comparison}' not supported")
 
         # Create detection mask
-        detection_mask = comparison_ops[comparison](data, threshold)
+        detection_mask = comparison_ops[comparison](forecast, threshold)
 
         # Apply spatial aggregation
         spatial_dims = [
@@ -623,66 +625,8 @@ class EarlySignal(BaseMetric):
                     f"Spatial aggregation '{spatial_aggregation}' not supported"
                 )
 
-        # Find earliest detection for each init_time
-        earliest_results = {}
-
-        for init_t in forecast.init_time:
-            init_mask = detection_mask.sel(init_time=init_t)
-
-            # Find first occurrence along lead_time dimension
-            if init_mask.any():
-                # Get the first True index along lead_time
-                first_detection_idx = init_mask.argmax("lead_time")
-                earliest_lead = forecast.lead_time[first_detection_idx]
-                earliest_valid = init_t.values + np.timedelta64(int(earliest_lead), "h")
-
-                earliest_results[init_t.values] = {
-                    "init_time": init_t.values,
-                    "lead_time": earliest_lead.values,
-                    "valid_time": earliest_valid,
-                    "found": True,
-                }
-            else:
-                earliest_results[init_t.values] = {
-                    "init_time": init_t.values,
-                    "lead_time": np.timedelta64("NaT"),
-                    "valid_time": np.datetime64("NaT"),
-                    "found": False,
-                }
-
-        # Convert to xarray Dataset
-        init_times = list(earliest_results.keys())
-        earliest_init_times = [r["init_time"] for r in earliest_results.values()]
-        earliest_lead_times = [r["lead_time"] for r in earliest_results.values()]
-        earliest_valid_times = [r["valid_time"] for r in earliest_results.values()]
-        detection_found = [r["found"] for r in earliest_results.values()]
-
-        result = xr.Dataset(
-            {
-                "earliest_init_time": xr.DataArray(
-                    earliest_init_times,
-                    coords={"init_time": init_times},
-                    dims=["init_time"],
-                ),
-                "earliest_lead_time": xr.DataArray(
-                    earliest_lead_times,
-                    coords={"init_time": init_times},
-                    dims=["init_time"],
-                ),
-                "earliest_valid_time": xr.DataArray(
-                    earliest_valid_times,
-                    coords={"init_time": init_times},
-                    dims=["init_time"],
-                ),
-                "detection_found": xr.DataArray(
-                    detection_found,
-                    coords={"init_time": init_times},
-                    dims=["init_time"],
-                ),
-            }
-        )
-
-        return result
+        detection_mask.name = "early_signal"
+        return detection_mask
 
 
 class MaximumMAE(AppliedMetric):
