@@ -109,7 +109,7 @@ class ExtremeWeatherBench:
             logger.warning(
                 "Caching is not supported in parallel mode, ignoring cache_dir"
             )
-        # Instantiate the cache directory if caching and build it if needed
+        # Instantiate the cache directory if caching and build it if it does not exist
         elif self.cache_dir:
             if not self.cache_dir.exists():
                 self.cache_dir.mkdir(parents=True, exist_ok=True)
