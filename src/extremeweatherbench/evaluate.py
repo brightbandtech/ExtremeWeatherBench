@@ -220,7 +220,8 @@ def compute_case_operator(
         A concatenated dataframe of the results of the case operator.
     """
     logger.info(
-        "Computing case operator %s...", case_operator.case_metadata.case_id_number
+        "Computing case operator for case %s...",
+        case_operator.case_metadata.case_id_number,
     )
     forecast_ds, target_ds = _build_datasets(case_operator, **kwargs)
 
