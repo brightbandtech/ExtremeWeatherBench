@@ -79,19 +79,19 @@ pang_forecast = inputs.KerchunkForecast(
 ar_evaluation_objects = [
     inputs.EvaluationObject(
         event_type="atmospheric_river",
-        metric_list=[metrics.Signal],
+        metric_list=[metrics.CSI, metrics.Signal, metrics.SpatialDisplacement],
         target=era5_target,
         forecast=hres_forecast,
     ),
     inputs.EvaluationObject(
         event_type="atmospheric_river",
-        metric_list=[metrics.Signal],
+        metric_list=[metrics.CSI, metrics.Signal, metrics.SpatialDisplacement],
         target=era5_target,
         forecast=grap_forecast,
     ),
     inputs.EvaluationObject(
         event_type="atmospheric_river",
-        metric_list=[metrics.Signal],
+        metric_list=[metrics.CSI, metrics.Signal, metrics.SpatialDisplacement],
         target=era5_target,
         forecast=pang_forecast,
     ),
