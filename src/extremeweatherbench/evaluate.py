@@ -75,6 +75,7 @@ class ExtremeWeatherBench:
     def run(
         self,
         n_jobs: Optional[int] = None,
+        parallel_config: Optional[dict] = None,
         **kwargs,
     ) -> pd.DataFrame:
         """Runs the ExtremeWeatherBench workflow.
@@ -85,45 +86,71 @@ class ExtremeWeatherBench:
 
         Args:
             n_jobs: The number of jobs to run in parallel. If None, defaults to the
-            joblib backend default value. If 1, the workflow will run serially.
+                joblib backend default value. If 1, the workflow will run serially.
+                Ignored if parallel_config is provided.
+            parallel_config: Optional dictionary of joblib parallel configuration.
+                If provided, this takes precedence over n_jobs. If not provided and
+                n_jobs is specified, a default config with threading backend is used.
 
         Returns:
             A concatenated dataframe of the evaluation results.
         """
         logger.info("Running ExtremeWeatherBench workflow...")
-        # Caching does not work in parallel mode as of now, so ignore the cache_dir
-        # but raise a warning for the user
-        if self.cache_dir and n_jobs != 1:
+
+        # Build parallel_config if not provided
+        if parallel_config is None and n_jobs is not None:
+            parallel_config = {"backend": "threading", "n_jobs": n_jobs}
+
+        # Determine if running in serial mode
+        is_serial = parallel_config is None or parallel_config.get("n_jobs") == 1
+
+        # Caching does not work in parallel mode as of now
+        if self.cache_dir and not is_serial:
             logger.warning(
                 "Caching is not supported in parallel mode, ignoring cache_dir"
             )
-        # Instantiate the cache directory if caching and build it if it does not exist
+        # Instantiate the cache directory if caching and build it if needed
         elif self.cache_dir:
             if not self.cache_dir.exists():
                 self.cache_dir.mkdir(parents=True, exist_ok=True)
-        run_results = _run_case_operators(
-            self.case_operators, n_jobs, self.cache_dir, **kwargs
-        )
+
+        # Add parallel_config to kwargs if provided
+        if parallel_config is not None:
+            kwargs["parallel_config"] = parallel_config
+
+        run_results = _run_case_operators(self.case_operators, self.cache_dir, **kwargs)
+
+        # If there are results, concatenate them and return, else return an empty
+        # DataFrame with the expected columns
         if run_results:
             return utils._safe_concat(run_results, ignore_index=True)
         else:
-            # Return empty DataFrame with expected columns
             return pd.DataFrame(columns=defaults.OUTPUT_COLUMNS)
 
 
 def _run_case_operators(
     case_operators: list["cases.CaseOperator"],
-    n_jobs: Optional[int] = None,
     cache_dir: Optional[pathlib.Path] = None,
     **kwargs,
 ) -> list[pd.DataFrame]:
-    """Run the case operators in parallel or serial."""
+    """Run the case operators in parallel or serial.
+
+    Args:
+        case_operators: List of case operators to run.
+        cache_dir: Optional directory for caching (serial mode only).
+        **kwargs: Additional arguments, may include 'parallel_config' dict.
+
+    Returns:
+        List of result DataFrames.
+    """
     with logging_redirect_tqdm():
-        # If there are less than 2 case operators, run in serial (joblib will hang
-        # indefinitely)
-        if n_jobs != 1 and len(case_operators) >= 2:
+        # Check if parallel_config is provided
+        parallel_config = kwargs.get("parallel_config")
+
+        # Run in parallel if parallel_config exists and n_jobs != 1
+        if parallel_config is not None and parallel_config.get("n_jobs") != 1:
             logger.info("Running case operators in parallel...")
-            return _run_parallel(case_operators, n_jobs, **kwargs)
+            return _run_parallel(case_operators, **kwargs)
         else:
             return _run_serial(case_operators, cache_dir, **kwargs)
 
@@ -143,25 +170,27 @@ def _run_serial(
 
 def _run_parallel(
     case_operators: list["cases.CaseOperator"],
-    n_jobs: Optional[int] = None,
     **kwargs,
 ) -> list[pd.DataFrame]:
-    """Run the case operators in parallel."""
+    """Run the case operators in parallel.
 
-    if n_jobs is None:
+    Args:
+        case_operators: List of case operators to run.
+        **kwargs: Additional arguments, must include 'parallel_config' dict.
+
+    Returns:
+        List of result DataFrames.
+    """
+    parallel_config = kwargs.pop("parallel_config", None)
+
+    if parallel_config is None:
+        raise ValueError("parallel_config must be provided to _run_parallel")
+
+    if parallel_config.get("n_jobs") is None:
         logger.warning("No number of jobs provided, using joblib backend default.")
-    parallel_config = kwargs.get(
-        "parallel_config", {"backend": "threading", "n_jobs": n_jobs}
-    )
 
-    # If n_jobs is 1, run in serial
-    if n_jobs == 1:
-        logger.debug("n_jobs is 1, running in serial")
-        return _run_serial(case_operators, **kwargs)
     # TODO: return a generator and compute at a higher level
-    with joblib.parallel_config(
-        **parallel_config,
-    ):
+    with joblib.parallel_config(**parallel_config):
         run_results = utils.ParallelTqdm(total_tasks=len(case_operators))(
             # None is the cache_dir, we can't cache in parallel mode
             joblib.delayed(compute_case_operator)(case_operator, None, **kwargs)
