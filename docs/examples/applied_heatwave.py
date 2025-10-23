@@ -62,6 +62,7 @@ ewb = evaluate.ExtremeWeatherBench(
 
 # Run the workflow
 outputs = ewb.run(
+    parallel_config={"backend": "threading", "n_jobs": 24},
     # tolerance range is the number of hours before and after the timestamp a
     # validating occurrence is checked in the forecasts for certain metrics
     # such as minimum temperature MAE
