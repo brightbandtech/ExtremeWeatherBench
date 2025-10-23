@@ -1,6 +1,7 @@
 import dataclasses
+import logging
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Callable, Optional, Union
+from typing import TYPE_CHECKING, Any, Callable, Optional, TypeAlias, Union
 
 import numpy as np
 import pandas as pd
@@ -12,13 +13,15 @@ from extremeweatherbench import cases, derived, utils
 if TYPE_CHECKING:
     from extremeweatherbench import metrics
 
+logger = logging.getLogger(__name__)
+
 #: Storage/access options for gridded target datasets.
 ARCO_ERA5_FULL_URI = (
     "gs://gcp-public-data-arco-era5/ar/full_37-1h-0p25deg-chunk-1.zarr-v3"
 )
 
 #: Storage/access options for default point target dataset.
-DEFAULT_GHCN_URI = "gs://extremeweatherbench/datasets/ghcnh.parq"
+DEFAULT_GHCN_URI = "gs://extremeweatherbench/datasets/ghcnh_all_2020_2024.parq"
 
 #: Storage/access options for local storm report (LSR) tabular data.
 LSR_URI = "gs://extremeweatherbench/datasets/lsr_01012020_04302025.parq"
@@ -33,7 +36,58 @@ IBTRACS_URI = (
     "climate-stewardship-ibtracs/v04r01/access/csv/ibtracs.ALL.list.v04r01.csv"
 )
 
+# ERA5 metadata variable mapping
+ERA5_metadata_variable_mapping = {
+    "time": "valid_time",
+    "2m_temperature": "surface_air_temperature",
+    "2m_dewpoint_temperature": "surface_dewpoint_temperature",
+    "temperature": "air_temperature",
+    "dewpoint": "dewpoint_temperature",
+    "2m_relative_humidity": "surface_relative_humidity",
+    "2m_specific_humidity": "surface_specific_humidity",
+    "10m_u_component_of_wind": "surface_eastward_wind",
+    "10m_v_component_of_wind": "surface_northward_wind",
+    "u_component_of_wind": "eastward_wind",
+    "v_component_of_wind": "northward_wind",
+    "specific_humidity": "specific_humidity",
+    "mean_sea_level_pressure": "air_pressure_at_mean_sea_level",
+}
+
+# CIRA MLWP forecasts metadata variable mapping
+CIRA_metadata_variable_mapping = {
+    "time": "valid_time",
+    "t2": "surface_air_temperature",
+    "t": "air_temperature",
+    "q": "specific_humidity",
+    "u": "eastward_wind",
+    "v": "northward_wind",
+    "p": "air_pressure",
+    "z": "geopotential_height",
+    "r": "relative_humidity",
+    "u10": "surface_eastward_wind",
+    "v10": "surface_northward_wind",
+    "u100": "100m_eastward_wind",
+    "v100": "100m_northward_wind",
+}
+
+# HRES forecast (weatherbench2)metadata variable mapping
+HRES_metadata_variable_mapping = {
+    "2m_temperature": "surface_air_temperature",
+    "2m_dewpoint_temperature": "surface_dewpoint_temperature",
+    "temperature": "air_temperature",
+    "dewpoint": "dewpoint_temperature",
+    "10m_u_component_of_wind": "surface_eastward_wind",
+    "10m_v_component_of_wind": "surface_northward_wind",
+    "u_component_of_wind": "eastward_wind",
+    "v_component_of_wind": "northward_wind",
+    "prediction_timedelta": "lead_time",
+    "time": "init_time",
+    "mean_sea_level_pressure": "air_pressure_at_mean_sea_level",
+    "10m_wind_speed": "surface_wind_speed",
+}
+
 IBTrACS_metadata_variable_mapping = {
+    "SID": "storm_id",
     "ISO_TIME": "valid_time",
     "NAME": "tc_name",
     "LAT": "latitude",
@@ -66,6 +120,12 @@ IBTrACS_metadata_variable_mapping = {
     "MLC_WIND": "mlc_surface_wind_speed",
     "MLC_PRES": "mlc_air_pressure_at_mean_sea_level",
 }
+IncomingDataInput: TypeAlias = xr.Dataset | xr.DataArray | pl.LazyFrame | pd.DataFrame
+
+
+def _default_preprocess(input_data: IncomingDataInput) -> IncomingDataInput:
+    """Default forecast preprocess function that does nothing."""
+    return input_data
 
 
 @dataclasses.dataclass
@@ -86,12 +146,12 @@ class InputBase(ABC):
         default_factory=list
     )
     variable_mapping: dict = dataclasses.field(default_factory=dict)
-    storage_options: dict = dataclasses.field(default_factory=dict)
-    preprocess: Callable = utils._default_preprocess
+    storage_options: Optional[dict] = None
+    preprocess: Callable = _default_preprocess
 
     def open_and_maybe_preprocess_data_from_source(
         self,
-    ) -> utils.IncomingDataInput:
+    ) -> IncomingDataInput:
         data = self._open_data_from_source()
         data = self.preprocess(data)
         return data
@@ -105,7 +165,7 @@ class InputBase(ABC):
         self.name = name
 
     @abstractmethod
-    def _open_data_from_source(self) -> utils.IncomingDataInput:
+    def _open_data_from_source(self) -> IncomingDataInput:
         """Open the target data from the source, opting to avoid loading the entire
         dataset into memory if possible.
 
@@ -116,9 +176,10 @@ class InputBase(ABC):
     @abstractmethod
     def subset_data_to_case(
         self,
-        data: utils.IncomingDataInput,
+        data: IncomingDataInput,
         case_operator: "cases.CaseOperator",
-    ) -> utils.IncomingDataInput:
+        **kwargs,
+    ) -> IncomingDataInput:
         """Subset the target data to the case information provided in CaseOperator.
 
         Time information, spatial bounds, and variables are captured in the case
@@ -136,7 +197,7 @@ class InputBase(ABC):
             The target data with the variables subset to the case metadata.
         """
 
-    def maybe_convert_to_dataset(self, data: utils.IncomingDataInput) -> xr.Dataset:
+    def maybe_convert_to_dataset(self, data: IncomingDataInput) -> xr.Dataset:
         """Convert the target data to an xarray dataset if it is not already.
 
         This method handles the common conversion cases automatically. Override
@@ -157,7 +218,7 @@ class InputBase(ABC):
             # For other data types, try to use a custom conversion method if available
             return self._custom_convert_to_dataset(data)
 
-    def _custom_convert_to_dataset(self, data: utils.IncomingDataInput) -> xr.Dataset:
+    def _custom_convert_to_dataset(self, data: IncomingDataInput) -> xr.Dataset:
         """Hook method for custom conversion logic. Override this method in subclasses
         if you need custom conversion behavior for non-xarray data types.
 
@@ -188,9 +249,7 @@ class InputBase(ABC):
         ds.attrs["source"] = self.name
         return ds
 
-    def maybe_map_variable_names(
-        self, data: utils.IncomingDataInput
-    ) -> utils.IncomingDataInput:
+    def maybe_map_variable_names(self, data: IncomingDataInput) -> IncomingDataInput:
         """Map the variable names to the data, if required.
 
         Args:
@@ -210,11 +269,11 @@ class InputBase(ABC):
         if isinstance(data, xr.DataArray):
             return data.rename(variable_mapping[data.name])
         elif isinstance(data, xr.Dataset):
-            old_name_obj = data.variables.keys()
+            old_name_obj = list(data.variables.keys())
         elif isinstance(data, pl.LazyFrame):
-            old_name_obj = data.collect_schema().names()
+            old_name_obj = list(data.collect_schema().names())
         elif isinstance(data, pd.DataFrame):
-            old_name_obj = data.columns
+            old_name_obj = list(data.columns)
         else:
             raise ValueError(f"Data type {type(data)} not supported")
 
@@ -242,9 +301,11 @@ class ForecastBase(InputBase):
 
     def subset_data_to_case(
         self,
-        data: utils.IncomingDataInput,
+        data: IncomingDataInput,
         case_operator: "cases.CaseOperator",
-    ) -> utils.IncomingDataInput:
+        **kwargs,
+    ) -> IncomingDataInput:
+        drop = kwargs.get("drop", False)
         if not isinstance(data, xr.Dataset):
             raise ValueError(f"Expected xarray Dataset, got {type(data)}")
 
@@ -263,7 +324,7 @@ class ForecastBase(InputBase):
         # eval to add to the list of variables
         expected_and_maybe_derived_variables = (
             derived.maybe_pull_required_variables_from_derived_input(
-                case_operator.forecast.variables
+                list(case_operator.forecast.variables)
             )
         )
         try:
@@ -274,7 +335,7 @@ class ForecastBase(InputBase):
                 f"found in forecast data"
             )
         spatiotemporally_subset_data = case_operator.case_metadata.location.mask(
-            subset_time_data, drop=True
+            subset_time_data, drop=drop
         )
 
         # convert from init_time/lead_time to init_time/valid_time
@@ -304,7 +365,13 @@ class EvaluationObject:
     """
 
     event_type: str
-    metric_list: list[Union[Callable, "metrics.BaseMetric", "metrics.AppliedMetric"]]
+    metric_list: list[
+        Union[
+            Callable[..., Any],
+            type["metrics.BaseMetric"],
+            type["metrics.AppliedMetric"],
+        ]
+    ]
     target: "TargetBase"
     forecast: "ForecastBase"
 
@@ -315,8 +382,9 @@ class KerchunkForecast(ForecastBase):
 
     name: str = "kerchunk_forecast"
     chunks: Optional[Union[dict, str]] = "auto"
+    storage_options: dict = dataclasses.field(default_factory=dict)
 
-    def _open_data_from_source(self) -> utils.IncomingDataInput:
+    def _open_data_from_source(self) -> IncomingDataInput:
         return open_kerchunk_reference(
             self.source,
             storage_options=self.storage_options,
@@ -331,7 +399,7 @@ class ZarrForecast(ForecastBase):
     name: str = "zarr_forecast"
     chunks: Optional[Union[dict, str]] = "auto"
 
-    def _open_data_from_source(self) -> utils.IncomingDataInput:
+    def _open_data_from_source(self) -> IncomingDataInput:
         return xr.open_zarr(
             self.source,
             storage_options=self.storage_options,
@@ -386,8 +454,12 @@ class ERA5(TargetBase):
 
     name: str = "ERA5"
     chunks: Optional[Union[dict, str]] = None
+    source: str = ARCO_ERA5_FULL_URI
+    variable_mapping: dict = dataclasses.field(
+        default_factory=lambda: ERA5_metadata_variable_mapping.copy()
+    )
 
-    def _open_data_from_source(self) -> utils.IncomingDataInput:
+    def _open_data_from_source(self) -> IncomingDataInput:
         data = xr.open_zarr(
             self.source,
             storage_options=self.storage_options,
@@ -397,10 +469,14 @@ class ERA5(TargetBase):
 
     def subset_data_to_case(
         self,
-        data: utils.IncomingDataInput,
+        data: IncomingDataInput,
         case_operator: "cases.CaseOperator",
-    ) -> utils.IncomingDataInput:
-        return zarr_target_subsetter(data, case_operator)
+        **kwargs,
+    ) -> IncomingDataInput:
+        drop = kwargs.get("drop", False)
+        if not isinstance(data, xr.Dataset):
+            raise ValueError(f"Expected xarray Dataset, got {type(data)}")
+        return zarr_target_subsetter(data, case_operator, drop=drop)
 
     def maybe_align_forecast_to_target(
         self,
@@ -435,8 +511,9 @@ class GHCN(TargetBase):
     """
 
     name: str = "GHCN"
+    source: str = DEFAULT_GHCN_URI
 
-    def _open_data_from_source(self) -> utils.IncomingDataInput:
+    def _open_data_from_source(self) -> IncomingDataInput:
         target_data: pl.LazyFrame = pl.scan_parquet(
             self.source, storage_options=self.storage_options
         )
@@ -445,35 +522,36 @@ class GHCN(TargetBase):
 
     def subset_data_to_case(
         self,
-        target_data: utils.IncomingDataInput,
+        data: IncomingDataInput,
         case_operator: "cases.CaseOperator",
-    ) -> utils.IncomingDataInput:
-        if not isinstance(target_data, pl.LazyFrame):
-            raise ValueError(f"Expected polars LazyFrame, got {type(target_data)}")
+        **kwargs,
+    ) -> IncomingDataInput:
+        if not isinstance(data, pl.LazyFrame):
+            raise ValueError(f"Expected polars LazyFrame, got {type(data)}")
 
         # Create filter expressions for LazyFrame
         time_min = case_operator.case_metadata.start_date - pd.Timedelta(days=2)
         time_max = case_operator.case_metadata.end_date + pd.Timedelta(days=2)
 
         # Apply filters using proper polars expressions
-        subset_target_data = target_data.filter(
+        subset_target_data = data.filter(
             (pl.col("valid_time") >= time_min)
             & (pl.col("valid_time") <= time_max)
             & (
                 pl.col("latitude")
-                >= case_operator.case_metadata.location.geopandas.total_bounds[1]
+                >= case_operator.case_metadata.location.as_geopandas().total_bounds[1]
             )
             & (
                 pl.col("latitude")
-                <= case_operator.case_metadata.location.geopandas.total_bounds[3]
+                <= case_operator.case_metadata.location.as_geopandas().total_bounds[3]
             )
             & (
                 pl.col("longitude")
-                >= case_operator.case_metadata.location.geopandas.total_bounds[0]
+                >= case_operator.case_metadata.location.as_geopandas().total_bounds[0]
             )
             & (
                 pl.col("longitude")
-                <= case_operator.case_metadata.location.geopandas.total_bounds[2]
+                <= case_operator.case_metadata.location.as_geopandas().total_bounds[2]
             )
         )
         # convert to Kelvin
@@ -497,22 +575,24 @@ class GHCN(TargetBase):
         # subset the variables
         if target_variables:
             subset_target_data = subset_target_data.select(all_variables)
-
+        subset_target_data = subset_target_data.sort("valid_time")
         return subset_target_data
 
-    def _custom_convert_to_dataset(self, data: utils.IncomingDataInput) -> xr.Dataset:
+    def _custom_convert_to_dataset(self, data: IncomingDataInput) -> xr.Dataset:
         if isinstance(data, pl.LazyFrame):
             data = data.collect().to_pandas()
-            data["longitude"] = utils.convert_longitude_to_360(data["longitude"])
+            data["longitude"] = data["longitude"].apply(utils.convert_longitude_to_360)
 
             data = data.set_index(["valid_time", "latitude", "longitude"])
             # GHCN data can have duplicate values right now, dropping here if it occurs
             try:
-                data = data.to_xarray()
-            except ValueError as e:
-                if "non-unique" in str(e):
-                    pass
-                data = data.drop_duplicates().to_xarray()
+                data = data[~data.index.duplicated()].to_xarray()
+            except Exception as e:
+                logger.warning(
+                    "Error converting GHCN data to xarray: %s, returning empty Dataset",
+                    e,
+                )
+                return xr.Dataset()
             return data
         else:
             raise ValueError(f"Data is not a polars LazyFrame: {type(data)}")
@@ -536,8 +616,9 @@ class LSR(TargetBase):
     """
 
     name: str = "local_storm_reports"
+    source: str = LSR_URI
 
-    def _open_data_from_source(self) -> utils.IncomingDataInput:
+    def _open_data_from_source(self) -> IncomingDataInput:
         # force LSR to use anon token to prevent google reauth issues for users
         target_data = pd.read_parquet(self.source, storage_options=self.storage_options)
 
@@ -545,47 +626,33 @@ class LSR(TargetBase):
 
     def subset_data_to_case(
         self,
-        target_data: utils.IncomingDataInput,
+        data: IncomingDataInput,
         case_operator: "cases.CaseOperator",
-    ) -> utils.IncomingDataInput:
-        if not isinstance(target_data, pd.DataFrame):
-            raise ValueError(f"Expected pandas DataFrame, got {type(target_data)}")
+        **kwargs,
+    ) -> IncomingDataInput:
+        if not isinstance(data, pd.DataFrame):
+            raise ValueError(f"Expected pandas DataFrame, got {type(data)}")
 
         # latitude, longitude are strings by default, convert to float
-        target_data["latitude"] = target_data["latitude"].astype(float)
-        target_data["longitude"] = target_data["longitude"].astype(float)
-        target_data["valid_time"] = pd.to_datetime(target_data["valid_time"])
+        data["latitude"] = data["latitude"].astype(float)
+        data["longitude"] = data["longitude"].astype(float)
+        data["valid_time"] = pd.to_datetime(data["valid_time"])
 
         # filters to apply to the target data including datetimes and location bounds
+        bounds = case_operator.case_metadata.location.as_geopandas().total_bounds
         filters = (
-            (target_data["valid_time"] >= case_operator.case_metadata.start_date)
-            & (target_data["valid_time"] <= case_operator.case_metadata.end_date)
-            & (
-                target_data["latitude"]
-                >= case_operator.case_metadata.location.latitude_min
-            )
-            & (
-                target_data["latitude"]
-                <= case_operator.case_metadata.location.latitude_max
-            )
-            & (
-                target_data["longitude"]
-                >= utils.convert_longitude_to_180(
-                    case_operator.case_metadata.location.longitude_min
-                )
-            )
-            & (
-                target_data["longitude"]
-                <= utils.convert_longitude_to_180(
-                    case_operator.case_metadata.location.longitude_max
-                )
-            )
+            (data["valid_time"] >= case_operator.case_metadata.start_date)
+            & (data["valid_time"] <= case_operator.case_metadata.end_date)
+            & (data["latitude"] >= bounds[1])
+            & (data["latitude"] <= bounds[3])
+            & (data["longitude"] >= utils.convert_longitude_to_180(bounds[0]))
+            & (data["longitude"] <= utils.convert_longitude_to_180(bounds[2]))
         )
-        subset_target_data = target_data.loc[filters]
+        subset_target_data = data.loc[filters]
 
         return subset_target_data
 
-    def _custom_convert_to_dataset(self, data: utils.IncomingDataInput) -> xr.Dataset:
+    def _custom_convert_to_dataset(self, data: IncomingDataInput) -> xr.Dataset:
         if not isinstance(data, pd.DataFrame):
             raise ValueError(f"Data is not a pandas DataFrame: {type(data)}")
 
@@ -664,21 +731,29 @@ class PPH(TargetBase):
     """Target class for practically perfect hindcast data."""
 
     name: str = "practically_perfect_hindcast"
+    source: str = PPH_URI
 
     def _open_data_from_source(
         self,
-    ) -> utils.IncomingDataInput:
+    ) -> IncomingDataInput:
         return xr.open_zarr(self.source, storage_options=self.storage_options)
 
     def subset_data_to_case(
         self,
-        target_data: utils.IncomingDataInput,
+        data: IncomingDataInput,
         case_operator: "cases.CaseOperator",
-    ) -> utils.IncomingDataInput:
-        return zarr_target_subsetter(target_data, case_operator)
+        **kwargs,
+    ) -> IncomingDataInput:
+        drop = kwargs.get("drop", False)
+        if not isinstance(data, xr.Dataset):
+            raise ValueError(f"Expected xarray Dataset, got {type(data)}")
+        return zarr_target_subsetter(data, case_operator, drop=drop)
 
-    def _custom_convert_to_dataset(self, data: utils.IncomingDataInput) -> xr.Dataset:
-        return data
+    def _custom_convert_to_dataset(self, data: IncomingDataInput) -> xr.Dataset:
+        if isinstance(data, xr.Dataset):
+            return data
+        else:
+            raise ValueError(f"Data is not an xarray Dataset: {type(data)}")
 
     def maybe_align_forecast_to_target(
         self,
@@ -693,8 +768,9 @@ class IBTrACS(TargetBase):
     """Target class for IBTrACS data."""
 
     name: str = "IBTrACS"
+    source: str = IBTRACS_URI
 
-    def _open_data_from_source(self) -> utils.IncomingDataInput:
+    def _open_data_from_source(self) -> IncomingDataInput:
         # not using storage_options in this case due to NetCDF4Backend not
         # supporting them
         target_data: pl.LazyFrame = pl.scan_csv(
@@ -706,11 +782,13 @@ class IBTrACS(TargetBase):
 
     def subset_data_to_case(
         self,
-        target_data: utils.IncomingDataInput,
+        data: IncomingDataInput,
         case_operator: "cases.CaseOperator",
-    ) -> utils.IncomingDataInput:
-        if not isinstance(target_data, pl.LazyFrame):
-            raise ValueError(f"Expected polars LazyFrame, got {type(target_data)}")
+        **kwargs,
+    ) -> IncomingDataInput:
+        # Note: drop parameter not applicable for polars LazyFrame data
+        if not isinstance(data, pl.LazyFrame):
+            raise ValueError(f"Expected polars LazyFrame, got {type(data)}")
 
         # Get the season (year) from the case start date, cast as string as
         # polars is interpreting the schema as strings
@@ -720,7 +798,7 @@ class IBTrACS(TargetBase):
 
         # Create a subquery to find all storm numbers in the same season
         matching_numbers = (
-            target_data.filter(pl.col("SEASON").cast(pl.Int64) == season)
+            data.filter(pl.col("SEASON").cast(pl.Int64) == season)
             .select("NUMBER")
             .unique()
         )
@@ -728,7 +806,7 @@ class IBTrACS(TargetBase):
         # Apply the filter to get all data for storms with the same number in
         # the same season
         # This maintains the lazy evaluation
-        subset_target_data = target_data.join(
+        subset_target_data = data.join(
             matching_numbers, on="NUMBER", how="inner"
         ).filter(
             (pl.col("tc_name") == case_operator.case_metadata.title.upper())
@@ -817,12 +895,12 @@ class IBTrACS(TargetBase):
 
         return subset_target_data
 
-    def _custom_convert_to_dataset(self, data: utils.IncomingDataInput) -> xr.Dataset:
+    def _custom_convert_to_dataset(self, data: IncomingDataInput) -> xr.Dataset:
         if isinstance(data, pl.LazyFrame):
             data = data.collect().to_pandas()
 
             # IBTrACS data is in -180 to 180, convert to 0 to 360
-            data["longitude"] = utils.convert_longitude_to_360(data["longitude"])
+            data["longitude"] = data["longitude"].apply(utils.convert_longitude_to_360)
 
             # Due to missing data in the IBTrACS dataset, polars doesn't convert
             # the valid_time to a datetime by default
@@ -833,8 +911,11 @@ class IBTrACS(TargetBase):
                 data = xr.Dataset.from_dataframe(data, sparse=True)
             except ValueError as e:
                 if "non-unique" in str(e):
-                    pass
-                data = xr.Dataset.from_dataframe(data.drop_duplicates(), sparse=True)
+                    # Drop duplicates from the pandas DataFrame before converting
+                    data_df = data.drop_duplicates()
+                    data = xr.Dataset.from_dataframe(data_df, sparse=True)
+                else:
+                    raise
             return data
         else:
             raise ValueError(f"Data is not a polars LazyFrame: {type(data)}")
@@ -888,6 +969,7 @@ def zarr_target_subsetter(
     data: xr.Dataset,
     case_operator: "cases.CaseOperator",
     time_variable: str = "valid_time",
+    drop: bool = False,
 ) -> xr.Dataset:
     """Subset a zarr dataset to a case operator."""
     # Determine the actual time variable in the dataset
@@ -912,11 +994,14 @@ def zarr_target_subsetter(
         }
     )
 
-    target_and_maybe_derived_variables = (
-        derived.maybe_pull_required_variables_from_derived_input(
-            case_operator.target.variables
+    if case_operator.target.variables is None:
+        target_and_maybe_derived_variables = []
+    else:
+        target_and_maybe_derived_variables = (
+            derived.maybe_pull_required_variables_from_derived_input(
+                list(case_operator.target.variables)
+            )
         )
-    )
     # check that the variables are in the target data
     if target_and_maybe_derived_variables and any(
         var not in subset_time_data.data_vars
@@ -934,9 +1019,11 @@ def zarr_target_subsetter(
         )
     # mask the data to the case location
     fully_subset_data = case_operator.case_metadata.location.mask(
-        subset_time_variable_data, drop=True
+        subset_time_variable_data, drop=drop
     )
-
+    # chunk the data if it doesn't have chunks, e.g. ARCO ERA5
+    if not fully_subset_data.chunks:
+        fully_subset_data = fully_subset_data.chunk()
     return fully_subset_data
 
 
@@ -975,7 +1062,7 @@ def align_forecast_to_target(
         and dim not in ["time", "valid_time", "lead_time", "init_time"]
     ]
 
-    spatial_dims = {dim: target_data[dim] for dim in intersection_dims}
+    spatial_dims = {str(dim): target_data[dim] for dim in intersection_dims}
     # Align time dimensions - find overlapping times
     time_aligned_target, time_aligned_forecast = xr.align(
         target_data,
@@ -986,8 +1073,23 @@ def align_forecast_to_target(
 
     # Regrid forecast to target grid using nearest neighbor interpolation
     # extrapolate in the case of targets slightly outside the forecast domain
-    time_space_aligned_forecast = time_aligned_forecast.interp(
-        **spatial_dims, method=method, kwargs={"fill_value": "extrapolate"}
-    )
+    if spatial_dims:
+        # Use explicit keyword arguments to avoid mypy issues with **kwargs
+        from typing import Literal
+
+        interp_method: Literal["nearest", "linear"] = (
+            "nearest" if method == "nearest" else "linear"
+        )
+
+        # Build interpolation arguments properly
+        # Cast to Any to avoid mypy issues with mixed dict types
+        from typing import Any, cast
+
+        interp_kwargs = cast(dict[str, Any], {"method": interp_method})
+        interp_kwargs.update(spatial_dims)
+
+        time_space_aligned_forecast = time_aligned_forecast.interp(**interp_kwargs)
+    else:
+        time_space_aligned_forecast = time_aligned_forecast
 
     return time_space_aligned_forecast, time_aligned_target

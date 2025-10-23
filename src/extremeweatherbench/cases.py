@@ -7,9 +7,12 @@ import dataclasses
 import datetime
 import itertools
 import logging
-from typing import TYPE_CHECKING, Callable, Union
+from importlib import resources
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Callable, Literal, Sequence, Union
 
 import dacite
+import yaml  # type: ignore[import]
 
 from extremeweatherbench import regions
 
@@ -17,7 +20,6 @@ if TYPE_CHECKING:
     from extremeweatherbench import inputs, metrics
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
 
 
 @dataclasses.dataclass
@@ -50,6 +52,77 @@ class IndividualCaseCollection:
 
     cases: list[IndividualCase]
 
+    def select_cases(
+        self,
+        by: Literal["event_type", "case_id_number", "title", "location"],
+        value: Union[str, int, regions.Region, Sequence[float], datetime.datetime],
+        inplace: bool = False,
+    ) -> "IndividualCaseCollection":
+        """Select cases from the collection based on the given criteria.
+
+        Args:
+            by: The field to select cases by.
+            value: The value to select cases by.
+                - event_type: The event type to select cases by.
+                - case_id_number: The case id number to select cases by.
+                - title: The title to select cases by.
+                - location: The location to select cases by.
+                    - Region: The Region object to select cases by.
+                    - tuple or list: The bounding coordinates in the order
+                    longitude_min, latitude_min, longitude_max, latitude_max.
+            inplace: Whether to modify the collection in place or return a new
+            collection. Defaults to False.
+
+        Returns:
+            A new IndividualCaseCollection with the cases selected by the given criteria
+        """
+        match by:
+            case "event_type":
+                cases = [case for case in self.cases if case.event_type == value]
+            case "location":
+                if isinstance(value, regions.Region):
+                    cases = [
+                        case
+                        for case in self.cases
+                        if case.location.as_geopandas()
+                        .geometry.union_all()
+                        .intersects(value.as_geopandas().geometry.union_all())
+                    ]
+                elif isinstance(value, (tuple, list)):
+                    longitude_min, latitude_min, longitude_max, latitude_max = value
+                    value_region = regions.BoundingBoxRegion(
+                        latitude_min=latitude_min,
+                        latitude_max=latitude_max,
+                        longitude_min=longitude_min,
+                        longitude_max=longitude_max,
+                    )
+                    cases = [
+                        case
+                        for case in self.cases
+                        if case.location.as_geopandas()
+                        .geometry.union_all()
+                        .intersects(value_region.as_geopandas().geometry.union_all())
+                    ]
+            case "case_id_number":
+                if isinstance(value, int):
+                    cases = [
+                        case for case in self.cases if case.case_id_number == value
+                    ]
+                elif isinstance(value, list):
+                    cases = [
+                        case for case in self.cases if case.case_id_number in value
+                    ]
+                else:
+                    raise ValueError(f"Invalid value for case_id_number: {value}")
+            case "title":
+                cases = [case for case in self.cases if case.title == value]
+            case _:
+                raise ValueError(f"Invalid field to select cases by: {by}")
+        if inplace:
+            self.cases = cases
+            return self
+        return IndividualCaseCollection(cases=cases)
+
 
 @dataclasses.dataclass
 class CaseOperator:
@@ -68,35 +141,47 @@ class CaseOperator:
     """
 
     case_metadata: IndividualCase
-    metric_list: list[Union[Callable, "metrics.BaseMetric", "metrics.AppliedMetric"]]
+    metric_list: list[
+        Union[
+            Callable[..., Any],
+            type["metrics.BaseMetric"],
+            type["metrics.AppliedMetric"],
+        ]
+    ]
     target: "inputs.TargetBase"
     forecast: "inputs.ForecastBase"
 
 
 def build_case_operators(
-    cases_dict: dict[str, list],
+    cases: Union[dict[str, list], IndividualCaseCollection],
     evaluation_objects: list["inputs.EvaluationObject"],
 ) -> list[CaseOperator]:
     """Build a CaseOperator from the case metadata and metric evaluation objects.
 
     Args:
-        cases_dict: The case metadata to use for the case operators.
-        evaluation_objects: The evaluation objects to use for the
-            case operators.
+        cases: The case metadata to use for the case operators as a dictionary of cases
+            or an IndividualCaseCollection.
+        evaluation_objects: The evaluation objects to apply to the case operators.
 
     Returns:
         A list of CaseOperator objects.
     """
-    if isinstance(cases_dict["cases"], list):
+    # Cases are a dictionary of cases, convert to an IndividualCaseCollection
+    if isinstance(cases, dict):
         case_metadata_collection = dacite.from_dict(
             data_class=IndividualCaseCollection,
-            data=cases_dict,
+            data=cases,
             config=dacite.Config(
                 type_hooks={regions.Region: regions.map_to_create_region},
             ),
         )
+    elif isinstance(cases, IndividualCaseCollection):
+        # Cases are already an IndividualCaseCollection
+        case_metadata_collection = cases
     else:
-        raise TypeError("cases_dict['cases'] must be a list of cases")
+        raise TypeError(
+            "cases must be a dictionary of cases or an IndividualCaseCollection"
+        )
 
     # build list of case operators based on information provided in case dict and
     case_operators = []
@@ -116,14 +201,14 @@ def build_case_operators(
     return case_operators
 
 
-def load_individual_cases(cases: dict[str, list]):
+def load_individual_cases(cases: dict[str, list]) -> IndividualCaseCollection:
     """Load IndividualCase metadata from a dictionary.
 
     Args:
         cases: A dictionary of cases based on the IndividualCase dataclass.
 
     Returns:
-        A list of IndividualCase objects.
+        A collection of IndividualCase objects.
     """
     case_metadata_collection = dacite.from_dict(
         data_class=IndividualCaseCollection,
@@ -134,3 +219,71 @@ def load_individual_cases(cases: dict[str, list]):
     )
 
     return case_metadata_collection
+
+
+def load_individual_cases_from_yaml(
+    yaml_file: Union[str, Path],
+) -> IndividualCaseCollection:
+    """Load IndividualCase metadata directly from a yaml file.
+
+    This function is a wrapper around load_individual_cases that reads the yaml file
+    directly. It is useful for loading cases from a yaml file that is not part of the
+    ExtremeWeatherBench data package. Note that the yaml file must be in the same format
+    as described in the ExtremeWeatherBench documentation; errors will be raised within
+    the dacite.from_dict call if the yaml file otherwise.
+
+    Example of a yaml file:
+
+    ```yaml
+    cases:
+      - case_id_number: 1
+        title: Event 1
+        start_date: 2021-01-01 00:00:00
+        end_date: 2021-01-03 00:00:00
+        location:
+            type: bounded_region
+            parameters:
+                latitude_min: 10.0
+                latitude_max: 55.6
+                longitude_min: 265.0
+                longitude_max: 283.3
+        event_type: tropical_cyclone
+    ```
+
+    Args:
+        yaml_file: A path to a yaml file containing the case metadata.
+
+    Returns:
+        A collection of IndividualCase objects.
+    """
+    yaml_event_case = read_incoming_yaml(yaml_file)
+    return load_individual_cases(yaml_event_case)
+
+
+def load_ewb_events_yaml_into_case_collection() -> IndividualCaseCollection:
+    """Loads the EWB events yaml file into an IndividualCaseCollection."""
+    import extremeweatherbench.data
+
+    events_yaml_file = resources.files(extremeweatherbench.data).joinpath("events.yaml")
+    with resources.as_file(events_yaml_file) as file:
+        yaml_event_case = read_incoming_yaml(file)
+
+    return load_individual_cases(yaml_event_case)
+
+
+def read_incoming_yaml(input_pth: Union[str, Path]) -> dict:
+    """Read events yaml from data into a dictionary.
+
+    This function is a wrapper around yaml.safe_load that reads the yaml file directly.
+    It is useful for reading yaml files other than the EWB events.yaml file.
+
+    Args:
+        input_pth: A path to a yaml file containing the case metadata.
+
+    Returns:
+        A dictionary of case metadata.
+    """
+    input_pth = Path(input_pth)
+    with open(input_pth, "rb") as f:
+        yaml_event_case = yaml.safe_load(f)
+    return yaml_event_case

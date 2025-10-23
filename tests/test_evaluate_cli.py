@@ -1,4 +1,4 @@
-"""Unit tests for the rebuilt evaluate_cli.py interface."""
+"""Tests for the evaluate_cli interface."""
 
 import pickle
 import tempfile
@@ -69,11 +69,19 @@ class TestCLIBasicFunctionality:
 class TestDefaultMode:
     """Test --default mode functionality."""
 
-    @patch("extremeweatherbench.defaults.BRIGHTBAND_EVALUATION_OBJECTS", [])
+    @patch(
+        "extremeweatherbench.defaults.get_brightband_evaluation_objects",
+        return_value=[],
+    )
     @patch("extremeweatherbench.evaluate_cli._load_default_cases")
-    @patch("extremeweatherbench.evaluate_cli.ExtremeWeatherBench")
+    @patch("extremeweatherbench.evaluate.ExtremeWeatherBench")
     def test_default_mode_basic(
-        self, mock_ewb_class, mock_load_cases, runner, temp_config_dir
+        self,
+        mock_ewb_class,
+        mock_load_cases,
+        mock_get_brightband,
+        runner,
+        temp_config_dir,
     ):
         """Test basic default mode execution."""
         # Mock the ExtremeWeatherBench class and its methods
@@ -93,11 +101,19 @@ class TestDefaultMode:
         mock_ewb_class.assert_called_once()
         mock_ewb.run.assert_called_once()
 
-    @patch("extremeweatherbench.defaults.BRIGHTBAND_EVALUATION_OBJECTS", [])
+    @patch(
+        "extremeweatherbench.defaults.get_brightband_evaluation_objects",
+        return_value=[],
+    )
     @patch("extremeweatherbench.evaluate_cli._load_default_cases")
-    @patch("extremeweatherbench.evaluate_cli.ExtremeWeatherBench")
+    @patch("extremeweatherbench.evaluate.ExtremeWeatherBench")
     def test_default_mode_with_cache_dir(
-        self, mock_ewb_class, mock_load_cases, runner, temp_config_dir
+        self,
+        mock_ewb_class,
+        mock_load_cases,
+        mock_get_brightband,
+        runner,
+        temp_config_dir,
     ):
         """Test default mode with cache directory."""
         mock_ewb = Mock()
@@ -121,7 +137,7 @@ class TestDefaultMode:
 class TestConfigFileMode:
     """Test --config-file mode functionality."""
 
-    @patch("extremeweatherbench.evaluate_cli.ExtremeWeatherBench")
+    @patch("extremeweatherbench.evaluate.ExtremeWeatherBench")
     def test_config_file_mode_basic(
         self, mock_ewb_class, runner, sample_config_py, temp_config_dir
     ):
@@ -186,19 +202,27 @@ evaluation_objects = []
 class TestParallelExecution:
     """Test --parallel option functionality."""
 
-    @patch("extremeweatherbench.defaults.BRIGHTBAND_EVALUATION_OBJECTS", [])
-    @patch("extremeweatherbench.evaluate_cli._run_parallel_evaluation")
+    @patch(
+        "extremeweatherbench.defaults.get_brightband_evaluation_objects",
+        return_value=[],
+    )
+    @patch("extremeweatherbench.evaluate._run_parallel")
     @patch("extremeweatherbench.evaluate_cli._load_default_cases")
-    @patch("extremeweatherbench.evaluate_cli.ExtremeWeatherBench")
+    @patch("extremeweatherbench.evaluate.ExtremeWeatherBench")
     def test_parallel_execution(
-        self, mock_ewb_class, mock_load_cases, mock_parallel_eval, runner
+        self,
+        mock_ewb_class,
+        mock_load_cases,
+        mock_parallel_eval,
+        mock_get_brightband,
+        runner,
     ):
         """Test parallel execution mode."""
         mock_ewb = Mock()
         mock_ewb.case_operators = [Mock(), Mock(), Mock()]
         mock_ewb_class.return_value = mock_ewb
         mock_load_cases.return_value = {"cases": []}
-        mock_parallel_eval.return_value = pd.DataFrame({"test": [1, 2, 3]})
+        mock_parallel_eval.return_value = [pd.DataFrame({"test": [1, 2, 3]})]
 
         result = runner.invoke(
             evaluate_cli.cli_runner, ["--default", "--parallel", "3"]
@@ -207,13 +231,18 @@ class TestParallelExecution:
         assert result.exit_code == 0
         # Output suppressed - only check exit code
         mock_parallel_eval.assert_called_once_with(
-            mock_ewb.case_operators, 3, precompute=False
+            mock_ewb.case_operators, 3, pre_compute=False
         )
 
-    @patch("extremeweatherbench.defaults.BRIGHTBAND_EVALUATION_OBJECTS", [])
+    @patch(
+        "extremeweatherbench.defaults.get_brightband_evaluation_objects",
+        return_value=[],
+    )
     @patch("extremeweatherbench.evaluate_cli._load_default_cases")
-    @patch("extremeweatherbench.evaluate_cli.ExtremeWeatherBench")
-    def test_serial_execution_default(self, mock_ewb_class, mock_load_cases, runner):
+    @patch("extremeweatherbench.evaluate.ExtremeWeatherBench")
+    def test_serial_execution_default(
+        self, mock_ewb_class, mock_load_cases, mock_get_brightband, runner
+    ):
         """Test that serial execution is default (parallel=1)."""
         mock_ewb = Mock()
         mock_ewb.case_operators = []
@@ -231,11 +260,19 @@ class TestParallelExecution:
 class TestCaseOperatorSaving:
     """Test --save-case-operators functionality."""
 
-    @patch("extremeweatherbench.defaults.BRIGHTBAND_EVALUATION_OBJECTS", [])
+    @patch(
+        "extremeweatherbench.defaults.get_brightband_evaluation_objects",
+        return_value=[],
+    )
     @patch("extremeweatherbench.evaluate_cli._load_default_cases")
-    @patch("extremeweatherbench.evaluate_cli.ExtremeWeatherBench")
+    @patch("extremeweatherbench.evaluate.ExtremeWeatherBench")
     def test_save_case_operators(
-        self, mock_ewb_class, mock_load_cases, runner, temp_config_dir
+        self,
+        mock_ewb_class,
+        mock_load_cases,
+        mock_get_brightband,
+        runner,
+        temp_config_dir,
     ):
         """Test saving case operators to pickle file."""
         # Use simple dictionaries instead of Mock objects for pickling
@@ -265,11 +302,19 @@ class TestCaseOperatorSaving:
             loaded_ops = pickle.load(f)
         assert len(loaded_ops) == 2
 
-    @patch("extremeweatherbench.defaults.BRIGHTBAND_EVALUATION_OBJECTS", [])
+    @patch(
+        "extremeweatherbench.defaults.get_brightband_evaluation_objects",
+        return_value=[],
+    )
     @patch("extremeweatherbench.evaluate_cli._load_default_cases")
-    @patch("extremeweatherbench.evaluate_cli.ExtremeWeatherBench")
+    @patch("extremeweatherbench.evaluate.ExtremeWeatherBench")
     def test_save_case_operators_creates_directory(
-        self, mock_ewb_class, mock_load_cases, runner, temp_config_dir
+        self,
+        mock_ewb_class,
+        mock_load_cases,
+        mock_get_brightband,
+        runner,
+        temp_config_dir,
     ):
         """Test that saving case operators creates parent directories."""
         mock_ewb = Mock()
@@ -310,11 +355,19 @@ class TestValidationAndErrorHandling:
         assert result.exit_code != 0
         # Output suppressed - only check exit code
 
-    @patch("extremeweatherbench.defaults.BRIGHTBAND_EVALUATION_OBJECTS", [])
+    @patch(
+        "extremeweatherbench.defaults.get_brightband_evaluation_objects",
+        return_value=[],
+    )
     @patch("extremeweatherbench.evaluate_cli._load_default_cases")
-    @patch("extremeweatherbench.evaluate_cli.ExtremeWeatherBench")
+    @patch("extremeweatherbench.evaluate.ExtremeWeatherBench")
     def test_output_directory_creation(
-        self, mock_ewb_class, mock_load_cases, runner, temp_config_dir
+        self,
+        mock_ewb_class,
+        mock_load_cases,
+        mock_get_brightband,
+        runner,
+        temp_config_dir,
     ):
         """Test that output directory is created if it doesn't exist."""
         mock_ewb = Mock()
@@ -333,10 +386,15 @@ class TestValidationAndErrorHandling:
         assert result.exit_code == 0
         assert output_dir.exists()
 
-    @patch("extremeweatherbench.defaults.BRIGHTBAND_EVALUATION_OBJECTS", [])
+    @patch(
+        "extremeweatherbench.defaults.get_brightband_evaluation_objects",
+        return_value=[],
+    )
     @patch("extremeweatherbench.evaluate_cli._load_default_cases")
-    @patch("extremeweatherbench.evaluate_cli.ExtremeWeatherBench")
-    def test_default_output_directory(self, mock_ewb_class, mock_load_cases, runner):
+    @patch("extremeweatherbench.evaluate.ExtremeWeatherBench")
+    def test_default_output_directory(
+        self, mock_ewb_class, mock_load_cases, mock_get_brightband, runner
+    ):
         """Test that default output directory is current working directory."""
         mock_ewb = Mock()
         mock_ewb.case_operators = []
@@ -355,11 +413,19 @@ class TestValidationAndErrorHandling:
 class TestResultsSaving:
     """Test results saving functionality."""
 
-    @patch("extremeweatherbench.defaults.BRIGHTBAND_EVALUATION_OBJECTS", [])
+    @patch(
+        "extremeweatherbench.defaults.get_brightband_evaluation_objects",
+        return_value=[],
+    )
     @patch("extremeweatherbench.evaluate_cli._load_default_cases")
-    @patch("extremeweatherbench.evaluate_cli.ExtremeWeatherBench")
+    @patch("extremeweatherbench.evaluate.ExtremeWeatherBench")
     def test_results_saved_to_csv(
-        self, mock_ewb_class, mock_load_cases, runner, temp_config_dir
+        self,
+        mock_ewb_class,
+        mock_load_cases,
+        mock_get_brightband,
+        runner,
+        temp_config_dir,
     ):
         """Test that results are saved to CSV file."""
         mock_results = pd.DataFrame(
@@ -388,7 +454,7 @@ class TestResultsSaving:
         # CSV reading/verification removed since file writing is mocked
 
     @patch("extremeweatherbench.evaluate_cli._load_default_cases")
-    @patch("extremeweatherbench.evaluate_cli.ExtremeWeatherBench")
+    @patch("extremeweatherbench.evaluate.ExtremeWeatherBench")
     def test_empty_results_handling(self, mock_ewb_class, mock_load_cases, runner):
         """Test handling when no results are returned."""
         mock_ewb = Mock()
@@ -406,7 +472,7 @@ class TestResultsSaving:
 class TestHelperFunctions:
     """Test helper function functionality."""
 
-    @patch("extremeweatherbench.utils.load_events_yaml")
+    @patch("extremeweatherbench.cases.load_ewb_events_yaml_into_case_collection")
     def test_load_default_cases(self, mock_load_yaml):
         """Test _load_default_cases function."""
         mock_cases = {"cases": [{"id": 1}]}
@@ -416,43 +482,3 @@ class TestHelperFunctions:
 
         assert result == mock_cases
         mock_load_yaml.assert_called_once_with()
-
-    @patch("extremeweatherbench.evaluate_cli.compute_case_operator")
-    @patch("extremeweatherbench.evaluate_cli.Parallel")
-    def test_run_parallel_evaluation(self, mock_parallel_class, mock_compute):
-        """Test _run_parallel_evaluation function."""
-        # Mock the Parallel class and its behavior
-        mock_parallel = Mock()
-        mock_parallel_class.return_value = mock_parallel
-        mock_parallel.return_value = [
-            pd.DataFrame({"test": [1]}),
-            pd.DataFrame({"test": [2]}),
-            None,  # Test None filtering
-        ]
-
-        mock_case_ops = [Mock(), Mock(), Mock()]
-
-        result = evaluate_cli._run_parallel_evaluation(
-            mock_case_ops, 2, precompute=False
-        )
-
-        # Verify Parallel was called correctly
-        mock_parallel_class.assert_called_once_with(n_jobs=2)
-
-        # Verify result concatenation (should filter out None)
-        assert len(result) == 2
-        assert list(result["test"]) == [1, 2]
-
-    def test_run_parallel_evaluation_all_none_results(self):
-        """Test _run_parallel_evaluation when all results are None."""
-        with patch("extremeweatherbench.evaluate_cli.Parallel") as mock_parallel_class:
-            mock_parallel = Mock()
-            mock_parallel_class.return_value = mock_parallel
-            mock_parallel.return_value = [None, None, None]
-
-            result = evaluate_cli._run_parallel_evaluation(
-                [Mock()], 1, precompute=False
-            )
-
-            assert isinstance(result, pd.DataFrame)
-            assert len(result) == 0
