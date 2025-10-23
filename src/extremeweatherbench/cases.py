@@ -9,7 +9,7 @@ import itertools
 import logging
 from importlib import resources
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Literal, Self, Sequence, Union
+from typing import TYPE_CHECKING, Any, Callable, Literal, Sequence, Union
 
 import dacite
 import yaml  # type: ignore[import]
@@ -57,7 +57,7 @@ class IndividualCaseCollection:
         by: Literal["event_type", "case_id_number", "title", "location"],
         value: Union[str, int, regions.Region, Sequence[float], datetime.datetime],
         inplace: bool = False,
-    ) -> Self:
+    ) -> "IndividualCaseCollection":
         """Select cases from the collection based on the given criteria.
 
         Args:
@@ -120,6 +120,7 @@ class IndividualCaseCollection:
                 raise ValueError(f"Invalid field to select cases by: {by}")
         if inplace:
             self.cases = cases
+            return self
         return IndividualCaseCollection(cases=cases)
 
 
