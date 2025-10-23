@@ -1098,9 +1098,10 @@ class TestSelectCases:
 
         selected = collection.select_cases(by="event_type", value="heat_wave")
 
-        assert len(selected) == 1
-        assert selected[0].case_id_number == 1
-        assert selected[0].event_type == "heat_wave"
+        assert isinstance(selected, cases.IndividualCaseCollection)
+        assert len(selected.cases) == 1
+        assert selected.cases[0].case_id_number == 1
+        assert selected.cases[0].event_type == "heat_wave"
 
     def test_select_by_case_id_number(self):
         """Test selecting cases by case ID number."""
@@ -1108,9 +1109,123 @@ class TestSelectCases:
 
         selected = collection.select_cases(by="case_id_number", value=2)
 
-        assert len(selected) == 1
-        assert selected[0].case_id_number == 2
-        assert selected[0].title == "Central Drought"
+        assert isinstance(selected, cases.IndividualCaseCollection)
+        assert len(selected.cases) == 1
+        assert selected.cases[0].case_id_number == 2
+        assert selected.cases[0].title == "Central Drought"
+
+    def test_select_by_multiple_case_id_numbers(self):
+        """Test selecting cases by list of case ID numbers."""
+        collection = self.create_test_collection()
+
+        selected = collection.select_cases(by="case_id_number", value=[1, 3])
+
+        assert isinstance(selected, cases.IndividualCaseCollection)
+        assert len(selected.cases) == 2
+        case_ids = [case.case_id_number for case in selected.cases]
+        assert 1 in case_ids
+        assert 3 in case_ids
+        assert 2 not in case_ids
+
+    def test_select_by_case_id_number_list_all_cases(self):
+        """Test selecting all cases by providing list of all IDs."""
+        collection = self.create_test_collection()
+
+        selected = collection.select_cases(by="case_id_number", value=[1, 2, 3])
+
+        assert isinstance(selected, cases.IndividualCaseCollection)
+        assert len(selected.cases) == 3
+        case_ids = [case.case_id_number for case in selected.cases]
+        assert 1 in case_ids
+        assert 2 in case_ids
+        assert 3 in case_ids
+
+    def test_select_by_case_id_number_list_single_id(self):
+        """Test selecting by list with single case ID number."""
+        collection = self.create_test_collection()
+
+        selected = collection.select_cases(by="case_id_number", value=[2])
+
+        assert isinstance(selected, cases.IndividualCaseCollection)
+        assert len(selected.cases) == 1
+        assert selected.cases[0].case_id_number == 2
+
+    def test_select_by_case_id_number_list_no_matches(self):
+        """Test selecting by list with no matching case IDs."""
+        collection = self.create_test_collection()
+
+        selected = collection.select_cases(by="case_id_number", value=[99, 100])
+
+        assert isinstance(selected, cases.IndividualCaseCollection)
+        assert len(selected.cases) == 0
+
+    def test_select_by_case_id_number_list_partial_matches(self):
+        """Test selecting by list with partial matches."""
+        collection = self.create_test_collection()
+
+        # List includes both existing (1, 2) and non-existing (99) IDs
+        selected = collection.select_cases(by="case_id_number", value=[1, 2, 99])
+
+        assert isinstance(selected, cases.IndividualCaseCollection)
+        assert len(selected.cases) == 2
+        case_ids = [case.case_id_number for case in selected.cases]
+        assert 1 in case_ids
+        assert 2 in case_ids
+        assert 99 not in case_ids
+
+    def test_select_by_case_id_number_list_empty(self):
+        """Test selecting by empty list of case IDs."""
+        collection = self.create_test_collection()
+
+        selected = collection.select_cases(by="case_id_number", value=[])
+
+        assert isinstance(selected, cases.IndividualCaseCollection)
+        assert len(selected.cases) == 0
+
+    def test_select_by_case_id_number_list_with_duplicates(self):
+        """Test selecting by list with duplicate case IDs."""
+        collection = self.create_test_collection()
+
+        # List with duplicate ID 1
+        selected = collection.select_cases(by="case_id_number", value=[1, 1, 2])
+
+        assert isinstance(selected, cases.IndividualCaseCollection)
+        # Should still return 2 unique cases
+        assert len(selected.cases) == 2
+        case_ids = [case.case_id_number for case in selected.cases]
+        assert 1 in case_ids
+        assert 2 in case_ids
+
+    def test_select_by_case_id_number_list_inplace_false(self):
+        """Test list selection doesn't modify original collection."""
+        collection = self.create_test_collection()
+        original_length = len(collection.cases)
+
+        selected = collection.select_cases(
+            by="case_id_number", value=[1, 3], inplace=False
+        )
+
+        # Collection should be unchanged
+        assert len(collection.cases) == original_length
+        # Returned collection should be filtered
+        assert len(selected.cases) == 2
+
+    def test_select_by_case_id_number_list_inplace_true(self):
+        """Test list selection modifies collection in place."""
+        collection = self.create_test_collection()
+
+        selected = collection.select_cases(
+            by="case_id_number", value=[2, 3], inplace=True
+        )
+
+        # Collection should be modified
+        assert len(collection.cases) == 2
+        case_ids = [case.case_id_number for case in collection.cases]
+        assert 2 in case_ids
+        assert 3 in case_ids
+        assert 1 not in case_ids
+        # Returned collection should match
+        assert len(selected.cases) == 2
 
     def test_select_by_title(self):
         """Test selecting cases by title."""
@@ -1118,9 +1233,10 @@ class TestSelectCases:
 
         selected = collection.select_cases(by="title", value="Northern Storm")
 
-        assert len(selected) == 1
-        assert selected[0].case_id_number == 3
-        assert selected[0].title == "Northern Storm"
+        assert isinstance(selected, cases.IndividualCaseCollection)
+        assert len(selected.cases) == 1
+        assert selected.cases[0].case_id_number == 3
+        assert selected.cases[0].title == "Northern Storm"
 
     def test_select_by_region_object_overlapping(self):
         """Test selecting cases by Region that overlaps with cases."""
@@ -1137,8 +1253,8 @@ class TestSelectCases:
         selected = collection.select_cases(by="location", value=search_region)
 
         # Should select cases 1 and 2 (both overlap with search_region)
-        assert len(selected) == 2
-        case_ids = [case.case_id_number for case in selected]
+        assert len(selected.cases) == 2
+        case_ids = [case.case_id_number for case in selected.cases]
         assert 1 in case_ids
         assert 2 in case_ids
 
@@ -1156,7 +1272,7 @@ class TestSelectCases:
 
         selected = collection.select_cases(by="location", value=search_region)
 
-        assert len(selected) == 0
+        assert len(selected.cases) == 0
 
     def test_select_by_region_object_single_match(self):
         """Test selecting cases by Region matching single case."""
@@ -1169,8 +1285,8 @@ class TestSelectCases:
 
         selected = collection.select_cases(by="location", value=search_region)
 
-        assert len(selected) == 1
-        assert selected[0].case_id_number == 3
+        assert len(selected.cases) == 1
+        assert selected.cases[0].case_id_number == 3
 
     def test_select_by_tuple_coordinates_overlapping(self):
         """Test selecting cases by tuple of coordinates."""
@@ -1182,8 +1298,8 @@ class TestSelectCases:
         selected = collection.select_cases(by="location", value=search_coords)
 
         # Should select cases 1 and 2
-        assert len(selected) == 2
-        case_ids = [case.case_id_number for case in selected]
+        assert len(selected.cases) == 2
+        case_ids = [case.case_id_number for case in selected.cases]
         assert 1 in case_ids
         assert 2 in case_ids
 
@@ -1197,8 +1313,8 @@ class TestSelectCases:
         selected = collection.select_cases(by="location", value=search_coords)
 
         # Should select cases 1 and 2
-        assert len(selected) == 2
-        case_ids = [case.case_id_number for case in selected]
+        assert len(selected.cases) == 2
+        case_ids = [case.case_id_number for case in selected.cases]
         assert 1 in case_ids
         assert 2 in case_ids
 
@@ -1211,7 +1327,7 @@ class TestSelectCases:
 
         selected = collection.select_cases(by="location", value=search_coords)
 
-        assert len(selected) == 0
+        assert len(selected.cases) == 0
 
     def test_select_by_coordinates_contains_case(self):
         """Test selecting when search region contains a case."""
@@ -1223,8 +1339,8 @@ class TestSelectCases:
         selected = collection.select_cases(by="location", value=search_coords)
 
         # Should select cases 1 and 2 (both within or overlapping)
-        assert len(selected) >= 1
-        case_ids = [case.case_id_number for case in selected]
+        assert len(selected.cases) >= 1
+        case_ids = [case.case_id_number for case in selected.cases]
         assert 1 in case_ids
 
     def test_select_by_coordinates_contained_by_case(self):
@@ -1237,8 +1353,8 @@ class TestSelectCases:
         selected = collection.select_cases(by="location", value=search_coords)
 
         # Should select case1 (contains the search region)
-        assert len(selected) >= 1
-        case_ids = [case.case_id_number for case in selected]
+        assert len(selected.cases) >= 1
+        case_ids = [case.case_id_number for case in selected.cases]
         assert 1 in case_ids
 
     def test_select_inplace_false(self):
@@ -1253,7 +1369,7 @@ class TestSelectCases:
         # Collection should be unchanged
         assert len(collection.cases) == original_length
         # But returned list should be filtered
-        assert len(selected) == 1
+        assert len(selected.cases) == 1
 
     def test_select_inplace_true(self):
         """Test select_cases modifying collection in place."""
@@ -1267,8 +1383,8 @@ class TestSelectCases:
         assert len(collection.cases) == 1
         assert collection.cases[0].event_type == "drought"
         # Returned list should match
-        assert len(selected) == 1
-        assert selected[0].event_type == "drought"
+        assert len(selected.cases) == 1
+        assert selected.cases[0].event_type == "drought"
 
     def test_select_invalid_field_raises_error(self):
         """Test that selecting by invalid field raises ValueError."""
@@ -1283,8 +1399,8 @@ class TestSelectCases:
 
         selected = collection.select_cases(by="event_type", value="nonexistent_type")
 
-        assert len(selected) == 0
-        assert isinstance(selected, list)
+        assert len(selected.cases) == 0
+        assert isinstance(selected, cases.IndividualCaseCollection)
 
     def test_select_all_cases_by_large_region(self):
         """Test selecting all cases with very large region."""
@@ -1301,7 +1417,8 @@ class TestSelectCases:
         selected = collection.select_cases(by="location", value=large_region)
 
         # Should select all 3 cases
-        assert len(selected) == 3
+        assert len(selected.cases) == 3
+        assert isinstance(selected, cases.IndividualCaseCollection)
 
     def test_select_by_region_edge_touching(self):
         """Test selection when regions share an edge."""
@@ -1334,4 +1451,4 @@ class TestSelectCases:
         selected = collection.select_cases(by="location", value=edge_region)
 
         # Should select the case (edges touching count as intersecting)
-        assert len(selected) == 1
+        assert len(selected.cases) == 1
