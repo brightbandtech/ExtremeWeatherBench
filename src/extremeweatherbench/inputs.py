@@ -935,7 +935,9 @@ def zarr_target_subsetter(
     )
     # mask the data to the case location
     fully_subset_data = case_metadata.location.mask(subset_time_data, drop=drop)
-
+    # chunk the data if it doesn't have chunks, e.g. ARCO ERA5
+    if not fully_subset_data.chunks:
+        fully_subset_data = fully_subset_data.chunk()
     return fully_subset_data
 
 

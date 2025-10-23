@@ -1774,6 +1774,35 @@ class TestStandaloneFunctions:
         with pytest.raises(ValueError, match="No suitable time dimension found"):
             inputs.zarr_target_subsetter(data_no_time, mock_case_metadata)
 
+    @mock.patch(
+        "extremeweatherbench.derived.maybe_include_variables_from_derived_input"
+    )
+    def test_zarr_target_subsetter_chunks_unchunked_data(
+        self, mock_derived, sample_era5_dataset
+    ):
+        """Test zarr_target_subsetter chunks data when it has no chunks."""
+        mock_derived.return_value = ["2m_temperature"]
+
+        # Create mock case operator
+        mock_case = mock.Mock()
+        mock_case.case_metadata.start_date = pd.Timestamp("2021-06-20")
+        mock_case.case_metadata.end_date = pd.Timestamp("2021-06-22")
+        mock_case.target.variables = ["2m_temperature"]
+
+        # Create unchunked dataset (no chunks attribute)
+        unchunked_data = sample_era5_dataset.copy()
+        # Ensure the dataset has no chunks by loading it
+        unchunked_data = unchunked_data.load()
+
+        # Mock the mask method to return unchunked data
+        mock_case.case_metadata.location.mask.return_value = unchunked_data
+
+        result = inputs.zarr_target_subsetter(unchunked_data, mock_case.case_metadata)
+
+        # Verify that the result has chunks (was chunked by the function)
+        assert result.chunks is not None
+        assert isinstance(result, xr.Dataset)
+
     def test_zarr_target_subsetter_with_valid_time_dimension(self, sample_era5_dataset):
         """Test zarr_target_subsetter with valid_time dimension."""
         # Rename time to valid_time to test the dimension detection
