@@ -140,6 +140,19 @@ class TestDerivedVariableWithoutName(derived.DerivedVariable):
         return result
 
 
+class TestDerivedVariableForTesting(derived.DerivedVariable):
+    """A concrete derived variable class for testing
+    _maybe_convert_variable_to_string."""
+
+    name = "TestDerivedVar"
+    required_variables = ["input_var1", "input_var2"]
+
+    @classmethod
+    def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
+        """Simple derivation for testing."""
+        return data["input_var1"] + data["input_var2"]
+
+
 class TestDerivedVariableAbstractClass:
     """Test the abstract base class DerivedVariable."""
 
@@ -928,3 +941,51 @@ class TestIntegrationWithRealData:
                     "single_variable" in result.data_vars
                     or variable_combination[0].name in result.data_vars
                 )
+
+
+class TestNormalizeVariable:
+    """Test the _maybe_convert_variable_to_string function."""
+
+    def test_maybe_convert_variable_to_string_string_input(self):
+        """Test _maybe_convert_variable_to_string with string input."""
+        result = derived._maybe_convert_variable_to_string("temperature")
+        assert result == "temperature"
+        assert isinstance(result, str)
+
+    def test_maybe_convert_variable_to_string_derived_class_input(self):
+        """Test _maybe_convert_variable_to_string with DerivedVariable class input."""
+        result = derived._maybe_convert_variable_to_string(
+            TestDerivedVariableForTesting
+        )
+        assert result == "TestDerivedVar"
+        assert isinstance(result, str)
+
+    def test_maybe_convert_variable_to_string_derived_instance_input(self):
+        """Test _maybe_convert_variable_to_string with DerivedVariable instance input.
+
+        Note: The function is designed to handle classes, not instances.
+        Instances are passed through unchanged (not converted to string).
+        """
+        instance = TestDerivedVariableForTesting()
+        result = derived._maybe_convert_variable_to_string(instance)
+        # Instance is returned as-is, not converted to string
+        assert result == instance
+        assert isinstance(result, TestDerivedVariableForTesting)
+
+    def test_maybe_convert_variable_to_string_handles_both_types(self):
+        """Test that _maybe_convert_variable_to_string handles both incoming types
+        correctly."""
+        # Test string type
+        string_result = derived._maybe_convert_variable_to_string("my_variable")
+        assert string_result == "my_variable"
+
+        # Test derived variable type
+        derived_result = derived._maybe_convert_variable_to_string(
+            TestDerivedVariableForTesting
+        )
+        assert derived_result == "TestDerivedVar"
+
+        # Results should be different but both strings
+        assert string_result != derived_result
+        assert isinstance(string_result, str)
+        assert isinstance(derived_result, str)

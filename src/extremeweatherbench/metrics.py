@@ -7,7 +7,7 @@ import sparse
 import xarray as xr
 from scores import categorical, continuous  # type: ignore[import-untyped]
 
-from extremeweatherbench import derived, evaluate, utils
+from extremeweatherbench import derived, utils
 
 logger = logging.getLogger(__name__)
 
@@ -123,10 +123,10 @@ class BaseMetric(abc.ABC):
             )
         else:
             # Convert DerivedVariable object/class to string using .name
-            self.forecast_variable = evaluate.maybe_convert_variable_to_string(
+            self.forecast_variable = derived._maybe_convert_variable_to_string(
                 self.forecast_variable
             )
-            self.target_variable = evaluate.maybe_convert_variable_to_string(
+            self.target_variable = derived._maybe_convert_variable_to_string(
                 self.target_variable
             )
 
@@ -134,8 +134,8 @@ class BaseMetric(abc.ABC):
     @abc.abstractmethod
     def _compute_metric(
         cls,
-        forecast: xr.Dataset,
-        target: xr.Dataset,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
         **kwargs: Any,
     ) -> xr.DataArray:
         """Logic to compute, roll up, or otherwise transform the inputs for the base
@@ -151,8 +151,8 @@ class BaseMetric(abc.ABC):
     @classmethod
     def compute_metric(
         cls,
-        forecast: xr.Dataset,
-        target: xr.Dataset,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
         **kwargs,
     ) -> xr.DataArray:
         """Compute the metric.
@@ -186,6 +186,7 @@ class AppliedMetric(abc.ABC):
         compute_applied_metric: A method to compute the metric.
     """
 
+    name: str
     base_metric: type[BaseMetric]
 
     @classmethod
@@ -394,8 +395,8 @@ class FN(ThresholdMetric):
     @classmethod
     def _compute_metric(
         cls,
-        forecast: xr.Dataset,
-        target: xr.Dataset,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
         **kwargs: Any,
     ) -> Any:
         forecast_threshold = kwargs.get("forecast_threshold", 0.5)
@@ -494,8 +495,8 @@ class MAE(BaseMetric):
     @classmethod
     def _compute_metric(
         cls,
-        forecast: xr.Dataset,
-        target: xr.Dataset,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
         **kwargs: Any,
     ) -> Any:
         preserve_dims = kwargs.get("preserve_dims", "lead_time")
@@ -508,8 +509,8 @@ class ME(BaseMetric):
     @classmethod
     def _compute_metric(
         cls,
-        forecast: xr.Dataset,
-        target: xr.Dataset,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
         **kwargs: Any,
     ) -> Any:
         preserve_dims = kwargs.get("preserve_dims", "lead_time")
@@ -522,8 +523,8 @@ class RMSE(BaseMetric):
     @classmethod
     def _compute_metric(
         cls,
-        forecast: xr.Dataset,
-        target: xr.Dataset,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
         **kwargs: Any,
     ) -> Any:
         preserve_dims = kwargs.get("preserve_dims", "lead_time")

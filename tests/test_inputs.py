@@ -844,9 +844,9 @@ class TestForecastBase:
         first_time_data = deduplicated_data.sel(init_time="2021-06-20")[
             "surface_air_temperature"
         ]
-        assert np.all(
-            first_time_data.values == 1.0
-        ), "Should preserve first occurrence, not duplicate"
+        assert np.all(first_time_data.values == 1.0), (
+            "Should preserve first occurrence, not duplicate"
+        )
 
         # Verify we have the correct number of unique times
         assert len(deduplicated_data.init_time) == 2
@@ -1040,7 +1040,9 @@ class TestERA5:
 
         result = era5.subset_data_to_case(sample_era5_dataset, mock_case)
 
-        mock_subsetter.assert_called_once_with(sample_era5_dataset, mock_case)
+        mock_subsetter.assert_called_once_with(
+            sample_era5_dataset, mock_case, drop=False
+        )
         assert result == sample_era5_dataset
 
     def test_era5_maybe_align_forecast_to_target_same_grid(
@@ -1197,7 +1199,11 @@ class TestGHCN:
         mock_case = mock.Mock()
         mock_case.start_date = pd.Timestamp("2021-06-20")
         mock_case.end_date = pd.Timestamp("2021-06-22")
-        mock_case.location.geopandas.total_bounds = [-120, 30, -90, 50]
+
+        # Mock the as_geopandas() method to return an object with total_bounds
+        mock_geopandas = mock.Mock()
+        mock_geopandas.total_bounds = [-120, 30, -90, 50]
+        mock_case.location.as_geopandas.return_value = mock_geopandas
 
         ghcn = inputs.GHCN(
             source="test.parquet",
@@ -1205,7 +1211,7 @@ class TestGHCN:
             variable_mapping={},
             storage_options={},
         )
-
+        mock_case.target.variables = ["surface_air_temperature"]
         result = ghcn.subset_data_to_case(sample_ghcn_dataframe.lazy(), mock_case)
 
         assert isinstance(result, pl.LazyFrame)
@@ -1240,7 +1246,11 @@ class TestGHCN:
         mock_case_metadata = mock.Mock()
         mock_case_metadata.start_date = pd.Timestamp("2021-06-20")
         mock_case_metadata.end_date = pd.Timestamp("2021-06-22")
-        mock_case_metadata.location.geopandas.total_bounds = [-120, 30, -90, 50]
+
+        # Mock the as_geopandas() method to return an object with total_bounds
+        mock_geopandas = mock.Mock()
+        mock_geopandas.total_bounds = [-120, 30, -90, 50]
+        mock_case_metadata.location.as_geopandas.return_value = mock_geopandas
 
         ghcn = inputs.GHCN(
             source="test.parquet",
@@ -1248,15 +1258,15 @@ class TestGHCN:
             variable_mapping={},
             storage_options={},
         )
-
+        mock_case_metadata.target.variables = ["surface_air_temperature"]
         # Call subset_data_to_case with unsorted data
         result = ghcn.subset_data_to_case(unsorted_data.lazy(), mock_case_metadata)
 
         # Collect the result and verify valid_time is sorted
         collected_result = result.collect()
-        assert collected_result[
-            "valid_time"
-        ].is_sorted(), "valid_time column should be sorted"
+        assert collected_result["valid_time"].is_sorted(), (
+            "valid_time column should be sorted"
+        )
 
     def test_ghcn_custom_convert_to_dataset(self, sample_ghcn_dataframe):
         """Test GHCN custom conversion to dataset."""
@@ -1507,10 +1517,16 @@ class TestLSR:
         mock_case = mock.Mock()
         mock_case.start_date = pd.Timestamp("2021-06-20")
         mock_case.end_date = pd.Timestamp("2021-06-21")
-        mock_case.location.latitude_min = 30
-        mock_case.location.latitude_max = 50
-        mock_case.location.longitude_min = -110
-        mock_case.location.longitude_max = -90
+
+        # Mock the location.as_geopandas().total_bounds call
+        mock_geopandas = mock.Mock()
+        mock_geopandas.total_bounds = [
+            -110,
+            30,
+            -90,
+            50,
+        ]  # [lon_min, lat_min, lon_max, lat_max]
+        mock_case.location.as_geopandas.return_value = mock_geopandas
 
         lsr = inputs.LSR(
             source="test.parquet",
@@ -1618,7 +1634,9 @@ class TestPPH:
 
         result = pph.subset_data_to_case(sample_era5_dataset, mock_case)
 
-        mock_subsetter.assert_called_once_with(sample_era5_dataset, mock_case)
+        mock_subsetter.assert_called_once_with(
+            sample_era5_dataset, mock_case, drop=False
+        )
         assert result == sample_era5_dataset
 
 
@@ -1755,6 +1773,35 @@ class TestStandaloneFunctions:
 
         with pytest.raises(ValueError, match="No suitable time dimension found"):
             inputs.zarr_target_subsetter(data_no_time, mock_case_metadata)
+
+    @mock.patch(
+        "extremeweatherbench.derived.maybe_include_variables_from_derived_input"
+    )
+    def test_zarr_target_subsetter_chunks_unchunked_data(
+        self, mock_derived, sample_era5_dataset
+    ):
+        """Test zarr_target_subsetter chunks data when it has no chunks."""
+        mock_derived.return_value = ["2m_temperature"]
+
+        # Create mock case operator
+        mock_case = mock.Mock()
+        mock_case.case_metadata.start_date = pd.Timestamp("2021-06-20")
+        mock_case.case_metadata.end_date = pd.Timestamp("2021-06-22")
+        mock_case.target.variables = ["2m_temperature"]
+
+        # Create unchunked dataset (no chunks attribute)
+        unchunked_data = sample_era5_dataset.copy()
+        # Ensure the dataset has no chunks by loading it
+        unchunked_data = unchunked_data.load()
+
+        # Mock the mask method to return unchunked data
+        mock_case.case_metadata.location.mask.return_value = unchunked_data
+
+        result = inputs.zarr_target_subsetter(unchunked_data, mock_case.case_metadata)
+
+        # Verify that the result has chunks (was chunked by the function)
+        assert result.chunks is not None
+        assert isinstance(result, xr.Dataset)
 
     def test_zarr_target_subsetter_with_valid_time_dimension(self, sample_era5_dataset):
         """Test zarr_target_subsetter with valid_time dimension."""
