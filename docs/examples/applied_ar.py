@@ -104,8 +104,8 @@ ar_ewb = evaluate.ExtremeWeatherBench(
     evaluation_objects=ar_evaluation_objects,
 )
 
-# Run the workflow using all available CPUs
-outputs = ar_ewb.run(n_jobs=3)
+# Run the workflow using 8 jobs
+outputs = ar_ewb.run(n_jobs=8)
 
 # Save the evaluationoutputs to a csv file
 outputs.to_csv("ar_signal_outputs.csv")
