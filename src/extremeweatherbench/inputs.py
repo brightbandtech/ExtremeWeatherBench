@@ -1,7 +1,7 @@
 import abc
 import dataclasses
 import logging
-from typing import TYPE_CHECKING, Callable, Optional, TypeAlias, Union
+from typing import TYPE_CHECKING, Any, Callable, Optional, TypeAlias, Union
 
 import numpy as np
 import pandas as pd
@@ -189,6 +189,7 @@ class InputBase(abc.ABC):
         self,
         data: IncomingDataInput,
         case_metadata: "cases.IndividualCase",
+        **kwargs,
     ) -> IncomingDataInput:
         """Subset the input data to the case information provided in IndividualCase.
 
@@ -271,11 +272,11 @@ class InputBase(abc.ABC):
         if isinstance(data, xr.DataArray):
             return data.rename(variable_mapping[data.name])
         elif isinstance(data, xr.Dataset):
-            old_name_obj = data.variables.keys()
+            old_name_obj = list(data.variables.keys())
         elif isinstance(data, pl.LazyFrame):
-            old_name_obj = data.collect_schema().names()
+            old_name_obj = list(data.collect_schema().names())
         elif isinstance(data, pd.DataFrame):
-            old_name_obj = data.columns
+            old_name_obj = list(data.columns)
         else:
             raise ValueError(f"Data type {type(data)} not supported")
 
@@ -305,7 +306,9 @@ class ForecastBase(InputBase):
         self,
         data: IncomingDataInput,
         case_metadata: "cases.IndividualCase",
+        **kwargs,
     ) -> IncomingDataInput:
+        drop = kwargs.get("drop", False)
         if not isinstance(data, xr.Dataset):
             raise ValueError(f"Expected xarray Dataset, got {type(data)}")
         # Drop duplicate init_time values
@@ -348,7 +351,7 @@ class ForecastBase(InputBase):
         )
 
         spatiotemporally_subset_data = case_metadata.location.mask(
-            subset_time_data, drop=True
+            subset_time_data, drop=drop
         )
 
         # convert from init_time/lead_time to init_time/valid_time
@@ -385,7 +388,13 @@ class EvaluationObject:
     """
 
     event_type: str
-    metric_list: list[Union["metrics.BaseMetric", "metrics.AppliedMetric"]]
+    metric_list: list[
+        Union[
+            Callable[..., Any],
+            type["metrics.BaseMetric"],
+            type["metrics.AppliedMetric"],
+        ]
+    ]
     target: "TargetBase"
     forecast: "ForecastBase"
 
@@ -478,8 +487,12 @@ class ERA5(TargetBase):
         self,
         data: IncomingDataInput,
         case_metadata: "cases.IndividualCase",
+        **kwargs,
     ) -> IncomingDataInput:
-        return zarr_target_subsetter(data, case_metadata)
+        drop = kwargs.get("drop", False)
+        if not isinstance(data, xr.Dataset):
+            raise ValueError(f"Expected xarray Dataset, got {type(data)}")
+        return zarr_target_subsetter(data, case_metadata, drop=drop)
 
     def maybe_align_forecast_to_target(
         self,
@@ -527,6 +540,7 @@ class GHCN(TargetBase):
         self,
         data: IncomingDataInput,
         case_metadata: "cases.IndividualCase",
+        **kwargs,
     ) -> IncomingDataInput:
         if not isinstance(data, pl.LazyFrame):
             raise ValueError(f"Expected polars LazyFrame, got {type(data)}")
@@ -534,15 +548,15 @@ class GHCN(TargetBase):
         # Create filter expressions for LazyFrame
         time_min = case_metadata.start_date - pd.Timedelta(days=2)
         time_max = case_metadata.end_date + pd.Timedelta(days=2)
-
+        case_location = case_metadata.location.as_geopandas()
         # Apply filters using proper polars expressions
         subset_target_data = data.filter(
             (pl.col("valid_time") >= time_min)
             & (pl.col("valid_time") <= time_max)
-            & (pl.col("latitude") >= case_metadata.location.geopandas.total_bounds[1])
-            & (pl.col("latitude") <= case_metadata.location.geopandas.total_bounds[3])
-            & (pl.col("longitude") >= case_metadata.location.geopandas.total_bounds[0])
-            & (pl.col("longitude") <= case_metadata.location.geopandas.total_bounds[2])
+            & (pl.col("latitude") >= case_location.total_bounds[1])
+            & (pl.col("latitude") <= case_location.total_bounds[3])
+            & (pl.col("longitude") >= case_location.total_bounds[0])
+            & (pl.col("longitude") <= case_location.total_bounds[2])
         ).sort("valid_time")
         return subset_target_data
 
@@ -601,6 +615,7 @@ class LSR(TargetBase):
         self,
         data: IncomingDataInput,
         case_metadata: "cases.IndividualCase",
+        **kwargs,
     ) -> IncomingDataInput:
         if not isinstance(data, pd.DataFrame):
             raise ValueError(f"Expected pandas DataFrame, got {type(data)}")
@@ -611,19 +626,14 @@ class LSR(TargetBase):
         data["valid_time"] = pd.to_datetime(data["valid_time"])
 
         # filters to apply to the target data including datetimes and location bounds
+        bounds = case_metadata.location.as_geopandas().total_bounds
         filters = (
             (data["valid_time"] >= case_metadata.start_date)
             & (data["valid_time"] <= case_metadata.end_date)
-            & (data["latitude"] >= case_metadata.location.latitude_min)
-            & (data["latitude"] <= case_metadata.location.latitude_max)
-            & (
-                data["longitude"]
-                >= utils.convert_longitude_to_180(case_metadata.location.longitude_min)
-            )
-            & (
-                data["longitude"]
-                <= utils.convert_longitude_to_180(case_metadata.location.longitude_max)
-            )
+            & (data["latitude"] >= bounds[1])
+            & (data["latitude"] <= bounds[3])
+            & (data["longitude"] >= utils.convert_longitude_to_180(bounds[0]))
+            & (data["longitude"] <= utils.convert_longitude_to_180(bounds[2]))
         )
         subset_target_data = data.loc[filters]
 
@@ -722,8 +732,18 @@ class PPH(TargetBase):
         self,
         data: IncomingDataInput,
         case_metadata: "cases.IndividualCase",
+        **kwargs,
     ) -> IncomingDataInput:
-        return zarr_target_subsetter(data, case_metadata)
+        drop = kwargs.get("drop", False)
+        if not isinstance(data, xr.Dataset):
+            raise ValueError(f"Expected xarray Dataset, got {type(data)}")
+        return zarr_target_subsetter(data, case_metadata, drop=drop)
+
+    def _custom_convert_to_dataset(self, data: IncomingDataInput) -> xr.Dataset:
+        if isinstance(data, xr.Dataset):
+            return data
+        else:
+            raise ValueError(f"Data is not an xarray Dataset: {type(data)}")
 
     def maybe_align_forecast_to_target(
         self,
@@ -754,7 +774,9 @@ class IBTrACS(TargetBase):
         self,
         data: IncomingDataInput,
         case_metadata: "cases.IndividualCase",
+        **kwargs,
     ) -> IncomingDataInput:
+        # Note: drop parameter not applicable for polars LazyFrame data
         if not isinstance(data, pl.LazyFrame):
             raise ValueError(f"Expected polars LazyFrame, got {type(data)}")
 
@@ -808,7 +830,7 @@ class IBTrACS(TargetBase):
             data = data.collect(engine="streaming").to_pandas()
 
             # IBTrACS data is in -180 to 180, convert to 0 to 360
-            data["longitude"] = utils.convert_longitude_to_360(data["longitude"])
+            data["longitude"] = data["longitude"].apply(utils.convert_longitude_to_360)
 
             # Due to missing data in the IBTrACS dataset, polars doesn't convert
             # the valid_time to a datetime by default
@@ -819,8 +841,11 @@ class IBTrACS(TargetBase):
                 data = xr.Dataset.from_dataframe(data, sparse=True)
             except ValueError as e:
                 if "non-unique" in str(e):
-                    pass
-                data = xr.Dataset.from_dataframe(data.drop_duplicates(), sparse=True)
+                    # Drop duplicates from the pandas DataFrame before converting
+                    data_df = data.drop_duplicates()
+                    data = xr.Dataset.from_dataframe(data_df, sparse=True)
+                else:
+                    raise
             return data
         else:
             raise ValueError(f"Data is not a polars LazyFrame: {type(data)}")
@@ -875,6 +900,7 @@ def zarr_target_subsetter(
     data: xr.Dataset,
     case_metadata: "cases.IndividualCase",
     time_variable: str = "valid_time",
+    drop: bool = False,
 ) -> xr.Dataset:
     """Subset a zarr dataset to a case operator.
 
@@ -908,8 +934,10 @@ def zarr_target_subsetter(
         }
     )
     # mask the data to the case location
-    fully_subset_data = case_metadata.location.mask(subset_time_data, drop=True)
-
+    fully_subset_data = case_metadata.location.mask(subset_time_data, drop=drop)
+    # chunk the data if it doesn't have chunks, e.g. ARCO ERA5
+    if not fully_subset_data.chunks:
+        fully_subset_data = fully_subset_data.chunk()
     return fully_subset_data
 
 
@@ -927,7 +955,7 @@ def align_forecast_to_target(
         and dim not in ["time", "valid_time", "lead_time", "init_time"]
     ]
 
-    spatial_dims = {dim: target_data[dim] for dim in intersection_dims}
+    spatial_dims = {str(dim): target_data[dim] for dim in intersection_dims}
     # Align time dimensions - find overlapping times
     time_aligned_target, time_aligned_forecast = xr.align(
         target_data,
@@ -938,9 +966,24 @@ def align_forecast_to_target(
 
     # Regrid forecast to target grid using nearest neighbor interpolation
     # extrapolate in the case of targets slightly outside the forecast domain
-    time_space_aligned_forecast = time_aligned_forecast.interp(
-        **spatial_dims, method=method, kwargs={"fill_value": "extrapolate"}
-    )
+    if spatial_dims:
+        # Use explicit keyword arguments to avoid mypy issues with **kwargs
+        from typing import Literal
+
+        interp_method: Literal["nearest", "linear"] = (
+            "nearest" if method == "nearest" else "linear"
+        )
+
+        # Build interpolation arguments properly
+        # Cast to Any to avoid mypy issues with mixed dict types
+        from typing import Any, cast
+
+        interp_kwargs = cast(dict[str, Any], {"method": interp_method})
+        interp_kwargs.update(spatial_dims)
+
+        time_space_aligned_forecast = time_aligned_forecast.interp(**interp_kwargs)
+    else:
+        time_space_aligned_forecast = time_aligned_forecast
 
     return time_space_aligned_forecast, time_aligned_target
 

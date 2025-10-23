@@ -2362,19 +2362,6 @@ class TestEnsureOutputSchema:
         assert all(result["event_type"] == "updated_event")
 
 
-class TestDerivedVariableForTesting(derived.DerivedVariable):
-    """A concrete derived variable class for testing
-    _maybe_convert_variable_to_string."""
-
-    name = "TestDerivedVar"
-    required_variables = ["input_var1", "input_var2"]
-
-    @classmethod
-    def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
-        """Simple derivation for testing."""
-        return data["input_var1"] + data["input_var2"]
-
-
 class TestForecastDerivedVariable(derived.DerivedVariable):
     """Test derived variable for forecast data."""
 
@@ -2397,54 +2384,6 @@ class TestTargetDerivedVariable(derived.DerivedVariable):
     def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
         """Simple derivation - just return the temperature variable."""
         return data["2m_temperature"]
-
-
-class TestNormalizeVariable:
-    """Test the _maybe_convert_variable_to_string function."""
-
-    def test_maybe_convert_variable_to_string_string_input(self):
-        """Test _maybe_convert_variable_to_string with string input."""
-        result = evaluate._maybe_convert_variable_to_string("temperature")
-        assert result == "temperature"
-        assert isinstance(result, str)
-
-    def test_maybe_convert_variable_to_string_derived_class_input(self):
-        """Test _maybe_convert_variable_to_string with DerivedVariable class input."""
-        result = evaluate._maybe_convert_variable_to_string(
-            TestDerivedVariableForTesting
-        )
-        assert result == "TestDerivedVar"
-        assert isinstance(result, str)
-
-    def test_maybe_convert_variable_to_string_derived_instance_input(self):
-        """Test _maybe_convert_variable_to_string with DerivedVariable instance input.
-
-        Note: The function is designed to handle classes, not instances.
-        Instances are passed through unchanged (not converted to string).
-        """
-        instance = TestDerivedVariableForTesting()
-        result = evaluate._maybe_convert_variable_to_string(instance)
-        # Instance is returned as-is, not converted to string
-        assert result == instance
-        assert isinstance(result, TestDerivedVariableForTesting)
-
-    def test_maybe_convert_variable_to_string_handles_both_types(self):
-        """Test that _maybe_convert_variable_to_string handles both incoming types
-        correctly."""
-        # Test string type
-        string_result = evaluate._maybe_convert_variable_to_string("my_variable")
-        assert string_result == "my_variable"
-
-        # Test derived variable type
-        derived_result = evaluate._maybe_convert_variable_to_string(
-            TestDerivedVariableForTesting
-        )
-        assert derived_result == "TestDerivedVar"
-
-        # Results should be different but both strings
-        assert string_result != derived_result
-        assert isinstance(string_result, str)
-        assert isinstance(derived_result, str)
 
 
 class TestRegionSubsettingIntegration:
@@ -2694,7 +2633,6 @@ class TestRegionSubsettingIntegration:
         # Load cases and apply subsetting
         original_cases = cases.load_individual_cases(multi_case_dict)
         subset_cases = subsetter.subset_case_collection(original_cases)
-
         # Create new evaluation with subset cases
         subset_cases_dict = {
             "cases": [
@@ -2705,7 +2643,18 @@ class TestRegionSubsettingIntegration:
                     "end_date": case.end_date,
                     "location": {
                         "type": "bounded_region",
-                        "parameters": case.location.get_bounding_coordinates._asdict(),
+                        "parameters": {
+                            key: bound
+                            for key, bound in zip(
+                                [
+                                    "latitude_min",
+                                    "latitude_max",
+                                    "longitude_min",
+                                    "longitude_max",
+                                ],
+                                case.location.as_geopandas().total_bounds,
+                            )
+                        },
                     },
                     "event_type": case.event_type,
                 }

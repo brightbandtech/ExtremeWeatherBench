@@ -6,10 +6,11 @@ Some code similarly structured to WeatherBenchX (Rasp et al.).
 import dataclasses
 import datetime
 import importlib
+import importlib.resources
 import itertools
 import logging
 import pathlib
-from typing import TYPE_CHECKING, Callable, Literal, Sequence, Union
+from typing import TYPE_CHECKING, Any, Callable, Literal, Sequence, Union
 
 import dacite
 import yaml  # type: ignore[import]
@@ -84,9 +85,9 @@ class IndividualCaseCollection:
                     cases = [
                         case
                         for case in self.cases
-                        if case.location.geopandas.geometry.union_all().intersects(
-                            value.geopandas.geometry.union_all()
-                        )
+                        if case.location.as_geopandas()
+                        .geometry.union_all()
+                        .intersects(value.as_geopandas().geometry.union_all())
                     ]
                 elif isinstance(value, (tuple, list)):
                     longitude_min, latitude_min, longitude_max, latitude_max = value
@@ -99,9 +100,9 @@ class IndividualCaseCollection:
                     cases = [
                         case
                         for case in self.cases
-                        if case.location.geopandas.geometry.union_all().intersects(
-                            value_region.geopandas.geometry.union_all()
-                        )
+                        if case.location.as_geopandas()
+                        .geometry.union_all()
+                        .intersects(value_region.as_geopandas().geometry.union_all())
                     ]
             case "case_id_number":
                 cases = [case for case in self.cases if case.case_id_number == value]
@@ -131,7 +132,13 @@ class CaseOperator:
     """
 
     case_metadata: IndividualCase
-    metric_list: list[Union[Callable, "metrics.BaseMetric", "metrics.AppliedMetric"]]
+    metric_list: list[
+        Union[
+            Callable[..., Any],
+            type["metrics.BaseMetric"],
+            type["metrics.AppliedMetric"],
+        ]
+    ]
     target: "inputs.TargetBase"
     forecast: "inputs.ForecastBase"
 
