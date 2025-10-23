@@ -893,10 +893,9 @@ class LeadTimeDetection(AppliedMetric):
         raise NotImplementedError("LeadTimeDetection is not implemented yet")
 
 
-class HeatwaveDurationME(AppliedMetric):
+class DurationME(AppliedMetric):
     """Compute the duration of a case's event.
-    This metric computes the mean error between the forecast and target heatwave
-    durations.
+    This metric computes the mean error between the forecast and target durations.
 
     Args:
         climatology: The climatology dataset for the heatwave criteria.
@@ -941,6 +940,7 @@ class HeatwaveDurationME(AppliedMetric):
             for dim in forecast.dims
             if dim not in ["init_time", "lead_time", "valid_time"]
         ]
+
         # If target is sparse, stack the data and interpolate the climatology to the
         # target grid
         # otherwise, interpolate the climatology to the target grid
@@ -961,6 +961,7 @@ class HeatwaveDurationME(AppliedMetric):
         forecast_mask = create_comparison_mask(
             forecast, climatology_time, self.criteria_sign
         )
+
         # Calculate target duration (count of timesteps exceeding climatology)
         target_mask = create_comparison_mask(
             target, climatology_time, self.criteria_sign
@@ -983,7 +984,6 @@ class HeatwaveDurationME(AppliedMetric):
         # Sum to get durations (NaN values are excluded by default)
         forecast_duration = forecast_mask_final.groupby(self.preserve_dims).sum()
         target_duration = target_mask_final.groupby(self.preserve_dims).sum()
-        # Compute mean error using the base metric
 
         # TODO: product of time resolution hours and duration
         return {

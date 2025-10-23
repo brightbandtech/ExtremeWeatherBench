@@ -70,12 +70,18 @@ fcnv2_forecast = inputs.KerchunkForecast(
     variable_mapping=inputs.CIRA_metadata_variable_mapping,
     preprocess=_preprocess_bb_cira_forecast_dataset,
 )
+climatology = xr.open_zarr(
+    "gs://extremeweatherbench/datasets/surface_air_temperature_1990_2019_climatology.zarr",  # noqa: E501
+    storage_options={"anon": True},
+    chunks="auto",
+)
+
+climatology = climatology["2m_temperature"].sel(quantile=0.15)
 
 metrics_list = [
     metrics.RMSE,
     metrics.MinimumMAE,
-    metrics.OnsetME,
-    metrics.DurationME,
+    metrics.DurationME(climatology, criteria_sign="<="),
 ]
 # Create a list of evaluation objects for freeze
 freeze_evaluation_object = [
