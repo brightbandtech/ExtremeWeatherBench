@@ -153,6 +153,11 @@ def _run_parallel(
     parallel_config = kwargs.get(
         "parallel_config", {"backend": "threading", "n_jobs": n_jobs}
     )
+
+    # If n_jobs is 1, run in serial
+    if n_jobs == 1:
+        logger.debug("n_jobs is 1, running in serial")
+        return _run_serial(case_operators, **kwargs)
     # TODO: return a generator and compute at a higher level
     with joblib.parallel_config(
         **parallel_config,
