@@ -222,7 +222,7 @@ class TestParallelExecution:
         mock_ewb.case_operators = [Mock(), Mock(), Mock()]
         mock_ewb_class.return_value = mock_ewb
         mock_load_cases.return_value = {"cases": []}
-        mock_parallel_eval.return_value = pd.DataFrame({"test": [1, 2, 3]})
+        mock_parallel_eval.return_value = [pd.DataFrame({"test": [1, 2, 3]})]
 
         result = runner.invoke(
             evaluate_cli.cli_runner, ["--default", "--parallel", "3"]

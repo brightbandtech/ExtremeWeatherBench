@@ -10,7 +10,7 @@ import importlib.resources
 import itertools
 import logging
 import pathlib
-from typing import TYPE_CHECKING, Callable, Literal, Sequence, Union
+from typing import TYPE_CHECKING, Any, Callable, Literal, Sequence, Union
 
 import dacite
 import yaml  # type: ignore[import]
@@ -58,7 +58,7 @@ class IndividualCaseCollection:
         by: Literal["event_type", "case_id_number", "title", "location"],
         value: Union[str, int, regions.Region, Sequence[float], datetime.datetime],
         inplace: bool = False,
-    ) -> list[IndividualCase]:
+    ) -> "IndividualCaseCollection":
         """Select cases from the collection based on the given criteria.
 
         Args:
@@ -75,7 +75,7 @@ class IndividualCaseCollection:
             collection. Defaults to False.
 
         Returns:
-            A list of IndividualCase objects.
+            A new IndividualCaseCollection with the cases selected by the given criteria
         """
         match by:
             case "event_type":
@@ -105,14 +105,24 @@ class IndividualCaseCollection:
                         .intersects(value_region.as_geopandas().geometry.union_all())
                     ]
             case "case_id_number":
-                cases = [case for case in self.cases if case.case_id_number == value]
+                if isinstance(value, int):
+                    cases = [
+                        case for case in self.cases if case.case_id_number == value
+                    ]
+                elif isinstance(value, list):
+                    cases = [
+                        case for case in self.cases if case.case_id_number in value
+                    ]
+                else:
+                    raise ValueError(f"Invalid value for case_id_number: {value}")
             case "title":
                 cases = [case for case in self.cases if case.title == value]
             case _:
                 raise ValueError(f"Invalid field to select cases by: {by}")
         if inplace:
             self.cases = cases
-        return cases
+            return self
+        return IndividualCaseCollection(cases=cases)
 
 
 @dataclasses.dataclass
@@ -132,7 +142,13 @@ class CaseOperator:
     """
 
     case_metadata: IndividualCase
-    metric_list: list[Union[Callable, "metrics.BaseMetric", "metrics.AppliedMetric"]]
+    metric_list: list[
+        Union[
+            Callable[..., Any],
+            type["metrics.BaseMetric"],
+            type["metrics.AppliedMetric"],
+        ]
+    ]
     target: "inputs.TargetBase"
     forecast: "inputs.ForecastBase"
 

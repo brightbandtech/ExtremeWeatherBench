@@ -3,6 +3,7 @@
 import abc
 import logging
 import pathlib
+import warnings
 from typing import TYPE_CHECKING, Literal, Mapping, Type, Union
 
 import geopandas as gpd
@@ -35,6 +36,21 @@ class Region(abc.ABC):
         """Return representation of this Region as a GeoDataFrame."""
         pass
 
+    def get_adjusted_bounds(
+        self, dataset: xr.Dataset
+    ) -> tuple[float, float, float, float]:
+        """Get region bounds adjusted to dataset's longitude convention.
+
+        Args:
+            dataset: The dataset to match longitude convention with
+
+        Returns:
+            Tuple of (lon_min, lat_min, lon_max, lat_max) adjusted to
+            match the dataset's longitude convention
+        """
+        region_bounds = self.as_geopandas().total_bounds
+        return _adjust_bounds_to_dataset_convention(region_bounds, dataset)
+
     def mask(self, dataset: xr.Dataset, drop: bool = False) -> xr.Dataset:
         """Mask a dataset to the region.
 
@@ -45,36 +61,60 @@ class Region(abc.ABC):
         Returns:
             The subset dataset.
         """
-        import warnings
-
-        ...
-
         if drop:
             warnings.warn(
                 "`drop` is no longer used and will be removed in a future version.",
                 DeprecationWarning,
                 stacklevel=2,
             )
-        longitude_min, latitude_min, longitude_max, latitude_max = (
-            self.as_geopandas().total_bounds
+
+        # Get region bounds adjusted to dataset's longitude convention
+        (
+            region_longitude_min,
+            region_latitude_min,
+            region_longitude_max,
+            region_latitude_max,
+        ) = self.get_adjusted_bounds(dataset)
+
+        # Avoids slice() which is susceptible to differences in coord order
+        latitude_da = dataset.latitude.where(
+            np.logical_and(
+                dataset.latitude >= region_latitude_min,
+                dataset.latitude <= region_latitude_max,
+            ),
+            drop=True,
         )
 
-        # Handle longitude convention mismatch between dataset and region bounds
-        dataset_lon_min = float(dataset.longitude.min())
-        dataset_lon_max = float(dataset.longitude.max())
+        # Detect if region wraps around 0/360 or -180/180 boundary
+        # This happens either from:
+        # 1. True antimeridian crossing (MultiPolygon geometry)
+        # 2. Prime meridian crossing converted to 0-360 (lon_min > lon_max)
+        gdf = self.as_geopandas()
+        geometry = gdf.geometry.iloc[0]
+        crosses_boundary = isinstance(geometry, shapely.MultiPolygon) or (
+            region_longitude_min > region_longitude_max
+        )
 
-        # Check if dataset uses 0-360 convention while region uses -180/+180
-        if (
-            dataset_lon_min >= 0
-            and dataset_lon_max <= 360
-            and (longitude_min < 0 or longitude_max < 0)
-        ):
-            # Convert region bounds to 0-360 convention
-            longitude_min = utils.convert_longitude_to_360(longitude_min)
-            longitude_max = utils.convert_longitude_to_360(longitude_max)
+        if crosses_boundary:
+            # Use OR condition: include lons >= min OR lons <= max
+            longitude_da = dataset.longitude.where(
+                np.logical_or(
+                    dataset.longitude >= region_longitude_min,
+                    dataset.longitude <= region_longitude_max,
+                ),
+                drop=True,
+            )
+        else:
+            longitude_da = dataset.longitude.where(
+                np.logical_and(
+                    dataset.longitude >= region_longitude_min,
+                    dataset.longitude <= region_longitude_max,
+                ),
+                drop=True,
+            )
         dataset = dataset.sel(
-            latitude=slice(latitude_max, latitude_min),
-            longitude=slice(longitude_min, longitude_max),
+            latitude=latitude_da,
+            longitude=longitude_da,
         )
 
         return dataset
@@ -288,9 +328,16 @@ class ShapefileRegion(Region):
         Returns:
             The subset dataset.
         """
-        longitude_min, latitude_min, longitude_max, latitude_max = (
-            self.as_geopandas().total_bounds
-        )
+        # Get region bounds adjusted to dataset's longitude convention
+        (
+            longitude_min,
+            latitude_min,
+            longitude_max,
+            latitude_max,
+        ) = self.get_adjusted_bounds(dataset)
+
+        # Note: ShapefileRegion.mask uses slice which doesn't support
+        # prime/antimeridian crossing with OR logic, but regionmask handles it
         dataset = dataset.sel(
             latitude=slice(latitude_max, latitude_min),
             longitude=slice(longitude_min, longitude_max),
@@ -563,3 +610,35 @@ def subset_results_to_region(
 
     # Filter the results DataFrame
     return results_df[results_df["case_id_number"].isin(included_case_ids)]
+
+
+def _adjust_bounds_to_dataset_convention(
+    region_bounds: tuple[float, float, float, float],
+    dataset: xr.Dataset,
+    longitude_coord: str = "longitude",
+) -> tuple[float, float, float, float]:
+    """Adjust region bounds to match dataset longitude convention.
+
+    Uses existing utils functions to convert between 0-360 and -180/+180.
+
+    Args:
+        region_bounds: Tuple of (lon_min, lat_min, lon_max, lat_max)
+        dataset: The dataset to match conventions with
+        longitude_coord: Name of the longitude coordinate
+
+    Returns:
+        Adjusted bounds as (lon_min, lat_min, lon_max, lat_max)
+    """
+    lon_min, lat_min, lon_max, lat_max = region_bounds
+
+    # Detect if dataset uses 0-360 convention (has values > 180)
+    ds_uses_360 = np.any(dataset[longitude_coord].values > 180)
+
+    if ds_uses_360:
+        # Convert region bounds to 0-360 to match dataset
+        lon_min = utils.convert_longitude_to_360(lon_min)
+        lon_max = utils.convert_longitude_to_360(lon_max)
+    # If dataset uses -180/+180, region bounds are already in that
+    # convention from _create_geopandas_from_bounds
+
+    return (lon_min, lat_min, lon_max, lat_max)
