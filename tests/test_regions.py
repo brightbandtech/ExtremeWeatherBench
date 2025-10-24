@@ -1025,7 +1025,7 @@ class TestCreateGeopandasFromBounds:
 
 
 class TestTotalBounds:
-    """Test the as_geopandas().total_bounds method for all Region subclasses."""
+    """Test the as_geopandas().total_bounds method for all regions.Region subclasses."""
 
     def test_centered_region_total_bounds(self):
         """Test regions.CenteredRegion.as_geopandas().total_bounds method."""
