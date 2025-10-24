@@ -189,14 +189,41 @@ def _run_parallel(
     if parallel_config.get("n_jobs") is None:
         logger.warning("No number of jobs provided, using joblib backend default.")
 
-    # TODO(198): return a generator and compute at a higher level
-    with joblib.parallel_config(**parallel_config):
-        run_results = utils.ParallelTqdm(total_tasks=len(case_operators))(
-            # None is the cache_dir, we can't cache in parallel mode
-            joblib.delayed(compute_case_operator)(case_operator, None, **kwargs)
-            for case_operator in case_operators
-        )
-    return run_results
+    # Handle dask backend - create client if needed
+    dask_client = None
+    if parallel_config.get("backend") == "dask":
+        try:
+            from dask.distributed import Client, LocalCluster
+
+            # Check if a client already exists
+            try:
+                Client.current()
+                logger.info("Using existing dask client")
+            except ValueError:
+                # No client exists, create a local one
+                logger.info("Creating local dask client for parallel execution")
+                dask_client = Client(LocalCluster(processes=True, silence_logs=False))
+                logger.info(f"Dask client created: {dask_client}")
+        except ImportError:
+            raise ImportError(
+                "Dask is required for dask backend. "
+                "Install with: pip install dask[distributed]"
+            )
+
+    try:
+        # TODO(198): return a generator and compute at a higher level
+        with joblib.parallel_config(**parallel_config):
+            run_results = utils.ParallelTqdm(total_tasks=len(case_operators))(
+                # None is the cache_dir, we can't cache in parallel mode
+                joblib.delayed(compute_case_operator)(case_operator, None, **kwargs)
+                for case_operator in case_operators
+            )
+        return run_results
+    finally:
+        # Clean up the dask client if we created it
+        if dask_client is not None:
+            logger.info("Closing dask client")
+            dask_client.close()
 
 
 def compute_case_operator(

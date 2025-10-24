@@ -833,6 +833,66 @@ class TestRunParallel:
 
                 assert result == []
 
+    @mock.patch("dask.distributed.Client")
+    @mock.patch("dask.distributed.LocalCluster")
+    def test_run_parallel_dask_backend_auto_client(
+        self, mock_local_cluster, mock_client_class, sample_case_operator
+    ):
+        """Test _run_parallel with dask backend automatically creates client."""
+        # Mock Client.current() to raise ValueError (no existing client)
+        mock_client_class.current.side_effect = ValueError("No client found")
+
+        # Mock the client instance
+        mock_client = mock.Mock()
+        mock_client_class.return_value = mock_client
+
+        # Mock LocalCluster
+        mock_cluster = mock.Mock()
+        mock_local_cluster.return_value = mock_cluster
+
+        # Mock the parallel execution
+        with mock.patch("extremeweatherbench.utils.ParallelTqdm") as mock_parallel:
+            mock_parallel_instance = mock.Mock()
+            mock_parallel.return_value = mock_parallel_instance
+            mock_parallel_instance.return_value = [pd.DataFrame({"test": [1]})]
+
+            with mock.patch("joblib.parallel_config"):
+                result = evaluate._run_parallel(
+                    [sample_case_operator],
+                    parallel_config={"backend": "dask", "n_jobs": 2},
+                )
+
+        # Verify client was created and closed
+        mock_client_class.assert_called_once_with(mock_cluster)
+        mock_client.close.assert_called_once()
+        assert isinstance(result, list)
+
+    @mock.patch("dask.distributed.Client")
+    def test_run_parallel_dask_backend_existing_client(
+        self, mock_client_class, sample_case_operator
+    ):
+        """Test _run_parallel with dask backend uses existing client."""
+        # Mock existing client
+        mock_existing_client = mock.Mock()
+        mock_client_class.current.return_value = mock_existing_client
+
+        # Mock the parallel execution
+        with mock.patch("extremeweatherbench.utils.ParallelTqdm") as mock_parallel:
+            mock_parallel_instance = mock.Mock()
+            mock_parallel.return_value = mock_parallel_instance
+            mock_parallel_instance.return_value = [pd.DataFrame({"test": [1]})]
+
+            with mock.patch("joblib.parallel_config"):
+                result = evaluate._run_parallel(
+                    [sample_case_operator],
+                    parallel_config={"backend": "dask", "n_jobs": 2},
+                )
+
+        # Verify no new client was created and existing wasn't closed
+        mock_client_class.assert_not_called()
+        mock_existing_client.close.assert_not_called()
+        assert isinstance(result, list)
+
 
 class TestComputeCaseOperator:
     """Test the compute_case_operator function."""

@@ -195,7 +195,10 @@ def cli_runner(
     # Run evaluation
     if final_parallel_config is not None and final_parallel_config.get("n_jobs", 1) > 1:
         num_jobs = final_parallel_config["n_jobs"]
-        click.echo(f"Running evaluation with {num_jobs} parallel jobs...")
+        backend = final_parallel_config.get("backend", "threading")
+        click.echo(
+            f"Running evaluation with {num_jobs} parallel jobs using {backend} backend "
+        )
         results_list = evaluate._run_parallel(
             case_operators,
             parallel_config=final_parallel_config,
