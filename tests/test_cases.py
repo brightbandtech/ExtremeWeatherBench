@@ -36,7 +36,7 @@ class TestIndividualCase:
 
     def test_individual_case_with_different_region_types(self):
         """Test IndividualCase with different region types."""
-        # Test with CenteredRegion
+        # Test with regions.CenteredRegion
         centered_region = regions.CenteredRegion.create_region(
             latitude=45.0, longitude=-120.0, bounding_box_degrees=10.0
         )
@@ -52,7 +52,7 @@ class TestIndividualCase:
 
         assert isinstance(case1.location, regions.CenteredRegion)
 
-        # Test with BoundingBoxRegion
+        # Test with regions.BoundingBoxRegion
         bbox_region = regions.BoundingBoxRegion.create_region(
             latitude_min=40.0,
             latitude_max=50.0,

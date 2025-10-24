@@ -164,7 +164,7 @@ class TestRegionToGeopandas:
         assert abs(bounds[2] - (-115.0)) < 0.001  # max lon (converted to -180 to 180)
 
     def test_shapefile_region_to_geopandas(self):
-        """Test ShapefileRegion.as_geopandas()."""
+        """Test regions.ShapefileRegion.as_geopandas()."""
         # Create a mock GeoDataFrame
         mock_polygon = shapely.Polygon([(0, 0), (1, 0), (1, 1), (0, 1), (0, 0)])
         mock_gdf = gpd.GeoDataFrame(geometry=[mock_polygon], crs="EPSG:4326")
@@ -337,7 +337,7 @@ class TestRegionMask:
         assert "temperature" in bbox_masked.data_vars
 
     def test_centered_region_mask_with_180_longitude(self, sample_dataset_180):
-        """Test CenteredRegion.mask() with -180 to 180 longitude."""
+        """Test regions.CenteredRegion.mask() with -180 to 180 longitude."""
         region = regions.CenteredRegion.create_region(
             latitude=45.0, longitude=-120.0, bounding_box_degrees=10.0
         )
@@ -362,7 +362,7 @@ class TestRegionMask:
         assert masked_dataset.longitude.max() <= -115.0 + 1
 
     def test_bounding_box_region_mask_with_180_longitude(self, sample_dataset_180):
-        """Test BoundingBoxRegion.mask() with -180 to 180 longitude."""
+        """Test regions.BoundingBoxRegion.mask() with -180 to 180 longitude."""
         region = regions.BoundingBoxRegion.create_region(
             latitude_min=40.0,
             latitude_max=50.0,
@@ -387,7 +387,7 @@ class TestRegionMask:
         assert masked_dataset.longitude.max() <= -115.0 + 1
 
     def test_shapefile_region_mask_with_180_longitude(self, sample_dataset_180):
-        """Test ShapefileRegion.mask() with -180 to 180 longitude."""
+        """Test regions.ShapefileRegion.mask() with -180 to 180 longitude."""
         # Create polygon with -180 to 180 coordinates
         mock_polygon = shapely.Polygon(
             [(-120, 40), (-110, 40), (-110, 50), (-120, 50), (-120, 40)]
@@ -968,7 +968,7 @@ class TestCreateGeopandasFromBounds:
         )
 
         geometry = gdf.geometry.iloc[0]
-        # Should be a Multishapely.Polygon
+        # Should be a geometry.MultiPolygon
         assert isinstance(geometry, shapely.MultiPolygon)
         assert len(geometry.geoms) == 2
 
@@ -1028,7 +1028,7 @@ class TestTotalBounds:
     """Test the as_geopandas().total_bounds method for all Region subclasses."""
 
     def test_centered_region_total_bounds(self):
-        """Test CenteredRegion.as_geopandas().total_bounds method."""
+        """Test regions.CenteredRegion.as_geopandas().total_bounds method."""
         region = regions.CenteredRegion.create_region(
             latitude=45.0, longitude=-120.0, bounding_box_degrees=10.0
         )
@@ -1040,7 +1040,8 @@ class TestTotalBounds:
         assert coords[3] == 50.0
 
     def test_centered_region_total_bounds_tuple_box(self):
-        """Test CenteredRegion.as_geopandas().total_bounds with tuple bounding box."""
+        """Test regions.CenteredRegion.as_geopandas().total_bounds with tuple bounding
+        box."""
         region = regions.CenteredRegion.create_region(
             latitude=45.0, longitude=-120.0, bounding_box_degrees=(5.0, 10.0)
         )
@@ -1051,7 +1052,7 @@ class TestTotalBounds:
         assert coords[3] == 47.5
 
     def test_bounding_box_region_total_bounds(self):
-        """Test BoundingBoxRegion.as_geopandas().total_bounds method."""
+        """Test regions.BoundingBoxRegion.as_geopandas().total_bounds method."""
         region = regions.BoundingBoxRegion.create_region(
             latitude_min=40.0,
             latitude_max=50.0,
@@ -1068,7 +1069,7 @@ class TestTotalBounds:
         assert coords[3] == 50.0
 
     def test_shapefile_region_bounding_coordinates(self):
-        """Test ShapefileRegion.as_geopandas().total_bounds method."""
+        """Test regions.ShapefileRegion.as_geopandas().total_bounds method."""
         # Create a mock polygon with known bounds
         mock_polygon = shapely.Polygon(
             [(240, 40), (250, 40), (250, 50), (240, 50), (240, 40)]
@@ -1235,7 +1236,7 @@ class TestRegionIntegration:
         assert len(subset.latitude) < len(dataset.latitude)
         assert len(subset.longitude) < len(dataset.longitude)
 
-        # Test that ShapefileRegion supports drop parameter
+        # Test that regions.ShapefileRegion supports drop parameter
         mock_polygon = shapely.Polygon(
             [(240, 40), (250, 40), (250, 50), (240, 50), (240, 40)]
         )
@@ -1608,7 +1609,7 @@ class TestConvenienceFunctions:
         assert subset_cases.cases[0].case_id_number == 1
 
     def test_subset_cases_to_region_with_dict(self, sample_case_collection):
-        """Test subset_cases_to_region with dictionary."""
+        """Test regions.subset_cases_to_region with dictionary."""
         region_dict = {
             "latitude_min": 40.0,
             "latitude_max": 50.0,
@@ -1643,7 +1644,7 @@ class TestConvenienceFunctions:
         assert isinstance(subset_cases, type(sample_case_collection))
 
     def test_subset_cases_to_region_all_method(self, sample_case_collection):
-        """Test subset_cases_to_region with all method."""
+        """Test regions.subset_cases_to_region with all method."""
         # Create a region that contains case 1 completely
         large_region = regions.BoundingBoxRegion.create_region(
             latitude_min=40.0,
@@ -1660,7 +1661,7 @@ class TestConvenienceFunctions:
         assert len(subset_cases.cases) >= 1
 
     def test_subset_results_to_region_convenience(self, sample_case_collection):
-        """Test subset_results_to_region convenience function."""
+        """Test regions.subset_results_to_region convenience function."""
         # Create mock results
         results_df = pd.DataFrame(
             {
@@ -1809,7 +1810,7 @@ class TestRegionSubsettingEdgeCases:
 
 
 class TestAdjustBoundsToDatasetConvention:
-    """Test the _adjust_bounds_to_dataset_convention helper function."""
+    """Test the regions._adjust_bounds_to_dataset_convention helper function."""
 
     @pytest.fixture
     def dataset_360(self):
