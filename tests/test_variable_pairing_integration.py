@@ -1,4 +1,4 @@
-"""Integration tests for variable pairing in forecast vs target evaluations.
+"""Integration tests.
 
 This test suite validates that the evaluation system correctly pairs forecast and
 target variables using the zip() pairing logic, covering various scenarios:
@@ -19,13 +19,11 @@ import xarray as xr
 
 from extremeweatherbench import cases, evaluate, inputs, metrics, regions
 
-# =============================================================================
-# Test Fixtures
-# =============================================================================
-
 
 class MockMetric(metrics.BaseMetric):
     """A simple mock metric for testing."""
+
+    name = "MockMetric"
 
     @classmethod
     def _compute_metric(cls, forecast: xr.DataArray, target: xr.DataArray, **kwargs):
@@ -207,11 +205,6 @@ def create_case_operator(
     )
 
 
-# =============================================================================
-# Integration Tests
-# =============================================================================
-
-
 class TestVariablePairingIntegration:
     """Integration tests for variable pairing behavior."""
 
@@ -331,9 +324,9 @@ class TestVariablePairingIntegration:
 
         # Verify results
         assert isinstance(result, pd.DataFrame)
-        assert (
-            len(result) == 1
-        ), "Should have exactly one evaluation result (only first pairing)"
+        assert len(result) == 1, (
+            "Should have exactly one evaluation result (only first pairing)"
+        )
 
         # Check that only the first pairing was created: var_a <-> var_x
         assert result["target_variable"].iloc[0] == "var_x"
@@ -361,9 +354,9 @@ class TestVariablePairingIntegration:
 
         # Verify results
         assert isinstance(result, pd.DataFrame)
-        assert (
-            len(result) == 1
-        ), "Should have exactly one evaluation result (only first pairing)"
+        assert len(result) == 1, (
+            "Should have exactly one evaluation result (only first pairing)"
+        )
 
         # Check that only the first pairing was created: var_a <-> var_x
         assert result["target_variable"].iloc[0] == "var_x"
@@ -466,11 +459,6 @@ class TestVariablePairingIntegration:
         # with different underlying data patterns
         msg = "Different variable pairings should produce different metric values"
         assert len(set(values)) == 2, msg
-
-
-# =============================================================================
-# Test ExtremeWeatherBench Class with Variable Pairing
-# =============================================================================
 
 
 class TestExtremeWeatherBenchVariablePairing:
