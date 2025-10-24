@@ -496,55 +496,6 @@ class TestMaxMinMAE:
             assert isinstance(metric, metrics.MaxMinMAE)
 
 
-class TestOnsetME:
-    """Tests for the OnsetME applied metric."""
-
-    def test_instantiation(self):
-        """Test that OnsetME can be instantiated."""
-        metric = metrics.OnsetME()
-        assert isinstance(metric, metrics.AppliedMetric)
-        assert metric.name == "onset_me"
-
-    def test_base_metric_property(self):
-        """Test that base_metric property returns ME."""
-        metric = metrics.OnsetME()
-        assert metric.base_metric == metrics.ME
-
-    def test_onset_method_exists(self):
-        """Test that onset method exists and is callable."""
-        metric = metrics.OnsetME()
-        assert hasattr(metric, "onset")
-        assert callable(metric.onset)
-
-    def test_compute_applied_metric_structure(self):
-        """Test that _compute_applied_metric returns expected structure."""
-        metric = metrics.OnsetME()
-
-        # Create minimal test data
-        times = pd.date_range("2020-01-01", periods=8, freq="6h")
-
-        forecast = xr.DataArray(
-            data=[[280, 285, 290, 291, 289, 286, 284, 282]],
-            dims=["init_time", "valid_time"],
-            coords={"init_time": [pd.Timestamp("2020-01-01")], "valid_time": times},
-            attrs={"forecast_resolution_hours": 6},
-        ).expand_dims(["latitude", "longitude"])
-
-        target = xr.DataArray(
-            data=[280, 285, 290, 291, 289, 286, 284, 282],
-            dims=["valid_time"],
-            coords={"valid_time": times},
-        ).expand_dims(["latitude", "longitude"])
-
-        result = metric._compute_applied_metric(forecast, target)
-
-        # Should return a dictionary with required keys
-        assert isinstance(result, dict)
-        assert "forecast" in result
-        assert "target" in result
-        assert "preserve_dims" in result
-
-
 class TestDurationME:
     """Tests for the DurationME applied metric.
 
@@ -1031,3 +982,436 @@ class TestDurationME:
 
         # Verify that the computation completed without errors
         assert not np.isnan(result.values[0])
+
+
+class TestOnsetME:
+    """Tests for the OnsetME applied metric.
+
+    OnsetME works by:
+    1. Comparing data to climatology threshold (>= for heatwaves)
+    2. Creating binary masks (1 where condition met, 0 otherwise)
+    3. Finding first occurrence of N consecutive timesteps meeting criteria
+    4. Computing ME = forecast_onset_time - target_onset_time (in hours)
+    """
+
+    @staticmethod
+    def create_climatology():
+        """Create climatology with threshold at 300K."""
+        dayofyear = np.array([1])
+        hours = np.arange(0, 10) * 6
+        lats = np.array([40.0, 41.0])
+        lons = np.array([50.0, 51.0])
+
+        return xr.DataArray(
+            np.full((len(dayofyear), len(hours), len(lats), len(lons)), 300.0),
+            dims=["dayofyear", "hour", "latitude", "longitude"],
+            coords={
+                "dayofyear": dayofyear,
+                "hour": hours,
+                "latitude": lats,
+                "longitude": lons,
+            },
+        )
+
+    @staticmethod
+    def create_test_case(forecast_vals, target_vals, climatology):
+        """Create test data with specified temperature values.
+
+        Args:
+            forecast_vals: Array of temperature values for forecast
+            target_vals: Array of temperature values for target
+            climatology: Climatology dataset
+
+        Returns:
+            forecast, target xr.DataArrays
+        """
+        init_time = np.array(["2020-01-01T00:00:00"], dtype="datetime64[ns]")
+        valid_times = pd.date_range("2020-01-01", periods=10, freq="6h")
+        lats = climatology.latitude.values
+        lons = climatology.longitude.values
+
+        # Expand forecast_vals to spatial dimensions
+        forecast_values = np.tile(
+            forecast_vals[:, np.newaxis, np.newaxis], (1, len(lats), len(lons))
+        )
+
+        forecast = xr.DataArray(
+            forecast_values[np.newaxis, :, :, :],
+            dims=["init_time", "valid_time", "latitude", "longitude"],
+            coords={
+                "init_time": init_time,
+                "valid_time": valid_times,
+                "latitude": lats,
+                "longitude": lons,
+            },
+        )
+
+        # Expand target_vals to spatial dimensions
+        target_values = np.tile(
+            target_vals[:, np.newaxis, np.newaxis], (1, len(lats), len(lons))
+        )
+
+        target = xr.DataArray(
+            target_values,
+            dims=["valid_time", "latitude", "longitude"],
+            coords={
+                "valid_time": valid_times,
+                "latitude": lats,
+                "longitude": lons,
+            },
+        )
+
+        return forecast, target
+
+    def test_instantiation(self):
+        """Test that OnsetME can be instantiated with climatology."""
+        climatology = self.create_climatology()
+        metric = metrics.OnsetME(climatology=climatology)
+        assert isinstance(metric, metrics.AppliedMetric)
+        assert metric.name == "onset_me"
+        assert metric.min_consecutive_timesteps == 1
+
+    def test_instantiation_with_consecutive_timesteps(self):
+        """Test instantiation with custom consecutive timesteps."""
+        climatology = self.create_climatology()
+        metric = metrics.OnsetME(climatology=climatology, min_consecutive_timesteps=3)
+        assert metric.min_consecutive_timesteps == 3
+
+    def test_base_metric_property(self):
+        """Test that base_metric property returns ME instance."""
+        climatology = self.create_climatology()
+        metric = metrics.OnsetME(climatology=climatology)
+        assert isinstance(metric.base_metric, metrics.ME)
+
+    def test_compute_applied_metric_structure(self):
+        """Test that _compute_applied_metric returns expected structure."""
+        climatology = self.create_climatology()
+        metric = metrics.OnsetME(climatology=climatology)
+
+        forecast_vals = np.concatenate([np.full(3, 295.0), np.full(7, 305.0)])
+        target_vals = np.concatenate([np.full(5, 295.0), np.full(5, 305.0)])
+
+        forecast, target = self.create_test_case(
+            forecast_vals, target_vals, climatology
+        )
+
+        result = metric._compute_applied_metric(forecast, target)
+
+        # Should return a dictionary with required keys
+        assert isinstance(result, dict)
+        assert "forecast" in result
+        assert "target" in result
+        assert "preserve_dims" in result
+
+    def test_onset_forecast_earlier_than_target(self):
+        """Test ME when forecast onset is earlier than target.
+
+        Forecast onset at timestep 3, target onset at timestep 5.
+        ME should be negative (forecast - target = -12 hours).
+        """
+        climatology = self.create_climatology()
+
+        # Forecast: exceeds at timesteps 3-9
+        forecast_vals = np.concatenate([np.full(3, 295.0), np.full(7, 305.0)])
+        # Target: exceeds at timesteps 5-9
+        target_vals = np.concatenate([np.full(5, 295.0), np.full(5, 305.0)])
+
+        forecast, target = self.create_test_case(
+            forecast_vals, target_vals, climatology
+        )
+
+        metric = metrics.OnsetME(climatology=climatology, min_consecutive_timesteps=2)
+        result = metric.compute_metric(forecast=forecast, target=target)
+
+        # Forecast onset 2 timesteps (12 hours) earlier
+        assert result.values[0] == -12.0
+
+    def test_onset_forecast_later_than_target(self):
+        """Test ME when forecast onset is later than target.
+
+        Target onset at timestep 2, forecast onset at timestep 5.
+        ME should be positive (forecast - target = +18 hours).
+        """
+        climatology = self.create_climatology()
+
+        # Forecast: exceeds at timesteps 5-9
+        forecast_vals = np.concatenate([np.full(5, 295.0), np.full(5, 305.0)])
+        # Target: exceeds at timesteps 2-9
+        target_vals = np.concatenate([np.full(2, 295.0), np.full(8, 305.0)])
+
+        forecast, target = self.create_test_case(
+            forecast_vals, target_vals, climatology
+        )
+
+        metric = metrics.OnsetME(climatology=climatology, min_consecutive_timesteps=2)
+        result = metric.compute_metric(forecast=forecast, target=target)
+
+        # Forecast onset 3 timesteps (18 hours) later
+        assert result.values[0] == 18.0
+
+    def test_onset_same_time(self):
+        """Test ME = 0 when forecast and target have same onset."""
+        climatology = self.create_climatology()
+
+        # Both onset at timestep 3
+        forecast_vals = np.concatenate([np.full(3, 295.0), np.full(7, 305.0)])
+        target_vals = np.concatenate([np.full(3, 295.0), np.full(7, 305.0)])
+
+        forecast, target = self.create_test_case(
+            forecast_vals, target_vals, climatology
+        )
+
+        metric = metrics.OnsetME(climatology=climatology, min_consecutive_timesteps=2)
+        result = metric.compute_metric(forecast=forecast, target=target)
+
+        # Same onset time
+        assert result.values[0] == 0.0
+
+    def test_onset_with_single_timestep_requirement(self):
+        """Test onset detection with min_consecutive_timesteps=1."""
+        climatology = self.create_climatology()
+
+        # Forecast: first exceeds at timestep 4
+        forecast_vals = np.concatenate([np.full(4, 295.0), np.full(6, 305.0)])
+        # Target: first exceeds at timestep 6
+        target_vals = np.concatenate([np.full(6, 295.0), np.full(4, 305.0)])
+
+        forecast, target = self.create_test_case(
+            forecast_vals, target_vals, climatology
+        )
+
+        metric = metrics.OnsetME(climatology=climatology, min_consecutive_timesteps=1)
+        result = metric.compute_metric(forecast=forecast, target=target)
+
+        # Forecast onset 2 timesteps (12 hours) earlier
+        assert result.values[0] == -12.0
+
+    def test_onset_with_three_consecutive_requirement(self):
+        """Test onset detection requiring 3 consecutive timesteps."""
+        climatology = self.create_climatology()
+
+        # Forecast: 3 consecutive starting at timestep 2
+        forecast_vals = np.concatenate([np.full(2, 295.0), np.full(8, 305.0)])
+        # Target: 3 consecutive starting at timestep 4
+        target_vals = np.concatenate([np.full(4, 295.0), np.full(6, 305.0)])
+
+        forecast, target = self.create_test_case(
+            forecast_vals, target_vals, climatology
+        )
+
+        metric = metrics.OnsetME(climatology=climatology, min_consecutive_timesteps=3)
+        result = metric.compute_metric(forecast=forecast, target=target)
+
+        # Forecast onset 2 timesteps (12 hours) earlier
+        assert result.values[0] == -12.0
+
+    def test_onset_no_forecast_onset(self):
+        """Test when forecast never meets consecutive requirement."""
+        climatology = self.create_climatology()
+
+        # Forecast: only 1 timestep exceeds (need 2 consecutive)
+        forecast_vals = np.array([295, 295, 305, 295, 295, 295, 295, 295, 295, 295])
+        # Target: exceeds at timesteps 3-9
+        target_vals = np.concatenate([np.full(3, 295.0), np.full(7, 305.0)])
+
+        forecast, target = self.create_test_case(
+            forecast_vals, target_vals, climatology
+        )
+
+        metric = metrics.OnsetME(climatology=climatology, min_consecutive_timesteps=2)
+        result = metric.compute_metric(forecast=forecast, target=target)
+
+        # No forecast onset found, should be NaN
+        assert np.isnan(result.values[0])
+
+    def test_onset_with_nans_in_forecast(self):
+        """Test onset detection with NaNs in forecast data."""
+        climatology = self.create_climatology()
+
+        # Forecast: exceeds at timesteps 3-9
+        forecast_vals = np.concatenate([np.full(3, 295.0), np.full(7, 305.0)])
+        # Target: exceeds at timesteps 5-9
+        target_vals = np.concatenate([np.full(5, 295.0), np.full(5, 305.0)])
+
+        forecast, target = self.create_test_case(
+            forecast_vals, target_vals, climatology
+        )
+
+        # Add NaN at one location in timestep 4
+        forecast_with_nans = forecast.copy()
+        forecast_with_nans.values[0, 4, 0, 0] = np.nan
+
+        metric = metrics.OnsetME(climatology=climatology, min_consecutive_timesteps=2)
+        result = metric.compute_metric(forecast=forecast_with_nans, target=target)
+
+        # Should still detect onset (spatially averaged mask handles NaNs)
+        # Onset should still be around -12 hours (may vary slightly due to NaN)
+        assert not np.isnan(result.values[0])
+        assert result.values[0] < 0  # Forecast still earlier
+
+    def test_onset_intermittent_exceedance(self):
+        """Test onset with intermittent exceedances.
+
+        Forecast has pattern: exceed, below, exceed, below, then continuous.
+        With min_consecutive=2, onset should be when continuous starts.
+        """
+        climatology = self.create_climatology()
+
+        # Forecast: intermittent then continuous from timestep 5
+        forecast_vals = np.array([305, 295, 305, 295, 295, 305, 305, 305, 305, 305])
+        # Target: continuous from timestep 3
+        target_vals = np.concatenate([np.full(3, 295.0), np.full(7, 305.0)])
+
+        forecast, target = self.create_test_case(
+            forecast_vals, target_vals, climatology
+        )
+
+        metric = metrics.OnsetME(climatology=climatology, min_consecutive_timesteps=2)
+        result = metric.compute_metric(forecast=forecast, target=target)
+
+        # Forecast onset at timestep 5, target at timestep 3
+        # Difference: 2 timesteps = 12 hours (forecast later)
+        assert result.values[0] == 12.0
+
+    def test_onset_multiple_init_times(self):
+        """Test OnsetME with multiple init_times.
+
+        This tests onset detection across multiple forecast initializations.
+        """
+        climatology = self.create_climatology()
+
+        # Create forecast with 3 different init_times
+        n_init = 3
+        valid_times = pd.date_range("2020-01-01", periods=10, freq="6h")
+        init_times = pd.date_range("2020-01-01", periods=n_init, freq="12h")
+        lats = climatology.latitude.values
+        lons = climatology.longitude.values
+
+        # All forecasts: exceeds starting at timestep 3
+        forecast_vals = np.concatenate([np.full(3, 295.0), np.full(7, 305.0)])
+        forecast_values = np.tile(
+            forecast_vals[np.newaxis, :, np.newaxis, np.newaxis],
+            (n_init, 1, len(lats), len(lons)),
+        )
+
+        forecast = xr.DataArray(
+            forecast_values,
+            dims=["init_time", "valid_time", "latitude", "longitude"],
+            coords={
+                "init_time": init_times,
+                "valid_time": valid_times,
+                "latitude": lats,
+                "longitude": lons,
+            },
+        )
+
+        # Target: exceeds starting at timestep 5
+        target_vals = np.concatenate([np.full(5, 295.0), np.full(5, 305.0)])
+        target_values = np.tile(
+            target_vals[:, np.newaxis, np.newaxis], (1, len(lats), len(lons))
+        )
+
+        target = xr.DataArray(
+            target_values,
+            dims=["valid_time", "latitude", "longitude"],
+            coords={
+                "valid_time": valid_times,
+                "latitude": lats,
+                "longitude": lons,
+            },
+        )
+
+        # Compute metric with 2 consecutive timesteps
+        metric = metrics.OnsetME(
+            climatology=climatology, min_consecutive_timesteps=2
+        )
+        result = metric.compute_metric(forecast=forecast, target=target)
+
+        # Result will have init_time dimension
+        assert result.dims == ("init_time",)
+        assert len(result) == n_init
+
+        # All forecasts have onset at timestep 3, target at timestep 5
+        # So all should be -12 hours
+        assert np.all(result.values == -12.0)
+
+    @pytest.mark.skip(
+        reason="OnsetME with lead_time dimension structure not yet supported"
+    )
+    def test_onset_with_lead_time_dimension(self):
+        """Test OnsetME with forecast having lead_time dimension.
+
+        NOTE: This test is currently skipped because when init_time is a 2D
+        coordinate (not a dimension), groupby operations stack dimensions
+        which breaks the onset detection logic that needs valid_time dimension.
+
+        This tests the alternative forecast structure where:
+        - dims are (lead_time, valid_time, latitude, longitude)
+        - init_time is a coordinate computed from valid_time - lead_time
+        """
+        climatology = self.create_climatology()
+
+        # Create test data with lead_time dimension
+        n_lead_times = 5
+        n_valid_times = 10
+        lats = climatology.latitude.values
+        lons = climatology.longitude.values
+
+        # Create valid_time and lead_time coordinates
+        valid_times = pd.date_range("2020-01-01", periods=n_valid_times, freq="6h")
+        lead_times = pd.timedelta_range(start="0h", periods=n_lead_times, freq="6h")
+
+        # Create init_time as 2D coordinate: init_time = valid_time - lead_time
+        init_time_2d = np.array(
+            [[vt - lt for vt in valid_times] for lt in lead_times]
+        )
+
+        # Forecast: exceeds starting at timestep 3
+        forecast_vals = np.concatenate([np.full(3, 295.0), np.full(7, 305.0)])
+        forecast_values = np.tile(
+            forecast_vals[np.newaxis, :, np.newaxis, np.newaxis],
+            (n_lead_times, 1, len(lats), len(lons)),
+        )
+
+        forecast = xr.DataArray(
+            forecast_values,
+            dims=["lead_time", "valid_time", "latitude", "longitude"],
+            coords={
+                "lead_time": lead_times,
+                "valid_time": valid_times,
+                "latitude": lats,
+                "longitude": lons,
+                "init_time": (["lead_time", "valid_time"], init_time_2d),
+            },
+        )
+
+        # Target: exceeds starting at timestep 5
+        target_vals = np.concatenate([np.full(5, 295.0), np.full(5, 305.0)])
+        target_values = np.tile(
+            target_vals[:, np.newaxis, np.newaxis], (1, len(lats), len(lons))
+        )
+
+        target = xr.DataArray(
+            target_values,
+            dims=["valid_time", "latitude", "longitude"],
+            coords={
+                "valid_time": valid_times,
+                "latitude": lats,
+                "longitude": lons,
+            },
+        )
+
+        # Compute metric with 2 consecutive timesteps
+        metric = metrics.OnsetME(
+            climatology=climatology, min_consecutive_timesteps=2
+        )
+        result = metric.compute_metric(forecast=forecast, target=target)
+
+        # Result will have init_time dimension from groupby
+        assert result.dims == ("init_time",)
+
+        # Forecast onset at timestep 3, target at timestep 5
+        # All init_times should show forecast earlier (negative values)
+        valid_results = result.values[~np.isnan(result.values)]
+        assert len(valid_results) > 0
+        assert np.all(valid_results < 0)

@@ -832,51 +832,182 @@ class MaxMinMAE(AppliedMetric):
 
 
 class OnsetME(AppliedMetric):
-    base_metric = ME()
+    """Compute the mean error between forecast and target onset times.
+
+    This metric finds the first time when the criteria is met for a
+    specified number of consecutive timesteps, then computes the mean
+    error between forecast and target onset times.
+
+    Args:
+        climatology: The climatology dataset for the threshold criteria.
+        min_consecutive_timesteps: Minimum number of consecutive timesteps
+            that must meet the criteria to be considered onset. Default is 1.
+        criteria_sign: Comparison operator (">", ">=", "<", "<=", "==").
+            Default is ">=" for heatwave detection.
+
+    Returns:
+        The mean error (in hours) between forecast and target onset times.
+    """
+
     preserve_dims: str = "init_time"
+    criteria_sign: Literal[">", ">=", "<", "<=", "=="] = ">="
     name = "onset_me"
 
-    def onset(self, forecast: xr.DataArray, **kwargs) -> xr.DataArray:
-        if (forecast.valid_time.max() - forecast.valid_time.min()).values.astype(
-            "timedelta64[h]"
-        ) >= 48:
-            # get the forecast resolution hours from the kwargs, otherwise default to 6
-            num_timesteps = 24 // kwargs.get("forecast_resolution_hours", 6)
-            if num_timesteps is None:
-                return xr.DataArray(np.datetime64("NaT", "ns"))
-            min_daily_vals = forecast.groupby("valid_time.dayofyear").map(
-                utils.min_if_all_timesteps_present,
-                time_resolution_hours=utils.determine_temporal_resolution(forecast),
+    def __init__(
+        self,
+        climatology: xr.DataArray,
+        min_consecutive_timesteps: int = 1,
+    ):
+        self.climatology = climatology
+        self.min_consecutive_timesteps = min_consecutive_timesteps
+
+    @property
+    def base_metric(self) -> type[BaseMetric]:
+        return ME()
+
+    def _find_onset_time(self, data: xr.DataArray, mask: xr.DataArray) -> xr.DataArray:
+        """Find the first time where criteria is met for N consecutive steps.
+
+        Args:
+            data: Input data array with valid_time dimension
+            mask: Boolean mask where condition is met
+
+        Returns:
+            DataArray containing the onset time (or NaT if not found)
+        """
+        # Get time dimension
+        time_dim = "valid_time"
+        if time_dim not in mask.dims:
+            return xr.DataArray(np.datetime64("NaT", "ns"))
+
+        # Convert mask to float for easier processing
+        mask_float = mask.astype(float)
+
+        # Check for consecutive timesteps
+        n_times = mask.sizes[time_dim]
+        if n_times < self.min_consecutive_timesteps:
+            return xr.DataArray(np.datetime64("NaT", "ns"))
+
+        # Find first occurrence of N consecutive True values
+        for i in range(n_times - self.min_consecutive_timesteps + 1):
+            window = mask_float.isel(
+                {time_dim: slice(i, i + self.min_consecutive_timesteps)}
             )
-            if min_daily_vals.size >= 2:  # Check if we have at least 2 values
-                for i in range(min_daily_vals.size - 1):
-                    # TODO: CHANGE LOGIC; define forecast heatwave onset
-                    if min_daily_vals[i] >= 288.15 and min_daily_vals[i + 1] >= 288.15:
-                        return xr.DataArray(
-                            forecast.where(
-                                forecast["valid_time"].dt.dayofyear
-                                == min_daily_vals.dayofyear[i],
-                                drop=True,
-                            )
-                            .valid_time[0]
-                            .values
-                        )
+            # Check if all values in window are True (== 1.0)
+            # Mean over time_dim only - mask should already be spatially averaged
+            window_mean = window.mean(dim=time_dim, skipna=True)
+            # If there are other dims (e.g., lead_time), check all are 1.0
+            if window_mean.ndim == 0:
+                # Scalar case
+                if float(window_mean) == 1.0:
+                    onset_time = data[time_dim].isel({time_dim: i})
+                    return onset_time
+            else:
+                # Array case - check if all values are 1.0
+                if bool((window_mean == 1.0).all()):
+                    onset_time = data[time_dim].isel({time_dim: i})
+                    return onset_time
+
+        # No onset found
         return xr.DataArray(np.datetime64("NaT", "ns"))
 
     def _compute_applied_metric(
-        self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
+        self,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
     ) -> Any:
-        target_time = target.valid_time[0] + np.timedelta64(48, "h")
-        forecast = (
-            _reduce_duck_array(
-                forecast, func=np.nanmean, reduce_dims=["latitude", "longitude"]
-            )
-            .groupby("init_time")
-            .map(self.onset)
+        """Compute spatially averaged onset time mean error.
+
+        Args:
+            forecast: Forecast dataset with dims (init_time, lead_time, valid_time)
+            target: Target dataset with dims (valid_time)
+
+        Returns:
+            Mean error (hours) between forecast and target onset times
+        """
+        climatology_time = convert_day_yearofday_to_time(
+            self.climatology, forecast.valid_time.dt.year.values[0]
         )
+        spatial_dims = [
+            dim
+            for dim in forecast.dims
+            if dim not in ["init_time", "lead_time", "valid_time"]
+        ]
+
+        # If target is sparse, stack the data
+        if isinstance(target.data, sparse.COO):
+            forecast = utils.stack_sparse_data_from_dims(forecast, spatial_dims)
+            target = utils.stack_sparse_data_from_dims(target, spatial_dims)
+
+            climatology_time = climatology_time.interp(
+                latitude=target["stacked"]["latitude"],
+                longitude=target["stacked"]["longitude"],
+                method="nearest",
+                kwargs={"fill_value": None},
+            )
+        else:
+            climatology_time = climatology_time.interp_like(
+                target, method="nearest", kwargs={"fill_value": None}
+            )
+
+        # Create comparison masks
+        forecast_mask = create_comparison_mask(
+            forecast, climatology_time, self.criteria_sign
+        )
+        target_mask = create_comparison_mask(
+            target, climatology_time, self.criteria_sign
+        )
+
+        # Spatially average the masks (mean over spatial dims)
+        for dim in spatial_dims:
+            if dim in forecast_mask.dims:
+                forecast_mask = forecast_mask.mean(dim=dim, skipna=True)
+            if dim in target_mask.dims:
+                target_mask = target_mask.mean(dim=dim, skipna=True)
+
+        # Threshold averaged mask (>=0.5 means majority of points meet criteria)
+        forecast_mask = forecast_mask >= 0.5
+        target_mask = target_mask >= 0.5
+
+        # Check if init_time is a dimension or just a coordinate
+        has_init_time_dim = "init_time" in forecast.dims
+        
+        # Find onset times for each init_time
+        if has_init_time_dim:
+            forecast_onset = forecast.groupby("init_time").map(
+                lambda x: self._find_onset_time(
+                    x, forecast_mask.sel(init_time=x.init_time.values[0])
+                )
+            )
+        else:
+            # For lead_time structure, group by init_time coordinate
+            forecast_onset = forecast.groupby("init_time").map(
+                lambda x: self._find_onset_time(x, forecast_mask)
+            )
+
+        target_onset = self._find_onset_time(target, target_mask)
+
+        # Convert onset times to hours since a reference time
+        # Use target onset as reference for easier interpretation
+        if not pd.isna(target_onset.values):
+            ref_time = pd.Timestamp(target_onset.values)
+            # Convert forecast onset to hours difference
+            forecast_onset_hours = xr.apply_ufunc(
+                lambda t: (pd.Timestamp(t) - ref_time).total_seconds() / 3600
+                if not pd.isna(t)
+                else np.nan,
+                forecast_onset,
+                vectorize=True,
+            )
+            target_onset_hours = xr.DataArray(0.0)  # Reference is 0
+        else:
+            # If no target onset, use NaN
+            forecast_onset_hours = xr.full_like(forecast_onset, np.nan, dtype=float)
+            target_onset_hours = xr.DataArray(np.nan)
+
         return {
-            "forecast": forecast,
-            "target": target_time,
+            "forecast": forecast_onset_hours,
+            "target": target_onset_hours,
             "preserve_dims": self.preserve_dims,
         }
 

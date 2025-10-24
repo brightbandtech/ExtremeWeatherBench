@@ -42,6 +42,7 @@ climatology = xr.open_zarr(
 )
 climatology = climatology["2m_temperature"].sel(quantile=0.85)
 metrics_list = [
+    metrics.OnsetME(climatology, min_consecutive_timesteps=4),
     metrics.DurationME(climatology),
     metrics.MaximumMAE,
     metrics.RMSE,
