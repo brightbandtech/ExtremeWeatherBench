@@ -14,12 +14,12 @@ from extremeweatherbench import regions, utils
 
 
 class TestRegionClasses:
-    """Test the Region base class and its subclasses."""
+    """Test the regions.Region base class and its subclasses."""
 
     def test_region_base_class(self):
-        """Test that Region is an abstract base class that cannot be
+        """Test that regions.Region is an abstract base class that cannot be
         instantiated."""
-        # Region is now abstract and cannot be instantiated
+        # regions.Region is now abstract and cannot be instantiated
         with pytest.raises(TypeError, match="Can't instantiate abstract class"):
             regions.Region()
 
@@ -93,7 +93,7 @@ class TestRegionClasses:
 
 
 class TestRegionToGeopandas:
-    """Test the to_geopandas() method for all Region subclasses."""
+    """Test the to_geopandas() method for all regions.Region subclasses."""
 
     def test_centered_region_to_geopandas_single_box(self):
         """Test regions.CenteredRegion.geopandas with single bounding box."""
@@ -229,7 +229,7 @@ class TestRegionToGeopandas:
 
 
 class TestRegionMask:
-    """Test the mask() method for all Region subclasses."""
+    """Test the mask() method for all regions.Region subclasses."""
 
     @pytest.fixture
     def sample_dataset(self):
@@ -595,10 +595,10 @@ class TestRegionMask:
 
 
 class TestRegionInheritance:
-    """Test that all region types properly inherit from Region."""
+    """Test that all region types properly inherit from regions.Region."""
 
     def test_region_inheritance(self):
-        """Test that all region types properly inherit from Region."""
+        """Test that all region types properly inherit from regions.Region."""
         # Test regions.CenteredRegion
         centered = regions.CenteredRegion.create_region(
             latitude=45.0, longitude=-120.0, bounding_box_degrees=10.0
@@ -1025,7 +1025,7 @@ class TestCreateGeopandasFromBounds:
 
 
 class TestTotalBounds:
-    """Test the as_geopandas().total_bounds method for all Region subclasses."""
+    """Test the as_geopandas().total_bounds method for all regions.Region subclasses."""
 
     def test_centered_region_total_bounds(self):
         """Test regions.CenteredRegion.as_geopandas().total_bounds method."""
@@ -1356,7 +1356,7 @@ class TestRegionGeometricOperations:
 
 
 class TestRegionSubsetter:
-    """Test the  regions.RegionSubsetter class."""
+    """Test the regions.RegionSubsetter class."""
 
     @pytest.fixture
     def target_region(self):
@@ -1423,7 +1423,7 @@ class TestRegionSubsetter:
         )
 
     def test_subsetter_initialization_with_region(self, target_region):
-        """Test  regions.RegionSubsetter initialization with Region object."""
+        """Test regions.RegionSubsetter initialization with Region object."""
         subsetter = regions.RegionSubsetter(
             region=target_region, method="intersects", percent_threshold=0.5
         )
@@ -1433,7 +1433,7 @@ class TestRegionSubsetter:
         assert subsetter.percent_threshold == 0.5
 
     def test_subsetter_initialization_with_dict(self):
-        """Test  regions.RegionSubsetter initialization with dictionary."""
+        """Test regions.RegionSubsetter initialization with dictionary."""
         region_dict = {
             "latitude_min": 40.0,
             "latitude_max": 50.0,
