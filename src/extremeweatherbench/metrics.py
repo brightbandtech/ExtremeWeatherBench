@@ -1,10 +1,9 @@
+import abc
 import logging
-from abc import ABC, abstractmethod
 from typing import Any
 
 import numpy as np
 import scores
-import scores.categorical as cat  # type: ignore[import-untyped]
 import xarray as xr
 
 from extremeweatherbench import utils
@@ -12,7 +11,7 @@ from extremeweatherbench import utils
 logger = logging.getLogger(__name__)
 
 
-class BaseMetric(ABC):
+class BaseMetric(abc.ABC):
     """A BaseMetric class is an abstract class that defines the foundational interface
     for all metrics.
 
@@ -29,7 +28,7 @@ class BaseMetric(ABC):
         return self.__class__.__name__
 
     @classmethod
-    @abstractmethod
+    @abc.abstractmethod
     def _compute_metric(
         cls,
         forecast: xr.DataArray,
@@ -59,7 +58,7 @@ class BaseMetric(ABC):
         )
 
 
-class AppliedMetric(ABC):
+class AppliedMetric(abc.ABC):
     """An applied metric is a derivative of a BaseMetric.
 
     It is a wrapper around one or more BaseMetrics that is intended for more
@@ -78,7 +77,7 @@ class AppliedMetric(ABC):
         return self.__class__.__name__
 
     @property
-    @abstractmethod
+    @abc.abstractmethod
     def base_metric(self) -> type[BaseMetric]:
         pass
 
@@ -107,7 +106,7 @@ class AppliedMetric(ABC):
         # Then compute the base metric with the applied result
         return self.base_metric._compute_metric(**applied_result, **base_metric_kwargs)
 
-    @abstractmethod
+    @abc.abstractmethod
     def _compute_applied_metric(
         self,
         forecast: xr.DataArray,
@@ -133,7 +132,7 @@ class BinaryContingencyTable(BaseMetric):
         **kwargs: Any,
     ) -> Any:
         preserve_dims = kwargs.get("preserve_dims", "lead_time")
-        return cat.BinaryContingencyManager(
+        return scores.categorical.BinaryContingencyManager(
             forecast, target, preserve_dims=preserve_dims
         )
 

@@ -2,10 +2,10 @@
 specialized package."""
 
 import datetime
+import importlib
 import inspect
 import logging
-from importlib import resources
-from pathlib import Path
+import pathlib
 from typing import Any, Callable, Optional, Union
 
 import numpy as np
@@ -64,20 +64,22 @@ def load_events_yaml():
     )
     import extremeweatherbench.data
 
-    events_yaml_file = resources.files(extremeweatherbench.data).joinpath("events.yaml")
-    with resources.as_file(events_yaml_file) as file:
+    events_yaml_file = importlib.resources.files(extremeweatherbench.data).joinpath(
+        "events.yaml"
+    )
+    with importlib.resources.as_file(events_yaml_file) as file:
         yaml_event_case = read_event_yaml(file)
 
     return yaml_event_case
 
 
-def read_event_yaml(input_pth: str | Path) -> dict:
+def read_event_yaml(input_pth: str | pathlib.Path) -> dict:
     """Read events yaml from data."""
     logger.warning(
         "This function is deprecated and will be removed in a future release. "
         "Please use cases.read_incoming_yaml instead."
     )
-    input_pth = Path(input_pth)
+    input_pth = pathlib.Path(input_pth)
     with open(input_pth, "rb") as f:
         yaml_event_case = yaml.safe_load(f)
     return yaml_event_case
