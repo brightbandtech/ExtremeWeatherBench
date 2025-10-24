@@ -32,11 +32,20 @@ from extremeweatherbench import cases, defaults, evaluate, utils
     help="Optional directory for caching intermediate data",
 )
 @click.option(
-    "--parallel",
-    "-p",
+    "--n-jobs",
     type=int,
     default=1,
-    help="Number of parallel jobs using joblib (default: 1 for serial execution)",
+    help="Number of parallel jobs to run (default: 1 for serial execution)",
+)
+@click.option(
+    "--parallel-config",
+    "-p",
+    type=dict,
+    default=None,
+    help=(
+        "Advanced parallel configuration using joblib. Takes precedence over "
+        "--n-jobs if provided."
+    ),
 )
 @click.option(
     "--save-case-operators",
@@ -56,7 +65,8 @@ def cli_runner(
     config_file: Optional[str],
     output_dir: Optional[str],
     cache_dir: Optional[str],
-    parallel: int,
+    n_jobs: int,
+    parallel_config: Optional[dict],
     save_case_operators: Optional[str],
     precompute: bool,
 ):
@@ -75,12 +85,24 @@ def cli_runner(
     The CLI can run evaluations in serial or parallel using joblib, and optionally
     save CaseOperator objects for later use or inspection.
 
+    Args:
+        default: Use default Brightband evaluation objects with current directory as
+        output
+        config_file: Path to a config.py file containing evaluation objects
+        output_dir: Directory for analysis outputs (default: current directory)
+        cache_dir: Optional directory for caching intermediate data
+        parallel_config: Parallel configuration using joblib (default: {'backend':
+        'threading', 'n_jobs': 8})
+        save_case_operators: Save CaseOperator objects to a pickle file at this path
+        precompute: Pre-compute datasets before running metrics to avoid recomputing
+        them for each metric (faster but uses more memory)
+
     Examples:
         # Use default evaluation objects
         $ ewb --default
 
         # Use custom config file with parallel execution
-        $ ewb --config-file my_config.py --parallel 4
+        $ ewb --config-file my_config.py --n-jobs 4
 
         # Save case operators to pickle file
         $ ewb --default --save-case-operators case_ops.pkl
@@ -90,6 +112,9 @@ def cli_runner(
 
         # Use precompute for faster execution (higher memory usage)
         $ ewb --default --precompute
+
+        # Use custom parallel configuration
+        $ ewb --default --parallel-config '{"backend": "dask", "n_jobs": 4}'
     """
     # Store original output_dir value before setting default
     original_output_dir = output_dir
@@ -108,7 +133,8 @@ def cli_runner(
         args_provided = (
             original_output_dir is not None
             or cache_dir is not None
-            or parallel != 1
+            or n_jobs != 1
+            or parallel_config is not None
             or save_case_operators is not None
             or precompute
         )
@@ -155,11 +181,25 @@ def cli_runner(
             pickle.dump(case_operators, f)
         click.echo(f"Case operators saved to {save_case_operators}")
 
+    # Build final parallel configuration - parallel_config always takes precedence
+    if parallel_config is not None:
+        # Use provided parallel_config (takes precedence)
+        final_parallel_config = parallel_config
+    elif n_jobs > 1:
+        # Build parallel_config from n_jobs option
+        final_parallel_config = {"backend": "threading", "n_jobs": n_jobs}
+    else:
+        # Serial execution
+        final_parallel_config = None
+
     # Run evaluation
-    if parallel > 1:
-        click.echo(f"Running evaluation with {parallel} parallel jobs...")
+    if final_parallel_config is not None and final_parallel_config.get("n_jobs", 1) > 1:
+        num_jobs = final_parallel_config["n_jobs"]
+        click.echo(f"Running evaluation with {num_jobs} parallel jobs...")
         results_list = evaluate._run_parallel(
-            case_operators, parallel, pre_compute=precompute
+            case_operators,
+            parallel_config=final_parallel_config,
+            pre_compute=precompute,
         )
         results = (
             utils._safe_concat(results_list, ignore_index=True)
