@@ -923,7 +923,7 @@ class DurationME(AppliedMetric):
         forecast: xr.DataArray,
         target: xr.DataArray,
     ) -> Any:
-        """Compute spatially averaged heatwave duration mean error.
+        """Compute spatially averaged duration mean error.
 
         Args:
             forecast: Forecast dataset with dims (init_time, lead_time, valid_time)
