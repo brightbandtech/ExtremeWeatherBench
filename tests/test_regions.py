@@ -254,7 +254,7 @@ class TestRegionMask:
         )
 
     def test_centered_region_mask(self, sample_dataset):
-        """Test CenteredRegion.mask() method."""
+        """Test regions.CenteredRegion.mask() method."""
         region = regions.CenteredRegion.create_region(
             latitude=45.0, longitude=240.0, bounding_box_degrees=10.0
         )
@@ -1592,7 +1592,7 @@ class TestConvenienceFunctions:
         return cases.IndividualCaseCollection(cases=[case1, case2])
 
     def test_subset_cases_to_region_with_region_object(self, sample_case_collection):
-        """Test subset_cases_to_region with Region object."""
+        """Test regions.subset_cases_to_region with Region object."""
         target_region = regions.BoundingBoxRegion.create_region(
             latitude_min=40.0,
             latitude_max=50.0,
@@ -1625,7 +1625,7 @@ class TestConvenienceFunctions:
         assert subset_cases.cases[0].case_id_number == 1
 
     def test_subset_cases_to_region_with_percent_method(self, sample_case_collection):
-        """Test subset_cases_to_region with percent method."""
+        """Test regions.subset_cases_to_region with percent method."""
         target_region = regions.BoundingBoxRegion.create_region(
             latitude_min=40.0,
             latitude_max=50.0,
