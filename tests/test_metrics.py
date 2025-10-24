@@ -1322,9 +1322,7 @@ class TestOnsetME:
         )
 
         # Compute metric with 2 consecutive timesteps
-        metric = metrics.OnsetME(
-            climatology=climatology, min_consecutive_timesteps=2
-        )
+        metric = metrics.OnsetME(climatology=climatology, min_consecutive_timesteps=2)
         result = metric.compute_metric(forecast=forecast, target=target)
 
         # Result will have init_time dimension
@@ -1362,9 +1360,7 @@ class TestOnsetME:
         lead_times = pd.timedelta_range(start="0h", periods=n_lead_times, freq="6h")
 
         # Create init_time as 2D coordinate: init_time = valid_time - lead_time
-        init_time_2d = np.array(
-            [[vt - lt for vt in valid_times] for lt in lead_times]
-        )
+        init_time_2d = np.array([[vt - lt for vt in valid_times] for lt in lead_times])
 
         # Forecast: exceeds starting at timestep 3
         forecast_vals = np.concatenate([np.full(3, 295.0), np.full(7, 305.0)])
@@ -1402,9 +1398,7 @@ class TestOnsetME:
         )
 
         # Compute metric with 2 consecutive timesteps
-        metric = metrics.OnsetME(
-            climatology=climatology, min_consecutive_timesteps=2
-        )
+        metric = metrics.OnsetME(climatology=climatology, min_consecutive_timesteps=2)
         result = metric.compute_metric(forecast=forecast, target=target)
 
         # Result will have init_time dimension from groupby

@@ -971,7 +971,7 @@ class OnsetME(AppliedMetric):
 
         # Check if init_time is a dimension or just a coordinate
         has_init_time_dim = "init_time" in forecast.dims
-        
+
         # Find onset times for each init_time
         if has_init_time_dim:
             forecast_onset = forecast.groupby("init_time").map(
