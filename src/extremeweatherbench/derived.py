@@ -1,5 +1,5 @@
+import abc
 import logging
-from abc import ABC, abstractmethod
 from typing import List, Type, Union
 
 import xarray as xr
@@ -7,7 +7,7 @@ import xarray as xr
 logger = logging.getLogger(__name__)
 
 
-class DerivedVariable(ABC):
+class DerivedVariable(abc.ABC):
     """An abstract base class defining the interface for ExtremeWeatherBench
     derived variables.
 
@@ -40,7 +40,7 @@ class DerivedVariable(ABC):
         return self.__class__.__name__
 
     @classmethod
-    @abstractmethod
+    @abc.abstractmethod
     def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
         """Derive the variable from the required variables.
 
@@ -77,7 +77,7 @@ class DerivedVariable(ABC):
 
 
 def maybe_derive_variables(
-    dataset: xr.Dataset,
+    data: xr.Dataset,
     variables: list[Union[str, DerivedVariable, Type[DerivedVariable]]],
     **kwargs,
 ) -> xr.Dataset:
@@ -88,7 +88,7 @@ def maybe_derive_variables(
     variable. If there are multiple derived variables, the first one will be used.
 
     Args:
-        ds: The dataset, ideally already subset in case of in memory operations
+        data: The data, ideally already subset in case of in memory operations
             in the derived variables.
         variables: The potential variables to derive as a list of strings or
             DerivedVariable objects.
@@ -103,7 +103,7 @@ def maybe_derive_variables(
 
     if not maybe_derived_variables:
         logger.debug("No derived variables for dataset type.")
-        return dataset
+        return data
 
     if len(maybe_derived_variables) > 1:
         logger.warning(
@@ -114,7 +114,7 @@ def maybe_derive_variables(
 
     # Take the first derived variable and process it
     derived_variable = maybe_derived_variables[0]
-    output = derived_variable.compute(data=dataset, **kwargs)
+    output = derived_variable.compute(data=data, **kwargs)
 
     # Ensure the DataArray has the correct name and is a DataArray.
     # Some derived variables return a dataset (multiple variables), so we need
@@ -138,7 +138,7 @@ def maybe_derive_variables(
         f"Derived variable {derived_variable.name} returned neither DataArray nor "
         "Dataset. Returning original dataset."
     )
-    return dataset
+    return data
 
 
 def maybe_pull_required_variables_from_derived_input(

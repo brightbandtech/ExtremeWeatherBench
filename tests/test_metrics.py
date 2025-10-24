@@ -1,4 +1,4 @@
-"""Tests for the extremeweatherbench.metrics module."""
+"""Tests for the metrics module."""
 
 import numpy as np
 import pandas as pd
@@ -20,6 +20,8 @@ class TestBaseMetric:
         """Test that the name property returns the class name."""
 
         class TestConcreteMetric(metrics.BaseMetric):
+            name = "TestConcreteMetric"
+
             @classmethod
             def _compute_metric(cls, forecast, target, **kwargs):
                 return forecast - target
@@ -31,6 +33,8 @@ class TestBaseMetric:
         """Test that compute_metric method exists and is callable."""
 
         class TestConcreteMetric(metrics.BaseMetric):
+            name = "TestConcreteMetric"
+
             @classmethod
             def _compute_metric(cls, forecast, target, **kwargs):
                 return forecast - target
@@ -293,7 +297,8 @@ class TestMaxMinMAE:
             assert "target" in result
             assert "preserve_dims" in result
         except Exception:
-            # If computation fails due to data structure issues, at least test instantiation works
+            # If computation fails due to data structure issues, at least test
+            # instantiation works
             assert isinstance(metric, metrics.MaxMinMAE)
 
 
