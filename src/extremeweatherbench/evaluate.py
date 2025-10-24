@@ -148,7 +148,7 @@ def _run_parallel(
     run_results = joblib.Parallel(n_jobs=n_jobs)(
         # None is the cache_dir, we can't cache in parallel mode
         joblib.delayed(compute_case_operator)(case_operator, None, **kwargs)
-        for case_operator in case_operators
+        for case_operator in tqdm(case_operators)
     )
     return run_results
 
