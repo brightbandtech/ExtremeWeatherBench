@@ -3,9 +3,9 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 import numpy as np
+import scores
 import scores.categorical as cat  # type: ignore[import-untyped]
 import xarray as xr
-from scores.continuous import mae, mean_error, rmse  # type: ignore[import-untyped]
 
 from extremeweatherbench import utils
 
@@ -147,7 +147,7 @@ class MAE(BaseMetric):
         **kwargs: Any,
     ) -> Any:
         preserve_dims = kwargs.get("preserve_dims", "lead_time")
-        return mae(forecast, target, preserve_dims=preserve_dims)
+        return scores.continuous.mae(forecast, target, preserve_dims=preserve_dims)
 
 
 class ME(BaseMetric):
@@ -159,7 +159,9 @@ class ME(BaseMetric):
         **kwargs: Any,
     ) -> Any:
         preserve_dims = kwargs.get("preserve_dims", "lead_time")
-        return mean_error(forecast, target, preserve_dims=preserve_dims)
+        return scores.continuous.mean_error(
+            forecast, target, preserve_dims=preserve_dims
+        )
 
 
 class RMSE(BaseMetric):
@@ -171,7 +173,7 @@ class RMSE(BaseMetric):
         **kwargs: Any,
     ) -> Any:
         preserve_dims = kwargs.get("preserve_dims", "lead_time")
-        return rmse(forecast, target, preserve_dims=preserve_dims)
+        return scores.continuous.rmse(forecast, target, preserve_dims=preserve_dims)
 
 
 # TODO: base metric for identifying signal and complete implementation
