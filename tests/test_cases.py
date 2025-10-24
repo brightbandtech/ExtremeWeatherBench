@@ -707,7 +707,7 @@ class TestLoadIndividualCasesFromYaml:
 class TestLoadEventsYaml:
     """Test the load_ewb_events_yaml_into_case_collection function."""
 
-    @mock.patch("extremeweatherbench.cases.resources")
+    @mock.patch("importlib.resources")
     def test_load_ewb_events_yaml_into_case_collection_success(self, mock_resources):
         """Test successful loading of events YAML."""
         # Mock the resource access
@@ -736,7 +736,7 @@ class TestLoadEventsYaml:
             ]
         }
 
-        with mock.patch("extremeweatherbench.cases.resources.as_file") as mock_as_file:
+        with mock.patch("importlib.resources.as_file") as mock_as_file:
             with mock.patch(
                 "extremeweatherbench.cases.read_incoming_yaml"
             ) as mock_read:

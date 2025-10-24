@@ -636,8 +636,8 @@ class TestRunSerial:
 class TestRunParallel:
     """Test the _run_parallel function."""
 
-    @mock.patch("extremeweatherbench.evaluate.Parallel")
-    @mock.patch("extremeweatherbench.evaluate.delayed")
+    @mock.patch("joblib.Parallel")
+    @mock.patch("joblib.delayed")
     @mock.patch("tqdm.auto.tqdm")
     def test_run_parallel_basic(
         self, mock_tqdm, mock_delayed, mock_parallel_class, sample_case_operator
@@ -663,8 +663,8 @@ class TestRunParallel:
 
         assert result == mock_result
 
-    @mock.patch("extremeweatherbench.evaluate.Parallel")
-    @mock.patch("extremeweatherbench.evaluate.delayed")
+    @mock.patch("joblib.Parallel")
+    @mock.patch("joblib.delayed")
     @mock.patch("tqdm.auto.tqdm")
     def test_run_parallel_with_none_n_jobs(
         self, mock_tqdm, mock_delayed, mock_parallel_class, sample_case_operator
@@ -691,8 +691,8 @@ class TestRunParallel:
             mock_parallel_class.assert_called_once_with(n_jobs=None)
             assert isinstance(result, list)
 
-    @mock.patch("extremeweatherbench.evaluate.Parallel")
-    @mock.patch("extremeweatherbench.evaluate.delayed")
+    @mock.patch("joblib.Parallel")
+    @mock.patch("joblib.delayed")
     @mock.patch("tqdm.auto.tqdm")
     def test_run_parallel_multiple_cases(
         self, mock_tqdm, mock_delayed, mock_parallel_class
@@ -720,8 +720,8 @@ class TestRunParallel:
         assert result[0]["case_id_number"].iloc[0] == 1
         assert result[1]["case_id_number"].iloc[0] == 2
 
-    @mock.patch("extremeweatherbench.evaluate.Parallel")
-    @mock.patch("extremeweatherbench.evaluate.delayed")
+    @mock.patch("joblib.Parallel")
+    @mock.patch("joblib.delayed")
     @mock.patch("tqdm.auto.tqdm")
     def test_run_parallel_with_kwargs(
         self, mock_tqdm, mock_delayed, mock_parallel_class, sample_case_operator
@@ -755,7 +755,7 @@ class TestRunParallel:
 
     def test_run_parallel_empty_list(self):
         """Test _run_parallel with empty case operator list."""
-        with mock.patch("extremeweatherbench.evaluate.Parallel") as mock_parallel_class:
+        with mock.patch("joblib.Parallel") as mock_parallel_class:
             with mock.patch("tqdm.auto.tqdm") as mock_tqdm:
                 mock_tqdm.return_value = []
                 mock_parallel_instance = mock.Mock()
@@ -1376,8 +1376,8 @@ class TestErrorHandling:
         with pytest.raises(Exception, match="Case operator failed"):
             evaluate._run_serial([sample_case_operator])
 
-    @mock.patch("extremeweatherbench.evaluate.Parallel")
-    @mock.patch("extremeweatherbench.evaluate.delayed")
+    @mock.patch("joblib.Parallel")
+    @mock.patch("joblib.delayed")
     @mock.patch("tqdm.auto.tqdm")
     def test_run_parallel_joblib_exception(
         self, mock_tqdm, mock_delayed, mock_parallel_class, sample_case_operator
@@ -1394,8 +1394,8 @@ class TestErrorHandling:
         with pytest.raises(Exception, match="Joblib parallel failed"):
             evaluate._run_parallel([sample_case_operator], n_jobs=2)
 
-    @mock.patch("extremeweatherbench.evaluate.Parallel")
-    @mock.patch("extremeweatherbench.evaluate.delayed")
+    @mock.patch("joblib.Parallel")
+    @mock.patch("joblib.delayed")
     @mock.patch("tqdm.auto.tqdm")
     def test_run_parallel_delayed_function_exception(
         self, mock_tqdm, mock_delayed, mock_parallel_class, sample_case_operator
@@ -1458,8 +1458,8 @@ class TestErrorHandling:
         # Should have tried only the first two
         assert mock_compute_case_operator.call_count == 2
 
-    @mock.patch("extremeweatherbench.evaluate.Parallel")
-    @mock.patch("extremeweatherbench.evaluate.delayed")
+    @mock.patch("joblib.Parallel")
+    @mock.patch("joblib.delayed")
     @mock.patch("tqdm.auto.tqdm")
     def test_run_parallel_invalid_n_jobs(
         self, mock_tqdm, mock_delayed, mock_parallel_class, sample_case_operator
@@ -1733,7 +1733,7 @@ class TestIntegration:
         serial_call_count = mock_compute_case_operator.call_count
         mock_compute_case_operator.side_effect = mock_results
 
-        with mock.patch("extremeweatherbench.evaluate.Parallel") as mock_parallel_class:
+        with mock.patch("joblib.Parallel") as mock_parallel_class:
             mock_parallel_instance = mock.Mock()
             mock_parallel_class.return_value = mock_parallel_instance
             mock_parallel_instance.return_value = mock_results
@@ -1786,9 +1786,7 @@ class TestIntegration:
                 assert mock_compute_case_operator.call_count == 2
             else:
                 # Mock parallel execution to avoid serialization issues
-                with mock.patch(
-                    "extremeweatherbench.evaluate.Parallel"
-                ) as mock_parallel_class:
+                with mock.patch("joblib.Parallel") as mock_parallel_class:
                     mock_parallel_instance = mock.Mock()
                     mock_parallel_class.return_value = mock_parallel_instance
                     mock_parallel_instance.return_value = mock_results
@@ -1831,10 +1829,8 @@ class TestIntegration:
             assert isinstance(result, list)
 
             # Test parallel kwargs propagation
-            with mock.patch(
-                "extremeweatherbench.evaluate.Parallel"
-            ) as mock_parallel_class:
-                with mock.patch("extremeweatherbench.evaluate.delayed") as mock_delayed:
+            with mock.patch("joblib.Parallel") as mock_parallel_class:
+                with mock.patch("joblib.delayed") as mock_delayed:
                     mock_delayed.return_value = mock_compute_with_kwargs
                     mock_parallel_instance = mock.Mock()
                     mock_parallel_class.return_value = mock_parallel_instance
@@ -1870,7 +1866,7 @@ class TestIntegration:
         assert result == []
 
         # Test _run_parallel
-        with mock.patch("extremeweatherbench.evaluate.Parallel") as mock_parallel_class:
+        with mock.patch("joblib.Parallel") as mock_parallel_class:
             mock_parallel_instance = mock.Mock()
             mock_parallel_class.return_value = mock_parallel_instance
             mock_parallel_instance.return_value = []
@@ -1904,7 +1900,7 @@ class TestIntegration:
         mock_compute_case_operator.reset_mock()
         mock_compute_case_operator.side_effect = mock_results
 
-        with mock.patch("extremeweatherbench.evaluate.Parallel") as mock_parallel_class:
+        with mock.patch("joblib.Parallel") as mock_parallel_class:
             mock_parallel_instance = mock.Mock()
             mock_parallel_class.return_value = mock_parallel_instance
             mock_parallel_instance.return_value = mock_results

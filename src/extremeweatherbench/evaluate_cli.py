@@ -1,7 +1,7 @@
 import importlib.util
 import os
+import pathlib
 import pickle
-from pathlib import Path
 from typing import Optional
 
 import click
@@ -98,7 +98,7 @@ def cli_runner(
     if output_dir is None:
         output_dir = os.getcwd()
 
-    output_path = Path(output_dir)
+    output_path = pathlib.Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
     # Validate that either default or config_file is provided
@@ -149,7 +149,7 @@ def cli_runner(
 
     # Save case operators if requested
     if save_case_operators:
-        save_path = Path(save_case_operators)
+        save_path = pathlib.Path(save_case_operators)
         save_path.parent.mkdir(parents=True, exist_ok=True)
         with open(save_path, "wb") as f:
             pickle.dump(case_operators, f)
@@ -193,7 +193,7 @@ def _load_config_file(config_path: str) -> tuple:
     - evaluation_objects: List of EvaluationObject instances
     - cases_dict: Dictionary containing case data
     """
-    config_path_obj = Path(config_path)
+    config_path_obj = pathlib.Path(config_path)
 
     # Load the config module
     spec = importlib.util.spec_from_file_location("config", str(config_path_obj))
