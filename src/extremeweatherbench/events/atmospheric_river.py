@@ -144,7 +144,8 @@ def _compute_laplacian_ufunc(data: xr.DataArray, sigma: float) -> xr.DataArray:
     Returns:
         The Laplacian of IVT
     """
-    return ndimage.gaussian_filter(filters.laplace(data), sigma=sigma)
+    laplace_data = filters.laplace(data)
+    return ndimage.gaussian_filter(laplace_data, sigma=sigma)
 
 
 def compute_ivt_laplacian(ivt: xr.DataArray, sigma: float = 3) -> xr.DataArray:
