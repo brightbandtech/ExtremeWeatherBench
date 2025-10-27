@@ -146,10 +146,8 @@ class TropicalCycloneTrackVariables(DerivedVariable):
         else:
             raise ValueError("No track data data provided to constrain TC tracks.")
 
-        tctracks_ds = (
-            tropical_cyclone.create_tctracks_from_dataset_with_tc_track_data_filter(
-                cyclone_dataset, tc_track_data
-            )
+        tctracks_ds = tropical_cyclone.generate_tctracks_from_dataset_and_tc_track_data(
+            cyclone_dataset, tc_track_data
         )
         # Cache the result
         tropical_cyclone._TC_TRACK_CACHE[cache_key] = tctracks_ds

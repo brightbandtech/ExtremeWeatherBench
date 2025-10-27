@@ -38,7 +38,7 @@ from extremeweatherbench import calc, utils
 logger = logging.getLogger(__name__)
 
 
-def create_tctracks_from_dataset_with_tc_track_data_filter(
+def generate_tctracks_from_dataset_and_tc_track_data(
     gridded_dataset: xr.Dataset,
     tc_track_data: xr.Dataset,
     slp_contour_magnitude: float = 200,
@@ -104,15 +104,15 @@ def create_tctracks_from_dataset_with_tc_track_data_filter(
     logger.info("Generating TC tracks")
     if "init_time" in gridded_dataset.coords:
         return process_all_init_times(
-            gridded_dataset,
-            tc_track_data_df,
-            slp_contour_magnitude,
-            dz_contour_magnitude,
-            min_distance,
-            max_spatial_distance_degrees,
-            max_temporal_hours,
-            use_contour_validation,
-            min_track_length,
+            gridded_dataset=gridded_dataset,
+            tc_track_data_df=tc_track_data_df,
+            slp_contour_magnitude=slp_contour_magnitude,
+            dz_contour_magnitude=dz_contour_magnitude,
+            min_distance=min_distance,
+            max_spatial_distance_degrees=max_spatial_distance_degrees,
+            max_temporal_hours=max_temporal_hours,
+            use_contour_validation=use_contour_validation,
+            min_track_length=min_track_length,
         )
     # If no init_time dimension, return empty dataset
     else:

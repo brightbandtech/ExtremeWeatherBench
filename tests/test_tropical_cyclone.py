@@ -54,6 +54,7 @@ def sample_tc_dataset():
     # Create wind field
     wind_u = np.random.normal(0, 5, data_shape)
     wind_v = np.random.normal(0, 5, data_shape)
+    wind_speed = np.sqrt(wind_u**2 + wind_v**2)
 
     # Create geopotential field at 500hPa
     geopotential = np.random.normal(5500, 100, data_shape) * 9.80665
@@ -71,6 +72,10 @@ def sample_tc_dataset():
             "surface_northward_wind": (
                 ["time", "latitude", "longitude", "lead_time"],
                 wind_v,
+            ),
+            "surface_wind_speed": (
+                ["time", "latitude", "longitude", "lead_time"],
+                wind_speed,
             ),
             "geopotential": (
                 ["time", "latitude", "longitude", "lead_time"],
@@ -102,8 +107,11 @@ def sample_ibtracs_dataset():
         {
             "latitude": (["valid_time"], lats),
             "longitude": (["valid_time"], lons),
-            "max_sustained_wind": (["valid_time"], np.random.uniform(30, 80, n_points)),
-            "min_pressure": (["valid_time"], np.random.uniform(950, 1010, n_points)),
+            "surface_wind_speed": (["valid_time"], np.random.uniform(30, 80, n_points)),
+            "air_pressure_at_mean_sea_level": (
+                ["valid_time"],
+                np.random.uniform(95000, 101000, n_points),
+            ),
         },
         coords={"valid_time": valid_time},
     )
@@ -113,39 +121,39 @@ def sample_ibtracs_dataset():
     return dataset
 
 
-class TestIBTrACSRegistry:
-    """Test the IBTrACS data registry functions."""
+class TestTCTrackDataRegistry:
+    """Test the TC track data registry functions."""
 
     def setup_method(self):
         """Clear registry before each test."""
-        tropical_cyclone.clear_ibtracs_registry()
+        tropical_cyclone.clear_tc_track_data_registry()
 
-    def test_register_and_get_ibtracs_data(self, sample_ibtracs_dataset):
-        """Test registering and retrieving IBTrACS data."""
+    def test_register_and_get_tc_track_data(self, sample_ibtracs_dataset):
+        """Test registering and retrieving TC track data."""
         case_id = "test_case_123"
 
         # Initially should return None
-        assert tropical_cyclone.get_ibtracs_data(case_id) is None
+        assert tropical_cyclone.get_tc_track_data(case_id) is None
 
         # Register data
-        tropical_cyclone.register_ibtracs_data(case_id, sample_ibtracs_dataset)
+        tropical_cyclone.register_tc_track_data(case_id, sample_ibtracs_dataset)
 
         # Should now return the dataset
-        retrieved_data = tropical_cyclone.get_ibtracs_data(case_id)
+        retrieved_data = tropical_cyclone.get_tc_track_data(case_id)
         assert retrieved_data is not None
         xr.testing.assert_equal(retrieved_data, sample_ibtracs_dataset)
 
-    def test_clear_ibtracs_registry(self, sample_ibtracs_dataset):
-        """Test clearing the IBTrACS registry."""
+    def test_clear_tc_track_data_registry(self, sample_ibtracs_dataset):
+        """Test clearing the TC track data registry."""
         case_id = "test_case_456"
 
         # Register data
-        tropical_cyclone.register_ibtracs_data(case_id, sample_ibtracs_dataset)
-        assert tropical_cyclone.get_ibtracs_data(case_id) is not None
+        tropical_cyclone.register_tc_track_data(case_id, sample_ibtracs_dataset)
+        assert tropical_cyclone.get_tc_track_data(case_id) is not None
 
         # Clear registry
-        tropical_cyclone.clear_ibtracs_registry()
-        assert tropical_cyclone.get_ibtracs_data(case_id) is None
+        tropical_cyclone.clear_tc_track_data_registry()
+        assert tropical_cyclone.get_tc_track_data(case_id) is None
 
     def test_multiple_case_ids(self, sample_ibtracs_dataset):
         """Test handling multiple case IDs."""
@@ -157,12 +165,12 @@ class TestIBTrACSRegistry:
         dataset2["latitude"] = dataset2["latitude"] + 5
 
         # Register both
-        tropical_cyclone.register_ibtracs_data(case_id1, sample_ibtracs_dataset)
-        tropical_cyclone.register_ibtracs_data(case_id2, dataset2)
+        tropical_cyclone.register_tc_track_data(case_id1, sample_ibtracs_dataset)
+        tropical_cyclone.register_tc_track_data(case_id2, dataset2)
 
         # Verify both can be retrieved correctly
-        retrieved1 = tropical_cyclone.get_ibtracs_data(case_id1)
-        retrieved2 = tropical_cyclone.get_ibtracs_data(case_id2)
+        retrieved1 = tropical_cyclone.get_tc_track_data(case_id1)
+        retrieved2 = tropical_cyclone.get_tc_track_data(case_id2)
 
         xr.testing.assert_equal(retrieved1, sample_ibtracs_dataset)
         xr.testing.assert_equal(retrieved2, dataset2)
@@ -278,39 +286,32 @@ class TestTropicalCycloneDetection:
         assert isinstance(contours, list)
         mock_measure.find_contours.assert_called_once()
 
-    def test_create_tctracks_from_dataset_with_ibtracs_filter(
+    def test_create_tctracks_from_dataset_with_tc_track_data_filter(
         self, sample_tc_dataset, sample_ibtracs_dataset
     ):
-        """Test TC track creation with IBTrACS filtering."""
+        """Test TC track creation with TC track data filtering."""
         # This is a complex integration test
         with patch(
-            "extremeweatherbench.events.tropical_cyclone._create_tctracks_optimized_with_ibtracs"
+            "extremeweatherbench.events.tropical_cyclone._process_entire_dataset"
         ) as mock_create:
-            # Mock the return value
-            mock_result = xr.Dataset(
-                {
-                    "tc_slp": (
-                        ["time", "lead_time"],
-                        np.random.normal(101000, 1000, (5, 5)),
-                    ),
-                    "tc_latitude": (
-                        ["time", "lead_time"],
-                        np.random.uniform(10, 30, (5, 5)),
-                    ),
-                    "tc_longitude": (
-                        ["time", "lead_time"],
-                        np.random.uniform(-80, -50, (5, 5)),
-                    ),
-                    "tc_vmax": (
-                        ["time", "lead_time"],
-                        np.random.uniform(20, 50, (5, 5)),
-                    ),
-                }
+            # Mock the return value - _process_entire_dataset returns a tuple of arrays
+            mock_create.return_value = (
+                np.array([5]),  # n_detections
+                np.array([0, 1, 2, 0, 1]),  # lt_indices
+                np.array([0, 0, 0, 1, 1]),  # vt_indices
+                np.array([1, 1, 1, 2, 2]),  # track_ids
+                np.array([25.0, 26.0, 27.0, 24.0, 25.0]),  # lats
+                np.array([-75.0, -74.0, -73.0, -76.0, -75.0]),  # lons
+                np.array(
+                    [101000.0, 100800.0, 100600.0, 101200.0, 101000.0]
+                ),  # slp_vals
+                np.array([25.0, 30.0, 35.0, 20.0, 25.0]),  # wind_vals
             )
-            mock_create.return_value = mock_result
 
-            result = tropical_cyclone.create_tctracks_from_dataset_with_ibtracs_filter(
-                sample_tc_dataset, sample_ibtracs_dataset
+            result = (
+                tropical_cyclone.create_tctracks_from_dataset_with_tc_track_data_filter(
+                    sample_tc_dataset, sample_ibtracs_dataset
+                )
             )
 
             assert isinstance(result, xr.Dataset)
@@ -318,44 +319,53 @@ class TestTropicalCycloneDetection:
 
 
 class TestDistanceCalculations:
-    """Test distance calculation functions."""
+    """Test distance calculation functions using calc module."""
 
-    def test_calculate_great_circle_distance(self):
-        """Test vectorized great circle distance calculation."""
+    def test_calculate_haversine_distance_degrees(self):
+        """Test haversine distance calculation in degrees."""
         # Test known distance: equator to North Pole = 90 degrees = pi/2 radians
+        from extremeweatherbench import calc
+
         lat1, lon1 = 0.0, 0.0
         lat2, lon2 = 90.0, 0.0
 
-        distance = tropical_cyclone._calculate_great_circle_distance(
-            lat1, lon1, lat2, lon2
+        distance = calc.calculate_haversine_distance(
+            [lat1, lon1], [lat2, lon2], units="degrees"
         )
 
         # Should be approximately 90 degrees
         assert abs(distance - 90.0) < 0.1
 
-    def test_calculate_great_circle_distance_scalar(self):
-        """Test scalar great circle distance calculation."""
-        # Test same known distance
+    def test_calculate_haversine_distance_km(self):
+        """Test haversine distance calculation in kilometers."""
+        from extremeweatherbench import calc
+
+        # Test same known distance in km
         lat1, lon1 = 0.0, 0.0
         lat2, lon2 = 90.0, 0.0
 
-        distance = tropical_cyclone._calculate_great_circle_distance(
-            lat1, lon1, lat2, lon2
+        distance_km = calc.calculate_haversine_distance(
+            [lat1, lon1], [lat2, lon2], units="km"
         )
 
-        assert abs(distance - 90.0) < 0.1
+        # Should be approximately 10,000 km (quarter of Earth's circumference)
+        assert abs(distance_km - 10000) < 100
 
     def test_distance_calculation_consistency(self):
-        """Test that vectorized and scalar versions give same results."""
+        """Test that distance calculations are consistent."""
+        from extremeweatherbench import calc
+
         lat1, lon1 = 25.0, -80.0
         lat2, lon2 = 30.0, -75.0
 
-        dist = tropical_cyclone._calculate_great_circle_distance(lat1, lon1, lat2, lon2)
-        dist_scalar = tropical_cyclone._calculate_great_circle_distance(
-            lat1, lon1, lat2, lon2
+        dist1 = calc.calculate_haversine_distance(
+            [lat1, lon1], [lat2, lon2], units="degrees"
+        )
+        dist2 = calc.calculate_haversine_distance(
+            [lat1, lon1], [lat2, lon2], units="degrees"
         )
 
-        assert abs(dist - dist_scalar) < 1e-10
+        assert abs(dist1 - dist2) < 1e-10
 
 
 class TestUtilityFunctions:
@@ -751,8 +761,11 @@ class TestDimensionHandling:
         )
 
         # This should not raise the "tuple.index(x): x not in tuple" error
-        result = tropical_cyclone.create_tctracks_from_dataset_with_ibtracs_filter(
-            forecast_dataset_with_init_time.isel(lead_time=slice(0, 3)), ibtracs_data
+        result = (
+            tropical_cyclone.create_tctracks_from_dataset_with_tc_track_data_filter(
+                forecast_dataset_with_init_time.isel(lead_time=slice(0, 3)),
+                ibtracs_data,
+            )
         )
 
         # Verify the function completed successfully
@@ -829,7 +842,7 @@ class TestTCIntegration:
         # This tests the integration without actually running expensive computations
 
         with patch(
-            "extremeweatherbench.events.tropical_cyclone._process_entire_dataset_compact"
+            "extremeweatherbench.events.tropical_cyclone._process_entire_dataset"
         ) as mock_process:
             # Mock the processing function to return some fake detections
             mock_process.return_value = (
@@ -843,8 +856,10 @@ class TestTCIntegration:
                 np.array([25.0]),  # wind_vals
             )
 
-            result = tropical_cyclone.create_tctracks_from_dataset_with_ibtracs_filter(
-                sample_tc_dataset, sample_ibtracs_dataset
+            result = (
+                tropical_cyclone.create_tctracks_from_dataset_with_tc_track_data_filter(
+                    sample_tc_dataset, sample_ibtracs_dataset
+                )
             )
 
             assert isinstance(result, xr.Dataset)
@@ -957,8 +972,8 @@ class TestConsolidatedLandfallFunctionality:
         try:
             from extremeweatherbench.metrics import (
                 LandfallDisplacement,
-                LandfallTimeME,
                 LandfallIntensityMAE,
+                LandfallTimeME,
             )
 
             # Test all approaches
