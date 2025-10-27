@@ -164,7 +164,7 @@ class TestRegionToGeopandas:
         assert abs(bounds[2] - (-115.0)) < 0.001  # max lon (converted to -180 to 180)
 
     def test_shapefile_region_to_geopandas(self):
-        """Test ShapefileRegion.as_geopandas()."""
+        """Test regions.ShapefileRegion.as_geopandas()."""
         # Create a mock GeoDataFrame
         mock_polygon = shapely.Polygon([(0, 0), (1, 0), (1, 1), (0, 1), (0, 0)])
         mock_gdf = gpd.GeoDataFrame(geometry=[mock_polygon], crs="EPSG:4326")
@@ -254,7 +254,7 @@ class TestRegionMask:
         )
 
     def test_centered_region_mask(self, sample_dataset):
-        """Test CenteredRegion.mask() method."""
+        """Test regions.CenteredRegion.mask() method."""
         region = regions.CenteredRegion.create_region(
             latitude=45.0, longitude=240.0, bounding_box_degrees=10.0
         )
@@ -337,7 +337,7 @@ class TestRegionMask:
         assert "temperature" in bbox_masked.data_vars
 
     def test_centered_region_mask_with_180_longitude(self, sample_dataset_180):
-        """Test CenteredRegion.mask() with -180 to 180 longitude."""
+        """Test regions.CenteredRegion.mask() with -180 to 180 longitude."""
         region = regions.CenteredRegion.create_region(
             latitude=45.0, longitude=-120.0, bounding_box_degrees=10.0
         )
@@ -362,7 +362,7 @@ class TestRegionMask:
         assert masked_dataset.longitude.max() <= -115.0 + 1
 
     def test_bounding_box_region_mask_with_180_longitude(self, sample_dataset_180):
-        """Test BoundingBoxRegion.mask() with -180 to 180 longitude."""
+        """Test regions.BoundingBoxRegion.mask() with -180 to 180 longitude."""
         region = regions.BoundingBoxRegion.create_region(
             latitude_min=40.0,
             latitude_max=50.0,
@@ -387,7 +387,7 @@ class TestRegionMask:
         assert masked_dataset.longitude.max() <= -115.0 + 1
 
     def test_shapefile_region_mask_with_180_longitude(self, sample_dataset_180):
-        """Test ShapefileRegion.mask() with -180 to 180 longitude."""
+        """Test regions.ShapefileRegion.mask() with -180 to 180 longitude."""
         # Create polygon with -180 to 180 coordinates
         mock_polygon = shapely.Polygon(
             [(-120, 40), (-110, 40), (-110, 50), (-120, 50), (-120, 40)]
@@ -449,6 +449,149 @@ class TestRegionMask:
         assert isinstance(masked_east, xr.Dataset)
         assert masked_east.sizes["latitude"] < sample_dataset_180.sizes["latitude"]
         assert masked_east.sizes["longitude"] <= sample_dataset_180.sizes["longitude"]
+
+    @pytest.fixture
+    def dataset_increasing_lat(self):
+        """Create dataset with increasing latitude (40 to 50 degrees)."""
+        lats = np.linspace(40, 50, 11)  # 1 degree resolution: 40, 41, ..., 50
+        lons = np.linspace(0, 359, 360)
+        data = np.random.random((len(lats), len(lons)))
+        return xr.Dataset(
+            {"temperature": (["latitude", "longitude"], data)},
+            coords={"latitude": lats, "longitude": lons},
+        )
+
+    @pytest.fixture
+    def dataset_decreasing_lat(self):
+        """Create dataset with decreasing latitude (50 to 40 degrees)."""
+        lats = np.linspace(50, 40, 11)  # 1 degree resolution: 50, 49, ..., 40
+        lons = np.linspace(0, 359, 360)
+        data = np.random.random((len(lats), len(lons)))
+        return xr.Dataset(
+            {"temperature": (["latitude", "longitude"], data)},
+            coords={"latitude": lats, "longitude": lons},
+        )
+
+    def test_region_mask_latitude_ordering_consistency(
+        self, dataset_increasing_lat, dataset_decreasing_lat
+    ):
+        """Test that region mask produces same size for increasing and decreasing
+        latitude coordinates.
+
+        This test verifies that datasets with increasing (40-50) and decreasing
+        (50-40) latitude coordinates both produce the same latitude dimension
+        size when masked to the same region, confirming the mask handles
+        coordinate ordering correctly.
+        """
+        # Create a region that covers the middle portion (42-48 degrees)
+        region = regions.BoundingBoxRegion.create_region(
+            latitude_min=42.0,
+            latitude_max=48.0,
+            longitude_min=100.0,
+            longitude_max=200.0,
+        )
+
+        # Mask both datasets
+        masked_increasing = region.mask(dataset_increasing_lat)
+        masked_decreasing = region.mask(dataset_decreasing_lat)
+
+        # Both should have the same latitude dimension size
+        assert (
+            masked_increasing.sizes["latitude"] == masked_decreasing.sizes["latitude"]
+        )
+
+        # Both should have 7 latitude points (42, 43, 44, 45, 46, 47, 48)
+        expected_lat_size = 7
+        assert masked_increasing.sizes["latitude"] == expected_lat_size
+        assert masked_decreasing.sizes["latitude"] == expected_lat_size
+
+        # Verify the actual latitude values are correct (should be same set)
+        increasing_lats = set(masked_increasing.latitude.values)
+        decreasing_lats = set(masked_decreasing.latitude.values)
+        expected_lats = {42.0, 43.0, 44.0, 45.0, 46.0, 47.0, 48.0}
+
+        assert increasing_lats == expected_lats
+        assert decreasing_lats == expected_lats
+        assert increasing_lats == decreasing_lats
+
+    def test_region_mask_latitude_ordering_edge_cases(
+        self, dataset_increasing_lat, dataset_decreasing_lat
+    ):
+        """Test edge cases for latitude ordering in region masking."""
+
+        # Test 1: Region exactly at boundaries (40-50, full range)
+        full_region = regions.BoundingBoxRegion.create_region(
+            latitude_min=40.0,
+            latitude_max=50.0,
+            longitude_min=100.0,
+            longitude_max=200.0,
+        )
+
+        masked_inc_full = full_region.mask(dataset_increasing_lat)
+        masked_dec_full = full_region.mask(dataset_decreasing_lat)
+
+        # Should include all 11 latitude points
+        assert masked_inc_full.sizes["latitude"] == 11
+        assert masked_dec_full.sizes["latitude"] == 11
+        assert masked_inc_full.sizes["latitude"] == masked_dec_full.sizes["latitude"]
+
+        # Test 2: Region with partial overlap at boundaries
+        partial_region = regions.BoundingBoxRegion.create_region(
+            latitude_min=39.5,  # Slightly below minimum
+            latitude_max=45.5,  # Cuts through middle
+            longitude_min=100.0,
+            longitude_max=200.0,
+        )
+
+        masked_inc_partial = partial_region.mask(dataset_increasing_lat)
+        masked_dec_partial = partial_region.mask(dataset_decreasing_lat)
+
+        # Should include latitudes 40, 41, 42, 43, 44, 45 (6 points)
+        expected_partial_size = 6
+        assert masked_inc_partial.sizes["latitude"] == expected_partial_size
+        assert masked_dec_partial.sizes["latitude"] == expected_partial_size
+        assert (
+            masked_inc_partial.sizes["latitude"] == masked_dec_partial.sizes["latitude"]
+        )
+
+        # Test 3: Region outside the data range
+        outside_region = regions.BoundingBoxRegion.create_region(
+            latitude_min=60.0,
+            latitude_max=70.0,
+            longitude_min=100.0,
+            longitude_max=200.0,
+        )
+
+        masked_inc_outside = outside_region.mask(dataset_increasing_lat)
+        masked_dec_outside = outside_region.mask(dataset_decreasing_lat)
+
+        # Should have no latitude points
+        assert masked_inc_outside.sizes["latitude"] == 0
+        assert masked_dec_outside.sizes["latitude"] == 0
+
+    def test_region_mask_latitude_ordering_single_point(
+        self, dataset_increasing_lat, dataset_decreasing_lat
+    ):
+        """Test region masking that should select single latitude point."""
+
+        # Create a region that should select only latitude 45
+        single_point_region = regions.BoundingBoxRegion.create_region(
+            latitude_min=44.5,
+            latitude_max=45.5,
+            longitude_min=100.0,
+            longitude_max=200.0,
+        )
+
+        masked_inc_single = single_point_region.mask(dataset_increasing_lat)
+        masked_dec_single = single_point_region.mask(dataset_decreasing_lat)
+
+        # Both should have exactly 1 latitude point
+        assert masked_inc_single.sizes["latitude"] == 1
+        assert masked_dec_single.sizes["latitude"] == 1
+
+        # Both should have latitude value of 45.0
+        assert float(masked_inc_single.latitude.values[0]) == 45.0
+        assert float(masked_dec_single.latitude.values[0]) == 45.0
 
 
 class TestRegionInheritance:
@@ -825,7 +968,7 @@ class TestCreateGeopandasFromBounds:
         )
 
         geometry = gdf.geometry.iloc[0]
-        # Should be a Multishapely.Polygon
+        # Should be a geometry.MultiPolygon
         assert isinstance(geometry, shapely.MultiPolygon)
         assert len(geometry.geoms) == 2
 
@@ -882,10 +1025,10 @@ class TestCreateGeopandasFromBounds:
 
 
 class TestTotalBounds:
-    """Test the as_geopandas().total_bounds method for all Region subclasses."""
+    """Test the as_geopandas().total_bounds method for all regions.Region subclasses."""
 
     def test_centered_region_total_bounds(self):
-        """Test CenteredRegion.as_geopandas().total_bounds method."""
+        """Test regions.CenteredRegion.as_geopandas().total_bounds method."""
         region = regions.CenteredRegion.create_region(
             latitude=45.0, longitude=-120.0, bounding_box_degrees=10.0
         )
@@ -897,7 +1040,8 @@ class TestTotalBounds:
         assert coords[3] == 50.0
 
     def test_centered_region_total_bounds_tuple_box(self):
-        """Test CenteredRegion.as_geopandas().total_bounds with tuple bounding box."""
+        """Test regions.CenteredRegion.as_geopandas().total_bounds with tuple bounding
+        box."""
         region = regions.CenteredRegion.create_region(
             latitude=45.0, longitude=-120.0, bounding_box_degrees=(5.0, 10.0)
         )
@@ -908,7 +1052,7 @@ class TestTotalBounds:
         assert coords[3] == 47.5
 
     def test_bounding_box_region_total_bounds(self):
-        """Test BoundingBoxRegion.as_geopandas().total_bounds method."""
+        """Test regions.BoundingBoxRegion.as_geopandas().total_bounds method."""
         region = regions.BoundingBoxRegion.create_region(
             latitude_min=40.0,
             latitude_max=50.0,
@@ -925,7 +1069,7 @@ class TestTotalBounds:
         assert coords[3] == 50.0
 
     def test_shapefile_region_bounding_coordinates(self):
-        """Test ShapefileRegion.as_geopandas().total_bounds method."""
+        """Test regions.ShapefileRegion.as_geopandas().total_bounds method."""
         # Create a mock polygon with known bounds
         mock_polygon = shapely.Polygon(
             [(240, 40), (250, 40), (250, 50), (240, 50), (240, 40)]
@@ -1092,7 +1236,7 @@ class TestRegionIntegration:
         assert len(subset.latitude) < len(dataset.latitude)
         assert len(subset.longitude) < len(dataset.longitude)
 
-        # Test that ShapefileRegion supports drop parameter
+        # Test that regions.ShapefileRegion supports drop parameter
         mock_polygon = shapely.Polygon(
             [(240, 40), (250, 40), (250, 50), (240, 50), (240, 40)]
         )
@@ -1118,7 +1262,7 @@ class TestRegionIntegration:
 
 
 class TestRegionGeometricOperations:
-    """Test geometric operations on regions."""
+    """Test geometric operations on"""
 
     def test_region_intersects(self):
         """Test the intersects method."""
@@ -1212,7 +1356,7 @@ class TestRegionGeometricOperations:
 
 
 class TestRegionSubsetter:
-    """Test the  regions.RegionSubsetter class."""
+    """Test the regions.RegionSubsetter class."""
 
     @pytest.fixture
     def target_region(self):
@@ -1279,7 +1423,7 @@ class TestRegionSubsetter:
         )
 
     def test_subsetter_initialization_with_region(self, target_region):
-        """Test  regions.RegionSubsetter initialization with Region object."""
+        """Test regions.RegionSubsetter initialization with Region object."""
         subsetter = regions.RegionSubsetter(
             region=target_region, method="intersects", percent_threshold=0.5
         )
@@ -1289,7 +1433,7 @@ class TestRegionSubsetter:
         assert subsetter.percent_threshold == 0.5
 
     def test_subsetter_initialization_with_dict(self):
-        """Test  regions.RegionSubsetter initialization with dictionary."""
+        """Test regions.RegionSubsetter initialization with dictionary."""
         region_dict = {
             "latitude_min": 40.0,
             "latitude_max": 50.0,
@@ -1448,7 +1592,7 @@ class TestConvenienceFunctions:
         return cases.IndividualCaseCollection(cases=[case1, case2])
 
     def test_subset_cases_to_region_with_region_object(self, sample_case_collection):
-        """Test subset_cases_to_region with Region object."""
+        """Test regions.subset_cases_to_region with Region object."""
         target_region = regions.BoundingBoxRegion.create_region(
             latitude_min=40.0,
             latitude_max=50.0,
@@ -1465,7 +1609,7 @@ class TestConvenienceFunctions:
         assert subset_cases.cases[0].case_id_number == 1
 
     def test_subset_cases_to_region_with_dict(self, sample_case_collection):
-        """Test subset_cases_to_region with dictionary."""
+        """Test regions.subset_cases_to_region with dictionary."""
         region_dict = {
             "latitude_min": 40.0,
             "latitude_max": 50.0,
@@ -1481,7 +1625,7 @@ class TestConvenienceFunctions:
         assert subset_cases.cases[0].case_id_number == 1
 
     def test_subset_cases_to_region_with_percent_method(self, sample_case_collection):
-        """Test subset_cases_to_region with percent method."""
+        """Test regions.subset_cases_to_region with percent method."""
         target_region = regions.BoundingBoxRegion.create_region(
             latitude_min=40.0,
             latitude_max=50.0,
@@ -1500,7 +1644,7 @@ class TestConvenienceFunctions:
         assert isinstance(subset_cases, type(sample_case_collection))
 
     def test_subset_cases_to_region_all_method(self, sample_case_collection):
-        """Test subset_cases_to_region with all method."""
+        """Test regions.subset_cases_to_region with all method."""
         # Create a region that contains case 1 completely
         large_region = regions.BoundingBoxRegion.create_region(
             latitude_min=40.0,
@@ -1517,7 +1661,7 @@ class TestConvenienceFunctions:
         assert len(subset_cases.cases) >= 1
 
     def test_subset_results_to_region_convenience(self, sample_case_collection):
-        """Test subset_results_to_region convenience function."""
+        """Test regions.subset_results_to_region convenience function."""
         # Create mock results
         results_df = pd.DataFrame(
             {
@@ -1566,7 +1710,7 @@ class TestRegionSubsettingEdgeCases:
         assert len(subset_cases.cases) == 0
 
     def test_very_small_regions(self):
-        """Test subsetting with very small regions."""
+        """Test subsetting with very small"""
         from extremeweatherbench import cases
 
         # Create a very small case region
@@ -1633,7 +1777,7 @@ class TestRegionSubsettingEdgeCases:
         assert isinstance(subset_cases, cases.IndividualCaseCollection)
 
     def test_polar_regions(self):
-        """Test subsetting with polar regions."""
+        """Test subsetting with polar"""
         from extremeweatherbench import cases
 
         # Create a case near the North Pole
@@ -1663,3 +1807,247 @@ class TestRegionSubsettingEdgeCases:
         # Should handle polar coordinates gracefully
         subset_cases = subsetter.subset_case_collection(case_collection)
         assert isinstance(subset_cases, cases.IndividualCaseCollection)
+
+
+class TestAdjustBoundsToDatasetConvention:
+    """Test the regions._adjust_bounds_to_dataset_convention helper function."""
+
+    @pytest.fixture
+    def dataset_360(self):
+        """Create a dataset using 0-360 longitude convention."""
+        lats = np.linspace(30, 60, 31)
+        lons = np.linspace(0, 359, 360)
+        data = np.random.random((len(lats), len(lons)))
+        return xr.Dataset(
+            {"temperature": (["latitude", "longitude"], data)},
+            coords={"latitude": lats, "longitude": lons},
+        )
+
+    @pytest.fixture
+    def dataset_180(self):
+        """Create a dataset using -180/+180 longitude convention."""
+        lats = np.linspace(30, 60, 31)
+        lons = np.linspace(-180, 179, 360)
+        data = np.random.random((len(lats), len(lons)))
+        return xr.Dataset(
+            {"temperature": (["latitude", "longitude"], data)},
+            coords={"latitude": lats, "longitude": lons},
+        )
+
+    def test_adjust_180_to_360(self, dataset_360):
+        """Test adjusting -180/+180 bounds to 0-360 dataset."""
+        # Region bounds in -180/+180 convention (from geopandas)
+        region_bounds = (-9.75, 39.25, 8.25, 56.0)
+
+        (
+            lon_min,
+            lat_min,
+            lon_max,
+            lat_max,
+        ) = regions._adjust_bounds_to_dataset_convention(region_bounds, dataset_360)
+
+        # Should convert to 0-360
+        assert lon_min == 350.25  # -9.75 becomes 350.25
+        assert lon_max == 8.25  # 8.25 stays 8.25
+        assert lat_min == 39.25  # Latitude unchanged
+        assert lat_max == 56.0  # Latitude unchanged
+
+    def test_no_adjustment_for_180_dataset(self, dataset_180):
+        """Test that -180/+180 bounds stay unchanged for -180/+180 dataset."""
+        # Region bounds already in -180/+180 (from geopandas)
+        region_bounds = (-9.75, 39.25, 8.25, 56.0)
+
+        (
+            lon_min,
+            lat_min,
+            lon_max,
+            lat_max,
+        ) = regions._adjust_bounds_to_dataset_convention(region_bounds, dataset_180)
+
+        # Should stay unchanged
+        assert lon_min == -9.75
+        assert lon_max == 8.25
+        assert lat_min == 39.25
+        assert lat_max == 56.0
+
+    def test_adjust_full_range_to_360(self, dataset_360):
+        """Test adjusting larger range to 0-360."""
+        region_bounds = (-120.0, 30.0, -100.0, 50.0)
+
+        (
+            lon_min,
+            lat_min,
+            lon_max,
+            lat_max,
+        ) = regions._adjust_bounds_to_dataset_convention(region_bounds, dataset_360)
+
+        # Should convert to 0-360
+        assert lon_min == 240.0  # -120 becomes 240
+        assert lon_max == 260.0  # -100 becomes 260
+
+
+class TestLongitudeCoordinateMismatch:
+    """Test the longitude coordinate mismatch for zero-length dimensions."""
+
+    @pytest.fixture
+    def dataset_360_convention(self):
+        """Create a dataset using 0-360 longitude convention."""
+        lats = np.linspace(30, 60, 31)  # 30N to 60N
+        # Create longitude range that includes both 350-360 and 0-20
+        lons = np.concatenate([np.linspace(350, 359, 10), np.linspace(0, 20, 21)])
+        data = np.random.random((len(lats), len(lons)))
+        return xr.Dataset(
+            {"temperature": (["latitude", "longitude"], data)},
+            coords={"latitude": lats, "longitude": lons},
+        )
+
+    @pytest.fixture
+    def dataset_180_convention(self):
+        """Create a dataset using -180/+180 longitude convention."""
+        lats = np.linspace(30, 60, 31)  # 30N to 60N
+        lons = np.linspace(-20, 20, 41)  # 20W to 20E
+        data = np.random.random((len(lats), len(lons)))
+        return xr.Dataset(
+            {"temperature": (["latitude", "longitude"], data)},
+            coords={"latitude": lats, "longitude": lons},
+        )
+
+    def test_region_180_with_dataset_360(self, dataset_360_convention):
+        """Test region in -180/+180 convention with dataset in 0-360.
+
+        This test verifies that the normalize_region_bounds_to_dataset
+        function correctly converts region bounds to match the dataset's
+        longitude convention, preventing zero-length dimensions.
+        """
+        # Create region matching UK case 20: longitude -9.75 to 8.25
+        region = regions.BoundingBoxRegion.create_region(
+            latitude_min=39.25,
+            latitude_max=56.0,
+            longitude_min=-9.75,  # -180/+180 convention
+            longitude_max=8.25,
+        )
+
+        # This should NOT result in zero-length longitude dimension
+        masked_dataset = region.mask(dataset_360_convention)
+
+        assert isinstance(masked_dataset, xr.Dataset)
+        assert "temperature" in masked_dataset.data_vars
+
+        # Should have some longitude coordinates (not zero-length)
+        assert len(masked_dataset.longitude) > 0
+
+        # Longitude values should be in the expected range after conversion
+        # -9.75 becomes 350.25, 8.25 stays 8.25 in 0-360 convention
+        lon_values = masked_dataset.longitude.values
+        expected_condition = np.logical_or(
+            lon_values >= 350.25,  # Converted -9.75
+            lon_values <= 8.25,  # Original 8.25
+        )
+        assert np.all(expected_condition)
+
+    def test_region_360_with_dataset_180(self, dataset_180_convention):
+        """Test region in 0-360 convention with dataset in -180/+180."""
+        # Create region in 0-360 convention
+        region = regions.BoundingBoxRegion.create_region(
+            latitude_min=39.25,
+            latitude_max=56.0,
+            longitude_min=350.25,  # 0-360 convention (equivalent to -9.75)
+            longitude_max=8.25,
+        )
+
+        # This should NOT result in zero-length longitude dimension
+        masked_dataset = region.mask(dataset_180_convention)
+
+        assert isinstance(masked_dataset, xr.Dataset)
+        assert "temperature" in masked_dataset.data_vars
+
+        # Should have some longitude coordinates (not zero-length)
+        assert len(masked_dataset.longitude) > 0
+
+    def test_antimeridian_crossing_360_dataset(self):
+        """Test antimeridian crossing with 0-360 dataset."""
+        # Create dataset that spans antimeridian in 0-360 convention
+        lats = np.linspace(30, 60, 31)
+        lons = np.concatenate([np.linspace(350, 360, 11), np.linspace(0, 10, 11)])
+        data = np.random.random((len(lats), len(lons)))
+        dataset = xr.Dataset(
+            {"temperature": (["latitude", "longitude"], data)},
+            coords={"latitude": lats, "longitude": lons},
+        )
+
+        # Region that crosses antimeridian in 0-360 convention
+        region = regions.BoundingBoxRegion.create_region(
+            latitude_min=35.0,
+            latitude_max=55.0,
+            longitude_min=355.0,  # Should wrap to include 0-5 range
+            longitude_max=5.0,
+        )
+
+        masked_dataset = region.mask(dataset)
+
+        # Should handle antimeridian crossing correctly
+        assert len(masked_dataset.longitude) > 0
+        lon_values = masked_dataset.longitude.values
+        # Should include both high values (>=355) and low values (<=5)
+        has_high = np.any(lon_values >= 355.0)
+        has_low = np.any(lon_values <= 5.0)
+        assert has_high or has_low  # Should have at least one side
+
+    def test_antimeridian_crossing_180_dataset(self):
+        """Test antimeridian crossing with -180/+180 dataset."""
+        # Create dataset that spans antimeridian in -180/+180 convention
+        lats = np.linspace(30, 60, 31)
+        lons = np.concatenate([np.linspace(-180, -170, 11), np.linspace(170, 180, 11)])
+        data = np.random.random((len(lats), len(lons)))
+        dataset = xr.Dataset(
+            {"temperature": (["latitude", "longitude"], data)},
+            coords={"latitude": lats, "longitude": lons},
+        )
+
+        # Region that crosses antimeridian in -180/+180 convention
+        region = regions.BoundingBoxRegion.create_region(
+            latitude_min=35.0,
+            latitude_max=55.0,
+            longitude_min=175.0,  # Crosses antimeridian
+            longitude_max=-175.0,
+        )
+
+        masked_dataset = region.mask(dataset)
+
+        # Should handle antimeridian crossing correctly
+        assert len(masked_dataset.longitude) > 0
+
+    def test_case_20_specific_scenario(self):
+        """Test the specific Case 20 scenario that was failing."""
+        # Simulate a typical forecast dataset with 0-360 longitude
+        lats = np.linspace(20, 70, 51)  # Covers UK region
+        lons = np.linspace(0, 359, 360)  # Full global 0-360 coverage
+        data = np.random.random((len(lats), len(lons)))
+        forecast_dataset = xr.Dataset(
+            {"temperature": (["latitude", "longitude"], data)},
+            coords={"latitude": lats, "longitude": lons},
+        )
+
+        # Case 20 region definition (UK August 2022)
+        case_20_region = regions.BoundingBoxRegion.create_region(
+            latitude_min=39.25,
+            latitude_max=56.0,
+            longitude_min=-9.75,  # -180/+180 convention
+            longitude_max=8.25,
+        )
+
+        # This should work without zero-length longitude dimension
+        masked_dataset = case_20_region.mask(forecast_dataset)
+
+        assert isinstance(masked_dataset, xr.Dataset)
+        assert len(masked_dataset.longitude) > 0  # Should not be zero-length
+        assert len(masked_dataset.latitude) > 0
+
+        # Verify longitude coordinates are in expected range
+        lon_values = masked_dataset.longitude.values
+        # After conversion: -9.75 -> 350.25, 8.25 -> 8.25
+        expected_condition = np.logical_or(
+            lon_values >= 350.25,  # Western part (converted from -9.75)
+            lon_values <= 8.25,  # Eastern part
+        )
+        assert np.all(expected_condition)

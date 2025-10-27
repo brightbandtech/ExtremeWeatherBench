@@ -148,7 +148,7 @@ def _run_parallel(
     run_results = joblib.Parallel(n_jobs=n_jobs)(
         # None is the cache_dir, we can't cache in parallel mode
         joblib.delayed(compute_case_operator)(case_operator, None, **kwargs)
-        for case_operator in case_operators
+        for case_operator in tqdm(case_operators)
     )
     return run_results
 
@@ -232,7 +232,7 @@ def compute_case_operator(
 
 def _extract_standard_metadata(
     target_variable: Union[str, "derived.DerivedVariable"],
-    metric: "metrics.BaseMetric",
+    metric: Union["metrics.BaseMetric", "metrics.AppliedMetric"],
     case_operator: "cases.CaseOperator",
 ) -> dict:
     """Extract standard metadata for output dataframe.
@@ -336,8 +336,8 @@ def _evaluate_metric_and_return_df(
     """
 
     # Normalize variables to their string names if needed
-    forecast_variable = _maybe_convert_variable_to_string(forecast_variable)
-    target_variable = _maybe_convert_variable_to_string(target_variable)
+    forecast_variable = derived._maybe_convert_variable_to_string(forecast_variable)
+    target_variable = derived._maybe_convert_variable_to_string(target_variable)
 
     # TODO: remove this once we have a better way to handle metric
     # instantiation
@@ -357,16 +357,6 @@ def _evaluate_metric_and_return_df(
     # TODO: add functionality for custom metadata columns
     metadata = _extract_standard_metadata(target_variable, metric, case_operator)
     return _ensure_output_schema(df, **metadata)
-
-
-def _maybe_convert_variable_to_string(
-    variable: Union[str, Type["derived.DerivedVariable"]],
-) -> str:
-    """Convert a variable to its string representation."""
-    if derived.is_derived_variable(variable):
-        return variable.name  # type: ignore
-    else:
-        return variable  # type: ignore
 
 
 def _build_datasets(
