@@ -1,4 +1,4 @@
-"""Tests for the region-related functionality in py."""
+"""Tests for the regions module."""
 
 from pathlib import Path
 from unittest import mock
