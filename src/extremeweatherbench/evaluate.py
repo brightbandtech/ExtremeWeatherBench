@@ -100,13 +100,11 @@ class ExtremeWeatherBench:
         # Determine if running in serial or parallel mode
         # Serial: n_jobs=1 or (parallel_config with n_jobs=1)
         # Parallel: n_jobs>1 or (parallel_config with n_jobs>1)
-        is_serial = (n_jobs == 1) or (
-            parallel_config is not None and parallel_config.get("n_jobs") == 1
+        is_serial = (
+            (n_jobs == 1)
+            or (parallel_config is not None and parallel_config.get("n_jobs") == 1)
+            or (n_jobs is None and parallel_config is None)
         )
-
-        # If n_jobs not specified, check if parallel_config suggests parallel
-        if n_jobs is None and parallel_config is None:
-            is_serial = True
         logger.debug("Running in %s mode.", "serial" if is_serial else "parallel")
 
         if not is_serial:
