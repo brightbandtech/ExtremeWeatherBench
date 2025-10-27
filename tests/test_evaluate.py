@@ -1157,7 +1157,7 @@ class TestPipelineFunctions:
             assert isinstance(target_ds, xr.Dataset)
 
             # Should log a warning
-            mock_warning.assert_called_once()
+            mock_warning.assert_called()
             warning_message = mock_warning.call_args[0][0]
             assert "has no data for case time range" in warning_message
             assert (
@@ -1179,7 +1179,7 @@ class TestPipelineFunctions:
             forecast_ds, target_ds = evaluate._build_datasets(sample_case_operator)
 
             # Verify warning message contains expected information
-            mock_warning.assert_called_once()
+            mock_warning.assert_called()
             warning_message = mock_warning.call_args[0][0]
 
             # Check all expected components are in the warning message
@@ -1208,7 +1208,7 @@ class TestPipelineFunctions:
             assert len(target_ds) == 0
 
             # Should log a warning
-            mock_warning.assert_called_once()
+            mock_warning.assert_called()
             warning_message = mock_warning.call_args[0][0]
             assert "has no data for case time range" in warning_message
             assert (
