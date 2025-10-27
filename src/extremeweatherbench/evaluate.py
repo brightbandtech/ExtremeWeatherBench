@@ -97,26 +97,38 @@ class ExtremeWeatherBench:
         """
         logger.info("Running ExtremeWeatherBench workflow...")
 
-        # Build parallel_config if not provided
-        if parallel_config is None and n_jobs is not None:
-            parallel_config = {"backend": "threading", "n_jobs": n_jobs}
+        # Determine if running in serial or parallel mode
+        # Serial: n_jobs=1 or (parallel_config with n_jobs=1)
+        # Parallel: n_jobs>1 or (parallel_config with n_jobs>1)
+        is_serial = (n_jobs == 1) or (
+            parallel_config is not None and parallel_config.get("n_jobs") == 1
+        )
 
-        # Determine if running in serial mode
-        is_serial = parallel_config is None or parallel_config.get("n_jobs") == 1
+        # If n_jobs not specified, check if parallel_config suggests parallel
+        if n_jobs is None and parallel_config is None:
+            is_serial = True
+        logger.debug("Running in %s mode.", "serial" if is_serial else "parallel")
 
-        # Caching does not work in parallel mode as of now
-        if self.cache_dir and not is_serial:
-            logger.warning(
-                "Caching is not supported in parallel mode, ignoring cache_dir"
-            )
-        # Instantiate the cache directory if caching and build it if it does not exist
-        elif self.cache_dir:
-            if not self.cache_dir.exists():
-                self.cache_dir.mkdir(parents=True, exist_ok=True)
-
-        # Add parallel_config to kwargs if provided
-        if parallel_config is not None:
+        if not is_serial:
+            # Build parallel_config if not provided
+            if parallel_config is None and n_jobs is not None:
+                logger.debug(
+                    "No parallel_config provided, using threading backend and %s jobs.",
+                    n_jobs,
+                )
+                parallel_config = {"backend": "threading", "n_jobs": n_jobs}
             kwargs["parallel_config"] = parallel_config
+
+            # Caching does not work in parallel mode as of now
+            if self.cache_dir:
+                logger.warning(
+                    "Caching is not supported in parallel mode, ignoring cache_dir"
+                )
+        else:
+            # Running in serial mode - instantiate cache dir if needed
+            if self.cache_dir:
+                if not self.cache_dir.exists():
+                    self.cache_dir.mkdir(parents=True, exist_ok=True)
 
         run_results = _run_case_operators(self.case_operators, self.cache_dir, **kwargs)
 
@@ -145,13 +157,14 @@ def _run_case_operators(
     """
     with logging_redirect_tqdm():
         # Check if parallel_config is provided
-        parallel_config = kwargs.get("parallel_config")
+        parallel_config = kwargs.get("parallel_config", None)
 
         # Run in parallel if parallel_config exists and n_jobs != 1
-        if parallel_config is not None and parallel_config.get("n_jobs") != 1:
+        if parallel_config is not None:
             logger.info("Running case operators in parallel...")
             return _run_parallel(case_operators, **kwargs)
         else:
+            logger.info("Running case operators in serial...")
             return _run_serial(case_operators, cache_dir, **kwargs)
 
 

@@ -318,10 +318,10 @@ class TestExtremeWeatherBench:
 
             result = ewb.run(n_jobs=1)
 
+            # Serial mode should not pass parallel_config
             mock_run_case_operators.assert_called_once_with(
                 [sample_case_operator],
                 None,
-                parallel_config={"backend": "threading", "n_jobs": 1},
             )
             assert isinstance(result, pd.DataFrame)
             assert len(result) == 1
@@ -508,13 +508,10 @@ class TestRunCaseOperators:
         mock_results = [pd.DataFrame({"value": [1.0]})]
         mock_run_serial.return_value = mock_results
 
-        result = evaluate._run_case_operators(
-            [sample_case_operator], parallel_config={"n_jobs": 1}
-        )
+        # Serial mode: don't pass parallel_config
+        result = evaluate._run_case_operators([sample_case_operator], None)
 
-        mock_run_serial.assert_called_once_with(
-            [sample_case_operator], None, parallel_config={"n_jobs": 1}
-        )
+        mock_run_serial.assert_called_once_with([sample_case_operator], None)
         assert result == mock_results
 
     @mock.patch("extremeweatherbench.evaluate._run_parallel")
@@ -542,16 +539,17 @@ class TestRunCaseOperators:
         mock_results = [pd.DataFrame({"value": [1.0]})]
         mock_run_serial.return_value = mock_results
 
+        # Serial mode: don't pass parallel_config
         result = evaluate._run_case_operators(
             [sample_case_operator],
-            parallel_config={"n_jobs": 1},
+            None,
             threshold=0.5,
             pre_compute=True,
         )
 
         call_args = mock_run_serial.call_args
         assert call_args[0][0] == [sample_case_operator]
-        assert call_args[1]["parallel_config"] == {"n_jobs": 1}
+        assert call_args[0][1] is None  # cache_dir
         assert call_args[1]["threshold"] == 0.5
         assert call_args[1]["pre_compute"] is True
         assert isinstance(result, list)
@@ -581,9 +579,10 @@ class TestRunCaseOperators:
         with mock.patch("extremeweatherbench.evaluate._run_serial") as mock_serial:
             mock_serial.return_value = []
 
-            result = evaluate._run_case_operators([], parallel_config={"n_jobs": 1})
+            # Serial mode: don't pass parallel_config
+            result = evaluate._run_case_operators([], None)
 
-            mock_serial.assert_called_once_with([], None, parallel_config={"n_jobs": 1})
+            mock_serial.assert_called_once_with([], None)
             assert result == []
 
 
@@ -1578,9 +1577,8 @@ class TestErrorHandling:
         mock_run_serial.side_effect = Exception("Serial execution failed")
 
         with pytest.raises(Exception, match="Serial execution failed"):
-            evaluate._run_case_operators(
-                [sample_case_operator], parallel_config={"n_jobs": 1}
-            )
+            # Serial mode: don't pass parallel_config
+            evaluate._run_case_operators([sample_case_operator], None)
 
     @mock.patch("extremeweatherbench.evaluate._run_parallel")
     def test_run_case_operators_parallel_exception(
