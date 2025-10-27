@@ -11,6 +11,7 @@ import sparse
 import xarray as xr
 from tqdm.auto import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
+from tqdm.dask import TqdmCallback
 
 from extremeweatherbench import cases, defaults, derived, inputs, sources, utils
 
@@ -74,6 +75,7 @@ class ExtremeWeatherBench:
     def run(
         self,
         n_jobs: Optional[int] = None,
+        parallel_config: Optional[dict] = None,
         **kwargs,
     ) -> pd.DataFrame:
         """Runs the ExtremeWeatherBench workflow.
@@ -84,42 +86,83 @@ class ExtremeWeatherBench:
 
         Args:
             n_jobs: The number of jobs to run in parallel. If None, defaults to the
-            joblib backend default value. If 1, the workflow will run serially.
+                joblib backend default value. If 1, the workflow will run serially.
+                Ignored if parallel_config is provided.
+            parallel_config: Optional dictionary of joblib parallel configuration.
+                If provided, this takes precedence over n_jobs. If not provided and
+                n_jobs is specified, a default config with threading backend is used.
 
         Returns:
             A concatenated dataframe of the evaluation results.
         """
-        # Caching does not work in parallel mode as of now, so ignore the cache_dir
-        # but raise a warning for the user
-        if self.cache_dir and n_jobs != 1:
-            logger.warning(
-                "Caching is not supported in parallel mode, ignoring cache_dir"
-            )
-        # Instantiate the cache directory if caching and build it if it does not exist
-        elif self.cache_dir:
-            if not self.cache_dir.exists():
-                self.cache_dir.mkdir(parents=True, exist_ok=True)
-        run_results = _run_case_operators(
-            self.case_operators, n_jobs, self.cache_dir, **kwargs
+        logger.info("Running ExtremeWeatherBench workflow...")
+
+        # Determine if running in serial or parallel mode
+        # Serial: n_jobs=1 or (parallel_config with n_jobs=1)
+        # Parallel: n_jobs>1 or (parallel_config with n_jobs>1)
+        is_serial = (
+            (n_jobs == 1)
+            or (parallel_config is not None and parallel_config.get("n_jobs") == 1)
+            or (n_jobs is None and parallel_config is None)
         )
+        logger.debug("Running in %s mode.", "serial" if is_serial else "parallel")
+
+        if not is_serial:
+            # Build parallel_config if not provided
+            if parallel_config is None and n_jobs is not None:
+                logger.debug(
+                    "No parallel_config provided, using threading backend and %s jobs.",
+                    n_jobs,
+                )
+                parallel_config = {"backend": "threading", "n_jobs": n_jobs}
+            kwargs["parallel_config"] = parallel_config
+
+            # Caching does not work in parallel mode as of now
+            if self.cache_dir:
+                logger.warning(
+                    "Caching is not supported in parallel mode, ignoring cache_dir"
+                )
+        else:
+            # Running in serial mode - instantiate cache dir if needed
+            if self.cache_dir:
+                if not self.cache_dir.exists():
+                    self.cache_dir.mkdir(parents=True, exist_ok=True)
+
+        run_results = _run_case_operators(self.case_operators, self.cache_dir, **kwargs)
+
+        # If there are results, concatenate them and return, else return an empty
+        # DataFrame with the expected columns
         if run_results:
             return utils._safe_concat(run_results, ignore_index=True)
         else:
-            # Return empty DataFrame with expected columns
             return pd.DataFrame(columns=defaults.OUTPUT_COLUMNS)
 
 
 def _run_case_operators(
     case_operators: list["cases.CaseOperator"],
-    n_jobs: Optional[int] = None,
     cache_dir: Optional[pathlib.Path] = None,
     **kwargs,
 ) -> list[pd.DataFrame]:
-    """Run the case operators in parallel or serial."""
+    """Run the case operators in parallel or serial.
+
+    Args:
+        case_operators: List of case operators to run.
+        cache_dir: Optional directory for caching (serial mode only).
+        **kwargs: Additional arguments, may include 'parallel_config' dict.
+
+    Returns:
+        List of result DataFrames.
+    """
     with logging_redirect_tqdm():
-        if n_jobs != 1:
-            return _run_parallel(case_operators, n_jobs, **kwargs)
+        # Check if parallel_config is provided
+        parallel_config = kwargs.get("parallel_config", None)
+
+        # Run in parallel if parallel_config exists and n_jobs != 1
+        if parallel_config is not None:
+            logger.info("Running case operators in parallel...")
+            return _run_parallel(case_operators, **kwargs)
         else:
+            logger.info("Running case operators in serial...")
             return _run_serial(case_operators, cache_dir, **kwargs)
 
 
@@ -138,19 +181,60 @@ def _run_serial(
 
 def _run_parallel(
     case_operators: list["cases.CaseOperator"],
-    n_jobs: Optional[int] = None,
     **kwargs,
 ) -> list[pd.DataFrame]:
-    """Run the case operators in parallel."""
+    """Run the case operators in parallel.
 
-    if n_jobs is None:
+    Args:
+        case_operators: List of case operators to run.
+        **kwargs: Additional arguments, must include 'parallel_config' dict.
+
+    Returns:
+        List of result DataFrames.
+    """
+    parallel_config = kwargs.pop("parallel_config", None)
+
+    if parallel_config is None:
+        raise ValueError("parallel_config must be provided to _run_parallel")
+
+    if parallel_config.get("n_jobs") is None:
         logger.warning("No number of jobs provided, using joblib backend default.")
-    run_results = joblib.Parallel(n_jobs=n_jobs)(
-        # None is the cache_dir, we can't cache in parallel mode
-        joblib.delayed(compute_case_operator)(case_operator, None, **kwargs)
-        for case_operator in tqdm(case_operators)
-    )
-    return run_results
+
+    # Handle dask backend - create client if needed
+    dask_client = None
+    if parallel_config.get("backend") == "dask":
+        try:
+            from dask.distributed import Client, LocalCluster
+
+            # Check if a client already exists
+            try:
+                Client.current()
+                logger.info("Using existing dask client")
+            except ValueError:
+                # No client exists, create a local one
+                logger.info("Creating local dask client for parallel execution")
+                dask_client = Client(LocalCluster(processes=True, silence_logs=False))
+                logger.info(f"Dask client created: {dask_client}")
+        except ImportError:
+            raise ImportError(
+                "Dask is required for dask backend. "
+                "Install with: pip install dask[distributed]"
+            )
+
+    try:
+        # TODO(198): return a generator and compute at a higher level
+        with joblib.parallel_config(**parallel_config):
+            run_results = utils.ParallelTqdm(total_tasks=len(case_operators))(
+                # None is the cache_dir, we can't cache in parallel mode
+                joblib.delayed(compute_case_operator)(case_operator, None, **kwargs)
+                for case_operator in case_operators
+            )
+        return run_results
+    finally:
+        # Clean up the dask client if we created it
+        if dask_client is not None:
+            logger.info("Closing dask client")
+            dask_client.close()
 
 
 def compute_case_operator(
@@ -173,7 +257,12 @@ def compute_case_operator(
     Returns:
         A concatenated dataframe of the results of the case operator.
     """
+    logger.info(
+        "Computing case operator for case %s...",
+        case_operator.case_metadata.case_id_number,
+    )
     forecast_ds, target_ds = _build_datasets(case_operator, **kwargs)
+
     # Check if any dimension has zero length
     if 0 in forecast_ds.sizes.values() or 0 in target_ds.sizes.values():
         return pd.DataFrame(columns=defaults.OUTPUT_COLUMNS)
@@ -376,16 +465,21 @@ def _build_datasets(
         has no dimensions, both will be empty datasets.
     """
     logger.info("Running target pipeline... ")
-    target_ds = run_pipeline(
-        case_operator.case_metadata, case_operator.target, **kwargs
-    )
-    # If the target dataset has no dimensions, return empty datasets
-    if len(target_ds.dims) == 0:
-        return xr.Dataset(), xr.Dataset()
+    with TqdmCallback(
+        desc=f"Running target pipeline for case "
+        f"{case_operator.case_metadata.case_id_number}"
+    ):
+        target_ds = run_pipeline(
+            case_operator.case_metadata, case_operator.target, **kwargs
+        )
     logger.info("Running forecast pipeline... ")
-    forecast_ds = run_pipeline(
-        case_operator.case_metadata, case_operator.forecast, **kwargs
-    )
+    with TqdmCallback(
+        desc=f"Running forecast pipeline for case "
+        f"{case_operator.case_metadata.case_id_number}"
+    ):
+        forecast_ds = run_pipeline(
+            case_operator.case_metadata, case_operator.forecast, **kwargs
+        )
     # Check if any dimension has zero length
     zero_length_dims = [dim for dim, size in forecast_ds.sizes.items() if size == 0]
     if zero_length_dims:
