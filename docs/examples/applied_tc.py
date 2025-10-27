@@ -24,12 +24,13 @@ from extremeweatherbench import cases, derived, evaluate, inputs, metrics
 # %%
 logging.getLogger("urllib3.connectionpool").setLevel(logging.CRITICAL)
 logging.getLogger("botocore.httpchecksum").setLevel(logging.CRITICAL)
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logging.basicConfig()
+logger = logging.getLogger("extremeweatherbench")
+logger.setLevel(logging.INFO)
 
 # %%
 case_yaml = cases.load_ewb_events_yaml_into_case_collection()
-case_yaml.select_cases(by="case_id_number", value=211, inplace=True)
+case_yaml.select_cases(by="case_id_number", value=220, inplace=True)
 
 # %%
 ibtracs_target = inputs.IBTrACS()
