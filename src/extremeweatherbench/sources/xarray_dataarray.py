@@ -103,10 +103,10 @@ def check_for_spatial_data(data: xr.DataArray, location: "regions.Region") -> bo
     if lat_dim is None or lon_dim is None:
         return False
 
-    coords = location.get_bounding_coordinates
+    coords = location.as_geopandas().total_bounds
     # Get location bounds
-    lat_min, lat_max = coords.latitude_min, coords.latitude_max
-    lon_min, lon_max = coords.longitude_min, coords.longitude_max
+    lat_min, lat_max = coords[1], coords[3]
+    lon_min, lon_max = coords[0], coords[2]
 
     # Check if reversing the latitude range still returns no data
     if len(data.sel({lat_dim: slice(lat_min, lat_max)})) == 0:

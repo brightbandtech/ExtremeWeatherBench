@@ -175,8 +175,7 @@ def check_for_spatial_data(
         data: The Polars LazyFrame to check for spatial data. Should contain
             latitude and longitude columns with coordinate data.
         location: A Region object that defines the geographic area to check
-            against. Must have a get_bounding_coordinates method that returns
-            latitude and longitude bounds.
+            against.
 
     Returns:
         bool: True if the LazyFrame has spatial data within the region bounds,
@@ -215,10 +214,10 @@ def check_for_spatial_data(
 
     if lat_col is None or lon_col is None:
         return False
-    coords = location.get_bounding_coordinates
+    coords = location.as_geopandas().total_bounds
     # Get location bounds
-    lat_min, lat_max = coords.latitude_min, coords.latitude_max
-    lon_min, lon_max = coords.longitude_min, coords.longitude_max
+    lat_min, lat_max = coords[1], coords[3]
+    lon_min, lon_max = coords[0], coords[2]
 
     # Check if there are any data points within the location bounds
     filtered_data = data.filter(
