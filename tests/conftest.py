@@ -1,11 +1,11 @@
+import pathlib
 import tempfile
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import pytest
 import xarray as xr
-from click.testing import CliRunner
+from click import testing
 
 
 def make_sample_gridded_obs_dataset():
@@ -153,20 +153,20 @@ def sample_results_dataarray_list():
 @pytest.fixture
 def runner():
     """Fixture for Click CLI runner."""
-    return CliRunner()
+    return testing.CliRunner()
 
 
 @pytest.fixture
 def temp_config_dir():
     """Fixture that creates a temporary directory for config files."""
     with tempfile.TemporaryDirectory() as temp_dir:
-        yield Path(temp_dir)
+        yield pathlib.Path(temp_dir)
 
 
 @pytest.fixture
 def sample_yaml_config():
     """Fixture that returns the path to the sample YAML config file."""
-    return Path(__file__).parent / "data" / "sample_config.yaml"
+    return pathlib.Path(__file__).parent / "data" / "sample_config.yaml"
 
 
 def make_sample_gridded_obs_dataarray():
@@ -345,7 +345,7 @@ def sample_ibtracs_dataframe():
 def temp_zarr_file():
     """Fixture that creates a temporary zarr file."""
     with tempfile.TemporaryDirectory() as temp_dir:
-        zarr_path = Path(temp_dir) / "test.zarr"
+        zarr_path = pathlib.Path(temp_dir) / "test.zarr"
         # Create a simple zarr dataset
         ds = make_sample_era5_dataset()
         ds.to_zarr(zarr_path)
@@ -356,7 +356,7 @@ def temp_zarr_file():
 def temp_parquet_file():
     """Fixture that creates a temporary parquet file."""
     with tempfile.TemporaryDirectory() as temp_dir:
-        parquet_path = Path(temp_dir) / "test.parquet"
+        parquet_path = pathlib.Path(temp_dir) / "test.parquet"
         # Create a simple parquet file
         df = make_sample_ghcn_dataframe()
         df.write_parquet(parquet_path)
