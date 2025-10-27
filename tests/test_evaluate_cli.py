@@ -206,31 +206,29 @@ class TestParallelExecution:
         "extremeweatherbench.defaults.get_brightband_evaluation_objects",
         return_value=[],
     )
-    @mock.patch("extremeweatherbench.evaluate._run_parallel")
     @mock.patch("extremeweatherbench.evaluate_cli._load_default_cases")
     @mock.patch("extremeweatherbench.evaluate.ExtremeWeatherBench")
     def test_parallel_execution(
         self,
         mock_ewb_class,
         mock_load_cases,
-        mock_parallel_eval,
         mock_get_brightband,
         runner,
     ):
         """Test parallel execution mode."""
         mock_ewb = mock.Mock()
         mock_ewb.case_operators = [mock.Mock(), mock.Mock(), mock.Mock()]
+        mock_ewb.run.return_value = pd.DataFrame({"test": [1, 2, 3]})
         mock_ewb_class.return_value = mock_ewb
         mock_load_cases.return_value = {"cases": []}
-        mock_parallel_eval.return_value = [pd.DataFrame({"test": [1, 2, 3]})]
 
         result = runner.invoke(evaluate_cli.cli_runner, ["--default", "--n-jobs", "3"])
 
         assert result.exit_code == 0
-        # Output suppressed - only check exit code
-        mock_parallel_eval.assert_called_once_with(
-            mock_ewb.case_operators,
-            parallel_config={"backend": "threading", "n_jobs": 3},
+        # Verify ewb.run was called with parallel config
+        mock_ewb.run.assert_called_once_with(
+            n_jobs=3,
+            parallel_config=None,
             pre_compute=False,
         )
 
@@ -342,8 +340,7 @@ class TestValidationAndErrorHandling:
         """Test error when neither --default nor --config-file is specified."""
         result = runner.invoke(evaluate_cli.cli_runner, ["--output-dir", "/tmp"])
 
-        assert result.exit_code != 0
-        # Output suppressed - only check exit code
+        assert result.exit_code == 0
 
     def test_both_default_and_config_specified(self, runner, sample_config_py):
         """Test error when both --default and --config-file are specified."""

@@ -7,7 +7,7 @@ from typing import Optional
 import click
 import pandas as pd
 
-from extremeweatherbench import cases, defaults, evaluate, utils
+from extremeweatherbench import cases, defaults, evaluate
 
 
 @click.command()
@@ -60,7 +60,9 @@ from extremeweatherbench import cases, defaults, evaluate, utils
         "uses more memory)"
     ),
 )
+@click.pass_context
 def cli_runner(
+    ctx: click.Context,
     default: bool,
     config_file: Optional[str],
     output_dir: Optional[str],
@@ -116,8 +118,10 @@ def cli_runner(
         # Use custom parallel configuration
         $ ewb --default --parallel-config '{"backend": "dask", "n_jobs": 4}'
     """
-    # Store original output_dir value before setting default
-    original_output_dir = output_dir
+    # Show help if no arguments provided
+    if not default and not config_file:
+        click.echo(ctx.get_help())
+        ctx.exit()
 
     # Set default output directory to current working directory
     if output_dir is None:
@@ -125,29 +129,6 @@ def cli_runner(
 
     output_path = pathlib.Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
-
-    # Validate that either default or config_file is provided
-    if not default and not config_file:
-        ctx = click.get_current_context()
-        # Check if any non-default arguments were provided
-        args_provided = (
-            original_output_dir is not None
-            or cache_dir is not None
-            or n_jobs != 1
-            or parallel_config is not None
-            or save_case_operators is not None
-            or precompute
-        )
-
-        if not args_provided:
-            # No arguments provided, show help and exit 0
-            click.echo(ctx.get_help())
-            ctx.exit(0)
-        else:
-            # Some arguments provided but missing required flags, show error
-            raise click.UsageError(
-                "Either --default or --config-file must be specified"
-            )
 
     if default and config_file:
         raise click.UsageError("Cannot specify both --default and --config-file")
@@ -181,37 +162,13 @@ def cli_runner(
             pickle.dump(case_operators, f)
         click.echo(f"Case operators saved to {save_case_operators}")
 
-    # Build final parallel configuration - parallel_config always takes precedence
-    if parallel_config is not None:
-        # Use provided parallel_config (takes precedence)
-        final_parallel_config = parallel_config
-    elif n_jobs > 1:
-        # Build parallel_config from n_jobs option
-        final_parallel_config = {"backend": "threading", "n_jobs": n_jobs}
-    else:
-        # Serial execution
-        final_parallel_config = None
-
     # Run evaluation
-    if final_parallel_config is not None and final_parallel_config.get("n_jobs", 1) > 1:
-        num_jobs = final_parallel_config["n_jobs"]
-        backend = final_parallel_config.get("backend", "threading")
-        click.echo(
-            f"Running evaluation with {num_jobs} parallel jobs using {backend} backend "
-        )
-        results_list = evaluate._run_parallel(
-            case_operators,
-            parallel_config=final_parallel_config,
-            pre_compute=precompute,
-        )
-        results = (
-            utils._safe_concat(results_list, ignore_index=True)
-            if results_list
-            else pd.DataFrame()
-        )
-    else:
-        click.echo("Running evaluation in serial...")
-        results = ewb.run(pre_compute=precompute)
+    click.echo("Running evaluation...")
+    results = ewb.run(
+        n_jobs=n_jobs,
+        parallel_config=parallel_config,
+        pre_compute=precompute,
+    )
 
     # Save results
     output_file = output_path / "evaluation_results.csv"
