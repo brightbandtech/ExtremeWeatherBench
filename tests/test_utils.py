@@ -907,9 +907,9 @@ class TestSafeConcat:
                 and "DataFrame concatenation with empty or all-NA entries"
                 in str(warning.message)
             ]
-            assert (
-                len(future_warnings) == 0
-            ), f"FutureWarning was raised: {future_warnings}"
+            assert len(future_warnings) == 0, (
+                f"FutureWarning was raised: {future_warnings}"
+            )
 
         # Should successfully concatenate without warnings
         assert isinstance(result, pd.DataFrame)
