@@ -749,13 +749,13 @@ def create_case_summary_plot(
         transform=ccrs.PlateCarree(),
     )
     ax3.add_patch(ar_rect)
-
+    buffered_bounds_edges = buffered_bounds.as_geopandas().total_bounds
     # Plot buffered bounds (dashed green)
-    buff_width = buffered_bounds.longitude_max - buffered_bounds.longitude_min
-    buff_height = buffered_bounds.latitude_max - buffered_bounds.latitude_min
+    buff_width = buffered_bounds_edges[2] - buffered_bounds_edges[0]
+    buff_height = buffered_bounds_edges[3] - buffered_bounds_edges[1]
 
     buff_rect = Rectangle(
-        (buffered_bounds.longitude_min, buffered_bounds.latitude_min),
+        (buffered_bounds_edges[0], buffered_bounds_edges[1]),
         buff_width,
         buff_height,
         linewidth=2,
@@ -816,12 +816,12 @@ def process_ar_event(
     case.end_date = case.end_date + pd.Timedelta(days=3)
 
     # Expand the case location by 10 degrees on all edges
-    original_location = case.location
+    original_location = case.location.as_geopandas().total_bounds
     expanded_location = regions.BoundingBoxRegion(
-        latitude_min=original_location.latitude_min - extent_modifier_degrees,
-        latitude_max=original_location.latitude_max + extent_modifier_degrees,
-        longitude_min=original_location.longitude_min - extent_modifier_degrees,
-        longitude_max=original_location.longitude_max + extent_modifier_degrees,
+        latitude_min=original_location[1] - extent_modifier_degrees,
+        latitude_max=original_location[3] + extent_modifier_degrees,
+        longitude_min=original_location[0] - extent_modifier_degrees,
+        longitude_max=original_location[2] + extent_modifier_degrees,
     )
     case.location = expanded_location
 
@@ -848,24 +848,11 @@ def process_ar_event(
     ivt_laplacian = ar.compute_ivt_laplacian(ivt_da)
     ivt_laplacian.name = "integrated_vapor_transport_laplacian"
 
-    # Merge all data
-    full_data = xr.merge([era5_subset, ivt_da, ivt_laplacian])
-
     # Compute AR mask
     ar_mask = ar.atmospheric_river_mask(
-        full_data, min_size_gridpoints=AR_OBJECT_CONFIG["min_area_gridpoints"]
-    )
-
-    logger.info("  AR mask shape: %s", ar_mask.shape)
-    logger.info("  Total AR grid points across all time: %s", ar_mask.sum().values)
-
-    # Compute land intersection
-    logger.info("  Computing land intersection...")
-    from extremeweatherbench import calc
-
-    land_intersection = calc.find_land_intersection(ar_mask)
-    logger.info(
-        "  Total AR-land intersection points: %s", land_intersection.sum().values
+        ivt=ivt_da,
+        ivt_laplacian=ivt_laplacian,
+        min_size_gridpoints=AR_OBJECT_CONFIG["min_area_gridpoints"],
     )
 
     # Generate land mask for peak time finding
@@ -913,7 +900,7 @@ def process_ar_event(
     # Create composite AR mask over entire time range (max)
     logger.info("  Creating composite AR mask over time...")
     composite_ar_mask, composite_land_intersection = create_composite_ar_mask(
-        ar_mask, land_intersection
+        ar_mask, land_intersection=land_mask
     )
 
     logger.info(
@@ -921,7 +908,9 @@ def process_ar_event(
     )
     logger.info(
         "  Composite land intersection has %s grid points",
-        composite_land_intersection.sum().values,
+        composite_land_intersection.sum().values
+        if composite_land_intersection is not None
+        else 0,
     )
 
     # Find bounds using composite mask & expand to contiguous AR
@@ -972,11 +961,11 @@ def process_ar_event(
     bounds_with_buffer = calculate_extent_bounds(
         left_lon, right_lon, bottom_lat, top_lat, extent_buffer=250
     )
-
-    lon_min = bounds_with_buffer.longitude_min
-    lon_max = bounds_with_buffer.longitude_max
-    lat_min = bounds_with_buffer.latitude_min
-    lat_max = bounds_with_buffer.latitude_max
+    bounds_with_buffer_edges = bounds_with_buffer.as_geopandas().total_bounds
+    lon_min = bounds_with_buffer_edges[0]
+    lon_max = bounds_with_buffer_edges[2]
+    lat_min = bounds_with_buffer_edges[1]
+    lat_max = bounds_with_buffer_edges[3]
     logger.info(
         "  Buffered bounds: %.1f-%.1f°, %.1f-%.1f°",
         lon_min,
@@ -1019,10 +1008,10 @@ def process_ar_event(
             "longitude_max": right_lon,
         },
         "buffered_bounds": {
-            "latitude_min": bounds_with_buffer.latitude_min,
-            "latitude_max": bounds_with_buffer.latitude_max,
-            "longitude_min": bounds_with_buffer.longitude_min,
-            "longitude_max": bounds_with_buffer.longitude_max,
+            "latitude_min": bounds_with_buffer_edges[1],
+            "latitude_max": bounds_with_buffer_edges[3],
+            "longitude_min": bounds_with_buffer_edges[0],
+            "longitude_max": bounds_with_buffer_edges[2],
         },
         "bounds_region": bounds_with_buffer,
         "largest_object_metadata": largest_obj_metadata,
