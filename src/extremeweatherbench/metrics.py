@@ -244,7 +244,7 @@ class ThresholdMetric(BaseMetric):
         self.target_threshold = target_threshold
         self.preserve_dims = preserve_dims
 
-    def __call__(self, forecast: xr.Dataset, target: xr.Dataset, **kwargs):
+    def __call__(self, forecast: xr.DataArray, target: xr.DataArray, **kwargs):
         """Make instances callable using their configured thresholds."""
         # Use instance attributes as defaults, but allow override from kwargs
         kwargs.setdefault("forecast_threshold", self.forecast_threshold)

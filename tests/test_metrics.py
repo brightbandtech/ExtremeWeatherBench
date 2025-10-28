@@ -131,8 +131,8 @@ class TestThresholdMetrics:
     def test_threshold_metric_dual_interface(self):
         """Test that both classmethod and instance callable interfaces work."""
         # Create test data
-        forecast = xr.Dataset({"data": (["x"], [0.6, 0.8])})
-        target = xr.Dataset({"data": (["x"], [0.7, 0.9])})
+        forecast = xr.DataArray([0.6, 0.8], dims=["x"])
+        target = xr.DataArray([0.7, 0.9], dims=["x"])
 
         # Test classmethod usage
         csi_class_result = metrics.CSI.compute_metric(
@@ -156,8 +156,8 @@ class TestThresholdMetrics:
         csi_instance = metrics.CSI(forecast_threshold=0.7, target_threshold=0.8)
 
         # Create test data
-        forecast = xr.Dataset({"data": (["x"], [0.6, 0.8])})
-        target = xr.Dataset({"data": (["x"], [0.7, 0.9])})
+        forecast = xr.DataArray([0.6, 0.8], dims=["x"])
+        target = xr.DataArray([0.7, 0.9], dims=["x"])
 
         # Call with different thresholds (should override instance values)
         result = csi_instance(
@@ -169,7 +169,7 @@ class TestThresholdMetrics:
         )
 
         # Should not raise an exception
-        assert isinstance(result, (xr.Dataset, xr.DataArray))
+        assert isinstance(result, xr.DataArray)
 
     def test_threshold_metric_cannot_instantiate_base_class(self):
         """Test that ThresholdMetric base class cannot be instantiated directly."""
@@ -182,8 +182,8 @@ class TestThresholdMetrics:
         metrics.clear_contingency_cache()
 
         # Create simple test data
-        forecast = xr.Dataset({"data": (["x", "y"], [[15500, 14000], [16000, 14500]])})
-        target = xr.Dataset({"data": (["x", "y"], [[0.4, 0.2], [0.5, 0.25]])})
+        forecast = xr.DataArray([[15500, 14000], [16000, 14500]], dims=["x", "y"])
+        target = xr.DataArray([[0.4, 0.2], [0.5, 0.25]], dims=["x", "y"])
 
         # Test all factory functions
         csi_metric = metrics.CSI(forecast_threshold=15000, target_threshold=0.3)
@@ -198,10 +198,10 @@ class TestThresholdMetrics:
         fp_result = fp_metric(forecast, target, preserve_dims="x")
 
         # All should return xarray objects
-        assert isinstance(csi_result, (xr.Dataset, xr.DataArray))
-        assert isinstance(far_result, (xr.Dataset, xr.DataArray))
-        assert isinstance(tp_result, (xr.Dataset, xr.DataArray))
-        assert isinstance(fp_result, (xr.Dataset, xr.DataArray))
+        assert isinstance(csi_result, xr.DataArray)
+        assert isinstance(far_result, xr.DataArray)
+        assert isinstance(tp_result, xr.DataArray)
+        assert isinstance(fp_result, xr.DataArray)
 
     def test_cache_efficiency(self):
         """Test that cache is shared across metrics with same thresholds."""
@@ -209,8 +209,8 @@ class TestThresholdMetrics:
         metrics.clear_contingency_cache()
         initial_cache_size = len(metrics._GLOBAL_CONTINGENCY_CACHE)
 
-        forecast = xr.Dataset({"data": (["x", "y"], [[15500, 14000], [16000, 14500]])})
-        target = xr.Dataset({"data": (["x", "y"], [[0.4, 0.2], [0.5, 0.25]])})
+        forecast = xr.DataArray([[15500, 14000], [16000, 14500]], dims=["x", "y"])
+        target = xr.DataArray([[0.4, 0.2], [0.5, 0.25]], dims=["x", "y"])
 
         # Create multiple metrics with same thresholds
         csi_metric = metrics.CSI(forecast_threshold=15000, target_threshold=0.3)
@@ -236,8 +236,8 @@ class TestThresholdMetrics:
         metrics.clear_contingency_cache()
 
         # Simple test case for verification
-        forecast = xr.Dataset({"data": (["x", "y"], [[15500, 14000], [16000, 14500]])})
-        target = xr.Dataset({"data": (["x", "y"], [[0.4, 0.2], [0.5, 0.25]])})
+        forecast = xr.DataArray([[15500, 14000], [16000, 14500]], dims=["x", "y"])
+        target = xr.DataArray([[0.4, 0.2], [0.5, 0.25]], dims=["x", "y"])
 
         # Get all contingency table components
         tp_result = metrics.TP(15000, 0.3).compute_metric(
@@ -255,7 +255,7 @@ class TestThresholdMetrics:
 
         # Ratios should sum to 1
         total = tp_result + fp_result + tn_result + fn_result
-        np.testing.assert_allclose(total["data"].values, [1.0, 1.0], rtol=1e-10)
+        np.testing.assert_allclose(total.values, [1.0, 1.0], rtol=1e-10)
 
         # CSI and FAR should be reasonable
         csi_result = metrics.CSI(15000, 0.3).compute_metric(
@@ -266,12 +266,12 @@ class TestThresholdMetrics:
         )
 
         # CSI should be between 0 and 1
-        assert np.all(csi_result["data"].values >= 0)
-        assert np.all(csi_result["data"].values <= 1)
+        assert np.all(csi_result.values >= 0)
+        assert np.all(csi_result.values <= 1)
 
         # FAR should be between 0 and 1
-        assert np.all(far_result["data"].values >= 0)
-        assert np.all(far_result["data"].values <= 1)
+        assert np.all(far_result.values >= 0)
+        assert np.all(far_result.values <= 1)
 
 
 class TestMAE:
