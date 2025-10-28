@@ -121,7 +121,7 @@ class AtmosphericRiverMask(DerivedVariable):
 
 def maybe_derive_variables(
     data: xr.Dataset,
-    variables: list[Union[str, DerivedVariable, Type[DerivedVariable]]],
+    variables: list[Union[str, DerivedVariable]],
     **kwargs,
 ) -> xr.Dataset:
     """Derive variable from the data if it exists in a list of variables.
@@ -131,7 +131,7 @@ def maybe_derive_variables(
     variable. If there are multiple derived variables, the first one will be used.
 
     Args:
-        data: The dataset, ideally already subset in case of in memory operations
+        data: The data, ideally already subset in case of in memory operations
             in the derived variables.
         variables: The potential variables to derive as a list of strings or
             DerivedVariable objects.
