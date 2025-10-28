@@ -7,7 +7,7 @@ import inspect
 import logging
 import pathlib
 import threading
-from typing import Any, Callable, Optional, Union
+from typing import Any, Callable, Optional, Sequence, Union
 
 import numpy as np
 import pandas as pd  # type: ignore[import-untyped]
@@ -474,6 +474,22 @@ def stack_sparse_data_from_dims(
     return da
 
 
+def check_for_vars(variable_list: list[str], source: Sequence) -> Optional[str]:
+    """Check if the variable is in the source.
+
+    Args:
+        variable_list: The list of variables to check for.
+        source: The source to check for the variables.
+
+    Returns:
+        The variable if it is in the source, otherwise None.
+    """
+    for variable in variable_list:
+        if variable in source:
+            return variable
+    return None
+
+
 class ParallelTqdm(Parallel):
     """joblib.Parallel, but with a tqdm progressbar
     From: https://gist.github.com/tsvikas/5f859a484e53d4ef93400751d0a116de
@@ -558,6 +574,9 @@ class ParallelTqdm(Parallel):
 
     def print_progress(self):
         """Display the process of the parallel execution using tqdm"""
+        # Check if progress_bar has been initialized
+        if self.progress_bar is None:
+            return
         # if we finish dispatching, find total_tasks from the number of remaining items
         if self.total_tasks is None and self._original_iterator is None:
             self.total_tasks = self.n_dispatched_tasks

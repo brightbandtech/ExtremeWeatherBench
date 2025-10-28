@@ -1,4 +1,5 @@
 import logging
+from typing import Any, Callable, Union
 
 import numpy as np
 import xarray as xr
@@ -20,6 +21,15 @@ OUTPUT_COLUMNS = [
     "target_source",
     "case_id_number",
     "event_type",
+]
+# The core coordinate variables that are always required, even if not dimensions
+# (e.g. latitude and longitude for xarray datasets)
+DEFAULT_COORDINATE_VARIABLES = [
+    "valid_time",
+    "lead_time",
+    "init_time",
+    "latitude",
+    "longitude",
 ]
 
 
@@ -219,14 +229,18 @@ def get_brightband_evaluation_objects() -> list[inputs.EvaluationObject]:
     # Import metrics here to avoid circular import
     from extremeweatherbench import metrics
 
-    heatwave_metric_list = [
+    heatwave_metric_list: list[
+        Union[Callable[..., Any], type[metrics.BaseMetric], type[metrics.AppliedMetric]]
+    ] = [
         metrics.MaximumMAE,
         metrics.RMSE,
         metrics.OnsetME,
         metrics.DurationME,
         metrics.MaxMinMAE,
     ]
-    freeze_metric_list = [
+    freeze_metric_list: list[
+        Union[Callable[..., Any], type[metrics.BaseMetric], type[metrics.AppliedMetric]]
+    ] = [
         metrics.MinimumMAE,
         metrics.RMSE,
         metrics.OnsetME,

@@ -13,7 +13,7 @@ from cartopy.mpl.gridliner import LatitudeFormatter, LongitudeFormatter
 from matplotlib import dates as mdates
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-from extremeweatherbench import case, utils
+from extremeweatherbench import cases, utils
 
 sns.set_theme(style="whitegrid", context="talk")
 
@@ -23,23 +23,22 @@ def subset_event_and_mask_climatology(
     climatology: xr.Dataset,
     actual_start_date: datetime.datetime,
     actual_end_date: datetime.datetime,
-    single_case: case.IndividualCase,
+    single_case: cases.IndividualCase,
 ):
     """Calculate the times where regional average of temperature exceeds the
     climatology."""
     era5_event = era5[["2m_temperature"]].sel(
         time=slice(actual_start_date, actual_end_date)
     )
-    era5_event = era5_event.sel(time=utils.is_6_hourly(era5_event["time.hour"]))
-    subset_climatology = utils.convert_day_yearofday_to_time(
+    era5_event = era5_event.sel(time=era5_event["time.hour"].isin([0, 6, 12, 18]))
+    subset_climatology = convert_day_yearofday_to_time(
         climatology, np.unique(era5_event.time.dt.year.values)[0]
     ).rename_vars({"2m_temperature": "2m_temperature_85th_percentile"})
-
+    location = single_case.location.as_geopandas().total_bounds
     merged_dataset = xr.merge([subset_climatology, era5_event], join="inner")
-    merged_dataset = utils.clip_dataset_to_bounding_box(
-        merged_dataset,
-        single_case.location_center,
-        single_case.box_length_width_in_km,
+    merged_dataset = merged_dataset.sel(
+        latitude=slice(location[1], location[3]),
+        longitude=slice(location[0], location[2]),
     )
     merged_dataset = utils.remove_ocean_gridpoints(merged_dataset)
     time_averaged_merged_dataset = merged_dataset.mean(["latitude", "longitude"])
@@ -54,7 +53,7 @@ def subset_event_and_mask_climatology(
 def find_heatwave_events(
     era5: xr.Dataset,
     climatology: xr.Dataset,
-    single_case: case.IndividualCase,
+    single_case: cases.IndividualCase,
     plot: bool = True,
 ):
     """Find the start and end dates of heatwave events, stepping +- 6 hours until <
@@ -63,8 +62,8 @@ def find_heatwave_events(
     end_date = pd.to_datetime(single_case.end_date)
     location_center = single_case.location
     era5_event = era5[["2m_temperature"]].sel(time=slice(start_date, end_date))
-    era5_event = era5_event.sel(time=utils.is_6_hourly(era5_event["time.hour"]))
-    subset_climatology = utils.convert_day_yearofday_to_time(
+    era5_event = era5_event.sel(time=era5_event["time.hour"].isin([0, 6, 12, 18]))
+    subset_climatology = convert_day_yearofday_to_time(
         climatology, np.unique(era5_event.time.dt.year.values)[0]
     ).rename_vars({"2m_temperature": "2m_temperature_85th_percentile"})
 
@@ -126,7 +125,7 @@ def find_heatwave_events(
 def case_plot(
     merged_dataset: xr.Dataset,
     time_based_merged_dataset: xr.Dataset,
-    single_case: case.IndividualCase,
+    single_case: cases.IndividualCase,
 ):
     """Plot the max timestep of the heatwave event, the average regional temperature
     time series, and the associated climatology."""
@@ -170,15 +169,21 @@ def case_plot(
     gl.yformatter = LatitudeFormatter()
     gl.xlabel_style = {"size": 12, "color": "k"}
     gl.ylabel_style = {"size": 12, "color": "k"}
+    time_subset = merged_dataset["time"].sel(time=subset_timestep)
     ax1.set_title(
-        f"Event ID {case.case_id_number}: 2m Temperature, "
-        f"{merged_dataset['time'].sel(time=subset_timestep).dt.strftime('%Y-%m-%d %Hz').values[0]}",
+        f"Event ID {single_case.case_id_number}: 2m Temperature, "
+        f"{time_subset.dt.strftime('%Y-%m-%d %Hz').values[0]}",
         fontsize=12,
     )
     # Add the location coordinate as a dot on the map
+    # Get center coordinates from the region bounds
+    bounds = single_case.location.as_geopandas().total_bounds
+    center_lon = (bounds[0] + bounds[2]) / 2  # (lon_min + lon_max) / 2
+    center_lat = (bounds[1] + bounds[3]) / 2  # (lat_min + lat_max) / 2
+
     ax1.plot(
-        single_case.location_center.longitude,
-        single_case.location_center.latitude,
+        center_lon,
+        center_lat,
         "ko",
         markersize=10,
         transform=ccrs.PlateCarree(),
@@ -226,3 +231,27 @@ def case_plot(
     ax2.tick_params(axis="y", labelsize=12)
     ax2.legend(["2m Temperature, 85th Percentile", "2m Temperature"], fontsize=12)
     plt.show()
+
+
+def convert_day_yearofday_to_time(dataset: xr.Dataset, year: int) -> xr.Dataset:
+    """Convert dayofyear and hour coordinates in an xarray Dataset to a new time
+    coordinate.
+
+    Args:
+        dataset: The input xarray dataset.
+        year: The base year to use for the time coordinate.
+
+    Returns:
+        The dataset with a new time coordinate.
+    """
+    # Create a new time coordinate by combining dayofyear and hour
+    time_dim = pd.date_range(
+        start=f"{year}-01-01",
+        periods=len(dataset["dayofyear"]) * len(dataset["hour"]),
+        freq="6h",
+    )
+    dataset = dataset.stack(time=("dayofyear", "hour")).drop(["dayofyear", "hour"])
+    # Assign the new time coordinate to the dataset
+    dataset = dataset.assign_coords(time=time_dim)
+
+    return dataset

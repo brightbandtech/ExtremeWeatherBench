@@ -35,7 +35,8 @@ def validate_datetime_format(
         if date_value.count("-") == 2 and len(date_value) in [10, 19]:
             errors.append(
                 f"Case {case_num}: {field_name} '{date_value}' appears to be "
-                f"quoted in YAML. Dates should be unquoted to be parsed as datetime objects"
+                f"quoted in YAML. Dates should be unquoted to be parsed as datetime "
+                "objects. "
             )
         else:
             try:
