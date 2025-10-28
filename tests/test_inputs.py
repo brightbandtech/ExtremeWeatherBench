@@ -1743,7 +1743,7 @@ class TestIBTrACS:
         from extremeweatherbench.inputs import IBTrACS
 
         # Clear registry and test registration
-        tropical_cyclone._IBTRACS_DATA_REGISTRY.clear()
+        tropical_cyclone._TRACK_DATA_REGISTRY.clear()
         test_case_id_number = 456
 
         # Create an IBTrACS instance
@@ -1772,7 +1772,7 @@ class TestIBTrACS:
         result_dataset = ibtracs.add_source_to_dataset_attrs(test_dataset)
 
         # Verify registration occurred
-        assert test_case_id_number in tropical_cyclone._IBTRACS_DATA_REGISTRY
+        assert test_case_id_number in tropical_cyclone._TRACK_DATA_REGISTRY
         assert result_dataset.attrs["is_ibtracs_data"] is True
 
 

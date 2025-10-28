@@ -889,7 +889,7 @@ class IBTrACS(TargetBase):
 
         subset_target_data = subset_target_data.select(columns_to_keep)
 
-        self._current_case_id = case_metadata.case_id_number
+        self._current_case_id = str(case_metadata.case_id_number)
 
         return subset_target_data
 
@@ -937,7 +937,7 @@ class IBTrACS(TargetBase):
         if self._current_case_id is not None:
             from extremeweatherbench.events import tropical_cyclone
 
-            tropical_cyclone.register_tc_track_data(int(self._current_case_id), ds)
+            tropical_cyclone.register_tc_track_data(self._current_case_id, ds)
 
         # Store flag indicating this is IBTrACS data
         ds.attrs["is_ibtracs_data"] = True

@@ -3,7 +3,7 @@ data proximity filtering.
 
 The function flow is as follows:
 
-1. create_tctracks_from_dataset_with_tc_track_data_filter
+1. generate_forecast_tctracks
 2. process_all_init_times
 3. _process_entire_dataset
 4. _convert_detections_to_dataset
@@ -38,7 +38,7 @@ from extremeweatherbench import calc, utils
 logger = logging.getLogger(__name__)
 
 
-def generate_tctracks_from_dataset_and_tc_track_data(
+def generate_forecast_tctracks(
     gridded_dataset: xr.Dataset,
     tc_track_data: xr.Dataset,
     slp_contour_magnitude: float = 200,
@@ -198,9 +198,10 @@ def process_all_init_times(
 
     # Filter the tc_track_data_df to only include valid times that match the forecast
     # times
+    # Flatten time_coord.values to handle multi-dimensional time arrays
     tc_track_data_df = tc_track_data_df[
         pd.to_datetime(tc_track_data_df["valid_time"]).isin(
-            pd.to_datetime(time_coord.values)
+            pd.to_datetime(time_coord.values.ravel())
         )
     ]
     logger.debug(f"tc_track_data_df shape after filtering: {tc_track_data_df.shape}")
@@ -223,7 +224,7 @@ def process_all_init_times(
     ]
     input_core_dims: list[list[str]] = [
         [str(dim) for dim in non_spatial_dims + spatial_dims],  # lead_time, valid_time
-        ["valid_time"],  # e.g., ['valid_time']
+        [str(dim) for dim in time_coord.dims],  # Use actual time_coord dims
         [str(dim) for dim in init_time_coord.dims],  # Use actual init_time dims
         ["latitude"],  # latitude coordinates
         ["longitude"],  # longitude coordinates
@@ -684,7 +685,9 @@ def _convert_detections_to_dataset(
             lead_times = np.arange(max_lt + 1)
 
         # Get valid_time values
-        valid_times = original_dataset.coords["valid_time"].values[: max_vt + 1]
+        # Flatten (works for any dimensionality) and get unique sorted values
+        valid_times = np.unique(original_dataset.coords["valid_time"].values.ravel())
+        valid_times = valid_times[: max_vt + 1]
     else:
         lead_times = np.array([])
         valid_times = np.array([])

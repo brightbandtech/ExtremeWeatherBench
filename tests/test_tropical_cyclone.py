@@ -23,20 +23,20 @@ from extremeweatherbench.events import tropical_cyclone
 @pytest.fixture
 def sample_tc_dataset():
     """Create a sample dataset for TC detection testing."""
-    time = pd.date_range("2023-09-01", periods=5, freq="6h")
+    valid_time = pd.date_range("2023-09-01", periods=5, freq="6h")
     lead_time = np.array([0, 6, 12, 18, 24], dtype="timedelta64[h]")
     lat = np.linspace(10, 40, 31)
     lon = np.linspace(-80, -50, 31)
 
     # Create realistic pressure field with a low-pressure system
-    data_shape = (len(time), len(lat), len(lon), len(lead_time))
+    data_shape = (len(valid_time), len(lat), len(lon), len(lead_time))
 
     # Create base pressure field
     base_pressure = np.full(data_shape, 101325.0)
 
     # Add a low pressure center
     center_lat, center_lon = 15, 2  # indices for lat ~25N, lon ~65W
-    for t in range(len(time)):
+    for t in range(len(valid_time)):
         for lt in range(len(lead_time)):
             # Create a low pressure center that moves
             offset_lat = center_lat + t
@@ -59,31 +59,38 @@ def sample_tc_dataset():
     # Create geopotential field at 500hPa
     geopotential = np.random.normal(5500, 100, data_shape) * 9.80665
 
+    # Create init_time coordinate (2D: lead_time x valid_time)
+    # For forecast data: valid_time = init_time + lead_time
+    init_time_grid = np.broadcast_to(
+        valid_time.values.reshape(1, -1), (len(lead_time), len(valid_time))
+    ) - np.broadcast_to(lead_time.reshape(-1, 1), (len(lead_time), len(valid_time)))
+
     dataset = xr.Dataset(
         {
             "air_pressure_at_mean_sea_level": (
-                ["time", "latitude", "longitude", "lead_time"],
+                ["valid_time", "latitude", "longitude", "lead_time"],
                 base_pressure,
             ),
             "surface_eastward_wind": (
-                ["time", "latitude", "longitude", "lead_time"],
+                ["valid_time", "latitude", "longitude", "lead_time"],
                 wind_u,
             ),
             "surface_northward_wind": (
-                ["time", "latitude", "longitude", "lead_time"],
+                ["valid_time", "latitude", "longitude", "lead_time"],
                 wind_v,
             ),
             "surface_wind_speed": (
-                ["time", "latitude", "longitude", "lead_time"],
+                ["valid_time", "latitude", "longitude", "lead_time"],
                 wind_speed,
             ),
             "geopotential": (
-                ["time", "latitude", "longitude", "lead_time"],
+                ["valid_time", "latitude", "longitude", "lead_time"],
                 geopotential,
             ),
         },
         coords={
-            "valid_time": time,
+            "valid_time": valid_time,
+            "init_time": (["lead_time", "valid_time"], init_time_grid),
             "latitude": lat,
             "longitude": lon,
             "lead_time": lead_time,
@@ -286,7 +293,7 @@ class TestTropicalCycloneDetection:
         assert isinstance(contours, list)
         mock_measure.find_contours.assert_called_once()
 
-    def test_create_tctracks_from_dataset_with_tc_track_data_filter(
+    def test_generate_forecast_tctracks(
         self, sample_tc_dataset, sample_ibtracs_dataset
     ):
         """Test TC track creation with TC track data filtering."""
@@ -308,10 +315,8 @@ class TestTropicalCycloneDetection:
                 np.array([25.0, 30.0, 35.0, 20.0, 25.0]),  # wind_vals
             )
 
-            result = (
-                tropical_cyclone.create_tctracks_from_dataset_with_tc_track_data_filter(
-                    sample_tc_dataset, sample_ibtracs_dataset
-                )
+            result = tropical_cyclone.generate_forecast_tctracks(
+                sample_tc_dataset, sample_ibtracs_dataset
             )
 
             assert isinstance(result, xr.Dataset)
@@ -732,9 +737,7 @@ class TestDimensionHandling:
         # The datetime may be converted to int (nanoseconds) or stay as datetime64/Timestamp
         assert isinstance(track_key[1], (pd.Timestamp, np.datetime64, int, type(None)))
 
-    @patch(
-        "extremeweatherbench.events.tropical_cyclone._process_entire_dataset_compact"
-    )
+    @patch("extremeweatherbench.events.tropical_cyclone._process_entire_dataset")
     def test_apply_ufunc_dimension_compatibility(
         self, mock_process, forecast_dataset_with_init_time
     ):
@@ -756,16 +759,16 @@ class TestDimensionHandling:
             {
                 "latitude": (["valid_time"], [25.0]),
                 "longitude": (["valid_time"], [-75.0]),
+                "surface_wind_speed": (["valid_time"], [30.0]),
+                "air_pressure_at_mean_sea_level": (["valid_time"], [100000.0]),
             },
             coords={"valid_time": [pd.Timestamp("2023-09-01")]},
         )
 
         # This should not raise the "tuple.index(x): x not in tuple" error
-        result = (
-            tropical_cyclone.create_tctracks_from_dataset_with_tc_track_data_filter(
-                forecast_dataset_with_init_time.isel(lead_time=slice(0, 3)),
-                ibtracs_data,
-            )
+        result = tropical_cyclone.generate_forecast_tctracks(
+            forecast_dataset_with_init_time.isel(lead_time=slice(0, 3)),
+            ibtracs_data,
         )
 
         # Verify the function completed successfully
@@ -846,7 +849,7 @@ class TestTCIntegration:
         ) as mock_process:
             # Mock the processing function to return some fake detections
             mock_process.return_value = (
-                np.array([5]),  # n_detections
+                np.array([1]),  # n_detections (should match array sizes below)
                 np.array([0]),  # lt_indices
                 np.array([0]),  # vt_indices
                 np.array([1]),  # track_ids
@@ -856,19 +859,18 @@ class TestTCIntegration:
                 np.array([25.0]),  # wind_vals
             )
 
-            result = (
-                tropical_cyclone.create_tctracks_from_dataset_with_tc_track_data_filter(
-                    sample_tc_dataset, sample_ibtracs_dataset
-                )
+            result = tropical_cyclone.generate_forecast_tctracks(
+                sample_tc_dataset, sample_ibtracs_dataset
             )
 
             assert isinstance(result, xr.Dataset)
             # Check that expected TC variables are present
             expected_vars = [
-                "tc_slp",  # air_pressure_at_mean_sea_level -> tc_slp
-                "tc_vmax",  # surface_wind_speed -> tc_vmax
-                "tc_latitude",  # latitude -> tc_latitude
-                "tc_longitude",  # longitude -> tc_longitude
+                "air_pressure_at_mean_sea_level",
+                "surface_wind_speed",
+                "latitude",
+                "longitude",
+                "track_id",
             ]
             for var in expected_vars:
                 assert var in result.data_vars
