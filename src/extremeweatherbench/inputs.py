@@ -1,7 +1,16 @@
+import abc
 import dataclasses
 import logging
-import abc
-from typing import TYPE_CHECKING, Callable, Optional, TypeAlias, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Literal,
+    Optional,
+    TypeAlias,
+    Union,
+    cast,
+)
 
 import numpy as np
 import pandas as pd
@@ -36,15 +45,7 @@ IBTRACS_URI = (
     "climate-stewardship-ibtracs/v04r01/access/csv/ibtracs.ALL.list.v04r01.csv"
 )
 
-# The core coordinate variables that are always required, even if not dimensions
-# (e.g. latitude and longitude for xarray datasets)
-DEFAULT_COORDINATE_VARIABLES = [
-    "valid_time",
-    "lead_time",
-    "init_time",
-    "latitude",
-    "longitude",
-]
+
 # ERA5 metadata variable mapping
 ERA5_metadata_variable_mapping = {
     "time": "valid_time",
@@ -189,6 +190,7 @@ class InputBase(abc.ABC):
         self,
         data: IncomingDataInput,
         case_metadata: "cases.IndividualCase",
+        **kwargs,
     ) -> IncomingDataInput:
         """Subset the input data to the case information provided in IndividualCase.
 
@@ -271,11 +273,11 @@ class InputBase(abc.ABC):
         if isinstance(data, xr.DataArray):
             return data.rename(variable_mapping[data.name])
         elif isinstance(data, xr.Dataset):
-            old_name_obj = data.variables.keys()
+            old_name_obj = list(data.variables.keys())
         elif isinstance(data, pl.LazyFrame):
-            old_name_obj = data.collect_schema().names()
+            old_name_obj = list(data.collect_schema().names())
         elif isinstance(data, pd.DataFrame):
-            old_name_obj = data.columns
+            old_name_obj = list(data.columns)
         else:
             raise ValueError(f"Data type {type(data)} not supported")
 
@@ -305,7 +307,9 @@ class ForecastBase(InputBase):
         self,
         data: IncomingDataInput,
         case_metadata: "cases.IndividualCase",
+        **kwargs,
     ) -> IncomingDataInput:
+        drop = kwargs.get("drop", False)
         if not isinstance(data, xr.Dataset):
             raise ValueError(f"Expected xarray Dataset, got {type(data)}")
         # Drop duplicate init_time values
@@ -348,7 +352,7 @@ class ForecastBase(InputBase):
         )
 
         spatiotemporally_subset_data = case_metadata.location.mask(
-            subset_time_data, drop=True
+            subset_time_data, drop=drop
         )
 
         # convert from init_time/lead_time to init_time/valid_time
@@ -385,7 +389,13 @@ class EvaluationObject:
     """
 
     event_type: str
-    metric_list: list[Union["metrics.BaseMetric", "metrics.AppliedMetric"]]
+    metric_list: list[
+        Union[
+            Callable[..., Any],
+            type["metrics.BaseMetric"],
+            type["metrics.AppliedMetric"],
+        ]
+    ]
     target: "TargetBase"
     forecast: "ForecastBase"
 
@@ -478,8 +488,12 @@ class ERA5(TargetBase):
         self,
         data: IncomingDataInput,
         case_metadata: "cases.IndividualCase",
+        **kwargs,
     ) -> IncomingDataInput:
-        return zarr_target_subsetter(data, case_metadata)
+        drop = kwargs.get("drop", False)
+        if not isinstance(data, xr.Dataset):
+            raise ValueError(f"Expected xarray Dataset, got {type(data)}")
+        return zarr_target_subsetter(data, case_metadata, drop=drop)
 
     def maybe_align_forecast_to_target(
         self,
@@ -525,24 +539,25 @@ class GHCN(TargetBase):
 
     def subset_data_to_case(
         self,
-        target_data: IncomingDataInput,
+        data: IncomingDataInput,
         case_metadata: "cases.IndividualCase",
+        **kwargs,
     ) -> IncomingDataInput:
-        if not isinstance(target_data, pl.LazyFrame):
-            raise ValueError(f"Expected polars LazyFrame, got {type(target_data)}")
+        if not isinstance(data, pl.LazyFrame):
+            raise ValueError(f"Expected polars LazyFrame, got {type(data)}")
 
         # Create filter expressions for LazyFrame
         time_min = case_metadata.start_date - pd.Timedelta(days=2)
         time_max = case_metadata.end_date + pd.Timedelta(days=2)
-
+        case_location = case_metadata.location.as_geopandas()
         # Apply filters using proper polars expressions
-        subset_target_data = target_data.filter(
+        subset_target_data = data.filter(
             (pl.col("valid_time") >= time_min)
             & (pl.col("valid_time") <= time_max)
-            & (pl.col("latitude") >= case_metadata.location.geopandas.total_bounds[1])
-            & (pl.col("latitude") <= case_metadata.location.geopandas.total_bounds[3])
-            & (pl.col("longitude") >= case_metadata.location.geopandas.total_bounds[0])
-            & (pl.col("longitude") <= case_metadata.location.geopandas.total_bounds[2])
+            & (pl.col("latitude") >= case_location.total_bounds[1])
+            & (pl.col("latitude") <= case_location.total_bounds[3])
+            & (pl.col("longitude") >= case_location.total_bounds[0])
+            & (pl.col("longitude") <= case_location.total_bounds[2])
         ).sort("valid_time")
         return subset_target_data
 
@@ -599,33 +614,29 @@ class LSR(TargetBase):
 
     def subset_data_to_case(
         self,
-        target_data: IncomingDataInput,
+        data: IncomingDataInput,
         case_metadata: "cases.IndividualCase",
+        **kwargs,
     ) -> IncomingDataInput:
-        if not isinstance(target_data, pd.DataFrame):
-            raise ValueError(f"Expected pandas DataFrame, got {type(target_data)}")
+        if not isinstance(data, pd.DataFrame):
+            raise ValueError(f"Expected pandas DataFrame, got {type(data)}")
 
         # latitude, longitude are strings by default, convert to float
-        target_data["latitude"] = target_data["latitude"].astype(float)
-        target_data["longitude"] = target_data["longitude"].astype(float)
-        target_data["valid_time"] = pd.to_datetime(target_data["valid_time"])
+        data["latitude"] = data["latitude"].astype(float)
+        data["longitude"] = data["longitude"].astype(float)
+        data["valid_time"] = pd.to_datetime(data["valid_time"])
 
         # filters to apply to the target data including datetimes and location bounds
+        bounds = case_metadata.location.as_geopandas().total_bounds
         filters = (
-            (target_data["valid_time"] >= case_metadata.start_date)
-            & (target_data["valid_time"] <= case_metadata.end_date)
-            & (target_data["latitude"] >= case_metadata.location.latitude_min)
-            & (target_data["latitude"] <= case_metadata.location.latitude_max)
-            & (
-                target_data["longitude"]
-                >= utils.convert_longitude_to_180(case_metadata.location.longitude_min)
-            )
-            & (
-                target_data["longitude"]
-                <= utils.convert_longitude_to_180(case_metadata.location.longitude_max)
-            )
+            (data["valid_time"] >= case_metadata.start_date)
+            & (data["valid_time"] <= case_metadata.end_date)
+            & (data["latitude"] >= bounds[1])
+            & (data["latitude"] <= bounds[3])
+            & (data["longitude"] >= utils.convert_longitude_to_180(bounds[0]))
+            & (data["longitude"] <= utils.convert_longitude_to_180(bounds[2]))
         )
-        subset_target_data = target_data.loc[filters]
+        subset_target_data = data.loc[filters]
 
         return subset_target_data
 
@@ -720,10 +731,20 @@ class PPH(TargetBase):
 
     def subset_data_to_case(
         self,
-        target_data: IncomingDataInput,
+        data: IncomingDataInput,
         case_metadata: "cases.IndividualCase",
+        **kwargs,
     ) -> IncomingDataInput:
-        return zarr_target_subsetter(target_data, case_metadata)
+        drop = kwargs.get("drop", False)
+        if not isinstance(data, xr.Dataset):
+            raise ValueError(f"Expected xarray Dataset, got {type(data)}")
+        return zarr_target_subsetter(data, case_metadata, drop=drop)
+
+    def _custom_convert_to_dataset(self, data: IncomingDataInput) -> xr.Dataset:
+        if isinstance(data, xr.Dataset):
+            return data
+        else:
+            raise ValueError(f"Data is not an xarray Dataset: {type(data)}")
 
     def maybe_align_forecast_to_target(
         self,
@@ -752,11 +773,13 @@ class IBTrACS(TargetBase):
 
     def subset_data_to_case(
         self,
-        target_data: IncomingDataInput,
+        data: IncomingDataInput,
         case_metadata: "cases.IndividualCase",
+        **kwargs,
     ) -> IncomingDataInput:
-        if not isinstance(target_data, pl.LazyFrame):
-            raise ValueError(f"Expected polars LazyFrame, got {type(target_data)}")
+        # Note: drop parameter not applicable for polars LazyFrame data
+        if not isinstance(data, pl.LazyFrame):
+            raise ValueError(f"Expected polars LazyFrame, got {type(data)}")
 
         # Get the season (year) from the case start date, cast as string as
         # polars is interpreting the schema as strings
@@ -766,7 +789,7 @@ class IBTrACS(TargetBase):
 
         # Create a subquery to find all storm numbers in the same season
         matching_numbers = (
-            target_data.filter(pl.col("SEASON").cast(pl.Int64) == season)
+            data.filter(pl.col("SEASON").cast(pl.Int64) == season)
             .select("NUMBER")
             .unique()
         )
@@ -777,7 +800,7 @@ class IBTrACS(TargetBase):
         # the same season, matching any of the possible names
         # This maintains the lazy evaluation
         name_filter = pl.col("tc_name").is_in(possible_names)
-        subset_target_data = target_data.join(
+        subset_target_data = data.join(
             matching_numbers, on="NUMBER", how="inner"
         ).filter(name_filter & (pl.col("SEASON").cast(pl.Int64) == season))
 
@@ -808,7 +831,7 @@ class IBTrACS(TargetBase):
             data = data.collect(engine="streaming").to_pandas()
 
             # IBTrACS data is in -180 to 180, convert to 0 to 360
-            data["longitude"] = utils.convert_longitude_to_360(data["longitude"])
+            data["longitude"] = data["longitude"].apply(utils.convert_longitude_to_360)
 
             # Due to missing data in the IBTrACS dataset, polars doesn't convert
             # the valid_time to a datetime by default
@@ -819,8 +842,11 @@ class IBTrACS(TargetBase):
                 data = xr.Dataset.from_dataframe(data, sparse=True)
             except ValueError as e:
                 if "non-unique" in str(e):
-                    pass
-                data = xr.Dataset.from_dataframe(data.drop_duplicates(), sparse=True)
+                    # Drop duplicates from the pandas DataFrame before converting
+                    data_df = data.drop_duplicates()
+                    data = xr.Dataset.from_dataframe(data_df, sparse=True)
+                else:
+                    raise
             return data
         else:
             raise ValueError(f"Data is not a polars LazyFrame: {type(data)}")
@@ -875,6 +901,7 @@ def zarr_target_subsetter(
     data: xr.Dataset,
     case_metadata: "cases.IndividualCase",
     time_variable: str = "valid_time",
+    drop: bool = False,
 ) -> xr.Dataset:
     """Subset a zarr dataset to a case operator.
 
@@ -908,8 +935,10 @@ def zarr_target_subsetter(
         }
     )
     # mask the data to the case location
-    fully_subset_data = case_metadata.location.mask(subset_time_data, drop=True)
-
+    fully_subset_data = case_metadata.location.mask(subset_time_data, drop=drop)
+    # chunk the data if it doesn't have chunks, e.g. ARCO ERA5
+    if not fully_subset_data.chunks:
+        fully_subset_data = fully_subset_data.chunk()
     return fully_subset_data
 
 
@@ -927,7 +956,7 @@ def align_forecast_to_target(
         and dim not in ["time", "valid_time", "lead_time", "init_time"]
     ]
 
-    spatial_dims = {dim: target_data[dim] for dim in intersection_dims}
+    spatial_dims = {str(dim): target_data[dim] for dim in intersection_dims}
     # Align time dimensions - find overlapping times
     time_aligned_target, time_aligned_forecast = xr.align(
         target_data,
@@ -938,110 +967,36 @@ def align_forecast_to_target(
 
     # Regrid forecast to target grid using nearest neighbor interpolation
     # extrapolate in the case of targets slightly outside the forecast domain
-    time_space_aligned_forecast = time_aligned_forecast.interp(
-        **spatial_dims, method=method, kwargs={"fill_value": "extrapolate"}
-    )
+    if spatial_dims:
+        interp_method: Literal["nearest", "linear"] = (
+            "nearest" if method == "nearest" else "linear"
+        )
+
+        interp_kwargs = cast(dict[str, Any], {"method": interp_method})
+        interp_kwargs.update(spatial_dims)
+
+        time_space_aligned_forecast = time_aligned_forecast.interp(**interp_kwargs)
+    else:
+        time_space_aligned_forecast = time_aligned_forecast
 
     return time_space_aligned_forecast, time_aligned_target
-
-
-def safely_pull_variables(
-    dataset: IncomingDataInput,
-    required_variables: list[str],
-    alternative_variables: Optional[dict[str, list[str]]] = None,
-    optional_variables: Optional[list[str]] = None,
-) -> IncomingDataInput:
-    """Safely pull variables from any IncomingDataInput type, prioritizing required variables.
-
-    This function attempts to extract variables from a dataset, giving
-    priority to required variables when available. If alternative variables
-    are present and required variables are not, they can replace required variables.
-
-    Args:
-        dataset: The dataset to extract variables from (xr.Dataset, xr.DataArray,
-            pl.LazyFrame, or pd.DataFrame).
-        variables: List of required variable names to extract.
-        alternative_variables: Dict mapping required vars to list of
-            alternative vars they can be replaced with if not available.
-        optional_variables: List of optional variable names which can avoid
-            loading from elsewhere if available, such as orography.
-
-    Returns:
-        Same type as input dataset containing the extracted variables.
-
-    Raises:
-        KeyError: If required variables are not present and no suitable
-            alternative variables are available as replacements.
-
-    Examples:
-        >>> ds = xr.Dataset(
-        ...     {
-        ...         "air_temperature": (["x"], [1, 2, 3]),
-        ...         "relative_humidity": (["x"], [4, 5, 6]),
-        ...     }
-        ... )
-        >>> result = safely_pull_variables(
-        ...     ds,
-        ...     required_variables=["specific_humidity", "pressure"],
-        ...     alternative_variables={
-        ...         "specific_humidity": ["relative_humidity", "air_temperature"]
-        ...     },
-        ...     optional_variables=[
-        ...         "orography"
-        ...     },
-        ... )
-        >>> list(result.data_vars)
-        ['relative_humidity', 'air_temperature']
-    """
-    if optional_variables is None:
-        optional_variables = []
-    if alternative_variables is None:
-        alternative_variables = {}
-
-    # Dispatch to type-specific handlers
-    match dataset:
-        case xr.Dataset():
-            return sources.safely_pull_variables_xr_dataset(
-                dataset, required_variables, alternative_variables, optional_variables
-            )
-        case xr.DataArray():
-            return sources.safely_pull_variables_xr_dataarray(
-                dataset, required_variables, alternative_variables, optional_variables
-            )
-        case pl.LazyFrame():
-            return sources.safely_pull_variables_polars_lazyframe(
-                dataset,
-                required_variables,
-                optional_variables + DEFAULT_COORDINATE_VARIABLES,
-                alternative_variables,
-            )
-        case pd.DataFrame():
-            return sources.safely_pull_variables_pandas_dataframe(
-                dataset,
-                required_variables + DEFAULT_COORDINATE_VARIABLES,
-                optional_variables + DEFAULT_COORDINATE_VARIABLES,
-                alternative_variables,
-            )
-        case _:
-            raise TypeError(
-                f"Unsupported dataset type: {type(dataset)}. "
-                f"Expected one of: xr.Dataset, xr.DataArray, pl.LazyFrame, pd.DataFrame"
-            )
 
 
 def maybe_subset_variables(
     data: IncomingDataInput,
     variables: list[Union[str, "derived.DerivedVariable"]],
+    source_module: Optional["sources.base.Source"] = None,
 ) -> IncomingDataInput:
     """Subset the variables from the data, if required.
 
     If the variables list includes derived variables, extracts their required
     and optional variables for subsetting.
 
-    Args:
+        Args:
         data: The dataset to subset (xr.Dataset, xr.DataArray, pl.LazyFrame,
             or pd.DataFrame).
         variables: List of variable names and/or derived variable classes.
+        source_module: Optional pre-created source module. If None, creates one.
 
     Returns:
         The data subset to only the specified variables.
@@ -1069,10 +1024,36 @@ def maybe_subset_variables(
     expected_and_maybe_derived_variables = (
         derived.maybe_include_variables_from_derived_input(variables)
     )
-    data = safely_pull_variables(
+
+    # Use provided source module or get one
+    if source_module is None:
+        source_module = sources.get_backend_module(type(data))
+    data = source_module.safely_pull_variables(
         data,
         expected_and_maybe_derived_variables,
         alternative_variables=alternative_variables,
         optional_variables=optional_variables,
     )
     return data
+
+
+def check_for_missing_data(
+    data: IncomingDataInput,
+    case_metadata: "cases.IndividualCase",
+    source_module: Optional["sources.base.Source"] = None,
+) -> bool:
+    """Check if the data has missing data in the given date range."""
+    # Use provided source module or get one
+    if source_module is None:
+        source_module = sources.get_backend_module(type(data))
+
+    # First check if the data has valid times in the given date range
+    if not source_module.check_for_valid_times(
+        data, case_metadata.start_date, case_metadata.end_date
+    ):
+        return False
+    # Then check if the data has spatial data for the given location
+    elif not source_module.check_for_spatial_data(data, case_metadata.location):
+        return False
+    else:
+        return True

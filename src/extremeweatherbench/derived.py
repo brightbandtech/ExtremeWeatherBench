@@ -85,7 +85,7 @@ class DerivedVariable(abc.ABC):
 
 def maybe_derive_variables(
     data: xr.Dataset,
-    variables: list[Union[str, DerivedVariable, Type[DerivedVariable]]],
+    variables: list[Union[str, DerivedVariable]],
     **kwargs,
 ) -> xr.Dataset:
     """Derive variable from the data if it exists in a list of variables.
@@ -95,7 +95,7 @@ def maybe_derive_variables(
     variable. If there are multiple derived variables, the first one will be used.
 
     Args:
-        data: The dataset, ideally already subset in case of in memory operations
+        data: The data, ideally already subset in case of in memory operations
             in the derived variables.
         variables: The potential variables to derive as a list of strings or
             DerivedVariable objects.
@@ -154,7 +154,7 @@ def maybe_derive_variables(
 
 
 def maybe_include_variables_from_derived_input(
-    incoming_variables: Sequence[Union[str, Type[DerivedVariable]]],
+    incoming_variables: Sequence[Union[str, DerivedVariable]],
 ) -> list[str]:
     """Identify and return variables that a derived variable needs to compute.
 
@@ -195,3 +195,13 @@ def is_derived_variable(
     """
 
     return isinstance(variable, type) and issubclass(variable, DerivedVariable)
+
+
+def _maybe_convert_variable_to_string(
+    variable: Union[str, Type[DerivedVariable]],
+) -> str:
+    """Convert a variable to its string representation."""
+    if is_derived_variable(variable):
+        return variable.name  # type: ignore
+    else:
+        return variable  # type: ignore

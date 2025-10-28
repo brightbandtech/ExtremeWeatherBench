@@ -141,6 +141,19 @@ class TestDerivedVariableWithoutName(derived.DerivedVariable):
         return result
 
 
+class TestDerivedVariableForTesting(derived.DerivedVariable):
+    """A concrete derived variable class for testing
+    _maybe_convert_variable_to_string."""
+
+    name = "TestDerivedVar"
+    required_variables = ["input_var1", "input_var2"]
+
+    @classmethod
+    def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
+        """Simple derivation for testing."""
+        return data["input_var1"] + data["input_var2"]
+
+
 class TestDerivedVariableAbstractClass:
     """Test the abstract base class DerivedVariable."""
 
@@ -862,8 +875,9 @@ class TestAlternativeVariables:
     """Test alternative_variables functionality in derived variables."""
 
     def test_alternative_variables_success_same_shape(self, sample_dataset):
-        """Test alternative_variables when all alternatives are present with same shape."""
-        from extremeweatherbench.inputs import safely_pull_variables
+        """Test alternative_variables when all alternatives are present with same
+        shape."""
+        from extremeweatherbench.variable_utils import safely_pull_variables
 
         # Remove the required variable so alternatives will be used
         test_dataset = sample_dataset.drop_vars("specific_humidity", errors="ignore")
@@ -904,7 +918,7 @@ class TestAlternativeVariables:
 
     def test_alternative_variables_failure_missing_alternatives(self, sample_dataset):
         """Test alternative_variables when alternatives are not in dataset."""
-        from extremeweatherbench.inputs import safely_pull_variables
+        from extremeweatherbench.variable_utils import safely_pull_variables
 
         # Remove the required variable so alternatives will be needed
         test_dataset = sample_dataset.drop_vars("specific_humidity", errors="ignore")
@@ -928,7 +942,7 @@ class TestAlternativeVariables:
 
     def test_alternative_variables_partial_alternatives_failure(self, sample_dataset):
         """Test alternative_variables when only some alternatives are present."""
-        from extremeweatherbench.inputs import safely_pull_variables
+        from extremeweatherbench.variable_utils import safely_pull_variables
 
         # Remove the required variable so alternatives will be needed
         test_dataset = sample_dataset.drop_vars("specific_humidity", errors="ignore")
@@ -966,7 +980,7 @@ class TestAlternativeVariables:
         self, sample_dataset
     ):
         """Test that when required variable is present, alternatives are ignored."""
-        from extremeweatherbench.inputs import safely_pull_variables
+        from extremeweatherbench.variable_utils import safely_pull_variables
 
         # Add alternative variables
         level_shape = (
@@ -1004,7 +1018,7 @@ class TestAlternativeVariables:
 
     def test_alternative_variables_multiple_required_vars(self, sample_dataset):
         """Test alternative_variables with multiple required variables."""
-        from extremeweatherbench.inputs import safely_pull_variables
+        from extremeweatherbench.variable_utils import safely_pull_variables
 
         # Remove the required variables so alternatives will be used
         test_dataset = sample_dataset.drop_vars(
@@ -1063,7 +1077,7 @@ class TestOptionalVariables:
 
     def test_optional_variables_present_in_dataset(self, sample_dataset):
         """Test optional_variables when they are present in dataset."""
-        from extremeweatherbench.inputs import safely_pull_variables
+        from extremeweatherbench.variable_utils import safely_pull_variables
 
         # Add an optional variable
         sample_dataset["orography"] = (
@@ -1096,7 +1110,7 @@ class TestOptionalVariables:
 
     def test_optional_variables_missing_from_dataset(self, sample_dataset):
         """Test optional_variables when they are missing from dataset."""
-        from extremeweatherbench.inputs import safely_pull_variables
+        from extremeweatherbench.variable_utils import safely_pull_variables
 
         alternative_variables = {}
         optional_variables = ["orography"]
@@ -1115,7 +1129,7 @@ class TestOptionalVariables:
 
     def test_optional_variables_multiple_optional(self, sample_dataset):
         """Test multiple optional_variables."""
-        from extremeweatherbench.inputs import safely_pull_variables
+        from extremeweatherbench.variable_utils import safely_pull_variables
 
         # Add some optional variables
         sample_dataset["orography"] = (
@@ -1164,7 +1178,7 @@ class TestMixedAlternativeAndOptionalVariables:
 
     def test_alternative_and_optional_variables_both_present(self, sample_dataset):
         """Test when both alternative and optional variables are present."""
-        from extremeweatherbench.inputs import safely_pull_variables
+        from extremeweatherbench.variable_utils import safely_pull_variables
 
         # Remove the required variable so alternatives will be used
         test_dataset = sample_dataset.drop_vars("specific_humidity", errors="ignore")
@@ -1219,7 +1233,7 @@ class TestMixedAlternativeAndOptionalVariables:
 
     def test_alternative_present_optional_missing(self, sample_dataset):
         """Test when alternatives are present but optional variables are missing."""
-        from extremeweatherbench.inputs import safely_pull_variables
+        from extremeweatherbench.variable_utils import safely_pull_variables
 
         # Remove the required variable so alternatives will be used
         test_dataset = sample_dataset.drop_vars("specific_humidity", errors="ignore")
@@ -1261,7 +1275,7 @@ class TestMixedAlternativeAndOptionalVariables:
 
     def test_alternative_missing_optional_present(self, sample_dataset):
         """Test when alternatives are missing but optional variables are present."""
-        from extremeweatherbench.inputs import safely_pull_variables
+        from extremeweatherbench.variable_utils import safely_pull_variables
 
         # Remove the required variable so alternatives will be needed
         test_dataset = sample_dataset.drop_vars("specific_humidity", errors="ignore")
@@ -1285,7 +1299,8 @@ class TestMixedAlternativeAndOptionalVariables:
         }
         optional_variables = ["orography"]
 
-        # This should fail because required variable is missing and alternatives are not present
+        # This should fail because required variable is missing and alternatives are
+        # not present
         with pytest.raises(
             KeyError,
             match="Required variables specific_humidity nor any of their alternatives",
@@ -1303,7 +1318,7 @@ class TestEdgeCasesAlternativeOptionalVariables:
 
     def test_empty_alternative_variables_dict(self, sample_dataset):
         """Test with empty alternative_variables dictionary."""
-        from extremeweatherbench.inputs import safely_pull_variables
+        from extremeweatherbench.variable_utils import safely_pull_variables
 
         alternative_variables = {}
         optional_variables = []
@@ -1322,7 +1337,7 @@ class TestEdgeCasesAlternativeOptionalVariables:
 
     def test_empty_optional_variables_list(self, sample_dataset):
         """Test with empty optional_variables list."""
-        from extremeweatherbench.inputs import safely_pull_variables
+        from extremeweatherbench.variable_utils import safely_pull_variables
 
         alternative_variables = {}
         optional_variables = []
@@ -1341,7 +1356,7 @@ class TestEdgeCasesAlternativeOptionalVariables:
 
     def test_none_alternative_variables(self, sample_dataset):
         """Test with None alternative_variables."""
-        from extremeweatherbench.inputs import safely_pull_variables
+        from extremeweatherbench.variable_utils import safely_pull_variables
 
         # Test that it works with None alternative variables
         result = safely_pull_variables(
@@ -1357,7 +1372,7 @@ class TestEdgeCasesAlternativeOptionalVariables:
 
     def test_none_optional_variables(self, sample_dataset):
         """Test with None optional_variables."""
-        from extremeweatherbench.inputs import safely_pull_variables
+        from extremeweatherbench.variable_utils import safely_pull_variables
 
         # Test that it works with None optional variables
         result = safely_pull_variables(
@@ -1373,7 +1388,7 @@ class TestEdgeCasesAlternativeOptionalVariables:
 
     def test_duplicate_variables_in_alternatives(self, sample_dataset):
         """Test with duplicate variables in alternative_variables."""
-        from extremeweatherbench.inputs import safely_pull_variables
+        from extremeweatherbench.variable_utils import safely_pull_variables
 
         # Remove the required variable so alternatives will be used
         test_dataset = sample_dataset.drop_vars("specific_humidity", errors="ignore")
@@ -1418,7 +1433,7 @@ class TestEdgeCasesAlternativeOptionalVariables:
 
     def test_shape_mismatch_in_alternatives(self, sample_dataset):
         """Test with shape mismatch in alternative variables."""
-        from extremeweatherbench.inputs import safely_pull_variables
+        from extremeweatherbench.variable_utils import safely_pull_variables
 
         # Remove the required variable so alternatives will be used
         test_dataset = sample_dataset.drop_vars("specific_humidity", errors="ignore")
@@ -1467,7 +1482,7 @@ class TestEdgeCasesAlternativeOptionalVariables:
 
     def test_alternative_variables_with_empty_list(self, sample_dataset):
         """Test alternative_variables with empty list for a required variable."""
-        from extremeweatherbench.inputs import safely_pull_variables
+        from extremeweatherbench.variable_utils import safely_pull_variables
 
         # Remove the required variable so alternatives will be needed
         test_dataset = sample_dataset.drop_vars("specific_humidity", errors="ignore")
@@ -1477,7 +1492,8 @@ class TestEdgeCasesAlternativeOptionalVariables:
         }
         optional_variables = []
 
-        # This should fail because required variable is missing and alternatives list is empty
+        # This should fail because required variable is missing and alternatives list
+        # is empty
         with pytest.raises(
             KeyError,
             match="Required variables specific_humidity nor any of their alternatives",
@@ -1491,7 +1507,7 @@ class TestEdgeCasesAlternativeOptionalVariables:
 
     def test_required_variable_in_optional_variables(self, sample_dataset):
         """Test when a required variable is also listed in optional_variables."""
-        from extremeweatherbench.inputs import safely_pull_variables
+        from extremeweatherbench.variable_utils import safely_pull_variables
 
         alternative_variables = {}
         optional_variables = [
@@ -1588,7 +1604,7 @@ class TestIntegrationWithSafelyPullVariables:
 
     def test_safely_pull_variables_with_alternative_variables(self, sample_dataset):
         """Test safely_pull_variables with alternative_variables."""
-        from extremeweatherbench.inputs import safely_pull_variables
+        from extremeweatherbench.variable_utils import safely_pull_variables
 
         # Remove the required variable so alternatives will be used
         test_dataset = sample_dataset.drop_vars("specific_humidity", errors="ignore")
@@ -1630,7 +1646,7 @@ class TestIntegrationWithSafelyPullVariables:
 
     def test_safely_pull_variables_with_optional_variables(self, sample_dataset):
         """Test safely_pull_variables with optional_variables."""
-        from extremeweatherbench.inputs import safely_pull_variables
+        from extremeweatherbench.variable_utils import safely_pull_variables
 
         # Add optional variable
         sample_dataset["orography"] = (
@@ -1663,7 +1679,7 @@ class TestIntegrationWithSafelyPullVariables:
 
     def test_safely_pull_variables_missing_alternatives_failure(self, sample_dataset):
         """Test safely_pull_variables failure when alternatives are missing."""
-        from extremeweatherbench.inputs import safely_pull_variables
+        from extremeweatherbench.variable_utils import safely_pull_variables
 
         # Remove the required variable so alternatives will be needed
         test_dataset = sample_dataset.drop_vars("specific_humidity", errors="ignore")
@@ -1687,7 +1703,7 @@ class TestIntegrationWithSafelyPullVariables:
 
     def test_safely_pull_variables_mixed_scenario(self, sample_dataset):
         """Test safely_pull_variables with both alternative and optional variables."""
-        from extremeweatherbench.inputs import safely_pull_variables
+        from extremeweatherbench.variable_utils import safely_pull_variables
 
         # Remove the required variable so alternatives will be used
         test_dataset = sample_dataset.drop_vars("specific_humidity", errors="ignore")
@@ -1744,7 +1760,7 @@ class TestIntegrationWithSafelyPullVariables:
         self, sample_dataset
     ):
         """Test that required variables take precedence over alternatives."""
-        from extremeweatherbench.inputs import safely_pull_variables
+        from extremeweatherbench.variable_utils import safely_pull_variables
 
         # Add alternative variables
         level_shape = (
@@ -1781,8 +1797,9 @@ class TestIntegrationWithSafelyPullVariables:
         assert "air_temperature" not in result.data_vars
 
     def test_safely_pull_variables_partial_alternatives_failure(self, sample_dataset):
-        """Test safely_pull_variables failure when only some alternatives are present."""
-        from extremeweatherbench.inputs import safely_pull_variables
+        """Test safely_pull_variables failure when only some alternatives are
+        present."""
+        from extremeweatherbench.variable_utils import safely_pull_variables
 
         # Remove the required variable so alternatives will be needed
         test_dataset = sample_dataset.drop_vars("specific_humidity", errors="ignore")
@@ -1818,7 +1835,7 @@ class TestIntegrationWithSafelyPullVariables:
 
     def test_safely_pull_variables_empty_optional_variables(self, sample_dataset):
         """Test safely_pull_variables with empty optional_variables."""
-        from extremeweatherbench.inputs import safely_pull_variables
+        from extremeweatherbench.variable_utils import safely_pull_variables
 
         alternative_variables = {}
         optional_variables = []
@@ -1837,7 +1854,7 @@ class TestIntegrationWithSafelyPullVariables:
 
     def test_safely_pull_variables_none_parameters(self, sample_dataset):
         """Test safely_pull_variables with None parameters."""
-        from extremeweatherbench.inputs import safely_pull_variables
+        from extremeweatherbench.variable_utils import safely_pull_variables
 
         # Test that it works with None parameters
         result = safely_pull_variables(
@@ -1850,3 +1867,51 @@ class TestIntegrationWithSafelyPullVariables:
         # Should contain only the required variable
         assert "test_variable_1" in result.data_vars
         assert len(result.data_vars) == 1
+
+
+class TestNormalizeVariable:
+    """Test the _maybe_convert_variable_to_string function."""
+
+    def test_maybe_convert_variable_to_string_string_input(self):
+        """Test _maybe_convert_variable_to_string with string input."""
+        result = derived._maybe_convert_variable_to_string("temperature")
+        assert result == "temperature"
+        assert isinstance(result, str)
+
+    def test_maybe_convert_variable_to_string_derived_class_input(self):
+        """Test _maybe_convert_variable_to_string with DerivedVariable class input."""
+        result = derived._maybe_convert_variable_to_string(
+            TestDerivedVariableForTesting
+        )
+        assert result == "TestDerivedVar"
+        assert isinstance(result, str)
+
+    def test_maybe_convert_variable_to_string_derived_instance_input(self):
+        """Test _maybe_convert_variable_to_string with DerivedVariable instance input.
+
+        Note: The function is designed to handle classes, not instances.
+        Instances are passed through unchanged (not converted to string).
+        """
+        instance = TestDerivedVariableForTesting()
+        result = derived._maybe_convert_variable_to_string(instance)
+        # Instance is returned as-is, not converted to string
+        assert result == instance
+        assert isinstance(result, TestDerivedVariableForTesting)
+
+    def test_maybe_convert_variable_to_string_handles_both_types(self):
+        """Test that _maybe_convert_variable_to_string handles both incoming types
+        correctly."""
+        # Test string type
+        string_result = derived._maybe_convert_variable_to_string("my_variable")
+        assert string_result == "my_variable"
+
+        # Test derived variable type
+        derived_result = derived._maybe_convert_variable_to_string(
+            TestDerivedVariableForTesting
+        )
+        assert derived_result == "TestDerivedVar"
+
+        # Results should be different but both strings
+        assert string_result != derived_result
+        assert isinstance(string_result, str)
+        assert isinstance(derived_result, str)

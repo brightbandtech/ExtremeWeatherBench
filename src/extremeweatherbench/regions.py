@@ -1,17 +1,16 @@
 """Region classes and utilities for the ExtremeWeatherBench package."""
 
 import abc
-import dataclasses
 import logging
 import pathlib
-from collections import namedtuple
-from typing import TYPE_CHECKING, Any, Literal, Mapping, Type, Union
+import warnings
+from typing import TYPE_CHECKING, Literal, Mapping, Type, Union
 
-import geopandas as gpd  # type: ignore[import-untyped]
+import geopandas as gpd
 import numpy as np
 import pandas as pd
 import regionmask
-import shapely  # type: ignore[import-untyped]
+import shapely
 import xarray as xr
 
 from extremeweatherbench import utils
@@ -32,35 +31,101 @@ class Region(abc.ABC):
         their own, specialized arguments."""
         pass
 
-    @property
     @abc.abstractmethod
-    def geopandas(self) -> gpd.GeoDataFrame:
+    def as_geopandas(self) -> gpd.GeoDataFrame:
         """Return representation of this Region as a GeoDataFrame."""
         pass
 
-    def mask(self, dataset: xr.Dataset, drop: bool = False) -> xr.Dataset:
-        """Mask a dataset to the region."""
-        mask = regionmask.mask_geopandas(
-            self.geopandas, dataset.longitude, dataset.latitude
-        )
-        mask_array = ~np.isnan(mask)
-        return dataset.where(mask_array, drop=drop)
+    def get_adjusted_bounds(
+        self, dataset: xr.Dataset
+    ) -> tuple[float, float, float, float]:
+        """Get region bounds adjusted to dataset's longitude convention.
 
-    @property
-    def get_bounding_coordinates(self) -> tuple[Any, ...]:
-        """Get the bounding coordinates of the region."""
-        return namedtuple(
-            "BoundingCoordinates",
-            ["longitude_min", "latitude_min", "longitude_max", "latitude_max"],
-        )(*self.geopandas.total_bounds)
+        Args:
+            dataset: The dataset to match longitude convention with
+
+        Returns:
+            Tuple of (lon_min, lat_min, lon_max, lat_max) adjusted to
+            match the dataset's longitude convention
+        """
+        region_bounds = self.as_geopandas().total_bounds
+        return _adjust_bounds_to_dataset_convention(region_bounds, dataset)
+
+    def mask(self, dataset: xr.Dataset, drop: bool = False) -> xr.Dataset:
+        """Mask a dataset to the region.
+
+        Args:
+            dataset: The dataset to mask.
+            drop: Whether to drop coordinates outside the region bounds.
+
+        Returns:
+            The subset dataset.
+        """
+        if drop:
+            warnings.warn(
+                "`drop` is no longer used and will be removed in a future version.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+
+        # Get region bounds adjusted to dataset's longitude convention
+        (
+            region_longitude_min,
+            region_latitude_min,
+            region_longitude_max,
+            region_latitude_max,
+        ) = self.get_adjusted_bounds(dataset)
+
+        # Avoids slice() which is susceptible to differences in coord order
+        latitude_da = dataset.latitude.where(
+            np.logical_and(
+                dataset.latitude >= region_latitude_min,
+                dataset.latitude <= region_latitude_max,
+            ),
+            drop=True,
+        )
+
+        # Detect if region wraps around 0/360 or -180/180 boundary
+        # This happens either from:
+        # 1. True antimeridian crossing (MultiPolygon geometry)
+        # 2. Prime meridian crossing converted to 0-360 (lon_min > lon_max)
+        gdf = self.as_geopandas()
+        geometry = gdf.geometry.iloc[0]
+        crosses_boundary = isinstance(geometry, shapely.MultiPolygon) or (
+            region_longitude_min > region_longitude_max
+        )
+
+        if crosses_boundary:
+            # Use OR condition: include lons >= min OR lons <= max
+            longitude_da = dataset.longitude.where(
+                np.logical_or(
+                    dataset.longitude >= region_longitude_min,
+                    dataset.longitude <= region_longitude_max,
+                ),
+                drop=True,
+            )
+        else:
+            longitude_da = dataset.longitude.where(
+                np.logical_and(
+                    dataset.longitude >= region_longitude_min,
+                    dataset.longitude <= region_longitude_max,
+                ),
+                drop=True,
+            )
+        dataset = dataset.sel(
+            latitude=latitude_da,
+            longitude=longitude_da,
+        )
+
+        return dataset
 
     def intersects(self, other: "Region") -> bool:
         """Check if this region intersects with another region."""
-        return self.geopandas.intersects(other.geopandas).any().any()
+        return self.as_geopandas().intersects(other.as_geopandas()).any().any()
 
     def contains(self, other: "Region") -> bool:
         """Check if this region completely contains another region."""
-        return self.geopandas.contains(other.geopandas).any().any()
+        return self.as_geopandas().contains(other.as_geopandas()).any().any()
 
     def area_overlap_fraction(self, other: "Region") -> float:
         """Calculate fraction of other region's area that overlaps with this region.
@@ -72,14 +137,16 @@ class Region(abc.ABC):
             Fraction of other region's area within this region (0.0 to 1.0)
         """
         # Calculate intersection area between regions
-        intersection = self.geopandas.overlay(other.geopandas, how="intersection")
+        intersection = self.as_geopandas().overlay(
+            other.as_geopandas(), how="intersection"
+        )
         if intersection.empty:
             return 0.0
 
         # Convert to equal area projection for accurate area calculation
         # Using World Mollweide projection (ESRI:54009)
         intersection_projected = intersection.to_crs("ESRI:54009")
-        other_projected = other.geopandas.to_crs("ESRI:54009")
+        other_projected = other.as_geopandas().to_crs("ESRI:54009")
 
         # Calculate areas in square meters
         intersection_area = intersection_projected.geometry.area.sum()
@@ -123,7 +190,14 @@ class CenteredRegion(Region):
     def create_region(
         cls, latitude: float, longitude: float, bounding_box_degrees: float | tuple
     ) -> "CenteredRegion":
-        """Create a CenteredRegion with the given parameters."""
+        """Create a CenteredRegion with the given parameters.
+
+        Args:
+            latitude: The latitude of the center point.
+            longitude: The longitude of the center point.
+            bounding_box_degrees: The size of the bounding box in degrees or tuple of
+                (lat_degrees, lon_degrees).
+        """
 
         return cls(
             latitude=latitude,
@@ -131,9 +205,12 @@ class CenteredRegion(Region):
             bounding_box_degrees=bounding_box_degrees,
         )
 
-    @property
-    def geopandas(self) -> gpd.GeoDataFrame:
-        """Return representation of this Region as a GeoDataFrame."""
+    def as_geopandas(self) -> gpd.GeoDataFrame:
+        """Return representation of this Region as a GeoDataFrame.
+
+        Returns:
+            A GeoDataFrame representing the region.
+        """
         if isinstance(self.bounding_box_degrees, tuple):
             bounding_box_degrees = tuple(self.bounding_box_degrees)
             latitude_min = self.latitude - bounding_box_degrees[0] / 2
@@ -197,15 +274,17 @@ class BoundingBoxRegion(Region):
             longitude_max=longitude_max,
         )
 
-    @property
-    def geopandas(self) -> gpd.GeoDataFrame:
-        """Return representation of this Region as a GeoDataFrame."""
+    def as_geopandas(self) -> gpd.GeoDataFrame:
+        """Return representation of this Region as a GeoDataFrame.
+
+        Returns:
+            A GeoDataFrame representing the region.
+        """
         return _create_geopandas_from_bounds(
             self.longitude_min, self.longitude_max, self.latitude_min, self.latitude_max
         )
 
 
-@dataclasses.dataclass
 class ShapefileRegion(Region):
     """A region defined by a shapefile.
 
@@ -213,7 +292,7 @@ class ShapefileRegion(Region):
     on instantiation.
 
     Attributes:
-        shapefile_path: Path to the shapefile
+        shapefile_path: Local or remote path to the .shp shapefile
     """
 
     def __repr__(self):
@@ -227,14 +306,48 @@ class ShapefileRegion(Region):
         """Create a ShapefileRegion with the given parameters."""
         return cls(shapefile_path=str(shapefile_path))
 
-    @property
-    def geopandas(self) -> gpd.GeoDataFrame:
-        """Return representation of this Region as a GeoDataFrame."""
+    def as_geopandas(self) -> gpd.GeoDataFrame:
+        """Return representation of this Region as a GeoDataFrame.
+
+        Returns:
+            A GeoDataFrame representing the region.
+        """
         try:
             return gpd.read_file(self.shapefile_path)
         except Exception as e:
             logger.error(f"Error reading shapefile: {e}")
             raise ValueError(f"Error reading shapefile: {e}")
+
+    def mask(self, dataset: xr.Dataset, drop: bool = False) -> xr.Dataset:
+        """Mask a dataset to the region.
+
+        Args:
+            dataset: The dataset to mask.
+            drop: Whether to drop NaN values outside the region. Defaults to False.
+
+        Returns:
+            The subset dataset.
+        """
+        # Get region bounds adjusted to dataset's longitude convention
+        (
+            longitude_min,
+            latitude_min,
+            longitude_max,
+            latitude_max,
+        ) = self.get_adjusted_bounds(dataset)
+
+        # Note: ShapefileRegion.mask uses slice which doesn't support
+        # prime/antimeridian crossing with OR logic, but regionmask handles it
+        dataset = dataset.sel(
+            latitude=slice(latitude_max, latitude_min),
+            longitude=slice(longitude_min, longitude_max),
+            drop=drop,
+        )
+        # Subset dataset after cutting out a box to minimize memory pressure
+        mask = regionmask.mask_geopandas(
+            self.as_geopandas(), dataset.longitude, dataset.latitude
+        )
+        return dataset.where(~np.isnan(mask), drop=drop)
 
 
 # Registry of region types that can be extended by users
@@ -497,3 +610,35 @@ def subset_results_to_region(
 
     # Filter the results DataFrame
     return results_df[results_df["case_id_number"].isin(included_case_ids)]
+
+
+def _adjust_bounds_to_dataset_convention(
+    region_bounds: tuple[float, float, float, float],
+    dataset: xr.Dataset,
+    longitude_coord: str = "longitude",
+) -> tuple[float, float, float, float]:
+    """Adjust region bounds to match dataset longitude convention.
+
+    Uses existing utils functions to convert between 0-360 and -180/+180.
+
+    Args:
+        region_bounds: Tuple of (lon_min, lat_min, lon_max, lat_max)
+        dataset: The dataset to match conventions with
+        longitude_coord: Name of the longitude coordinate
+
+    Returns:
+        Adjusted bounds as (lon_min, lat_min, lon_max, lat_max)
+    """
+    lon_min, lat_min, lon_max, lat_max = region_bounds
+
+    # Detect if dataset uses 0-360 convention (has values > 180)
+    ds_uses_360 = np.any(dataset[longitude_coord].values > 180)
+
+    if ds_uses_360:
+        # Convert region bounds to 0-360 to match dataset
+        lon_min = utils.convert_longitude_to_360(lon_min)
+        lon_max = utils.convert_longitude_to_360(lon_max)
+    # If dataset uses -180/+180, region bounds are already in that
+    # convention from _create_geopandas_from_bounds
+
+    return (lon_min, lat_min, lon_max, lat_max)
