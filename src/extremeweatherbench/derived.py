@@ -76,29 +76,25 @@ class DerivedVariable(abc.ABC):
 
 def maybe_derive_variables(
     data: xr.Dataset,
-    variables: list[Union[str, DerivedVariable, Type[DerivedVariable]]],
+    variables: list[Union[str, DerivedVariable]],
     **kwargs,
 ) -> xr.Dataset:
     """Derive variable from the data if it exists in a list of variables.
 
-        Derived variables do not need to maintain the same spatial dimensions as the
-        original dataset. Expected behavior is that an EvaluationObject has one derived
-        variable. If there are multiple derived variables, the first one will be used.
+    Derived variables do not need to maintain the same spatial dimensions as the
+    original dataset. Expected behavior is that an EvaluationObject has one derived
+    variable. If there are multiple derived variables, the first one will be used.
 
-        Args:
-    <<<<<<< HEAD
-            data: The dataset, ideally already subset in case of in memory operations
-    =======
-            data: The data, ideally already subset in case of in memory operations
-    >>>>>>> main
-                in the derived variables.
-            variables: The potential variables to derive as a list of strings or
-                DerivedVariable objects.
-            **kwargs: Additional keyword arguments to pass to the derived variables.
+    Args:
+        data: The data, ideally already subset in case of in memory operations
+            in the derived variables.
+        variables: The potential variables to derive as a list of strings or
+            DerivedVariable objects.
+        **kwargs: Additional keyword arguments to pass to the derived variables.
 
-        Returns:
-            A dataset with derived variables, if any exist, else the original
-            dataset.
+    Returns:
+        A dataset with derived variables, if any exist, else the original
+        dataset.
     """
     # If there are no valid times, return the dataset unaltered; saves time as case will
     # be skipped

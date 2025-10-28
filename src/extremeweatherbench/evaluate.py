@@ -13,7 +13,7 @@ from tqdm.auto import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 from tqdm.dask import TqdmCallback
 
-from extremeweatherbench import cases, defaults, derived, inputs, utils
+from extremeweatherbench import cases, defaults, derived, inputs, sources, utils
 
 if TYPE_CHECKING:
     from extremeweatherbench import metrics, regions
@@ -458,11 +458,11 @@ def _build_datasets(
     forecast datasets, including preprocessing, variable renaming, and subsetting.
 
     Args:
-        case_operator: The case operator to build datasets for.
+        case_operator: The case operator containing metadata and input sources.
         **kwargs: Additional keyword arguments to pass to pipeline steps.
-
     Returns:
-        A tuple of (forecast_dataset, target_dataset).
+        A tuple containing (forecast_dataset, target_dataset). If either dataset
+        has no dimensions, both will be empty datasets.
     """
     logger.info("Running target pipeline... ")
     with TqdmCallback(
@@ -530,29 +530,47 @@ def run_pipeline(
         The processed input data as an xarray dataset.
     """
     # Open data and process through pipeline steps
-    data = (
-        # Opens data from user-defined source
-        input_data.open_and_maybe_preprocess_data_from_source()
-        # Maps variable names to the input data if not already using EWB
-        # naming conventions
-        .pipe(input_data.maybe_map_variable_names)
-        # subsets the input data to the variables defined in the input data
-        .pipe(inputs.maybe_subset_variables, variables=input_data.variables)
-        # Subsets the input data using case metadata
-        .pipe(
-            input_data.subset_data_to_case,
-            case_metadata=case_metadata,
-            **kwargs,
-        )
-        # Converts the input data to an xarray dataset if it is not already
-        .pipe(input_data.maybe_convert_to_dataset)
-        # Adds the name of the dataset to the dataset attributes
-        .pipe(input_data.add_source_to_dataset_attrs)
-        # Derives variables if needed
-        .pipe(
-            derived.maybe_derive_variables,
-            variables=input_data.variables,
-            case_metadata=case_metadata,
-        )
+    data = input_data.open_and_maybe_preprocess_data_from_source().pipe(
+        lambda ds: input_data.maybe_map_variable_names(ds)
     )
-    return data
+
+    # Get the appropriate source module for the data type
+    source_module = sources.get_backend_module(type(data))
+
+    # Checks if the data has valid times and spatial overlap. This must come after
+    # maybe_map_variable_names to ensure variable names are mapped correctly.
+    if inputs.check_for_missing_data(
+        data,
+        case_metadata,
+        source_module=source_module,
+    ):
+        valid_data = (
+            inputs.maybe_subset_variables(
+                data,
+                variables=input_data.variables,
+                source_module=source_module,
+            )
+            .pipe(
+                lambda ds: input_data.subset_data_to_case(ds, case_metadata, **kwargs)
+            )
+            .pipe(input_data.maybe_convert_to_dataset)
+            .pipe(input_data.add_source_to_dataset_attrs)
+            .pipe(
+                lambda ds: derived.maybe_derive_variables(
+                    ds,
+                    variables=input_data.variables,
+                    case_metadata=case_metadata,
+                )
+            )
+        )
+        return valid_data
+    else:
+        logger.warning(
+            "Forecast dataset for case %s has no data for case time range %s to %s."
+            % (
+                case_metadata.case_id_number,
+                case_metadata.start_date.strftime("%Y-%m-%d %H:%M:%S"),
+                case_metadata.end_date.strftime("%Y-%m-%d %H:%M:%S"),
+            )
+        )
+        return xr.Dataset()
