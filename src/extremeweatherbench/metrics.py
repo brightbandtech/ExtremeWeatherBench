@@ -3,9 +3,9 @@ import logging
 from typing import Any, Callable, Optional, Type
 
 import numpy as np
+import scores
 import sparse
 import xarray as xr
-from scores import categorical, continuous  # type: ignore[import-untyped]
 
 from extremeweatherbench import derived, utils
 
@@ -22,7 +22,7 @@ def get_cached_transformed_manager(
     forecast_threshold: float = 0.5,
     target_threshold: float = 0.5,
     preserve_dims: str = "lead_time",
-) -> categorical.BasicContingencyManager:
+) -> scores.categorical.BasicContingencyManager:
     """Get cached transformed contingency manager, creating if needed.
 
     This function provides a global cache that can be used by any metric
@@ -50,7 +50,7 @@ def get_cached_transformed_manager(
     binary_target = (target >= target_threshold).astype(float)
 
     # Create and transform contingency manager
-    binary_contingency_manager = categorical.BinaryContingencyManager(
+    binary_contingency_manager = scores.categorical.BinaryContingencyManager(
         binary_forecast, binary_target
     )
     transformed = binary_contingency_manager.transform(preserve_dims=preserve_dims)
@@ -500,7 +500,7 @@ class MAE(BaseMetric):
         **kwargs: Any,
     ) -> Any:
         preserve_dims = kwargs.get("preserve_dims", "lead_time")
-        return continuous.mae(forecast, target, preserve_dims=preserve_dims)
+        return scores.continuous.mae(forecast, target, preserve_dims=preserve_dims)
 
 
 class ME(BaseMetric):
@@ -514,7 +514,9 @@ class ME(BaseMetric):
         **kwargs: Any,
     ) -> Any:
         preserve_dims = kwargs.get("preserve_dims", "lead_time")
-        return continuous.mean_error(forecast, target, preserve_dims=preserve_dims)
+        return scores.continuous.mean_error(
+            forecast, target, preserve_dims=preserve_dims
+        )
 
 
 class RMSE(BaseMetric):
@@ -528,7 +530,7 @@ class RMSE(BaseMetric):
         **kwargs: Any,
     ) -> Any:
         preserve_dims = kwargs.get("preserve_dims", "lead_time")
-        return continuous.rmse(forecast, target, preserve_dims=preserve_dims)
+        return scores.continuous.rmse(forecast, target, preserve_dims=preserve_dims)
 
 
 class EarlySignal(BaseMetric):
