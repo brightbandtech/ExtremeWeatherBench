@@ -21,6 +21,14 @@ from extremeweatherbench import (
     regions,
 )
 
+# Check if dask.distributed is available
+try:
+    import dask.distributed  # noqa: F401
+
+    HAS_DASK_DISTRIBUTED = True
+except ImportError:
+    HAS_DASK_DISTRIBUTED = False
+
 
 @pytest.fixture
 def sample_individual_case():
@@ -844,6 +852,9 @@ class TestRunParallel:
 
                 assert result == []
 
+    @pytest.mark.skipif(
+        not HAS_DASK_DISTRIBUTED, reason="dask.distributed not installed"
+    )
     @mock.patch("dask.distributed.Client")
     @mock.patch("dask.distributed.LocalCluster")
     def test_run_parallel_dask_backend_auto_client(
@@ -878,6 +889,9 @@ class TestRunParallel:
         mock_client.close.assert_called_once()
         assert isinstance(result, list)
 
+    @pytest.mark.skipif(
+        not HAS_DASK_DISTRIBUTED, reason="dask.distributed not installed"
+    )
     @mock.patch("dask.distributed.Client")
     def test_run_parallel_dask_backend_existing_client(
         self, mock_client_class, sample_case_operator
