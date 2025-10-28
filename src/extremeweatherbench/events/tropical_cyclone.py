@@ -79,12 +79,19 @@ def generate_tctracks_from_dataset_and_tc_track_data(
     """
     # Filter out init_times that occur after all tropical cyclone track data landfalls
     if exclude_post_landfall_init_times:
+        n_init_times = (
+            len(gridded_dataset.init_time)
+            if "init_time" in gridded_dataset.coords
+            else "N/A"
+        )
+        logger.debug(f"Filtering post-landfall (before: {n_init_times})")
         filtered_dataset = _filter_post_landfall_init_times(
             gridded_dataset, tc_track_data
         )
 
         # If no valid init_times remain, return empty dataset
         if filtered_dataset is None:
+            logger.debug("All init_times filtered (post-landfall)")
             return _create_empty_tracks_dataset()
 
         # Check if dataset has init_time after filtering
@@ -92,8 +99,11 @@ def generate_tctracks_from_dataset_and_tc_track_data(
             "init_time" in filtered_dataset.coords
             and len(filtered_dataset.init_time) == 0
         ):
+            logger.debug("All init_times filtered (post-landfall)")
             return _create_empty_tracks_dataset()
 
+        n_remain = len(filtered_dataset.init_time)
+        logger.debug(f"After post-landfall filter: {n_remain}")
         # Update the cyclone dataset to be filtered_dataset
         gridded_dataset = filtered_dataset
 
@@ -102,7 +112,22 @@ def generate_tctracks_from_dataset_and_tc_track_data(
     tc_track_data_df = tc_track_data.to_dataframe().reset_index()
     tc_track_data_df["valid_time"] = pd.to_datetime(tc_track_data_df["valid_time"])
     logger.info("Generating TC tracks")
-    if "init_time" in gridded_dataset.coords:
+
+    # Debug statements to check the dimensions of the gridded dataset
+    has_init_time = "init_time" in gridded_dataset.coords
+    if has_init_time:
+        n_init = len(gridded_dataset.init_time)
+        has_lead = "lead_time" in gridded_dataset.dims
+        n_lead = len(gridded_dataset.lead_time) if has_lead else "N/A"
+        has_valid = "valid_time" in gridded_dataset.dims
+        n_valid = len(gridded_dataset.valid_time) if has_valid else "N/A"
+        logger.debug(
+            f"Dims: {n_init} init_times, {n_lead} lead_times, {n_valid} valid_times"
+        )
+        if has_lead:
+            lt_start = gridded_dataset.lead_time.values[0]
+            lt_end = gridded_dataset.lead_time.values[-1]
+            logger.debug(f"Lead time range: {lt_start} to {lt_end}")
         return process_all_init_times(
             gridded_dataset=gridded_dataset,
             tc_track_data_df=tc_track_data_df,
@@ -166,11 +191,21 @@ def process_all_init_times(
     # Determine the correct input core dims based on actual data dimensions
     spatial_dims = ["latitude", "longitude"]
     non_spatial_dims = [dim for dim in slp.dims if dim not in spatial_dims]
+
+    # Debug statements to check the shape of the tc_track_data_df and the forecast times
+    logger.debug(f"tc_track_data_df shape before filtering: {tc_track_data_df.shape}")
+    logger.debug(f"Forecast time_coord values: {time_coord.values[:5]}...")
+
+    # Filter the tc_track_data_df to only include valid times that match the forecast
+    # times
     tc_track_data_df = tc_track_data_df[
         pd.to_datetime(tc_track_data_df["valid_time"]).isin(
             pd.to_datetime(time_coord.values)
         )
     ]
+    logger.debug(f"tc_track_data_df shape after filtering: {tc_track_data_df.shape}")
+    if len(tc_track_data_df) == 0:
+        logger.warning("No TC track data matches forecast times - returning empty")
     # Get wind speed data
     wind_speed = gridded_dataset["surface_wind_speed"]
 
@@ -353,22 +388,13 @@ def _process_entire_dataset(
         for lt_idx in range(n_lead_times):
             for vt_idx in range(n_valid_times):
                 if init_time_mask[lt_idx, vt_idx]:
-                    # Apply temporal filtering within max_temporal_hours
                     current_valid_time = valid_time_array[vt_idx]
                     if hasattr(current_valid_time, "item"):
                         current_valid_time = current_valid_time.item()
 
-                    # Convert to pandas Timestamp for consistent datetime operations
+                    # Convert to pandas Timestamp for consistent operations
                     current_valid_time = pd.Timestamp(current_valid_time)
-                    current_init_time = pd.Timestamp(current_init_time)
-
-                    # Calculate time difference in hours
-                    time_diff = current_valid_time - current_init_time
-                    time_diff_hours = time_diff.total_seconds() / 3600.0
-
-                    # Only include if within max_temporal_hours
-                    if time_diff_hours <= max_temporal_hours:
-                        time_indices.append((lt_idx, vt_idx, current_valid_time))
+                    time_indices.append((lt_idx, vt_idx, current_valid_time))
 
         # Sort by valid_time to ensure temporal continuity
         time_indices.sort(key=lambda x: x[2])
@@ -390,6 +416,7 @@ def _process_entire_dataset(
                 lat_array,
                 lon_array,
                 max_spatial_distance_degrees,
+                max_temporal_hours,
                 dz_slice if dz_slice is not None else np.array([]),
                 slp_contour_magnitude,
                 dz_contour_magnitude,
@@ -397,6 +424,10 @@ def _process_entire_dataset(
             )
 
             if len(peaks) > 0:
+                logger.debug(
+                    f"Found {len(peaks)} peaks at "
+                    f"lt_idx={lt_idx}, vt_idx={vt_idx}, time={current_valid_time}"
+                )
                 # Get coordinates and values for all peaks
                 peak_lats = lat_array[peaks[:, 0]]
                 peak_lons = lon_array[peaks[:, 1]]
@@ -469,6 +500,9 @@ def _process_entire_dataset(
                         "lon": peak_lons[peak_idx],
                     }
 
+    n_det = len(detections)
+    logger.debug(f"Total detections before track length filter: {n_det}")
+
     # Filter out tracks with fewer than min_track_length consecutive lead times
     if detections:
         # Group detections by (track_id, init_time) and collect lead time indices
@@ -513,6 +547,15 @@ def _process_entire_dataset(
                 else:
                     current_consecutive = 1
 
+            track_id, init_time = track_key
+            logger.debug(
+                f"Track {track_id} (init={init_time}): "
+                f"{len(lt_indices)} lead_times, "
+                f"max_consecutive={max_consecutive}, "
+                f"need={min_track_length}, "
+                f"indices={sorted_lt_indices[:5]}..."
+            )
+
             # Only keep tracks with at least min_track_length consecutive lead times
             if max_consecutive >= min_track_length:
                 valid_track_keys.add(track_key)
@@ -531,8 +574,14 @@ def _process_entire_dataset(
 
             if track_key in valid_track_keys:
                 filtered_detections.append(d)
+        n_filtered = len(filtered_detections)
+        n_total = len(detections)
+        logger.debug(
+            f"After min_track_length filter: {n_filtered} remain (from {n_total})"
+        )
     else:
         filtered_detections = []
+        logger.debug("No detections found")
 
     # Convert filtered data to arrays
     n_detections = len(filtered_detections)
@@ -968,6 +1017,7 @@ def _find_peaks_for_time_slice(
     lat_coords: Optional[np.ndarray] = None,
     lon_coords: Optional[np.ndarray] = None,
     max_spatial_distance_degrees: float = 5.0,
+    max_temporal_hours: float = 48.0,
     dz_slice: Optional[np.ndarray] = None,
     slp_contour_magnitude: float = 200,
     dz_contour_magnitude: float = -6,
@@ -975,15 +1025,19 @@ def _find_peaks_for_time_slice(
 ) -> np.ndarray:
     """Find peaks for a single time slice with tropical cyclone track data filtering."""
 
-    # Filter tropical cyclone track data temporally
+    # Filter tropical cyclone track data temporally (exact time match)
     time_diff = np.abs(
         (tc_track_data_df["valid_time"] - current_valid_time).dt.total_seconds() / 3600
     )
-    temporal_mask = time_diff <= 0
+    temporal_mask = time_diff == 0
     nearby_tc_track_data = tc_track_data_df[temporal_mask]
 
     if len(nearby_tc_track_data) == 0:
+        logger.debug(f"No TC track data at time {current_valid_time}")
         return np.array([])
+    else:
+        n_rows = len(nearby_tc_track_data)
+        logger.debug(f"Found {n_rows} TC track data rows at {current_valid_time}")
 
     # Check for valid data
     if np.all(np.isnan(slp_slice)):
@@ -1124,21 +1178,28 @@ def _filter_post_landfall_init_times(
 
     if tc_track_data_landfalls is None:
         # No tropical cyclone track data landfalls detected, keep all init_times
+        logger.debug("No TC track data landfalls found, keeping all init_times")
         return cyclone_dataset
 
     # Get all tropical cyclone track data landfall times
     landfall_times = tc_track_data_landfalls.valid_time.values
     latest_landfall = np.max(landfall_times)
+    logger.debug(f"Latest TC track data landfall time: {latest_landfall}")
 
     # Convert cyclone_dataset to have init_time coordinate if it doesn't already
     if "init_time" not in cyclone_dataset.coords:
         cyclone_dataset = convert_valid_time_to_init_time(cyclone_dataset)
+
+    init_start = cyclone_dataset.init_time.values[0]
+    init_end = cyclone_dataset.init_time.values[-1]
+    logger.debug(f"Forecast init_time range: {init_start} to {init_end}")
 
     # Filter to only include init_times before the latest landfall
     valid_init_times = cyclone_dataset.init_time < latest_landfall
 
     if not valid_init_times.any():
         # No valid init_times
+        logger.warning(f"No init_times before latest landfall ({latest_landfall})")
         return None
 
     # Return filtered dataset
