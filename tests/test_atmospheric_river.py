@@ -81,7 +81,10 @@ class TestAtmosphericRiverMask:
 
     def test_atmospheric_river_mask_basic(self, sample_ar_dataset):
         """Test basic atmospheric river mask functionality."""
-        result = atmospheric_river.atmospheric_river_mask(sample_ar_dataset)
+        result = atmospheric_river.atmospheric_river_mask(
+            ivt=sample_ar_dataset["integrated_vapor_transport"],
+            ivt_laplacian=sample_ar_dataset["integrated_vapor_transport_laplacian"],
+        )
 
         # Should return a DataArray
         assert isinstance(result, xr.DataArray)
@@ -97,14 +100,17 @@ class TestAtmosphericRiverMask:
         assert set(result.values.flatten()).issubset({0, 1})
 
         # Should have some True values where we created high IVT/Laplacian
-        # Note: This might be 0 if the size filtering removes the features
+        # Note: This might be 0 if the size filtering removes features
         # We'll test with lower thresholds in other tests
 
     def test_atmospheric_river_mask_custom_thresholds(self, sample_ar_dataset):
         """Test atmospheric river mask with custom thresholds."""
         # Test with very high thresholds (should return mostly zeros)
         result_high = atmospheric_river.atmospheric_river_mask(
-            sample_ar_dataset, laplacian_threshold=10.0, ivt_threshold=1000.0
+            ivt=sample_ar_dataset["integrated_vapor_transport"],
+            ivt_laplacian=sample_ar_dataset["integrated_vapor_transport_laplacian"],
+            laplacian_threshold=10.0,
+            ivt_threshold=1000.0,
         )
 
         # Should return mostly zeros with high thresholds
@@ -112,7 +118,10 @@ class TestAtmosphericRiverMask:
 
         # Test with very low thresholds (should return more ones)
         result_low = atmospheric_river.atmospheric_river_mask(
-            sample_ar_dataset, laplacian_threshold=0.1, ivt_threshold=50.0
+            ivt=sample_ar_dataset["integrated_vapor_transport"],
+            ivt_laplacian=sample_ar_dataset["integrated_vapor_transport_laplacian"],
+            laplacian_threshold=0.1,
+            ivt_threshold=50.0,
         )
 
         # Should return more ones with low thresholds
@@ -122,12 +131,16 @@ class TestAtmosphericRiverMask:
         """Test atmospheric river mask size filtering."""
         # Test with very large minimum size (should filter out small features)
         result_large_min = atmospheric_river.atmospheric_river_mask(
-            sample_ar_dataset, min_size_gridpoints=1000
+            ivt=sample_ar_dataset["integrated_vapor_transport"],
+            ivt_laplacian=sample_ar_dataset["integrated_vapor_transport_laplacian"],
+            min_size_gridpoints=1000,
         )
 
         # Test with small minimum size (should keep more features)
         result_small_min = atmospheric_river.atmospheric_river_mask(
-            sample_ar_dataset, min_size_gridpoints=10
+            ivt=sample_ar_dataset["integrated_vapor_transport"],
+            ivt_laplacian=sample_ar_dataset["integrated_vapor_transport_laplacian"],
+            min_size_gridpoints=10,
         )
 
         # Small minimum size should have more features
@@ -163,7 +176,10 @@ class TestAtmosphericRiverMask:
             },
         )
 
-        result = atmospheric_river.atmospheric_river_mask(dataset)
+        result = atmospheric_river.atmospheric_river_mask(
+            ivt=dataset["integrated_vapor_transport"],
+            ivt_laplacian=dataset["integrated_vapor_transport_laplacian"],
+        )
 
         # Should return a DataArray
         assert isinstance(result, xr.DataArray)
@@ -668,12 +684,19 @@ class TestBuildMaskAndLandIntersection:
         lon = np.linspace(-130, -100, 5)
         level = [1000, 850, 700, 500, 300, 200]
 
-        # Create dataset missing required variables
+        data_shape_3d = (len(time), len(lat), len(lon))
+
+        # Create dataset missing required wind variables
+        # Include geopotential and air_temperature to avoid circular import
         dataset = xr.Dataset(
             {
                 "air_temperature": (
                     ["time", "level", "latitude", "longitude"],
                     rng.uniform(250, 300, (1, 6, 5, 5)),
+                ),
+                "geopotential_at_surface": (
+                    ["time", "latitude", "longitude"],
+                    rng.uniform(0, 1000, data_shape_3d),
                 ),
             },
             coords={
@@ -685,7 +708,7 @@ class TestBuildMaskAndLandIntersection:
         )
 
         # Should raise an error when required variables are missing
-        with pytest.raises(KeyError):
+        with pytest.raises(ValueError):
             atmospheric_river.build_atmospheric_river_mask_and_land_intersection(
                 dataset
             )
