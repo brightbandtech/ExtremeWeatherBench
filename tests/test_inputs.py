@@ -844,9 +844,9 @@ class TestForecastBase:
         first_time_data = deduplicated_data.sel(init_time="2021-06-20")[
             "surface_air_temperature"
         ]
-        assert np.all(
-            first_time_data.values == 1.0
-        ), "Should preserve first occurrence, not duplicate"
+        assert np.all(first_time_data.values == 1.0), (
+            "Should preserve first occurrence, not duplicate"
+        )
 
         # Verify we have the correct number of unique times
         assert len(deduplicated_data.init_time) == 2
