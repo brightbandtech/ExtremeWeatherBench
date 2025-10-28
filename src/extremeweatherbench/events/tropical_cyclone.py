@@ -697,7 +697,7 @@ Location = namedtuple("Location", ["latitude", "longitude"])
 _TC_TRACK_CACHE: Dict[str, xr.Dataset] = {}
 
 # Global registry for tropical cyclone track data to be used in TC filtering
-_IBTRACS_DATA_REGISTRY: Dict[str, xr.Dataset] = {}
+_TRACK_DATA_REGISTRY: Dict[str, xr.Dataset] = {}
 
 
 def register_tc_track_data(case_id: str, tc_track_data: xr.Dataset) -> None:
@@ -709,8 +709,8 @@ def register_tc_track_data(case_id: str, tc_track_data: xr.Dataset) -> None:
         tc_track_data: tropical cyclone track dataset with valid_time, latitude,
             longitude.
     """
-    global _IBTRACS_DATA_REGISTRY
-    _IBTRACS_DATA_REGISTRY[case_id] = tc_track_data
+    global _TRACK_DATA_REGISTRY
+    _TRACK_DATA_REGISTRY[case_id] = tc_track_data
 
 
 def get_tc_track_data(case_id: str) -> Optional[xr.Dataset]:
@@ -722,14 +722,14 @@ def get_tc_track_data(case_id: str) -> Optional[xr.Dataset]:
     Returns:
         tropical cyclone track dataset if available, None otherwise.
     """
-    global _IBTRACS_DATA_REGISTRY
-    return _IBTRACS_DATA_REGISTRY.get(case_id, None)
+    global _TRACK_DATA_REGISTRY
+    return _TRACK_DATA_REGISTRY.get(case_id, None)
 
 
 def clear_tc_track_data_registry() -> None:
     """Clear the tropical cyclone track data registry."""
-    global _IBTRACS_DATA_REGISTRY
-    _IBTRACS_DATA_REGISTRY.clear()
+    global _TRACK_DATA_REGISTRY
+    _TRACK_DATA_REGISTRY.clear()
 
 
 def _generate_cache_key(data: xr.Dataset) -> str:
