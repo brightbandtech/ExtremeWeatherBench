@@ -331,10 +331,13 @@ def _evaluate_metric_and_return_df(
     Returns:
         A dataframe of the results of the metric evaluation.
     """
-    metric_instance = metric()
-    logger.info("Computing metric %s", metric_instance.name)
 
-    metric_result = metric_instance.compute_metric(
+    # Instantiate metric if not already
+    if isinstance(metric, type):
+        metric = metric()
+    logger.info("Computing metric %s", metric.name)
+
+    metric_result = metric.compute_metric(
         forecast_ds[forecast_variable],
         target_ds[target_variable],
         **kwargs,
@@ -343,9 +346,7 @@ def _evaluate_metric_and_return_df(
     # Convert to DataFrame and add metadata, ensuring OUTPUT_COLUMNS compliance
     df = metric_result.to_dataframe(name="value").reset_index()
     # TODO: add functionality for custom metadata columns
-    metadata = _extract_standard_metadata(
-        target_variable, metric_instance, case_operator
-    )
+    metadata = _extract_standard_metadata(target_variable, metric, case_operator)
     return _ensure_output_schema(df, **metadata)
 
 
