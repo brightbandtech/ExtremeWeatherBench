@@ -34,7 +34,11 @@ class BaseMetric(abc.ABC):
         Args:
             forecast: The forecast DataArray.
             target: The target DataArray.
-            kwargs: Additional keyword arguments to pass to the metric.
+            preserve_dims: Dimension(s) to preserve when computing
+                the metric. Defaults to "lead_time".
+
+        Returns:
+            The computed metric result.
         """
         pass
 
@@ -44,11 +48,30 @@ class BaseMetric(abc.ABC):
         target: xr.DataArray,
         **kwargs: Any,
     ) -> Any:
+        """Public interface to compute the metric.
+
+        Filters kwargs to match _compute_metric signature before
+        calling the implementation.
+
+        Args:
+            forecast: The forecast DataArray.
+            target: The target DataArray.
+            **kwargs: Additional keyword arguments to pass to the
+                metric implementation.
+
+        Returns:
+            The computed metric result.
+        """
         unique_kwargs = utils.filter_kwargs_for_callable(kwargs, self._compute_metric)
         return self._compute_metric(forecast, target, **unique_kwargs)
 
 
 class BinaryContingencyTable(BaseMetric):
+    """Binary contingency table for categorical forecast verification.
+
+    Computes binary contingency statistics using the scores library.
+    """
+
     name = "BinaryContingencyTable"
 
     def _compute_metric(
@@ -63,6 +86,8 @@ class BinaryContingencyTable(BaseMetric):
 
 
 class MAE(BaseMetric):
+    """Mean Absolute Error metric."""
+
     name = "MAE"
 
     def _compute_metric(
@@ -75,6 +100,8 @@ class MAE(BaseMetric):
 
 
 class ME(BaseMetric):
+    """Mean Error (bias) metric."""
+
     name = "ME"
 
     def _compute_metric(
@@ -89,6 +116,8 @@ class ME(BaseMetric):
 
 
 class RMSE(BaseMetric):
+    """Root Mean Square Error metric."""
+
     name = "RMSE"
 
     def _compute_metric(
@@ -115,6 +144,13 @@ class EarlySignal(BaseMetric):
 
 
 class MaximumMAE(BaseMetric):
+    """MAE of the maximum value in a tolerance window.
+
+    Computes the MAE between the forecast and target maximum
+    values, where the forecast is filtered to a time window
+    around the target's maximum.
+    """
+
     name = "MaximumMAE"
 
     def _compute_metric(
@@ -124,6 +160,20 @@ class MaximumMAE(BaseMetric):
         preserve_dims: str = "lead_time",
         tolerance_range: int = 24,
     ) -> Any:
+        """Compute MaximumMAE.
+
+        Args:
+            forecast: The forecast DataArray.
+            target: The target DataArray.
+            preserve_dims: Dimension(s) to preserve. Defaults to
+                "lead_time".
+            tolerance_range: Time window (hours) around target
+                maximum to search for forecast maximum. Defaults
+                to 24 hours.
+
+        Returns:
+            MAE of the maximum values.
+        """
         forecast = forecast.compute()
         target_spatial_mean = target.compute().mean(["latitude", "longitude"])
         maximum_timestep = target_spatial_mean.idxmax("valid_time")
@@ -153,6 +203,13 @@ class MaximumMAE(BaseMetric):
 
 
 class MinimumMAE(BaseMetric):
+    """MAE of the minimum value in a tolerance window.
+
+    Computes the MAE between the forecast and target minimum
+    values, where the forecast is filtered to a time window
+    around the target's minimum.
+    """
+
     name = "MinimumMAE"
 
     def _compute_metric(
@@ -162,6 +219,20 @@ class MinimumMAE(BaseMetric):
         preserve_dims: str = "lead_time",
         tolerance_range: int = 24,
     ) -> Any:
+        """Compute MinimumMAE.
+
+        Args:
+            forecast: The forecast DataArray.
+            target: The target DataArray.
+            preserve_dims: Dimension(s) to preserve. Defaults to
+                "lead_time".
+            tolerance_range: Time window (hours) around target
+                minimum to search for forecast minimum. Defaults
+                to 24 hours.
+
+        Returns:
+            MAE of the minimum values.
+        """
         forecast = forecast.compute()
         target_spatial_mean = target.compute().mean(["latitude", "longitude"])
         minimum_timestep = target_spatial_mean.idxmin("valid_time")
@@ -190,6 +261,13 @@ class MinimumMAE(BaseMetric):
 
 
 class MaxMinMAE(BaseMetric):
+    """MAE of the maximum of daily minimum values.
+
+    Computes the MAE between the warmest nighttime (daily minimum)
+    temperature in the target and forecast, commonly used for
+    heatwave evaluation.
+    """
+
     name = "MaxMinMAE"
 
     def _compute_metric(
@@ -199,6 +277,20 @@ class MaxMinMAE(BaseMetric):
         preserve_dims: str = "lead_time",
         tolerance_range: int = 24,
     ) -> Any:
+        """Compute MaxMinMAE.
+
+        Args:
+            forecast: The forecast DataArray.
+            target: The target DataArray.
+            preserve_dims: Dimension(s) to preserve. Defaults to
+                "lead_time".
+            tolerance_range: Time window (hours) around target
+                max-min to search for forecast max-min. Defaults
+                to 24 hours.
+
+        Returns:
+            MAE of the maximum daily minimum values.
+        """
         forecast = forecast.compute().mean(["latitude", "longitude"])
         target = target.compute().mean(["latitude", "longitude"])
         time_resolution_hours = utils.determine_temporal_resolution(target)
@@ -255,9 +347,24 @@ class MaxMinMAE(BaseMetric):
 
 
 class OnsetME(BaseMetric):
+    """Mean error of heatwave onset time.
+
+    Computes the mean error between forecast and observed timing
+    of event onset (currently configured for heatwaves).
+    """
+
     name = "OnsetME"
 
     def onset(self, forecast: xr.DataArray) -> xr.DataArray:
+        """Identify onset time from forecast data.
+
+        Args:
+            forecast: The forecast DataArray.
+
+        Returns:
+            DataArray containing the onset datetime, or NaT if
+            onset criteria not met.
+        """
         if (forecast.valid_time.max() - forecast.valid_time.min()).values.astype(
             "timedelta64[h]"
         ) >= 48:
@@ -286,6 +393,17 @@ class OnsetME(BaseMetric):
         target: xr.DataArray,
         preserve_dims: str = "init_time",
     ) -> Any:
+        """Compute OnsetME.
+
+        Args:
+            forecast: The forecast DataArray.
+            target: The target DataArray.
+            preserve_dims: Dimension(s) to preserve. Defaults to
+                "init_time".
+
+        Returns:
+            Mean error of onset timing.
+        """
         target_time = target.valid_time[0] + np.timedelta64(48, "h")
         forecast = (
             forecast.mean(["latitude", "longitude"])
@@ -300,9 +418,24 @@ class OnsetME(BaseMetric):
 
 
 class DurationME(BaseMetric):
+    """Mean error of event duration.
+
+    Computes the mean error between forecast and observed duration
+    of an event (currently configured for heatwaves).
+    """
+
     name = "DurationME"
 
     def duration(self, forecast: xr.DataArray) -> xr.DataArray:
+        """Calculate event duration from forecast data.
+
+        Args:
+            forecast: The forecast DataArray.
+
+        Returns:
+            DataArray containing the duration as timedelta, or
+            NaT if duration criteria not met.
+        """
         if (forecast.valid_time.max() - forecast.valid_time.min()).values.astype(
             "timedelta64[h]"
         ) >= 48:
@@ -332,6 +465,17 @@ class DurationME(BaseMetric):
         target: xr.DataArray,
         preserve_dims: str = "init_time",
     ) -> Any:
+        """Compute DurationME.
+
+        Args:
+            forecast: The forecast DataArray.
+            target: The target DataArray.
+            preserve_dims: Dimension(s) to preserve. Defaults to
+                "init_time".
+
+        Returns:
+            Mean error of event duration.
+        """
         # Dummy implementation for duration mean error
         target_duration = target.valid_time[-1] - target.valid_time[0]
         forecast = (
@@ -348,6 +492,11 @@ class DurationME(BaseMetric):
 
 # TODO: fill landfall displacement out
 class LandfallDisplacement(BaseMetric):
+    """Spatial displacement error of landfall location.
+
+    Note: Not yet implemented.
+    """
+
     name = "LandfallDisplacement"
 
     def _compute_metric(
@@ -362,6 +511,11 @@ class LandfallDisplacement(BaseMetric):
 
 # TODO: complete landfall time mean error implementation
 class LandfallTimeME(BaseMetric):
+    """Mean error of landfall time.
+
+    Note: Not yet implemented.
+    """
+
     name = "LandfallTimeME"
 
     def _compute_metric(
@@ -376,6 +530,11 @@ class LandfallTimeME(BaseMetric):
 
 # TODO: complete landfall intensity mean absolute error implementation
 class LandfallIntensityMAE(BaseMetric):
+    """MAE of landfall intensity.
+
+    Note: Not yet implemented.
+    """
+
     name = "LandfallIntensityMAE"
 
     def _compute_metric(
@@ -390,6 +549,11 @@ class LandfallIntensityMAE(BaseMetric):
 
 # TODO: complete spatial displacement implementation
 class SpatialDisplacement(BaseMetric):
+    """Spatial displacement error metric.
+
+    Note: Not yet implemented.
+    """
+
     name = "SpatialDisplacement"
 
     def _compute_metric(
@@ -404,6 +568,11 @@ class SpatialDisplacement(BaseMetric):
 
 # TODO: complete false alarm ratio implementation
 class FAR(BaseMetric):
+    """False Alarm Ratio metric.
+
+    Note: Not yet implemented.
+    """
+
     name = "FAR"
 
     def _compute_metric(
@@ -418,6 +587,11 @@ class FAR(BaseMetric):
 
 # TODO: complete CSI implementation
 class CSI(BaseMetric):
+    """Critical Success Index metric.
+
+    Note: Not yet implemented.
+    """
+
     name = "CSI"
 
     def _compute_metric(
@@ -432,6 +606,11 @@ class CSI(BaseMetric):
 
 # TODO: complete lead time detection implementation
 class LeadTimeDetection(BaseMetric):
+    """Lead time detection metric.
+
+    Note: Not yet implemented.
+    """
+
     name = "LeadTimeDetection"
 
     def _compute_metric(
@@ -446,6 +625,11 @@ class LeadTimeDetection(BaseMetric):
 
 # TODO: complete regional hits and misses implementation
 class RegionalHitsMisses(BaseMetric):
+    """Regional hits and misses metric.
+
+    Note: Not yet implemented.
+    """
+
     name = "RegionalHitsMisses"
 
     def _compute_metric(
@@ -460,6 +644,11 @@ class RegionalHitsMisses(BaseMetric):
 
 # TODO: complete hits and misses implementation
 class HitsMisses(BaseMetric):
+    """Hits and misses metric.
+
+    Note: Not yet implemented.
+    """
+
     name = "HitsMisses"
 
     def _compute_metric(
