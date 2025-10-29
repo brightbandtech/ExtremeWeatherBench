@@ -758,12 +758,12 @@ def _ibtracs_preprocess(data: IncomingDataInput) -> IncomingDataInput:
     pressure_cols = [col for col in schema if "PRES" in col.lower()]
     wind_cols = [col for col in schema if "WIND" in col.lower()]
 
-    # Apply transformations to convert " " to null and cast to float
+    # Apply transformations to strip whitespace, replace empty with null, cast
     subset_target_data = data.with_columns(
         [
-            pl.when(pl.col(col) == " ")
-            .then(None)
-            .otherwise(pl.col(col))
+            pl.col(col)
+            .str.strip_chars()
+            .replace("", None)
             .cast(pl.Float64, strict=False)
             .alias(col)
             for col in pressure_cols + wind_cols
@@ -776,20 +776,18 @@ def _ibtracs_preprocess(data: IncomingDataInput) -> IncomingDataInput:
     )
 
     # Create unified pressure and wind columns by preferring USA and WMO data
-    # For surface wind speed
-    wind_columns = [col for col in schema if "WIND" in col]
+    # For surface wind speed - reuse wind_cols from earlier
     wind_priority = ["USA_WIND", "WMO_WIND"] + [
-        col for col in wind_columns if col not in ["USA_WIND", "WMO_WIND"]
+        col for col in wind_cols if col not in ["USA_WIND", "WMO_WIND"]
     ]
 
-    # For pressure at mean sea level
-    pressure_columns = [col for col in schema if "PRES" in col]
+    # For pressure at mean sea level - reuse pressure_cols from earlier
     pressure_priority = [
         "USA_PRES",
         "WMO_PRES",
     ] + [
         col
-        for col in pressure_columns
+        for col in pressure_cols
         if col
         not in [
             "USA_PRES",
@@ -798,24 +796,37 @@ def _ibtracs_preprocess(data: IncomingDataInput) -> IncomingDataInput:
     ]
 
     # Create unified columns using coalesce (equivalent to pandas bfill)
+    # Filter to only include columns that exist in the schema
+    schema_names = subset_target_data.collect_schema().names()
+    available_wind_cols = [col for col in wind_priority if col in schema_names]
+    available_pressure_cols = [col for col in pressure_priority if col in schema_names]
+
+    # If no columns available, return early with empty dataframe
+    if not available_wind_cols or not available_pressure_cols:
+        return subset_target_data.filter(pl.lit(False))
+
     subset_target_data = subset_target_data.with_columns(
         [
-            pl.coalesce(wind_priority).alias("surface_wind_speed"),
-            pl.coalesce(pressure_priority).alias("air_pressure_at_mean_sea_level"),
+            pl.coalesce([pl.col(col) for col in available_wind_cols]).alias(
+                "surface_wind_speed"
+            ),
+            pl.coalesce([pl.col(col) for col in available_pressure_cols]).alias(
+                "air_pressure_at_mean_sea_level"
+            ),
         ]
     )
 
-    # Drop rows where wind speed OR pressure are null (equivalent to pandas
-    # dropna with how="any")
+    # Drop rows where wind speed OR pressure are null
     subset_target_data = subset_target_data.filter(
         pl.col("surface_wind_speed").is_not_null()
         & pl.col("air_pressure_at_mean_sea_level").is_not_null()
     )
     # Cast to float64 and convert knots to m/s
+    # Use strict=False to handle any edge cases
     subset_target_data = subset_target_data.with_columns(
         [
-            pl.col("surface_wind_speed").cast(pl.Float64) * 0.514444,
-            pl.col("air_pressure_at_mean_sea_level").cast(pl.Float64),
+            pl.col("surface_wind_speed").cast(pl.Float64, strict=False) * 0.514444,
+            pl.col("air_pressure_at_mean_sea_level").cast(pl.Float64, strict=False),
         ]
     )
     return subset_target_data
@@ -851,6 +862,10 @@ class IBTrACS(TargetBase):
         **kwargs,
     ) -> IncomingDataInput:
         # Note: drop parameter not applicable for polars LazyFrame data
+        import logging
+
+        logger = logging.getLogger(__name__)
+
         if not isinstance(data, pl.LazyFrame):
             raise ValueError(f"Expected polars LazyFrame, got {type(data)}")
 
@@ -860,6 +875,8 @@ class IBTrACS(TargetBase):
         if case_metadata.start_date.month > 11:
             season += 1
 
+        logger.debug("IBTrACS subsetting for season %s", season)
+
         # Create a subquery to find all storm numbers in the same season
         matching_numbers = (
             data.filter(pl.col("SEASON").cast(pl.Int64) == season)
@@ -868,6 +885,7 @@ class IBTrACS(TargetBase):
         )
 
         possible_names = utils.extract_tc_names(case_metadata.title)
+        logger.debug("Looking for TC names: %s", possible_names)
 
         # Apply the filter to get all data for storms with the same number in
         # the same season, matching any of the possible names
@@ -876,6 +894,10 @@ class IBTrACS(TargetBase):
         subset_target_data = data.join(
             matching_numbers, on="NUMBER", how="inner"
         ).filter(name_filter & (pl.col("SEASON").cast(pl.Int64) == season))
+
+        # Check if we have any data before selecting columns
+        num_rows = subset_target_data.select(pl.len()).collect().item()
+        logger.debug("Rows after filtering: %s", num_rows)
 
         # Select only the columns to keep
         columns_to_keep = [
@@ -931,13 +953,23 @@ class IBTrACS(TargetBase):
         Returns:
             The dataset with source attributes added.
         """
+
         ds = super().add_source_to_dataset_attrs(ds)
+
+        logger.debug(
+            "IBTrACS add_source: _current_case_id=%s, ds dims=%s",
+            self._current_case_id,
+            ds.dims,
+        )
 
         # Register IBTrACS data immediately for tropical cyclone filtering
         if self._current_case_id is not None:
             from extremeweatherbench.events import tropical_cyclone
 
+            logger.debug("Registering tc_track_data for case %s", self._current_case_id)
             tropical_cyclone.register_tc_track_data(self._current_case_id, ds)
+        else:
+            logger.warning("Cannot register IBTrACS data: _current_case_id is None")
 
         # Store flag indicating this is IBTrACS data
         ds.attrs["is_ibtracs_data"] = True

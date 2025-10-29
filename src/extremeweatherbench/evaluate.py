@@ -214,7 +214,7 @@ def _run_parallel(
                 # No client exists, create a local one
                 logger.info("Creating local dask client for parallel execution")
                 dask_client = Client(LocalCluster(processes=True, silence_logs=False))
-                logger.info(f"Dask client created: {dask_client}")
+                logger.info("Dask client created: %s", dask_client)
         except ImportError:
             raise ImportError(
                 "Dask is required for dask backend. "
@@ -485,19 +485,20 @@ def _build_datasets(
     if zero_length_dims:
         if "valid_time" in zero_length_dims:
             logger.warning(
-                f"Forecast dataset for case "
-                f"{case_operator.case_metadata.case_id_number} "
-                f"has no data for case time range "
-                f"{case_operator.case_metadata.start_date} to "
-                f"{case_operator.case_metadata.end_date}."
+                "Forecast dataset for case %s has no data for case time range %s to "
+                "%s.",
+                case_operator.case_metadata.case_id_number,
+                case_operator.case_metadata.start_date,
+                case_operator.case_metadata.end_date,
             )
         else:
             logger.warning(
-                f"Forecast dataset for case "
-                f"{case_operator.case_metadata.case_id_number} "
-                f"has zero-length dimensions {zero_length_dims} for case time range "
-                f"{case_operator.case_metadata.start_date} "
-                f"to {case_operator.case_metadata.end_date}."
+                "Forecast dataset for case %s has zero-length dimensions %s for case "
+                "time range %s to %s.",
+                case_operator.case_metadata.case_id_number,
+                zero_length_dims,
+                case_operator.case_metadata.start_date,
+                case_operator.case_metadata.end_date,
             )
         return xr.Dataset(), xr.Dataset()
     return (forecast_ds, target_ds)

@@ -77,6 +77,11 @@ def generate_forecast_tctracks(
     Returns:
         An xarray Dataset with detected storm tracks.
     """
+    # Handle None input for tc_track_data
+    if tc_track_data is None:
+        logger.warning("tc_track_data is None, returning empty tracks dataset")
+        return _create_empty_tracks_dataset()
+
     # Filter out init_times that occur after all tropical cyclone track data landfalls
     if exclude_post_landfall_init_times:
         n_init_times = (
@@ -84,7 +89,7 @@ def generate_forecast_tctracks(
             if "init_time" in gridded_dataset.coords
             else "N/A"
         )
-        logger.debug(f"Filtering post-landfall (before: {n_init_times})")
+        logger.debug("Filtering post-landfall (before: %s)", n_init_times)
         filtered_dataset = _filter_post_landfall_init_times(
             gridded_dataset, tc_track_data
         )
@@ -103,7 +108,7 @@ def generate_forecast_tctracks(
             return _create_empty_tracks_dataset()
 
         n_remain = len(filtered_dataset.init_time)
-        logger.debug(f"After post-landfall filter: {n_remain}")
+        logger.debug("After post-landfall filter: %s", n_remain)
         # Update the cyclone dataset to be filtered_dataset
         gridded_dataset = filtered_dataset
 
@@ -122,12 +127,15 @@ def generate_forecast_tctracks(
         has_valid = "valid_time" in gridded_dataset.dims
         n_valid = len(gridded_dataset.valid_time) if has_valid else "N/A"
         logger.debug(
-            f"Dims: {n_init} init_times, {n_lead} lead_times, {n_valid} valid_times"
+            "Dims: %s init_times, %s lead_times, %s valid_times",
+            n_init,
+            n_lead,
+            n_valid,
         )
         if has_lead:
             lt_start = gridded_dataset.lead_time.values[0]
             lt_end = gridded_dataset.lead_time.values[-1]
-            logger.debug(f"Lead time range: {lt_start} to {lt_end}")
+            logger.debug("Lead time range: %s to %s", lt_start, lt_end)
         return process_all_init_times(
             gridded_dataset=gridded_dataset,
             tc_track_data_df=tc_track_data_df,
@@ -193,8 +201,8 @@ def process_all_init_times(
     non_spatial_dims = [dim for dim in slp.dims if dim not in spatial_dims]
 
     # Debug statements to check the shape of the tc_track_data_df and the forecast times
-    logger.debug(f"tc_track_data_df shape before filtering: {tc_track_data_df.shape}")
-    logger.debug(f"Forecast time_coord values: {time_coord.values[:5]}...")
+    logger.debug("tc_track_data_df shape before filtering: %s", tc_track_data_df.shape)
+    logger.debug("Forecast time_coord values: %s...", time_coord.values[:5])
 
     # Filter the tc_track_data_df to only include valid times that match the forecast
     # times
@@ -204,7 +212,7 @@ def process_all_init_times(
             pd.to_datetime(time_coord.values.ravel())
         )
     ]
-    logger.debug(f"tc_track_data_df shape after filtering: {tc_track_data_df.shape}")
+    logger.debug("tc_track_data_df shape after filtering: %s", tc_track_data_df.shape)
     if len(tc_track_data_df) == 0:
         logger.warning("No TC track data matches forecast times - returning empty")
     # Get wind speed data
@@ -426,8 +434,11 @@ def _process_entire_dataset(
 
             if len(peaks) > 0:
                 logger.debug(
-                    f"Found {len(peaks)} peaks at "
-                    f"lt_idx={lt_idx}, vt_idx={vt_idx}, time={current_valid_time}"
+                    "Found %s peaks at lt_idx=%s, vt_idx=%s, time=%s",
+                    len(peaks),
+                    lt_idx,
+                    vt_idx,
+                    current_valid_time,
                 )
                 # Get coordinates and values for all peaks
                 peak_lats = lat_array[peaks[:, 0]]
@@ -502,7 +513,7 @@ def _process_entire_dataset(
                     }
 
     n_det = len(detections)
-    logger.debug(f"Total detections before track length filter: {n_det}")
+    logger.debug("Total detections before track length filter: %s", n_det)
 
     # Filter out tracks with fewer than min_track_length consecutive lead times
     if detections:
@@ -550,11 +561,14 @@ def _process_entire_dataset(
 
             track_id, init_time = track_key
             logger.debug(
-                f"Track {track_id} (init={init_time}): "
-                f"{len(lt_indices)} lead_times, "
-                f"max_consecutive={max_consecutive}, "
-                f"need={min_track_length}, "
-                f"indices={sorted_lt_indices[:5]}..."
+                "Track %s (init=%s): %s lead_times, max_consecutive=%s, need=%s, "
+                "indices=%s...",
+                track_id,
+                init_time,
+                len(lt_indices),
+                max_consecutive,
+                min_track_length,
+                sorted_lt_indices[:5],
             )
 
             # Only keep tracks with at least min_track_length consecutive lead times
@@ -578,7 +592,9 @@ def _process_entire_dataset(
         n_filtered = len(filtered_detections)
         n_total = len(detections)
         logger.debug(
-            f"After min_track_length filter: {n_filtered} remain (from {n_total})"
+            "After min_track_length filter: %s remain (from %s)",
+            n_filtered,
+            n_total,
         )
     else:
         filtered_detections = []
@@ -774,8 +790,18 @@ def get_tc_track_data(case_id: str) -> Optional[xr.Dataset]:
     Returns:
         tropical cyclone track dataset if available, None otherwise.
     """
+    import logging
+
+    logger = logging.getLogger(__name__)
+
     global _TRACK_DATA_REGISTRY
-    return _TRACK_DATA_REGISTRY.get(case_id, None)
+    logger.debug(
+        "get_tc_track_data called with case_id=%s (type=%s)", case_id, type(case_id)
+    )
+    logger.debug("Registry keys: %s", list(_TRACK_DATA_REGISTRY.keys()))
+    result = _TRACK_DATA_REGISTRY.get(case_id, None)
+    logger.debug("Found data: %s", result is not None)
+    return result
 
 
 def clear_tc_track_data_registry() -> None:
@@ -1036,11 +1062,11 @@ def _find_peaks_for_time_slice(
     nearby_tc_track_data = tc_track_data_df[temporal_mask]
 
     if len(nearby_tc_track_data) == 0:
-        logger.debug(f"No TC track data at time {current_valid_time}")
+        logger.debug("No TC track data at time %s", current_valid_time)
         return np.array([])
     else:
         n_rows = len(nearby_tc_track_data)
-        logger.debug(f"Found {n_rows} TC track data rows at {current_valid_time}")
+        logger.debug("Found %s TC track data rows at %s", n_rows, current_valid_time)
 
     # Check for valid data
     if np.all(np.isnan(slp_slice)):
@@ -1187,7 +1213,7 @@ def _filter_post_landfall_init_times(
     # Get all tropical cyclone track data landfall times
     landfall_times = tc_track_data_landfalls.valid_time.values
     latest_landfall = np.max(landfall_times)
-    logger.debug(f"Latest TC track data landfall time: {latest_landfall}")
+    logger.debug("Latest TC track data landfall time: %s", latest_landfall)
 
     # Convert cyclone_dataset to have init_time coordinate if it doesn't already
     if "init_time" not in cyclone_dataset.coords:
@@ -1195,14 +1221,14 @@ def _filter_post_landfall_init_times(
 
     init_start = cyclone_dataset.init_time.values[0]
     init_end = cyclone_dataset.init_time.values[-1]
-    logger.debug(f"Forecast init_time range: {init_start} to {init_end}")
+    logger.debug("Forecast init_time range: %s to %s", init_start, init_end)
 
     # Filter to only include init_times before the latest landfall
     valid_init_times = cyclone_dataset.init_time < latest_landfall
 
     if not valid_init_times.any():
         # No valid init_times
-        logger.warning(f"No init_times before latest landfall ({latest_landfall})")
+        logger.warning("No init_times before latest landfall (%s)", latest_landfall)
         return None
 
     # Return filtered dataset
@@ -1354,6 +1380,10 @@ def find_all_landfalls(track_dataset: xr.Dataset) -> Optional[xr.Dataset]:
         For forecast data, includes init_time dimension.
         Dataset has a "landfall" dimension for multiple landfall points.
     """
+    # Handle None input
+    if track_dataset is None:
+        return None
+
     # Pre-load coastline data with buffer for better detection
 
     # Use 110m resolution (faster) but add buffer for better coastal detection
@@ -1548,7 +1578,7 @@ def _find_all_landfalls_tc_track_data(
                     }
                 )
         except Exception as e:
-            print(f"Error finding landfall: {e}")
+            logger.error("Error finding landfall: %s", e)
             # Skip this segment if any error occurs
             continue
 

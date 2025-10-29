@@ -89,6 +89,15 @@ def check_for_valid_times(
         True if the dataset has any times within the specified range,
         False otherwise.
     """
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    logger.debug(
+        "Checking xarray for time columns. Available coords: %s",
+        list(data.coords.keys()),
+    )
+    logger.debug("Date range: %s to %s", start_date, end_date)
 
     # Convert the start and end dates to pandas Timestamp objects for xarray's
     # loc indexing
@@ -99,9 +108,17 @@ def check_for_valid_times(
     time_dims = ["valid_time", "time", "init_time"]
     for time_dim in time_dims:
         if time_dim in data.coords:
-            return any(data[time_dim].loc[start_ts:end_ts])
+            logger.debug("Found time coord: %s", time_dim)
+            try:
+                result = any(data[time_dim].loc[start_ts:end_ts])
+                logger.debug("Time check result: %s", result)
+                return result
+            except Exception as e:
+                logger.debug("Time check failed: %s", e)
+                continue
 
     # If no time dimension found, return False
+    logger.debug("No time dimension found in xarray dataset")
     return False
 
 
@@ -116,6 +133,10 @@ def check_for_spatial_data(data: xr.Dataset, location: "regions.Region") -> bool
         True if the Dataset has any data within the specified region,
         False otherwise.
     """
+    import logging
+
+    logger = logging.getLogger(__name__)
+
     # Check if Dataset has latitude and longitude dimensions
     lat_dims = ["latitude", "lat"]
     lon_dims = ["longitude", "lon"]
@@ -123,17 +144,25 @@ def check_for_spatial_data(data: xr.Dataset, location: "regions.Region") -> bool
     lat_dim = utils.check_for_vars(lat_dims, list(data.coords.keys()))
     lon_dim = utils.check_for_vars(lon_dims, list(data.coords.keys()))
 
+    logger.debug("Xarray spatial check - lat_dim: %s, lon_dim: %s", lat_dim, lon_dim)
+
     if lat_dim is None or lon_dim is None:
+        logger.debug("No lat/lon dims found in xarray dataset")
         return False
     coords = location.as_geopandas().total_bounds
     # Get location bounds
     lat_min, lat_max = coords[1], coords[3]
     lon_min, lon_max = coords[0], coords[2]
 
+    logger.debug(
+        "Region bounds: lat [%s, %s], lon [%s, %s]", lat_min, lat_max, lon_min, lon_max
+    )
+
     # Check if reversing the latitude range still returns no data
     if len(data.sel({lat_dim: slice(lat_min, lat_max)})) == 0:
         if len(data.sel({lat_dim: slice(lat_max, lat_min)})) == 0:
             # If reversing the latitude range still returns no data, return False
+            logger.debug("No spatial data found (both lat orderings tried)")
             return False
         else:
             # If latitude has data, check longitude
@@ -147,4 +176,6 @@ def check_for_spatial_data(data: xr.Dataset, location: "regions.Region") -> bool
         )
 
     # Check if any data remains after spatial filtering
-    return sum(data.sizes.values()) > 0
+    result = sum(data.sizes.values()) > 0
+    logger.debug("Xarray spatial check result: %s", result)
+    return result

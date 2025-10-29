@@ -26,7 +26,7 @@ logging.getLogger("urllib3.connectionpool").setLevel(logging.CRITICAL)
 logging.getLogger("botocore.httpchecksum").setLevel(logging.CRITICAL)
 logging.basicConfig()
 logger = logging.getLogger("extremeweatherbench")
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
 
 # %%
 case_yaml = cases.load_ewb_events_yaml_into_case_collection()

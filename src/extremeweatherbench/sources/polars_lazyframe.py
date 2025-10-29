@@ -10,6 +10,10 @@ from extremeweatherbench import defaults, utils
 if TYPE_CHECKING:
     from extremeweatherbench import regions
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 def safely_pull_variables(
     data: pl.LazyFrame,
@@ -143,18 +147,27 @@ def check_for_valid_times(
         >>> check_for_valid_times(lf, start, end)
         True
     """
-    # Try different time column names
-    time_cols = ["valid_time", "time", "init_time"]
+    # Try different time column names (including IBTrACS original name)
+    time_cols = ["valid_time", "time", "init_time", "ISO_TIME"]
     available_columns = data.collect_schema().names()
+
+    logger.debug("Checking for time columns. Available: %s", available_columns)
+    logger.debug("Looking for: %s", time_cols)
 
     for time_col in time_cols:
         if time_col in available_columns:
-            # Filter the LazyFrame to only include valid times in the given date range
+            logger.debug("Found time column: %s", time_col)
+            logger.debug("Date range: %s to %s", start_date, end_date)
+            # Filter LazyFrame to include valid times in date range
+            # Try parsing as string first, fall back to direct comparison
             time_filtered_lf = data.select(pl.col(time_col)).filter(
-                (pl.col(time_col) >= start_date) & (pl.col(time_col) <= end_date)
+                (pl.col(time_col).str.to_datetime() >= pl.lit(start_date))
+                & (pl.col(time_col).str.to_datetime() <= pl.lit(end_date))
             )
             # If the filtered LazyFrame has any rows, return True
-            return not time_filtered_lf.collect().is_empty()
+            result = not time_filtered_lf.collect().is_empty()
+            logger.debug("String parse succeeded, has data: %s", result)
+            return result
 
     # If no time column found, return False
     return False
@@ -204,20 +217,35 @@ def check_for_spatial_data(
         True
     """
     # Check if LazyFrame has latitude and longitude columns
-    lat_cols = ["latitude", "lat"]
-    lon_cols = ["longitude", "lon"]
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    lat_cols = ["latitude", "lat", "LAT"]
+    lon_cols = ["longitude", "lon", "LON"]
 
     available_columns = data.collect_schema().names()
 
     lat_col = utils.check_for_vars(lat_cols, available_columns)
     lon_col = utils.check_for_vars(lon_cols, available_columns)
 
+    logger.debug("Spatial check - lat_col: %s, lon_col: %s", lat_col, lon_col)
+
     if lat_col is None or lon_col is None:
+        logger.debug("No lat/lon columns found, returning False")
         return False
     coords = location.as_geopandas().total_bounds
     # Get location bounds
     lat_min, lat_max = coords[1], coords[3]
     lon_min, lon_max = coords[0], coords[2]
+
+    logger.debug(
+        "Region bounds: lat [%s, %s], lon [%s, %s]",
+        lat_min,
+        lat_max,
+        lon_min,
+        lon_max,
+    )
 
     # Check if there are any data points within the location bounds
     filtered_data = data.filter(
@@ -227,4 +255,6 @@ def check_for_spatial_data(
         & (pl.col(lon_col) <= lon_max)
     )
 
-    return not filtered_data.collect().is_empty()
+    result = not filtered_data.collect().is_empty()
+    logger.debug("Spatial check result: %s", result)
+    return result

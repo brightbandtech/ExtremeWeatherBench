@@ -141,9 +141,22 @@ class TropicalCycloneTrackVariables(DerivedVariable):
         tc_track_data = kwargs.get("tc_track_data", None)
         case_metadata = kwargs.get("case_metadata", None)
         case_id_number = case_metadata.case_id_number if case_metadata else None
+
+        logger.debug(
+            "TC derived variable: case_id_number=%s, tc_track_data from kwargs=%s",
+            case_id_number,
+            tc_track_data is not None,
+        )
+
         if tc_track_data is None and case_id_number is not None:
-            tc_track_data = tropical_cyclone.get_tc_track_data(case_id_number)
-        else:
+            # Convert to string to match registry key type
+            case_id_str = str(case_id_number)
+            logger.debug("Looking up tc_track_data for case %s", case_id_str)
+            tc_track_data = tropical_cyclone.get_tc_track_data(case_id_str)
+            logger.debug("Retrieved tc_track_data: %s", tc_track_data is not None)
+
+        if tc_track_data is None:
+            logger.error("No track data found for case %s", case_id_number)
             raise ValueError("No track data data provided to constrain TC tracks.")
 
         tctracks_ds = tropical_cyclone.generate_forecast_tctracks(
