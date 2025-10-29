@@ -141,13 +141,7 @@ class CaseOperator:
     """
 
     case_metadata: IndividualCase
-    metric_list: list[
-        Union[
-            Callable[..., Any],
-            type["metrics.BaseMetric"],
-            type["metrics.AppliedMetric"],
-        ]
-    ]
+    metric_list: list[Union[Callable[..., Any], type["metrics.BaseMetric"]]]
     target: "inputs.TargetBase"
     forecast: "inputs.ForecastBase"
 

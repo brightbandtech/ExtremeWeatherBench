@@ -242,7 +242,7 @@ def compute_case_operator(
 
 def _extract_standard_metadata(
     target_variable: Union[str, "derived.DerivedVariable"],
-    metric: Union["metrics.BaseMetric", "metrics.AppliedMetric"],
+    metric: "metrics.BaseMetric",
     case_operator: "cases.CaseOperator",
 ) -> dict:
     """Extract standard metadata for output dataframe.
@@ -313,7 +313,7 @@ def _evaluate_metric_and_return_df(
     target_ds: xr.Dataset,
     forecast_variable: Union[str, "derived.DerivedVariable"],
     target_variable: Union[str, "derived.DerivedVariable"],
-    metric: Union[type["metrics.BaseMetric"], type["metrics.AppliedMetric"]],
+    metric: Union[type["metrics.BaseMetric"]],
     case_operator: "cases.CaseOperator",
     **kwargs,
 ) -> pd.DataFrame:
