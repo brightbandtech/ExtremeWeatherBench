@@ -21,15 +21,13 @@ class BaseMetric(abc.ABC):
     """
 
     name: str
-    # default to preserving lead_time in EWB metrics
-    preserve_dims: str = "lead_time"
 
     @abc.abstractmethod
     def _compute_metric(
         self,
         forecast: xr.DataArray,
         target: xr.DataArray,
-        **kwargs: Any,
+        preserve_dims: str = "lead_time",  # default to preserving lead_time in metrics
     ) -> Any:
         """Compute the metric.
 
@@ -44,13 +42,10 @@ class BaseMetric(abc.ABC):
         self,
         forecast: xr.DataArray,
         target: xr.DataArray,
-        **kwargs,
-    ):
-        return self._compute_metric(
-            forecast,
-            target,
-            **utils.filter_kwargs_for_callable(kwargs, self._compute_metric),
-        )
+        **kwargs: Any,
+    ) -> Any:
+        unique_kwargs = utils.filter_kwargs_for_callable(kwargs, self._compute_metric)
+        return self._compute_metric(forecast, target, **unique_kwargs)
 
 
 class BinaryContingencyTable(BaseMetric):
@@ -60,9 +55,8 @@ class BinaryContingencyTable(BaseMetric):
         self,
         forecast: xr.DataArray,
         target: xr.DataArray,
-        **kwargs: Any,
+        preserve_dims: str = "lead_time",
     ) -> Any:
-        preserve_dims = kwargs.get("preserve_dims", "lead_time")
         return scores.categorical.BinaryContingencyManager(
             forecast, target, preserve_dims=preserve_dims
         )
@@ -75,9 +69,8 @@ class MAE(BaseMetric):
         self,
         forecast: xr.DataArray,
         target: xr.DataArray,
-        **kwargs: Any,
+        preserve_dims: str = "lead_time",
     ) -> Any:
-        preserve_dims = kwargs.get("preserve_dims", "lead_time")
         return scores.continuous.mae(forecast, target, preserve_dims=preserve_dims)
 
 
@@ -88,9 +81,8 @@ class ME(BaseMetric):
         self,
         forecast: xr.DataArray,
         target: xr.DataArray,
-        **kwargs: Any,
+        preserve_dims: str = "lead_time",
     ) -> Any:
-        preserve_dims = kwargs.get("preserve_dims", "lead_time")
         return scores.continuous.mean_error(
             forecast, target, preserve_dims=preserve_dims
         )
@@ -103,9 +95,8 @@ class RMSE(BaseMetric):
         self,
         forecast: xr.DataArray,
         target: xr.DataArray,
-        **kwargs: Any,
+        preserve_dims: str = "lead_time",
     ) -> Any:
-        preserve_dims = kwargs.get("preserve_dims", "lead_time")
         return scores.continuous.rmse(forecast, target, preserve_dims=preserve_dims)
 
 
@@ -114,7 +105,10 @@ class EarlySignal(BaseMetric):
     name = "EarlySignal"
 
     def _compute_metric(
-        self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
+        self,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
+        preserve_dims: str = "lead_time",
     ) -> Any:
         # Dummy implementation for early signal
         raise NotImplementedError("EarlySignal is not implemented yet")
@@ -127,8 +121,8 @@ class MaximumMAE(BaseMetric):
         self,
         forecast: xr.DataArray,
         target: xr.DataArray,
+        preserve_dims: str = "lead_time",
         tolerance_range: int = 24,
-        **kwargs: Any,
     ) -> Any:
         forecast = forecast.compute()
         target_spatial_mean = target.compute().mean(["latitude", "longitude"])
@@ -154,7 +148,7 @@ class MaximumMAE(BaseMetric):
         return MAE().compute_metric(
             forecast=filtered_max_forecast,
             target=maximum_value,
-            preserve_dims=self.preserve_dims,
+            preserve_dims=preserve_dims,
         )
 
 
@@ -165,8 +159,8 @@ class MinimumMAE(BaseMetric):
         self,
         forecast: xr.DataArray,
         target: xr.DataArray,
+        preserve_dims: str = "lead_time",
         tolerance_range: int = 24,
-        **kwargs: Any,
     ) -> Any:
         forecast = forecast.compute()
         target_spatial_mean = target.compute().mean(["latitude", "longitude"])
@@ -191,7 +185,7 @@ class MinimumMAE(BaseMetric):
         return MAE().compute_metric(
             forecast=filtered_min_forecast,
             target=minimum_value,
-            preserve_dims=self.preserve_dims,
+            preserve_dims=preserve_dims,
         )
 
 
@@ -202,8 +196,8 @@ class MaxMinMAE(BaseMetric):
         self,
         forecast: xr.DataArray,
         target: xr.DataArray,
+        preserve_dims: str = "lead_time",
         tolerance_range: int = 24,
-        **kwargs: Any,
     ) -> Any:
         forecast = forecast.compute().mean(["latitude", "longitude"])
         target = target.compute().mean(["latitude", "longitude"])
@@ -256,13 +250,12 @@ class MaxMinMAE(BaseMetric):
         return MAE().compute_metric(
             forecast=subset_forecast,
             target=max_min_target_value,
-            preserve_dims=self.preserve_dims,
+            preserve_dims=preserve_dims,
         )
 
 
 class OnsetME(BaseMetric):
     name = "OnsetME"
-    preserve_dims: str = "init_time"
 
     def onset(self, forecast: xr.DataArray) -> xr.DataArray:
         if (forecast.valid_time.max() - forecast.valid_time.min()).values.astype(
@@ -288,7 +281,10 @@ class OnsetME(BaseMetric):
         return xr.DataArray(np.datetime64("NaT", "ns"))
 
     def _compute_metric(
-        self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
+        self,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
+        preserve_dims: str = "init_time",
     ) -> Any:
         target_time = target.valid_time[0] + np.timedelta64(48, "h")
         forecast = (
@@ -299,13 +295,12 @@ class OnsetME(BaseMetric):
         return ME().compute_metric(
             forecast=forecast,
             target=target_time,
-            preserve_dims=self.preserve_dims,
+            preserve_dims=preserve_dims,
         )
 
 
 class DurationME(BaseMetric):
     name = "DurationME"
-    preserve_dims: str = "init_time"
 
     def duration(self, forecast: xr.DataArray) -> xr.DataArray:
         if (forecast.valid_time.max() - forecast.valid_time.min()).values.astype(
@@ -332,7 +327,10 @@ class DurationME(BaseMetric):
         return xr.DataArray(np.timedelta64("NaT", "ns"))
 
     def _compute_metric(
-        self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
+        self,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
+        preserve_dims: str = "init_time",
     ) -> Any:
         # Dummy implementation for duration mean error
         target_duration = target.valid_time[-1] - target.valid_time[0]
@@ -344,7 +342,7 @@ class DurationME(BaseMetric):
         return ME().compute_metric(
             forecast=forecast,
             target=target_duration,
-            preserve_dims=self.preserve_dims,
+            preserve_dims=preserve_dims,
         )
 
 
@@ -353,7 +351,10 @@ class LandfallDisplacement(BaseMetric):
     name = "LandfallDisplacement"
 
     def _compute_metric(
-        self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
+        self,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
+        preserve_dims: str = "init_time",
     ) -> Any:
         # Dummy implementation for landfall displacement
         raise NotImplementedError("LandfallDisplacement is not implemented yet")
@@ -364,7 +365,10 @@ class LandfallTimeME(BaseMetric):
     name = "LandfallTimeME"
 
     def _compute_metric(
-        self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
+        self,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
+        preserve_dims: str = "init_time",
     ) -> Any:
         # Dummy implementation for landfall time mean error
         raise NotImplementedError("LandfallTimeME is not implemented yet")
@@ -375,7 +379,10 @@ class LandfallIntensityMAE(BaseMetric):
     name = "LandfallIntensityMAE"
 
     def _compute_metric(
-        self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
+        self,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
+        preserve_dims: str = "init_time",
     ) -> Any:
         # Dummy implementation for landfall intensity mean absolute error
         raise NotImplementedError("LandfallIntensityMAE is not implemented yet")
@@ -386,7 +393,10 @@ class SpatialDisplacement(BaseMetric):
     name = "SpatialDisplacement"
 
     def _compute_metric(
-        self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
+        self,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
+        preserve_dims: str = "init_time",
     ) -> Any:
         # Dummy implementation for spatial displacement
         raise NotImplementedError("SpatialDisplacement is not implemented yet")
@@ -397,7 +407,10 @@ class FAR(BaseMetric):
     name = "FAR"
 
     def _compute_metric(
-        self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
+        self,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
+        preserve_dims: str = "init_time",
     ) -> Any:
         # Dummy implementation for False Alarm Rate
         raise NotImplementedError("FAR is not implemented yet")
@@ -408,7 +421,10 @@ class CSI(BaseMetric):
     name = "CSI"
 
     def _compute_metric(
-        self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
+        self,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
+        preserve_dims: str = "init_time",
     ) -> Any:
         # Dummy implementation for Critical Success Index
         raise NotImplementedError("CSI is not implemented yet")
@@ -419,7 +435,10 @@ class LeadTimeDetection(BaseMetric):
     name = "LeadTimeDetection"
 
     def _compute_metric(
-        self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
+        self,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
+        preserve_dims: str = "init_time",
     ) -> Any:
         # Dummy implementation for lead time detection
         raise NotImplementedError("LeadTimeDetection is not implemented yet")
@@ -430,7 +449,10 @@ class RegionalHitsMisses(BaseMetric):
     name = "RegionalHitsMisses"
 
     def _compute_metric(
-        self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
+        self,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
+        preserve_dims: str = "init_time",
     ) -> Any:
         # Dummy implementation for regional hits and misses
         raise NotImplementedError("RegionalHitsMisses is not implemented yet")
@@ -441,7 +463,10 @@ class HitsMisses(BaseMetric):
     name = "HitsMisses"
 
     def _compute_metric(
-        self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
+        self,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
+        preserve_dims: str = "init_time",
     ) -> Any:
         # Dummy implementation for hits and misses
         raise NotImplementedError("HitsMisses is not implemented yet")
