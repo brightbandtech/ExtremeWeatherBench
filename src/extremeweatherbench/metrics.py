@@ -20,7 +20,20 @@ class BaseMetric(abc.ABC):
     analyses, so long as the spatiotemporal dimensions are the same.
     """
 
-    name: str
+    @property
+    def name(self) -> str:
+        """The name of the metric.
+
+        Defaults to the class name if not explicitly set.
+        """
+        return getattr(
+            self, "_name", self.__class__.__dict__.get("name", self.__class__.__name__)
+        )
+
+    @name.setter
+    def name(self, value: str) -> None:
+        """Set the name of the metric."""
+        self._name = value
 
     @abc.abstractmethod
     def _compute_metric(
