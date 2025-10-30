@@ -22,8 +22,8 @@ class ComputeDocstringMetaclass(abc.ABCMeta):
 
     """
 
-    def __new__(mcs, name, bases, namespace):
-        cls = super().__new__(mcs, name, bases, namespace)
+    def __new__(cls, name, bases, namespace):
+        cls = super().__new__(cls, name, bases, namespace)
         # NOTE: the `compute_metric()` method will be defined in the ABC `BaseMetric`, and we
         # never expect the user re-implement it. So it won't be in the namespace of the concrete
         # metric classes - it will only be in the namespace of the ABC `BaseMetric`, and will be
@@ -128,7 +128,8 @@ class MAE(BaseMetric):
         Args:
             forecast: The forecast DataArray.
             target: The target DataArray.
-            **kwargs: Additional keyword arguments to pass to the metric implementation.
+            **kwargs: Additional keyword arguments. Supported kwargs:
+                preserve_dims (str): Dimension(s) to preserve. Defaults to "lead_time".
 
         Returns:
             The computed Mean Absolute Error result.
@@ -148,6 +149,17 @@ class ME(BaseMetric):
         target: xr.DataArray,
         **kwargs: Any,
     ) -> Any:
+        """Compute the Mean Error.
+
+        Args:
+            forecast: The forecast DataArray.
+            target: The target DataArray.
+            **kwargs: Additional keyword arguments. Supported kwargs:
+                preserve_dims (str): Dimension(s) to preserve. Defaults to "lead_time".
+
+        Returns:
+            The computed Mean Error result.
+        """
         preserve_dims = kwargs.get("preserve_dims", "lead_time")
         return scores.continuous.mean_error(
             forecast, target, preserve_dims=preserve_dims
@@ -170,7 +182,8 @@ class RMSE(BaseMetric):
         Args:
             forecast: The forecast DataArray.
             target: The target DataArray.
-            **kwargs: Additional keyword arguments to pass to the metric implementation.
+            **kwargs: Additional keyword arguments. Supported kwargs:
+                preserve_dims (str): Dimension(s) to preserve. Defaults to "lead_time".
 
         Returns:
             The computed Root Mean Square Error result.
@@ -217,8 +230,6 @@ class MaximumMAE(MAE):
         self,
         forecast: xr.DataArray,
         target: xr.DataArray,
-        preserve_dims: str = "lead_time",
-        tolerance_range: int = 24,
         **kwargs: Any,
     ) -> Any:
         """Compute MaximumMAE.
@@ -226,13 +237,17 @@ class MaximumMAE(MAE):
         Args:
             forecast: The forecast DataArray.
             target: The target DataArray.
-            preserve_dims: Dimension(s) to preserve. Defaults to "lead_time".
-            tolerance_range: Time window (hours) around target's maximum value to
-                search for forecast maximum. Defaults to 24 hours.
+            **kwargs: Additional keyword arguments. Supported kwargs:
+                preserve_dims (str): Dimension(s) to preserve. Defaults to "lead_time".
+                tolerance_range (int): Time window (hours) around target's maximum value to
+                    search for forecast maximum. Defaults to 24 hours.
 
         Returns:
             MAE of the maximum values.
         """
+        preserve_dims = kwargs.get("preserve_dims", "lead_time")
+        tolerance_range = kwargs.get("tolerance_range", 24)
+
         forecast = forecast.compute()
         target_spatial_mean = target.compute().mean(["latitude", "longitude"])
         maximum_timestep = target_spatial_mean.idxmax("valid_time")
@@ -275,8 +290,6 @@ class MinimumMAE(MAE):
         self,
         forecast: xr.DataArray,
         target: xr.DataArray,
-        preserve_dims: str = "lead_time",
-        tolerance_range: int = 24,
         **kwargs: Any,
     ) -> Any:
         """Compute MinimumMAE.
@@ -284,13 +297,17 @@ class MinimumMAE(MAE):
         Args:
             forecast: The forecast DataArray.
             target: The target DataArray.
-            preserve_dims: Dimension(s) to preserve. Defaults to "lead_time".
-            tolerance_range: Time window (hours) around target's minimum value to
-                search for forecast minimum. Defaults to 24 hours.
+            **kwargs: Additional keyword arguments. Supported kwargs:
+                preserve_dims (str): Dimension(s) to preserve. Defaults to "lead_time".
+                tolerance_range (int): Time window (hours) around target's minimum value to
+                    search for forecast minimum. Defaults to 24 hours.
 
         Returns:
             MAE of the minimum values.
         """
+        preserve_dims = kwargs.get("preserve_dims", "lead_time")
+        tolerance_range = kwargs.get("tolerance_range", 24)
+
         forecast = forecast.compute()
         target_spatial_mean = target.compute().mean(["latitude", "longitude"])
         minimum_timestep = target_spatial_mean.idxmin("valid_time")
@@ -332,8 +349,6 @@ class MaxMinMAE(MAE):
         self,
         forecast: xr.DataArray,
         target: xr.DataArray,
-        preserve_dims: str = "lead_time",
-        tolerance_range: int = 24,
         **kwargs: Any,
     ) -> Any:
         """Compute MaxMinMAE.
@@ -341,13 +356,17 @@ class MaxMinMAE(MAE):
         Args:
             forecast: The forecast DataArray.
             target: The target DataArray.
-            preserve_dims: Dimension(s) to preserve. Defaults to "lead_time".
-            tolerance_range: Time window (hours) around target's max-min value to
-                search for forecast max-min. Defaults to 24 hours.
+            **kwargs: Additional keyword arguments. Supported kwargs:
+                preserve_dims (str): Dimension(s) to preserve. Defaults to "lead_time".
+                tolerance_range (int): Time window (hours) around target's max-min value to
+                    search for forecast max-min. Defaults to 24 hours.
 
         Returns:
             MAE of the maximum daily minimum values.
         """
+        preserve_dims = kwargs.get("preserve_dims", "lead_time")
+        tolerance_range = kwargs.get("tolerance_range", 24)
+
         forecast = forecast.compute().mean(["latitude", "longitude"])
         target = target.compute().mean(["latitude", "longitude"])
         time_resolution_hours = utils.determine_temporal_resolution(target)
@@ -448,7 +467,6 @@ class OnsetME(ME):
         self,
         forecast: xr.DataArray,
         target: xr.DataArray,
-        preserve_dims: str = "init_time",
         **kwargs: Any,
     ) -> Any:
         """Compute OnsetME.
@@ -456,11 +474,14 @@ class OnsetME(ME):
         Args:
             forecast: The forecast DataArray.
             target: The target DataArray.
-            preserve_dims: Dimension(s) to preserve. Defaults to "init_time".
+            **kwargs: Additional keyword arguments. Supported kwargs:
+                preserve_dims (str): Dimension(s) to preserve. Defaults to "init_time".
 
         Returns:
             Mean error of onset timing.
         """
+        preserve_dims = kwargs.get("preserve_dims", "init_time")
+
         target_time = target.valid_time[0] + np.timedelta64(48, "h")
         forecast = (
             forecast.mean(["latitude", "longitude"])
@@ -520,7 +541,6 @@ class DurationME(ME):
         self,
         forecast: xr.DataArray,
         target: xr.DataArray,
-        preserve_dims: str = "init_time",
         **kwargs: Any,
     ) -> Any:
         """Compute DurationME.
@@ -528,11 +548,14 @@ class DurationME(ME):
         Args:
             forecast: The forecast DataArray.
             target: The target DataArray.
-            preserve_dims: Dimension(s) to preserve. Defaults to "init_time".
+            **kwargs: Additional keyword arguments. Supported kwargs:
+                preserve_dims (str): Dimension(s) to preserve. Defaults to "init_time".
 
         Returns:
             Mean error of event duration.
         """
+        preserve_dims = kwargs.get("preserve_dims", "init_time")
+
         # Dummy implementation for duration mean error
         target_duration = target.valid_time[-1] - target.valid_time[0]
         forecast = (
