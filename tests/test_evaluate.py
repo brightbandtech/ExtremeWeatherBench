@@ -1230,13 +1230,12 @@ class TestMetricEvaluation:
         mock_metric_instance = mock.Mock()
         mock_metric_instance.name = "TestMetric"
         mock_metric_instance.compute_metric.return_value = mock_result
-        mock_base_metric.return_value = mock_metric_instance
         result = evaluate._evaluate_metric_and_return_df(
             forecast_ds=sample_forecast_dataset,
             target_ds=sample_target_dataset,
             forecast_variable="surface_air_temperature",
             target_variable="2m_temperature",
-            metric=mock_base_metric,
+            metric=mock_metric_instance,
             case_operator=sample_case_operator,
         )
 
@@ -1263,14 +1262,13 @@ class TestMetricEvaluation:
         mock_metric_instance = mock.Mock()
         mock_metric_instance.name = "TestMetric"
         mock_metric_instance.compute_metric.return_value = mock_result
-        mock_base_metric.return_value = mock_metric_instance
 
         evaluate._evaluate_metric_and_return_df(
             forecast_ds=sample_forecast_dataset,
             target_ds=sample_target_dataset,
             forecast_variable="surface_air_temperature",
             target_variable="2m_temperature",
-            metric=mock_base_metric,
+            metric=mock_metric_instance,
             case_operator=sample_case_operator,
             threshold=0.5,  # Additional kwarg
         )
@@ -1332,7 +1330,6 @@ class TestErrorHandling:
         mock_metric_instance.compute_metric.side_effect = Exception(
             "Metric computation failed"
         )
-        mock_base_metric.return_value = mock_metric_instance
 
         with pytest.raises(Exception, match="Metric computation failed"):
             evaluate._evaluate_metric_and_return_df(
@@ -1340,7 +1337,7 @@ class TestErrorHandling:
                 target_ds=sample_target_dataset,
                 forecast_variable="surface_air_temperature",
                 target_variable="2m_temperature",
-                metric=mock_base_metric,
+                metric=mock_metric_instance,
                 case_operator=sample_case_operator,
             )
 

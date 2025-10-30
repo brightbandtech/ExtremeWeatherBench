@@ -313,7 +313,7 @@ def _evaluate_metric_and_return_df(
     target_ds: xr.Dataset,
     forecast_variable: Union[str, "derived.DerivedVariable"],
     target_variable: Union[str, "derived.DerivedVariable"],
-    metric: Union[type["metrics.BaseMetric"]],
+    metric: "metrics.BaseMetric",
     case_operator: "cases.CaseOperator",
     **kwargs,
 ) -> pd.DataFrame:
@@ -332,9 +332,6 @@ def _evaluate_metric_and_return_df(
         A dataframe of the results of the metric evaluation.
     """
 
-    # Instantiate metric if not already
-    if isinstance(metric, type):
-        metric = metric()
     logger.info("Computing metric %s", metric.name)
 
     metric_result = metric.compute_metric(
