@@ -368,8 +368,7 @@ class EvaluationObject:
     metric_list: list[
         Union[
             Callable[..., Any],
-            type["metrics.BaseMetric"],
-            type["metrics.AppliedMetric"],
+            "metrics.BaseMetric",
         ]
     ]
     target: "TargetBase"

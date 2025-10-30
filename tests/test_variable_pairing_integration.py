@@ -25,8 +25,7 @@ class MockMetric(metrics.BaseMetric):
 
     name = "MockMetric"
 
-    @classmethod
-    def _compute_metric(cls, forecast: xr.DataArray, target: xr.DataArray, **kwargs):
+    def _compute_metric(self, forecast: xr.DataArray, target: xr.DataArray, **kwargs):
         """Return a simple mean absolute difference."""
         diff = abs(forecast - target)
         # Reduce to a scalar but return as DataArray for EWB compatibility
@@ -41,7 +40,7 @@ class MockMetric(metrics.BaseMetric):
 @pytest.fixture
 def mock_metric():
     """Create a mock metric instance."""
-    return MockMetric
+    return MockMetric()
 
 
 @pytest.fixture
