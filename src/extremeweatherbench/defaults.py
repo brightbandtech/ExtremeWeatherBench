@@ -263,10 +263,10 @@ def get_brightband_evaluation_objects() -> list[inputs.EvaluationObject]:
         # inputs.EvaluationObject(
         #     event_type="severe_convection",
         #     metric_list=[
-        #         metrics.CSI,
-        #         metrics.FAR,
-        #         metrics.RegionalHitsMisses,
-        #         metrics.HitsMisses,
+        #         metrics.CSI(),
+        #         metrics.FAR(),
+        #         metrics.RegionalHitsMisses(),
+        #         metrics.HitsMisses(),
         #     ],
         #     target=lsr_target,
         #     forecast=cira_severe_convection_forecast,
@@ -274,8 +274,8 @@ def get_brightband_evaluation_objects() -> list[inputs.EvaluationObject]:
         # TODO: Re-enable when atmospheric river forecast is implemented
         # inputs.EvaluationObject(
         #     event_type="atmospheric_river",
-        #     metric_list=[metrics.CSI, metrics.SpatialDisplacement,
-        #  metrics.EarlySignal],
+        #     metric_list=[metrics.CSI(), metrics.SpatialDisplacement(),
+        #  metrics.EarlySignal()],
         #     target=era5_atmospheric_river_target,
         #     forecast=cira_atmospheric_river_forecast,
         # ),
@@ -283,10 +283,10 @@ def get_brightband_evaluation_objects() -> list[inputs.EvaluationObject]:
         # inputs.EvaluationObject(
         #     event_type="tropical_cyclone",
         #     metric_list=[
-        #         metrics.EarlySignal,
-        #         metrics.LandfallDisplacement,
-        #         metrics.LandfallTimeME,
-        #         metrics.LandfallIntensityMAE,
+        #         metrics.EarlySignal(),
+        #         metrics.LandfallDisplacement(),
+        #         metrics.LandfallTimeME(),
+        #         metrics.LandfallIntensityMAE(),
         #     ],
         #     target=ibtracs_target,
         #     forecast=cira_tropical_cyclone_forecast,

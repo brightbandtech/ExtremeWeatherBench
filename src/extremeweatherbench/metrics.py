@@ -40,7 +40,7 @@ class BaseMetric(abc.ABC):
         self,
         forecast: xr.DataArray,
         target: xr.DataArray,
-        preserve_dims: str = "lead_time",  # default to preserving lead_time in metrics
+        **kwargs: Any,
     ) -> Any:
         """Compute the metric.
 
@@ -75,8 +75,7 @@ class BaseMetric(abc.ABC):
         Returns:
             The computed metric result.
         """
-        unique_kwargs = utils.filter_kwargs_for_callable(kwargs, self._compute_metric)
-        return self._compute_metric(forecast, target, **unique_kwargs)
+        return self._compute_metric(forecast, target, **kwargs)
 
 
 class MAE(BaseMetric):
@@ -88,8 +87,9 @@ class MAE(BaseMetric):
         self,
         forecast: xr.DataArray,
         target: xr.DataArray,
-        preserve_dims: str = "lead_time",
+        **kwargs: Any,
     ) -> Any:
+        preserve_dims = kwargs.get("preserve_dims", "lead_time")
         return scores.continuous.mae(forecast, target, preserve_dims=preserve_dims)
 
 
@@ -102,8 +102,9 @@ class ME(BaseMetric):
         self,
         forecast: xr.DataArray,
         target: xr.DataArray,
-        preserve_dims: str = "lead_time",
+        **kwargs: Any,
     ) -> Any:
+        preserve_dims = kwargs.get("preserve_dims", "lead_time")
         return scores.continuous.mean_error(
             forecast, target, preserve_dims=preserve_dims
         )
@@ -118,8 +119,9 @@ class RMSE(BaseMetric):
         self,
         forecast: xr.DataArray,
         target: xr.DataArray,
-        preserve_dims: str = "lead_time",
+        **kwargs: Any,
     ) -> Any:
+        preserve_dims = kwargs.get("preserve_dims", "lead_time")
         return scores.continuous.rmse(forecast, target, preserve_dims=preserve_dims)
 
 
@@ -131,7 +133,7 @@ class EarlySignal(BaseMetric):
         self,
         forecast: xr.DataArray,
         target: xr.DataArray,
-        preserve_dims: str = "lead_time",
+        **kwargs: Any,
     ) -> Any:
         # Dummy implementation for early signal
         raise NotImplementedError("EarlySignal is not implemented yet")
@@ -151,8 +153,7 @@ class MaximumMAE(BaseMetric):
         self,
         forecast: xr.DataArray,
         target: xr.DataArray,
-        preserve_dims: str = "lead_time",
-        tolerance_range: int = 24,
+        **kwargs: Any,
     ) -> Any:
         """Compute MaximumMAE.
 
@@ -168,6 +169,8 @@ class MaximumMAE(BaseMetric):
         Returns:
             MAE of the maximum values.
         """
+        preserve_dims = kwargs.get("preserve_dims", "lead_time")
+        tolerance_range = kwargs.get("tolerance_range", 24)
         forecast = forecast.compute()
         target_spatial_mean = target.compute().mean(["latitude", "longitude"])
         maximum_timestep = target_spatial_mean.idxmax("valid_time")
@@ -210,8 +213,7 @@ class MinimumMAE(BaseMetric):
         self,
         forecast: xr.DataArray,
         target: xr.DataArray,
-        preserve_dims: str = "lead_time",
-        tolerance_range: int = 24,
+        **kwargs: Any,
     ) -> Any:
         """Compute MinimumMAE.
 
@@ -227,6 +229,8 @@ class MinimumMAE(BaseMetric):
         Returns:
             MAE of the minimum values.
         """
+        preserve_dims = kwargs.get("preserve_dims", "lead_time")
+        tolerance_range = kwargs.get("tolerance_range", 24)
         forecast = forecast.compute()
         target_spatial_mean = target.compute().mean(["latitude", "longitude"])
         minimum_timestep = target_spatial_mean.idxmin("valid_time")
@@ -268,8 +272,7 @@ class MaxMinMAE(BaseMetric):
         self,
         forecast: xr.DataArray,
         target: xr.DataArray,
-        preserve_dims: str = "lead_time",
-        tolerance_range: int = 24,
+        **kwargs: Any,
     ) -> Any:
         """Compute MaxMinMAE.
 
@@ -285,6 +288,8 @@ class MaxMinMAE(BaseMetric):
         Returns:
             MAE of the maximum daily minimum values.
         """
+        preserve_dims = kwargs.get("preserve_dims", "lead_time")
+        tolerance_range = kwargs.get("tolerance_range", 24)
         forecast = forecast.compute().mean(["latitude", "longitude"])
         target = target.compute().mean(["latitude", "longitude"])
         time_resolution_hours = utils.determine_temporal_resolution(target)
@@ -385,7 +390,7 @@ class OnsetME(BaseMetric):
         self,
         forecast: xr.DataArray,
         target: xr.DataArray,
-        preserve_dims: str = "init_time",
+        **kwargs: Any,
     ) -> Any:
         """Compute OnsetME.
 
@@ -398,6 +403,7 @@ class OnsetME(BaseMetric):
         Returns:
             Mean error of onset timing.
         """
+        preserve_dims = kwargs.get("preserve_dims", "init_time")
         target_time = target.valid_time[0] + np.timedelta64(48, "h")
         forecast = (
             forecast.mean(["latitude", "longitude"])
@@ -457,7 +463,7 @@ class DurationME(BaseMetric):
         self,
         forecast: xr.DataArray,
         target: xr.DataArray,
-        preserve_dims: str = "init_time",
+        **kwargs: Any,
     ) -> Any:
         """Compute DurationME.
 
@@ -470,6 +476,7 @@ class DurationME(BaseMetric):
         Returns:
             Mean error of event duration.
         """
+        preserve_dims = kwargs.get("preserve_dims", "init_time")
         # Dummy implementation for duration mean error
         target_duration = target.valid_time[-1] - target.valid_time[0]
         forecast = (
@@ -497,9 +504,8 @@ class LandfallDisplacement(BaseMetric):
         self,
         forecast: xr.DataArray,
         target: xr.DataArray,
-        preserve_dims: str = "init_time",
+        **kwargs: Any,
     ) -> Any:
-        # Dummy implementation for landfall displacement
         raise NotImplementedError("LandfallDisplacement is not implemented yet")
 
 
@@ -516,9 +522,8 @@ class LandfallTimeME(BaseMetric):
         self,
         forecast: xr.DataArray,
         target: xr.DataArray,
-        preserve_dims: str = "init_time",
+        **kwargs: Any,
     ) -> Any:
-        # Dummy implementation for landfall time mean error
         raise NotImplementedError("LandfallTimeME is not implemented yet")
 
 
@@ -535,9 +540,8 @@ class LandfallIntensityMAE(BaseMetric):
         self,
         forecast: xr.DataArray,
         target: xr.DataArray,
-        preserve_dims: str = "init_time",
+        **kwargs: Any,
     ) -> Any:
-        # Dummy implementation for landfall intensity mean absolute error
         raise NotImplementedError("LandfallIntensityMAE is not implemented yet")
 
 
@@ -554,9 +558,8 @@ class SpatialDisplacement(BaseMetric):
         self,
         forecast: xr.DataArray,
         target: xr.DataArray,
-        preserve_dims: str = "init_time",
+        **kwargs: Any,
     ) -> Any:
-        # Dummy implementation for spatial displacement
         raise NotImplementedError("SpatialDisplacement is not implemented yet")
 
 
@@ -573,9 +576,8 @@ class FAR(BaseMetric):
         self,
         forecast: xr.DataArray,
         target: xr.DataArray,
-        preserve_dims: str = "init_time",
+        **kwargs: Any,
     ) -> Any:
-        # Dummy implementation for False Alarm Rate
         raise NotImplementedError("FAR is not implemented yet")
 
 
@@ -592,9 +594,8 @@ class CSI(BaseMetric):
         self,
         forecast: xr.DataArray,
         target: xr.DataArray,
-        preserve_dims: str = "init_time",
+        **kwargs: Any,
     ) -> Any:
-        # Dummy implementation for Critical Success Index
         raise NotImplementedError("CSI is not implemented yet")
 
 
@@ -611,9 +612,8 @@ class LeadTimeDetection(BaseMetric):
         self,
         forecast: xr.DataArray,
         target: xr.DataArray,
-        preserve_dims: str = "init_time",
+        **kwargs: Any,
     ) -> Any:
-        # Dummy implementation for lead time detection
         raise NotImplementedError("LeadTimeDetection is not implemented yet")
 
 
@@ -630,9 +630,8 @@ class RegionalHitsMisses(BaseMetric):
         self,
         forecast: xr.DataArray,
         target: xr.DataArray,
-        preserve_dims: str = "init_time",
+        **kwargs: Any,
     ) -> Any:
-        # Dummy implementation for regional hits and misses
         raise NotImplementedError("RegionalHitsMisses is not implemented yet")
 
 
@@ -649,7 +648,6 @@ class HitsMisses(BaseMetric):
         self,
         forecast: xr.DataArray,
         target: xr.DataArray,
-        preserve_dims: str = "init_time",
+        **kwargs: Any,
     ) -> Any:
-        # Dummy implementation for hits and misses
         raise NotImplementedError("HitsMisses is not implemented yet")
