@@ -3,7 +3,7 @@
 import itertools
 import logging
 import pathlib
-from typing import TYPE_CHECKING, Optional, Type, Union
+from typing import TYPE_CHECKING, Optional, Union
 
 import joblib
 import pandas as pd
@@ -321,7 +321,7 @@ def compute_case_operator(
 
 def _extract_standard_metadata(
     target_variable: Union[str, "derived.DerivedVariable"],
-    metric: Union["metrics.BaseMetric", "metrics.AppliedMetric"],
+    metric: "metrics.BaseMetric",
     case_operator: "cases.CaseOperator",
 ) -> dict:
     """Extract standard metadata for output dataframe.
@@ -403,8 +403,8 @@ def _ensure_output_schema(df: pd.DataFrame, **metadata) -> pd.DataFrame:
 def _evaluate_metric_and_return_df(
     forecast_ds: xr.Dataset,
     target_ds: xr.Dataset,
-    forecast_variable: Union[str, Type["derived.DerivedVariable"]],
-    target_variable: Union[str, Type["derived.DerivedVariable"]],
+    forecast_variable: Union[str, "derived.DerivedVariable"],
+    target_variable: Union[str, "derived.DerivedVariable"],
     metric: "metrics.BaseMetric",
     case_operator: "cases.CaseOperator",
     **kwargs,

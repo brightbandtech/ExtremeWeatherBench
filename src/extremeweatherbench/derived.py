@@ -1,6 +1,6 @@
 import abc
 import logging
-from typing import Sequence, Type, TypeGuard, Union
+from typing import Sequence, TypeGuard, Union
 
 import xarray as xr
 
@@ -174,8 +174,8 @@ def maybe_include_variables_from_derived_input(
 
 
 def is_derived_variable(
-    variable: Union[str, Type[DerivedVariable]],
-) -> TypeGuard[Type[DerivedVariable]]:
+    variable: Union[str, DerivedVariable],
+) -> TypeGuard[DerivedVariable]:
     """Checks whether the incoming variable is a string or a DerivedVariable.
 
     Args:
@@ -189,7 +189,7 @@ def is_derived_variable(
 
 
 def _maybe_convert_variable_to_string(
-    variable: Union[str, Type[DerivedVariable]],
+    variable: Union[str, DerivedVariable],
 ) -> str:
     """Convert a variable to its string representation."""
     if is_derived_variable(variable):
