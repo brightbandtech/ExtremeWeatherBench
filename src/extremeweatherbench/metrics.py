@@ -140,7 +140,7 @@ class EarlySignal(BaseMetric):
         raise NotImplementedError("EarlySignal is not implemented yet")
 
 
-class MaximumMAE(BaseMetric):
+class MaximumMAE(MAE):
     """MAE of the maximum value in a tolerance window.
 
     Computes the MAE between the forecast and target maximum
@@ -193,14 +193,14 @@ class MaximumMAE(BaseMetric):
             ),
             drop=True,
         ).max("valid_time")
-        return MAE().compute_metric(
+        return super()._compute_metric(
             forecast=filtered_max_forecast,
             target=maximum_value,
             preserve_dims=preserve_dims,
         )
 
 
-class MinimumMAE(BaseMetric):
+class MinimumMAE(MAE):
     """MAE of the minimum value in a tolerance window.
 
     Computes the MAE between the forecast and target minimum
@@ -252,14 +252,14 @@ class MinimumMAE(BaseMetric):
             ),
             drop=True,
         ).min("valid_time")
-        return MAE().compute_metric(
+        return super()._compute_metric(
             forecast=filtered_min_forecast,
             target=minimum_value,
             preserve_dims=preserve_dims,
         )
 
 
-class MaxMinMAE(BaseMetric):
+class MaxMinMAE(MAE):
     """MAE of the maximum of daily minimum values.
 
     Computes the MAE between the warmest nighttime (daily minimum)
@@ -339,14 +339,14 @@ class MaxMinMAE(BaseMetric):
             .min("dayofyear")
         )
 
-        return MAE().compute_metric(
+        return super()._compute_metric(
             forecast=subset_forecast,
             target=max_min_target_value,
             preserve_dims=preserve_dims,
         )
 
 
-class OnsetME(BaseMetric):
+class OnsetME(ME):
     """Mean error of heatwave onset time.
 
     Computes the mean error between forecast and observed timing
@@ -411,14 +411,14 @@ class OnsetME(BaseMetric):
             .groupby("init_time")
             .map(self.onset)
         )
-        return ME().compute_metric(
+        return super()._compute_metric(
             forecast=forecast,
             target=target_time,
             preserve_dims=preserve_dims,
         )
 
 
-class DurationME(BaseMetric):
+class DurationME(ME):
     """Mean error of event duration.
 
     Computes the mean error between forecast and observed duration
@@ -485,7 +485,7 @@ class DurationME(BaseMetric):
             .groupby("init_time")
             .map(self.duration)
         )
-        return ME().compute_metric(
+        return super()._compute_metric(
             forecast=forecast,
             target=target_duration,
             preserve_dims=preserve_dims,
