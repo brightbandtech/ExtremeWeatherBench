@@ -220,18 +220,18 @@ def get_brightband_evaluation_objects() -> list[inputs.EvaluationObject]:
     # Import metrics here to avoid circular import
     from extremeweatherbench import metrics
 
-    heatwave_metric_list: list[Union[Callable[..., Any], type[metrics.BaseMetric]]] = [
-        metrics.MaximumMAE,
-        metrics.RMSE,
-        metrics.OnsetME,
-        metrics.DurationME,
-        metrics.MaxMinMAE,
+    heatwave_metric_list: list[Union[Callable[..., Any], metrics.BaseMetric]] = [
+        metrics.MaximumMAE(),
+        metrics.RMSE(),
+        metrics.OnsetME(),
+        metrics.DurationME(),
+        metrics.MaxMinMAE(),
     ]
-    freeze_metric_list: list[Union[Callable[..., Any], type[metrics.BaseMetric]]] = [
-        metrics.MinimumMAE,
-        metrics.RMSE,
-        metrics.OnsetME,
-        metrics.DurationME,
+    freeze_metric_list: list[Union[Callable[..., Any], metrics.BaseMetric]] = [
+        metrics.MinimumMAE(),
+        metrics.RMSE(),
+        metrics.OnsetME(),
+        metrics.DurationME(),
     ]
 
     return [
