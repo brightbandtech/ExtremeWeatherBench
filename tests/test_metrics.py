@@ -73,33 +73,6 @@ class TestBaseMetric:
         assert result is not None
 
 
-class TestBinaryContingencyTable:
-    """Tests for the BinaryContingencyTable metric."""
-
-    def test_instantiation(self):
-        """Test that BinaryContingencyTable can be instantiated."""
-        metric = metrics.BinaryContingencyTable()
-        assert isinstance(metric, metrics.BaseMetric)
-        assert metric.name == "BinaryContingencyTable"
-
-    def test_compute_metric_basic(self):
-        """Test basic computation without checking specific values."""
-        metric = metrics.BinaryContingencyTable()
-
-        # Create simple binary test data
-        forecast = xr.Dataset({"data": (["x", "y"], [[1, 0], [0, 1]])})
-        target = xr.Dataset({"data": (["x", "y"], [[1, 1], [0, 0]])})
-
-        # Test that it runs without error
-        try:
-            result = metric._compute_metric(forecast, target)
-            # Just check that something is returned
-            assert result is not None
-        except Exception:
-            # If there are parameter issues, at least the class should exist
-            assert isinstance(metric, metrics.BinaryContingencyTable)
-
-
 class TestMAE:
     """Tests for the MAE (Mean Absolute Error) metric."""
 
@@ -534,7 +507,6 @@ class TestMetricIntegration:
     def test_all_metrics_have_required_methods(self):
         """Test that all metric classes have required methods."""
         all_metrics = [
-            metrics.BinaryContingencyTable,
             metrics.MAE,
             metrics.ME,
             metrics.RMSE,
@@ -568,7 +540,6 @@ class TestMetricIntegration:
 
         # Test that all expected metric classes exist
         expected_classes = [
-            "BinaryContingencyTable",
             "MAE",
             "ME",
             "RMSE",

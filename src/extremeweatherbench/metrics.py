@@ -79,25 +79,6 @@ class BaseMetric(abc.ABC):
         return self._compute_metric(forecast, target, **unique_kwargs)
 
 
-class BinaryContingencyTable(BaseMetric):
-    """Binary contingency table for categorical forecast verification.
-
-    Computes binary contingency statistics using the scores library.
-    """
-
-    name = "BinaryContingencyTable"
-
-    def _compute_metric(
-        self,
-        forecast: xr.DataArray,
-        target: xr.DataArray,
-        preserve_dims: str = "lead_time",
-    ) -> Any:
-        return scores.categorical.BinaryContingencyManager(
-            forecast, target, preserve_dims=preserve_dims
-        )
-
-
 class MAE(BaseMetric):
     """Mean Absolute Error metric."""
 
