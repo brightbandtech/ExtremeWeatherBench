@@ -228,7 +228,7 @@ class MaximumMAE(MAE):
             target: The target DataArray.
             preserve_dims: Dimension(s) to preserve. Defaults to "lead_time".
             tolerance_range: Time window (hours) around target's maximum value to
-            search for forecast maximum. Defaults to 24 hours.
+                search for forecast maximum. Defaults to 24 hours.
 
         Returns:
             MAE of the maximum values.
