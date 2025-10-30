@@ -44,15 +44,20 @@ class TestBaseMetric:
         assert callable(metric.compute_metric)
 
     def test_compute_metric_filters_kwargs(self):
-        """Test that compute_metric properly filters kwargs for
-        _compute_metric.
+        """Test that compute_metric handles extra kwargs gracefully
+        when _compute_metric accepts **kwargs.
         """
 
         class TestMetricWithParams(metrics.BaseMetric):
             name = "TestMetricWithParams"
 
             def _compute_metric(
-                self, forecast, target, preserve_dims="lead_time", custom_param=10
+                self,
+                forecast,
+                target,
+                preserve_dims="lead_time",
+                custom_param=10,
+                **kwargs,
             ):
                 return forecast - target + custom_param
 
@@ -60,7 +65,7 @@ class TestBaseMetric:
         forecast = xr.DataArray([1, 2, 3])
         target = xr.DataArray([0, 1, 2])
 
-        # Should filter and pass only valid kwargs
+        # Should handle extra kwargs without error
         result = metric.compute_metric(
             forecast,
             target,

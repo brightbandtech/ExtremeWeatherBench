@@ -44,11 +44,15 @@ class BaseMetric(abc.ABC):
     ) -> Any:
         """Compute the metric.
 
+        All implementations must accept **kwargs to handle extra
+        parameters gracefully, even if they don't use them.
+
         Args:
             forecast: The forecast DataArray.
             target: The target DataArray.
-            preserve_dims: Dimension(s) to preserve when computing
-                the metric. Defaults to "lead_time".
+            **kwargs: Additional parameters. Common ones include
+                preserve_dims (dimension(s) to preserve, defaults
+                to "lead_time").
 
         Returns:
             The computed metric result.
@@ -62,9 +66,6 @@ class BaseMetric(abc.ABC):
         **kwargs: Any,
     ) -> Any:
         """Public interface to compute the metric.
-
-        Filters kwargs to match _compute_metric signature before
-        calling the implementation.
 
         Args:
             forecast: The forecast DataArray.
