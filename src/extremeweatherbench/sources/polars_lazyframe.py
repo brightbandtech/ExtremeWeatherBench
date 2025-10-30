@@ -158,15 +158,25 @@ def check_for_valid_times(
         if time_col in available_columns:
             logger.debug("Found time column: %s", time_col)
             logger.debug("Date range: %s to %s", start_date, end_date)
+            # Check the dtype of the column
+            col_dtype = data.collect_schema()[time_col]
             # Filter LazyFrame to include valid times in date range
-            # Try parsing as string first, fall back to direct comparison
-            time_filtered_lf = data.select(pl.col(time_col)).filter(
-                (pl.col(time_col).str.to_datetime() >= pl.lit(start_date))
-                & (pl.col(time_col).str.to_datetime() <= pl.lit(end_date))
-            )
+            # Handle both datetime and string types
+            if col_dtype in (pl.Datetime, pl.Date):
+                # Column is already datetime, compare directly
+                time_filtered_lf = data.select(pl.col(time_col)).filter(
+                    (pl.col(time_col) >= pl.lit(start_date))
+                    & (pl.col(time_col) <= pl.lit(end_date))
+                )
+            else:
+                # Column is string, convert to datetime first
+                time_filtered_lf = data.select(pl.col(time_col)).filter(
+                    (pl.col(time_col).str.to_datetime() >= pl.lit(start_date))
+                    & (pl.col(time_col).str.to_datetime() <= pl.lit(end_date))
+                )
             # If the filtered LazyFrame has any rows, return True
             result = not time_filtered_lf.collect().is_empty()
-            logger.debug("String parse succeeded, has data: %s", result)
+            logger.debug("Time filter succeeded, has data: %s", result)
             return result
 
     # If no time column found, return False

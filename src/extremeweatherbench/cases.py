@@ -6,6 +6,7 @@ Some code similarly structured to WeatherBenchX (Rasp et al.).
 import dataclasses
 import datetime
 import importlib
+import importlib.resources
 import itertools
 import logging
 import pathlib

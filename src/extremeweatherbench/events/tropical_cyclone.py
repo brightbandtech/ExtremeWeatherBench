@@ -77,11 +77,6 @@ def generate_forecast_tctracks(
     Returns:
         An xarray Dataset with detected storm tracks.
     """
-    # Handle None input for tc_track_data
-    if tc_track_data is None:
-        logger.warning("tc_track_data is None, returning empty tracks dataset")
-        return _create_empty_tracks_dataset()
-
     # Filter out init_times that occur after all tropical cyclone track data landfalls
     if exclude_post_landfall_init_times:
         n_init_times = (
@@ -190,15 +185,11 @@ def process_all_init_times(
     use_contour_validation: bool = True,
     min_track_length: int = 10,
 ) -> xr.Dataset:
-    """Process all init_times using a single vectorized apply_ufunc call."""
+    """Process all init_times."""
 
     slp = gridded_dataset["air_pressure_at_mean_sea_level"]
     time_coord = slp.valid_time
     init_time_coord = slp.init_time
-
-    # Determine the correct input core dims based on actual data dimensions
-    spatial_dims = ["latitude", "longitude"]
-    non_spatial_dims = [dim for dim in slp.dims if dim not in spatial_dims]
 
     # Debug statements to check the shape of the tc_track_data_df and the forecast times
     logger.debug("tc_track_data_df shape before filtering: %s", tc_track_data_df.shape)
@@ -221,73 +212,25 @@ def process_all_init_times(
     # Get geopotential thickness data if available
     dz = gridded_dataset.get("geopotential_thickness", None)
 
-    # OPTIMIZED: Single apply_ufunc call that returns compact detection results
-    input_vars = [
-        slp,
-        time_coord,
-        init_time_coord,
-        slp.latitude,
-        slp.longitude,
-        wind_speed,
-    ]
-    input_core_dims: list[list[str]] = [
-        [str(dim) for dim in non_spatial_dims + spatial_dims],  # lead_time, valid_time
-        [str(dim) for dim in time_coord.dims],  # Use actual time_coord dims
-        [str(dim) for dim in init_time_coord.dims],  # Use actual init_time dims
-        ["latitude"],  # latitude coordinates
-        ["longitude"],  # longitude coordinates
-        [str(dim) for dim in non_spatial_dims + spatial_dims],  # wind speed dims
-    ]
-
-    # Always pass dz_array (either the data or None)
-    if dz is not None:
-        input_vars.append(dz)
-        input_core_dims.append([str(dim) for dim in non_spatial_dims + spatial_dims])
-    else:
-        # Add None as a placeholder for dz_array
-        input_vars.append(None)
-        input_core_dims.append([])  # type: ignore
-
-    detection_data = xr.apply_ufunc(
-        _process_entire_dataset,
-        *input_vars,
-        kwargs={
-            "tc_track_data_df": tc_track_data_df,
-            "max_spatial_distance_degrees": max_spatial_distance_degrees,
-            "min_distance": min_distance,
-            "max_temporal_hours": max_temporal_hours,
-            "slp_contour_magnitude": slp_contour_magnitude,
-            "dz_contour_magnitude": dz_contour_magnitude,
-            "use_contour_validation": use_contour_validation and dz is not None,
-            "min_track_length": min_track_length,
-        },
-        input_core_dims=input_core_dims,
-        output_core_dims=[
-            ["detection"],  # All detections as a single dimension
-            ["detection"],  # Lead time indices for each detection
-            ["detection"],  # Valid time indices for each detection
-            ["detection"],  # Track IDs for each detection
-            ["detection"],  # Latitudes for each detection
-            ["detection"],  # Longitudes for each detection
-            ["detection"],  # SLP values for each detection
-            ["detection"],  # Wind speeds for each detection
-        ],
-        dask="allowed",
-        output_dtypes=[
-            int,  # n_detections
-            int,  # lead_time_idx
-            int,  # valid_time_idx
-            int,  # track_id
-            float,  # latitude
-            float,  # longitude
-            float,  # slp
-            float,  # wind
-        ],
-    )
-
-    # Unpack the results from apply_ufunc
+    # Call _process_entire_dataset directly (it uses xr.apply_ufunc internally)
     n_detections, lt_indices, vt_indices, track_ids, lats, lons, slp_vals, wind_vals = (
-        detection_data
+        _process_entire_dataset(
+            slp.values,
+            time_coord.values,
+            init_time_coord.values,
+            slp.latitude.values,
+            slp.longitude.values,
+            wind_speed.values,
+            dz.values if dz is not None else None,
+            tc_track_data_df,
+            max_spatial_distance_degrees,
+            min_distance,
+            max_temporal_hours,
+            slp_contour_magnitude,
+            dz_contour_magnitude,
+            use_contour_validation and dz is not None,
+            min_track_length,
+        )
     )
 
     # Convert to a proper xarray Dataset with the requested structure
@@ -353,13 +296,13 @@ def _process_entire_dataset(
         min_track_length: Minimum consecutive lead times for valid tracks
     """
 
-    # Ensure they're numpy arrays
-    slp_array = np.asarray(slp_array)
-    valid_time_array = np.asarray(time_array)
-    init_time_array = np.asarray(init_time_array)
-    wind_array = np.asarray(wind_array)
-    if dz_array is not None:
-        dz_array = np.asarray(dz_array)
+    # # Ensure they're numpy arrays
+    # slp_array = np.asarray(slp_array)
+    # valid_time_array = np.asarray(time_array)
+    # init_time_array = np.asarray(init_time_array)
+    # wind_array = np.asarray(wind_array)
+    # if dz_array is not None:
+    #     dz_array = np.asarray(dz_array)
 
     # Initialize arrays for (lead_time, valid_time, latitude, longitude)
     if slp_array.ndim == 4:
@@ -397,7 +340,7 @@ def _process_entire_dataset(
         for lt_idx in range(n_lead_times):
             for vt_idx in range(n_valid_times):
                 if init_time_mask[lt_idx, vt_idx]:
-                    current_valid_time = valid_time_array[vt_idx]
+                    current_valid_time = time_array[vt_idx]
                     if hasattr(current_valid_time, "item"):
                         current_valid_time = current_valid_time.item()
 
@@ -408,29 +351,118 @@ def _process_entire_dataset(
         # Sort by valid_time to ensure temporal continuity
         time_indices.sort(key=lambda x: x[2])
 
-        # Process time steps in chronological order
-        for lt_idx, vt_idx, current_valid_time in time_indices:
-            slp_slice = slp_array[lt_idx, vt_idx, :, :]
-            wind_slice = wind_array[lt_idx, vt_idx, :, :]
-            dz_slice = dz_array[lt_idx, vt_idx, :, :] if dz_array is not None else None
-            current_valid_time = pd.Timestamp(current_valid_time)
+        # Extract all time slices and metadata for vectorized processing
+        n_timesteps = len(time_indices)
+        if n_timesteps == 0:
+            continue
 
-            # Apply tropical cyclone track data filtering with optional contour
-            # validation
-            peaks = _find_peaks_for_time_slice(
-                slp_slice,
-                current_valid_time,
-                tc_track_data_df,
-                min_distance,
-                lat_array,
-                lon_array,
-                max_spatial_distance_degrees,
-                max_temporal_hours,
-                dz_slice if dz_slice is not None else np.array([]),
-                slp_contour_magnitude,
-                dz_contour_magnitude,
-                use_contour_validation,
+        lt_indices_seq = np.array([t[0] for t in time_indices], dtype=np.intp)
+        vt_indices_seq = np.array([t[1] for t in time_indices], dtype=np.intp)
+        valid_times_seq = [t[2] for t in time_indices]
+
+        # Extract slices using fancy indexing (broadcasted)
+        # Build 3D arrays: (n_timesteps, lat, lon)
+        slp_stack = slp_array[lt_indices_seq, vt_indices_seq]
+        wind_stack = wind_array[lt_indices_seq, vt_indices_seq]
+        if dz_array is not None:
+            dz_stack = dz_array[lt_indices_seq, vt_indices_seq]
+        else:
+            dz_stack = None
+
+        # Use xr.apply_ufunc to vectorize peak finding across time slices
+        # Create DataArrays for the stacked data
+        slp_da = xr.DataArray(
+            slp_stack,
+            dims=["timestep", "latitude", "longitude"],
+            coords={
+                "timestep": np.arange(n_timesteps),
+                "latitude": lat_array,
+                "longitude": lon_array,
+            },
+        )
+        wind_da = xr.DataArray(
+            wind_stack,
+            dims=["timestep", "latitude", "longitude"],
+            coords={
+                "timestep": np.arange(n_timesteps),
+                "latitude": lat_array,
+                "longitude": lon_array,
+            },
+        )
+
+        if dz_stack is not None:
+            dz_da = xr.DataArray(
+                dz_stack,
+                dims=["timestep", "latitude", "longitude"],
+                coords={
+                    "timestep": np.arange(n_timesteps),
+                    "latitude": lat_array,
+                    "longitude": lon_array,
+                },
             )
+        else:
+            dz_da = None
+
+        # Create timestep index array
+        timestep_indices = xr.DataArray(
+            np.arange(n_timesteps),
+            dims=["timestep"],
+            coords={"timestep": np.arange(n_timesteps)},
+        )
+
+        # Vectorized peak finding using apply_ufunc
+        peaks_list = xr.apply_ufunc(
+            _find_peaks_batch,
+            slp_da,
+            wind_da,
+            dz_da,
+            timestep_indices,
+            kwargs={
+                "valid_times": valid_times_seq,
+                "tc_track_data_df": tc_track_data_df,
+                "min_distance": min_distance,
+                "lat_array": lat_array,
+                "lon_array": lon_array,
+                "max_spatial_distance_degrees": max_spatial_distance_degrees,
+                "max_temporal_hours": max_temporal_hours,
+                "slp_contour_magnitude": slp_contour_magnitude,
+                "dz_contour_magnitude": dz_contour_magnitude,
+                "use_contour_validation": use_contour_validation,
+            },
+            input_core_dims=[
+                ["latitude", "longitude"],
+                ["latitude", "longitude"],
+                ["latitude", "longitude"] if dz_da is not None else [],
+                [],  # timestep index is scalar per iteration
+            ],
+            output_core_dims=[[]],
+            vectorize=True,
+            dask="parallelized",
+            output_dtypes=[object],
+        )
+
+        # Convert results to list format
+        all_peaks_for_init = []
+        for timestep_idx in range(n_timesteps):
+            peaks = peaks_list.values[timestep_idx]
+            all_peaks_for_init.append(
+                {
+                    "peaks": peaks,
+                    "lt_idx": lt_indices_seq[timestep_idx],
+                    "vt_idx": vt_indices_seq[timestep_idx],
+                    "slp_slice": slp_stack[timestep_idx],
+                    "wind_slice": wind_stack[timestep_idx],
+                }
+            )
+
+        # Now assign tracks sequentially
+        for timestep_idx, peak_data in enumerate(all_peaks_for_init):
+            peaks = peak_data["peaks"]
+            lt_idx = peak_data["lt_idx"]
+            vt_idx = peak_data["vt_idx"]
+            slp_slice = peak_data["slp_slice"]
+            wind_slice = peak_data["wind_slice"]
+            current_valid_time = pd.Timestamp(valid_times_seq[timestep_idx])
 
             if len(peaks) > 0:
                 logger.debug(
@@ -1038,6 +1070,71 @@ def _safe_extract_value(
         return array_or_scalar
 
 
+def _find_peaks_batch(
+    slp_slice: np.ndarray,
+    wind_slice: np.ndarray,
+    dz_slice: Optional[np.ndarray],
+    timestep_idx: int,
+    valid_times: list,
+    tc_track_data_df: pd.DataFrame,
+    min_distance: int,
+    lat_array: np.ndarray,
+    lon_array: np.ndarray,
+    max_spatial_distance_degrees: float,
+    max_temporal_hours: float,
+    slp_contour_magnitude: float,
+    dz_contour_magnitude: float,
+    use_contour_validation: bool,
+) -> np.ndarray:
+    """Wrapper for vectorized peak finding across time slices.
+
+    This function is designed to work with xr.apply_ufunc's vectorize mode.
+
+    Args:
+        slp_slice: Single time slice of SLP data
+        wind_slice: Single time slice of wind data (unused here)
+        dz_slice: Single time slice of DZ data
+        timestep_idx: Index of current timestep
+        valid_times: List of valid times for all timesteps
+        tc_track_data_df: TC track data
+        min_distance: Minimum distance between peaks
+        lat_array: Latitude coordinates
+        lon_array: Longitude coordinates
+        max_spatial_distance_degrees: Max spatial distance
+        max_temporal_hours: Max temporal buffer for genesis
+        slp_contour_magnitude: SLP contour magnitude
+        dz_contour_magnitude: DZ contour magnitude
+        use_contour_validation: Whether to use contour validation
+
+    Returns:
+        Array of peak coordinates
+    """
+    # Convert scalar to int if needed
+    if hasattr(timestep_idx, "item"):
+        timestep_idx = int(timestep_idx.item())
+    else:
+        timestep_idx = int(timestep_idx)
+
+    current_valid_time = pd.Timestamp(valid_times[timestep_idx])
+    is_first_timestep = timestep_idx == 0
+
+    return _find_peaks_for_time_slice(
+        slp_slice,
+        current_valid_time,
+        tc_track_data_df,
+        min_distance,
+        lat_array,
+        lon_array,
+        max_spatial_distance_degrees,
+        max_temporal_hours,
+        dz_slice if dz_slice is not None else np.array([]),
+        slp_contour_magnitude,
+        dz_contour_magnitude,
+        use_contour_validation,
+        is_first_timestep,
+    )
+
+
 def _find_peaks_for_time_slice(
     slp_slice: np.ndarray,
     current_valid_time: pd.Timestamp,
@@ -1051,14 +1148,37 @@ def _find_peaks_for_time_slice(
     slp_contour_magnitude: float = 200,
     dz_contour_magnitude: float = -6,
     use_contour_validation: bool = True,
+    is_first_timestep: bool = False,
 ) -> np.ndarray:
-    """Find peaks for a single time slice with tropical cyclone track data filtering."""
+    """Find peaks with tropical cyclone track data filtering.
 
-    # Filter tropical cyclone track data temporally (exact time match)
+    Args:
+        slp_slice: Sea level pressure slice
+        current_valid_time: Current valid time being processed
+        tc_track_data_df: Tropical cyclone track data
+        min_distance: Minimum distance between peaks
+        lat_coords: Latitude coordinates
+        lon_coords: Longitude coordinates
+        max_spatial_distance_degrees: Max spatial distance
+        max_temporal_hours: Max temporal buffer for genesis
+        dz_slice: Geopotential thickness slice
+        slp_contour_magnitude: SLP contour magnitude
+        dz_contour_magnitude: DZ contour magnitude
+        use_contour_validation: Whether to use contour validation
+        is_first_timestep: If True, applies temporal buffer
+    """
+
+    # Filter tropical cyclone track data temporally
     time_diff = np.abs(
         (tc_track_data_df["valid_time"] - current_valid_time).dt.total_seconds() / 3600
     )
-    temporal_mask = time_diff == 0
+
+    # For first timestep (genesis), allow buffer; otherwise exact
+    if is_first_timestep:
+        temporal_mask = time_diff <= max_temporal_hours
+    else:
+        temporal_mask = time_diff == 0
+
     nearby_tc_track_data = tc_track_data_df[temporal_mask]
 
     if len(nearby_tc_track_data) == 0:
