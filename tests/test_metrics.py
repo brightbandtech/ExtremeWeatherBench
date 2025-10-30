@@ -57,7 +57,9 @@ class TestComputeDocstringMetaclass:
 
         # Should not have the base MAE docstring
         mae_metric = metrics.MAE()
-        assert max_mae_metric.compute_metric.__doc__ != mae_metric.compute_metric.__doc__
+        assert (
+            max_mae_metric.compute_metric.__doc__ != mae_metric.compute_metric.__doc__
+        )
 
     def test_multi_level_inheritance_docstrings(self):
         """Test that docstring transfer works correctly with multi-level inheritance."""
