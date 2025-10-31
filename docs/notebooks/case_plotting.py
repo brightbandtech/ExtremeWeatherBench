@@ -129,11 +129,19 @@ def plot_all_cases(ewb_cases, event_type=None, filename=None, bounding_box=None,
     # Initialize counts for each event type
     counts_by_type = dict({'freeze': 0, 'heat_wave': 0, 'severe_convection': 0, 'atmospheric_river': 0, 'tropical_cyclone': 0})
     zorders = {'freeze': 9, 'heat_wave': 8, 'atmospheric_river': 2, 'tropical_cyclone': 10, 'severe_convection': 0}
-    alphas = {'freeze': 0.2, 'heat_wave': 0.2, 'atmospheric_river': 0.2, 'tropical_cyclone': 0.15, 'severe_convection': 0.02}
+    alphas = {'freeze': 0.2, 'heat_wave': 0.2, 'atmospheric_river': 0.3, 'tropical_cyclone': 0.07, 'severe_convection': 0.02}
     box_alphas = {'freeze': 1, 'heat_wave': 1, 'atmospheric_river': 1, 'tropical_cyclone': 0.5, 'severe_convection': 1}
 
+    # Handle both IndividualCaseCollection and IndividualCase
+    if isinstance(ewb_cases, cases.IndividualCaseCollection):
+        cases_to_plot = ewb_cases.cases
+    elif isinstance(ewb_cases, cases.IndividualCase):
+        cases_to_plot = [ewb_cases]
+    else:
+        raise TypeError(f"ewb_cases must be IndividualCase or IndividualCaseCollection, got {type(ewb_cases)}")
+
     # Plot boxes for each case
-    for indiv_case in ewb_cases.cases:
+    for indiv_case in cases_to_plot:
         # Get color based on event type
         indiv_event_type = indiv_case.event_type
         color = event_colors.get(indiv_event_type, 'gray')  # Default to gray if event type not found
@@ -266,8 +274,16 @@ def plot_all_cases_and_obs(ewb_cases, event_type=None, filename=None, bounding_b
     zorders = {'freeze': 9, 'heat_wave': 8, 'atmospheric_river': 2, 'tropical_cyclone': 10, 'severe_convection': 0}
     alphas = {'freeze': 1, 'heat_wave': 1, 'atmospheric_river': 1, 'tropical_cyclone': 1, 'severe_convection': 1}
 
+    # Handle both IndividualCaseCollection and IndividualCase
+    if isinstance(ewb_cases, cases.IndividualCaseCollection):
+        cases_to_plot = ewb_cases.cases
+    elif isinstance(ewb_cases, cases.IndividualCase):
+        cases_to_plot = [ewb_cases]
+    else:
+        raise TypeError(f"ewb_cases must be IndividualCase or IndividualCaseCollection, got {type(ewb_cases)}")
+
     # Plot boxes for each case
-    for indiv_case in ewb_cases.cases:
+    for indiv_case in cases_to_plot:
         # Get color based on event type
         indiv_event_type = indiv_case.event_type
         color = event_colors.get(indiv_event_type, 'gray')  # Default to gray if event type not found
@@ -920,3 +936,218 @@ def generate_freeze_plots(
     plt.tight_layout()
     plt.savefig(f"case_{single_case.case_id_number}_timeseries.png",transparent=True)
     plt.show()
+
+def plot_results_by_metric(data, settings, title, filename=None, show_all_in_legend=False):
+    """
+    Plots the results of the ExtremeWeatherBench for the data specified
+    parameters:
+        data: list of dictionaries containing the data to plot
+        settings: list of dictionaries containing the settings for the plot
+        title: string, the title of the plot
+        filename: string, the filename to save the plot to (None if you don't want to save it   )
+        show_all_in_legend: boolean, if True, then all of the labels will be shown in the legend, if False they will be grouped
+    """
+    sns.set_theme(style='whitegrid')
+    sns_palette = sns.color_palette("tab10")
+    fig, ax = plt.subplots(figsize=(16,4))
+    
+    legend_elements = []
+    legend_labels = list()
+
+    # and add the HRES line
+    for my_settings in settings:
+        if (show_all_in_legend):
+            my_label = f"{my_settings['label_str']} (n={my_n})"
+        else:
+            my_label = my_settings['label_str']
+
+        if ("HRES" in my_label):
+            legend_elements.append(plt.Line2D([0], [0], color=my_settings['color'], linewidth=4, label=my_label))
+            break
+
+    # Add a blank line to your legend_elements list
+    legend_elements.append(plt.Line2D([0], [0], color='white', alpha=0, label=' '))
+
+
+    for i, model in enumerate(data):
+        my_mean = model['value'].mean('case_id_number')
+        my_n = len(np.unique(model['case_id_number'].values))
+        my_settings = settings[i]
+        if (show_all_in_legend):
+            my_label = f"{my_settings['label_str']} (n={my_n})"
+        else:
+            my_label = my_settings['label_str']
+
+        plt.plot(my_mean, color=my_settings['color'], linewidth=4, label=my_label,
+            linestyle=my_settings['linestyle'], marker=my_settings['marker'], markersize=10)
+    
+        # add any unique labels to the legend except for HRES (it gets its own line in the legend)
+        if (show_all_in_legend or (my_label not in legend_labels and "HRES" not in my_label)):
+            legend_labels.append(my_label)
+            legend_elements.append(plt.Line2D([0], [0], color=my_settings['color'], linewidth=4, label=my_label))
+
+
+    # set the xticks in days    
+    xtick_str = [f"{int(my_time/ np.timedelta64(1, 'D')):d}" for my_time in model['lead_time'].values]
+    ax.set_xticks(labels=xtick_str, ticks=np.arange(0, len(model['lead_time']), 1))
+
+    ax.set_ylabel('Celsius')
+    ax.set_xlabel('Lead Time (days)')
+    plt.title(title)
+
+    # Add a blank line to your legend_elements list
+    legend_elements.append(plt.Line2D([0], [0], color='white', alpha=0, label=' '))
+
+    # now add the unique groups with markers
+    my_groups = list()
+    for my_settings in settings:
+        if (my_settings['group'] not in my_groups and my_settings['group'] != 'HRES'):
+            my_groups.append(my_settings['group'])
+            legend_elements.append(plt.Line2D([0], [0], color='darkgrey', marker=my_settings['marker'], markersize=10, 
+                label=my_settings['group'], linestyle=my_settings['linestyle'], linewidth=4))
+
+
+
+    ax.legend(handles=legend_elements, loc="center left", bbox_to_anchor=(1.0, 0.5))
+
+    if (filename is not None):
+        plt.savefig(filename, bbox_inches='tight', dpi=300)
+
+
+def plot_all_cases_hexbin(ewb_cases, event_type=None, filename=None, bounding_box=None, hexbin_size=[100,100]):
+    """A function to plot all cases using hexbins to cover the full space
+    Args:
+        ewb_cases (list): A list of cases to plot.
+        event_type (str): The type of event to plot. If None, all events will be plotted).
+        filename (str): The name of the file to save the plot. If None, the plot will not be saved.
+        bounding_box (tuple): A tuple of the form (min_lon, min_lat, max_lon, max_lat) to set the bounding box for the plot. If None, the full world map will be plotted.
+    """
+
+    # Create bounding box polygon if provided
+    bounding_box_polygon = None
+    if bounding_box is not None:
+        bounding_box_polygon = get_polygon_from_bounding_box(bounding_box)
+
+    # first make the counts by hexbin
+    polygons_by_event = dict()
+
+    # save a list of polygons for each event type
+    for indiv_case in ewb_cases.cases:
+        # Get color based on event type
+        indiv_event_type = indiv_case.event_type
+
+        if (indiv_event_type not in polygons_by_event):
+            polygons_by_event[indiv_event_type] = []
+
+        # check if the case is inside the bounding box
+        if bounding_box is not None:
+            if (not shapely.intersects(indiv_case.location.as_geopandas().geometry[0], bounding_box_polygon)):
+                #print(f"Skipping case {indiv_case.case_id_number} as it is outside the bounding box.")
+                continue
+
+        # grab all the points inside the polygon and increment all of the overlapping hexbins
+        if (event_type is None or indiv_event_type == event_type):
+            if isinstance(indiv_case.location.as_geopandas().geometry.iloc[0], shapely.geometry.MultiPolygon):
+                for poly in indiv_case.location.as_geopandas().geometry.iloc[0].geoms:
+                    polygons_by_event[indiv_event_type].append(poly)
+            else:
+                polygons_by_event[indiv_event_type].append(indiv_case.location.as_geopandas().geometry.iloc[0])
+               
+    #print(polygons_by_event)
+
+
+    # now make the grid for the hexbins and then find all grid points inside each polygon
+    # Create a meshgrid of longitude and latitude
+    lon_grid = np.linspace(-180, 180, hexbin_size[0])
+    lat_grid = np.linspace(-90, 90, hexbin_size[1])
+    lon_mesh, lat_mesh = np.meshgrid(lon_grid, lat_grid, indexing='ij')
+    
+    # Flatten to get all grid point coordinates
+    lon_flat = lon_mesh.flatten()
+    lat_flat = lat_mesh.flatten()
+    
+    # Create shapely points from the grid coordinates
+    # shapely.points takes an array of shape (n, 2) with [lon, lat] pairs
+    grid_points_coords = np.column_stack([lon_flat, lat_flat])
+    grid_points = shapely.points(grid_points_coords)
+
+    # Store grid points inside polygons by event type
+    grid_points_by_event = dict()
+    
+    # For each event type, find all grid points inside any of its polygons
+    for event_type_name, polygons in polygons_by_event.items():
+        # Use a set to avoid duplicates (points can be inside multiple polygons)
+        grid_points_set = set()
+        
+        # For each polygon in this event type, find points inside it
+        for poly in polygons:
+            # Check each grid point to see if it's inside the polygon
+            # Using polygon.contains() method for point-in-polygon check
+            for i, point in enumerate(grid_points):
+                if poly.contains(point):
+                    grid_point_coord = (lon_flat[i], lat_flat[i])
+                    grid_points_set.add(grid_point_coord)
+        
+        # Convert set to list and store by event type
+        grid_points_by_event[event_type_name] = list(grid_points_set)
+
+    print(grid_points_by_event)
+
+    # Create scatter plot of grid points colored by event type
+    fig = plt.figure(figsize=(15, 10))
+    ax = plt.axes(projection=ccrs.PlateCarree())
+
+    # Set the map extent
+    if (bounding_box is None):
+        ax.set_global()
+    else:
+        ax.set_extent(bounding_box, crs=ccrs.PlateCarree())
+    
+    # Add coastlines and gridlines
+    ax.coastlines()
+    ax.add_feature(cfeature.BORDERS, linestyle=':')
+    ax.add_feature(cfeature.LAND, edgecolor='black')
+    ax.add_feature(cfeature.LAKES, edgecolor='black', facecolor='white')
+    ax.add_feature(cfeature.RIVERS, edgecolor='black')
+    ax.add_feature(cfeature.OCEAN, edgecolor='black', facecolor='white', zorder=10)
+
+    # Add gridlines
+    gl = ax.gridlines(draw_labels=True, linewidth=0.5, color='gray', alpha=0.5, linestyle='--')
+    gl.top_labels = False
+    gl.right_labels = False
+    gl.xformatter = LongitudeFormatter()
+    gl.yformatter = LatitudeFormatter()
+
+    # Define colors for each event type (using the same palette as other plots)
+    sns_palette = sns.color_palette("tab10")
+    event_colors = {
+        'freeze': sns_palette[0],  
+        'heat_wave': sns_palette[3],
+        'tropical_cyclone': sns_palette[1],
+        'severe_convection': sns_palette[5],
+        'atmospheric_river': sns_palette[7],
+    }
+
+    # Plot grid points for each event type
+    for event_type_name, grid_points_list in grid_points_by_event.items():
+        if len(grid_points_list) > 0:
+            # Unzip the coordinates
+            lons, lats = zip(*grid_points_list)
+            color = event_colors.get(event_type_name, 'gray')
+            ax.scatter(lons, lats, c=color, s=10, alpha=0.6, 
+                      transform=ccrs.PlateCarree(), 
+                      label=event_type_name.replace('_', ' ').title(), 
+                      zorder=10)
+
+    # Create legend
+    ax.legend(loc='lower left', framealpha=1, frameon=True, fontsize=10)
+    
+    # Set title
+    total_points = sum(len(points) for points in grid_points_by_event.values())
+    ax.set_title(f'Grid Points Inside Event Polygons (n = {total_points})', 
+                 loc='left', fontsize=20)
+    
+    # Save if filename is provided
+    if filename is not None:
+        plt.savefig(filename, transparent=False, bbox_inches='tight', dpi=300)
+    
