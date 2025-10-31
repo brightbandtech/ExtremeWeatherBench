@@ -12,22 +12,24 @@ logger = logging.getLogger(__name__)
 
 
 class ComputeDocstringMetaclass(abc.ABCMeta):
-    """A metaclass that maps the docstring from self._compute_metric() to self.compute_metric().
+    """A metaclass that maps the docstring from self._compute_metric() to
+    self.compute_metric().
 
-    The `BaseMetric` abstract base class requires users to override a function called `_compute_metric()`,
-    while providing a standardized public interface to this method called `compute_metric()`. This
-    metaclass automatically maps the docstring from `_compute_metric()` to `compute_metric()` so that
-    the documentation a user provides for their implementation will automatically appear with the
-    public interface without any additional effort.
-
+    The `BaseMetric` abstract base class requires users to override a function called
+    `_compute_metric()`, while providing a standardized public interface to this method
+    called `compute_metric()`. This metaclass automatically maps the docstring from
+    `_compute_metric()` to `compute_metric()` so that the documentation a user provides
+    for their implementation will automatically appear with the public interface without
+    any additional effort.
     """
 
     def __new__(cls, name, bases, namespace):
         cls = super().__new__(cls, name, bases, namespace)
-        # NOTE: the `compute_metric()` method will be defined in the ABC `BaseMetric`, and we
-        # never expect the user re-implement it. So it won't be in the namespace of the concrete
-        # metric classes - it will only be in the namespace of the ABC `BaseMetric`, and will be
-        # available as an attribute of the concrete metric classes.
+        # NOTE: the `compute_metric()` method will be defined in the ABC `BaseMetric`,
+        # and we never expect the user re-implement it. So it won't be in the namespace
+        # of the concrete metric classes - it will only be in the namespace of the ABC
+        # `BaseMetric`, and will be available as an attribute of the concrete metric
+        # classes.
         if "_compute_metric" in namespace and hasattr(cls, "compute_metric"):
             # Transfer the docstring from _compute_metric to compute_metric, if the
             # former exists.
@@ -239,8 +241,8 @@ class MaximumMAE(MAE):
             target: The target DataArray.
             **kwargs: Additional keyword arguments. Supported kwargs:
                 preserve_dims (str): Dimension(s) to preserve. Defaults to "lead_time".
-                tolerance_range (int): Time window (hours) around target's maximum value to
-                    search for forecast maximum. Defaults to 24 hours.
+                tolerance_range (int): Time window (hours) around target's maximum value
+                to search for forecast maximum. Defaults to 24 hours.
 
         Returns:
             MAE of the maximum values.
@@ -299,8 +301,8 @@ class MinimumMAE(MAE):
             target: The target DataArray.
             **kwargs: Additional keyword arguments. Supported kwargs:
                 preserve_dims (str): Dimension(s) to preserve. Defaults to "lead_time".
-                tolerance_range (int): Time window (hours) around target's minimum value to
-                    search for forecast minimum. Defaults to 24 hours.
+                tolerance_range (int): Time window (hours) around target's minimum
+                value to search for forecast minimum. Defaults to 24 hours.
 
         Returns:
             MAE of the minimum values.
@@ -358,8 +360,8 @@ class MaxMinMAE(MAE):
             target: The target DataArray.
             **kwargs: Additional keyword arguments. Supported kwargs:
                 preserve_dims (str): Dimension(s) to preserve. Defaults to "lead_time".
-                tolerance_range (int): Time window (hours) around target's max-min value to
-                    search for forecast max-min. Defaults to 24 hours.
+                tolerance_range (int): Time window (hours) around target's max-min
+                value to search for forecast max-min. Defaults to 24 hours.
 
         Returns:
             MAE of the maximum daily minimum values.
