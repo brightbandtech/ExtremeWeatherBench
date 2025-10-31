@@ -13,3 +13,11 @@ wheels/
 .mypy_cache
 .vscode/
 docs/source/_build/
+docs/notebooks/figs/fourv2_freeze_results.pkl
+docs/notebooks/figs/gc_freeze_results.pkl
+docs/notebooks/figs/hres_freeze_results.pkl
+docs/notebooks/figs/pang_freeze_results.pkl
+docs/notebooks/figs/fourv2_heat_results.pkl
+docs/notebooks/figs/gc_heat_results.pkl
+docs/notebooks/figs/hres_heat_results.pkl
+docs/notebooks/figs/pang_heat_results.pkl
