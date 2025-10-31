@@ -8,6 +8,109 @@ import xarray as xr
 from extremeweatherbench import metrics
 
 
+class TestComputeDocstringMetaclass:
+    """Tests for the ComputeDocstringMetaclass functionality."""
+
+    def test_docstring_transfer_from_private_to_public_method(self):
+        """Test that _compute_metric docstring is transferred to compute_metric."""
+        metric = metrics.MAE()
+
+        # The compute_metric method should have the docstring from _compute_metric
+        assert metric.compute_metric.__doc__ is not None
+        assert "Mean Absolute Error" in metric.compute_metric.__doc__
+        # Should contain the detailed documentation from _compute_metric
+        assert "forecast" in metric.compute_metric.__doc__
+        assert "target" in metric.compute_metric.__doc__
+
+    def test_each_metric_has_unique_docstring(self):
+        """Test that metrics with custom docstrings get them transferred correctly."""
+        mae_metric = metrics.MAE()
+        me_metric = metrics.ME()
+        rmse_metric = metrics.RMSE()
+
+        # Get the docstrings
+        mae_doc = mae_metric.compute_metric.__doc__
+        me_doc = me_metric.compute_metric.__doc__
+        rmse_doc = rmse_metric.compute_metric.__doc__
+
+        # MAE has a custom docstring, so it should have "Mean Absolute Error"
+        assert mae_doc is not None
+        assert "Mean Absolute Error" in mae_doc
+
+        # RMSE has a custom docstring, so it should have "Root Mean Square Error"
+        assert rmse_doc is not None
+        assert "Root Mean Square Error" in rmse_doc
+
+        # All three should have different docstrings (ME falls back to base class)
+        assert me_doc != mae_doc
+        assert rmse_doc != mae_doc
+        assert me_doc != rmse_doc
+
+    def test_inherited_metric_docstring_transfer(self):
+        """Test that docstring transfer works for metrics inheriting from other
+        metrics."""
+        max_mae_metric = metrics.MaximumMAE()
+
+        # MaximumMAE inherits from MAE but should have its own docstring
+        assert max_mae_metric.compute_metric.__doc__ is not None
+        assert "MaximumMAE" in max_mae_metric.compute_metric.__doc__
+        assert "tolerance_range" in max_mae_metric.compute_metric.__doc__
+
+        # Should not have the base MAE docstring
+        mae_metric = metrics.MAE()
+        assert (
+            max_mae_metric.compute_metric.__doc__ != mae_metric.compute_metric.__doc__
+        )
+
+    def test_multi_level_inheritance_docstrings(self):
+        """Test that docstring transfer works correctly with multi-level inheritance."""
+        mae_metric = metrics.MAE()
+        max_mae_metric = metrics.MaximumMAE()
+        min_mae_metric = metrics.MinimumMAE()
+        maxmin_mae_metric = metrics.MaxMinMAE()
+
+        # All should have different docstrings
+        docs = [
+            mae_metric.compute_metric.__doc__,
+            max_mae_metric.compute_metric.__doc__,
+            min_mae_metric.compute_metric.__doc__,
+            maxmin_mae_metric.compute_metric.__doc__,
+        ]
+
+        # Check all are non-None
+        assert all(doc is not None for doc in docs)
+
+        # Check all are unique
+        assert len(set(docs)) == len(docs), "All docstrings should be unique"
+
+    def test_onset_and_duration_me_have_distinct_docstrings(self):
+        """Test that OnsetME and DurationME have their own distinct docstrings."""
+        onset_metric = metrics.OnsetME()
+        duration_metric = metrics.DurationME()
+
+        onset_doc = onset_metric.compute_metric.__doc__
+        duration_doc = duration_metric.compute_metric.__doc__
+
+        assert onset_doc is not None
+        assert duration_doc is not None
+
+        # Should contain method-specific content
+        assert "OnsetME" in onset_doc or "onset" in onset_doc.lower()
+        assert "DurationME" in duration_doc or "duration" in duration_doc.lower()
+
+        # Should be different from each other
+        assert onset_doc != duration_doc
+
+    def test_metric_without_custom_docstring(self):
+        """Test metrics that might not have custom docstrings on _compute_metric."""
+        me_metric = metrics.ME()
+
+        # ME class has _compute_metric but might not have a detailed docstring
+        # The metaclass should handle this gracefully
+        assert hasattr(me_metric, "compute_metric")
+        assert callable(me_metric.compute_metric)
+
+
 class TestBaseMetric:
     """Tests for the BaseMetric abstract base class."""
 

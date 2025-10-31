@@ -92,7 +92,43 @@ def clear_contingency_cache():
     _GLOBAL_CONTINGENCY_CACHE.clear()
 
 
-class BaseMetric(abc.ABC):
+class ComputeDocstringMetaclass(abc.ABCMeta):
+    """A metaclass that maps the docstring from self._compute_metric() to
+    self.compute_metric().
+
+    The `BaseMetric` abstract base class requires users to override a function called
+    `_compute_metric()`, while providing a standardized public interface to this method
+    called `compute_metric()`. This metaclass automatically maps the docstring from
+    `_compute_metric()` to `compute_metric()` so that the documentation a user provides
+    for their implementation will automatically appear with the public interface without
+    any additional effort.
+    """
+
+    def __new__(cls, name, bases, namespace):
+        cls = super().__new__(cls, name, bases, namespace)
+        # NOTE: the `compute_metric()` method will be defined in the ABC `BaseMetric`,
+        # and we never expect the user re-implement it. So it won't be in the namespace
+        # of the concrete metric classes - it will only be in the namespace of the ABC
+        # `BaseMetric`, and will be available as an attribute of the concrete metric
+        # classes.
+        if "_compute_metric" in namespace and hasattr(cls, "compute_metric"):
+            # Transfer the docstring from _compute_metric to compute_metric, if the
+            # former exists.
+            if cls._compute_metric.__doc__ is not None:
+                # Create a new method for _this_ class, so we can avoid overwriting what
+                # we set for the parent.
+                _original_compute_metric = cls.compute_metric
+
+                def _compute_metric_with_docstring(self, *args, **kwargs):
+                    return _original_compute_metric(self, *args, **kwargs)
+
+                _compute_metric_with_docstring.__doc__ = cls._compute_metric.__doc__
+                cls.compute_metric = _compute_metric_with_docstring
+
+        return cls
+
+
+class BaseMetric(abc.ABC, metaclass=ComputeDocstringMetaclass):
     """A BaseMetric class is an abstract class that defines the foundational interface
     for all metrics.
 
@@ -146,9 +182,8 @@ class BaseMetric(abc.ABC):
         Args:
             forecast: The forecast DataArray.
             target: The target DataArray.
-            **kwargs: Additional parameters. Common ones include
-                preserve_dims (dimension(s) to preserve, defaults
-                to "lead_time").
+            **kwargs: Additional parameters. Common ones include preserve_dims
+                (dimension(s) to preserve, defaults to "lead_time").
 
         Returns:
             The computed metric result.
@@ -442,6 +477,17 @@ class MAE(BaseMetric):
         target: xr.DataArray,
         **kwargs: Any,
     ) -> Any:
+        """Compute the Mean Absolute Error.
+
+        Args:
+            forecast: The forecast DataArray.
+            target: The target DataArray.
+            **kwargs: Additional keyword arguments. Supported kwargs:
+                preserve_dims (str): Dimension(s) to preserve. Defaults to "lead_time".
+
+        Returns:
+            The computed Mean Absolute Error result.
+        """
         preserve_dims = kwargs.get("preserve_dims", "lead_time")
         return scores.continuous.mae(forecast, target, preserve_dims=preserve_dims)
 
@@ -457,6 +503,17 @@ class ME(BaseMetric):
         target: xr.DataArray,
         **kwargs: Any,
     ) -> Any:
+        """Compute the Mean Error.
+
+        Args:
+            forecast: The forecast DataArray.
+            target: The target DataArray.
+            **kwargs: Additional keyword arguments. Supported kwargs:
+                preserve_dims (str): Dimension(s) to preserve. Defaults to "lead_time".
+
+        Returns:
+            The computed Mean Error result.
+        """
         preserve_dims = kwargs.get("preserve_dims", "lead_time")
         return scores.continuous.mean_error(
             forecast, target, preserve_dims=preserve_dims
@@ -474,6 +531,17 @@ class RMSE(BaseMetric):
         target: xr.DataArray,
         **kwargs: Any,
     ) -> Any:
+        """Compute the Root Mean Square Error.
+
+        Args:
+            forecast: The forecast DataArray.
+            target: The target DataArray.
+            **kwargs: Additional keyword arguments. Supported kwargs:
+                preserve_dims (str): Dimension(s) to preserve. Defaults to "lead_time".
+
+        Returns:
+            The computed Root Mean Square Error result.
+        """
         preserve_dims = kwargs.get("preserve_dims", "lead_time")
         return scores.continuous.rmse(forecast, target, preserve_dims=preserve_dims)
 
@@ -639,6 +707,19 @@ class MaximumMAE(MAE):
         target: xr.DataArray,
         **kwargs,
     ) -> dict[str, xr.DataArray]:
+        """Compute MaximumMAE.
+
+        Args:
+            forecast: The forecast DataArray.
+            target: The target DataArray.
+            **kwargs: Additional keyword arguments. Supported kwargs:
+                preserve_dims (str): Dimension(s) to preserve. Defaults to "lead_time".
+                tolerance_range (int): Time window (hours) around target's maximum value
+                to search for forecast maximum. Defaults to 24 hours.
+
+        Returns:
+            MAE of the maximum values.
+        """
         preserve_dims = kwargs.get("preserve_dims", "lead_time")
         tolerance_range = kwargs.get("tolerance_range", 24)
         target_spatial_mean = _reduce_duck_array(
@@ -693,11 +774,10 @@ class MinimumMAE(MAE):
         Args:
             forecast: The forecast DataArray.
             target: The target DataArray.
-            preserve_dims: Dimension(s) to preserve. Defaults to
-                "lead_time".
-            tolerance_range: Time window (hours) around target
-                minimum to search for forecast minimum. Defaults
-                to 24 hours.
+            **kwargs: Additional keyword arguments. Supported kwargs:
+                preserve_dims (str): Dimension(s) to preserve. Defaults to "lead_time".
+                tolerance_range (int): Time window (hours) around target's minimum
+                value to search for forecast minimum. Defaults to 24 hours.
 
         Returns:
             MAE of the minimum values.
@@ -755,11 +835,10 @@ class MaxMinMAE(MAE):
         Args:
             forecast: The forecast DataArray.
             target: The target DataArray.
-            preserve_dims: Dimension(s) to preserve. Defaults to
-                "lead_time".
-            tolerance_range: Time window (hours) around target
-                max-min to search for forecast max-min. Defaults
-                to 24 hours.
+            **kwargs: Additional keyword arguments. Supported kwargs:
+                preserve_dims (str): Dimension(s) to preserve. Defaults to "lead_time".
+                tolerance_range (int): Time window (hours) around target's max-min
+                value to search for forecast max-min. Defaults to 24 hours.
 
         Returns:
             MAE of the maximum daily minimum values.
@@ -884,13 +963,14 @@ class OnsetME(ME):
         Args:
             forecast: The forecast DataArray.
             target: The target DataArray.
-            preserve_dims: Dimension(s) to preserve. Defaults to
-                "init_time".
+            **kwargs: Additional keyword arguments. Supported kwargs:
+                preserve_dims (str): Dimension(s) to preserve. Defaults to "init_time".
 
         Returns:
             Mean error of onset timing.
         """
         preserve_dims = kwargs.get("preserve_dims", "init_time")
+
         target_time = target.valid_time[0] + np.timedelta64(48, "h")
         forecast = (
             _reduce_duck_array(
@@ -963,13 +1043,14 @@ class DurationME(ME):
         Args:
             forecast: The forecast DataArray.
             target: The target DataArray.
-            preserve_dims: Dimension(s) to preserve. Defaults to
-                "init_time".
+            **kwargs: Additional keyword arguments. Supported kwargs:
+                preserve_dims (str): Dimension(s) to preserve. Defaults to "init_time".
 
         Returns:
             Mean error of event duration.
         """
         preserve_dims = kwargs.get("preserve_dims", "init_time")
+
         # Dummy implementation for duration mean error
         target_duration = target.valid_time[-1] - target.valid_time[0]
         forecast = (
