@@ -323,7 +323,7 @@ class ForecastBase(InputBase):
         # use the list of required variables from the derived variables in the
         # eval to add to the list of variables
         expected_and_maybe_derived_variables = (
-            derived.maybe_pull_required_variables_from_derived_input(
+            derived.maybe_pull_variables_from_derived_input(
                 list(case_operator.forecast.variables)
             )
         )
@@ -997,7 +997,7 @@ def zarr_target_subsetter(
         target_and_maybe_derived_variables = []
     else:
         target_and_maybe_derived_variables = (
-            derived.maybe_pull_required_variables_from_derived_input(
+            derived.maybe_pull_variables_from_derived_input(
                 list(case_operator.target.variables)
             )
         )
