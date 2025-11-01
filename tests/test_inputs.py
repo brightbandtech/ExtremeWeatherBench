@@ -359,9 +359,7 @@ class TestMaybeMapVariableNames:
         assert isinstance(result, xr.DataArray)
         assert result.name == "temp"
 
-    @mock.patch(
-        "extremeweatherbench.derived.maybe_pull_required_variables_from_derived_input"
-    )
+    @mock.patch("extremeweatherbench.derived.maybe_pull_variables_from_derived_input")
     def test_maybe_map_variable_names_polars_lazyframe(
         self, mock_derived, test_input_base, sample_ghcn_dataframe
     ):
@@ -386,9 +384,7 @@ class TestMaybeMapVariableNames:
         assert "surface_air_temperature" not in schema.names()
         assert "latitude" in schema.names()
 
-    @mock.patch(
-        "extremeweatherbench.derived.maybe_pull_required_variables_from_derived_input"
-    )
+    @mock.patch("extremeweatherbench.derived.maybe_pull_variables_from_derived_input")
     def test_maybe_map_variable_names_pandas_dataframe(
         self, mock_derived, test_input_base, sample_lsr_dataframe
     ):
@@ -489,9 +485,7 @@ class TestMaybeMapVariableNames:
         # Should return data unchanged when variable mapping is empty
         xr.testing.assert_identical(result, sample_era5_dataset)
 
-    @mock.patch(
-        "extremeweatherbench.derived.maybe_pull_required_variables_from_derived_input"
-    )
+    @mock.patch("extremeweatherbench.derived.maybe_pull_variables_from_derived_input")
     def test_maybe_map_variable_names_with_derived_variables(
         self, mock_derived, test_input_base, sample_era5_dataset
     ):
@@ -546,9 +540,7 @@ class TestForecastBase:
 
     @mock.patch("extremeweatherbench.utils.derive_indices_from_init_time_and_lead_time")
     @mock.patch("extremeweatherbench.utils.convert_init_time_to_valid_time")
-    @mock.patch(
-        "extremeweatherbench.derived.maybe_pull_required_variables_from_derived_input"
-    )
+    @mock.patch("extremeweatherbench.derived.maybe_pull_variables_from_derived_input")
     def test_forecast_base_subset_data_to_case(
         self, mock_derived, mock_convert, mock_derive, sample_forecast_dataset
     ):
@@ -1506,9 +1498,7 @@ class TestStandaloneFunctions:
         with pytest.raises(TypeError, match="Unknown kerchunk file type"):
             inputs.open_kerchunk_reference("test.txt")
 
-    @mock.patch(
-        "extremeweatherbench.derived.maybe_pull_required_variables_from_derived_input"
-    )
+    @mock.patch("extremeweatherbench.derived.maybe_pull_variables_from_derived_input")
     def test_zarr_target_subsetter(self, mock_derived, sample_era5_dataset):
         """Test zarr_target_subsetter function."""
         mock_derived.return_value = ["2m_temperature"]
@@ -1526,9 +1516,7 @@ class TestStandaloneFunctions:
         mock_case.case_metadata.location.mask.assert_called_once()
         assert isinstance(result, xr.Dataset)
 
-    @mock.patch(
-        "extremeweatherbench.derived.maybe_pull_required_variables_from_derived_input"
-    )
+    @mock.patch("extremeweatherbench.derived.maybe_pull_variables_from_derived_input")
     def test_zarr_target_subsetter_missing_variables(
         self, mock_derived, sample_era5_dataset
     ):
@@ -1543,9 +1531,7 @@ class TestStandaloneFunctions:
         with pytest.raises(ValueError, match="Variables .* not found in target data"):
             inputs.zarr_target_subsetter(sample_era5_dataset, mock_case)
 
-    @mock.patch(
-        "extremeweatherbench.derived.maybe_pull_required_variables_from_derived_input"
-    )
+    @mock.patch("extremeweatherbench.derived.maybe_pull_variables_from_derived_input")
     def test_zarr_target_subsetter_no_variables(
         self, mock_derived, sample_era5_dataset
     ):
@@ -1560,9 +1546,7 @@ class TestStandaloneFunctions:
         with pytest.raises(ValueError, match="Variables not defined"):
             inputs.zarr_target_subsetter(sample_era5_dataset, mock_case)
 
-    @mock.patch(
-        "extremeweatherbench.derived.maybe_pull_required_variables_from_derived_input"
-    )
+    @mock.patch("extremeweatherbench.derived.maybe_pull_variables_from_derived_input")
     def test_zarr_target_subsetter_chunks_unchunked_data(
         self, mock_derived, sample_era5_dataset
     ):
