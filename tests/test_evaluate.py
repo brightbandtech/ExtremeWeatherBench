@@ -2529,7 +2529,7 @@ class TestForecastDerivedVariable(derived.DerivedVariable):
     """Test derived variable for forecast data."""
 
     name = "derived_forecast_var"
-    required_variables = ["surface_air_temperature"]
+    variables = ["surface_air_temperature"]
 
     @classmethod
     def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
@@ -2541,7 +2541,7 @@ class TestTargetDerivedVariable(derived.DerivedVariable):
     """Test derived variable for target data."""
 
     name = "derived_target_var"
-    required_variables = ["2m_temperature"]
+    variables = ["2m_temperature"]
 
     @classmethod
     def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
