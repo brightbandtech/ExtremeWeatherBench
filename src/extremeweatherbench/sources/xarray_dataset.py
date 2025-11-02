@@ -131,18 +131,18 @@ def check_for_spatial_data(data: xr.Dataset, location: "regions.Region") -> bool
     lon_min, lon_max = coords[0], coords[2]
 
     # Check if reversing the latitude range still returns no data
-    if len(data.sel({lat_dim: slice(lat_min, lat_max)})) == 0:
-        if len(data.sel({lat_dim: slice(lat_max, lat_min)})) == 0:
+    if len(data[lat_dim].sel({lat_dim: slice(lat_min, lat_max)})) == 0:
+        if len(data[lat_dim].sel({lat_dim: slice(lat_max, lat_min)})) == 0:
             # If reversing the latitude range still returns no data, return False
             return False
         else:
             # If latitude has data, check longitude
-            data = data.sel(
+            data = data[[lat_dim, lon_dim]].sel(
                 {lat_dim: slice(lat_max, lat_min), lon_dim: slice(lon_min, lon_max)}
             )
     else:
         # Check longitude if latitude > 0
-        data = data.sel(
+        data = data[[lat_dim, lon_dim]].sel(
             {lat_dim: slice(lat_min, lat_max), lon_dim: slice(lon_min, lon_max)}
         )
 
