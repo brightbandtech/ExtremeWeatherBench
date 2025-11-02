@@ -66,8 +66,8 @@ def _reduce_duck_array(
 ) -> xr.DataArray:
     """Reduce the duck array of the data.
 
-    Some data will return as a sparse array, which can also be reduced but requires
-    some additional logic.
+    Some data will return as a sparse array, which can also be reduced but
+    requires some additional logic.
 
     Args:
         da: The xarray dataarray to reduce.
@@ -77,13 +77,13 @@ def _reduce_duck_array(
     Returns:
         The reduced xarray dataarray.
     """
-    if isinstance(da.data, np.ndarray):
-        # Reduce the data by applying func to the dims in reduce_dims
-        return da.reduce(func, dim=reduce_dims)
-    elif isinstance(da.data, sparse.COO):
+    if isinstance(da.data, sparse.COO):
         da = utils.stack_sparse_data_from_dims(da, reduce_dims)
         # Apply the reduce function to the data
         return da.reduce(func, dim="stacked")
+    else:
+        # Handles np.ndarray, dask.array, and other duck arrays
+        return da.reduce(func, dim=reduce_dims)
 
 
 def clear_contingency_cache():

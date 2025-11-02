@@ -5,6 +5,7 @@ import logging
 import pathlib
 from typing import TYPE_CHECKING, Optional, Union
 
+import dask.array as da
 import joblib
 import pandas as pd
 import sparse
@@ -441,7 +442,15 @@ def _evaluate_metric_and_return_df(
     # If data is sparse, densify it
     if isinstance(metric_result.data, sparse.COO):
         metric_result.data = metric_result.data.maybe_densify()
+    elif isinstance(metric_result.data, da.Array) and isinstance(
+        metric_result.data._meta, sparse.COO
+    ):
+        # Dask array with sparse.COO chunks - densify chunks
+        metric_result.data = metric_result.data.map_blocks(
+            lambda x: x.maybe_densify(), dtype=metric_result.data.dtype
+        )
     # Convert to DataFrame and add metadata, ensuring OUTPUT_COLUMNS compliance
+
     df = metric_result.to_dataframe(name="value").reset_index()
     # TODO: add functionality for custom metadata columns
     metadata = _extract_standard_metadata(target_variable, metric, case_operator)
