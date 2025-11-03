@@ -1,20 +1,11 @@
-"""Tropical cyclone track creation from a gridded dataset with tropical cyclone track
-data proximity filtering.
+"""Tropical cyclone track detection from gridded datasets.
 
-The function flow is as follows:
+Main functions:
+- generate_forecast_tctracks: Create TC tracks from forecast data
+- process_all_init_times: Process multiple initialization times
 
-1. generate_forecast_tctracks
-2. process_all_init_times
-3. _process_entire_dataset
-4. _convert_detections_to_dataset
-5. compute_landfall_metric
-6. _compute_first_landfall_metric
-7. _compute_next_landfall_metric
-8. _compute_all_landfalls_metric
-9. _compute_displacement_metric
-10. _compute_timing_metric
-11. _compute_intensity_metric
-
+Landfall detection and metrics have been moved to calc.py and metrics.py
+for generalization and reusability.
 """
 
 import hashlib
@@ -27,9 +18,6 @@ import numpy as np
 import pandas as pd
 import scipy.spatial as spatial
 import xarray as xr
-from cartopy.io.shapereader import Reader, natural_earth
-from shapely.geometry import LineString, Point, Polygon
-from shapely.ops import unary_union
 from skimage import measure
 from skimage.feature import peak_local_max
 
@@ -50,87 +38,94 @@ def generate_forecast_tctracks(
     min_track_length: int = 10,
     exclude_post_landfall_init_times: bool = True,
 ) -> xr.Dataset:
-    """Create storm tracks from a gridded dataset with tropical cyclone track data
-    proximity filtering.
+    """Create storm tracks from gridded Dataset with TC track data filtering.
 
-    For forecast data, this function only considers TC candidates that are within
-    min_distance great circle degrees of tropical cyclone track data points and within
-    max_temporal_hours of the valid_time.
+    High-level function that wraps process_all_init_times with Dataset inputs
+    for convenience and backward compatibility.
 
     Args:
-        gridded_dataset: The gridded dataset.
-        tc_track_data: The tropical cyclone track dataset with valid_time, latitude,
-            longitude.
-        slp_contour_magnitude: The SLP contour magnitude.
-        dz_contour_magnitude: The DZ contour magnitude.
-        min_distance: The minimum distance between TCs.
-        max_spatial_distance_degrees: Maximum great circle distance from
-            tc_track_data points.
-        max_temporal_hours: Maximum time difference from tropical cyclone track data
-            valid_time.
-        use_contour_validation: Whether to use contour validation.
-        min_track_length: Minimum number of points required for a track to be
-            included in results (default: 10).
-        exclude_post_landfall_init_times: Whether to exclude init_times that occur
-            after all tropical cyclone track data landfall events (default: True).
+        gridded_dataset: Dataset with air_pressure_at_mean_sea_level,
+                        surface_wind_speed, optional geopotential_thickness
+        tc_track_data: TC track Dataset with latitude, longitude, valid_time
+        slp_contour_magnitude: SLP contour magnitude
+        dz_contour_magnitude: DZ contour magnitude
+        min_distance: Minimum distance between TCs
+        max_spatial_distance_degrees: Max distance from TC track data points
+        max_temporal_hours: Max time difference from TC track data
+        use_contour_validation: Whether to use contour validation
+        min_track_length: Minimum points required for a track
+        exclude_post_landfall_init_times: Exclude init_times after landfalls
 
     Returns:
-        An xarray Dataset with detected storm tracks.
+        Dataset with detected storm tracks
     """
-    # Filter out init_times that occur after all tropical cyclone track data landfalls
+    # Filter out init_times after all TC track data landfalls
     if exclude_post_landfall_init_times:
-        n_init_times = (
-            len(gridded_dataset.init_time)
-            if "init_time" in gridded_dataset.coords
-            else "N/A"
-        )
-        logger.debug("Filtering post-landfall (before: %s)", n_init_times)
-        filtered_dataset = _filter_post_landfall_init_times(
-            gridded_dataset, tc_track_data
-        )
+        # Extract appropriate DataArray for landfall detection
+        if "surface_wind_speed" in tc_track_data:
+            track_array = tc_track_data["surface_wind_speed"]
+        else:
+            track_array = xr.full_like(tc_track_data["latitude"], 1.0)
 
-        # If no valid init_times remain, return empty dataset
-        if filtered_dataset is None:
-            logger.debug("All init_times filtered (post-landfall)")
-            return _create_empty_tracks_dataset()
+        # Ensure latitude/longitude are coordinates (not data variables)
+        if "latitude" in tc_track_data.data_vars:
+            track_array = track_array.assign_coords(
+                latitude=tc_track_data["latitude"],
+                longitude=tc_track_data["longitude"],
+            )
 
-        # Check if dataset has init_time after filtering
-        if (
-            "init_time" in filtered_dataset.coords
-            and len(filtered_dataset.init_time) == 0
-        ):
-            logger.debug("All init_times filtered (post-landfall)")
-            return _create_empty_tracks_dataset()
+        tc_track_data_landfalls = calc.find_landfalls(track_array, return_all=True)
 
-        n_remain = len(filtered_dataset.init_time)
-        logger.debug("After post-landfall filter: %s", n_remain)
-        # Update the cyclone dataset to be filtered_dataset
-        gridded_dataset = filtered_dataset
+        if tc_track_data_landfalls is not None:
+            # Get latest landfall time
+            landfall_times = tc_track_data_landfalls.coords["valid_time"].values
+            latest_landfall = np.max(landfall_times)
+            logger.debug("Latest TC track data landfall time: %s", latest_landfall)
 
-    # Convert tropical cyclone track data to pandas for easier temporal filtering and
-    # generate TC tracks using process_all_init_times
+            # Convert to init_time if needed
+            if "init_time" not in gridded_dataset.coords:
+                gridded_dataset = utils.convert_valid_time_to_init_time(gridded_dataset)
+
+            # Filter to only include init_times before the latest landfall
+            valid_init_times = gridded_dataset.init_time < latest_landfall
+
+            if not valid_init_times.any():
+                logger.warning(
+                    "No init_times before latest landfall (%s)", latest_landfall
+                )
+                return _create_empty_tracks_dataset()
+
+            gridded_dataset = gridded_dataset.where(valid_init_times, drop=True)
+            logger.debug(
+                "After post-landfall filter: %s init_times",
+                len(gridded_dataset.init_time),
+            )
+        else:
+            logger.debug("No TC track data landfalls found, keeping all init_times")
+
+    # Convert TC track data to DataFrame
     tc_track_data_df = tc_track_data.to_dataframe().reset_index()
     tc_track_data_df["valid_time"] = pd.to_datetime(tc_track_data_df["valid_time"])
     logger.info("Generating TC tracks")
 
-    # Debug statements to check the dimensions of the gridded dataset
-    has_init_time = "init_time" in gridded_dataset.coords
-    if has_init_time:
-        n_init = len(gridded_dataset.init_time)
-        has_lead = "lead_time" in gridded_dataset.dims
-        n_lead = len(gridded_dataset.lead_time) if has_lead else "N/A"
-        has_valid = "valid_time" in gridded_dataset.dims
-        n_valid = len(gridded_dataset.valid_time) if has_valid else "N/A"
+    # Debug logging
+    if "init_time" in gridded_dataset.coords:
         logger.debug(
             "Dims: %s init_times, %s lead_times, %s valid_times",
-            n_init,
-            n_lead,
-            n_valid,
+            len(gridded_dataset.init_time),
+            len(gridded_dataset.lead_time)
+            if "lead_time" in gridded_dataset.dims
+            else "N/A",
+            len(gridded_dataset.valid_time)
+            if "valid_time" in gridded_dataset.dims
+            else "N/A",
         )
-        if has_lead:
-            lt_start = gridded_dataset.lead_time.values[0]
-            lt_end = gridded_dataset.lead_time.values[-1]
-            logger.debug("Lead time range: %s to %s", lt_start, lt_end)
+        if "lead_time" in gridded_dataset.dims:
+            logger.debug(
+                "Lead time range: %s to %s",
+                gridded_dataset.lead_time.values[0],
+                gridded_dataset.lead_time.values[-1],
+            )
         return process_all_init_times(
             sea_level_pressure=gridded_dataset["air_pressure_at_mean_sea_level"],
             wind_speed=gridded_dataset["surface_wind_speed"],
@@ -144,36 +139,9 @@ def generate_forecast_tctracks(
             use_contour_validation=use_contour_validation,
             min_track_length=min_track_length,
         )
-    # If no init_time dimension, return empty dataset
     else:
-        time_dim = "time"
-        lead_time_dim = "lead_time"
-        time_coord = gridded_dataset.time
-        lead_time_coord = gridded_dataset.lead_time
-        return xr.Dataset(
-            {
-                "air_pressure_at_mean_sea_level": (
-                    [time_dim, lead_time_dim],
-                    np.full((len(time_coord), len(lead_time_coord)), np.nan),
-                ),
-                "latitude": (
-                    [time_dim, lead_time_dim],
-                    np.full((len(time_coord), len(lead_time_coord)), np.nan),
-                ),
-                "longitude": (
-                    [time_dim, lead_time_dim],
-                    np.full((len(time_coord), len(lead_time_coord)), np.nan),
-                ),
-                "surface_wind_speed": (
-                    [time_dim, lead_time_dim],
-                    np.full((len(time_coord), len(lead_time_coord)), np.nan),
-                ),
-            },
-            coords={
-                time_dim: time_coord,
-                lead_time_dim: lead_time_coord,
-            },
-        )
+        # No init_time dimension, return empty
+        return _create_empty_tracks_dataset()
 
 
 def process_all_init_times(
@@ -841,23 +809,25 @@ def find_contours_from_point_specified_field(
 def find_valid_contour_from_point(
     contour: Sequence[tuple[float, float]],
     point: tuple[float, float],
-    ds_mapping: xr.Dataset,
+    latitude: xr.DataArray,
+    longitude: xr.DataArray,
 ) -> float:
     """Find the great circle distance from a point to a contour.
 
     Args:
-        contour: The contour to find the great circle distance to.
-        point: The point to find the great circle distance to.
-        ds_mapping: The xarray dataset to map the point to.
+        contour: The contour to find the great circle distance to
+        point: The point to find the great circle distance to
+        latitude: Latitude DataArray for coordinate mapping
+        longitude: Longitude DataArray for coordinate mapping
 
     Returns:
-        The great circle distance from the point to the contour.
+        Great circle distance from the point to the contour
     """
     furthest_point, _ = find_furthest_contour_from_point(contour, point)
     gc_distance_point_latlon = calc.convert_from_cartesian_to_latlon(
-        furthest_point, ds_mapping
+        furthest_point, latitude, longitude
     )
-    point_latlon = calc.convert_from_cartesian_to_latlon(point, ds_mapping)
+    point_latlon = calc.convert_from_cartesian_to_latlon(point, latitude, longitude)
     gc_distance_contour_distance = calc.calculate_haversine_distance(
         [gc_distance_point_latlon[0], gc_distance_point_latlon[1]],
         [point_latlon[0], point_latlon[1]],
@@ -873,43 +843,38 @@ def find_valid_candidates(
     slp_contours: Sequence[Sequence[tuple[float, float]]],
     dz_contours: Sequence[Sequence[tuple[float, float]]],
     point: tuple[float, float],
-    ds_mapping: xr.Dataset,
+    latitude: xr.DataArray,
+    longitude: xr.DataArray,
     time_counter: int,
+    orography: Optional[xr.DataArray] = None,
     max_gc_distance_slp_contour: float = 5.5,
     max_gc_distance_dz_contour: float = 6.5,
     orography_filter_threshold: float = 150,
 ) -> Optional[Location]:
     """Find valid candidate coordinate for a TC.
 
-    Defaults use the TempestExtremes criteria for TC track detection, where the
-    slp must increase by at least n hPa within 5.5 great circle degrees from
-    the center point, geopotential thickness must increase by at least m meters
-    within 6.5 great circle degrees from the center point, and the terrain must
-    be less than 150m.
-
     Args:
-        slp_contours: List of SLP contours.
-        dz_contours: List of DZ contours.
-        point: The point to find the valid candidate for.
-        ds_mapping: The xarray dataset to map the point to.
-        time_counter: The time counter.
-        max_gc_distance_slp_contour: The maximum great circle distance for the
-            SLP contour.
-        max_gc_distance_dz_contour: The maximum great circle distance for the
-            DZ contour.
-        orography_filter_threshold: The threshold for the orography filter.
+        slp_contours: List of SLP contours
+        dz_contours: List of DZ contours
+        point: Point to find the valid candidate for
+        latitude: Latitude DataArray for coordinate mapping
+        longitude: Longitude DataArray for coordinate mapping
+        time_counter: Time counter
+        orography: Orography DataArray (optional)
+        max_gc_distance_slp_contour: Max great circle distance for SLP contour
+        max_gc_distance_dz_contour: Max great circle distance for DZ contour
+        orography_filter_threshold: Threshold for the orography filter
 
     Returns:
-        The valid candidate coordinate as a dict of timestamp and tuple of
-        latitude and longitude.
+        Valid candidate Location or None
     """
-    latitude = calc.convert_from_cartesian_to_latlon(point, ds_mapping)[0]
-    longitude = calc.convert_from_cartesian_to_latlon(point, ds_mapping)[1]
-    # Check orography filter if orography data is available
-    if "orography" in ds_mapping.data_vars:
+    lat_val = calc.convert_from_cartesian_to_latlon(point, latitude, longitude)[0]
+    lon_val = calc.convert_from_cartesian_to_latlon(point, latitude, longitude)[1]
+
+    # Check orography filter if data is available
+    if orography is not None:
         orography_filter = (
-            ds_mapping["orography"]
-            .sel(latitude=latitude, longitude=longitude, method="nearest")
+            orography.sel(latitude=lat_val, longitude=lon_val, method="nearest")
             .min()
             .values
             < orography_filter_threshold
@@ -917,29 +882,24 @@ def find_valid_candidates(
             else True
         )
     else:
-        # If no orography data, skip the orography filter
         orography_filter = True
-    latitude_filter = abs(latitude) < 50 if time_counter < 10 else True
+
+    latitude_filter = abs(lat_val) < 50 if time_counter < 10 else True
+
     for slp_contour, dz_contour in product(slp_contours, dz_contours):
         if (
-            # Only check closed contours
             all(np.isclose(slp_contour[-1], slp_contour[0]))
             and all(np.isclose(dz_contour[-1], dz_contour[0]))
-            and
-            # Check if point is inside both contour types
-            measure.points_in_poly([[point[0], point[1]]], slp_contour)[0]
+            and measure.points_in_poly([[point[0], point[1]]], slp_contour)[0]
             and measure.points_in_poly([[point[0], point[1]]], dz_contour)[0]
-            and
-            # Check if the contour is within the max great circle distance
-            find_valid_contour_from_point(slp_contour, point, ds_mapping)
+            and find_valid_contour_from_point(slp_contour, point, latitude, longitude)
             < max_gc_distance_slp_contour
-            and find_valid_contour_from_point(dz_contour, point, ds_mapping)
+            and find_valid_contour_from_point(dz_contour, point, latitude, longitude)
             < max_gc_distance_dz_contour
             and orography_filter
             and latitude_filter
         ):
-            valid_candidate = Location(latitude=latitude, longitude=longitude)
-            return valid_candidate
+            return Location(latitude=lat_val, longitude=lon_val)
     return None
 
 
@@ -1118,7 +1078,7 @@ def _find_peaks_for_time_slice(
     if use_contour_validation and dz_slice is not None and len(peaks) > 0:
         validated_peaks = []
 
-        # Create temporary datasets for contour analysis
+        # Create temporary DataArrays for contour analysis
         lat_da = xr.DataArray(lat_coords, dims=["latitude"])
         lon_da = xr.DataArray(lon_coords, dims=["longitude"])
 
@@ -1132,9 +1092,6 @@ def _find_peaks_for_time_slice(
             dims=["latitude", "longitude"],
             coords={"latitude": lat_da, "longitude": lon_da},
         )
-
-        # Create a simple dataset for mapping
-        ds_mapping = xr.Dataset({"latitude": lat_da, "longitude": lon_da})
 
         for peak in peaks:
             # Generate contours for this peak
@@ -1150,8 +1107,10 @@ def _find_peaks_for_time_slice(
                 slp_contours,
                 dz_contours,
                 peak,
-                ds_mapping,
-                0,  # time_counter=0
+                lat_da,
+                lon_da,
+                time_counter=0,
+                orography=None,
                 max_gc_distance_slp_contour=5.5,
                 max_gc_distance_dz_contour=6.5,
             )
@@ -1199,53 +1158,6 @@ def _create_spatial_mask(
     return spatial_mask
 
 
-def _filter_post_landfall_init_times(
-    cyclone_dataset: xr.Dataset, tc_track_data: xr.Dataset
-) -> Optional[xr.Dataset]:
-    """
-    Filter out init_times that occur after all tropical cyclone track data landfall
-    events.
-
-    Args:
-        cyclone_dataset: Forecast dataset with init_time dimension
-        tc_track_data: tropical cyclone track dataset
-
-    Returns:
-        Filtered dataset with only valid init_times, or None if no valid init_times
-    """
-    # Find all tropical cyclone track data landfalls
-    tc_track_data_landfalls = find_all_landfalls(tc_track_data)
-
-    if tc_track_data_landfalls is None:
-        # No tropical cyclone track data landfalls detected, keep all init_times
-        logger.debug("No TC track data landfalls found, keeping all init_times")
-        return cyclone_dataset
-
-    # Get all tropical cyclone track data landfall times
-    landfall_times = tc_track_data_landfalls.valid_time.values
-    latest_landfall = np.max(landfall_times)
-    logger.debug("Latest TC track data landfall time: %s", latest_landfall)
-
-    # Convert cyclone_dataset to have init_time coordinate if it doesn't already
-    if "init_time" not in cyclone_dataset.coords:
-        cyclone_dataset = convert_valid_time_to_init_time(cyclone_dataset)
-
-    init_start = cyclone_dataset.init_time.values[0]
-    init_end = cyclone_dataset.init_time.values[-1]
-    logger.debug("Forecast init_time range: %s to %s", init_start, init_end)
-
-    # Filter to only include init_times before the latest landfall
-    valid_init_times = cyclone_dataset.init_time < latest_landfall
-
-    if not valid_init_times.any():
-        # No valid init_times
-        logger.warning("No init_times before latest landfall (%s)", latest_landfall)
-        return None
-
-    # Return filtered dataset
-    return cyclone_dataset.where(valid_init_times, drop=True)
-
-
 def _create_empty_tracks_dataset() -> xr.Dataset:
     """Create an empty tracks dataset with proper structure."""
     return xr.Dataset(
@@ -1269,887 +1181,43 @@ def _create_empty_tracks_dataset() -> xr.Dataset:
     )
 
 
-def find_landfall(track_dataset: xr.Dataset) -> Optional[xr.Dataset]:
-    """Finds the first point where a tropical cyclone track intersects with land
-    by linearly interpolating between track points using pure xarray operations.
-
-    Based on the original find_landfall function, handles two cases:
-    1. Tropical cyclone track data: single track with valid_time dimension
-    2. Forecast data: tracks with lead_time, valid_time dimensions processed by
-    init_time
-
-    Args:
-        track_dataset: xarray Dataset containing track data with variables:
-                      - latitude, longitude, surface_wind_speed,
-                        air_pressure_at_mean_sea_level
-                      Case 1: (valid_time,) for tropical cyclone track data
-                      Case 2: (lead_time, valid_time) for forecasts
-
-    Returns:
-        xarray Dataset with landfall point data, or None if no landfall found.
-        For forecast data, includes init_time dimension.
-    """
-    # Pre-load coastline data once
-    land = natural_earth(category="physical", name="land", resolution="10m")
-    land_geom = list(Reader(land).geometries())[0]
-
-    # Case 1: tropical cyclone track data with valid_time dimension
-    if "valid_time" in track_dataset.dims and "lead_time" not in track_dataset.dims:
-        return _find_landfall_tc_track_data(track_dataset, land_geom)
-
-    # Case 2: Forecast data with lead_time and valid_time dimensions
-    elif "lead_time" in track_dataset.dims and "valid_time" in track_dataset.dims:
-        return _find_landfall_forecast(track_dataset, land_geom)
-
-    else:
-        raise ValueError(
-            f"Unsupported track dataset structure. Expected either "
-            f"(valid_time,) for tropical cyclone track data or (lead_time, valid_time) "
-            "for forecasts. "
-            f"Got dimensions: {list(track_dataset.dims)}"
-        )
-
-
-def find_next_landfall_for_init_time(
-    forecast_dataset: xr.Dataset, target_landfalls: xr.Dataset
-) -> Optional[xr.Dataset]:
-    """For each init_time in the forecast, find the next upcoming landfall from target
-    data.
-
-    Args:
-        forecast_dataset: Forecast dataset with init_time dimension
-        target_landfalls: Target landfall dataset (from find_all_landfalls)
-
-    Returns:
-        Dataset with next landfall for each init_time, or None if no target landfalls
-    """
-    if target_landfalls is None:
-        return None
-
-    # Convert forecast to have init_time if needed
-    if "init_time" not in forecast_dataset.coords:
-        forecast_dataset = convert_valid_time_to_init_time(forecast_dataset)
-
-    # Get all target landfall times
-    target_times = target_landfalls.valid_time.values
-
-    next_landfalls = []
-    init_times_out = []
-
-    for init_time in forecast_dataset.init_time:
-        init_time_val = init_time.values
-
-        # Find target landfalls that occur after this init_time
-        future_landfall_mask = target_times > init_time_val
-
-        if not future_landfall_mask.any():
-            # No future landfalls for this init_time - skip it
-            continue
-
-        # Get the earliest future landfall (next landfall)
-        future_landfall_indices = np.where(future_landfall_mask)[0]
-        next_landfall_idx = future_landfall_indices[
-            0
-        ]  # First (earliest) future landfall
-
-        # Extract the next landfall data
-        next_landfall = target_landfalls.isel(landfall=next_landfall_idx)
-        next_landfalls.append(next_landfall)
-        init_times_out.append(init_time_val)
-
-    if not next_landfalls:
-        return None
-
-    # Combine into a dataset with init_time dimension
-    combined_data = {}
-    for var in next_landfalls[0].data_vars:
-        values = [landfall[var].values for landfall in next_landfalls]
-        combined_data[var] = (["init_time"], values)
-
-    # Handle coordinates
-    coords = {"init_time": init_times_out}
-    if "valid_time" in next_landfalls[0].coords:
-        valid_times = [landfall.valid_time.values for landfall in next_landfalls]
-        combined_data["valid_time"] = (["init_time"], valid_times)
-
-    return xr.Dataset(combined_data, coords=coords)
-
-
-def find_all_landfalls(track_dataset: xr.Dataset) -> Optional[xr.Dataset]:
-    """Finds ALL points where a tropical cyclone track intersects with land
-    by linearly interpolating between track points using pure xarray operations.
-
-    Args:
-        track_dataset: xarray Dataset containing track data with variables:
-                      - latitude, longitude, surface_wind_speed,
-                        air_pressure_at_mean_sea_level
-                      Case 1: (valid_time,) for tropical cyclone track data
-                      Case 2: (lead_time, valid_time) for forecasts
-
-    Returns:
-        xarray Dataset with ALL landfall point data, or None if no landfall found.
-        For forecast data, includes init_time dimension.
-        Dataset has a "landfall" dimension for multiple landfall points.
-    """
-    # Handle None input
-    if track_dataset is None:
-        return None
-
-    # Pre-load coastline data with buffer for better detection
-
-    # Use 110m resolution (faster) but add buffer for better coastal detection
-    land = natural_earth(category="physical", name="land", resolution="110m")
-    land_geoms = list(Reader(land).geometries())
-    land_geom = unary_union(land_geoms)
-
-    # Add a small buffer (0.1 degrees ~11km) to catch near-coastal points
-    land_geom = land_geom.buffer(0.1)
-
-    # Case 1: tropical cyclone track data with valid_time dimension
-    if "valid_time" in track_dataset.dims and "lead_time" not in track_dataset.dims:
-        return _find_all_landfalls_tc_track_data(track_dataset, land_geom)
-
-    # Case 2: Forecast data with lead_time and valid_time dimensions
-    elif "lead_time" in track_dataset.dims and "valid_time" in track_dataset.dims:
-        return _find_all_landfalls_forecast(track_dataset, land_geom)
-
-    else:
-        raise ValueError(
-            f"Unsupported track dataset structure. Expected either "
-            f"(valid_time,) for tropical cyclone track data or (lead_time, valid_time) "
-            "for forecasts. "
-            f"Got dimensions: {list(track_dataset.dims)}"
-        )
-
-
-def _find_landfall_tc_track_data(
-    track_dataset: xr.Dataset, land_geom
-) -> Optional[xr.Dataset]:
-    """Find landfall for tropical cyclone track data (single track with valid_time
-    dimension).
-    """
-    # Filter out NaN values and sort by time
-    valid_mask = (
-        ~np.isnan(track_dataset["latitude"])
-        & ~np.isnan(track_dataset["longitude"])
-        & ~np.isnan(track_dataset["surface_wind_speed"])
-        & ~np.isnan(track_dataset["air_pressure_at_mean_sea_level"])
-    )
-    track_data = track_dataset.where(valid_mask, drop=True).sortby("valid_time")
-
-    # Extract data
-    lats = track_data["latitude"].values
-    lons = track_data["longitude"].values
-    valid_times = track_data["valid_time"].values
-    vmax = track_data["surface_wind_speed"].values
-    slp = track_data["air_pressure_at_mean_sea_level"].values
-
-    if len(lats) < 2:
-        return None
-
-    # Get coastlines from Natural Earth
-    land = natural_earth(category="physical", name="land", resolution="10m")
-    land_geom = list(Reader(land).geometries())[0]
-
-    # Convert to -180 to 180 degree longitude (for now) - from original code
-    lons_180 = (lons + 180) % 360 - 180
-
-    # Check each track segment - from original code
-    landfall_data = []
-
-    for i in range(len(valid_times) - 1):
-        try:
-            # Create line segment between consecutive points
-            segment = LineString(
-                [(lons_180[i], lats[i]), (lons_180[i + 1], lats[i + 1])]
-            )
-
-            # Check if this is a true landfall (ocean to land movement)
-            if _is_true_landfall(
-                lons_180[i], lats[i], lons_180[i + 1], lats[i + 1], land_geom
-            ):
-                intersection = segment.intersection(land_geom)
-                landfall_lon, landfall_lat = intersection.coords[0]
-
-                # Linearly interpolate time based on distance along segment - from
-                # original code
-                full_dist = segment.length
-                landfall_dist = LineString(
-                    [(lons_180[i], lats[i]), (landfall_lon, landfall_lat)]
-                ).length
-                frac = landfall_dist / full_dist
-
-                landfall_time = valid_times[i] + frac * (
-                    valid_times[i + 1] - valid_times[i]
-                )
-                landfall_vmax = vmax[i] + frac * (vmax[i + 1] - vmax[i])
-                landfall_slp = slp[i] + frac * (slp[i + 1] - slp[i])
-
-                # Store landfall data
-                landfall_data.append(
-                    {
-                        "latitude": landfall_lat,
-                        "longitude": utils.convert_longitude_to_360(landfall_lon),
-                        "surface_wind_speed": landfall_vmax,
-                        "air_pressure_at_mean_sea_level": landfall_slp,
-                        "valid_time": landfall_time,
-                    }
-                )
-        except Exception as e:
-            print(f"Error finding landfall: {e}")
-            # Skip this segment if any error occurs
-            continue
-
-    # Convert list of dictionaries to proper xarray Dataset
-    if not landfall_data:
-        return None
-
-    # Always return first landfall point as scalar for metrics compatibility
-    data_point = landfall_data[0]
-    return xr.Dataset(
-        {
-            "latitude": ([], data_point["latitude"]),
-            "longitude": ([], data_point["longitude"]),
-            "surface_wind_speed": ([], data_point["surface_wind_speed"]),
-            "air_pressure_at_mean_sea_level": (
-                [],
-                data_point["air_pressure_at_mean_sea_level"],
-            ),
-        },
-        coords={"valid_time": data_point["valid_time"]},
-    )
-
-
-def _find_all_landfalls_tc_track_data(
-    track_dataset: xr.Dataset, land_geom: Polygon
-) -> Optional[xr.Dataset]:
-    """Find all landfall points for tropical cyclone track data (single track with
-    valid_time dimension).
-    """
-    # Filter out NaN values and sort by time
-    valid_mask = (
-        ~np.isnan(track_dataset["latitude"])
-        & ~np.isnan(track_dataset["longitude"])
-        & ~np.isnan(track_dataset["surface_wind_speed"])
-        & ~np.isnan(track_dataset["air_pressure_at_mean_sea_level"])
-    )
-    track_data = track_dataset.where(valid_mask, drop=True).sortby("valid_time")
-
-    # Extract data
-    lats = track_data["latitude"].values
-    lons = track_data["longitude"].values
-    valid_times = track_data["valid_time"].values
-    vmax = track_data["surface_wind_speed"].values
-    slp = track_data["air_pressure_at_mean_sea_level"].values
-
-    if len(lats) < 2:
-        return None
-
-    # Convert to -180 to 180 degree longitude
-    lons_180 = (lons + 180) % 360 - 180
-
-    # Check each track segment and collect ALL landfall points
-    landfall_data = []
-
-    for i in range(len(valid_times) - 1):
-        try:
-            # Create line segment between consecutive points
-            segment = LineString(
-                [(lons_180[i], lats[i]), (lons_180[i + 1], lats[i + 1])]
-            )
-
-            # Check if this is a true landfall (ocean to land movement)
-            if _is_true_landfall(
-                lons_180[i], lats[i], lons_180[i + 1], lats[i + 1], land_geom
-            ):
-                intersection = segment.intersection(land_geom)
-                landfall_lon, landfall_lat = intersection.coords[0]
-
-                # Linearly interpolate time based on distance along segment
-                full_dist = segment.length
-                landfall_dist = LineString(
-                    [(lons_180[i], lats[i]), (landfall_lon, landfall_lat)]
-                ).length
-                frac = landfall_dist / full_dist
-
-                landfall_time = valid_times[i] + frac * (
-                    valid_times[i + 1] - valid_times[i]
-                )
-                landfall_vmax = vmax[i] + frac * (vmax[i + 1] - vmax[i])
-                landfall_slp = slp[i] + frac * (slp[i + 1] - slp[i])
-
-                # Store landfall data
-                landfall_data.append(
-                    {
-                        "latitude": landfall_lat,
-                        "longitude": utils.convert_longitude_to_360(landfall_lon),
-                        "surface_wind_speed": landfall_vmax,
-                        "air_pressure_at_mean_sea_level": landfall_slp,
-                        "valid_time": landfall_time,
-                    }
-                )
-        except Exception as e:
-            logger.error("Error finding landfall: %s", e)
-            # Skip this segment if any error occurs
-            continue
-
-    # Convert list of dictionaries to proper xarray Dataset
-    if not landfall_data:
-        return None
-
-    # Return ALL landfall points with landfall dimension
-    n_landfalls = len(landfall_data)
-
-    latitudes = np.array([d["latitude"] for d in landfall_data])
-    longitudes = np.array([d["longitude"] for d in landfall_data])
-    wind_speeds = np.array([d["surface_wind_speed"] for d in landfall_data])
-    pressures = np.array([d["air_pressure_at_mean_sea_level"] for d in landfall_data])
-    times = np.array([d["valid_time"] for d in landfall_data])
-
-    return xr.Dataset(
-        {
-            "latitude": (["landfall"], latitudes),
-            "longitude": (["landfall"], longitudes),
-            "surface_wind_speed": (["landfall"], wind_speeds),
-            "air_pressure_at_mean_sea_level": (["landfall"], pressures),
-            "valid_time": (["landfall"], times),
-        },
-        coords={"landfall": np.arange(n_landfalls)},
-    )
-
-
-def _find_landfall_forecast(
-    track_dataset: xr.Dataset, land_geom
-) -> Optional[xr.Dataset]:
-    """Find landfall for forecast data (lead_time, valid_time dimensions).
-    Simple version that processes by unique init_time.
-    """
-    # Squeeze out track dimension if it exists and has size 1
-    if "track" in track_dataset.dims and track_dataset.sizes["track"] == 1:
-        track_dataset = track_dataset.squeeze("track", drop=True)
-
-    landfall_results = []
-    valid_init_times = []
-    track_dataset = convert_valid_time_to_init_time(track_dataset)
-    # Process each lead_time separately (each represents a different init_time)
-    for init_time in track_dataset.init_time:
-        # Extract data for this lead_time
-        single_forecast = track_dataset.sel(init_time=init_time)
-
-        # Convert to numpy arrays
-        lats = single_forecast.latitude.values
-        lons = single_forecast.longitude.values
-        vmax = single_forecast.surface_wind_speed.values
-        slp = single_forecast.air_pressure_at_mean_sea_level.values
-        times = single_forecast.valid_time.values
-
-        # Remove NaN values
-        valid_idx = ~(np.isnan(lats) | np.isnan(lons) | np.isnan(vmax) | np.isnan(slp))
-        if np.sum(valid_idx) < 2:
-            continue  # Skip if insufficient data
-
-        lats = lats[valid_idx]
-        lons = lons[valid_idx]
-        vmax = vmax[valid_idx]
-        slp = slp[valid_idx]
-        times = times[valid_idx]
-
-        # Sort by time
-        sort_idx = np.argsort(times)
-        lats = lats[sort_idx]
-        lons = lons[sort_idx]
-        vmax = vmax[sort_idx]
-        slp = slp[sort_idx]
-        times = times[sort_idx]
-
-        # Find landfall using optimized approach
-        landfall = _find_landfall_optimized(lats, lons, vmax, slp, times, land_geom)
-        if landfall is not None:
-            landfall = landfall.assign_coords(init_time=init_time)
-            landfall_results.append(landfall)
-            # Use the first init_time value (they should all be the same for this
-            # lead_time)
-            valid_init_times.append(
-                init_time.values if hasattr(init_time, "values") else init_time
-            )
-
-    if not landfall_results:
-        return None
-
-    # Concatenate along init_time dimension
-    combined_landfall = xr.concat(landfall_results, dim="init_time")
-    return combined_landfall
-
-
-def _find_all_landfalls_forecast(
-    track_dataset: xr.Dataset, land_geom: Polygon
-) -> Optional[xr.Dataset]:
-    """Find ALL landfall points for forecast data (lead_time, valid_time dimensions).
-    Returns all landfall points for each init_time,
-    with init_time and landfall dimensions.
-    """
-    # Squeeze out track dimension if it exists and has size 1
-    if "track" in track_dataset.dims and track_dataset.sizes["track"] == 1:
-        track_dataset = track_dataset.squeeze("track", drop=True)
-
-    landfall_results = []
-    track_dataset = convert_valid_time_to_init_time(track_dataset)
-
-    # Process each init_time separately
-    for init_time in track_dataset.init_time:
-        # Extract data for this init_time
-        single_forecast = track_dataset.sel(init_time=init_time)
-
-        # Convert to numpy arrays
-        lats = single_forecast.latitude.values
-        lons = single_forecast.longitude.values
-        vmax = single_forecast.surface_wind_speed.values
-        slp = single_forecast.air_pressure_at_mean_sea_level.values
-        times = single_forecast.valid_time.values
-
-        # Remove NaN values
-        valid_idx = ~(np.isnan(lats) | np.isnan(lons) | np.isnan(vmax) | np.isnan(slp))
-        if np.sum(valid_idx) < 2:
-            continue  # Skip if insufficient data
-
-        lats = lats[valid_idx]
-        lons = lons[valid_idx]
-        vmax = vmax[valid_idx]
-        slp = slp[valid_idx]
-        times = times[valid_idx]
-
-        # Sort by time
-        sort_idx = np.argsort(times)
-        lats = lats[sort_idx]
-        lons = lons[sort_idx]
-        vmax = vmax[sort_idx]
-        slp = slp[sort_idx]
-        times = times[sort_idx]
-
-        # Find ALL landfalls for this init_time
-        all_landfalls = _find_all_landfalls_optimized(
-            lats, lons, vmax, slp, times, land_geom
-        )
-        if all_landfalls is not None:
-            all_landfalls = all_landfalls.assign_coords(init_time=init_time)
-            landfall_results.append(all_landfalls)
-
-    if not landfall_results:
-        return None
-
-    # Concatenate along init_time dimension
-    combined_landfall = xr.concat(landfall_results, dim="init_time")
-    return combined_landfall
-
-
-def _is_true_landfall(
-    lon1: float, lat1: float, lon2: float, lat2: float, land_geom: Polygon
-):
-    """Clean landfall detection following exact requirements:
-    1. Ocean -> Land = LANDFALL
-    2. Ocean -> Ocean (with land between) = LANDFALL
-    3. Land -> Ocean = NOT LANDFALL
-    4. Ocean -> Ocean (no land between) = NOT LANDFALL
-
-    Args:
-        lon1, lat1: Starting point coordinates
-        lon2, lat2: Ending point coordinates
-        land_geom: Land geometry for intersection testing
-
-    Returns:
-        bool: True if this represents a landfall, False otherwise
-    """
-    try:
-        # Create points
-        start_point = Point(lon1, lat1)
-        end_point = Point(lon2, lat2)
-
-        # Check if points are over land or ocean
-        start_over_land = land_geom.contains(start_point)
-        end_over_land = land_geom.contains(end_point)
-
-        # Case 1: Ocean -> Land = LANDFALL
-        if not start_over_land and end_over_land:
-            return True
-
-        # Case 2: Ocean -> Ocean, check if land is between
-        if not start_over_land and not end_over_land:
-            segment = LineString([(lon1, lat1), (lon2, lat2)])
-            if segment.intersects(land_geom):
-                return True
-
-        # Case 3: Land -> Ocean = NOT LANDFALL
-        # Case 4: Ocean -> Ocean (no intersection) = NOT LANDFALL
-        return False
-
-    except Exception:
-        return False
-
-    # ORIGINAL LOGIC (DISABLED FOR NOW):
-    # try:
-    #     # Create points for start and end positions
-    #     start_point = Point(lon1, lat1)
-    #     end_point = Point(lon2, lat2)
-
-    #     # Check if start point is over ocean and end point is over land
-    #     start_over_ocean = not land_geom.contains(start_point)
-    #     end_over_land = land_geom.contains(end_point)
-
-    #     # Case 1: Ocean to Land - clear landfall
-    #     if start_over_ocean and end_over_land:
-    #         return True
-
-    #     # Case 2: Ocean to Ocean - check if track crosses land (e.g., island crossing)
-    #     end_over_ocean = not land_geom.contains(end_point)
-    #     if start_over_ocean and end_over_ocean:
-    #         segment = LineString([(lon1, lat1), (lon2, lat2)])
-    #         if segment.intersects(land_geom):
-    #             # Track crosses land between ocean points - this is a landfall
-    #             return True
-
-    #     # Case 3: Land to Ocean - this is NOT a landfall (it's an exit)
-    #     # Case 4: Land to Land - this is NOT a landfall (already on land)
-    #     return False
-
-    # except Exception:
-    #     # If there are geometry errors, fall back to simple intersection check
-    #     segment = LineString([(lon1, lat1), (lon2, lat2)])
-    #     return segment.intersects(land_geom)
-
-
-def _find_landfall_optimized(
-    lats: np.ndarray,
-    lons: np.ndarray,
-    vmax: np.ndarray,
-    slp: np.ndarray,
-    times: np.ndarray,
-    land_geom: Polygon,
-):
-    """Optimized landfall detection for pre-processed coordinate arrays.
-    Uses simple intersection detection for forecast data.
-    """
-    if len(lats) < 2:
-        return None
-
-    # Convert longitude to -180 to 180 for geometry operations
-    lons_180 = (lons + 180) % 360 - 180
-
-    # Check segments for landfall
-    for i in range(len(lats) - 1):
-        try:
-            # Skip invalid coordinates
-            if (
-                np.isnan(lats[i])
-                or np.isnan(lats[i + 1])
-                or np.isnan(lons_180[i])
-                or np.isnan(lons_180[i + 1])
-                or (lats[i] == lats[i + 1] and lons_180[i] == lons_180[i + 1])
-            ):
-                continue
-
-            # Check if this is a true landfall (ocean to land movement)
-            if _is_true_landfall(
-                lons_180[i], lats[i], lons_180[i + 1], lats[i + 1], land_geom
-            ):
-                # Create line segment and get intersection for true landfall
-                segment = LineString(
-                    [(lons_180[i], lats[i]), (lons_180[i + 1], lats[i + 1])]
-                )
-                intersection = segment.intersection(land_geom)
-
-                # Extract landfall coordinates - use centroid for better interpolation
-                landfall_lon, landfall_lat = None, None
-                try:
-                    if hasattr(intersection, "coords") and len(intersection.coords) > 0:
-                        # For simple point intersections
-                        landfall_lon, landfall_lat = intersection.coords[0]
-                    elif hasattr(intersection, "centroid"):
-                        # Use centroid for complex geometries (better interpolation)
-                        centroid = intersection.centroid
-                        landfall_lon, landfall_lat = centroid.x, centroid.y
-                    elif hasattr(intersection, "geoms") and len(intersection.geoms) > 0:
-                        # Multi-geometry case - use first geometry's centroid
-                        first_geom = list(intersection.geoms)[0]
-                        if hasattr(first_geom, "centroid"):
-                            centroid = first_geom.centroid
-                            landfall_lon, landfall_lat = centroid.x, centroid.y
-                        elif (
-                            hasattr(first_geom, "coords") and len(first_geom.coords) > 0
-                        ):
-                            landfall_lon, landfall_lat = first_geom.coords[0]
-                except Exception:
-                    # Fallback to segment midpoint if geometry extraction fails
-                    landfall_lon = (lons_180[i] + lons_180[i + 1]) / 2
-                    landfall_lat = (lats[i] + lats[i + 1]) / 2
-
-                if (
-                    landfall_lon is None
-                    or np.isnan(landfall_lon)
-                    or np.isnan(landfall_lat)
-                ):
-                    continue
-
-                # Interpolate landfall values
-                full_dist = segment.length
-                landfall_dist = LineString(
-                    [(lons_180[i], lats[i]), (landfall_lon, landfall_lat)]
-                ).length
-                frac = landfall_dist / full_dist if full_dist > 0 else 0
-
-                landfall_time = times[i] + frac * (times[i + 1] - times[i])
-                landfall_vmax = vmax[i] + frac * (vmax[i + 1] - vmax[i])
-                landfall_slp = slp[i] + frac * (slp[i + 1] - slp[i])
-
-                # Return landfall dataset
-                return xr.Dataset(
-                    {
-                        "latitude": ([], landfall_lat),
-                        "longitude": ([], utils.convert_longitude_to_360(landfall_lon)),
-                        "surface_wind_speed": ([], landfall_vmax),
-                        "air_pressure_at_mean_sea_level": ([], landfall_slp),
-                    },
-                    coords={"valid_time": landfall_time},
-                )
-
-        except Exception:
-            continue
-
-    return None
-
-
-def _find_landfall_intersection_point(lon1, lat1, lon2, lat2, land_geom):
-    """Find the FIRST intersection point where a track segment enters land.
-    For ocean->ocean crossings, this returns the entry point, not the exit.
-    """
-
-    try:
-        segment = LineString([(lon1, lat1), (lon2, lat2)])
-        intersection = segment.intersection(land_geom)
-
-        # Collect all intersection points
-        intersection_points = []
-
-        if hasattr(intersection, "coords") and len(intersection.coords) > 0:
-            # Single point intersection
-            intersection_points = list(intersection.coords)
-        elif hasattr(intersection, "geoms") and len(intersection.geoms) > 0:
-            # Multiple geometries - collect all points
-            for geom in intersection.geoms:
-                if hasattr(geom, "coords") and len(geom.coords) > 0:
-                    intersection_points.extend(list(geom.coords))
-
-        if not intersection_points:
-            # No intersection points found, use midpoint
-            return ((lon1 + lon2) / 2, (lat1 + lat2) / 2)
-
-        # Find the intersection point closest to the start of the segment
-        start_point = np.array([lon1, lat1])
-        closest_point = None
-        min_distance = float("inf")
-
-        for point in intersection_points:
-            point_array = np.array(point)
-            distance = np.linalg.norm(point_array - start_point)
-            if distance < min_distance:
-                min_distance = distance
-                closest_point = point
-
-        return (
-            closest_point if closest_point else ((lon1 + lon2) / 2, (lat1 + lat2) / 2)
-        )
-
-    except Exception:
-        # Fallback to segment midpoint
-        return ((lon1 + lon2) / 2, (lat1 + lat2) / 2)
-
-
-def _find_all_landfalls_optimized(lats, lons, vmax, slp, times, land_geom):
-    """Optimized detection for all true landfall points along pre-processed coordinate
-    arrays.
-
-    Only detects ocean to land linestrings.
-    """
-    if len(lats) < 2:
-        return None
-
-    # Convert longitude to -180 to 180 for geometry operations
-    lons_180 = (lons + 180) % 360 - 180
-
-    # Find the first landfall only
-    for i in range(len(lats) - 1):
-        # Skip invalid coordinates
-        if (
-            np.isnan(lats[i])
-            or np.isnan(lats[i + 1])
-            or np.isnan(lons_180[i])
-            or np.isnan(lons_180[i + 1])
-            or (lats[i] == lats[i + 1] and lons_180[i] == lons_180[i + 1])
-        ):
-            continue
-
-        # Check if this segment represents a landfall
-        if _is_true_landfall(
-            lons_180[i], lats[i], lons_180[i + 1], lats[i + 1], land_geom
-        ):
-            # Get the exact intersection point
-            landfall_lon, landfall_lat = _find_landfall_intersection_point(
-                lons_180[i], lats[i], lons_180[i + 1], lats[i + 1], land_geom
-            )
-
-            segment = LineString(
-                [(lons_180[i], lats[i]), (lons_180[i + 1], lats[i + 1])]
-            )
-            full_dist = segment.length
-
-            if full_dist > 0:
-                landfall_dist = LineString(
-                    [(lons_180[i], lats[i]), (landfall_lon, landfall_lat)]
-                ).length
-                frac = landfall_dist / full_dist
-            else:
-                frac = 0.5  # Midpoint if no distance
-
-            # Interpolate time and other values
-            landfall_time = times[i] + frac * (times[i + 1] - times[i])
-            landfall_vmax = vmax[i] + frac * (vmax[i + 1] - vmax[i])
-            landfall_slp = slp[i] + frac * (slp[i + 1] - slp[i])
-
-            # Return the first landfall found
-            return xr.Dataset(
-                {
-                    "latitude": (["landfall"], [landfall_lat]),
-                    "longitude": (
-                        ["landfall"],
-                        [utils.convert_longitude_to_360(landfall_lon)],
-                    ),
-                    "surface_wind_speed": (["landfall"], [landfall_vmax]),
-                    "air_pressure_at_mean_sea_level": (["landfall"], [landfall_slp]),
-                },
-                coords={
-                    "landfall": [0],
-                    "valid_time": (["landfall"], [landfall_time]),
-                },
-            )
-
-    # No landfall found
-    return None
-
-
-def calculate_landfall_time_difference_hours(
-    landfall1: xr.Dataset, landfall2: xr.Dataset
-) -> xr.DataArray:
-    """Calculate the time difference between two landfall points in hours.
-
-    Args:
-        landfall1: First landfall xarray Dataset
-        landfall2: Second landfall xarray Dataset
-
-    Returns:
-        Time difference in hours (landfall1 - landfall2) as xarray DataArray
-        with init_time as the sole dimension
-    """
-    if landfall1 is None or landfall2 is None:
-        return xr.DataArray(np.nan)
-
-    # Get time values from landfall datasets
-    time1 = landfall1.valid_time if "valid_time" in landfall1 else landfall1.time
-    time2 = landfall2.valid_time if "valid_time" in landfall2 else landfall2.time
-
-    # Calculate time difference in hours
-    time_diff = time1 - time2
-    time_diff_hours = time_diff / np.timedelta64(1, "h")
-
-    # Return with init_time as the only dimension
-    if "init_time" in landfall1.dims:
-        # Ensure the values are properly shaped for init_time dimension
-        if time_diff_hours.dims == ():
-            # Scalar case - broadcast to all init_times
-            values = np.full(len(landfall1.init_time), float(time_diff_hours.values))
-        else:
-            # Already has the right dimensions
-            values = time_diff_hours.values
-
-        return xr.DataArray(
-            values,
-            dims=["init_time"],
-            coords={"init_time": landfall1.init_time},
-        )
-    else:
-        # Scalar case - no init_time dimension
-        return time_diff_hours
-
-
-def calculate_landfall_distance_km(
-    landfall1: xr.Dataset, landfall2: xr.Dataset
-) -> xr.DataArray:
-    """Calculate the distance between two landfall points in kilometers.
-    Handles both scalar and multi-dimensional (with init_time) datasets.
-
-    Args:
-        landfall1: First landfall xarray Dataset
-        landfall2: Second landfall xarray Dataset
-
-    Returns:
-        Distance in kilometers as xarray DataArray
-    """
-    if landfall1 is None or landfall2 is None:
-        return xr.DataArray(np.nan)
-
-    # Use xarray operations to handle multi-dimensional case
-    distance_degrees = calc.calculate_haversine_distance(
-        [landfall1.latitude, landfall1.longitude],
-        [landfall2.latitude, landfall2.longitude],
-        units="degrees",
-    )
-
-    # Convert from degrees to kilometers (1 degree ≈ 111 km at equator)
-    distance_km = np.radians(distance_degrees) * 6371
-
-    return distance_km
-
-
-def generate_tc_variables(ds: xr.Dataset) -> xr.Dataset:
+def generate_tc_variables(
+    air_pressure_at_mean_sea_level: xr.DataArray,
+    surface_eastward_wind: Optional[xr.DataArray] = None,
+    surface_northward_wind: Optional[xr.DataArray] = None,
+    surface_wind_speed: Optional[xr.DataArray] = None,
+    geopotential: Optional[xr.DataArray] = None,
+) -> xr.Dataset:
     """Generate the variables needed for the TC track calculation.
 
     Args:
-        ds: The xarray dataset to subset from.
+        air_pressure_at_mean_sea_level: Pressure DataArray
+        surface_eastward_wind: Eastward wind component DataArray (optional)
+        surface_northward_wind: Northward wind component DataArray (optional)
+        surface_wind_speed: Wind speed DataArray (optional, computed if missing)
+        geopotential: Geopotential DataArray (optional)
 
     Returns:
-        The subset variables as an xarray Dataset.
+        Dataset with TC variables
     """
+    output_vars = {"air_pressure_at_mean_sea_level": air_pressure_at_mean_sea_level}
 
-    output_vars = {
-        "air_pressure_at_mean_sea_level": ds["air_pressure_at_mean_sea_level"],
-        "surface_wind_speed": calc.maybe_calculate_wind_speed(ds)["surface_wind_speed"],
-    }
+    # Calculate wind speed if not provided
+    if surface_wind_speed is None:
+        if surface_eastward_wind is not None and surface_northward_wind is not None:
+            surface_wind_speed = np.hypot(surface_eastward_wind, surface_northward_wind)
+        else:
+            raise ValueError(
+                "Must provide either surface_wind_speed or both wind components"
+            )
 
-    # Only add geopotential thickness if the dataset has level data
-    if "level" in ds.dims and "geopotential" in ds.data_vars:
+    output_vars["surface_wind_speed"] = surface_wind_speed
+
+    # Add geopotential thickness if geopotential is provided
+    if geopotential is not None and "level" in geopotential.dims:
+        temp_ds = xr.Dataset({"geopotential": geopotential})
         output_vars["geopotential_thickness"] = calc.generate_geopotential_thickness(
-            ds, top_level_value=300, bottom_level_value=500
+            temp_ds, top_level_value=300, bottom_level_value=500
         )
 
-    output = xr.Dataset(output_vars)
-    return output
-
-
-def convert_valid_time_to_init_time(ds: xr.Dataset) -> xr.Dataset:
-    """Convert the valid_time coordinate to a init_time coordinate.
-
-    Args:
-        ds: The dataset to convert with lead_time and valid_time coordinates.
-
-    Returns:
-        The dataset with a init_time coordinate.
-    """
-    init_time = xr.DataArray(
-        ds.valid_time, coords={"valid_time": ds.valid_time}
-    ) - xr.DataArray(ds.lead_time, coords={"lead_time": ds.lead_time})
-    ds = ds.assign_coords(init_time=init_time)
-    return xr.concat(
-        [
-            ds.sel(lead_time=lead).swap_dims({"valid_time": "init_time"})
-            for lead in ds.lead_time
-        ],
-        "lead_time",
-    )
+    return xr.Dataset(output_vars)

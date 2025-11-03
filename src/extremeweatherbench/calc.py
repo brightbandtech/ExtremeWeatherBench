@@ -1,32 +1,37 @@
-from typing import Literal, Sequence, Union
+import logging
+from typing import Literal, Optional, Sequence, Union
 
 import numpy as np
 import xarray as xr
+from cartopy.io.shapereader import Reader, natural_earth
+from shapely.geometry import LineString, Point
+from shapely.ops import unary_union
+
+from extremeweatherbench import utils
+
+logger = logging.getLogger(__name__)
 
 
 def convert_from_cartesian_to_latlon(
-    input_point: Union[np.ndarray, tuple[float, float]], ds_mapping: xr.Dataset
+    input_point: Union[np.ndarray, tuple[float, float]],
+    latitude: xr.DataArray,
+    longitude: xr.DataArray,
 ) -> tuple[float, float]:
-    """Convert a point from the cartesian coordinate system to the lat/lon coordinate
-    system.
+    """Convert point from cartesian coordinate system to lat/lon.
 
     Args:
-        input_point: The point to convert, represented as a tuple (y, x) in the
-            cartesian coordinate system.
-        ds_mapping: The dataset containing the latitude and longitude
-            coordinates.
+        input_point: Point as tuple (y, x) in cartesian system
+        latitude: Latitude DataArray
+        longitude: Longitude DataArray
 
     Returns:
-        The point in the lat/lon coordinate system, represented as a tuple
-        (latitude, longitude) in degrees.
+        Tuple (latitude, longitude) in degrees
     """
+    lat_idx = int(input_point[0])
+    lon_idx = int(input_point[1])
     return (
-        ds_mapping.isel(
-            latitude=int(input_point[0]), longitude=int(input_point[1])
-        ).latitude.values,
-        ds_mapping.isel(
-            latitude=int(input_point[0]), longitude=int(input_point[1])
-        ).longitude.values,
+        latitude.isel(latitude=lat_idx).values,
+        longitude.isel(longitude=lon_idx).values,
     )
 
 
@@ -240,3 +245,301 @@ def nantrapezoid(
         y = np.asarray(y)
         ret = np.add.reduce(d * (y[tuple(slice1)] + y[tuple(slice2)]) / 2.0, axis)
     return ret
+
+
+def find_landfalls(
+    track_data: xr.DataArray,
+    return_all: bool = False,
+) -> Optional[xr.DataArray]:
+    """Find landfall point(s) where tracked object intersects land.
+
+    Generalized landfall detection for any object (TC, AR, etc).
+    Expects DataArray with latitude, longitude, valid_time as coords.
+
+    Args:
+        track_data: Track DataArray with latitude, longitude,
+            valid_time coords. Data values are interpolated at landfall.
+            Shape: (valid_time,) or (lead_time, valid_time)
+        return_all: If True, return all landfalls; if False, first only
+
+    Returns:
+        DataArray with landfall values and lat/lon/time as coords,
+        or None if no landfall found
+    """
+    # Use 10m resolution with buffer for better coastal detection
+    land = natural_earth(category="physical", name="land", resolution="10m")
+    land_geoms = list(Reader(land).geometries())
+    land_geom = unary_union(land_geoms).buffer(0.1)
+
+    return _find_landfalls(track_data, land_geom, return_all)
+
+
+def find_next_landfall_for_init_time(
+    forecast_dataset: xr.Dataset,
+    target_landfalls: xr.DataArray,
+) -> Optional[xr.DataArray]:
+    """Find next upcoming landfall from target data for each init_time.
+
+    For each forecast initialization time, finds the next landfall
+    event in the target data that occurs after that init_time.
+
+    Args:
+        forecast_dataset: Forecast dataset with init_time dimension
+        target_landfalls: Target landfall DataArray from find_landfalls
+            with return_all=True (has landfall dimension)
+
+    Returns:
+        DataArray with next landfall for each init_time, or None if
+        no future landfalls exist
+    """
+    # Convert forecast to have init_time if needed
+    if "init_time" not in forecast_dataset.coords:
+        forecast_dataset = utils.convert_valid_time_to_init_time(forecast_dataset)
+
+    # Vectorized search for next landfall for each init_time
+    target_times = target_landfalls.coords["valid_time"].values
+    init_times = forecast_dataset.init_time.values
+
+    # Use searchsorted to find next landfall index for each init_time
+    next_indices = np.searchsorted(target_times, init_times, side="right")
+
+    # Filter to only valid indices (where future landfall exists)
+    valid_mask = next_indices < len(target_times)
+
+    if not valid_mask.any():
+        return None
+
+    # Select the next landfalls and corresponding init_times
+    selected_landfalls = target_landfalls.isel(landfall=next_indices[valid_mask])
+    selected_init_times = init_times[valid_mask]
+
+    # Assign init_time coordinate and return
+    return selected_landfalls.assign_coords(
+        init_time=("landfall", selected_init_times)
+    ).swap_dims({"landfall": "init_time"})
+
+
+def _find_landfalls(
+    track_data: xr.DataArray,
+    land_geom,
+    return_all: bool = False,
+) -> Optional[xr.DataArray]:
+    """Core function to find landfalls from track DataArray.
+
+    Args:
+        track_data: Track DataArray with latitude, longitude, valid_time coords
+        land_geom: Land geometry for intersection testing
+        return_all: If True, return all landfalls; if False, first only
+
+    Returns:
+        DataArray with landfall data, or None if no landfalls found
+    """
+    # Squeeze track dimension if needed
+    if "track" in track_data.dims and track_data.sizes["track"] == 1:
+        track_data = track_data.squeeze("track", drop=True)
+
+    # Detect forecast vs single track data
+    is_forecast = "lead_time" in track_data.dims and "valid_time" in track_data.dims
+
+    if is_forecast:
+        # Convert to init_time indexing
+        temp_ds = xr.Dataset({"track_data": track_data})
+        temp_ds = utils.convert_valid_time_to_init_time(temp_ds)
+        results = []
+
+        for init_time in temp_ds.init_time:
+            init_time_val = (
+                init_time.values if hasattr(init_time, "values") else init_time
+            )
+
+            single_track = temp_ds["track_data"].sel(init_time=init_time)
+
+            da = _process_single_track(
+                single_track,
+                land_geom,
+                return_all,
+                init_time=init_time_val,
+            )
+            if da is not None:
+                results.append(da)
+
+        return xr.concat(results, dim="init_time") if results else None
+
+    else:
+        # Process single track data
+        return _process_single_track(track_data, land_geom, return_all)
+
+
+def _process_single_track(
+    track_data: xr.DataArray,
+    land_geom,
+    return_all: bool = False,
+    init_time: Optional[np.datetime64] = None,
+) -> Optional[xr.DataArray]:
+    """Process a single track to find and format landfall data.
+
+    Args:
+        track_data: Track DataArray with latitude, longitude,
+            valid_time coords
+        land_geom: Shapely geometry for land intersection testing
+        return_all: If True, return all landfalls; if False, first only
+        init_time: If provided, add init_time coordinate to output
+
+    Returns:
+        DataArray with landfall values and lat/lon/time as coords,
+        or None if no landfalls
+    """
+    # Extract coordinates
+    lats = track_data.latitude
+    lons = track_data.longitude
+    times = track_data.valid_time
+
+    # Filter NaN values (where track_data itself is valid)
+    valid_mask = ~np.isnan(track_data)
+    track_filtered = track_data.where(valid_mask, drop=True)
+    lats = lats.where(valid_mask, drop=True)
+    lons = lons.where(valid_mask, drop=True)
+    times = times.where(valid_mask, drop=True)
+
+    # Sort by valid_time if it's a dimension
+    if "valid_time" in track_filtered.dims:
+        sort_idx = np.argsort(times.values)
+        track_filtered = track_filtered.isel(valid_time=sort_idx)
+        lats = lats.isel(valid_time=sort_idx)
+        lons = lons.isel(valid_time=sort_idx)
+        times = times.isel(valid_time=sort_idx)
+
+    # Extract values
+    lats_vals = lats.values
+    lons_vals = lons.values
+    times_vals = times.values
+    track_vals = track_filtered.values
+
+    # Need at least 2 points for landfall detection
+    if len(lats_vals) < 2:
+        return None
+
+    # Convert to -180 to 180 longitude
+    lons_180 = (lons_vals + 180) % 360 - 180
+
+    # Find landfalls
+    landfall_data = []
+
+    for i in range(len(times_vals) - 1):
+        try:
+            segment = LineString(
+                [(lons_180[i], lats_vals[i]), (lons_180[i + 1], lats_vals[i + 1])]
+            )
+
+            if _is_true_landfall(
+                lons_180[i], lats_vals[i], lons_180[i + 1], lats_vals[i + 1], land_geom
+            ):
+                intersection = segment.intersection(land_geom)
+                landfall_lon, landfall_lat = intersection.coords[0]
+
+                # Interpolate landfall values
+                full_dist = segment.length
+                landfall_dist = LineString(
+                    [(lons_180[i], lats_vals[i]), (landfall_lon, landfall_lat)]
+                ).length
+                frac = landfall_dist / full_dist
+
+                landfall_point = {
+                    "latitude": landfall_lat,
+                    "longitude": utils.convert_longitude_to_360(landfall_lon),
+                    "valid_time": times_vals[i]
+                    + frac * (times_vals[i + 1] - times_vals[i]),
+                }
+
+                # Interpolate the track data value itself
+                if track_data.name:
+                    landfall_point["value"] = track_vals[i] + frac * (
+                        track_vals[i + 1] - track_vals[i]
+                    )
+                else:
+                    # Use NaN if no named variable
+                    landfall_point["value"] = np.nan
+
+                landfall_data.append(landfall_point)
+
+                # Stop after first landfall if that's all we need
+                if not return_all:
+                    break
+
+        except Exception as e:
+            logger.error("Error finding landfall: %s", e)
+            continue
+
+    # Format output
+    if not landfall_data:
+        return None
+
+    if return_all:
+        # Multiple landfalls with landfall dimension
+        values = [d["value"] for d in landfall_data]
+        coords = {
+            "latitude": (["landfall"], [d["latitude"] for d in landfall_data]),
+            "longitude": (["landfall"], [d["longitude"] for d in landfall_data]),
+            "valid_time": (["landfall"], [d["valid_time"] for d in landfall_data]),
+            "landfall": np.arange(len(landfall_data)),
+        }
+        da = xr.DataArray(
+            values,
+            dims=["landfall"],
+            coords=coords,
+            name=track_data.name if track_data.name else "landfall_value",
+        )
+    else:
+        # Single (first) landfall as scalar
+        d = landfall_data[0]
+        coords = {
+            "latitude": d["latitude"],
+            "longitude": d["longitude"],
+            "valid_time": d["valid_time"],
+        }
+        da = xr.DataArray(
+            d["value"],
+            coords=coords,
+            name=track_data.name if track_data.name else "landfall_value",
+        )
+
+    # Add init_time if provided
+    if init_time is not None:
+        da = da.assign_coords(init_time=init_time)
+
+    return da
+
+
+def _is_true_landfall(lon1: float, lat1: float, lon2: float, lat2: float, land_geom):
+    """Detect true landfall (ocean to land movement).
+
+    Args:
+        lon1, lat1: Starting point coordinates
+        lon2, lat2: Ending point coordinates
+        land_geom: Land geometry for intersection testing
+
+    Returns:
+        True if this represents a landfall, False otherwise
+    """
+    try:
+        start_point = Point(lon1, lat1)
+        end_point = Point(lon2, lat2)
+
+        start_over_land = land_geom.contains(start_point)
+        end_over_land = land_geom.contains(end_point)
+
+        # Ocean -> Land = LANDFALL
+        if not start_over_land and end_over_land:
+            return True
+
+        # Ocean -> Ocean, check if land is between
+        if not start_over_land and not end_over_land:
+            segment = LineString([(lon1, lat1), (lon2, lat2)])
+            if segment.intersects(land_geom):
+                return True
+
+        # Land -> Ocean or Ocean -> Ocean (no intersection) = NOT LANDFALL
+        return False
+
+    except Exception:
+        return False

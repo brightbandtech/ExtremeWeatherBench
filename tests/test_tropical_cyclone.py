@@ -299,28 +299,47 @@ class TestTropicalCycloneDetection:
         """Test TC track creation with TC track data filtering."""
         # This is a complex integration test
         with patch(
-            "extremeweatherbench.events.tropical_cyclone._process_entire_dataset"
-        ) as mock_create:
-            # Mock the return value - _process_entire_dataset returns a tuple of arrays
-            mock_create.return_value = (
-                np.array([5]),  # n_detections
-                np.array([0, 1, 2, 0, 1]),  # lt_indices
-                np.array([0, 0, 0, 1, 1]),  # vt_indices
-                np.array([1, 1, 1, 2, 2]),  # track_ids
-                np.array([25.0, 26.0, 27.0, 24.0, 25.0]),  # lats
-                np.array([-75.0, -74.0, -73.0, -76.0, -75.0]),  # lons
-                np.array(
-                    [101000.0, 100800.0, 100600.0, 101200.0, 101000.0]
-                ),  # slp_vals
-                np.array([25.0, 30.0, 35.0, 20.0, 25.0]),  # wind_vals
+            "extremeweatherbench.events.tropical_cyclone.process_all_init_times"
+        ) as mock_process:
+            # Mock the return value - process_all_init_times returns a Dataset
+            mock_process.return_value = xr.Dataset(
+                {
+                    "track_id": (
+                        ["lead_time", "valid_time", "track"],
+                        np.array([[[1, 2]]]),
+                    ),
+                    "latitude": (
+                        ["lead_time", "valid_time", "track"],
+                        np.array([[[25.0, 24.0]]]),
+                    ),
+                    "longitude": (
+                        ["lead_time", "valid_time", "track"],
+                        np.array([[[-75.0, -76.0]]]),
+                    ),
+                    "air_pressure_at_mean_sea_level": (
+                        ["lead_time", "valid_time", "track"],
+                        np.array([[[101000.0, 101200.0]]]),
+                    ),
+                    "surface_wind_speed": (
+                        ["lead_time", "valid_time", "track"],
+                        np.array([[[25.0, 20.0]]]),
+                    ),
+                },
+                coords={
+                    "lead_time": [12],
+                    "valid_time": [pd.Timestamp("2023-09-15")],
+                    "track": [0, 1],
+                },
             )
 
             result = tropical_cyclone.generate_forecast_tctracks(
-                sample_tc_dataset, sample_ibtracs_dataset
+                sample_tc_dataset,
+                sample_ibtracs_dataset,
+                exclude_post_landfall_init_times=False,
             )
 
             assert isinstance(result, xr.Dataset)
-            mock_create.assert_called_once()
+            mock_process.assert_called_once()
 
 
 class TestDistanceCalculations:
@@ -418,186 +437,6 @@ class TestUtilityFunctions:
         assert isinstance(mask, np.ndarray)
         assert mask.shape == (3, 3)  # lat x lon
         assert mask.dtype == bool
-
-    def test_convert_valid_time_to_init_time(self):
-        """Test converting valid_time coordinates to init_time coordinates."""
-        # Create a test dataset with valid_time and lead_time coordinates
-        valid_times = pd.date_range("2023-09-01", periods=3, freq="6h")
-        lead_times = np.array([0, 6], dtype="timedelta64[h]")
-
-        dataset = xr.Dataset(
-            {
-                "temperature": (["valid_time"], [20.0, 21.0, 22.0]),
-            },
-            coords={
-                "valid_time": valid_times,
-                "lead_time": lead_times,
-            },
-        )
-
-        # Convert using the function
-        result = tropical_cyclone.convert_valid_time_to_init_time(dataset)
-
-        # Test that the result has an init_time coordinate
-        assert "init_time" in result.coords
-        assert "lead_time" in result.dims
-
-        # Test that the dimensions are transformed correctly
-        assert "lead_time" in result.dims
-        assert "init_time" in result.dims
-        assert result["temperature"].dims == ("lead_time", "init_time")
-
-        # Test that lead_time dimension is preserved
-        assert len(result.lead_time) == len(lead_times)
-        np.testing.assert_array_equal(result.lead_time.values, lead_times)
-
-        # Test that init_time coordinate is correctly calculated
-        # The function creates init_times by subtracting each lead_time from each valid_time
-        # and then concatenates all unique init_times
-        expected_init_times = set()
-        for valid_time in valid_times:
-            for lead_time in lead_times:
-                init_time = pd.Timestamp(valid_time) - pd.Timedelta(lead_time)
-                expected_init_times.add(init_time)
-
-        expected_init_times = sorted(expected_init_times)
-        actual_init_times = sorted(result.init_time.values)
-
-        # Convert to pandas timestamps for comparison
-        expected_init_times = [pd.Timestamp(t) for t in expected_init_times]
-        actual_init_times = [pd.Timestamp(t) for t in actual_init_times]
-
-        assert len(actual_init_times) == len(expected_init_times)
-        for expected, actual in zip(expected_init_times, actual_init_times):
-            assert expected == actual
-
-        # Test that data structure makes sense
-        # For 0-hour lead time, there should be valid data where init_time matches original valid_time
-        zero_lead_data = result.sel(lead_time=lead_times[0])
-
-        # Check that some data points are not NaN (where init_time aligns with original valid_times)
-        assert not np.all(np.isnan(zero_lead_data["temperature"].values))
-
-        # Test with spatial dimensions
-        spatial_dataset = xr.Dataset(
-            {
-                "pressure": (
-                    ["valid_time", "latitude"],
-                    [[100.0, 101.0], [102.0, 103.0], [104.0, 105.0]],
-                ),
-            },
-            coords={
-                "valid_time": valid_times,
-                "lead_time": lead_times,
-                "latitude": [10.0, 20.0],
-            },
-        )
-
-        spatial_result = tropical_cyclone.convert_valid_time_to_init_time(
-            spatial_dataset
-        )
-
-        # Test that spatial dimensions are preserved
-        assert "latitude" in spatial_result.dims
-        assert spatial_result["pressure"].dims == ("lead_time", "init_time", "latitude")
-        assert len(spatial_result.latitude) == 2
-
-    def test_convert_valid_time_to_init_time_with_complex_data(self):
-        """Test convert_valid_time_to_init_time with more complex forecast-like data."""
-        # Create a more realistic forecast dataset structure
-        valid_times = pd.date_range("2023-09-01", periods=10, freq="3h")
-        lead_times = np.array([0, 6, 12, 18, 24], dtype="timedelta64[h]")
-        lat = np.linspace(20, 30, 10)
-        lon = np.linspace(-80, -70, 10)
-
-        # Create multiple variables
-        data_shape = (len(valid_times), len(lat), len(lon))
-
-        dataset = xr.Dataset(
-            {
-                "air_pressure_at_mean_sea_level": (
-                    ["valid_time", "latitude", "longitude"],
-                    np.random.normal(101325, 1000, data_shape),
-                ),
-                "surface_wind_speed": (
-                    ["valid_time", "latitude", "longitude"],
-                    np.random.uniform(0, 30, data_shape),
-                ),
-            },
-            coords={
-                "valid_time": valid_times,
-                "lead_time": lead_times,
-                "latitude": lat,
-                "longitude": lon,
-            },
-        )
-
-        # Convert using the function
-        result = tropical_cyclone.convert_valid_time_to_init_time(dataset)
-
-        # Test that all variables are preserved
-        expected_vars = [
-            "air_pressure_at_mean_sea_level",
-            "surface_wind_speed",
-        ]
-        for var in expected_vars:
-            assert var in result.data_vars
-
-        # Test dimensions are correctly transformed
-        for var in expected_vars:
-            assert result[var].dims[0] == "lead_time"
-            # The second dimension should be the new init_time dimension
-            # (swapped from valid_time)
-
-        # Test that the init_time coordinate exists and has correct values
-        assert "init_time" in result.coords
-
-        # Test data integrity - dimensions should make sense
-        assert result.sizes["lead_time"] == len(lead_times)
-        assert "init_time" in result.sizes
-
-    def test_convert_valid_time_to_init_time_edge_cases(self):
-        """Test convert_valid_time_to_init_time with edge cases."""
-        # Test with single time point
-        valid_times = pd.date_range("2023-09-01", periods=1)
-        lead_times = np.array([0], dtype="timedelta64[h]")
-
-        dataset = xr.Dataset(
-            {
-                "temperature": (["valid_time"], [20.0]),
-            },
-            coords={
-                "valid_time": valid_times,
-                "lead_time": lead_times,
-            },
-        )
-
-        result = tropical_cyclone.convert_valid_time_to_init_time(dataset)
-
-        assert "init_time" in result.coords
-        assert len(result.lead_time) == 1
-
-        # For zero lead time, init_time should equal valid_time
-        assert result.init_time.values[0] == valid_times.values[0]
-
-        # Test with empty dataset
-        empty_dataset = xr.Dataset(
-            coords={
-                "valid_time": pd.date_range("2023-09-01", periods=0),
-                "lead_time": np.array([], dtype="timedelta64[h]"),
-            }
-        )
-
-        # Should handle empty dataset gracefully
-        try:
-            empty_result = tropical_cyclone.convert_valid_time_to_init_time(
-                empty_dataset
-            )
-            # If it doesn't raise an error, init_time should be present
-            assert "init_time" in empty_result.coords
-        except (ValueError, IndexError):
-            # Some edge cases might raise errors, which is acceptable
-            pass
 
 
 class TestDimensionHandling:
@@ -737,21 +576,40 @@ class TestDimensionHandling:
         # The datetime may be converted to int (nanoseconds) or stay as datetime64/Timestamp
         assert isinstance(track_key[1], (pd.Timestamp, np.datetime64, int, type(None)))
 
-    @patch("extremeweatherbench.events.tropical_cyclone._process_entire_dataset")
+    @patch("extremeweatherbench.events.tropical_cyclone.process_all_init_times")
     def test_apply_ufunc_dimension_compatibility(
         self, mock_process, forecast_dataset_with_init_time
     ):
         """Test that apply_ufunc works with the fixed dimension handling."""
-        # Mock successful processing
-        mock_process.return_value = (
-            np.array([0]),  # n_detections (empty)
-            np.array([]),  # lt_indices
-            np.array([]),  # vt_indices
-            np.array([]),  # track_ids
-            np.array([]),  # lats
-            np.array([]),  # lons
-            np.array([]),  # slp_vals
-            np.array([]),  # wind_vals
+        # Mock successful processing - process_all_init_times returns an empty Dataset
+        mock_process.return_value = xr.Dataset(
+            {
+                "track_id": (
+                    ["lead_time", "valid_time", "track"],
+                    np.array([], dtype=int).reshape(0, 0, 0),
+                ),
+                "latitude": (
+                    ["lead_time", "valid_time", "track"],
+                    np.array([]).reshape(0, 0, 0),
+                ),
+                "longitude": (
+                    ["lead_time", "valid_time", "track"],
+                    np.array([]).reshape(0, 0, 0),
+                ),
+                "air_pressure_at_mean_sea_level": (
+                    ["lead_time", "valid_time", "track"],
+                    np.array([]).reshape(0, 0, 0),
+                ),
+                "surface_wind_speed": (
+                    ["lead_time", "valid_time", "track"],
+                    np.array([]).reshape(0, 0, 0),
+                ),
+            },
+            coords={
+                "lead_time": [],
+                "valid_time": [],
+                "track": [],
+            },
         )
 
         # Create minimal IBTrACS data
@@ -769,6 +627,7 @@ class TestDimensionHandling:
         result = tropical_cyclone.generate_forecast_tctracks(
             forecast_dataset_with_init_time.isel(lead_time=slice(0, 3)),
             ibtracs_data,
+            exclude_post_landfall_init_times=False,
         )
 
         # Verify the function completed successfully
@@ -845,22 +704,43 @@ class TestTCIntegration:
         # This tests the integration without actually running expensive computations
 
         with patch(
-            "extremeweatherbench.events.tropical_cyclone._process_entire_dataset"
+            "extremeweatherbench.events.tropical_cyclone.process_all_init_times"
         ) as mock_process:
-            # Mock the processing function to return some fake detections
-            mock_process.return_value = (
-                np.array([1]),  # n_detections (should match array sizes below)
-                np.array([0]),  # lt_indices
-                np.array([0]),  # vt_indices
-                np.array([1]),  # track_ids
-                np.array([25.0]),  # lats
-                np.array([-75.0]),  # lons
-                np.array([101000.0]),  # slp_vals
-                np.array([25.0]),  # wind_vals
+            # Mock the processing function to return a Dataset with fake detections
+            mock_process.return_value = xr.Dataset(
+                {
+                    "track_id": (
+                        ["lead_time", "valid_time", "track"],
+                        np.array([[[1]]]),
+                    ),
+                    "latitude": (
+                        ["lead_time", "valid_time", "track"],
+                        np.array([[[25.0]]]),
+                    ),
+                    "longitude": (
+                        ["lead_time", "valid_time", "track"],
+                        np.array([[[-75.0]]]),
+                    ),
+                    "air_pressure_at_mean_sea_level": (
+                        ["lead_time", "valid_time", "track"],
+                        np.array([[[101000.0]]]),
+                    ),
+                    "surface_wind_speed": (
+                        ["lead_time", "valid_time", "track"],
+                        np.array([[[25.0]]]),
+                    ),
+                },
+                coords={
+                    "lead_time": [0],
+                    "valid_time": [pd.Timestamp("2023-09-15")],
+                    "track": [0],
+                },
             )
 
             result = tropical_cyclone.generate_forecast_tctracks(
-                sample_tc_dataset, sample_ibtracs_dataset
+                sample_tc_dataset,
+                sample_ibtracs_dataset,
+                exclude_post_landfall_init_times=False,
             )
 
             assert isinstance(result, xr.Dataset)
@@ -874,127 +754,3 @@ class TestTCIntegration:
             ]
             for var in expected_vars:
                 assert var in result.data_vars
-
-
-class TestConsolidatedLandfallFunctionality:
-    """Test the consolidated landfall functionality."""
-
-    @pytest.fixture
-    def multi_landfall_ibtracs_dataset(self):
-        """Create IBTrACS dataset with multiple potential landfall points."""
-        valid_times = pd.date_range("2023-09-01", periods=50, freq="6h")
-
-        # Create a track that could make landfall multiple times
-        lats = []
-        lons = []
-        for i, time in enumerate(valid_times):
-            if i < 20:  # Over ocean
-                lat = 15.0 + i * 0.3  # Moving north
-                lon = -75.0 + i * 0.1  # Moving west
-            elif 20 <= i < 25:  # First potential landfall period
-                lat = 21.0 + (i - 20) * 0.1  # On or near land
-                lon = -73.0 + (i - 20) * 0.1
-            elif 25 <= i < 35:  # Back over ocean
-                lat = 21.5 + (i - 25) * 0.1  # Moving back out
-                lon = -72.5 + (i - 25) * 0.1
-            else:  # Second potential landfall
-                lat = 22.5 + (i - 35) * 0.1  # Second landfall
-                lon = -71.5 + (i - 35) * 0.1
-
-            lats.append(lat)
-            lons.append(lon)
-
-        return xr.Dataset(
-            {
-                "latitude": (["valid_time"], lats),
-                "longitude": (["valid_time"], lons),
-                "surface_wind_speed": (["valid_time"], np.full(50, 35.0)),
-                "air_pressure_at_mean_sea_level": (
-                    ["valid_time"],
-                    np.full(50, 98000.0),
-                ),
-            },
-            coords={"valid_time": valid_times},
-        )
-
-    def test_find_all_landfalls_function_exists(self):
-        """Test that the find_all_landfalls function exists."""
-        assert hasattr(tropical_cyclone, "find_all_landfalls")
-        assert callable(tropical_cyclone.find_all_landfalls)
-
-    def test_consolidated_landfall_metrics_exist(self):
-        """Test that the consolidated landfall metrics exist and can be instantiated."""
-        from extremeweatherbench import metrics
-
-        # Test that consolidated metrics exist
-        assert hasattr(metrics, "LandfallDisplacement")
-        assert hasattr(metrics, "LandfallTimeME")
-        assert hasattr(metrics, "LandfallIntensityMAE")
-
-        # Test that they can be instantiated with different approaches
-        displacement_first = metrics.LandfallDisplacement(approach="first")
-        displacement_next = metrics.LandfallDisplacement(approach="next")
-        displacement_all = metrics.LandfallDisplacement(approach="all")
-
-        assert displacement_first.approach == "first"
-        assert displacement_next.approach == "next"
-        assert displacement_all.approach == "all"
-
-    @pytest.mark.slow
-    def test_consolidated_metrics_with_simple_data(self):
-        """Test consolidated landfall functionality with simple synthetic data."""
-        # Create simple test data that should work without complex geometry
-        target = xr.Dataset(
-            {
-                "latitude": (["valid_time"], [25.0]),
-                "longitude": (["valid_time"], [-80.0]),
-                "surface_wind_speed": (["valid_time"], [40.0]),
-                "air_pressure_at_mean_sea_level": (["valid_time"], [97000.0]),
-            },
-            coords={"valid_time": [pd.Timestamp("2023-09-15")]},
-        )
-
-        forecast = xr.Dataset(
-            {
-                "latitude": (["lead_time", "valid_time"], [[25.1]]),
-                "longitude": (["lead_time", "valid_time"], [[-80.1]]),
-                "surface_wind_speed": (["lead_time", "valid_time"], [[38.0]]),
-                "air_pressure_at_mean_sea_level": (
-                    ["lead_time", "valid_time"],
-                    [[97500.0]],
-                ),
-            },
-            coords={
-                "lead_time": [12],
-                "valid_time": [pd.Timestamp("2023-09-15")],
-            },
-        )
-
-        # Test the consolidated metrics
-        try:
-            from extremeweatherbench.metrics import (
-                LandfallDisplacement,
-                LandfallIntensityMAE,
-                LandfallTimeME,
-            )
-
-            # Test all approaches
-            metrics_to_test = [
-                LandfallDisplacement(approach="first"),
-                LandfallDisplacement(approach="next"),
-                LandfallDisplacement(approach="all"),
-                LandfallTimeME(approach="first"),
-                LandfallIntensityMAE(approach="first"),
-            ]
-
-            for metric in metrics_to_test:
-                result = metric._compute_metric(forecast, target)
-                # Should return an xarray DataArray
-                assert isinstance(result, xr.DataArray)
-
-            print("Consolidated landfall functionality test passed!")
-
-        except Exception as e:
-            # If there are geometry-related errors, that's expected in the test environment
-            print(f"Geometry-related test limitation (acceptable): {e}")
-            assert True
