@@ -38,6 +38,35 @@ class TestAtmosphericRiverMask:
         ivt_laplacian[0, 5:15, 5:15] = 3.0
         ivt_laplacian[1, 8:12, 8:12] = 3.5
 
+        # Create temperature and humidity data for specific humidity
+        air_temp = rng.uniform(250, 300, data_shape_4d)
+        rel_humidity = rng.uniform(0.3, 0.9, data_shape_4d)
+
+        # Compute specific humidity
+        specific_hum = calc.specific_humidity_from_relative_humidity(
+            air_temperature=xr.DataArray(
+                air_temp,
+                dims=["time", "level", "latitude", "longitude"],
+                coords={
+                    "time": time,
+                    "level": level,
+                    "latitude": lat,
+                    "longitude": lon,
+                },
+            ),
+            relative_humidity=xr.DataArray(
+                rel_humidity,
+                dims=["time", "level", "latitude", "longitude"],
+                coords={
+                    "time": time,
+                    "level": level,
+                    "latitude": lat,
+                    "longitude": lon,
+                },
+            ),
+            levels=xr.DataArray(level, dims=["level"], coords={"level": level}),
+        )
+
         dataset = xr.Dataset(
             {
                 "integrated_vapor_transport": (
@@ -58,12 +87,13 @@ class TestAtmosphericRiverMask:
                 ),
                 "air_temperature": (
                     ["time", "level", "latitude", "longitude"],
-                    rng.uniform(250, 300, data_shape_4d),
+                    air_temp,
                 ),
                 "relative_humidity": (
                     ["time", "level", "latitude", "longitude"],
-                    rng.uniform(0.3, 0.9, data_shape_4d),
+                    rel_humidity,
                 ),
+                "specific_humidity": specific_hum,
                 "geopotential_at_surface": (
                     ["time", "latitude", "longitude"],
                     rng.uniform(0, 1000, data_shape_3d),
@@ -74,6 +104,7 @@ class TestAtmosphericRiverMask:
                 "latitude": lat,
                 "longitude": lon,
                 "level": level,
+                "adjusted_level": level,
             },
         )
 
@@ -205,6 +236,35 @@ class TestComputeIVT:
         data_shape_4d = (len(time), len(level), len(lat), len(lon))
         data_shape_3d = (len(time), len(lat), len(lon))
 
+        # Create temperature and humidity data for specific humidity
+        air_temp = rng.uniform(250, 300, data_shape_4d)
+        rel_humidity = rng.uniform(0.3, 0.9, data_shape_4d)
+
+        # Compute specific humidity
+        specific_hum = calc.specific_humidity_from_relative_humidity(
+            air_temperature=xr.DataArray(
+                air_temp,
+                dims=["time", "level", "latitude", "longitude"],
+                coords={
+                    "time": time,
+                    "level": level,
+                    "latitude": lat,
+                    "longitude": lon,
+                },
+            ),
+            relative_humidity=xr.DataArray(
+                rel_humidity,
+                dims=["time", "level", "latitude", "longitude"],
+                coords={
+                    "time": time,
+                    "level": level,
+                    "latitude": lat,
+                    "longitude": lon,
+                },
+            ),
+            levels=xr.DataArray(level, dims=["level"], coords={"level": level}),
+        )
+
         dataset = xr.Dataset(
             {
                 "eastward_wind": (
@@ -217,12 +277,13 @@ class TestComputeIVT:
                 ),
                 "air_temperature": (
                     ["time", "level", "latitude", "longitude"],
-                    rng.uniform(250, 300, data_shape_4d),
+                    air_temp,
                 ),
                 "relative_humidity": (
                     ["time", "level", "latitude", "longitude"],
-                    rng.uniform(0.3, 0.9, data_shape_4d),
+                    rel_humidity,
                 ),
+                "specific_humidity": specific_hum,
                 "geopotential_at_surface": (
                     ["time", "latitude", "longitude"],
                     rng.uniform(0, 1000, data_shape_3d),
@@ -233,16 +294,15 @@ class TestComputeIVT:
                 "latitude": lat,
                 "longitude": lon,
                 "level": level,
+                "adjusted_level": level,
             },
         )
 
-        # Build required atmospheric river variables
-        dataset = atmospheric_river._maybe_build_atmospheric_river_variables(dataset)
         return dataset
 
-    def test_compute_ivt_basic(self, sample_ivt_dataset):
+    def test_integrated_vapor_transport_basic(self, sample_ivt_dataset):
         """Test basic IVT computation."""
-        result = atmospheric_river.compute_ivt(
+        result = atmospheric_river.integrated_vapor_transport(
             specific_humidity=sample_ivt_dataset["specific_humidity"],
             eastward_wind=sample_ivt_dataset["eastward_wind"],
             northward_wind=sample_ivt_dataset["northward_wind"],
@@ -266,8 +326,8 @@ class TestComputeIVT:
         # Some extreme values may exceed 1000 but should be under 3000
         assert (result < 3000).all()
 
-    def test_compute_ivt_nan_handling(self):
-        """Test compute_ivt with NaN values."""
+    def test_integrated_vapor_transport_nan_handling(self):
+        """Test integrated_vapor_transport with NaN values."""
         time = pd.date_range("2023-01-01", periods=1, freq="6h")
         lat = np.linspace(20, 50, 5)
         lon = np.linspace(-130, -100, 5)
@@ -283,6 +343,35 @@ class TestComputeIVT:
         northward_wind = rng.uniform(-20, 20, data_shape_4d)
         northward_wind[0, 2, 2, 2] = np.nan  # Add NaN value
 
+        # Create temperature and humidity data for specific humidity
+        air_temp = rng.uniform(250, 300, data_shape_4d)
+        rel_humidity = rng.uniform(0.3, 0.9, data_shape_4d)
+
+        # Compute specific humidity
+        specific_hum = calc.specific_humidity_from_relative_humidity(
+            air_temperature=xr.DataArray(
+                air_temp,
+                dims=["time", "level", "latitude", "longitude"],
+                coords={
+                    "time": time,
+                    "level": level,
+                    "latitude": lat,
+                    "longitude": lon,
+                },
+            ),
+            relative_humidity=xr.DataArray(
+                rel_humidity,
+                dims=["time", "level", "latitude", "longitude"],
+                coords={
+                    "time": time,
+                    "level": level,
+                    "latitude": lat,
+                    "longitude": lon,
+                },
+            ),
+            levels=xr.DataArray(level, dims=["level"], coords={"level": level}),
+        )
+
         dataset = xr.Dataset(
             {
                 "eastward_wind": (
@@ -295,12 +384,13 @@ class TestComputeIVT:
                 ),
                 "air_temperature": (
                     ["time", "level", "latitude", "longitude"],
-                    rng.uniform(250, 300, data_shape_4d),
+                    air_temp,
                 ),
                 "relative_humidity": (
                     ["time", "level", "latitude", "longitude"],
-                    rng.uniform(0.3, 0.9, data_shape_4d),
+                    rel_humidity,
                 ),
+                "specific_humidity": specific_hum,
                 "geopotential_at_surface": (
                     ["time", "latitude", "longitude"],
                     rng.uniform(0, 1000, data_shape_3d),
@@ -311,10 +401,10 @@ class TestComputeIVT:
                 "latitude": lat,
                 "longitude": lon,
                 "level": level,
+                "adjusted_level": level,
             },
         )
-        dataset = atmospheric_river._maybe_build_atmospheric_river_variables(dataset)
-        result = atmospheric_river.compute_ivt(
+        result = atmospheric_river.integrated_vapor_transport(
             specific_humidity=dataset["specific_humidity"],
             eastward_wind=dataset["eastward_wind"],
             northward_wind=dataset["northward_wind"],
@@ -328,8 +418,8 @@ class TestComputeIVT:
         # Note: nantrapezoid should handle NaNs, but result might still have NaNs
         # depending on the specific implementation
 
-    def test_compute_ivt_missing_variables(self):
-        """Test compute_ivt with missing required variables."""
+    def test_integrated_vapor_transport_missing_variables(self):
+        """Test integrated_vapor_transport with missing required variables."""
         time = pd.date_range("2023-01-01", periods=1, freq="6h")
         lat = np.linspace(20, 50, 5)
         lon = np.linspace(-130, -100, 5)
@@ -351,15 +441,16 @@ class TestComputeIVT:
 
         # Should raise an error when required variables are missing (None values)
         with pytest.raises((TypeError, AttributeError)):
-            atmospheric_river.compute_ivt(
+            atmospheric_river.integrated_vapor_transport(
                 specific_humidity=None,
                 eastward_wind=eastward_wind,
                 northward_wind=eastward_wind,
                 levels=levels,
             )
 
-    def test_compute_ivt_low_pressure_levels(self):
-        """Test compute_ivt with levels below 200 hPa (should be filtered out)."""
+    def test_integrated_vapor_transport_low_pressure_levels(self):
+        """Test integrated_vapor_transport with levels below 200 hPa (should be
+        filtered out)."""
         time = pd.date_range("2023-01-01", periods=1, freq="6h")
         lat = np.linspace(20, 50, 5)
         lon = np.linspace(-130, -100, 5)
@@ -369,6 +460,39 @@ class TestComputeIVT:
         data_shape_4d = (len(time), len(level), len(lat), len(lon))
         data_shape_3d = (len(time), len(lat), len(lon))
 
+        # Create temperature and humidity data for specific humidity
+        air_temp = rng.uniform(250, 300, data_shape_4d)
+        rel_humidity = rng.uniform(0.3, 0.9, data_shape_4d)
+
+        # Compute specific humidity
+        specific_hum = calc.specific_humidity_from_relative_humidity(
+            air_temperature=xr.DataArray(
+                air_temp,
+                dims=["time", "level", "latitude", "longitude"],
+                coords={
+                    "time": time,
+                    "level": level,
+                    "latitude": lat,
+                    "longitude": lon,
+                },
+            ),
+            relative_humidity=xr.DataArray(
+                rel_humidity,
+                dims=["time", "level", "latitude", "longitude"],
+                coords={
+                    "time": time,
+                    "level": level,
+                    "latitude": lat,
+                    "longitude": lon,
+                },
+            ),
+            levels=xr.DataArray(level, dims=["level"], coords={"level": level}),
+        )
+
+        # Filter adjusted_level to >= 200 hPa
+        adjusted_level = [lev for lev in level if lev >= 200]
+
+        # Create full dataset first
         dataset = xr.Dataset(
             {
                 "eastward_wind": (
@@ -381,12 +505,13 @@ class TestComputeIVT:
                 ),
                 "air_temperature": (
                     ["time", "level", "latitude", "longitude"],
-                    rng.uniform(250, 300, data_shape_4d),
+                    air_temp,
                 ),
                 "relative_humidity": (
                     ["time", "level", "latitude", "longitude"],
-                    rng.uniform(0.3, 0.9, data_shape_4d),
+                    rel_humidity,
                 ),
+                "specific_humidity": specific_hum,
                 "geopotential_at_surface": (
                     ["time", "latitude", "longitude"],
                     rng.uniform(0, 1000, data_shape_3d),
@@ -400,14 +525,15 @@ class TestComputeIVT:
             },
         )
 
-        # Build required atmospheric river variables
-        dataset = atmospheric_river._maybe_build_atmospheric_river_variables(dataset)
+        # Select only the adjusted levels
+        dataset_filtered = dataset.sel(level=adjusted_level)
+        dataset_filtered = dataset_filtered.assign_coords(adjusted_level=adjusted_level)
 
-        result = atmospheric_river.compute_ivt(
-            specific_humidity=dataset["specific_humidity"],
-            eastward_wind=dataset["eastward_wind"],
-            northward_wind=dataset["northward_wind"],
-            levels=dataset["adjusted_level"],
+        result = atmospheric_river.integrated_vapor_transport(
+            specific_humidity=dataset_filtered["specific_humidity"],
+            eastward_wind=dataset_filtered["eastward_wind"],
+            northward_wind=dataset_filtered["northward_wind"],
+            levels=dataset_filtered["adjusted_level"],
         )
 
         # Should return a DataArray
@@ -425,9 +551,6 @@ class TestComputeIVT:
 
         # Values should be reasonable for IVT
         assert (result < 3000).all()
-
-        # The computation should work despite having levels below 200 hPa
-        # because _maybe_build_atmospheric_river_variables filters them out
 
 
 class TestComputeIVTLaplacian:
@@ -458,9 +581,11 @@ class TestComputeIVTLaplacian:
 
         return ivt
 
-    def test_compute_ivt_laplacian_basic(self, sample_ivt_dataarray):
+    def test_integrated_vapor_transport_laplacian_basic(self, sample_ivt_dataarray):
         """Test basic IVT Laplacian computation."""
-        result = atmospheric_river.compute_ivt_laplacian(sample_ivt_dataarray)
+        result = atmospheric_river.integrated_vapor_transport_laplacian(
+            sample_ivt_dataarray
+        )
 
         # Should return a DataArray
         assert isinstance(result, xr.DataArray)
@@ -472,17 +597,19 @@ class TestComputeIVTLaplacian:
         assert result.shape == (2, 10, 10)
 
         # Should have correct name
-        assert result.name == "integrated_vapor_transport_laplacian"
+        assert result.name == "integrated_vapor_transport_blurred_laplacian"
 
         # Values should be finite (no NaN or inf)
         assert np.isfinite(result).all()
 
-    def test_compute_ivt_laplacian_custom_sigma(self, sample_ivt_dataarray):
+    def test_integrated_vapor_transport_laplacian_custom_sigma(
+        self, sample_ivt_dataarray
+    ):
         """Test IVT Laplacian with custom sigma parameter."""
-        result_small_sigma = atmospheric_river.compute_ivt_laplacian(
+        result_small_sigma = atmospheric_river.integrated_vapor_transport_laplacian(
             sample_ivt_dataarray, sigma=1.0
         )
-        result_large_sigma = atmospheric_river.compute_ivt_laplacian(
+        result_large_sigma = atmospheric_river.integrated_vapor_transport_laplacian(
             sample_ivt_dataarray, sigma=5.0
         )
 
@@ -493,7 +620,7 @@ class TestComputeIVTLaplacian:
         # Different sigma values should produce different results
         assert not np.allclose(result_small_sigma, result_large_sigma)
 
-    def test_compute_ivt_laplacian_nan_handling(self):
+    def test_integrated_vapor_transport_laplacian_nan_handling(self):
         """Test IVT Laplacian with NaN values."""
         time = pd.date_range("2023-01-01", periods=1, freq="6h")
         lat = np.linspace(20, 50, 5)
@@ -514,7 +641,7 @@ class TestComputeIVTLaplacian:
             name="integrated_vapor_transport",
         )
 
-        result = atmospheric_river.compute_ivt_laplacian(ivt)
+        result = atmospheric_river.integrated_vapor_transport_laplacian(ivt)
 
         # Should return a DataArray
         assert isinstance(result, xr.DataArray)
@@ -617,6 +744,35 @@ class TestBuildMaskAndLandIntersection:
         data_shape_4d = (len(time), len(level), len(lat), len(lon))
         data_shape_3d = (len(time), len(lat), len(lon))
 
+        # Create temperature and humidity data for specific humidity
+        air_temp = rng.uniform(250, 300, data_shape_4d)
+        rel_humidity = rng.uniform(0.3, 0.9, data_shape_4d)
+
+        # Compute specific humidity
+        specific_hum = calc.specific_humidity_from_relative_humidity(
+            air_temperature=xr.DataArray(
+                air_temp,
+                dims=["time", "level", "latitude", "longitude"],
+                coords={
+                    "time": time,
+                    "level": level,
+                    "latitude": lat,
+                    "longitude": lon,
+                },
+            ),
+            relative_humidity=xr.DataArray(
+                rel_humidity,
+                dims=["time", "level", "latitude", "longitude"],
+                coords={
+                    "time": time,
+                    "level": level,
+                    "latitude": lat,
+                    "longitude": lon,
+                },
+            ),
+            levels=xr.DataArray(level, dims=["level"], coords={"level": level}),
+        )
+
         dataset = xr.Dataset(
             {
                 "eastward_wind": (
@@ -629,12 +785,13 @@ class TestBuildMaskAndLandIntersection:
                 ),
                 "air_temperature": (
                     ["time", "level", "latitude", "longitude"],
-                    rng.uniform(250, 300, data_shape_4d),
+                    air_temp,
                 ),
                 "relative_humidity": (
                     ["time", "level", "latitude", "longitude"],
-                    rng.uniform(0.3, 0.9, data_shape_4d),
+                    rel_humidity,
                 ),
+                "specific_humidity": specific_hum,
                 "geopotential_at_surface": (
                     ["time", "latitude", "longitude"],
                     rng.uniform(0, 1000, data_shape_3d),
@@ -645,6 +802,7 @@ class TestBuildMaskAndLandIntersection:
                 "latitude": lat,
                 "longitude": lon,
                 "level": level,
+                "adjusted_level": level,
             },
         )
 
@@ -708,7 +866,7 @@ class TestBuildMaskAndLandIntersection:
         )
 
         # Should raise an error when required variables are missing
-        with pytest.raises(ValueError):
+        with pytest.raises(KeyError):
             atmospheric_river.build_atmospheric_river_mask_and_land_intersection(
                 dataset
             )
@@ -730,6 +888,35 @@ class TestBuildMaskAndLandIntersection:
         northward_wind = rng.uniform(-20, 20, data_shape_4d)
         northward_wind[0, 2, 2, 2] = np.nan
 
+        # Create temperature and humidity data for specific humidity
+        air_temp = rng.uniform(250, 300, data_shape_4d)
+        rel_humidity = rng.uniform(0.3, 0.9, data_shape_4d)
+
+        # Compute specific humidity
+        specific_hum = calc.specific_humidity_from_relative_humidity(
+            air_temperature=xr.DataArray(
+                air_temp,
+                dims=["time", "level", "latitude", "longitude"],
+                coords={
+                    "time": time,
+                    "level": level,
+                    "latitude": lat,
+                    "longitude": lon,
+                },
+            ),
+            relative_humidity=xr.DataArray(
+                rel_humidity,
+                dims=["time", "level", "latitude", "longitude"],
+                coords={
+                    "time": time,
+                    "level": level,
+                    "latitude": lat,
+                    "longitude": lon,
+                },
+            ),
+            levels=xr.DataArray(level, dims=["level"], coords={"level": level}),
+        )
+
         dataset = xr.Dataset(
             {
                 "eastward_wind": (
@@ -742,12 +929,13 @@ class TestBuildMaskAndLandIntersection:
                 ),
                 "air_temperature": (
                     ["time", "level", "latitude", "longitude"],
-                    rng.uniform(250, 300, data_shape_4d),
+                    air_temp,
                 ),
                 "relative_humidity": (
                     ["time", "level", "latitude", "longitude"],
-                    rng.uniform(0.3, 0.9, data_shape_4d),
+                    rel_humidity,
                 ),
+                "specific_humidity": specific_hum,
                 "geopotential_at_surface": (
                     ["time", "latitude", "longitude"],
                     rng.uniform(0, 1000, data_shape_3d),
@@ -758,6 +946,7 @@ class TestBuildMaskAndLandIntersection:
                 "latitude": lat,
                 "longitude": lon,
                 "level": level,
+                "adjusted_level": level,
             },
         )
 

@@ -14,27 +14,27 @@ def atmospheric_river_mask(
     dilation_radius: int = 8,
     min_size_gridpoints: int = 500,
 ) -> xr.DataArray:
-    """Calculate the atmospheric river mask using thresholds for IVT and its Laplacian.
+    """Calculate atmospheric river mask using IVT and Laplacian thresholds.
 
-    The incoming dataset must contain the variables integrated_vapor_transport
-    and integrated_vapor_transport_laplacian. The current implementation uses
-    standard grid spacing of 0.25 degrees (same as ERA5); users must convert their
-    data to this grid spacing before using this function as of v1.0.0.
-
-    Parameter defaults for the mask are based on Newell et al. 1992, Mo 2024,
-    TempestExtremes v2.1 criteria (Ullrich et al. 2021), and visual inspection of
-    ERA5 outputs.
+    The current implementation uses standard grid spacing of 0.25 degrees.
+    Users must convert their data to this grid spacing before using this
+    function, otherwise unexpected results may occur. Parameter defaults
+    are based on Newell et al. 1992, Mo 2024, TempestExtremes v2.1
+    criteria (Ullrich et al. 2021), and visual inspection of ERA5 outputs.
 
     Args:
-        data: the input dataset containing integrated_vapor_transport as a variable and
-        integrated_vapor_transport_laplacian as a variable.
+        ivt: the input DataArray containing integrated_vapor_transport
+        ivt_laplacian: the input DataArray containing
+            integrated_vapor_transport_laplacian
         laplacian_threshold: the threshold for the Laplacian in kg/m^2/s^2
         ivt_threshold: the threshold for the IVT in kg/m/s
-        dilation_radius: the radius for the dilation of the Laplacian in gridpoints
-        min_size_gridpoints: the minimum size of the atmospheric river in gridpoints
+        dilation_radius: the radius for the dilation of the Laplacian in
+            gridpoints
+        min_size_gridpoints: the minimum size of the atmospheric river in
+            gridpoints
 
     Returns:
-        The atmospheric river mask
+        The atmospheric river mask as a DataArray
     """
 
     # Get all coordinates except level for the intersection DataArray
@@ -72,7 +72,7 @@ def atmospheric_river_mask(
     # Create final mask using valid features
     feature_mask = np.isin(labeled_array, valid_features)
 
-    # Final result with size threshold and centroid restriction applied
+    # Final result with size threshold applied
     ar_mask = xr.DataArray(
         xr.where(feature_mask, 1, 0), coords=coords_dict, dims=coords_dict.keys()
     )
@@ -80,19 +80,22 @@ def atmospheric_river_mask(
     return ar_mask
 
 
-def compute_ivt(
+def integrated_vapor_transport(
     specific_humidity: xr.DataArray,
     eastward_wind: xr.DataArray,
     northward_wind: xr.DataArray,
     levels: xr.DataArray,
 ) -> xr.DataArray:
-    """Compute integrated vapor transport from eastward and northward winds.
+    """Compute integrated vapor transport from humidity and winds.
 
     Args:
-        data: dataset containing wind and humidity variables
+        specific_humidity: a DataArray containing specific humidity
+        eastward_wind: a DataArray containing eastward wind (u-component)
+        northward_wind: a DataArray containing northward wind (v-component)
+        levels: a DataArray containing pressure levels
 
     Returns:
-        An integrated vapor transport dataarray
+        Integrated vapor transport as a DataArray
     """
 
     # Get required coordinates excluding level dimension
@@ -134,33 +137,35 @@ def compute_ivt(
     return ivt_magnitude
 
 
-def _compute_laplacian_ufunc(data: xr.DataArray, sigma: float) -> xr.DataArray:
-    """Compute Laplacian using scipy filters.
+def _compute_blurred_laplacian_ufunc(data: xr.DataArray, sigma: float) -> xr.DataArray:
+    """Compute blurred Laplacian using scipy filters.
 
     Args:
-        data: IVT data to compute the Laplacian of; data must be 2D
+        data: IVT data to compute the blurred Laplacian of; data must be 2D
         sigma: the standard deviation for the Gaussian filter
 
     Returns:
-        The Laplacian of IVT
+        The blurred Laplacian of IVT
     """
     laplace_data = filters.laplace(data)
     return ndimage.gaussian_filter(laplace_data, sigma=sigma)
 
 
-def compute_ivt_laplacian(ivt: xr.DataArray, sigma: float = 3) -> xr.DataArray:
-    """Compute the Laplacian of IVT.
+def integrated_vapor_transport_laplacian(
+    ivt: xr.DataArray, sigma: float = 3
+) -> xr.DataArray:
+    """Compute the blurred Laplacian of IVT.
 
     Args:
         ivt: integrated vapor transport DataArray
         sigma: Gaussian filter sigma for smoothing
 
     Returns:
-        The Laplacian of IVT
+        The blurred Laplacian of IVT
     """
     # TODO(189): determine if numba can be used to speed up this computation
     laplacian = xr.apply_ufunc(
-        _compute_laplacian_ufunc,
+        _compute_blurred_laplacian_ufunc,
         ivt,
         sigma,
         input_core_dims=[["latitude", "longitude"], []],
@@ -171,81 +176,30 @@ def compute_ivt_laplacian(ivt: xr.DataArray, sigma: float = 3) -> xr.DataArray:
     )
 
     # Add name to the dataarray
-    laplacian.name = "integrated_vapor_transport_laplacian"
+    laplacian.name = "integrated_vapor_transport_blurred_laplacian"
     return laplacian
-
-
-def _maybe_build_atmospheric_river_variables(data: xr.Dataset) -> xr.Dataset:
-    """Maybe build atmospheric river variables in the dataset if not already available.
-
-    Args:
-        data: dataset containing wind and humidity variables; if the dataset does not
-        contain the variables, they will be calculated and added to the dataset
-
-    Returns:
-        Dataset containing required atmospheric river variables of surface standard
-        pressure, specific humidity, and adjusted broadcasted level.
-    """
-    if "surface_standard_pressure" not in data.data_vars:
-        # Calculate orography from geopotential at the surface if not available
-        if "orography" not in data.variables:
-            orography = calc.orography(data)
-        else:
-            orography = data["orography"]
-        data["surface_standard_pressure"] = calc.pressure_at_surface(orography)
-
-    # Ensure specific humidity is available
-    if "specific_humidity" not in data.data_vars:
-        if "relative_humidity" not in data.data_vars:
-            raise ValueError(
-                "specific_humidity or relative_humidity must be in the dataset"
-            )
-        data["specific_humidity"] = calc.specific_humidity_from_relative_humidity(
-            air_temperature=data["air_temperature"],
-            relative_humidity=data["relative_humidity"],
-            levels=data["level"],
-        )
-
-    # Broadcast level to match all dimensions including valid_time
-    # Only include levels > 200 hPa (levels lower than 200 hPa have negligible
-    # moisture)
-    level_broadcasted = data["level"].broadcast_like(data)
-    data["adjusted_level"] = xr.where(
-        (level_broadcasted * 100 < data["surface_standard_pressure"])
-        & (level_broadcasted > 200),
-        level_broadcasted,
-        np.nan,
-    )
-    return data
 
 
 def build_atmospheric_river_mask_and_land_intersection(data: xr.Dataset) -> xr.Dataset:
     """Calculate atmospheric river mask and land intersection.
 
     Args:
-        data: data with wind and humidity data. Must contain eastward_wind,
+        data: Dataset with atmospheric data. Must contain eastward_wind,
         northward_wind, specific_humidity, and level.
 
     Returns:
         Dataset containing atmospheric river mask and land intersection
     """
-    if "integrated_vapor_transport" not in data.data_vars:
-        # Ensure standard surface pressure is available. Standard surface pressure is
-        # used to remove pressure levels below the surface
-
-        # Build required atmospheric river variables if not already available
-        data = _maybe_build_atmospheric_river_variables(data)
-
-        # First compute IVT
-        ivt_data = compute_ivt(
-            specific_humidity=data["specific_humidity"],
-            eastward_wind=data["eastward_wind"],
-            northward_wind=data["northward_wind"],
-            levels=data["adjusted_level"],
-        )
+    # Generate IVT
+    ivt_data = integrated_vapor_transport(
+        specific_humidity=data["specific_humidity"],
+        eastward_wind=data["eastward_wind"],
+        northward_wind=data["northward_wind"],
+        levels=data["level"],
+    )
 
     # Compute IVT Laplacian
-    ivt_laplacian = compute_ivt_laplacian(ivt=ivt_data, sigma=3)
+    ivt_laplacian = integrated_vapor_transport_laplacian(ivt=ivt_data, sigma=3)
 
     # Compute AR mask with default parameters
     ar_mask_result = atmospheric_river_mask(ivt=ivt_data, ivt_laplacian=ivt_laplacian)
