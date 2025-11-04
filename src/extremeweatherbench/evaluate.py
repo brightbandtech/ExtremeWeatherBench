@@ -2,12 +2,12 @@
 
 import itertools
 import logging
-from pathlib import Path
+import pathlib
 from typing import TYPE_CHECKING, Literal, Optional, Union
 
+import joblib
 import pandas as pd
 import xarray as xr
-from joblib import Parallel, delayed
 from tqdm.auto import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 
@@ -41,7 +41,7 @@ class ExtremeWeatherBench:
         self,
         case_metadata: Union[dict[str, list], "cases.IndividualCaseCollection"],
         evaluation_objects: list["inputs.EvaluationObject"],
-        cache_dir: Optional[Union[str, Path]] = None,
+        cache_dir: Optional[Union[str, pathlib.Path]] = None,
         region_subsetter: Optional["regions.RegionSubsetter"] = None,
     ):
         if isinstance(case_metadata, dict):
@@ -54,7 +54,7 @@ class ExtremeWeatherBench:
                 "IndividualCaseCollection"
             )
         self.evaluation_objects = evaluation_objects
-        self.cache_dir = Path(cache_dir) if cache_dir else None
+        self.cache_dir = pathlib.Path(cache_dir) if cache_dir else None
         self.region_subsetter = region_subsetter
 
     # Case operators as a property are a convenience method for users to use
@@ -112,7 +112,7 @@ class ExtremeWeatherBench:
 def _run_case_operators(
     case_operators: list["cases.CaseOperator"],
     n_jobs: Optional[int] = None,
-    cache_dir: Optional[Path] = None,
+    cache_dir: Optional[pathlib.Path] = None,
     **kwargs,
 ) -> list[pd.DataFrame]:
     """Run the case operators in parallel or serial."""
@@ -125,7 +125,7 @@ def _run_case_operators(
 
 def _run_serial(
     case_operators: list["cases.CaseOperator"],
-    cache_dir: Optional[Path] = None,
+    cache_dir: Optional[pathlib.Path] = None,
     **kwargs,
 ) -> list[pd.DataFrame]:
     """Run the case operators in serial."""
@@ -145,9 +145,9 @@ def _run_parallel(
 
     if n_jobs is None:
         logger.warning("No number of jobs provided, using joblib backend default.")
-    run_results = Parallel(n_jobs=n_jobs)(
+    run_results = joblib.Parallel(n_jobs=n_jobs)(
         # None is the cache_dir, we can't cache in parallel mode
-        delayed(compute_case_operator)(case_operator, None, **kwargs)
+        joblib.delayed(compute_case_operator)(case_operator, None, **kwargs)
         for case_operator in tqdm(case_operators)
     )
     return run_results
@@ -155,7 +155,7 @@ def _run_parallel(
 
 def compute_case_operator(
     case_operator: "cases.CaseOperator",
-    cache_dir: Optional[Path] = None,
+    cache_dir: Optional[pathlib.Path] = None,
     **kwargs,
 ) -> pd.DataFrame:
     """Compute the results of a case operator.
@@ -230,7 +230,9 @@ def compute_case_operator(
         # Cache the results of each metric if caching
         cache_dir = kwargs.get("cache_dir", None)
         if cache_dir:
-            cache_path = Path(cache_dir) if isinstance(cache_dir, str) else cache_dir
+            cache_path = (
+                pathlib.Path(cache_dir) if isinstance(cache_dir, str) else cache_dir
+            )
             concatenated = utils._safe_concat(results, ignore_index=True)
             if not concatenated.empty:
                 concatenated.to_pickle(cache_path / "results.pkl")
@@ -240,7 +242,7 @@ def compute_case_operator(
 
 def _extract_standard_metadata(
     target_variable: Union[str, "derived.DerivedVariable"],
-    metric: Union["metrics.BaseMetric", "metrics.AppliedMetric"],
+    metric: "metrics.BaseMetric",
     case_operator: "cases.CaseOperator",
 ) -> dict:
     """Extract standard metadata for output dataframe.
@@ -311,7 +313,7 @@ def _evaluate_metric_and_return_df(
     target_ds: xr.Dataset,
     forecast_variable: Union[str, "derived.DerivedVariable"],
     target_variable: Union[str, "derived.DerivedVariable"],
-    metric: Union[type["metrics.BaseMetric"], type["metrics.AppliedMetric"]],
+    metric: "metrics.BaseMetric",
     case_operator: "cases.CaseOperator",
     **kwargs,
 ) -> pd.DataFrame:
@@ -329,10 +331,10 @@ def _evaluate_metric_and_return_df(
     Returns:
         A dataframe of the results of the metric evaluation.
     """
-    metric_instance = metric()
-    logger.info("Computing metric %s", metric_instance.name)
 
-    metric_result = metric_instance.compute_metric(
+    logger.info("Computing metric %s", metric.name)
+
+    metric_result = metric.compute_metric(
         forecast_ds[forecast_variable],
         target_ds[target_variable],
         **kwargs,
@@ -341,9 +343,7 @@ def _evaluate_metric_and_return_df(
     # Convert to DataFrame and add metadata, ensuring OUTPUT_COLUMNS compliance
     df = metric_result.to_dataframe(name="value").reset_index()
     # TODO: add functionality for custom metadata columns
-    metadata = _extract_standard_metadata(
-        target_variable, metric_instance, case_operator
-    )
+    metadata = _extract_standard_metadata(target_variable, metric, case_operator)
     return _ensure_output_schema(df, **metadata)
 
 
@@ -382,7 +382,7 @@ def _build_datasets(
 
 
 def _compute_and_maybe_cache(
-    *datasets: xr.Dataset, cache_dir: Optional[Union[str, Path]]
+    *datasets: xr.Dataset, cache_dir: Optional[Union[str, pathlib.Path]]
 ) -> list[xr.Dataset]:
     """Compute and cache the datasets if caching."""
     logger.info("Computing datasets...")

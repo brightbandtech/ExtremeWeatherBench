@@ -1,6 +1,6 @@
+import abc
 import dataclasses
 import logging
-from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, Callable, Optional, TypeAlias, Union
 
 import numpy as np
@@ -129,7 +129,7 @@ def _default_preprocess(input_data: IncomingDataInput) -> IncomingDataInput:
 
 
 @dataclasses.dataclass
-class InputBase(ABC):
+class InputBase(abc.ABC):
     """An abstract base dataclass for target and forecast data.
 
     Attributes:
@@ -164,7 +164,7 @@ class InputBase(ABC):
         """
         self.name = name
 
-    @abstractmethod
+    @abc.abstractmethod
     def _open_data_from_source(self) -> IncomingDataInput:
         """Open the target data from the source, opting to avoid loading the entire
         dataset into memory if possible.
@@ -173,7 +173,7 @@ class InputBase(ABC):
             The target data with a type determined by the user.
         """
 
-    @abstractmethod
+    @abc.abstractmethod
     def subset_data_to_case(
         self,
         data: IncomingDataInput,
@@ -323,7 +323,7 @@ class ForecastBase(InputBase):
         # use the list of required variables from the derived variables in the
         # eval to add to the list of variables
         expected_and_maybe_derived_variables = (
-            derived.maybe_pull_required_variables_from_derived_input(
+            derived.maybe_pull_variables_from_derived_input(
                 list(case_operator.forecast.variables)
             )
         )
@@ -368,8 +368,7 @@ class EvaluationObject:
     metric_list: list[
         Union[
             Callable[..., Any],
-            type["metrics.BaseMetric"],
-            type["metrics.AppliedMetric"],
+            "metrics.BaseMetric",
         ]
     ]
     target: "TargetBase"
@@ -998,7 +997,7 @@ def zarr_target_subsetter(
         target_and_maybe_derived_variables = []
     else:
         target_and_maybe_derived_variables = (
-            derived.maybe_pull_required_variables_from_derived_input(
+            derived.maybe_pull_variables_from_derived_input(
                 list(case_operator.target.variables)
             )
         )

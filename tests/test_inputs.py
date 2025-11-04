@@ -1,6 +1,6 @@
 """Comprehensive tests for extremeweatherbench.inputs module."""
 
-from unittest.mock import Mock, patch
+from unittest import mock
 
 import numpy as np
 import pandas as pd
@@ -359,9 +359,7 @@ class TestMaybeMapVariableNames:
         assert isinstance(result, xr.DataArray)
         assert result.name == "temp"
 
-    @patch(
-        "extremeweatherbench.derived.maybe_pull_required_variables_from_derived_input"
-    )
+    @mock.patch("extremeweatherbench.derived.maybe_pull_variables_from_derived_input")
     def test_maybe_map_variable_names_polars_lazyframe(
         self, mock_derived, test_input_base, sample_ghcn_dataframe
     ):
@@ -386,9 +384,7 @@ class TestMaybeMapVariableNames:
         assert "surface_air_temperature" not in schema.names()
         assert "latitude" in schema.names()
 
-    @patch(
-        "extremeweatherbench.derived.maybe_pull_required_variables_from_derived_input"
-    )
+    @mock.patch("extremeweatherbench.derived.maybe_pull_variables_from_derived_input")
     def test_maybe_map_variable_names_pandas_dataframe(
         self, mock_derived, test_input_base, sample_lsr_dataframe
     ):
@@ -489,9 +485,7 @@ class TestMaybeMapVariableNames:
         # Should return data unchanged when variable mapping is empty
         xr.testing.assert_identical(result, sample_era5_dataset)
 
-    @patch(
-        "extremeweatherbench.derived.maybe_pull_required_variables_from_derived_input"
-    )
+    @mock.patch("extremeweatherbench.derived.maybe_pull_variables_from_derived_input")
     def test_maybe_map_variable_names_with_derived_variables(
         self, mock_derived, test_input_base, sample_era5_dataset
     ):
@@ -542,13 +536,11 @@ class TestForecastBase:
         )
 
         with pytest.raises(ValueError, match="Expected xarray Dataset"):
-            forecast.subset_data_to_case("invalid_data", Mock())
+            forecast.subset_data_to_case("invalid_data", mock.Mock())
 
-    @patch("extremeweatherbench.utils.derive_indices_from_init_time_and_lead_time")
-    @patch("extremeweatherbench.utils.convert_init_time_to_valid_time")
-    @patch(
-        "extremeweatherbench.derived.maybe_pull_required_variables_from_derived_input"
-    )
+    @mock.patch("extremeweatherbench.utils.derive_indices_from_init_time_and_lead_time")
+    @mock.patch("extremeweatherbench.utils.convert_init_time_to_valid_time")
+    @mock.patch("extremeweatherbench.derived.maybe_pull_variables_from_derived_input")
     def test_forecast_base_subset_data_to_case(
         self, mock_derived, mock_convert, mock_derive, sample_forecast_dataset
     ):
@@ -559,7 +551,7 @@ class TestForecastBase:
         mock_derived.return_value = ["surface_air_temperature"]
 
         # Create mock case operator
-        mock_case = Mock()
+        mock_case = mock.Mock()
         mock_case.case_metadata.start_date = pd.Timestamp("2021-06-20")
         mock_case.case_metadata.end_date = pd.Timestamp("2021-06-22")
         mock_case.case_metadata.location.mask.return_value = sample_forecast_dataset
@@ -652,9 +644,9 @@ class TestEvaluationObject:
 
     def test_evaluation_object_creation(self):
         """Test creating an EvaluationObject."""
-        mock_metric = Mock()
-        mock_target = Mock()
-        mock_forecast = Mock()
+        mock_metric = mock.Mock()
+        mock_target = mock.Mock()
+        mock_forecast = mock.Mock()
 
         eval_obj = inputs.EvaluationObject(
             event_type="test_event",
@@ -672,7 +664,7 @@ class TestEvaluationObject:
 class TestZarrForecast:
     """Test the ZarrForecast class."""
 
-    @patch("xarray.open_zarr")
+    @mock.patch("xarray.open_zarr")
     def test_zarr_forecast_open_data_from_source(
         self, mock_open_zarr, sample_forecast_dataset
     ):
@@ -716,7 +708,7 @@ class TestZarrForecast:
 class TestKerchunkForecast:
     """Test the KerchunkForecast class."""
 
-    @patch("extremeweatherbench.inputs.open_kerchunk_reference")
+    @mock.patch("extremeweatherbench.inputs.open_kerchunk_reference")
     def test_kerchunk_forecast_open_data_from_source(
         self, mock_open_kerchunk, sample_forecast_dataset
     ):
@@ -744,7 +736,7 @@ class TestKerchunkForecast:
 class TestERA5:
     """Test the ERA5 target class."""
 
-    @patch("xarray.open_zarr")
+    @mock.patch("xarray.open_zarr")
     def test_era5_open_data_from_source(self, mock_open_zarr, sample_era5_dataset):
         """Test opening ERA5 data from source."""
         mock_open_zarr.return_value = sample_era5_dataset
@@ -767,11 +759,11 @@ class TestERA5:
         )
         xr.testing.assert_identical(result, sample_era5_dataset)
 
-    @patch("extremeweatherbench.inputs.zarr_target_subsetter")
+    @mock.patch("extremeweatherbench.inputs.zarr_target_subsetter")
     def test_era5_subset_data_to_case(self, mock_subsetter, sample_era5_dataset):
         """Test ERA5 subset_data_to_case."""
         mock_subsetter.return_value = sample_era5_dataset
-        mock_case = Mock()
+        mock_case = mock.Mock()
 
         era5 = inputs.ERA5(
             name="test",
@@ -919,7 +911,7 @@ class TestERA5:
 class TestGHCN:
     """Test the GHCN target class."""
 
-    @patch("polars.scan_parquet")
+    @mock.patch("polars.scan_parquet")
     def test_ghcn_open_data_from_source(self, mock_scan_parquet, sample_ghcn_dataframe):
         """Test opening GHCN data from source."""
         mock_scan_parquet.return_value = sample_ghcn_dataframe.lazy()
@@ -939,7 +931,7 @@ class TestGHCN:
     def test_ghcn_subset_data_to_case(self, sample_ghcn_dataframe):
         """Test GHCN subset_data_to_case."""
         # Create mock case operator
-        mock_case = Mock()
+        mock_case = mock.Mock()
         mock_case.case_metadata.start_date = pd.Timestamp("2021-06-20")
         mock_case.case_metadata.end_date = pd.Timestamp("2021-06-22")
         mock_case.case_metadata.location.as_geopandas().total_bounds = [
@@ -971,7 +963,7 @@ class TestGHCN:
         )
 
         with pytest.raises(ValueError, match="Expected polars LazyFrame"):
-            ghcn.subset_data_to_case("invalid_data", Mock())
+            ghcn.subset_data_to_case("invalid_data", mock.Mock())
 
     def test_ghcn_subset_data_to_case_sorted_valid_time(self, sample_ghcn_dataframe):
         """Test that subset_data_to_case returns sorted valid_time column."""
@@ -988,7 +980,7 @@ class TestGHCN:
             unsorted_data = sample_ghcn_dataframe.reverse()
 
         # Create mock case operator
-        mock_case = Mock()
+        mock_case = mock.Mock()
         mock_case.case_metadata.start_date = pd.Timestamp("2021-06-20")
         mock_case.case_metadata.end_date = pd.Timestamp("2021-06-22")
         mock_case.case_metadata.location.as_geopandas().total_bounds = [
@@ -1011,9 +1003,9 @@ class TestGHCN:
 
         # Collect the result and verify valid_time is sorted
         collected_result = result.collect()
-        assert collected_result[
-            "valid_time"
-        ].is_sorted(), "valid_time column should be sorted"
+        assert collected_result["valid_time"].is_sorted(), (
+            "valid_time column should be sorted"
+        )
 
     def test_ghcn_custom_convert_to_dataset(self, sample_ghcn_dataframe):
         """Test GHCN custom conversion to dataset."""
@@ -1155,7 +1147,7 @@ class TestGHCN:
             }
         )
 
-        with patch("extremeweatherbench.inputs.logger") as mock_logger:
+        with mock.patch("extremeweatherbench.inputs.logger") as mock_logger:
             result = ghcn._custom_convert_to_dataset(problematic_data.lazy())
 
             # Should return empty Dataset on exception
@@ -1216,7 +1208,7 @@ class TestGHCN:
         assert isinstance(result_with_attrs, xr.Dataset)
         assert result_with_attrs.attrs.get("source") == "GHCN"
 
-    @patch("extremeweatherbench.inputs.align_forecast_to_target")
+    @mock.patch("extremeweatherbench.inputs.align_forecast_to_target")
     def test_ghcn_maybe_align_forecast_to_target(
         self, mock_align, sample_forecast_dataset, sample_era5_dataset
     ):
@@ -1241,7 +1233,7 @@ class TestGHCN:
 class TestLSR:
     """Test the LSR (Local Storm Report) target class."""
 
-    @patch("pandas.read_parquet")
+    @mock.patch("pandas.read_parquet")
     def test_lsr_open_data_from_source(self, mock_read_parquet, sample_lsr_dataframe):
         """Test opening LSR data from source."""
         mock_read_parquet.return_value = sample_lsr_dataframe
@@ -1261,7 +1253,7 @@ class TestLSR:
     def test_lsr_subset_data_to_case(self, sample_lsr_dataframe):
         """Test LSR subset_data_to_case."""
         # Create mock case operator
-        mock_case = Mock()
+        mock_case = mock.Mock()
         mock_case.case_metadata.start_date = pd.Timestamp("2021-06-20")
         mock_case.case_metadata.end_date = pd.Timestamp("2021-06-21")
         # Mock as_geopandas().total_bounds; [min_lon, min_lat, max_lon, max_lat]
@@ -1294,7 +1286,7 @@ class TestLSR:
         )
 
         with pytest.raises(ValueError, match="Expected pandas DataFrame"):
-            lsr.subset_data_to_case("invalid_data", Mock())
+            lsr.subset_data_to_case("invalid_data", mock.Mock())
 
     def test_lsr_custom_convert_to_dataset(self, sample_lsr_dataframe):
         """Test LSR custom conversion to dataset."""
@@ -1321,7 +1313,7 @@ class TestLSR:
         with pytest.raises(ValueError, match="Data is not a pandas DataFrame"):
             lsr._custom_convert_to_dataset("invalid_data")
 
-    @patch("extremeweatherbench.inputs.align_forecast_to_target")
+    @mock.patch("extremeweatherbench.inputs.align_forecast_to_target")
     def test_lsr_maybe_align_forecast_to_target(
         self, mock_align, sample_forecast_dataset, sample_era5_dataset
     ):
@@ -1346,7 +1338,7 @@ class TestLSR:
 class TestPPH:
     """Test the PPH (Practically Perfect Hindcast) target class."""
 
-    @patch("xarray.open_zarr")
+    @mock.patch("xarray.open_zarr")
     def test_pph_open_data_from_source(self, mock_open_zarr, sample_era5_dataset):
         """Test opening PPH data from source."""
         mock_open_zarr.return_value = sample_era5_dataset
@@ -1363,11 +1355,11 @@ class TestPPH:
         mock_open_zarr.assert_called_once_with("test.zarr", storage_options={})
         assert result == sample_era5_dataset
 
-    @patch("extremeweatherbench.inputs.zarr_target_subsetter")
+    @mock.patch("extremeweatherbench.inputs.zarr_target_subsetter")
     def test_pph_subset_data_to_case(self, mock_subsetter, sample_era5_dataset):
         """Test PPH subset_data_to_case."""
         mock_subsetter.return_value = sample_era5_dataset
-        mock_case = Mock()
+        mock_case = mock.Mock()
 
         pph = inputs.PPH(
             source="test.zarr",
@@ -1400,7 +1392,7 @@ class TestPPH:
 class TestIBTrACS:
     """Test the IBTrACS target class."""
 
-    @patch("polars.scan_csv")
+    @mock.patch("polars.scan_csv")
     def test_ibtracs_open_data_from_source(
         self, mock_scan_csv, sample_ibtracs_dataframe
     ):
@@ -1452,7 +1444,7 @@ class TestIBTrACS:
 class TestStandaloneFunctions:
     """Test standalone functions in inputs module."""
 
-    @patch("xarray.open_dataset")
+    @mock.patch("xarray.open_dataset")
     def test_open_kerchunk_reference_parquet(
         self, mock_open_dataset, sample_forecast_dataset
     ):
@@ -1474,7 +1466,7 @@ class TestStandaloneFunctions:
         )
         assert result == sample_forecast_dataset
 
-    @patch("xarray.open_dataset")
+    @mock.patch("xarray.open_dataset")
     def test_open_kerchunk_reference_json(
         self, mock_open_dataset, sample_forecast_dataset
     ):
@@ -1506,15 +1498,13 @@ class TestStandaloneFunctions:
         with pytest.raises(TypeError, match="Unknown kerchunk file type"):
             inputs.open_kerchunk_reference("test.txt")
 
-    @patch(
-        "extremeweatherbench.derived.maybe_pull_required_variables_from_derived_input"
-    )
+    @mock.patch("extremeweatherbench.derived.maybe_pull_variables_from_derived_input")
     def test_zarr_target_subsetter(self, mock_derived, sample_era5_dataset):
         """Test zarr_target_subsetter function."""
         mock_derived.return_value = ["2m_temperature"]
 
         # Create mock case operator
-        mock_case = Mock()
+        mock_case = mock.Mock()
         mock_case.case_metadata.start_date = pd.Timestamp("2021-06-20")
         mock_case.case_metadata.end_date = pd.Timestamp("2021-06-22")
         mock_case.case_metadata.location.mask.return_value = sample_era5_dataset
@@ -1526,16 +1516,14 @@ class TestStandaloneFunctions:
         mock_case.case_metadata.location.mask.assert_called_once()
         assert isinstance(result, xr.Dataset)
 
-    @patch(
-        "extremeweatherbench.derived.maybe_pull_required_variables_from_derived_input"
-    )
+    @mock.patch("extremeweatherbench.derived.maybe_pull_variables_from_derived_input")
     def test_zarr_target_subsetter_missing_variables(
         self, mock_derived, sample_era5_dataset
     ):
         """Test zarr_target_subsetter with missing variables."""
         mock_derived.return_value = ["nonexistent_variable"]
 
-        mock_case = Mock()
+        mock_case = mock.Mock()
         mock_case.case_metadata.start_date = pd.Timestamp("2021-06-20")
         mock_case.case_metadata.end_date = pd.Timestamp("2021-06-22")
         mock_case.target.variables = ["nonexistent_variable"]
@@ -1543,16 +1531,14 @@ class TestStandaloneFunctions:
         with pytest.raises(ValueError, match="Variables .* not found in target data"):
             inputs.zarr_target_subsetter(sample_era5_dataset, mock_case)
 
-    @patch(
-        "extremeweatherbench.derived.maybe_pull_required_variables_from_derived_input"
-    )
+    @mock.patch("extremeweatherbench.derived.maybe_pull_variables_from_derived_input")
     def test_zarr_target_subsetter_no_variables(
         self, mock_derived, sample_era5_dataset
     ):
         """Test zarr_target_subsetter with no variables defined."""
         mock_derived.return_value = None
 
-        mock_case = Mock()
+        mock_case = mock.Mock()
         mock_case.case_metadata.start_date = pd.Timestamp("2021-06-20")
         mock_case.case_metadata.end_date = pd.Timestamp("2021-06-22")
         mock_case.target.variables = None
@@ -1560,9 +1546,7 @@ class TestStandaloneFunctions:
         with pytest.raises(ValueError, match="Variables not defined"):
             inputs.zarr_target_subsetter(sample_era5_dataset, mock_case)
 
-    @patch(
-        "extremeweatherbench.derived.maybe_pull_required_variables_from_derived_input"
-    )
+    @mock.patch("extremeweatherbench.derived.maybe_pull_variables_from_derived_input")
     def test_zarr_target_subsetter_chunks_unchunked_data(
         self, mock_derived, sample_era5_dataset
     ):
@@ -1570,7 +1554,7 @@ class TestStandaloneFunctions:
         mock_derived.return_value = ["2m_temperature"]
 
         # Create mock case operator
-        mock_case = Mock()
+        mock_case = mock.Mock()
         mock_case.case_metadata.start_date = pd.Timestamp("2021-06-20")
         mock_case.case_metadata.end_date = pd.Timestamp("2021-06-22")
         mock_case.target.variables = ["2m_temperature"]
