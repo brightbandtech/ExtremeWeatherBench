@@ -313,8 +313,13 @@ def plot_all_cases_and_obs(ewb_cases, event_type=None, filename=None, bounding_b
                                         alpha=alphas[indiv_event_type], my_zorder=zorders[indiv_event_type], linewidth=0.8)
                 
             # grab the target data for this case
-            my_target_info = [n[1] for n in targets if n[0] == indiv_case.case_id_number and n[1].attrs['source'] != 'ERA5']
-
+            # grab the target data for this case
+            my_target_info = [
+                n.target
+                for n in targets
+                if n.case_metadata.case_id_number == indiv_case.case_id_number
+                and n.target.name != "ERA5"
+            ]
             # make a scatter plot of the target points (for hot/cold/tc events)
             if (indiv_event_type in ['heat_wave', 'freeze', 'tropical_cyclone'] and len(my_target_info) > 0):
                 # Get the data from my_target_info
