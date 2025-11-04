@@ -17,9 +17,35 @@
 # %%
 import logging
 
+import numpy as np
+import xarray as xr
+
 # %%
 # %%
-from extremeweatherbench import cases, derived, evaluate, inputs, metrics
+from extremeweatherbench import calc, cases, derived, evaluate, inputs, metrics
+
+
+def _preprocess_bb_cira_tc_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
+    """An example preprocess function that renames the time coordinate to lead_time,
+    creates a valid_time coordinate, and sets the lead time range and resolution not
+    present in the original dataset.
+
+    Args:
+        ds: The forecast dataset to rename.
+
+    Returns:
+        The renamed forecast dataset.
+    """
+    ds = ds.rename({"time": "lead_time"})
+    # The evaluation configuration is used to set the lead time range and resolution.
+    ds["lead_time"] = np.array(
+        [i for i in range(0, 241, 6)], dtype="timedelta64[h]"
+    ).astype("timedelta64[ns]")
+    ds["geopotential_thickness"] = calc.generate_geopotential_thickness(
+        ds["z"], top_level_value=300, bottom_level_value=500
+    )
+    return ds
+
 
 # %%
 logging.getLogger("urllib3.connectionpool").setLevel(logging.CRITICAL)
@@ -44,9 +70,27 @@ hres_forecast = inputs.ZarrForecast(
     storage_options={"remote_options": {"anon": True}},
 )
 
+fcn_forecast = inputs.KerchunkForecast(
+    name="fcn_forecast",
+    source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
+    variables=[derived.TropicalCycloneTrackVariables],
+    variable_mapping=inputs.CIRA_metadata_variable_mapping,
+    preprocess=_preprocess_bb_cira_tc_forecast_dataset,
+    storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
+)
+
+pangu_forecast = inputs.KerchunkForecast(
+    name="pangu_forecast",
+    source="gs://extremeweatherbench/PANG_v100_GFS.parq",
+    variables=[derived.TropicalCycloneTrackVariables],
+    variable_mapping=inputs.CIRA_metadata_variable_mapping,
+    preprocess=_preprocess_bb_cira_tc_forecast_dataset,
+    storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
+)
 # %%
 # just one for now
 tc_evaluation_object = [
+    # HRES forecast
     inputs.EvaluationObject(
         event_type="tropical_cyclone",
         metric_list=[
@@ -57,6 +101,28 @@ tc_evaluation_object = [
         target=ibtracs_target,
         forecast=hres_forecast,
     ),
+    # Pangu forecast
+    inputs.EvaluationObject(
+        event_type="tropical_cyclone",
+        metric_list=[
+            metrics.LandfallTimeME,
+            metrics.LandfallIntensityMAE,
+            metrics.LandfallDisplacement,
+        ],
+        target=ibtracs_target,
+        forecast=pangu_forecast,
+    ),
+    # FCN forecast
+    inputs.EvaluationObject(
+        event_type="tropical_cyclone",
+        metric_list=[
+            metrics.LandfallTimeME,
+            metrics.LandfallIntensityMAE,
+            metrics.LandfallDisplacement,
+        ],
+        target=ibtracs_target,
+        forecast=fcn_forecast,
+    ),
 ]
 # %%
 test_ewb = evaluate.ExtremeWeatherBench(
@@ -65,6 +131,6 @@ test_ewb = evaluate.ExtremeWeatherBench(
 )
 logger.info("Starting EWB run")
 outputs = test_ewb.run(
-    n_jobs=1,
+    n_jobs=3,
 )
 outputs.to_csv("tc_metric_test_results.csv")
