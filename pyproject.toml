@@ -110,3 +110,6 @@ docstring-code-line-length = "dynamic"
 
 [tool.ruff.lint.isort]
 case-sensitive = true
+
+[tool.uv]
+constraint-dependencies = ["llvm>0.43.0"]
