@@ -1272,6 +1272,7 @@ dependencies = [
     { name = "pandas" },
     { name = "polars" },
     { name = "pyarrow" },
+    { name = "pyogrio" },
     { name = "pyyaml" },
     { name = "regionmask" },
     { name = "s3fs" },
@@ -1337,6 +1338,7 @@ requires-dist = [
     { name = "pandas", specifier = ">=2.2.3" },
     { name = "polars", specifier = ">=1.32.1" },
     { name = "pyarrow", specifier = ">=19.0.1" },
+    { name = "pyogrio", specifier = "==0.10.0" },
     { name = "pyyaml", specifier = ">=6.0.2" },
     { name = "regionmask", specifier = ">=0.13.0" },
     { name = "s3fs", specifier = ">=2024.12.0" },
@@ -3803,33 +3805,33 @@ wheels = [
 
 [[package]]
 name = "pyogrio"
-version = "0.11.1"
+version = "0.10.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "certifi" },
     { name = "numpy" },
     { name = "packaging" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/bf/1d/ae0340237207664e2da1b77f2cdbcb5f81fd0fc9f3200a48ca993a5e12ef/pyogrio-0.11.1.tar.gz", hash = "sha256:e1441dc9c866f10d8e6ae7ea9249a10c1f57ea921b1f19a5b0977ab91ef8082c", size = 287267, upload_time = "2025-08-02T20:19:20.167Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a5/8f/5a784595524a79c269f2b1c880f4fdb152867df700c97005dda51997da02/pyogrio-0.10.0.tar.gz", hash = "sha256:ec051cb568324de878828fae96379b71858933413e185148acb6c162851ab23c", size = 281950, upload_time = "2024-09-28T19:11:20.898Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/d0/81/50441f029609bcb883ee2738bdee3f81a998a11e4052b6ad0ef0ae4c0ae5/pyogrio-0.11.1-cp311-cp311-macosx_12_0_arm64.whl", hash = "sha256:d36162ddc1a309bb941a3cfb550b8f88c862c67ef2f52df6460100e5e958bbc6", size = 19459279, upload_time = "2025-08-02T20:18:18.955Z" },
-    { url = "https://files.pythonhosted.org/packages/0d/4a/a3a2fae13e42ee98574b18591ddb66bca88bc1fa812c017437b42c85569f/pyogrio-0.11.1-cp311-cp311-macosx_12_0_x86_64.whl", hash = "sha256:845c78d5e7c9ec1c7d00250c07e144e5fe504fdb4ccdc141d9413f85b8c55c91", size = 20646364, upload_time = "2025-08-02T20:18:21.171Z" },
-    { url = "https://files.pythonhosted.org/packages/7d/f2/1dd5795f8cccf8f97d5ac7f28fee31fc1afc5f6bce9fab2ac4486ed3af44/pyogrio-0.11.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:50aa869509f189fa1bff4d90d2d4c7860b963e693af85f2957646306e882b631", size = 26999659, upload_time = "2025-08-02T20:18:25.482Z" },
-    { url = "https://files.pythonhosted.org/packages/ea/ef/4f8d61afb6798edde8bd6d2721032e868ff78a25395d9512f7e5e50b23c4/pyogrio-0.11.1-cp311-cp311-manylinux_2_28_aarch64.whl", hash = "sha256:dd0f44dd2d849d32aea3f73647c74083996917e446479645bf93de6656160f2d", size = 26523036, upload_time = "2025-08-02T20:18:28.761Z" },
-    { url = "https://files.pythonhosted.org/packages/e7/99/81d9a441ac7709407750f359813889b9a3f6076999cb9ae8893d5ba7c707/pyogrio-0.11.1-cp311-cp311-manylinux_2_28_x86_64.whl", hash = "sha256:36b910d4037694b2935b5b1c1eb757dcc2906dca05cb2992cbdaf1291b54ff97", size = 27678041, upload_time = "2025-08-02T20:18:31.103Z" },
-    { url = "https://files.pythonhosted.org/packages/74/4e/a5d00c30e5ca3f4133a425fe41531b219139ad4451ea8edc3520f221f9dd/pyogrio-0.11.1-cp311-cp311-win_amd64.whl", hash = "sha256:cb744097f302f19dcc5c93ee5e9cfd707b864c9a418e399f0908406a60003728", size = 19226619, upload_time = "2025-08-02T20:18:34.261Z" },
-    { url = "https://files.pythonhosted.org/packages/72/d3/2ba967ca4255cdfa130a6d8b437826488567b4bc1bb417c442bb43d62611/pyogrio-0.11.1-cp312-cp312-macosx_12_0_arm64.whl", hash = "sha256:f186456ebe5d5f61e7bd883bad25a59d43d6304178d4f0d3e03273f42b40a4cc", size = 19450110, upload_time = "2025-08-02T20:18:36.643Z" },
-    { url = "https://files.pythonhosted.org/packages/5a/e1/3bc29ae71d24a91cf91f7413541e50acb7de2ce609587168ce2f4b405d3b/pyogrio-0.11.1-cp312-cp312-macosx_12_0_x86_64.whl", hash = "sha256:b8a199bc0e421eac444af96942b7553268e43d0cadf30d0d6d41017de05b7e9e", size = 20635348, upload_time = "2025-08-02T20:18:38.714Z" },
-    { url = "https://files.pythonhosted.org/packages/8c/b2/ec453e544370a90b4e8b2c6afa72501963ddc33afe883f0e5ba34af6a80f/pyogrio-0.11.1-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:afce80b4b32f043fcf76a50e8572e3ad8d9d3e6abbbfa6137f0975ba55c4eeb8", size = 26980190, upload_time = "2025-08-02T20:18:41.197Z" },
-    { url = "https://files.pythonhosted.org/packages/b1/f6/337f122b58f697f807bf9093b606b33b3ef52fe06a21e88d8a9230844cc3/pyogrio-0.11.1-cp312-cp312-manylinux_2_28_aarch64.whl", hash = "sha256:0cfd79caf0b8cb7bbf30b419dff7f21509169efcf4d431172c61b44fe1029dba", size = 26474852, upload_time = "2025-08-02T20:18:43.74Z" },
-    { url = "https://files.pythonhosted.org/packages/e6/0f/8193a4a879f1284d693793e59a2e185c8fd3c47cb562b0e5daf7289997ea/pyogrio-0.11.1-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:ab3aa6dbf2441d2407ce052233f2966324a3cff752bd43d99e4c779ea54e0a16", size = 27659721, upload_time = "2025-08-02T20:18:46.398Z" },
-    { url = "https://files.pythonhosted.org/packages/5f/7d/3e818625a435fcc196ea441a6ca8495f87dd1f1eebeb95760eb401ea425d/pyogrio-0.11.1-cp312-cp312-win_amd64.whl", hash = "sha256:cd10035eb3b5e5a43bdafbd777339d2274e9b75972658364f0ce31c4d3400d1e", size = 19219350, upload_time = "2025-08-02T20:18:48.866Z" },
-    { url = "https://files.pythonhosted.org/packages/f2/68/86328e36d010ee565ce0c65cdf9b830afcb1fb5972f537fe1cc561a49247/pyogrio-0.11.1-cp313-cp313-macosx_12_0_arm64.whl", hash = "sha256:3b368c597357ff262f3b46591ded86409462ee594ef42556708b090d121f873c", size = 19445347, upload_time = "2025-08-02T20:18:51.088Z" },
-    { url = "https://files.pythonhosted.org/packages/20/bc/34bd87641fc2ecc6d842d6d758bbaa8d58aea4d36aa6a1111cbc9d450e74/pyogrio-0.11.1-cp313-cp313-macosx_12_0_x86_64.whl", hash = "sha256:1cb82cfd3493f32396e9c3f9255e17885610f62a323870947f4e04dd59bc3595", size = 20630594, upload_time = "2025-08-02T20:18:53.176Z" },
-    { url = "https://files.pythonhosted.org/packages/68/9a/41b72ffa3e21354eb9afbbae855c86b94dbf06b22e89c16a807cc8b22bd2/pyogrio-0.11.1-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:5d61aae22e67030fd354f03e21c6462537bf56160134dd8663709335a5a46b28", size = 26929440, upload_time = "2025-08-02T20:18:55.614Z" },
-    { url = "https://files.pythonhosted.org/packages/42/dd/c968c49a2e9b7c219eac0cc504241c21ef789f1f1b34d33780508cea9764/pyogrio-0.11.1-cp313-cp313-manylinux_2_28_aarch64.whl", hash = "sha256:76150a3cd787c31628191c7abc6f8c796660125852fb65ae15dd7be1e9196816", size = 26433178, upload_time = "2025-08-02T20:18:58.274Z" },
-    { url = "https://files.pythonhosted.org/packages/89/a9/79eca15094f7806a3adcf0bb976ab4346b0fb1bd87956c1933df44546c14/pyogrio-0.11.1-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:e929452f6988c0365dd32ff2485d9488160a709fee28743abbbc18d663169ed0", size = 27616835, upload_time = "2025-08-02T20:19:01.112Z" },
-    { url = "https://files.pythonhosted.org/packages/2b/f3/7722bc81e9eee39b528c1cbc6289a26d2d3b1b187491ed8493457d6a3a0e/pyogrio-0.11.1-cp313-cp313-win_amd64.whl", hash = "sha256:d6d56862b89a05fccd7211171c88806b6ec9b5effb79bf807cce0a57c1f2a606", size = 19219088, upload_time = "2025-08-02T20:19:03.732Z" },
+    { url = "https://files.pythonhosted.org/packages/8d/2c/c761e6adeb81bd4029a137b3240e7214a8c9aaf225883356196afd6ef9d8/pyogrio-0.10.0-cp311-cp311-macosx_12_0_arm64.whl", hash = "sha256:5b1a51431a27a1cb3e4e19558939c1423106e06e7b67d6285f4fba9c2d0a91b9", size = 15083526, upload_time = "2024-09-28T19:10:24.621Z" },
+    { url = "https://files.pythonhosted.org/packages/c3/e5/983aa9ddf2ff784e973d6b2ec3e874065d6655a5329ca26311b0f3b9f92f/pyogrio-0.10.0-cp311-cp311-macosx_12_0_x86_64.whl", hash = "sha256:216d69cd77b2b4a0c9d7d449bc239f8b77f3d73f4a05d9c738a0745b236902d8", size = 16457867, upload_time = "2024-09-28T19:10:28.711Z" },
+    { url = "https://files.pythonhosted.org/packages/fa/9a/7103eee7aa3b6ec88e072ef18a05c3aae1ed96fe00009a7a5ce139b50f30/pyogrio-0.10.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:a2f0b75f0077ce33256aec6278c2a9c3b79bf0637ddf4f93d3ab2609f0501d96", size = 23926332, upload_time = "2024-09-28T19:10:31.692Z" },
+    { url = "https://files.pythonhosted.org/packages/8b/b2/2ca124343aba24b9a5dcd7c1f43da81e652849cfaf3110d3f507a80af0a1/pyogrio-0.10.0-cp311-cp311-manylinux_2_28_aarch64.whl", hash = "sha256:0a47f702d29808c557d2ebea8542c23903f021eae44e16838adef2ab4281c71b", size = 23138693, upload_time = "2024-09-28T20:42:11.989Z" },
+    { url = "https://files.pythonhosted.org/packages/ae/15/501aa4823c142232169d54255ab343f28c4ea9e7fa489b8433dcc873a942/pyogrio-0.10.0-cp311-cp311-manylinux_2_28_x86_64.whl", hash = "sha256:11e6c71d12da6b445e77d0fc0198db1bd35a77e03a0685e45338cbab9ce02add", size = 24062952, upload_time = "2024-09-28T19:10:34.13Z" },
+    { url = "https://files.pythonhosted.org/packages/94/8d/24f21e6a93ca418231aee3bddade7a0766c89c523832f29e08a8860f83e6/pyogrio-0.10.0-cp311-cp311-win_amd64.whl", hash = "sha256:d0d74e91a9c0ff2f9abe01b556ff663977193b2d6922208406172d0fc833beff", size = 16172573, upload_time = "2024-09-28T19:10:37.06Z" },
+    { url = "https://files.pythonhosted.org/packages/b5/b5/3c5dfd0b50cbce6f3d4e42c0484647feb1809dbe20e225c4c6abd067e69f/pyogrio-0.10.0-cp312-cp312-macosx_12_0_arm64.whl", hash = "sha256:2d6558b180e020f71ab7aa7f82d592ed3305c9f698d98f6d0a4637ec7a84c4ce", size = 15079211, upload_time = "2024-09-28T19:10:40.059Z" },
+    { url = "https://files.pythonhosted.org/packages/b8/9a/1ba9c707a094976f343bd0177741eaba0e842fa05ecd8ab97192db4f2ec1/pyogrio-0.10.0-cp312-cp312-macosx_12_0_x86_64.whl", hash = "sha256:a99102037eead8ba491bc57825c1e395ee31c9956d7bff7b4a9e4fdbff3a13c2", size = 16442782, upload_time = "2024-09-28T19:10:42.373Z" },
+    { url = "https://files.pythonhosted.org/packages/5e/bb/b4250746c2c85fea5004cae93e9e25ad01516e9e94e04de780a2e78139da/pyogrio-0.10.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:3a4c373281d7cbf560c5b61f8f3c7442103ad7f1c7ac4ef3a84572ed7a5dd2f6", size = 23899832, upload_time = "2024-09-28T19:10:44.81Z" },
+    { url = "https://files.pythonhosted.org/packages/bd/4c/79e47e40a8e54e79a45133786a0a58209534f580591c933d40c5ed314fe7/pyogrio-0.10.0-cp312-cp312-manylinux_2_28_aarch64.whl", hash = "sha256:19f18411bdf836d24cdc08b9337eb3ec415e4ac4086ba64516b36b73a2e88622", size = 23081469, upload_time = "2024-09-28T20:42:22.049Z" },
+    { url = "https://files.pythonhosted.org/packages/47/78/2b62c8a340bcb0ea56b9ddf2ef5fd3d1f101dc0e98816b9e6da87c5ac3b7/pyogrio-0.10.0-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:1abbcdd9876f30bebf1df8a0273f6cdeb29d03259290008275c7fddebe139f20", size = 24024758, upload_time = "2024-09-28T19:10:47.873Z" },
+    { url = "https://files.pythonhosted.org/packages/43/97/34605480f06b0ad9611bf58a174eccc6f3673275f3d519cf763391892881/pyogrio-0.10.0-cp312-cp312-win_amd64.whl", hash = "sha256:2a3e09839590d71ff832aa95c4f23fa00a2c63c3de82c1fbd4fb8d265792acfc", size = 16160294, upload_time = "2024-09-28T19:10:50.75Z" },
+    { url = "https://files.pythonhosted.org/packages/14/4a/4c8e4f5b9edbca46e0f8d6c1c0b56c0d4af0900c29f4bea22d37853c07f3/pyogrio-0.10.0-cp313-cp313-macosx_12_0_arm64.whl", hash = "sha256:c90478209537a31dcc65664a87a04c094bb0e08efe502908a6682b8cec0259bf", size = 15076879, upload_time = "2024-09-28T19:10:53.812Z" },
+    { url = "https://files.pythonhosted.org/packages/5f/be/7db0644eef9ef3382518399aaf3332827c43018112d2a74f78784fd496ec/pyogrio-0.10.0-cp313-cp313-macosx_12_0_x86_64.whl", hash = "sha256:fec45e1963b7058e5a1aa98598aed07c0858512c833d6aad2c672c3ec98bbf04", size = 16440405, upload_time = "2024-09-28T19:10:56.696Z" },
+    { url = "https://files.pythonhosted.org/packages/96/77/f199230ba86fe88b1f57e71428c169ed982de68a32d6082cd7c12d0f5d55/pyogrio-0.10.0-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:28cb139f8a5d0365ede602230104b407ae52bb6b55173c8d5a35424d28c4a2c5", size = 23871511, upload_time = "2024-09-28T19:10:59.01Z" },
+    { url = "https://files.pythonhosted.org/packages/25/ac/ca483bec408b59c54f7129b0244cc9de21d8461aefe89ece7bd74ad33807/pyogrio-0.10.0-cp313-cp313-manylinux_2_28_aarch64.whl", hash = "sha256:cea0187fcc2d574e52af8cfab041fa0a7ad71d5ef6b94b49a3f3d2a04534a27e", size = 23048830, upload_time = "2024-09-28T20:42:32.174Z" },
+    { url = "https://files.pythonhosted.org/packages/d7/3e/c35f2d8dad95b24e568c468f09ff60fb61945065465e0ec7868400596566/pyogrio-0.10.0-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:7c02b207ea8cf09c501ea3e95d29152781a00d3c32267286bc36fa457c332205", size = 23996873, upload_time = "2024-09-28T19:11:02.01Z" },
+    { url = "https://files.pythonhosted.org/packages/27/5d/0deb16d228362a097ee3258d0a887c9c0add4b9678bb4847b08a241e124d/pyogrio-0.10.0-cp313-cp313-win_amd64.whl", hash = "sha256:02e54bcfb305af75f829044b0045f74de31b77c2d6546f7aaf96822066147848", size = 16158260, upload_time = "2024-09-28T19:11:04.623Z" },
 ]
 
 [[package]]
