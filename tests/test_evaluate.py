@@ -22,6 +22,14 @@ from extremeweatherbench import (
 )
 from extremeweatherbench.events import tropical_cyclone
 
+# Check if dask.distributed is available
+try:
+    import dask.distributed  # noqa: F401
+
+    HAS_DASK_DISTRIBUTED = True
+except ImportError:
+    HAS_DASK_DISTRIBUTED = False
+
 
 @pytest.fixture
 def sample_individual_case():
@@ -845,6 +853,9 @@ class TestRunParallel:
 
                 assert result == []
 
+    @pytest.mark.skipif(
+        not HAS_DASK_DISTRIBUTED, reason="dask.distributed not installed"
+    )
     @mock.patch("dask.distributed.Client")
     @mock.patch("dask.distributed.LocalCluster")
     def test_run_parallel_dask_backend_auto_client(
@@ -879,6 +890,9 @@ class TestRunParallel:
         mock_client.close.assert_called_once()
         assert isinstance(result, list)
 
+    @pytest.mark.skipif(
+        not HAS_DASK_DISTRIBUTED, reason="dask.distributed not installed"
+    )
     @mock.patch("dask.distributed.Client")
     def test_run_parallel_dask_backend_existing_client(
         self, mock_client_class, sample_case_operator
@@ -1480,8 +1494,8 @@ class TestMetricEvaluation:
         result = evaluate._evaluate_metric_and_return_df(
             forecast_ds=forecast_ds,
             target_ds=target_ds,
-            forecast_variable=TestForecastDerivedVariable,
-            target_variable=TestTargetDerivedVariable,
+            forecast_variable=ForecastDerivedVariable,
+            target_variable=TargetDerivedVariable,
             metric=mock_base_metric,
             case_operator=sample_case_operator,
         )
@@ -2480,12 +2494,9 @@ class TestDerivedVariableIntegration:
         derived.TropicalCycloneTrackVariables.clear_cache()
 
     @mock.patch(
-        "extremeweatherbench.events.tropical_cyclone.generate_forecast_tctracks"
+        "extremeweatherbench.events.tropical_cyclone.generate_tc_tracks_by_init_time"
     )
-    @mock.patch("extremeweatherbench.events.tropical_cyclone.generate_tc_variables")
-    def test_maybe_derive_variables_with_tc_tracks(
-        self, mock_generate_tc_vars, mock_create_tracks
-    ):
+    def test_maybe_derive_variables_with_tc_tracks(self, mock_create_tracks):
         """Test maybe_derive_variables with TC track variables."""
         # Create a dataset that needs TC track derivation
         base_dataset = xr.Dataset(
@@ -2536,7 +2547,6 @@ class TestDerivedVariableIntegration:
             }
         )
 
-        mock_generate_tc_vars.return_value = base_dataset
         mock_create_tracks.return_value = mock_tracks
 
         # Register IBTrACS data for the case
@@ -2551,7 +2561,7 @@ class TestDerivedVariableIntegration:
         tropical_cyclone.register_tc_track_data("test_case", ibtracs_data)
 
         # Test derivation
-        variables = [derived.TropicalCycloneTrackVariables]
+        variables = [derived.TropicalCycloneTrackVariables()]
         # Create mock case operator for the new signature
         from unittest.mock import Mock
 
@@ -2576,7 +2586,7 @@ class TestDerivedVariableIntegration:
         """Test pulling required variables from TC derived variables."""
         incoming_variables = [
             "existing_variable",
-            derived.TropicalCycloneTrackVariables,
+            derived.TropicalCycloneTrackVariables(),
         ]
 
         result = derived.maybe_include_variables_from_derived_input(incoming_variables)
@@ -2586,7 +2596,7 @@ class TestDerivedVariableIntegration:
         expected_vars = [
             "existing_variable",
             "air_pressure_at_mean_sea_level",
-            "geopotential",
+            "geopotential_height",
             "surface_eastward_wind",
             "surface_northward_wind",
         ]
@@ -2612,7 +2622,7 @@ class TestDerivedVariableIntegration:
         expected_vars = [
             "base_variable",
             "air_pressure_at_mean_sea_level",
-            "geopotential",
+            "geopotential_height",
             "surface_eastward_wind",
             "surface_northward_wind",
         ]
@@ -2948,11 +2958,11 @@ class TestEnsureOutputSchema:
         assert all(result["event_type"] == "updated_event")
 
 
-class TestForecastDerivedVariable(derived.DerivedVariable):
+class ForecastDerivedVariable(derived.DerivedVariable):
     """Test derived variable for forecast data."""
 
     name = "derived_forecast_var"
-    required_variables = ["surface_air_temperature"]
+    variables = ["surface_air_temperature"]
 
     @classmethod
     def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
@@ -2960,11 +2970,11 @@ class TestForecastDerivedVariable(derived.DerivedVariable):
         return data["surface_air_temperature"]
 
 
-class TestTargetDerivedVariable(derived.DerivedVariable):
+class TargetDerivedVariable(derived.DerivedVariable):
     """Test derived variable for target data."""
 
     name = "derived_target_var"
-    required_variables = ["2m_temperature"]
+    variables = ["2m_temperature"]
 
     @classmethod
     def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:

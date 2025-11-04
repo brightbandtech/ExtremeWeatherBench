@@ -1,12 +1,4 @@
-"""Tropical cyclone track detection from gridded datasets.
-
-Main functions:
-- generate_forecast_tctracks: Create TC tracks from forecast data
-- process_all_init_times: Process multiple initialization times
-
-Landfall detection and metrics have been moved to calc.py and metrics.py
-for generalization and reusability.
-"""
+"""Tropical cyclone track detection from gridded datasets."""
 
 import hashlib
 import logging

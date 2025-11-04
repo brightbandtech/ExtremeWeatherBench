@@ -32,11 +32,11 @@ hres_forecast = inputs.ZarrForecast(
 )
 
 metrics_list = [
-    metrics.MaximumMAE,
-    metrics.RMSE,
-    metrics.OnsetME,
-    metrics.DurationME,
-    metrics.MaxMinMAE,
+    metrics.MaximumMAE(),
+    metrics.RMSE(),
+    metrics.OnsetME(),
+    metrics.DurationME(),
+    metrics.MaxMinMAE(),
 ]
 # Create a list of evaluation objects for heatwave
 heatwave_evaluation_object = [
@@ -62,13 +62,14 @@ ewb = evaluate.ExtremeWeatherBench(
 
 # Run the workflow
 outputs = ewb.run(
+    parallel_config={"backend": "threading", "n_jobs": 64},
     # tolerance range is the number of hours before and after the timestamp a
     # validating occurrence is checked in the forecasts for certain metrics
     # such as minimum temperature MAE
     tolerance_range=48,
     # precompute the datasets before metrics are calculated, to avoid IO costs loading
     # them into memory for each metric
-    pre_compute=True,
+    pre_compute=False,
 )
 
 # Print the outputs; can be saved if desired

@@ -1,7 +1,16 @@
 import abc
 import dataclasses
 import logging
-from typing import TYPE_CHECKING, Any, Callable, Optional, TypeAlias, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Literal,
+    Optional,
+    TypeAlias,
+    Union,
+    cast,
+)
 
 import numpy as np
 import pandas as pd
@@ -12,7 +21,6 @@ from extremeweatherbench import cases, derived, sources, utils
 
 if TYPE_CHECKING:
     from extremeweatherbench import metrics
-    from extremeweatherbench.sources.base import Source
 
 logger = logging.getLogger(__name__)
 
@@ -385,8 +393,7 @@ class EvaluationObject:
     metric_list: list[
         Union[
             Callable[..., Any],
-            type["metrics.BaseMetric"],
-            type["metrics.AppliedMetric"],
+            "metrics.BaseMetric",
         ]
     ]
     target: "TargetBase"
@@ -1094,16 +1101,9 @@ def align_forecast_to_target(
     # Regrid forecast to target grid using nearest neighbor interpolation
     # extrapolate in the case of targets slightly outside the forecast domain
     if spatial_dims:
-        # Use explicit keyword arguments to avoid mypy issues with **kwargs
-        from typing import Literal
-
         interp_method: Literal["nearest", "linear"] = (
             "nearest" if method == "nearest" else "linear"
         )
-
-        # Build interpolation arguments properly
-        # Cast to Any to avoid mypy issues with mixed dict types
-        from typing import Any, cast
 
         interp_kwargs = cast(dict[str, Any], {"method": interp_method})
         interp_kwargs.update(spatial_dims)
@@ -1118,7 +1118,7 @@ def align_forecast_to_target(
 def maybe_subset_variables(
     data: IncomingDataInput,
     variables: list[Union[str, "derived.DerivedVariable"]],
-    source_module: Optional["Source"] = None,
+    source_module: Optional["sources.base.Source"] = None,
 ) -> IncomingDataInput:
     """Subset the variables from the data, if required.
 
@@ -1173,7 +1173,7 @@ def maybe_subset_variables(
 def check_for_missing_data(
     data: IncomingDataInput,
     case_metadata: "cases.IndividualCase",
-    source_module: Optional["Source"] = None,
+    source_module: Optional["sources.base.Source"] = None,
 ) -> bool:
     """Check if the data has missing data in the given date range."""
     # Use provided source module or get one

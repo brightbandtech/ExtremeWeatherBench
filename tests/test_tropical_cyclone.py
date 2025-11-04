@@ -299,9 +299,9 @@ class TestTropicalCycloneDetection:
         """Test TC track creation with TC track data filtering."""
         # This is a complex integration test
         with patch(
-            "extremeweatherbench.events.tropical_cyclone.process_all_init_times"
+            "extremeweatherbench.events.tropical_cyclone.generate_tc_tracks_by_init_time"
         ) as mock_process:
-            # Mock the return value - process_all_init_times returns a Dataset
+            # Mock the return value - generate_tc_tracks_by_init_time returns a Dataset
             mock_process.return_value = xr.Dataset(
                 {
                     "track_id": (
@@ -332,10 +332,12 @@ class TestTropicalCycloneDetection:
                 },
             )
 
-            result = tropical_cyclone.generate_forecast_tctracks(
-                sample_tc_dataset,
+            # Call the actual function that exists
+            result = tropical_cyclone.generate_tc_tracks_by_init_time(
+                sample_tc_dataset["air_pressure_at_mean_sea_level"],
+                sample_tc_dataset["surface_wind_speed"],
+                None,  # geopotential_thickness
                 sample_ibtracs_dataset,
-                exclude_post_landfall_init_times=False,
             )
 
             assert isinstance(result, xr.Dataset)
@@ -576,12 +578,14 @@ class TestDimensionHandling:
         # The datetime may be converted to int (nanoseconds) or stay as datetime64/Timestamp
         assert isinstance(track_key[1], (pd.Timestamp, np.datetime64, int, type(None)))
 
-    @patch("extremeweatherbench.events.tropical_cyclone.process_all_init_times")
+    @patch(
+        "extremeweatherbench.events.tropical_cyclone.generate_tc_tracks_by_init_time"
+    )
     def test_apply_ufunc_dimension_compatibility(
         self, mock_process, forecast_dataset_with_init_time
     ):
         """Test that apply_ufunc works with the fixed dimension handling."""
-        # Mock successful processing - process_all_init_times returns an empty Dataset
+        # Mock successful processing - generate_tc_tracks_by_init_time returns an empty Dataset
         mock_process.return_value = xr.Dataset(
             {
                 "track_id": (
@@ -624,10 +628,12 @@ class TestDimensionHandling:
         )
 
         # This should not raise the "tuple.index(x): x not in tuple" error
-        result = tropical_cyclone.generate_forecast_tctracks(
-            forecast_dataset_with_init_time.isel(lead_time=slice(0, 3)),
+        forecast_subset = forecast_dataset_with_init_time.isel(lead_time=slice(0, 3))
+        result = tropical_cyclone.generate_tc_tracks_by_init_time(
+            forecast_subset["air_pressure_at_mean_sea_level"],
+            forecast_subset["surface_wind_speed"],
+            None,  # geopotential_thickness
             ibtracs_data,
-            exclude_post_landfall_init_times=False,
         )
 
         # Verify the function completed successfully
@@ -704,7 +710,7 @@ class TestTCIntegration:
         # This tests the integration without actually running expensive computations
 
         with patch(
-            "extremeweatherbench.events.tropical_cyclone.process_all_init_times"
+            "extremeweatherbench.events.tropical_cyclone.generate_tc_tracks_by_init_time"
         ) as mock_process:
             # Mock the processing function to return a Dataset with fake detections
             mock_process.return_value = xr.Dataset(
@@ -737,10 +743,11 @@ class TestTCIntegration:
                 },
             )
 
-            result = tropical_cyclone.generate_forecast_tctracks(
-                sample_tc_dataset,
+            result = tropical_cyclone.generate_tc_tracks_by_init_time(
+                sample_tc_dataset["air_pressure_at_mean_sea_level"],
+                sample_tc_dataset["surface_wind_speed"],
+                None,  # geopotential_thickness
                 sample_ibtracs_dataset,
-                exclude_post_landfall_init_times=False,
             )
 
             assert isinstance(result, xr.Dataset)

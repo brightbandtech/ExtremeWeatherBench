@@ -117,8 +117,8 @@ class TestDefaults:
             assert len(obj.metric_list) > 0
             # Check that at least one metric is from the metrics module
             for metric in obj.metric_list:
-                # The metric should be a class from the metrics module
-                assert hasattr(metrics, metric.__name__)
+                # The metric should be an instance from the metrics module
+                assert hasattr(metrics, metric.__class__.__name__)
 
     def test_target_objects_exist(self):
         """Test that target objects are properly defined."""

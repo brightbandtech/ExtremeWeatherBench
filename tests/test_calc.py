@@ -17,7 +17,9 @@ class TestBasicCalculations:
         # Test with center point
         point = (8, 10)  # Middle of the grid
 
-        lat, lon = calc.convert_from_cartesian_to_latlon(point, sample_calc_dataset)
+        lat, lon = calc.convert_from_cartesian_to_latlon(
+            point, sample_calc_dataset.latitude, sample_calc_dataset.longitude
+        )
 
         # Should return values within the grid bounds
         assert 20 <= lat <= 50
@@ -502,7 +504,9 @@ class TestGeopotentialCalculations:
 
     def test_generate_geopotential_thickness_default_levels(self, sample_calc_dataset):
         """Test geopotential thickness with default levels."""
-        thickness = calc.generate_geopotential_thickness(sample_calc_dataset)
+        thickness = calc.generate_geopotential_thickness(
+            sample_calc_dataset["geopotential"]
+        )
 
         # Should return a DataArray
         assert isinstance(thickness, xr.DataArray)
@@ -519,7 +523,10 @@ class TestGeopotentialCalculations:
     def test_generate_geopotential_thickness_custom_levels(self, sample_calc_dataset):
         """Test geopotential thickness with custom levels."""
         thickness = calc.generate_geopotential_thickness(
-            sample_calc_dataset, top_level_value=200, bottom_level_value=850
+            sample_calc_dataset["geopotential"],
+            top_level_value=200,
+            bottom_level_value=850,
+            geopotential=True,
         )
 
         # Manual calculation for verification
@@ -536,7 +543,9 @@ class TestGeopotentialCalculations:
     ):
         """Test geopotential thickness with multiple top levels."""
         thickness = calc.generate_geopotential_thickness(
-            sample_calc_dataset, top_level_value=[200, 300, 500], bottom_level_value=850
+            sample_calc_dataset["geopotential"],
+            top_level_value=[200, 300, 500],
+            bottom_level_value=850,
         )
 
         # Should have level dimension for multiple top levels
