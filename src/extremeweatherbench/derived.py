@@ -99,7 +99,7 @@ class TropicalCycloneTrackVariables(DerivedVariable):
     # required variables for TC track identification
     required_variables = [
         "air_pressure_at_mean_sea_level",
-        "geopotential",
+        "geopotential_height",
         "surface_eastward_wind",
         "surface_northward_wind",
     ]
@@ -134,7 +134,6 @@ class TropicalCycloneTrackVariables(DerivedVariable):
 
         # Generates the variables needed for the TC track calculation
         # (geop. thickness, winds, temps, slp)
-        cyclone_dataset = tropical_cyclone.generate_tc_variables(prepared_data)
 
         # Check if we should apply track data filtering
         # First check kwargs, then the global registry
@@ -159,12 +158,15 @@ class TropicalCycloneTrackVariables(DerivedVariable):
             logger.error("No track data found for case %s", case_id_number)
             raise ValueError("No track data data provided to constrain TC tracks.")
 
-        tctracks_ds = tropical_cyclone.generate_forecast_tctracks(
-            cyclone_dataset, tc_track_data
+        tctracks_ds = tropical_cyclone.generate_tc_tracks_by_init_time(
+            prepared_data["air_pressure_at_mean_sea_level"],
+            prepared_data["surface_wind_speed"],
+            prepared_data.get("geopotential_thickness", None),
+            tc_track_data,
         )
         # Cache the result
         tropical_cyclone._TC_TRACK_CACHE[cache_key] = tctracks_ds
-
+        tctracks_ds.to_netcdf("test_tctracks_20251103_pang.nc")
         return tctracks_ds
 
     @classmethod

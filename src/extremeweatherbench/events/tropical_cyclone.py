@@ -26,134 +26,16 @@ from extremeweatherbench import calc, utils
 logger = logging.getLogger(__name__)
 
 
-def generate_forecast_tctracks(
-    gridded_dataset: xr.Dataset,
-    tc_track_data: xr.Dataset,
+def generate_tc_tracks_by_init_time(
+    sea_level_pressure: xr.DataArray,
+    wind_speed: xr.DataArray,
+    geopotential_thickness: Optional[xr.DataArray],
+    tc_track_analysis_data: xr.DataArray,
     slp_contour_magnitude: float = 200,
     dz_contour_magnitude: float = -6,
     min_distance: int = 5,
     max_spatial_distance_degrees: float = 5.0,
     max_temporal_hours: float = 48,
-    use_contour_validation: bool = True,
-    min_track_length: int = 10,
-    exclude_post_landfall_init_times: bool = True,
-) -> xr.Dataset:
-    """Create storm tracks from gridded Dataset with TC track data filtering.
-
-    High-level function that wraps process_all_init_times with Dataset inputs
-    for convenience and backward compatibility.
-
-    Args:
-        gridded_dataset: Dataset with air_pressure_at_mean_sea_level,
-                        surface_wind_speed, optional geopotential_thickness
-        tc_track_data: TC track Dataset with latitude, longitude, valid_time
-        slp_contour_magnitude: SLP contour magnitude
-        dz_contour_magnitude: DZ contour magnitude
-        min_distance: Minimum distance between TCs
-        max_spatial_distance_degrees: Max distance from TC track data points
-        max_temporal_hours: Max time difference from TC track data
-        use_contour_validation: Whether to use contour validation
-        min_track_length: Minimum points required for a track
-        exclude_post_landfall_init_times: Exclude init_times after landfalls
-
-    Returns:
-        Dataset with detected storm tracks
-    """
-    # Filter out init_times after all TC track data landfalls
-    if exclude_post_landfall_init_times:
-        # Extract appropriate DataArray for landfall detection
-        if "surface_wind_speed" in tc_track_data:
-            track_array = tc_track_data["surface_wind_speed"]
-        else:
-            track_array = xr.full_like(tc_track_data["latitude"], 1.0)
-
-        # Ensure latitude/longitude are coordinates (not data variables)
-        if "latitude" in tc_track_data.data_vars:
-            track_array = track_array.assign_coords(
-                latitude=tc_track_data["latitude"],
-                longitude=tc_track_data["longitude"],
-            )
-
-        tc_track_data_landfalls = calc.find_landfalls(track_array, return_all=True)
-
-        if tc_track_data_landfalls is not None:
-            # Get latest landfall time
-            landfall_times = tc_track_data_landfalls.coords["valid_time"].values
-            latest_landfall = np.max(landfall_times)
-            logger.debug("Latest TC track data landfall time: %s", latest_landfall)
-
-            # Convert to init_time if needed
-            if "init_time" not in gridded_dataset.coords:
-                gridded_dataset = utils.convert_valid_time_to_init_time(gridded_dataset)
-
-            # Filter to only include init_times before the latest landfall
-            valid_init_times = gridded_dataset.init_time < latest_landfall
-
-            if not valid_init_times.any():
-                logger.warning(
-                    "No init_times before latest landfall (%s)", latest_landfall
-                )
-                return _create_empty_tracks_dataset()
-
-            gridded_dataset = gridded_dataset.where(valid_init_times, drop=True)
-            logger.debug(
-                "After post-landfall filter: %s init_times",
-                len(gridded_dataset.init_time),
-            )
-        else:
-            logger.debug("No TC track data landfalls found, keeping all init_times")
-
-    # Convert TC track data to DataFrame
-    tc_track_data_df = tc_track_data.to_dataframe().reset_index()
-    tc_track_data_df["valid_time"] = pd.to_datetime(tc_track_data_df["valid_time"])
-    logger.info("Generating TC tracks")
-
-    # Debug logging
-    if "init_time" in gridded_dataset.coords:
-        logger.debug(
-            "Dims: %s init_times, %s lead_times, %s valid_times",
-            len(gridded_dataset.init_time),
-            len(gridded_dataset.lead_time)
-            if "lead_time" in gridded_dataset.dims
-            else "N/A",
-            len(gridded_dataset.valid_time)
-            if "valid_time" in gridded_dataset.dims
-            else "N/A",
-        )
-        if "lead_time" in gridded_dataset.dims:
-            logger.debug(
-                "Lead time range: %s to %s",
-                gridded_dataset.lead_time.values[0],
-                gridded_dataset.lead_time.values[-1],
-            )
-        return process_all_init_times(
-            sea_level_pressure=gridded_dataset["air_pressure_at_mean_sea_level"],
-            wind_speed=gridded_dataset["surface_wind_speed"],
-            geopotential_thickness=gridded_dataset.get("geopotential_thickness", None),
-            tc_track_data_df=tc_track_data_df,
-            slp_contour_magnitude=slp_contour_magnitude,
-            dz_contour_magnitude=dz_contour_magnitude,
-            min_distance=min_distance,
-            max_spatial_distance_degrees=max_spatial_distance_degrees,
-            max_temporal_hours=max_temporal_hours,
-            use_contour_validation=use_contour_validation,
-            min_track_length=min_track_length,
-        )
-    else:
-        # No init_time dimension, return empty
-        return _create_empty_tracks_dataset()
-
-
-def process_all_init_times(
-    sea_level_pressure: xr.DataArray,
-    wind_speed: xr.DataArray,
-    geopotential_thickness: Optional[xr.DataArray],
-    tc_track_data_df: pd.DataFrame,
-    max_temporal_hours: float,
-    max_spatial_distance_degrees: float,
-    min_distance: int,
-    slp_contour_magnitude: float = 200,
-    dz_contour_magnitude: float = -6,
     use_contour_validation: bool = True,
     min_track_length: int = 10,
 ) -> xr.Dataset:
@@ -176,6 +58,11 @@ def process_all_init_times(
     Returns:
         xr.Dataset with detected tropical cyclone tracks
     """
+    logger.info("Generating TC tracks by init_time")
+    # Convert TC track data to DataFrame
+    tc_track_data_df = tc_track_analysis_data.to_dataframe().reset_index()
+    tc_track_data_df["valid_time"] = pd.to_datetime(tc_track_data_df["valid_time"])
+
     time_coord = sea_level_pressure.valid_time
     init_time_coord = sea_level_pressure.init_time
     latitude = sea_level_pressure.latitude
@@ -1179,45 +1066,3 @@ def _create_empty_tracks_dataset() -> xr.Dataset:
             "valid_time": [],
         },
     )
-
-
-def generate_tc_variables(
-    air_pressure_at_mean_sea_level: xr.DataArray,
-    surface_eastward_wind: Optional[xr.DataArray] = None,
-    surface_northward_wind: Optional[xr.DataArray] = None,
-    surface_wind_speed: Optional[xr.DataArray] = None,
-    geopotential: Optional[xr.DataArray] = None,
-) -> xr.Dataset:
-    """Generate the variables needed for the TC track calculation.
-
-    Args:
-        air_pressure_at_mean_sea_level: Pressure DataArray
-        surface_eastward_wind: Eastward wind component DataArray (optional)
-        surface_northward_wind: Northward wind component DataArray (optional)
-        surface_wind_speed: Wind speed DataArray (optional, computed if missing)
-        geopotential: Geopotential DataArray (optional)
-
-    Returns:
-        Dataset with TC variables
-    """
-    output_vars = {"air_pressure_at_mean_sea_level": air_pressure_at_mean_sea_level}
-
-    # Calculate wind speed if not provided
-    if surface_wind_speed is None:
-        if surface_eastward_wind is not None and surface_northward_wind is not None:
-            surface_wind_speed = np.hypot(surface_eastward_wind, surface_northward_wind)
-        else:
-            raise ValueError(
-                "Must provide either surface_wind_speed or both wind components"
-            )
-
-    output_vars["surface_wind_speed"] = surface_wind_speed
-
-    # Add geopotential thickness if geopotential is provided
-    if geopotential is not None and "level" in geopotential.dims:
-        temp_ds = xr.Dataset({"geopotential": geopotential})
-        output_vars["geopotential_thickness"] = calc.generate_geopotential_thickness(
-            temp_ds, top_level_value=300, bottom_level_value=500
-        )
-
-    return xr.Dataset(output_vars)
