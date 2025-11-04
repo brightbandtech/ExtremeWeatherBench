@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
-from extremeweatherbench import defaults, utils
+from extremeweatherbench import utils
 
 if TYPE_CHECKING:
     from extremeweatherbench import regions
@@ -61,6 +61,8 @@ def safely_pull_variables(
     """
     # For polars LazyFrames, automatically add coordinate variables
     # to optional variables only (not required)
+    from extremeweatherbench import defaults
+
     optional_variables = optional_variables + defaults.DEFAULT_COORDINATE_VARIABLES
 
     # Get column names from LazyFrame

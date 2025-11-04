@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 import pandas as pd
 
-from extremeweatherbench import defaults, utils
+from extremeweatherbench import utils
 
 if TYPE_CHECKING:
     from extremeweatherbench import regions
@@ -53,6 +53,8 @@ def safely_pull_variables(
     """
     # For pandas DataFrames, automatically add coordinate variables
     # to both required and optional variables
+    from extremeweatherbench import defaults
+
     variables = variables + defaults.DEFAULT_COORDINATE_VARIABLES
     optional_variables = optional_variables + defaults.DEFAULT_COORDINATE_VARIABLES
 

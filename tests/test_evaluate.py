@@ -13,7 +13,6 @@ import xarray as xr
 
 from extremeweatherbench import (
     cases,
-    defaults,
     derived,
     evaluate,
     inputs,
@@ -205,6 +204,26 @@ def sample_target_dataset():
         },
         attrs={"source": "test_target"},
     )
+
+
+class TestOutputColumns:
+    """Test the OUTPUT_COLUMNS constant."""
+
+    def test_output_columns_exists(self):
+        """Test that OUTPUT_COLUMNS is defined and contains expected columns."""
+        expected_columns = [
+            "value",
+            "lead_time",
+            "init_time",
+            "target_variable",
+            "metric",
+            "forecast_source",
+            "target_source",
+            "case_id_number",
+            "event_type",
+        ]
+        assert hasattr(evaluate, "OUTPUT_COLUMNS")
+        assert evaluate.OUTPUT_COLUMNS == expected_columns
 
 
 class TestExtremeWeatherBench:
@@ -433,7 +452,7 @@ class TestExtremeWeatherBench:
 
             assert isinstance(result, pd.DataFrame)
             assert len(result) == 0
-            assert list(result.columns) == defaults.OUTPUT_COLUMNS
+            assert list(result.columns) == evaluate.OUTPUT_COLUMNS
 
     @mock.patch("extremeweatherbench.evaluate.compute_case_operator")
     def test_run_with_caching(
@@ -1065,7 +1084,7 @@ class TestComputeCaseOperator:
         # Should return empty DataFrame with correct columns
         assert isinstance(result, pd.DataFrame)
         assert len(result) == 0
-        assert list(result.columns) == defaults.OUTPUT_COLUMNS
+        assert list(result.columns) == evaluate.OUTPUT_COLUMNS
 
         # _build_datasets should be called, but no further processing should occur
         mock_build_datasets.assert_called_once_with(sample_case_operator)
@@ -1085,7 +1104,7 @@ class TestComputeCaseOperator:
         # Should return empty DataFrame with correct columns
         assert isinstance(result, pd.DataFrame)
         assert len(result) == 0
-        assert list(result.columns) == defaults.OUTPUT_COLUMNS
+        assert list(result.columns) == evaluate.OUTPUT_COLUMNS
 
         mock_build_datasets.assert_called_once_with(sample_case_operator)
 
@@ -1105,7 +1124,7 @@ class TestComputeCaseOperator:
         # Should return empty DataFrame with correct columns
         assert isinstance(result, pd.DataFrame)
         assert len(result) == 0
-        assert list(result.columns) == defaults.OUTPUT_COLUMNS
+        assert list(result.columns) == evaluate.OUTPUT_COLUMNS
 
         # _build_datasets should be called, but no further processing should occur
         mock_build_datasets.assert_called_once_with(sample_case_operator)
@@ -1125,7 +1144,7 @@ class TestComputeCaseOperator:
         # Should return empty DataFrame with correct columns
         assert isinstance(result, pd.DataFrame)
         assert len(result) == 0
-        assert list(result.columns) == defaults.OUTPUT_COLUMNS
+        assert list(result.columns) == evaluate.OUTPUT_COLUMNS
 
         mock_build_datasets.assert_called_once_with(sample_case_operator)
 
@@ -2637,7 +2656,7 @@ class TestEnsureOutputSchema:
     def test_ensure_output_schema_init_time_valid_time(self):
         """Test _ensure_output_schema with init_time and valid_time columns.
 
-        init_time is now in defaults.OUTPUT_COLUMNS, valid_time is not and will be
+        init_time is now in evaluate.OUTPUT_COLUMNS, valid_time is not and will be
         dropped.
         """
         df = pd.DataFrame(
@@ -2656,29 +2675,29 @@ class TestEnsureOutputSchema:
             event_type="heat_wave",
         )
 
-        # Check all defaults.OUTPUT_COLUMNS are present
-        assert list(result.columns) == defaults.OUTPUT_COLUMNS
+        # Check all evaluate.OUTPUT_COLUMNS are present
+        assert list(result.columns) == evaluate.OUTPUT_COLUMNS
         # Check metadata was added
         assert all(result["target_variable"] == "temperature")
         assert all(result["metric"] == "TestMetric")
         assert all(result["case_id_number"] == 1)
         assert all(result["event_type"] == "heat_wave")
-        # Check original columns preserved for those in defaults.OUTPUT_COLUMNS
+        # Check original columns preserved for those in evaluate.OUTPUT_COLUMNS
         assert len(result) == 2
         assert list(result["value"]) == [1.0, 2.0]
-        # init_time should be preserved (now in defaults.OUTPUT_COLUMNS)
+        # init_time should be preserved (now in evaluate.OUTPUT_COLUMNS)
         assert "init_time" in result.columns
         assert list(result["init_time"]) == [
             pd.to_datetime("2021-06-20"),
             pd.to_datetime("2021-06-21"),
         ]
-        # valid_time should be dropped (not in defaults.OUTPUT_COLUMNS)
+        # valid_time should be dropped (not in evaluate.OUTPUT_COLUMNS)
         assert "valid_time" not in result.columns
 
     def test_ensure_output_schema_init_time_only(self):
         """Test _ensure_output_schema with init_time only.
 
-        init_time is now in defaults.OUTPUT_COLUMNS so will be preserved.
+        init_time is now in evaluate.OUTPUT_COLUMNS so will be preserved.
         """
         df = pd.DataFrame({"value": [1.5], "init_time": pd.to_datetime(["2021-06-20"])})
 
@@ -2691,17 +2710,17 @@ class TestEnsureOutputSchema:
         )
 
         # Check all columns present
-        assert list(result.columns) == defaults.OUTPUT_COLUMNS
-        # lead_time should be NaN since not provided and is in defaults.OUTPUT_COLUMNS
+        assert list(result.columns) == evaluate.OUTPUT_COLUMNS
+        # lead_time should be NaN since not provided and is in evaluate.OUTPUT_COLUMNS
         assert pd.isna(result["lead_time"].iloc[0])
-        # init_time should be preserved (now in defaults.OUTPUT_COLUMNS)
+        # init_time should be preserved (now in evaluate.OUTPUT_COLUMNS)
         assert "init_time" in result.columns
         assert result["init_time"].iloc[0] == pd.to_datetime("2021-06-20")
 
     def test_ensure_output_schema_lead_time_only(self):
         """Test _ensure_output_schema with lead_time only.
 
-        lead_time is in defaults.OUTPUT_COLUMNS so will be preserved.
+        lead_time is in evaluate.OUTPUT_COLUMNS so will be preserved.
         """
         df = pd.DataFrame({"value": [2.5, 3.0], "lead_time": [6, 12]})
 
@@ -2714,16 +2733,16 @@ class TestEnsureOutputSchema:
         )
 
         # Check all columns present
-        assert list(result.columns) == defaults.OUTPUT_COLUMNS
-        # lead_time should be preserved (it's in defaults.OUTPUT_COLUMNS)
+        assert list(result.columns) == evaluate.OUTPUT_COLUMNS
+        # lead_time should be preserved (it's in evaluate.OUTPUT_COLUMNS)
         assert list(result["lead_time"]) == [6, 12]
-        # init_time should be NaN since not provided and is in defaults.OUTPUT_COLUMNS
+        # init_time should be NaN since not provided and is in evaluate.OUTPUT_COLUMNS
         assert pd.isna(result["init_time"].iloc[0])
 
     def test_ensure_output_schema_lead_time_valid_time(self):
         """Test _ensure_output_schema with lead_time and valid_time.
 
-        lead_time is in defaults.OUTPUT_COLUMNS, valid_time is not and will be dropped.
+        lead_time is in evaluate.OUTPUT_COLUMNS, valid_time is not and will be dropped.
         """
         df = pd.DataFrame(
             {
@@ -2741,11 +2760,11 @@ class TestEnsureOutputSchema:
             event_type="drought",
         )
 
-        assert list(result.columns) == defaults.OUTPUT_COLUMNS
+        assert list(result.columns) == evaluate.OUTPUT_COLUMNS
         assert result["lead_time"].iloc[0] == 24
-        # init_time should be NaN since not provided and is in defaults.OUTPUT_COLUMNS
+        # init_time should be NaN since not provided and is in evaluate.OUTPUT_COLUMNS
         assert pd.isna(result["init_time"].iloc[0])
-        # valid_time should be dropped (not in defaults.OUTPUT_COLUMNS)
+        # valid_time should be dropped (not in evaluate.OUTPUT_COLUMNS)
         assert "valid_time" not in result.columns
 
     def test_ensure_output_schema_init_time_temperature(self):
@@ -2766,8 +2785,8 @@ class TestEnsureOutputSchema:
             event_type="heat_wave",
         )
 
-        assert list(result.columns) == defaults.OUTPUT_COLUMNS
-        # Custom column should be preserved but not part of defaults.OUTPUT_COLUMNS
+        assert list(result.columns) == evaluate.OUTPUT_COLUMNS
+        # Custom column should be preserved but not part of evaluate.OUTPUT_COLUMNS
         # temperature column should not appear in final result
         assert "temperature" not in result.columns
         assert len(result) == 2
@@ -2792,7 +2811,7 @@ class TestEnsureOutputSchema:
             event_type="complex",
         )
 
-        assert list(result.columns) == defaults.OUTPUT_COLUMNS
+        assert list(result.columns) == evaluate.OUTPUT_COLUMNS
         # Extra variables should not appear in final result
         assert "variable1" not in result.columns
         assert "variable2" not in result.columns
@@ -2819,7 +2838,7 @@ class TestEnsureOutputSchema:
             event_type="ensemble",
         )
 
-        assert list(result.columns) == defaults.OUTPUT_COLUMNS
+        assert list(result.columns) == evaluate.OUTPUT_COLUMNS
         assert list(result["lead_time"]) == [48, 72]
         assert "variable1" not in result.columns
         assert len(result) == 2
@@ -2840,7 +2859,7 @@ class TestEnsureOutputSchema:
         # Should warn about missing columns
         assert "Missing expected columns" in caplog.text
         # But still return properly structured DataFrame
-        assert list(result.columns) == defaults.OUTPUT_COLUMNS
+        assert list(result.columns) == evaluate.OUTPUT_COLUMNS
         assert result["value"].iloc[0] == 1.0
 
     def test_ensure_output_schema_no_warning_init_time_when_lead_time_present(
@@ -2865,7 +2884,7 @@ class TestEnsureOutputSchema:
         init_time_warnings = [msg for msg in warning_messages if "init_time" in msg]
         assert len(init_time_warnings) == 0
 
-        assert list(result.columns) == defaults.OUTPUT_COLUMNS
+        assert list(result.columns) == evaluate.OUTPUT_COLUMNS
 
     def test_ensure_output_schema_no_warning_lead_time_when_init_time_present(
         self, caplog
@@ -2889,11 +2908,11 @@ class TestEnsureOutputSchema:
         lead_time_warnings = [msg for msg in warning_messages if "lead_time" in msg]
         assert len(lead_time_warnings) == 0
 
-        assert list(result.columns) == defaults.OUTPUT_COLUMNS
+        assert list(result.columns) == evaluate.OUTPUT_COLUMNS
 
     def test_ensure_output_schema_no_missing_variables(self):
         """Test _ensure_output_schema when no variables are missing."""
-        # Create a dataframe with all required defaults.OUTPUT_COLUMNS already present
+        # Create a dataframe with all required evaluate.OUTPUT_COLUMNS already present
         df = pd.DataFrame(
             {
                 "value": [1.0, 2.0],
@@ -2911,14 +2930,14 @@ class TestEnsureOutputSchema:
         result = evaluate._ensure_output_schema(df)
 
         # Should work without warnings and preserve all columns
-        assert list(result.columns) == defaults.OUTPUT_COLUMNS
+        assert list(result.columns) == evaluate.OUTPUT_COLUMNS
         assert len(result) == 2
         assert result["value"].tolist() == [1.0, 2.0]
         assert result["lead_time"].tolist() == [1, 2]
 
     def test_ensure_output_schema_no_missing_with_metadata(self, caplog):
         """Test _ensure_output_schema when no variables are missing with metadata."""
-        # Create a dataframe with all required defaults.OUTPUT_COLUMNS already present
+        # Create a dataframe with all required evaluate.OUTPUT_COLUMNS already present
         df = pd.DataFrame(
             {
                 "value": [1.5, 2.5],
@@ -2949,7 +2968,7 @@ class TestEnsureOutputSchema:
         assert len(missing_warnings) == 0
 
         # Should preserve structure and update metadata
-        assert list(result.columns) == defaults.OUTPUT_COLUMNS
+        assert list(result.columns) == evaluate.OUTPUT_COLUMNS
         assert len(result) == 2
         assert result["value"].tolist() == [1.5, 2.5]
         assert all(result["target_variable"] == "updated_pressure")
@@ -3426,6 +3445,153 @@ class TestRegionSubsettingIntegration:
             assert case.case_id_number == original_case.case_id_number
             # Location regions should be equivalent (but may be different objects)
             assert isinstance(case.location, type(original_case.location))
+
+
+class TestSafeConcat:
+    """Test the _safe_concat helper function."""
+
+    def test_safe_concat_with_non_empty_dataframes(self):
+        """Test _safe_concat with non-empty DataFrames."""
+        df1 = pd.DataFrame({"a": [1, 2], "b": [3, 4]})
+        df2 = pd.DataFrame({"a": [5, 6], "b": [7, 8]})
+        dataframes = [df1, df2]
+
+        result = evaluate._safe_concat(dataframes)
+
+        # Should concatenate normally
+        assert isinstance(result, pd.DataFrame)
+        assert len(result) == 4
+        assert list(result.columns) == ["a", "b"]
+        assert result["a"].tolist() == [1, 2, 5, 6]
+
+    def test_safe_concat_with_all_empty_dataframes(self):
+        """Test _safe_concat when all DataFrames are empty."""
+
+        df1 = pd.DataFrame()
+        df2 = pd.DataFrame()
+        dataframes = [df1, df2]
+
+        result = evaluate._safe_concat(dataframes)
+
+        # Should return empty DataFrame with OUTPUT_COLUMNS
+        assert isinstance(result, pd.DataFrame)
+        assert len(result) == 0
+        assert list(result.columns) == evaluate.OUTPUT_COLUMNS
+
+    def test_safe_concat_with_mixed_empty_and_non_empty(self):
+        """Test _safe_concat with mix of empty and non-empty DataFrames."""
+        df1 = pd.DataFrame()  # Empty
+        df2 = pd.DataFrame({"value": [1.0], "metric": ["test"]})
+        df3 = pd.DataFrame()  # Empty
+        df4 = pd.DataFrame({"value": [2.0], "metric": ["test2"]})
+        dataframes = [df1, df2, df3, df4]
+
+        result = evaluate._safe_concat(dataframes)
+
+        # Should only concatenate non-empty DataFrames
+        assert isinstance(result, pd.DataFrame)
+        assert len(result) == 2
+        assert result["value"].tolist() == [1.0, 2.0]
+        assert result["metric"].tolist() == ["test", "test2"]
+
+    def test_safe_concat_with_ignore_index_false(self):
+        """Test _safe_concat with ignore_index=False."""
+        df1 = pd.DataFrame({"a": [1, 2]}, index=[0, 1])
+        df2 = pd.DataFrame({"a": [3, 4]}, index=[0, 1])
+        dataframes = [df1, df2]
+
+        result = evaluate._safe_concat(dataframes, ignore_index=False)
+
+        # Should preserve original indices
+        assert isinstance(result, pd.DataFrame)
+        assert len(result) == 4
+        assert list(result.index) == [0, 1, 0, 1]
+
+    def test_safe_concat_with_ignore_index_true(self):
+        """Test _safe_concat with ignore_index=True (default)."""
+        df1 = pd.DataFrame({"a": [1, 2]}, index=[10, 11])
+        df2 = pd.DataFrame({"a": [3, 4]}, index=[20, 21])
+        dataframes = [df1, df2]
+
+        result = evaluate._safe_concat(dataframes, ignore_index=True)
+
+        # Should create new sequential index
+        assert isinstance(result, pd.DataFrame)
+        assert len(result) == 4
+        assert list(result.index) == [0, 1, 2, 3]
+
+    def test_safe_concat_with_empty_list(self):
+        """Test _safe_concat with empty list of DataFrames."""
+
+        dataframes = []
+
+        result = evaluate._safe_concat(dataframes)
+
+        # Should return empty DataFrame with OUTPUT_COLUMNS
+        assert isinstance(result, pd.DataFrame)
+        assert len(result) == 0
+        assert list(result.columns) == evaluate.OUTPUT_COLUMNS
+
+    def test_safe_concat_prevents_future_warning(self):
+        """Test that _safe_concat prevents the specific pandas FutureWarning."""
+        import warnings
+
+        # Create DataFrames that would trigger the specific FutureWarning
+        # about empty or all-NA entries
+        df1 = pd.DataFrame()  # Empty DataFrame
+        df2 = pd.DataFrame({"a": [1], "b": [2]})
+        df3 = pd.DataFrame({"a": [None], "b": [None]})  # All-NA DataFrame
+        dataframes = [df1, df2, df3]
+
+        # Test that our _safe_concat prevents the warning
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            result = evaluate._safe_concat(dataframes)
+
+            # Check that no FutureWarnings about concatenation were raised
+            future_warnings = [
+                warning
+                for warning in w
+                if issubclass(warning.category, FutureWarning)
+                and "DataFrame concatenation with empty or all-NA entries"
+                in str(warning.message)
+            ]
+            assert len(future_warnings) == 0, (
+                f"FutureWarning was raised: {future_warnings}"
+            )
+
+        # Should successfully concatenate without warnings
+        assert isinstance(result, pd.DataFrame)
+        assert len(result) >= 1  # Should have at least the non-empty DataFrame
+
+    def test_safe_concat_preserves_dtypes_when_consistent(self):
+        """Test that _safe_concat preserves dtypes when they are consistent."""
+        df1 = pd.DataFrame({"a": [1, 2], "b": [3.0, 4.0]})  # int64, float64
+        df2 = pd.DataFrame({"a": [5, 6], "b": [7.0, 8.0]})  # int64, float64
+        dataframes = [df1, df2]
+
+        result = evaluate._safe_concat(dataframes)
+
+        # Should preserve original dtypes
+        assert result["a"].dtype == "int64"
+        assert result["b"].dtype == "float64"
+        assert len(result) == 4
+
+    def test_safe_concat_converts_to_object_when_mismatched(self):
+        """Test that _safe_concat converts to object dtype when dtypes mismatch."""
+
+        df1 = pd.DataFrame({"a": [1, 2], "b": [3.0, 4.0]})  # int64, float64
+        df2 = pd.DataFrame(
+            {"a": [pd.Timestamp("2021-01-01")], "b": ["text"]}
+        )  # datetime, object
+        dataframes = [df1, df2]
+
+        result = evaluate._safe_concat(dataframes)
+
+        # Should convert to object dtypes due to mismatches
+        assert result["a"].dtype == "object"
+        assert result["b"].dtype == "object"
+        assert len(result) == 3
 
 
 if __name__ == "__main__":
