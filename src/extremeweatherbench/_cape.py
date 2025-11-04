@@ -369,7 +369,7 @@ def compute_ml_cape_cin_from_profile(
 ) -> tuple[float, float]:
     """Compute CAPE/CIN for a given thermodynamic profile.
 
-    This function operates on a single thermodynamic profile at a team, and uses a
+    This function operates on a single thermodynamic profile at a time, and uses a
     variety of inlined helper functions to ensure that the computation is as fast
     as possible.
 
@@ -702,10 +702,10 @@ def compute_ml_cape_cin_batched(
     """Automatically choose serial or parallel based on batch size.
 
     Args:
-        pressure_batch: 2D array of shape (n_profiles, n_levels)
-        temperature_batch: 2D array of shape (n_profiles, n_levels)
-        dewpoint_batch: 2D array of shape (n_profiles, n_levels)
-        geopotential_batch: 2D array of shape (n_profiles, n_levels)
+        pressure: 2D array of shape (n_profiles, n_levels)
+        temperature: 2D array of shape (n_profiles, n_levels)
+        dewpoint: 2D array of shape (n_profiles, n_levels)
+        geopotential: 2D array of shape (n_profiles, n_levels)
         depth: Mixed layer depth in hPa
 
     Returns:

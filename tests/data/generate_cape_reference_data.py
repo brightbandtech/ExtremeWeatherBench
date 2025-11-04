@@ -382,7 +382,7 @@ def generate_cape_reference_data(radius_deg: float = 2.0):
         pressure_test, temperature_test, dewpoint_test
     )
 
-    # Use the reference CAPE calculations to filter our any bad profiles
+    # Use the reference CAPE calculations to filter out any bad profiles
     valid = ~(np.isnan(cape_ref) | np.isnan(cin_ref))
     n_valid = np.sum(valid)
 
