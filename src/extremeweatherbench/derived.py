@@ -92,16 +92,10 @@ class TropicalCycloneTrackVariables(DerivedVariable):
     # required variables for TC track identification
     variables = [
         "air_pressure_at_mean_sea_level",
-        "geopotential_height",
+        "geopotential_thickness",
         "surface_eastward_wind",
         "surface_northward_wind",
     ]
-    optional_variables = [
-        "surface_wind_speed",
-    ]
-    optional_variables_mapping = {
-        "surface_wind_speed": ["surface_eastward_wind", "surface_northward_wind"],
-    }
 
     @classmethod
     def _get_or_compute_tracks(cls, data: xr.Dataset, *args, **kwargs) -> xr.Dataset:
