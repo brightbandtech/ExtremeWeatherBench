@@ -166,7 +166,6 @@ class TropicalCycloneTrackVariables(DerivedVariable):
         )
         # Cache the result
         tropical_cyclone._TC_TRACK_CACHE[cache_key] = tctracks_ds
-        tctracks_ds.to_netcdf("test_tctracks_20251103_pang.nc")
         return tctracks_ds
 
     @classmethod
