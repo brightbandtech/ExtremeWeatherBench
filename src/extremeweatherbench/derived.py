@@ -1,6 +1,6 @@
 import abc
 import logging
-from typing import Sequence, Type, TypeGuard, Union
+from typing import List, Optional, Sequence, Union
 
 import xarray as xr
 
@@ -13,39 +13,33 @@ class DerivedVariable(abc.ABC):
     """An abstract base class defining the interface for ExtremeWeatherBench
     derived variables.
 
-    A DerivedVariable is any variable that requires extra computation than what
-    is provided in analysis or forecast data. Some examples include the
+    A DerivedVariable is any variable or transform that requires extra computation than
+    what is provided in analysis or forecast data. Some examples include the
     practically perfect hindcast, MLCAPE, IVT, or atmospheric river masks.
 
     Attributes:
         name: The name that is used for applications of derived variables.
             Defaults to the class name.
-        required_variables: A list of variables that are used to build the
-            variable.
-        build: A method that builds the variable from the required variables.
-            Build is used specifically to distinguish from the compute method in
-            xarray, which eagerly processes the data and loads into memory;
-            build is used to lazily process the data and return a dataset that
-            can be used later to compute the variable.
+        variables: A list of variables that are used to build the
+            derived variable.
+        compute: A method that generates the derived variable from the variables.
         derive_variable: An abstract method that defines the computation to
-            derive the variable from required_variables.
+            derive the derived_variable from variables.
     """
 
-    required_variables: list[str]
-    optional_variables: list[str] = []
-    optional_variables_mapping: dict = {}
+    variables: List[str]
 
-    @property
-    def name(self) -> str:
-        """A name for the derived variable.
+    def __init__(self, name: Optional[str] = None):
+        """Initialize the derived variable.
 
-        Defaults to the class name.
+        Args:
+            name: The name of the derived variable. Defaults to class-level
+                name attribute if present, otherwise the class name.
         """
-        return self.__class__.__name__
+        self.name = name or getattr(self.__class__, "name", self.__class__.__name__)
 
-    @classmethod
     @abc.abstractmethod
-    def derive_variable(cls, data: xr.Dataset, *args, **kwargs) -> xr.DataArray:
+    def derive_variable(self, data: xr.Dataset, *args, **kwargs) -> xr.DataArray:
         """Derive the variable from the required variables.
 
         The output of the derivation must be a single variable output returned as
@@ -59,8 +53,7 @@ class DerivedVariable(abc.ABC):
         """
         pass
 
-    @classmethod
-    def compute(cls, data: xr.Dataset, *args, **kwargs) -> xr.DataArray:
+    def compute(self, data: xr.Dataset, *args, **kwargs) -> xr.DataArray:
         """Build the derived variable from the input variables.
 
         This method is used to build the derived variable from the input variables.
@@ -73,7 +66,7 @@ class DerivedVariable(abc.ABC):
         Returns:
             A DataArray with the derived variable.
         """
-        return cls.derive_variable(data, *args, **kwargs)
+        return self.derive_variable(data, *args, **kwargs)
 
 
 class AtmosphericRiverMask(DerivedVariable):
@@ -203,41 +196,27 @@ def maybe_include_variables_from_derived_input(
     """
     string_variables = [v for v in incoming_variables if isinstance(v, str)]
 
-    derived_required_variables = []
+    derived_variables: list[str] = []
     for v in incoming_variables:
         if isinstance(v, DerivedVariable):
             # Handle instances of DerivedVariable
-            derived_required_variables.extend(v.required_variables)
-        elif is_derived_variable(v):
-            # Handle classes that inherit from DerivedVariable
-            # Recursively pull required variables from derived variables
-            derived_required_variables.extend(
-                maybe_include_variables_from_derived_input(v.required_variables)
-            )
+            derived_variables.extend(v.variables)
 
-    return list(set(string_variables + derived_required_variables))
-
-
-def is_derived_variable(
-    variable: Union[str, Type[DerivedVariable]],
-) -> TypeGuard[Type[DerivedVariable]]:
-    """Checks whether the incoming variable is a string or a DerivedVariable.
-
-    Args:
-        variable: a single string or DerivedVariable object
-
-    Returns:
-        True if the variable is a DerivedVariable object, False otherwise
-    """
-
-    return isinstance(variable, type) and issubclass(variable, DerivedVariable)
+    return list(set(string_variables + derived_variables))
 
 
 def _maybe_convert_variable_to_string(
-    variable: Union[str, Type[DerivedVariable]],
+    variable: Union[str, DerivedVariable],
 ) -> str:
-    """Convert a variable to its string representation."""
-    if is_derived_variable(variable):
-        return variable.name  # type: ignore
-    else:
-        return variable  # type: ignore
+    """Convert a variable to its string representation.
+
+    Args:
+        variable: Either a string or a DerivedVariable instance.
+
+    Returns:
+        The string representation of the variable.
+    """
+    if isinstance(variable, str):
+        return variable
+    # variable is a DerivedVariable instance with .name set in __init__
+    return str(variable.name)

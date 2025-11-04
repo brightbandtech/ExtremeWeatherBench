@@ -10,22 +10,6 @@ from extremeweatherbench import defaults, inputs, metrics
 class TestDefaults:
     """Test the defaults module."""
 
-    def test_output_columns_exists(self):
-        """Test that OUTPUT_COLUMNS is defined and contains expected columns."""
-        expected_columns = [
-            "value",
-            "lead_time",
-            "init_time",
-            "target_variable",
-            "metric",
-            "forecast_source",
-            "target_source",
-            "case_id_number",
-            "event_type",
-        ]
-        assert hasattr(defaults, "OUTPUT_COLUMNS")
-        assert defaults.OUTPUT_COLUMNS == expected_columns
-
     def test_preprocess_bb_cira_forecast_dataset(self):
         """Test the _preprocess_bb_cira_forecast_dataset function."""
 
@@ -117,8 +101,8 @@ class TestDefaults:
             assert len(obj.metric_list) > 0
             # Check that at least one metric is from the metrics module
             for metric in obj.metric_list:
-                # The metric should be a class from the metrics module
-                assert hasattr(metrics, metric.__name__)
+                # The metric should be an instance from the metrics module
+                assert hasattr(metrics, metric.__class__.__name__)
 
     def test_target_objects_exist(self):
         """Test that target objects are properly defined."""

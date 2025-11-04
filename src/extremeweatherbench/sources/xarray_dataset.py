@@ -35,7 +35,7 @@ def safely_pull_variables(
     """
     # Track which variables we've found
     found_variables = []
-    required_variables_satisfied = set()
+    variables_satisfied = set()
 
     # First, check for optional variables and add them if present
     for opt_var in optional_variables:
@@ -46,14 +46,14 @@ def safely_pull_variables(
                 replaced_vars = optional_variables_mapping[opt_var]
                 # Handle both single string and list of strings
                 if isinstance(replaced_vars, str):
-                    required_variables_satisfied.add(replaced_vars)
+                    variables_satisfied.add(replaced_vars)
                 else:
-                    required_variables_satisfied.update(replaced_vars)
+                    variables_satisfied.update(replaced_vars)
 
     # Then check for required variables that weren't replaced
     missing_variables = []
     for var in variables:
-        if var in required_variables_satisfied:
+        if var in variables_satisfied:
             # This required variable was replaced by an optional variable
             continue
         elif var in data.data_vars:
@@ -131,18 +131,18 @@ def check_for_spatial_data(data: xr.Dataset, location: "regions.Region") -> bool
     lon_min, lon_max = coords[0], coords[2]
 
     # Check if reversing the latitude range still returns no data
-    if len(data.sel({lat_dim: slice(lat_min, lat_max)})) == 0:
-        if len(data.sel({lat_dim: slice(lat_max, lat_min)})) == 0:
+    if len(data[lat_dim].sel({lat_dim: slice(lat_min, lat_max)})) == 0:
+        if len(data[lat_dim].sel({lat_dim: slice(lat_max, lat_min)})) == 0:
             # If reversing the latitude range still returns no data, return False
             return False
         else:
             # If latitude has data, check longitude
-            data = data.sel(
+            data = data[[lat_dim, lon_dim]].sel(
                 {lat_dim: slice(lat_max, lat_min), lon_dim: slice(lon_min, lon_max)}
             )
     else:
         # Check longitude if latitude > 0
-        data = data.sel(
+        data = data[[lat_dim, lon_dim]].sel(
             {lat_dim: slice(lat_min, lat_max), lon_dim: slice(lon_min, lon_max)}
         )
 
