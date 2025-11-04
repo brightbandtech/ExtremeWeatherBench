@@ -100,13 +100,13 @@ cp.plot_all_cases_and_obs(
     ewb_cases,
     event_type="tropical_cyclone",
     filename=basepath + "docs/notebooks/figs/ewb_tcs_obs.png",
-    targets=case_operators,
+    targets=case_operators_with_targets_established,
 )
 cp.plot_all_cases_and_obs(
     ewb_cases,
     event_type="freeze",
     filename=basepath + "docs/notebooks/figs/ewb_freeze_obs.png",
-    targets=case_operators,
+    targets=case_operators_with_targets_established,
 )
 cp.plot_all_cases_and_obs(
     ewb_cases,
@@ -118,11 +118,11 @@ cp.plot_all_cases_and_obs(
     ewb_cases,
     event_type="atmospheric_river",
     filename=basepath + "docs/notebooks/figs/ewb_ar_obs.png",
-    targets=case_operators,
+    targets=case_operators_with_targets_established,
 )
 cp.plot_all_cases_and_obs(
     ewb_cases,
     event_type="severe_convection",
     filename=basepath + "docs/notebooks/figs/ewb_convective_obs.png",
-    targets=case_operators,
+    targets=case_operators_with_targets_established,
 )
