@@ -255,7 +255,7 @@ def dewpoint_from_specific_humidity(pressure: float, specific_humidity: float) -
     $$T_d =\frac{243.5 \log(e / 6.112)}{17.67 - \log(e / 6.112)}$$
 
     Args:
-        pressure: The ambient pressure in Pascals.
+        pressure: The ambient pressure in hPa.
         specific_humidity: The specific humidity in kg/kg.
 
     Returns:
