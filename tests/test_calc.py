@@ -450,7 +450,7 @@ class TestPressureCalculations:
 
         assert abs(calculated - expected) < 1e-6
 
-    def test_orography_from_arco_era5(self):
+    def test_orography_from_arco_era5(self, monkeypatch):
         """Test orography calculation from ARCO ERA5 when no surface geopotential."""
         # Create a dataset without geopotential_at_surface to trigger else branch
         time = pd.date_range("2023-01-01", periods=2, freq="6h")
@@ -468,6 +468,26 @@ class TestPressureCalculations:
             coords={"time": time, "latitude": lat, "longitude": lon},
         )
 
+        # Mock the ARCO ERA5 dataset with geopotential data
+        mock_era5_time = pd.date_range("2020-01-01", periods=1000001, freq="h")
+        # Use reasonable geopotential values (0-20000 m²/s² -> 0-2000m orography)
+        mock_geopotential = np.random.uniform(0, 20000, (1000001, 3, 3))  # m²/s²
+        mock_era5 = xr.Dataset(
+            {
+                "geopotential_at_surface": (
+                    ["time", "latitude", "longitude"],
+                    mock_geopotential,
+                ),
+            },
+            coords={"time": mock_era5_time, "latitude": lat, "longitude": lon},
+        )
+
+        # Mock xr.open_zarr to return our mock dataset
+        def mock_open_zarr(*args, **kwargs):
+            return mock_era5
+
+        monkeypatch.setattr(xr, "open_zarr", mock_open_zarr)
+
         # This should trigger the else branch and load from ARCO ERA5
         orography_data = calc.orography(dataset)
 
@@ -482,13 +502,12 @@ class TestPressureCalculations:
         # Should have data (not all zeros or NaN)
         assert not orography_data.isnull().all()
 
-        # Test a specific point - hardcode expected value for validation
+        # Test a specific point - verify orography values are reasonable
         # Using a point in the middle of our test grid (35°N, 265°E)
-        # This is roughly in the central US where elevation should be reasonable
         test_point = orography_data.sel(latitude=35, longitude=265, method="nearest")
 
-        # Elevation should be reasonable for central US (0-2000m typically)
-        assert 0 <= test_point <= 3000  # Allow up to 3000m for mountain regions
+        # Elevation should match our mock data range (0-2000m)
+        assert 0 <= test_point <= 2100  # Allow small buffer for rounding
 
 
 class TestGeopotentialCalculations:

@@ -105,14 +105,14 @@ class ComputeDocstringMetaclass(abc.ABCMeta):
     any additional effort.
     """
 
-    def __new__(self, name, bases, namespace):
-        cls = super().__new__(self, name, bases, namespace)
+    def __new__(cls, name, bases, namespace):
+        cls = super().__new__(cls, name, bases, namespace)
         # NOTE: the `compute_metric()` method will be defined in the ABC `BaseMetric`,
         # and we never expect the user re-implement it. So it won't be in the namespace
         # of the concrete metric classes - it will only be in the namespace of the ABC
         # `BaseMetric`, and will be available as an attribute of the concrete metric
         # classes.
-        if "_compute_metric" in namespace and hasattr(self, "compute_metric"):
+        if "_compute_metric" in namespace and hasattr(cls, "compute_metric"):
             # Transfer the docstring from _compute_metric to compute_metric, if the
             # former exists.
             if cls._compute_metric.__doc__ is not None:
@@ -237,8 +237,8 @@ class ThresholdMetric(BaseMetric):
         kwargs.setdefault("target_threshold", self.target_threshold)
         kwargs.setdefault("preserve_dims", self.preserve_dims)
 
-        # Call the classmethod with the configured parameters
-        return self.__class__.compute_metric(forecast, target, **kwargs)
+        # Call the instance method with the configured parameters
+        return self.compute_metric(forecast, target, **kwargs)
 
 
 class CSI(ThresholdMetric):
@@ -1099,7 +1099,6 @@ class SpatialDisplacement(BaseMetric):
         self.forecast_mask_variable = forecast_mask_variable
         self.target_mask_variable = target_mask_variable
 
-    @classmethod
     def _compute_metric(
         self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
     ) -> Any:
@@ -1113,26 +1112,6 @@ class SpatialDisplacement(BaseMetric):
             else:
                 return (np.nan, np.nan)
 
-        def idx_to_coords(lat_idx, lon_idx, lat_coords, lon_coords):
-            """Convert indices to coordinates, handling NaN indices."""
-            # Create output arrays with NaN
-            lat_coords_out = np.full_like(lat_idx, np.nan)
-            lon_coords_out = np.full_like(lon_idx, np.nan)
-
-            # Find valid (non-NaN) indices
-            valid_mask = ~(np.isnan(lat_idx) | np.isnan(lon_idx))
-
-            if valid_mask.any():
-                # Convert to integer indices only where valid
-                int_lat_idx = np.where(valid_mask, lat_idx.astype(int), 0)
-                int_lon_idx = np.where(valid_mask, lon_idx.astype(int), 0)
-
-                # Use advanced indexing to get coordinates
-                lat_coords_out[valid_mask] = lat_coords[int_lat_idx[valid_mask]]
-                lon_coords_out[valid_mask] = lon_coords[int_lon_idx[valid_mask]]
-
-            return lat_coords_out, lon_coords_out
-
         target_lat_idx, target_lon_idx = xr.apply_ufunc(
             center_of_mass_ufunc,
             target,
@@ -1145,7 +1124,7 @@ class SpatialDisplacement(BaseMetric):
         # Process target coordinates
         target_lat_idx = np.round(target_lat_idx)
         target_lon_idx = np.round(target_lon_idx)
-        target_lat_coords, target_lon_coords = idx_to_coords(
+        target_lat_coords, target_lon_coords = utils.idx_to_coords(
             target_lat_idx,
             target_lon_idx,
             target.latitude.values,
@@ -1164,7 +1143,7 @@ class SpatialDisplacement(BaseMetric):
         )
         forecast_lat_idx = np.round(forecast_lat_idx)
         forecast_lon_idx = np.round(forecast_lon_idx)
-        forecast_lat_coords, forecast_lon_coords = idx_to_coords(
+        forecast_lat_coords, forecast_lon_coords = utils.idx_to_coords(
             forecast_lat_idx,
             forecast_lon_idx,
             forecast.latitude.values,

@@ -240,27 +240,26 @@ class TestThresholdMetrics:
         assert acc_metric.forecast_threshold == 15000
         assert acc_metric.target_threshold == 0.3
 
-    def test_threshold_metric_dual_interface(self):
-        """Test that both classmethod and instance callable interfaces work."""
+    def test_threshold_metric_instance_interface(self):
+        """Test that instance callable interface works."""
         # Create test data
         forecast = xr.DataArray([0.6, 0.8], dims=["x"])
         target = xr.DataArray([0.7, 0.9], dims=["x"])
-
-        # Test classmethod usage
-        csi_class_result = metrics.CSI.compute_metric(
-            forecast,
-            target,
-            custom_param=5,
-            preserve_dims="init_time",
-            invalid_param=999,
-        )
 
         # Test instance callable usage
         csi_instance = metrics.CSI(forecast_threshold=0.5, target_threshold=0.5)
         csi_instance_result = csi_instance(forecast, target, preserve_dims="x")
 
-        # Results should be the same type
-        assert isinstance(csi_class_result, type(csi_instance_result))
+        # Should return a DataArray
+        assert isinstance(csi_instance_result, xr.DataArray)
+
+        # Test using compute_metric directly on instance
+        csi_direct_result = csi_instance.compute_metric(
+            forecast, target, preserve_dims="x"
+        )
+
+        # Both should return same type
+        assert isinstance(csi_direct_result, type(csi_instance_result))
 
     def test_threshold_metric_parameter_override(self):
         """Test that instance call can override configured thresholds."""
@@ -811,9 +810,6 @@ class TestIncompleteMetrics:
             metrics.FAR,
             metrics.CSI,
             metrics.LeadTimeDetection,
-            metrics.RegionalHitsMisses,
-            metrics.HitsMisses,
-            metrics.EarlySignal,
         ]
 
         for metric_class in incomplete_metrics:
@@ -831,7 +827,6 @@ class TestMetricIntegration:
             metrics.MAE,
             metrics.ME,
             metrics.RMSE,
-            metrics.EarlySignal,
             metrics.MaximumMAE,
             metrics.MinimumMAE,
             metrics.MaxMinMAE,
@@ -844,8 +839,6 @@ class TestMetricIntegration:
             metrics.FAR,
             metrics.CSI,
             metrics.LeadTimeDetection,
-            metrics.RegionalHitsMisses,
-            metrics.HitsMisses,
         ]
 
         for metric_class in all_metrics:
@@ -869,7 +862,6 @@ class TestMetricIntegration:
             "MaxMinMAE",
             "OnsetME",
             "DurationME",
-            "EarlySignal",
             "LandfallDisplacement",
             "LandfallTimeME",
             "LandfallIntensityMAE",
@@ -877,8 +869,6 @@ class TestMetricIntegration:
             "FAR",
             "CSI",
             "LeadTimeDetection",
-            "RegionalHitsMisses",
-            "HitsMisses",
         ]
 
         for class_name in expected_classes:

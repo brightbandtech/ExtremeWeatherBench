@@ -216,9 +216,10 @@ class TestInputsIntegration:
     def test_era5_full_workflow_with_zarr(self, temp_zarr_file):
         """Test complete ERA5 workflow with zarr file."""
         era5 = inputs.ERA5(
+            source=temp_zarr_file,
             variables=["2m_temperature"],
             variable_mapping={},
-            storage_options={},
+            storage_options=None,
         )
 
         # Test opening data
@@ -236,7 +237,7 @@ class TestInputsIntegration:
             source=temp_parquet_file,
             variables=["surface_air_temperature"],
             variable_mapping={},
-            storage_options={},
+            storage_options=None,
         )
 
         # Test opening data

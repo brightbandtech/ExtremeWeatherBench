@@ -516,3 +516,39 @@ class ParallelTqdm(Parallel):
             self.progress_bar.refresh()
         # update progressbar
         self.progress_bar.update(self.n_completed_tasks - self.progress_bar.n)
+
+
+def idx_to_coords(
+    lat_idx: Sequence[float],
+    lon_idx: Sequence[float],
+    lat_coords: Sequence[float],
+    lon_coords: Sequence[float],
+) -> tuple[Sequence[float], Sequence[float]]:
+    """Convert indices to coordinates, handling NaN indices.
+
+    Args:
+        lat_idx: The latitude indices.
+        lon_idx: The longitude indices.
+        lat_coords: The latitude coordinates.
+        lon_coords: The longitude coordinates.
+
+    Returns:
+        The latitude and longitude coordinates.
+    """
+    # Create output arrays with NaN
+    lat_coords_out = np.full_like(lat_idx, np.nan)
+    lon_coords_out = np.full_like(lon_idx, np.nan)
+
+    # Find valid (non-NaN) indices
+    valid_mask = ~(np.isnan(lat_idx) | np.isnan(lon_idx))
+
+    if valid_mask.any():
+        # Convert to integer indices only where valid
+        int_lat_idx = np.where(valid_mask, lat_idx.astype(int), 0)
+        int_lon_idx = np.where(valid_mask, lon_idx.astype(int), 0)
+
+        # Use advanced indexing to get coordinates
+        lat_coords_out[valid_mask] = lat_coords[int_lat_idx[valid_mask]]
+        lon_coords_out[valid_mask] = lon_coords[int_lon_idx[valid_mask]]
+
+    return lat_coords_out, lon_coords_out
