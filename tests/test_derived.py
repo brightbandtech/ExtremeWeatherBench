@@ -108,36 +108,33 @@ def sample_dataset():
 class TestValidDerivedVariable(derived.DerivedVariable):
     """A valid test implementation of DerivedVariable for testing purposes."""
 
-    required_variables = ["test_variable_1", "test_variable_2"]
+    variables = ["test_variable_1", "test_variable_2"]
 
-    @classmethod
-    def derive_variable(cls, data: xr.Dataset, **kwargs) -> xr.DataArray:
+    def derive_variable(self, data: xr.Dataset, **kwargs) -> xr.DataArray:
         """Test implementation that sums two variables."""
-        return data[cls.required_variables[0]] + data[cls.required_variables[1]]
+        return data[self.variables[0]] + data[self.variables[1]]
 
 
 class TestMinimalDerivedVariable(derived.DerivedVariable):
     """A minimal test implementation with one required variable."""
 
-    required_variables = ["single_variable"]
+    variables = ["single_variable"]
 
-    @classmethod
-    def derive_variable(cls, data: xr.Dataset, **kwargs) -> xr.DataArray:
+    def derive_variable(self, data: xr.Dataset, **kwargs) -> xr.DataArray:
         """Test implementation that returns the variable unchanged."""
-        return data[cls.required_variables[0]]
+        return data[self.variables[0]]
 
 
 class TestDerivedVariableWithoutName(derived.DerivedVariable):
     """A test implementation that returns a DataArray without a name."""
 
-    required_variables = ["single_variable"]
+    variables = ["single_variable"]
 
-    @classmethod
-    def derive_variable(cls, data: xr.Dataset, **kwargs) -> xr.DataArray:
+    def derive_variable(self, data: xr.Dataset, **kwargs) -> xr.DataArray:
         """Test implementation that returns DataArray without name."""
-        result = data[cls.required_variables[0]]
+        result = data[self.variables[0]]
         result.name = None
-        return result
+        return result  # type: ignore
 
 
 class TestDerivedVariableForTesting(derived.DerivedVariable):
@@ -145,7 +142,7 @@ class TestDerivedVariableForTesting(derived.DerivedVariable):
     _maybe_convert_variable_to_string."""
 
     name = "TestDerivedVar"
-    required_variables = ["input_var1", "input_var2"]
+    variables = ["input_var1", "input_var2"]
 
     @classmethod
     def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
@@ -165,9 +162,15 @@ class TestDerivedVariableAbstractClass:
         """Test that the name property defaults to class name."""
         assert TestValidDerivedVariable().name == "TestValidDerivedVariable"
 
+    def test_name_property_custom(self):
+        """Test that custom name overrides class name."""
+        custom_name = "CustomVariableName"
+        derived_var = TestValidDerivedVariable(name=custom_name)
+        assert derived_var.name == custom_name
+
     def test_compute_method_calls_derive_variable(self, sample_dataset):
         """Test that compute method calls derive_variable and validates inputs."""
-        result = TestValidDerivedVariable.compute(sample_dataset)
+        result = TestValidDerivedVariable().compute(sample_dataset)
 
         assert isinstance(result, xr.DataArray)
         # Should be sum of test_variable_1 and test_variable_2
@@ -180,15 +183,13 @@ class TestDerivedVariableAbstractClass:
         incomplete_dataset = sample_dataset.drop_vars("test_variable_2")
 
         # This should fail during derive_variable when accessing missing variable
-        with pytest.raises(
-            KeyError
-        ):  # derive_variable will fail when accessing missing variable
-            TestValidDerivedVariable.compute(incomplete_dataset)
+        with pytest.raises(KeyError, match="test_variable_2"):
+            TestValidDerivedVariable().compute(incomplete_dataset)
 
-    def test_required_variables_class_attribute(self):
-        """Test that required_variables is properly defined as class attribute."""
-        assert hasattr(TestValidDerivedVariable, "required_variables")
-        assert TestValidDerivedVariable.required_variables == [
+    def test_variables_class_attribute(self):
+        """Test that variables is properly defined as class attribute."""
+        assert hasattr(TestValidDerivedVariable, "variables")
+        assert TestValidDerivedVariable.variables == [
             "test_variable_1",
             "test_variable_2",
         ]
@@ -291,35 +292,32 @@ class TestMaybeDeriveVariablesFunction:
         """Test that kwargs are passed to derived variable compute methods."""
 
         class TestDerivedVariableWithKwargs(derived.DerivedVariable):
-            required_variables = ["test_variable_1"]
+            variables = ["test_variable_1"]
 
-            @classmethod
-            def derive_variable(cls, data: xr.Dataset, **kwargs) -> xr.DataArray:
+            def derive_variable(self, data: xr.Dataset, **kwargs) -> xr.DataArray:
                 multiplier = kwargs.get("multiplier", 1)
-                return data[cls.required_variables[0]] * multiplier
+                return data[self.variables[0]] * multiplier
 
-            @classmethod
-            def compute(cls, data: xr.Dataset, **kwargs) -> xr.DataArray:
+            def compute(self, data: xr.Dataset, **kwargs) -> xr.DataArray:
                 # Override to accept kwargs
-                for v in cls.required_variables:
+                for v in self.variables:
                     if v not in data.data_vars:
                         raise ValueError(f"Input variable {v} not found in data")
-                return cls.derive_variable(data, **kwargs)
+                return self.derive_variable(data, **kwargs)
 
     def test_derived_variable_missing_required_vars(self, sample_dataset):
         """Test derived variable with missing required variables."""
 
         class TestMissingVarDerived(derived.DerivedVariable):
-            required_variables = ["nonexistent_variable"]
+            variables = ["nonexistent_variable"]
 
-            @classmethod
-            def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
-                return data[cls.required_variables[0]]
+            def derive_variable(self, data: xr.Dataset) -> xr.DataArray:
+                return data[self.variables[0]]
 
         variables = [TestMissingVarDerived()]
 
         sample_dataset.attrs["dataset_type"] = "forecast"
-        with pytest.raises(KeyError, match="No variable named 'nonexistent_variable'"):
+        with pytest.raises(KeyError, match="nonexistent_variable"):
             derived.maybe_derive_variables(sample_dataset, variables)
 
     def test_no_derived_variables_in_list(self, sample_dataset):
@@ -380,10 +378,9 @@ class TestMaybeDeriveVariablesFunction:
         """Test that exceptions from derived variable compute methods propagate."""
 
         class TestExceptionDerived(derived.DerivedVariable):
-            required_variables = ["test_variable_1"]
+            variables = ["test_variable_1"]
 
-            @classmethod
-            def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
+            def derive_variable(self, data: xr.Dataset) -> xr.DataArray:
                 raise RuntimeError("Test exception from derive_variable")
 
         variables = [TestExceptionDerived()]
@@ -396,18 +393,16 @@ class TestMaybeDeriveVariablesFunction:
         """Test behavior with multiple derived variables - only first is processed."""
 
         class TestDuplicateName1(derived.DerivedVariable):
-            required_variables = ["test_variable_1"]
+            variables = ["test_variable_1"]
 
-            @classmethod
-            def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
-                return data[cls.required_variables[0]] * 2
+            def derive_variable(self, data: xr.Dataset) -> xr.DataArray:
+                return data[self.variables[0]] * 2
 
         class TestDuplicateName2(derived.DerivedVariable):
-            required_variables = ["test_variable_2"]
+            variables = ["test_variable_2"]
 
-            @classmethod
-            def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
-                return data[cls.required_variables[0]] * 3
+            def derive_variable(self, data: xr.Dataset) -> xr.DataArray:
+                return data[self.variables[0]] * 3
 
         # Rename both to have same name by overriding name property
         TestDuplicateName1.__name__ = "SameName"
@@ -431,22 +426,20 @@ class TestMaybeDeriveVariablesFunction:
         """Test early return when first derived var returns dataset with diff dims."""
 
         class TestEarlyReturnDataset(derived.DerivedVariable):
-            required_variables = ["test_variable_1"]
+            variables = ["test_variable_1"]
 
-            @classmethod
-            def derive_variable(cls, data: xr.Dataset) -> xr.Dataset:
+            def derive_variable(self, data: xr.Dataset) -> xr.Dataset:
                 # Return dataset with different dims - should trigger early return
                 return xr.Dataset(
                     {"special_var": xr.DataArray([1, 2, 3], dims=["special_dim"])}
                 )
 
         class TestNeverExecuted(derived.DerivedVariable):
-            required_variables = ["test_variable_2"]
+            variables = ["test_variable_2"]
 
-            @classmethod
-            def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
+            def derive_variable(self, data: xr.Dataset) -> xr.DataArray:
                 # This should never be called due to early return
-                return data[cls.required_variables[0]]
+                return data[self.variables[0]]
 
         variables = [TestEarlyReturnDataset(), TestNeverExecuted()]
 
@@ -464,10 +457,9 @@ class TestMaybeDeriveVariablesFunction:
         """Test derived variable that returns Dataset with matching dimensions."""
 
         class TestDatasetMatchingDims(derived.DerivedVariable):
-            required_variables = ["test_variable_1"]
+            variables = ["test_variable_1"]
 
-            @classmethod
-            def derive_variable(cls, data: xr.Dataset) -> xr.Dataset:
+            def derive_variable(self, data: xr.Dataset) -> xr.Dataset:
                 # Return a dataset with same dimensions as input but multiple variables
                 return xr.Dataset(
                     {
@@ -502,17 +494,15 @@ class TestMaybeDeriveVariablesFunction:
         """Test mix of derived variables - only first is processed."""
 
         class TestDataArrayOutput(derived.DerivedVariable):
-            required_variables = ["test_variable_1"]
+            variables = ["test_variable_1"]
 
-            @classmethod
-            def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
+            def derive_variable(self, data: xr.Dataset) -> xr.DataArray:
                 return data["test_variable_1"] * 3
 
         class TestDatasetOutput(derived.DerivedVariable):
-            required_variables = ["test_variable_2"]
+            variables = ["test_variable_2"]
 
-            @classmethod
-            def derive_variable(cls, data: xr.Dataset) -> xr.Dataset:
+            def derive_variable(self, data: xr.Dataset) -> xr.Dataset:
                 # Return dataset with matching dimensions
                 return xr.Dataset(
                     {
@@ -540,7 +530,7 @@ class TestMaybeDeriveVariablesFunction:
         """Test derived variable that returns neither DataArray nor Dataset."""
 
         class TestInvalidReturnType(derived.DerivedVariable):
-            required_variables = ["test_variable_1"]
+            variables = ["test_variable_1"]
 
             @classmethod
             def derive_variable(cls, data: xr.Dataset):
@@ -562,7 +552,7 @@ class TestMaybeDeriveVariablesFunction:
 class TestRecursiveDerivedVariable(derived.DerivedVariable):
     """A test derived variable that requires another derived variable."""
 
-    required_variables = [TestValidDerivedVariable]
+    variables = [TestValidDerivedVariable]
 
     @classmethod
     def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
@@ -575,7 +565,7 @@ class TestRecursiveDerivedVariable(derived.DerivedVariable):
 class TestDeeplyNestedDerivedVariable(derived.DerivedVariable):
     """A test derived variable that requires a recursive derived variable."""
 
-    required_variables = [TestRecursiveDerivedVariable]
+    variables = [TestRecursiveDerivedVariable]
 
     @classmethod
     def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
@@ -607,12 +597,13 @@ class TestUtilityFunctions:
 
         assert set(result) == set(expected)
 
-    def test_maybe_include_variables_from_derived_input_with_classes(self):
-        """Test maybe_include_variables_from_derived_input with classes."""
+    def test_maybe_include_variables_from_derived_input_with_multiple_instances(self):
+        """Test maybe_include_variables_from_derived_input with multiple
+        instances."""
         incoming_variables = [
             "existing_variable",
-            TestValidDerivedVariable,  # Class, not instance
-            TestMinimalDerivedVariable,  # Class, not instance
+            TestValidDerivedVariable(),  # Instance
+            TestMinimalDerivedVariable(),  # Instance
         ]
 
         result = derived.maybe_include_variables_from_derived_input(incoming_variables)
@@ -634,17 +625,18 @@ class TestUtilityFunctions:
 
         assert set(result) == set(incoming_variables)
 
-    def test_maybe_include_variables_with_recursive_derived_classes(self):
-        """Test recursive resolution of derived variables with classes."""
+    def test_maybe_include_variables_with_nested_string_variables(self):
+        """Test that nested derived variables are flattened correctly."""
+        # TestRecursiveDerivedVariable has TestValidDerivedVariable class
+        # in its variables list, but since we only support instances,
+        # it will be treated as a string and not recursively resolved
         incoming_variables = [
             "base_variable",
-            TestRecursiveDerivedVariable,  # Requires TestValidDerivedVariable
+            TestValidDerivedVariable(),
         ]
 
         result = derived.maybe_include_variables_from_derived_input(incoming_variables)
 
-        # Should recursively resolve TestRecursiveDerivedVariable ->
-        # TestValidDerivedVariable -> ["test_variable_1", "test_variable_2"]
         expected = [
             "base_variable",
             "test_variable_1",
@@ -653,61 +645,61 @@ class TestUtilityFunctions:
 
         assert set(result) == set(expected)
 
-    def test_maybe_include_variables_with_deeply_nested_derived_classes(self):
-        """Test deeply nested recursive resolution of derived variables."""
+    def test_maybe_include_variables_with_different_instances(self):
+        """Test multiple different derived variable instances."""
         incoming_variables = [
             "base_variable",
-            TestDeeplyNestedDerivedVariable,  # Requires TestRecursiveDerivedVariable
+            TestValidDerivedVariable(),
+            TestMinimalDerivedVariable(),
         ]
 
         result = derived.maybe_include_variables_from_derived_input(incoming_variables)
 
-        # Should recursively resolve:
-        # TestDeeplyNestedDerivedVariable -> TestRecursiveDerivedVariable ->
-        # TestValidDerivedVariable -> ["test_variable_1", "test_variable_2"]
         expected = [
             "base_variable",
             "test_variable_1",
             "test_variable_2",
+            "single_variable",
         ]
 
         assert set(result) == set(expected)
 
-    def test_maybe_include_variables_mixed_instances_and_classes(self):
-        """Test mixed instances and classes with recursive resolution."""
+    def test_maybe_include_variables_mixed_strings_and_instances(self):
+        """Test mixed strings and instances."""
         incoming_variables = [
             "base_variable",
             TestValidDerivedVariable(),  # Instance
-            TestRecursiveDerivedVariable,  # Class requires TestValidDerivedVariable
+            TestMinimalDerivedVariable(),  # Instance
             "another_variable",
         ]
 
         result = derived.maybe_include_variables_from_derived_input(incoming_variables)
 
-        # Should handle both instance and class, avoiding duplicates
+        # Should handle both strings and instances, avoiding duplicates
         expected = [
             "base_variable",
             "another_variable",
             "test_variable_1",
             "test_variable_2",
+            "single_variable",
         ]
 
         assert set(result) == set(expected)
 
     def test_maybe_include_variables_removes_duplicates(self):
-        """Test that function preserves order and removes duplicates."""
+        """Test that function removes duplicates."""
         incoming_variables = [
             "var1",
-            TestValidDerivedVariable,  # Adds test_variable_1, test_variable_2
+            TestValidDerivedVariable(),  # Adds test_variable_1, test_variable_2
             "var2",
-            TestMinimalDerivedVariable,  # Adds single_variable
+            TestMinimalDerivedVariable(),  # Adds single_variable
             "var1",  # Duplicate
-            TestValidDerivedVariable,  # Duplicate derived variable
+            TestValidDerivedVariable(),  # Duplicate derived variable type
         ]
 
         result = derived.maybe_include_variables_from_derived_input(incoming_variables)
 
-        # Should preserve order and remove duplicates
+        # Should remove duplicates
         expected = [
             "var1",
             "var2",
@@ -717,58 +709,6 @@ class TestUtilityFunctions:
         ]
 
         assert set(result) == set(expected)
-
-    def test_is_derived_variable_with_string(self):
-        """Test is_derived_variable returns False for string inputs."""
-        result = derived.is_derived_variable("regular_string_variable")
-        assert result is False
-
-    def test_is_derived_variable_with_derived_variable_class(self):
-        """Test is_derived_variable returns True for DerivedVariable classes."""
-        result = derived.is_derived_variable(TestValidDerivedVariable)
-        assert result is True
-
-    def test_is_derived_variable_with_minimal_derived_variable_class(self):
-        """Test is_derived_variable returns True for minimal DerivedVariable classes."""
-        result = derived.is_derived_variable(TestMinimalDerivedVariable)
-        assert result is True
-
-    def test_is_derived_variable_with_derived_variable_instance(self):
-        """Test is_derived_variable returns False for DerivedVariable instances."""
-        # The function is designed to work with classes, not instances
-        instance = TestValidDerivedVariable()
-        result = derived.is_derived_variable(instance)
-        assert result is False
-
-    def test_is_derived_variable_with_non_derived_class(self):
-        """Test is_derived_variable returns False for non-DerivedVariable classes."""
-
-        class NotDerivedVariable:
-            pass
-
-        result = derived.is_derived_variable(NotDerivedVariable)
-        assert result is False
-
-    def test_is_derived_variable_with_builtin_type(self):
-        """Test is_derived_variable returns False for builtin types."""
-        result_int = derived.is_derived_variable(int)
-        result_str = derived.is_derived_variable(str)
-        result_list = derived.is_derived_variable(list)
-
-        assert result_int is False
-        assert result_str is False
-        assert result_list is False
-
-    def test_is_derived_variable_with_none(self):
-        """Test is_derived_variable returns False for None."""
-        result = derived.is_derived_variable(None)
-        assert result is False
-
-    def test_is_derived_variable_with_abstract_base_class(self):
-        """Test is_derived_variable with abstract DerivedVariable class."""
-        # The abstract base class should return True since it's still a subclass
-        result = derived.is_derived_variable(derived.DerivedVariable)
-        assert result is True
 
 
 class TestEdgeCasesAndErrorConditions:
@@ -798,19 +738,17 @@ class TestEdgeCasesAndErrorConditions:
             # This is acceptable behavior for None input
             pass
 
-    def test_maybe_include_variables_circular_dependency(self):
-        """Test handling of potential circular dependencies."""
-        # Create a derived variable that could theoretically depend on itself
-        # This tests the robustness of the recursive resolution
+    def test_maybe_include_variables_simple_instance(self):
+        """Test handling of a simple derived variable instance."""
 
         class TestSelfReferencing(derived.DerivedVariable):
-            required_variables = ["base_var"]
+            variables = ["base_var"]
 
             @classmethod
             def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
                 return data["base_var"]
 
-        incoming_variables = [TestSelfReferencing]
+        incoming_variables = [TestSelfReferencing()]
 
         result = derived.maybe_include_variables_from_derived_input(incoming_variables)
 
@@ -821,11 +759,8 @@ class TestEdgeCasesAndErrorConditions:
         """Test behavior with empty datasets."""
         empty_dataset = xr.Dataset()
 
-        # Should fail during derive_variable when accessing missing variables
-        with pytest.raises(
-            KeyError
-        ):  # derive_variable will fail when accessing missing variables
-            TestValidDerivedVariable.compute(empty_dataset)
+        with pytest.raises(KeyError):
+            TestValidDerivedVariable().compute(empty_dataset)
 
     def test_derived_variable_with_wrong_dimensions(self, sample_dataset):
         """Test behavior when variables have unexpected dimensions."""
@@ -838,7 +773,7 @@ class TestEdgeCasesAndErrorConditions:
         )
 
         # This should still work because xarray handles broadcasting
-        result = TestValidDerivedVariable.compute(wrong_dim_dataset)
+        result = TestValidDerivedVariable().compute(wrong_dim_dataset)
         assert isinstance(result, xr.DataArray)
 
     def test_large_dataset_performance(self):
@@ -867,7 +802,7 @@ class TestEdgeCasesAndErrorConditions:
         )
 
         # This tests that the computation doesn't crash with larger data
-        result = TestValidDerivedVariable.compute(large_dataset)
+        result = TestValidDerivedVariable().compute(large_dataset)
         assert isinstance(result, xr.DataArray)
         assert result.shape == (len(time), len(latitudes), len(longitudes))
 
@@ -952,37 +887,34 @@ class TestNormalizeVariable:
         assert result == "temperature"
         assert isinstance(result, str)
 
-    def test_maybe_convert_variable_to_string_derived_class_input(self):
-        """Test _maybe_convert_variable_to_string with DerivedVariable class input."""
-        result = derived._maybe_convert_variable_to_string(
-            TestDerivedVariableForTesting
-        )
+    def test_maybe_convert_variable_to_string_derived_instance_with_custom_name(self):
+        """Test _maybe_convert_variable_to_string with DerivedVariable instance
+        with custom name."""
+        instance = TestDerivedVariableForTesting()
+        result = derived._maybe_convert_variable_to_string(instance)
+        # Should use the class-level name attribute via __init__
         assert result == "TestDerivedVar"
         assert isinstance(result, str)
 
-    def test_maybe_convert_variable_to_string_derived_instance_input(self):
-        """Test _maybe_convert_variable_to_string with DerivedVariable instance input.
-
-        Note: The function is designed to handle classes, not instances.
-        Instances are passed through unchanged (not converted to string).
-        """
-        instance = TestDerivedVariableForTesting()
+    def test_maybe_convert_variable_to_string_derived_instance_default_name(self):
+        """Test _maybe_convert_variable_to_string with DerivedVariable instance
+        using default name (class name)."""
+        instance = TestValidDerivedVariable()
         result = derived._maybe_convert_variable_to_string(instance)
-        # Instance is returned as-is, not converted to string
-        assert result == instance
-        assert isinstance(result, TestDerivedVariableForTesting)
+        # Should use the class name via __init__ when no custom name provided
+        assert result == "TestValidDerivedVariable"
+        assert isinstance(result, str)
 
     def test_maybe_convert_variable_to_string_handles_both_types(self):
-        """Test that _maybe_convert_variable_to_string handles both incoming types
-        correctly."""
+        """Test that _maybe_convert_variable_to_string handles both incoming
+        types correctly."""
         # Test string type
         string_result = derived._maybe_convert_variable_to_string("my_variable")
         assert string_result == "my_variable"
 
-        # Test derived variable type
-        derived_result = derived._maybe_convert_variable_to_string(
-            TestDerivedVariableForTesting
-        )
+        # Test derived variable instance type
+        instance = TestDerivedVariableForTesting()
+        derived_result = derived._maybe_convert_variable_to_string(instance)
         assert derived_result == "TestDerivedVar"
 
         # Results should be different but both strings

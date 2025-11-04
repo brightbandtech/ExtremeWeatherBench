@@ -21,6 +21,14 @@ from extremeweatherbench import (
     regions,
 )
 
+# Check if dask.distributed is available
+try:
+    import dask.distributed  # noqa: F401
+
+    HAS_DASK_DISTRIBUTED = True
+except ImportError:
+    HAS_DASK_DISTRIBUTED = False
+
 
 @pytest.fixture
 def sample_individual_case():
@@ -844,6 +852,9 @@ class TestRunParallel:
 
                 assert result == []
 
+    @pytest.mark.skipif(
+        not HAS_DASK_DISTRIBUTED, reason="dask.distributed not installed"
+    )
     @mock.patch("dask.distributed.Client")
     @mock.patch("dask.distributed.LocalCluster")
     def test_run_parallel_dask_backend_auto_client(
@@ -878,6 +889,9 @@ class TestRunParallel:
         mock_client.close.assert_called_once()
         assert isinstance(result, list)
 
+    @pytest.mark.skipif(
+        not HAS_DASK_DISTRIBUTED, reason="dask.distributed not installed"
+    )
     @mock.patch("dask.distributed.Client")
     def test_run_parallel_dask_backend_existing_client(
         self, mock_client_class, sample_case_operator
@@ -2515,7 +2529,7 @@ class TestForecastDerivedVariable(derived.DerivedVariable):
     """Test derived variable for forecast data."""
 
     name = "derived_forecast_var"
-    required_variables = ["surface_air_temperature"]
+    variables = ["surface_air_temperature"]
 
     @classmethod
     def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
@@ -2527,7 +2541,7 @@ class TestTargetDerivedVariable(derived.DerivedVariable):
     """Test derived variable for target data."""
 
     name = "derived_target_var"
-    required_variables = ["2m_temperature"]
+    variables = ["2m_temperature"]
 
     @classmethod
     def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:

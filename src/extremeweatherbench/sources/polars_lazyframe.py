@@ -64,7 +64,7 @@ def safely_pull_variables(
 
     # Track which variables we've found (use set to avoid duplicates)
     found_variables = set()
-    required_variables_satisfied = set()
+    variables_satisfied = set()
 
     # First, check for optional variables and add them if present
     for opt_var in optional_variables:
@@ -75,14 +75,14 @@ def safely_pull_variables(
                 replaced_vars = optional_variables_mapping[opt_var]
                 # Handle both single string and list of strings
                 if isinstance(replaced_vars, str):
-                    required_variables_satisfied.add(replaced_vars)
+                    variables_satisfied.add(replaced_vars)
                 else:
-                    required_variables_satisfied.update(replaced_vars)
+                    variables_satisfied.update(replaced_vars)
 
     # Then check for required variables that weren't replaced
     missing_variables = []
     for var in variables:
-        if var in required_variables_satisfied:
+        if var in variables_satisfied:
             # This required variable was replaced by an optional variable
             continue
         elif var in available_columns:
