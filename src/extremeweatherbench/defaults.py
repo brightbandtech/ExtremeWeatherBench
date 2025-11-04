@@ -10,18 +10,7 @@ from extremeweatherbench import inputs
 logging.getLogger("urllib3.connectionpool").setLevel(logging.CRITICAL)
 logging.getLogger("botocore.httpchecksum").setLevel(logging.CRITICAL)
 
-# Columns for the evaluation output dataframe
-OUTPUT_COLUMNS = [
-    "value",
-    "lead_time",
-    "init_time",
-    "target_variable",
-    "metric",
-    "forecast_source",
-    "target_source",
-    "case_id_number",
-    "event_type",
-]
+
 # The core coordinate variables that are always required, even if not dimensions
 # (e.g. latitude and longitude for xarray datasets)
 DEFAULT_COORDINATE_VARIABLES = [

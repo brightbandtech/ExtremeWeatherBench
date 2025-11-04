@@ -14,12 +14,25 @@ from tqdm.auto import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 from tqdm.dask import TqdmCallback
 
-from extremeweatherbench import cases, defaults, derived, inputs, sources, utils
+from extremeweatherbench import cases, derived, inputs, sources, utils
 
 if TYPE_CHECKING:
     from extremeweatherbench import metrics, regions
 
 logger = logging.getLogger(__name__)
+
+# Columns for the evaluation output dataframe
+OUTPUT_COLUMNS = [
+    "value",
+    "lead_time",
+    "init_time",
+    "target_variable",
+    "metric",
+    "forecast_source",
+    "target_source",
+    "case_id_number",
+    "event_type",
+]
 
 
 class ExtremeWeatherBench:
@@ -134,9 +147,9 @@ class ExtremeWeatherBench:
         # If there are results, concatenate them and return, else return an empty
         # DataFrame with the expected columns
         if run_results:
-            return utils._safe_concat(run_results, ignore_index=True)
+            return _safe_concat(run_results, ignore_index=True)
         else:
-            return pd.DataFrame(columns=defaults.OUTPUT_COLUMNS)
+            return pd.DataFrame(columns=OUTPUT_COLUMNS)
 
 
 def _run_case_operators(
@@ -266,11 +279,11 @@ def compute_case_operator(
 
     # Check if any dimension has zero length
     if 0 in forecast_ds.sizes.values() or 0 in target_ds.sizes.values():
-        return pd.DataFrame(columns=defaults.OUTPUT_COLUMNS)
+        return pd.DataFrame(columns=OUTPUT_COLUMNS)
 
     # Or, check if there aren't any dimensions
     elif len(forecast_ds.sizes) == 0 or len(target_ds.sizes) == 0:
-        return pd.DataFrame(columns=defaults.OUTPUT_COLUMNS)
+        return pd.DataFrame(columns=OUTPUT_COLUMNS)
     # spatiotemporally align the target and forecast datasets dependent on the target
     aligned_forecast_ds, aligned_target_ds = (
         case_operator.target.maybe_align_forecast_to_target(forecast_ds, target_ds)
@@ -313,11 +326,11 @@ def compute_case_operator(
             cache_path = (
                 pathlib.Path(cache_dir) if isinstance(cache_dir, str) else cache_dir
             )
-            concatenated = utils._safe_concat(results, ignore_index=True)
+            concatenated = _safe_concat(results, ignore_index=True)
             if not concatenated.empty:
                 concatenated.to_pickle(cache_path / "results.pkl")
 
-    return utils._safe_concat(results, ignore_index=True)
+    return _safe_concat(results, ignore_index=True)
 
 
 def _extract_standard_metadata(
@@ -377,7 +390,7 @@ def _ensure_output_schema(df: pd.DataFrame, **metadata) -> pd.DataFrame:
         df[col] = value
 
     # Check for missing columns and warn
-    missing_cols = set(defaults.OUTPUT_COLUMNS) - set(df.columns)
+    missing_cols = set(OUTPUT_COLUMNS) - set(df.columns)
 
     # An output requires one of init_time or lead_time. init_time will be present for a
     # metric that assesses something in an entire model run, such as the onset error of
@@ -398,7 +411,7 @@ def _ensure_output_schema(df: pd.DataFrame, **metadata) -> pd.DataFrame:
 
     # Ensure all OUTPUT_COLUMNS are present (missing ones will be NaN)
     # and reorder to match OUTPUT_COLUMNS specification
-    return df.reindex(columns=defaults.OUTPUT_COLUMNS)
+    return df.reindex(columns=OUTPUT_COLUMNS)
 
 
 def _evaluate_metric_and_return_df(
@@ -583,3 +596,69 @@ def run_pipeline(
             )
         )
         return xr.Dataset()
+
+
+def _safe_concat(
+    dataframes: list[pd.DataFrame], ignore_index: bool = True
+) -> pd.DataFrame:
+    """Safely concatenate DataFrames, filtering out empty ones.
+
+    This function prevents FutureWarnings from pd.concat when dealing with
+    empty or all-NA DataFrames by filtering them out before concatenation.
+    It also handles dtype mismatches by converting to object dtype only when
+    necessary to prevent concatenation warnings.
+
+    Args:
+        dataframes: List of DataFrames to concatenate
+        ignore_index: Whether to ignore index during concatenation
+
+    Returns:
+        Concatenated DataFrame, or empty DataFrame with OUTPUT_COLUMNS if all
+        input DataFrames are empty. Preserves original dtypes when consistent
+        across DataFrames, converts to object dtype only when there are
+        dtype mismatches.
+    """
+    # Filter out problematic DataFrames that would trigger FutureWarning
+    valid_dfs = []
+    for i, df in enumerate(dataframes):
+        # Skip empty DataFrames
+        if df.empty:
+            logger.debug(f"Skipping empty DataFrame {i}")
+            continue
+        # Skip DataFrames where all values are NA
+        if df.isna().all().all():
+            logger.debug(f"Skipping all-NA DataFrame {i}")
+            continue
+        # Skip DataFrames where all columns are empty/NA
+        if len(df.columns) > 0 and all(df[col].isna().all() for col in df.columns):
+            logger.debug(f"Skipping DataFrame {i} with all-NA columns")
+            continue
+
+        valid_dfs.append(df)
+
+    if valid_dfs:
+        # Check for dtype inconsistencies that cause FutureWarning
+        if len(valid_dfs) > 1:
+            # Check if there are dtype mismatches between DataFrames
+            reference_df = valid_dfs[0]
+            has_dtype_mismatch = False
+
+            for df in valid_dfs[1:]:
+                # Check if columns have different dtypes across DataFrames
+                for col in reference_df.columns:
+                    if col in df.columns:
+                        if reference_df[col].dtype != df[col].dtype:
+                            has_dtype_mismatch = True
+                            break
+                if has_dtype_mismatch:
+                    break
+
+            if has_dtype_mismatch:
+                # Only convert to object dtype if there are mismatches
+                consistent_dfs = [df.astype(object) for df in valid_dfs]
+                return pd.concat(consistent_dfs, ignore_index=ignore_index)
+
+        # No dtype mismatches, concatenate normally
+        return pd.concat(valid_dfs, ignore_index=ignore_index)
+    else:
+        return pd.DataFrame(columns=OUTPUT_COLUMNS)
