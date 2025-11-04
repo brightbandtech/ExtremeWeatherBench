@@ -278,7 +278,7 @@ def dewpoint_from_specific_humidity(pressure: float, specific_humidity: float) -
     return T_d + 273.15
 
 
-def compute_cape_cin(
+def compute_mixed_layer_cape(
     pressure: xr.DataArray,
     temperature: xr.DataArray,
     dewpoint: xr.DataArray,
@@ -286,8 +286,8 @@ def compute_cape_cin(
     pressure_dim: str = "level",
     depth: float = 100.0,
     parallel: bool = True,
-) -> tuple[xr.DataArray, xr.DataArray]:
-    """Compute CAPE and CIN from thermodynamic profiles.
+) -> xr.DataArray:
+    """Compute mixed-layer CAPE from thermodynamic profiles.
 
     This function applies the optimized CAPE/CIN calculation to xarray DataArrays,
     handling both in-memory and Dask-backed arrays automatically. It supports arbitrary
@@ -296,6 +296,8 @@ def compute_cape_cin(
     In general, we recommend using parallel=False whenever you are processing data with
     less than ~1,000 profiles per chunk; otherwise, use parallel=True to take advantage
     of batching at the chunk level.
+
+    We don't return the computed CIN here because it's not yet implemented correctly.
 
     Args:
         pressure: Pressure in hPa. Must have pressure_dim as one of its dimensions.
@@ -408,18 +410,17 @@ def compute_cape_cin(
         z_batch = np.ascontiguousarray(z_batch, dtype=np.float64)
 
         # Call the selected Numba batch function (parallel or serial)
-        cape_array, cin_array = cape_batch_func(
+        cape_array, _ = cape_batch_func(
             p_batch, t_batch, td_batch, z_batch, depth=depth
         )
 
         # Reshape back to original batch dimensions (removing pressure dimension)
         cape_array = cape_array.reshape(original_shape)
-        cin_array = cin_array.reshape(original_shape)
 
-        return cape_array, cin_array
+        return cape_array
 
     # Use xarray.apply_ufunc to apply the wrapped interface
-    cape, cin = xr.apply_ufunc(
+    cape = xr.apply_ufunc(
         _compute_cape_cin_wrapper,
         pressure,
         temperature,
@@ -431,10 +432,10 @@ def compute_cape_cin(
             [pressure_dim],
             [pressure_dim],
         ],
-        output_core_dims=[[], []],  # CAPE and CIN have no pressure dimension
+        output_core_dims=[[]],  # CAPE has no pressure dimension
         vectorize=False,  # We handle the batching ourselves
         dask="parallelized",  # Enable Dask support
-        output_dtypes=[np.float64, np.float64],  # Specify output types
+        output_dtypes=[np.float64],  # Specify output types
         dask_gufunc_kwargs={
             "output_sizes": {},  # No new dimensions created
         },
@@ -447,12 +448,4 @@ def compute_cape_cin(
         "units": "J/kg",
         "description": f"Mixed-layer CAPE computed over {depth} hPa depth",
     }
-
-    cin.name = "cin"
-    cin.attrs = {
-        "long_name": "Convective Inhibition",
-        "units": "J/kg",
-        "description": f"Mixed-layer CIN computed over {depth} hPa depth",
-    }
-
-    return cape, cin
+    return cape
