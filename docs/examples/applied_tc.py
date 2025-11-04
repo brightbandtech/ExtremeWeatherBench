@@ -47,6 +47,23 @@ def _preprocess_bb_cira_tc_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
     return ds
 
 
+def _preprocess_hres_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
+    """An example preprocess function that renames the time coordinate to lead_time,
+    creates a valid_time coordinate, and sets the lead time range and resolution not
+    present in the original dataset.
+
+    Args:
+        ds: The forecast dataset to rename.
+    """
+    ds["geopotential_thickness"] = calc.generate_geopotential_thickness(
+        ds["geopotential"],
+        top_level_value=300,
+        bottom_level_value=500,
+        geopotential=True,
+    )
+    return ds
+
+
 # %%
 logging.getLogger("urllib3.connectionpool").setLevel(logging.CRITICAL)
 logging.getLogger("botocore.httpchecksum").setLevel(logging.CRITICAL)
@@ -65,15 +82,16 @@ ibtracs_target = inputs.IBTrACS()
 hres_forecast = inputs.ZarrForecast(
     name="hres_forecast",
     source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
-    variables=[derived.TropicalCycloneTrackVariables],
+    variables=[derived.TropicalCycloneTrackVariables()],
     variable_mapping=inputs.HRES_metadata_variable_mapping,
     storage_options={"remote_options": {"anon": True}},
+    preprocess=_preprocess_hres_forecast_dataset,
 )
 
 fcn_forecast = inputs.KerchunkForecast(
     name="fcn_forecast",
     source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
-    variables=[derived.TropicalCycloneTrackVariables],
+    variables=[derived.TropicalCycloneTrackVariables()],
     variable_mapping=inputs.CIRA_metadata_variable_mapping,
     preprocess=_preprocess_bb_cira_tc_forecast_dataset,
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
@@ -82,7 +100,7 @@ fcn_forecast = inputs.KerchunkForecast(
 pangu_forecast = inputs.KerchunkForecast(
     name="pangu_forecast",
     source="gs://extremeweatherbench/PANG_v100_GFS.parq",
-    variables=[derived.TropicalCycloneTrackVariables],
+    variables=[derived.TropicalCycloneTrackVariables()],
     variable_mapping=inputs.CIRA_metadata_variable_mapping,
     preprocess=_preprocess_bb_cira_tc_forecast_dataset,
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
