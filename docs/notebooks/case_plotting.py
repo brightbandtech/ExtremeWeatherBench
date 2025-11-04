@@ -85,7 +85,7 @@ def plot_all_cases(
         None, the full world map will be plotted.
     """
     # plot all cases on one giant world map
-    _ = plt.figure(_size=(15, 10))
+    _ = plt.figure(figsize=(15, 10))
     ax = plt.axes(projection=ccrs.PlateCarree())
 
     # plot the full map or a subset if bounding_box is specified
