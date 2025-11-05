@@ -1279,7 +1279,8 @@ def plot_results_by_metric(
     # and add the HRES line
     for my_settings in settings:
         if show_all_in_legend:
-            my_label = f"{my_settings['label_str']} (n={my_n})"
+            # my_label = f"{my_settings['label_str']} (n={my_n})"
+            raise ValueError("need to fix what my_n should be")
         else:
             my_label = my_settings["label_str"]
 

@@ -112,7 +112,7 @@ cp.plot_all_cases_and_obs(
     ewb_cases,
     event_type="heat_wave",
     filename=basepath + "docs/notebooks/figs/ewb_heat_obs.png",
-    targets=case_operators,
+    targets=case_operators_with_targets_established,
 )
 cp.plot_all_cases_and_obs(
     ewb_cases,
