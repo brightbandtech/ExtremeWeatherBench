@@ -732,7 +732,7 @@ class MaximumMAE(MAE):
         # Handle the case where there are >1 resulting target values
         maximum_timestep = utils.maybe_get_closest_timestamp_to_center_of_valid_times(
             maximum_timestep, target.valid_time
-        )
+        ).compute()
         forecast_spatial_mean = _reduce_duck_array(
             forecast, func=np.nanmean, reduce_dims=["latitude", "longitude"]
         )
