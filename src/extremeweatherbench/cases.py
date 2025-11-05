@@ -6,7 +6,6 @@ Some code similarly structured to WeatherBenchX (Rasp et al.).
 import dataclasses
 import datetime
 import importlib
-import importlib.resources
 import itertools
 import logging
 import pathlib
@@ -136,19 +135,13 @@ class CaseOperator:
 
     Attributes:
         case_metadata: IndividualCase metadata
-        metric_list: A list of metrics that are intended to be evaluated for the case
+        metric_list: A list of metrics that are to be evaluated for the case operator
         target_config: A TargetConfig object
         forecast_config: A ForecastConfig object
     """
 
     case_metadata: IndividualCase
-    metric_list: list[
-        Union[
-            Callable[..., Any],
-            type["metrics.BaseMetric"],
-            type["metrics.AppliedMetric"],
-        ]
-    ]
+    metric_list: list[Union[Callable[..., Any], "metrics.BaseMetric"]]
     target: "inputs.TargetBase"
     forecast: "inputs.ForecastBase"
 
