@@ -3,8 +3,6 @@ from typing import Literal, Sequence, Union
 import numpy as np
 import xarray as xr
 
-from extremeweatherbench import inputs
-
 
 def convert_from_cartesian_to_latlon(
     input_point: Union[np.ndarray, tuple[float, float]], ds_mapping: xr.Dataset
@@ -103,9 +101,13 @@ def orography(ds: xr.Dataset) -> xr.DataArray:
     Returns:
         The orography as an xarray DataArray.
     """
+
     if "geopotential_at_surface" in ds.variables:
         return ds["geopotential_at_surface"].isel(time=0) / 9.80665
     else:
+        # Import inputs here to avoid circular import
+        from extremeweatherbench import inputs
+
         era5 = xr.open_zarr(
             inputs.ARCO_ERA5_FULL_URI,
             chunks=None,
@@ -133,24 +135,33 @@ def calculate_pressure_at_surface(orography_da: xr.DataArray) -> xr.DataArray:
     return 101325 * (1 - 2.25577e-5 * orography_da) ** 5.25579
 
 
-def calculate_wind_speed(ds: xr.Dataset) -> xr.DataArray:
-    """Calculate wind speed from available wind data.
+def maybe_calculate_wind_speed(ds: xr.Dataset) -> xr.Dataset:
+    """Maybe prepare wind data by computing wind speed.
+
+    If the wind speed is not already present, it will be computed from the eastward
+    and northward wind components (u and v). If the wind speed is already present, the
+    dataset is returned as is.
 
     Args:
-        ds: The xarray dataset to calculate the wind speed from.
+        ds: The dataset to prepare the wind data from.
 
     Returns:
-        The wind speed as an xarray DataArray.
+        A dataset with the wind speed computed if it is not already present.
     """
-    if "surface_wind_speed" in ds.data_vars:
-        return ds["surface_wind_speed"]
-    elif (
+
+    has_wind_speed = "surface_wind_speed" in ds.data_vars
+    has_wind_components = (
         "surface_eastward_wind" in ds.data_vars
         and "surface_northward_wind" in ds.data_vars
-    ):
-        return np.hypot(ds["surface_eastward_wind"], ds["surface_northward_wind"])
-    else:
-        raise ValueError("No suitable wind speed variables found in dataset")
+    )
+
+    # If we don't have wind speed but have components, compute it
+    if not has_wind_speed and has_wind_components:
+        ds["surface_wind_speed"] = np.hypot(
+            ds["surface_eastward_wind"], ds["surface_northward_wind"]
+        )
+
+    return ds
 
 
 def generate_geopotential_thickness(

@@ -1,9 +1,9 @@
-"""Unit tests for the rebuilt evaluate_cli.py interface."""
+"""Tests for the evaluate_cli interface."""
 
 import pickle
 import tempfile
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest import mock
 
 import click.testing
 import pandas as pd
@@ -16,8 +16,8 @@ from extremeweatherbench import evaluate_cli
 def suppress_cli_output():
     """Suppress all click.echo output and file writing during tests."""
     with (
-        patch("extremeweatherbench.evaluate_cli.click.echo"),
-        patch("pandas.DataFrame.to_csv"),
+        mock.patch("extremeweatherbench.evaluate_cli.click.echo"),
+        mock.patch("pandas.DataFrame.to_csv"),
     ):
         yield
 
@@ -69,16 +69,24 @@ class TestCLIBasicFunctionality:
 class TestDefaultMode:
     """Test --default mode functionality."""
 
-    @patch("extremeweatherbench.defaults.BRIGHTBAND_EVALUATION_OBJECTS", [])
-    @patch("extremeweatherbench.evaluate_cli._load_default_cases")
-    @patch("extremeweatherbench.evaluate_cli.ExtremeWeatherBench")
+    @mock.patch(
+        "extremeweatherbench.defaults.get_brightband_evaluation_objects",
+        return_value=[],
+    )
+    @mock.patch("extremeweatherbench.evaluate_cli._load_default_cases")
+    @mock.patch("extremeweatherbench.evaluate.ExtremeWeatherBench")
     def test_default_mode_basic(
-        self, mock_ewb_class, mock_load_cases, runner, temp_config_dir
+        self,
+        mock_ewb_class,
+        mock_load_cases,
+        mock_get_brightband,
+        runner,
+        temp_config_dir,
     ):
         """Test basic default mode execution."""
         # Mock the ExtremeWeatherBench class and its methods
-        mock_ewb = Mock()
-        mock_ewb.case_operators = [Mock(), Mock()]  # Mock 2 case operators
+        mock_ewb = mock.Mock()
+        mock_ewb.case_operators = [mock.Mock(), mock.Mock()]  # Mock 2 case operators
         mock_ewb.run.return_value = pd.DataFrame({"test": [1, 2]})
         mock_ewb_class.return_value = mock_ewb
 
@@ -93,14 +101,22 @@ class TestDefaultMode:
         mock_ewb_class.assert_called_once()
         mock_ewb.run.assert_called_once()
 
-    @patch("extremeweatherbench.defaults.BRIGHTBAND_EVALUATION_OBJECTS", [])
-    @patch("extremeweatherbench.evaluate_cli._load_default_cases")
-    @patch("extremeweatherbench.evaluate_cli.ExtremeWeatherBench")
+    @mock.patch(
+        "extremeweatherbench.defaults.get_brightband_evaluation_objects",
+        return_value=[],
+    )
+    @mock.patch("extremeweatherbench.evaluate_cli._load_default_cases")
+    @mock.patch("extremeweatherbench.evaluate.ExtremeWeatherBench")
     def test_default_mode_with_cache_dir(
-        self, mock_ewb_class, mock_load_cases, runner, temp_config_dir
+        self,
+        mock_ewb_class,
+        mock_load_cases,
+        mock_get_brightband,
+        runner,
+        temp_config_dir,
     ):
         """Test default mode with cache directory."""
-        mock_ewb = Mock()
+        mock_ewb = mock.Mock()
         mock_ewb.case_operators = []
         mock_ewb.run.return_value = pd.DataFrame()
         mock_ewb_class.return_value = mock_ewb
@@ -121,13 +137,13 @@ class TestDefaultMode:
 class TestConfigFileMode:
     """Test --config-file mode functionality."""
 
-    @patch("extremeweatherbench.evaluate_cli.ExtremeWeatherBench")
+    @mock.patch("extremeweatherbench.evaluate.ExtremeWeatherBench")
     def test_config_file_mode_basic(
         self, mock_ewb_class, runner, sample_config_py, temp_config_dir
     ):
         """Test basic config file mode execution."""
-        mock_ewb = Mock()
-        mock_ewb.case_operators = [Mock()]
+        mock_ewb = mock.Mock()
+        mock_ewb.case_operators = [mock.Mock()]
         mock_ewb.run.return_value = pd.DataFrame({"test": [1]})
         mock_ewb_class.return_value = mock_ewb
 
@@ -186,19 +202,27 @@ evaluation_objects = []
 class TestParallelExecution:
     """Test --parallel option functionality."""
 
-    @patch("extremeweatherbench.defaults.BRIGHTBAND_EVALUATION_OBJECTS", [])
-    @patch("extremeweatherbench.evaluate_cli._run_parallel")
-    @patch("extremeweatherbench.evaluate_cli._load_default_cases")
-    @patch("extremeweatherbench.evaluate_cli.ExtremeWeatherBench")
+    @mock.patch(
+        "extremeweatherbench.defaults.get_brightband_evaluation_objects",
+        return_value=[],
+    )
+    @mock.patch("extremeweatherbench.evaluate._run_parallel")
+    @mock.patch("extremeweatherbench.evaluate_cli._load_default_cases")
+    @mock.patch("extremeweatherbench.evaluate.ExtremeWeatherBench")
     def test_parallel_execution(
-        self, mock_ewb_class, mock_load_cases, mock_parallel_eval, runner
+        self,
+        mock_ewb_class,
+        mock_load_cases,
+        mock_parallel_eval,
+        mock_get_brightband,
+        runner,
     ):
         """Test parallel execution mode."""
-        mock_ewb = Mock()
-        mock_ewb.case_operators = [Mock(), Mock(), Mock()]
+        mock_ewb = mock.Mock()
+        mock_ewb.case_operators = [mock.Mock(), mock.Mock(), mock.Mock()]
         mock_ewb_class.return_value = mock_ewb
         mock_load_cases.return_value = {"cases": []}
-        mock_parallel_eval.return_value = pd.DataFrame({"test": [1, 2, 3]})
+        mock_parallel_eval.return_value = [pd.DataFrame({"test": [1, 2, 3]})]
 
         result = runner.invoke(
             evaluate_cli.cli_runner, ["--default", "--parallel", "3"]
@@ -210,12 +234,17 @@ class TestParallelExecution:
             mock_ewb.case_operators, 3, pre_compute=False
         )
 
-    @patch("extremeweatherbench.defaults.BRIGHTBAND_EVALUATION_OBJECTS", [])
-    @patch("extremeweatherbench.evaluate_cli._load_default_cases")
-    @patch("extremeweatherbench.evaluate_cli.ExtremeWeatherBench")
-    def test_serial_execution_default(self, mock_ewb_class, mock_load_cases, runner):
+    @mock.patch(
+        "extremeweatherbench.defaults.get_brightband_evaluation_objects",
+        return_value=[],
+    )
+    @mock.patch("extremeweatherbench.evaluate_cli._load_default_cases")
+    @mock.patch("extremeweatherbench.evaluate.ExtremeWeatherBench")
+    def test_serial_execution_default(
+        self, mock_ewb_class, mock_load_cases, mock_get_brightband, runner
+    ):
         """Test that serial execution is default (parallel=1)."""
-        mock_ewb = Mock()
+        mock_ewb = mock.Mock()
         mock_ewb.case_operators = []
         mock_ewb.run.return_value = pd.DataFrame()
         mock_ewb_class.return_value = mock_ewb
@@ -231,17 +260,25 @@ class TestParallelExecution:
 class TestCaseOperatorSaving:
     """Test --save-case-operators functionality."""
 
-    @patch("extremeweatherbench.defaults.BRIGHTBAND_EVALUATION_OBJECTS", [])
-    @patch("extremeweatherbench.evaluate_cli._load_default_cases")
-    @patch("extremeweatherbench.evaluate_cli.ExtremeWeatherBench")
+    @mock.patch(
+        "extremeweatherbench.defaults.get_brightband_evaluation_objects",
+        return_value=[],
+    )
+    @mock.patch("extremeweatherbench.evaluate_cli._load_default_cases")
+    @mock.patch("extremeweatherbench.evaluate.ExtremeWeatherBench")
     def test_save_case_operators(
-        self, mock_ewb_class, mock_load_cases, runner, temp_config_dir
+        self,
+        mock_ewb_class,
+        mock_load_cases,
+        mock_get_brightband,
+        runner,
+        temp_config_dir,
     ):
         """Test saving case operators to pickle file."""
         # Use simple dictionaries instead of Mock objects for pickling
         mock_case_op1 = {"id": 1, "type": "test_case_op"}
         mock_case_op2 = {"id": 2, "type": "test_case_op"}
-        mock_ewb = Mock()
+        mock_ewb = mock.Mock()
         mock_ewb.case_operators = [mock_case_op1, mock_case_op2]
         mock_ewb.run.return_value = pd.DataFrame()
         mock_ewb_class.return_value = mock_ewb
@@ -265,14 +302,22 @@ class TestCaseOperatorSaving:
             loaded_ops = pickle.load(f)
         assert len(loaded_ops) == 2
 
-    @patch("extremeweatherbench.defaults.BRIGHTBAND_EVALUATION_OBJECTS", [])
-    @patch("extremeweatherbench.evaluate_cli._load_default_cases")
-    @patch("extremeweatherbench.evaluate_cli.ExtremeWeatherBench")
+    @mock.patch(
+        "extremeweatherbench.defaults.get_brightband_evaluation_objects",
+        return_value=[],
+    )
+    @mock.patch("extremeweatherbench.evaluate_cli._load_default_cases")
+    @mock.patch("extremeweatherbench.evaluate.ExtremeWeatherBench")
     def test_save_case_operators_creates_directory(
-        self, mock_ewb_class, mock_load_cases, runner, temp_config_dir
+        self,
+        mock_ewb_class,
+        mock_load_cases,
+        mock_get_brightband,
+        runner,
+        temp_config_dir,
     ):
         """Test that saving case operators creates parent directories."""
-        mock_ewb = Mock()
+        mock_ewb = mock.Mock()
         mock_ewb.case_operators = []
         mock_ewb.run.return_value = pd.DataFrame()
         mock_ewb_class.return_value = mock_ewb
@@ -310,14 +355,22 @@ class TestValidationAndErrorHandling:
         assert result.exit_code != 0
         # Output suppressed - only check exit code
 
-    @patch("extremeweatherbench.defaults.BRIGHTBAND_EVALUATION_OBJECTS", [])
-    @patch("extremeweatherbench.evaluate_cli._load_default_cases")
-    @patch("extremeweatherbench.evaluate_cli.ExtremeWeatherBench")
+    @mock.patch(
+        "extremeweatherbench.defaults.get_brightband_evaluation_objects",
+        return_value=[],
+    )
+    @mock.patch("extremeweatherbench.evaluate_cli._load_default_cases")
+    @mock.patch("extremeweatherbench.evaluate.ExtremeWeatherBench")
     def test_output_directory_creation(
-        self, mock_ewb_class, mock_load_cases, runner, temp_config_dir
+        self,
+        mock_ewb_class,
+        mock_load_cases,
+        mock_get_brightband,
+        runner,
+        temp_config_dir,
     ):
         """Test that output directory is created if it doesn't exist."""
-        mock_ewb = Mock()
+        mock_ewb = mock.Mock()
         mock_ewb.case_operators = []
         mock_ewb.run.return_value = pd.DataFrame()
         mock_ewb_class.return_value = mock_ewb
@@ -333,12 +386,17 @@ class TestValidationAndErrorHandling:
         assert result.exit_code == 0
         assert output_dir.exists()
 
-    @patch("extremeweatherbench.defaults.BRIGHTBAND_EVALUATION_OBJECTS", [])
-    @patch("extremeweatherbench.evaluate_cli._load_default_cases")
-    @patch("extremeweatherbench.evaluate_cli.ExtremeWeatherBench")
-    def test_default_output_directory(self, mock_ewb_class, mock_load_cases, runner):
+    @mock.patch(
+        "extremeweatherbench.defaults.get_brightband_evaluation_objects",
+        return_value=[],
+    )
+    @mock.patch("extremeweatherbench.evaluate_cli._load_default_cases")
+    @mock.patch("extremeweatherbench.evaluate.ExtremeWeatherBench")
+    def test_default_output_directory(
+        self, mock_ewb_class, mock_load_cases, mock_get_brightband, runner
+    ):
         """Test that default output directory is current working directory."""
-        mock_ewb = Mock()
+        mock_ewb = mock.Mock()
         mock_ewb.case_operators = []
         mock_ewb.run.return_value = pd.DataFrame()
         mock_ewb_class.return_value = mock_ewb
@@ -355,11 +413,19 @@ class TestValidationAndErrorHandling:
 class TestResultsSaving:
     """Test results saving functionality."""
 
-    @patch("extremeweatherbench.defaults.BRIGHTBAND_EVALUATION_OBJECTS", [])
-    @patch("extremeweatherbench.evaluate_cli._load_default_cases")
-    @patch("extremeweatherbench.evaluate_cli.ExtremeWeatherBench")
+    @mock.patch(
+        "extremeweatherbench.defaults.get_brightband_evaluation_objects",
+        return_value=[],
+    )
+    @mock.patch("extremeweatherbench.evaluate_cli._load_default_cases")
+    @mock.patch("extremeweatherbench.evaluate.ExtremeWeatherBench")
     def test_results_saved_to_csv(
-        self, mock_ewb_class, mock_load_cases, runner, temp_config_dir
+        self,
+        mock_ewb_class,
+        mock_load_cases,
+        mock_get_brightband,
+        runner,
+        temp_config_dir,
     ):
         """Test that results are saved to CSV file."""
         mock_results = pd.DataFrame(
@@ -370,7 +436,7 @@ class TestResultsSaving:
             }
         )
 
-        mock_ewb = Mock()
+        mock_ewb = mock.Mock()
         mock_ewb.case_operators = []
         mock_ewb.run.return_value = mock_results
         mock_ewb_class.return_value = mock_ewb
@@ -387,11 +453,11 @@ class TestResultsSaving:
 
         # CSV reading/verification removed since file writing is mocked
 
-    @patch("extremeweatherbench.evaluate_cli._load_default_cases")
-    @patch("extremeweatherbench.evaluate_cli.ExtremeWeatherBench")
+    @mock.patch("extremeweatherbench.evaluate_cli._load_default_cases")
+    @mock.patch("extremeweatherbench.evaluate.ExtremeWeatherBench")
     def test_empty_results_handling(self, mock_ewb_class, mock_load_cases, runner):
         """Test handling when no results are returned."""
-        mock_ewb = Mock()
+        mock_ewb = mock.Mock()
         mock_ewb.case_operators = []
         mock_ewb.run.return_value = pd.DataFrame()  # Empty results
         mock_ewb_class.return_value = mock_ewb
@@ -406,7 +472,7 @@ class TestResultsSaving:
 class TestHelperFunctions:
     """Test helper function functionality."""
 
-    @patch("extremeweatherbench.cases.load_ewb_events_yaml_into_case_collection")
+    @mock.patch("extremeweatherbench.cases.load_ewb_events_yaml_into_case_collection")
     def test_load_default_cases(self, mock_load_yaml):
         """Test _load_default_cases function."""
         mock_cases = {"cases": [{"id": 1}]}
@@ -428,13 +494,13 @@ class TestCustomForecastOptions:
         kerchunk_file = temp_config_dir / "test_forecast.parq"
         json_file = temp_config_dir / "test_forecast.json"
         unsupported_file = temp_config_dir / "test_forecast.txt"
-        
+
         # Create empty files
         zarr_file.touch()
         kerchunk_file.touch()
         json_file.touch()
         unsupported_file.touch()
-        
+
         return {
             "zarr": zarr_file,
             "kerchunk": kerchunk_file,
@@ -458,7 +524,7 @@ class TestCustomForecastOptions:
             evaluate_cli.cli_runner,
             ["--default", "--forecast-path", str(temp_forecast_files["zarr"])],
         )
-        
+
         assert result.exit_code != 0
 
     def test_variable_mapping_only_fails(self, runner, valid_variable_mapping):
@@ -467,12 +533,14 @@ class TestCustomForecastOptions:
             evaluate_cli.cli_runner,
             ["--default", "--variable-mapping", valid_variable_mapping],
         )
-        
+
         assert result.exit_code != 0
 
-    @patch("extremeweatherbench.evaluate_cli._create_evaluation_objects_with_custom_forecast")
-    @patch("extremeweatherbench.evaluate_cli._load_default_cases")
-    @patch("extremeweatherbench.evaluate_cli.ExtremeWeatherBench")
+    @mock.patch(
+        "extremeweatherbench.evaluate_cli._create_evaluation_objects_with_custom_forecast"
+    )
+    @mock.patch("extremeweatherbench.evaluate_cli._load_default_cases")
+    @mock.patch("extremeweatherbench.evaluate_cli.ExtremeWeatherBench")
     def test_both_forecast_options_success(
         self,
         mock_ewb_class,
@@ -483,7 +551,7 @@ class TestCustomForecastOptions:
         valid_variable_mapping,
     ):
         """Test that providing both forecast options succeeds."""
-        mock_ewb = Mock()
+        mock_ewb = mock.Mock()
         mock_ewb.case_operators = []
         mock_ewb.run.return_value = pd.DataFrame()
         mock_ewb_class.return_value = mock_ewb
@@ -506,7 +574,9 @@ class TestCustomForecastOptions:
             str(temp_forecast_files["zarr"]), valid_variable_mapping, None, None
         )
 
-    def test_nonexistent_local_forecast_path_fails(self, runner, valid_variable_mapping):
+    def test_nonexistent_local_forecast_path_fails(
+        self, runner, valid_variable_mapping
+    ):
         """Test that non-existent local forecast path fails."""
         result = runner.invoke(
             evaluate_cli.cli_runner,
@@ -518,12 +588,14 @@ class TestCustomForecastOptions:
                 valid_variable_mapping,
             ],
         )
-        
+
         assert result.exit_code != 0
 
-    @patch("extremeweatherbench.evaluate_cli._create_evaluation_objects_with_custom_forecast")
-    @patch("extremeweatherbench.evaluate_cli._load_default_cases")
-    @patch("extremeweatherbench.evaluate_cli.ExtremeWeatherBench")
+    @mock.patch(
+        "extremeweatherbench.evaluate_cli._create_evaluation_objects_with_custom_forecast"
+    )
+    @mock.patch("extremeweatherbench.evaluate_cli._load_default_cases")
+    @mock.patch("extremeweatherbench.evaluate_cli.ExtremeWeatherBench")
     def test_remote_url_forecast_path_succeeds(
         self,
         mock_ewb_class,
@@ -533,7 +605,7 @@ class TestCustomForecastOptions:
         valid_variable_mapping,
     ):
         """Test that remote URL forecast paths work."""
-        mock_ewb = Mock()
+        mock_ewb = mock.Mock()
         mock_ewb.case_operators = []
         mock_ewb.run.return_value = pd.DataFrame()
         mock_ewb_class.return_value = mock_ewb
@@ -553,12 +625,17 @@ class TestCustomForecastOptions:
 
         assert result.exit_code == 0
         mock_create_eval_objects.assert_called_once_with(
-            "gs://extremeweatherbench/FOUR_v200_GFS.parq", valid_variable_mapping, None, None
+            "gs://extremeweatherbench/FOUR_v200_GFS.parq",
+            valid_variable_mapping,
+            None,
+            None,
         )
 
-    @patch("extremeweatherbench.evaluate_cli._create_evaluation_objects_with_custom_forecast")
-    @patch("extremeweatherbench.evaluate_cli._load_default_cases")
-    @patch("extremeweatherbench.evaluate_cli.ExtremeWeatherBench")
+    @mock.patch(
+        "extremeweatherbench.evaluate_cli._create_evaluation_objects_with_custom_forecast"
+    )
+    @mock.patch("extremeweatherbench.evaluate_cli._load_default_cases")
+    @mock.patch("extremeweatherbench.evaluate_cli.ExtremeWeatherBench")
     def test_storage_options_passed_correctly(
         self,
         mock_ewb_class,
@@ -569,7 +646,7 @@ class TestCustomForecastOptions:
         valid_storage_options,
     ):
         """Test that storage options are passed correctly."""
-        mock_ewb = Mock()
+        mock_ewb = mock.Mock()
         mock_ewb.case_operators = []
         mock_ewb.run.return_value = pd.DataFrame()
         mock_ewb_class.return_value = mock_ewb
@@ -591,15 +668,17 @@ class TestCustomForecastOptions:
 
         assert result.exit_code == 0
         mock_create_eval_objects.assert_called_once_with(
-            "gs://extremeweatherbench/FOUR_v200_GFS.parq", 
-            valid_variable_mapping, 
-            valid_storage_options, 
-            None
+            "gs://extremeweatherbench/FOUR_v200_GFS.parq",
+            valid_variable_mapping,
+            valid_storage_options,
+            None,
         )
 
-    @patch("extremeweatherbench.evaluate_cli._create_evaluation_objects_with_custom_forecast")
-    @patch("extremeweatherbench.evaluate_cli._load_default_cases")
-    @patch("extremeweatherbench.evaluate_cli.ExtremeWeatherBench")
+    @mock.patch(
+        "extremeweatherbench.evaluate_cli._create_evaluation_objects_with_custom_forecast"
+    )
+    @mock.patch("extremeweatherbench.evaluate_cli._load_default_cases")
+    @mock.patch("extremeweatherbench.evaluate_cli.ExtremeWeatherBench")
     def test_preprocess_function_passed_correctly(
         self,
         mock_ewb_class,
@@ -610,7 +689,7 @@ class TestCustomForecastOptions:
         valid_variable_mapping,
     ):
         """Test that preprocess function is passed correctly."""
-        mock_ewb = Mock()
+        mock_ewb = mock.Mock()
         mock_ewb.case_operators = []
         mock_ewb.run.return_value = pd.DataFrame()
         mock_ewb_class.return_value = mock_ewb
@@ -632,10 +711,10 @@ class TestCustomForecastOptions:
 
         assert result.exit_code == 0
         mock_create_eval_objects.assert_called_once_with(
-            str(temp_forecast_files["zarr"]), 
-            valid_variable_mapping, 
-            None, 
-            "extremeweatherbench.defaults._preprocess_bb_cira_forecast_dataset"
+            str(temp_forecast_files["zarr"]),
+            valid_variable_mapping,
+            None,
+            "extremeweatherbench.defaults._preprocess_bb_cira_forecast_dataset",
         )
 
 
@@ -647,51 +726,47 @@ class TestForecastTypeInference:
         """Create temporary forecast files with different extensions."""
         files = {}
         extensions = [".zarr", ".parq", ".parquet", ".json", ".txt", ".nc"]
-        
+
         for ext in extensions:
             file_path = temp_config_dir / f"test_forecast{ext}"
             file_path.touch()
             files[ext] = file_path
-            
+
         return files
 
     def test_zarr_inference(self, temp_forecast_files):
         """Test that .zarr files are inferred as ZarrForecast."""
         result = evaluate_cli._create_evaluation_objects_with_custom_forecast(
-            str(temp_forecast_files[".zarr"]),
-            '{"temp": "surface_air_temperature"}'
+            str(temp_forecast_files[".zarr"]), '{"temp": "surface_air_temperature"}'
         )
-        
+
         assert len(result) > 0
         assert result[0].forecast.__class__.__name__ == "ZarrForecast"
 
     def test_parquet_inference(self, temp_forecast_files):
         """Test that .parq files are inferred as KerchunkForecast."""
         result = evaluate_cli._create_evaluation_objects_with_custom_forecast(
-            str(temp_forecast_files[".parq"]),
-            '{"temp": "surface_air_temperature"}'
+            str(temp_forecast_files[".parq"]), '{"temp": "surface_air_temperature"}'
         )
-        
+
         assert len(result) > 0
         assert result[0].forecast.__class__.__name__ == "KerchunkForecast"
 
     def test_parquet_full_extension_inference(self, temp_forecast_files):
         """Test that .parquet files are inferred as KerchunkForecast."""
         result = evaluate_cli._create_evaluation_objects_with_custom_forecast(
-            str(temp_forecast_files[".parquet"]),
-            '{"temp": "surface_air_temperature"}'
+            str(temp_forecast_files[".parquet"]), '{"temp": "surface_air_temperature"}'
         )
-        
+
         assert len(result) > 0
         assert result[0].forecast.__class__.__name__ == "KerchunkForecast"
 
     def test_json_inference(self, temp_forecast_files):
         """Test that .json files are inferred as KerchunkForecast."""
         result = evaluate_cli._create_evaluation_objects_with_custom_forecast(
-            str(temp_forecast_files[".json"]),
-            '{"temp": "surface_air_temperature"}'
+            str(temp_forecast_files[".json"]), '{"temp": "surface_air_temperature"}'
         )
-        
+
         assert len(result) > 0
         assert result[0].forecast.__class__.__name__ == "KerchunkForecast"
 
@@ -699,10 +774,9 @@ class TestForecastTypeInference:
         """Test that unsupported extensions raise an error."""
         with pytest.raises(click.ClickException) as exc_info:
             evaluate_cli._create_evaluation_objects_with_custom_forecast(
-                str(temp_forecast_files[".txt"]),
-                '{"temp": "surface_air_temperature"}'
+                str(temp_forecast_files[".txt"]), '{"temp": "surface_air_temperature"}'
             )
-        
+
         assert "Cannot infer forecast type" in str(exc_info.value)
         assert ".txt" in str(exc_info.value)
 
@@ -710,20 +784,18 @@ class TestForecastTypeInference:
         """Test that .nc files raise an error (not supported)."""
         with pytest.raises(click.ClickException) as exc_info:
             evaluate_cli._create_evaluation_objects_with_custom_forecast(
-                str(temp_forecast_files[".nc"]),
-                '{"temp": "surface_air_temperature"}'
+                str(temp_forecast_files[".nc"]), '{"temp": "surface_air_temperature"}'
             )
-        
+
         assert "Cannot infer forecast type" in str(exc_info.value)
         assert ".nc" in str(exc_info.value)
 
     def test_remote_url_zarr_inference(self):
         """Test that remote zarr URLs are inferred correctly."""
         result = evaluate_cli._create_evaluation_objects_with_custom_forecast(
-            "gs://bucket/forecast.zarr",
-            '{"temp": "surface_air_temperature"}'
+            "gs://bucket/forecast.zarr", '{"temp": "surface_air_temperature"}'
         )
-        
+
         assert len(result) > 0
         assert result[0].forecast.__class__.__name__ == "ZarrForecast"
         assert result[0].forecast.source == "gs://bucket/forecast.zarr"
@@ -732,12 +804,14 @@ class TestForecastTypeInference:
         """Test that remote kerchunk URLs are inferred correctly."""
         result = evaluate_cli._create_evaluation_objects_with_custom_forecast(
             "gs://extremeweatherbench/FOUR_v200_GFS.parq",
-            '{"t2": "surface_air_temperature"}'
+            '{"t2": "surface_air_temperature"}',
         )
-        
+
         assert len(result) > 0
         assert result[0].forecast.__class__.__name__ == "KerchunkForecast"
-        assert result[0].forecast.source == "gs://extremeweatherbench/FOUR_v200_GFS.parq"
+        assert (
+            result[0].forecast.source == "gs://extremeweatherbench/FOUR_v200_GFS.parq"
+        )
 
 
 class TestForecastPathValidation:
@@ -756,14 +830,14 @@ class TestForecastPathValidation:
         """Test that local file validation fails for non-existent files."""
         with pytest.raises(click.ClickException) as exc_info:
             evaluate_cli._validate_forecast_path("/nonexistent/file.zarr")
-        
+
         assert "Local file does not exist" in str(exc_info.value)
 
     def test_local_file_validation_passes_for_existing(self, temp_config_dir):
         """Test that local file validation passes for existing files."""
         test_file = temp_config_dir / "test.zarr"
         test_file.touch()
-        
+
         # Should not raise exception
         evaluate_cli._validate_forecast_path(str(test_file))
 
@@ -781,41 +855,37 @@ class TestStorageOptionsValidation:
     def test_valid_storage_options(self, temp_zarr_file):
         """Test that valid storage options work."""
         valid_options = '{"remote_protocol": "s3", "remote_options": {"anon": true}}'
-        
+
         result = evaluate_cli._create_evaluation_objects_with_custom_forecast(
-            str(temp_zarr_file), 
-            '{"temp": "surface_air_temperature"}',
-            valid_options
+            str(temp_zarr_file), '{"temp": "surface_air_temperature"}', valid_options
         )
-        
+
         assert len(result) > 0
         assert result[0].forecast.storage_options == {
             "remote_protocol": "s3",
-            "remote_options": {"anon": True}
+            "remote_options": {"anon": True},
         }
 
     def test_empty_storage_options(self, temp_zarr_file):
         """Test that empty storage options work."""
         result = evaluate_cli._create_evaluation_objects_with_custom_forecast(
-            str(temp_zarr_file), 
-            '{"temp": "surface_air_temperature"}',
-            None
+            str(temp_zarr_file), '{"temp": "surface_air_temperature"}', None
         )
-        
+
         assert len(result) > 0
         assert result[0].forecast.storage_options == {}
 
     def test_invalid_storage_options_json(self, temp_zarr_file):
         """Test that invalid JSON in storage options raises error."""
         invalid_options = '{"remote_protocol": "s3", invalid}'
-        
+
         with pytest.raises(click.ClickException) as exc_info:
             evaluate_cli._create_evaluation_objects_with_custom_forecast(
-                str(temp_zarr_file), 
+                str(temp_zarr_file),
                 '{"temp": "surface_air_temperature"}',
-                invalid_options
+                invalid_options,
             )
-        
+
         assert "Invalid JSON in --storage-options" in str(exc_info.value)
 
 
@@ -827,7 +897,7 @@ class TestPreprocessFunctionValidation:
         func = evaluate_cli._load_preprocess_function(
             "extremeweatherbench.defaults._preprocess_bb_cira_forecast_dataset"
         )
-        
+
         assert callable(func)
         assert func.__name__ == "_preprocess_bb_cira_forecast_dataset"
 
@@ -835,21 +905,23 @@ class TestPreprocessFunctionValidation:
         """Test that invalid module raises error."""
         with pytest.raises(click.ClickException) as exc_info:
             evaluate_cli._load_preprocess_function("nonexistent.module.function")
-        
+
         assert "Could not load preprocess function" in str(exc_info.value)
 
     def test_invalid_preprocess_function_name(self):
         """Test that invalid function name raises error."""
         with pytest.raises(click.ClickException) as exc_info:
-            evaluate_cli._load_preprocess_function("extremeweatherbench.defaults.nonexistent_function")
-        
+            evaluate_cli._load_preprocess_function(
+                "extremeweatherbench.defaults.nonexistent_function"
+            )
+
         assert "Could not load preprocess function" in str(exc_info.value)
 
     def test_invalid_preprocess_function_format(self):
         """Test that invalid format raises error."""
         with pytest.raises(click.ClickException) as exc_info:
             evaluate_cli._load_preprocess_function("invalid_format")
-        
+
         assert "Could not load preprocess function" in str(exc_info.value)
 
     @pytest.fixture
@@ -862,12 +934,12 @@ class TestPreprocessFunctionValidation:
     def test_preprocess_function_integration(self, temp_zarr_file):
         """Test that preprocess function is properly integrated."""
         result = evaluate_cli._create_evaluation_objects_with_custom_forecast(
-            str(temp_zarr_file), 
+            str(temp_zarr_file),
             '{"temp": "surface_air_temperature"}',
             None,
-            "extremeweatherbench.defaults._preprocess_bb_cira_forecast_dataset"
+            "extremeweatherbench.defaults._preprocess_bb_cira_forecast_dataset",
         )
-        
+
         assert len(result) > 0
         assert hasattr(result[0].forecast, "preprocess")
         assert callable(result[0].forecast.preprocess)
@@ -885,49 +957,51 @@ class TestVariableMappingValidation:
 
     def test_valid_json_mapping(self, temp_zarr_file):
         """Test that valid JSON mapping works."""
-        valid_mapping = '{"temp": "surface_air_temperature", "u10": "surface_eastward_wind"}'
-        
+        valid_mapping = (
+            '{"temp": "surface_air_temperature", "u10": "surface_eastward_wind"}'
+        )
+
         result = evaluate_cli._create_evaluation_objects_with_custom_forecast(
             str(temp_zarr_file), valid_mapping
         )
-        
+
         assert len(result) > 0
         assert result[0].forecast.variable_mapping == {
             "temp": "surface_air_temperature",
-            "u10": "surface_eastward_wind"
+            "u10": "surface_eastward_wind",
         }
 
     def test_empty_json_mapping(self, temp_zarr_file):
         """Test that empty JSON mapping works."""
-        empty_mapping = '{}'
-        
+        empty_mapping = "{}"
+
         result = evaluate_cli._create_evaluation_objects_with_custom_forecast(
             str(temp_zarr_file), empty_mapping
         )
-        
+
         assert len(result) > 0
         assert result[0].forecast.variable_mapping == {}
 
     def test_invalid_json_fails(self, temp_zarr_file):
         """Test that invalid JSON raises an error."""
         invalid_mapping = '{"temp": "surface_air_temperature", invalid}'
-        
+
         with pytest.raises(click.ClickException) as exc_info:
             evaluate_cli._create_evaluation_objects_with_custom_forecast(
                 str(temp_zarr_file), invalid_mapping
             )
-        
+
         assert "Invalid JSON in --variable-mapping" in str(exc_info.value)
 
     def test_non_json_string_fails(self, temp_zarr_file):
         """Test that non-JSON string raises an error."""
-        non_json = 'not json at all'
-        
+        non_json = "not json at all"
+
         with pytest.raises(click.ClickException) as exc_info:
             evaluate_cli._create_evaluation_objects_with_custom_forecast(
                 str(temp_zarr_file), non_json
             )
-        
+
         assert "Invalid JSON in --variable-mapping" in str(exc_info.value)
 
 
@@ -941,64 +1015,77 @@ class TestCustomForecastObjectCreation:
         zarr_file.touch()
         return zarr_file
 
-    @patch("extremeweatherbench.defaults.BRIGHTBAND_EVALUATION_OBJECTS")
+    @mock.patch("extremeweatherbench.defaults.get_brightband_evaluation_objects")
     def test_evaluation_objects_created_with_custom_forecast(
         self, mock_default_objects, temp_zarr_file
     ):
         """Test that evaluation objects are created with custom forecast."""
         # Mock default evaluation objects
-        mock_eval_obj1 = Mock()
+        mock_eval_obj1 = mock.Mock()
         mock_eval_obj1.event_type = "heat_wave"
         mock_eval_obj1.metric_list = ["RMSE", "MAE"]
-        mock_eval_obj1.target = Mock()
+        mock_eval_obj1.target = mock.Mock()
         mock_eval_obj1.forecast.variables = ["surface_air_temperature"]
-        
-        mock_eval_obj2 = Mock()
+
+        mock_eval_obj2 = mock.Mock()
         mock_eval_obj2.event_type = "freeze"
         mock_eval_obj2.metric_list = ["MinimumMAE"]
-        mock_eval_obj2.target = Mock()
-        mock_eval_obj2.forecast.variables = ["surface_air_temperature", "surface_eastward_wind"]
-        
-        mock_default_objects.__iter__.return_value = [mock_eval_obj1, mock_eval_obj2]
-        
+        mock_eval_obj2.target = mock.Mock()
+        mock_eval_obj2.forecast.variables = [
+            "surface_air_temperature",
+            "surface_eastward_wind",
+        ]
+
+        mock_default_objects.return_value = [mock_eval_obj1, mock_eval_obj2]
+
         result = evaluate_cli._create_evaluation_objects_with_custom_forecast(
-            str(temp_zarr_file),
-            '{"temp": "surface_air_temperature"}'
+            str(temp_zarr_file), '{"temp": "surface_air_temperature"}'
         )
-        
+
         assert len(result) == 2
-        
+
         # Check that all evaluation objects use the custom forecast
         for eval_obj in result:
             assert eval_obj.forecast.__class__.__name__ == "ZarrForecast"
             assert eval_obj.forecast.source == str(temp_zarr_file)
-            assert eval_obj.forecast.variable_mapping == {"temp": "surface_air_temperature"}
+            assert eval_obj.forecast.variable_mapping == {
+                "temp": "surface_air_temperature"
+            }
 
-    @patch("extremeweatherbench.defaults.BRIGHTBAND_EVALUATION_OBJECTS")
+    @mock.patch("extremeweatherbench.defaults.get_brightband_evaluation_objects")
     def test_variables_collected_from_all_default_objects(
         self, mock_default_objects, temp_zarr_file
     ):
         """Test that variables are collected from all default evaluation objects."""
         # Mock default evaluation objects with different variables
-        mock_eval_obj1 = Mock()
+        mock_eval_obj1 = mock.Mock()
         mock_eval_obj1.forecast.variables = ["surface_air_temperature", "pressure"]
-        
-        mock_eval_obj2 = Mock()
-        mock_eval_obj2.forecast.variables = ["surface_eastward_wind", "surface_air_temperature"]
-        
-        mock_eval_obj3 = Mock()
+
+        mock_eval_obj2 = mock.Mock()
+        mock_eval_obj2.forecast.variables = [
+            "surface_eastward_wind",
+            "surface_air_temperature",
+        ]
+
+        mock_eval_obj3 = mock.Mock()
         mock_eval_obj3.forecast.variables = ["humidity"]
-        
-        mock_default_objects.__iter__.return_value = [mock_eval_obj1, mock_eval_obj2, mock_eval_obj3]
-        
+
+        mock_default_objects.return_value = [
+            mock_eval_obj1,
+            mock_eval_obj2,
+            mock_eval_obj3,
+        ]
+
         result = evaluate_cli._create_evaluation_objects_with_custom_forecast(
-            str(temp_zarr_file),
-            '{"temp": "surface_air_temperature"}'
+            str(temp_zarr_file), '{"temp": "surface_air_temperature"}'
         )
-        
+
         # Check that custom forecast has all unique variables
         expected_variables = {
-            "surface_air_temperature", "pressure", "surface_eastward_wind", "humidity"
+            "surface_air_temperature",
+            "pressure",
+            "surface_eastward_wind",
+            "humidity",
         }
         actual_variables = set(result[0].forecast.variables)
         assert actual_variables == expected_variables
@@ -1016,8 +1103,8 @@ class TestCustomForecastIntegration:
         parq_file.touch()
         return {"zarr": zarr_file, "parq": parq_file}
 
-    @patch("extremeweatherbench.evaluate_cli._load_default_cases")
-    @patch("extremeweatherbench.evaluate_cli.ExtremeWeatherBench")
+    @mock.patch("extremeweatherbench.evaluate_cli._load_default_cases")
+    @mock.patch("extremeweatherbench.evaluate_cli.ExtremeWeatherBench")
     def test_end_to_end_zarr_forecast(
         self,
         mock_ewb_class,
@@ -1027,8 +1114,8 @@ class TestCustomForecastIntegration:
         temp_config_dir,
     ):
         """Test end-to-end execution with zarr forecast."""
-        mock_ewb = Mock()
-        mock_ewb.case_operators = [Mock()]
+        mock_ewb = mock.Mock()
+        mock_ewb.case_operators = [mock.Mock()]
         mock_ewb.run.return_value = pd.DataFrame({"test": [1]})
         mock_ewb_class.return_value = mock_ewb
         mock_load_cases.return_value = {"cases": []}
@@ -1048,14 +1135,14 @@ class TestCustomForecastIntegration:
 
         assert result.exit_code == 0
         mock_ewb_class.assert_called_once()
-        
+
         # Verify that custom evaluation objects were passed
         call_args = mock_ewb_class.call_args
         evaluation_objects = call_args[1]["evaluation_objects"]
         assert len(evaluation_objects) > 0
 
-    @patch("extremeweatherbench.evaluate_cli._load_default_cases")
-    @patch("extremeweatherbench.evaluate_cli.ExtremeWeatherBench")
+    @mock.patch("extremeweatherbench.evaluate_cli._load_default_cases")
+    @mock.patch("extremeweatherbench.evaluate_cli.ExtremeWeatherBench")
     def test_end_to_end_kerchunk_forecast(
         self,
         mock_ewb_class,
@@ -1065,8 +1152,8 @@ class TestCustomForecastIntegration:
         temp_config_dir,
     ):
         """Test end-to-end execution with kerchunk forecast."""
-        mock_ewb = Mock()
-        mock_ewb.case_operators = [Mock()]
+        mock_ewb = mock.Mock()
+        mock_ewb.case_operators = [mock.Mock()]
         mock_ewb.run.return_value = pd.DataFrame({"test": [1]})
         mock_ewb_class.return_value = mock_ewb
         mock_load_cases.return_value = {"cases": []}
@@ -1107,8 +1194,8 @@ class TestCustomForecastIntegration:
         # This tests the current behavior - config-file mode ignores forecast options
         assert result.exit_code == 0
 
-    @patch("extremeweatherbench.evaluate_cli._load_default_cases")
-    @patch("extremeweatherbench.evaluate_cli.ExtremeWeatherBench")
+    @mock.patch("extremeweatherbench.evaluate_cli._load_default_cases")
+    @mock.patch("extremeweatherbench.evaluate_cli.ExtremeWeatherBench")
     def test_custom_forecast_with_parallel_execution(
         self,
         mock_ewb_class,
@@ -1117,14 +1204,16 @@ class TestCustomForecastIntegration:
         temp_forecast_files,
     ):
         """Test custom forecast with parallel execution."""
-        mock_ewb = Mock()
-        mock_ewb.case_operators = [Mock(), Mock()]
+        mock_ewb = mock.Mock()
+        mock_ewb.case_operators = [mock.Mock(), mock.Mock()]
         mock_ewb_class.return_value = mock_ewb
         mock_load_cases.return_value = {"cases": []}
 
-        with patch("extremeweatherbench.evaluate_cli._run_parallel") as mock_parallel:
+        with mock.patch(
+            "extremeweatherbench.evaluate_cli._run_parallel"
+        ) as mock_parallel:
             mock_parallel.return_value = pd.DataFrame({"test": [1, 2]})
-            
+
             result = runner.invoke(
                 evaluate_cli.cli_runner,
                 [

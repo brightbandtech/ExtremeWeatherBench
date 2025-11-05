@@ -1,3 +1,5 @@
+"""Tests for the utils module."""
+
 import datetime
 
 import numpy as np
@@ -110,19 +112,6 @@ def test_derive_indices_from_init_time_and_lead_time():
     assert len(indices) == 2
     assert isinstance(indices[0], np.ndarray)
     assert isinstance(indices[1], np.ndarray)
-
-
-def test_default_preprocess():
-    """Test default preprocess function."""
-    # Test with xarray Dataset
-    ds = xr.Dataset({"temp": (["x"], [1, 2, 3])})
-    result = utils._default_preprocess(ds)
-    assert result is ds  # Should return the same object unchanged
-
-    # Test with pandas DataFrame
-    df = pd.DataFrame({"a": [1, 2, 3]})
-    result_df = utils._default_preprocess(df)
-    assert result_df is df
 
 
 def test_filter_kwargs_for_callable():
@@ -502,9 +491,9 @@ class TestSafeConcat:
                 and "DataFrame concatenation with empty or all-NA entries"
                 in str(warning.message)
             ]
-            assert (
-                len(future_warnings) == 0
-            ), f"FutureWarning was raised: {future_warnings}"
+            assert len(future_warnings) == 0, (
+                f"FutureWarning was raised: {future_warnings}"
+            )
 
         # Should successfully concatenate without warnings
         assert isinstance(result, pd.DataFrame)

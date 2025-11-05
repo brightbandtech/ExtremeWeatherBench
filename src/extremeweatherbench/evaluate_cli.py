@@ -1,15 +1,14 @@
 import importlib.util
 import json
 import os
+import pathlib
 import pickle
-from pathlib import Path
 from typing import Optional
 
 import click
 import pandas as pd
 
-from extremeweatherbench import defaults, inputs
-from extremeweatherbench.evaluate import ExtremeWeatherBench, _run_parallel, _run_serial
+from extremeweatherbench import cases, defaults, evaluate, inputs
 
 
 @click.command()
@@ -56,7 +55,10 @@ from extremeweatherbench.evaluate import ExtremeWeatherBench, _run_parallel, _ru
 @click.option(
     "--forecast-path",
     type=str,
-    help="Path to forecast data file (zarr or kerchunk format, supports local paths and remote URLs)",
+    help=(
+        "Path to forecast data file (zarr or kerchunk format, supports local paths and "
+        "remote URLs)"
+    ),
 )
 @click.option(
     "--variable-mapping",
@@ -71,7 +73,10 @@ from extremeweatherbench.evaluate import ExtremeWeatherBench, _run_parallel, _ru
 @click.option(
     "--preprocess-function",
     type=str,
-    help="Python module path and function name for preprocessing (e.g., 'mymodule.preprocess_func')",
+    help=(
+        "Python module path and function name for preprocessing (e.g., "
+        "'mymodule.preprocess_func')"
+    ),
 )
 def cli_runner(
     default: bool,
@@ -108,13 +113,13 @@ def cli_runner(
         $ ewb --default
 
         # Use default evaluation with custom forecast
-        $ ewb --default --forecast-path /path/to/forecast.zarr --variable-mapping '{"temp":"surface_air_temperature"}'
-        
+        $ ewb --default --forecast-path /path/to/forecast.zarr --variable-mapping '{"temp":"surface_air_temperature"}'" # noqa: E501
+
         # Use default evaluation with remote forecast and storage options
-        $ ewb --default --forecast-path gs://bucket/forecast.parq --variable-mapping '{"t2":"surface_air_temperature"}' --storage-options '{"remote_protocol":"s3","remote_options":{"anon":true}}'
-        
+        $ ewb --default --forecast-path gs://bucket/forecast.parq --variable-mapping '{"t2":"surface_air_temperature"}' --storage-options '{"remote_protocol":"s3","remote_options":{"anon":true}}' # noqa: E501
+
         # Use default evaluation with custom preprocess function
-        $ ewb --default --forecast-path /path/to/forecast.zarr --variable-mapping '{"temp":"surface_air_temperature"}' --preprocess-function mymodule.preprocess_func
+        $ ewb --default --forecast-path /path/to/forecast.zarr --variable-mapping '{"temp":"surface_air_temperature"}' --preprocess-function mymodule.preprocess_func"
 
         # Use custom config file with parallel execution
         $ ewb --config-file my_config.py --parallel 4
@@ -135,7 +140,7 @@ def cli_runner(
     if output_dir is None:
         output_dir = os.getcwd()
 
-    output_path = Path(output_dir)
+    output_path = pathlib.Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
     # Validate that either default or config_file is provided
@@ -178,7 +183,7 @@ def cli_runner(
             )
         else:
             click.echo("Using default Brightband evaluation objects...")
-            evaluation_objects = defaults.BRIGHTBAND_EVALUATION_OBJECTS
+            evaluation_objects = defaults.get_brightband_evaluation_objects()
         cases_dict = _load_default_cases()
     else:
         assert config_file is not None  # for mypy
@@ -186,8 +191,8 @@ def cli_runner(
         evaluation_objects, cases_dict = _load_config_file(config_file)
 
     # Initialize ExtremeWeatherBench
-    ewb = ExtremeWeatherBench(
-        cases=cases_dict,
+    ewb = evaluate.ExtremeWeatherBench(
+        case_metadata=cases_dict,
         evaluation_objects=evaluation_objects,
         cache_dir=cache_dir if cache_dir else None,
     )
@@ -198,7 +203,7 @@ def cli_runner(
 
     # Save case operators if requested
     if save_case_operators:
-        save_path = Path(save_case_operators)
+        save_path = pathlib.Path(save_case_operators)
         save_path.parent.mkdir(parents=True, exist_ok=True)
         with open(save_path, "wb") as f:
             pickle.dump(case_operators, f)
@@ -222,11 +227,10 @@ def cli_runner(
         click.echo("No results to save")
 
 
-def _load_default_cases() -> dict:
+def _load_default_cases():
     """Load default case data for default evaluation objects."""
-    from extremeweatherbench.cases import load_ewb_events_yaml_into_case_collection
 
-    return load_ewb_events_yaml_into_case_collection()
+    return cases.load_ewb_events_yaml_into_case_collection()
 
 
 def _load_config_file(config_path: str) -> tuple:
@@ -236,7 +240,7 @@ def _load_config_file(config_path: str) -> tuple:
     - evaluation_objects: List of EvaluationObject instances
     - cases_dict: Dictionary containing case data
     """
-    config_path_obj = Path(config_path)
+    config_path_obj = pathlib.Path(config_path)
 
     # Load the config module
     spec = importlib.util.spec_from_file_location("config", str(config_path_obj))
@@ -258,18 +262,18 @@ def _load_config_file(config_path: str) -> tuple:
 
 def _load_preprocess_function(function_str: str):
     """Load a preprocess function from a module.function string.
-    
+
     Args:
         function_str: String in format 'module.path.function_name'
-        
+
     Returns:
         The loaded function
-        
+
     Raises:
         click.ClickException: If function cannot be loaded
     """
     try:
-        module_path, function_name = function_str.rsplit('.', 1)
+        module_path, function_name = function_str.rsplit(".", 1)
         module = importlib.import_module(module_path)
         func = getattr(module, function_name)
         return func
@@ -281,48 +285,48 @@ def _load_preprocess_function(function_str: str):
 
 def _validate_forecast_path(forecast_path: str) -> None:
     """Validate forecast path (local file or remote URL).
-    
+
     Args:
         forecast_path: Path to validate
-        
+
     Raises:
         click.ClickException: If path is invalid
     """
     # Check if it's a remote URL
-    if forecast_path.startswith(('http://', 'https://', 'gs://', 's3://', 'gcs://')):
+    if forecast_path.startswith(("http://", "https://", "gs://", "s3://", "gcs://")):
         # For remote URLs, we can't validate existence, just accept them
         return
-    
+
     # For local paths, check if they exist
-    if not Path(forecast_path).exists():
+    if not pathlib.Path(forecast_path).exists():
         raise click.ClickException(f"Local file does not exist: {forecast_path}")
 
 
 def _create_evaluation_objects_with_custom_forecast(
-    forecast_path: str, 
+    forecast_path: str,
     variable_mapping_str: str,
     storage_options_str: Optional[str] = None,
-    preprocess_function_str: Optional[str] = None
+    preprocess_function_str: Optional[str] = None,
 ) -> list:
     """Create evaluation objects using custom forecast data.
-    
+
     Args:
         forecast_path: Path to the forecast data file (local or remote)
         variable_mapping_str: JSON string containing variable mapping
         storage_options_str: Optional JSON string containing storage options
         preprocess_function_str: Optional module.function string for preprocessing
-        
+
     Returns:
         List of evaluation objects with custom forecast
     """
     # Validate the forecast path
     _validate_forecast_path(forecast_path)
-    
+
     try:
         variable_mapping = json.loads(variable_mapping_str)
     except json.JSONDecodeError as e:
         raise click.ClickException(f"Invalid JSON in --variable-mapping: {e}")
-    
+
     # Parse storage options
     storage_options = {}
     if storage_options_str:
@@ -330,37 +334,37 @@ def _create_evaluation_objects_with_custom_forecast(
             storage_options = json.loads(storage_options_str)
         except json.JSONDecodeError as e:
             raise click.ClickException(f"Invalid JSON in --storage-options: {e}")
-    
+
     # Load preprocess function if specified
     preprocess_func = None
     if preprocess_function_str:
         preprocess_func = _load_preprocess_function(preprocess_function_str)
-    
+
     # Infer forecast type from file extension
     # For URLs, get the path part after the last '/'
-    if forecast_path.startswith(('http://', 'https://', 'gs://', 's3://', 'gcs://')):
+    if forecast_path.startswith(("http://", "https://", "gs://", "s3://", "gcs://")):
         # Extract filename from URL
-        filename = forecast_path.split('/')[-1]
-        extension = Path(filename).suffix.lower()
+        filename = forecast_path.split("/")[-1]
+        extension = pathlib.Path(filename).suffix.lower()
     else:
         # Local path
-        extension = Path(forecast_path).suffix.lower()
-    
+        extension = pathlib.Path(forecast_path).suffix.lower()
+
     if extension == ".zarr" or forecast_path.endswith(".zarr"):
-        forecast_class = inputs.ZarrForecast
+        forecast_class = inputs.ZarrForecast  # type: ignore
     elif extension in [".parq", ".parquet", ".json"]:
-        forecast_class = inputs.KerchunkForecast
+        forecast_class = inputs.KerchunkForecast  # type: ignore
     else:
         raise click.ClickException(
             f"Cannot infer forecast type from extension '{extension}'. "
             "Supported extensions: .zarr, .parq, .parquet, .json"
         )
-    
+
     # Get all unique variables from default evaluation objects
     all_variables = set()
-    for eval_obj in defaults.BRIGHTBAND_EVALUATION_OBJECTS:
+    for eval_obj in defaults.get_brightband_evaluation_objects():
         all_variables.update(eval_obj.forecast.variables)
-    
+
     # Create custom forecast object
     forecast_kwargs = {
         "source": forecast_path,
@@ -368,16 +372,16 @@ def _create_evaluation_objects_with_custom_forecast(
         "variable_mapping": variable_mapping,
         "storage_options": storage_options,
     }
-    
+
     # Add preprocess function if provided
     if preprocess_func is not None:
         forecast_kwargs["preprocess"] = preprocess_func
-    
+
     custom_forecast = forecast_class(**forecast_kwargs)
-    
+
     # Create new evaluation objects with custom forecast
     evaluation_objects = []
-    for eval_obj in defaults.BRIGHTBAND_EVALUATION_OBJECTS:
+    for eval_obj in defaults.get_brightband_evaluation_objects():
         new_eval_obj = inputs.EvaluationObject(
             event_type=eval_obj.event_type,
             metric_list=eval_obj.metric_list,
@@ -385,7 +389,7 @@ def _create_evaluation_objects_with_custom_forecast(
             forecast=custom_forecast,
         )
         evaluation_objects.append(new_eval_obj)
-    
+
     return evaluation_objects
 
 

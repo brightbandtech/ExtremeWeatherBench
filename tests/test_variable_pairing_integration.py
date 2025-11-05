@@ -1,4 +1,4 @@
-"""Integration tests for variable pairing in forecast vs target evaluations.
+"""Integration tests.
 
 This test suite validates that the evaluation system correctly pairs forecast and
 target variables using the zip() pairing logic, covering various scenarios:
@@ -10,26 +10,22 @@ target variables using the zip() pairing logic, covering various scenarios:
 
 import datetime
 from typing import List
-from unittest.mock import Mock
+from unittest import mock
 
 import numpy as np
 import pandas as pd
 import pytest
 import xarray as xr
 
-from extremeweatherbench import cases, evaluate, inputs, metrics
-from extremeweatherbench.regions import CenteredRegion
-
-# =============================================================================
-# Test Fixtures
-# =============================================================================
+from extremeweatherbench import cases, evaluate, inputs, metrics, regions
 
 
 class MockMetric(metrics.BaseMetric):
     """A simple mock metric for testing."""
 
-    @classmethod
-    def _compute_metric(cls, forecast: xr.DataArray, target: xr.DataArray, **kwargs):
+    name = "MockMetric"
+
+    def _compute_metric(self, forecast: xr.DataArray, target: xr.DataArray, **kwargs):
         """Return a simple mean absolute difference."""
         diff = abs(forecast - target)
         # Reduce to a scalar but return as DataArray for EWB compatibility
@@ -44,7 +40,7 @@ class MockMetric(metrics.BaseMetric):
 @pytest.fixture
 def mock_metric():
     """Create a mock metric instance."""
-    return MockMetric
+    return MockMetric()
 
 
 @pytest.fixture
@@ -55,7 +51,7 @@ def sample_case():
         title="Variable Pairing Test",
         start_date=datetime.datetime(2021, 6, 20),
         end_date=datetime.datetime(2021, 6, 25),
-        location=CenteredRegion(
+        location=regions.CenteredRegion(
             latitude=45.0, longitude=-120.0, bounding_box_degrees=5.0
         ),
         event_type="test_event",
@@ -129,7 +125,7 @@ def base_target_dataset():
 
 def create_mock_input(variables: List[str], dataset: xr.Dataset, input_type: str):
     """Helper to create mock forecast or target inputs."""
-    mock_input = Mock()
+    mock_input = mock.Mock()
     mock_input.name = f"Mock{input_type.title()}"
     mock_input.variables = variables
 
@@ -143,7 +139,7 @@ def create_mock_input(variables: List[str], dataset: xr.Dataset, input_type: str
     if input_type == "target":
         # This should return (aligned_forecast, aligned_target)
         # We'll update this in create_case_operator
-        mock_input.maybe_align_forecast_to_target = Mock()
+        mock_input.maybe_align_forecast_to_target = mock.Mock()
 
     return mock_input
 
@@ -206,11 +202,6 @@ def create_case_operator(
         target=mock_target,
         forecast=mock_forecast,
     )
-
-
-# =============================================================================
-# Integration Tests
-# =============================================================================
 
 
 class TestVariablePairingIntegration:
@@ -332,9 +323,9 @@ class TestVariablePairingIntegration:
 
         # Verify results
         assert isinstance(result, pd.DataFrame)
-        assert (
-            len(result) == 1
-        ), "Should have exactly one evaluation result (only first pairing)"
+        assert len(result) == 1, (
+            "Should have exactly one evaluation result (only first pairing)"
+        )
 
         # Check that only the first pairing was created: var_a <-> var_x
         assert result["target_variable"].iloc[0] == "var_x"
@@ -362,9 +353,9 @@ class TestVariablePairingIntegration:
 
         # Verify results
         assert isinstance(result, pd.DataFrame)
-        assert (
-            len(result) == 1
-        ), "Should have exactly one evaluation result (only first pairing)"
+        assert len(result) == 1, (
+            "Should have exactly one evaluation result (only first pairing)"
+        )
 
         # Check that only the first pairing was created: var_a <-> var_x
         assert result["target_variable"].iloc[0] == "var_x"
@@ -469,11 +460,6 @@ class TestVariablePairingIntegration:
         assert len(set(values)) == 2, msg
 
 
-# =============================================================================
-# Test ExtremeWeatherBench Class with Variable Pairing
-# =============================================================================
-
-
 class TestExtremeWeatherBenchVariablePairing:
     """Test the full ExtremeWeatherBench workflow with variable pairing scenarios."""
 
@@ -538,7 +524,7 @@ class TestExtremeWeatherBenchVariablePairing:
 
         # Create and run ExtremeWeatherBench
         ewb = evaluate.ExtremeWeatherBench(
-            cases=cases_dict,
+            case_metadata=cases_dict,
             evaluation_objects=[evaluation_obj],
         )
 
@@ -619,7 +605,7 @@ class TestExtremeWeatherBenchVariablePairing:
 
         # Create and run ExtremeWeatherBench
         ewb = evaluate.ExtremeWeatherBench(
-            cases=cases_dict,
+            case_metadata=cases_dict,
             evaluation_objects=[evaluation_obj],
         )
 
