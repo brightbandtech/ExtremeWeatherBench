@@ -37,7 +37,7 @@ def generate_tc_tracks_by_init_time(
         sea_level_pressure: Sea level pressure DataArray
         wind_speed: Wind speed DataArray
         geopotential_thickness: Geopotential thickness DataArray (optional)
-        tc_track_data_df: Tropical cyclone track dataframe for filtering
+        tc_track_analysis_data: Tropical cyclone track analysis data
         max_temporal_hours: Maximum temporal window from init_time
         max_spatial_distance_degrees: Max spatial distance for TC track
             data filtering
@@ -91,7 +91,7 @@ def generate_tc_tracks_by_init_time(
     )
 
     # Use apply_ufunc to parallelize over init_time
-    logger.debug("Processing %d init_times with apply_ufunc", n_init_times)
+    logger.debug("Processing %d init_times", n_init_times)
     use_validation = use_contour_validation and geopotential_thickness is not None
     results = xr.apply_ufunc(
         _process_single_init_time,
