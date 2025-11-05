@@ -240,3 +240,32 @@ def nantrapezoid(
         y = np.asarray(y)
         ret = np.add.reduce(d * (y[tuple(slice1)] + y[tuple(slice2)]) / 2.0, axis)
     return ret
+
+
+def dewpoint_from_specific_humidity(pressure: float, specific_humidity: float) -> float:
+    r"""Calculate dewpoint from specific humidity.
+
+    This computation follows the methodology used in `metpy.calc.dewpoint_from_specific_humidity`.
+    Given specific humidity $q$, mixing ratio $w$, and pressure $p$, we compute first
+    $w = q / (1 - q)$ and $e = p w / (w + \epsilon)$ where $\epsilon=0.622$ is the ratio
+    of the molecular weights of water and dry air and $e$ is the partial pressure of water vapor.
+
+    Then, we invert the Bolton (1980) formula to get the dewpoint $T_d$ given $e$:
+
+    $$T_d =\frac{243.5 \log(e / 6.112)}{17.67 - \log(e / 6.112)}$$
+
+    Args:
+        pressure: The ambient pressure in hPa.
+        specific_humidity: The specific humidity in kg/kg.
+
+    Returns:
+        The dewpoint in Kelvin.
+    """
+    # NOTE: there are some pathological cases where the specific humidity is negative in some
+    # NWP and MLWP data sources. For safety, you should restrict the specific humidity to the
+    # interval [1e-10, 1], which addresses this and should preserve the remaining physical
+    # constraints.
+    w = specific_humidity / (1.0 - specific_humidity)
+    e = pressure * w / (w + 0.622)
+    T_d = 243.5 * np.log(e / 6.112) / (17.67 - np.log(e / 6.112))
+    return T_d + 273.15

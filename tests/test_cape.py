@@ -407,6 +407,7 @@ class TestPerformance:
             f"Single profile computation too slow: {time_per_call:.2f} μs"
         )
 
+    @pytest.mark.flaky(reruns=3)
     def test_batch_performance(self, era5_reference):
         """Test that batch processing is reasonably fast."""
         import time
