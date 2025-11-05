@@ -7,7 +7,7 @@ import inspect
 import logging
 import pathlib
 import threading
-from typing import Any, Callable, Optional, Union
+from typing import Any, Callable, Optional, Sequence, Union
 
 import numpy as np
 import pandas as pd  # type: ignore[import-untyped]
@@ -339,74 +339,6 @@ def maybe_get_closest_timestamp_to_center_of_valid_times(
     return output_times
 
 
-def _safe_concat(
-    dataframes: list[pd.DataFrame], ignore_index: bool = True
-) -> pd.DataFrame:
-    """Safely concatenate DataFrames, filtering out empty ones.
-
-    This function prevents FutureWarnings from pd.concat when dealing with
-    empty or all-NA DataFrames by filtering them out before concatenation.
-    It also handles dtype mismatches by converting to object dtype only when
-    necessary to prevent concatenation warnings.
-
-    Args:
-        dataframes: List of DataFrames to concatenate
-        ignore_index: Whether to ignore index during concatenation
-
-    Returns:
-        Concatenated DataFrame, or empty DataFrame with OUTPUT_COLUMNS if all
-        input DataFrames are empty. Preserves original dtypes when consistent
-        across DataFrames, converts to object dtype only when there are
-        dtype mismatches.
-    """
-    # Filter out problematic DataFrames that would trigger FutureWarning
-    valid_dfs = []
-    for i, df in enumerate(dataframes):
-        # Skip empty DataFrames
-        if df.empty:
-            logger.debug(f"Skipping empty DataFrame {i}")
-            continue
-        # Skip DataFrames where all values are NA
-        if df.isna().all().all():
-            logger.debug(f"Skipping all-NA DataFrame {i}")
-            continue
-        # Skip DataFrames where all columns are empty/NA
-        if len(df.columns) > 0 and all(df[col].isna().all() for col in df.columns):
-            logger.debug(f"Skipping DataFrame {i} with all-NA columns")
-            continue
-
-        valid_dfs.append(df)
-
-    if valid_dfs:
-        # Check for dtype inconsistencies that cause FutureWarning
-        if len(valid_dfs) > 1:
-            # Check if there are dtype mismatches between DataFrames
-            reference_df = valid_dfs[0]
-            has_dtype_mismatch = False
-
-            for df in valid_dfs[1:]:
-                # Check if columns have different dtypes across DataFrames
-                for col in reference_df.columns:
-                    if col in df.columns:
-                        if reference_df[col].dtype != df[col].dtype:
-                            has_dtype_mismatch = True
-                            break
-                if has_dtype_mismatch:
-                    break
-
-            if has_dtype_mismatch:
-                # Only convert to object dtype if there are mismatches
-                consistent_dfs = [df.astype(object) for df in valid_dfs]
-                return pd.concat(consistent_dfs, ignore_index=ignore_index)
-
-        # No dtype mismatches, concatenate normally
-        return pd.concat(valid_dfs, ignore_index=ignore_index)
-    else:
-        from extremeweatherbench.defaults import OUTPUT_COLUMNS
-
-        return pd.DataFrame(columns=OUTPUT_COLUMNS)
-
-
 # Extract all possible names from the title to handle cases with
 # multiple names in formats: "name1 (name2)" or "name1 and name2"
 def extract_tc_names(title: str) -> list[str]:
@@ -472,6 +404,22 @@ def stack_sparse_data_from_dims(
         da = da.stack(stacked=reduce_dim_names).sel(stacked=coord_values)
     da.data = da.data.maybe_densify(max_size=max_size)
     return da
+
+
+def check_for_vars(variable_list: list[str], source: Sequence) -> Optional[str]:
+    """Check if the variable is in the source.
+
+    Args:
+        variable_list: The list of variables to check for.
+        source: The source to check for the variables.
+
+    Returns:
+        The variable if it is in the source, otherwise None.
+    """
+    for variable in variable_list:
+        if variable in source:
+            return variable
+    return None
 
 
 class ParallelTqdm(Parallel):
@@ -558,6 +506,9 @@ class ParallelTqdm(Parallel):
 
     def print_progress(self):
         """Display the process of the parallel execution using tqdm"""
+        # Check if progress_bar has been initialized
+        if self.progress_bar is None:
+            return
         # if we finish dispatching, find total_tasks from the number of remaining items
         if self.total_tasks is None and self._original_iterator is None:
             self.total_tasks = self.n_dispatched_tasks

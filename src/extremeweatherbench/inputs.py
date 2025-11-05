@@ -1,7 +1,16 @@
 import abc
 import dataclasses
 import logging
-from typing import TYPE_CHECKING, Any, Callable, Optional, TypeAlias, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Literal,
+    Optional,
+    TypeAlias,
+    Union,
+    cast,
+)
 
 import numpy as np
 import pandas as pd
@@ -36,15 +45,7 @@ IBTRACS_URI = (
     "climate-stewardship-ibtracs/v04r01/access/csv/ibtracs.ALL.list.v04r01.csv"
 )
 
-# The core coordinate variables that are always required, even if not dimensions
-# (e.g. latitude and longitude for xarray datasets)
-DEFAULT_COORDINATE_VARIABLES = [
-    "valid_time",
-    "lead_time",
-    "init_time",
-    "latitude",
-    "longitude",
-]
+
 # ERA5 metadata variable mapping
 ERA5_metadata_variable_mapping = {
     "time": "valid_time",
@@ -391,8 +392,7 @@ class EvaluationObject:
     metric_list: list[
         Union[
             Callable[..., Any],
-            type["metrics.BaseMetric"],
-            type["metrics.AppliedMetric"],
+            "metrics.BaseMetric",
         ]
     ]
     target: "TargetBase"
@@ -830,7 +830,7 @@ class IBTrACS(TargetBase):
     """Target class for IBTrACS data."""
 
     name: str = "IBTrACS"
-    _current_case_id: Optional[str] = dataclasses.field(default=None, init=False)
+    _current_case_id: Optional[int] = None
     preprocess: Callable = _ibtracs_preprocess
     input_variables_same_as_forecast: bool = False
     source: str = IBTRACS_URI
@@ -1071,16 +1071,9 @@ def align_forecast_to_target(
     # Regrid forecast to target grid using nearest neighbor interpolation
     # extrapolate in the case of targets slightly outside the forecast domain
     if spatial_dims:
-        # Use explicit keyword arguments to avoid mypy issues with **kwargs
-        from typing import Literal
-
         interp_method: Literal["nearest", "linear"] = (
             "nearest" if method == "nearest" else "linear"
         )
-
-        # Build interpolation arguments properly
-        # Cast to Any to avoid mypy issues with mixed dict types
-        from typing import Any, cast
 
         interp_kwargs = cast(dict[str, Any], {"method": interp_method})
         interp_kwargs.update(spatial_dims)
@@ -1092,98 +1085,21 @@ def align_forecast_to_target(
     return time_space_aligned_forecast, time_aligned_target
 
 
-def safely_pull_variables(
-    dataset: IncomingDataInput,
-    variables: list[str],
-    optional_variables: Optional[list[str]] = None,
-    optional_variables_mapping: Optional[dict[str, list[str]]] = None,
-) -> IncomingDataInput:
-    """Safely pull variables from any IncomingDataInput type, prioritizing optionals.
-
-    This function attempts to extract variables from a dataset, giving
-    priority to optional variables when available. If optional variables
-    are present, they can replace the need for required variables through
-    the mapping dictionary.
-
-    Args:
-        dataset: The dataset to extract variables from (xr.Dataset, xr.DataArray,
-            pl.LazyFrame, or pd.DataFrame).
-        variables: List of required variable names to extract.
-        optional_variables: List of optional variable names to try first.
-        optional_variables_mapping: Dict mapping optional vars to list of
-            required vars they can replace.
-
-    Returns:
-        Same type as input dataset containing the extracted variables.
-
-    Raises:
-        KeyError: If required variables are not present and no suitable
-            optional variables are available as replacements.
-
-    Examples:
-        >>> ds = xr.Dataset(
-        ...     {"temp": (["x"], [1, 2, 3]), "dewpoint_temperature": (["x"], [4, 5, 6])}
-        ... )
-        >>> result = safely_pull_variables(
-        ...     ds,
-        ...     variables=["specific_humidity", "pressure"],
-        ...     optional_variables=["dewpoint_temperature"],
-        ...     optional_variables_mapping={
-        ...         "dewpoint_temperature": ["specific_humidity", "pressure"]
-        ...     },
-        ... )
-        >>> list(result.data_vars)
-        ['dewpoint_temperature']
-    """
-    if optional_variables is None:
-        optional_variables = []
-    if optional_variables_mapping is None:
-        optional_variables_mapping = {}
-
-    # Dispatch to type-specific handlers
-    match dataset:
-        case xr.Dataset():
-            return sources.safely_pull_variables_xr_dataset(
-                dataset, variables, optional_variables, optional_variables_mapping
-            )
-        case xr.DataArray():
-            return sources.safely_pull_variables_xr_dataarray(
-                dataset, variables, optional_variables, optional_variables_mapping
-            )
-        case pl.LazyFrame():
-            return sources.safely_pull_variables_polars_lazyframe(
-                dataset,
-                variables,
-                optional_variables + DEFAULT_COORDINATE_VARIABLES,
-                optional_variables_mapping,
-            )
-        case pd.DataFrame():
-            return sources.safely_pull_variables_pandas_dataframe(
-                dataset,
-                variables + DEFAULT_COORDINATE_VARIABLES,
-                optional_variables + DEFAULT_COORDINATE_VARIABLES,
-                optional_variables_mapping,
-            )
-        case _:
-            raise TypeError(
-                f"Unsupported dataset type: {type(dataset)}. "
-                f"Expected one of: xr.Dataset, xr.DataArray, pl.LazyFrame, pd.DataFrame"
-            )
-
-
 def maybe_subset_variables(
     data: IncomingDataInput,
     variables: list[Union[str, "derived.DerivedVariable"]],
+    source_module: Optional["sources.base.Source"] = None,
 ) -> IncomingDataInput:
     """Subset the variables from the data, if required.
 
     If the variables list includes derived variables, extracts their required
     and optional variables for subsetting.
 
-    Args:
+        Args:
         data: The dataset to subset (xr.Dataset, xr.DataArray, pl.LazyFrame,
             or pd.DataFrame).
         variables: List of variable names and/or derived variable classes.
+        source_module: Optional pre-created source module. If None, creates one.
 
     Returns:
         The data subset to only the specified variables.
@@ -1211,10 +1127,36 @@ def maybe_subset_variables(
     expected_and_maybe_derived_variables = (
         derived.maybe_include_variables_from_derived_input(variables)
     )
-    data = safely_pull_variables(
+
+    # Use provided source module or get one
+    if source_module is None:
+        source_module = sources.get_backend_module(type(data))
+    data = source_module.safely_pull_variables(
         data,
         expected_and_maybe_derived_variables,
         optional_variables=optional_variables,
         optional_variables_mapping=optional_variables_mapping,
     )
     return data
+
+
+def check_for_missing_data(
+    data: IncomingDataInput,
+    case_metadata: "cases.IndividualCase",
+    source_module: Optional["sources.base.Source"] = None,
+) -> bool:
+    """Check if the data has missing data in the given date range."""
+    # Use provided source module or get one
+    if source_module is None:
+        source_module = sources.get_backend_module(type(data))
+
+    # First check if the data has valid times in the given date range
+    if not source_module.check_for_valid_times(
+        data, case_metadata.start_date, case_metadata.end_date
+    ):
+        return False
+    # Then check if the data has spatial data for the given location
+    elif not source_module.check_for_spatial_data(data, case_metadata.location):
+        return False
+    else:
+        return True

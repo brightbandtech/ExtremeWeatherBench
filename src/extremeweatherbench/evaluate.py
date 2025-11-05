@@ -3,21 +3,36 @@
 import itertools
 import logging
 import pathlib
-from typing import TYPE_CHECKING, Optional, Type, Union
+from typing import TYPE_CHECKING, Optional, Union
 
+import dask.array as da
 import joblib
 import pandas as pd
 import sparse
 import xarray as xr
 from tqdm.auto import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
+from tqdm.dask import TqdmCallback
 
-from extremeweatherbench import cases, defaults, derived, inputs, utils
+from extremeweatherbench import cases, derived, inputs, sources, utils
 
 if TYPE_CHECKING:
     from extremeweatherbench import metrics, regions
 
 logger = logging.getLogger(__name__)
+
+# Columns for the evaluation output dataframe
+OUTPUT_COLUMNS = [
+    "value",
+    "lead_time",
+    "init_time",
+    "target_variable",
+    "metric",
+    "forecast_source",
+    "target_source",
+    "case_id_number",
+    "event_type",
+]
 
 
 class ExtremeWeatherBench:
@@ -74,6 +89,7 @@ class ExtremeWeatherBench:
     def run(
         self,
         n_jobs: Optional[int] = None,
+        parallel_config: Optional[dict] = None,
         **kwargs,
     ) -> pd.DataFrame:
         """Runs the ExtremeWeatherBench workflow.
@@ -84,42 +100,83 @@ class ExtremeWeatherBench:
 
         Args:
             n_jobs: The number of jobs to run in parallel. If None, defaults to the
-            joblib backend default value. If 1, the workflow will run serially.
+                joblib backend default value. If 1, the workflow will run serially.
+                Ignored if parallel_config is provided.
+            parallel_config: Optional dictionary of joblib parallel configuration.
+                If provided, this takes precedence over n_jobs. If not provided and
+                n_jobs is specified, a default config with threading backend is used.
 
         Returns:
             A concatenated dataframe of the evaluation results.
         """
-        # Caching does not work in parallel mode as of now, so ignore the cache_dir
-        # but raise a warning for the user
-        if self.cache_dir and n_jobs != 1:
-            logger.warning(
-                "Caching is not supported in parallel mode, ignoring cache_dir"
-            )
-        # Instantiate the cache directory if caching and build it if it does not exist
-        elif self.cache_dir:
-            if not self.cache_dir.exists():
-                self.cache_dir.mkdir(parents=True, exist_ok=True)
-        run_results = _run_case_operators(
-            self.case_operators, n_jobs, self.cache_dir, **kwargs
+        logger.info("Running ExtremeWeatherBench workflow...")
+
+        # Determine if running in serial or parallel mode
+        # Serial: n_jobs=1 or (parallel_config with n_jobs=1)
+        # Parallel: n_jobs>1 or (parallel_config with n_jobs>1)
+        is_serial = (
+            (n_jobs == 1)
+            or (parallel_config is not None and parallel_config.get("n_jobs") == 1)
+            or (n_jobs is None and parallel_config is None)
         )
-        if run_results:
-            return utils._safe_concat(run_results, ignore_index=True)
+        logger.debug("Running in %s mode.", "serial" if is_serial else "parallel")
+
+        if not is_serial:
+            # Build parallel_config if not provided
+            if parallel_config is None and n_jobs is not None:
+                logger.debug(
+                    "No parallel_config provided, using threading backend and %s jobs.",
+                    n_jobs,
+                )
+                parallel_config = {"backend": "threading", "n_jobs": n_jobs}
+            kwargs["parallel_config"] = parallel_config
+
+            # Caching does not work in parallel mode as of now
+            if self.cache_dir:
+                logger.warning(
+                    "Caching is not supported in parallel mode, ignoring cache_dir"
+                )
         else:
-            # Return empty DataFrame with expected columns
-            return pd.DataFrame(columns=defaults.OUTPUT_COLUMNS)
+            # Running in serial mode - instantiate cache dir if needed
+            if self.cache_dir:
+                if not self.cache_dir.exists():
+                    self.cache_dir.mkdir(parents=True, exist_ok=True)
+
+        run_results = _run_case_operators(self.case_operators, self.cache_dir, **kwargs)
+
+        # If there are results, concatenate them and return, else return an empty
+        # DataFrame with the expected columns
+        if run_results:
+            return _safe_concat(run_results, ignore_index=True)
+        else:
+            return pd.DataFrame(columns=OUTPUT_COLUMNS)
 
 
 def _run_case_operators(
     case_operators: list["cases.CaseOperator"],
-    n_jobs: Optional[int] = None,
     cache_dir: Optional[pathlib.Path] = None,
     **kwargs,
 ) -> list[pd.DataFrame]:
-    """Run the case operators in parallel or serial."""
+    """Run the case operators in parallel or serial.
+
+    Args:
+        case_operators: List of case operators to run.
+        cache_dir: Optional directory for caching (serial mode only).
+        **kwargs: Additional arguments, may include 'parallel_config' dict.
+
+    Returns:
+        List of result DataFrames.
+    """
     with logging_redirect_tqdm():
-        if n_jobs != 1:
-            return _run_parallel(case_operators, n_jobs, **kwargs)
+        # Check if parallel_config is provided
+        parallel_config = kwargs.get("parallel_config", None)
+
+        # Run in parallel if parallel_config exists and n_jobs != 1
+        if parallel_config is not None:
+            logger.info("Running case operators in parallel...")
+            return _run_parallel(case_operators, **kwargs)
         else:
+            logger.info("Running case operators in serial...")
             return _run_serial(case_operators, cache_dir, **kwargs)
 
 
@@ -138,19 +195,60 @@ def _run_serial(
 
 def _run_parallel(
     case_operators: list["cases.CaseOperator"],
-    n_jobs: Optional[int] = None,
     **kwargs,
 ) -> list[pd.DataFrame]:
-    """Run the case operators in parallel."""
+    """Run the case operators in parallel.
 
-    if n_jobs is None:
+    Args:
+        case_operators: List of case operators to run.
+        **kwargs: Additional arguments, must include 'parallel_config' dict.
+
+    Returns:
+        List of result DataFrames.
+    """
+    parallel_config = kwargs.pop("parallel_config", None)
+
+    if parallel_config is None:
+        raise ValueError("parallel_config must be provided to _run_parallel")
+
+    if parallel_config.get("n_jobs") is None:
         logger.warning("No number of jobs provided, using joblib backend default.")
-    run_results = joblib.Parallel(n_jobs=n_jobs)(
-        # None is the cache_dir, we can't cache in parallel mode
-        joblib.delayed(compute_case_operator)(case_operator, None, **kwargs)
-        for case_operator in case_operators
-    )
-    return run_results
+
+    # Handle dask backend - create client if needed
+    dask_client = None
+    if parallel_config.get("backend") == "dask":
+        try:
+            from dask.distributed import Client, LocalCluster
+
+            # Check if a client already exists
+            try:
+                Client.current()
+                logger.info("Using existing dask client")
+            except ValueError:
+                # No client exists, create a local one
+                logger.info("Creating local dask client for parallel execution")
+                dask_client = Client(LocalCluster(processes=True, silence_logs=False))
+                logger.info(f"Dask client created: {dask_client}")
+        except ImportError:
+            raise ImportError(
+                "Dask is required for dask backend. "
+                "Install with: pip install dask[distributed]"
+            )
+
+    try:
+        # TODO(198): return a generator and compute at a higher level
+        with joblib.parallel_config(**parallel_config):
+            run_results = utils.ParallelTqdm(total_tasks=len(case_operators))(
+                # None is the cache_dir, we can't cache in parallel mode
+                joblib.delayed(compute_case_operator)(case_operator, None, **kwargs)
+                for case_operator in case_operators
+            )
+        return run_results
+    finally:
+        # Clean up the dask client if we created it
+        if dask_client is not None:
+            logger.info("Closing dask client")
+            dask_client.close()
 
 
 def compute_case_operator(
@@ -173,14 +271,19 @@ def compute_case_operator(
     Returns:
         A concatenated dataframe of the results of the case operator.
     """
+    logger.info(
+        "Computing case operator for case %s...",
+        case_operator.case_metadata.case_id_number,
+    )
     forecast_ds, target_ds = _build_datasets(case_operator, **kwargs)
+
     # Check if any dimension has zero length
     if 0 in forecast_ds.sizes.values() or 0 in target_ds.sizes.values():
-        return pd.DataFrame(columns=defaults.OUTPUT_COLUMNS)
+        return pd.DataFrame(columns=OUTPUT_COLUMNS)
 
     # Or, check if there aren't any dimensions
     elif len(forecast_ds.sizes) == 0 or len(target_ds.sizes) == 0:
-        return pd.DataFrame(columns=defaults.OUTPUT_COLUMNS)
+        return pd.DataFrame(columns=OUTPUT_COLUMNS)
     # spatiotemporally align the target and forecast datasets dependent on the target
     aligned_forecast_ds, aligned_target_ds = (
         case_operator.target.maybe_align_forecast_to_target(forecast_ds, target_ds)
@@ -223,16 +326,16 @@ def compute_case_operator(
             cache_path = (
                 pathlib.Path(cache_dir) if isinstance(cache_dir, str) else cache_dir
             )
-            concatenated = utils._safe_concat(results, ignore_index=True)
+            concatenated = _safe_concat(results, ignore_index=True)
             if not concatenated.empty:
                 concatenated.to_pickle(cache_path / "results.pkl")
 
-    return utils._safe_concat(results, ignore_index=True)
+    return _safe_concat(results, ignore_index=True)
 
 
 def _extract_standard_metadata(
     target_variable: Union[str, "derived.DerivedVariable"],
-    metric: Union["metrics.BaseMetric", "metrics.AppliedMetric"],
+    metric: "metrics.BaseMetric",
     case_operator: "cases.CaseOperator",
 ) -> dict:
     """Extract standard metadata for output dataframe.
@@ -287,7 +390,7 @@ def _ensure_output_schema(df: pd.DataFrame, **metadata) -> pd.DataFrame:
         df[col] = value
 
     # Check for missing columns and warn
-    missing_cols = set(defaults.OUTPUT_COLUMNS) - set(df.columns)
+    missing_cols = set(OUTPUT_COLUMNS) - set(df.columns)
 
     # An output requires one of init_time or lead_time. init_time will be present for a
     # metric that assesses something in an entire model run, such as the onset error of
@@ -308,14 +411,14 @@ def _ensure_output_schema(df: pd.DataFrame, **metadata) -> pd.DataFrame:
 
     # Ensure all OUTPUT_COLUMNS are present (missing ones will be NaN)
     # and reorder to match OUTPUT_COLUMNS specification
-    return df.reindex(columns=defaults.OUTPUT_COLUMNS)
+    return df.reindex(columns=OUTPUT_COLUMNS)
 
 
 def _evaluate_metric_and_return_df(
     forecast_ds: xr.Dataset,
     target_ds: xr.Dataset,
-    forecast_variable: Union[str, Type["derived.DerivedVariable"]],
-    target_variable: Union[str, Type["derived.DerivedVariable"]],
+    forecast_variable: Union[str, "derived.DerivedVariable"],
+    target_variable: Union[str, "derived.DerivedVariable"],
     metric: "metrics.BaseMetric",
     case_operator: "cases.CaseOperator",
     **kwargs,
@@ -352,7 +455,15 @@ def _evaluate_metric_and_return_df(
     # If data is sparse, densify it
     if isinstance(metric_result.data, sparse.COO):
         metric_result.data = metric_result.data.maybe_densify()
+    elif isinstance(metric_result.data, da.Array) and isinstance(
+        metric_result.data._meta, sparse.COO
+    ):
+        # Dask array with sparse.COO chunks - densify chunks
+        metric_result.data = metric_result.data.map_blocks(
+            lambda x: x.maybe_densify(), dtype=metric_result.data.dtype
+        )
     # Convert to DataFrame and add metadata, ensuring OUTPUT_COLUMNS compliance
+
     df = metric_result.to_dataframe(name="value").reset_index()
     # TODO: add functionality for custom metadata columns
     metadata = _extract_standard_metadata(target_variable, metric, case_operator)
@@ -369,20 +480,28 @@ def _build_datasets(
     forecast datasets, including preprocessing, variable renaming, and subsetting.
 
     Args:
-        case_operator: The case operator to build datasets for.
+        case_operator: The case operator containing metadata and input sources.
         **kwargs: Additional keyword arguments to pass to pipeline steps.
-
     Returns:
-        A tuple of (forecast_dataset, target_dataset).
+        A tuple containing (forecast_dataset, target_dataset). If either dataset
+        has no dimensions, both will be empty datasets.
     """
     logger.info("Running target pipeline... ")
-    target_ds = run_pipeline(
-        case_operator.case_metadata, case_operator.target, **kwargs
-    )
+    with TqdmCallback(
+        desc=f"Running target pipeline for case "
+        f"{case_operator.case_metadata.case_id_number}"
+    ):
+        target_ds = run_pipeline(
+            case_operator.case_metadata, case_operator.target, **kwargs
+        )
     logger.info("Running forecast pipeline... ")
-    forecast_ds = run_pipeline(
-        case_operator.case_metadata, case_operator.forecast, **kwargs
-    )
+    with TqdmCallback(
+        desc=f"Running forecast pipeline for case "
+        f"{case_operator.case_metadata.case_id_number}"
+    ):
+        forecast_ds = run_pipeline(
+            case_operator.case_metadata, case_operator.forecast, **kwargs
+        )
     # Check if any dimension has zero length
     zero_length_dims = [dim for dim, size in forecast_ds.sizes.items() if size == 0]
     if zero_length_dims:
@@ -433,29 +552,113 @@ def run_pipeline(
         The processed input data as an xarray dataset.
     """
     # Open data and process through pipeline steps
-    data = (
-        # Opens data from user-defined source
-        input_data.open_and_maybe_preprocess_data_from_source()
-        # Maps variable names to the input data if not already using EWB
-        # naming conventions
-        .pipe(input_data.maybe_map_variable_names)
-        # subsets the input data to the variables defined in the input data
-        .pipe(inputs.maybe_subset_variables, variables=input_data.variables)
-        # Subsets the input data using case metadata
-        .pipe(
-            input_data.subset_data_to_case,
-            case_metadata=case_metadata,
-            **kwargs,
-        )
-        # Converts the input data to an xarray dataset if it is not already
-        .pipe(input_data.maybe_convert_to_dataset)
-        # Adds the name of the dataset to the dataset attributes
-        .pipe(input_data.add_source_to_dataset_attrs)
-        # Derives variables if needed
-        .pipe(
-            derived.maybe_derive_variables,
-            variables=input_data.variables,
-            case_metadata=case_metadata,
-        )
+    data = input_data.open_and_maybe_preprocess_data_from_source().pipe(
+        lambda ds: input_data.maybe_map_variable_names(ds)
     )
-    return data
+
+    # Get the appropriate source module for the data type
+    source_module = sources.get_backend_module(type(data))
+
+    # Checks if the data has valid times and spatial overlap. This must come after
+    # maybe_map_variable_names to ensure variable names are mapped correctly.
+    if inputs.check_for_missing_data(
+        data,
+        case_metadata,
+        source_module=source_module,
+    ):
+        valid_data = (
+            inputs.maybe_subset_variables(
+                data,
+                variables=input_data.variables,
+                source_module=source_module,
+            )
+            .pipe(
+                lambda ds: input_data.subset_data_to_case(ds, case_metadata, **kwargs)
+            )
+            .pipe(input_data.maybe_convert_to_dataset)
+            .pipe(input_data.add_source_to_dataset_attrs)
+            .pipe(
+                lambda ds: derived.maybe_derive_variables(
+                    ds,
+                    variables=input_data.variables,
+                    case_metadata=case_metadata,
+                )
+            )
+        )
+        return valid_data
+    else:
+        logger.warning(
+            "Forecast dataset for case %s has no data for case time range %s to %s."
+            % (
+                case_metadata.case_id_number,
+                case_metadata.start_date.strftime("%Y-%m-%d %H:%M:%S"),
+                case_metadata.end_date.strftime("%Y-%m-%d %H:%M:%S"),
+            )
+        )
+        return xr.Dataset()
+
+
+def _safe_concat(
+    dataframes: list[pd.DataFrame], ignore_index: bool = True
+) -> pd.DataFrame:
+    """Safely concatenate DataFrames, filtering out empty ones.
+
+    This function prevents FutureWarnings from pd.concat when dealing with
+    empty or all-NA DataFrames by filtering them out before concatenation.
+    It also handles dtype mismatches by converting to object dtype only when
+    necessary to prevent concatenation warnings.
+
+    Args:
+        dataframes: List of DataFrames to concatenate
+        ignore_index: Whether to ignore index during concatenation
+
+    Returns:
+        Concatenated DataFrame, or empty DataFrame with OUTPUT_COLUMNS if all
+        input DataFrames are empty. Preserves original dtypes when consistent
+        across DataFrames, converts to object dtype only when there are
+        dtype mismatches.
+    """
+    # Filter out problematic DataFrames that would trigger FutureWarning
+    valid_dfs = []
+    for i, df in enumerate(dataframes):
+        # Skip empty DataFrames
+        if df.empty:
+            logger.debug(f"Skipping empty DataFrame {i}")
+            continue
+        # Skip DataFrames where all values are NA
+        if df.isna().all().all():
+            logger.debug(f"Skipping all-NA DataFrame {i}")
+            continue
+        # Skip DataFrames where all columns are empty/NA
+        if len(df.columns) > 0 and all(df[col].isna().all() for col in df.columns):
+            logger.debug(f"Skipping DataFrame {i} with all-NA columns")
+            continue
+
+        valid_dfs.append(df)
+
+    if valid_dfs:
+        # Check for dtype inconsistencies that cause FutureWarning
+        if len(valid_dfs) > 1:
+            # Check if there are dtype mismatches between DataFrames
+            reference_df = valid_dfs[0]
+            has_dtype_mismatch = False
+
+            for df in valid_dfs[1:]:
+                # Check if columns have different dtypes across DataFrames
+                for col in reference_df.columns:
+                    if col in df.columns:
+                        if reference_df[col].dtype != df[col].dtype:
+                            has_dtype_mismatch = True
+                            break
+                if has_dtype_mismatch:
+                    break
+
+            if has_dtype_mismatch:
+                # Only convert to object dtype if there are mismatches
+                consistent_dfs = [df.astype(object) for df in valid_dfs]
+                return pd.concat(consistent_dfs, ignore_index=ignore_index)
+
+        # No dtype mismatches, concatenate normally
+        return pd.concat(valid_dfs, ignore_index=ignore_index)
+    else:
+        return pd.DataFrame(columns=OUTPUT_COLUMNS)
