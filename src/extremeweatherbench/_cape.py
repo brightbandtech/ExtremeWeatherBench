@@ -178,9 +178,7 @@ def compute_buoyancy_energy_inline(
 
 
 @njit(fastmath=True)
-def lcl_fast(
-    pressure: float, temperature: float, dewpoint: float
-) -> tuple[float, float]:
+def lcl(pressure: float, temperature: float, dewpoint: float) -> tuple[float, float]:
     """Fast LCL calculation with inline math, following Bolton (1980).
 
     Args:
@@ -204,7 +202,7 @@ def lcl_fast(
 
 
 @njit(fastmath=True)
-def insert_lcl_level_fast(
+def insert_lcl_level(
     pressure: np.ndarray,
     temperature: np.ndarray,
     dewpoint: np.ndarray,
@@ -314,7 +312,7 @@ def insert_lcl_level_fast(
 
 
 @njit(fastmath=True)
-def moist_ascent_fast(p_target: float, p_lcl: float, t_lcl: float) -> float:
+def moist_ascent(p_target: float, p_lcl: float, t_lcl: float) -> float:
     """Compute the temperature of a parcel that is ascending moist adiabatically from the LCL.
 
     Args:
@@ -426,10 +424,10 @@ def compute_ml_cape_cin_from_profile(
     )
 
     # Step 2: LCL
-    p_lcl, t_lcl = lcl_fast(p_surface, ml_temp, ml_dewpoint)
+    p_lcl, t_lcl = lcl(p_surface, ml_temp, ml_dewpoint)
 
     # Step 2b: Insert LCL into profile for better resolution
-    pressure, temperature, dewpoint, geopotential, lcl_idx = insert_lcl_level_fast(
+    pressure, temperature, dewpoint, geopotential, lcl_idx = insert_lcl_level(
         pressure, temperature, dewpoint, geopotential, p_lcl, t_lcl
     )
 
@@ -448,7 +446,7 @@ def compute_ml_cape_cin_from_profile(
             t_parcel = ml_temp * (p / p_surface) ** KAPPA
             w_parcel = w_ml
         else:
-            t_parcel = moist_ascent_fast(p, p_lcl, t_lcl)
+            t_parcel = moist_ascent(p, p_lcl, t_lcl)
             e_parcel = saturation_vapor_pressure_inline(t_parcel)
             w_parcel = mixing_ratio_inline(p, e_parcel)
 
