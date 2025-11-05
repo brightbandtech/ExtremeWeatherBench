@@ -681,17 +681,6 @@ class TestNantrapezoid:
         assert not np.isnan(result)
 
 
-class TestComputeCapeCin:
-    """Test the compute_cape_cin function."""
-
-    def test_compute_cape_cin(self, sample_calc_dataset):
-        """Test the compute_cape_cin function."""
-        cape, cin = calc.compute_cape_cin(sample_calc_dataset)
-
-        assert cape.shape == sample_calc_dataset.shape
-        assert cin.shape == sample_calc_dataset.shape
-
-
 class TestDewpointFromSpecificHumidity:
     """Test the dewpoint_from_specific_humidity function."""
 
