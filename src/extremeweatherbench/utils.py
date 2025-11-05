@@ -2,22 +2,19 @@
 specialized package."""
 
 import datetime
+import importlib
 import inspect
 import logging
-from importlib import resources
-from pathlib import Path
-from typing import Any, Callable, Optional, TypeAlias, Union
+import pathlib
+from typing import Any, Callable, Optional, Union
 
 import numpy as np
 import pandas as pd  # type: ignore[import-untyped]
-import polars as pl
 import regionmask
 import xarray as xr
 import yaml  # type: ignore[import]
 
 logger = logging.getLogger(__name__)
-
-IncomingDataInput: TypeAlias = xr.Dataset | xr.DataArray | pl.LazyFrame | pd.DataFrame
 
 
 def convert_longitude_to_360(longitude: float) -> float:
@@ -67,20 +64,22 @@ def load_events_yaml():
     )
     import extremeweatherbench.data
 
-    events_yaml_file = resources.files(extremeweatherbench.data).joinpath("events.yaml")
-    with resources.as_file(events_yaml_file) as file:
+    events_yaml_file = importlib.resources.files(extremeweatherbench.data).joinpath(
+        "events.yaml"
+    )
+    with importlib.resources.as_file(events_yaml_file) as file:
         yaml_event_case = read_event_yaml(file)
 
     return yaml_event_case
 
 
-def read_event_yaml(input_pth: str | Path) -> dict:
+def read_event_yaml(input_pth: str | pathlib.Path) -> dict:
     """Read events yaml from data."""
     logger.warning(
         "This function is deprecated and will be removed in a future release. "
         "Please use cases.read_incoming_yaml instead."
     )
-    input_pth = Path(input_pth)
+    input_pth = pathlib.Path(input_pth)
     with open(input_pth, "rb") as f:
         yaml_event_case = yaml.safe_load(f)
     return yaml_event_case
@@ -138,11 +137,6 @@ def derive_indices_from_init_time_and_lead_time(
     valid_time_indices = np.asarray(valid_time_mask).nonzero()
 
     return valid_time_indices
-
-
-def _default_preprocess(input_data: IncomingDataInput) -> IncomingDataInput:
-    """Default forecast preprocess function that does nothing."""
-    return input_data
 
 
 def filter_kwargs_for_callable(kwargs: dict, callable_obj: Callable) -> dict:
