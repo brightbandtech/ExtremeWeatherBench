@@ -55,7 +55,6 @@ def safely_pull_variables(
     # to both required and optional variables
     from extremeweatherbench import defaults
 
-    variables = variables + defaults.DEFAULT_COORDINATE_VARIABLES
     optional_variables = optional_variables + defaults.DEFAULT_COORDINATE_VARIABLES
 
     # Get column names from DataFrame
