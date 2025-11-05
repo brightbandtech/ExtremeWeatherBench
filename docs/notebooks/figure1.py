@@ -6,7 +6,7 @@ import matplotlib.font_manager
 flist = matplotlib.font_manager.get_font_names()
 from pathlib import Path  # noqa: E402
 
-from extremeweatherbench import cases, defaults, evaluate, utils  # noqa: E402
+from extremeweatherbench import cases, defaults, evaluate  # noqa: E402
 
 # make the basepath - change this to your local path
 basepath = Path.home() / "ExtremeWeatherBench" / ""
@@ -20,17 +20,13 @@ import case_plotting as cp  # noqa: E402
 
 # load in all of the events in the yaml file
 print("loading in the events yaml file")
-case_dict = utils.load_events_yaml()
-
-# turn the dictionary into a list of case objects
-ewb_cases = cases.load_individual_cases(case_dict)
-
+ewb_cases = cases.load_ewb_events_yaml_into_case_collection()
 # build out all of the expected data to evalate the case
 # this will not be a 1-1 mapping with ewb_cases because there are multiple data sources
 # to evaluate for some cases
 # for example, a heat/cold case will have both a case operator for ERA-5 data and GHCN
 case_operators = cases.build_case_operators(
-    case_dict, defaults.get_brightband_evaluation_objects()
+    ewb_cases, defaults.get_brightband_evaluation_objects()
 )
 
 # to plot the targets, we need to run the pipeline for each case and target
