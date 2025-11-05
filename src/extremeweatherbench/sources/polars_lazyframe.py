@@ -158,8 +158,6 @@ def check_for_valid_times(
 
     for time_col in time_cols:
         if time_col in available_columns:
-            logger.debug("Found time column: %s", time_col)
-            logger.debug("Date range: %s to %s", start_date, end_date)
             # Check the dtype of the column
             col_dtype = data.collect_schema()[time_col]
             # Filter LazyFrame to include valid times in date range

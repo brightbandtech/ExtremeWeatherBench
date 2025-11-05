@@ -393,6 +393,64 @@ class TestPolarsLazyFrameModule:
         result = polars_lazyframe.check_for_valid_times(lf, start_date, end_date)
         assert result is False
 
+    def test_check_for_valid_times_with_datetime_column(self):
+        """Ensure datetime columns work with pl.lit() comparisons."""
+        dates = pd.date_range("2021-01-01", "2021-01-10", freq="1D")
+        df = pl.DataFrame({"valid_time": dates, "value": range(len(dates))})
+        lf = df.lazy()
+
+        start_date = datetime.datetime(2021, 1, 3)
+        end_date = datetime.datetime(2021, 1, 7)
+
+        result = polars_lazyframe.check_for_valid_times(lf, start_date, end_date)
+        assert result is True
+
+    def test_check_for_valid_times_with_string_column(self):
+        """Test that string datetime columns are converted properly."""
+        date_strings = [
+            "2021-01-01T00:00:00",
+            "2021-01-02T00:00:00",
+            "2021-01-03T00:00:00",
+            "2021-01-04T00:00:00",
+            "2021-01-05T00:00:00",
+        ]
+        df = pl.DataFrame({"valid_time": date_strings, "value": range(5)})
+        lf = df.lazy()
+
+        start_date = datetime.datetime(2021, 1, 2)
+        end_date = datetime.datetime(2021, 1, 4)
+
+        result = polars_lazyframe.check_for_valid_times(lf, start_date, end_date)
+        assert result is True
+
+    def test_check_for_valid_times_with_date_type(self):
+        """Test with polars Date type columns."""
+        dates = pl.date_range(
+            datetime.date(2021, 1, 1),
+            datetime.date(2021, 1, 10),
+            interval="1d",
+            eager=True,
+        )
+        df = pl.DataFrame({"valid_time": dates, "value": range(10)})
+        lf = df.lazy()
+
+        start_date = datetime.datetime(2021, 1, 3)
+        end_date = datetime.datetime(2021, 1, 7)
+
+        result = polars_lazyframe.check_for_valid_times(lf, start_date, end_date)
+        assert result is True
+
+    def test_check_for_valid_times_no_time_column(self):
+        """Test when no time column exists in the LazyFrame."""
+        df = pl.DataFrame({"value": range(10), "id": range(10)})
+        lf = df.lazy()
+
+        start_date = datetime.datetime(2021, 1, 1)
+        end_date = datetime.datetime(2021, 1, 10)
+
+        result = polars_lazyframe.check_for_valid_times(lf, start_date, end_date)
+        assert result is False
+
     def test_check_for_spatial_data_with_latitude_longitude(self):
         """Test check_for_spatial_data when LazyFrame has latitude and longitude
         columns."""
@@ -487,6 +545,54 @@ class TestPolarsLazyFrameModule:
 
         result = polars_lazyframe.check_for_spatial_data(lf, region)
         assert result is False
+
+    def test_check_for_spatial_data_partial_overlap(self):
+        """Test when only some data points fall within the region."""
+        from extremeweatherbench.regions import BoundingBoxRegion
+
+        # Create LazyFrame with data partially in and out of region
+        data = {
+            "latitude": [38.0, 40.0, 45.0, 50.0],
+            "longitude": [-75.0, -73.0, -71.0, -80.0],
+            "temperature": [20.0, 21.0, 22.0, 23.0],
+        }
+        df = pl.DataFrame(data)
+        lf = df.lazy()
+
+        # Create region that overlaps with some points
+        region = BoundingBoxRegion(
+            latitude_min=39.5,
+            latitude_max=43.5,
+            longitude_min=-74.5,
+            longitude_max=-70.5,
+        )
+
+        result = polars_lazyframe.check_for_spatial_data(lf, region)
+        assert result is True
+
+    def test_check_for_spatial_data_edge_case(self):
+        """Test with data points exactly on region boundaries."""
+        from extremeweatherbench.regions import BoundingBoxRegion
+
+        # Create LazyFrame with data on boundaries
+        data = {
+            "latitude": [39.5, 43.5],
+            "longitude": [-74.5, -70.5],
+            "temperature": [20.0, 21.0],
+        }
+        df = pl.DataFrame(data)
+        lf = df.lazy()
+
+        # Create region with exact boundaries
+        region = BoundingBoxRegion(
+            latitude_min=39.5,
+            latitude_max=43.5,
+            longitude_min=-74.5,
+            longitude_max=-70.5,
+        )
+
+        result = polars_lazyframe.check_for_spatial_data(lf, region)
+        assert result is True
 
 
 class TestXarrayDataArrayModule:
