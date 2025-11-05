@@ -1010,11 +1010,13 @@ class OnsetME(ME):
             if dim not in ["init_time", "lead_time", "valid_time"]
         ]
 
-        # If target is sparse, stack the data
-        if isinstance(target.data, sparse.COO):
-            forecast = utils.stack_sparse_data_from_dims(forecast, spatial_dims)
-            target = utils.stack_sparse_data_from_dims(target, spatial_dims)
+        forecast = _reduce_duck_array(
+            forecast, func=np.nanmean, reduce_dims=spatial_dims
+        )
+        target = _reduce_duck_array(target, func=np.nanmean, reduce_dims=spatial_dims)
 
+        if isinstance(target.data, sparse.COO):
+            # If target is sparse, interp with stacked coordinates
             climatology_time = climatology_time.interp(
                 latitude=target["stacked"]["latitude"],
                 longitude=target["stacked"]["longitude"],
@@ -1022,6 +1024,7 @@ class OnsetME(ME):
                 kwargs={"fill_value": None},
             )
         else:
+            # Otherwise, interp with target coordinates
             climatology_time = climatology_time.interp_like(
                 target, method="nearest", kwargs={"fill_value": None}
             )
@@ -1134,14 +1137,12 @@ class DurationME(ME):
             for dim in forecast.dims
             if dim not in ["init_time", "lead_time", "valid_time"]
         ]
-
-        # If target is sparse, stack the data and interpolate the climatology to the
-        # target grid
-        # otherwise, interpolate the climatology to the target grid
+        forecast = _reduce_duck_array(
+            forecast, func=np.nanmean, reduce_dims=spatial_dims
+        )
+        target = _reduce_duck_array(target, func=np.nanmean, reduce_dims=spatial_dims)
         if isinstance(target.data, sparse.COO):
-            forecast = utils.stack_sparse_data_from_dims(forecast, spatial_dims)
-            target = utils.stack_sparse_data_from_dims(target, spatial_dims)
-
+            # If target is sparse, interp with stacked coordinates
             climatology_time = climatology_time.interp(
                 latitude=target["stacked"]["latitude"],
                 longitude=target["stacked"]["longitude"],
@@ -1149,6 +1150,7 @@ class DurationME(ME):
                 kwargs={"fill_value": None},
             )
         else:
+            # Otherwise, interp with target coordinates
             climatology_time = climatology_time.interp_like(
                 target, method="nearest", kwargs={"fill_value": None}
             )
