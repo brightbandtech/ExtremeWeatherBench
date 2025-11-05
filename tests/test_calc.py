@@ -899,3 +899,84 @@ class TestComputeCapeCin:
         )
 
         assert np.allclose(cape_parallel, cape_serial)
+
+
+class TestDewpointFromSpecificHumidity:
+    """Test the dewpoint_from_specific_humidity function."""
+
+    def test_dewpoints_from_specific_humidities(self):
+        """Test the dewpoint_from_specific_humidity function with known values
+        pre-computed from MetPy.
+
+        The values useed were randomly selected from an ERA5 timeslice.
+        """
+
+        pressures = np.array(
+            [
+                800.0,
+                125.0,
+                825.0,
+                200.0,
+                600.0,
+                800.0,
+                350.0,
+                875.0,
+                700.0,
+                250.0,
+                950.0,
+                1000.0,
+            ]
+        )
+        specific_humidities = np.array(
+            [
+                2.9980205e-04,
+                2.0001212e-06,
+                3.2219910e-03,
+                1.0791991e-05,
+                2.0538690e-04,
+                1.2427913e-03,
+                1.4054612e-04,
+                1.3353663e-02,
+                1.6551274e-03,
+                4.9075752e-06,
+                1.0287719e-02,
+                2.7858345e-03,
+            ],
+        )
+        # Computed from metpy.calc.dewpoint_from_specific_humidity
+        ref_dewpoints = np.array(
+            [
+                240.25,
+                187.25,
+                268.25,
+                200.75,
+                233.55,
+                255.95,
+                225.05,
+                289.55,
+                257.75,
+                197.05,
+                286.85,
+                268.95,
+            ]
+        )
+        dewpoints = calc.dewpoint_from_specific_humidity(pressures, specific_humidities)
+        np.testing.assert_allclose(dewpoints, ref_dewpoints, atol=1e-1)
+
+    def test_dewpoint_decreasing_with_humidity(self):
+        """Given a constant pressure, dewpoint should decrease as specific humidity decreases."""
+        p0 = 1035.0  # hPa
+        qs = [2e-2, 2e-3, 2e-4, 2e-5]  # kg/kg
+        tds = [calc.dewpoint_from_specific_humidity(p0, q) for q in qs]
+        diffs = np.diff(tds)
+        is_decreasing = np.all(diffs < 0)
+        assert is_decreasing, "Dewpoint should decrease as specific humidity decreases"
+
+    def test_dewpoint_increasing_with_pressure(self):
+        """Given a constant specific humidity, dewpoint should decrease with increasing pressure."""
+        q0 = 2e-3  # kg/kg
+        ps = [1000.0, 950.0, 900.0, 850.0]  # hPa
+        tds = [calc.dewpoint_from_specific_humidity(p, q0) for p in ps]
+        diffs = np.diff(tds)
+        is_decreasing = np.all(diffs < 0)
+        assert is_decreasing, "Dewpoint should decrease as pressure increases"
