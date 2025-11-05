@@ -15,6 +15,7 @@ find it easier to use the xarray-based interfaces in the `cape.py` module.
 """
 
 import numpy as np
+import numpy.typing as npt
 from numba import njit, prange
 
 # ============================================================================
@@ -203,13 +204,19 @@ def lcl(pressure: float, temperature: float, dewpoint: float) -> tuple[float, fl
 
 @njit(fastmath=True)
 def insert_lcl_level(
-    pressure: np.ndarray,
-    temperature: np.ndarray,
-    dewpoint: np.ndarray,
-    geopotential: np.ndarray,
+    pressure: npt.NDArray[np.float64],
+    temperature: npt.NDArray[np.float64],
+    dewpoint: npt.NDArray[np.float64],
+    geopotential: npt.NDArray[np.float64],
     p_lcl: float,
     t_lcl: float,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, int]:
+) -> tuple[
+    npt.NDArray[np.float64],
+    npt.NDArray[np.float64],
+    npt.NDArray[np.float64],
+    npt.NDArray[np.float64],
+    int,
+]:
     """Insert LCL as a new level in the profile for better resolution.
 
     This function consumes 1D profiles of pressure, temperature, dewpoint, and geopotential
@@ -360,9 +367,9 @@ def moist_ascent(p_target: float, p_lcl: float, t_lcl: float) -> float:
 @njit(fastmath=True)
 def compute_ml_cape_cin_from_profile(
     pressure: np.ndarray,
-    temperature: np.ndarray,
-    dewpoint: np.ndarray,
-    geopotential: np.ndarray,
+    temperature: npt.NDArray[np.float64],
+    dewpoint: npt.NDArray[np.float64],
+    geopotential: npt.NDArray[np.float64],
     depth: float = 100.0,
 ) -> tuple[float, float]:
     """Compute CAPE/CIN for a given thermodynamic profile.
@@ -613,12 +620,12 @@ def compute_ml_cape_cin_from_profile(
 
 @njit(parallel=True, fastmath=True, cache=True)
 def _compute_batch_parallel(
-    pressure_batch: np.ndarray,
-    temperature_batch: np.ndarray,
-    dewpoint_batch: np.ndarray,
-    geopotential_batch: np.ndarray,
+    pressure_batch: npt.NDArray[np.float64],
+    temperature_batch: npt.NDArray[np.float64],
+    dewpoint_batch: npt.NDArray[np.float64],
+    geopotential_batch: npt.NDArray[np.float64],
     depth: float = 100.0,
-) -> tuple[np.ndarray, np.ndarray]:
+) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
     """Compute CAPE/CIN for multiple profiles in parallel.
 
     This uses Numba's parallel processing to compute multiple profiles simultaneously.
@@ -653,12 +660,12 @@ def _compute_batch_parallel(
 
 @njit(fastmath=True, cache=True)
 def _compute_batch_serial(
-    pressure_batch: np.ndarray,
-    temperature_batch: np.ndarray,
-    dewpoint_batch: np.ndarray,
-    geopotential_batch: np.ndarray,
+    pressure_batch: npt.NDArray[np.float64],
+    temperature_batch: npt.NDArray[np.float64],
+    dewpoint_batch: npt.NDArray[np.float64],
+    geopotential_batch: npt.NDArray[np.float64],
     depth: float = 100.0,
-) -> tuple[np.ndarray, np.ndarray]:
+) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
     """Compute CAPE/CIN for multiple profiles serially.
 
     Use this for smaller batches where parallel overhead isn't worth it.
@@ -691,12 +698,12 @@ def _compute_batch_serial(
 
 
 def compute_ml_cape_cin_batched(
-    pressure: np.ndarray,
-    temperature: np.ndarray,
-    dewpoint: np.ndarray,
-    geopotential: np.ndarray,
+    pressure: npt.NDArray[np.float64],
+    temperature: npt.NDArray[np.float64],
+    dewpoint: npt.NDArray[np.float64],
+    geopotential: npt.NDArray[np.float64],
     depth: float = 100.0,
-) -> tuple[np.ndarray, np.ndarray]:
+) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
     """Automatically choose serial or parallel based on batch size.
 
     Args:
