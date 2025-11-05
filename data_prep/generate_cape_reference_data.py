@@ -42,6 +42,11 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+# Set the output directory to the tests/data directory, relative from this script's
+# location in the repo.
+OUTPUT_DIR = pathlib.Path(__file__).parent.parent / "tests" / "data"
+
+
 def compute_metpy_reference(
     pressure: np.ndarray, temperature: np.ndarray, dewpoint: np.ndarray
 ) -> tuple[np.ndarray, np.ndarray]:
@@ -359,8 +364,6 @@ def create_pathological_profiles():
 
 
 def generate_cape_reference_data(radius_deg: float = 2.0):
-    output_dir = pathlib.Path(__file__).parent
-
     logger.info("Fetching ERA5 data...")
     pressure, temperature, dewpoint, geopotential = fetch_era5_data(
         radius_deg=radius_deg
@@ -396,7 +399,7 @@ def generate_cape_reference_data(radius_deg: float = 2.0):
     cin_ref = cin_ref[valid]
 
     # 3. Save real profile reference data
-    real_output = output_dir / "era5_reference.npz"
+    real_output = OUTPUT_DIR / "era5_reference.npz"
     logger.info(f"Saving ERA5 reference data to {real_output}...")
     np.savez(
         real_output,
@@ -415,7 +418,7 @@ def generate_cape_reference_data(radius_deg: float = 2.0):
     pathological = create_pathological_profiles()
 
     # Save pathological profiles
-    pathological_output = output_dir / "pathological_profiles.npz"
+    pathological_output = OUTPUT_DIR / "pathological_profiles.npz"
     logger.info(f"Saving pathological profiles to {pathological_output}...")
 
     # Convert to arrays for saving
