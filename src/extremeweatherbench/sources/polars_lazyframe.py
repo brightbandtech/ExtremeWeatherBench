@@ -14,8 +14,6 @@ if TYPE_CHECKING:
 def safely_pull_variables(
     data: pl.LazyFrame,
     variables: list[str],
-    optional_variables: list[str],
-    optional_variables_mapping: dict[str, list[str]],
 ) -> pl.LazyFrame:
     """Safely extract variables from a Polars LazyFrame with optional replacements.
 
@@ -27,13 +25,7 @@ def safely_pull_variables(
     Args:
         data: The Polars LazyFrame to extract variables from.
         variables: List of required variable names to extract. These must be
-            present in the LazyFrame unless replaced by optional variables.
-        optional_variables: List of optional variable names to extract. These
-            are only included if present in the LazyFrame.
-        optional_variables_mapping: Dictionary mapping optional variable names
-            to the required variables they can replace. Keys are optional
-            variable names, values can be a single string or list of strings
-            representing the required variables to replace.
+            present in the LazyFrame.
 
     Returns:
         pl.LazyFrame: A new LazyFrame containing only the found columns.
@@ -57,37 +49,17 @@ def safely_pull_variables(
     """
     # For polars LazyFrames, automatically add coordinate variables
     # to optional variables only (not required)
-    from extremeweatherbench import defaults
-
-    optional_variables = optional_variables + defaults.DEFAULT_COORDINATE_VARIABLES
 
     # Get column names from LazyFrame
     available_columns = data.collect_schema().names()
 
     # Track which variables we've found (use set to avoid duplicates)
     found_variables = set()
-    variables_satisfied = set()
-
-    # First, check for optional variables and add them if present
-    for opt_var in optional_variables:
-        if opt_var in available_columns:
-            found_variables.add(opt_var)
-            # Check if this optional variable replaces required variables
-            if opt_var in optional_variables_mapping:
-                replaced_vars = optional_variables_mapping[opt_var]
-                # Handle both single string and list of strings
-                if isinstance(replaced_vars, str):
-                    variables_satisfied.add(replaced_vars)
-                else:
-                    variables_satisfied.update(replaced_vars)
 
     # Then check for required variables that weren't replaced
     missing_variables = []
     for var in variables:
-        if var in variables_satisfied:
-            # This required variable was replaced by an optional variable
-            continue
-        elif var in available_columns:
+        if var in available_columns:
             found_variables.add(var)
         else:
             missing_variables.append(var)

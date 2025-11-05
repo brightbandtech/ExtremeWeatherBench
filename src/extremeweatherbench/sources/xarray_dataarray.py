@@ -11,17 +11,12 @@ from extremeweatherbench import regions, utils
 def safely_pull_variables(
     data: xr.DataArray,
     variables: list[str],
-    optional_variables: list[str],
-    optional_variables_mapping: dict[str, list[str]],
 ) -> xr.DataArray:
     """Handle variable extraction for xarray DataArray.
 
     Args:
         data: The xarray DataArray to extract variables from.
         variables: List of required variable names to extract.
-        optional_variables: List of optional variable names to extract.
-        optional_variables_mapping: Dictionary mapping optional variables to
-            the required variables they replace.
 
     Returns:
         The DataArray if it matches one of the requested variables.
@@ -34,14 +29,7 @@ def safely_pull_variables(
     dataarray_name = data.name or "unnamed"
 
     # Check if any of the requested variables match this DataArray
-    if (
-        dataarray_name in variables
-        or dataarray_name in optional_variables
-        or any(
-            dataarray_name in variables
-            for variables in optional_variables_mapping.values()
-        )
-    ):
+    if dataarray_name in variables:
         return data
     else:
         available_vars = [dataarray_name]
