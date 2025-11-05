@@ -620,6 +620,8 @@ class LSR(TargetBase):
         if not isinstance(data, pd.DataFrame):
             raise ValueError(f"Expected pandas DataFrame, got {type(data)}")
 
+        data = data.copy()
+
         # latitude, longitude are strings by default, convert to float
         data["latitude"] = data["latitude"].astype(float)
         data["longitude"] = data["longitude"].astype(float)
