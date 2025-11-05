@@ -146,6 +146,7 @@ cira_tropical_cyclone_forecast = inputs.KerchunkForecast(
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
 )
 cira_atmospheric_river_forecast = inputs.KerchunkForecast(
+    name="FourCastNetv2",
     source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
     variables=["surface_eastward_wind"],
     variable_mapping=inputs.CIRA_metadata_variable_mapping,
@@ -153,6 +154,7 @@ cira_atmospheric_river_forecast = inputs.KerchunkForecast(
 )
 
 cira_severe_convection_forecast = inputs.KerchunkForecast(
+    name="FourCastNetv2",
     source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
     variables=["surface_air_temperature"],
     variable_mapping=inputs.CIRA_metadata_variable_mapping,
