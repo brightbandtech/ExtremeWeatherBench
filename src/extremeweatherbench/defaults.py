@@ -91,7 +91,7 @@ ghcn_freeze_target = inputs.GHCN(
 # TODO: Re-enable when severe convection is implemented
 lsr_target = inputs.LSR(
     source=inputs.LSR_URI,
-    variables=["local_storm_reports"],
+    variables=["report_type"],
     variable_mapping={},
     storage_options={"remote_options": {"anon": True}},
 )
