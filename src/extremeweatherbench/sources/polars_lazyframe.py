@@ -151,10 +151,22 @@ def check_for_valid_times(
 
     for time_col in time_cols:
         if time_col in available_columns:
-            # Filter the LazyFrame to only include valid times in the given date range
-            time_filtered_lf = data.select(pl.col(time_col)).filter(
-                (pl.col(time_col) >= start_date) & (pl.col(time_col) <= end_date)
-            )
+            # Check the dtype of the column
+            col_dtype = data.collect_schema()[time_col]
+            # Filter LazyFrame to include valid times in date range
+            # Handle both datetime and string types
+            if col_dtype in (pl.Datetime, pl.Date):
+                # Column is already datetime, compare directly
+                time_filtered_lf = data.select(pl.col(time_col)).filter(
+                    (pl.col(time_col) >= pl.lit(start_date))
+                    & (pl.col(time_col) <= pl.lit(end_date))
+                )
+            else:
+                # Column is string, convert to datetime first
+                time_filtered_lf = data.select(pl.col(time_col)).filter(
+                    (pl.col(time_col).str.to_datetime() >= pl.lit(start_date))
+                    & (pl.col(time_col).str.to_datetime() <= pl.lit(end_date))
+                )
             # If the filtered LazyFrame has any rows, return True
             return not time_filtered_lf.collect().is_empty()
 
