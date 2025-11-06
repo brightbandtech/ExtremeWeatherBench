@@ -42,10 +42,10 @@ climatology = xr.open_zarr(
 )
 climatology = climatology["2m_temperature"].sel(quantile=0.85)
 metrics_list = [
-    metrics.OnsetME(climatology, min_consecutive_timesteps=4),
     metrics.DurationME(climatology),
-    metrics.MaximumMAE,
-    metrics.RMSE,
+    metrics.MaximumMAE(),
+    metrics.RMSE(),
+    metrics.MaxMinMAE(),
 ]
 # Create a list of evaluation objects for heatwave
 heatwave_evaluation_object = [
@@ -71,7 +71,7 @@ ewb = evaluate.ExtremeWeatherBench(
 
 # Run the workflow
 outputs = ewb.run(
-    parallel_config={"backend": "threading", "n_jobs": 64},
+    parallel_config={"backend": "threading", "n_jobs": 1},
     # tolerance range is the number of hours before and after the timestamp a
     # validating occurrence is checked in the forecasts for certain metrics
     # such as minimum temperature MAE
