@@ -1,9 +1,9 @@
 """Evaluation routines for use during ExtremeWeatherBench case studies / analyses."""
 
-import itertools
+import copy
 import logging
 import pathlib
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING, Optional, Union, cast
 
 import dask.array as da
 import joblib
@@ -275,6 +275,20 @@ def compute_case_operator(
         "Computing case operator for case %s...",
         case_operator.case_metadata.case_id_number,
     )
+
+    # Validate that all metrics are instantiated (not classes or callables)
+    for metric in case_operator.metric_list:
+        if isinstance(metric, type):
+            raise TypeError(
+                f"Metric {metric.__name__} must be instantiated. "
+                f"Use {metric.__name__}() instead of {metric.__name__}."
+            )
+        if not hasattr(metric, "compute_metric"):
+            raise TypeError(f"Metric must be a BaseMetric instance, got {type(metric)}")
+
+    # After validation, we know all items are BaseMetric instances
+    validated_metrics = cast(list["metrics.BaseMetric"], case_operator.metric_list)
+
     forecast_ds, target_ds = _build_datasets(case_operator, **kwargs)
 
     # Check if any dimension has zero length
@@ -301,24 +315,33 @@ def compute_case_operator(
     )
     results = []
     # TODO: determine if derived variables need to be pushed here or at pre-compute
-    for variables, metric in itertools.product(
-        zip(
-            case_operator.forecast.variables,
-            case_operator.target.variables,
-        ),
-        case_operator.metric_list,
-    ):
-        results.append(
-            _evaluate_metric_and_return_df(
-                forecast_ds=aligned_forecast_ds,
-                target_ds=aligned_target_ds,
-                forecast_variable=variables[0],
-                target_variable=variables[1],
-                metric=metric,
-                case_operator=case_operator,
-                **kwargs,
+    for metric in validated_metrics:
+        # Determine which variable pairs to evaluate for this metric
+        if metric.forecast_variable is not None and metric.target_variable is not None:
+            # Use metric-specific variables only
+            variable_pairs = [(metric.forecast_variable, metric.target_variable)]
+        else:
+            # Use all InputBase variable pairs for this metric
+            variable_pairs = list(
+                zip(
+                    case_operator.forecast.variables,
+                    case_operator.target.variables,
+                )
             )
-        )
+
+        # Evaluate the metric for each variable pair
+        for forecast_var, target_var in variable_pairs:
+            results.append(
+                _evaluate_metric_and_return_df(
+                    forecast_ds=aligned_forecast_ds,
+                    target_ds=aligned_target_ds,
+                    forecast_variable=forecast_var,
+                    target_variable=target_var,
+                    metric=metric,
+                    case_operator=case_operator,
+                    **kwargs,
+                )
+            )
 
         # Cache the results of each metric if caching
         cache_dir = kwargs.get("cache_dir", None)
@@ -442,10 +465,6 @@ def _evaluate_metric_and_return_df(
     forecast_variable = derived._maybe_convert_variable_to_string(forecast_variable)
     target_variable = derived._maybe_convert_variable_to_string(target_variable)
 
-    # TODO: remove this once we have a better way to handle metric
-    # instantiation
-    if isinstance(metric, type):
-        metric = metric()
     logger.info("Computing metric %s... ", metric.name)
     metric_result = metric.compute_metric(
         forecast_ds.get(forecast_variable, forecast_ds.data_vars),
@@ -470,6 +489,33 @@ def _evaluate_metric_and_return_df(
     return _ensure_output_schema(df, **metadata)
 
 
+def _collect_metric_variables(
+    metric_list: list["metrics.BaseMetric"],
+) -> tuple[
+    set[Union[str, "derived.DerivedVariable"]],
+    set[Union[str, "derived.DerivedVariable"]],
+]:
+    """Collect unique variables from metrics that have them defined.
+
+    Args:
+        metric_list: List of metrics to extract variables from.
+
+    Returns:
+        Tuple of (forecast_variables, target_variables) as sets.
+    """
+    forecast_vars = set()
+    target_vars = set()
+
+    for metric in metric_list:
+        # Check if metric has variables defined (not None)
+        if metric.forecast_variable is not None:
+            forecast_vars.add(metric.forecast_variable)
+        if metric.target_variable is not None:
+            target_vars.add(metric.target_variable)
+
+    return forecast_vars, target_vars
+
+
 def _build_datasets(
     case_operator: "cases.CaseOperator",
     **kwargs,
@@ -486,13 +532,30 @@ def _build_datasets(
         A tuple containing (forecast_dataset, target_dataset). If either dataset
         has no dimensions, both will be empty datasets.
     """
+    # Collect variables from metrics to ensure they're loaded/derived
+    # Cast to BaseMetric list for type checking (validation happens in caller)
+    metric_list = cast(list["metrics.BaseMetric"], case_operator.metric_list)
+    metric_forecast_vars, metric_target_vars = _collect_metric_variables(metric_list)
+
+    # Create augmented copies of InputBase objects with combined variables
+    augmented_forecast = copy.copy(case_operator.forecast)
+    augmented_target = copy.copy(case_operator.target)
+
+    # Combine InputBase variables with metric-specific variables
+    augmented_forecast.variables = list(
+        set(case_operator.forecast.variables) | metric_forecast_vars
+    )
+    augmented_target.variables = list(
+        set(case_operator.target.variables) | metric_target_vars
+    )
+
     logger.info("Running target pipeline... ")
     with TqdmCallback(
         desc=f"Running target pipeline for case "
         f"{case_operator.case_metadata.case_id_number}"
     ):
         target_ds = run_pipeline(
-            case_operator.case_metadata, case_operator.target, **kwargs
+            case_operator.case_metadata, augmented_target, **kwargs
         )
     logger.info("Running forecast pipeline... ")
     with TqdmCallback(
@@ -500,7 +563,7 @@ def _build_datasets(
         f"{case_operator.case_metadata.case_id_number}"
     ):
         forecast_ds = run_pipeline(
-            case_operator.case_metadata, case_operator.forecast, **kwargs
+            case_operator.case_metadata, augmented_forecast, **kwargs
         )
     # Check if any dimension has zero length
     zero_length_dims = [dim for dim, size in forecast_ds.sizes.items() if size == 0]
