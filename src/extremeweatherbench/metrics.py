@@ -696,7 +696,7 @@ class MaximumMAE(MAE):
         """
         preserve_dims = kwargs.get("preserve_dims", "lead_time")
         tolerance_range = kwargs.get("tolerance_range", 24)
-        target_spatial_mean = utils.reduce_xarray_method(
+        target_spatial_mean = utils.reduce_dataarray(
             target, method="mean", reduce_dims=["latitude", "longitude"], skipna=True
         )
         maximum_timestep = target_spatial_mean.idxmax("valid_time")
@@ -706,7 +706,7 @@ class MaximumMAE(MAE):
         maximum_timestep = utils.maybe_get_closest_timestamp_to_center_of_valid_times(
             maximum_timestep, target.valid_time
         ).compute()
-        forecast_spatial_mean = utils.reduce_xarray_method(
+        forecast_spatial_mean = utils.reduce_dataarray(
             forecast, method="mean", reduce_dims=["latitude", "longitude"], skipna=True
         )
         filtered_max_forecast = forecast_spatial_mean.where(
@@ -758,12 +758,12 @@ class MinimumMAE(MAE):
         """
         preserve_dims = kwargs.get("preserve_dims", "lead_time")
         tolerance_range = kwargs.get("tolerance_range", 24)
-        target_spatial_mean = utils.reduce_xarray_method(
+        target_spatial_mean = utils.reduce_dataarray(
             target, method="mean", reduce_dims=["latitude", "longitude"], skipna=True
         )
         minimum_timestep = target_spatial_mean.idxmin("valid_time")
         minimum_value = target_spatial_mean.sel(valid_time=minimum_timestep)
-        forecast_spatial_mean = utils.reduce_xarray_method(
+        forecast_spatial_mean = utils.reduce_dataarray(
             forecast, method="mean", reduce_dims=["latitude", "longitude"], skipna=True
         )
         # Handle the case where there are >1 resulting target values
@@ -822,10 +822,10 @@ class MaxMinMAE(MAE):
             for dim in forecast.dims
             if dim not in ["valid_time", "lead_time", "time"]
         ]
-        forecast = utils.reduce_xarray_method(
+        forecast = utils.reduce_dataarray(
             forecast, method="mean", reduce_dims=reduce_dims, skipna=True
         )
-        target = utils.reduce_xarray_method(
+        target = utils.reduce_dataarray(
             target, method="mean", reduce_dims=reduce_dims, skipna=True
         )
 
@@ -949,7 +949,7 @@ class OnsetME(ME):
 
         target_time = target.valid_time[0] + np.timedelta64(48, "h")
         forecast = (
-            utils.reduce_xarray_method(
+            utils.reduce_dataarray(
                 forecast,
                 method="mean",
                 reduce_dims=["latitude", "longitude"],
@@ -1033,7 +1033,7 @@ class DurationME(ME):
         # Dummy implementation for duration mean error
         target_duration = target.valid_time[-1] - target.valid_time[0]
         forecast = (
-            utils.reduce_xarray_method(
+            utils.reduce_dataarray(
                 forecast,
                 method="mean",
                 reduce_dims=["latitude", "longitude"],

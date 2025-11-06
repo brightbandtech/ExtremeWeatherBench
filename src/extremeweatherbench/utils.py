@@ -519,7 +519,7 @@ class ParallelTqdm(Parallel):
         self.progress_bar.update(self.n_completed_tasks - self.progress_bar.n)
 
 
-def reduce_xarray_method(
+def reduce_dataarray(
     da: xr.DataArray,
     method: str | Callable,
     reduce_dims: list[str],
@@ -527,9 +527,9 @@ def reduce_xarray_method(
 ) -> xr.DataArray:
     """Reduce using xarray methods or numpy functions.
 
-    This function can utilize xarray's optimized methods (e.g., mean,
-    sum) or numpy/callable reductions, providing flexibility and
-    efficiency.
+    This function can utilize xarray's optimized methods (e.g., mean, sum) or
+    numpy/callable reductions. Using the built-in methods xarray provides can be more
+    efficient than using numpy functions.
 
     Args:
         da: The xarray dataarray to reduce.
