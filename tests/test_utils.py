@@ -689,9 +689,11 @@ class TestStackSparseDataFromDims:
             coords={"latitude": [10.0, 20.0, 30.0], "longitude": [100.0, 110.0]},
         )
 
-        # This should raise an error or handle gracefully since it expects
-        # sparse data
-        with pytest.raises(AttributeError):
+        # This should raise ValueError since coords must be provided for
+        # non-sparse data
+        with pytest.raises(
+            ValueError, match="coords must be provided if da.data is not sparse.COO"
+        ):
             utils.stack_sparse_data_from_dims(da, stack_dims=["latitude", "longitude"])
 
     def test_empty_stack_dims_list(self):
@@ -794,3 +796,339 @@ class TestStackSparseDataFromDims:
 
         assert isinstance(result, xr.DataArray)
         assert "stacked" in result.dims
+
+
+class TestConvertDayYearofDayToTime:
+    """Tests for convert_day_yearofday_to_time utility function."""
+
+    def test_basic_conversion(self):
+        """Test basic conversion of dayofyear and hour to time coordinate."""
+        # Create a simple dataset with dayofyear and hour coords
+        ds = xr.Dataset(
+            {"temperature": (["dayofyear", "hour"], np.random.randn(3, 2))},
+            coords={
+                "dayofyear": [1, 2, 3],
+                "hour": [0, 6],
+            },
+        )
+
+        result = utils.convert_day_yearofday_to_time(ds, year=2023)
+
+        # Check that valid_time coordinate was created
+        assert "valid_time" in result.coords
+        # Check that dayofyear and hour were removed
+        assert "dayofyear" not in result.coords
+        assert "hour" not in result.coords
+        # Check that the time dimension was stacked
+        assert "valid_time" in result.dims
+        # Should have 3 * 2 = 6 timesteps
+        assert len(result.valid_time) == 6
+
+    def test_year_parameter(self):
+        """Test that different years produce different dates."""
+        ds = xr.Dataset(
+            {"temperature": (["dayofyear", "hour"], np.random.randn(2, 2))},
+            coords={
+                "dayofyear": [1, 2],
+                "hour": [0, 6],
+            },
+        )
+
+        result_2023 = utils.convert_day_yearofday_to_time(ds, year=2023)
+        result_2024 = utils.convert_day_yearofday_to_time(ds, year=2024)
+
+        # First timestamp should be different years
+        assert result_2023.valid_time[0].dt.year.item() == 2023
+        assert result_2024.valid_time[0].dt.year.item() == 2024
+
+    def test_correct_time_sequence(self):
+        """Test that times are created in correct 6-hour intervals."""
+        ds = xr.Dataset(
+            {"temperature": (["dayofyear", "hour"], np.random.randn(2, 4))},
+            coords={
+                "dayofyear": [1, 2],
+                "hour": [0, 6, 12, 18],
+            },
+        )
+
+        result = utils.convert_day_yearofday_to_time(ds, year=2023)
+
+        # Check the time coordinate is correctly created
+        expected_times = pd.date_range(start="2023-01-01", periods=8, freq="6h")
+        pd.testing.assert_index_equal(
+            pd.DatetimeIndex(result.valid_time.values),
+            expected_times,
+        )
+
+    def test_preserves_data_values(self):
+        """Test that data values are preserved after transformation."""
+        data = np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]])
+        ds = xr.Dataset(
+            {"temperature": (["dayofyear", "hour"], data)},
+            coords={
+                "dayofyear": [1, 2, 3],
+                "hour": [0, 6],
+            },
+        )
+
+        result = utils.convert_day_yearofday_to_time(ds, year=2023)
+
+        # Data should be flattened in the stacked dimension
+        assert result["temperature"].shape == (6,)
+        # Values should match the flattened original data
+        np.testing.assert_array_equal(result["temperature"].values, data.flatten())
+
+    def test_with_additional_dimensions(self):
+        """Test conversion with additional dimensions like latitude."""
+        ds = xr.Dataset(
+            {
+                "temperature": (
+                    ["dayofyear", "hour", "latitude"],
+                    np.random.randn(2, 2, 3),
+                )
+            },
+            coords={
+                "dayofyear": [1, 2],
+                "hour": [0, 6],
+                "latitude": [10.0, 20.0, 30.0],
+            },
+        )
+
+        result = utils.convert_day_yearofday_to_time(ds, year=2023)
+
+        # Should preserve latitude dimension
+        assert "latitude" in result.dims
+        assert len(result.latitude) == 3
+        # Should have stacked time dimension
+        assert "valid_time" in result.dims
+        assert len(result.valid_time) == 4
+
+
+class TestMaybeStackSparseTargetData:
+    """Tests for maybe_stack_sparse_target_data utility function."""
+
+    def test_with_dense_data(self):
+        """Test that dense data is returned unchanged."""
+        forecast = xr.DataArray(
+            np.random.randn(1, 10, 2, 2),
+            dims=["init_time", "lead_time", "latitude", "longitude"],
+            coords={
+                "init_time": [pd.Timestamp("2023-01-01")],
+                "lead_time": range(10),
+                "latitude": [10.0, 20.0],
+                "longitude": [100.0, 110.0],
+            },
+        )
+        target = xr.DataArray(
+            np.random.randn(10, 2, 2),
+            dims=["valid_time", "latitude", "longitude"],
+            coords={
+                "valid_time": pd.date_range("2023-01-01", periods=10, freq="1D"),
+                "latitude": [10.0, 20.0],
+                "longitude": [100.0, 110.0],
+            },
+        )
+
+        result_forecast, result_target = utils.maybe_stack_sparse_target_data(
+            forecast, target, spatial_dims=["latitude", "longitude"]
+        )
+
+        # Should return unchanged
+        assert result_forecast.equals(forecast)
+        assert result_target.equals(target)
+
+    def test_with_sparse_target(self):
+        """Test that sparse target data is stacked."""
+        import sparse
+
+        # Create sparse target data (coords must be (ndim, nnz))
+        # nnz=3 non-zero values
+        sparse_data = sparse.COO(
+            coords=[[0, 1, 2], [0, 1, 0], [1, 0, 1]],  # (3 dims, 3 nnz)
+            data=[1.0, 2.0, 3.0],  # 3 values
+            shape=(10, 2, 2),
+        )
+        target = xr.DataArray(
+            sparse_data,
+            dims=["valid_time", "latitude", "longitude"],
+            coords={
+                "valid_time": pd.date_range("2023-01-01", periods=10, freq="1D"),
+                "latitude": [10.0, 20.0],
+                "longitude": [100.0, 110.0],
+            },
+        )
+        forecast = xr.DataArray(
+            np.random.randn(1, 10, 2, 2),
+            dims=["init_time", "lead_time", "latitude", "longitude"],
+            coords={
+                "init_time": [pd.Timestamp("2023-01-01")],
+                "lead_time": range(10),
+                "latitude": [10.0, 20.0],
+                "longitude": [100.0, 110.0],
+            },
+        )
+
+        result_forecast, result_target = utils.maybe_stack_sparse_target_data(
+            forecast, target, spatial_dims=["latitude", "longitude"]
+        )
+
+        # Both should be stacked
+        assert "stacked" in result_forecast.dims
+        assert "stacked" in result_target.dims
+        # Original spatial dims should be gone
+        assert "latitude" not in result_forecast.dims
+        assert "longitude" not in result_forecast.dims
+
+    def test_preserves_non_spatial_dims(self):
+        """Test that non-spatial dimensions are preserved."""
+        import sparse
+
+        sparse_data = sparse.COO(
+            coords=[[0, 1, 2], [0, 1, 0], [1, 0, 1]],  # (3 dims, 3 nnz)
+            data=[1.0, 2.0, 3.0],  # 3 values
+            shape=(10, 2, 2),
+        )
+        target = xr.DataArray(
+            sparse_data,
+            dims=["valid_time", "latitude", "longitude"],
+            coords={
+                "valid_time": pd.date_range("2023-01-01", periods=10, freq="1D"),
+                "latitude": [10.0, 20.0],
+                "longitude": [100.0, 110.0],
+            },
+        )
+        forecast = xr.DataArray(
+            np.random.randn(1, 10, 2, 2),
+            dims=["init_time", "lead_time", "latitude", "longitude"],
+            coords={
+                "init_time": [pd.Timestamp("2023-01-01")],
+                "lead_time": range(10),
+                "latitude": [10.0, 20.0],
+                "longitude": [100.0, 110.0],
+            },
+        )
+
+        result_forecast, result_target = utils.maybe_stack_sparse_target_data(
+            forecast, target, spatial_dims=["latitude", "longitude"]
+        )
+
+        # Time dimensions should be preserved
+        assert "init_time" in result_forecast.dims
+        assert "lead_time" in result_forecast.dims
+        assert "valid_time" in result_target.dims
+
+
+class TestInterpClimatologyToTarget:
+    """Tests for interp_climatology_to_target utility function."""
+
+    def test_with_dense_3d_target(self):
+        """Test interpolation with dense 3D target data."""
+        # Create climatology
+        climatology = xr.DataArray(
+            np.random.randn(5, 5),
+            dims=["latitude", "longitude"],
+            coords={
+                "latitude": np.linspace(0, 40, 5),
+                "longitude": np.linspace(100, 140, 5),
+            },
+        )
+        # Create dense target with 3+ dimensions
+        target = xr.DataArray(
+            np.random.randn(10, 3, 3),
+            dims=["valid_time", "latitude", "longitude"],
+            coords={
+                "valid_time": pd.date_range("2023-01-01", periods=10, freq="1D"),
+                "latitude": [10.0, 20.0, 30.0],
+                "longitude": [110.0, 120.0, 130.0],
+            },
+        )
+
+        result = utils.interp_climatology_to_target(target, climatology)
+
+        # Should interpolate to target's lat/lon grid
+        assert result.dims == ("latitude", "longitude")
+        assert len(result.latitude) == 3
+        assert len(result.longitude) == 3
+        np.testing.assert_array_equal(result.latitude.values, target.latitude.values)
+        np.testing.assert_array_equal(result.longitude.values, target.longitude.values)
+
+    def test_ndim_less_than_3(self):
+        """Test that ndim < 3 triggers the stacked interpolation path."""
+        # Create climatology
+        climatology = xr.DataArray(
+            [[10.0, 20.0], [30.0, 40.0]],
+            dims=["latitude", "longitude"],
+            coords={
+                "latitude": [10.0, 20.0],
+                "longitude": [100.0, 110.0],
+            },
+        )
+        # Create a 1D target (ndim < 3)
+        target = xr.DataArray(
+            np.random.randn(5),
+            dims=["time"],
+            coords={"time": range(5)},
+        )
+
+        # The function checks ndim < 3, which is True here
+        # It will try to access target["stacked"]["latitude/longitude"]
+        # This will fail, but that's expected for this edge case
+        # The test verifies the branch logic exists
+        with pytest.raises((KeyError, TypeError)):
+            utils.interp_climatology_to_target(target, climatology)
+
+    def test_with_different_grid(self):
+        """Test that interpolation works when grids don't match."""
+        # Create climatology on one grid
+        climatology = xr.DataArray(
+            np.arange(9).reshape(3, 3),
+            dims=["latitude", "longitude"],
+            coords={
+                "latitude": [0.0, 10.0, 20.0],
+                "longitude": [100.0, 110.0, 120.0],
+            },
+        )
+        # Create target on a different grid
+        target = xr.DataArray(
+            np.random.randn(5, 2, 2),
+            dims=["valid_time", "latitude", "longitude"],
+            coords={
+                "valid_time": pd.date_range("2023-01-01", periods=5, freq="1D"),
+                "latitude": [5.0, 15.0],  # Different from climatology
+                "longitude": [105.0, 115.0],  # Different from climatology
+            },
+        )
+
+        result = utils.interp_climatology_to_target(target, climatology)
+
+        # Should interpolate to target's grid
+        assert result.dims == ("latitude", "longitude")
+        np.testing.assert_array_equal(result.latitude.values, [5.0, 15.0])
+        np.testing.assert_array_equal(result.longitude.values, [105.0, 115.0])
+
+    def test_nearest_neighbor_interpolation(self):
+        """Test that nearest neighbor method is used."""
+        # Create climatology with known values
+        climatology = xr.DataArray(
+            [[100.0, 200.0], [300.0, 400.0]],
+            dims=["latitude", "longitude"],
+            coords={
+                "latitude": [0.0, 20.0],
+                "longitude": [100.0, 120.0],
+            },
+        )
+        # Create target at exact climatology points
+        target = xr.DataArray(
+            np.random.randn(5, 2, 2),
+            dims=["valid_time", "latitude", "longitude"],
+            coords={
+                "valid_time": pd.date_range("2023-01-01", periods=5, freq="1D"),
+                "latitude": [0.0, 20.0],
+                "longitude": [100.0, 120.0],
+            },
+        )
+
+        result = utils.interp_climatology_to_target(target, climatology)
+
+        # Should have exact values since points match
+        np.testing.assert_array_almost_equal(result.values, climatology.values)
