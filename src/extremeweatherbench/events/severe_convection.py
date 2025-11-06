@@ -1115,7 +1115,7 @@ def find_intersections(
         return np.array([]), np.array([])
 
     # Filter indices to only process valid intersections
-    closest_idx = (closest_idx[0][valid_mask],)
+    closest_idx = closest_idx[0][valid_mask]
     next_idx = next_idx[valid_mask]
 
     _, x0 = _next_non_masked_element(x, closest_idx)
