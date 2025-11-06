@@ -2615,7 +2615,7 @@ class TestDerivedVariableIntegration:
         expected_vars = [
             "existing_variable",
             "air_pressure_at_mean_sea_level",
-            "geopotential_height",
+            "geopotential_thickness",
             "surface_eastward_wind",
             "surface_northward_wind",
         ]
@@ -2641,7 +2641,7 @@ class TestDerivedVariableIntegration:
         expected_vars = [
             "base_variable",
             "air_pressure_at_mean_sea_level",
-            "geopotential_height",
+            "geopotential_thickness",
             "surface_eastward_wind",
             "surface_northward_wind",
         ]

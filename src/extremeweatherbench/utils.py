@@ -345,6 +345,9 @@ def convert_valid_time_to_init_time(da: xr.DataArray) -> xr.DataArray:
             for lead in da.lead_time
         ],
         "lead_time",
+        coords="different",
+        compat="equals",
+        join="outer",
     )
 
 
