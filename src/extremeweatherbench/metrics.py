@@ -1057,12 +1057,12 @@ class DurationME(ME):
             forecast, target, spatial_dims
         )
         climatology_time = utils.interp_climatology_to_target(target, climatology_time)
-        forecast_mask = create_comparison_mask(
+        forecast_mask = utils.create_comparison_mask(
             forecast, climatology_time, self.criteria_sign
         )
 
         # Calculate target duration (count of timesteps exceeding climatology)
-        target_mask = create_comparison_mask(
+        target_mask = utils.create_comparison_mask(
             target, climatology_time, self.criteria_sign
         )
 
@@ -1090,33 +1090,3 @@ class DurationME(ME):
             target=target_duration,
             preserve_dims=self.preserve_dims,
         )
-
-
-def create_comparison_mask(
-    data: xr.DataArray,
-    criteria: xr.DataArray,
-    sign: str = ">=",
-) -> xr.DataArray:
-    """Create comparison mask based on sign.
-
-    Args:
-        data: Input data array
-        criteria: Criteria to compare against
-        sign: Comparison operator (">", ">=", "<", "<=", "==")
-
-    Returns:
-        Boolean mask where condition is met
-    """
-    match sign:
-        case ">=":
-            return data >= criteria
-        case ">":
-            return data > criteria
-        case "<=":
-            return data <= criteria
-        case "<":
-            return data < criteria
-        case "==":
-            return data == criteria
-        case _:
-            raise ValueError(f"Unsupported sign: {sign}")

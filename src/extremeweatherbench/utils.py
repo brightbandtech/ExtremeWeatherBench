@@ -667,3 +667,33 @@ def interp_climatology_to_target(
     return climatology.interp_like(
         target, method="nearest", kwargs={"fill_value": None}
     )
+
+
+def create_comparison_mask(
+    data: xr.DataArray,
+    criteria: xr.DataArray,
+    sign: str = ">=",
+) -> xr.DataArray:
+    """Create comparison mask based on sign.
+
+    Args:
+        data: Input data array
+        criteria: Criteria to compare against
+        sign: Comparison operator (">", ">=", "<", "<=", "==")
+
+    Returns:
+        Boolean mask where condition is met
+    """
+    match sign:
+        case ">=":
+            return data >= criteria
+        case ">":
+            return data > criteria
+        case "<=":
+            return data <= criteria
+        case "<":
+            return data < criteria
+        case "==":
+            return data == criteria
+        case _:
+            raise ValueError(f"Unsupported sign: {sign}")
