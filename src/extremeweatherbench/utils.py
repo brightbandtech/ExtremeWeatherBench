@@ -10,6 +10,7 @@ import threading
 from typing import Any, Callable, Optional, Sequence, Union
 
 import numpy as np
+import numpy.typing as npt
 import pandas as pd  # type: ignore[import-untyped]
 import regionmask
 import tqdm
@@ -519,11 +520,11 @@ class ParallelTqdm(Parallel):
 
 
 def idx_to_coords(
-    lat_idx: Sequence[float],
-    lon_idx: Sequence[float],
-    lat_coords: Sequence[float],
-    lon_coords: Sequence[float],
-) -> tuple[Sequence[float], Sequence[float]]:
+    lat_idx: npt.NDArray,
+    lon_idx: npt.NDArray,
+    lat_coords: npt.NDArray,
+    lon_coords: npt.NDArray,
+) -> tuple[npt.NDArray, npt.NDArray]:
     """Convert indices to coordinates, handling NaN indices.
 
     Args:

@@ -1089,10 +1089,10 @@ class SpatialDisplacement(BaseMetric):
 
     def __init__(
         self,
-        forecast_variable: Optional[str | Type["derived.DerivedVariable"]] = None,
-        target_variable: Optional[str | Type["derived.DerivedVariable"]] = None,
-        forecast_mask_variable: Optional[str | Type["derived.DerivedVariable"]] = None,
-        target_mask_variable: Optional[str | Type["derived.DerivedVariable"]] = None,
+        forecast_variable: Optional[str | "derived.DerivedVariable"] = None,
+        target_variable: Optional[str | "derived.DerivedVariable"] = None,
+        forecast_mask_variable: Optional[str | derived.DerivedVariable] = None,
+        target_mask_variable: Optional[str | derived.DerivedVariable] = None,
     ):
         self.forecast_variable = forecast_variable
         self.target_variable = target_variable
