@@ -1,10 +1,9 @@
 import abc
 import logging
-from typing import Any, Callable, Optional, Type
+from typing import Any, Optional, Type
 
 import numpy as np
 import scores
-import sparse
 import xarray as xr
 
 from extremeweatherbench import derived, utils
@@ -59,31 +58,6 @@ def get_cached_transformed_manager(
     _GLOBAL_CONTINGENCY_CACHE[cache_key] = transformed
 
     return transformed
-
-
-def _reduce_duck_array(
-    da: xr.DataArray, func: Callable, reduce_dims: list[str]
-) -> xr.DataArray:
-    """Reduce the duck array of the data.
-
-    Some data will return as a sparse array, which can also be reduced but
-    requires some additional logic.
-
-    Args:
-        da: The xarray dataarray to reduce.
-        func: The function to reduce the data.
-        reduce_dims: The dimensions to reduce.
-
-    Returns:
-        The reduced xarray dataarray.
-    """
-    if isinstance(da.data, sparse.COO):
-        da = utils.stack_sparse_data_from_dims(da, reduce_dims)
-        # Apply the reduce function to the data
-        return da.reduce(func, dim="stacked")
-    else:
-        # Handles np.ndarray, dask.array, and other duck arrays
-        return da.reduce(func, dim=reduce_dims)
 
 
 def clear_contingency_cache():
@@ -722,8 +696,8 @@ class MaximumMAE(MAE):
         """
         preserve_dims = kwargs.get("preserve_dims", "lead_time")
         tolerance_range = kwargs.get("tolerance_range", 24)
-        target_spatial_mean = _reduce_duck_array(
-            target, func=np.nanmean, reduce_dims=["latitude", "longitude"]
+        target_spatial_mean = utils.reduce_dataarray(
+            target, method="mean", reduce_dims=["latitude", "longitude"], skipna=True
         )
         maximum_timestep = target_spatial_mean.idxmax("valid_time")
         maximum_value = target_spatial_mean.sel(valid_time=maximum_timestep)
@@ -732,8 +706,8 @@ class MaximumMAE(MAE):
         maximum_timestep = utils.maybe_get_closest_timestamp_to_center_of_valid_times(
             maximum_timestep, target.valid_time
         ).compute()
-        forecast_spatial_mean = _reduce_duck_array(
-            forecast, func=np.nanmean, reduce_dims=["latitude", "longitude"]
+        forecast_spatial_mean = utils.reduce_dataarray(
+            forecast, method="mean", reduce_dims=["latitude", "longitude"], skipna=True
         )
         filtered_max_forecast = forecast_spatial_mean.where(
             (
@@ -784,13 +758,13 @@ class MinimumMAE(MAE):
         """
         preserve_dims = kwargs.get("preserve_dims", "lead_time")
         tolerance_range = kwargs.get("tolerance_range", 24)
-        target_spatial_mean = _reduce_duck_array(
-            target, func=np.nanmean, reduce_dims=["latitude", "longitude"]
+        target_spatial_mean = utils.reduce_dataarray(
+            target, method="mean", reduce_dims=["latitude", "longitude"], skipna=True
         )
         minimum_timestep = target_spatial_mean.idxmin("valid_time")
         minimum_value = target_spatial_mean.sel(valid_time=minimum_timestep)
-        forecast_spatial_mean = _reduce_duck_array(
-            forecast, func=np.nanmean, reduce_dims=["latitude", "longitude"]
+        forecast_spatial_mean = utils.reduce_dataarray(
+            forecast, method="mean", reduce_dims=["latitude", "longitude"], skipna=True
         )
         # Handle the case where there are >1 resulting target values
         minimum_timestep = utils.maybe_get_closest_timestamp_to_center_of_valid_times(
@@ -848,10 +822,12 @@ class MaxMinMAE(MAE):
             for dim in forecast.dims
             if dim not in ["valid_time", "lead_time", "time"]
         ]
-        forecast = _reduce_duck_array(
-            forecast, func=np.nanmean, reduce_dims=reduce_dims
+        forecast = utils.reduce_dataarray(
+            forecast, method="mean", reduce_dims=reduce_dims, skipna=True
         )
-        target = _reduce_duck_array(target, func=np.nanmean, reduce_dims=reduce_dims)
+        target = utils.reduce_dataarray(
+            target, method="mean", reduce_dims=reduce_dims, skipna=True
+        )
 
         preserve_dims = kwargs.get("preserve_dims", "lead_time")
         tolerance_range = kwargs.get("tolerance_range", 24)
@@ -973,8 +949,11 @@ class OnsetME(ME):
 
         target_time = target.valid_time[0] + np.timedelta64(48, "h")
         forecast = (
-            _reduce_duck_array(
-                forecast, func=np.nanmean, reduce_dims=["latitude", "longitude"]
+            utils.reduce_dataarray(
+                forecast,
+                method="mean",
+                reduce_dims=["latitude", "longitude"],
+                skipna=True,
             )
             .groupby("init_time")
             .map(self.onset)
@@ -1054,8 +1033,11 @@ class DurationME(ME):
         # Dummy implementation for duration mean error
         target_duration = target.valid_time[-1] - target.valid_time[0]
         forecast = (
-            _reduce_duck_array(
-                forecast, func=np.nanmean, reduce_dims=["latitude", "longitude"]
+            utils.reduce_dataarray(
+                forecast,
+                method="mean",
+                reduce_dims=["latitude", "longitude"],
+                skipna=True,
             )
             .groupby("init_time")
             .map(
