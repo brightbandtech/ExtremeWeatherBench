@@ -971,6 +971,11 @@ class TestReduceXarrayMethod:
         with pytest.raises(ValueError, match="DataArray has no method"):
             utils.reduce_dataarray(sample_dataarray, "nonexistent_method", ["time"])
 
+    def test_xarray_attribute_without_method(self, sample_dataarray):
+        """Test that xarray attribute that isn't a method raises some kind of error."""
+        with pytest.raises(TypeError, match="not callable"):
+            utils.reduce_dataarray(sample_dataarray, "shape", ["time"])
+
     def test_empty_reduce_dims(self, sample_dataarray):
         """Test with empty reduce_dims list."""
         # This is edge case - xarray handles it gracefully
