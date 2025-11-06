@@ -38,101 +38,51 @@ class TestPandasDataFrameModule:
     def test_safely_pull_variables_success(self, sample_dataframe):
         """Test successful variable extraction."""
         variables = ["temperature", "pressure"]
-        optional_variables = []
-        optional_variables_mapping = {}
 
-        result = pandas_dataframe.safely_pull_variables(
-            sample_dataframe, variables, optional_variables, optional_variables_mapping
-        )
+        result = pandas_dataframe.safely_pull_variables(sample_dataframe, variables)
 
-        # Coordinate variables are automatically added for pandas DataFrames
-        expected_columns = variables + [
-            "valid_time",
-            "lead_time",
-            "init_time",
-            "latitude",
-            "longitude",
-        ]
-        assert sorted(result.columns) == sorted(expected_columns)
+        # Only the requested variables are returned
+        assert sorted(result.columns) == sorted(variables)
         assert len(result) == len(sample_dataframe)
 
     def test_safely_pull_variables_with_optional(self, sample_dataframe):
-        """Test variable extraction with optional variables."""
-        variables = ["temperature"]
-        optional_variables = ["humidity", "nonexistent"]
-        optional_variables_mapping = {}
+        """Test variable extraction with multiple variables."""
+        variables = ["temperature", "humidity"]
 
-        result = pandas_dataframe.safely_pull_variables(
-            sample_dataframe, variables, optional_variables, optional_variables_mapping
-        )
+        result = pandas_dataframe.safely_pull_variables(sample_dataframe, variables)
 
-        # Coordinate variables are automatically added for pandas DataFrames
-        expected_columns = ["humidity", "temperature"] + [
-            "valid_time",
-            "lead_time",
-            "init_time",
-            "latitude",
-            "longitude",
-        ]
+        # Only the requested variables are returned
+        expected_columns = ["humidity", "temperature"]
         assert sorted(result.columns) == sorted(expected_columns)
 
     def test_safely_pull_variables_with_mapping(self, sample_dataframe):
-        """Test variable extraction with optional variable mapping."""
-        variables = ["temp", "press"]
-        optional_variables = ["temperature", "pressure"]
-        optional_variables_mapping = {
-            "temperature": "temp",
-            "pressure": "press",
-        }
+        """Test variable extraction with multiple variables."""
+        variables = ["temperature", "pressure"]
 
-        result = pandas_dataframe.safely_pull_variables(
-            sample_dataframe, variables, optional_variables, optional_variables_mapping
-        )
+        result = pandas_dataframe.safely_pull_variables(sample_dataframe, variables)
 
-        # Coordinate variables are automatically added for pandas DataFrames
-        expected_columns = ["temperature", "pressure"] + [
-            "valid_time",
-            "lead_time",
-            "init_time",
-            "latitude",
-            "longitude",
-        ]
+        # Only the requested variables are returned
+        expected_columns = ["temperature", "pressure"]
         assert sorted(result.columns) == sorted(expected_columns)
 
     def test_safely_pull_variables_with_mapping_list(self, sample_dataframe):
-        """Test variable extraction with optional variable mapping as list."""
-        variables = ["temp", "press"]
-        optional_variables = ["wind_speed"]
-        optional_variables_mapping = {
-            "wind_speed": ["temp", "press"],
-        }
+        """Test variable extraction with single variable."""
+        variables = ["wind_speed"]
 
-        result = pandas_dataframe.safely_pull_variables(
-            sample_dataframe, variables, optional_variables, optional_variables_mapping
-        )
+        result = pandas_dataframe.safely_pull_variables(sample_dataframe, variables)
 
-        # Coordinate variables are automatically added for pandas DataFrames
-        expected_columns = ["wind_speed"] + [
-            "valid_time",
-            "lead_time",
-            "init_time",
-            "latitude",
-            "longitude",
-        ]
+        # Only the requested variable is returned
+        expected_columns = ["wind_speed"]
         assert sorted(result.columns) == sorted(expected_columns)
 
     def test_safely_pull_variables_missing_required(self, sample_dataframe):
         """Test error when required variables are missing."""
         variables = ["temperature", "nonexistent"]
-        optional_variables = []
-        optional_variables_mapping = {}
 
         with pytest.raises(KeyError, match="Required variables.*not found"):
             pandas_dataframe.safely_pull_variables(
                 sample_dataframe,
                 variables,
-                optional_variables,
-                optional_variables_mapping,
             )
 
     def test_check_for_valid_times_both_dates_in_dataset(self):
@@ -283,78 +233,40 @@ class TestPolarsLazyFrameModule:
     def test_safely_pull_variables_success(self, sample_lazyframe):
         """Test successful variable extraction."""
         variables = ["temperature", "pressure"]
-        optional_variables = []
-        optional_variables_mapping = {}
 
-        result = polars_lazyframe.safely_pull_variables(
-            sample_lazyframe, variables, optional_variables, optional_variables_mapping
-        )
+        result = polars_lazyframe.safely_pull_variables(sample_lazyframe, variables)
 
-        # For polars LazyFrames, coordinate variables are added to optional only
-        expected_columns = variables + [
-            "valid_time",
-            "lead_time",
-            "init_time",
-            "latitude",
-            "longitude",
-        ]
-        assert sorted(result.columns) == sorted(expected_columns)
+        # Only the requested variables are returned
+        assert sorted(result.collect_schema().names()) == sorted(variables)
 
     def test_safely_pull_variables_with_optional(self, sample_lazyframe):
-        """Test variable extraction with optional variables."""
-        variables = ["temperature"]
-        optional_variables = ["humidity", "nonexistent"]
-        optional_variables_mapping = {}
+        """Test variable extraction with multiple variables."""
+        variables = ["temperature", "humidity"]
 
-        result = polars_lazyframe.safely_pull_variables(
-            sample_lazyframe, variables, optional_variables, optional_variables_mapping
-        )
+        result = polars_lazyframe.safely_pull_variables(sample_lazyframe, variables)
 
-        # For polars LazyFrames, coordinate variables are added to optional only
-        expected_columns = ["humidity", "temperature"] + [
-            "valid_time",
-            "lead_time",
-            "init_time",
-            "latitude",
-            "longitude",
-        ]
-        assert sorted(result.columns) == sorted(expected_columns)
+        # Only the requested variables are returned
+        expected_columns = ["humidity", "temperature"]
+        assert sorted(result.collect_schema().names()) == sorted(expected_columns)
 
     def test_safely_pull_variables_with_mapping(self, sample_lazyframe):
-        """Test variable extraction with optional variable mapping."""
-        variables = ["temp", "press"]
-        optional_variables = ["temperature", "pressure"]
-        optional_variables_mapping = {
-            "temperature": "temp",
-            "pressure": "press",
-        }
+        """Test variable extraction with multiple variables."""
+        variables = ["temperature", "pressure"]
 
-        result = polars_lazyframe.safely_pull_variables(
-            sample_lazyframe, variables, optional_variables, optional_variables_mapping
-        )
+        result = polars_lazyframe.safely_pull_variables(sample_lazyframe, variables)
 
-        # For polars LazyFrames, coordinate variables are added to optional only
-        expected_columns = ["temperature", "pressure"] + [
-            "valid_time",
-            "lead_time",
-            "init_time",
-            "latitude",
-            "longitude",
-        ]
-        assert sorted(result.columns) == sorted(expected_columns)
+        # Only the requested variables are returned
+        expected_columns = ["temperature", "pressure"]
+        assert sorted(result.collect_schema().names()) == sorted(expected_columns)
 
     def test_safely_pull_variables_missing_required(self, sample_lazyframe):
         """Test error when required variables are missing."""
         variables = ["temperature", "nonexistent"]
-        optional_variables = []
-        optional_variables_mapping = {}
 
         with pytest.raises(KeyError, match="Required variables.*not found"):
             polars_lazyframe.safely_pull_variables(
                 sample_lazyframe,
                 variables,
-                optional_variables,
-                optional_variables_mapping,
             )
 
     def test_check_for_valid_times_both_dates_in_dataset(self):
@@ -618,25 +530,17 @@ class TestXarrayDataArrayModule:
     def test_safely_pull_variables_success(self, sample_dataarray):
         """Test successful variable extraction."""
         variables = ["temperature"]
-        optional_variables = []
-        optional_variables_mapping = {}
 
-        result = xarray_dataarray.safely_pull_variables(
-            sample_dataarray, variables, optional_variables, optional_variables_mapping
-        )
+        result = xarray_dataarray.safely_pull_variables(sample_dataarray, variables)
 
         assert result.name == "temperature"
         assert result.equals(sample_dataarray)
 
     def test_safely_pull_variables_with_optional(self, sample_dataarray):
         """Test variable extraction with optional variables."""
-        variables = ["pressure"]
-        optional_variables = ["temperature"]
-        optional_variables_mapping = {}
+        variables = ["temperature"]
 
-        result = xarray_dataarray.safely_pull_variables(
-            sample_dataarray, variables, optional_variables, optional_variables_mapping
-        )
+        result = xarray_dataarray.safely_pull_variables(sample_dataarray, variables)
 
         assert result.name == "temperature"
         assert result.equals(sample_dataarray)
@@ -644,15 +548,11 @@ class TestXarrayDataArrayModule:
     def test_safely_pull_variables_missing_required(self, sample_dataarray):
         """Test error when required variables are missing."""
         variables = ["pressure"]
-        optional_variables = []
-        optional_variables_mapping = {}
 
         with pytest.raises(KeyError, match="Required variables.*not found"):
             xarray_dataarray.safely_pull_variables(
                 sample_dataarray,
                 variables,
-                optional_variables,
-                optional_variables_mapping,
             )
 
     def test_safely_pull_variables_unnamed_dataarray(self):
@@ -670,12 +570,8 @@ class TestXarrayDataArrayModule:
         )
 
         variables = ["unnamed"]
-        optional_variables = []
-        optional_variables_mapping = {}
 
-        result = xarray_dataarray.safely_pull_variables(
-            da, variables, optional_variables, optional_variables_mapping
-        )
+        result = xarray_dataarray.safely_pull_variables(da, variables)
 
         assert result.equals(da)
 
@@ -853,12 +749,8 @@ class TestXarrayDatasetModule:
     def test_safely_pull_variables_success(self, sample_dataset):
         """Test successful variable extraction."""
         variables = ["temperature", "pressure"]
-        optional_variables = []
-        optional_variables_mapping = {}
 
-        result = xarray_dataset.safely_pull_variables(
-            sample_dataset, variables, optional_variables, optional_variables_mapping
-        )
+        result = xarray_dataset.safely_pull_variables(sample_dataset, variables)
 
         assert sorted(result.data_vars) == sorted(variables)
         assert result["temperature"].equals(sample_dataset["temperature"])
@@ -866,44 +758,27 @@ class TestXarrayDatasetModule:
 
     def test_safely_pull_variables_with_optional(self, sample_dataset):
         """Test variable extraction with optional variables."""
-        variables = ["temperature"]
-        optional_variables = ["humidity", "nonexistent"]
-        optional_variables_mapping = {}
+        variables = ["temperature", "humidity"]
 
-        result = xarray_dataset.safely_pull_variables(
-            sample_dataset, variables, optional_variables, optional_variables_mapping
-        )
+        result = xarray_dataset.safely_pull_variables(sample_dataset, variables)
 
         expected_vars = ["humidity", "temperature"]
         assert sorted(result.data_vars) == sorted(expected_vars)
 
     def test_safely_pull_variables_with_mapping(self, sample_dataset):
-        """Test variable extraction with optional variable mapping."""
-        variables = ["temp", "press"]
-        optional_variables = ["temperature", "pressure"]
-        optional_variables_mapping = {
-            "temperature": "temp",
-            "pressure": "press",
-        }
+        """Test variable extraction with variable mapping."""
+        variables = ["temperature", "pressure"]
 
-        result = xarray_dataset.safely_pull_variables(
-            sample_dataset, variables, optional_variables, optional_variables_mapping
-        )
+        result = xarray_dataset.safely_pull_variables(sample_dataset, variables)
 
         expected_vars = ["temperature", "pressure"]
         assert sorted(result.data_vars) == sorted(expected_vars)
 
     def test_safely_pull_variables_with_mapping_list(self, sample_dataset):
-        """Test variable extraction with optional variable mapping as list."""
-        variables = ["temp", "press"]
-        optional_variables = ["wind_speed"]
-        optional_variables_mapping = {
-            "wind_speed": ["temp", "press"],
-        }
+        """Test variable extraction with variable mapping as list."""
+        variables = ["wind_speed"]
 
-        result = xarray_dataset.safely_pull_variables(
-            sample_dataset, variables, optional_variables, optional_variables_mapping
-        )
+        result = xarray_dataset.safely_pull_variables(sample_dataset, variables)
 
         expected_vars = ["wind_speed"]
         assert list(result.data_vars) == expected_vars
@@ -911,15 +786,11 @@ class TestXarrayDatasetModule:
     def test_safely_pull_variables_missing_required(self, sample_dataset):
         """Test error when required variables are missing."""
         variables = ["temperature", "nonexistent"]
-        optional_variables = []
-        optional_variables_mapping = {}
 
         with pytest.raises(KeyError, match="Required variables.*not found"):
             xarray_dataset.safely_pull_variables(
                 sample_dataset,
                 variables,
-                optional_variables,
-                optional_variables_mapping,
             )
 
     def test_check_for_valid_times_both_dates_in_dataset(self, sample_dataset):

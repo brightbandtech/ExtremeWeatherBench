@@ -12,8 +12,6 @@ class Source(Protocol):
         self,
         data: Any,
         variables: list[str],
-        optional_variables: list[str],
-        optional_variables_mapping: dict[str, list[str]],
     ) -> Any:
         """This function handles variable extraction from a Pandas DataFrame, supporting
         both required and optional variables. Optional variables can replace required
@@ -22,13 +20,7 @@ class Source(Protocol):
         Args:
             data: The data to extract variables from.
             variables: List of required variable names to extract. These must be
-                present in the data unless replaced by optional variables.
-            optional_variables: List of optional variable names to extract. These
-                are only included if present in the data.
-            optional_variables_mapping: Dictionary mapping optional variable names
-                to the required variables they can replace. Keys are optional
-                variable names, values can be a single string or list of strings
-                representing the required variables to replace.
+                present in the data.
 
         Returns:
             Data containing only the identified variables.
