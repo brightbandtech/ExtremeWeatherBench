@@ -12,6 +12,7 @@ from typing import Any, Callable, Optional, Sequence, Union
 import numpy as np
 import pandas as pd  # type: ignore[import-untyped]
 import regionmask
+import sparse
 import tqdm
 import xarray as xr
 import yaml  # type: ignore[import]
@@ -516,3 +517,44 @@ class ParallelTqdm(Parallel):
             self.progress_bar.refresh()
         # update progressbar
         self.progress_bar.update(self.n_completed_tasks - self.progress_bar.n)
+
+
+def reduce_xarray_method(
+    da: xr.DataArray,
+    method: str | Callable,
+    reduce_dims: list[str],
+    **method_kwargs,
+) -> xr.DataArray:
+    """Reduce using xarray methods or numpy functions.
+
+    This function can utilize xarray's optimized methods (e.g., mean,
+    sum) or numpy/callable reductions, providing flexibility and
+    efficiency.
+
+    Args:
+        da: The xarray dataarray to reduce.
+        method: Either an xarray method name (e.g., 'mean', 'sum') or
+            a callable function (e.g., np.nanmean).
+        reduce_dims: The dimensions to reduce.
+        **method_kwargs: Additional kwargs for the method. Only used
+            when method is a string (xarray method).
+
+    Returns:
+        The reduced xarray dataarray.
+    """
+    if isinstance(da.data, sparse.COO):
+        da = stack_sparse_data_from_dims(da, reduce_dims)
+        reduce_dims = ["stacked"]
+
+    if callable(method):
+        # Use numpy function or other callable (original behavior)
+        return da.reduce(method, dim=reduce_dims)
+    elif isinstance(method, str):
+        # Use xarray built-in method
+        if not hasattr(da, method):
+            raise ValueError(f"DataArray has no method '{method}'")
+
+        method_func = getattr(da, method)
+        return method_func(dim=reduce_dims, **method_kwargs)
+    else:
+        raise TypeError(f"method must be str or callable, got {type(method)}")
