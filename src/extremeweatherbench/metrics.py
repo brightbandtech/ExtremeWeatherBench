@@ -1019,7 +1019,7 @@ class OnsetME(ME):
         Returns:
             Mean error (hours) between forecast and target onset times
         """
-        climatology_time = convert_day_yearofday_to_time(
+        climatology_time = utils.convert_day_yearofday_to_time(
             self.climatology, forecast.valid_time.dt.year.values[0]
         )
         spatial_dims = [
@@ -1152,7 +1152,7 @@ class DurationME(ME):
         Returns:
             Mean error between forecast and target heatwave durations
         """
-        climatology_time = convert_day_yearofday_to_time(
+        climatology_time = utils.convert_day_yearofday_to_time(
             self.climatology, forecast.valid_time.dt.year.values[0]
         )
         spatial_dims = [
@@ -1160,10 +1160,10 @@ class DurationME(ME):
             for dim in forecast.dims
             if dim not in ["init_time", "lead_time", "valid_time"]
         ]
-        forecast, target = maybe_stack_sparse_target_data(
+        forecast, target = utils.maybe_stack_sparse_target_data(
             forecast, target, spatial_dims
         )
-        climatology_time = interp_climatology_to_target(target, climatology_time)
+        climatology_time = utils.interp_climatology_to_target(target, climatology_time)
         forecast_mask = create_comparison_mask(
             forecast, climatology_time, self.criteria_sign
         )
@@ -1227,79 +1227,3 @@ def create_comparison_mask(
             return data == criteria
         case _:
             raise ValueError(f"Unsupported sign: {sign}")
-
-
-def convert_day_yearofday_to_time(dataset: xr.Dataset, year: int) -> xr.Dataset:
-    """Convert dayofyear and hour coordinates in an xarray Dataset to a new time
-    coordinate.
-
-    Args:
-        dataset: The input xarray dataset.
-        year: The base year to use for the time coordinate.
-
-    Returns:
-        The dataset with a new time coordinate.
-    """
-    # Create a new time coordinate by combining dayofyear and hour
-    time_dim = pd.date_range(
-        start=f"{year}-01-01",
-        periods=len(dataset["dayofyear"]) * len(dataset["hour"]),
-        freq="6h",
-    )
-    dataset = dataset.stack(valid_time=("dayofyear", "hour")).drop(
-        ["dayofyear", "hour"]
-    )
-    # Assign the new time coordinate to the dataset
-    dataset = dataset.assign_coords(valid_time=time_dim)
-
-    return dataset
-
-
-def maybe_stack_sparse_target_data(
-    forecast: xr.DataArray, target: xr.DataArray, spatial_dims: list[str]
-) -> tuple[xr.DataArray, xr.DataArray]:
-    """Maybe stack sparse data from target and forecast.
-
-    If either target or forecast is sparse, stack the data and get the coords before
-    the data is stacked. If not, return the original data.
-
-    Args:
-        forecast: The forecast data array.
-        target: The target data array.
-        spatial_dims: The spatial dimensions to stack.
-
-    Returns:
-        The stacked data arrays.
-    """
-    if isinstance(target.data, sparse.COO):
-        coords = target.data.coords
-        target = utils.stack_sparse_data_from_dims(target, spatial_dims, coords=coords)
-        forecast = utils.stack_sparse_data_from_dims(
-            forecast, spatial_dims, coords=coords
-        )
-    return forecast, target
-
-
-def interp_climatology_to_target(
-    target: xr.DataArray, climatology: xr.DataArray
-) -> xr.DataArray:
-    """Interpolate the climatology to the target coordinates.
-
-    Args:
-        target: The target data array.
-        climatology: The climatology data array.
-
-    Returns:
-        The interpolated climatology data array.
-    """
-    if isinstance(target.data, sparse.COO) or target.ndim < 3:
-        return climatology.interp(
-            # stacked as a data variable is enforced by stack_sparse_data_from_dims
-            latitude=target["stacked"]["latitude"],
-            longitude=target["stacked"]["longitude"],
-            method="nearest",
-            kwargs={"fill_value": None},
-        )
-    return climatology.interp_like(
-        target, method="nearest", kwargs={"fill_value": None}
-    )
