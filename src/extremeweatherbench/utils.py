@@ -10,6 +10,7 @@ import threading
 from typing import Any, Callable, Optional, Sequence, Union
 
 import numpy as np
+import numpy.typing as npt
 import pandas as pd  # type: ignore[import-untyped]
 import regionmask
 import sparse
@@ -412,7 +413,10 @@ def map_sparse_array_to_dense_array(
 
 
 def stack_sparse_data_from_dims(
-    da: xr.DataArray, stack_dims: list[str], max_size: int = 100000
+    da: xr.DataArray,
+    stack_dims: list[str],
+    max_size: int = 100000,
+    coords: Optional[npt.NDArray] = None,
 ) -> xr.DataArray:
     """Stack sparse data with n-dimensions.
 
@@ -427,8 +431,22 @@ def stack_sparse_data_from_dims(
     Returns:
         The densified xarray dataarray reduced to (time, location).
     """
+    if coords is None and isinstance(da.data, sparse.COO):
+        coords = da.data.coords
+    elif coords is None:
+        raise ValueError("coords must be provided if da.data is not sparse.COO")
+    # Check if da dimensions size equals number of rows in coords
+    if len(da.dims) != coords.shape[0]:
+        # Add a new dimension to coords for the missing dimension
+        missing_dim_size = da.shape[0]
+        nnz = coords.shape[1]
+        # Create indices for the missing dimension (all values)
+        new_dim_indices = np.repeat(np.arange(missing_dim_size), nnz)
+        # Replicate existing coords for each value in the missing dim
+        expanded_coords = np.tile(coords, missing_dim_size)
+        # Prepend the new dimension indices
+        coords = np.vstack([new_dim_indices, expanded_coords])
 
-    coords = da.data.coords
     # Get the indices of the dimensions to stack
     reduce_dim_indices = [da.dims.index(dim) for dim in stack_dims]
     reduce_dim_names = [da.dims[n] for n in reduce_dim_indices]
@@ -450,7 +468,10 @@ def stack_sparse_data_from_dims(
     # return the data densified as an empty dataarray
     if da.size != 0:
         da = da.stack(stacked=reduce_dim_names).sel(stacked=coord_values)
-    da.data = da.data.maybe_densify(max_size=max_size)
+
+    # If the data is sparse, densify it
+    if isinstance(da.data, sparse.COO):
+        da.data = da.data.maybe_densify(max_size=max_size)
     return da
 
 

@@ -62,29 +62,45 @@ def get_cached_transformed_manager(
     return transformed
 
 
-def _reduce_duck_array(
-    da: xr.DataArray, func: Callable, reduce_dims: list[str]
+def _reduce_xarray_method(
+    da: xr.DataArray,
+    method: str | Callable,
+    reduce_dims: list[str],
+    **method_kwargs,
 ) -> xr.DataArray:
-    """Reduce the duck array of the data.
+    """Reduce using xarray methods or numpy functions.
 
-    Some data will return as a sparse array, which can also be reduced but
-    requires some additional logic.
+    This function can utilize xarray's optimized methods (e.g., mean,
+    sum) or numpy/callable reductions, providing flexibility and
+    efficiency.
 
     Args:
         da: The xarray dataarray to reduce.
-        func: The function to reduce the data.
+        method: Either an xarray method name (e.g., 'mean', 'sum') or
+            a callable function (e.g., np.nanmean).
         reduce_dims: The dimensions to reduce.
+        **method_kwargs: Additional kwargs for the method. Only used
+            when method is a string (xarray method).
 
     Returns:
         The reduced xarray dataarray.
     """
     if isinstance(da.data, sparse.COO):
         da = utils.stack_sparse_data_from_dims(da, reduce_dims)
-        # Apply the reduce function to the data
-        return da.reduce(func, dim="stacked")
+        reduce_dims = ["stacked"]
+
+    if callable(method):
+        # Use numpy function or other callable (original behavior)
+        return da.reduce(method, dim=reduce_dims)
+    elif isinstance(method, str):
+        # Use xarray built-in method
+        if not hasattr(da, method):
+            raise ValueError(f"DataArray has no method '{method}'")
+
+        method_func = getattr(da, method)
+        return method_func(dim=reduce_dims, **method_kwargs)
     else:
-        # Handles np.ndarray, dask.array, and other duck arrays
-        return da.reduce(func, dim=reduce_dims)
+        raise TypeError(f"method must be str or callable, got {type(method)}")
 
 
 def clear_contingency_cache():
@@ -723,8 +739,8 @@ class MaximumMAE(MAE):
         """
         preserve_dims = kwargs.get("preserve_dims", "lead_time")
         tolerance_range = kwargs.get("tolerance_range", 24)
-        target_spatial_mean = _reduce_duck_array(
-            target, func=np.nanmean, reduce_dims=["latitude", "longitude"]
+        target_spatial_mean = _reduce_xarray_method(
+            target, method="mean", reduce_dims=["latitude", "longitude"], skipna=True
         )
         maximum_timestep = target_spatial_mean.idxmax("valid_time")
         maximum_value = target_spatial_mean.sel(valid_time=maximum_timestep)
@@ -732,9 +748,9 @@ class MaximumMAE(MAE):
         # Handle the case where there are >1 resulting target values
         maximum_timestep = utils.maybe_get_closest_timestamp_to_center_of_valid_times(
             maximum_timestep, target.valid_time
-        ).compute()
-        forecast_spatial_mean = _reduce_duck_array(
-            forecast, func=np.nanmean, reduce_dims=["latitude", "longitude"]
+        )
+        forecast_spatial_mean = _reduce_xarray_method(
+            forecast, method="mean", reduce_dims=["latitude", "longitude"], skipna=True
         )
         filtered_max_forecast = forecast_spatial_mean.where(
             (
@@ -785,13 +801,13 @@ class MinimumMAE(MAE):
         """
         preserve_dims = kwargs.get("preserve_dims", "lead_time")
         tolerance_range = kwargs.get("tolerance_range", 24)
-        target_spatial_mean = _reduce_duck_array(
-            target, func=np.nanmean, reduce_dims=["latitude", "longitude"]
+        target_spatial_mean = _reduce_xarray_method(
+            target, method="mean", reduce_dims=["latitude", "longitude"], skipna=True
         )
         minimum_timestep = target_spatial_mean.idxmin("valid_time")
         minimum_value = target_spatial_mean.sel(valid_time=minimum_timestep)
-        forecast_spatial_mean = _reduce_duck_array(
-            forecast, func=np.nanmean, reduce_dims=["latitude", "longitude"]
+        forecast_spatial_mean = _reduce_xarray_method(
+            forecast, method="mean", reduce_dims=["latitude", "longitude"], skipna=True
         )
         # Handle the case where there are >1 resulting target values
         minimum_timestep = utils.maybe_get_closest_timestamp_to_center_of_valid_times(
@@ -849,10 +865,12 @@ class MaxMinMAE(MAE):
             for dim in forecast.dims
             if dim not in ["valid_time", "lead_time", "time"]
         ]
-        forecast = _reduce_duck_array(
-            forecast, func=np.nanmean, reduce_dims=reduce_dims
+        forecast = _reduce_xarray_method(
+            forecast, method="mean", reduce_dims=reduce_dims, skipna=True
         )
-        target = _reduce_duck_array(target, func=np.nanmean, reduce_dims=reduce_dims)
+        target = _reduce_xarray_method(
+            target, method="mean", reduce_dims=reduce_dims, skipna=True
+        )
 
         preserve_dims = kwargs.get("preserve_dims", "lead_time")
         tolerance_range = kwargs.get("tolerance_range", 24)
@@ -1010,12 +1028,17 @@ class OnsetME(ME):
             if dim not in ["init_time", "lead_time", "valid_time"]
         ]
 
-        forecast = _reduce_duck_array(
-            forecast, func=np.nanmean, reduce_dims=spatial_dims
-        )
-        target = _reduce_duck_array(target, func=np.nanmean, reduce_dims=spatial_dims)
-
         if isinstance(target.data, sparse.COO):
+            # If target is sparse, stack the data and get the coords before target
+            # is stacked
+            coords = target.data.coords
+            target = utils.stack_sparse_data_from_dims(
+                target, spatial_dims, coords=coords
+            )
+            forecast = utils.stack_sparse_data_from_dims(
+                forecast, spatial_dims, coords=coords
+            )
+
             # If target is sparse, interp with stacked coordinates
             climatology_time = climatology_time.interp(
                 latitude=target["stacked"]["latitude"],
@@ -1137,23 +1160,10 @@ class DurationME(ME):
             for dim in forecast.dims
             if dim not in ["init_time", "lead_time", "valid_time"]
         ]
-        forecast = _reduce_duck_array(
-            forecast, func=np.nanmean, reduce_dims=spatial_dims
+        forecast, target = maybe_stack_sparse_target_data(
+            forecast, target, spatial_dims
         )
-        target = _reduce_duck_array(target, func=np.nanmean, reduce_dims=spatial_dims)
-        if isinstance(target.data, sparse.COO):
-            # If target is sparse, interp with stacked coordinates
-            climatology_time = climatology_time.interp(
-                latitude=target["stacked"]["latitude"],
-                longitude=target["stacked"]["longitude"],
-                method="nearest",
-                kwargs={"fill_value": None},
-            )
-        else:
-            # Otherwise, interp with target coordinates
-            climatology_time = climatology_time.interp_like(
-                target, method="nearest", kwargs={"fill_value": None}
-            )
+        climatology_time = interp_climatology_to_target(target, climatology_time)
         forecast_mask = create_comparison_mask(
             forecast, climatology_time, self.criteria_sign
         )
@@ -1243,3 +1253,53 @@ def convert_day_yearofday_to_time(dataset: xr.Dataset, year: int) -> xr.Dataset:
     dataset = dataset.assign_coords(valid_time=time_dim)
 
     return dataset
+
+
+def maybe_stack_sparse_target_data(
+    forecast: xr.DataArray, target: xr.DataArray, spatial_dims: list[str]
+) -> tuple[xr.DataArray, xr.DataArray]:
+    """Maybe stack sparse data from target and forecast.
+
+    If either target or forecast is sparse, stack the data and get the coords before
+    the data is stacked. If not, return the original data.
+
+    Args:
+        forecast: The forecast data array.
+        target: The target data array.
+        spatial_dims: The spatial dimensions to stack.
+
+    Returns:
+        The stacked data arrays.
+    """
+    if isinstance(target.data, sparse.COO):
+        coords = target.data.coords
+        target = utils.stack_sparse_data_from_dims(target, spatial_dims, coords=coords)
+        forecast = utils.stack_sparse_data_from_dims(
+            forecast, spatial_dims, coords=coords
+        )
+    return forecast, target
+
+
+def interp_climatology_to_target(
+    target: xr.DataArray, climatology: xr.DataArray
+) -> xr.DataArray:
+    """Interpolate the climatology to the target coordinates.
+
+    Args:
+        target: The target data array.
+        climatology: The climatology data array.
+
+    Returns:
+        The interpolated climatology data array.
+    """
+    if isinstance(target.data, sparse.COO) or target.ndim < 3:
+        return climatology.interp(
+            # stacked as a data variable is enforced by stack_sparse_data_from_dims
+            latitude=target["stacked"]["latitude"],
+            longitude=target["stacked"]["longitude"],
+            method="nearest",
+            kwargs={"fill_value": None},
+        )
+    return climatology.interp_like(
+        target, method="nearest", kwargs={"fill_value": None}
+    )
