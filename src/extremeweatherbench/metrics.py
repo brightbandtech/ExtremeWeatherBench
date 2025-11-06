@@ -1160,11 +1160,11 @@ def calculate_landfall_time_difference_hours(
         return time_diff_hours
 
 
-def _get_nan_result_for_forecast(forecast: xr.Dataset) -> xr.DataArray:
+def _get_nan_result_for_forecast(forecast: xr.DataArray) -> xr.DataArray:
     """Create NaN result with appropriate dimensions based on forecast."""
     if "lead_time" in forecast.dims:
         # Calculate init_times from lead_time and valid_time
-        init_times_calc = forecast.valid_time - forecast.lead_time
+        init_times_calc = forecast.coords["valid_time"] - forecast.lead_time
         unique_init_times = np.unique(init_times_calc.values)
 
         return xr.DataArray(
@@ -1183,48 +1183,33 @@ def _get_nan_result_for_forecast(forecast: xr.Dataset) -> xr.DataArray:
 
 
 def _get_landfall_data(
-    forecast: xr.Dataset,
-    target: xr.Dataset,
+    forecast: xr.DataArray,
+    target: xr.DataArray,
     approach: Literal["first", "next"],
 ) -> tuple[Optional[xr.DataArray], Optional[xr.DataArray]]:
     """Get forecast and target landfall DataArrays based on approach.
 
-    Uses calc.find_landfalls() for landfall detection. Extracts
-    appropriate variable from datasets for tracking.
+    Uses calc.find_landfalls() for landfall detection. The DataArrays
+    must have latitude, longitude, and valid_time as coordinates.
 
     Args:
-        forecast: Forecast track dataset
-        target: Target track dataset
+        forecast: Forecast track DataArray with lat/lon/valid_time coords
+        target: Target track DataArray with lat/lon/valid_time coords
         approach: Landfall detection approach ('first' or 'next')
 
     Returns:
         Tuple of (forecast_landfall, target_landfall) DataArrays
         with latitude, longitude, valid_time as coordinates
     """
-
-    def create_track_dataarray(ds):
-        """Create track DataArray from dataset for landfall detection."""
-        # Use surface_wind_speed as primary tracked variable if available
-        if "surface_wind_speed" in ds:
-            return ds["surface_wind_speed"]
-        # Otherwise use latitude as a dummy (coordinates are what matter)
-        return ds["latitude"]
-
     if approach == "first":
         # First landfall approach - simple
-        forecast_landfall = calc.find_landfalls(
-            create_track_dataarray(forecast), return_all=False
-        )
-        target_landfall = calc.find_landfalls(
-            create_track_dataarray(target), return_all=False
-        )
+        forecast_landfall = calc.find_landfalls(forecast, return_all=False)
+        target_landfall = calc.find_landfalls(target, return_all=False)
         return forecast_landfall, target_landfall
 
     elif approach == "next":
         # Next landfall approach - more complex
-        target_landfalls = calc.find_landfalls(
-            create_track_dataarray(target), return_all=True
-        )
+        target_landfalls = calc.find_landfalls(target, return_all=True)
         if target_landfalls is None:
             return None, None
 
@@ -1234,9 +1219,7 @@ def _get_landfall_data(
         if next_target_landfalls is None:
             return None, None
 
-        forecast_landfalls = calc.find_landfalls(
-            create_track_dataarray(forecast), return_all=True
-        )
+        forecast_landfalls = calc.find_landfalls(forecast, return_all=True)
         if forecast_landfalls is None:
             return None, next_target_landfalls
 
@@ -1336,22 +1319,22 @@ def _compute_intensity(
     """Compute intensity error for first landfall approach.
 
     Args:
-        forecast_landfall: Forecast landfall DataArray
-        target_landfall: Target landfall DataArray
+        forecast_landfall: Forecast landfall DataArray with intensity values
+        target_landfall: Target landfall DataArray with intensity values
         intensity_var: Expected variable name (for validation)
 
     Returns:
         Absolute error between forecast and target intensity
     """
     # The DataArray values are the intensity values
-    # Verify the DataArray name matches the expected intensity variable
-    if forecast_landfall.name != intensity_var:
-        raise ValueError(
+    # Verify the DataArray name matches expected if name is set
+    if forecast_landfall.name and forecast_landfall.name != intensity_var:
+        logger.warning(
             f"Forecast landfall variable '{forecast_landfall.name}' "
             f"does not match expected '{intensity_var}'"
         )
-    if target_landfall.name != intensity_var:
-        raise ValueError(
+    if target_landfall.name and target_landfall.name != intensity_var:
+        logger.warning(
             f"Target landfall variable '{target_landfall.name}' "
             f"does not match expected '{intensity_var}'"
         )
@@ -1542,8 +1525,8 @@ def _compute_next_intensity(
 
 
 def compute_landfall_metric(
-    forecast: xr.Dataset,
-    target: xr.Dataset,
+    forecast: xr.DataArray,
+    target: xr.DataArray,
     metric_type: Literal["displacement", "timing", "intensity"],
     approach: Literal["first", "next"] = "first",
     intensity_var: str = "surface_wind_speed",
@@ -1551,8 +1534,8 @@ def compute_landfall_metric(
     """Unified function to compute landfall metrics.
 
     Args:
-        forecast: Forecast TC track dataset
-        target: Target TC track dataset
+        forecast: Forecast TC track DataArray with lat/lon/time coords
+        target: Target TC track DataArray with lat/lon/time coords
         metric_type: Type of metric to compute
         approach: Landfall detection approach
         intensity_var: Variable to use for intensity metrics
@@ -1581,30 +1564,42 @@ def compute_landfall_metric(
 
 
 def compute_first_landfall_metric(
-    forecast: xr.Dataset,
-    target: xr.Dataset,
+    forecast: xr.DataArray,
+    target: xr.DataArray,
     metric_type: Literal["displacement", "timing", "intensity"],
     intensity_var: str = "surface_wind_speed",
 ):
     """Compute metric using first landfall approach (classic).
 
-    Legacy wrapper - use compute_landfall_metric() instead.
+    .. deprecated::
+        Use compute_landfall_metric() or the LandfallDisplacement,
+        LandfallTimeME, LandfallIntensityMAE classes instead.
     """
+    logger.warning(
+        "compute_first_landfall_metric is deprecated. Use "
+        "compute_landfall_metric() or metric classes instead."
+    )
     return compute_landfall_metric(
         forecast, target, metric_type, approach="first", intensity_var=intensity_var
     )
 
 
 def compute_next_landfall_metric(
-    forecast: xr.Dataset,
-    target: xr.Dataset,
+    forecast: xr.DataArray,
+    target: xr.DataArray,
     metric_type: Literal["displacement", "timing", "intensity"],
     intensity_var: str = "surface_wind_speed",
 ):
     """Compute metric using next upcoming landfall approach.
 
-    Legacy wrapper - use compute_landfall_metric() instead.
+    .. deprecated::
+        Use compute_landfall_metric() or the LandfallDisplacement,
+        LandfallTimeME, LandfallIntensityMAE classes instead.
     """
+    logger.warning(
+        "compute_next_landfall_metric is deprecated. Use "
+        "compute_landfall_metric() or metric classes instead."
+    )
     return compute_landfall_metric(
         forecast, target, metric_type, approach="next", intensity_var=intensity_var
     )
@@ -1612,54 +1607,75 @@ def compute_next_landfall_metric(
 
 def compute_landfall_selector(
     approach: Literal["first", "next"],
-    forecast: xr.Dataset,
-    target: xr.Dataset,
+    forecast: xr.DataArray,
+    target: xr.DataArray,
     metric_type: Literal["displacement", "timing", "intensity"],
     intensity_var: str = "surface_wind_speed",
 ):
     """Select the appropriate landfall metric based on the approach.
 
-    Legacy wrapper - use compute_landfall_metric() instead.
+    .. deprecated::
+        Use compute_landfall_metric() or the LandfallDisplacement,
+        LandfallTimeME, LandfallIntensityMAE classes instead.
     """
+    logger.warning(
+        "compute_landfall_selector is deprecated. Use "
+        "compute_landfall_metric() or metric classes instead."
+    )
     return compute_landfall_metric(
         forecast, target, metric_type, approach=approach, intensity_var=intensity_var
     )
 
 
 def compute_displacement_metric(
-    forecast_landfall: xr.Dataset, target_landfall: xr.Dataset
+    forecast_landfall: xr.DataArray, target_landfall: xr.DataArray
 ):
     """Compute displacement between forecast and target landfall.
 
-    Legacy wrapper - use _compute_displacement() directly.
+    .. deprecated::
+        Use _compute_displacement() directly or metric classes.
     """
+    logger.warning(
+        "compute_displacement_metric is deprecated. Use "
+        "_compute_displacement() or metric classes instead."
+    )
     return _compute_displacement(forecast_landfall, target_landfall)
 
 
 def compute_timing_metric(
-    forecast_landfall: xr.Dataset,
-    target_landfall: xr.Dataset,
+    forecast_landfall: xr.DataArray,
+    target_landfall: xr.DataArray,
 ):
     """Compute timing difference between forecast and target landfall.
 
-    Legacy wrapper - use calculate_landfall_time_difference_hours() directly.
+    .. deprecated::
+        Use calculate_landfall_time_difference_hours() or metric classes.
     """
+    logger.warning(
+        "compute_timing_metric is deprecated. Use "
+        "calculate_landfall_time_difference_hours() or classes instead."
+    )
     return calculate_landfall_time_difference_hours(forecast_landfall, target_landfall)
 
 
 def compute_intensity_metric(
-    forecast_landfall: xr.Dataset,
-    target_landfall: xr.Dataset,
+    forecast_landfall: xr.DataArray,
+    target_landfall: xr.DataArray,
     intensity_var: str,
 ):
     """Compute intensity difference between forecast and target landfall.
 
-    Legacy wrapper - use _compute_intensity() directly.
+    .. deprecated::
+        Use _compute_intensity() directly or metric classes.
     """
+    logger.warning(
+        "compute_intensity_metric is deprecated. Use "
+        "_compute_intensity() or metric classes instead."
+    )
     return _compute_intensity(forecast_landfall, target_landfall, intensity_var)
 
 
-class LandfallDisplacement(BaseMetric):
+class LandfallDisplacement(SpatialDisplacement):
     """Landfall displacement metric with configurable landfall detection
     approaches.
 
@@ -1692,25 +1708,25 @@ class LandfallDisplacement(BaseMetric):
         self.approach = approach
         self.exclude_post_landfall = exclude_post_landfall
 
-    @classmethod
-    def _compute_metric(cls, forecast, target, **kwargs: Any) -> Any:
+    def _compute_metric(
+        self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
+    ) -> Any:
         """Compute the landfall displacement using the configured approach.
 
         Args:
-            forecast: Forecast TC track dataset
-            target: Target/analysis TC track dataset
-            **kwargs: Additional arguments (including approach)
+            forecast: Forecast TC track DataArray with lat/lon/time coords
+            target: Target/analysis TC track DataArray with lat/lon/time
+            **kwargs: Additional arguments
 
         Returns:
             xarray.DataArray with landfall displacement distance in km
         """
-        approach = kwargs.get("approach", cls.approach)
         return compute_landfall_metric(
-            forecast, target, metric_type="displacement", approach=approach
+            forecast, target, metric_type="displacement", approach=self.approach
         )
 
 
-class LandfallTimeME(BaseMetric):
+class LandfallTimeME(ME):
     """Landfall timing metric with configurable landfall detection approaches.
 
     This metric computes the time difference between forecast and target landfall
@@ -1735,37 +1751,42 @@ class LandfallTimeME(BaseMetric):
         super().__init__()
         self.approach = approach
 
-    @classmethod
-    def _compute_metric(cls, forecast, target, **kwargs: Any) -> Any:
+    def _compute_metric(
+        self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
+    ) -> Any:
         """Compute landfall timing error using the configured approach.
 
         Args:
-            forecast: Forecast TC track dataset
-            target: Target/analysis TC track dataset
-            **kwargs: Additional arguments (including approach, aggregation)
+            forecast: Forecast TC track DataArray with lat/lon/time coords
+            target: Target/analysis TC track DataArray with lat/lon/time
+            **kwargs: Additional arguments
 
         Returns:
             xarray.DataArray with landfall timing errors in hours
         """
-        approach = kwargs.get("approach", cls.approach)
         return compute_landfall_metric(
-            forecast, target, metric_type="timing", approach=approach
+            forecast, target, metric_type="timing", approach=self.approach
         )
 
 
-class LandfallIntensityMAE(BaseMetric):
+class LandfallIntensityMAE(MAE):
     """Landfall intensity metric with configurable landfall detection approaches.
 
-    This metric computes the mean absolute error between forecast and target intensity
-    at landfall using different approaches:
+    This metric computes the mean absolute error between forecast and target
+    intensity at landfall using different approaches:
 
     - 'first': Uses the first landfall point for each track
-    - 'next': For each init_time, finds the next upcoming landfall in target data
+    - 'next': For each init_time, finds the next upcoming landfall in target
+
+    The intensity variable is determined by forecast_variable and
+    target_variable. To evaluate multiple intensity variables (e.g.,
+    surface_wind_speed and air_pressure_at_mean_sea_level), create
+    separate metric instances for each variable.
 
     Parameters:
-        approach (str): Landfall detection approach ('first', 'next')
-        intensity_var (str): Variable to use for intensity ('surface_wind_speed',
-        'air_pressure_at_mean_sea_level')
+        approach: Landfall detection approach ('first', 'next')
+        forecast_variable: Variable to use for forecast intensity
+        target_variable: Variable to use for target intensity
     """
 
     name = "landfall_intensity_mae"
@@ -1775,38 +1796,41 @@ class LandfallIntensityMAE(BaseMetric):
     def __init__(
         self,
         approach: Literal["first", "next"] = "first",
-        intensity_var: str = "surface_wind_speed",
+        forecast_variable: Optional[str | derived.DerivedVariable] = None,
+        target_variable: Optional[str | derived.DerivedVariable] = None,
     ):
         """Initialize the landfall intensity metric.
 
         Args:
             approach: Landfall detection approach ('first', 'next')
-            intensity_var: Variable to use for intensity
+            forecast_variable: Variable for forecast intensity (optional)
+            target_variable: Variable for target intensity (optional)
         """
-        super().__init__()
+        super().__init__(
+            forecast_variable=forecast_variable, target_variable=target_variable
+        )
         self.approach = approach
-        self.intensity_var = intensity_var
 
-    @classmethod
-    def _compute_metric(cls, forecast, target, **kwargs: Any) -> Any:
+    def _compute_metric(
+        self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
+    ) -> Any:
         """Compute landfall intensity error using the configured approach.
 
         Args:
-            forecast: Forecast TC track dataset
-            target: Target/analysis TC track dataset
-            **kwargs: Additional arguments (including approach, aggregation,
-            intensity_var)
+            forecast: Forecast TC track DataArray with lat/lon/time coords
+            target: Target/analysis TC track DataArray with lat/lon/time
+            **kwargs: Additional arguments
 
         Returns:
             xarray.DataArray with landfall intensity errors
         """
-        approach = kwargs.get("approach", cls.approach)
-        intensity_var = kwargs.get("intensity_var", "surface_wind_speed")
+        # Use the DataArray name as the intensity variable
+        intensity_var = forecast.name if forecast.name else "surface_wind_speed"
 
         return compute_landfall_metric(
             forecast,
             target,
             metric_type="intensity",
-            approach=approach,
+            approach=self.approach,
             intensity_var=intensity_var,
         )

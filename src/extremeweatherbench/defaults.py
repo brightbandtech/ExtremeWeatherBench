@@ -284,7 +284,11 @@ def get_brightband_evaluation_objects() -> list[inputs.EvaluationObject]:
         #         metrics.EarlySignal(),
         #         metrics.LandfallDisplacement(),
         #         metrics.LandfallTimeME(),
-        #         metrics.LandfallIntensityMAE(),
+        #         # Intensity metric requires variable specification
+        #         metrics.LandfallIntensityMAE(
+        #             forecast_variable="surface_wind_speed",
+        #             target_variable="surface_wind_speed",
+        #         ),
         #     ],
         #     target=ibtracs_target,
         #     forecast=cira_tropical_cyclone_forecast,

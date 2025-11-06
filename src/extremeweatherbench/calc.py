@@ -277,7 +277,7 @@ def find_landfalls(
 
 
 def find_next_landfall_for_init_time(
-    forecast_dataset: xr.Dataset,
+    forecast_data: xr.DataArray,
     target_landfalls: xr.DataArray,
 ) -> Optional[xr.DataArray]:
     """Find next upcoming landfall from target data for each init_time.
@@ -286,7 +286,7 @@ def find_next_landfall_for_init_time(
     event in the target data that occurs after that init_time.
 
     Args:
-        forecast_dataset: Forecast dataset with init_time dimension
+        forecast_data: Forecast DataArray with init_time dimension
         target_landfalls: Target landfall DataArray from find_landfalls
             with return_all=True (has landfall dimension)
 
@@ -295,12 +295,15 @@ def find_next_landfall_for_init_time(
         no future landfalls exist
     """
     # Convert forecast to have init_time if needed
-    if "init_time" not in forecast_dataset.coords:
-        forecast_dataset = utils.convert_valid_time_to_init_time(forecast_dataset)
+    if "init_time" not in forecast_data.coords:
+        # Wrap in Dataset, convert, then extract
+        temp_ds = xr.Dataset({"data": forecast_data})
+        temp_ds = utils.convert_valid_time_to_init_time(temp_ds)
+        forecast_data = temp_ds["data"]
 
     # Vectorized search for next landfall for each init_time
     target_times = target_landfalls.coords["valid_time"].values
-    init_times = forecast_dataset.init_time.values
+    init_times = forecast_data.init_time.values
 
     # Use searchsorted to find next landfall index for each init_time
     next_indices = np.searchsorted(target_times, init_times, side="right")

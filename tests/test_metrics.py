@@ -621,10 +621,13 @@ class TestLandfallMetrics:
     def test_landfall_intensity_mae_instantiation(self):
         """Test LandfallIntensityMAE can be instantiated."""
         intensity = metrics.LandfallIntensityMAE(
-            approach="first", intensity_var="surface_wind_speed"
+            approach="first",
+            forecast_variable="surface_wind_speed",
+            target_variable="surface_wind_speed",
         )
         assert intensity.approach == "first"
-        assert intensity.intensity_var == "surface_wind_speed"
+        assert intensity.forecast_variable == "surface_wind_speed"
+        assert intensity.target_variable == "surface_wind_speed"
         assert isinstance(intensity, metrics.BaseMetric)
 
     def test_landfall_metrics_with_mocked_data(self):
@@ -711,15 +714,23 @@ class TestLandfallMetrics:
 
             mock_find.side_effect = mock_find_func
 
-            # Test all metric types
+            # Test all metric types with DataArrays
+            # Extract DataArrays from datasets for the new API
+            forecast_da = forecast["surface_wind_speed"]
+            target_da = target["surface_wind_speed"]
+
             metrics_to_test = [
                 metrics.LandfallDisplacement(approach="first"),
                 metrics.LandfallTimeME(approach="first"),
-                metrics.LandfallIntensityMAE(approach="first"),
+                metrics.LandfallIntensityMAE(
+                    approach="first",
+                    forecast_variable="surface_wind_speed",
+                    target_variable="surface_wind_speed",
+                ),
             ]
 
             for metric in metrics_to_test:
-                result = metric._compute_metric(forecast, target)
+                result = metric._compute_metric(forecast_da, target_da)
                 assert isinstance(result, xr.DataArray)
 
             # Verify mocking was used

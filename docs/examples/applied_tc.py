@@ -106,15 +106,21 @@ pangu_forecast = inputs.KerchunkForecast(
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
 )
 # %%
-# just one for now
+# Evaluation objects for tropical cyclone metrics
+# Note: Landfall metrics work with DataArrays that have lat/lon/time coords
+# For intensity metrics, specify variables explicitly to evaluate different
+# intensity measures (e.g., wind speed vs. pressure)
 tc_evaluation_object = [
     # HRES forecast
     inputs.EvaluationObject(
         event_type="tropical_cyclone",
         metric_list=[
             metrics.LandfallTimeME,
-            metrics.LandfallIntensityMAE,
             metrics.LandfallDisplacement,
+            metrics.LandfallIntensityMAE(
+                forecast_variable="surface_wind_speed",
+                target_variable="surface_wind_speed",
+            ),
         ],
         target=ibtracs_target,
         forecast=hres_forecast,
@@ -124,8 +130,11 @@ tc_evaluation_object = [
         event_type="tropical_cyclone",
         metric_list=[
             metrics.LandfallTimeME,
-            metrics.LandfallIntensityMAE,
             metrics.LandfallDisplacement,
+            metrics.LandfallIntensityMAE(
+                forecast_variable="surface_wind_speed",
+                target_variable="surface_wind_speed",
+            ),
         ],
         target=ibtracs_target,
         forecast=pangu_forecast,
@@ -135,8 +144,11 @@ tc_evaluation_object = [
         event_type="tropical_cyclone",
         metric_list=[
             metrics.LandfallTimeME,
-            metrics.LandfallIntensityMAE,
             metrics.LandfallDisplacement,
+            metrics.LandfallIntensityMAE(
+                forecast_variable="surface_wind_speed",
+                target_variable="surface_wind_speed",
+            ),
         ],
         target=ibtracs_target,
         forecast=fcn_forecast,
