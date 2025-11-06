@@ -321,6 +321,9 @@ def convert_init_time_to_valid_time(ds: xr.Dataset) -> xr.Dataset:
             for lead in ds.lead_time
         ],
         "lead_time",
+        coords="different",
+        compat="equals",
+        join="outer",
     )
 
 

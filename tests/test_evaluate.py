@@ -1512,8 +1512,8 @@ class TestMetricEvaluation:
         result = evaluate._evaluate_metric_and_return_df(
             forecast_ds=forecast_ds,
             target_ds=target_ds,
-            forecast_variable=TestForecastDerivedVariable,
-            target_variable=TestTargetDerivedVariable,
+            forecast_variable=ForecastDerivedVariable,
+            target_variable=TargetDerivedVariable,
             metric=mock_base_metric,
             case_operator=sample_case_operator,
         )
@@ -2544,7 +2544,7 @@ class TestEnsureOutputSchema:
         assert all(result["event_type"] == "updated_event")
 
 
-class TestForecastDerivedVariable(derived.DerivedVariable):
+class ForecastDerivedVariable(derived.DerivedVariable):
     """Test derived variable for forecast data."""
 
     name = "derived_forecast_var"
@@ -2556,7 +2556,7 @@ class TestForecastDerivedVariable(derived.DerivedVariable):
         return data["surface_air_temperature"]
 
 
-class TestTargetDerivedVariable(derived.DerivedVariable):
+class TargetDerivedVariable(derived.DerivedVariable):
     """Test derived variable for target data."""
 
     name = "derived_target_var"
