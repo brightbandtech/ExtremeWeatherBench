@@ -258,18 +258,22 @@ def compute_case_operator(
 ) -> pd.DataFrame:
     """Compute the results of a case operator.
 
-    This method will compute the results of a case operator. It will build
-    the target and forecast datasets,
-    align them, compute the metrics, and return a concatenated dataframe of the results.
+    This method will compute the results of a case operator. It validates
+    that all metrics are properly instantiated, builds the target and forecast
+    datasets, aligns them, and computes each metric with appropriate variable
+    pairs. Metrics with their own forecast_variable and target_variable use
+    only those variables; metrics without use all InputBase variable pairs.
 
     Args:
         case_operator: The case operator to compute the results of.
-        cache_dir: The directory to cache the mid-flight outputs of the workflow if
-        in serial mode.
+        cache_dir: The directory to cache mid-flight outputs (serial mode).
         kwargs: Keyword arguments to pass to the metric computations.
 
     Returns:
         A concatenated dataframe of the results of the case operator.
+
+    Raises:
+        TypeError: If any metric is not properly instantiated.
     """
     logger.info(
         "Computing case operator for case %s...",
@@ -454,11 +458,11 @@ def _evaluate_metric_and_return_df(
         forecast_variable: The forecast variable to evaluate.
         target_variable: The target variable to evaluate.
         metric: The metric to evaluate.
-        case_id_number: The case id number.
-        event_type: The event type.
+        case_operator: The case operator with metadata for the evaluation.
+        **kwargs: Additional keyword arguments to pass to metric computation.
 
     Returns:
-        A dataframe of the results of the metric evaluation.
+        A dataframe of the results with standard output schema columns.
     """
 
     # Normalize variables to their string names if needed
@@ -524,6 +528,8 @@ def _build_datasets(
 
     This method will process through all stages of the pipeline for the target and
     forecast datasets, including preprocessing, variable renaming, and subsetting.
+    It augments the InputBase variables with any variables defined in metrics to
+    ensure all required variables are loaded and derived.
 
     Args:
         case_operator: The case operator containing metadata and input sources.
