@@ -496,7 +496,9 @@ class TestGeopotentialCalculations:
 
     def test_geopotential_thickness_default_levels(self, sample_calc_dataset):
         """Test geopotential thickness with default levels."""
-        thickness = calc.geopotential_thickness(sample_calc_dataset)
+        thickness = calc.geopotential_thickness(
+            sample_calc_dataset["geopotential"], geopotential=True
+        )
 
         # Should return a DataArray
         assert isinstance(thickness, xr.DataArray)
@@ -513,7 +515,10 @@ class TestGeopotentialCalculations:
     def test_geopotential_thickness_custom_levels(self, sample_calc_dataset):
         """Test geopotential thickness with custom levels."""
         thickness = calc.geopotential_thickness(
-            sample_calc_dataset, top_level_value=200, bottom_level_value=850
+            sample_calc_dataset["geopotential"],
+            top_level_value=200,
+            bottom_level_value=850,
+            geopotential=True,
         )
 
         # Manual calculation for verification
@@ -525,15 +530,28 @@ class TestGeopotentialCalculations:
 
         xr.testing.assert_allclose(thickness, expected_thickness)
 
-    def test_geopotential_thickness_multiple_top_levels(self, sample_calc_dataset):
-        """Test geopotential thickness with multiple top levels."""
-        thickness = calc.geopotential_thickness(
-            sample_calc_dataset, top_level_value=[200, 300, 500], bottom_level_value=850
+    def test_geopotential_thickness_multiple_calculations(self, sample_calc_dataset):
+        """Test geopotential thickness with multiple calculations."""
+        # Calculate thickness for multiple level pairs
+        thickness_200_850 = calc.geopotential_thickness(
+            sample_calc_dataset["geopotential"],
+            top_level_value=200,
+            bottom_level_value=850,
+            geopotential=True,
         )
 
-        # Should have level dimension for multiple top levels
-        assert "level" in thickness.dims
-        assert len(thickness.level) == 3
+        thickness_300_700 = calc.geopotential_thickness(
+            sample_calc_dataset["geopotential"],
+            top_level_value=300,
+            bottom_level_value=700,
+            geopotential=True,
+        )
+
+        # Both should be DataArrays without level dimension
+        assert isinstance(thickness_200_850, xr.DataArray)
+        assert isinstance(thickness_300_700, xr.DataArray)
+        assert "level" not in thickness_200_850.dims
+        assert "level" not in thickness_300_700.dims
 
 
 class TestNantrapezoid:
