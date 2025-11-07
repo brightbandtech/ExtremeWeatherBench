@@ -123,10 +123,10 @@ class TestBaseMetric:
         """Test that the name property returns the class name."""
 
         class TestConcreteMetric(metrics.BaseMetric):
-            name = "TestConcreteMetric"
+            def __init__(self, *args, **kwargs):
+                super().__init__("TestConcreteMetric", *args, **kwargs)
 
-            @classmethod
-            def _compute_metric(cls, forecast, target, **kwargs):
+            def _compute_metric(self, forecast, target, **kwargs):
                 return forecast - target
 
         metric = TestConcreteMetric()
@@ -136,10 +136,10 @@ class TestBaseMetric:
         """Test that compute_metric method exists and is callable."""
 
         class TestConcreteMetric(metrics.BaseMetric):
-            name = "TestConcreteMetric"
+            def __init__(self, *args, **kwargs):
+                super().__init__("TestConcreteMetric", *args, **kwargs)
 
-            @classmethod
-            def _compute_metric(cls, forecast, target, **kwargs):
+            def _compute_metric(self, forecast, target, **kwargs):
                 return forecast - target
 
         metric = TestConcreteMetric()
@@ -152,7 +152,8 @@ class TestBaseMetric:
         """
 
         class TestMetricWithParams(metrics.BaseMetric):
-            name = "TestMetricWithParams"
+            def __init__(self, *args, **kwargs):
+                super().__init__("TestMetricWithParams", *args, **kwargs)
 
             def _compute_metric(
                 self,
@@ -188,7 +189,7 @@ class TestMAE:
         """Test that MAE can be instantiated."""
         metric = metrics.MAE()
         assert isinstance(metric, metrics.BaseMetric)
-        assert metric.name == "mae"
+        assert metric.name == "MAE"
 
     def test_compute_metric_simple(self):
         """Test MAE computation with simple data."""
@@ -215,7 +216,7 @@ class TestME:
         """Test that ME can be instantiated."""
         metric = metrics.ME()
         assert isinstance(metric, metrics.BaseMetric)
-        assert metric.name == "me"
+        assert metric.name == "ME"
 
     def test_compute_metric_simple(self):
         """Test ME computation with simple data."""

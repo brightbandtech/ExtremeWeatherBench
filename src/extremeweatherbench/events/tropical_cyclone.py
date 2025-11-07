@@ -306,7 +306,7 @@ def _process_single_init_time(
                 best_distance = float("inf")
 
                 for peak_idx in unassigned_peaks:
-                    distance = calc.calculate_haversine_distance(
+                    distance = calc.haversine_distance(
                         [peak_lats[peak_idx], peak_lons[peak_idx]],
                         [last_pos["latitude"], last_pos["longitude"]],
                         units="deg",
@@ -707,7 +707,7 @@ def find_valid_contour_from_point(
         furthest_point, latitude, longitude
     )
     point_latlon = calc.convert_from_cartesian_to_latlon(point, latitude, longitude)
-    gc_distance_contour_distance = calc.calculate_haversine_distance(
+    gc_distance_contour_distance = calc.haversine_distance(
         [gc_distance_point_latlon[0], gc_distance_point_latlon[1]],
         [point_latlon[0], point_latlon[1]],
         units="degrees",
@@ -1025,7 +1025,7 @@ def _create_spatial_mask(
         tc_track_data_lon = tc_track_data_row["longitude"]
 
         # Vectorized distance calculation
-        distances = calc.calculate_haversine_distance(
+        distances = calc.haversine_distance(
             [lat_grid, lon_grid],
             [tc_track_data_lat, tc_track_data_lon],
             units="degrees",

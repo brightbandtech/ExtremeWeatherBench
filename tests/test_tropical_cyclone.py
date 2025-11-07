@@ -347,7 +347,7 @@ class TestTropicalCycloneDetection:
 class TestDistanceCalculations:
     """Test distance calculation functions using calc module."""
 
-    def test_calculate_haversine_distance_degrees(self):
+    def test_haversine_distance_degrees(self):
         """Test haversine distance calculation in degrees."""
         # Test known distance: equator to North Pole = 90 degrees = pi/2 radians
         from extremeweatherbench import calc
@@ -355,14 +355,12 @@ class TestDistanceCalculations:
         lat1, lon1 = 0.0, 0.0
         lat2, lon2 = 90.0, 0.0
 
-        distance = calc.calculate_haversine_distance(
-            [lat1, lon1], [lat2, lon2], units="degrees"
-        )
+        distance = calc.haversine_distance([lat1, lon1], [lat2, lon2], units="degrees")
 
         # Should be approximately 90 degrees
         assert abs(distance - 90.0) < 0.1
 
-    def test_calculate_haversine_distance_km(self):
+    def test_haversine_distance_km(self):
         """Test haversine distance calculation in kilometers."""
         from extremeweatherbench import calc
 
@@ -370,9 +368,7 @@ class TestDistanceCalculations:
         lat1, lon1 = 0.0, 0.0
         lat2, lon2 = 90.0, 0.0
 
-        distance_km = calc.calculate_haversine_distance(
-            [lat1, lon1], [lat2, lon2], units="km"
-        )
+        distance_km = calc.haversine_distance([lat1, lon1], [lat2, lon2], units="km")
 
         # Should be approximately 10,000 km (quarter of Earth's circumference)
         assert abs(distance_km - 10000) < 100
@@ -384,12 +380,8 @@ class TestDistanceCalculations:
         lat1, lon1 = 25.0, -80.0
         lat2, lon2 = 30.0, -75.0
 
-        dist1 = calc.calculate_haversine_distance(
-            [lat1, lon1], [lat2, lon2], units="degrees"
-        )
-        dist2 = calc.calculate_haversine_distance(
-            [lat1, lon1], [lat2, lon2], units="degrees"
-        )
+        dist1 = calc.haversine_distance([lat1, lon1], [lat2, lon2], units="degrees")
+        dist2 = calc.haversine_distance([lat1, lon1], [lat2, lon2], units="degrees")
 
         assert abs(dist1 - dist2) < 1e-10
 

@@ -86,13 +86,12 @@ def check_for_valid_times(
     time_dims = ["valid_time", "time", "init_time"]
     for time_dim in time_dims:
         if time_dim in data.coords:
-            logger.debug("Found time coord: %s", time_dim)
             try:
-                result = any(data[time_dim].loc[start_ts:end_ts])
-                logger.debug("Time check result: %s", result)
-                return result
-            except Exception as e:
-                logger.debug("Time check failed: %s", e)
+                time_slice = data[time_dim].sel({time_dim: slice(start_ts, end_ts)})
+                return len(time_slice) > 0
+
+            # If time dim is not found, check rest of time dims just in case
+            except (KeyError, ValueError):
                 continue
 
     # If no time dimension found, return False
