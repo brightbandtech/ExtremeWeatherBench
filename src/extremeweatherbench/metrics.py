@@ -107,7 +107,7 @@ class BaseMetric(abc.ABC, metaclass=ComputeDocstringMetaclass):
     for all metrics.
 
     Metrics are general operations applied between a forecast and analysis xarray
-    dataset. EWB metrics prioritize the use of any arbitrary sets of forecasts and
+    DataArray. EWB metrics prioritize the use of any arbitrary sets of forecasts and
     analyses, so long as the spatiotemporal dimensions are the same.
     """
 
@@ -276,7 +276,7 @@ class TP(ThresholdMetric):
     def _compute_metric(
         self,
         forecast: xr.DataArray,
-        target: xr.Dataset,
+        target: xr.DataArray,
         **kwargs: Any,
     ) -> Any:
         forecast_threshold = kwargs.get("forecast_threshold", 0.5)
@@ -557,8 +557,8 @@ class EarlySignal(BaseMetric):
         """Compute early signal detection.
 
         Args:
-            forecast: The forecast dataset with init_time, lead_time, valid_time
-            target: The target dataset (used for reference/validation)
+            forecast: The forecast dataarray with init_time, lead_time, valid_time
+            target: The target dataarray (used for reference/validation)
             threshold: Threshold value for signal detection
             variable: Variable name to analyze for signal detection
             comparison: Comparison operator (">=", "<=", ">", "<", "==", "!=")
@@ -566,7 +566,7 @@ class EarlySignal(BaseMetric):
             **kwargs: Additional arguments
 
         Returns:
-            Dataset containing earliest detection times with coordinates:
+            DataArray containing earliest detection times with coordinates:
             - earliest_init_time: First init_time when signal was detected
             - earliest_lead_time: Corresponding lead_time
             - earliest_valid_time: Corresponding valid_time
