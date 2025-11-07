@@ -44,7 +44,6 @@ case_yaml = case_yaml.select_cases(by="case_id_number", value=115)
 
 case_yaml.cases[0].start_date = datetime.datetime(2022, 12, 27, 11, 0, 0)
 case_yaml.cases[0].end_date = datetime.datetime(2022, 12, 27, 13, 0, 0)
-print(case_yaml.cases[0])
 # Define ERA5 target
 era5_target = inputs.ERA5(
     variables=[derived.AtmosphericRiverMask()],
