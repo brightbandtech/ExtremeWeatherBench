@@ -77,6 +77,7 @@ class ExtremeWeatherBench:
     @property
     def case_operators(self) -> list["cases.CaseOperator"]:
         """Build the CaseOperator objects from case_metadata and evaluation_objects."""
+
         # Subset the cases if a region subsetter was provided
         if self.region_subsetter:
             subset_collection = self.region_subsetter.subset_case_collection(
@@ -187,6 +188,7 @@ def _run_serial(
 ) -> list[pd.DataFrame]:
     """Run the case operators in serial."""
     run_results = []
+
     # Loop over the case operators
     for case_operator in tqdm(case_operators):
         run_results.append(compute_case_operator(case_operator, cache_dir, **kwargs))
@@ -300,7 +302,6 @@ def compute_case_operator(
         "Datasets built for case %s.", case_operator.case_metadata.case_id_number
     )
     results = []
-    # TODO: determine if derived variables need to be pushed here or at pre-compute
     for variables, metric in itertools.product(
         zip(
             case_operator.forecast.variables,
