@@ -794,3 +794,302 @@ class TestStackSparseDataFromDims:
 
         assert isinstance(result, xr.DataArray)
         assert "stacked" in result.dims
+
+
+class TestReduceXarrayMethod:
+    """Test the reduce_dataarray function."""
+
+    @pytest.fixture
+    def sample_dataarray(self):
+        """Create a sample DataArray for testing."""
+        data = np.array(
+            [
+                [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]],
+                [[7.0, 8.0, 9.0], [10.0, 11.0, 12.0]],
+            ]
+        )
+        return xr.DataArray(
+            data,
+            dims=["time", "latitude", "longitude"],
+            coords={
+                "time": pd.date_range("2020-01-01", periods=2),
+                "latitude": [10.0, 20.0],
+                "longitude": [100.0, 110.0, 120.0],
+            },
+        )
+
+    @pytest.fixture
+    def dataarray_with_nans(self):
+        """Create DataArray with NaN values for testing skipna."""
+        data = np.array(
+            [
+                [[1.0, np.nan, 3.0], [4.0, 5.0, np.nan]],
+                [[7.0, 8.0, 9.0], [np.nan, 11.0, 12.0]],
+            ]
+        )
+        return xr.DataArray(
+            data,
+            dims=["time", "latitude", "longitude"],
+            coords={
+                "time": pd.date_range("2020-01-01", periods=2),
+                "latitude": [10.0, 20.0],
+                "longitude": [100.0, 110.0, 120.0],
+            },
+        )
+
+    # Tests for numpy reduction functions (callables)
+    def test_numpy_mean(self, sample_dataarray):
+        """Test reduction using np.mean."""
+        result = utils.reduce_dataarray(sample_dataarray, np.mean, ["time"])
+        expected = sample_dataarray.mean(dim=["time"])
+        xr.testing.assert_allclose(result, expected)
+
+    def test_numpy_sum(self, sample_dataarray):
+        """Test reduction using np.sum."""
+        result = utils.reduce_dataarray(sample_dataarray, np.sum, ["time"])
+        expected = sample_dataarray.sum(dim=["time"])
+        xr.testing.assert_allclose(result, expected)
+
+    def test_numpy_nanmean(self, dataarray_with_nans):
+        """Test reduction using np.nanmean."""
+        result = utils.reduce_dataarray(dataarray_with_nans, np.nanmean, ["time"])
+        # np.nanmean should ignore NaN values
+        assert not np.isnan(result.values).all()
+
+    def test_numpy_nansum(self, dataarray_with_nans):
+        """Test reduction using np.nansum."""
+        result = utils.reduce_dataarray(
+            dataarray_with_nans, np.nansum, ["latitude", "longitude"]
+        )
+        # Result should have only time dimension
+        assert result.dims == ("time",)
+        assert not np.isnan(result.values).all()
+
+    def test_custom_callable(self, sample_dataarray):
+        """Test reduction using custom callable."""
+
+        def custom_func(x, axis):
+            return np.max(x, axis=axis)
+
+        result = utils.reduce_dataarray(sample_dataarray, custom_func, ["time"])
+        expected = sample_dataarray.max(dim=["time"])
+        xr.testing.assert_allclose(result, expected)
+
+    def test_callable_ignores_method_kwargs(self, sample_dataarray):
+        """Test that method_kwargs are ignored for callables."""
+        # This should work and ignore skipna parameter
+        result = utils.reduce_dataarray(
+            sample_dataarray, np.mean, ["time"], skipna=True
+        )
+        expected = sample_dataarray.mean(dim=["time"])
+        xr.testing.assert_allclose(result, expected)
+
+    # Tests for xarray built-in methods (strings)
+    def test_xarray_mean_string(self, sample_dataarray):
+        """Test reduction using 'mean' string method."""
+        result = utils.reduce_dataarray(sample_dataarray, "mean", ["time"])
+        expected = sample_dataarray.mean(dim=["time"])
+        xr.testing.assert_allclose(result, expected)
+
+    def test_xarray_sum_string(self, sample_dataarray):
+        """Test reduction using 'sum' string method."""
+        result = utils.reduce_dataarray(
+            sample_dataarray, "sum", ["latitude", "longitude"]
+        )
+        expected = sample_dataarray.sum(dim=["latitude", "longitude"])
+        xr.testing.assert_allclose(result, expected)
+
+    def test_xarray_min_string(self, sample_dataarray):
+        """Test reduction using 'min' string method."""
+        result = utils.reduce_dataarray(sample_dataarray, "min", ["time"])
+        expected = sample_dataarray.min(dim=["time"])
+        xr.testing.assert_allclose(result, expected)
+
+    def test_xarray_max_string(self, sample_dataarray):
+        """Test reduction using 'max' string method."""
+        result = utils.reduce_dataarray(sample_dataarray, "max", ["longitude"])
+        expected = sample_dataarray.max(dim=["longitude"])
+        xr.testing.assert_allclose(result, expected)
+
+    def test_xarray_std_string(self, sample_dataarray):
+        """Test reduction using 'std' string method."""
+        result = utils.reduce_dataarray(sample_dataarray, "std", ["time"])
+        expected = sample_dataarray.std(dim=["time"])
+        xr.testing.assert_allclose(result, expected)
+
+    def test_xarray_median_string(self, sample_dataarray):
+        """Test reduction using 'median' string method."""
+        result = utils.reduce_dataarray(sample_dataarray, "median", ["latitude"])
+        expected = sample_dataarray.median(dim=["latitude"])
+        xr.testing.assert_allclose(result, expected)
+
+    def test_xarray_var_string(self, sample_dataarray):
+        """Test reduction using 'var' string method."""
+        result = utils.reduce_dataarray(sample_dataarray, "var", ["time"])
+        expected = sample_dataarray.var(dim=["time"])
+        xr.testing.assert_allclose(result, expected)
+
+    # Tests for dimension handling
+    def test_single_dimension_reduction(self, sample_dataarray):
+        """Test reducing a single dimension."""
+        result = utils.reduce_dataarray(sample_dataarray, "mean", ["time"])
+        assert "time" not in result.dims
+        assert "latitude" in result.dims
+        assert "longitude" in result.dims
+
+    def test_multiple_dimension_reduction(self, sample_dataarray):
+        """Test reducing multiple dimensions."""
+        result = utils.reduce_dataarray(
+            sample_dataarray, "sum", ["latitude", "longitude"]
+        )
+        assert "latitude" not in result.dims
+        assert "longitude" not in result.dims
+        assert "time" in result.dims
+
+    def test_all_dimensions_reduction(self, sample_dataarray):
+        """Test reducing all dimensions."""
+        result = utils.reduce_dataarray(
+            sample_dataarray, "mean", ["time", "latitude", "longitude"]
+        )
+        # Result should be scalar (0 dimensions)
+        assert len(result.dims) == 0
+        assert isinstance(result.values.item(), (float, np.floating))
+
+    def test_nonexistent_dimension_raises_error(self, sample_dataarray):
+        """Test that non-existent dimension raises error."""
+        with pytest.raises((ValueError, KeyError)):
+            utils.reduce_dataarray(sample_dataarray, "mean", ["nonexistent_dim"])
+
+    # Tests for error handling
+    def test_invalid_method_type_raises_typeerror(self, sample_dataarray):
+        """Test that invalid method type raises TypeError."""
+        with pytest.raises(TypeError, match="method must be str or callable"):
+            utils.reduce_dataarray(sample_dataarray, 123, ["time"])
+
+    def test_nonexistent_xarray_method_raises_valueerror(self, sample_dataarray):
+        """Test that non-existent xarray method raises ValueError."""
+        with pytest.raises(ValueError, match="DataArray has no method"):
+            utils.reduce_dataarray(sample_dataarray, "nonexistent_method", ["time"])
+
+    def test_xarray_attribute_without_method(self, sample_dataarray):
+        """Test that xarray attribute that isn't a method raises some kind of error."""
+        with pytest.raises(TypeError, match="not callable"):
+            utils.reduce_dataarray(sample_dataarray, "shape", ["time"])
+
+    def test_empty_reduce_dims(self, sample_dataarray):
+        """Test with empty reduce_dims list."""
+        # This is edge case - xarray handles it gracefully
+        result = utils.reduce_dataarray(sample_dataarray, "mean", [])
+        # Should return the same array
+        xr.testing.assert_equal(result, sample_dataarray)
+
+    # Tests for method_kwargs
+    def test_skipna_true(self, dataarray_with_nans):
+        """Test skipna=True skips NaN values."""
+        result = utils.reduce_dataarray(
+            dataarray_with_nans, "mean", ["time"], skipna=True
+        )
+        # With skipna=True, result should not have NaNs
+        assert not np.isnan(result.values).all()
+
+    def test_skipna_false(self, dataarray_with_nans):
+        """Test skipna=False propagates NaN values."""
+        result = utils.reduce_dataarray(
+            dataarray_with_nans, "mean", ["time"], skipna=False
+        )
+        # With skipna=False, NaNs should propagate
+        assert np.isnan(result.values).any()
+
+    def test_keep_attrs(self, sample_dataarray):
+        """Test keep_attrs parameter."""
+        sample_dataarray.attrs["test_attr"] = "test_value"
+        result = utils.reduce_dataarray(
+            sample_dataarray, "mean", ["time"], keep_attrs=True
+        )
+        assert result.attrs.get("test_attr") == "test_value"
+
+    def test_multiple_method_kwargs(self, dataarray_with_nans):
+        """Test multiple method_kwargs together."""
+        dataarray_with_nans.attrs["units"] = "K"
+        result = utils.reduce_dataarray(
+            dataarray_with_nans,
+            "sum",
+            ["latitude"],
+            skipna=True,
+            keep_attrs=True,
+        )
+        assert result.attrs.get("units") == "K"
+        assert not np.isnan(result.values).all()
+
+    # Tests for sparse data handling
+    def test_sparse_data_handling(self):
+        """Test that sparse data is handled correctly."""
+        import sparse
+
+        # Create sparse array
+        coords = ([0, 1, 2], [0, 1, 0])
+        data = [1.0, 2.0, 3.0]
+        shape = (3, 2)
+        sparse_array = sparse.COO(coords, data, shape=shape)
+
+        da = xr.DataArray(
+            sparse_array,
+            dims=["latitude", "longitude"],
+            coords={
+                "latitude": [10.0, 20.0, 30.0],
+                "longitude": [100.0, 110.0],
+            },
+        )
+
+        # Test that sparse data is handled
+        result = utils.reduce_dataarray(da, "sum", ["latitude", "longitude"])
+        assert isinstance(result, xr.DataArray)
+        # Result should be densified scalar
+        assert not isinstance(result.data, sparse.COO)
+
+    def test_sparse_data_with_callable(self):
+        """Test sparse data with callable method."""
+        import sparse
+
+        coords = ([0, 1, 0], [0, 1, 1], [0, 1, 0])
+        data = [1.0, 2.0, 3.0]
+        shape = (2, 2, 2)
+        sparse_array = sparse.COO(coords, data, shape=shape)
+
+        da = xr.DataArray(
+            sparse_array,
+            dims=["time", "latitude", "longitude"],
+            coords={
+                "time": pd.date_range("2020-01-01", periods=2),
+                "latitude": [10.0, 20.0],
+                "longitude": [100.0, 110.0],
+            },
+        )
+
+        result = utils.reduce_dataarray(da, np.sum, ["latitude", "longitude"])
+        assert isinstance(result, xr.DataArray)
+        assert not isinstance(result.data, sparse.COO)
+
+    def test_sparse_data_stacked_dimension(self):
+        """Test sparse data creates stacked dimension."""
+        import sparse
+
+        coords = ([0, 1, 2], [0, 1, 0])
+        data = [10.0, 20.0, 30.0]
+        shape = (3, 2)
+        sparse_array = sparse.COO(coords, data, shape=shape)
+
+        da = xr.DataArray(
+            sparse_array,
+            dims=["latitude", "longitude"],
+            coords={
+                "latitude": [10.0, 20.0, 30.0],
+                "longitude": [100.0, 110.0],
+            },
+        )
+
+        # For sparse data, it should stack and reduce
+        result = utils.reduce_dataarray(da, "mean", ["latitude", "longitude"])
+        assert isinstance(result, xr.DataArray)
+        # Result should be scalar after reducing all dims
+        assert result.ndim == 0
