@@ -24,7 +24,8 @@ from extremeweatherbench import cases, evaluate, inputs, metrics, regions
 class MockMetric(metrics.BaseMetric):
     """A simple mock metric for testing."""
 
-    name = "MockMetric"
+    def __init__(self, *args, **kwargs):
+        super().__init__("MockMetric", *args, **kwargs)
 
     def _compute_metric(self, forecast: xr.DataArray, target: xr.DataArray, **kwargs):
         """Return a simple mean absolute difference."""

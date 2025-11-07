@@ -30,7 +30,7 @@ class TestBasicCalculations:
         assert abs(lat - expected_lat) < 1e-10
         assert abs(lon - expected_lon) < 1e-10
 
-    def test_calculate_haversine_distance(self):
+    def test_haversine_distance(self):
         """Test haversine distance calculation."""
         # Test known distances
         point_a = [0.0, 0.0]  # Equator, prime meridian
@@ -41,7 +41,7 @@ class TestBasicCalculations:
         # Should be 90 degrees (quarter of great circle)
         assert abs(distance - 90.0) < 0.1
 
-    def test_calculate_haversine_distance_with_xarray(self, sample_calc_dataset):
+    def test_haversine_distance_with_xarray(self, sample_calc_dataset):
         """Test haversine distance calculation with xarray inputs."""
         point_a = [30.0, -100.0]
         point_b = [sample_calc_dataset.latitude, sample_calc_dataset.longitude]
@@ -58,7 +58,7 @@ class TestBasicCalculations:
         )
         assert distances.shape == expected_shape
 
-    def test_calculate_haversine_distance_km(self):
+    def test_haversine_distance_km(self):
         """Test haversine distance calculation with km units."""
         # Test known distances
         point_a = [0.0, 0.0]  # Equator, prime meridian
@@ -70,7 +70,7 @@ class TestBasicCalculations:
         # Earth's circumference is ~40,075 km, so quarter is ~10,018 km
         assert abs(distance - 10018.0) < 50.0
 
-    def test_calculate_haversine_distance_km_with_xarray(self, sample_calc_dataset):
+    def test_haversine_distance_km_with_xarray(self, sample_calc_dataset):
         """Test haversine distance calculation with km units and xarray inputs."""
         point_a = [30.0, -100.0]
         point_b = [sample_calc_dataset.latitude, sample_calc_dataset.longitude]
@@ -93,7 +93,7 @@ class TestBasicCalculations:
         # Distances should be reasonable (not too large for Earth)
         assert (distances <= 20000).all()  # Maximum distance on Earth ~20,000 km
 
-    def test_calculate_haversine_distance_edge_cases(self):
+    def test_haversine_distance_edge_cases(self):
         """Test edge cases for haversine distance calculation."""
         # Test identical points (distance should be 0)
         point_a = [40.0, -74.0]
@@ -113,7 +113,7 @@ class TestBasicCalculations:
         distance = calc.haversine_distance(point_a, point_b, units="km")
         assert abs(distance - 20003.9) < 50.0
 
-    def test_calculate_haversine_distance_known_cities(self):
+    def test_haversine_distance_known_cities(self):
         """Test haversine distance with known city distances."""
         # New York City to Los Angeles (approximate distance ~3944 km)
         nyc = [40.7128, -74.0060]
@@ -133,7 +133,7 @@ class TestBasicCalculations:
         distance = calc.haversine_distance(sydney, melbourne, units="km")
         assert abs(distance - 713) < 20  # Allow 30km tolerance
 
-    def test_calculate_haversine_distance_units_conversion(self):
+    def test_haversine_distance_units_conversion(self):
         """Test unit conversion between km and degrees."""
         point_a = [0.0, 0.0]
         point_b = [1.0, 0.0]  # 1 degree north
@@ -152,7 +152,7 @@ class TestBasicCalculations:
         assert abs(distance_km_long - distance_km) < 1e-10
         assert abs(distance_deg_long - distance_deg) < 1e-10
 
-    def test_calculate_haversine_distance_with_numpy_arrays(self):
+    def test_haversine_distance_with_numpy_arrays(self):
         """Test haversine distance with numpy array inputs."""
         # Test with numpy arrays
         point_a = np.array([40.0, -74.0])
@@ -173,7 +173,7 @@ class TestBasicCalculations:
         assert distances.shape == (3,)
         assert all(d > 0 for d in distances)
 
-    def test_calculate_haversine_distance_error_handling(self):
+    def test_haversine_distance_error_handling(self):
         """Test error handling for invalid inputs."""
         point_a = [40.0, -74.0]
         point_b = [34.0, -118.0]
@@ -185,7 +185,7 @@ class TestBasicCalculations:
         with pytest.raises(ValueError, match="Invalid units"):
             calc.haversine_distance(point_a, point_b, units="invalid")
 
-    def test_calculate_haversine_distance_symmetry(self):
+    def test_haversine_distance_symmetry(self):
         """Test that distance calculation is symmetric."""
         point_a = [40.7128, -74.0060]  # NYC
         point_b = [34.0522, -118.2437]  # LA
@@ -195,7 +195,7 @@ class TestBasicCalculations:
 
         assert abs(distance_ab - distance_ba) < 1e-10
 
-    def test_calculate_haversine_distance_boundary_conditions(self):
+    def test_haversine_distance_boundary_conditions(self):
         """Test boundary conditions for latitude and longitude."""
         # Test at latitude boundaries
         point_a = [90.0, 0.0]  # North pole
@@ -214,7 +214,7 @@ class TestBasicCalculations:
         distance = calc.haversine_distance(point_a, point_b, units="deg")
         assert abs(distance - 2.0) < 0.1
 
-    def test_calculate_haversine_distance_large_datasets(self, sample_calc_dataset):
+    def test_haversine_distance_large_datasets(self, sample_calc_dataset):
         """Test performance and correctness with larger datasets."""
         # Use a single point and compute distance to entire grid
         center_point = [35.0, -100.0]
@@ -241,7 +241,7 @@ class TestBasicCalculations:
         min_distance = distances.isel(latitude=lat_idx, longitude=lon_idx)
         assert min_distance < 500  # Should be within 500km of center
 
-    def test_calculate_haversine_distance_scalar_case(self):
+    def test_haversine_distance_scalar_case(self):
         """Test haversine distance when result is scalar (line 90 coverage)."""
         # Test case where distance calculation returns a scalar
         point_a = [40.0, -74.0]
@@ -254,12 +254,12 @@ class TestBasicCalculations:
         assert not isinstance(distance, xr.DataArray)
         assert abs(distance) < 1e-10
 
-    def test_create_great_circle_mask(self, sample_calc_dataset):
+    def test_great_circle_mask(self, sample_calc_dataset):
         """Test creation of great circle mask."""
         center_point = (35.0, -100.0)  # Somewhere in the middle
         radius = 5.0  # degrees
 
-        mask = calc.create_great_circle_mask(sample_calc_dataset, center_point, radius)
+        mask = calc.great_circle_mask(sample_calc_dataset, center_point, radius)
 
         # Should return boolean mask
         assert isinstance(mask, xr.DataArray)
@@ -275,7 +275,7 @@ class TestBasicCalculations:
         assert mask.any()  # At least some True values
         assert not mask.all()  # Not all True values
 
-    def test_create_great_circle_mask_scalar_distance(self):
+    def test_great_circle_mask_scalar_distance(self):
         """Test great circle mask when distance is scalar (line 90 coverage)."""
         # Create a dataset with scalar coordinates to force scalar distance
         import unittest.mock
@@ -299,7 +299,7 @@ class TestBasicCalculations:
         ) as mock_distance:
             mock_distance.return_value = 2.0  # Return scalar instead of DataArray
 
-            mask = calc.create_great_circle_mask(dataset, center_point, radius)
+            mask = calc.great_circle_mask(dataset, center_point, radius)
 
             # Should return a boolean DataArray even with scalar distance
             assert isinstance(mask, xr.DataArray)
@@ -419,7 +419,7 @@ class TestPressureCalculations:
             # If time dimension was removed, compare with first time slice
             xr.testing.assert_allclose(orography, expected.isel(time=0))
 
-    def test_calculate_pressure_at_surface(self, sample_calc_dataset):
+    def test_pressure_at_surface(self, sample_calc_dataset):
         """Test surface pressure calculation from orography."""
         # First get orography
         orography_data = calc.orography(sample_calc_dataset)

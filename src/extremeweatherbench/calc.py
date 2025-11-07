@@ -104,7 +104,7 @@ def saturation_mixing_ratio(
 
 
 def haversine_distance(
-    input_a: Sequence[float],
+    input_a: Sequence[Union[float, xr.DataArray]],
     input_b: Sequence[Union[float, xr.DataArray]],
     units: Literal["km", "kilometers", "deg", "degrees"] = "km",
 ) -> Union[float, xr.DataArray]:
@@ -139,7 +139,7 @@ def haversine_distance(
         raise ValueError(f"Invalid units: {units}")
 
 
-def create_great_circle_mask(
+def great_circle_mask(
     ds: xr.Dataset, latlon_point: tuple[float, float], radius_degrees: float
 ) -> xr.DataArray:
     """Create a circular mask based on great circle distance for an xarray dataset.
