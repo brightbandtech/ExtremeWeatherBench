@@ -30,12 +30,13 @@ def convert_from_cartesian_to_latlon(
     )
 
 
-def calculate_haversine_distance(
-    input_a: Sequence[float],
+def haversine_distance(
+    input_a: Sequence[Union[float, xr.DataArray]],
     input_b: Sequence[Union[float, xr.DataArray]],
     units: Literal["km", "kilometers", "deg", "degrees"] = "km",
 ) -> Union[float, xr.DataArray]:
-    """Calculate the great-circle distance between two points on the Earth's surface.
+    """Calculate the great-circle/haversine distance between two points on the Earth's
+    surface.
 
     Args:
         input_a: The first point, represented as an ndarray of shape (2,n) in
@@ -65,7 +66,7 @@ def calculate_haversine_distance(
         raise ValueError(f"Invalid units: {units}")
 
 
-def create_great_circle_mask(
+def great_circle_mask(
     ds: xr.Dataset, latlon_point: tuple[float, float], radius_degrees: float
 ) -> xr.DataArray:
     """Create a circular mask based on great circle distance for an xarray dataset.
@@ -79,7 +80,7 @@ def create_great_circle_mask(
         Boolean mask where True indicates points within the radius.
     """
 
-    distance = calculate_haversine_distance(
+    distance = haversine_distance(
         latlon_point, (ds.latitude, ds.longitude), units="deg"
     )
     # Create mask as xarray DataArray
@@ -121,7 +122,7 @@ def orography(ds: xr.Dataset) -> xr.DataArray:
         )
 
 
-def calculate_pressure_at_surface(orography_da: xr.DataArray) -> xr.DataArray:
+def pressure_at_surface(orography_da: xr.DataArray) -> xr.DataArray:
     """Calculate the pressure at the surface, based on orography.
 
     The dataarray is orography (geopotential at the surface/g0).
@@ -164,7 +165,7 @@ def maybe_calculate_wind_speed(ds: xr.Dataset) -> xr.Dataset:
     return ds
 
 
-def generate_geopotential_thickness(
+def geopotential_thickness(
     ds: xr.Dataset,
     var_name: str = "geopotential",
     level_name: str = "level",
