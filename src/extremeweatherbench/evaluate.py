@@ -322,16 +322,31 @@ def compute_case_operator(
     for metric in validated_metrics:
         # Determine which variable pairs to evaluate for this metric
         if metric.forecast_variable is not None and metric.target_variable is not None:
-            # Use metric-specific variables only
-            variable_pairs = [(metric.forecast_variable, metric.target_variable)]
+            # Expand DerivedVariable to output_variables if applicable
+            forecast_vars = _maybe_expand_derived_variable_to_output_variables(
+                metric.forecast_variable
+            )
+            target_vars = _maybe_expand_derived_variable_to_output_variables(
+                metric.target_variable
+            )
+            # Create pairs from expanded variables
+            variable_pairs = list(zip(forecast_vars, target_vars))
         else:
             # Use all InputBase variable pairs for this metric
-            variable_pairs = list(
-                zip(
-                    case_operator.forecast.variables,
-                    case_operator.target.variables,
+            # Expand any DerivedVariables in the InputBase variables
+            forecast_vars_expanded = []
+            for var in case_operator.forecast.variables:
+                forecast_vars_expanded.extend(
+                    _maybe_expand_derived_variable_to_output_variables(var)
                 )
-            )
+
+            target_vars_expanded = []
+            for var in case_operator.target.variables:
+                target_vars_expanded.extend(
+                    _maybe_expand_derived_variable_to_output_variables(var)
+                )
+
+            variable_pairs = list(zip(forecast_vars_expanded, target_vars_expanded))
 
         # Evaluate the metric for each variable pair
         for forecast_var, target_var in variable_pairs:
@@ -470,9 +485,27 @@ def _evaluate_metric_and_return_df(
     target_variable = derived._maybe_convert_variable_to_string(target_variable)
 
     logger.info("Computing metric %s... ", metric.name)
+
+    # Extract the appropriate data for the metric
+    # Variables should already be present at this point in the pipeline
+    if forecast_variable not in forecast_ds.data_vars:
+        raise ValueError(
+            f"Variable '{forecast_variable}' not found in forecast dataset. "
+            f"Available variables: {list(forecast_ds.data_vars)}"
+        )
+
+    if target_variable not in target_ds.data_vars:
+        raise ValueError(
+            f"Variable '{target_variable}' not found in target dataset. "
+            f"Available variables: {list(target_ds.data_vars)}"
+        )
+
+    forecast_data = forecast_ds[forecast_variable]
+    target_data = target_ds[target_variable]
+
     metric_result = metric.compute_metric(
-        forecast_ds.get(forecast_variable, forecast_ds.data_vars),
-        target_ds.get(target_variable, target_ds.data_vars),
+        forecast_data,
+        target_data,
         **kwargs,
     )
     # If data is sparse, densify it
@@ -493,6 +526,33 @@ def _evaluate_metric_and_return_df(
     return _ensure_output_schema(df, **metadata)
 
 
+def _maybe_expand_derived_variable_to_output_variables(
+    variable: Union[str, "derived.DerivedVariable"],
+) -> list[str]:
+    """Expand a variable to its output_variables if it's a DerivedVariable.
+
+    Args:
+        variable: Either a string variable name or a DerivedVariable
+            instance.
+
+    Returns:
+        List of variable names. For strings, returns [variable]. For
+        DerivedVariable with output_variables, returns those. For
+        DerivedVariable without output_variables, returns [variable.name].
+    """
+    if isinstance(variable, str):
+        return [variable]
+    elif isinstance(variable, derived.DerivedVariable):
+        if hasattr(variable, "output_variables") and variable.output_variables:
+            return variable.output_variables
+        else:
+            # DerivedVariable without output_variables, use name
+            return [str(variable.name)]
+    else:
+        # Fallback to string conversion, this should never happen
+        return [str(variable)]
+
+
 def _collect_metric_variables(
     metric_list: list["metrics.BaseMetric"],
 ) -> tuple[
@@ -500,6 +560,10 @@ def _collect_metric_variables(
     set[Union[str, "derived.DerivedVariable"]],
 ]:
     """Collect unique variables from metrics that have them defined.
+
+    When a metric has a DerivedVariable with output_variables defined,
+    the DerivedVariable instance is added to ensure it gets computed
+    during pipeline execution.
 
     Args:
         metric_list: List of metrics to extract variables from.
