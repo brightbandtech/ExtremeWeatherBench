@@ -239,29 +239,33 @@ def maybe_calculate_wind_speed(ds: xr.Dataset) -> xr.Dataset:
 
 
 def geopotential_thickness(
-    ds: xr.Dataset,
-    var_name: str = "geopotential",
-    level_name: str = "level",
+    da: xr.DataArray,
     top_level_value: int = 300,
     bottom_level_value: int = 500,
+    geopotential: bool = False,
 ) -> xr.DataArray:
     """Generate the geopotential thickness from the geopotential heights.
 
     Args:
-        ds: The xarray dataset to generate the geopotential thickness from.
-        var_name: The name of the variable to generate the geopotential thickness from.
-        level_name: The name of the level to generate the geopotential thickness from.
+        da: The xarray DataArray to generate the geopotential thickness from.
         top_level_value: The value of the top level to generate the geopotential
             thickness from.
         bottom_level_value: The value of the bottom level to generate the
             geopotential thickness from.
+        geopotential: Whether the input DataArray is geopotential height or
+        geopotential (default is geopotential height).
 
     Returns:
         The geopotential thickness as an xarray DataArray.
     """
-    geopotential_heights = ds[var_name].sel({level_name: top_level_value})
-    geopotential_height_bottom = ds[var_name].sel({level_name: bottom_level_value})
-    geopotential_thickness = (geopotential_heights - geopotential_height_bottom) / g0
+    geopotential_heights = da.sel({"level": top_level_value})
+    geopotential_height_bottom = da.sel({"level": bottom_level_value})
+    if geopotential:
+        geopotential_thickness = (
+            geopotential_heights - geopotential_height_bottom
+        ) / 9.80665
+    else:
+        geopotential_thickness = geopotential_heights - geopotential_height_bottom
     geopotential_thickness.attrs = dict(
         description="Geopotential thickness of level and 500 hPa", units="m"
     )
