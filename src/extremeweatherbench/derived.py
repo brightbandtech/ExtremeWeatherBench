@@ -80,26 +80,11 @@ class AtmosphericRiverMask(DerivedVariable):
     sigma of 3 grid points, meant to smooth out 0.25 degree grid scale features.
     """
 
-    required_variables = [
+    variables = [
         "eastward_wind",
         "northward_wind",
         "specific_humidity",
     ]
-    optional_variables = [
-        "integrated_vapor_transport",
-        "surface_standard_pressure",
-        "relative_humidity",
-        "air_temperature",
-    ]
-    optional_variables_mapping = {
-        "integrated_vapor_transport": [
-            "eastward_wind",
-            "northward_wind",
-            "specific_humidity",
-        ],
-        "surface_standard_pressure": ["surface_standard_pressure"],
-        "relative_humidity": ["specific_humidity", "air_temperature"],
-    }
 
     # Note: this name is used for the intersection between the AR mask and land, not the
     # mask. The mask is named "atmospheric_river_mask" in the atmospheric_river module.
