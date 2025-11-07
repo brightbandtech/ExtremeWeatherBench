@@ -27,14 +27,21 @@ class DerivedVariable(abc.ABC):
 
     variables: List[str]
 
-    def __init__(self, name: Optional[str] = None):
+    def __init__(
+        self,
+        output_variables: Optional[List[str]] = None,
+        name: Optional[str] = None,
+    ):
         """Initialize the derived variable.
 
         Args:
+            output_variables: Optional list of variable names that specify
+                which outputs to use from the derived computation.
             name: The name of the derived variable. Defaults to class-level
                 name attribute if present, otherwise the class name.
         """
         self.name = name or getattr(self.__class__, "name", self.__class__.__name__)
+        self.output_variables = output_variables
 
     @abc.abstractmethod
     def derive_variable(self, data: xr.Dataset, *args, **kwargs) -> xr.DataArray:
@@ -123,18 +130,47 @@ def maybe_derive_variables(
             )
             output.name = derived_variable.name
         # Merge the derived variable into the dataset
-        return output.to_dataset()
+        output_ds = output.to_dataset()
 
     elif isinstance(output, xr.Dataset):
         # Check if derived dataset dimensions are compatible for merging
-        return output
+        output_ds = output
 
-    # If output is neither DataArray nor Dataset, return original
-    logger.warning(
-        f"Derived variable {derived_variable.name} returned neither DataArray nor "
-        "Dataset. Returning original dataset."
-    )
-    return data
+    else:
+        # If output is neither DataArray nor Dataset, return original
+        logger.warning(
+            f"Derived variable {derived_variable.name} returned neither "
+            "DataArray nor Dataset. Returning original dataset."
+        )
+        return data
+
+    # Subset to output_variables if specified
+    if (
+        hasattr(derived_variable, "output_variables")
+        and derived_variable.output_variables
+    ):
+        missing_vars = set(derived_variable.output_variables) - set(output_ds.data_vars)
+        if missing_vars:
+            logger.warning(
+                f"Derived variable {derived_variable.name} specified "
+                f"output_variables {derived_variable.output_variables}, but "
+                f"computed output is missing: {missing_vars}"
+            )
+        # Subset to only the requested output variables
+        available_vars = [
+            v for v in derived_variable.output_variables if v in output_ds.data_vars
+        ]
+        if available_vars:
+            output_ds = output_ds[available_vars]
+        else:
+            logger.warning(
+                f"None of the specified output_variables "
+                f"{derived_variable.output_variables} are in the computed "
+                f"dataset. Returning original dataset."
+            )
+            return data
+
+    return output_ds
 
 
 def maybe_include_variables_from_derived_input(
