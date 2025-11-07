@@ -322,7 +322,7 @@ def compute_case_operator(
     explicitly_claimed_forecast_vars = set()
     explicitly_claimed_target_vars = set()
 
-    for metric in validated_metrics:
+    for metric in case_operator.metric_list:
         if metric.forecast_variable is not None and metric.target_variable is not None:
             # Expand and collect claimed variables
             explicitly_claimed_forecast_vars.update(
