@@ -315,7 +315,7 @@ def compute_mixed_layer_cape(
 
     Examples:
         # Basic usage with parallel processing (default, recommended)
-        >>> cape, cin = compute_cape_cin(
+        >>> cape, cin = compute_mixed_layer_cape(
         ...     ds["pressure"],
         ...     ds["temperature"],
         ...     ds["dewpoint"],
@@ -326,7 +326,7 @@ def compute_mixed_layer_cape(
         # Dask distributed with large chunks - use parallel (excellent performance)
         >>> # Dataset: 61 timesteps, 160 lat * 280 lon = ~45k profiles/chunk
         >>> ds = xr.open_zarr("era5.zarr", chunks={"time": 1})
-        >>> cape, cin = compute_cape_cin(
+        >>> cape, cin = compute_mixed_layer_cape(
         ...     ds["pressure"],
         ...     ds["temperature"],
         ...     ds["dewpoint"],
@@ -336,7 +336,7 @@ def compute_mixed_layer_cape(
 
         # Small chunks or debugging - use serial
         >>> ds_small = xr.open_zarr("data.zarr", chunks={"profile": 100})
-        >>> cape, cin = compute_cape_cin(
+        >>> cape, cin = compute_mixed_layer_cape(
         ...     ds_small["pressure"],
         ...     ds_small["temperature"],
         ...     ds_small["dewpoint"],
@@ -345,7 +345,7 @@ def compute_mixed_layer_cape(
         ... )
 
         # Isobaric data (pressure is 1D, others are multi-dimensional)
-        >>> cape, cin = compute_cape_cin(
+        >>> cape, cin = compute_mixed_layer_cape(
         ...     ds["pressure"],  # shape: (level,) - isobaric levels
         ...     ds["temperature"],  # shape: (time, lat, lon, level)
         ...     ds["dewpoint"],  # shape: (time, lat, lon, level)
