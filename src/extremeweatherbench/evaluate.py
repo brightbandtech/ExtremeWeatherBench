@@ -3,7 +3,7 @@
 import copy
 import logging
 import pathlib
-from typing import TYPE_CHECKING, Optional, Union, cast
+from typing import TYPE_CHECKING, Optional, Union
 
 import dask.array as da
 import joblib
@@ -290,9 +290,6 @@ def compute_case_operator(
         if not hasattr(metric, "compute_metric"):
             raise TypeError(f"Metric must be a BaseMetric instance, got {type(metric)}")
 
-    # After validation, we know all items are BaseMetric instances
-    validated_metrics = cast(list["metrics.BaseMetric"], case_operator.metric_list)
-
     forecast_ds, target_ds = _build_datasets(case_operator, **kwargs)
 
     # Check if any dimension has zero length
@@ -340,7 +337,7 @@ def compute_case_operator(
             )
 
     # TODO: determine if derived variables need to be pushed here or at pre-compute
-    for metric in validated_metrics:
+    for metric in case_operator.metric_list:
         # Determine which variable pairs to evaluate for this metric
         if metric.forecast_variable is not None and metric.target_variable is not None:
             # Expand DerivedVariable to output_variables if applicable
@@ -654,10 +651,9 @@ def _build_datasets(
         A tuple containing (forecast_dataset, target_dataset). If either dataset
         has no dimensions, both will be empty datasets.
     """
-    # Collect variables from metrics to ensure they're loaded/derived
-    # Cast to BaseMetric list for type checking (validation happens in caller)
-    metric_list = cast(list["metrics.BaseMetric"], case_operator.metric_list)
-    metric_forecast_vars, metric_target_vars = _collect_metric_variables(metric_list)
+    metric_forecast_vars, metric_target_vars = _collect_metric_variables(
+        case_operator.metric_list
+    )
 
     # Get all output_variables from DerivedVariables in InputBase
     # These should NOT be added separately as they'll be created by derivation
