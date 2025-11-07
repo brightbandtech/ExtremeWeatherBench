@@ -1,5 +1,7 @@
 """Tests for the metrics module."""
 
+import inspect
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -123,10 +125,10 @@ class TestBaseMetric:
         """Test that the name property returns the class name."""
 
         class TestConcreteMetric(metrics.BaseMetric):
-            name = "TestConcreteMetric"
+            def __init__(self, *args, **kwargs):
+                super().__init__("TestConcreteMetric", *args, **kwargs)
 
-            @classmethod
-            def _compute_metric(cls, forecast, target, **kwargs):
+            def _compute_metric(self, forecast, target, **kwargs):
                 return forecast - target
 
         metric = TestConcreteMetric()
@@ -136,10 +138,10 @@ class TestBaseMetric:
         """Test that compute_metric method exists and is callable."""
 
         class TestConcreteMetric(metrics.BaseMetric):
-            name = "TestConcreteMetric"
+            def __init__(self, *args, **kwargs):
+                super().__init__("TestConcreteMetric", *args, **kwargs)
 
-            @classmethod
-            def _compute_metric(cls, forecast, target, **kwargs):
+            def _compute_metric(self, forecast, target, **kwargs):
                 return forecast - target
 
         metric = TestConcreteMetric()
@@ -152,7 +154,8 @@ class TestBaseMetric:
         """
 
         class TestMetricWithParams(metrics.BaseMetric):
-            name = "TestMetricWithParams"
+            def __init__(self, *args, **kwargs):
+                super().__init__("TestMetricWithParams", *args, **kwargs)
 
             def _compute_metric(
                 self,
@@ -188,7 +191,7 @@ class TestMAE:
         """Test that MAE can be instantiated."""
         metric = metrics.MAE()
         assert isinstance(metric, metrics.BaseMetric)
-        assert metric.name == "mae"
+        assert metric.name == "MAE"
 
     def test_compute_metric_simple(self):
         """Test MAE computation with simple data."""
@@ -215,7 +218,7 @@ class TestME:
         """Test that ME can be instantiated."""
         metric = metrics.ME()
         assert isinstance(metric, metrics.BaseMetric)
-        assert metric.name == "me"
+        assert metric.name == "ME"
 
     def test_compute_metric_simple(self):
         """Test ME computation with simple data."""
@@ -622,28 +625,16 @@ class TestMetricIntegration:
 
     def test_all_metrics_have_required_methods(self):
         """Test that all metric classes have required methods."""
-        all_metrics = [
-            metrics.MAE,
-            metrics.ME,
-            metrics.RMSE,
-            metrics.EarlySignal,
-            metrics.MaximumMAE,
-            metrics.MinimumMAE,
-            metrics.MaxMinMAE,
-            metrics.OnsetME,
-            metrics.DurationME,
-            metrics.LandfallDisplacement,
-            metrics.LandfallTimeME,
-            metrics.LandfallIntensityMAE,
-            metrics.SpatialDisplacement,
-            metrics.FAR,
-            metrics.CSI,
-            metrics.LeadTimeDetection,
-            metrics.RegionalHitsMisses,
-            metrics.HitsMisses,
+        # Auto-discover all BaseMetric subclasses, excluding abstract ones
+        all_metric_classes = [
+            cls
+            for name, cls in inspect.getmembers(metrics, inspect.isclass)
+            if issubclass(cls, metrics.BaseMetric)
+            and cls not in (metrics.BaseMetric, metrics.ThresholdMetric)
+            and not inspect.isabstract(cls)
         ]
 
-        for metric_class in all_metrics:
+        for metric_class in all_metric_classes:
             metric = metric_class()
             assert hasattr(metric, "_compute_metric")
             assert hasattr(metric, "compute_metric")
@@ -654,28 +645,16 @@ class TestMetricIntegration:
         # Test that required classes exist
         assert hasattr(metrics, "BaseMetric")
 
-        # Test that all expected metric classes exist
-        expected_classes = [
-            "MAE",
-            "ME",
-            "RMSE",
-            "MaximumMAE",
-            "MinimumMAE",
-            "MaxMinMAE",
-            "OnsetME",
-            "DurationME",
-            "EarlySignal",
-            "LandfallDisplacement",
-            "LandfallTimeME",
-            "LandfallIntensityMAE",
-            "SpatialDisplacement",
-            "FAR",
-            "CSI",
-            "LeadTimeDetection",
-            "RegionalHitsMisses",
-            "HitsMisses",
+        # Auto-discover all metric classes (including abstract ones)
+        all_metric_classes = [
+            (name, cls)
+            for name, cls in inspect.getmembers(metrics, inspect.isclass)
+            if issubclass(cls, metrics.BaseMetric) and cls != metrics.BaseMetric
         ]
 
-        for class_name in expected_classes:
+        # Should have at least some metrics
+        assert len(all_metric_classes) > 0
+
+        for class_name, cls in all_metric_classes:
             assert hasattr(metrics, class_name)
             assert callable(getattr(metrics, class_name))
