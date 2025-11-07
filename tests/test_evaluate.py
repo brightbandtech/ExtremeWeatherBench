@@ -3354,10 +3354,100 @@ class TestMetricVariableHandling:
 
             result = evaluate.compute_case_operator(case_operator)
 
-            # metric1 called once (own vars), metric2 called once (InputBase)
+            # metric1 called once (own vars)
+            # metric2 NOT called because metric1 claims all available variables
+            # This is the expected behavior: metrics with explicit variables
+            # claim those variables exclusively
             assert metric1.compute_metric.call_count == 1
-            assert metric2.compute_metric.call_count == 1
+            assert metric2.compute_metric.call_count == 0
             assert isinstance(result, pd.DataFrame)
+
+    def test_compute_case_operator_claimed_variables_excluded(
+        self, sample_individual_case
+    ):
+        """Test that variables claimed by metrics with explicit vars are
+        excluded from metrics without explicit vars."""
+        # Create datasets with multiple variables
+        time = pd.date_range("2021-06-20", freq="6h", periods=2)
+        lat = [45.0]
+        lon = [-120.0]
+
+        ds = xr.Dataset(
+            {
+                "surface_air_temperature": (
+                    ["lead_time", "latitude", "longitude"],
+                    [[[20.0]]],
+                ),
+                "2m_temperature": (
+                    ["lead_time", "latitude", "longitude"],
+                    [[[18.0]]],
+                ),
+                "total_precipitation": (
+                    ["lead_time", "latitude", "longitude"],
+                    [[[5.0]]],
+                ),
+                "precipitation": (
+                    ["lead_time", "latitude", "longitude"],
+                    [[[4.5]]],
+                ),
+            },
+            coords={
+                "lead_time": [0],
+                "latitude": lat,
+                "longitude": lon,
+                "valid_time": ("lead_time", time[:1]),
+            },
+        )
+
+        # Metric with specific variable (claims "surface_air_temperature")
+        metric1 = mock.Mock(spec=metrics.BaseMetric)
+        metric1.name = "MetricWithVars"
+        metric1.forecast_variable = "surface_air_temperature"
+        metric1.target_variable = "2m_temperature"
+        metric1.compute_metric.return_value = xr.DataArray(
+            data=[1.0], dims=["lead_time"], coords={"lead_time": [0]}
+        )
+
+        # Metric without variables (should only use unclaimed variables)
+        metric2 = mock.Mock(spec=metrics.BaseMetric)
+        metric2.name = "MetricWithoutVars"
+        metric2.forecast_variable = None
+        metric2.target_variable = None
+        metric2.compute_metric.return_value = xr.DataArray(
+            data=[2.0], dims=["lead_time"], coords={"lead_time": [0]}
+        )
+
+        # Setup InputBase with TWO variables
+        mock_target = mock.Mock(spec=inputs.TargetBase)
+        mock_target.name = "MockTarget"
+        mock_target.variables = ["2m_temperature", "precipitation"]
+        mock_target.maybe_align_forecast_to_target.return_value = (ds, ds)
+
+        mock_forecast = mock.Mock(spec=inputs.ForecastBase)
+        mock_forecast.name = "MockForecast"
+        mock_forecast.variables = ["surface_air_temperature", "total_precipitation"]
+
+        case_operator = cases.CaseOperator(
+            case_metadata=sample_individual_case,
+            metric_list=[metric1, metric2],
+            target=mock_target,
+            forecast=mock_forecast,
+        )
+
+        with mock.patch("extremeweatherbench.evaluate.run_pipeline") as mock_pipeline:
+            mock_pipeline.return_value = ds
+
+            result = evaluate.compute_case_operator(case_operator)
+
+            # metric1 called once with its specific variables
+            assert metric1.compute_metric.call_count == 1
+
+            # metric2 called once with the unclaimed variable pair
+            # (total_precipitation, precipitation)
+            assert metric2.compute_metric.call_count == 1
+
+            assert isinstance(result, pd.DataFrame)
+            assert len(result) == 2  # Two metric evaluations
 
     def test_compute_case_operator_rejects_uninstantiated_metrics(
         self, sample_individual_case, mock_target_base, mock_forecast_base
@@ -3453,7 +3543,7 @@ class TestExpandDerivedVariableToOutputVariables:
 
     def test_expand_string_variable(self):
         """String variables return as single-item list."""
-        result = evaluate._expand_derived_variable_to_output_variables("temp")
+        result = evaluate._maybe_expand_derived_variable_to_output_variables("temp")
         assert result == ["temp"]
         assert isinstance(result, list)
 
@@ -3462,25 +3552,33 @@ class TestExpandDerivedVariableToOutputVariables:
         derived_var = MockDerivedVariableWithOutputs(
             output_variables=["output_1", "output_2"]
         )
-        result = evaluate._expand_derived_variable_to_output_variables(derived_var)
+        result = evaluate._maybe_expand_derived_variable_to_output_variables(
+            derived_var
+        )
         assert result == ["output_1", "output_2"]
 
     def test_expand_derived_variable_without_output_variables(self):
         """DerivedVariable without output_variables returns its name."""
         derived_var = MockDerivedVariableWithOutputs()
-        result = evaluate._expand_derived_variable_to_output_variables(derived_var)
+        result = evaluate._maybe_expand_derived_variable_to_output_variables(
+            derived_var
+        )
         assert result == ["MockDerivedVariableWithOutputs"]
 
     def test_expand_derived_variable_empty_output_variables(self):
         """DerivedVariable with empty output_variables returns its name."""
         derived_var = MockDerivedVariableWithOutputs(output_variables=[])
-        result = evaluate._expand_derived_variable_to_output_variables(derived_var)
+        result = evaluate._maybe_expand_derived_variable_to_output_variables(
+            derived_var
+        )
         assert result == ["MockDerivedVariableWithOutputs"]
 
     def test_expand_derived_variable_single_output(self):
         """DerivedVariable with single output_variable returns list."""
         derived_var = MockDerivedVariableWithOutputs(output_variables=["output_1"])
-        result = evaluate._expand_derived_variable_to_output_variables(derived_var)
+        result = evaluate._maybe_expand_derived_variable_to_output_variables(
+            derived_var
+        )
         assert result == ["output_1"]
 
 

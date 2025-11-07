@@ -318,6 +318,27 @@ def compute_case_operator(
         "Datasets built for case %s.", case_operator.case_metadata.case_id_number
     )
     results = []
+
+    # Collect all explicitly specified variables across all metrics
+    # These variables are "claimed" and should not be used by metrics
+    # without specific variables
+    explicitly_claimed_forecast_vars = set()
+    explicitly_claimed_target_vars = set()
+
+    for metric in validated_metrics:
+        if metric.forecast_variable is not None and metric.target_variable is not None:
+            # Expand and collect claimed variables
+            explicitly_claimed_forecast_vars.update(
+                _maybe_expand_derived_variable_to_output_variables(
+                    metric.forecast_variable
+                )
+            )
+            explicitly_claimed_target_vars.update(
+                _maybe_expand_derived_variable_to_output_variables(
+                    metric.target_variable
+                )
+            )
+
     # TODO: determine if derived variables need to be pushed here or at pre-compute
     for metric in validated_metrics:
         # Determine which variable pairs to evaluate for this metric
@@ -346,7 +367,19 @@ def compute_case_operator(
                     _maybe_expand_derived_variable_to_output_variables(var)
                 )
 
-            variable_pairs = list(zip(forecast_vars_expanded, target_vars_expanded))
+            # Exclude variables that are explicitly claimed by other metrics
+            forecast_vars_available = [
+                v
+                for v in forecast_vars_expanded
+                if v not in explicitly_claimed_forecast_vars
+            ]
+            target_vars_available = [
+                v
+                for v in target_vars_expanded
+                if v not in explicitly_claimed_target_vars
+            ]
+
+            variable_pairs = list(zip(forecast_vars_available, target_vars_available))
 
         # Evaluate the metric for each variable pair
         for forecast_var, target_var in variable_pairs:
@@ -553,6 +586,25 @@ def _maybe_expand_derived_variable_to_output_variables(
         return [str(variable)]
 
 
+def _get_all_derived_output_variables(
+    variables: list[Union[str, "derived.DerivedVariable"]],
+) -> set[str]:
+    """Get all output_variables from DerivedVariables in a list.
+
+    Args:
+        variables: List that may contain DerivedVariable instances.
+
+    Returns:
+        Set of all output_variable names from DerivedVariables.
+    """
+    output_vars = set()
+    for var in variables:
+        if isinstance(var, derived.DerivedVariable):
+            if hasattr(var, "output_variables") and var.output_variables:
+                output_vars.update(var.output_variables)
+    return output_vars
+
+
 def _collect_metric_variables(
     metric_list: list["metrics.BaseMetric"],
 ) -> tuple[
@@ -607,16 +659,38 @@ def _build_datasets(
     metric_list = cast(list["metrics.BaseMetric"], case_operator.metric_list)
     metric_forecast_vars, metric_target_vars = _collect_metric_variables(metric_list)
 
+    # Get all output_variables from DerivedVariables in InputBase
+    # These should NOT be added separately as they'll be created by derivation
+    forecast_derived_outputs = _get_all_derived_output_variables(
+        case_operator.forecast.variables
+    )
+    target_derived_outputs = _get_all_derived_output_variables(
+        case_operator.target.variables
+    )
+
+    # Filter out string variables that are output_variables of existing DerivedVariables
+    # Only add metric variables that are not already covered by DerivedVariable outputs
+    filtered_forecast_vars = {
+        v
+        for v in metric_forecast_vars
+        if not (isinstance(v, str) and v in forecast_derived_outputs)
+    }
+    filtered_target_vars = {
+        v
+        for v in metric_target_vars
+        if not (isinstance(v, str) and v in target_derived_outputs)
+    }
+
     # Create augmented copies of InputBase objects with combined variables
     augmented_forecast = copy.copy(case_operator.forecast)
     augmented_target = copy.copy(case_operator.target)
 
-    # Combine InputBase variables with metric-specific variables
+    # Combine InputBase variables with metric-specific variables (filtered)
     augmented_forecast.variables = list(
-        set(case_operator.forecast.variables) | metric_forecast_vars
+        set(case_operator.forecast.variables) | filtered_forecast_vars
     )
     augmented_target.variables = list(
-        set(case_operator.target.variables) | metric_target_vars
+        set(case_operator.target.variables) | filtered_target_vars
     )
 
     logger.info("Running target pipeline... ")
