@@ -431,11 +431,11 @@ def _evaluate_metric_and_return_df(
         forecast_variable: The forecast variable to evaluate.
         target_variable: The target variable to evaluate.
         metric: The metric to evaluate.
-        case_id_number: The case id number.
-        event_type: The event type.
+        case_operator: The case operator with metadata for the evaluation.
+        **kwargs: Additional keyword arguments to pass to metric computation.
 
     Returns:
-        A dataframe of the results of the metric evaluation.
+        A dataframe of the results with standard output schema columns.
     """
 
     # Normalize variables to their string names if needed
