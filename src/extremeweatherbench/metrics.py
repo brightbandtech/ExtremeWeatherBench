@@ -111,17 +111,17 @@ class BaseMetric(abc.ABC, metaclass=ComputeDocstringMetaclass):
     analyses, so long as the spatiotemporal dimensions are the same.
     """
 
-    # default to preserving lead_time in EWB metrics
-    name: str
-    preserve_dims: str = "lead_time"
-
     def __init__(
         self,
+        name: str,
+        preserve_dims: str = "lead_time",
         forecast_variable: Optional[str | derived.DerivedVariable] = None,
         target_variable: Optional[str | derived.DerivedVariable] = None,
     ):
         # Store the original variables (str or DerivedVariable instances)
         # Do NOT convert to string to preserve output_variables info
+        self.name = name
+        self.preserve_dims = preserve_dims
         self.forecast_variable = forecast_variable
         self.target_variable = target_variable
         # Check if both variables are None - this is allowed
@@ -187,12 +187,13 @@ class ThresholdMetric(BaseMetric):
 
     def __init__(
         self,
+        name: str,
+        preserve_dims: str = "lead_time",
         forecast_threshold: float = 0.5,
         target_threshold: float = 0.5,
-        preserve_dims: str = "lead_time",
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(name, **kwargs)
         self.forecast_threshold = forecast_threshold
         self.target_threshold = target_threshold
         self.preserve_dims = preserve_dims
@@ -211,7 +212,8 @@ class ThresholdMetric(BaseMetric):
 class CSI(ThresholdMetric):
     """Critical Success Index metric."""
 
-    name = "critical_success_index"
+    def __init__(self, *args, **kwargs):
+        super().__init__("critical_success_index", *args, **kwargs)
 
     def _compute_metric(
         self,
@@ -236,7 +238,8 @@ class CSI(ThresholdMetric):
 class FAR(ThresholdMetric):
     """False Alarm Ratio metric."""
 
-    name = "false_alarm_ratio"
+    def __init__(self, *args, **kwargs):
+        super().__init__("false_alarm_ratio", *args, **kwargs)
 
     def _compute_metric(
         self,
@@ -261,7 +264,8 @@ class FAR(ThresholdMetric):
 class TP(ThresholdMetric):
     """True Positive metric."""
 
-    name = "true_positive"
+    def __init__(self, *args, **kwargs):
+        super().__init__("true_positive", *args, **kwargs)
 
     def _compute_metric(
         self,
@@ -287,7 +291,8 @@ class TP(ThresholdMetric):
 class FP(ThresholdMetric):
     """False Positive metric."""
 
-    name = "false_positive"
+    def __init__(self, *args, **kwargs):
+        super().__init__("false_positive", *args, **kwargs)
 
     def _compute_metric(
         self,
@@ -313,7 +318,8 @@ class FP(ThresholdMetric):
 class TN(ThresholdMetric):
     """True Negative metric."""
 
-    name = "true_negative"
+    def __init__(self, *args, **kwargs):
+        super().__init__("true_negative", *args, **kwargs)
 
     def _compute_metric(
         self,
@@ -339,7 +345,8 @@ class TN(ThresholdMetric):
 class FN(ThresholdMetric):
     """False Negative metric."""
 
-    name = "false_negative"
+    def __init__(self, *args, **kwargs):
+        super().__init__("false_negative", *args, **kwargs)
 
     def _compute_metric(
         self,
@@ -365,7 +372,8 @@ class FN(ThresholdMetric):
 class Accuracy(ThresholdMetric):
     """Accuracy metric."""
 
-    name = "accuracy"
+    def __init__(self, *args, **kwargs):
+        super().__init__("accuracy", *args, **kwargs)
 
     def _compute_metric(
         self,
@@ -427,6 +435,7 @@ def create_threshold_metrics(
 
         metric_class = metric_classes[metric_name]
         metric = metric_class(
+            name=metric_name,
             forecast_threshold=forecast_threshold,
             target_threshold=target_threshold,
             preserve_dims=preserve_dims,
@@ -437,7 +446,8 @@ def create_threshold_metrics(
 
 
 class MAE(BaseMetric):
-    name = "mae"
+    def __init__(self, name: str = "MAE", *args, **kwargs):
+        super().__init__(name, *args, **kwargs)
 
     def _compute_metric(
         self,
@@ -463,7 +473,8 @@ class MAE(BaseMetric):
 class ME(BaseMetric):
     """Mean Error (bias) metric."""
 
-    name = "me"
+    def __init__(self, name: str = "ME", *args, **kwargs):
+        super().__init__(name, *args, **kwargs)
 
     def _compute_metric(
         self,
@@ -491,7 +502,8 @@ class ME(BaseMetric):
 class RMSE(BaseMetric):
     """Root Mean Square Error metric."""
 
-    name = "rmse"
+    def __init__(self, *args, **kwargs):
+        super().__init__("rmse", *args, **kwargs)
 
     def _compute_metric(
         self,
@@ -523,7 +535,8 @@ class EarlySignal(BaseMetric):
     signal detection criteria that can be specified in applied metrics downstream.
     """
 
-    name = "early_signal"
+    def __init__(self, *args, **kwargs):
+        super().__init__("early_signal", *args, **kwargs)
 
     def _compute_metric(
         self,
@@ -667,7 +680,8 @@ class EarlySignal(BaseMetric):
 
 
 class MaximumMAE(MAE):
-    name = "MaximumMAE"
+    def __init__(self, *args, **kwargs):
+        super().__init__("MaximumMAE", *args, **kwargs)
 
     def _compute_metric(
         self,
@@ -729,7 +743,8 @@ class MinimumMAE(MAE):
     around the target's minimum.
     """
 
-    name = "MinimumMAE"
+    def __init__(self, *args, **kwargs):
+        super().__init__("MinimumMAE", *args, **kwargs)
 
     def _compute_metric(
         self,
@@ -790,7 +805,8 @@ class MaxMinMAE(MAE):
     heatwave evaluation.
     """
 
-    name = "MaxMinMAE"
+    def __init__(self, *args, **kwargs):
+        super().__init__(name="MaxMinMAE", *args, **kwargs)
 
     def _compute_metric(
         self,
@@ -884,7 +900,8 @@ class OnsetME(ME):
     of event onset (currently configured for heatwaves).
     """
 
-    name = "OnsetME"
+    def __init__(self, *args, **kwargs):
+        super().__init__("OnsetME", *args, **kwargs)
 
     def onset(self, forecast: xr.DataArray, **kwargs: Any) -> xr.DataArray:
         """Identify onset time from forecast data.
@@ -966,7 +983,8 @@ class DurationME(ME):
     of an event (currently configured for heatwaves).
     """
 
-    name = "DurationME"
+    def __init__(self, *args, **kwargs):
+        super().__init__("DurationME", *args, **kwargs)
 
     def duration(self, forecast: xr.DataArray, **kwargs: Any) -> xr.DataArray:
         """Calculate event duration from forecast data.
@@ -1052,7 +1070,8 @@ class LandfallDisplacement(BaseMetric):
     Note: Not yet implemented.
     """
 
-    name = "LandfallDisplacement"
+    def __init__(self, *args, **kwargs):
+        super().__init__("LandfallDisplacement", *args, **kwargs)
 
     def _compute_metric(
         self,
@@ -1070,7 +1089,8 @@ class LandfallTimeME(BaseMetric):
     Note: Not yet implemented.
     """
 
-    name = "LandfallTimeME"
+    def __init__(self, *args, **kwargs):
+        super().__init__("LandfallTimeME", *args, **kwargs)
 
     def _compute_metric(
         self,
@@ -1088,7 +1108,8 @@ class LandfallIntensityMAE(BaseMetric):
     Note: Not yet implemented.
     """
 
-    name = "LandfallIntensityMAE"
+    def __init__(self, *args, **kwargs):
+        super().__init__("LandfallIntensityMAE", *args, **kwargs)
 
     def _compute_metric(
         self,
@@ -1106,7 +1127,8 @@ class SpatialDisplacement(BaseMetric):
     Note: Not yet implemented.
     """
 
-    name = "SpatialDisplacement"
+    def __init__(self, *args, **kwargs):
+        super().__init__("SpatialDisplacement", *args, **kwargs)
 
     def _compute_metric(
         self,
@@ -1124,7 +1146,8 @@ class LeadTimeDetection(BaseMetric):
     Note: Not yet implemented.
     """
 
-    name = "LeadTimeDetection"
+    def __init__(self, *args, **kwargs):
+        super().__init__("LeadTimeDetection", *args, **kwargs)
 
     def _compute_metric(
         self,
@@ -1142,7 +1165,8 @@ class RegionalHitsMisses(BaseMetric):
     Note: Not yet implemented.
     """
 
-    name = "RegionalHitsMisses"
+    def __init__(self, *args, **kwargs):
+        super().__init__("RegionalHitsMisses", *args, **kwargs)
 
     def _compute_metric(
         self,
@@ -1160,7 +1184,8 @@ class HitsMisses(BaseMetric):
     Note: Not yet implemented.
     """
 
-    name = "HitsMisses"
+    def __init__(self, *args, **kwargs):
+        super().__init__("HitsMisses", *args, **kwargs)
 
     def _compute_metric(
         self,

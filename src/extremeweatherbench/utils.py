@@ -191,8 +191,8 @@ def derive_indices_from_init_time_and_lead_time(
             dataset.lead_time.shape[0],
         )
     )
-    valid_time_mask = (valid_times_reshaped > pd.to_datetime(start_date)) & (
-        valid_times_reshaped < pd.to_datetime(end_date)
+    valid_time_mask = (valid_times_reshaped >= pd.to_datetime(start_date)) & (
+        valid_times_reshaped <= pd.to_datetime(end_date)
     )
     valid_time_indices = np.asarray(valid_time_mask).nonzero()
 
