@@ -69,8 +69,8 @@ class DerivedVariable(abc.ABC):
         return self.derive_variable(data, *args, **kwargs)
 
 
-class AtmosphericRiverMask(DerivedVariable):
-    """A derived variable that computes the atmospheric river mask.
+class AtmosphericRiver(DerivedVariable):
+    """A derived variable that computes atmospheric river related variables.
 
     Calculates the IVT (Integrated Vapor Transport) and its Laplacian from a dataset.IVT
     is calculated using the method described in Newell et al. 1992 and elsewhere
@@ -86,13 +86,9 @@ class AtmosphericRiverMask(DerivedVariable):
         "specific_humidity",
     ]
 
-    # Note: this name is used for the intersection between the AR mask and land, not the
-    # mask. The mask is named "atmospheric_river_mask" in the atmospheric_river module.
-    # EWB's atmospheric river event detection uses the intersection for evaluation.
-    name = "atmospheric_river_land_intersection"
+    name = "atmospheric_river"
 
-    @classmethod
-    def derive_variable(cls, data: xr.Dataset, *args, **kwargs) -> xr.Dataset:
+    def derive_variable(self, data: xr.Dataset, *args, **kwargs) -> xr.Dataset:
         """Derive the atmospheric river mask using xr.apply_ufunc approach."""
         return ar.build_atmospheric_river_mask_and_land_intersection(data)
 
