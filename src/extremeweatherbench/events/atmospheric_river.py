@@ -132,7 +132,7 @@ def integrated_vapor_transport(
     )
 
     # Compute IVT using components
-    ivt_magnitude = np.hypot(eastward_ivt, northward_ivt)
+    ivt_magnitude = xr.ufuncs.hypot(eastward_ivt, northward_ivt)
     ivt_magnitude.name = "integrated_vapor_transport"
     return ivt_magnitude
 
