@@ -13,6 +13,7 @@ import numpy as np
 import numpy.typing as npt
 import pandas as pd  # type: ignore[import-untyped]
 import regionmask
+import sparse
 import tqdm
 import xarray as xr
 import yaml  # type: ignore[import]
@@ -556,3 +557,44 @@ def idx_to_coords(
         lon_coords_out[valid_mask] = lon_coords[int_lon_idx[valid_mask]]
 
     return lat_coords_out, lon_coords_out
+
+
+def reduce_dataarray(
+    da: xr.DataArray,
+    method: str | Callable,
+    reduce_dims: list[str],
+    **method_kwargs,
+) -> xr.DataArray:
+    """Reduce using xarray methods or numpy functions.
+
+    This function can utilize xarray's optimized methods (e.g., mean, sum) or
+    numpy/callable reductions. Using the built-in methods xarray provides can be more
+    efficient than using numpy functions.
+
+    Args:
+        da: The xarray dataarray to reduce.
+        method: Either an xarray method name (e.g., 'mean', 'sum') or
+            a callable function (e.g., np.nanmean).
+        reduce_dims: The dimensions to reduce.
+        **method_kwargs: Additional kwargs for the method. Only used
+            when method is a string (xarray method).
+
+    Returns:
+        The reduced xarray dataarray.
+    """
+    if isinstance(da.data, sparse.COO):
+        da = stack_sparse_data_from_dims(da, reduce_dims)
+        reduce_dims = ["stacked"]
+
+    if callable(method):
+        # Use numpy function or other callable (original behavior)
+        return da.reduce(method, dim=reduce_dims)
+    elif isinstance(method, str):
+        # Use xarray built-in method
+        if not hasattr(da, method):
+            raise ValueError(f"DataArray has no method '{method}'")
+
+        method_func = getattr(da, method)
+        return method_func(dim=reduce_dims, **method_kwargs)
+    else:
+        raise TypeError(f"method must be str or callable, got {type(method)}")
