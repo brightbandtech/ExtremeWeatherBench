@@ -535,10 +535,10 @@ Location = namedtuple("Location", ["latitude", "longitude"])
 _TC_TRACK_CACHE: Dict[str, xr.Dataset] = {}
 
 # Global registry for tropical cyclone track data to be used in TC filtering
-_TRACK_DATA_REGISTRY: Dict[str, xr.Dataset] = {}
+_TRACK_DATA_REGISTRY: Dict[int, xr.Dataset] = {}
 
 
-def register_tc_track_data(case_id: str, tc_track_data: xr.Dataset) -> None:
+def register_tc_track_data(case_id: int, tc_track_data: xr.Dataset) -> None:
     """Register tropical cyclone track data for a specific case to be used in TC
     filtering.
 
@@ -551,7 +551,7 @@ def register_tc_track_data(case_id: str, tc_track_data: xr.Dataset) -> None:
     _TRACK_DATA_REGISTRY[case_id] = tc_track_data
 
 
-def get_tc_track_data(case_id: str) -> Optional[xr.Dataset]:
+def get_tc_track_data(case_id_number: int) -> Optional[xr.Dataset]:
     """Get registered tropical cyclone track data for a specific case.
 
     Args:
@@ -560,18 +560,8 @@ def get_tc_track_data(case_id: str) -> Optional[xr.Dataset]:
     Returns:
         tropical cyclone track dataset if available, None otherwise.
     """
-    import logging
-
-    logger = logging.getLogger(__name__)
-
     global _TRACK_DATA_REGISTRY
-    logger.debug(
-        "get_tc_track_data called with case_id=%s (type=%s)", case_id, type(case_id)
-    )
-    logger.debug("Registry keys: %s", list(_TRACK_DATA_REGISTRY.keys()))
-    result = _TRACK_DATA_REGISTRY.get(case_id, None)
-    logger.debug("Found data: %s", result is not None)
-    return result
+    return _TRACK_DATA_REGISTRY.get(case_id_number, None)
 
 
 def clear_tc_track_data_registry() -> None:

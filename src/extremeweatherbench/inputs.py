@@ -847,7 +847,7 @@ class IBTrACS(TargetBase):
     """Target class for IBTrACS data."""
 
     name: str = "IBTrACS"
-    _current_case_id: Optional[str] = dataclasses.field(default=None, init=False)
+    _current_case_id: Optional[int] = dataclasses.field(default=None, init=False)
     preprocess: Callable = _ibtracs_preprocess
     variable_mapping: dict = dataclasses.field(
         default_factory=lambda: IBTrACS_metadata_variable_mapping.copy()
@@ -872,10 +872,6 @@ class IBTrACS(TargetBase):
         **kwargs,
     ) -> IncomingDataInput:
         # Note: drop parameter not applicable for polars LazyFrame data
-        import logging
-
-        logger = logging.getLogger(__name__)
-
         if not isinstance(data, pl.LazyFrame):
             raise ValueError(f"Expected polars LazyFrame, got {type(data)}")
 
@@ -885,8 +881,6 @@ class IBTrACS(TargetBase):
         if case_metadata.start_date.month > 11:
             season += 1
 
-        logger.debug("IBTrACS subsetting for season %s", season)
-
         # Create a subquery to find all storm numbers in the same season
         matching_numbers = (
             data.filter(pl.col("SEASON").cast(pl.Int64) == season)
@@ -895,7 +889,6 @@ class IBTrACS(TargetBase):
         )
 
         possible_names = utils.extract_tc_names(case_metadata.title)
-        logger.debug("Looking for TC names: %s", possible_names)
 
         # Apply the filter to get all data for storms with the same number in
         # the same season, matching any of the possible names
@@ -904,10 +897,6 @@ class IBTrACS(TargetBase):
         subset_target_data = data.join(
             matching_numbers, on="NUMBER", how="inner"
         ).filter(name_filter & (pl.col("SEASON").cast(pl.Int64) == season))
-
-        # Check if we have any data before selecting columns
-        num_rows = subset_target_data.select(pl.len()).collect().item()
-        logger.debug("Rows after filtering: %s", num_rows)
 
         # Select only the columns to keep
         columns_to_keep = [
@@ -921,7 +910,13 @@ class IBTrACS(TargetBase):
 
         subset_target_data = subset_target_data.select(columns_to_keep)
 
-        self._current_case_id = str(case_metadata.case_id_number)
+        # Drop rows where wind speed OR pressure are null (equivalent to pandas
+        # dropna with how="any")
+        subset_target_data = subset_target_data.filter(
+            pl.col("surface_wind_speed").is_not_null()
+            & pl.col("air_pressure_at_mean_sea_level").is_not_null()
+        )
+        self._current_case_id = case_metadata.case_id_number
 
         return subset_target_data
 
@@ -965,12 +960,6 @@ class IBTrACS(TargetBase):
         """
 
         ds = super().add_source_to_dataset_attrs(ds)
-
-        logger.debug(
-            "IBTrACS add_source: _current_case_id=%s, ds dims=%s",
-            self._current_case_id,
-            ds.dims,
-        )
 
         # Register IBTrACS data immediately for tropical cyclone filtering
         if self._current_case_id is not None:

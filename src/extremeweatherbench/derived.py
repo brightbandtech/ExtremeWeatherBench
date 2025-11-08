@@ -135,10 +135,8 @@ class TropicalCycloneTrackVariables(DerivedVariable):
         )
 
         if tc_track_data is None and case_id_number is not None:
-            # Convert to string to match registry key type
-            case_id_str = str(case_id_number)
-            logger.debug("Looking up tc_track_data for case %s", case_id_str)
-            tc_track_data = tropical_cyclone.get_tc_track_data(case_id_str)
+            logger.debug("Looking up tc_track_data for case %s", case_id_number)
+            tc_track_data = tropical_cyclone.get_tc_track_data(case_id_number)
             logger.debug("Retrieved tc_track_data: %s", tc_track_data is not None)
 
         if tc_track_data is None:
