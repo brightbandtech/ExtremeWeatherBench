@@ -77,6 +77,7 @@ class ExtremeWeatherBench:
     @property
     def case_operators(self) -> list["cases.CaseOperator"]:
         """Build the CaseOperator objects from case_metadata and evaluation_objects."""
+
         # Subset the cases if a region subsetter was provided
         if self.region_subsetter:
             subset_collection = self.region_subsetter.subset_case_collection(
@@ -109,43 +110,20 @@ class ExtremeWeatherBench:
         Returns:
             A concatenated dataframe of the evaluation results.
         """
-        logger.info("Running ExtremeWeatherBench workflow...")
+        # Caching does not work in parallel mode as of now, so ignore the cache_dir
+        # but raise a warning for the user
+        if self.cache_dir and n_jobs != 1:
+            logger.warning(
+                "Caching is not supported in parallel mode, ignoring cache_dir"
+            )
 
-        # Determine if running in serial or parallel mode
-        # Serial: n_jobs=1 or (parallel_config with n_jobs=1)
-        # Parallel: n_jobs>1 or (parallel_config with n_jobs>1)
-        is_serial = (
-            (n_jobs == 1)
-            or (parallel_config is not None and parallel_config.get("n_jobs") == 1)
-            or (n_jobs is None and parallel_config is None)
+        # Instantiate the cache directory if caching and build it if it does not exist
+        elif self.cache_dir:
+            if not self.cache_dir.exists():
+                self.cache_dir.mkdir(parents=True, exist_ok=True)
+        run_results = _run_case_operators(
+            self.case_operators, n_jobs, self.cache_dir, **kwargs
         )
-        logger.debug("Running in %s mode.", "serial" if is_serial else "parallel")
-
-        if not is_serial:
-            # Build parallel_config if not provided
-            if parallel_config is None and n_jobs is not None:
-                logger.debug(
-                    "No parallel_config provided, using threading backend and %s jobs.",
-                    n_jobs,
-                )
-                parallel_config = {"backend": "threading", "n_jobs": n_jobs}
-            kwargs["parallel_config"] = parallel_config
-
-            # Caching does not work in parallel mode as of now
-            if self.cache_dir:
-                logger.warning(
-                    "Caching is not supported in parallel mode, ignoring cache_dir"
-                )
-        else:
-            # Running in serial mode - instantiate cache dir if needed
-            if self.cache_dir:
-                if not self.cache_dir.exists():
-                    self.cache_dir.mkdir(parents=True, exist_ok=True)
-
-        run_results = _run_case_operators(self.case_operators, self.cache_dir, **kwargs)
-
-        # If there are results, concatenate them and return, else return an empty
-        # DataFrame with the expected columns
         if run_results:
             return _safe_concat(run_results, ignore_index=True)
         else:
@@ -187,6 +165,7 @@ def _run_serial(
 ) -> list[pd.DataFrame]:
     """Run the case operators in serial."""
     run_results = []
+
     # Loop over the case operators
     for case_operator in tqdm(case_operators):
         run_results.append(compute_case_operator(case_operator, cache_dir, **kwargs))
@@ -300,7 +279,6 @@ def compute_case_operator(
         "Datasets built for case %s.", case_operator.case_metadata.case_id_number
     )
     results = []
-    # TODO: determine if derived variables need to be pushed here or at pre-compute
     for variables, metric in itertools.product(
         zip(
             case_operator.forecast.variables,
