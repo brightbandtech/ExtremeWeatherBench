@@ -78,6 +78,8 @@ CIRA_metadata_variable_mapping = {
     "v10": "surface_northward_wind",
     "u100": "100m_eastward_wind",
     "v100": "100m_northward_wind",
+    "msl": "air_pressure_at_mean_sea_level",
+    "apcp": "accumulated_precipitation",
 }
 
 # HRES forecast (weatherbench2)metadata variable mapping

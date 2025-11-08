@@ -328,6 +328,31 @@ def convert_init_time_to_valid_time(ds: xr.Dataset) -> xr.Dataset:
     )
 
 
+def convert_valid_time_to_init_time(da: xr.DataArray) -> xr.DataArray:
+    """Convert the valid_time coordinate to a init_time coordinate.
+
+    Args:
+        ds: The dataset to convert with lead_time and valid_time coordinates.
+
+    Returns:
+        The dataset with a init_time coordinate.
+    """
+    init_time = xr.DataArray(
+        da.valid_time, coords={"valid_time": da.valid_time}
+    ) - xr.DataArray(da.lead_time, coords={"lead_time": da.lead_time})
+    da = da.assign_coords(init_time=init_time)
+    return xr.concat(
+        [
+            da.sel(lead_time=lead).swap_dims({"valid_time": "init_time"})
+            for lead in da.lead_time
+        ],
+        "lead_time",
+        coords="different",
+        compat="equals",
+        join="outer",
+    )
+
+
 def maybe_get_closest_timestamp_to_center_of_valid_times(
     output_times: xr.DataArray,
     valid_time_values: xr.DataArray,
