@@ -812,7 +812,6 @@ class TestIncompleteMetrics:
             metrics.SpatialDisplacement,
             metrics.FAR,
             metrics.CSI,
-            metrics.LeadTimeDetection,
         ]
 
         for metric_class in incomplete_metrics:
