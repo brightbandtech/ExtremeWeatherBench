@@ -43,8 +43,7 @@ def safely_pull_variables(
         >>> list(result.columns)
         ['temp']
     """
-    # For pandas DataFrames, automatically add coordinate variables
-    # to both required and optional variables
+    from extremeweatherbench import defaults
 
     # Get column names from DataFrame
     available_columns = list(data.columns)
@@ -52,6 +51,10 @@ def safely_pull_variables(
     # Track which variables we've found (use set to avoid duplicates)
     found_variables = set()
 
+    # First, add any coordinate columns that exist
+    for coord in defaults.DEFAULT_COORDINATE_VARIABLES:
+        if coord in available_columns:
+            found_variables.add(coord)
     # Then check for required variables that weren't replaced
     missing_variables = []
     for var in variables:

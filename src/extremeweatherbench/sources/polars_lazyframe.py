@@ -47,14 +47,17 @@ def safely_pull_variables(
         >>> result.collect().columns
         ['temp']
     """
-    # For polars LazyFrames, automatically add coordinate variables
-    # to optional variables only (not required)
+    from extremeweatherbench import defaults
 
     # Get column names from LazyFrame
     available_columns = data.collect_schema().names()
 
     # Track which variables we've found (use set to avoid duplicates)
     found_variables = set()
+    # First, add any coordinate columns that exist
+    for coord in defaults.DEFAULT_COORDINATE_VARIABLES:
+        if coord in available_columns:
+            found_variables.add(coord)
 
     # Then check for required variables that weren't replaced
     missing_variables = []
