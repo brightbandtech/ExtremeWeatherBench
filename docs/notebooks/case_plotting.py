@@ -34,33 +34,16 @@ def get_polygon_from_bounding_box(bounding_box):
     )
 
 
-def plot_polygon(polygon, ax, color="yellow", alpha=0.5, my_zorder=1, linewidth=2):
+def plot_polygon(
+    polygon, ax, color="yellow", alpha=0.5, my_zorder=1, linewidth=2, fill=True
+):
     """Plot a shapely Polygon on a Cartopy axis."""
     if polygon is None:
         return
     patch = patches.Polygon(
         polygon.exterior.coords,
         closed=True,
-        facecolor=color,
-        edgecolor=color,
-        alpha=alpha,
-        linewidth=linewidth,
-        zorder=my_zorder,
-        transform=ccrs.PlateCarree(),
-    )
-    ax.add_patch(patch)
-
-
-def plot_polygon_outline(
-    polygon, ax, color="yellow", alpha=0.5, my_zorder=1, linewidth=2
-):
-    """Plot a shapely Polygon outline on a Cartopy axis."""
-    if polygon is None:
-        return
-    patch = patches.Polygon(
-        polygon.exterior.coords,
-        closed=True,
-        facecolor="none",
+        facecolor=color if fill else "none",
         edgecolor=color,
         alpha=alpha,
         linewidth=linewidth,
@@ -97,7 +80,6 @@ def plot_all_cases(
     # save the bounding box polygon to subset the counts later
     if bounding_box is not None:
         bounding_box_polygon = get_polygon_from_bounding_box(bounding_box)
-        # plot_polygon(bounding_box_polygon, ax, color='yellow', alpha=0.5)
 
     # Add coastlines and gridlines
     ax.coastlines()
@@ -121,13 +103,6 @@ def plot_all_cases(
     sns_palette = sns.color_palette("tab10")
     sns.set_style("whitegrid")
 
-    # event_colors = {
-    #     'heat_wave': 'firebrick',
-    #     'tropical_cyclone': 'darkorange',
-    #     'severe_convection': 'orchid',
-    #     'atmospheric_river': 'mediumseagreen',
-    #     'freeze': 'royalblue',
-    # }
     event_colors = {
         "freeze": sns_palette[0],
         "heat_wave": sns_palette[3],
@@ -159,13 +134,6 @@ def plot_all_cases(
         "atmospheric_river": 0.3,
         "tropical_cyclone": 0.07,
         "severe_convection": 0.02,
-    }
-    box_alphas = {
-        "freeze": 1,
-        "heat_wave": 1,
-        "atmospheric_river": 1,
-        "tropical_cyclone": 0.5,
-        "severe_convection": 1,
     }
 
     # Handle both IndividualCaseCollection and IndividualCase
@@ -201,60 +169,32 @@ def plot_all_cases(
 
         # Plot the case geopandas info
         if event_type is None or indiv_event_type == event_type:
-            if fill_boxes:
-                # to handle wrapping around the prime meridian, we
-                # can't use geopandas plot (and besides it is slow)
-                # instead we have multi-polygon patches if it wraps
-                # around and we need to plot each polygon separately
-                if isinstance(
-                    indiv_case.location.as_geopandas().geometry.iloc[0],
-                    shapely.geometry.MultiPolygon,
-                ):
-                    for poly in (
-                        indiv_case.location.as_geopandas().geometry.iloc[0].geoms
-                    ):
-                        plot_polygon(
-                            poly,
-                            ax,
-                            color=color,
-                            alpha=alphas[indiv_event_type],
-                            my_zorder=zorders[indiv_event_type],
-                        )
-                else:
+            # to handle wrapping around the prime meridian, we
+            # can't use geopandas plot (and besides it is slow)
+            # instead we have multi-polygon patches if it wraps
+            # around and we need to plot each polygon separately
+            if isinstance(
+                indiv_case.location.as_geopandas().geometry.iloc[0],
+                shapely.geometry.MultiPolygon,
+            ):
+                for poly in indiv_case.location.as_geopandas().geometry.iloc[0].geoms:
                     plot_polygon(
-                        indiv_case.location.as_geopandas().geometry.iloc[0],
+                        poly,
                         ax,
                         color=color,
                         alpha=alphas[indiv_event_type],
                         my_zorder=zorders[indiv_event_type],
+                        fill=fill_boxes,
                     )
             else:
-                # to handle wrapping around the prime meridian, we
-                # can't use geopandas plot (and besides it is slow)
-                # instead we have multi-polygon patches if it wraps
-                # around and we need to plot each polygon separately
-                if isinstance(
+                plot_polygon(
                     indiv_case.location.as_geopandas().geometry.iloc[0],
-                    shapely.geometry.MultiPolygon,
-                ):
-                    for poly in (
-                        indiv_case.location.as_geopandas().geometry.iloc[0].geoms
-                    ):
-                        plot_polygon_outline(
-                            poly,
-                            ax,
-                            color=color,
-                            alpha=box_alphas[indiv_event_type],
-                            my_zorder=zorders[indiv_event_type],
-                        )
-                else:
-                    plot_polygon_outline(
-                        indiv_case.location.as_geopandas().geometry.iloc[0],
-                        ax,
-                        color=color,
-                        alpha=box_alphas[indiv_event_type],
-                        my_zorder=zorders[indiv_event_type],
-                    )
+                    ax,
+                    color=color,
+                    alpha=alphas[indiv_event_type],
+                    my_zorder=zorders[indiv_event_type],
+                    fill=fill_boxes,
+                )
 
     # Create a custom legend for event types
     if event_type is not None:
@@ -387,13 +327,6 @@ def plot_all_cases_and_obs(
     sns_palette = sns.color_palette("tab10")
     sns.set_style("whitegrid")
 
-    # event_colors = {
-    #     'heat_wave': 'firebrick',
-    #     'tropical_cyclone': 'darkorange',
-    #     'severe_convection': 'orchid',
-    #     'atmospheric_river': 'mediumseagreen',
-    #     'freeze': 'royalblue',
-    # }
     event_colors = {
         "freeze": sns_palette[0],
         "heat_wave": sns_palette[3],
@@ -473,22 +406,24 @@ def plot_all_cases_and_obs(
                 shapely.geometry.MultiPolygon,
             ):
                 for poly in indiv_case.location.as_geopandas().geometry.iloc[0].geoms:
-                    plot_polygon_outline(
+                    plot_polygon(
                         poly,
                         ax,
                         color=color,
                         alpha=alphas[indiv_event_type],
                         my_zorder=zorders[indiv_event_type],
                         linewidth=0.8,
+                        fill=False,
                     )
             else:
-                plot_polygon_outline(
+                plot_polygon(
                     indiv_case.location.as_geopandas().geometry.iloc[0],
                     ax,
                     color=color,
                     alpha=alphas[indiv_event_type],
                     my_zorder=zorders[indiv_event_type],
                     linewidth=0.8,
+                    fill=False,
                 )
 
             # grab the target data for this case; targets is a list of tuples of
@@ -498,6 +433,8 @@ def plot_all_cases_and_obs(
                 for n in targets
                 if n[0] == indiv_case.case_id_number and n[1].attrs["source"] != "ERA5"
             ]
+            # print(my_target_info)
+
             # make a scatter plot of the target points (for hot/cold/tc events)
             if (
                 indiv_event_type in ["heat_wave", "freeze", "tropical_cyclone"]
@@ -532,6 +469,7 @@ def plot_all_cases_and_obs(
                     print(indiv_case.case_id_number)
                     print(data)
                     continue
+
                 # Convert longitude values from 0-360 to -180 to 180 for proper
                 # antimeridian handling with Cartopy
                 lon_values_180 = utils.convert_longitude_to_180(lon_values)
@@ -549,97 +487,49 @@ def plot_all_cases_and_obs(
                     zorder=zorders[indiv_event_type],
                 )
 
-        # # if it is convective, show the PPH and LSRs
-        # if (indiv_event_type == 'severe_convection'):
-        #     if (case_id is not None and
-        #         indiv_case.case_id_number != case_id and
-        #         obs is not None):
-        #         continue
+            # if it is convective, show the PPH and LSRs
+            if indiv_event_type == "severe_convection":
+                # Get the data from my_target_info
+                data = my_target_info[0]
+                try:
+                    data = utils.stack_sparse_data_from_dims(
+                        data["report_type"], ["latitude", "longitude"]
+                    )
+                except Exception as e:
+                    print(
+                        f"Error stacking sparse data for "
+                        f"{indiv_case.case_id_number} from "
+                        f"dimensions latitude, longitude: {e}. "
+                        f"This is likely because the data is not "
+                        f"available for this case."
+                    )
+                    continue
 
-        #     # Make sure reports are visible by increasing size
-        #     # and using a distinctive color
-        #     # Convert string coordinates to float before plotting
-        #     colors = {'tor': 'red','wind': 'blue', 'hail': 'black'}
-        #     markers= {'tor': 'o', 'wind': 's', 'hail': '^'}
+                for my_data in data:
+                    hail_reports = my_data[my_data == 2]
+                    lat_values = hail_reports.latitude.values
+                    lon_values = hail_reports.longitude.values
+                    ax.scatter(
+                        lon_values,
+                        lat_values,
+                        color="black",
+                        alpha=0.9,
+                        marker="o",
+                        transform=ccrs.Geodetic(),
+                        s=6,
+                    )
 
-        #     # Define zorder values to control plotting order
-        #     # (higher values appear on top)
-        #     zorders = {'tor': 10, 'wind': 9, 'hail': 8}
-
-        #     # Sort the dataframe by report type to ensure
-        #     # tornadoes are plotted last (on top)
-        #     # Create a custom sort order where 'tor' comes last
-        #     sort_order = {'hail': 0, 'wind': 1, 'tor': 2}
-        #     sorted_df = obs[indiv_case.case_id_number]['lsr_reports'].copy()
-        #     sorted_df['sort_key'] = sorted_df['report_type'].map(sort_order)
-
-        #     # Group by report type and plot each group with
-        #     # its own color
-        #     for report_type, group in (
-        #         sorted_df.sort_values('sort_key').groupby('report_type')):
-        #         ax.scatter(
-        #             group['Longitude'].astype(float),
-        #             group['Latitude'].astype(float),
-        #             color=colors.get(report_type, 'gray'), s=20,
-        #             marker=markers.get(report_type), alpha=0.9,
-        #             transform=ccrs.PlateCarree(),
-        #             label=f'{report_type.capitalize()} Reports',
-        #             zorder=zorders.get(report_type, 10))
-
-        #     # Plot the PPH outline
-        #     pph = obs[indiv_case.case_id_number]['pph']
-
-        #     #print (np.max(pph.values), np.min(pph.values))
-
-        #     # find the contour outlines
-        #     contours = find_contours(pph.values, level=0.01, fully_connected='low')
-
-        #     for contour in contours:
-        #         contour_lon_lat_coords = []
-        #         for r_idx, c_idx in contour:
-        #             # Ensure indices are integers for array lookup
-        #             r_idx_int = int(r_idx)
-        #             c_idx_int = int(c_idx)
-
-        #             # Get the corresponding longitude and latitude
-        #             lon_val = pph.longitude[c_idx_int]
-        #             lat_val = pph.latitude[r_idx_int]
-        #             contour_lon_lat_coords.append((lon_val, lat_val))
-
-        #         # Convert to a NumPy array for easier handling
-        #         # if needed
-        #         contour_lon_lat_coords = np.array(contour_lon_lat_coords)
-        #         #print(contour_lon_lat_coords)
-
-        #         # convert from array indices to lat/lon
-        #         patch = patches.Polygon(
-        #             contour_lon_lat_coords, closed=True,
-        #             facecolor='none',
-        #             edgecolor=event_colors['severe_convection'],
-        #             alpha=1, linewidth=2,
-        #             transform=ccrs.PlateCarree())
-        #         ax.add_patch(patch)
-
-        #     if (show_orig_pph):
-        #         # Plot the data using contourf
-        #         levels = [0.01, .05,.15,.30,.45,.60,.75]
-
-        #         # Create a custom colormap that sets alpha=0
-        #         # for values below 0.05
-        #         cmap = plt.cm.viridis
-        #         norm = mcolors.BoundaryNorm(levels, cmap.N)
-
-        #         # Create the colormap with alpha=0 for values
-        #         # below 0.05
-        #         # Create a mask for values below 0.05
-        #         mask = np.ma.masked_less(pph, 0.001)
-        #         cmap_with_alpha = plt.cm.viridis.copy()
-        #         # Set masked values to transparent
-        #         cmap_with_alpha.set_bad('none', alpha=0)
-
-        #         contour = ax.contour(pph.longitude, pph.latitude, mask,
-        #                             levels=levels, transform=ccrs.PlateCarree(),
-        #                             cmap=cmap_with_alpha, extend='both')
+                    tor_reports = my_data[my_data == 1]
+                    lat_values = tor_reports.latitude.values
+                    lon_values = tor_reports.longitude.values
+                    ax.scatter(
+                        lon_values,
+                        lat_values,
+                        color="red",
+                        marker="^",
+                        transform=ccrs.Geodetic(),
+                        s=6,
+                    )
 
     # Create a custom legend for event types
     if event_type is not None:
@@ -740,7 +630,7 @@ def plot_boxes(box_list, box_names, title, filename=None):
 
     # Plot boxes for each case
     for box in box_list:
-        plot_polygon_outline(box, ax, color="blue", alpha=1)
+        plot_polygon(box, ax, color="blue", alpha=1, fill=False)
 
     plt.legend(loc="lower left", fontsize=12)
     ax.set_title(title, loc="left", fontsize=20)
