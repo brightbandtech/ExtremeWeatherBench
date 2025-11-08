@@ -508,20 +508,23 @@ def _build_datasets(
     if zero_length_dims:
         if "valid_time" in zero_length_dims:
             logger.warning(
-                "Forecast dataset for case %s has no data for case time range %s to "
-                "%s.",
-                case_operator.case_metadata.case_id_number,
-                case_operator.case_metadata.start_date,
-                case_operator.case_metadata.end_date,
+                "Forecast dataset for case %s has no data for case time range %s to %s."
+                % (
+                    case_operator.case_metadata.case_id_number,
+                    case_operator.case_metadata.start_date,
+                    case_operator.case_metadata.end_date,
+                )
             )
         else:
             logger.warning(
                 "Forecast dataset for case %s has zero-length dimensions %s for case "
-                "time range %s to %s.",
-                case_operator.case_metadata.case_id_number,
-                zero_length_dims,
-                case_operator.case_metadata.start_date,
-                case_operator.case_metadata.end_date,
+                "time range %s to %s."
+                % (
+                    case_operator.case_metadata.case_id_number,
+                    zero_length_dims,
+                    case_operator.case_metadata.start_date,
+                    case_operator.case_metadata.end_date,
+                )
             )
         return xr.Dataset(), xr.Dataset()
     return (forecast_ds, target_ds)
@@ -625,15 +628,15 @@ def _safe_concat(
     for i, df in enumerate(dataframes):
         # Skip empty DataFrames
         if df.empty:
-            logger.debug(f"Skipping empty DataFrame {i}")
+            logger.debug("Skipping empty DataFrame %s", i)
             continue
         # Skip DataFrames where all values are NA
         if df.isna().all().all():
-            logger.debug(f"Skipping all-NA DataFrame {i}")
+            logger.debug("Skipping all-NA DataFrame %s", i)
             continue
         # Skip DataFrames where all columns are empty/NA
         if len(df.columns) > 0 and all(df[col].isna().all() for col in df.columns):
-            logger.debug(f"Skipping DataFrame {i} with all-NA columns")
+            logger.debug("Skipping DataFrame %s with all-NA columns", i)
             continue
 
         valid_dfs.append(df)
