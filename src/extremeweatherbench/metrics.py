@@ -542,13 +542,12 @@ class Signal(BaseMetric):
     and spatial_aggregation parameters.
     """
 
-    name = "signal"
-
     def __init__(self, **kwargs: Any):
-        super().__init__(**kwargs)
-        self.threshold = kwargs.get("threshold", 0.5)
-        self.comparison = kwargs.get("comparison", ">=")
-        self.spatial_aggregation = kwargs.get("spatial_aggregation", "any")
+        # Extract threshold params before passing to super
+        self.threshold = kwargs.pop("threshold", 0.5)
+        self.comparison = kwargs.pop("comparison", ">=")
+        self.spatial_aggregation = kwargs.pop("spatial_aggregation", "any")
+        super().__init__("signal", **kwargs)
 
     def _compute_metric(
         self,
@@ -1068,18 +1067,13 @@ class LandfallIntensityMAE(BaseMetric):
 
 
 class SpatialDisplacement(BaseMetric):
-    name = "spatial_displacement"
-    preserve_dims: str = "lead_time"
-
     def __init__(
         self,
-        forecast_variable: Optional[str | derived.DerivedVariable] = None,
-        target_variable: Optional[str | derived.DerivedVariable] = None,
         forecast_mask_variable: Optional[str | derived.DerivedVariable] = None,
         target_mask_variable: Optional[str | derived.DerivedVariable] = None,
+        **kwargs: Any,
     ):
-        self.forecast_variable = forecast_variable
-        self.target_variable = target_variable
+        super().__init__("spatial_displacement", **kwargs)
         self.forecast_mask_variable = forecast_mask_variable
         self.target_mask_variable = target_mask_variable
 
