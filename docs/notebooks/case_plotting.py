@@ -303,7 +303,6 @@ def plot_all_cases_and_obs(
     # save the bounding box polygon to subset the counts later
     if bounding_box is not None:
         bounding_box_polygon = get_polygon_from_bounding_box(bounding_box)
-        # plot_polygon(bounding_box_polygon, ax, color='yellow', alpha=0.5)
 
     # Add coastlines and gridlines
     ax.coastlines()
@@ -379,10 +378,9 @@ def plot_all_cases_and_obs(
             indiv_event_type, "gray"
         )  # Default to gray if event type not found
 
-        # check if the case is inside the bounding box
         if bounding_box is not None:
             if not shapely.intersects(
-                indiv_case.location.geopandas.geometry[0], bounding_box_polygon
+                indiv_case.location.as_geopandas().geometry[0], bounding_box_polygon
             ):
                 # print(f"Skipping case {indiv_case.case_id_number} "
                 # f"as it is outside the bounding box.")
