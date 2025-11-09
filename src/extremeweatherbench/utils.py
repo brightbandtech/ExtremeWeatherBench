@@ -12,6 +12,7 @@ from typing import Any, Callable, Optional, Sequence, Union
 import numpy as np
 import pandas as pd  # type: ignore[import-untyped]
 import regionmask
+import sparse
 import tqdm
 import xarray as xr
 import yaml  # type: ignore[import]
@@ -190,8 +191,8 @@ def derive_indices_from_init_time_and_lead_time(
             dataset.lead_time.shape[0],
         )
     )
-    valid_time_mask = (valid_times_reshaped > pd.to_datetime(start_date)) & (
-        valid_times_reshaped < pd.to_datetime(end_date)
+    valid_time_mask = (valid_times_reshaped >= pd.to_datetime(start_date)) & (
+        valid_times_reshaped <= pd.to_datetime(end_date)
     )
     valid_time_indices = np.asarray(valid_time_mask).nonzero()
 
@@ -318,6 +319,31 @@ def convert_init_time_to_valid_time(ds: xr.Dataset) -> xr.Dataset:
         [
             ds.sel(lead_time=lead).swap_dims({"init_time": "valid_time"})
             for lead in ds.lead_time
+        ],
+        "lead_time",
+        coords="different",
+        compat="equals",
+        join="outer",
+    )
+
+
+def convert_valid_time_to_init_time(da: xr.DataArray) -> xr.DataArray:
+    """Convert the valid_time coordinate to a init_time coordinate.
+
+    Args:
+        ds: The dataset to convert with lead_time and valid_time coordinates.
+
+    Returns:
+        The dataset with a init_time coordinate.
+    """
+    init_time = xr.DataArray(
+        da.valid_time, coords={"valid_time": da.valid_time}
+    ) - xr.DataArray(da.lead_time, coords={"lead_time": da.lead_time})
+    da = da.assign_coords(init_time=init_time)
+    return xr.concat(
+        [
+            da.sel(lead_time=lead).swap_dims({"valid_time": "init_time"})
+            for lead in da.lead_time
         ],
         "lead_time",
         coords="different",
@@ -519,3 +545,44 @@ class ParallelTqdm(Parallel):
             self.progress_bar.refresh()
         # update progressbar
         self.progress_bar.update(self.n_completed_tasks - self.progress_bar.n)
+
+
+def reduce_dataarray(
+    da: xr.DataArray,
+    method: str | Callable,
+    reduce_dims: list[str],
+    **method_kwargs,
+) -> xr.DataArray:
+    """Reduce using xarray methods or numpy functions.
+
+    This function can utilize xarray's optimized methods (e.g., mean, sum) or
+    numpy/callable reductions. Using the built-in methods xarray provides can be more
+    efficient than using numpy functions.
+
+    Args:
+        da: The xarray dataarray to reduce.
+        method: Either an xarray method name (e.g., 'mean', 'sum') or
+            a callable function (e.g., np.nanmean).
+        reduce_dims: The dimensions to reduce.
+        **method_kwargs: Additional kwargs for the method. Only used
+            when method is a string (xarray method).
+
+    Returns:
+        The reduced xarray dataarray.
+    """
+    if isinstance(da.data, sparse.COO):
+        da = stack_sparse_data_from_dims(da, reduce_dims)
+        reduce_dims = ["stacked"]
+
+    if callable(method):
+        # Use numpy function or other callable (original behavior)
+        return da.reduce(method, dim=reduce_dims)
+    elif isinstance(method, str):
+        # Use xarray built-in method
+        if not hasattr(da, method):
+            raise ValueError(f"DataArray has no method '{method}'")
+
+        method_func = getattr(da, method)
+        return method_func(dim=reduce_dims, **method_kwargs)
+    else:
+        raise TypeError(f"method must be str or callable, got {type(method)}")

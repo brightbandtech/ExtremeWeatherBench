@@ -110,20 +110,43 @@ class ExtremeWeatherBench:
         Returns:
             A concatenated dataframe of the evaluation results.
         """
-        # Caching does not work in parallel mode as of now, so ignore the cache_dir
-        # but raise a warning for the user
-        if self.cache_dir and n_jobs != 1:
-            logger.warning(
-                "Caching is not supported in parallel mode, ignoring cache_dir"
-            )
+        logger.info("Running ExtremeWeatherBench workflow...")
 
-        # Instantiate the cache directory if caching and build it if it does not exist
-        elif self.cache_dir:
-            if not self.cache_dir.exists():
-                self.cache_dir.mkdir(parents=True, exist_ok=True)
-        run_results = _run_case_operators(
-            self.case_operators, n_jobs, self.cache_dir, **kwargs
+        # Determine if running in serial or parallel mode
+        # Serial: n_jobs=1 or (parallel_config with n_jobs=1)
+        # Parallel: n_jobs>1 or (parallel_config with n_jobs>1)
+        is_serial = (
+            (n_jobs == 1)
+            or (parallel_config is not None and parallel_config.get("n_jobs") == 1)
+            or (n_jobs is None and parallel_config is None)
         )
+        logger.debug("Running in %s mode.", "serial" if is_serial else "parallel")
+
+        if not is_serial:
+            # Build parallel_config if not provided
+            if parallel_config is None and n_jobs is not None:
+                logger.debug(
+                    "No parallel_config provided, using threading backend and %s jobs.",
+                    n_jobs,
+                )
+                parallel_config = {"backend": "threading", "n_jobs": n_jobs}
+            kwargs["parallel_config"] = parallel_config
+
+            # Caching does not work in parallel mode as of now
+            if self.cache_dir:
+                logger.warning(
+                    "Caching is not supported in parallel mode, ignoring cache_dir"
+                )
+        else:
+            # Running in serial mode - instantiate cache dir if needed
+            if self.cache_dir:
+                if not self.cache_dir.exists():
+                    self.cache_dir.mkdir(parents=True, exist_ok=True)
+
+        run_results = _run_case_operators(self.case_operators, self.cache_dir, **kwargs)
+
+        # If there are results, concatenate them and return, else return an empty
+        # DataFrame with the expected columns
         if run_results:
             return _safe_concat(run_results, ignore_index=True)
         else:
@@ -207,7 +230,7 @@ def _run_parallel(
                 # No client exists, create a local one
                 logger.info("Creating local dask client for parallel execution")
                 dask_client = Client(LocalCluster(processes=True, silence_logs=False))
-                logger.info(f"Dask client created: {dask_client}")
+                logger.info("Dask client created: %s", dask_client)
         except ImportError:
             raise ImportError(
                 "Dask is required for dask backend. "
@@ -409,11 +432,11 @@ def _evaluate_metric_and_return_df(
         forecast_variable: The forecast variable to evaluate.
         target_variable: The target variable to evaluate.
         metric: The metric to evaluate.
-        case_id_number: The case id number.
-        event_type: The event type.
+        case_operator: The case operator with metadata for the evaluation.
+        **kwargs: Additional keyword arguments to pass to metric computation.
 
     Returns:
-        A dataframe of the results of the metric evaluation.
+        A dataframe of the results with standard output schema columns.
     """
 
     # Normalize variables to their string names if needed
@@ -485,19 +508,23 @@ def _build_datasets(
     if zero_length_dims:
         if "valid_time" in zero_length_dims:
             logger.warning(
-                f"Forecast dataset for case "
-                f"{case_operator.case_metadata.case_id_number} "
-                f"has no data for case time range "
-                f"{case_operator.case_metadata.start_date} to "
-                f"{case_operator.case_metadata.end_date}."
+                "Forecast dataset for case %s has no data for case time range %s to %s."
+                % (
+                    case_operator.case_metadata.case_id_number,
+                    case_operator.case_metadata.start_date,
+                    case_operator.case_metadata.end_date,
+                )
             )
         else:
             logger.warning(
-                f"Forecast dataset for case "
-                f"{case_operator.case_metadata.case_id_number} "
-                f"has zero-length dimensions {zero_length_dims} for case time range "
-                f"{case_operator.case_metadata.start_date} "
-                f"to {case_operator.case_metadata.end_date}."
+                "Forecast dataset for case %s has zero-length dimensions %s for case "
+                "time range %s to %s."
+                % (
+                    case_operator.case_metadata.case_id_number,
+                    zero_length_dims,
+                    case_operator.case_metadata.start_date,
+                    case_operator.case_metadata.end_date,
+                )
             )
         return xr.Dataset(), xr.Dataset()
     return (forecast_ds, target_ds)
@@ -601,15 +628,15 @@ def _safe_concat(
     for i, df in enumerate(dataframes):
         # Skip empty DataFrames
         if df.empty:
-            logger.debug(f"Skipping empty DataFrame {i}")
+            logger.debug("Skipping empty DataFrame %s", i)
             continue
         # Skip DataFrames where all values are NA
         if df.isna().all().all():
-            logger.debug(f"Skipping all-NA DataFrame {i}")
+            logger.debug("Skipping all-NA DataFrame %s", i)
             continue
         # Skip DataFrames where all columns are empty/NA
         if len(df.columns) > 0 and all(df[col].isna().all() for col in df.columns):
-            logger.debug(f"Skipping DataFrame {i} with all-NA columns")
+            logger.debug("Skipping DataFrame %s with all-NA columns", i)
             continue
 
         valid_dfs.append(df)
