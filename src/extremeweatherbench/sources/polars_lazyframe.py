@@ -54,12 +54,13 @@ def safely_pull_variables(
 
     # Track which variables we've found (use set to avoid duplicates)
     found_variables = set()
+
     # First, add any coordinate columns that exist
     for coord in defaults.DEFAULT_COORDINATE_VARIABLES:
         if coord in available_columns:
             found_variables.add(coord)
 
-    # Then check for required variables that weren't replaced
+    # Then check for required variables
     missing_variables = []
     for var in variables:
         if var in available_columns:
