@@ -3203,7 +3203,7 @@ cases:
         longitude_min: 110.0
         longitude_max: 155.0
     event_type: severe_convection
-  - case_id_number: 269
+  - case_id_number: 268
     title: October 2021 Australia
     start_date: 2021-10-27 12:00:00
     end_date: 2021-10-28 12:00:00
@@ -3215,7 +3215,7 @@ cases:
         longitude_min: 110.0
         longitude_max: 155.0
     event_type: severe_convection
-  - case_id_number: 270
+  - case_id_number: 269
     title: December 2021 Australia
     start_date: 2021-12-02 12:00:00
     end_date: 2021-12-03 12:00:00
@@ -3227,7 +3227,7 @@ cases:
         longitude_min: 110.0
         longitude_max: 155.0
     event_type: severe_convection
-  - case_id_number: 271
+  - case_id_number: 270
     title: December 2021 Australia
     start_date: 2021-12-08 12:00:00
     end_date: 2021-12-09 12:00:00
@@ -3239,7 +3239,7 @@ cases:
         longitude_min: 110.0
         longitude_max: 155.0
     event_type: severe_convection
-  - case_id_number: 272
+  - case_id_number: 271
     title: January 2022 Australia
     start_date: 2022-01-14 12:00:00
     end_date: 2022-01-15 12:00:00
@@ -3251,7 +3251,7 @@ cases:
         longitude_min: 110.0
         longitude_max: 155.0
     event_type: severe_convection
-  - case_id_number: 273
+  - case_id_number: 272
     title: March 2022 Australia
     start_date: 2022-03-03 12:00:00
     end_date: 2022-03-04 12:00:00
@@ -3263,7 +3263,7 @@ cases:
         longitude_min: 110.0
         longitude_max: 155.0
     event_type: severe_convection
-  - case_id_number: 274
+  - case_id_number: 273
     title: December 2022 Australia
     start_date: 2022-12-07 12:00:00
     end_date: 2022-12-08 12:00:00
@@ -3275,7 +3275,7 @@ cases:
         longitude_min: 110.0
         longitude_max: 155.0
     event_type: severe_convection
-  - case_id_number: 275
+  - case_id_number: 274
     title: February 2023 Australia
     start_date: 2023-02-13 12:00:00
     end_date: 2023-02-14 12:00:00
@@ -3287,7 +3287,7 @@ cases:
         longitude_min: 110.0
         longitude_max: 155.0
     event_type: severe_convection
-  - case_id_number: 276
+  - case_id_number: 275
     title: December 2023 Australia
     start_date: 2023-12-11 12:00:00
     end_date: 2023-12-12 12:00:00
@@ -3299,7 +3299,7 @@ cases:
         longitude_min: 110.0
         longitude_max: 155.0
     event_type: severe_convection
-  - case_id_number: 277
+  - case_id_number: 276
     title: December 2023 Australia
     start_date: 2023-12-24 12:00:00
     end_date: 2023-12-26 12:00:00
@@ -3311,7 +3311,7 @@ cases:
         longitude_min: 110.0
         longitude_max: 155.0
     event_type: severe_convection
-  - case_id_number: 279
+  - case_id_number: 277
     title: August 2024 Australia
     start_date: 2024-08-24 12:00:00
     end_date: 2024-08-25 12:00:00
@@ -3323,7 +3323,7 @@ cases:
         longitude_min: 110.0
         longitude_max: 155.0
     event_type: severe_convection
-  - case_id_number: 280
+  - case_id_number: 278
     title: October 2024 Australia
     start_date: 2024-10-08 12:00:00
     end_date: 2024-10-09 12:00:00
@@ -3335,7 +3335,7 @@ cases:
         longitude_min: 110.0
         longitude_max: 155.0
     event_type: severe_convection
-  - case_id_number: 281
+  - case_id_number: 279
     title: October 2024 Australia
     start_date: 2024-10-16 12:00:00
     end_date: 2024-10-17 12:00:00
@@ -3347,7 +3347,7 @@ cases:
         longitude_min: 110.0
         longitude_max: 155.0
     event_type: severe_convection
-  - case_id_number: 282
+  - case_id_number: 280
     title: November 2024 Australia
     start_date: 2024-10-31 12:00:00
     end_date: 2024-11-01 12:00:00
@@ -3359,7 +3359,7 @@ cases:
         longitude_min: 110.0
         longitude_max: 155.0
     event_type: severe_convection
-  - case_id_number: 283
+  - case_id_number: 281
     title: November 2024 Australia
     start_date: 2024-11-12 12:00:00
     end_date: 2024-11-13 12:00:00
@@ -3371,7 +3371,7 @@ cases:
         longitude_min: 110.0
         longitude_max: 155.0
     event_type: severe_convection
-  - case_id_number: 284
+  - case_id_number: 282
     title: April 2023 Midwest
     start_date: 2023-04-05 12:00:00
     end_date: 2023-04-06 12:00:00
@@ -3383,7 +3383,7 @@ cases:
         longitude_min: 245.0
         longitude_max: 295.0
     event_type: severe_convection
-  - case_id_number: 285
+  - case_id_number: 283
     title: March 2023 Midwest + Southeast
     start_date: 2023-03-31 12:00:00
     end_date: 2023-04-01 12:00:00
@@ -3395,7 +3395,7 @@ cases:
         longitude_min: 245.0
         longitude_max: 295.0
     event_type: severe_convection
-  - case_id_number: 286
+  - case_id_number: 284
     title: March 2023 North America
     start_date: 2023-03-02 12:00:00
     end_date: 2023-03-03 12:00:00
@@ -3407,7 +3407,7 @@ cases:
         longitude_min: 245.0
         longitude_max: 295.0
     event_type: severe_convection
-  - case_id_number: 287
+  - case_id_number: 285
     title: February 2023 North America
     start_date: 2023-02-26 12:00:00
     end_date: 2023-02-27 12:00:00
@@ -3419,7 +3419,7 @@ cases:
         longitude_min: 245.0
         longitude_max: 295.0
     event_type: severe_convection
-  - case_id_number: 288
+  - case_id_number: 286
     title: July 2022 Great Plains
     start_date: 2022-07-22 12:00:00
     end_date: 2022-07-23 12:00:00
@@ -3431,7 +3431,7 @@ cases:
         longitude_min: 245.0
         longitude_max: 295.0
     event_type: severe_convection
-  - case_id_number: 289
+  - case_id_number: 287
     title: June 2022 Southwest
     start_date: 2022-06-07 12:00:00
     end_date: 2022-06-08 12:00:00
@@ -3443,7 +3443,7 @@ cases:
         longitude_min: 245.0
         longitude_max: 295.0
     event_type: severe_convection
-  - case_id_number: 290
+  - case_id_number: 288
     title: May 2022 Midwest
     start_date: 2022-05-12 12:00:00
     end_date: 2022-05-13 12:00:00
@@ -3455,7 +3455,7 @@ cases:
         longitude_min: 245.0
         longitude_max: 295.0
     event_type: severe_convection
-  - case_id_number: 291
+  - case_id_number: 289
     title: April 2022 Great Plains
     start_date: 2022-04-12 12:00:00
     end_date: 2022-04-13 12:00:00
@@ -3467,7 +3467,7 @@ cases:
         longitude_min: 245.0
         longitude_max: 295.0
     event_type: severe_convection
-  - case_id_number: 292
+  - case_id_number: 290
     title: April 2022 South
     start_date: 2022-04-05 12:00:00
     end_date: 2022-04-06 12:00:00
@@ -3479,7 +3479,7 @@ cases:
         longitude_min: 245.0
         longitude_max: 295.0
     event_type: severe_convection
-  - case_id_number: 293
+  - case_id_number: 291
     title: December 2021 Midwest
     start_date: 2021-12-15 12:00:00
     end_date: 2021-12-16 12:00:00
@@ -3491,7 +3491,7 @@ cases:
         longitude_min: 245.0
         longitude_max: 295.0
     event_type: severe_convection
-  - case_id_number: 294
+  - case_id_number: 292
     title: December 2021 Great Plains
     start_date: 2021-12-10 12:00:00
     end_date: 2021-12-11 12:00:00
@@ -3503,7 +3503,7 @@ cases:
         longitude_min: 245.0
         longitude_max: 295.0
     event_type: severe_convection
-  - case_id_number: 295
+  - case_id_number: 293
     title: June 2021 Great Plains
     start_date: 2021-06-18 12:00:00
     end_date: 2021-06-19 12:00:00
@@ -3515,7 +3515,7 @@ cases:
         longitude_min: 245.0
         longitude_max: 295.0
     event_type: severe_convection
-  - case_id_number: 296
+  - case_id_number: 294
     title: May 2021 Great Plains
     start_date: 2021-05-03 12:00:00
     end_date: 2021-05-05 12:00:00
@@ -3527,7 +3527,7 @@ cases:
         longitude_min: 245.0
         longitude_max: 295.0
     event_type: severe_convection
-  - case_id_number: 297
+  - case_id_number: 295
     title: March 2021 South
     start_date: 2021-03-27 12:00:00
     end_date: 2021-03-28 12:00:00
@@ -3539,7 +3539,7 @@ cases:
         longitude_min: 245.0
         longitude_max: 295.0
     event_type: severe_convection
-  - case_id_number: 298
+  - case_id_number: 296
     title: March 2021 South
     start_date: 2021-03-25 12:00:00
     end_date: 2021-03-26 12:00:00
@@ -3551,7 +3551,7 @@ cases:
         longitude_min: 245.0
         longitude_max: 295.0
     event_type: severe_convection
-  - case_id_number: 299
+  - case_id_number: 297
     title: April 2020 South
     start_date: 2020-04-22 12:00:00
     end_date: 2020-04-23 12:00:00
@@ -3563,7 +3563,7 @@ cases:
         longitude_min: 245.0
         longitude_max: 295.0
     event_type: severe_convection
-  - case_id_number: 300
+  - case_id_number: 298
     title: April 2020 Southeast
     start_date: 2020-04-12 12:00:00
     end_date: 2020-04-13 12:00:00
@@ -3575,7 +3575,7 @@ cases:
         longitude_min: 245.0
         longitude_max: 295.0
     event_type: severe_convection
-  - case_id_number: 301
+  - case_id_number: 299
     title: April 2020 Midwest
     start_date: 2020-04-08 12:00:00
     end_date: 2020-04-09 12:00:00
@@ -3587,7 +3587,7 @@ cases:
         longitude_min: 245.0
         longitude_max: 295.0
     event_type: severe_convection
-  - case_id_number: 302
+  - case_id_number: 300
     title: March 2020 South
     start_date: 2020-03-28 12:00:00
     end_date: 2020-03-29 12:00:00
@@ -3599,7 +3599,7 @@ cases:
         longitude_min: 245.0
         longitude_max: 295.0
     event_type: severe_convection
-  - case_id_number: 303
+  - case_id_number: 301
     title: March 2020 Southeast
     start_date: 2020-03-02 12:00:00
     end_date: 2020-03-03 12:00:00
@@ -3611,7 +3611,7 @@ cases:
         longitude_min: 245.0
         longitude_max: 295.0
     event_type: severe_convection
-  - case_id_number: 304
+  - case_id_number: 302
     title: February 2020 East
     start_date: 2020-02-05 12:00:00
     end_date: 2020-02-07 12:00:00
@@ -3623,7 +3623,7 @@ cases:
         longitude_min: 245.0
         longitude_max: 295.0
     event_type: severe_convection
-  - case_id_number: 305
+  - case_id_number: 303
     title: January 2020 South
     start_date: 2020-01-10 12:00:00
     end_date: 2020-01-12 12:00:00

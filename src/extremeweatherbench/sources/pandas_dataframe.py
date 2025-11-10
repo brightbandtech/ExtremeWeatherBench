@@ -55,6 +55,7 @@ def safely_pull_variables(
     for coord in defaults.DEFAULT_COORDINATE_VARIABLES:
         if coord in available_columns:
             found_variables.add(coord)
+
     # Then check for required variables that weren't replaced
     missing_variables = []
     for var in variables:
