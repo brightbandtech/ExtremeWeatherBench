@@ -839,15 +839,15 @@ class IBTrACS(TargetBase):
             # Due to missing data in the IBTrACS dataset, polars doesn't convert
             # the valid_time to a datetime by default
             data["valid_time"] = pd.to_datetime(data["valid_time"])
-            data = data.set_index(["valid_time", "latitude", "longitude"])
+            data = data.set_index(["valid_time"])
 
             try:
-                data = xr.Dataset.from_dataframe(data, sparse=True)
+                data = xr.Dataset.from_dataframe(data)
             except ValueError as e:
                 if "non-unique" in str(e):
                     # Drop duplicates from the pandas DataFrame before converting
-                    data_df = data.drop_duplicates()
-                    data = xr.Dataset.from_dataframe(data_df, sparse=True)
+                    data = data.drop_duplicates()
+                    data = xr.Dataset.from_dataframe(data)
                 else:
                     raise
             return data
