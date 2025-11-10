@@ -395,6 +395,8 @@ def plot_all_cases_and_obs(
 
         # Plot the case geopandas info
         if indiv_event_type == event_type or event_type is None:
+            # print(indiv_case)
+
             # to handle wrapping around the prime meridian, we
             # can't use geopandas plot (and besides it is slow)
             # instead we have multi-polygon patches if it wraps
@@ -464,8 +466,6 @@ def plot_all_cases_and_obs(
                         f"Error stacking sparse data from dimensions "
                         f"latitude, longitude: {e}"
                     )
-                    print(indiv_case.case_id_number)
-                    print(data)
                     continue
 
                 # Convert longitude values from 0-360 to -180 to 180 for proper
@@ -489,6 +489,7 @@ def plot_all_cases_and_obs(
             if indiv_event_type == "severe_convection":
                 # Get the data from my_target_info
                 data = my_target_info[0]
+                # print(data)
                 try:
                     data = utils.stack_sparse_data_from_dims(
                         data["report_type"], ["latitude", "longitude"]
@@ -504,7 +505,9 @@ def plot_all_cases_and_obs(
                     continue
 
                 for my_data in data:
+                    # print(my_data)
                     hail_reports = my_data[my_data == 2]
+                    # print(hail_reports)
                     lat_values = hail_reports.latitude.values
                     lon_values = hail_reports.longitude.values
                     ax.scatter(
@@ -517,7 +520,8 @@ def plot_all_cases_and_obs(
                         s=6,
                     )
 
-                    tor_reports = my_data[my_data == 1]
+                    tor_reports = my_data[my_data == 3]
+                    # print(tor_reports)
                     lat_values = tor_reports.latitude.values
                     lon_values = tor_reports.longitude.values
                     ax.scatter(
