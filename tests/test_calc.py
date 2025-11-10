@@ -17,8 +17,9 @@ class TestBasicCalculations:
         # Test with center point
         point = (8, 10)  # Middle of the grid
 
-        lat, lon = calc.convert_from_cartesian_to_latlon(point, sample_calc_dataset)
-
+        lat, lon = calc.convert_from_cartesian_to_latlon(
+            point, sample_calc_dataset.latitude, sample_calc_dataset.longitude
+        )
         # Should return values within the grid bounds
         assert 20 <= lat <= 50
         assert -120 <= lon <= -80

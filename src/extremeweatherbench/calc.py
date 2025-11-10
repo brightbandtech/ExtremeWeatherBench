@@ -5,28 +5,25 @@ import xarray as xr
 
 
 def convert_from_cartesian_to_latlon(
-    input_point: Union[np.ndarray, tuple[float, float]], ds_mapping: xr.Dataset
+    input_point: Union[np.ndarray, tuple[float, float]],
+    latitude: xr.DataArray,
+    longitude: xr.DataArray,
 ) -> tuple[float, float]:
-    """Convert a point from the cartesian coordinate system to the lat/lon coordinate
-    system.
+    """Convert point from cartesian coordinate system to lat/lon.
 
     Args:
-        input_point: The point to convert, represented as a tuple (y, x) in the
-            cartesian coordinate system.
-        ds_mapping: The dataset containing the latitude and longitude
-            coordinates.
+        input_point: Point as tuple (y, x) in cartesian system
+        latitude: Latitude DataArray
+        longitude: Longitude DataArray
 
     Returns:
-        The point in the lat/lon coordinate system, represented as a tuple
-        (latitude, longitude) in degrees.
+        Tuple (latitude, longitude) in degrees
     """
+    lat_idx = int(input_point[0])
+    lon_idx = int(input_point[1])
     return (
-        ds_mapping.isel(
-            latitude=int(input_point[0]), longitude=int(input_point[1])
-        ).latitude.values,
-        ds_mapping.isel(
-            latitude=int(input_point[0]), longitude=int(input_point[1])
-        ).longitude.values,
+        latitude.isel(latitude=lat_idx).values,
+        longitude.isel(longitude=lon_idx).values,
     )
 
 
