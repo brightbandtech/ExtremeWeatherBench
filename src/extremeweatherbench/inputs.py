@@ -938,8 +938,8 @@ class IBTrACS(TargetBase):
             except ValueError as e:
                 if "non-unique" in str(e):
                     # Drop duplicates from the pandas DataFrame before converting
-                    data_df = data.drop_duplicates()
-                    data = xr.Dataset.from_dataframe(data_df, sparse=True)
+                    data = data.drop_duplicates()
+                    data = xr.Dataset.from_dataframe(data)
                 else:
                     raise
             return data
