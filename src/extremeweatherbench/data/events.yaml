@@ -421,8 +421,8 @@ cases:
     event_type: freeze
   - case_id_number: 36
     title: July 2024 South Dakota
-    start_date: 2024-07-13 00:00:00
-    end_date: 2024-07-14 00:00:00
+    start_date: 2024-07-13 12:00:00
+    end_date: 2024-07-14 12:00:00
     location:
       type: bounded_region
       parameters:
@@ -433,8 +433,8 @@ cases:
     event_type: severe_convection
   - case_id_number: 37
     title: July 2024 Chicago
-    start_date: 2024-07-14 00:00:00
-    end_date: 2024-07-16 00:00:00
+    start_date: 2024-07-14 12:00:00
+    end_date: 2024-07-16 12:00:00
     location:
       type: bounded_region
       parameters:
@@ -445,8 +445,8 @@ cases:
     event_type: severe_convection
   - case_id_number: 38
     title: July 2024 New York
-    start_date: 2024-07-16 00:00:00
-    end_date: 2024-07-17 00:00:00
+    start_date: 2024-07-16 12:00:00
+    end_date: 2024-07-17 12:00:00
     location:
       type: bounded_region
       parameters:
@@ -457,8 +457,8 @@ cases:
     event_type: severe_convection
   - case_id_number: 39
     title: May 2024 Wisconsin
-    start_date: 2024-05-18 00:00:00
-    end_date: 2024-05-19 00:00:00
+    start_date: 2024-05-18 12:00:00
+    end_date: 2024-05-19 12:00:00
     location:
       type: bounded_region
       parameters:
@@ -469,8 +469,8 @@ cases:
     event_type: severe_convection
   - case_id_number: 40
     title: May 2024 Kansas
-    start_date: 2024-05-19 00:00:00
-    end_date: 2024-05-20 00:00:00
+    start_date: 2024-05-19 12:00:00
+    end_date: 2024-05-20 12:00:00
     location:
       type: bounded_region
       parameters:
@@ -481,8 +481,8 @@ cases:
     event_type: severe_convection
   - case_id_number: 41
     title: May 2024 Iowa + Nebraska
-    start_date: 2024-05-20 00:00:00
-    end_date: 2024-05-21 00:00:00
+    start_date: 2024-05-20 12:00:00
+    end_date: 2024-05-21 12:00:00
     location:
       type: bounded_region
       parameters:
@@ -493,8 +493,8 @@ cases:
     event_type: severe_convection
   - case_id_number: 42
     title: May 2024 Iowa + Wisconsin
-    start_date: 2024-05-21 00:00:00
-    end_date: 2024-05-22 00:00:00
+    start_date: 2024-05-21 12:00:00
+    end_date: 2024-05-22 12:00:00
     location:
       type: bounded_region
       parameters:
@@ -505,8 +505,8 @@ cases:
     event_type: severe_convection
   - case_id_number: 43
     title: May 2024 Texas
-    start_date: 2024-05-22 00:00:00
-    end_date: 2024-05-23 00:00:00
+    start_date: 2024-05-22 12:00:00
+    end_date: 2024-05-23 12:00:00
     location:
       type: bounded_region
       parameters:
@@ -517,8 +517,8 @@ cases:
     event_type: severe_convection
   - case_id_number: 44
     title: May 2024 Iowa + Nebraska 2
-    start_date: 2024-05-23 00:00:00
-    end_date: 2024-05-24 00:00:00
+    start_date: 2024-05-23 12:00:00
+    end_date: 2024-05-24 12:00:00
     location:
       type: bounded_region
       parameters:
@@ -3097,8 +3097,8 @@ cases:
     event_type: tropical_cyclone
   - case_id_number: 259
     title: January 2020 Australia
-    start_date: 2020-01-20 00:00:00
-    end_date: 2020-01-21 00:00:00
+    start_date: 2020-01-19 12:00:00
+    end_date: 2020-01-20 12:00:00
     location:
       type: bounded_region
       parameters:
@@ -3109,8 +3109,8 @@ cases:
     event_type: severe_convection
   - case_id_number: 260
     title: April 2020 Australia
-    start_date: 2020-04-03 00:00:00
-    end_date: 2020-04-04 00:00:00
+    start_date: 2020-04-02 12:00:00
+    end_date: 2020-04-03 12:00:00
     location:
       type: bounded_region
       parameters:
@@ -3121,8 +3121,8 @@ cases:
     event_type: severe_convection
   - case_id_number: 261
     title: May 2020 Australia
-    start_date: 2020-05-31 00:00:00
-    end_date: 2020-06-01 00:00:00
+    start_date: 2020-05-30 12:00:00
+    end_date: 2020-05-31 12:00:00
     location:
       type: bounded_region
       parameters:
@@ -3133,8 +3133,8 @@ cases:
     event_type: severe_convection
   - case_id_number: 262
     title: September 2020 Australia
-    start_date: 2020-09-05 00:00:00
-    end_date: 2020-09-06 00:00:00
+    start_date: 2020-09-24 12:00:00
+    end_date: 2020-09-25 12:00:00
     location:
       type: bounded_region
       parameters:
@@ -3145,8 +3145,8 @@ cases:
     event_type: severe_convection
   - case_id_number: 263
     title: October 2020 Australia
-    start_date: 2020-10-31 00:00:00
-    end_date: 2020-11-01 00:00:00
+    start_date: 2020-10-30 12:00:00
+    end_date: 2020-10-31 12:00:00
     location:
       type: bounded_region
       parameters:
@@ -3157,8 +3157,8 @@ cases:
     event_type: severe_convection
   - case_id_number: 264
     title: December 2020 Australia
-    start_date: 2020-12-05 00:00:00
-    end_date: 2020-12-06 00:00:00
+    start_date: 2020-12-04 12:00:00
+    end_date: 2020-12-05 12:00:00
     location:
       type: bounded_region
       parameters:
@@ -3169,8 +3169,8 @@ cases:
     event_type: severe_convection
   - case_id_number: 265
     title: September 2021 Australia
-    start_date: 2021-09-30 00:00:00
-    end_date: 2021-10-01 00:00:00
+    start_date: 2021-09-29 12:00:00
+    end_date: 2021-09-30 12:00:00
     location:
       type: bounded_region
       parameters:
@@ -3181,8 +3181,8 @@ cases:
     event_type: severe_convection
   - case_id_number: 266
     title: October 2021 Australia
-    start_date: 2021-10-14 00:00:00
-    end_date: 2021-10-15 00:00:00
+    start_date: 2021-10-13 12:00:00
+    end_date: 2021-10-14 12:00:00
     location:
       type: bounded_region
       parameters:
@@ -3193,20 +3193,8 @@ cases:
     event_type: severe_convection
   - case_id_number: 267
     title: October 2021 Australia
-    start_date: 2021-10-18 00:00:00
-    end_date: 2021-10-19 00:00:00
-    location:
-      type: bounded_region
-      parameters:
-        latitude_min: -40.0
-        latitude_max: -10.0
-        longitude_min: 110.0
-        longitude_max: 155.0
-    event_type: severe_convection
-  - case_id_number: 268
-    title: October 2021 Australia
-    start_date: 2021-10-19 00:00:00
-    end_date: 2021-10-20 00:00:00
+    start_date: 2021-10-17 12:00:00
+    end_date: 2021-10-19 12:00:00
     location:
       type: bounded_region
       parameters:
@@ -3217,8 +3205,8 @@ cases:
     event_type: severe_convection
   - case_id_number: 269
     title: October 2021 Australia
-    start_date: 2021-10-28 00:00:00
-    end_date: 2021-10-29 00:00:00
+    start_date: 2021-10-27 12:00:00
+    end_date: 2021-10-28 12:00:00
     location:
       type: bounded_region
       parameters:
@@ -3229,8 +3217,8 @@ cases:
     event_type: severe_convection
   - case_id_number: 270
     title: December 2021 Australia
-    start_date: 2021-12-03 00:00:00
-    end_date: 2021-12-04 00:00:00
+    start_date: 2021-12-02 12:00:00
+    end_date: 2021-12-03 12:00:00
     location:
       type: bounded_region
       parameters:
@@ -3241,8 +3229,8 @@ cases:
     event_type: severe_convection
   - case_id_number: 271
     title: December 2021 Australia
-    start_date: 2021-12-09 00:00:00
-    end_date: 2021-12-10 00:00:00
+    start_date: 2021-12-08 12:00:00
+    end_date: 2021-12-09 12:00:00
     location:
       type: bounded_region
       parameters:
@@ -3253,8 +3241,8 @@ cases:
     event_type: severe_convection
   - case_id_number: 272
     title: January 2022 Australia
-    start_date: 2022-01-15 00:00:00
-    end_date: 2022-01-16 00:00:00
+    start_date: 2022-01-14 12:00:00
+    end_date: 2022-01-15 12:00:00
     location:
       type: bounded_region
       parameters:
@@ -3265,8 +3253,8 @@ cases:
     event_type: severe_convection
   - case_id_number: 273
     title: March 2022 Australia
-    start_date: 2022-03-04 00:00:00
-    end_date: 2022-03-05 00:00:00
+    start_date: 2022-03-03 12:00:00
+    end_date: 2022-03-04 12:00:00
     location:
       type: bounded_region
       parameters:
@@ -3277,8 +3265,8 @@ cases:
     event_type: severe_convection
   - case_id_number: 274
     title: December 2022 Australia
-    start_date: 2022-12-08 00:00:00
-    end_date: 2022-12-09 00:00:00
+    start_date: 2022-12-07 12:00:00
+    end_date: 2022-12-08 12:00:00
     location:
       type: bounded_region
       parameters:
@@ -3289,8 +3277,8 @@ cases:
     event_type: severe_convection
   - case_id_number: 275
     title: February 2023 Australia
-    start_date: 2023-02-14 00:00:00
-    end_date: 2023-02-15 00:00:00
+    start_date: 2023-02-13 12:00:00
+    end_date: 2023-02-14 12:00:00
     location:
       type: bounded_region
       parameters:
@@ -3301,8 +3289,8 @@ cases:
     event_type: severe_convection
   - case_id_number: 276
     title: December 2023 Australia
-    start_date: 2023-12-12 00:00:00
-    end_date: 2023-12-13 00:00:00
+    start_date: 2023-12-11 12:00:00
+    end_date: 2023-12-12 12:00:00
     location:
       type: bounded_region
       parameters:
@@ -3313,20 +3301,8 @@ cases:
     event_type: severe_convection
   - case_id_number: 277
     title: December 2023 Australia
-    start_date: 2023-12-25 00:00:00
-    end_date: 2023-12-26 00:00:00
-    location:
-      type: bounded_region
-      parameters:
-        latitude_min: -40.0
-        latitude_max: -10.0
-        longitude_min: 110.0
-        longitude_max: 155.0
-    event_type: severe_convection
-  - case_id_number: 278
-    title: December 2023 Australia
-    start_date: 2023-12-26 00:00:00
-    end_date: 2023-12-27 00:00:00
+    start_date: 2023-12-24 12:00:00
+    end_date: 2023-12-26 12:00:00
     location:
       type: bounded_region
       parameters:
@@ -3337,8 +3313,8 @@ cases:
     event_type: severe_convection
   - case_id_number: 279
     title: August 2024 Australia
-    start_date: 2024-08-25 00:00:00
-    end_date: 2024-08-26 00:00:00
+    start_date: 2024-08-24 12:00:00
+    end_date: 2024-08-25 12:00:00
     location:
       type: bounded_region
       parameters:
@@ -3349,8 +3325,8 @@ cases:
     event_type: severe_convection
   - case_id_number: 280
     title: October 2024 Australia
-    start_date: 2024-10-09 00:00:00
-    end_date: 2024-10-10 00:00:00
+    start_date: 2024-10-08 12:00:00
+    end_date: 2024-10-09 12:00:00
     location:
       type: bounded_region
       parameters:
@@ -3361,8 +3337,8 @@ cases:
     event_type: severe_convection
   - case_id_number: 281
     title: October 2024 Australia
-    start_date: 2024-10-17 00:00:00
-    end_date: 2024-10-18 00:00:00
+    start_date: 2024-10-16 12:00:00
+    end_date: 2024-10-17 12:00:00
     location:
       type: bounded_region
       parameters:
@@ -3373,8 +3349,8 @@ cases:
     event_type: severe_convection
   - case_id_number: 282
     title: November 2024 Australia
-    start_date: 2024-11-01 00:00:00
-    end_date: 2024-11-02 00:00:00
+    start_date: 2024-10-31 12:00:00
+    end_date: 2024-11-01 12:00:00
     location:
       type: bounded_region
       parameters:
@@ -3385,8 +3361,8 @@ cases:
     event_type: severe_convection
   - case_id_number: 283
     title: November 2024 Australia
-    start_date: 2024-11-13 00:00:00
-    end_date: 2024-11-14 00:00:00
+    start_date: 2024-11-12 12:00:00
+    end_date: 2024-11-13 12:00:00
     location:
       type: bounded_region
       parameters:
