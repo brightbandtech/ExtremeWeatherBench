@@ -42,8 +42,15 @@ class TestPandasDataFrameModule:
         result = pandas_dataframe.safely_pull_variables(sample_dataframe, variables)
 
         # Requested variables plus coordinate variables are returned
-        expected = ["valid_time", "lead_time", "init_time", "latitude",
-                    "longitude", "temperature", "pressure"]
+        expected = [
+            "valid_time",
+            "lead_time",
+            "init_time",
+            "latitude",
+            "longitude",
+            "temperature",
+            "pressure",
+        ]
         assert sorted(result.columns) == sorted(expected)
         assert len(result) == len(sample_dataframe)
 
@@ -54,8 +61,15 @@ class TestPandasDataFrameModule:
         result = pandas_dataframe.safely_pull_variables(sample_dataframe, variables)
 
         # Requested variables plus coordinate variables are returned
-        expected_columns = ["valid_time", "lead_time", "init_time", "latitude",
-                            "longitude", "humidity", "temperature"]
+        expected_columns = [
+            "valid_time",
+            "lead_time",
+            "init_time",
+            "latitude",
+            "longitude",
+            "humidity",
+            "temperature",
+        ]
         assert sorted(result.columns) == sorted(expected_columns)
 
     def test_safely_pull_variables_with_mapping(self, sample_dataframe):
@@ -65,8 +79,15 @@ class TestPandasDataFrameModule:
         result = pandas_dataframe.safely_pull_variables(sample_dataframe, variables)
 
         # Requested variables plus coordinate variables are returned
-        expected_columns = ["valid_time", "lead_time", "init_time", "latitude",
-                            "longitude", "temperature", "pressure"]
+        expected_columns = [
+            "valid_time",
+            "lead_time",
+            "init_time",
+            "latitude",
+            "longitude",
+            "temperature",
+            "pressure",
+        ]
         assert sorted(result.columns) == sorted(expected_columns)
 
     def test_safely_pull_variables_with_mapping_list(self, sample_dataframe):
@@ -76,8 +97,14 @@ class TestPandasDataFrameModule:
         result = pandas_dataframe.safely_pull_variables(sample_dataframe, variables)
 
         # Requested variable plus coordinate variables are returned
-        expected_columns = ["valid_time", "lead_time", "init_time", "latitude",
-                            "longitude", "wind_speed"]
+        expected_columns = [
+            "valid_time",
+            "lead_time",
+            "init_time",
+            "latitude",
+            "longitude",
+            "wind_speed",
+        ]
         assert sorted(result.columns) == sorted(expected_columns)
 
     def test_safely_pull_variables_missing_required(self, sample_dataframe):
@@ -242,8 +269,15 @@ class TestPolarsLazyFrameModule:
         result = polars_lazyframe.safely_pull_variables(sample_lazyframe, variables)
 
         # Requested variables plus coordinate variables are returned
-        expected = ["valid_time", "lead_time", "init_time", "latitude",
-                    "longitude", "temperature", "pressure"]
+        expected = [
+            "valid_time",
+            "lead_time",
+            "init_time",
+            "latitude",
+            "longitude",
+            "temperature",
+            "pressure",
+        ]
         assert sorted(result.collect_schema().names()) == sorted(expected)
 
     def test_safely_pull_variables_with_optional(self, sample_lazyframe):
@@ -253,8 +287,15 @@ class TestPolarsLazyFrameModule:
         result = polars_lazyframe.safely_pull_variables(sample_lazyframe, variables)
 
         # Requested variables plus coordinate variables are returned
-        expected_columns = ["valid_time", "lead_time", "init_time", "latitude",
-                            "longitude", "humidity", "temperature"]
+        expected_columns = [
+            "valid_time",
+            "lead_time",
+            "init_time",
+            "latitude",
+            "longitude",
+            "humidity",
+            "temperature",
+        ]
         assert sorted(result.collect_schema().names()) == sorted(expected_columns)
 
     def test_safely_pull_variables_with_mapping(self, sample_lazyframe):
@@ -264,8 +305,15 @@ class TestPolarsLazyFrameModule:
         result = polars_lazyframe.safely_pull_variables(sample_lazyframe, variables)
 
         # Requested variables plus coordinate variables are returned
-        expected_columns = ["valid_time", "lead_time", "init_time", "latitude",
-                            "longitude", "temperature", "pressure"]
+        expected_columns = [
+            "valid_time",
+            "lead_time",
+            "init_time",
+            "latitude",
+            "longitude",
+            "temperature",
+            "pressure",
+        ]
         assert sorted(result.collect_schema().names()) == sorted(expected_columns)
 
     def test_safely_pull_variables_missing_required(self, sample_lazyframe):
