@@ -1,11 +1,10 @@
 import logging
 from typing import Literal, Optional, Sequence, Union
 
+import cartopy.io.shapereader as shpreader
 import numpy as np
+import shapely
 import xarray as xr
-from cartopy.io.shapereader import Reader, natural_earth
-from shapely.geometry import LineString, Point
-from shapely.ops import unary_union
 
 from extremeweatherbench import utils
 
@@ -270,9 +269,9 @@ def find_landfalls(
         or None if no landfall found
     """
     # Use 10m resolution with buffer for better coastal detection
-    land = natural_earth(category="physical", name="land", resolution="10m")
-    land_geoms = list(Reader(land).geometries())
-    land_geom = unary_union(land_geoms).buffer(0.1)
+    land = shpreader.natural_earth(category="physical", name="land", resolution="10m")
+    land_geoms = list(shpreader.Reader(land).geometries())
+    land_geom = shapely.ops.unary_union(land_geoms).buffer(0.1)
 
     return _find_landfalls(track_data, land_geom, return_all)
 
@@ -360,7 +359,7 @@ def _find_landfalls(
 
             single_track = temp_ds["track_data"].sel(init_time=init_time)
 
-            da = _process_single_track(
+            da = _process_single_track_landfall(
                 single_track,
                 land_geom,
                 return_all,
@@ -373,10 +372,10 @@ def _find_landfalls(
 
     else:
         # Process single track data
-        return _process_single_track(track_data, land_geom, return_all)
+        return _process_single_track_landfall(track_data, land_geom, return_all)
 
 
-def _process_single_track(
+def _process_single_track_landfall(
     track_data: xr.DataArray,
     land_geom,
     return_all: bool = False,
@@ -433,7 +432,7 @@ def _process_single_track(
 
     for i in range(len(times_vals) - 1):
         try:
-            segment = LineString(
+            segment = shapely.geometry.LineString(
                 [(lons_180[i], lats_vals[i]), (lons_180[i + 1], lats_vals[i + 1])]
             )
 
@@ -445,7 +444,7 @@ def _process_single_track(
 
                 # Interpolate landfall values
                 full_dist = segment.length
-                landfall_dist = LineString(
+                landfall_dist = shapely.geometry.LineString(
                     [(lons_180[i], lats_vals[i]), (landfall_lon, landfall_lat)]
                 ).length
                 frac = landfall_dist / full_dist
@@ -516,7 +515,13 @@ def _process_single_track(
     return da
 
 
-def _is_true_landfall(lon1: float, lat1: float, lon2: float, lat2: float, land_geom):
+def _is_true_landfall(
+    lon1: float,
+    lat1: float,
+    lon2: float,
+    lat2: float,
+    land_geom: shapely.geometry.Polygon,
+) -> bool:
     """Detect true landfall (ocean to land movement).
 
     Args:
@@ -528,8 +533,8 @@ def _is_true_landfall(lon1: float, lat1: float, lon2: float, lat2: float, land_g
         True if this represents a landfall, False otherwise
     """
     try:
-        start_point = Point(lon1, lat1)
-        end_point = Point(lon2, lat2)
+        start_point = shapely.geometry.Point(lon1, lat1)
+        end_point = shapely.geometry.Point(lon2, lat2)
 
         start_over_land = land_geom.contains(start_point)
         end_over_land = land_geom.contains(end_point)
@@ -540,7 +545,7 @@ def _is_true_landfall(lon1: float, lat1: float, lon2: float, lat2: float, land_g
 
         # Ocean -> Ocean, check if land is between
         if not start_over_land and not end_over_land:
-            segment = LineString([(lon1, lat1), (lon2, lat2)])
+            segment = shapely.geometry.LineString([(lon1, lat1), (lon2, lat2)])
             if segment.intersects(land_geom):
                 return True
 
