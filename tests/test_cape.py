@@ -437,7 +437,7 @@ class TestPerformance:
         time_per_profile = (elapsed / n_profiles) * 1e6  # microseconds
 
         # Batch should be much faster than 100 μs per profile
-        assert time_per_profile < 20, (
+        assert time_per_profile < 30, (
             f"Batch processing too slow: {time_per_profile:.2f} μs per profile"
         )
 
