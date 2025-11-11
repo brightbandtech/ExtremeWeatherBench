@@ -946,36 +946,6 @@ class IBTrACS(TargetBase):
         else:
             raise ValueError(f"Data is not a polars LazyFrame: {type(data)}")
 
-    def add_source_to_dataset_attrs(self, ds: xr.Dataset) -> xr.Dataset:
-        """Add the source name and register IBTrACS data for TC filtering.
-
-        This method extends the base functionality to also register this
-        IBTrACS dataset for use in tropical cyclone filtering operations.
-        The registration happens automatically when IBTrACS data is processed.
-
-        Args:
-            ds: The dataset to add source attributes to.
-
-        Returns:
-            The dataset with source attributes added.
-        """
-
-        ds = super().add_source_to_dataset_attrs(ds)
-
-        # Register IBTrACS data immediately for tropical cyclone filtering
-        if self._current_case_id is not None:
-            from extremeweatherbench.events import tropical_cyclone
-
-            logger.debug("Registering tc_track_data for case %s", self._current_case_id)
-            tropical_cyclone.register_tc_track_data(self._current_case_id, ds)
-        else:
-            logger.warning("Cannot register IBTrACS data: _current_case_id is None")
-
-        # Store flag indicating this is IBTrACS data
-        ds.attrs["is_ibtracs_data"] = True
-
-        return ds
-
 
 def open_kerchunk_reference(
     forecast_dir: str,
