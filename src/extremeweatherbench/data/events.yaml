@@ -3635,3 +3635,435 @@ cases:
         longitude_min: 245.0
         longitude_max: 295.0
     event_type: severe_convection
+  - case_id_number: 304
+    title: June 2020 Canada
+    start_date: 2020-06-10 12:00:00
+    end_date: 2020-06-11 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 40.0
+        latitude_max: 70.0
+        longitude_min: 220.0
+        longitude_max: 280.0
+    event_type: severe_convection
+  - case_id_number: 305
+    title: June 2020 Canada
+    start_date: 2020-06-12 12:00:00
+    end_date: 2020-06-13 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 40.0
+        latitude_max: 70.0
+        longitude_min: 220.0
+        longitude_max: 280.0
+    event_type: severe_convection
+  - case_id_number: 306
+    title: June 2020 Canada
+    start_date: 2020-06-28 12:00:00
+    end_date: 2020-06-29 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 40.0
+        latitude_max: 70.0
+        longitude_min: 220.0
+        longitude_max: 280.0
+    event_type: severe_convection
+  - case_id_number: 307
+    title: July 2020 Canada
+    start_date: 2020-07-04 12:00:00
+    end_date: 2020-07-05 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 40.0
+        latitude_max: 70.0
+        longitude_min: 220.0
+        longitude_max: 280.0
+    event_type: severe_convection
+  - case_id_number: 308
+    title: July 2020 Canada
+    start_date: 2020-07-12 12:00:00
+    end_date: 2020-07-13 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 40.0
+        latitude_max: 70.0
+        longitude_min: 220.0
+        longitude_max: 280.0
+    event_type: severe_convection
+  - case_id_number: 309
+    title: July 2020 Canada
+    start_date: 2020-07-19 12:00:00
+    end_date: 2020-07-20 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 40.0
+        latitude_max: 70.0
+        longitude_min: 220.0
+        longitude_max: 280.0
+    event_type: severe_convection
+  - case_id_number: 310
+    title: July 2020 Canada
+    start_date: 2020-07-23 12:00:00
+    end_date: 2020-07-24 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 40.0
+        latitude_max: 70.0
+        longitude_min: 220.0
+        longitude_max: 280.0
+    event_type: severe_convection
+  - case_id_number: 311
+    title: August 2020 Canada
+    start_date: 2020-08-27 12:00:00
+    end_date: 2020-08-28 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 40.0
+        latitude_max: 70.0
+        longitude_min: 220.0
+        longitude_max: 280.0
+    event_type: severe_convection
+  - case_id_number: 312
+    title: June 2021 Canada
+    start_date: 2021-06-05 12:00:00
+    end_date: 2021-06-06 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 40.0
+        latitude_max: 70.0
+        longitude_min: 220.0
+        longitude_max: 280.0
+    event_type: severe_convection
+  - case_id_number: 313
+    title: June 2021 Canada
+    start_date: 2021-06-14 12:00:00
+    end_date: 2021-06-15 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 40.0
+        latitude_max: 70.0
+        longitude_min: 220.0
+        longitude_max: 280.0
+    event_type: severe_convection
+  - case_id_number: 314
+    title: July 2021 Canada
+    start_date: 2021-07-15 12:00:00
+    end_date: 2021-07-16 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 40.0
+        latitude_max: 70.0
+        longitude_min: 220.0
+        longitude_max: 280.0
+    event_type: severe_convection
+  - case_id_number: 315
+    title: July 2021 Canada
+    start_date: 2021-07-22 12:00:00
+    end_date: 2021-07-23 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 40.0
+        latitude_max: 70.0
+        longitude_min: 220.0
+        longitude_max: 280.0
+    event_type: severe_convection
+  - case_id_number: 316
+    title: August 2021 Canada
+    start_date: 2021-08-23 12:00:00
+    end_date: 2021-08-24 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 40.0
+        latitude_max: 70.0
+        longitude_min: 220.0
+        longitude_max: 280.0
+    event_type: severe_convection
+  - case_id_number: 317
+    title: August 2021 Canada
+    start_date: 2021-08-31 12:00:00
+    end_date: 2021-09-01 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 40.0
+        latitude_max: 70.0
+        longitude_min: 220.0
+        longitude_max: 280.0
+    event_type: severe_convection
+  - case_id_number: 318
+    title: June 2022 Canada
+    start_date: 2022-06-23 12:00:00
+    end_date: 2022-06-24 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 40.0
+        latitude_max: 70.0
+        longitude_min: 220.0
+        longitude_max: 280.0
+    event_type: severe_convection
+  - case_id_number: 319
+    title: June 2022 Canada
+    start_date: 2022-06-29 12:00:00
+    end_date: 2022-06-30 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 40.0
+        latitude_max: 70.0
+        longitude_min: 220.0
+        longitude_max: 280.0
+    event_type: severe_convection
+  - case_id_number: 320
+    title: July 2022 Canada
+    start_date: 2022-07-05 12:00:00
+    end_date: 2022-07-06 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 40.0
+        latitude_max: 70.0
+        longitude_min: 220.0
+        longitude_max: 280.0
+    event_type: severe_convection
+  - case_id_number: 321
+    title: July 2022 Canada
+    start_date: 2022-07-07 12:00:00
+    end_date: 2022-07-08 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 40.0
+        latitude_max: 70.0
+        longitude_min: 220.0
+        longitude_max: 280.0
+    event_type: severe_convection
+  - case_id_number: 322
+    title: July 2022 Canada
+    start_date: 2022-07-08 12:00:00
+    end_date: 2022-07-09 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 40.0
+        latitude_max: 70.0
+        longitude_min: 220.0
+        longitude_max: 280.0
+    event_type: severe_convection
+  - case_id_number: 323
+    title: July 2022 Canada
+    start_date: 2022-07-17 12:00:00
+    end_date: 2022-07-18 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 40.0
+        latitude_max: 70.0
+        longitude_min: 220.0
+        longitude_max: 280.0
+    event_type: severe_convection
+  - case_id_number: 324
+    title: July 2022 Canada
+    start_date: 2022-07-19 12:00:00
+    end_date: 2022-07-20 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 40.0
+        latitude_max: 70.0
+        longitude_min: 220.0
+        longitude_max: 280.0
+    event_type: severe_convection
+  - case_id_number: 325
+    title: July 2022 Canada
+    start_date: 2022-07-31 12:00:00
+    end_date: 2022-08-01 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 40.0
+        latitude_max: 70.0
+        longitude_min: 220.0
+        longitude_max: 280.0
+    event_type: severe_convection
+  - case_id_number: 326
+    title: May 2023 Canada
+    start_date: 2023-05-31 12:00:00
+    end_date: 2023-06-01 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 40.0
+        latitude_max: 70.0
+        longitude_min: 220.0
+        longitude_max: 280.0
+    event_type: severe_convection
+  - case_id_number: 327
+    title: June 2023 Canada
+    start_date: 2023-06-28 12:00:00
+    end_date: 2023-06-29 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 40.0
+        latitude_max: 70.0
+        longitude_min: 220.0
+        longitude_max: 280.0
+    event_type: severe_convection
+  - case_id_number: 328
+    title: July 2023 Canada
+    start_date: 2023-07-13 12:00:00
+    end_date: 2023-07-14 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 40.0
+        latitude_max: 70.0
+        longitude_min: 220.0
+        longitude_max: 280.0
+    event_type: severe_convection
+  - case_id_number: 329
+    title: July 2023 Canada
+    start_date: 2023-07-20 12:00:00
+    end_date: 2023-07-21 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 40.0
+        latitude_max: 70.0
+        longitude_min: 220.0
+        longitude_max: 280.0
+    event_type: severe_convection
+  - case_id_number: 330
+    title: July 2023 Canada
+    start_date: 2023-07-22 12:00:00
+    end_date: 2023-07-23 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 40.0
+        latitude_max: 70.0
+        longitude_min: 220.0
+        longitude_max: 280.0
+    event_type: severe_convection
+  - case_id_number: 331
+    title: July 2023 Canada
+    start_date: 2023-07-26 12:00:00
+    end_date: 2023-07-27 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 40.0
+        latitude_max: 70.0
+        longitude_min: 220.0
+        longitude_max: 280.0
+    event_type: severe_convection
+  - case_id_number: 332
+    title: August 2023 Canada
+    start_date: 2023-08-03 12:00:00
+    end_date: 2023-08-04 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 40.0
+        latitude_max: 70.0
+        longitude_min: 220.0
+        longitude_max: 280.0
+    event_type: severe_convection
+  - case_id_number: 333
+    title: June 2024 Canada
+    start_date: 2024-06-12 12:00:00
+    end_date: 2024-06-13 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 40.0
+        latitude_max: 70.0
+        longitude_min: 220.0
+        longitude_max: 280.0
+    event_type: severe_convection
+  - case_id_number: 334
+    title: June 2024 Canada
+    start_date: 2024-06-22 12:00:00
+    end_date: 2024-06-23 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 40.0
+        latitude_max: 70.0
+        longitude_min: 220.0
+        longitude_max: 280.0
+    event_type: severe_convection
+  - case_id_number: 335
+    title: June 2024 Canada
+    start_date: 2024-06-23 12:00:00
+    end_date: 2024-06-24 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 40.0
+        latitude_max: 70.0
+        longitude_min: 220.0
+        longitude_max: 280.0
+    event_type: severe_convection
+  - case_id_number: 336
+    title: July 2024 Canada
+    start_date: 2024-07-11 12:00:00
+    end_date: 2024-07-12 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 40.0
+        latitude_max: 70.0
+        longitude_min: 220.0
+        longitude_max: 280.0
+    event_type: severe_convection
+  - case_id_number: 337
+    title: July 2024 Canada
+    start_date: 2024-07-24 12:00:00
+    end_date: 2024-07-25 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 40.0
+        latitude_max: 70.0
+        longitude_min: 220.0
+        longitude_max: 280.0
+    event_type: severe_convection
+  - case_id_number: 338
+    title: August 2024 Canada
+    start_date: 2024-08-05 12:00:00
+    end_date: 2024-08-06 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 40.0
+        latitude_max: 70.0
+        longitude_min: 220.0
+        longitude_max: 280.0
+    event_type: severe_convection
+  - case_id_number: 339
+    title: August 2024 Canada
+    start_date: 2024-08-21 12:00:00
+    end_date: 2024-08-22 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 40.0
+        latitude_max: 70.0
+        longitude_min: 220.0
+        longitude_max: 280.0
+    event_type: severe_convection
