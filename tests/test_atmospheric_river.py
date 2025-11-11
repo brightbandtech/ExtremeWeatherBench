@@ -12,7 +12,7 @@ from extremeweatherbench.events import atmospheric_river
 rng = np.random.default_rng(seed=42)
 
 
-class TestAtmosphericRiverMask:
+class TestAtmosphericRiverVariables:
     """Test atmospheric river mask calculations."""
 
     @pytest.fixture

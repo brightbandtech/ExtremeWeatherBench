@@ -69,7 +69,7 @@ class DerivedVariable(abc.ABC):
         return self.derive_variable(data, *args, **kwargs)
 
 
-class AtmosphericRiver(DerivedVariable):
+class AtmosphericRiverVariables(DerivedVariable):
     """A derived variable that computes atmospheric river related variables.
 
     Calculates the IVT (Integrated Vapor Transport) and its Laplacian from a dataset.IVT

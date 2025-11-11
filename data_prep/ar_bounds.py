@@ -1030,7 +1030,7 @@ def main():
     logger.info(client.dashboard_link)
 
     # Setup ERA5 data source for atmospheric river detection
-    era5_ar = inputs.ERA5(variables=[derived.AtmosphericRiverMask])
+    era5_ar = inputs.ERA5(variables=[derived.AtmosphericRiverVariables])
     parallel = True
 
     # Load atmospheric river events from the events.yaml file

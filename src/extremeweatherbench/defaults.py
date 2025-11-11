@@ -73,7 +73,8 @@ era5_freeze_target = inputs.ERA5(
 #     source=inputs.ARCO_ERA5_FULL_URI,
 #     variables=[
 #         derived.IntegratedVaporTransport(),
-#         derived.AtmosphericRiverMask(),
+#         derived.AtmosphericRiverVariables
+((),)
 #     ],
 #     variable_mapping={
 #         "u_component_of_wind": "eastward_wind",
@@ -172,7 +173,8 @@ cira_freeze_forecast = inputs.KerchunkForecast(
 #     source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
 #     variables=[
 #         derived.IntegratedVaporTransport(),
-#         derived.AtmosphericRiverMask(),
+#         derived.AtmosphericRiverVariables
+((),)
 #     ],
 #     variable_mapping={
 #         "u_component_of_wind": "eastward_wind",
