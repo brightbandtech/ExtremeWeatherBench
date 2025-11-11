@@ -506,7 +506,7 @@ def plot_all_cases_and_obs(
 
                 for my_data in data:
                     # print(my_data)
-                    hail_reports = my_data[my_data == 2]
+                    hail_reports = my_data[my_data == "hail"]
                     # print(hail_reports)
                     lat_values = hail_reports.latitude.values
                     lon_values = hail_reports.longitude.values
@@ -520,7 +520,7 @@ def plot_all_cases_and_obs(
                         s=6,
                     )
 
-                    tor_reports = my_data[my_data == 3]
+                    tor_reports = my_data[my_data == "tor"]
                     # print(tor_reports)
                     lat_values = tor_reports.latitude.values
                     lon_values = tor_reports.longitude.values
