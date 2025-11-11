@@ -646,11 +646,6 @@ class LSR(TargetBase):
         if not isinstance(data, pd.DataFrame):
             raise ValueError(f"Data is not a pandas DataFrame: {type(data)}")
 
-        # Map report_type column to numeric values
-        if "report_type" in data.columns:
-            report_type_mapping = {"wind": 1, "hail": 2, "tor": 3}
-            data["report_type"] = data["report_type"].map(report_type_mapping)
-
         # Normalize these times for the LSR data
         # Western hemisphere reports get bucketed to 12Z on the date they fall
         # between 12Z-12Z
@@ -703,7 +698,6 @@ class LSR(TargetBase):
         data = xr.Dataset.from_dataframe(
             data[~data.index.duplicated(keep="first")], sparse=True
         )
-        data.attrs["report_type_mapping"] = report_type_mapping
         return data
 
     # TODO: keep forecasts on original grid for LSRs
