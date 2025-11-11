@@ -551,6 +551,7 @@ def reduce_dataarray(
     da: xr.DataArray,
     method: str | Callable,
     reduce_dims: list[str],
+    compute: bool = True,
     **method_kwargs,
 ) -> xr.DataArray:
     """Reduce using xarray methods or numpy functions.
@@ -559,11 +560,15 @@ def reduce_dataarray(
     numpy/callable reductions. Using the built-in methods xarray provides can be more
     efficient than using numpy functions.
 
+    If compute is True, the dataarray will be computed before returning.
+    This is useful to avoid dask exceptions when indexing with a boolean mask.
+
     Args:
         da: The xarray dataarray to reduce.
         method: Either an xarray method name (e.g., 'mean', 'sum') or
             a callable function (e.g., np.nanmean).
         reduce_dims: The dimensions to reduce.
+        compute: Whether to compute the dataarray before returning. Defaults to True.
         **method_kwargs: Additional kwargs for the method. Only used
             when method is a string (xarray method).
 
@@ -576,13 +581,21 @@ def reduce_dataarray(
 
     if callable(method):
         # Use numpy function or other callable (original behavior)
-        return da.reduce(method, dim=reduce_dims)
+        return (
+            da.reduce(method, dim=reduce_dims).compute()
+            if compute
+            else da.reduce(method, dim=reduce_dims)
+        )
     elif isinstance(method, str):
         # Use xarray built-in method
         if not hasattr(da, method):
             raise ValueError(f"DataArray has no method '{method}'")
 
         method_func = getattr(da, method)
-        return method_func(dim=reduce_dims, **method_kwargs)
+        return (
+            method_func(dim=reduce_dims, **method_kwargs).compute()
+            if compute
+            else method_func(dim=reduce_dims, **method_kwargs)
+        )
     else:
         raise TypeError(f"method must be str or callable, got {type(method)}")
