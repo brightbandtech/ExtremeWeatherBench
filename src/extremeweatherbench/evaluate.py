@@ -161,11 +161,13 @@ def compute_case_operator(
     cache_dir: Optional[pathlib.Path] = None,
     **kwargs,
 ) -> pd.DataFrame:
-    """Compute the results of a case operator.
+    """Compute the resulting evaluation of a case operator.
 
-    This method will compute the results of a case operator. It will build
-    the target and forecast datasets,
-    align them, compute the metrics, and return a concatenated dataframe of the results.
+    This method will compute the results of a case operator. It validates
+    that all metrics are properly instantiated, builds the target and forecast
+    datasets, aligns them, and computes each metric with appropriate variable
+    pairs. Metrics with their own forecast_variable and target_variable use
+    only those variables; metrics without will use all InputBase variable pairs.
 
     Args:
         case_operator: The case operator to compute the results of.
@@ -175,7 +177,21 @@ def compute_case_operator(
 
     Returns:
         A concatenated dataframe of the results of the case operator.
+
+    Raises:
+        TypeError: If any metric is not properly instantiated.
     """
+    # Validate that all metrics are instantiated (not classes or callables)
+    for i, metric in enumerate(case_operator.metric_list):
+        if isinstance(metric, type):
+            metric = metric()
+            case_operator.metric_list[i] = metric
+            logger.warning(
+                "Metric %s instantiated with default parameters", metric.name
+            )
+        if not hasattr(metric, "compute_metric"):
+            raise TypeError(f"Metric must be a BaseMetric instance, got {type(metric)}")
+
     forecast_ds, target_ds = _build_datasets(case_operator, **kwargs)
     # Check if any dimension has zero length
     if 0 in forecast_ds.sizes.values() or 0 in target_ds.sizes.values():
