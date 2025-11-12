@@ -16,8 +16,8 @@ _GLOBAL_CONTINGENCY_CACHE = utils.ThreadSafeDict()  # type: ignore
 
 
 def get_cached_transformed_manager(
-    forecast: xr.Dataset,
-    target: xr.Dataset,
+    forecast: xr.DataArray,
+    target: xr.DataArray,
     forecast_threshold: float = 0.5,
     target_threshold: float = 0.5,
     preserve_dims: str = "lead_time",
@@ -28,8 +28,8 @@ def get_cached_transformed_manager(
     with the same thresholds and data, regardless of how the metrics are created.
     """
     # Create cache key from data content hash and parameters
-    forecast_hash = hash(forecast.to_array().values.tobytes())
-    target_hash = hash(target.to_array().values.tobytes())
+    forecast_hash = hash(forecast.data.tobytes())
+    target_hash = hash(target.data.tobytes())
 
     cache_key = (
         forecast_hash,
@@ -107,7 +107,7 @@ class BaseMetric(abc.ABC, metaclass=ComputeDocstringMetaclass):
     for all metrics.
 
     Metrics are general operations applied between a forecast and analysis xarray
-    dataset. EWB metrics prioritize the use of any arbitrary sets of forecasts and
+    DataArray. EWB metrics prioritize the use of any arbitrary sets of forecasts and
     analyses, so long as the spatiotemporal dimensions are the same.
     """
 
@@ -204,15 +204,15 @@ class ThresholdMetric(BaseMetric):
         self.target_threshold = target_threshold
         self.preserve_dims = preserve_dims
 
-    def __call__(self, forecast: xr.Dataset, target: xr.Dataset, **kwargs):
+    def __call__(self, forecast: xr.DataArray, target: xr.DataArray, **kwargs) -> Any:
         """Make instances callable using their configured thresholds."""
         # Use instance attributes as defaults, but allow override from kwargs
         kwargs.setdefault("forecast_threshold", self.forecast_threshold)
         kwargs.setdefault("target_threshold", self.target_threshold)
         kwargs.setdefault("preserve_dims", self.preserve_dims)
 
-        # Call the classmethod with the configured parameters
-        return self.__class__.compute_metric(forecast, target, **kwargs)
+        # Call the instance method with the configured parameters
+        return self.compute_metric(forecast, target, **kwargs)
 
 
 class CSI(ThresholdMetric):
@@ -223,8 +223,8 @@ class CSI(ThresholdMetric):
 
     def _compute_metric(
         self,
-        forecast: xr.Dataset,
-        target: xr.Dataset,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
         **kwargs: Any,
     ) -> Any:
         forecast_threshold = kwargs.get("forecast_threshold", 0.5)
@@ -249,8 +249,8 @@ class FAR(ThresholdMetric):
 
     def _compute_metric(
         self,
-        forecast: xr.Dataset,
-        target: xr.Dataset,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
         **kwargs: Any,
     ) -> Any:
         forecast_threshold = kwargs.get("forecast_threshold", 0.5)
@@ -275,8 +275,8 @@ class TP(ThresholdMetric):
 
     def _compute_metric(
         self,
-        forecast: xr.Dataset,
-        target: xr.Dataset,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
         **kwargs: Any,
     ) -> Any:
         forecast_threshold = kwargs.get("forecast_threshold", 0.5)
@@ -302,8 +302,8 @@ class FP(ThresholdMetric):
 
     def _compute_metric(
         self,
-        forecast: xr.Dataset,
-        target: xr.Dataset,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
         **kwargs: Any,
     ) -> Any:
         forecast_threshold = kwargs.get("forecast_threshold", 0.5)
@@ -329,8 +329,8 @@ class TN(ThresholdMetric):
 
     def _compute_metric(
         self,
-        forecast: xr.Dataset,
-        target: xr.Dataset,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
         **kwargs: Any,
     ) -> Any:
         forecast_threshold = kwargs.get("forecast_threshold", 0.5)
@@ -546,19 +546,19 @@ class EarlySignal(BaseMetric):
 
     def _compute_metric(
         self,
-        forecast: xr.Dataset,
-        target: xr.Dataset,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
         threshold: Optional[float] = None,
         variable: Optional[str] = None,
         comparison: str = ">=",
         spatial_aggregation: str = "any",
         **kwargs: Any,
-    ) -> xr.Dataset:
+    ) -> xr.DataArray:
         """Compute early signal detection.
 
         Args:
-            forecast: The forecast dataset with init_time, lead_time, valid_time
-            target: The target dataset (used for reference/validation)
+            forecast: The forecast dataarray with init_time, lead_time, valid_time
+            target: The target dataarray (used for reference/validation)
             threshold: Threshold value for signal detection
             variable: Variable name to analyze for signal detection
             comparison: Comparison operator (">=", "<=", ">", "<", "==", "!=")
@@ -566,7 +566,7 @@ class EarlySignal(BaseMetric):
             **kwargs: Additional arguments
 
         Returns:
-            Dataset containing earliest detection times with coordinates:
+            DataArray containing earliest detection times with coordinates:
             - earliest_init_time: First init_time when signal was detected
             - earliest_lead_time: Corresponding lead_time
             - earliest_valid_time: Corresponding valid_time

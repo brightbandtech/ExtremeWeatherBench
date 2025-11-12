@@ -1793,9 +1793,7 @@ class TestIntegration:
             sample_forecast_dataset
         )
 
-        sample_evaluation_object.target.open_and_maybe_preprocess_data_from_source.return_value = (  # noqa: E501
-            sample_target_dataset
-        )
+        sample_evaluation_object.target.open_and_maybe_preprocess_data_from_source.return_value = sample_target_dataset  # noqa: E501
         sample_evaluation_object.target.maybe_map_variable_names.return_value = (
             sample_target_dataset
         )
