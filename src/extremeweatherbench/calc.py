@@ -1,4 +1,3 @@
-import logging
 from typing import Literal, Optional, Sequence, Union
 
 import cartopy.io.shapereader as shpreader
@@ -7,8 +6,6 @@ import shapely
 import xarray as xr
 
 from extremeweatherbench import utils
-
-logger = logging.getLogger(__name__)
 
 
 def convert_from_cartesian_to_latlon(
@@ -444,9 +441,12 @@ def _process_single_track_landfall(
                 # Stop after first landfall if that's all we need
                 if not return_all_landfalls:
                     break
-
-        except Exception as e:
-            logger.error("Error finding landfall: %s", e)
+        # Skip this segment if geometry operations fail:
+        # - IndexError: empty intersection coords
+        # - AttributeError: invalid geometry attributes
+        # - ValueError/TypeError: invalid coordinate values
+        # - ZeroDivisionError: zero-length segment
+        except (IndexError, AttributeError, ValueError, TypeError, ZeroDivisionError):
             continue
 
     # Format output
@@ -526,5 +526,8 @@ def _is_true_landfall(
         # Land -> Ocean or Ocean -> Ocean (no intersection) = NOT LANDFALL
         return False
 
-    except Exception:
+    except (AttributeError, ValueError, TypeError):
+        # Return False if geometry operations fail:
+        # - AttributeError: invalid/None geometry
+        # - ValueError/TypeError: invalid coordinate values
         return False
