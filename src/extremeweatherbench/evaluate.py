@@ -285,7 +285,7 @@ def compute_case_operator(
             logger.warning(
                 "Metric %s instantiated with default parameters", metric.name
             )
-        if not isinstance(metric, metrics.BaseMetric):
+        if not isinstance(case_operator.metric_list[i], metrics.BaseMetric):
             raise TypeError(f"Metric must be a BaseMetric instance, got {type(metric)}")
 
     forecast_ds, target_ds = _build_datasets(case_operator, **kwargs)

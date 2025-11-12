@@ -1011,7 +1011,10 @@ class TestComputeCaseOperator:
             sample_forecast_dataset,
             sample_target_dataset,
         )
-        sample_case_operator.metric_list = [mock.Mock(spec=metrics.BaseMetric)]
+        mock_metric = mock.Mock(spec=metrics.BaseMetric)
+        mock_metric.forecast_variable = None
+        mock_metric.target_variable = None
+        sample_case_operator.metric_list = [mock_metric]
 
         with mock.patch(
             "extremeweatherbench.evaluate._compute_and_maybe_cache"
@@ -1049,7 +1052,11 @@ class TestComputeCaseOperator:
 
         # Create multiple metrics
         metric_1 = mock.Mock(spec=metrics.BaseMetric)
+        metric_1.forecast_variable = None
+        metric_1.target_variable = None
         metric_2 = mock.Mock(spec=metrics.BaseMetric)
+        metric_2.forecast_variable = None
+        metric_2.target_variable = None
         sample_case_operator.metric_list = [metric_1, metric_2]
 
         sample_case_operator.target.maybe_align_forecast_to_target.return_value = (
@@ -3366,6 +3373,8 @@ class TestMetricVariableHandling:
 
         # Create a metric CLASS (not instance) with required methods
         class TestMetric(metrics.BaseMetric):
+            name = "TestMetric"
+
             def __init__(self):
                 super().__init__("TestMetric")
 
