@@ -192,8 +192,8 @@ def derive_indices_from_init_time_and_lead_time(
             dataset.lead_time.shape[0],
         )
     )
-    valid_time_mask = (valid_times_reshaped > pd.to_datetime(start_date)) & (
-        valid_times_reshaped < pd.to_datetime(end_date)
+    valid_time_mask = (valid_times_reshaped >= pd.to_datetime(start_date)) & (
+        valid_times_reshaped <= pd.to_datetime(end_date)
     )
     valid_time_indices = np.asarray(valid_time_mask).nonzero()
 
@@ -320,6 +320,31 @@ def convert_init_time_to_valid_time(ds: xr.Dataset) -> xr.Dataset:
         [
             ds.sel(lead_time=lead).swap_dims({"init_time": "valid_time"})
             for lead in ds.lead_time
+        ],
+        "lead_time",
+        coords="different",
+        compat="equals",
+        join="outer",
+    )
+
+
+def convert_valid_time_to_init_time(da: xr.DataArray) -> xr.DataArray:
+    """Convert the valid_time coordinate to a init_time coordinate.
+
+    Args:
+        ds: The dataset to convert with lead_time and valid_time coordinates.
+
+    Returns:
+        The dataset with a init_time coordinate.
+    """
+    init_time = xr.DataArray(
+        da.valid_time, coords={"valid_time": da.valid_time}
+    ) - xr.DataArray(da.lead_time, coords={"lead_time": da.lead_time})
+    da = da.assign_coords(init_time=init_time)
+    return xr.concat(
+        [
+            da.sel(lead_time=lead).swap_dims({"valid_time": "init_time"})
+            for lead in da.lead_time
         ],
         "lead_time",
         coords="different",
@@ -590,16 +615,17 @@ class ParallelTqdm(Parallel):
         self.progress_bar.update(self.n_completed_tasks - self.progress_bar.n)
 
 
-def convert_day_yearofday_to_time(dataset: xr.Dataset, year: int) -> xr.Dataset:
-    """Convert dayofyear and hour coordinates in an xarray Dataset to a new time
-    coordinate.
+def convert_day_yearofday_to_time(
+    dataset: Union[xr.Dataset, xr.DataArray], year: int
+) -> Union[xr.Dataset, xr.DataArray]:
+    """Convert dayofyear and hour to new time coordinate.
 
     Args:
-        dataset: The input xarray dataset.
+        dataset: The input xarray dataset or dataarray.
         year: The base year to use for the time coordinate.
 
     Returns:
-        The dataset with a new time coordinate.
+        The dataset or dataarray with a new time coordinate.
     """
     # Create a new time coordinate by combining dayofyear and hour
     time_dim = pd.date_range(
@@ -607,36 +633,13 @@ def convert_day_yearofday_to_time(dataset: xr.Dataset, year: int) -> xr.Dataset:
         periods=len(dataset["dayofyear"]) * len(dataset["hour"]),
         freq="6h",
     )
-    dataset = dataset.stack(valid_time=("dayofyear", "hour")).drop(
+    dataset = dataset.stack(valid_time=("dayofyear", "hour")).drop_vars(
         ["dayofyear", "hour"]
     )
     # Assign the new time coordinate to the dataset
     dataset = dataset.assign_coords(valid_time=time_dim)
 
     return dataset
-
-
-def maybe_stack_sparse_target_data(
-    forecast: xr.DataArray, target: xr.DataArray, spatial_dims: list[str]
-) -> tuple[xr.DataArray, xr.DataArray]:
-    """Maybe stack sparse data from target and forecast.
-
-    If either target or forecast is sparse, stack the data and get the coords before
-    the data is stacked. If not, return the original data.
-
-    Args:
-        forecast: The forecast data array.
-        target: The target data array.
-        spatial_dims: The spatial dimensions to stack.
-
-    Returns:
-        The stacked data arrays.
-    """
-    if isinstance(target.data, sparse.COO):
-        coords = target.data.coords
-        target = stack_sparse_data_from_dims(target, spatial_dims, coords=coords)
-        forecast = stack_sparse_data_from_dims(forecast, spatial_dims, coords=coords)
-    return forecast, target
 
 
 def interp_climatology_to_target(
@@ -669,31 +672,55 @@ def interp_climatology_to_target(
     )
 
 
-def create_comparison_mask(
-    data: xr.DataArray,
-    criteria: xr.DataArray,
-    sign: str = ">=",
+def reduce_dataarray(
+    da: xr.DataArray,
+    method: str | Callable,
+    reduce_dims: list[str],
+    compute: bool = True,
+    **method_kwargs,
 ) -> xr.DataArray:
-    """Create comparison mask based on sign.
+    """Reduce using xarray methods or numpy functions.
+
+    This function can utilize xarray's optimized methods (e.g., mean, sum) or
+    numpy/callable reductions. Using the built-in methods xarray provides can be more
+    efficient than using numpy functions.
+
+    If compute is True, the dataarray will be computed before returning.
+    This is useful to avoid dask exceptions when indexing with a boolean mask.
 
     Args:
-        data: Input data array
-        criteria: Criteria to compare against
-        sign: Comparison operator (">", ">=", "<", "<=", "==")
+        da: The xarray dataarray to reduce.
+        method: Either an xarray method name (e.g., 'mean', 'sum') or
+            a callable function (e.g., np.nanmean).
+        reduce_dims: The dimensions to reduce.
+        compute: Whether to compute the dataarray before returning. Defaults to True.
+        **method_kwargs: Additional kwargs for the method. Only used
+            when method is a string (xarray method).
 
     Returns:
-        Boolean mask where condition is met
+        The reduced xarray dataarray.
     """
-    match sign:
-        case ">=":
-            return data >= criteria
-        case ">":
-            return data > criteria
-        case "<=":
-            return data <= criteria
-        case "<":
-            return data < criteria
-        case "==":
-            return data == criteria
-        case _:
-            raise ValueError(f"Unsupported sign: {sign}")
+    if isinstance(da.data, sparse.COO):
+        da = stack_sparse_data_from_dims(da, reduce_dims)
+        reduce_dims = ["stacked"]
+
+    if callable(method):
+        # Use numpy function or other callable (original behavior)
+        return (
+            da.reduce(method, dim=reduce_dims).compute()
+            if compute
+            else da.reduce(method, dim=reduce_dims)
+        )
+    elif isinstance(method, str):
+        # Use xarray built-in method
+        if not hasattr(da, method):
+            raise ValueError(f"DataArray has no method '{method}'")
+
+        method_func = getattr(da, method)
+        return (
+            method_func(dim=reduce_dims, **method_kwargs).compute()
+            if compute
+            else method_func(dim=reduce_dims, **method_kwargs)
+        )
+    else:
+        raise TypeError(f"method must be str or callable, got {type(method)}")

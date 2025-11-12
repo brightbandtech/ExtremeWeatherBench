@@ -33,8 +33,7 @@ ARCO_ERA5_FULL_URI = (
 DEFAULT_GHCN_URI = "gs://extremeweatherbench/datasets/ghcnh_all_2020_2024.parq"
 
 #: Storage/access options for local storm report (LSR) tabular data.
-LSR_URI = "gs://extremeweatherbench/datasets/lsr_01012020_04302025.parq"
-
+LSR_URI = "gs://extremeweatherbench/datasets/combined_canada_australia_us_lsr_01012020_09272025.parq"  # noqa: E501
 PPH_URI = (
     "gs://extremeweatherbench/datasets/"
     "practically_perfect_hindcast_20200104_20250430.zarr"
@@ -78,6 +77,8 @@ CIRA_metadata_variable_mapping = {
     "v10": "surface_northward_wind",
     "u100": "100m_eastward_wind",
     "v100": "100m_northward_wind",
+    "msl": "air_pressure_at_mean_sea_level",
+    "apcp": "accumulated_precipitation",
 }
 
 # HRES forecast (weatherbench2)metadata variable mapping
@@ -837,15 +838,15 @@ class IBTrACS(TargetBase):
             # Due to missing data in the IBTrACS dataset, polars doesn't convert
             # the valid_time to a datetime by default
             data["valid_time"] = pd.to_datetime(data["valid_time"])
-            data = data.set_index(["valid_time", "latitude", "longitude"])
+            data = data.set_index(["valid_time"])
 
             try:
-                data = xr.Dataset.from_dataframe(data, sparse=True)
+                data = xr.Dataset.from_dataframe(data)
             except ValueError as e:
                 if "non-unique" in str(e):
                     # Drop duplicates from the pandas DataFrame before converting
-                    data_df = data.drop_duplicates()
-                    data = xr.Dataset.from_dataframe(data_df, sparse=True)
+                    data = data.drop_duplicates()
+                    data = xr.Dataset.from_dataframe(data)
                 else:
                     raise
             return data

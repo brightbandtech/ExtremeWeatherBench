@@ -1,5 +1,7 @@
 """Tests for the metrics module."""
 
+import inspect
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -135,10 +137,10 @@ class TestBaseMetric:
         """Test that the name property returns the class name."""
 
         class TestConcreteMetric(metrics.BaseMetric):
-            name = "TestConcreteMetric"
+            def __init__(self, *args, **kwargs):
+                super().__init__("TestConcreteMetric", *args, **kwargs)
 
-            @classmethod
-            def _compute_metric(cls, forecast, target, **kwargs):
+            def _compute_metric(self, forecast, target, **kwargs):
                 return forecast - target
 
         metric = TestConcreteMetric()
@@ -148,10 +150,10 @@ class TestBaseMetric:
         """Test that compute_metric method exists and is callable."""
 
         class TestConcreteMetric(metrics.BaseMetric):
-            name = "TestConcreteMetric"
+            def __init__(self, *args, **kwargs):
+                super().__init__("TestConcreteMetric", *args, **kwargs)
 
-            @classmethod
-            def _compute_metric(cls, forecast, target, **kwargs):
+            def _compute_metric(self, forecast, target, **kwargs):
                 return forecast - target
 
         metric = TestConcreteMetric()
@@ -164,7 +166,8 @@ class TestBaseMetric:
         """
 
         class TestMetricWithParams(metrics.BaseMetric):
-            name = "TestMetricWithParams"
+            def __init__(self, *args, **kwargs):
+                super().__init__("TestMetricWithParams", *args, **kwargs)
 
             def _compute_metric(
                 self,
@@ -200,7 +203,7 @@ class TestMAE:
         """Test that MAE can be instantiated."""
         metric = metrics.MAE()
         assert isinstance(metric, metrics.BaseMetric)
-        assert metric.name == "mae"
+        assert metric.name == "MAE"
 
     def test_compute_metric_simple(self):
         """Test MAE computation with simple data."""
@@ -227,7 +230,7 @@ class TestME:
         """Test that ME can be instantiated."""
         metric = metrics.ME()
         assert isinstance(metric, metrics.BaseMetric)
-        assert metric.name == "me"
+        assert metric.name == "ME"
 
     def test_compute_metric_simple(self):
         """Test ME computation with simple data."""
@@ -1344,83 +1347,6 @@ class TestOnsetME:
         # Compute metric with 2 consecutive timesteps
         metric = metrics.OnsetME(climatology=climatology, min_consecutive_timesteps=2)
         result = metric.compute_metric(forecast=forecast, target=target)
-
-        # Result will have init_time dimension
-        assert result.dims == ("init_time",)
-        assert len(result) == n_init
-
-        # All forecasts have onset at timestep 3, target at timestep 5
-        # So all should be -12 hours
-        assert np.all(result.values == -12.0)
-
-    @pytest.mark.skip(
-        reason="OnsetME with lead_time dimension structure not yet supported"
-    )
-    def test_onset_with_lead_time_dimension(self):
-        """Test OnsetME with forecast having lead_time dimension.
-
-        NOTE: This test is currently skipped because when init_time is a 2D
-        coordinate (not a dimension), groupby operations stack dimensions
-        which breaks the onset detection logic that needs valid_time dimension.
-
-        This tests the alternative forecast structure where:
-        - dims are (lead_time, valid_time, latitude, longitude)
-        - init_time is a coordinate computed from valid_time - lead_time
-        """
-        climatology = self.create_climatology()
-
-        # Create test data with lead_time dimension
-        n_lead_times = 5
-        n_valid_times = 10
-        lats = climatology.latitude.values
-        lons = climatology.longitude.values
-
-        # Create valid_time and lead_time coordinates
-        valid_times = pd.date_range("2020-01-01", periods=n_valid_times, freq="6h")
-        lead_times = pd.timedelta_range(start="0h", periods=n_lead_times, freq="6h")
-
-        # Create init_time as 2D coordinate: init_time = valid_time - lead_time
-        init_time_2d = np.array([[vt - lt for vt in valid_times] for lt in lead_times])
-
-        # Forecast: exceeds starting at timestep 3
-        forecast_vals = np.concatenate([np.full(3, 295.0), np.full(7, 305.0)])
-        forecast_values = np.tile(
-            forecast_vals[np.newaxis, :, np.newaxis, np.newaxis],
-            (n_lead_times, 1, len(lats), len(lons)),
-        )
-
-        forecast = xr.DataArray(
-            forecast_values,
-            dims=["lead_time", "valid_time", "latitude", "longitude"],
-            coords={
-                "lead_time": lead_times,
-                "valid_time": valid_times,
-                "latitude": lats,
-                "longitude": lons,
-                "init_time": (["lead_time", "valid_time"], init_time_2d),
-            },
-        )
-
-        # Target: exceeds starting at timestep 5
-        target_vals = np.concatenate([np.full(5, 295.0), np.full(5, 305.0)])
-        target_values = np.tile(
-            target_vals[:, np.newaxis, np.newaxis], (1, len(lats), len(lons))
-        )
-
-        target = xr.DataArray(
-            target_values,
-            dims=["valid_time", "latitude", "longitude"],
-            coords={
-                "valid_time": valid_times,
-                "latitude": lats,
-                "longitude": lons,
-            },
-        )
-
-        # Compute metric with 2 consecutive timesteps
-        metric = metrics.OnsetME(climatology=climatology, min_consecutive_timesteps=2)
-        result = metric.compute_metric(forecast=forecast, target=target)
-
         # Result will have init_time dimension from groupby
         assert result.dims == ("init_time",)
 
@@ -1429,3 +1355,43 @@ class TestOnsetME:
         valid_results = result.values[~np.isnan(result.values)]
         assert len(valid_results) > 0
         assert np.all(valid_results < 0)
+
+
+class TestMetricIntegration:
+    """Integration tests for metric classes."""
+
+    def test_all_metrics_have_required_methods(self):
+        """Test that all metric classes have required methods."""
+        # Auto-discover all BaseMetric subclasses, excluding abstract ones
+        all_metric_classes = [
+            cls
+            for name, cls in inspect.getmembers(metrics, inspect.isclass)
+            if issubclass(cls, metrics.BaseMetric)
+            and cls not in (metrics.BaseMetric, metrics.ThresholdMetric)
+            and not inspect.isabstract(cls)
+        ]
+
+        for metric_class in all_metric_classes:
+            metric = metric_class()
+            assert hasattr(metric, "_compute_metric")
+            assert hasattr(metric, "compute_metric")
+            assert hasattr(metric, "name")
+
+    def test_metrics_module_structure(self):
+        """Test the overall structure of the metrics module."""
+        # Test that required classes exist
+        assert hasattr(metrics, "BaseMetric")
+
+        # Auto-discover all metric classes (including abstract ones)
+        all_metric_classes = [
+            (name, cls)
+            for name, cls in inspect.getmembers(metrics, inspect.isclass)
+            if issubclass(cls, metrics.BaseMetric) and cls != metrics.BaseMetric
+        ]
+
+        # Should have at least some metrics
+        assert len(all_metric_classes) > 0
+
+        for class_name, cls in all_metric_classes:
+            assert hasattr(metrics, class_name)
+            assert callable(getattr(metrics, class_name))

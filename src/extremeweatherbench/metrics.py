@@ -1,10 +1,10 @@
 import abc
 import logging
-from typing import Any, Callable, Literal, Optional, Type
+import operator
+from typing import Any, Callable, Optional, Type
 
 import numpy as np
 import scores
-import sparse
 import xarray as xr
 
 from extremeweatherbench import derived, utils
@@ -17,8 +17,8 @@ _GLOBAL_CONTINGENCY_CACHE = utils.ThreadSafeDict()  # type: ignore
 
 
 def get_cached_transformed_manager(
-    forecast: xr.Dataset,
-    target: xr.Dataset,
+    forecast: xr.DataArray,
+    target: xr.DataArray,
     forecast_threshold: float = 0.5,
     target_threshold: float = 0.5,
     preserve_dims: str = "lead_time",
@@ -29,8 +29,8 @@ def get_cached_transformed_manager(
     with the same thresholds and data, regardless of how the metrics are created.
     """
     # Create cache key from data content hash and parameters
-    forecast_hash = hash(forecast.to_array().values.tobytes())
-    target_hash = hash(target.to_array().values.tobytes())
+    forecast_hash = hash(forecast.data.tobytes())
+    target_hash = hash(target.data.tobytes())
 
     cache_key = (
         forecast_hash,
@@ -59,47 +59,6 @@ def get_cached_transformed_manager(
     _GLOBAL_CONTINGENCY_CACHE[cache_key] = transformed
 
     return transformed
-
-
-def _reduce_xarray_method(
-    da: xr.DataArray,
-    method: str | Callable,
-    reduce_dims: list[str],
-    **method_kwargs,
-) -> xr.DataArray:
-    """Reduce using xarray methods or numpy functions.
-
-    This function can utilize xarray's optimized methods (e.g., mean,
-    sum) or numpy/callable reductions, providing flexibility and
-    efficiency.
-
-    Args:
-        da: The xarray dataarray to reduce.
-        method: Either an xarray method name (e.g., 'mean', 'sum') or
-            a callable function (e.g., np.nanmean).
-        reduce_dims: The dimensions to reduce.
-        **method_kwargs: Additional kwargs for the method. Only used
-            when method is a string (xarray method).
-
-    Returns:
-        The reduced xarray dataarray.
-    """
-    if isinstance(da.data, sparse.COO):
-        da = utils.stack_sparse_data_from_dims(da, reduce_dims)
-        reduce_dims = ["stacked"]
-
-    if callable(method):
-        # Use numpy function or other callable (original behavior)
-        return da.reduce(method, dim=reduce_dims)
-    elif isinstance(method, str):
-        # Use xarray built-in method
-        if not hasattr(da, method):
-            raise ValueError(f"DataArray has no method '{method}'")
-
-        method_func = getattr(da, method)
-        return method_func(dim=reduce_dims, **method_kwargs)
-    else:
-        raise TypeError(f"method must be str or callable, got {type(method)}")
 
 
 def clear_contingency_cache():
@@ -149,19 +108,19 @@ class BaseMetric(abc.ABC, metaclass=ComputeDocstringMetaclass):
     for all metrics.
 
     Metrics are general operations applied between a forecast and analysis xarray
-    dataset. EWB metrics prioritize the use of any arbitrary sets of forecasts and
+    DataArray. EWB metrics prioritize the use of any arbitrary sets of forecasts and
     analyses, so long as the spatiotemporal dimensions are the same.
     """
 
-    # default to preserving lead_time in EWB metrics
-    name: str
-    preserve_dims: str = "lead_time"
-
     def __init__(
         self,
+        name: str,
+        preserve_dims: str = "lead_time",
         forecast_variable: Optional[str | derived.DerivedVariable] = None,
         target_variable: Optional[str | derived.DerivedVariable] = None,
     ):
+        self.name = name
+        self.preserve_dims = preserve_dims
         self.forecast_variable = forecast_variable
         self.target_variable = target_variable
         # Check if both variables are None - this is allowed
@@ -235,36 +194,38 @@ class ThresholdMetric(BaseMetric):
 
     def __init__(
         self,
+        name: str,
+        preserve_dims: str = "lead_time",
         forecast_threshold: float = 0.5,
         target_threshold: float = 0.5,
-        preserve_dims: str = "lead_time",
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(name, **kwargs)
         self.forecast_threshold = forecast_threshold
         self.target_threshold = target_threshold
         self.preserve_dims = preserve_dims
 
-    def __call__(self, forecast: xr.Dataset, target: xr.Dataset, **kwargs):
+    def __call__(self, forecast: xr.DataArray, target: xr.DataArray, **kwargs) -> Any:
         """Make instances callable using their configured thresholds."""
         # Use instance attributes as defaults, but allow override from kwargs
         kwargs.setdefault("forecast_threshold", self.forecast_threshold)
         kwargs.setdefault("target_threshold", self.target_threshold)
         kwargs.setdefault("preserve_dims", self.preserve_dims)
 
-        # Call the classmethod with the configured parameters
-        return self.__class__.compute_metric(forecast, target, **kwargs)
+        # Call the instance method with the configured parameters
+        return self.compute_metric(forecast, target, **kwargs)
 
 
 class CSI(ThresholdMetric):
     """Critical Success Index metric."""
 
-    name = "critical_success_index"
+    def __init__(self, *args, **kwargs):
+        super().__init__("critical_success_index", *args, **kwargs)
 
     def _compute_metric(
         self,
-        forecast: xr.Dataset,
-        target: xr.Dataset,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
         **kwargs: Any,
     ) -> Any:
         forecast_threshold = kwargs.get("forecast_threshold", 0.5)
@@ -284,12 +245,13 @@ class CSI(ThresholdMetric):
 class FAR(ThresholdMetric):
     """False Alarm Ratio metric."""
 
-    name = "false_alarm_ratio"
+    def __init__(self, *args, **kwargs):
+        super().__init__("false_alarm_ratio", *args, **kwargs)
 
     def _compute_metric(
         self,
-        forecast: xr.Dataset,
-        target: xr.Dataset,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
         **kwargs: Any,
     ) -> Any:
         forecast_threshold = kwargs.get("forecast_threshold", 0.5)
@@ -309,12 +271,13 @@ class FAR(ThresholdMetric):
 class TP(ThresholdMetric):
     """True Positive metric."""
 
-    name = "true_positive"
+    def __init__(self, *args, **kwargs):
+        super().__init__("true_positive", *args, **kwargs)
 
     def _compute_metric(
         self,
-        forecast: xr.Dataset,
-        target: xr.Dataset,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
         **kwargs: Any,
     ) -> Any:
         forecast_threshold = kwargs.get("forecast_threshold", 0.5)
@@ -335,12 +298,13 @@ class TP(ThresholdMetric):
 class FP(ThresholdMetric):
     """False Positive metric."""
 
-    name = "false_positive"
+    def __init__(self, *args, **kwargs):
+        super().__init__("false_positive", *args, **kwargs)
 
     def _compute_metric(
         self,
-        forecast: xr.Dataset,
-        target: xr.Dataset,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
         **kwargs: Any,
     ) -> Any:
         forecast_threshold = kwargs.get("forecast_threshold", 0.5)
@@ -361,12 +325,13 @@ class FP(ThresholdMetric):
 class TN(ThresholdMetric):
     """True Negative metric."""
 
-    name = "true_negative"
+    def __init__(self, *args, **kwargs):
+        super().__init__("true_negative", *args, **kwargs)
 
     def _compute_metric(
         self,
-        forecast: xr.Dataset,
-        target: xr.Dataset,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
         **kwargs: Any,
     ) -> Any:
         forecast_threshold = kwargs.get("forecast_threshold", 0.5)
@@ -387,7 +352,8 @@ class TN(ThresholdMetric):
 class FN(ThresholdMetric):
     """False Negative metric."""
 
-    name = "false_negative"
+    def __init__(self, *args, **kwargs):
+        super().__init__("false_negative", *args, **kwargs)
 
     def _compute_metric(
         self,
@@ -413,7 +379,8 @@ class FN(ThresholdMetric):
 class Accuracy(ThresholdMetric):
     """Accuracy metric."""
 
-    name = "accuracy"
+    def __init__(self, *args, **kwargs):
+        super().__init__("accuracy", *args, **kwargs)
 
     def _compute_metric(
         self,
@@ -475,6 +442,7 @@ def create_threshold_metrics(
 
         metric_class = metric_classes[metric_name]
         metric = metric_class(
+            name=metric_name,
             forecast_threshold=forecast_threshold,
             target_threshold=target_threshold,
             preserve_dims=preserve_dims,
@@ -485,7 +453,8 @@ def create_threshold_metrics(
 
 
 class MAE(BaseMetric):
-    name = "mae"
+    def __init__(self, name: str = "MAE", *args, **kwargs):
+        super().__init__(name, *args, **kwargs)
 
     def _compute_metric(
         self,
@@ -511,7 +480,8 @@ class MAE(BaseMetric):
 class ME(BaseMetric):
     """Mean Error (bias) metric."""
 
-    name = "me"
+    def __init__(self, name: str = "ME", *args, **kwargs):
+        super().__init__(name, *args, **kwargs)
 
     def _compute_metric(
         self,
@@ -539,7 +509,8 @@ class ME(BaseMetric):
 class RMSE(BaseMetric):
     """Root Mean Square Error metric."""
 
-    name = "rmse"
+    def __init__(self, *args, **kwargs):
+        super().__init__("rmse", *args, **kwargs)
 
     def _compute_metric(
         self,
@@ -571,23 +542,24 @@ class EarlySignal(BaseMetric):
     signal detection criteria that can be specified in applied metrics downstream.
     """
 
-    name = "early_signal"
+    def __init__(self, *args, **kwargs):
+        super().__init__("early_signal", *args, **kwargs)
 
     def _compute_metric(
         self,
-        forecast: xr.Dataset,
-        target: xr.Dataset,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
         threshold: Optional[float] = None,
         variable: Optional[str] = None,
         comparison: str = ">=",
         spatial_aggregation: str = "any",
         **kwargs: Any,
-    ) -> xr.Dataset:
+    ) -> xr.DataArray:
         """Compute early signal detection.
 
         Args:
-            forecast: The forecast dataset with init_time, lead_time, valid_time
-            target: The target dataset (used for reference/validation)
+            forecast: The forecast dataarray with init_time, lead_time, valid_time
+            target: The target dataarray (used for reference/validation)
             threshold: Threshold value for signal detection
             variable: Variable name to analyze for signal detection
             comparison: Comparison operator (">=", "<=", ">", "<", "==", "!=")
@@ -595,7 +567,7 @@ class EarlySignal(BaseMetric):
             **kwargs: Additional arguments
 
         Returns:
-            Dataset containing earliest detection times with coordinates:
+            DataArray containing earliest detection times with coordinates:
             - earliest_init_time: First init_time when signal was detected
             - earliest_lead_time: Corresponding lead_time
             - earliest_valid_time: Corresponding valid_time
@@ -715,7 +687,8 @@ class EarlySignal(BaseMetric):
 
 
 class MaximumMAE(MAE):
-    name = "MaximumMAE"
+    def __init__(self, *args, **kwargs):
+        super().__init__("MaximumMAE", *args, **kwargs)
 
     def _compute_metric(
         self,
@@ -738,7 +711,7 @@ class MaximumMAE(MAE):
         """
         preserve_dims = kwargs.get("preserve_dims", "lead_time")
         tolerance_range = kwargs.get("tolerance_range", 24)
-        target_spatial_mean = _reduce_xarray_method(
+        target_spatial_mean = utils.reduce_dataarray(
             target, method="mean", reduce_dims=["latitude", "longitude"], skipna=True
         )
         maximum_timestep = target_spatial_mean.idxmax("valid_time")
@@ -747,8 +720,8 @@ class MaximumMAE(MAE):
         # Handle the case where there are >1 resulting target values
         maximum_timestep = utils.maybe_get_closest_timestamp_to_center_of_valid_times(
             maximum_timestep, target.valid_time
-        )
-        forecast_spatial_mean = _reduce_xarray_method(
+        ).compute()
+        forecast_spatial_mean = utils.reduce_dataarray(
             forecast, method="mean", reduce_dims=["latitude", "longitude"], skipna=True
         )
         filtered_max_forecast = forecast_spatial_mean.where(
@@ -777,7 +750,8 @@ class MinimumMAE(MAE):
     around the target's minimum.
     """
 
-    name = "MinimumMAE"
+    def __init__(self, *args, **kwargs):
+        super().__init__("MinimumMAE", *args, **kwargs)
 
     def _compute_metric(
         self,
@@ -800,12 +774,12 @@ class MinimumMAE(MAE):
         """
         preserve_dims = kwargs.get("preserve_dims", "lead_time")
         tolerance_range = kwargs.get("tolerance_range", 24)
-        target_spatial_mean = _reduce_xarray_method(
+        target_spatial_mean = utils.reduce_dataarray(
             target, method="mean", reduce_dims=["latitude", "longitude"], skipna=True
         )
         minimum_timestep = target_spatial_mean.idxmin("valid_time")
         minimum_value = target_spatial_mean.sel(valid_time=minimum_timestep)
-        forecast_spatial_mean = _reduce_xarray_method(
+        forecast_spatial_mean = utils.reduce_dataarray(
             forecast, method="mean", reduce_dims=["latitude", "longitude"], skipna=True
         )
         # Handle the case where there are >1 resulting target values
@@ -838,7 +812,8 @@ class MaxMinMAE(MAE):
     heatwave evaluation.
     """
 
-    name = "MaxMinMAE"
+    def __init__(self, *args, **kwargs):
+        super().__init__(name="MaxMinMAE", *args, **kwargs)
 
     def _compute_metric(
         self,
@@ -864,10 +839,10 @@ class MaxMinMAE(MAE):
             for dim in forecast.dims
             if dim not in ["valid_time", "lead_time", "time"]
         ]
-        forecast = _reduce_xarray_method(
+        forecast = utils.reduce_dataarray(
             forecast, method="mean", reduce_dims=reduce_dims, skipna=True
         )
-        target = _reduce_xarray_method(
+        target = utils.reduce_dataarray(
             target, method="mean", reduce_dims=reduce_dims, skipna=True
         )
 
@@ -932,7 +907,8 @@ class OnsetME(ME):
     of event onset (currently configured for heatwaves).
     """
 
-    name = "OnsetME"
+    def __init__(self, *args, **kwargs):
+        super().__init__("OnsetME", *args, **kwargs)
 
     def onset(self, forecast: xr.DataArray, **kwargs: Any) -> xr.DataArray:
         """Identify onset time from forecast data.
@@ -991,7 +967,7 @@ class OnsetME(ME):
 
         target_time = target.valid_time[0] + np.timedelta64(48, "h")
         forecast = (
-            _reduce_xarray_method(
+            utils.reduce_dataarray(
                 forecast,
                 method="mean",
                 reduce_dims=["latitude", "longitude"],
@@ -1021,12 +997,12 @@ class DurationME(ME):
     def __init__(
         self,
         climatology: xr.DataArray,
-        criteria_sign: Literal[">", ">=", "<", "<=", "=="] = ">=",
+        op_func: Callable = operator.ge,
         name: str = "heatwave_duration_me",
         preserve_dims: str = "init_time",
     ):
         self.climatology = climatology
-        self.criteria_sign = criteria_sign
+        self.op_func = op_func
         self.name = name
         self.preserve_dims = preserve_dims
 
@@ -1053,18 +1029,11 @@ class DurationME(ME):
             for dim in forecast.dims
             if dim not in ["init_time", "lead_time", "valid_time"]
         ]
-        forecast, target = utils.maybe_stack_sparse_target_data(
-            forecast, target, spatial_dims
-        )
+        forecast = utils.stack_sparse_data_from_dims(forecast, spatial_dims)
+        target = utils.stack_sparse_data_from_dims(target, spatial_dims)
         climatology_time = utils.interp_climatology_to_target(target, climatology_time)
-        forecast_mask = utils.create_comparison_mask(
-            forecast, climatology_time, self.criteria_sign
-        )
-
-        # Calculate target duration (count of timesteps exceeding climatology)
-        target_mask = utils.create_comparison_mask(
-            target, climatology_time, self.criteria_sign
-        )
+        forecast_mask = self.op_func(forecast, climatology_time)
+        target_mask = self.op_func(target, climatology_time)
 
         # Track NaN locations in forecast data
         forecast_valid_mask = ~forecast.isnull()

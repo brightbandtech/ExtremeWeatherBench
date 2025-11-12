@@ -1,4 +1,5 @@
 import logging
+import operator
 from typing import Any, Callable, Union
 
 import numpy as np
@@ -233,18 +234,18 @@ def get_brightband_evaluation_objects() -> list[inputs.EvaluationObject]:
         metrics.MaximumMAE(),
         metrics.RMSE(),
         metrics.OnsetME(
-            get_climatology(0.85), criteria_sign=">=", min_consecutive_timesteps=4
+            get_climatology(0.85), op_func=operator.ge, min_consecutive_timesteps=4
         ),
-        metrics.DurationME(get_climatology(0.85), criteria_sign=">="),
+        metrics.DurationME(get_climatology(0.85), op_func=operator.ge),
         metrics.MaxMinMAE(),
     ]
     freeze_metric_list: list[Union[Callable[..., Any], metrics.BaseMetric]] = [
         metrics.MinimumMAE(),
         metrics.RMSE(),
         metrics.OnsetME(
-            get_climatology(0.15), criteria_sign="<=", min_consecutive_timesteps=4
+            get_climatology(0.15), op_func=operator.le, min_consecutive_timesteps=4
         ),
-        metrics.DurationME(get_climatology(0.15), criteria_sign="<="),
+        metrics.DurationME(get_climatology(0.15), op_func=operator.le),
     ]
 
     return [
