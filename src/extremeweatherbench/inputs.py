@@ -848,12 +848,10 @@ class IBTrACS(TargetBase):
     """Target class for IBTrACS data."""
 
     name: str = "IBTrACS"
-    _current_case_id: Optional[int] = dataclasses.field(default=None, init=False)
     preprocess: Callable = _ibtracs_preprocess
     variable_mapping: dict = dataclasses.field(
         default_factory=lambda: IBTrACS_metadata_variable_mapping.copy()
     )
-    input_variables_same_as_forecast: bool = False
     source: str = IBTRACS_URI
 
     def _open_data_from_source(self) -> IncomingDataInput:
@@ -917,8 +915,6 @@ class IBTrACS(TargetBase):
             pl.col("surface_wind_speed").is_not_null()
             & pl.col("air_pressure_at_mean_sea_level").is_not_null()
         )
-        self._current_case_id = case_metadata.case_id_number
-
         return subset_target_data
 
     def _custom_convert_to_dataset(self, data: IncomingDataInput) -> xr.Dataset:
