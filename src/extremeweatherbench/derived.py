@@ -84,6 +84,14 @@ class CravenBrooksSignificantSevere(DerivedVariable):
         "geopotential",
     ]
 
+    def __init__(
+        self,
+        name: Optional[str] = "craven_brooks_significant_severe",
+        layer_depth: float = 100,
+    ):
+        super().__init__(name=name)
+        self.layer_depth = layer_depth
+
     def derive_variable(self, data: xr.Dataset, *args, **kwargs) -> xr.DataArray:
         """Derive the Craven-Brooks significant severe parameter."""
         # calculate dewpoint temperature if not present
@@ -101,7 +109,7 @@ class CravenBrooksSignificantSevere(DerivedVariable):
             # and if neither are present, raise an error
             else:
                 raise KeyError("No variable to compute dewpoint temperature.")
-        layer_depth = kwargs.get("layer_depth", 100)
+        layer_depth = self.layer_depth
         cbss = sc.craven_brooks_significant_severe(
             air_temperature=data["air_temperature"],
             dewpoint_temperature=data["dewpoint_temperature"],
