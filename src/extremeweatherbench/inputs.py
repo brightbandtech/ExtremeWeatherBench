@@ -1,7 +1,7 @@
 import abc
 import dataclasses
 import logging
-from typing import TYPE_CHECKING, Any, Callable, Optional, TypeAlias, Union
+from typing import TYPE_CHECKING, Callable, Optional, TypeAlias, Union
 
 import numpy as np
 import pandas as pd
@@ -365,12 +365,7 @@ class EvaluationObject:
     """
 
     event_type: str
-    metric_list: list[
-        Union[
-            Callable[..., Any],
-            "metrics.BaseMetric",
-        ]
-    ]
+    metric_list: list["metrics.BaseMetric"]
     target: "TargetBase"
     forecast: "ForecastBase"
 

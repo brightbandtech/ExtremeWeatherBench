@@ -9,7 +9,7 @@ import importlib
 import itertools
 import logging
 import pathlib
-from typing import TYPE_CHECKING, Any, Callable, Literal, Sequence, Union
+from typing import TYPE_CHECKING, Literal, Sequence, Union
 
 import dacite
 import yaml  # type: ignore[import]
@@ -141,7 +141,7 @@ class CaseOperator:
     """
 
     case_metadata: IndividualCase
-    metric_list: list[Union[Callable[..., Any], "metrics.BaseMetric"]]
+    metric_list: list["metrics.BaseMetric"]
     target: "inputs.TargetBase"
     forecast: "inputs.ForecastBase"
 
