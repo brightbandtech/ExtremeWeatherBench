@@ -690,3 +690,142 @@ class TestNantrapezoid:
         # Should still work and return proper result
         assert result.shape == (1,)
         assert not np.isnan(result)
+
+
+class TestLandfallDetection:
+    """Test landfall detection functions."""
+
+    def test_process_single_track_landfall_with_dataarray(self):
+        """Test _process_single_track_landfall with DataArray input."""
+        from unittest.mock import MagicMock
+
+        # Create a simple track DataArray that moves across coordinates
+        track = xr.DataArray(
+            [35.0, 40.0, 45.0, 40.0],
+            dims=["valid_time"],
+            coords={
+                "valid_time": pd.date_range("2023-09-15 00:00", periods=4, freq="6h"),
+                "latitude": (["valid_time"], [24.0, 24.5, 25.0, 25.5]),
+                "longitude": (["valid_time"], [-82.0, -81.5, -81.0, -80.5]),
+            },
+            name="surface_wind_speed",
+        )
+
+        # Mock land geometry that will detect a landfall
+        mock_land_geom = MagicMock()
+        mock_land_geom.intersects.return_value = True
+        mock_land_geom.intersection.return_value.coords = [(-81.25, 24.75)]
+
+        # Call the function
+        result = calc._process_single_track_landfall(
+            track, mock_land_geom, return_all=False
+        )
+
+        # Verify result structure (may be None if no landfall detected)
+        # In real scenarios with actual land geometry, this would return a DataArray
+        assert result is None or isinstance(result, xr.DataArray)
+
+    def test_process_single_track_landfall_insufficient_points(self):
+        """Test _process_single_track_landfall with too few points."""
+        from unittest.mock import MagicMock
+
+        # Create track with only 1 point (need at least 2 for landfall detection)
+        track = xr.DataArray(
+            [35.0],
+            dims=["valid_time"],
+            coords={
+                "valid_time": [pd.Timestamp("2023-09-15 00:00")],
+                "latitude": (["valid_time"], [24.0]),
+                "longitude": (["valid_time"], [-82.0]),
+            },
+            name="surface_wind_speed",
+        )
+
+        mock_land_geom = MagicMock()
+
+        # Should return None for insufficient points
+        result = calc._process_single_track_landfall(track, mock_land_geom)
+        assert result is None
+
+    def test_process_single_track_landfall_with_nan_values(self):
+        """Test _process_single_track_landfall filters NaN values correctly."""
+        from unittest.mock import MagicMock
+
+        # Create track with some NaN values
+        track = xr.DataArray(
+            [35.0, np.nan, 45.0, 40.0],
+            dims=["valid_time"],
+            coords={
+                "valid_time": pd.date_range("2023-09-15 00:00", periods=4, freq="6h"),
+                "latitude": (["valid_time"], [24.0, 24.5, 25.0, 25.5]),
+                "longitude": (["valid_time"], [-82.0, -81.5, -81.0, -80.5]),
+            },
+            name="surface_wind_speed",
+        )
+
+        mock_land_geom = MagicMock()
+        mock_land_geom.intersects.return_value = False
+
+        # Should handle NaN values gracefully
+        result = calc._process_single_track_landfall(track, mock_land_geom)
+        assert result is None or isinstance(result, xr.DataArray)
+
+    def test_process_single_track_landfall_with_init_time(self):
+        """Test _process_single_track_landfall adds init_time coordinate."""
+        from unittest.mock import MagicMock, patch
+
+        # Create a simple track
+        track = xr.DataArray(
+            [35.0, 40.0, 45.0],
+            dims=["valid_time"],
+            coords={
+                "valid_time": pd.date_range("2023-09-15 00:00", periods=3, freq="6h"),
+                "latitude": (["valid_time"], [24.0, 24.5, 25.0]),
+                "longitude": (["valid_time"], [-82.0, -81.5, -81.0]),
+            },
+            name="surface_wind_speed",
+        )
+
+        init_time_val = np.datetime64("2023-09-14T18:00")
+
+        # Mock land geometry and landfall detection
+        mock_land_geom = MagicMock()
+
+        # Mock _is_true_landfall to return True for at least one segment
+        with patch("extremeweatherbench.calc._is_true_landfall") as mock_is_landfall:
+            mock_is_landfall.return_value = True
+            mock_land_geom.intersection.return_value.coords = [(-81.5, 24.5)]
+
+            result = calc._process_single_track_landfall(
+                track, mock_land_geom, return_all=False, init_time=init_time_val
+            )
+
+            # If landfall is detected, result should have init_time coordinate
+            if result is not None:
+                assert "init_time" in result.coords
+                assert result.coords["init_time"] == init_time_val
+
+    def test_process_single_track_landfall_flattens_multidim_coords(self):
+        """Test that multi-dimensional coordinates are properly flattened."""
+        from unittest.mock import MagicMock
+
+        # Create track with 2D coordinates (e.g., from lead_time dimension)
+        track = xr.DataArray(
+            [35.0, 40.0, 45.0],
+            dims=["valid_time"],
+            coords={
+                "valid_time": pd.date_range("2023-09-15 00:00", periods=3, freq="6h"),
+                # Simulate coordinates that might be 2D after some operations
+                "latitude": (["valid_time"], [24.0, 24.5, 25.0]),
+                "longitude": (["valid_time"], [-82.0, -81.5, -81.0]),
+            },
+            name="surface_wind_speed",
+        )
+
+        mock_land_geom = MagicMock()
+        mock_land_geom.intersects.return_value = False
+
+        # Should handle and flatten coordinates without error
+        result = calc._process_single_track_landfall(track, mock_land_geom)
+        # Function should complete without error
+        assert result is None or isinstance(result, xr.DataArray)

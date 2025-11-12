@@ -1,6 +1,6 @@
 import abc
 import logging
-from typing import Any, Literal, Optional, Type
+from typing import Any, Callable, Literal, Optional, Type
 
 import numpy as np
 import scores
@@ -1069,6 +1069,204 @@ class DurationME(ME):
         )
 
 
+class LandfallMixin:
+    """Mixin that adds landfall detection and extraction to metrics.
+
+    This mixin provides the landfall detection logic that can be
+    combined with any error metric (MAE, ME, etc.) to compute
+    metrics specifically at landfall points.
+
+    The mixin uses Python's Method Resolution Order (MRO) to properly
+    chain with parent metric classes.
+    """
+
+    def __init__(
+        self,
+        approach: Literal["first", "next"] = "first",
+        exclude_post_landfall: bool = False,
+        **kwargs,
+    ):
+        """Initialize the landfall mixin.
+
+        Args:
+            approach: Landfall detection approach ('first', 'next')
+            exclude_post_landfall: Whether to exclude init_times
+                after all landfalls
+            **kwargs: Additional arguments passed to parent classes
+        """
+        self.approach = approach
+        self.exclude_post_landfall = exclude_post_landfall
+        super().__init__(**kwargs)
+
+    def _get_landfall_values(
+        self, forecast: xr.DataArray, target: xr.DataArray
+    ) -> tuple[Optional[xr.DataArray], Optional[xr.DataArray]]:
+        """Extract landfall points from forecast and target tracks.
+
+        Uses the configured approach to find landfall points and
+        returns the forecast and target values at those points.
+
+        Args:
+            forecast: Forecast TC track DataArray with lat/lon/time
+            target: Target TC track DataArray with lat/lon/time
+
+        Returns:
+            Tuple of (forecast_landfall, target_landfall) DataArrays,
+            or (None, None) if no landfalls found
+        """
+        return _get_landfall_data(forecast, target, self.approach)
+
+    def _compute_metric(
+        self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
+    ) -> Any:
+        """Compute metric at landfall points using configured approach.
+
+        This method handles the common pattern for all landfall metrics:
+        1. Extract landfall values
+        2. Handle None case
+        3. Branch on approach and delegate to appropriate computation
+
+        Args:
+            forecast: Forecast TC track DataArray
+            target: Target TC track DataArray
+            **kwargs: Additional arguments
+
+        Returns:
+            Computed metric result
+        """
+        # Get landfall values using mixin
+        forecast_landfall, target_landfall = self._get_landfall_values(forecast, target)
+
+        # Handle case where no landfall is found
+        if forecast_landfall is None or target_landfall is None:
+            return _get_nan_result_for_forecast(forecast)
+
+        # Branch on approach and compute metric
+        if self.approach == "next":
+            # Use approach-specific "next" computation
+            return self._compute_next_approach(
+                forecast, target, forecast_landfall, target_landfall, **kwargs
+            )
+        else:
+            # Use simple "first" approach - delegate to parent or custom
+            return self._compute_first_approach(
+                forecast, target, forecast_landfall, target_landfall, **kwargs
+            )
+
+    def _compute_first_approach(
+        self,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
+        forecast_landfall: xr.DataArray,
+        target_landfall: xr.DataArray,
+        **kwargs: Any,
+    ) -> Any:
+        """Compute metric for 'first' approach.
+
+        Default implementation calls parent metric's _compute_metric.
+        Subclasses can override for custom behavior.
+
+        Args:
+            forecast: Original forecast DataArray
+            target: Original target DataArray
+            forecast_landfall: Forecast values at landfall
+            target_landfall: Target values at landfall
+            **kwargs: Additional arguments
+
+        Returns:
+            Computed metric result
+        """
+        return super()._compute_metric(forecast_landfall, target_landfall, **kwargs)
+
+    def _compute_next_approach(
+        self,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
+        forecast_landfall: xr.DataArray,
+        target_landfall: xr.DataArray,
+        **kwargs: Any,
+    ) -> Any:
+        """Compute metric for 'next' approach.
+
+        This must be implemented by subclasses that support 'next' approach.
+
+        Args:
+            forecast: Original forecast DataArray
+            target: Original target DataArray
+            forecast_landfall: Forecast values at landfall
+            target_landfall: Target values at landfall
+            **kwargs: Additional arguments
+
+        Returns:
+            Computed metric result
+        """
+        raise NotImplementedError(
+            f"{self.__class__.__name__} must implement _compute_next_approach"
+        )
+
+    @staticmethod
+    def _match_and_compute_next_landfalls(
+        forecast_landfalls: xr.DataArray,
+        target_landfalls: xr.DataArray,
+        metric_func: Callable[[xr.DataArray, xr.DataArray], Any],
+    ) -> xr.DataArray:
+        """Generic helper for computing next landfall metrics.
+
+        This helper encapsulates the common pattern of:
+        1. Looping through target landfalls by init_time
+        2. Finding matching forecast landfall for each init_time
+        3. Finding the forecast landfall closest in time to the target
+        4. Computing a metric using the provided function
+
+        Args:
+            forecast_landfalls: Forecast landfalls with init_time and landfall dims
+            target_landfalls: Target landfalls with init_time dim
+            metric_func: Function that takes (closest_forecast, target_landfall)
+                and returns a scalar metric value
+
+        Returns:
+            DataArray with init_time dimension containing metric values
+        """
+        results = []
+        init_times_out = []
+
+        for i, init_time in enumerate(target_landfalls.coords["init_time"]):
+            target_landfall = target_landfalls.isel(init_time=i)
+            target_time = target_landfall.coords["valid_time"].values
+
+            # Find matching forecast landfall for this init_time
+            init_time_match = forecast_landfalls.coords["init_time"] == init_time
+            if not init_time_match.any():
+                results.append(np.nan)
+                init_times_out.append(init_time.values)
+                continue
+
+            forecast_for_init = forecast_landfalls.where(init_time_match, drop=True)
+
+            if len(forecast_for_init.coords["init_time"]) == 0:
+                results.append(np.nan)
+                init_times_out.append(init_time.values)
+                continue
+
+            # Find forecast landfall closest to target time
+            time_diffs = np.abs(forecast_for_init.coords["valid_time"] - target_time)
+            closest_idx = time_diffs.argmin()
+            closest_forecast = forecast_for_init.isel(landfall=closest_idx)
+
+            # Calculate metric using provided function
+            try:
+                result = metric_func(closest_forecast, target_landfall)
+                results.append(float(result.values))
+            except (KeyError, AttributeError, ValueError):
+                results.append(np.nan)
+
+            init_times_out.append(init_time.values)
+
+        return xr.DataArray(
+            results, dims=["init_time"], coords={"init_time": init_times_out}
+        )
+
+
 # TODO: complete spatial displacement implementation
 class SpatialDisplacement(BaseMetric):
     """Spatial displacement error metric.
@@ -1142,23 +1340,19 @@ def calculate_landfall_time_difference_hours(
     time_diff_hours = time_diff / np.timedelta64(1, "h")
 
     # Return with init_time as the only dimension
-    if "init_time" in landfall1.dims:
-        # Ensure the values are properly shaped for init_time dimension
-        if time_diff_hours.dims == ():
-            # Scalar case - broadcast to all init_times
-            values = np.full(len(landfall1.init_time), float(time_diff_hours.values))
-        else:
-            # Already has the right dimensions
-            values = time_diff_hours.values
-
-        return xr.DataArray(
-            values,
-            dims=["init_time"],
-            coords={"init_time": landfall1.coords["init_time"]},
-        )
+    # Ensure the values are properly shaped for init_time dimension
+    if time_diff_hours.dims == ():
+        # Scalar case - broadcast to all init_times
+        values = np.full(len(landfall1.init_time), float(time_diff_hours.values))
     else:
-        # Scalar case - no init_time dimension
-        return time_diff_hours
+        # Already has the right dimensions
+        values = time_diff_hours.values
+
+    return xr.DataArray(
+        values,
+        dims=["init_time"],
+        coords={"init_time": landfall1.coords["init_time"]},
+    )
 
 
 def _get_nan_result_for_forecast(forecast: xr.DataArray) -> xr.DataArray:
@@ -1231,58 +1425,48 @@ def _get_landfall_data(
         raise ValueError(f"Unknown approach: {approach}")
 
 
-def _compute_landfall_metric_value(
-    forecast_landfall: xr.DataArray,
-    target_landfall: xr.DataArray,
-    metric_type: Literal["displacement", "timing", "intensity"],
-    intensity_var: str = "surface_wind_speed",
-    approach: Literal["first", "next"] = "first",
-) -> xr.DataArray:
-    """Compute landfall metric value (displacement, timing, or intensity).
+class LandfallDisplacement(LandfallMixin, BaseMetric):
+    """Landfall displacement metric with configurable landfall detection
+    approaches.
 
-    Args:
-        forecast_landfall: Forecast landfall DataArray
-        target_landfall: Target landfall DataArray
-        metric_type: Type of metric ('displacement', 'timing', 'intensity')
-        intensity_var: Variable to use for intensity metrics
-        approach: Landfall approach (affects handling for 'next' approach)
+    This metric computes the great circle distance between forecast and target
+    landfall positions using different approaches:
 
-    Returns:
-        Computed metric as xarray DataArray
+    - 'first': Uses the first landfall point for each track
+    - 'next': For each init_time, finds the next upcoming landfall in target data
+
+    Parameters:
+        approach (str): Landfall detection approach ('first', 'next')
+        exclude_post_landfall (bool): Whether to exclude init_times after all landfalls
     """
-    if metric_type == "displacement":
-        if approach == "next" and "init_time" in target_landfall.dims:
-            # Handle next approach with per-init_time matching
-            return _compute_next_displacement(forecast_landfall, target_landfall)
-        else:
-            return _compute_displacement(forecast_landfall, target_landfall)
 
-    elif metric_type == "timing":
-        if approach == "next" and "init_time" in target_landfall.dims:
-            return _compute_next_timing(forecast_landfall, target_landfall)
-        else:
-            return calculate_landfall_time_difference_hours(
-                forecast_landfall, target_landfall
-            )
+    def __init__(
+        self,
+        approach: Literal["first", "next"] = "first",
+        exclude_post_landfall: bool = False,
+    ):
+        """Initialize the landfall displacement metric.
 
-    elif metric_type == "intensity":
-        if approach == "next" and "init_time" in target_landfall.dims:
-            return _compute_next_intensity(
-                forecast_landfall, target_landfall, intensity_var
-            )
-        else:
-            return _compute_intensity(forecast_landfall, target_landfall, intensity_var)
+        Args:
+            approach: Landfall detection approach ('first', 'next')
+            exclude_post_landfall: Whether to exclude init_times after all landfalls
+        """
+        super().__init__(
+            name="LandfallDisplacement",
+            approach=approach,
+            exclude_post_landfall=exclude_post_landfall,
+            preserve_dims="init_time",
+        )
 
-    else:
-        raise ValueError(f"Unknown metric_type: {metric_type}")
+    @staticmethod
+    def _compute_displacement_first(
+        forecast_landfall: xr.DataArray, target_landfall: xr.DataArray
+    ) -> xr.DataArray:
+        """Compute displacement for first landfall approach.
 
-
-def _compute_displacement(
-    forecast_landfall: xr.DataArray, target_landfall: xr.DataArray
-) -> xr.DataArray:
-    """Compute displacement for first landfall approach."""
-    if "init_time" in forecast_landfall.dims:
-        # Vector case - compute distance for each init_time
+        Assumes forecast_landfall has init_time dimension.
+        """
+        # Compute distance for each init_time
         distances = []
         for i in range(len(forecast_landfall.coords["init_time"])):
             f_lat = forecast_landfall.coords["latitude"].isel(init_time=i).values
@@ -1307,427 +1491,44 @@ def _compute_displacement(
             dims=["init_time"],
             coords={"init_time": forecast_landfall.coords["init_time"]},
         )
-    else:
-        # Scalar case
-        return calculate_landfall_distance_km(forecast_landfall, target_landfall)
 
+    @staticmethod
+    def _compute_displacement_next(
+        forecast_landfalls: xr.DataArray, target_landfalls: xr.DataArray
+    ) -> xr.DataArray:
+        """Compute displacement for next landfall approach.
 
-def _compute_intensity(
-    forecast_landfall: xr.DataArray,
-    target_landfall: xr.DataArray,
-    intensity_var: str,
-) -> xr.DataArray:
-    """Compute intensity error for first landfall approach.
-
-    Args:
-        forecast_landfall: Forecast landfall DataArray with intensity values
-        target_landfall: Target landfall DataArray with intensity values
-        intensity_var: Expected variable name (for validation)
-
-    Returns:
-        Absolute error between forecast and target intensity
-    """
-    # The DataArray values are the intensity values
-    # Verify the DataArray name matches expected if name is set
-    if forecast_landfall.name and forecast_landfall.name != intensity_var:
-        logger.warning(
-            f"Forecast landfall variable '{forecast_landfall.name}' "
-            f"does not match expected '{intensity_var}'"
-        )
-    if target_landfall.name and target_landfall.name != intensity_var:
-        logger.warning(
-            f"Target landfall variable '{target_landfall.name}' "
-            f"does not match expected '{intensity_var}'"
+        Matches each target landfall to the closest forecast landfall
+        in time for the same init_time.
+        """
+        return LandfallMixin._match_and_compute_next_landfalls(
+            forecast_landfalls, target_landfalls, calculate_landfall_distance_km
         )
 
-    # Calculate absolute error using DataArray values directly
-    return np.abs(forecast_landfall - target_landfall)
-
-
-def _compute_next_displacement(
-    forecast_landfalls: xr.DataArray, target_landfalls: xr.DataArray
-) -> xr.DataArray:
-    """Compute displacement for next landfall approach.
-
-    Matches each target landfall to the closest forecast landfall
-    in time for the same init_time.
-
-    Args:
-        forecast_landfalls: Forecast landfall DataArray with landfall dim
-        target_landfalls: Target landfall DataArray with init_time dim
-
-    Returns:
-        DataArray of distances in km for each init_time
-    """
-    results = []
-    init_times_out = []
-
-    for i, init_time in enumerate(target_landfalls.coords["init_time"]):
-        target_landfall = target_landfalls.isel(init_time=i)
-        target_time = target_landfall.coords["valid_time"].values
-
-        # Find matching forecast landfall for this init_time
-        if "init_time" in forecast_landfalls.dims:
-            init_time_match = forecast_landfalls.coords["init_time"] == init_time
-            if not init_time_match.any():
-                results.append(np.nan)
-                init_times_out.append(init_time.values)
-                continue
-
-            forecast_for_init = forecast_landfalls.where(init_time_match, drop=True)
-
-            if len(forecast_for_init.coords["init_time"]) == 0:
-                results.append(np.nan)
-                init_times_out.append(init_time.values)
-                continue
-
-            # Find forecast landfall closest to target time
-            time_diffs = np.abs(forecast_for_init.coords["valid_time"] - target_time)
-            closest_idx = time_diffs.argmin()
-            closest_forecast = forecast_for_init.isel(landfall=closest_idx)
-        else:
-            closest_forecast = forecast_landfalls
-
-        # Calculate distance
-        try:
-            result = calculate_landfall_distance_km(closest_forecast, target_landfall)
-            results.append(float(result.values))
-        except Exception:
-            results.append(np.nan)
-
-        init_times_out.append(init_time.values)
-
-    return xr.DataArray(
-        results, dims=["init_time"], coords={"init_time": init_times_out}
-    )
-
-
-def _compute_next_timing(
-    forecast_landfalls: xr.DataArray, target_landfalls: xr.DataArray
-) -> xr.DataArray:
-    """Compute timing error for next landfall approach.
-
-    Matches each target landfall to the closest forecast landfall
-    in time for the same init_time.
-
-    Args:
-        forecast_landfalls: Forecast landfall DataArray with landfall dim
-        target_landfalls: Target landfall DataArray with init_time dim
-
-    Returns:
-        DataArray of time differences in hours for each init_time
-    """
-    results = []
-    init_times_out = []
-
-    for i, init_time in enumerate(target_landfalls.coords["init_time"]):
-        target_landfall = target_landfalls.isel(init_time=i)
-        target_time = target_landfall.coords["valid_time"].values
-
-        # Find matching forecast landfall
-        if "init_time" in forecast_landfalls.dims:
-            init_time_match = forecast_landfalls.coords["init_time"] == init_time
-            if not init_time_match.any():
-                results.append(np.nan)
-                init_times_out.append(init_time.values)
-                continue
-
-            forecast_for_init = forecast_landfalls.where(init_time_match, drop=True)
-
-            if len(forecast_for_init.coords["init_time"]) == 0:
-                results.append(np.nan)
-                init_times_out.append(init_time.values)
-                continue
-
-            # Find forecast landfall closest to target time
-            time_diffs = np.abs(forecast_for_init.coords["valid_time"] - target_time)
-            closest_idx = time_diffs.argmin()
-            closest_forecast = forecast_for_init.isel(landfall=closest_idx)
-        else:
-            closest_forecast = forecast_landfalls
-
-        # Calculate time difference
-        try:
-            result = calculate_landfall_time_difference_hours(
-                closest_forecast, target_landfall
-            )
-            results.append(float(result.values))
-        except Exception:
-            results.append(np.nan)
-
-        init_times_out.append(init_time.values)
-
-    return xr.DataArray(
-        results, dims=["init_time"], coords={"init_time": init_times_out}
-    )
-
-
-def _compute_next_intensity(
-    forecast_landfalls: xr.DataArray,
-    target_landfalls: xr.DataArray,
-    intensity_var: str,
-) -> xr.DataArray:
-    """Compute intensity error for next landfall approach.
-
-    Matches each target landfall to the closest forecast landfall
-    in time for the same init_time.
-
-    Args:
-        forecast_landfalls: Forecast landfall DataArray with landfall dim
-        target_landfalls: Target landfall DataArray with init_time dim
-        intensity_var: Expected variable name (for validation)
-
-    Returns:
-        DataArray of absolute intensity errors for each init_time
-    """
-    results = []
-    init_times_out = []
-
-    for i, init_time in enumerate(target_landfalls.coords["init_time"]):
-        target_landfall = target_landfalls.isel(init_time=i)
-        target_time = target_landfall.coords["valid_time"].values
-
-        # Find matching forecast landfall
-        if "init_time" in forecast_landfalls.dims:
-            init_time_match = forecast_landfalls.coords["init_time"] == init_time
-            if not init_time_match.any():
-                results.append(np.nan)
-                init_times_out.append(init_time.values)
-                continue
-
-            forecast_for_init = forecast_landfalls.where(init_time_match, drop=True)
-
-            if len(forecast_for_init.coords["init_time"]) == 0:
-                results.append(np.nan)
-                init_times_out.append(init_time.values)
-                continue
-
-            # Find forecast landfall closest to target time
-            time_diffs = np.abs(forecast_for_init.coords["valid_time"] - target_time)
-            closest_idx = time_diffs.argmin()
-            closest_forecast = forecast_for_init.isel(landfall=closest_idx)
-        else:
-            closest_forecast = forecast_landfalls
-
-        # Calculate intensity error
-        try:
-            result = _compute_intensity(
-                closest_forecast, target_landfall, intensity_var
-            )
-            results.append(float(result.values))
-        except Exception:
-            results.append(np.nan)
-
-        init_times_out.append(init_time.values)
-
-    return xr.DataArray(
-        results, dims=["init_time"], coords={"init_time": init_times_out}
-    )
-
-
-def compute_landfall_metric(
-    forecast: xr.DataArray,
-    target: xr.DataArray,
-    metric_type: Literal["displacement", "timing", "intensity"],
-    approach: Literal["first", "next"] = "first",
-    intensity_var: str = "surface_wind_speed",
-) -> xr.DataArray:
-    """Unified function to compute landfall metrics.
-
-    Args:
-        forecast: Forecast TC track DataArray with lat/lon/time coords
-        target: Target TC track DataArray with lat/lon/time coords
-        metric_type: Type of metric to compute
-        approach: Landfall detection approach
-        intensity_var: Variable to use for intensity metrics
-
-    Returns:
-        Computed metric as xarray DataArray
-    """
-    # Get landfall data based on approach
-    forecast_landfall, target_landfall = _get_landfall_data(forecast, target, approach)
-
-    # Handle case where no landfall is found
-    if forecast_landfall is None or target_landfall is None:
-        return _get_nan_result_for_forecast(forecast)
-
-    # Compute the metric
-    return _compute_landfall_metric_value(
-        forecast_landfall,
-        target_landfall,
-        metric_type,
-        intensity_var,
-        approach,
-    )
-
-
-# Legacy functions - kept for backwards compatibility
-
-
-def compute_first_landfall_metric(
-    forecast: xr.DataArray,
-    target: xr.DataArray,
-    metric_type: Literal["displacement", "timing", "intensity"],
-    intensity_var: str = "surface_wind_speed",
-):
-    """Compute metric using first landfall approach (classic).
-
-    .. deprecated::
-        Use compute_landfall_metric() or the LandfallDisplacement,
-        LandfallTimeME, LandfallIntensityMAE classes instead.
-    """
-    logger.warning(
-        "compute_first_landfall_metric is deprecated. Use "
-        "compute_landfall_metric() or metric classes instead."
-    )
-    return compute_landfall_metric(
-        forecast, target, metric_type, approach="first", intensity_var=intensity_var
-    )
-
-
-def compute_next_landfall_metric(
-    forecast: xr.DataArray,
-    target: xr.DataArray,
-    metric_type: Literal["displacement", "timing", "intensity"],
-    intensity_var: str = "surface_wind_speed",
-):
-    """Compute metric using next upcoming landfall approach.
-
-    .. deprecated::
-        Use compute_landfall_metric() or the LandfallDisplacement,
-        LandfallTimeME, LandfallIntensityMAE classes instead.
-    """
-    logger.warning(
-        "compute_next_landfall_metric is deprecated. Use "
-        "compute_landfall_metric() or metric classes instead."
-    )
-    return compute_landfall_metric(
-        forecast, target, metric_type, approach="next", intensity_var=intensity_var
-    )
-
-
-def compute_landfall_selector(
-    approach: Literal["first", "next"],
-    forecast: xr.DataArray,
-    target: xr.DataArray,
-    metric_type: Literal["displacement", "timing", "intensity"],
-    intensity_var: str = "surface_wind_speed",
-):
-    """Select the appropriate landfall metric based on the approach.
-
-    .. deprecated::
-        Use compute_landfall_metric() or the LandfallDisplacement,
-        LandfallTimeME, LandfallIntensityMAE classes instead.
-    """
-    logger.warning(
-        "compute_landfall_selector is deprecated. Use "
-        "compute_landfall_metric() or metric classes instead."
-    )
-    return compute_landfall_metric(
-        forecast, target, metric_type, approach=approach, intensity_var=intensity_var
-    )
-
-
-def compute_displacement_metric(
-    forecast_landfall: xr.DataArray, target_landfall: xr.DataArray
-):
-    """Compute displacement between forecast and target landfall.
-
-    .. deprecated::
-        Use _compute_displacement() directly or metric classes.
-    """
-    logger.warning(
-        "compute_displacement_metric is deprecated. Use "
-        "_compute_displacement() or metric classes instead."
-    )
-    return _compute_displacement(forecast_landfall, target_landfall)
-
-
-def compute_timing_metric(
-    forecast_landfall: xr.DataArray,
-    target_landfall: xr.DataArray,
-):
-    """Compute timing difference between forecast and target landfall.
-
-    .. deprecated::
-        Use calculate_landfall_time_difference_hours() or metric classes.
-    """
-    logger.warning(
-        "compute_timing_metric is deprecated. Use "
-        "calculate_landfall_time_difference_hours() or classes instead."
-    )
-    return calculate_landfall_time_difference_hours(forecast_landfall, target_landfall)
-
-
-def compute_intensity_metric(
-    forecast_landfall: xr.DataArray,
-    target_landfall: xr.DataArray,
-    intensity_var: str,
-):
-    """Compute intensity difference between forecast and target landfall.
-
-    .. deprecated::
-        Use _compute_intensity() directly or metric classes.
-    """
-    logger.warning(
-        "compute_intensity_metric is deprecated. Use "
-        "_compute_intensity() or metric classes instead."
-    )
-    return _compute_intensity(forecast_landfall, target_landfall, intensity_var)
-
-
-class LandfallDisplacement(SpatialDisplacement):
-    """Landfall displacement metric with configurable landfall detection
-    approaches.
-
-    This metric computes the great circle distance between forecast and target
-    landfall positions using different approaches:
-
-    - 'first': Uses the first landfall point for each track
-    - 'next': For each init_time, finds the next upcoming landfall in target data
-
-    Parameters:
-        approach (str): Landfall detection approach ('first', 'next')
-        exclude_post_landfall (bool): Whether to exclude init_times after all landfalls
-    """
-
-    approach: Literal["first", "next"] = "first"
-    preserve_dims: str = "init_time"
-
-    def __init__(
+    def _compute_first_approach(
         self,
-        approach: Literal["first", "next"] = "first",
-        exclude_post_landfall: bool = False,
-    ):
-        """Initialize the landfall displacement metric.
-
-        Args:
-            approach: Landfall detection approach ('first', 'next', 'all')
-            exclude_post_landfall: Whether to exclude init_times after all landfalls
-        """
-        super().__init__()
-        self.approach = approach
-        self.exclude_post_landfall = exclude_post_landfall
-
-    def _compute_metric(
-        self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
+        forecast: xr.DataArray,
+        target: xr.DataArray,
+        forecast_landfall: xr.DataArray,
+        target_landfall: xr.DataArray,
+        **kwargs: Any,
     ) -> Any:
-        """Compute the landfall displacement using the configured approach.
+        """Compute displacement for first landfall approach."""
+        return self._compute_displacement_first(forecast_landfall, target_landfall)
 
-        Args:
-            forecast: Forecast TC track DataArray with lat/lon/time coords
-            target: Target/analysis TC track DataArray with lat/lon/time
-            **kwargs: Additional arguments
+    def _compute_next_approach(
+        self,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
+        forecast_landfall: xr.DataArray,
+        target_landfall: xr.DataArray,
+        **kwargs: Any,
+    ) -> Any:
+        """Compute displacement for next landfall approach."""
+        return self._compute_displacement_next(forecast_landfall, target_landfall)
 
-        Returns:
-            xarray.DataArray with landfall displacement distance in km
-        """
-        return compute_landfall_metric(
-            forecast, target, metric_type="displacement", approach=self.approach
-        )
 
-
-class LandfallTimeME(ME):
+class LandfallTimeME(LandfallMixin, ME):
     """Landfall timing metric with configurable landfall detection approaches.
 
     This metric computes the time difference between forecast and target landfall
@@ -1740,37 +1541,57 @@ class LandfallTimeME(ME):
         approach: Landfall detection approach ('first', 'next')
     """
 
-    approach: Literal["first", "next"] = "first"
-    preserve_dims: str = "init_time"
-
     def __init__(self, approach: Literal["first", "next"] = "first"):
         """Initialize the landfall timing metric.
 
         Args:
             approach: Landfall detection approach ('first', 'next')
         """
-        super().__init__()
-        self.approach = approach
-
-    def _compute_metric(
-        self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
-    ) -> Any:
-        """Compute landfall timing error using the configured approach.
-
-        Args:
-            forecast: Forecast TC track DataArray with lat/lon/time coords
-            target: Target/analysis TC track DataArray with lat/lon/time
-            **kwargs: Additional arguments
-
-        Returns:
-            xarray.DataArray with landfall timing errors in hours
-        """
-        return compute_landfall_metric(
-            forecast, target, metric_type="timing", approach=self.approach
+        super().__init__(
+            name="LandfallTimeME", approach=approach, preserve_dims="init_time"
         )
 
+    @staticmethod
+    def _compute_timing_next(
+        forecast_landfalls: xr.DataArray, target_landfalls: xr.DataArray
+    ) -> xr.DataArray:
+        """Compute timing error for next landfall approach.
 
-class LandfallIntensityMAE(MAE):
+        Matches each target landfall to the closest forecast landfall
+        in time for the same init_time.
+        """
+        return LandfallMixin._match_and_compute_next_landfalls(
+            forecast_landfalls,
+            target_landfalls,
+            calculate_landfall_time_difference_hours,
+        )
+
+    def _compute_first_approach(
+        self,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
+        forecast_landfall: xr.DataArray,
+        target_landfall: xr.DataArray,
+        **kwargs: Any,
+    ) -> Any:
+        """Compute timing error for first landfall approach."""
+        return calculate_landfall_time_difference_hours(
+            forecast_landfall, target_landfall
+        )
+
+    def _compute_next_approach(
+        self,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
+        forecast_landfall: xr.DataArray,
+        target_landfall: xr.DataArray,
+        **kwargs: Any,
+    ) -> Any:
+        """Compute timing error for next landfall approach."""
+        return self._compute_timing_next(forecast_landfall, target_landfall)
+
+
+class LandfallIntensityMAE(LandfallMixin, MAE):
     """Landfall intensity metric with configurable landfall detection approaches.
 
     This metric computes the mean absolute error between forecast and target
@@ -1784,15 +1605,15 @@ class LandfallIntensityMAE(MAE):
     surface_wind_speed and air_pressure_at_mean_sea_level), create
     separate metric instances for each variable.
 
+    For the 'first' approach, this uses MAE's _compute_metric directly on
+    landfall values. For 'next' approach, it matches forecast/target per
+    init_time before computing absolute error.
+
     Parameters:
         approach: Landfall detection approach ('first', 'next')
         forecast_variable: Variable to use for forecast intensity
         target_variable: Variable to use for target intensity
     """
-
-    name = "landfall_intensity_mae"
-    approach: Literal["first", "next"] = "first"
-    preserve_dims: str = "init_time"
 
     def __init__(
         self,
@@ -1808,30 +1629,100 @@ class LandfallIntensityMAE(MAE):
             target_variable: Variable for target intensity (optional)
         """
         super().__init__(
-            forecast_variable=forecast_variable, target_variable=target_variable
+            name="landfall_intensity_mae",
+            approach=approach,
+            preserve_dims="init_time",
+            forecast_variable=forecast_variable,
+            target_variable=target_variable,
         )
-        self.approach = approach
 
-    def _compute_metric(
-        self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
-    ) -> Any:
-        """Compute landfall intensity error using the configured approach.
+    @staticmethod
+    def _compute_intensity_first(
+        forecast_landfall: xr.DataArray,
+        target_landfall: xr.DataArray,
+        intensity_var: str,
+    ) -> xr.DataArray:
+        """Compute intensity error for first landfall approach.
 
         Args:
-            forecast: Forecast TC track DataArray with lat/lon/time coords
-            target: Target/analysis TC track DataArray with lat/lon/time
-            **kwargs: Additional arguments
+            forecast_landfall: Forecast landfall DataArray with intensity
+            target_landfall: Target landfall DataArray with intensity
+            intensity_var: Expected variable name (for validation)
 
         Returns:
-            xarray.DataArray with landfall intensity errors
+            Absolute error between forecast and target intensity
         """
-        # Use the DataArray name as the intensity variable
-        intensity_var = forecast.name if forecast.name else "surface_wind_speed"
+        # The DataArray values are the intensity values
+        # Verify the DataArray name matches expected if name is set
+        if forecast_landfall.name and forecast_landfall.name != intensity_var:
+            logger.warning(
+                f"Forecast landfall variable '{forecast_landfall.name}' "
+                f"does not match expected '{intensity_var}'"
+            )
+        if target_landfall.name and target_landfall.name != intensity_var:
+            logger.warning(
+                f"Target landfall variable '{target_landfall.name}' "
+                f"does not match expected '{intensity_var}'"
+            )
 
-        return compute_landfall_metric(
-            forecast,
-            target,
-            metric_type="intensity",
-            approach=self.approach,
-            intensity_var=intensity_var,
+        # Calculate absolute error using DataArray values directly
+        return np.abs(forecast_landfall - target_landfall)
+
+    @staticmethod
+    def _compute_intensity_next(
+        forecast_landfalls: xr.DataArray,
+        target_landfalls: xr.DataArray,
+        intensity_var: str,
+    ) -> xr.DataArray:
+        """Compute intensity error for next landfall approach.
+
+        Matches each target landfall to the closest forecast landfall
+        in time for the same init_time.
+        """
+
+        # Create a lambda that captures intensity_var
+        def metric_func(closest_forecast, target_landfall):
+            return LandfallIntensityMAE._compute_intensity_first(
+                closest_forecast, target_landfall, intensity_var
+            )
+
+        return LandfallMixin._match_and_compute_next_landfalls(
+            forecast_landfalls, target_landfalls, metric_func
+        )
+
+    def _compute_first_approach(
+        self,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
+        forecast_landfall: xr.DataArray,
+        target_landfall: xr.DataArray,
+        **kwargs: Any,
+    ) -> Any:
+        """Compute intensity MAE for first landfall approach.
+
+        Computes absolute difference (MAE) between landfall values.
+        Due to dimension mismatch (forecast has init_time, target is scalar),
+        we compute directly using numpy broadcasting, which is equivalent
+        to calling MAE._compute_metric but handles dimensions correctly.
+        """
+        intensity_var = forecast.name if forecast.name else "surface_wind_speed"
+        return self._compute_intensity_first(
+            forecast_landfall, target_landfall, intensity_var
+        )
+
+    def _compute_next_approach(
+        self,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
+        forecast_landfall: xr.DataArray,
+        target_landfall: xr.DataArray,
+        **kwargs: Any,
+    ) -> Any:
+        """Compute intensity MAE for next landfall approach.
+
+        Matches forecast/target landfalls per init_time.
+        """
+        intensity_var = forecast.name if forecast.name else "surface_wind_speed"
+        return self._compute_intensity_next(
+            forecast_landfall, target_landfall, intensity_var
         )

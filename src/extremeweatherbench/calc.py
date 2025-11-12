@@ -394,31 +394,15 @@ def _process_single_track_landfall(
         DataArray with landfall values and lat/lon/time as coords,
         or None if no landfalls
     """
-    # Extract coordinates
-    lats = track_data.latitude
-    lons = track_data.longitude
-    times = track_data.valid_time
-
-    # Filter NaN values (where track_data itself is valid)
+    # Filter NaN values and extract coordinate values
     valid_mask = ~np.isnan(track_data)
     track_filtered = track_data.where(valid_mask, drop=True)
-    lats = lats.where(valid_mask, drop=True)
-    lons = lons.where(valid_mask, drop=True)
-    times = times.where(valid_mask, drop=True)
 
-    # Sort by valid_time if it's a dimension
-    if "valid_time" in track_filtered.dims:
-        sort_idx = np.argsort(times.values)
-        track_filtered = track_filtered.isel(valid_time=sort_idx)
-        lats = lats.isel(valid_time=sort_idx)
-        lons = lons.isel(valid_time=sort_idx)
-        times = times.isel(valid_time=sort_idx)
-
-    # Extract values
-    lats_vals = lats.values
-    lons_vals = lons.values
-    times_vals = times.values
-    track_vals = track_filtered.values
+    # Get values directly from filtered data
+    lats_vals = track_filtered.coords["latitude"].values.flatten()
+    lons_vals = track_filtered.coords["longitude"].values.flatten()
+    times_vals = track_filtered.coords["valid_time"].values.flatten()
+    track_vals = track_filtered.values.flatten()
 
     # Need at least 2 points for landfall detection
     if len(lats_vals) < 2:
