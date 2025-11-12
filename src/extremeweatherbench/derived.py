@@ -82,6 +82,7 @@ class CravenBrooksSignificantSevere(DerivedVariable):
         "surface_northward_wind",
         "air_pressure_at_mean_sea_level",
         "geopotential",
+        "specific_humidity",
     ]
 
     def __init__(
@@ -104,7 +105,7 @@ class CravenBrooksSignificantSevere(DerivedVariable):
             # or using specific humidity if present
             elif "specific_humidity" in data.data_vars:
                 data["dewpoint_temperature"] = sc.dewpoint_from_specific_humidity(
-                    data["specific_humidity"], data["pressure"]
+                    data["specific_humidity"], data["level"]
                 )
             # and if neither are present, raise an error
             else:
