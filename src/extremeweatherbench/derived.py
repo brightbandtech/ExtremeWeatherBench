@@ -23,12 +23,16 @@ class DerivedVariable(abc.ABC):
             Defaults to the class name.
         variables: A list of variables that are used to build the
             derived variable.
+        requires_target_dataset: If True, target dataset will be passed to
+            this derived variable via kwargs. Set to False for memory efficiency
+            when target data is not needed.
         compute: A method that generates the derived variable from the variables.
         derive_variable: An abstract method that defines the computation to
             derive the derived_variable from variables.
     """
 
     variables: List[str]
+    requires_target_dataset: bool = False
 
     def __init__(self, name: Optional[str] = None):
         """Initialize the derived variable.
@@ -84,9 +88,12 @@ class TropicalCycloneTrackVariables(DerivedVariable):
     Deriving the track locations using default TempestExtremes criteria:
     https://doi.org/10.5194/gmd-14-5023-2021
 
-    For forecast data, when track data data is provided, the valid candidates
+    For forecast data, when track data is provided, the valid candidates
     approach is filtered to only include candidates within 5 great circle
     degrees of track data points and within 48 hours of the valid_time.
+
+    Track data is automatically obtained from the target dataset when using
+    the evaluation pipeline (via `requires_target_dataset=True` flag).
     """
 
     # required variables for TC track identification
@@ -96,6 +103,8 @@ class TropicalCycloneTrackVariables(DerivedVariable):
         "surface_eastward_wind",
         "surface_northward_wind",
     ]
+    # Needs target data for track filtering
+    requires_target_dataset = True
 
     def get_or_compute_tracks(self, data: xr.Dataset, *args, **kwargs) -> xr.Dataset:
         """Get cached track data or compute if not already cached.
@@ -103,11 +112,21 @@ class TropicalCycloneTrackVariables(DerivedVariable):
         This method handles the caching logic to ensure track computation
         is only done once per unique dataset.
 
+        Track data is automatically obtained from `_target_dataset` in kwargs,
+        which is provided by the evaluation pipeline when
+        `requires_target_dataset=True`.
+
         Args:
             data: Input dataset containing required variables
+            **kwargs: Must include:
+                - _target_dataset: Target dataset with lat/lon/valid_time
+                - case_metadata: IndividualCase with case_id_number (optional)
 
         Returns:
             3D dataset containing tropical cyclone track information
+
+        Raises:
+            ValueError: If _target_dataset is missing or lacks required vars
         """
         cache_key = tropical_cyclone._generate_cache_key(data)
 
@@ -121,26 +140,34 @@ class TropicalCycloneTrackVariables(DerivedVariable):
         # Generates the variables needed for the TC track calculation
         # (geop. thickness, winds, temps, slp)
 
-        # Check if we should apply track data filtering
-        # First check kwargs, then the global registry
-        tc_track_data = kwargs.get("tc_track_data", None)
-        case_metadata = kwargs.get("case_metadata", None)
-        case_id_number = case_metadata.case_id_number if case_metadata else None
+        # Get track data from target dataset (auto-provided by pipeline)
+        tc_track_data = kwargs.get("_target_dataset", None)
 
-        logger.debug(
-            "TC derived variable: case_id_number=%s, tc_track_data from kwargs=%s",
-            case_id_number,
-            tc_track_data is not None,
-        )
-
-        if tc_track_data is None and case_id_number is not None:
-            logger.debug("Looking up tc_track_data for case %s", case_id_number)
-            tc_track_data = tropical_cyclone.get_tc_track_data(case_id_number)
-            logger.debug("Retrieved tc_track_data: %s", tc_track_data is not None)
-
-        if tc_track_data is None:
-            logger.error("No track data found for case %s", case_id_number)
-            raise ValueError("No track data data provided to constrain TC tracks.")
+        if tc_track_data is not None:
+            # Verify it has the required variables for TC tracking
+            required = ["latitude", "longitude", "valid_time"]
+            has_required = all(
+                var in tc_track_data.coords or var in tc_track_data.data_vars
+                for var in required
+            )
+            if not has_required:
+                case_metadata = kwargs.get("case_metadata", None)
+                case_id = case_metadata.case_id_number if case_metadata else "unknown"
+                raise ValueError(
+                    f"Target dataset for case {case_id} missing required "
+                    f"track variables (latitude, longitude, valid_time). "
+                    f"Available coords: {list(tc_track_data.coords.keys())}, "
+                    f"vars: {list(tc_track_data.data_vars.keys())}"
+                )
+            logger.debug("Using target dataset as track data for TC detection")
+        else:
+            case_metadata = kwargs.get("case_metadata", None)
+            case_id = case_metadata.case_id_number if case_metadata else "unknown"
+            raise ValueError(
+                f"No track data provided for case {case_id}. "
+                "Ensure requires_target_dataset=True is set and target data "
+                "is available in the evaluation pipeline."
+            )
 
         tctracks_ds = tropical_cyclone.generate_tc_tracks_by_init_time(
             prepared_data["air_pressure_at_mean_sea_level"],
