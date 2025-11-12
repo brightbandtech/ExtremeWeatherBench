@@ -121,6 +121,8 @@ def mock_base_metric():
     """Create a mock BaseMetric object."""
     mock_metric = mock.Mock(spec=metrics.BaseMetric)
     mock_metric.name = "MockMetric"
+    mock_metric.forecast_variable = None
+    mock_metric.target_variable = None
     mock_metric.compute_metric.return_value = xr.DataArray(
         data=[1.0], dims=["lead_time"], coords={"lead_time": [0]}
     )
@@ -142,10 +144,12 @@ def sample_evaluation_object(mock_target_base, mock_forecast_base, mock_base_met
 def sample_case_operator(
     sample_individual_case, mock_target_base, mock_forecast_base, mock_base_metric
 ):
+    mock_base_metric.forecast_variable = None
+    mock_base_metric.target_variable = None
     """Create a sample CaseOperator."""
     return cases.CaseOperator(
         case_metadata=sample_individual_case,
-        metric_list=mock_base_metric,
+        metric_list=[mock_base_metric],
         target=mock_target_base,
         forecast=mock_forecast_base,
     )
@@ -972,8 +976,7 @@ class TestComputeCaseOperator:
         )
         mock_evaluate_metric.return_value = mock_result
 
-        # Setup the case operator mocks - metric should be a list for iteration
-        sample_case_operator.metric_list = [mock_base_metric]
+        # Setup the case operator mocks
         sample_case_operator.target.maybe_align_forecast_to_target.return_value = (
             sample_forecast_dataset,
             sample_target_dataset,
@@ -1005,7 +1008,7 @@ class TestComputeCaseOperator:
             sample_forecast_dataset,
             sample_target_dataset,
         )
-        sample_case_operator.metric_list = [mock.Mock()]
+        sample_case_operator.metric_list = [mock.Mock(spec=metrics.BaseMetric)]
 
         with mock.patch(
             "extremeweatherbench.evaluate._compute_and_maybe_cache"
@@ -1042,8 +1045,8 @@ class TestComputeCaseOperator:
         )
 
         # Create multiple metrics
-        metric_1 = mock.Mock()
-        metric_2 = mock.Mock()
+        metric_1 = mock.Mock(spec=metrics.BaseMetric)
+        metric_2 = mock.Mock(spec=metrics.BaseMetric)
         sample_case_operator.metric_list = [metric_1, metric_2]
 
         sample_case_operator.target.maybe_align_forecast_to_target.return_value = (
