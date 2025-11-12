@@ -1,6 +1,7 @@
 import abc
 import logging
-from typing import Any, Optional, Type
+import operator
+from typing import Any, Callable, Optional, Type
 
 import numpy as np
 import scores
@@ -533,21 +534,28 @@ class RMSE(BaseMetric):
         return scores.continuous.rmse(forecast, target, preserve_dims=preserve_dims)
 
 
-class Signal(BaseMetric):
-    """Metric to detect signal presence in forecast data.
+class EarlySignal(BaseMetric):
+    """Metric to identify the earliest signal detection in forecast data.
 
-    Returns a boolean DataArray indicating whether threshold criteria are met
-    for each (init_time, lead_time) combination. The metric is flexible for
-    different signal detection criteria specified via threshold, comparison,
-    and spatial_aggregation parameters.
+    This metric finds the first occurrence where a signal is detected based on
+    threshold criteria and returns the corresponding init_time, lead_time, and
+    valid_time information. The metric is designed to be flexible for different
+    signal detection criteria that can be specified in applied metrics downstream.
     """
 
-    def __init__(self, **kwargs: Any):
+    def __init__(
+        self,
+        name: str = "early_signal",
+        comparison_operator: Callable = operator.ge,
+        threshold: float = 0.5,
+        spatial_aggregation: str = "any",
+        **kwargs: Any,
+    ):
         # Extract threshold params before passing to super
-        self.threshold = kwargs.pop("threshold", 0.5)
-        self.comparison = kwargs.pop("comparison", ">=")
-        self.spatial_aggregation = kwargs.pop("spatial_aggregation", "any")
-        super().__init__("signal", **kwargs)
+        self.comparison_operator = comparison_operator
+        self.threshold = threshold
+        self.spatial_aggregation = spatial_aggregation
+        super().__init__(name, **kwargs)
 
     def _compute_metric(
         self,
@@ -583,24 +591,10 @@ class Signal(BaseMetric):
                 False,
                 dims=dims,
                 coords=coords,
-                name="early_signal",
+                name=self.name,
             )
-
-        # Apply threshold comparison
-        comparison_ops = {
-            ">=": lambda x, t: x >= t,
-            "<=": lambda x, t: x <= t,
-            ">": lambda x, t: x > t,
-            "<": lambda x, t: x < t,
-            "==": lambda x, t: x == t,
-            "!=": lambda x, t: x != t,
-        }
-
-        if self.comparison not in comparison_ops:
-            raise ValueError(f"Comparison '{self.comparison}' not supported")
-
         # Create detection mask
-        detection_mask = comparison_ops[self.comparison](forecast, self.threshold)
+        detection_mask = self.comparison_operator(forecast, self.threshold)
 
         # Apply spatial aggregation
         spatial_dims = [
@@ -621,7 +615,7 @@ class Signal(BaseMetric):
                     f"Spatial aggregation '{self.spatial_aggregation}' not supported"
                 )
 
-        detection_mask.name = "early_signal"
+        detection_mask.name = self.name
         return detection_mask
 
 
