@@ -1,10 +1,10 @@
 import logging
-from typing import Any, Callable, Union
+import operator
 
 import numpy as np
 import xarray as xr
 
-from extremeweatherbench import inputs
+from extremeweatherbench import derived, inputs
 
 # Suppress noisy log messages
 logging.getLogger("urllib3.connectionpool").setLevel(logging.CRITICAL)
@@ -68,25 +68,10 @@ era5_freeze_target = inputs.ERA5(
     storage_options={"remote_options": {"anon": True}},
 )
 
-# TODO: Re-enable when atmospheric river target is implemented
-# era5_atmospheric_river_target = inputs.ERA5(
-#     source=inputs.ARCO_ERA5_FULL_URI,
-#     variables=[
-#         derived.IntegratedVaporTransport(),
-#         derived.AtmosphericRiverVariables
-((),)
-#     ],
-#     variable_mapping={
-#         "u_component_of_wind": "eastward_wind",
-#         "v_component_of_wind": "northward_wind",
-#         "temperature": "air_temperature",
-#         "vertical_integral_of_northward_water_vapour_flux":
-#             "northward_water_vapour_flux",
-#         "vertical_integral_of_eastward_water_vapour_flux":
-#             "eastward_water_vapour_flux",
-#     },
-#     storage_options={"remote_options": {"anon": True}},
-# )
+
+era5_atmospheric_river_target = inputs.ERA5(
+    variables=[derived.AtmosphericRiverVariables()],
+)
 
 # GHCN targets
 ghcn_heatwave_target = inputs.GHCN(
@@ -168,26 +153,14 @@ cira_freeze_forecast = inputs.KerchunkForecast(
     preprocess=_preprocess_bb_cira_forecast_dataset,
 )
 
-# TODO: Re-enable when atmospheric river forecast is implemented
-# cira_atmospheric_river_forecast = inputs.KerchunkForecast(
-#     source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
-#     variables=[
-#         derived.IntegratedVaporTransport(),
-#         derived.AtmosphericRiverVariables
-((),)
-#     ],
-#     variable_mapping={
-#         "u_component_of_wind": "eastward_wind",
-#         "v_component_of_wind": "northward_wind",
-#         "specific_humidity": "specific_humidity",
-#         "temperature": "air_temperature",
-#         "vertical_integral_of_northward_water_vapour_flux":
-#             "northward_water_vapour_flux",
-#         "vertical_integral_of_eastward_water_vapour_flux":
-#             "eastward_water_vapour_flux",
-#     },
-#     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
-# )
+cira_atmospheric_river_forecast = inputs.KerchunkForecast(
+    name="FourCastNetv2",
+    source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
+    variables=[derived.AtmosphericRiverVariables()],
+    variable_mapping=inputs.CIRA_metadata_variable_mapping,
+    storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
+    preprocess=_preprocess_bb_cira_forecast_dataset,
+)
 
 # TODO: Re-enable when CravenSignificantSevereParameter is implemented
 # cira_severe_convection_forecast = inputs.KerchunkForecast(
@@ -220,14 +193,14 @@ def get_brightband_evaluation_objects() -> list[inputs.EvaluationObject]:
     # Import metrics here to avoid circular import
     from extremeweatherbench import metrics
 
-    heatwave_metric_list: list[Union[Callable[..., Any], metrics.BaseMetric]] = [
+    heatwave_metric_list: list[metrics.BaseMetric] = [
         metrics.MaximumMAE(),
         metrics.RMSE(),
         metrics.OnsetME(),
         metrics.DurationME(),
         metrics.MaxMinMAE(),
     ]
-    freeze_metric_list: list[Union[Callable[..., Any], metrics.BaseMetric]] = [
+    freeze_metric_list: list[metrics.BaseMetric] = [
         metrics.MinimumMAE(),
         metrics.RMSE(),
         metrics.OnsetME(),
@@ -271,14 +244,20 @@ def get_brightband_evaluation_objects() -> list[inputs.EvaluationObject]:
         #     target=lsr_target,
         #     forecast=cira_severe_convection_forecast,
         # ),
-        # TODO: Re-enable when atmospheric river forecast is implemented
-        # inputs.EvaluationObject(
-        #     event_type="atmospheric_river",
-        #     metric_list=[metrics.CSI(), metrics.SpatialDisplacement(),
-        #  metrics.EarlySignal()],
-        #     target=era5_atmospheric_river_target,
-        #     forecast=cira_atmospheric_river_forecast,
-        # ),
+        inputs.EvaluationObject(
+            event_type="atmospheric_river",
+            metric_list=[
+                metrics.CSI(),
+                metrics.SpatialDisplacement(),
+                metrics.EarlySignal(
+                    comparison_operator=operator.ge,
+                    threshold=0.5,
+                    spatial_aggregation="any",
+                ),
+            ],
+            target=era5_atmospheric_river_target,
+            forecast=cira_atmospheric_river_forecast,
+        ),
         # TODO: Re-enable when tropical cyclone forecast is implemented
         # inputs.EvaluationObject(
         #     event_type="tropical_cyclone",
