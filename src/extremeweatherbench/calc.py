@@ -251,7 +251,8 @@ def nantrapezoid(
 
 def find_landfalls(
     track_data: xr.DataArray,
-    return_all: bool = False,
+    land_geom: Optional[shapely.geometry.Polygon] = None,
+    return_all_landfalls: bool = False,
 ) -> Optional[xr.DataArray]:
     """Find landfall point(s) where tracked object intersects land.
 
@@ -268,12 +269,52 @@ def find_landfalls(
         DataArray with landfall values and lat/lon/time as coords,
         or None if no landfall found
     """
-    # Use 10m resolution with buffer for better coastal detection
-    land = shpreader.natural_earth(category="physical", name="land", resolution="10m")
-    land_geoms = list(shpreader.Reader(land).geometries())
-    land_geom = shapely.ops.unary_union(land_geoms).buffer(0.1)
 
-    return _find_landfalls(track_data, land_geom, return_all)
+    # If no land geometry is provided, use the default 10m resolution land geometry
+    if land_geom is None:
+        # Use 10m resolution with buffer for better coastal detection
+        land = shpreader.natural_earth(
+            category="physical", name="land", resolution="10m"
+        )
+        land_geoms = list(shpreader.Reader(land).geometries())
+        land_geom = shapely.ops.unary_union(land_geoms).buffer(0.1)
+
+    # Squeeze track dimension if needed
+    if "track" in track_data.dims and track_data.sizes["track"] == 1:
+        track_data = track_data.squeeze("track", drop=True)
+
+    # Detect forecast vs single track data
+    is_forecast = "lead_time" in track_data.dims and "valid_time" in track_data.dims
+
+    if is_forecast:
+        # Convert to init_time indexing
+        temp_ds = xr.Dataset({"track_data": track_data})
+        temp_ds = utils.convert_valid_time_to_init_time(temp_ds)
+        results = []
+
+        for init_time in temp_ds.init_time:
+            init_time_val = (
+                init_time.values if hasattr(init_time, "values") else init_time
+            )
+
+            single_track = temp_ds["track_data"].sel(init_time=init_time)
+
+            da = _process_single_track_landfall(
+                single_track,
+                land_geom,
+                return_all_landfalls,
+                init_time=init_time_val,
+            )
+            if da is not None:
+                results.append(da)
+
+        return xr.concat(results, dim="init_time") if results else None
+
+    else:
+        # Process single track data
+        return _process_single_track_landfall(
+            track_data, land_geom, return_all_landfalls
+        )
 
 
 def find_next_landfall_for_init_time(
@@ -324,61 +365,10 @@ def find_next_landfall_for_init_time(
     ).swap_dims({"landfall": "init_time"})
 
 
-def _find_landfalls(
-    track_data: xr.DataArray,
-    land_geom,
-    return_all: bool = False,
-) -> Optional[xr.DataArray]:
-    """Core function to find landfalls from track DataArray.
-
-    Args:
-        track_data: Track DataArray with latitude, longitude, valid_time coords
-        land_geom: Land geometry for intersection testing
-        return_all: If True, return all landfalls; if False, first only
-
-    Returns:
-        DataArray with landfall data, or None if no landfalls found
-    """
-    # Squeeze track dimension if needed
-    if "track" in track_data.dims and track_data.sizes["track"] == 1:
-        track_data = track_data.squeeze("track", drop=True)
-
-    # Detect forecast vs single track data
-    is_forecast = "lead_time" in track_data.dims and "valid_time" in track_data.dims
-
-    if is_forecast:
-        # Convert to init_time indexing
-        temp_ds = xr.Dataset({"track_data": track_data})
-        temp_ds = utils.convert_valid_time_to_init_time(temp_ds)
-        results = []
-
-        for init_time in temp_ds.init_time:
-            init_time_val = (
-                init_time.values if hasattr(init_time, "values") else init_time
-            )
-
-            single_track = temp_ds["track_data"].sel(init_time=init_time)
-
-            da = _process_single_track_landfall(
-                single_track,
-                land_geom,
-                return_all,
-                init_time=init_time_val,
-            )
-            if da is not None:
-                results.append(da)
-
-        return xr.concat(results, dim="init_time") if results else None
-
-    else:
-        # Process single track data
-        return _process_single_track_landfall(track_data, land_geom, return_all)
-
-
 def _process_single_track_landfall(
     track_data: xr.DataArray,
     land_geom,
-    return_all: bool = False,
+    return_all_landfalls: bool = False,
     init_time: Optional[np.datetime64] = None,
 ) -> Optional[xr.DataArray]:
     """Process a single track to find and format landfall data.
@@ -452,7 +442,7 @@ def _process_single_track_landfall(
                 landfall_data.append(landfall_point)
 
                 # Stop after first landfall if that's all we need
-                if not return_all:
+                if not return_all_landfalls:
                     break
 
         except Exception as e:
@@ -463,7 +453,7 @@ def _process_single_track_landfall(
     if not landfall_data:
         return None
 
-    if return_all:
+    if return_all_landfalls:
         # Multiple landfalls with landfall dimension
         values = [d["value"] for d in landfall_data]
         coords = {

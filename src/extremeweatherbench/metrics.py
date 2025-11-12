@@ -1399,13 +1399,13 @@ def _get_landfall_data(
     """
     if approach == "first":
         # First landfall approach - simple
-        forecast_landfall = calc.find_landfalls(forecast, return_all=False)
-        target_landfall = calc.find_landfalls(target, return_all=False)
+        forecast_landfall = calc.find_landfalls(forecast, return_all_landfalls=False)
+        target_landfall = calc.find_landfalls(target, return_all_landfalls=False)
         return forecast_landfall, target_landfall
 
     elif approach == "next":
         # Next landfall approach - more complex
-        target_landfalls = calc.find_landfalls(target, return_all=True)
+        target_landfalls = calc.find_landfalls(target, return_all_landfalls=True)
         if target_landfalls is None:
             return None, None
 
@@ -1415,7 +1415,7 @@ def _get_landfall_data(
         if next_target_landfalls is None:
             return None, None
 
-        forecast_landfalls = calc.find_landfalls(forecast, return_all=True)
+        forecast_landfalls = calc.find_landfalls(forecast, return_all_landfalls=True)
         if forecast_landfalls is None:
             return None, next_target_landfalls
 

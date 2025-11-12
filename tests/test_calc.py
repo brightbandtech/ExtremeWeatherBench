@@ -718,7 +718,7 @@ class TestLandfallDetection:
 
         # Call the function
         result = calc._process_single_track_landfall(
-            track, mock_land_geom, return_all=False
+            track, mock_land_geom, return_all_landfalls=False
         )
 
         # Verify result structure (may be None if no landfall detected)
@@ -797,7 +797,10 @@ class TestLandfallDetection:
             mock_land_geom.intersection.return_value.coords = [(-81.5, 24.5)]
 
             result = calc._process_single_track_landfall(
-                track, mock_land_geom, return_all=False, init_time=init_time_val
+                track,
+                mock_land_geom,
+                return_all_landfalls=False,
+                init_time=init_time_val,
             )
 
             # If landfall is detected, result should have init_time coordinate
@@ -829,3 +832,324 @@ class TestLandfallDetection:
         result = calc._process_single_track_landfall(track, mock_land_geom)
         # Function should complete without error
         assert result is None or isinstance(result, xr.DataArray)
+
+    def test_find_landfalls_with_custom_land_geometry(self):
+        """Test find_landfalls with custom land geometry."""
+        import shapely.geometry
+
+        # Create track moving from ocean to land
+        # Atlantic to Florida coast
+        track = xr.DataArray(
+            [35.0, 40.0, 45.0, 50.0],
+            dims=["valid_time"],
+            coords={
+                "valid_time": pd.date_range("2023-09-15", periods=4, freq="6h"),
+                "latitude": (["valid_time"], [24.0, 24.5, 25.0, 25.5]),
+                "longitude": (["valid_time"], [280.0, 279.0, 278.0, 277.0]),
+            },
+            name="surface_wind_speed",
+        )
+
+        # Create simple land geometry (box representing Florida coast)
+        land_geom = shapely.geometry.box(-82, 24, -80, 26)
+
+        result = calc.find_landfalls(track, land_geom=land_geom)
+
+        # Should return DataArray or None
+        assert result is None or isinstance(result, xr.DataArray)
+        if result is not None:
+            # Should have expected coordinates
+            assert "latitude" in result.coords
+            assert "longitude" in result.coords
+            assert "valid_time" in result.coords
+
+    def test_find_landfalls_with_default_land_geometry(self):
+        """Test find_landfalls with default (None) land geometry."""
+        # Create track over ocean that doesn't hit land
+        track = xr.DataArray(
+            [35.0, 40.0, 45.0],
+            dims=["valid_time"],
+            coords={
+                "valid_time": pd.date_range("2023-09-15", periods=3, freq="6h"),
+                "latitude": (["valid_time"], [20.0, 20.5, 21.0]),
+                "longitude": (["valid_time"], [260.0, 260.5, 261.0]),
+            },
+            name="surface_wind_speed",
+        )
+
+        # Use default land geometry (None)
+        result = calc.find_landfalls(track, land_geom=None)
+
+        # Should complete without error
+        assert result is None or isinstance(result, xr.DataArray)
+
+    def test_find_landfalls_forecast_data(self):
+        """Test find_landfalls with forecast data dimensions."""
+        # Create forecast track data (lead_time, valid_time)
+        valid_times = pd.date_range("2023-09-15", periods=4, freq="6h")
+
+        track = xr.DataArray(
+            [[35.0, 40.0, 45.0, 50.0], [36.0, 41.0, 46.0, 51.0]],
+            dims=["lead_time", "valid_time"],
+            coords={
+                "lead_time": [0, 6],
+                "valid_time": valid_times,
+                "latitude": (
+                    ["lead_time", "valid_time"],
+                    [[24.0, 24.5, 25.0, 25.5], [24.2, 24.7, 25.2, 25.7]],
+                ),
+                "longitude": (
+                    ["lead_time", "valid_time"],
+                    [[280.0, 279.0, 278.0, 277.0], [280.1, 279.1, 278.1, 277.1]],
+                ),
+            },
+            name="surface_wind_speed",
+        )
+
+        import shapely.geometry
+
+        land_geom = shapely.geometry.box(-82, 24, -80, 26)
+
+        result = calc.find_landfalls(track, land_geom=land_geom)
+
+        # Should handle forecast dimensions
+        assert result is None or isinstance(result, xr.DataArray)
+
+    def test_find_landfalls_return_all(self):
+        """Test find_landfalls with return_all_landfalls=True."""
+        import shapely.geometry
+
+        # Create track that crosses land multiple times
+        track = xr.DataArray(
+            [35.0, 40.0, 45.0, 50.0, 55.0],
+            dims=["valid_time"],
+            coords={
+                "valid_time": pd.date_range("2023-09-15", periods=5, freq="6h"),
+                "latitude": (["valid_time"], [24.0, 25.0, 26.0, 27.0, 28.0]),
+                "longitude": (["valid_time"], [280.0, 279.0, 278.0, 277.0, 276.0]),
+            },
+            name="surface_wind_speed",
+        )
+
+        # Create land geometry with multiple potential crossings
+        land_geom = shapely.geometry.box(-82, 24, -80, 28)
+
+        result = calc.find_landfalls(
+            track, land_geom=land_geom, return_all_landfalls=True
+        )
+
+        # Should return DataArray with landfall dimension if found
+        if result is not None:
+            # If landfalls found, should have landfall dimension
+            assert "landfall" in result.dims or result.dims == ()
+
+    def test_find_landfalls_single_point(self):
+        """Test find_landfalls with insufficient points."""
+        # Track with only 1 point (need at least 2)
+        track = xr.DataArray(
+            [35.0],
+            dims=["valid_time"],
+            coords={
+                "valid_time": [pd.Timestamp("2023-09-15 00:00")],
+                "latitude": (["valid_time"], [24.0]),
+                "longitude": (["valid_time"], [280.0]),
+            },
+            name="surface_wind_speed",
+        )
+
+        import shapely.geometry
+
+        land_geom = shapely.geometry.box(-82, 24, -80, 26)
+
+        result = calc.find_landfalls(track, land_geom=land_geom)
+
+        # Should return None for insufficient points
+        assert result is None
+
+    def test_find_landfalls_with_track_dimension(self):
+        """Test find_landfalls with singleton track dimension."""
+        import shapely.geometry
+
+        # Create track with track dimension
+        track = xr.DataArray(
+            [[35.0, 40.0, 45.0]],
+            dims=["track", "valid_time"],
+            coords={
+                "track": [0],
+                "valid_time": pd.date_range("2023-09-15", periods=3, freq="6h"),
+                "latitude": (["track", "valid_time"], [[24.0, 24.5, 25.0]]),
+                "longitude": (["track", "valid_time"], [[280.0, 279.0, 278.0]]),
+            },
+            name="surface_wind_speed",
+        )
+
+        land_geom = shapely.geometry.box(-82, 24, -80, 26)
+
+        # Should squeeze track dimension and process
+        result = calc.find_landfalls(track, land_geom=land_geom)
+
+        assert result is None or isinstance(result, xr.DataArray)
+
+    def test_find_next_landfall_for_init_time(self):
+        """Test find_next_landfall_for_init_time function."""
+        # Create forecast data with init_time dimension
+        init_times = pd.date_range("2023-09-14", periods=3, freq="12h")
+        lead_times = [0, 6, 12, 18]
+
+        forecast = xr.DataArray(
+            np.random.rand(3, 4),
+            dims=["init_time", "lead_time"],
+            coords={"init_time": init_times, "lead_time": lead_times},
+            name="forecast_data",
+        )
+
+        # Create target landfall data with multiple landfalls
+        landfall_times = pd.date_range("2023-09-14 06:00", periods=3, freq="12h")
+        target_landfalls = xr.DataArray(
+            [35.0, 40.0, 45.0],
+            dims=["landfall"],
+            coords={
+                "landfall": [0, 1, 2],
+                "valid_time": (["landfall"], landfall_times),
+                "latitude": (["landfall"], [24.0, 24.5, 25.0]),
+                "longitude": (["landfall"], [280.0, 279.0, 278.0]),
+            },
+            name="surface_wind_speed",
+        )
+
+        result = calc.find_next_landfall_for_init_time(forecast, target_landfalls)
+
+        # Should return DataArray with init_time dimension or None
+        assert result is None or isinstance(result, xr.DataArray)
+        if result is not None:
+            assert "init_time" in result.dims or "init_time" in result.coords
+
+    def test_find_next_landfall_no_future_landfalls(self):
+        """Test find_next_landfall when no future landfalls exist."""
+        # Forecast after all landfalls
+        init_times = pd.date_range("2023-09-17", periods=2, freq="12h")
+        forecast = xr.DataArray(
+            np.random.rand(2, 4),
+            dims=["init_time", "lead_time"],
+            coords={"init_time": init_times, "lead_time": [0, 6, 12, 18]},
+        )
+
+        # Target landfalls all in the past
+        landfall_times = pd.date_range("2023-09-14", periods=3, freq="12h")
+        target_landfalls = xr.DataArray(
+            [35.0, 40.0, 45.0],
+            dims=["landfall"],
+            coords={
+                "landfall": [0, 1, 2],
+                "valid_time": (["landfall"], landfall_times),
+                "latitude": (["landfall"], [24.0, 24.5, 25.0]),
+                "longitude": (["landfall"], [280.0, 279.0, 278.0]),
+            },
+        )
+
+        result = calc.find_next_landfall_for_init_time(forecast, target_landfalls)
+
+        # Should return None when no future landfalls
+        assert result is None
+
+    def test_find_next_landfall_without_init_time(self):
+        """Test find_next_landfall with forecast without init_time."""
+        # Forecast data with lead_time and valid_time
+        valid_times = pd.date_range("2023-09-15", periods=4, freq="6h")
+        lead_times = [0, 6, 12, 18]
+
+        forecast = xr.DataArray(
+            np.random.rand(4, 4),
+            dims=["valid_time", "lead_time"],
+            coords={"valid_time": valid_times, "lead_time": lead_times},
+        )
+
+        # Target landfalls
+        landfall_times = pd.date_range("2023-09-15 06:00", periods=3, freq="12h")
+        target_landfalls = xr.DataArray(
+            [35.0, 40.0, 45.0],
+            dims=["landfall"],
+            coords={
+                "landfall": [0, 1, 2],
+                "valid_time": (["landfall"], landfall_times),
+                "latitude": (["landfall"], [24.0, 24.5, 25.0]),
+                "longitude": (["landfall"], [280.0, 279.0, 278.0]),
+            },
+        )
+
+        result = calc.find_next_landfall_for_init_time(forecast, target_landfalls)
+
+        # Should handle conversion and return result
+        assert result is None or isinstance(result, xr.DataArray)
+
+    def test_is_true_landfall_ocean_to_land(self):
+        """Test _is_true_landfall detects ocean to land movement."""
+        import shapely.geometry
+
+        # Create simple land geometry (box)
+        land_geom = shapely.geometry.box(-81, 24, -80, 26)
+
+        # Ocean point to land point (landfall)
+        lon1, lat1 = -82.0, 25.0  # Ocean
+        lon2, lat2 = -80.5, 25.0  # Land
+
+        result = calc._is_true_landfall(lon1, lat1, lon2, lat2, land_geom)
+
+        # Should detect landfall
+        assert result is True
+
+    def test_is_true_landfall_ocean_crossing_land(self):
+        """Test _is_true_landfall detects ocean to ocean crossing land."""
+        import shapely.geometry
+
+        # Create land geometry
+        land_geom = shapely.geometry.box(-81, 24, -80, 26)
+
+        # Ocean to ocean but crossing land
+        lon1, lat1 = -82.0, 25.0  # Ocean
+        lon2, lat2 = -79.0, 25.0  # Ocean (other side)
+
+        result = calc._is_true_landfall(lon1, lat1, lon2, lat2, land_geom)
+
+        # Should detect landfall (crossing)
+        assert result is True
+
+    def test_is_true_landfall_land_to_ocean(self):
+        """Test _is_true_landfall rejects land to ocean movement."""
+        import shapely.geometry
+
+        # Create land geometry
+        land_geom = shapely.geometry.box(-81, 24, -80, 26)
+
+        # Land to ocean (not landfall)
+        lon1, lat1 = -80.5, 25.0  # Land
+        lon2, lat2 = -82.0, 25.0  # Ocean
+
+        result = calc._is_true_landfall(lon1, lat1, lon2, lat2, land_geom)
+
+        # Should not detect landfall (exit, not entry)
+        assert result is False
+
+    def test_is_true_landfall_ocean_to_ocean_no_intersection(self):
+        """Test _is_true_landfall rejects pure ocean movement."""
+        import shapely.geometry
+
+        # Create land geometry
+        land_geom = shapely.geometry.box(-81, 24, -80, 26)
+
+        # Ocean to ocean without crossing land
+        lon1, lat1 = -85.0, 25.0  # Ocean (far away)
+        lon2, lat2 = -84.0, 25.0  # Ocean (still far)
+
+        result = calc._is_true_landfall(lon1, lat1, lon2, lat2, land_geom)
+
+        # Should not detect landfall
+        assert result is False
+
+    def test_is_true_landfall_error_handling(self):
+        """Test _is_true_landfall handles errors gracefully."""
+        # Invalid geometry should return False
+        result = calc._is_true_landfall(0, 0, 1, 1, None)
+
+        # Should return False on error
+        assert result is False
