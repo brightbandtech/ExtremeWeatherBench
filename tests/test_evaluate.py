@@ -837,7 +837,7 @@ class TestComputeCaseOperator:
             sample_forecast_dataset,
             sample_target_dataset,
         )
-        sample_case_operator.metric_list = [mock.Mock()]
+        sample_case_operator.metric_list = [mock.Mock(spec=metrics.BaseMetric)]
 
         with mock.patch(
             "extremeweatherbench.evaluate._compute_and_maybe_cache"
@@ -874,8 +874,8 @@ class TestComputeCaseOperator:
         )
 
         # Create multiple metrics
-        metric_1 = mock.Mock()
-        metric_2 = mock.Mock()
+        metric_1 = mock.Mock(spec=metrics.BaseMetric)
+        metric_2 = mock.Mock(spec=metrics.BaseMetric)
         sample_case_operator.metric_list = [metric_1, metric_2]
 
         sample_case_operator.target.maybe_align_forecast_to_target.return_value = (

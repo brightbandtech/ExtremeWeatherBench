@@ -11,11 +11,11 @@ import xarray as xr
 from tqdm.auto import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 
-from extremeweatherbench import cases, derived, inputs, utils
+from extremeweatherbench import cases, derived, inputs, metrics, utils
 from extremeweatherbench.defaults import OUTPUT_COLUMNS
 
 if TYPE_CHECKING:
-    from extremeweatherbench import metrics, regions
+    from extremeweatherbench import regions
 
 logger = logging.getLogger(__name__)
 
@@ -176,7 +176,7 @@ def compute_case_operator(
         kwargs: Keyword arguments to pass to the metric computations.
 
     Returns:
-        A concatenated dataframe of results from the case operator.
+        A pd.DataFrame of results from the case operator.
 
     Raises:
         TypeError: If any metric is not properly instantiated (i.e. isn't an instance
@@ -185,12 +185,11 @@ def compute_case_operator(
     # Validate that all metrics are instantiated (not classes or callables)
     for i, metric in enumerate(case_operator.metric_list):
         if isinstance(metric, type):
-            metric = metric()
-            case_operator.metric_list[i] = metric
+            case_operator.metric_list[i] = metric()
             logger.warning(
                 "Metric %s instantiated with default parameters", metric.name
             )
-        if not hasattr(metric, "compute_metric"):
+        if not isinstance(metric, metrics.BaseMetric):
             raise TypeError(f"Metric must be a BaseMetric instance, got {type(metric)}")
 
     forecast_ds, target_ds = _build_datasets(case_operator, **kwargs)
