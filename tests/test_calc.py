@@ -17,8 +17,9 @@ class TestBasicCalculations:
         # Test with center point
         point = (8, 10)  # Middle of the grid
 
-        lat, lon = calc.convert_from_cartesian_to_latlon(point, sample_calc_dataset)
-
+        lat, lon = calc.convert_from_cartesian_to_latlon(
+            point, sample_calc_dataset.latitude, sample_calc_dataset.longitude
+        )
         # Should return values within the grid bounds
         assert 20 <= lat <= 50
         assert -120 <= lon <= -80
@@ -689,3 +690,304 @@ class TestNantrapezoid:
         # Should still work and return proper result
         assert result.shape == (1,)
         assert not np.isnan(result)
+
+
+class TestComputeCapeCin:
+    """Test the compute_cape_cin wrapper function."""
+
+    def test_single_profile(self):
+        """Test integration with DataArrays containing a single profile."""
+
+        # Splice in a pseudo-realistic atmosphere profile with our fixture dataset
+        pressures = np.array([1000, 850, 700, 500, 300, 200])
+        temp_sfc = 290.0  # K
+        lapse_rate = 6.5 / 1000.0  # K/km
+        geopotential = 29.3 * temp_sfc * np.log(1013.25 / pressures)
+        temp_profile = temp_sfc - lapse_rate * geopotential
+        dewpoint_profile = temp_profile - 5.0
+
+        # Create xarray DataArrays
+        pressures = xr.DataArray(pressures, dims=["level"], coords={"level": pressures})
+        temp_profile = xr.DataArray(
+            temp_profile, dims=["level"], coords={"level": pressures}
+        )
+        dewpoint_profile = xr.DataArray(
+            dewpoint_profile, dims=["level"], coords={"level": pressures}
+        )
+        geopotential = xr.DataArray(
+            geopotential, dims=["level"], coords={"level": pressures}
+        )
+
+        cape = calc.compute_mixed_layer_cape(
+            pressures,
+            temp_profile,
+            dewpoint_profile,
+            geopotential,
+        )
+
+        # Check that the output has the correct shape (scalars)
+        assert cape.values.shape == ()
+        assert "level" not in cape.dims
+
+        # Check that we don't have any NaNs and that all data are physically reasonable
+        assert np.isfinite(cape)
+        assert cape >= 0.0, "CAPE should be non-negative"
+
+    def test_grid_profiles(self):
+        """Test integration with typical gridded NWP-like data."""
+
+        n_times, n_lats, n_lons = 5, 10, 15
+
+        # Splice in a pseudo-realistic atmosphere profile with our fixture dataset
+        pressures = np.array([1000, 850, 700, 500, 300, 200])
+
+        temp_sfc = 290.0 + np.random.normal(0, 1, (n_times, n_lats, n_lons, 1))  # K
+        lapse_rate = 6.5 / 1000.0  # K/km
+        geopotential = (
+            29.3 * temp_sfc * np.log(1013.25 / pressures)
+        )  # (n_times, n_lats, n_lons, n_levels)
+        temp_profile = temp_sfc - lapse_rate * geopotential
+        dewpoint_profile = temp_profile - 5.0
+
+        # Create an xarray Dataset with these profiles
+        ds = xr.Dataset(
+            {
+                "temperature": (
+                    ["time", "latitude", "longitude", "level"],
+                    temp_profile,
+                ),
+                "dewpoint": (
+                    ["time", "latitude", "longitude", "level"],
+                    dewpoint_profile,
+                ),
+                "geopotential": (
+                    ["time", "latitude", "longitude", "level"],
+                    geopotential,
+                ),
+                "pressure": (["level"], pressures),
+            },
+            coords={
+                "time": range(n_times),
+                "latitude": range(n_lats),
+                "longitude": range(n_lons),
+                "level": pressures,
+            },
+        )
+
+        # Compute CAPE and CIN for each profile
+        cape = calc.compute_mixed_layer_cape(
+            ds["pressure"],
+            ds["temperature"],
+            ds["dewpoint"],
+            ds["geopotential"],
+        )
+
+        # Check that the output has the correct shape (scalars)
+        assert cape.values.shape == (n_times, n_lats, n_lons)
+        assert "level" not in cape.dims
+
+        # Check that we don't have any NaNs and that all data are physically reasonable
+        assert np.all(np.isfinite(cape))
+        assert np.all(cape >= 0.0), "CAPE should be non-negative"
+
+    def test_grid_profiles_with_dask(self):
+        """Test integration with typical gridded NWP-like data, but backed by dask arrays."""
+
+        n_times, n_lats, n_lons = 5, 4, 4
+
+        # Splice in a pseudo-realistic atmosphere profile with our fixture dataset
+        pressures = np.array([1000, 850, 700, 500, 300, 200])
+        temp_sfc = 290.0 + np.random.normal(0, 1, (n_times, n_lats, n_lons, 1))  # K
+        lapse_rate = 6.5 / 1000.0  # K/km
+        geopotential = (
+            29.3 * temp_sfc * np.log(1013.25 / pressures)
+        )  # (n_times, n_lats, n_lons, n_levels)
+        temp_profile = temp_sfc - lapse_rate * geopotential
+        dewpoint_profile = temp_profile - 5.0
+
+        # Create an xarray Dataset with these profiles
+        ds = xr.Dataset(
+            {
+                "temperature": (
+                    ["time", "latitude", "longitude", "level"],
+                    temp_profile,
+                ),
+                "dewpoint": (
+                    ["time", "latitude", "longitude", "level"],
+                    dewpoint_profile,
+                ),
+                "geopotential": (
+                    ["time", "latitude", "longitude", "level"],
+                    geopotential,
+                ),
+                "pressure": (["level"], pressures),
+            },
+            coords={
+                "time": range(n_times),
+                "latitude": range(n_lats),
+                "longitude": range(n_lons),
+                "level": pressures,
+            },
+        )
+        ds = ds.chunk({"time": 1, "level": -1})
+
+        # Compute CAPE for each profile
+        # NOTE: Use parallel=False with Dask to avoid Numba threading conflicts.
+        # Dask already provides parallelism at the chunk level, so Numba parallel
+        # features would conflict with Dask's threading. In general it should be
+        # safe to use parallel=True when Dask is distributing to multiple proceses;
+        # here, we're keeping things very simple and creating Dask arrays in-place
+        # within the pytest process.
+        cape = calc.compute_mixed_layer_cape(
+            ds["pressure"],
+            ds["temperature"],
+            ds["dewpoint"],
+            ds["geopotential"],
+            parallel=False,
+        )
+
+        # Check that the output has the correct shape (scalars)
+        assert cape.values.shape == (n_times, n_lats, n_lons)
+        assert "level" not in cape.dims
+
+        # Check that we don't have any NaNs and that all data are physically reasonable
+        assert np.all(np.isfinite(cape))
+        assert np.all(cape >= 0.0), "CAPE should be non-negative"
+
+    def test_parallel_serial_equivalence(self):
+        """Test that parallel and serial CAPE calculations produce equivalent results."""
+
+        n_times, n_lats, n_lons = 5, 4, 4
+
+        # Splice in a pseudo-realistic atmosphere profile with our fixture dataset
+        pressures = np.array([1000, 850, 700, 500, 300, 200])
+        temp_sfc = 290.0 + np.random.normal(0, 1, (n_times, n_lats, n_lons, 1))  # K
+        lapse_rate = 6.5 / 1000.0  # K/km
+        geopotential = (
+            29.3 * temp_sfc * np.log(1013.25 / pressures)
+        )  # (n_times, n_lats, n_lons, n_levels)
+        temp_profile = temp_sfc - lapse_rate * geopotential
+        dewpoint_profile = temp_profile - 5.0
+
+        # Create an xarray Dataset with these profiles
+        ds = xr.Dataset(
+            {
+                "temperature": (
+                    ["time", "latitude", "longitude", "level"],
+                    temp_profile,
+                ),
+                "dewpoint": (
+                    ["time", "latitude", "longitude", "level"],
+                    dewpoint_profile,
+                ),
+                "geopotential": (
+                    ["time", "latitude", "longitude", "level"],
+                    geopotential,
+                ),
+                "pressure": (["level"], pressures),
+            },
+            coords={
+                "time": range(n_times),
+                "latitude": range(n_lats),
+                "longitude": range(n_lons),
+                "level": pressures,
+            },
+        )
+
+        cape_parallel = calc.compute_mixed_layer_cape(
+            ds["pressure"],
+            ds["temperature"],
+            ds["dewpoint"],
+            ds["geopotential"],
+            parallel=True,
+        )
+        cape_serial = calc.compute_mixed_layer_cape(
+            ds["pressure"],
+            ds["temperature"],
+            ds["dewpoint"],
+            ds["geopotential"],
+            parallel=False,
+        )
+
+        assert np.allclose(cape_parallel, cape_serial)
+
+
+class TestDewpointFromSpecificHumidity:
+    """Test the dewpoint_from_specific_humidity function."""
+
+    def test_dewpoints_from_specific_humidities(self):
+        """Test the dewpoint_from_specific_humidity function with known values
+        pre-computed from MetPy.
+
+        The values useed were randomly selected from an ERA5 timeslice.
+        """
+
+        pressures = np.array(
+            [
+                800.0,
+                125.0,
+                825.0,
+                200.0,
+                600.0,
+                800.0,
+                350.0,
+                875.0,
+                700.0,
+                250.0,
+                950.0,
+                1000.0,
+            ]
+        )
+        specific_humidities = np.array(
+            [
+                2.9980205e-04,
+                2.0001212e-06,
+                3.2219910e-03,
+                1.0791991e-05,
+                2.0538690e-04,
+                1.2427913e-03,
+                1.4054612e-04,
+                1.3353663e-02,
+                1.6551274e-03,
+                4.9075752e-06,
+                1.0287719e-02,
+                2.7858345e-03,
+            ],
+        )
+        # Computed from metpy.calc.dewpoint_from_specific_humidity
+        ref_dewpoints = np.array(
+            [
+                240.25,
+                187.25,
+                268.25,
+                200.75,
+                233.55,
+                255.95,
+                225.05,
+                289.55,
+                257.75,
+                197.05,
+                286.85,
+                268.95,
+            ]
+        )
+        dewpoints = calc.dewpoint_from_specific_humidity(pressures, specific_humidities)
+        np.testing.assert_allclose(dewpoints, ref_dewpoints, atol=1e-1)
+
+    def test_dewpoint_decreasing_with_humidity(self):
+        """Given a constant pressure, dewpoint should decrease as specific humidity decreases."""
+        p0 = 1035.0  # hPa
+        qs = [2e-2, 2e-3, 2e-4, 2e-5]  # kg/kg
+        tds = [calc.dewpoint_from_specific_humidity(p0, q) for q in qs]
+        diffs = np.diff(tds)
+        is_decreasing = np.all(diffs < 0)
+        assert is_decreasing, "Dewpoint should decrease as specific humidity decreases"
+
+    def test_dewpoint_increasing_with_pressure(self):
+        """Given a constant specific humidity, dewpoint should decrease with increasing pressure."""
+        q0 = 2e-3  # kg/kg
+        ps = [1000.0, 950.0, 900.0, 850.0]  # hPa
+        tds = [calc.dewpoint_from_specific_humidity(p, q0) for p in ps]
+        diffs = np.diff(tds)
+        is_decreasing = np.all(diffs < 0)
+        assert is_decreasing, "Dewpoint should decrease as pressure increases"

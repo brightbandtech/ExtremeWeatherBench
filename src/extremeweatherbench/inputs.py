@@ -35,11 +35,13 @@ DEFAULT_GHCN_URI = "gs://extremeweatherbench/datasets/ghcnh_all_2020_2024.parq"
 #: Storage/access options for local storm report (LSR) tabular data.
 LSR_URI = "gs://extremeweatherbench/datasets/combined_canada_australia_us_lsr_01012020_09272025.parq"  # noqa: E501
 
+#: Storage/access options for practically perfect hindcast data.
 PPH_URI = (
     "gs://extremeweatherbench/datasets/"
     "practically_perfect_hindcast_20200104_20250927.zarr"
 )
 
+#: Storage/access options for IBTrACS data.
 IBTRACS_URI = (
     "https://www.ncei.noaa.gov/data/international-best-track-archive-for-"
     "climate-stewardship-ibtracs/v04r01/access/csv/ibtracs.ALL.list.v04r01.csv"
@@ -839,15 +841,15 @@ class IBTrACS(TargetBase):
             # Due to missing data in the IBTrACS dataset, polars doesn't convert
             # the valid_time to a datetime by default
             data["valid_time"] = pd.to_datetime(data["valid_time"])
-            data = data.set_index(["valid_time", "latitude", "longitude"])
+            data = data.set_index(["valid_time"])
 
             try:
-                data = xr.Dataset.from_dataframe(data, sparse=True)
+                data = xr.Dataset.from_dataframe(data)
             except ValueError as e:
                 if "non-unique" in str(e):
                     # Drop duplicates from the pandas DataFrame before converting
-                    data_df = data.drop_duplicates()
-                    data = xr.Dataset.from_dataframe(data_df, sparse=True)
+                    data = data.drop_duplicates()
+                    data = xr.Dataset.from_dataframe(data)
                 else:
                     raise
             return data
