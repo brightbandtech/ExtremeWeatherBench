@@ -88,23 +88,23 @@ hres_forecast = inputs.ZarrForecast(
     preprocess=_preprocess_hres_forecast_dataset,
 )
 
-fcn_forecast = inputs.KerchunkForecast(
-    name="fcn_forecast",
-    source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
-    variables=[derived.TropicalCycloneTrackVariables()],
-    variable_mapping=inputs.CIRA_metadata_variable_mapping,
-    preprocess=_preprocess_bb_cira_tc_forecast_dataset,
-    storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
-)
+# fcn_forecast = inputs.KerchunkForecast(
+#     name="fcn_forecast",
+#     source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
+#     variables=[derived.TropicalCycloneTrackVariables()],
+#     variable_mapping=inputs.CIRA_metadata_variable_mapping,
+#     preprocess=_preprocess_bb_cira_tc_forecast_dataset,
+#     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
+# )
 
-pangu_forecast = inputs.KerchunkForecast(
-    name="pangu_forecast",
-    source="gs://extremeweatherbench/PANG_v100_GFS.parq",
-    variables=[derived.TropicalCycloneTrackVariables()],
-    variable_mapping=inputs.CIRA_metadata_variable_mapping,
-    preprocess=_preprocess_bb_cira_tc_forecast_dataset,
-    storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
-)
+# pangu_forecast = inputs.KerchunkForecast(
+#     name="pangu_forecast",
+#     source="gs://extremeweatherbench/PANG_v100_GFS.parq",
+#     variables=[derived.TropicalCycloneTrackVariables()],
+#     variable_mapping=inputs.CIRA_metadata_variable_mapping,
+#     preprocess=_preprocess_bb_cira_tc_forecast_dataset,
+#     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
+# )
 # %%
 # Evaluation objects for tropical cyclone metrics
 # Note: Landfall metrics work with DataArrays that have lat/lon/time coords
@@ -125,34 +125,34 @@ tc_evaluation_object = [
         target=ibtracs_target,
         forecast=hres_forecast,
     ),
-    # Pangu forecast
-    inputs.EvaluationObject(
-        event_type="tropical_cyclone",
-        metric_list=[
-            metrics.LandfallTimeME,
-            metrics.LandfallDisplacement,
-            metrics.LandfallIntensityMAE(
-                forecast_variable="surface_wind_speed",
-                target_variable="surface_wind_speed",
-            ),
-        ],
-        target=ibtracs_target,
-        forecast=pangu_forecast,
-    ),
-    # FCN forecast
-    inputs.EvaluationObject(
-        event_type="tropical_cyclone",
-        metric_list=[
-            metrics.LandfallTimeME,
-            metrics.LandfallDisplacement,
-            metrics.LandfallIntensityMAE(
-                forecast_variable="surface_wind_speed",
-                target_variable="surface_wind_speed",
-            ),
-        ],
-        target=ibtracs_target,
-        forecast=fcn_forecast,
-    ),
+    # # Pangu forecast
+    # inputs.EvaluationObject(
+    #     event_type="tropical_cyclone",
+    #     metric_list=[
+    #         metrics.LandfallTimeME,
+    #         metrics.LandfallDisplacement,
+    #         metrics.LandfallIntensityMAE(
+    #             forecast_variable="surface_wind_speed",
+    #             target_variable="surface_wind_speed",
+    #         ),
+    #     ],
+    #     target=ibtracs_target,
+    #     forecast=pangu_forecast,
+    # ),
+    # # FCN forecast
+    # inputs.EvaluationObject(
+    #     event_type="tropical_cyclone",
+    #     metric_list=[
+    #         metrics.LandfallTimeME,
+    #         metrics.LandfallDisplacement,
+    #         metrics.LandfallIntensityMAE(
+    #             forecast_variable="surface_wind_speed",
+    #             target_variable="surface_wind_speed",
+    #         ),
+    #     ],
+    #     target=ibtracs_target,
+    #     forecast=fcn_forecast,
+    # ),
 ]
 # %%
 test_ewb = evaluate.ExtremeWeatherBench(
@@ -161,6 +161,6 @@ test_ewb = evaluate.ExtremeWeatherBench(
 )
 logger.info("Starting EWB run")
 outputs = test_ewb.run(
-    n_jobs=3,
+    n_jobs=1,
 )
 outputs.to_csv("tc_metric_test_results.csv")

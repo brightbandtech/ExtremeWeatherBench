@@ -19,7 +19,6 @@ from extremeweatherbench import (
     metrics,
     regions,
 )
-from extremeweatherbench.events import tropical_cyclone
 
 # Check if dask.distributed is available
 try:
@@ -2321,123 +2320,6 @@ def sample_ibtracs_dataset():
 class TestTropicalCycloneEvaluation:
     """Test tropical cyclone specific evaluation functionality."""
 
-    def setup_method(self):
-        """Clear registries before each test."""
-        tropical_cyclone.clear_tc_track_data_registry()
-
-    @mock.patch("extremeweatherbench.evaluate._build_datasets")
-    def test_ibtracs_registration_during_evaluation(
-        self,
-        mock_build_datasets,
-        sample_tc_case_operator,
-        sample_tc_forecast_dataset,
-        sample_ibtracs_dataset,
-    ):
-        """Test that IBTrACS data is registered during evaluation."""
-        # Override variables to avoid derived variable computation for this test
-        sample_tc_case_operator.target.variables = ["air_pressure_at_mean_sea_level"]
-        sample_tc_case_operator.forecast.variables = ["air_pressure_at_mean_sea_level"]
-
-        # Setup mocks
-        mock_build_datasets.return_value = (
-            sample_tc_forecast_dataset,
-            sample_ibtracs_dataset,
-        )
-
-        # Mock the target's maybe_align_forecast_to_target method
-        sample_tc_case_operator.target.maybe_align_forecast_to_target.return_value = (
-            sample_tc_forecast_dataset,
-            sample_ibtracs_dataset,
-        )
-
-        # Mock the metric computation
-        mock_metric_instance = mock.Mock(spec=metrics.BaseMetric)
-        mock_metric_instance.name = "TestMetric"
-        mock_metric_instance.compute_metric.return_value = xr.DataArray([1.0])
-        sample_tc_case_operator.metric_list[0] = mock_metric_instance
-
-        # Manually register IBTrACS data since we're bypassing the input pipeline
-        case_id_number = str(sample_tc_case_operator.case_metadata.case_id_number)
-        tropical_cyclone.register_tc_track_data(case_id_number, sample_ibtracs_dataset)
-
-        # Run the evaluation
-        evaluate.compute_case_operator(sample_tc_case_operator)
-
-        # Check that IBTrACS data was registered
-        case_id = str(sample_tc_case_operator.case_metadata.case_id_number)
-        registered_data = tropical_cyclone.get_tc_track_data(case_id)
-
-        assert registered_data is not None
-        xr.testing.assert_equal(registered_data, sample_ibtracs_dataset)
-
-    @mock.patch("extremeweatherbench.evaluate._build_datasets")
-    def test_non_ibtracs_target_no_registration(
-        self,
-        mock_build_datasets,
-        sample_tc_forecast_dataset,
-        sample_ibtracs_dataset,
-    ):
-        """Test that non-IBTrACS targets don't trigger registration."""
-        # Create case operator with non-IBTrACS target
-        from extremeweatherbench.regions import CenteredRegion
-
-        case_metadata = cases.IndividualCase(
-            case_id_number=157,
-            title="Test Non-TC Case",
-            start_date=pd.Timestamp("2023-09-01"),
-            end_date=pd.Timestamp("2023-09-05"),
-            location=CenteredRegion(25.0, -75.0, 5.0),
-            event_type="heat_wave",
-        )
-
-        mock_target = mock.MagicMock(spec=inputs.ERA5)
-        mock_target.__class__.__name__ = "ERA5"
-        mock_target.variables = ["surface_air_temperature"]
-        mock_target.name = "ERA5"
-
-        mock_forecast = mock.MagicMock(spec=inputs.KerchunkForecast)
-        mock_forecast.variables = ["surface_air_temperature"]
-        mock_forecast.name = "KerchunkForecast"
-
-        mock_metric = mock.MagicMock(spec=metrics.BaseMetric)
-
-        case_operator = cases.CaseOperator(
-            case_metadata=case_metadata,
-            metric_list=[mock_metric],
-            target=mock_target,
-            forecast=mock_forecast,
-        )
-
-        # Create a non-IBTrACS dataset for this test
-        non_ibtracs_dataset = sample_ibtracs_dataset.copy()
-        non_ibtracs_dataset.attrs.pop("is_ibtracs_data", None)
-        non_ibtracs_dataset.attrs["source"] = "ERA5"
-
-        # Setup mocks
-        mock_build_datasets.return_value = (
-            sample_tc_forecast_dataset,
-            non_ibtracs_dataset,
-        )
-
-        case_operator.target.maybe_align_forecast_to_target.return_value = (
-            sample_tc_forecast_dataset,
-            non_ibtracs_dataset,
-        )
-
-        mock_metric_instance = mock.Mock(spec=metrics.BaseMetric)
-        mock_metric_instance.name = "TestMetric"
-        mock_metric_instance.compute_metric.return_value = xr.DataArray([1.0])
-        case_operator.metric_list[0] = mock_metric_instance
-
-        # Run the evaluation
-        evaluate.compute_case_operator(case_operator)
-
-        # Check that IBTrACS data was NOT registered
-        case_id = str(case_operator.case_metadata.case_id_number)
-        registered_data = tropical_cyclone.get_tc_track_data(case_id)
-
-        assert registered_data is None
-
     @mock.patch("extremeweatherbench.evaluate._build_datasets")
     def test_case_metadata_passed_to_derive_variables(
         self,
@@ -2446,8 +2328,7 @@ class TestTropicalCycloneEvaluation:
         sample_tc_forecast_dataset,
         sample_ibtracs_dataset,
     ):
-        """Test that case_metadata is passed to maybe_derive_variables and
-        get_tc_track_data is called correctly."""
+        """Test that case_metadata is passed to maybe_derive_variables."""
         # Override variables to avoid derived variable computation for this test
         sample_tc_case_operator.target.variables = ["air_pressure_at_mean_sea_level"]
         sample_tc_case_operator.forecast.variables = ["air_pressure_at_mean_sea_level"]
@@ -2472,45 +2353,24 @@ class TestTropicalCycloneEvaluation:
         # Let's just test that the evaluation runs without errors
         # and that when it does call derived variables, the case_metadata is available
 
-        # Register some test IBTrACS data for the derived variables to use
+        # Run the evaluation - this should work without mocking
+        result = evaluate.compute_case_operator(sample_tc_case_operator)
 
-        case_id_str = str(sample_tc_case_operator.case_metadata.case_id_number)
-        tropical_cyclone.register_tc_track_data(case_id_str, sample_ibtracs_dataset)
+        # Basic sanity check - we should get a DataFrame back
+        assert isinstance(result, pd.DataFrame)
 
-        try:
-            # Run the evaluation - this should work without mocking
-            result = evaluate.compute_case_operator(sample_tc_case_operator)
-
-            # Basic sanity check - we should get a DataFrame back
-            assert isinstance(result, pd.DataFrame)
-
-            # Check that IBTrACS data was registered (this proves case_id_number flow
-            # works)
-            retrieved_data = tropical_cyclone.get_tc_track_data(case_id_str)
-            assert retrieved_data is not None
-
-            print(
-                "✅ Test passed - evaluation completed successfully with proper "
-                "case_metadata flow"
-            )
-
-        except Exception as e:
-            # If there's an error, it might be related to the derived variable
-            # processing
-            print(f"❌ Error during evaluation: {e}")
-            raise
-        finally:
-            # Clean up
-            tropical_cyclone.clear_tc_track_data_registry()
+        print(
+            "✅ Test passed - evaluation completed successfully with proper "
+            "case_metadata flow"
+        )
 
 
 class TestDerivedVariableIntegration:
     """Test integration of derived variables in evaluation."""
 
     def setup_method(self):
-        """Clear caches before each test."""
-        tropical_cyclone.clear_tc_track_data_registry()
-        derived.TropicalCycloneTrackVariables.clear_cache()
+        """Setup method for tests."""
+        pass
 
     @mock.patch(
         "extremeweatherbench.events.tropical_cyclone.generate_tc_tracks_by_init_time"
@@ -2568,16 +2428,14 @@ class TestDerivedVariableIntegration:
 
         mock_create_tracks.return_value = mock_tracks
 
-        # Register IBTrACS data for the case
+        # Create IBTrACS-like target data
         ibtracs_data = xr.Dataset(
             {
                 "latitude": (["time"], [25.0, 26.0]),
                 "longitude": (["time"], [-75.0, -74.0]),
             },
-            coords={"time": pd.date_range("2023-09-01", periods=2, freq="6h")},
+            coords={"valid_time": pd.date_range("2023-09-01", periods=2, freq="6h")},
         )
-
-        tropical_cyclone.register_tc_track_data("test_case", ibtracs_data)
 
         # Test derivation
         variables = [derived.TropicalCycloneTrackVariables()]
@@ -2593,7 +2451,10 @@ class TestDerivedVariableIntegration:
         base_dataset.attrs["dataset_type"] = "forecast"
 
         result = derived.maybe_derive_variables(
-            base_dataset, variables, case_metadata=mock_case_operator.case_metadata
+            base_dataset,
+            variables,
+            case_metadata=mock_case_operator.case_metadata,
+            _target_dataset=ibtracs_data,
         )
 
         # Should have the derived variable

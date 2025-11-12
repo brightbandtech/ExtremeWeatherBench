@@ -1,10 +1,9 @@
 """Tropical cyclone track detection from gridded datasets."""
 
-import hashlib
 import logging
 from collections import namedtuple
 from itertools import product
-from typing import Dict, Optional, Sequence, Union
+from typing import Optional, Sequence, Union
 
 import numpy as np
 import pandas as pd
@@ -531,93 +530,6 @@ def _convert_detections_to_dataset(
 
 
 Location = namedtuple("Location", ["latitude", "longitude"])
-# Global cache for TC track data to avoid recomputation across child classes
-_TC_TRACK_CACHE: Dict[str, xr.Dataset] = {}
-
-# Global registry for tropical cyclone track data to be used in TC filtering
-_TRACK_DATA_REGISTRY: Dict[int, xr.Dataset] = {}
-
-
-def register_tc_track_data(case_id: int, tc_track_data: xr.Dataset) -> None:
-    """Register tropical cyclone track data for a specific case to be used in TC
-    filtering.
-
-    Args:
-        case_id: Unique identifier for the case.
-        tc_track_data: tropical cyclone track dataset with valid_time, latitude,
-            longitude.
-    """
-    global _TRACK_DATA_REGISTRY
-    _TRACK_DATA_REGISTRY[case_id] = tc_track_data
-
-
-def get_tc_track_data(case_id_number: int) -> Optional[xr.Dataset]:
-    """Get registered tropical cyclone track data for a specific case.
-
-    Args:
-        case_id: Unique identifier for the case.
-
-    Returns:
-        tropical cyclone track dataset if available, None otherwise.
-    """
-    global _TRACK_DATA_REGISTRY
-    return _TRACK_DATA_REGISTRY.get(case_id_number, None)
-
-
-def clear_tc_track_data_registry() -> None:
-    """Clear the tropical cyclone track data registry."""
-    global _TRACK_DATA_REGISTRY
-    _TRACK_DATA_REGISTRY.clear()
-
-
-def _generate_cache_key(data: xr.Dataset) -> str:
-    """Generate a hash key for the dataset to use as cache key."""
-    # Create a hash based on data shape, coordinates, and first/last values
-    # This is a lightweight way to create a unique key without hashing entire arrays
-    key_components = []
-
-    # Add dataset shape and coordinate info
-    for var_name in [
-        "air_pressure_at_mean_sea_level",
-        "geopotential",
-        "surface_eastward_wind",
-        "surface_northward_wind",
-    ]:
-        if var_name in data.data_vars:
-            var = data[var_name]
-            key_components.extend(
-                [
-                    str(var.shape),
-                    str(var.dims),
-                    # Sample a few values for uniqueness (only if dims have size > 0)
-                    str(
-                        float(
-                            var.isel(
-                                {dim: 0 for dim in var.dims if var.sizes[dim] > 0}
-                            ).values
-                        )
-                    )
-                    if all(var.sizes[dim] > 0 for dim in var.dims)
-                    else "empty",
-                    str(
-                        float(
-                            var.isel(
-                                {dim: -1 for dim in var.dims if var.sizes[dim] > 0}
-                            ).values
-                        )
-                    )
-                    if all(var.sizes[dim] > 0 for dim in var.dims)
-                    else "empty",
-                ]
-            )
-
-    # Add time and coordinate info
-    if "time" in data.coords:
-        key_components.extend([str(data.time.values[0]), str(data.time.values[-1])])
-
-    # Create hash
-    key_string = "|".join(key_components)
-    return hashlib.md5(key_string.encode()).hexdigest()
 
 
 def find_furthest_contour_from_point(

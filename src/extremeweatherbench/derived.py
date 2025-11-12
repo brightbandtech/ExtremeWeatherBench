@@ -128,11 +128,6 @@ class TropicalCycloneTrackVariables(DerivedVariable):
         Raises:
             ValueError: If _target_dataset is missing or lacks required vars
         """
-        cache_key = tropical_cyclone._generate_cache_key(data)
-
-        # Return cached result if available
-        if cache_key in tropical_cyclone._TC_TRACK_CACHE:
-            return tropical_cyclone._TC_TRACK_CACHE[cache_key]
 
         # Prepare the data with wind variables as needed
         prepared_data = calc.maybe_calculate_wind_speed(data)
@@ -175,8 +170,6 @@ class TropicalCycloneTrackVariables(DerivedVariable):
             prepared_data.get("geopotential_thickness", None),
             tc_track_data,
         )
-        # Cache the result
-        tropical_cyclone._TC_TRACK_CACHE[cache_key] = tctracks_ds
         return tctracks_ds
 
     def derive_variable(self, data: xr.Dataset, *args, **kwargs) -> xr.DataArray:
@@ -196,13 +189,6 @@ class TropicalCycloneTrackVariables(DerivedVariable):
 
         # Squeeze the dataset to remove the track dimension if only one track is present
         return tracks_dataset.squeeze()
-
-    def clear_cache(self) -> None:
-        """Clear the global track cache.
-
-        Useful for memory management or when processing completely different datasets.
-        """
-        tropical_cyclone._TC_TRACK_CACHE.clear()
 
 
 def maybe_derive_variables(
