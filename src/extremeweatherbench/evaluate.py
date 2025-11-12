@@ -176,10 +176,11 @@ def compute_case_operator(
         kwargs: Keyword arguments to pass to the metric computations.
 
     Returns:
-        A concatenated dataframe of the results of the case operator.
+        A concatenated dataframe of results from the case operator.
 
     Raises:
-        TypeError: If any metric is not properly instantiated.
+        TypeError: If any metric is not properly instantiated (i.e. isn't an instance
+        or child class of BaseMetric).
     """
     # Validate that all metrics are instantiated (not classes or callables)
     for i, metric in enumerate(case_operator.metric_list):
