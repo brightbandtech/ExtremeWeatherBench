@@ -6,6 +6,7 @@ from itertools import product
 from typing import Optional, Sequence, Union
 
 import numpy as np
+import numpy.typing as npt
 import pandas as pd
 import scipy.spatial as spatial
 import xarray as xr
@@ -169,15 +170,15 @@ def generate_tc_tracks_by_init_time(
 
 
 def _process_single_init_time(
-    slp_data: np.ndarray,  # (lead_time, lat, lon)
-    wind_data: np.ndarray,  # (lead_time, lat, lon)
-    dz_data: np.ndarray,  # (lead_time, lat, lon) or all NaN
+    slp_data: npt.NDArray,  # (lead_time, lat, lon)
+    wind_data: npt.NDArray,  # (lead_time, lat, lon)
+    dz_data: npt.NDArray,  # (lead_time, lat, lon) or all NaN
     init_time_idx: int,
-    init_time_values: np.ndarray,  # Unique init_time values from transform
+    init_time_values: npt.NDArray,  # Unique init_time values from transform
     init_time_coord: xr.DataArray,  # Original 2D init_time coordinate
     time_coord: xr.DataArray,  # Original time coordinate
-    latitude: np.ndarray,
-    longitude: np.ndarray,
+    latitude: npt.NDArray,
+    longitude: npt.NDArray,
     tc_track_data_df: pd.DataFrame,
     min_distance: int,
     max_spatial_distance_degrees: float,
@@ -412,13 +413,13 @@ def _process_single_init_time(
 
 def _convert_detections_to_dataset(
     n_detections: int,
-    lt_indices: np.ndarray,
-    vt_indices: np.ndarray,
-    track_ids: np.ndarray,
-    lats: np.ndarray,
-    lons: np.ndarray,
-    slp_vals: np.ndarray,
-    wind_vals: np.ndarray,
+    lt_indices: npt.NDArray,
+    vt_indices: npt.NDArray,
+    track_ids: npt.NDArray,
+    lats: npt.NDArray,
+    lons: npt.NDArray,
+    slp_vals: npt.NDArray,
+    wind_vals: npt.NDArray,
     lead_time_coord: xr.DataArray,
     valid_time_coord: xr.DataArray,
 ) -> xr.Dataset:
@@ -533,9 +534,9 @@ Location = namedtuple("Location", ["latitude", "longitude"])
 
 
 def find_furthest_contour_from_point(
-    contour: Union[np.ndarray, Sequence[tuple[float, float]]],
-    point: Union[np.ndarray, tuple[float, float]],
-) -> tuple[np.ndarray, np.ndarray]:
+    contour: Union[npt.NDArray, Sequence[tuple[float, float]]],
+    point: Union[npt.NDArray, tuple[float, float]],
+) -> tuple[npt.NDArray, npt.NDArray]:
     """Find the two points in a contour that are furthest apart.
 
     From
@@ -667,6 +668,7 @@ def find_valid_candidates(
 
     latitude_filter = abs(lat_val) < 50 if time_counter < 10 else True
 
+    # Checks for all conditions to be met for a valid candidate
     for slp_contour, dz_contour in product(slp_contours, dz_contours):
         if (
             all(np.isclose(slp_contour[-1], slp_contour[0]))
@@ -685,7 +687,7 @@ def find_valid_candidates(
 
 
 def _safe_extract_value(
-    array_or_scalar: Union[xr.DataArray, np.ndarray, float],
+    array_or_scalar: Union[xr.DataArray, npt.NDArray, float],
 ) -> Union[float, str]:
     """Safely extract scalar value from DataArray or return as-is."""
     if hasattr(array_or_scalar, "item") and hasattr(array_or_scalar, "ndim"):
@@ -703,21 +705,21 @@ def _safe_extract_value(
 
 
 def _find_peaks_batch(
-    slp_slice: np.ndarray,
-    wind_slice: np.ndarray,
-    dz_slice: Optional[np.ndarray],
+    slp_slice: npt.NDArray,
+    wind_slice: npt.NDArray,
+    dz_slice: Optional[npt.NDArray],
     timestep_idx: int,
     valid_times: list,
     tc_track_data_df: pd.DataFrame,
     min_distance: int,
-    latitude: np.ndarray,
-    longitude: np.ndarray,
+    latitude: npt.NDArray,
+    longitude: npt.NDArray,
     max_spatial_distance_degrees: float,
     max_temporal_hours: float,
     slp_contour_magnitude: float,
     dz_contour_magnitude: float,
     use_contour_validation: bool,
-) -> np.ndarray:
+) -> npt.NDArray:
     """Wrapper for vectorized peak finding across time slices.
 
     This function is designed to work with xr.apply_ufunc's vectorize mode.
@@ -768,20 +770,20 @@ def _find_peaks_batch(
 
 
 def _find_peaks_for_time_slice(
-    slp_slice: np.ndarray,
+    slp_slice: npt.NDArray,
     current_valid_time: pd.Timestamp,
     tc_track_data_df: pd.DataFrame,
     min_distance: int,
-    lat_coords: Optional[np.ndarray] = None,
-    lon_coords: Optional[np.ndarray] = None,
+    lat_coords: Optional[npt.NDArray] = None,
+    lon_coords: Optional[npt.NDArray] = None,
     max_spatial_distance_degrees: float = 5.0,
     max_temporal_hours: float = 48.0,
-    dz_slice: Optional[np.ndarray] = None,
+    dz_slice: Optional[npt.NDArray] = None,
     slp_contour_magnitude: float = 200,
     dz_contour_magnitude: float = -6,
     use_contour_validation: bool = True,
     is_first_timestep: bool = False,
-) -> np.ndarray:
+) -> npt.NDArray:
     """Find peaks with tropical cyclone track data filtering.
 
     Args:
@@ -907,8 +909,8 @@ def _find_peaks_for_time_slice(
 
 
 def _create_spatial_mask(
-    lat_coords: np.ndarray,
-    lon_coords: np.ndarray,
+    lat_coords: npt.NDArray,
+    lon_coords: npt.NDArray,
     nearby_tc_track_data: pd.DataFrame,
     max_distance_degrees: float,
 ):
@@ -937,26 +939,3 @@ def _create_spatial_mask(
         spatial_mask |= distances <= max_distance_degrees
 
     return spatial_mask
-
-
-def _create_empty_tracks_dataset() -> xr.Dataset:
-    """Create an empty tracks dataset with proper structure."""
-    return xr.Dataset(
-        {
-            "track_id": (["lead_time", "valid_time"], np.array([]).reshape(0, 0)),
-            "air_pressure_at_mean_sea_level": (
-                ["lead_time", "valid_time"],
-                np.array([]).reshape(0, 0),
-            ),
-            "surface_wind_speed": (
-                ["lead_time", "valid_time"],
-                np.array([]).reshape(0, 0),
-            ),
-            "latitude": (["lead_time", "valid_time"], np.array([]).reshape(0, 0)),
-            "longitude": (["lead_time", "valid_time"], np.array([]).reshape(0, 0)),
-        },
-        coords={
-            "lead_time": [],
-            "valid_time": [],
-        },
-    )
