@@ -284,17 +284,15 @@ def find_landfalls(
     is_forecast = "lead_time" in track_data.dims and "valid_time" in track_data.dims
 
     if is_forecast:
-        # Convert to init_time indexing
-        temp_ds = xr.Dataset({"track_data": track_data})
-        temp_ds = utils.convert_valid_time_to_init_time(temp_ds)
+        temp_da = utils.convert_valid_time_to_init_time(track_data)
         results = []
 
-        for init_time in temp_ds.init_time:
+        for init_time in temp_da.init_time:
             init_time_val = (
                 init_time.values if hasattr(init_time, "values") else init_time
             )
 
-            single_track = temp_ds["track_data"].sel(init_time=init_time)
+            single_track = temp_da.sel(init_time=init_time)
 
             da = _process_single_track_landfall(
                 single_track,
@@ -332,13 +330,6 @@ def find_next_landfall_for_init_time(
         DataArray with next landfall for each init_time, or None if
         no future landfalls exist
     """
-    # Convert forecast to have init_time if needed
-    if "init_time" not in forecast_data.coords:
-        # Wrap in Dataset, convert, then extract
-        temp_ds = xr.Dataset({"data": forecast_data})
-        temp_ds = utils.convert_valid_time_to_init_time(temp_ds)
-        forecast_data = temp_ds["data"]
-
     # Vectorized search for next landfall for each init_time
     target_times = target_landfalls.coords["valid_time"].values
     init_times = forecast_data.init_time.values
@@ -497,6 +488,10 @@ def _is_true_landfall(
     land_geom: shapely.geometry.Polygon,
 ) -> bool:
     """Detect true landfall (ocean to land movement).
+
+    This function is a way to detect if a track crosses land. There are a few scenarios,
+    being ocean to land, ocean to ocean, and land to ocean. Ocean to ocean can have a
+    landfall if there is land between the two points.
 
     Args:
         lon1, lat1: Starting point coordinates
