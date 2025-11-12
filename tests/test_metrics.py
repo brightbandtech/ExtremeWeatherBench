@@ -595,6 +595,389 @@ class TestDurationME:
             assert isinstance(metric, metrics.DurationME)
 
 
+class TestThresholdMetric:
+    """Tests for the ThresholdMetric parent class."""
+
+    def test_instantiation(self):
+        """Test that ThresholdMetric can be instantiated via subclass."""
+        metric = metrics.CSI()
+        assert isinstance(metric, metrics.ThresholdMetric)
+        assert isinstance(metric, metrics.BaseMetric)
+
+    def test_threshold_parameters(self):
+        """Test that threshold parameters are set correctly."""
+        metric = metrics.CSI(
+            forecast_threshold=0.7, target_threshold=0.3, preserve_dims="time"
+        )
+        assert metric.forecast_threshold == 0.7
+        assert metric.target_threshold == 0.3
+        assert metric.preserve_dims == "time"
+
+    def test_callable_interface(self):
+        """Test that ThresholdMetric instances are callable."""
+        metric = metrics.CSI(forecast_threshold=0.6, target_threshold=0.4)
+
+        # Create simple binary-like test data
+        forecast = xr.DataArray(
+            data=[0.8, 0.3, 0.7, 0.2],
+            dims=["lead_time"],
+            coords={"lead_time": [0, 1, 2, 3]},
+        )
+        target = xr.DataArray(
+            data=[0.9, 0.1, 0.8, 0.1],
+            dims=["lead_time"],
+            coords={"lead_time": [0, 1, 2, 3]},
+        )
+
+        # Should be callable
+        result = metric(forecast, target)
+        assert result is not None
+        assert isinstance(result, xr.DataArray)
+
+    def test_transformed_contingency_manager_method(self):
+        """Test the transformed_contingency_manager method."""
+        metric = metrics.CSI()
+
+        # Create test data
+        forecast = xr.DataArray(
+            data=[0.8, 0.3, 0.7, 0.2],
+            dims=["lead_time"],
+            coords={"lead_time": [0, 1, 2, 3]},
+        )
+        target = xr.DataArray(
+            data=[0.9, 0.1, 0.8, 0.1],
+            dims=["lead_time"],
+            coords={"lead_time": [0, 1, 2, 3]},
+        )
+
+        # Call the method directly
+        manager = metric.transformed_contingency_manager(
+            forecast=forecast,
+            target=target,
+            forecast_threshold=0.5,
+            target_threshold=0.5,
+            preserve_dims="lead_time",
+        )
+
+        # Should return a BasicContingencyManager
+        assert manager is not None
+        assert hasattr(manager, "critical_success_index")
+        assert hasattr(manager, "false_alarm_ratio")
+
+    def test_composite_with_metric_classes(self):
+        """Test ThresholdMetric as composite with metric classes."""
+        # Create composite metric
+        composite = metrics.ThresholdMetric(
+            metrics=[metrics.CSI, metrics.FAR, metrics.Accuracy],
+            forecast_threshold=0.6,
+            target_threshold=0.4,
+        )
+
+        # Create test data
+        forecast = xr.DataArray(
+            data=[0.8, 0.3, 0.7, 0.2],
+            dims=["lead_time"],
+            coords={"lead_time": [0, 1, 2, 3]},
+        )
+        target = xr.DataArray(
+            data=[0.9, 0.1, 0.8, 0.1],
+            dims=["lead_time"],
+            coords={"lead_time": [0, 1, 2, 3]},
+        )
+
+        # Compute all metrics
+        results = composite.compute_metric(forecast, target)
+
+        # Should return dictionary with all results
+        assert isinstance(results, dict)
+        assert "critical_success_index" in results
+        assert "false_alarm_ratio" in results
+        assert "accuracy" in results
+
+        # All results should be DataArrays
+        assert all(isinstance(v, xr.DataArray) for v in results.values())
+
+    def test_composite_empty_raises_error(self):
+        """Test that composite without metrics raises error."""
+        composite = metrics.ThresholdMetric()
+
+        forecast = xr.DataArray(
+            data=[0.8, 0.3, 0.7, 0.2],
+            dims=["lead_time"],
+            coords={"lead_time": [0, 1, 2, 3]},
+        )
+        target = xr.DataArray(
+            data=[0.9, 0.1, 0.8, 0.1],
+            dims=["lead_time"],
+            coords={"lead_time": [0, 1, 2, 3]},
+        )
+
+        # Should raise NotImplementedError
+        with pytest.raises(NotImplementedError):
+            composite.compute_metric(forecast, target)
+
+    def test_composite_with_all_threshold_metrics(self):
+        """Test composite with all threshold metrics."""
+        composite = metrics.ThresholdMetric(
+            metrics=[
+                metrics.CSI,
+                metrics.FAR,
+                metrics.TP,
+                metrics.FP,
+                metrics.TN,
+                metrics.FN,
+                metrics.Accuracy,
+            ],
+            forecast_threshold=0.5,
+            target_threshold=0.5,
+        )
+
+        forecast = xr.DataArray(
+            data=[0.8, 0.3, 0.7, 0.2, 0.6, 0.1],
+            dims=["lead_time"],
+            coords={"lead_time": [0, 1, 2, 3, 4, 5]},
+        )
+        target = xr.DataArray(
+            data=[0.9, 0.1, 0.8, 0.6, 0.7, 0.2],
+            dims=["lead_time"],
+            coords={"lead_time": [0, 1, 2, 3, 4, 5]},
+        )
+
+        results = composite.compute_metric(forecast, target)
+
+        # Should have all 7 metrics
+        assert len(results) == 7
+        assert "critical_success_index" in results
+        assert "false_alarm_ratio" in results
+        assert "true_positive" in results
+        assert "false_positive" in results
+        assert "true_negative" in results
+        assert "false_negative" in results
+        assert "accuracy" in results
+
+    def test_composite_callable_interface(self):
+        """Test that composite metrics work with callable interface."""
+        composite = metrics.ThresholdMetric(
+            metrics=[metrics.CSI, metrics.FAR],
+            forecast_threshold=0.7,
+            target_threshold=0.3,
+        )
+
+        forecast = xr.DataArray(
+            data=[0.8, 0.3, 0.7, 0.2],
+            dims=["lead_time"],
+            coords={"lead_time": [0, 1, 2, 3]},
+        )
+        target = xr.DataArray(
+            data=[0.9, 0.1, 0.8, 0.1],
+            dims=["lead_time"],
+            coords={"lead_time": [0, 1, 2, 3]},
+        )
+
+        # Should work with __call__ interface
+        results = composite(forecast, target)
+        assert isinstance(results, dict)
+        assert len(results) == 2
+
+
+class TestCSI:
+    """Tests for the CSI (Critical Success Index) metric."""
+
+    def test_instantiation(self):
+        """Test that CSI can be instantiated."""
+        metric = metrics.CSI()
+        assert isinstance(metric, metrics.ThresholdMetric)
+        assert metric.name == "critical_success_index"
+
+    def test_compute_metric(self):
+        """Test CSI computation with simple data."""
+        metric = metrics.CSI(forecast_threshold=0.5, target_threshold=0.5)
+
+        # Test data: TP=2, FP=1, FN=1, TN=0
+        # CSI = TP/(TP+FP+FN) = 2/4 = 0.5
+        forecast = xr.DataArray(
+            data=[0.8, 0.3, 0.7, 0.2],
+            dims=["lead_time"],
+            coords={"lead_time": [0, 1, 2, 3]},
+        )
+        target = xr.DataArray(
+            data=[0.9, 0.1, 0.8, 0.6],
+            dims=["lead_time"],
+            coords={"lead_time": [0, 1, 2, 3]},
+        )
+
+        result = metric._compute_metric(forecast, target)
+        assert isinstance(result, xr.DataArray)
+
+
+class TestFAR:
+    """Tests for the FAR (False Alarm Ratio) metric."""
+
+    def test_instantiation(self):
+        """Test that FAR can be instantiated."""
+        metric = metrics.FAR()
+        assert isinstance(metric, metrics.ThresholdMetric)
+        assert metric.name == "false_alarm_ratio"
+
+    def test_compute_metric(self):
+        """Test FAR computation with simple data."""
+        metric = metrics.FAR(forecast_threshold=0.5, target_threshold=0.5)
+
+        forecast = xr.DataArray(
+            data=[0.8, 0.3, 0.7, 0.2],
+            dims=["lead_time"],
+            coords={"lead_time": [0, 1, 2, 3]},
+        )
+        target = xr.DataArray(
+            data=[0.9, 0.1, 0.8, 0.6],
+            dims=["lead_time"],
+            coords={"lead_time": [0, 1, 2, 3]},
+        )
+
+        result = metric._compute_metric(forecast, target)
+        assert isinstance(result, xr.DataArray)
+
+
+class TestTP:
+    """Tests for the TP (True Positive) metric."""
+
+    def test_instantiation(self):
+        """Test that TP can be instantiated."""
+        metric = metrics.TP()
+        assert isinstance(metric, metrics.ThresholdMetric)
+        assert metric.name == "true_positive"
+
+    def test_compute_metric(self):
+        """Test TP computation."""
+        metric = metrics.TP(forecast_threshold=0.5, target_threshold=0.5)
+
+        forecast = xr.DataArray(
+            data=[0.8, 0.3, 0.7, 0.2],
+            dims=["lead_time"],
+            coords={"lead_time": [0, 1, 2, 3]},
+        )
+        target = xr.DataArray(
+            data=[0.9, 0.1, 0.8, 0.6],
+            dims=["lead_time"],
+            coords={"lead_time": [0, 1, 2, 3]},
+        )
+
+        result = metric._compute_metric(forecast, target)
+        assert isinstance(result, xr.DataArray)
+
+
+class TestFP:
+    """Tests for the FP (False Positive) metric."""
+
+    def test_instantiation(self):
+        """Test that FP can be instantiated."""
+        metric = metrics.FP()
+        assert isinstance(metric, metrics.ThresholdMetric)
+        assert metric.name == "false_positive"
+
+    def test_compute_metric(self):
+        """Test FP computation."""
+        metric = metrics.FP(forecast_threshold=0.5, target_threshold=0.5)
+
+        forecast = xr.DataArray(
+            data=[0.8, 0.3, 0.7, 0.2],
+            dims=["lead_time"],
+            coords={"lead_time": [0, 1, 2, 3]},
+        )
+        target = xr.DataArray(
+            data=[0.9, 0.1, 0.8, 0.6],
+            dims=["lead_time"],
+            coords={"lead_time": [0, 1, 2, 3]},
+        )
+
+        result = metric._compute_metric(forecast, target)
+        assert isinstance(result, xr.DataArray)
+
+
+class TestTN:
+    """Tests for the TN (True Negative) metric."""
+
+    def test_instantiation(self):
+        """Test that TN can be instantiated."""
+        metric = metrics.TN()
+        assert isinstance(metric, metrics.ThresholdMetric)
+        assert metric.name == "true_negative"
+
+    def test_compute_metric(self):
+        """Test TN computation."""
+        metric = metrics.TN(forecast_threshold=0.5, target_threshold=0.5)
+
+        forecast = xr.DataArray(
+            data=[0.8, 0.3, 0.7, 0.2],
+            dims=["lead_time"],
+            coords={"lead_time": [0, 1, 2, 3]},
+        )
+        target = xr.DataArray(
+            data=[0.9, 0.1, 0.8, 0.6],
+            dims=["lead_time"],
+            coords={"lead_time": [0, 1, 2, 3]},
+        )
+
+        result = metric._compute_metric(forecast, target)
+        assert isinstance(result, xr.DataArray)
+
+
+class TestFN:
+    """Tests for the FN (False Negative) metric."""
+
+    def test_instantiation(self):
+        """Test that FN can be instantiated."""
+        metric = metrics.FN()
+        assert isinstance(metric, metrics.ThresholdMetric)
+        assert metric.name == "false_negative"
+
+    def test_compute_metric(self):
+        """Test FN computation."""
+        metric = metrics.FN(forecast_threshold=0.5, target_threshold=0.5)
+
+        forecast = xr.DataArray(
+            data=[0.8, 0.3, 0.7, 0.2],
+            dims=["lead_time"],
+            coords={"lead_time": [0, 1, 2, 3]},
+        )
+        target = xr.DataArray(
+            data=[0.9, 0.1, 0.8, 0.6],
+            dims=["lead_time"],
+            coords={"lead_time": [0, 1, 2, 3]},
+        )
+
+        result = metric._compute_metric(forecast, target)
+        assert isinstance(result, xr.DataArray)
+
+
+class TestAccuracy:
+    """Tests for the Accuracy metric."""
+
+    def test_instantiation(self):
+        """Test that Accuracy can be instantiated."""
+        metric = metrics.Accuracy()
+        assert isinstance(metric, metrics.ThresholdMetric)
+        assert metric.name == "accuracy"
+
+    def test_compute_metric(self):
+        """Test Accuracy computation."""
+        metric = metrics.Accuracy(forecast_threshold=0.5, target_threshold=0.5)
+
+        forecast = xr.DataArray(
+            data=[0.8, 0.3, 0.7, 0.2],
+            dims=["lead_time"],
+            coords={"lead_time": [0, 1, 2, 3]},
+        )
+        target = xr.DataArray(
+            data=[0.9, 0.1, 0.8, 0.6],
+            dims=["lead_time"],
+            coords={"lead_time": [0, 1, 2, 3]},
+        )
+
+        result = metric._compute_metric(forecast, target)
+        assert isinstance(result, xr.DataArray)
+
+
 class TestIncompleteMetrics:
     """Tests for metrics that are marked as TODO/incomplete
     implementations."""
@@ -606,8 +989,6 @@ class TestIncompleteMetrics:
             metrics.LandfallTimeME,
             metrics.LandfallIntensityMAE,
             metrics.SpatialDisplacement,
-            metrics.FAR,
-            metrics.CSI,
             metrics.LeadTimeDetection,
             metrics.RegionalHitsMisses,
             metrics.HitsMisses,

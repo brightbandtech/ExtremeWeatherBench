@@ -11,61 +11,6 @@ from extremeweatherbench import derived, utils
 logger = logging.getLogger(__name__)
 
 
-# Global cache for transformed contingency managers
-_GLOBAL_CONTINGENCY_CACHE = utils.ThreadSafeDict()  # type: ignore
-
-
-def get_cached_transformed_manager(
-    forecast: xr.DataArray,
-    target: xr.DataArray,
-    forecast_threshold: float = 0.5,
-    target_threshold: float = 0.5,
-    preserve_dims: str = "lead_time",
-) -> scores.categorical.BasicContingencyManager:
-    """Get cached transformed contingency manager, creating if needed.
-
-    This function provides a global cache that can be used by any metric
-    with the same thresholds and data, regardless of how the metrics are created.
-    """
-    # Create cache key from data content hash and parameters
-    forecast_hash = hash(forecast.data.tobytes())
-    target_hash = hash(target.data.tobytes())
-
-    cache_key = (
-        forecast_hash,
-        target_hash,
-        forecast_threshold,
-        target_threshold,
-        preserve_dims,
-    )
-
-    # Return cached result if available
-    if cache_key in _GLOBAL_CONTINGENCY_CACHE:
-        logger.info(f"Cache found for {cache_key}")
-        return _GLOBAL_CONTINGENCY_CACHE[cache_key]
-
-    # Apply thresholds to binarize the data
-    binary_forecast = (forecast >= forecast_threshold).astype(float)
-    binary_target = (target >= target_threshold).astype(float)
-
-    # Create and transform contingency manager
-    binary_contingency_manager = scores.categorical.BinaryContingencyManager(
-        binary_forecast, binary_target
-    )
-    transformed = binary_contingency_manager.transform(preserve_dims=preserve_dims)
-
-    # Cache the result
-    _GLOBAL_CONTINGENCY_CACHE[cache_key] = transformed
-
-    return transformed
-
-
-def clear_contingency_cache():
-    """Clear the global contingency manager cache."""
-    global _GLOBAL_CONTINGENCY_CACHE
-    _GLOBAL_CONTINGENCY_CACHE.clear()
-
-
 class ComputeDocstringMetaclass(abc.ABCMeta):
     """A metaclass that maps the docstring from self._compute_metric() to
     self.compute_metric().
@@ -189,20 +134,54 @@ class ThresholdMetric(BaseMetric):
 
     This class provides common functionality for metrics that require
     forecast and target thresholds for binarization.
+
+    Can be used in two ways:
+    1. As a base class for specific threshold metrics (CSI, FAR, etc.)
+    2. As a composite metric to compute multiple threshold metrics
+       efficiently by reusing the transformed contingency manager.
+
+    Example of composite usage:
+        composite = ThresholdMetric(
+            metrics=[CSI, FAR, Accuracy],
+            forecast_threshold=0.7,
+            target_threshold=0.5
+        )
+        results = composite.compute_metric(forecast, target)
+        # Returns: {"critical_success_index": ...,
+        #           "false_alarm_ratio": ..., "accuracy": ...}
     """
 
     def __init__(
         self,
-        name: str,
+        name: str = "threshold_metrics",
         preserve_dims: str = "lead_time",
         forecast_threshold: float = 0.5,
         target_threshold: float = 0.5,
+        metrics: Optional[list[Type["ThresholdMetric"]]] = None,
         **kwargs,
     ):
         super().__init__(name, **kwargs)
         self.forecast_threshold = forecast_threshold
         self.target_threshold = target_threshold
         self.preserve_dims = preserve_dims
+        self.metrics = metrics or []
+
+        # If metrics provided, instantiate them
+        if self.metrics:
+            self._metric_instances = [
+                (
+                    metric_cls(
+                        forecast_threshold=forecast_threshold,
+                        target_threshold=target_threshold,
+                        preserve_dims=preserve_dims,
+                    )
+                    if isinstance(metric_cls, type)
+                    else metric_cls
+                )
+                for metric_cls in self.metrics
+            ]
+        else:
+            self._metric_instances = []
 
     def __call__(self, forecast: xr.DataArray, target: xr.DataArray, **kwargs) -> Any:
         """Make instances callable using their configured thresholds."""
@@ -213,6 +192,102 @@ class ThresholdMetric(BaseMetric):
 
         # Call the instance method with the configured parameters
         return self.compute_metric(forecast, target, **kwargs)
+
+    def transformed_contingency_manager(
+        self,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
+        forecast_threshold: float,
+        target_threshold: float,
+        preserve_dims: str,
+    ) -> scores.categorical.BasicContingencyManager:
+        """Create and transform a contingency manager.
+
+        Args:
+            forecast: The forecast DataArray.
+            target: The target DataArray.
+            forecast_threshold: Threshold for binarizing forecast.
+            target_threshold: Threshold for binarizing target.
+            preserve_dims: Dimension(s) to preserve during transform.
+
+        Returns:
+            Transformed contingency manager.
+        """
+        # Apply thresholds to binarize the data
+        binary_forecast = (forecast >= forecast_threshold).astype(float)
+        binary_target = (target >= target_threshold).astype(float)
+
+        # Create and transform contingency manager
+        binary_contingency_manager = scores.categorical.BinaryContingencyManager(
+            binary_forecast, binary_target
+        )
+        transformed = binary_contingency_manager.transform(preserve_dims=preserve_dims)
+
+        return transformed
+
+    def _compute_metric(
+        self,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
+        **kwargs: Any,
+    ) -> Any:
+        """Compute metrics using ThresholdMetric as composite.
+
+        If no metrics are specified, this acts as abstract base.
+        If metrics are specified, computes all efficiently by
+        sharing the transformed contingency manager.
+
+        Args:
+            forecast: The forecast DataArray.
+            target: The target DataArray.
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            Dictionary of metric results if used as composite,
+            otherwise raises NotImplementedError.
+        """
+        if not self._metric_instances:
+            raise NotImplementedError(
+                "ThresholdMetric._compute_metric must be implemented "
+                "by subclasses or initialized with metrics list."
+            )
+
+        # Get threshold parameters
+        forecast_threshold = kwargs.get("forecast_threshold", self.forecast_threshold)
+        target_threshold = kwargs.get("target_threshold", self.target_threshold)
+        preserve_dims = kwargs.get("preserve_dims", self.preserve_dims)
+
+        # Compute transformed manager once
+        transformed = self.transformed_contingency_manager(
+            forecast=forecast,
+            target=target,
+            forecast_threshold=forecast_threshold,
+            target_threshold=target_threshold,
+            preserve_dims=preserve_dims,
+        )
+
+        # Compute all metrics using shared manager
+        results = {}
+        # Remove threshold params from kwargs to avoid duplicates
+        filtered_kwargs = {
+            k: v
+            for k, v in kwargs.items()
+            if k not in ["forecast_threshold", "target_threshold", "preserve_dims"]
+        }
+
+        for metric_instance in self._metric_instances:
+            result = metric_instance._compute_metric(
+                forecast=forecast,
+                target=target,
+                transformed_manager=transformed,
+                forecast_threshold=forecast_threshold,
+                target_threshold=target_threshold,
+                preserve_dims=preserve_dims,
+                **filtered_kwargs,
+            )
+            results[metric_instance.name] = result
+
+        return results
 
 
 class CSI(ThresholdMetric):
@@ -231,13 +306,16 @@ class CSI(ThresholdMetric):
         target_threshold = kwargs.get("target_threshold", 0.5)
         preserve_dims = kwargs.get("preserve_dims", "lead_time")
 
-        transformed = get_cached_transformed_manager(
-            forecast=forecast,
-            target=target,
-            forecast_threshold=forecast_threshold,
-            target_threshold=target_threshold,
-            preserve_dims=preserve_dims,
-        )
+        # Use pre-computed manager if provided, else compute
+        transformed = kwargs.get("transformed_manager")
+        if transformed is None:
+            transformed = self.transformed_contingency_manager(
+                forecast=forecast,
+                target=target,
+                forecast_threshold=forecast_threshold,
+                target_threshold=target_threshold,
+                preserve_dims=preserve_dims,
+            )
         return transformed.critical_success_index()
 
 
@@ -257,13 +335,16 @@ class FAR(ThresholdMetric):
         target_threshold = kwargs.get("target_threshold", 0.5)
         preserve_dims = kwargs.get("preserve_dims", "lead_time")
 
-        transformed = get_cached_transformed_manager(
-            forecast=forecast,
-            target=target,
-            forecast_threshold=forecast_threshold,
-            target_threshold=target_threshold,
-            preserve_dims=preserve_dims,
-        )
+        # Use pre-computed manager if provided, else compute
+        transformed = kwargs.get("transformed_manager")
+        if transformed is None:
+            transformed = self.transformed_contingency_manager(
+                forecast=forecast,
+                target=target,
+                forecast_threshold=forecast_threshold,
+                target_threshold=target_threshold,
+                preserve_dims=preserve_dims,
+            )
         return transformed.false_alarm_ratio()
 
 
@@ -283,13 +364,16 @@ class TP(ThresholdMetric):
         target_threshold = kwargs.get("target_threshold", 0.5)
         preserve_dims = kwargs.get("preserve_dims", "lead_time")
 
-        transformed = get_cached_transformed_manager(
-            forecast=forecast,
-            target=target,
-            forecast_threshold=forecast_threshold,
-            target_threshold=target_threshold,
-            preserve_dims=preserve_dims,
-        )
+        # Use pre-computed manager if provided, else compute
+        transformed = kwargs.get("transformed_manager")
+        if transformed is None:
+            transformed = self.transformed_contingency_manager(
+                forecast=forecast,
+                target=target,
+                forecast_threshold=forecast_threshold,
+                target_threshold=target_threshold,
+                preserve_dims=preserve_dims,
+            )
         counts = transformed.get_counts()
         return counts["tp_count"] / counts["total_count"]
 
@@ -310,13 +394,16 @@ class FP(ThresholdMetric):
         target_threshold = kwargs.get("target_threshold", 0.5)
         preserve_dims = kwargs.get("preserve_dims", "lead_time")
 
-        transformed = get_cached_transformed_manager(
-            forecast=forecast,
-            target=target,
-            forecast_threshold=forecast_threshold,
-            target_threshold=target_threshold,
-            preserve_dims=preserve_dims,
-        )
+        # Use pre-computed manager if provided, else compute
+        transformed = kwargs.get("transformed_manager")
+        if transformed is None:
+            transformed = self.transformed_contingency_manager(
+                forecast=forecast,
+                target=target,
+                forecast_threshold=forecast_threshold,
+                target_threshold=target_threshold,
+                preserve_dims=preserve_dims,
+            )
         counts = transformed.get_counts()
         return counts["fp_count"] / counts["total_count"]
 
@@ -337,13 +424,16 @@ class TN(ThresholdMetric):
         target_threshold = kwargs.get("target_threshold", 0.5)
         preserve_dims = kwargs.get("preserve_dims", "lead_time")
 
-        transformed = get_cached_transformed_manager(
-            forecast=forecast,
-            target=target,
-            forecast_threshold=forecast_threshold,
-            target_threshold=target_threshold,
-            preserve_dims=preserve_dims,
-        )
+        # Use pre-computed manager if provided, else compute
+        transformed = kwargs.get("transformed_manager")
+        if transformed is None:
+            transformed = self.transformed_contingency_manager(
+                forecast=forecast,
+                target=target,
+                forecast_threshold=forecast_threshold,
+                target_threshold=target_threshold,
+                preserve_dims=preserve_dims,
+            )
         counts = transformed.get_counts()
         return counts["tn_count"] / counts["total_count"]
 
@@ -364,13 +454,16 @@ class FN(ThresholdMetric):
         target_threshold = kwargs.get("target_threshold", 0.5)
         preserve_dims = kwargs.get("preserve_dims", "lead_time")
 
-        transformed = get_cached_transformed_manager(
-            forecast=forecast,
-            target=target,
-            forecast_threshold=forecast_threshold,
-            target_threshold=target_threshold,
-            preserve_dims=preserve_dims,
-        )
+        # Use pre-computed manager if provided, else compute
+        transformed = kwargs.get("transformed_manager")
+        if transformed is None:
+            transformed = self.transformed_contingency_manager(
+                forecast=forecast,
+                target=target,
+                forecast_threshold=forecast_threshold,
+                target_threshold=target_threshold,
+                preserve_dims=preserve_dims,
+            )
         counts = transformed.get_counts()
         return counts["fn_count"] / counts["total_count"]
 
@@ -391,64 +484,17 @@ class Accuracy(ThresholdMetric):
         target_threshold = kwargs.get("target_threshold", 0.5)
         preserve_dims = kwargs.get("preserve_dims", "lead_time")
 
-        transformed = get_cached_transformed_manager(
-            forecast=forecast,
-            target=target,
-            forecast_threshold=forecast_threshold,
-            target_threshold=target_threshold,
-            preserve_dims=preserve_dims,
-        )
+        # Use pre-computed manager if provided, else compute
+        transformed = kwargs.get("transformed_manager")
+        if transformed is None:
+            transformed = self.transformed_contingency_manager(
+                forecast=forecast,
+                target=target,
+                forecast_threshold=forecast_threshold,
+                target_threshold=target_threshold,
+                preserve_dims=preserve_dims,
+            )
         return transformed.accuracy()
-
-
-def create_threshold_metrics(
-    forecast_threshold: float = 0.5,
-    target_threshold: float = 0.5,
-    preserve_dims: str = "lead_time",
-    metrics: Optional[list[str]] = None,
-):
-    """Create multiple threshold-based metrics with the specified thresholds.
-
-    Args:
-        forecast_threshold: Threshold for binarizing forecast data
-        target_threshold: Threshold for binarizing target data
-        preserve_dims: Dimensions to preserve during contingency table computation
-        metrics: List of metric names to create (e.g., ['CSI', 'FAR', 'TP'])
-
-    Returns:
-        A list of metric objects with the specified thresholds
-    """
-    if metrics is None:
-        metrics = ["CSI", "FAR", "Accuracy", "TP", "FP", "TN", "FN"]
-
-    # Mapping of metric names to their classes (all threshold-based metrics)
-    metric_classes: dict[str, Type[ThresholdMetric]] = {
-        "CSI": CSI,
-        "FAR": FAR,
-        "Accuracy": Accuracy,
-        "TP": TP,
-        "FP": FP,
-        "TN": TN,
-        "FN": FN,
-    }
-
-    result_metrics = []
-
-    # Create metrics by instantiating their classes
-    for metric_name in metrics:
-        if metric_name not in metric_classes:
-            raise ValueError(f"Unknown metric: {metric_name}")
-
-        metric_class = metric_classes[metric_name]
-        metric = metric_class(
-            name=metric_name,
-            forecast_threshold=forecast_threshold,
-            target_threshold=target_threshold,
-            preserve_dims=preserve_dims,
-        )
-        result_metrics.append(metric)
-
-    return result_metrics
 
 
 class MAE(BaseMetric):
