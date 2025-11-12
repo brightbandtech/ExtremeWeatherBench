@@ -5,6 +5,7 @@ from typing import List, Optional, Sequence, Union
 import xarray as xr
 
 import extremeweatherbench.events.severe_convection as sc
+from extremeweatherbench import calc
 
 logger = logging.getLogger(__name__)
 
@@ -101,10 +102,10 @@ class CravenBrooksSignificantSevere(DerivedVariable):
             if "relative_humidity" in data.data_vars:
                 data["dewpoint_temperature"] = data[
                     "relative_humidity"
-                ] * sc.saturation_vapor_pressure(data["air_temperature"])
+                ] * calc.saturation_vapor_pressure(data["air_temperature"])
             # or using specific humidity if present
             elif "specific_humidity" in data.data_vars:
-                data["dewpoint_temperature"] = sc.dewpoint_from_specific_humidity(
+                data["dewpoint_temperature"] = calc.dewpoint_from_specific_humidity(
                     data["specific_humidity"], data["level"]
                 )
             # and if neither are present, raise an error
