@@ -14,10 +14,10 @@ from tqdm.auto import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 from tqdm.dask import TqdmCallback
 
-from extremeweatherbench import cases, derived, inputs, sources, utils
+from extremeweatherbench import cases, derived, inputs, metrics, sources, utils
 
 if TYPE_CHECKING:
-    from extremeweatherbench import metrics, regions
+    from extremeweatherbench import regions
 
 logger = logging.getLogger(__name__)
 
@@ -258,13 +258,13 @@ def compute_case_operator(
     cache_dir: Optional[pathlib.Path] = None,
     **kwargs,
 ) -> pd.DataFrame:
-    """Compute the results of a case operator.
+    """Compute the resulting evaluation of a case operator.
 
     This method will compute the results of a case operator. It validates
     that all metrics are properly instantiated, builds the target and forecast
     datasets, aligns them, and computes each metric with appropriate variable
     pairs. Metrics with their own forecast_variable and target_variable use
-    only those variables; metrics without use all InputBase variable pairs.
+    only those variables; metrics without will use all InputBase variable pairs.
 
     Args:
         case_operator: The case operator to compute the results of.
@@ -272,25 +272,20 @@ def compute_case_operator(
         kwargs: Keyword arguments to pass to the metric computations.
 
     Returns:
-        A concatenated dataframe of the results of the case operator.
+        A pd.DataFrame of results from the case operator.
 
     Raises:
-        TypeError: If any metric is not properly instantiated.
+        TypeError: If any metric is not properly instantiated (i.e. isn't an instance
+        or child class of BaseMetric).
     """
-    logger.info(
-        "Computing case operator for case %s...",
-        case_operator.case_metadata.case_id_number,
-    )
-
     # Validate that all metrics are instantiated (not classes or callables)
     for i, metric in enumerate(case_operator.metric_list):
         if isinstance(metric, type):
-            metric = metric()
-            case_operator.metric_list[i] = metric
+            case_operator.metric_list[i] = metric()
             logger.warning(
                 "Metric %s instantiated with default parameters", metric.name
             )
-        if not hasattr(metric, "compute_metric"):
+        if not isinstance(case_operator.metric_list[i], metrics.BaseMetric):
             raise TypeError(f"Metric must be a BaseMetric instance, got {type(metric)}")
 
     forecast_ds, target_ds = _build_datasets(case_operator, **kwargs)
@@ -326,7 +321,9 @@ def compute_case_operator(
     explicitly_claimed_target_vars = set()
 
     for metric in case_operator.metric_list:
-        if metric.forecast_variable is not None and metric.target_variable is not None:
+        if (metric.forecast_variable is not None) and (
+            metric.target_variable is not None
+        ):
             # Expand and collect claimed variables
             explicitly_claimed_forecast_vars.update(
                 _maybe_expand_derived_variable_to_output_variables(
@@ -339,7 +336,6 @@ def compute_case_operator(
                 )
             )
 
-    # TODO: determine if derived variables need to be pushed here or at pre-compute
     for metric in case_operator.metric_list:
         # Determine which variable pairs to evaluate for this metric
         if metric.forecast_variable is not None and metric.target_variable is not None:
@@ -350,6 +346,7 @@ def compute_case_operator(
             target_vars = _maybe_expand_derived_variable_to_output_variables(
                 metric.target_variable
             )
+
             # Create pairs from expanded variables
             variable_pairs = list(zip(forecast_vars, target_vars))
         else:
