@@ -1,6 +1,6 @@
 import logging
 
-from extremeweatherbench import cases, derived, evaluate, inputs, metrics, regions
+from extremeweatherbench import cases, derived, evaluate, inputs, metrics
 
 logging.getLogger("urllib3.connectionpool").setLevel(logging.CRITICAL)
 logging.getLogger("botocore.httpchecksum").setLevel(logging.CRITICAL)
@@ -8,15 +8,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 case_yaml = cases.load_ewb_events_yaml_into_case_collection()
-case_yaml.select_cases("event_type", "severe_convection", inplace=True)
 case_yaml.select_cases("case_id_number", 305, inplace=True)
-
-case_yaml.location = regions.BoundingBoxRegion(
-    latitude_min=30.0,
-    latitude_max=42.0,
-    longitude_min=265.0,
-    longitude_max=290.0,
-)
 
 pph_target = inputs.PPH(
     variables=["practically_perfect_hindcast"],
@@ -25,19 +17,8 @@ pph_target = inputs.PPH(
 hres_forecast = inputs.ZarrForecast(
     name="hres_forecast",
     source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
-    variables=[derived.CravenBrooksSignificantSevere],
-    variable_mapping={
-        "temperature": "air_temperature",
-        "dewpoint": "dewpoint_temperature",
-        "u_component_of_wind": "eastward_wind",
-        "v_component_of_wind": "northward_wind",
-        "10m_u_component_of_wind": "surface_eastward_wind",
-        "10m_v_component_of_wind": "surface_northward_wind",
-        "time": "init_time",
-        "prediction_timedelta": "lead_time",
-        "mean_sea_level_pressure": "air_pressure_at_mean_sea_level",
-        "specific_humidity": "specific_humidity",
-    },
+    variables=[derived.CravenBrooksSignificantSevere(layer_depth=100)],
+    variable_mapping=inputs.HRES_metadata_variable_mapping,
     storage_options={"remote_options": {"anon": True}},
 )
 
