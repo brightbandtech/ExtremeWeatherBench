@@ -1381,6 +1381,7 @@ class TestReduceXarrayMethod:
                 "longitude": [100.0, 110.0],
             },
         )
+
         result = utils.reduce_dataarray(da, np.sum, ["latitude", "longitude"])
         assert isinstance(result, xr.DataArray)
         assert not isinstance(result.data, sparse.COO)
