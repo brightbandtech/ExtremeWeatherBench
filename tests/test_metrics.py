@@ -690,8 +690,8 @@ class TestLandfallMetrics:
         # Mock expensive find_landfalls calls
         with patch.object(calc, "find_landfalls") as mock_find:
 
-            def mock_find_func(track_data, return_all=False):
-                if return_all:
+            def mock_find_func(track_data, return_all_landfalls=False):
+                if return_all_landfalls:
                     return xr.DataArray(
                         [40.0],
                         dims=["landfall"],
@@ -794,7 +794,7 @@ class TestLandfallMetrics:
 
         with patch.object(calc, "find_landfalls") as mock_find:
 
-            def mock_find_func(track_data, return_all=False):
+            def mock_find_func(track_data, return_all_landfalls=False):
                 if "lead_time" not in track_data.dims:
                     return mock_target_landfall
                 else:
@@ -885,7 +885,7 @@ class TestLandfallMetrics:
 
         with patch.object(calc, "find_landfalls") as mock_find:
 
-            def mock_find_func(track_data, return_all=False):
+            def mock_find_func(track_data, return_all_landfalls=False):
                 if "lead_time" not in track_data.dims:
                     return mock_target_landfall
                 else:
@@ -985,7 +985,7 @@ class TestLandfallMetrics:
 
         with patch.object(calc, "find_landfalls") as mock_find:
 
-            def mock_find_func(track_data, return_all=False):
+            def mock_find_func(track_data, return_all_landfalls=False):
                 if "lead_time" not in track_data.dims:
                     return mock_target_landfall
                 else:
@@ -1008,13 +1008,17 @@ class TestLandfallMetrics:
     def test_landfall_next_approach_displacement(self):
         """Test LandfallDisplacement with 'next' approach uses correct helper."""
         # This test verifies that the "next" approach properly delegates to
-        # the shared helper method in LandfallMixin
+        # the shared helper method in LandfallMixin via the new pattern
         metric = metrics.LandfallDisplacement(approach="next")
         assert metric.approach == "next"
 
-        # Verify the static method exists and is callable
-        assert hasattr(metrics.LandfallDisplacement, "_compute_displacement_next")
-        assert callable(metrics.LandfallDisplacement._compute_displacement_next)
+        # Verify the new pattern methods exist
+        assert hasattr(metric, "_get_landfall_metric_function")
+        assert callable(metric._get_landfall_metric_function)
+
+        # Verify the metric calculation function exists
+        assert hasattr(metrics.LandfallDisplacement, "_calculate_distance")
+        assert callable(metrics.LandfallDisplacement._calculate_distance)
 
         # Verify it uses the shared matching helper
         assert hasattr(metrics.LandfallMixin, "_match_and_compute_next_landfalls")
