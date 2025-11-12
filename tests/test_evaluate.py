@@ -3359,26 +3359,39 @@ class TestMetricVariableHandling:
             assert metric2.compute_metric.call_count == 1
             assert isinstance(result, pd.DataFrame)
 
-    def test_compute_case_operator_rejects_uninstantiated_metrics(
-        self, sample_individual_case, mock_target_base, mock_forecast_base
+    def test_compute_case_operator_instantiates_uninstantiated_metrics(
+        self, sample_individual_case, mock_target_base, mock_forecast_base, caplog
     ):
-        """Test that uninstantiated metrics are rejected with clear error."""
-        # Create a metric CLASS (not instance)
-        metric_class = type("TestMetric", (metrics.BaseMetric,), {})
+        """Test that uninstantiated metrics are instantiated with warning."""
+
+        # Create a metric CLASS (not instance) with required methods
+        class TestMetric(metrics.BaseMetric):
+            def __init__(self):
+                super().__init__("TestMetric")
+
+            def _compute_metric(self, forecast, target, **kwargs):
+                return xr.DataArray([1.0])
 
         case_operator = cases.CaseOperator(
             case_metadata=sample_individual_case,
-            metric_list=[metric_class],  # Pass class, not instance
+            metric_list=[TestMetric],  # Pass class, not instance
             target=mock_target_base,
             forecast=mock_forecast_base,
         )
 
-        with pytest.raises(TypeError) as exc_info:
-            evaluate.compute_case_operator(case_operator)
+        with mock.patch(
+            "extremeweatherbench.derived.maybe_derive_variables"
+        ) as mock_derive:
+            mock_derive.side_effect = lambda ds, variables, **kwargs: ds
 
-        error_msg = str(exc_info.value)
-        assert "must be instantiated" in error_msg
-        assert "TestMetric" in error_msg
+            result = evaluate.compute_case_operator(case_operator)
+
+        # Check that warning was logged about instantiation
+        assert "instantiated with default parameters" in caplog.text
+        assert "TestMetric" in caplog.text
+
+        # Verify the function completed successfully
+        assert isinstance(result, pd.DataFrame)
 
     @mock.patch("extremeweatherbench.evaluate.run_pipeline")
     def test_build_datasets_augments_variables(

@@ -281,11 +281,12 @@ def compute_case_operator(
     )
 
     # Validate that all metrics are instantiated (not classes or callables)
-    for metric in case_operator.metric_list:
+    for i, metric in enumerate(case_operator.metric_list):
         if isinstance(metric, type):
-            raise TypeError(
-                f"Metric {metric.__name__} must be instantiated. "
-                f"Use {metric.__name__}() instead of {metric.__name__}."
+            metric = metric()
+            case_operator.metric_list[i] = metric
+            logger.warning(
+                "Metric %s instantiated with default parameters", metric.name
             )
         if not hasattr(metric, "compute_metric"):
             raise TypeError(f"Metric must be a BaseMetric instance, got {type(metric)}")
