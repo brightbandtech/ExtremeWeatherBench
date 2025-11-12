@@ -318,7 +318,9 @@ def compute_case_operator(
         "Datasets built for case %s.", case_operator.case_metadata.case_id_number
     )
     results = []
-    # TODO: determine if derived variables need to be pushed here or at pre-compute
+
+    # Loop through metrics; if variables aren't defined for the metric, use variables
+    # declared in the InputBase objects
     for metric in case_operator.metric_list:
         # Determine which variable pairs to evaluate for this metric
         if metric.forecast_variable is not None and metric.target_variable is not None:
