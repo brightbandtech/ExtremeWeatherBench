@@ -121,6 +121,8 @@ def mock_base_metric():
     """Create a mock BaseMetric object."""
     mock_metric = mock.Mock(spec=metrics.BaseMetric)
     mock_metric.name = "MockMetric"
+    mock_metric.forecast_variable = None
+    mock_metric.target_variable = None
     mock_metric.compute_metric.return_value = xr.DataArray(
         data=[1.0], dims=["lead_time"], coords={"lead_time": [0]}
     )
@@ -142,10 +144,15 @@ def sample_evaluation_object(mock_target_base, mock_forecast_base, mock_base_met
 def sample_case_operator(
     sample_individual_case, mock_target_base, mock_forecast_base, mock_base_metric
 ):
+    mock_base_metric.forecast_variable = None
+    mock_base_metric.target_variable = None
     """Create a sample CaseOperator."""
+    # Ensure metric has forecast_variable and target_variable attributes
+    mock_base_metric.forecast_variable = None
+    mock_base_metric.target_variable = None
     return cases.CaseOperator(
         case_metadata=sample_individual_case,
-        metric_list=mock_base_metric,
+        metric_list=[mock_base_metric],
         target=mock_target_base,
         forecast=mock_forecast_base,
     )
@@ -972,8 +979,7 @@ class TestComputeCaseOperator:
         )
         mock_evaluate_metric.return_value = mock_result
 
-        # Setup the case operator mocks - metric should be a list for iteration
-        sample_case_operator.metric_list = [mock_base_metric]
+        # Setup the case operator mocks
         sample_case_operator.target.maybe_align_forecast_to_target.return_value = (
             sample_forecast_dataset,
             sample_target_dataset,
@@ -1005,7 +1011,10 @@ class TestComputeCaseOperator:
             sample_forecast_dataset,
             sample_target_dataset,
         )
-        sample_case_operator.metric_list = [mock.Mock()]
+        mock_metric = mock.Mock(spec=metrics.BaseMetric)
+        mock_metric.forecast_variable = None
+        mock_metric.target_variable = None
+        sample_case_operator.metric_list = [mock_metric]
 
         with mock.patch(
             "extremeweatherbench.evaluate._compute_and_maybe_cache"
@@ -1042,8 +1051,12 @@ class TestComputeCaseOperator:
         )
 
         # Create multiple metrics
-        metric_1 = mock.Mock()
-        metric_2 = mock.Mock()
+        metric_1 = mock.Mock(spec=metrics.BaseMetric)
+        metric_1.forecast_variable = None
+        metric_1.target_variable = None
+        metric_2 = mock.Mock(spec=metrics.BaseMetric)
+        metric_2.forecast_variable = None
+        metric_2.target_variable = None
         sample_case_operator.metric_list = [metric_1, metric_2]
 
         sample_case_operator.target.maybe_align_forecast_to_target.return_value = (
@@ -1849,6 +1862,8 @@ class TestIntegration:
         # Create multiple metrics
         metric_1 = mock.Mock(spec=metrics.BaseMetric)
         metric_1.name = "Metric1"
+        metric_1.forecast_variable = None
+        metric_1.target_variable = None
         metric_1.return_value.name = "Metric1"
         metric_1.return_value.compute_metric.return_value = xr.DataArray(
             data=[1.0], dims=["lead_time"], coords={"lead_time": [0]}
@@ -1856,6 +1871,8 @@ class TestIntegration:
 
         metric_2 = mock.Mock(spec=metrics.BaseMetric)
         metric_2.name = "Metric2"
+        metric_2.forecast_variable = None
+        metric_2.target_variable = None
         metric_2.return_value.name = "Metric2"
         metric_2.return_value.compute_metric.return_value = xr.DataArray(
             data=[2.0], dims=["lead_time"], coords={"lead_time": [0]}
@@ -3157,6 +3174,284 @@ class TestSafeConcat:
         assert result["a"].dtype == "object"
         assert result["b"].dtype == "object"
         assert len(result) == 3
+
+
+class TestMetricVariableHandling:
+    """Test handling of metric-specific variables."""
+
+    def test_collect_metric_variables_with_variables(self):
+        """Test _collect_metric_variables with metrics that have variables."""
+        # Create metrics with variables
+        metric1 = mock.Mock(spec=metrics.BaseMetric)
+        metric1.forecast_variable = "temp"
+        metric1.target_variable = "temp_obs"
+
+        metric2 = mock.Mock(spec=metrics.BaseMetric)
+        metric2.forecast_variable = "precip"
+        metric2.target_variable = "precip_obs"
+
+        forecast_vars, target_vars = evaluate._collect_metric_variables(
+            [metric1, metric2]
+        )
+
+        assert forecast_vars == {"temp", "precip"}
+        assert target_vars == {"temp_obs", "precip_obs"}
+
+    def test_collect_metric_variables_without_variables(self):
+        """Test _collect_metric_variables with metrics without variables."""
+        # Create metrics without variables
+        metric1 = mock.Mock(spec=metrics.BaseMetric)
+        metric1.forecast_variable = None
+        metric1.target_variable = None
+
+        metric2 = mock.Mock(spec=metrics.BaseMetric)
+        metric2.forecast_variable = None
+        metric2.target_variable = None
+
+        forecast_vars, target_vars = evaluate._collect_metric_variables(
+            [metric1, metric2]
+        )
+
+        assert forecast_vars == set()
+        assert target_vars == set()
+
+    def test_collect_metric_variables_mixed(self):
+        """Test _collect_metric_variables with mixed metrics."""
+        # Create mixed metrics
+        metric1 = mock.Mock(spec=metrics.BaseMetric)
+        metric1.forecast_variable = "temp"
+        metric1.target_variable = "temp_obs"
+
+        metric2 = mock.Mock(spec=metrics.BaseMetric)
+        metric2.forecast_variable = None
+        metric2.target_variable = None
+
+        forecast_vars, target_vars = evaluate._collect_metric_variables(
+            [metric1, metric2]
+        )
+
+        assert forecast_vars == {"temp"}
+        assert target_vars == {"temp_obs"}
+
+    def test_collect_metric_variables_duplicates(self):
+        """Test that duplicate variables are handled correctly."""
+        # Create metrics with duplicate variables
+        metric1 = mock.Mock(spec=metrics.BaseMetric)
+        metric1.forecast_variable = "temp"
+        metric1.target_variable = "temp_obs"
+
+        metric2 = mock.Mock(spec=metrics.BaseMetric)
+        metric2.forecast_variable = "temp"
+        metric2.target_variable = "temp_obs"
+
+        forecast_vars, target_vars = evaluate._collect_metric_variables(
+            [metric1, metric2]
+        )
+
+        # Sets should contain unique values
+        assert forecast_vars == {"temp"}
+        assert target_vars == {"temp_obs"}
+
+    @mock.patch("extremeweatherbench.evaluate._build_datasets")
+    def test_compute_case_operator_with_metric_variables(
+        self,
+        mock_build_datasets,
+        sample_individual_case,
+        mock_target_base,
+        mock_forecast_base,
+        sample_forecast_dataset,
+        sample_target_dataset,
+    ):
+        """Test compute_case_operator with metrics that have variables."""
+        # Setup datasets
+        mock_build_datasets.return_value = (
+            sample_forecast_dataset,
+            sample_target_dataset,
+        )
+
+        # Create metric with its own variables
+        metric = mock.Mock(spec=metrics.BaseMetric)
+        metric.name = "MetricWithVars"
+        metric.forecast_variable = "surface_air_temperature"
+        metric.target_variable = "2m_temperature"
+        metric.compute_metric.return_value = xr.DataArray(
+            data=[1.0], dims=["lead_time"], coords={"lead_time": [0]}
+        )
+
+        # Create case operator
+        case_operator = cases.CaseOperator(
+            case_metadata=sample_individual_case,
+            metric_list=[metric],
+            target=mock_target_base,
+            forecast=mock_forecast_base,
+        )
+
+        mock_target_base.maybe_align_forecast_to_target.return_value = (
+            sample_forecast_dataset,
+            sample_target_dataset,
+        )
+
+        with mock.patch(
+            "extremeweatherbench.derived.maybe_derive_variables"
+        ) as mock_derive:
+            mock_derive.side_effect = lambda ds, variables, **kwargs: ds
+
+            result = evaluate.compute_case_operator(case_operator)
+
+            # Should call compute_metric once with metric's variables
+            assert metric.compute_metric.call_count == 1
+            assert isinstance(result, pd.DataFrame)
+
+    @mock.patch("extremeweatherbench.evaluate._build_datasets")
+    def test_compute_case_operator_mixed_metrics(
+        self,
+        mock_build_datasets,
+        sample_individual_case,
+        sample_forecast_dataset,
+        sample_target_dataset,
+    ):
+        """Test with mixed metrics (some with vars, some without)."""
+        mock_build_datasets.return_value = (
+            sample_forecast_dataset,
+            sample_target_dataset,
+        )
+
+        # Metric with variables
+        metric1 = mock.Mock(spec=metrics.BaseMetric)
+        metric1.name = "MetricWithVars"
+        metric1.forecast_variable = "surface_air_temperature"
+        metric1.target_variable = "2m_temperature"
+        metric1.compute_metric.return_value = xr.DataArray(
+            data=[1.0], dims=["lead_time"], coords={"lead_time": [0]}
+        )
+
+        # Metric without variables
+        metric2 = mock.Mock(spec=metrics.BaseMetric)
+        metric2.name = "MetricWithoutVars"
+        metric2.forecast_variable = None
+        metric2.target_variable = None
+        metric2.compute_metric.return_value = xr.DataArray(
+            data=[2.0], dims=["lead_time"], coords={"lead_time": [0]}
+        )
+
+        # Setup InputBase with variables
+        mock_target = mock.Mock(spec=inputs.TargetBase)
+        mock_target.name = "MockTarget"
+        mock_target.variables = ["2m_temperature"]
+        mock_target.maybe_align_forecast_to_target.return_value = (
+            sample_forecast_dataset,
+            sample_target_dataset,
+        )
+
+        mock_forecast = mock.Mock(spec=inputs.ForecastBase)
+        mock_forecast.name = "MockForecast"
+        mock_forecast.variables = ["surface_air_temperature"]
+
+        case_operator = cases.CaseOperator(
+            case_metadata=sample_individual_case,
+            metric_list=[metric1, metric2],
+            target=mock_target,
+            forecast=mock_forecast,
+        )
+
+        with mock.patch(
+            "extremeweatherbench.derived.maybe_derive_variables"
+        ) as mock_derive:
+            mock_derive.side_effect = lambda ds, variables, **kwargs: ds
+
+            result = evaluate.compute_case_operator(case_operator)
+
+            # metric1 called once (own vars), metric2 called once (InputBase)
+            assert metric1.compute_metric.call_count == 1
+            assert metric2.compute_metric.call_count == 1
+            assert isinstance(result, pd.DataFrame)
+
+    def test_compute_case_operator_instantiates_uninstantiated_metrics(
+        self, sample_individual_case, mock_target_base, mock_forecast_base, caplog
+    ):
+        """Test that uninstantiated metrics are instantiated with warning."""
+
+        # Create a metric CLASS (not instance) with required methods
+        class TestMetric(metrics.BaseMetric):
+            name = "TestMetric"
+
+            def __init__(self):
+                super().__init__("TestMetric")
+
+            def _compute_metric(self, forecast, target, **kwargs):
+                return xr.DataArray([1.0])
+
+        case_operator = cases.CaseOperator(
+            case_metadata=sample_individual_case,
+            metric_list=[TestMetric],  # Pass class, not instance
+            target=mock_target_base,
+            forecast=mock_forecast_base,
+        )
+
+        with mock.patch(
+            "extremeweatherbench.derived.maybe_derive_variables"
+        ) as mock_derive:
+            mock_derive.side_effect = lambda ds, variables, **kwargs: ds
+
+            result = evaluate.compute_case_operator(case_operator)
+
+        # Check that warning was logged about instantiation
+        assert "instantiated with default parameters" in caplog.text
+        assert "TestMetric" in caplog.text
+
+        # Verify the function completed successfully
+        assert isinstance(result, pd.DataFrame)
+
+    @mock.patch("extremeweatherbench.evaluate.run_pipeline")
+    def test_build_datasets_augments_variables(
+        self, mock_run_pipeline, sample_individual_case
+    ):
+        """Test that _build_datasets augments InputBase with metric vars."""
+        # Create mock datasets
+        mock_dataset = xr.Dataset(
+            {"var1": (["time"], [1, 2, 3])},
+            coords={"time": pd.date_range("2021-01-01", periods=3)},
+        )
+        mock_run_pipeline.return_value = mock_dataset
+
+        # Create metrics with variables
+        metric1 = mock.Mock(spec=metrics.BaseMetric)
+        metric1.forecast_variable = "metric_forecast_var"
+        metric1.target_variable = "metric_target_var"
+
+        # Create InputBase objects with their own variables
+        mock_forecast = mock.Mock(spec=inputs.ForecastBase)
+        mock_forecast.name = "MockForecast"
+        mock_forecast.variables = ["base_forecast_var"]
+
+        mock_target = mock.Mock(spec=inputs.TargetBase)
+        mock_target.name = "MockTarget"
+        mock_target.variables = ["base_target_var"]
+
+        case_operator = cases.CaseOperator(
+            case_metadata=sample_individual_case,
+            metric_list=[metric1],
+            target=mock_target,
+            forecast=mock_forecast,
+        )
+
+        evaluate._build_datasets(case_operator)
+
+        # Check that run_pipeline was called twice (forecast and target)
+        assert mock_run_pipeline.call_count == 2
+
+        # Get the augmented InputBase objects passed to run_pipeline
+        forecast_call = mock_run_pipeline.call_args_list[1]
+        target_call = mock_run_pipeline.call_args_list[0]
+
+        # Verify variables were augmented
+        augmented_target = target_call[0][1]
+        augmented_forecast = forecast_call[0][1]
+
+        assert "base_target_var" in augmented_target.variables
+        assert "metric_target_var" in augmented_target.variables
+        assert "base_forecast_var" in augmented_forecast.variables
+        assert "metric_forecast_var" in augmented_forecast.variables
 
 
 if __name__ == "__main__":

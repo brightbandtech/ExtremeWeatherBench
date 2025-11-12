@@ -390,7 +390,7 @@ class EvaluationObject:
     """
 
     event_type: str
-    metric_list: list[Union["metrics.BaseMetric",]]
+    metric_list: list["metrics.BaseMetric"]
     target: "TargetBase"
     forecast: "ForecastBase"
 

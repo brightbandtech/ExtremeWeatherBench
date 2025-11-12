@@ -584,6 +584,63 @@ def idx_to_coords(
     return lat_coords_out, lon_coords_out
 
 
+def convert_day_yearofday_to_time(
+    dataset: Union[xr.Dataset, xr.DataArray], year: int
+) -> Union[xr.Dataset, xr.DataArray]:
+    """Convert dayofyear and hour to new time coordinate.
+
+    Args:
+        dataset: The input xarray dataset or dataarray.
+        year: The base year to use for the time coordinate.
+
+    Returns:
+        The dataset or dataarray with a new time coordinate.
+    """
+    # Create a new time coordinate by combining dayofyear and hour
+    time_dim = pd.date_range(
+        start=f"{year}-01-01",
+        periods=len(dataset["dayofyear"]) * len(dataset["hour"]),
+        freq="6h",
+    )
+    dataset = dataset.stack(valid_time=("dayofyear", "hour")).drop_vars(
+        ["dayofyear", "hour"]
+    )
+    # Assign the new time coordinate to the dataset
+    dataset = dataset.assign_coords(valid_time=time_dim)
+
+    return dataset
+
+
+def interp_climatology_to_target(
+    target: xr.DataArray, climatology: xr.DataArray
+) -> xr.DataArray:
+    """Interpolate a climatology to a target data array.
+
+    Args:
+        target: The target data array to interpolate the climatology to.
+        climatology: The climatology data array to interpolate.
+
+    Returns:
+        The interpolated climatology data array. If the target is sparse, the
+        climatology is interpolated to the target coordinates. If the target is not
+        sparse, the climatology is interpolated to the target coordinates.
+    """
+    # If the target is sparse or has less than 3 dimensions, interpolate the
+    # climatology using stacked dim
+    if isinstance(target.data, sparse.COO) or target.ndim < 3:
+        return climatology.interp(
+            # stacked as a data variable is enforced by stack_sparse_data_from_dims
+            latitude=target["stacked"]["latitude"],
+            longitude=target["stacked"]["longitude"],
+            method="nearest",
+            kwargs={"fill_value": None},
+        )
+    # Otherwise, interpolate the climatology to the target coordinates
+    return climatology.interp_like(
+        target, method="nearest", kwargs={"fill_value": None}
+    )
+
+
 def reduce_dataarray(
     da: xr.DataArray,
     method: str | Callable,
