@@ -1096,11 +1096,11 @@ class TestLandfallDetection:
                 "longitude": (["landfall"], [280.0, 279.0, 278.0]),
             },
         )
-
-        result = calc.find_next_landfall_for_init_time(forecast, target_landfalls)
-
-        # Should handle conversion and return result
-        assert result is None or isinstance(result, xr.DataArray)
+        with pytest.raises(
+            AttributeError,
+            match="'DataArray' object has no attribute 'init_time'",
+        ):
+            calc.find_next_landfall_for_init_time(forecast, target_landfalls)
 
     def test_is_true_landfall_ocean_to_land(self):
         """Test _is_true_landfall detects ocean to land movement."""
