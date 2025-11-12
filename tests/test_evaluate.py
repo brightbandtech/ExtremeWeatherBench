@@ -98,6 +98,8 @@ def mock_base_metric():
     """Create a mock BaseMetric object."""
     mock_metric = mock.Mock(spec=metrics.BaseMetric)
     mock_metric.name = "MockMetric"
+    mock_metric.forecast_variable = None
+    mock_metric.target_variable = None
     mock_metric.compute_metric.return_value = xr.DataArray(
         data=[1.0], dims=["lead_time"], coords={"lead_time": [0]}
     )
@@ -119,10 +121,12 @@ def sample_evaluation_object(mock_target_base, mock_forecast_base, mock_base_met
 def sample_case_operator(
     sample_individual_case, mock_target_base, mock_forecast_base, mock_base_metric
 ):
+    mock_base_metric.forecast_variable = None
+    mock_base_metric.target_variable = None
     """Create a sample CaseOperator."""
     return cases.CaseOperator(
         case_metadata=sample_individual_case,
-        metric_list=mock_base_metric,
+        metric_list=[mock_base_metric],
         target=mock_target_base,
         forecast=mock_forecast_base,
     )
@@ -789,7 +793,7 @@ class TestComputeCaseOperator:
             sample_target_dataset,
         )
         mock_derive_variables.side_effect = (
-            lambda ds, variables: ds  # Return unchanged
+            lambda ds, variables, **kwargs: ds  # Return unchanged
         )
 
         mock_result = pd.DataFrame(
@@ -801,8 +805,7 @@ class TestComputeCaseOperator:
         )
         mock_evaluate_metric.return_value = mock_result
 
-        # Setup the case operator mocks - metric should be a list for iteration
-        sample_case_operator.metric_list = [mock_base_metric]
+        # Setup the case operator mocks
         sample_case_operator.target.maybe_align_forecast_to_target.return_value = (
             sample_forecast_dataset,
             sample_target_dataset,
@@ -828,13 +831,13 @@ class TestComputeCaseOperator:
             sample_forecast_dataset,
             sample_target_dataset,
         )
-        mock_derive_variables.side_effect = lambda ds, variables: ds
+        mock_derive_variables.side_effect = lambda ds, variables, **kwargs: ds
 
         sample_case_operator.target.maybe_align_forecast_to_target.return_value = (
             sample_forecast_dataset,
             sample_target_dataset,
         )
-        sample_case_operator.metric_list = [mock.Mock()]
+        sample_case_operator.metric_list = [mock.Mock(spec=metrics.BaseMetric)]
 
         with mock.patch(
             "extremeweatherbench.evaluate._compute_and_maybe_cache"
@@ -871,8 +874,8 @@ class TestComputeCaseOperator:
         )
 
         # Create multiple metrics
-        metric_1 = mock.Mock()
-        metric_2 = mock.Mock()
+        metric_1 = mock.Mock(spec=metrics.BaseMetric)
+        metric_2 = mock.Mock(spec=metrics.BaseMetric)
         sample_case_operator.metric_list = [metric_1, metric_2]
 
         sample_case_operator.target.maybe_align_forecast_to_target.return_value = (
@@ -883,7 +886,7 @@ class TestComputeCaseOperator:
         with mock.patch(
             "extremeweatherbench.derived.maybe_derive_variables"
         ) as mock_derive:
-            mock_derive.side_effect = lambda ds, variables: ds
+            mock_derive.side_effect = lambda ds, variables, **kwargs: ds
 
             with mock.patch(
                 "extremeweatherbench.evaluate._evaluate_metric_and_return_df"
@@ -912,7 +915,7 @@ class TestComputeCaseOperator:
         # Should return empty DataFrame with correct columns
         assert isinstance(result, pd.DataFrame)
         assert len(result) == 0
-        assert list(result.columns) == defaults.OUTPUT_COLUMNS
+        assert list(result.columns) == evaluate.OUTPUT_COLUMNS
 
         # _build_datasets should be called, but no further processing should occur
         mock_build_datasets.assert_called_once_with(sample_case_operator)
@@ -932,7 +935,7 @@ class TestComputeCaseOperator:
         # Should return empty DataFrame with correct columns
         assert isinstance(result, pd.DataFrame)
         assert len(result) == 0
-        assert list(result.columns) == defaults.OUTPUT_COLUMNS
+        assert list(result.columns) == evaluate.OUTPUT_COLUMNS
 
         mock_build_datasets.assert_called_once_with(sample_case_operator)
 
@@ -952,7 +955,7 @@ class TestComputeCaseOperator:
         # Should return empty DataFrame with correct columns
         assert isinstance(result, pd.DataFrame)
         assert len(result) == 0
-        assert list(result.columns) == defaults.OUTPUT_COLUMNS
+        assert list(result.columns) == evaluate.OUTPUT_COLUMNS
 
         # _build_datasets should be called, but no further processing should occur
         mock_build_datasets.assert_called_once_with(sample_case_operator)
@@ -972,7 +975,7 @@ class TestComputeCaseOperator:
         # Should return empty DataFrame with correct columns
         assert isinstance(result, pd.DataFrame)
         assert len(result) == 0
-        assert list(result.columns) == defaults.OUTPUT_COLUMNS
+        assert list(result.columns) == evaluate.OUTPUT_COLUMNS
 
         mock_build_datasets.assert_called_once_with(sample_case_operator)
 

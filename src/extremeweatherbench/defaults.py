@@ -1,5 +1,4 @@
 import logging
-from typing import Any, Callable, Union
 
 import numpy as np
 import xarray as xr
@@ -220,14 +219,14 @@ def get_brightband_evaluation_objects() -> list[inputs.EvaluationObject]:
     # Import metrics here to avoid circular import
     from extremeweatherbench import metrics
 
-    heatwave_metric_list: list[Union[Callable[..., Any], metrics.BaseMetric]] = [
+    heatwave_metric_list: list[metrics.BaseMetric] = [
         metrics.MaximumMAE(),
         metrics.RMSE(),
         metrics.OnsetME(),
         metrics.DurationME(),
         metrics.MaxMinMAE(),
     ]
-    freeze_metric_list: list[Union[Callable[..., Any], metrics.BaseMetric]] = [
+    freeze_metric_list: list[metrics.BaseMetric] = [
         metrics.MinimumMAE(),
         metrics.RMSE(),
         metrics.OnsetME(),
