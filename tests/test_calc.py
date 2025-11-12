@@ -17,8 +17,9 @@ class TestBasicCalculations:
         # Test with center point
         point = (8, 10)  # Middle of the grid
 
-        lat, lon = calc.convert_from_cartesian_to_latlon(point, sample_calc_dataset)
-
+        lat, lon = calc.convert_from_cartesian_to_latlon(
+            point, sample_calc_dataset.latitude, sample_calc_dataset.longitude
+        )
         # Should return values within the grid bounds
         assert 20 <= lat <= 50
         assert -120 <= lon <= -80
@@ -30,23 +31,23 @@ class TestBasicCalculations:
         assert abs(lat - expected_lat) < 1e-10
         assert abs(lon - expected_lon) < 1e-10
 
-    def test_calculate_haversine_distance(self):
+    def test_haversine_distance(self):
         """Test haversine distance calculation."""
         # Test known distances
         point_a = [0.0, 0.0]  # Equator, prime meridian
         point_b = [90.0, 0.0]  # North pole
 
-        distance = calc.calculate_haversine_distance(point_a, point_b, units="deg")
+        distance = calc.haversine_distance(point_a, point_b, units="deg")
 
         # Should be 90 degrees (quarter of great circle)
         assert abs(distance - 90.0) < 0.1
 
-    def test_calculate_haversine_distance_with_xarray(self, sample_calc_dataset):
+    def test_haversine_distance_with_xarray(self, sample_calc_dataset):
         """Test haversine distance calculation with xarray inputs."""
         point_a = [30.0, -100.0]
         point_b = [sample_calc_dataset.latitude, sample_calc_dataset.longitude]
 
-        distances = calc.calculate_haversine_distance(point_a, point_b, units="deg")
+        distances = calc.haversine_distance(point_a, point_b, units="deg")
 
         # Should return an xarray DataArray
         assert isinstance(distances, xr.DataArray)
@@ -58,24 +59,24 @@ class TestBasicCalculations:
         )
         assert distances.shape == expected_shape
 
-    def test_calculate_haversine_distance_km(self):
+    def test_haversine_distance_km(self):
         """Test haversine distance calculation with km units."""
         # Test known distances
         point_a = [0.0, 0.0]  # Equator, prime meridian
         point_b = [90.0, 0.0]  # North pole
 
-        distance = calc.calculate_haversine_distance(point_a, point_b, units="km")
+        distance = calc.haversine_distance(point_a, point_b, units="km")
 
         # Should be approximately 10,018 km (quarter of great circle)
         # Earth's circumference is ~40,075 km, so quarter is ~10,018 km
         assert abs(distance - 10018.0) < 50.0
 
-    def test_calculate_haversine_distance_km_with_xarray(self, sample_calc_dataset):
+    def test_haversine_distance_km_with_xarray(self, sample_calc_dataset):
         """Test haversine distance calculation with km units and xarray inputs."""
         point_a = [30.0, -100.0]
         point_b = [sample_calc_dataset.latitude, sample_calc_dataset.longitude]
 
-        distances = calc.calculate_haversine_distance(point_a, point_b, units="km")
+        distances = calc.haversine_distance(point_a, point_b, units="km")
 
         # Should return an xarray DataArray
         assert isinstance(distances, xr.DataArray)
@@ -93,76 +94,72 @@ class TestBasicCalculations:
         # Distances should be reasonable (not too large for Earth)
         assert (distances <= 20000).all()  # Maximum distance on Earth ~20,000 km
 
-    def test_calculate_haversine_distance_edge_cases(self):
+    def test_haversine_distance_edge_cases(self):
         """Test edge cases for haversine distance calculation."""
         # Test identical points (distance should be 0)
         point_a = [40.0, -74.0]
         point_b = [40.0, -74.0]
-        distance = calc.calculate_haversine_distance(point_a, point_b)
+        distance = calc.haversine_distance(point_a, point_b)
         assert abs(distance) < 1e-10
 
         # Test antipodal points (should be ~20015 km, half Earth's circumference)
         point_a = [0.0, 0.0]  # Equator, prime meridian
         point_b = [0.0, 180.0]  # Equator, opposite side
-        distance = calc.calculate_haversine_distance(point_a, point_b, units="km")
+        distance = calc.haversine_distance(point_a, point_b, units="km")
         assert abs(distance - 20015.1) < 50.0
 
         # Test North/South pole distance
         point_a = [90.0, 0.0]  # North pole
         point_b = [-90.0, 0.0]  # South pole
-        distance = calc.calculate_haversine_distance(point_a, point_b, units="km")
+        distance = calc.haversine_distance(point_a, point_b, units="km")
         assert abs(distance - 20003.9) < 50.0
 
-    def test_calculate_haversine_distance_known_cities(self):
+    def test_haversine_distance_known_cities(self):
         """Test haversine distance with known city distances."""
         # New York City to Los Angeles (approximate distance ~3944 km)
         nyc = [40.7128, -74.0060]
         la = [34.0522, -118.2437]
-        distance = calc.calculate_haversine_distance(nyc, la, units="km")
+        distance = calc.haversine_distance(nyc, la, units="km")
         assert abs(distance - 3944) < 20  # Allow 100km tolerance
 
         # London to Paris (approximate distance ~344 km)
         london = [51.5074, -0.1278]
         paris = [48.8566, 2.3522]
-        distance = calc.calculate_haversine_distance(london, paris, units="km")
+        distance = calc.haversine_distance(london, paris, units="km")
         assert abs(distance - 344) < 20  # Allow 20km tolerance
 
         # Sydney to Melbourne (approximate distance ~713 km)
         sydney = [-33.8688, 151.2093]
         melbourne = [-37.8136, 144.9631]
-        distance = calc.calculate_haversine_distance(sydney, melbourne, units="km")
+        distance = calc.haversine_distance(sydney, melbourne, units="km")
         assert abs(distance - 713) < 20  # Allow 30km tolerance
 
-    def test_calculate_haversine_distance_units_conversion(self):
+    def test_haversine_distance_units_conversion(self):
         """Test unit conversion between km and degrees."""
         point_a = [0.0, 0.0]
         point_b = [1.0, 0.0]  # 1 degree north
 
-        distance_km = calc.calculate_haversine_distance(point_a, point_b, units="km")
-        distance_deg = calc.calculate_haversine_distance(point_a, point_b, units="deg")
+        distance_km = calc.haversine_distance(point_a, point_b, units="km")
+        distance_deg = calc.haversine_distance(point_a, point_b, units="deg")
 
         # 1 degree should be approximately 111.32 km
         assert abs(distance_km - 111.32) < 5.0
         assert abs(distance_deg - 1.0) < 0.01
 
         # Test with "kilometers" and "degrees" spelled out
-        distance_km_long = calc.calculate_haversine_distance(
-            point_a, point_b, units="kilometers"
-        )
-        distance_deg_long = calc.calculate_haversine_distance(
-            point_a, point_b, units="degrees"
-        )
+        distance_km_long = calc.haversine_distance(point_a, point_b, units="kilometers")
+        distance_deg_long = calc.haversine_distance(point_a, point_b, units="degrees")
 
         assert abs(distance_km_long - distance_km) < 1e-10
         assert abs(distance_deg_long - distance_deg) < 1e-10
 
-    def test_calculate_haversine_distance_with_numpy_arrays(self):
+    def test_haversine_distance_with_numpy_arrays(self):
         """Test haversine distance with numpy array inputs."""
         # Test with numpy arrays
         point_a = np.array([40.0, -74.0])
         point_b = np.array([34.0, -118.0])
 
-        distance = calc.calculate_haversine_distance(point_a, point_b, units="km")
+        distance = calc.haversine_distance(point_a, point_b, units="km")
         assert isinstance(distance, (float, np.ndarray))
         assert distance > 0
 
@@ -172,61 +169,59 @@ class TestBasicCalculations:
         point_a = [30.0, -100.0]
         point_b = [lats, lons]
 
-        distances = calc.calculate_haversine_distance(point_a, point_b, units="km")
+        distances = calc.haversine_distance(point_a, point_b, units="km")
         assert isinstance(distances, np.ndarray)
         assert distances.shape == (3,)
         assert all(d > 0 for d in distances)
 
-    def test_calculate_haversine_distance_error_handling(self):
+    def test_haversine_distance_error_handling(self):
         """Test error handling for invalid inputs."""
         point_a = [40.0, -74.0]
         point_b = [34.0, -118.0]
 
         # Test invalid units
         with pytest.raises(ValueError, match="Invalid units"):
-            calc.calculate_haversine_distance(point_a, point_b, units="miles")
+            calc.haversine_distance(point_a, point_b, units="miles")
 
         with pytest.raises(ValueError, match="Invalid units"):
-            calc.calculate_haversine_distance(point_a, point_b, units="invalid")
+            calc.haversine_distance(point_a, point_b, units="invalid")
 
-    def test_calculate_haversine_distance_symmetry(self):
+    def test_haversine_distance_symmetry(self):
         """Test that distance calculation is symmetric."""
         point_a = [40.7128, -74.0060]  # NYC
         point_b = [34.0522, -118.2437]  # LA
 
-        distance_ab = calc.calculate_haversine_distance(point_a, point_b)
-        distance_ba = calc.calculate_haversine_distance(point_b, point_a)
+        distance_ab = calc.haversine_distance(point_a, point_b)
+        distance_ba = calc.haversine_distance(point_b, point_a)
 
         assert abs(distance_ab - distance_ba) < 1e-10
 
-    def test_calculate_haversine_distance_boundary_conditions(self):
+    def test_haversine_distance_boundary_conditions(self):
         """Test boundary conditions for latitude and longitude."""
         # Test at latitude boundaries
         point_a = [90.0, 0.0]  # North pole
         point_b = [89.9, 0.0]  # Near north pole
-        distance = calc.calculate_haversine_distance(point_a, point_b, units="km")
+        distance = calc.haversine_distance(point_a, point_b, units="km")
         assert distance > 0 and distance < 20  # Should be small distance
 
         point_a = [-90.0, 0.0]  # South pole
         point_b = [-89.9, 0.0]  # Near south pole
-        distance = calc.calculate_haversine_distance(point_a, point_b, units="km")
+        distance = calc.haversine_distance(point_a, point_b, units="km")
         assert distance > 0 and distance < 20  # Should be small distance
 
         # Test longitude wraparound (179° to -179° should be 2° apart)
         point_a = [0.0, 179.0]
         point_b = [0.0, -179.0]
-        distance = calc.calculate_haversine_distance(point_a, point_b, units="deg")
+        distance = calc.haversine_distance(point_a, point_b, units="deg")
         assert abs(distance - 2.0) < 0.1
 
-    def test_calculate_haversine_distance_large_datasets(self, sample_calc_dataset):
+    def test_haversine_distance_large_datasets(self, sample_calc_dataset):
         """Test performance and correctness with larger datasets."""
         # Use a single point and compute distance to entire grid
         center_point = [35.0, -100.0]
         grid_point = [sample_calc_dataset.latitude, sample_calc_dataset.longitude]
 
-        distances = calc.calculate_haversine_distance(
-            center_point, grid_point, units="km"
-        )
+        distances = calc.haversine_distance(center_point, grid_point, units="km")
 
         # Should return an xarray DataArray with proper shape
         assert isinstance(distances, xr.DataArray)
@@ -247,25 +242,25 @@ class TestBasicCalculations:
         min_distance = distances.isel(latitude=lat_idx, longitude=lon_idx)
         assert min_distance < 500  # Should be within 500km of center
 
-    def test_calculate_haversine_distance_scalar_case(self):
+    def test_haversine_distance_scalar_case(self):
         """Test haversine distance when result is scalar (line 90 coverage)."""
         # Test case where distance calculation returns a scalar
         point_a = [40.0, -74.0]
         point_b = [40.0, -74.0]  # Same point, should return scalar 0
 
-        distance = calc.calculate_haversine_distance(point_a, point_b)
+        distance = calc.haversine_distance(point_a, point_b)
 
         # Should be a scalar (float), not a dataset
         assert isinstance(distance, (float, np.floating))
         assert not isinstance(distance, xr.DataArray)
         assert abs(distance) < 1e-10
 
-    def test_create_great_circle_mask(self, sample_calc_dataset):
+    def test_great_circle_mask(self, sample_calc_dataset):
         """Test creation of great circle mask."""
         center_point = (35.0, -100.0)  # Somewhere in the middle
         radius = 5.0  # degrees
 
-        mask = calc.create_great_circle_mask(sample_calc_dataset, center_point, radius)
+        mask = calc.great_circle_mask(sample_calc_dataset, center_point, radius)
 
         # Should return boolean mask
         assert isinstance(mask, xr.DataArray)
@@ -281,7 +276,7 @@ class TestBasicCalculations:
         assert mask.any()  # At least some True values
         assert not mask.all()  # Not all True values
 
-    def test_create_great_circle_mask_scalar_distance(self):
+    def test_great_circle_mask_scalar_distance(self):
         """Test great circle mask when distance is scalar (line 90 coverage)."""
         # Create a dataset with scalar coordinates to force scalar distance
         import unittest.mock
@@ -301,11 +296,11 @@ class TestBasicCalculations:
 
         # Mock the haversine distance to return a scalar
         with unittest.mock.patch(
-            "extremeweatherbench.calc.calculate_haversine_distance"
+            "extremeweatherbench.calc.haversine_distance"
         ) as mock_distance:
             mock_distance.return_value = 2.0  # Return scalar instead of DataArray
 
-            mask = calc.create_great_circle_mask(dataset, center_point, radius)
+            mask = calc.great_circle_mask(dataset, center_point, radius)
 
             # Should return a boolean DataArray even with scalar distance
             assert isinstance(mask, xr.DataArray)
@@ -425,13 +420,13 @@ class TestPressureCalculations:
             # If time dimension was removed, compare with first time slice
             xr.testing.assert_allclose(orography, expected.isel(time=0))
 
-    def test_calculate_pressure_at_surface(self, sample_calc_dataset):
+    def test_pressure_at_surface(self, sample_calc_dataset):
         """Test surface pressure calculation from orography."""
         # First get orography
         orography_data = calc.orography(sample_calc_dataset)
 
         # Calculate surface pressure
-        surface_pressure = calc.calculate_pressure_at_surface(orography_data)
+        surface_pressure = calc.pressure_at_surface(orography_data)
 
         # Should return a DataArray
         assert isinstance(surface_pressure, xr.DataArray)
@@ -500,9 +495,11 @@ class TestPressureCalculations:
 class TestGeopotentialCalculations:
     """Test geopotential-related calculations."""
 
-    def test_generate_geopotential_thickness_default_levels(self, sample_calc_dataset):
+    def test_geopotential_thickness_default_levels(self, sample_calc_dataset):
         """Test geopotential thickness with default levels."""
-        thickness = calc.generate_geopotential_thickness(sample_calc_dataset)
+        thickness = calc.geopotential_thickness(
+            sample_calc_dataset["geopotential"], geopotential=True
+        )
 
         # Should return a DataArray
         assert isinstance(thickness, xr.DataArray)
@@ -516,10 +513,13 @@ class TestGeopotentialCalculations:
         assert "units" in thickness.attrs
         assert thickness.attrs["units"] == "m"
 
-    def test_generate_geopotential_thickness_custom_levels(self, sample_calc_dataset):
+    def test_geopotential_thickness_custom_levels(self, sample_calc_dataset):
         """Test geopotential thickness with custom levels."""
-        thickness = calc.generate_geopotential_thickness(
-            sample_calc_dataset, top_level_value=200, bottom_level_value=850
+        thickness = calc.geopotential_thickness(
+            sample_calc_dataset["geopotential"],
+            top_level_value=200,
+            bottom_level_value=850,
+            geopotential=True,
         )
 
         # Manual calculation for verification
@@ -531,17 +531,28 @@ class TestGeopotentialCalculations:
 
         xr.testing.assert_allclose(thickness, expected_thickness)
 
-    def test_generate_geopotential_thickness_multiple_top_levels(
-        self, sample_calc_dataset
-    ):
-        """Test geopotential thickness with multiple top levels."""
-        thickness = calc.generate_geopotential_thickness(
-            sample_calc_dataset, top_level_value=[200, 300, 500], bottom_level_value=850
+    def test_geopotential_thickness_multiple_calculations(self, sample_calc_dataset):
+        """Test geopotential thickness with multiple calculations."""
+        # Calculate thickness for multiple level pairs
+        thickness_200_850 = calc.geopotential_thickness(
+            sample_calc_dataset["geopotential"],
+            top_level_value=200,
+            bottom_level_value=850,
+            geopotential=True,
         )
 
-        # Should have level dimension for multiple top levels
-        assert "level" in thickness.dims
-        assert len(thickness.level) == 3
+        thickness_300_700 = calc.geopotential_thickness(
+            sample_calc_dataset["geopotential"],
+            top_level_value=300,
+            bottom_level_value=700,
+            geopotential=True,
+        )
+
+        # Both should be DataArrays without level dimension
+        assert isinstance(thickness_200_850, xr.DataArray)
+        assert isinstance(thickness_300_700, xr.DataArray)
+        assert "level" not in thickness_200_850.dims
+        assert "level" not in thickness_300_700.dims
 
 
 class TestNantrapezoid:
@@ -679,3 +690,304 @@ class TestNantrapezoid:
         # Should still work and return proper result
         assert result.shape == (1,)
         assert not np.isnan(result)
+
+
+class TestComputeCapeCin:
+    """Test the compute_cape_cin wrapper function."""
+
+    def test_single_profile(self):
+        """Test integration with DataArrays containing a single profile."""
+
+        # Splice in a pseudo-realistic atmosphere profile with our fixture dataset
+        pressures = np.array([1000, 850, 700, 500, 300, 200])
+        temp_sfc = 290.0  # K
+        lapse_rate = 6.5 / 1000.0  # K/km
+        geopotential = 29.3 * temp_sfc * np.log(1013.25 / pressures)
+        temp_profile = temp_sfc - lapse_rate * geopotential
+        dewpoint_profile = temp_profile - 5.0
+
+        # Create xarray DataArrays
+        pressures = xr.DataArray(pressures, dims=["level"], coords={"level": pressures})
+        temp_profile = xr.DataArray(
+            temp_profile, dims=["level"], coords={"level": pressures}
+        )
+        dewpoint_profile = xr.DataArray(
+            dewpoint_profile, dims=["level"], coords={"level": pressures}
+        )
+        geopotential = xr.DataArray(
+            geopotential, dims=["level"], coords={"level": pressures}
+        )
+
+        cape = calc.compute_mixed_layer_cape(
+            pressures,
+            temp_profile,
+            dewpoint_profile,
+            geopotential,
+        )
+
+        # Check that the output has the correct shape (scalars)
+        assert cape.values.shape == ()
+        assert "level" not in cape.dims
+
+        # Check that we don't have any NaNs and that all data are physically reasonable
+        assert np.isfinite(cape)
+        assert cape >= 0.0, "CAPE should be non-negative"
+
+    def test_grid_profiles(self):
+        """Test integration with typical gridded NWP-like data."""
+
+        n_times, n_lats, n_lons = 5, 10, 15
+
+        # Splice in a pseudo-realistic atmosphere profile with our fixture dataset
+        pressures = np.array([1000, 850, 700, 500, 300, 200])
+
+        temp_sfc = 290.0 + np.random.normal(0, 1, (n_times, n_lats, n_lons, 1))  # K
+        lapse_rate = 6.5 / 1000.0  # K/km
+        geopotential = (
+            29.3 * temp_sfc * np.log(1013.25 / pressures)
+        )  # (n_times, n_lats, n_lons, n_levels)
+        temp_profile = temp_sfc - lapse_rate * geopotential
+        dewpoint_profile = temp_profile - 5.0
+
+        # Create an xarray Dataset with these profiles
+        ds = xr.Dataset(
+            {
+                "temperature": (
+                    ["time", "latitude", "longitude", "level"],
+                    temp_profile,
+                ),
+                "dewpoint": (
+                    ["time", "latitude", "longitude", "level"],
+                    dewpoint_profile,
+                ),
+                "geopotential": (
+                    ["time", "latitude", "longitude", "level"],
+                    geopotential,
+                ),
+                "pressure": (["level"], pressures),
+            },
+            coords={
+                "time": range(n_times),
+                "latitude": range(n_lats),
+                "longitude": range(n_lons),
+                "level": pressures,
+            },
+        )
+
+        # Compute CAPE and CIN for each profile
+        cape = calc.compute_mixed_layer_cape(
+            ds["pressure"],
+            ds["temperature"],
+            ds["dewpoint"],
+            ds["geopotential"],
+        )
+
+        # Check that the output has the correct shape (scalars)
+        assert cape.values.shape == (n_times, n_lats, n_lons)
+        assert "level" not in cape.dims
+
+        # Check that we don't have any NaNs and that all data are physically reasonable
+        assert np.all(np.isfinite(cape))
+        assert np.all(cape >= 0.0), "CAPE should be non-negative"
+
+    def test_grid_profiles_with_dask(self):
+        """Test integration with typical gridded NWP-like data, but backed by dask arrays."""
+
+        n_times, n_lats, n_lons = 5, 4, 4
+
+        # Splice in a pseudo-realistic atmosphere profile with our fixture dataset
+        pressures = np.array([1000, 850, 700, 500, 300, 200])
+        temp_sfc = 290.0 + np.random.normal(0, 1, (n_times, n_lats, n_lons, 1))  # K
+        lapse_rate = 6.5 / 1000.0  # K/km
+        geopotential = (
+            29.3 * temp_sfc * np.log(1013.25 / pressures)
+        )  # (n_times, n_lats, n_lons, n_levels)
+        temp_profile = temp_sfc - lapse_rate * geopotential
+        dewpoint_profile = temp_profile - 5.0
+
+        # Create an xarray Dataset with these profiles
+        ds = xr.Dataset(
+            {
+                "temperature": (
+                    ["time", "latitude", "longitude", "level"],
+                    temp_profile,
+                ),
+                "dewpoint": (
+                    ["time", "latitude", "longitude", "level"],
+                    dewpoint_profile,
+                ),
+                "geopotential": (
+                    ["time", "latitude", "longitude", "level"],
+                    geopotential,
+                ),
+                "pressure": (["level"], pressures),
+            },
+            coords={
+                "time": range(n_times),
+                "latitude": range(n_lats),
+                "longitude": range(n_lons),
+                "level": pressures,
+            },
+        )
+        ds = ds.chunk({"time": 1, "level": -1})
+
+        # Compute CAPE for each profile
+        # NOTE: Use parallel=False with Dask to avoid Numba threading conflicts.
+        # Dask already provides parallelism at the chunk level, so Numba parallel
+        # features would conflict with Dask's threading. In general it should be
+        # safe to use parallel=True when Dask is distributing to multiple proceses;
+        # here, we're keeping things very simple and creating Dask arrays in-place
+        # within the pytest process.
+        cape = calc.compute_mixed_layer_cape(
+            ds["pressure"],
+            ds["temperature"],
+            ds["dewpoint"],
+            ds["geopotential"],
+            parallel=False,
+        )
+
+        # Check that the output has the correct shape (scalars)
+        assert cape.values.shape == (n_times, n_lats, n_lons)
+        assert "level" not in cape.dims
+
+        # Check that we don't have any NaNs and that all data are physically reasonable
+        assert np.all(np.isfinite(cape))
+        assert np.all(cape >= 0.0), "CAPE should be non-negative"
+
+    def test_parallel_serial_equivalence(self):
+        """Test that parallel and serial CAPE calculations produce equivalent results."""
+
+        n_times, n_lats, n_lons = 5, 4, 4
+
+        # Splice in a pseudo-realistic atmosphere profile with our fixture dataset
+        pressures = np.array([1000, 850, 700, 500, 300, 200])
+        temp_sfc = 290.0 + np.random.normal(0, 1, (n_times, n_lats, n_lons, 1))  # K
+        lapse_rate = 6.5 / 1000.0  # K/km
+        geopotential = (
+            29.3 * temp_sfc * np.log(1013.25 / pressures)
+        )  # (n_times, n_lats, n_lons, n_levels)
+        temp_profile = temp_sfc - lapse_rate * geopotential
+        dewpoint_profile = temp_profile - 5.0
+
+        # Create an xarray Dataset with these profiles
+        ds = xr.Dataset(
+            {
+                "temperature": (
+                    ["time", "latitude", "longitude", "level"],
+                    temp_profile,
+                ),
+                "dewpoint": (
+                    ["time", "latitude", "longitude", "level"],
+                    dewpoint_profile,
+                ),
+                "geopotential": (
+                    ["time", "latitude", "longitude", "level"],
+                    geopotential,
+                ),
+                "pressure": (["level"], pressures),
+            },
+            coords={
+                "time": range(n_times),
+                "latitude": range(n_lats),
+                "longitude": range(n_lons),
+                "level": pressures,
+            },
+        )
+
+        cape_parallel = calc.compute_mixed_layer_cape(
+            ds["pressure"],
+            ds["temperature"],
+            ds["dewpoint"],
+            ds["geopotential"],
+            parallel=True,
+        )
+        cape_serial = calc.compute_mixed_layer_cape(
+            ds["pressure"],
+            ds["temperature"],
+            ds["dewpoint"],
+            ds["geopotential"],
+            parallel=False,
+        )
+
+        assert np.allclose(cape_parallel, cape_serial)
+
+
+class TestDewpointFromSpecificHumidity:
+    """Test the dewpoint_from_specific_humidity function."""
+
+    def test_dewpoints_from_specific_humidities(self):
+        """Test the dewpoint_from_specific_humidity function with known values
+        pre-computed from MetPy.
+
+        The values useed were randomly selected from an ERA5 timeslice.
+        """
+
+        pressures = np.array(
+            [
+                800.0,
+                125.0,
+                825.0,
+                200.0,
+                600.0,
+                800.0,
+                350.0,
+                875.0,
+                700.0,
+                250.0,
+                950.0,
+                1000.0,
+            ]
+        )
+        specific_humidities = np.array(
+            [
+                2.9980205e-04,
+                2.0001212e-06,
+                3.2219910e-03,
+                1.0791991e-05,
+                2.0538690e-04,
+                1.2427913e-03,
+                1.4054612e-04,
+                1.3353663e-02,
+                1.6551274e-03,
+                4.9075752e-06,
+                1.0287719e-02,
+                2.7858345e-03,
+            ],
+        )
+        # Computed from metpy.calc.dewpoint_from_specific_humidity
+        ref_dewpoints = np.array(
+            [
+                240.25,
+                187.25,
+                268.25,
+                200.75,
+                233.55,
+                255.95,
+                225.05,
+                289.55,
+                257.75,
+                197.05,
+                286.85,
+                268.95,
+            ]
+        )
+        dewpoints = calc.dewpoint_from_specific_humidity(pressures, specific_humidities)
+        np.testing.assert_allclose(dewpoints, ref_dewpoints, atol=1e-1)
+
+    def test_dewpoint_decreasing_with_humidity(self):
+        """Given a constant pressure, dewpoint should decrease as specific humidity decreases."""
+        p0 = 1035.0  # hPa
+        qs = [2e-2, 2e-3, 2e-4, 2e-5]  # kg/kg
+        tds = [calc.dewpoint_from_specific_humidity(p0, q) for q in qs]
+        diffs = np.diff(tds)
+        is_decreasing = np.all(diffs < 0)
+        assert is_decreasing, "Dewpoint should decrease as specific humidity decreases"
+
+    def test_dewpoint_increasing_with_pressure(self):
+        """Given a constant specific humidity, dewpoint should decrease with increasing pressure."""
+        q0 = 2e-3  # kg/kg
+        ps = [1000.0, 950.0, 900.0, 850.0]  # hPa
+        tds = [calc.dewpoint_from_specific_humidity(p, q0) for p in ps]
+        diffs = np.diff(tds)
+        is_decreasing = np.all(diffs < 0)
+        assert is_decreasing, "Dewpoint should decrease as pressure increases"
