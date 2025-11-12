@@ -97,8 +97,7 @@ class TropicalCycloneTrackVariables(DerivedVariable):
         "surface_northward_wind",
     ]
 
-    @classmethod
-    def _get_or_compute_tracks(cls, data: xr.Dataset, *args, **kwargs) -> xr.Dataset:
+    def get_or_compute_tracks(self, data: xr.Dataset, *args, **kwargs) -> xr.Dataset:
         """Get cached track data or compute if not already cached.
 
         This method handles the caching logic to ensure track computation
@@ -153,8 +152,7 @@ class TropicalCycloneTrackVariables(DerivedVariable):
         tropical_cyclone._TC_TRACK_CACHE[cache_key] = tctracks_ds
         return tctracks_ds
 
-    @classmethod
-    def derive_variable(cls, data: xr.Dataset, *args, **kwargs) -> xr.DataArray:
+    def derive_variable(self, data: xr.Dataset, *args, **kwargs) -> xr.DataArray:
         """Derive the TC track variables.
 
         This base method returns the full track dataset. Child classes should
@@ -167,13 +165,12 @@ class TropicalCycloneTrackVariables(DerivedVariable):
             DataArray containing the derived variable
         """
         # Get the cached or computed track data
-        tracks_dataset = cls._get_or_compute_tracks(data, *args, **kwargs)
+        tracks_dataset = self.get_or_compute_tracks(data, *args, **kwargs)
 
         # Squeeze the dataset to remove the track dimension if only one track is present
         return tracks_dataset.squeeze()
 
-    @classmethod
-    def clear_cache(cls) -> None:
+    def clear_cache(self) -> None:
         """Clear the global track cache.
 
         Useful for memory management or when processing completely different datasets.
