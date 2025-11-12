@@ -1063,13 +1063,10 @@ class LandfallIntensityMAE(BaseMetric):
 class SpatialDisplacement(BaseMetric):
     def __init__(
         self,
-        forecast_mask_variable: Optional[str | derived.DerivedVariable] = None,
-        target_mask_variable: Optional[str | derived.DerivedVariable] = None,
+        name: str = "spatial_displacement",
         **kwargs: Any,
     ):
-        super().__init__("spatial_displacement", **kwargs)
-        self.forecast_mask_variable = forecast_mask_variable
-        self.target_mask_variable = target_mask_variable
+        super().__init__(name, **kwargs)
 
     def _compute_metric(
         self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
