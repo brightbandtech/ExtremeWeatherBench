@@ -34,6 +34,8 @@ import xarray as xr
 from scipy.interpolate import interp1d  # type: ignore[import-untyped]
 from scipy.special import lambertw  # type: ignore[import-untyped]
 
+from extremeweatherbench import calc
+
 # Atmospheric Physics Constants
 # All constants follow standard atmospheric physics values from CODATA and WMO
 
@@ -1410,7 +1412,14 @@ def dewpoint_from_specific_humidity(
 
 
 def craven_brooks_significant_severe(
-    ds: xr.Dataset,
+    air_temperature: xr.DataArray,
+    dewpoint_temperature: xr.DataArray,
+    geopotential: xr.DataArray,
+    pressure: xr.DataArray,
+    eastward_wind: xr.DataArray,
+    northward_wind: xr.DataArray,
+    surface_eastward_wind: xr.DataArray,
+    surface_northward_wind: xr.DataArray,
     layer_depth: float = 100,
 ) -> xr.DataArray:
     """Calculate the Craven-Brooks Significant Severe (CBSS) parameter.
@@ -1426,14 +1435,14 @@ def craven_brooks_significant_severe(
     - Low-level shear: Promotes storm organization and rotation
 
     Args:
-        ds: xarray Dataset containing 3D atmospheric data with pressure levels.
-        pressure_var: Name of pressure variable in ds (hPa).
-        temperature_var: Name of temperature variable in ds (°C).
-        temperature_dewpoint_var: Name of dewpoint temperature variable in ds (°C).
-        eastward_wind_var: Name of u-component wind variable (m/s).
-        northward_wind_var: Name of v-component wind variable (m/s).
-        surface_eastward_wind_var: Name of surface u-component wind (m/s).
-        surface_northward_wind_var: Name of surface v-component wind (m/s).
+        air_temperature: Air temperature in Kelvin.
+        dewpoint_temperature: Dewpoint temperature in Kelvin.
+        geopotential: Geopotential in m2/s2.
+        pressure: Pressure in hPa.
+        eastward_wind: Eastward wind in m/s.
+        northward_wind: Northward wind in m/s.
+        surface_eastward_wind: Surface eastward wind in m/s.
+        surface_northward_wind: Surface northward wind in m/s.
         layer_depth: Mixed layer depth in hPa for CAPE calculation (default: 100).
 
     Returns:
@@ -1453,21 +1462,30 @@ def craven_brooks_significant_severe(
         derived parameters associated with deep moist convection. Natl. Wea.
         Digest, 28, 13-24.
     """
-    # Check for prerequisites to ensure successful execution
-    ds = _basic_ds_checks(ds)
     # CIN not needed for CBSS
-    cape, _ = mixed_layer_cape_cin(
-        ds,
-        layer_depth,
+    cape = calc.compute_mixed_layer_cape(
+        pressure,
+        air_temperature,
+        dewpoint_temperature,
+        geopotential,
+        depth=layer_depth,
     )
     shear = low_level_shear(
-        ds,
+        eastward_wind,
+        northward_wind,
+        surface_eastward_wind,
+        surface_northward_wind,
     )
     cbss = cape * shear
     return cbss
 
 
-def low_level_shear(ds: xr.Dataset) -> xr.DataArray:
+def low_level_shear(
+    eastward_wind: xr.DataArray,
+    northward_wind: xr.DataArray,
+    surface_eastward_wind: xr.DataArray,
+    surface_northward_wind: xr.DataArray,
+) -> xr.DataArray:
     """Calculates the low level (0-6 km) shear of a dataset (Lepore et al 2021).
 
     Args:
@@ -1477,8 +1495,8 @@ def low_level_shear(ds: xr.Dataset) -> xr.DataArray:
         ll_shear: ndarray of low level shear values in m/s
     """
     ll_shear = np.sqrt(
-        (ds["eastward_wind"].sel(level=500) - ds["surface_eastward_wind"]) ** 2
-        + (ds["northward_wind"].sel(level=500) - ds["surface_northward_wind"]) ** 2
+        (eastward_wind.sel(level=500) - surface_eastward_wind) ** 2
+        + (northward_wind.sel(level=500) - surface_northward_wind) ** 2
     )
     return ll_shear
 

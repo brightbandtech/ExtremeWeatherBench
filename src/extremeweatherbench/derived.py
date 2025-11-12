@@ -74,31 +74,18 @@ class CravenBrooksSignificantSevere(DerivedVariable):
     convection index.
     """
 
-    required_variables = [
+    variables = [
         "air_temperature",
         "eastward_wind",
         "northward_wind",
         "surface_eastward_wind",
         "surface_northward_wind",
         "air_pressure_at_mean_sea_level",
+        "geopotential",
     ]
-    optional_variables = [
-        "dewpoint_temperature",
-        "relative_humidity",
-        "specific_humidity",
-    ]
-    optional_variables_mapping = {
-        "dewpoint_temperature": ["specific_humidity"],
-        "relative_humidity": ["specific_humidity"],
-        "specific_humidity": ["relative_humidity"],
-    }
-    name = "craven_brooks_significant_severe"
 
-    @classmethod
-    def derive_variable(cls, data: xr.Dataset, *args, **kwargs) -> xr.DataArray:
+    def derive_variable(self, data: xr.Dataset, *args, **kwargs) -> xr.DataArray:
         """Derive the Craven-Brooks significant severe parameter."""
-        # create broadcasted pressure variable, output target is always last
-        _, data["pressure"] = xr.broadcast(data["air_temperature"], data["level"])
         # calculate dewpoint temperature if not present
         if "dewpoint_temperature" not in data.data_vars:
             # using relative humidity if present
@@ -114,14 +101,24 @@ class CravenBrooksSignificantSevere(DerivedVariable):
             # and if neither are present, raise an error
             else:
                 raise KeyError("No variable to compute dewpoint temperature.")
-
-        cbss = sc.craven_brooks_significant_severe(data)
+        layer_depth = kwargs.get("layer_depth", 100)
+        cbss = sc.craven_brooks_significant_severe(
+            air_temperature=data["air_temperature"],
+            dewpoint_temperature=data["dewpoint_temperature"],
+            geopotential=data["geopotential"],
+            pressure=data["level"],
+            eastward_wind=data["eastward_wind"],
+            northward_wind=data["northward_wind"],
+            surface_eastward_wind=data["surface_eastward_wind"],
+            surface_northward_wind=data["surface_northward_wind"],
+            layer_depth=layer_depth,
+        )
         coords = {dim: data.coords[dim] for dim in data.sizes.keys() if dim != "level"}
         return xr.DataArray(
             cbss,
             coords=coords,
             dims=coords.keys(),
-            name=cls.name,
+            name=self.name,
         )
 
 
