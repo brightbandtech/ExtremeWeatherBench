@@ -1176,7 +1176,8 @@ class LandfallMixin:
         Returns:
             Computed metric result
         """
-        return super()._compute_metric(forecast_landfall, target_landfall, **kwargs)
+        # Call parent class's _compute_metric (provided by BaseMetric subclass)
+        return super()._compute_metric(forecast_landfall, target_landfall, **kwargs)  # type: ignore[misc] # noqa: E501
 
     def _compute_next_approach(
         self,
