@@ -2,6 +2,7 @@
 
 # setup all the imports
 import matplotlib.font_manager
+import matplotlib.pyplot as plt
 
 flist = matplotlib.font_manager.get_font_names()
 from pathlib import Path  # noqa: E402
@@ -16,7 +17,7 @@ basepath = str(basepath) + "/"
 import sys  # noqa: E402
 
 sys.path.append(basepath + "/docs/notebooks/")
-import case_plotting as cp  # noqa: E402
+import paper_plotting as pp  # noqa: E402
 
 # load in all of the events in the yaml file
 print("loading in the events yaml file")
@@ -56,69 +57,83 @@ case_operators_with_targets_established = list(
 # now that they're not used
 get_reusable_executor().shutdown(wait=True)
 
+
+n_rows = 5
+n_cols = 3
+col_space = 0.5
+row_space = 0.5
+figsize = (5 * n_cols + col_space * (n_cols - 1), 5 * n_rows + row_space * (n_rows - 1))
+print(figsize)
+
+fig, axs = plt.subplots(n_rows, n_cols, figsize=figsize)
+
 # the left hand column of figure one shows all of the cases for each event type
 # plot the cases for each event type
 print("plotting the cases for each event type")
-cp.plot_all_cases(
+pp.plot_all_cases(
     ewb_cases,
     event_type="tropical_cyclone",
-    filename=basepath + "docs/notebooks/figs/ewb_tcs.png",
     fill_boxes=True,
+    ax=axs[0, 0],
 )
-cp.plot_all_cases(
+pp.plot_all_cases(
     ewb_cases,
     event_type="freeze",
-    filename=basepath + "docs/notebooks/figs/ewb_freeze.png",
     fill_boxes=True,
+    ax=axs[1, 0],
 )
-cp.plot_all_cases(
+pp.plot_all_cases(
     ewb_cases,
     event_type="heat_wave",
-    filename=basepath + "docs/notebooks/figs/ewb_heat.png",
     fill_boxes=True,
+    ax=axs[2, 0],
 )
-cp.plot_all_cases(
+pp.plot_all_cases(
     ewb_cases,
     event_type="atmospheric_river",
-    filename=basepath + "docs/notebooks/figs/ewb_ar.png",
     fill_boxes=True,
+    ax=axs[3, 0],
 )
-cp.plot_all_cases(
+pp.plot_all_cases(
     ewb_cases,
     event_type="severe_convection",
-    filename=basepath + "docs/notebooks/figs/ewb_convective.png",
     fill_boxes=True,
+    ax=axs[4, 0],
 )
 
-# the next column of figure one shows the cases for each event type with the obs
-# plot the cases for each event type with the observations
-cp.plot_all_cases_and_obs(
-    ewb_cases,
-    event_type="tropical_cyclone",
-    filename=basepath + "docs/notebooks/figs/ewb_tcs_obs.png",
-    targets=case_operators_with_targets_established,
-)
-cp.plot_all_cases_and_obs(
-    ewb_cases,
-    event_type="freeze",
-    filename=basepath + "docs/notebooks/figs/ewb_freeze_obs.png",
-    targets=case_operators_with_targets_established,
-)
-cp.plot_all_cases_and_obs(
-    ewb_cases,
-    event_type="heat_wave",
-    filename=basepath + "docs/notebooks/figs/ewb_heat_obs.png",
-    targets=case_operators_with_targets_established,
-)
-cp.plot_all_cases_and_obs(
-    ewb_cases,
-    event_type="atmospheric_river",
-    filename=basepath + "docs/notebooks/figs/ewb_ar_obs.png",
-    targets=case_operators_with_targets_established,
-)
-cp.plot_all_cases_and_obs(
-    ewb_cases,
-    event_type="severe_convection",
-    filename=basepath + "docs/notebooks/figs/ewb_convective_obs.png",
-    targets=case_operators_with_targets_established,
-)
+# # the next column of figure one shows the cases for each event type with the obs
+# # plot the cases for each event type with the observations
+# pp.plot_all_cases_and_obs(
+#     ewb_cases,
+#     event_type="tropical_cyclone",
+#     filename=basepath + "docs/notebooks/figs/ewb_tcs_obs.png",
+#     targets=case_operators_with_targets_established,
+# )
+# pp.plot_all_cases_and_obs(
+#     ewb_cases,
+#     event_type="freeze",
+#     filename=basepath + "docs/notebooks/figs/ewb_freeze_obs.png",
+#     targets=case_operators_with_targets_established,
+# )
+# pp.plot_all_cases_and_obs(
+#     ewb_cases,
+#     event_type="heat_wave",
+#     filename=basepath + "docs/notebooks/figs/ewb_heat_obs.png",
+#     targets=case_operators_with_targets_established,
+# )
+# pp.plot_all_cases_and_obs(
+#     ewb_cases,
+#     event_type="atmospheric_river",
+#     filename=basepath + "docs/notebooks/figs/ewb_ar_obs.png",
+#     targets=case_operators_with_targets_established,
+# )
+# pp.plot_all_cases_and_obs(
+#     ewb_cases,
+#     event_type="severe_convection",
+#     filename=basepath + "docs/notebooks/figs/ewb_convective_obs.png",
+#     targets=case_operators_with_targets_established,
+# )
+
+
+fig.tight_layout()
+fig.savefig(basepath + "docs/notebooks/figs/figure1.png")

@@ -54,22 +54,34 @@ def plot_polygon(
 
 
 def plot_all_cases(
-    ewb_cases, event_type=None, filename=None, bounding_box=None, fill_boxes=False
+    ewb_cases,
+    event_type=None,
+    filename=None,
+    bounding_box=None,
+    fill_boxes=False,
+    ax=None,
 ):
     """A function to plot all cases
     Args:
         ewb_cases (list): A list of cases to plot.
         event_type (str): The type of event to plot. If None, all
-        events will be plotted).
+            events will be plotted).
         filename (str): The name of the file to save the plot. If
-        None, the plot will not be saved.
+            None, the plot will not be saved.
         bounding_box (tuple): A tuple of the form (min_lon, min_lat,
         max_lon, max_lat) to set the bounding box for the plot. If
-        None, the full world map will be plotted.
+            None, the full world map will be plotted.
+        fill_boxes (bool): Whether to fill the boxes with color.
+        ax (matplotlib.axes.Axes): The axis to plot the cases on. If None, a new axis
+            will be created using plt.axes(projection=ccrs.PlateCarree()).
     """
     # plot all cases on one giant world map
-    _ = plt.figure(figsize=(15, 10))
-    ax = plt.axes(projection=ccrs.PlateCarree())
+    if ax is None:
+        _ = plt.figure(figsize=(15, 10))
+        ax = plt.axes(projection=ccrs.PlateCarree())
+
+    # setup to plot cartopy axes
+    # ax.set_projection(ccrs.PlateCarree())
 
     # plot the full map or a subset if bounding_box is specified
     if bounding_box is None:
@@ -276,6 +288,7 @@ def plot_all_cases_and_obs(
     targets=None,
     show_orig_pph=False,
     case_id=None,
+    ax=None,
 ):
     """Plot all cases (outlined) and observations (filled) on map.
     Args:
@@ -283,16 +296,21 @@ def plot_all_cases_and_obs(
         event_type (str): The type of event to plot. If None, all
         events will be plotted).
         filename (str): The name of the file to save the plot. If
-        None, the plot will not be saved.
+            None, the plot will not be saved.
         bounding_box (tuple): A tuple of the form (min_lon, min_lat,
         max_lon, max_lat) to set the bounding box for the plot. If
-        None, the full world map will be plotted.
-        targets (dict): A dictionary containing observation metadata
-        for each case, such as PPH and LSR reports.
+            None, the full world map will be plotted.
+        targets (dict): A dictionary containing observation metadata for each case,
+            such as PPH and LSR reports.
+        show_orig_pph (bool): Whether to show the original PPH reports.
+        case_id (str): The ID of the case to plot. If None, all cases will be plotted.
+        ax (matplotlib.axes.Axes): The axis to plot the cases on. If None, a new axis
+            will be created using plt.axes(projection=ccrs.PlateCarree()).
     """
     # plot all cases on one giant world map
-    _ = plt.figure(figsize=(15, 10))
-    ax = plt.axes(projection=ccrs.PlateCarree())
+    if ax is None:
+        _ = plt.figure(figsize=(15, 10))
+        ax = plt.axes(projection=ccrs.PlateCarree())
 
     # plot the full map or a subset if bounding_box is specified
     if bounding_box is None:
@@ -1147,7 +1165,7 @@ def generate_freeze_plots(
 
 
 def plot_results_by_metric(
-    data, settings, title, filename=None, show_all_in_legend=False
+    data, settings, title, filename=None, show_all_in_legend=False, ax=None
 ):
     """
     Plots the results of the ExtremeWeatherBench for the data
@@ -1163,7 +1181,8 @@ def plot_results_by_metric(
     """
     sns.set_theme(style="whitegrid")
     _ = sns.color_palette("tab10")
-    _, ax = plt.subplots(figsize=(16, 4))
+    if ax is None:
+        _, ax = plt.figure(figsize=(16, 4))
 
     legend_elements = []
     legend_labels = list()
@@ -1196,7 +1215,7 @@ def plot_results_by_metric(
         else:
             my_label = my_settings["label_str"]
 
-        plt.plot(
+        ax.plot(
             my_mean,
             color=my_settings["color"],
             linewidth=4,
@@ -1227,7 +1246,7 @@ def plot_results_by_metric(
 
     ax.set_ylabel("Celsius")
     ax.set_xlabel("Lead Time (days)")
-    plt.title(title)
+    ax.set_title(title)
 
     # Add a blank line to your legend_elements list
     legend_elements.append(plt.Line2D([0], [0], color="white", alpha=0, label=" "))
@@ -1254,3 +1273,57 @@ def plot_results_by_metric(
 
     if filename is not None:
         plt.savefig(filename, bbox_inches="tight", dpi=300)
+
+
+def subset_results_to_xarray(
+    results_df,
+    forecast_source,
+    target_source,
+    metric,
+    init_time=None,
+    case_id_list=None,
+):
+    """
+    takes in one of the overall results tables and returns a multi-dimensional xarray
+        for easier plotting.
+    parameters:
+        results_df: pandas dataframe containing the results
+        forecast_source: string, the forecast source
+        target_source: string, the target source
+        metric: string, the metric to plot
+        init_time: string, the initial time to subset the data to
+            (None if you don't want to subset by init time)
+        case_id_list: list of strings, the case ids to subset the data to
+            (None if you don't want to subset)
+    returns:
+        subset_xa: xarray dataset containing the subsetted data
+    """
+    # if the case_id_list is not empty, subset to the specific cases
+    if case_id_list is not None:
+        subset = results_df[
+            (results_df["forecast_source"] == forecast_source)
+            & (results_df["target_source"] == target_source)
+            & (results_df["metric"] == metric)
+            & (results_df["case_id_number"].isin(case_id_list))
+        ]
+    else:
+        subset = results_df[
+            (results_df["forecast_source"] == forecast_source)
+            & (results_df["target_source"] == target_source)
+            & (results_df["metric"] == metric)
+        ]
+
+    subset = subset.astype({"lead_time": "timedelta64[ns]"})
+
+    # if the init time is specified, subset that
+    if init_time == "zeroz":
+        # convert to a timedelta object so we can grab zeroz
+        subset = subset[subset["lead_time"].dt.seconds % 86400 == 0]
+    elif init_time == "twelvez":
+        subset = subset[subset["lead_time"].dt.seconds % 86400 == 43200]
+
+    # prepare for xarray conversion
+    subset2 = subset.set_index(["lead_time", "case_id_number"]).sort_index()
+    subset_xa = subset2.to_xarray()
+
+    return subset_xa
