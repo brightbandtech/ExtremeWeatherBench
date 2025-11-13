@@ -1,0 +1,25 @@
+cases:
+  - case_id_number: 1000
+    title: Yearlong Test
+    start_date: 2024-01-01 00:00:00
+    end_date: 2024-12-31 18:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: -90.0
+        latitude_max: 90.0
+        longitude_min: 0
+        longitude_max: 359.75
+    event_type: heat_wave
+  - case_id_number: 1001
+    title: Yearlong Test
+    start_date: 2024-01-01 00:00:00
+    end_date: 2024-12-31 18:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: -90.0
+        latitude_max: 90.0
+        longitude_min: 0
+        longitude_max: 359.75
+    event_type: freeze
