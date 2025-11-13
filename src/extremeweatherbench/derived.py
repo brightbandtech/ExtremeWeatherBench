@@ -112,17 +112,32 @@ class CravenBrooksSignificantSevere(DerivedVariable):
             else:
                 raise KeyError("No variable to compute dewpoint temperature.")
         layer_depth = self.layer_depth
-        cbss = sc.craven_brooks_significant_severe(
-            air_temperature=data["air_temperature"],
-            dewpoint_temperature=data["dewpoint_temperature"],
-            geopotential=data["geopotential"],
+
+        # Check if pressure levels need to be reversed
+        # CAPE expects descending order (surface to top)
+        needs_reverse = data["level"][0] < data["level"][-1]
+        if needs_reverse:
+            # Reverse and load to ensure contiguous arrays for Numba
+            data = data.isel(level=slice(None, None, -1)).load()
+
+        # Compute CAPE (geopotential in m²/s²)
+        cape = sc.compute_mixed_layer_cape(
             pressure=data["level"],
+            temperature=data["air_temperature"],
+            dewpoint=data["dewpoint_temperature"],
+            geopotential=data["geopotential"],
+            pressure_dim="level",
+            depth=layer_depth,
+        )
+
+        shear = sc.low_level_shear(
             eastward_wind=data["eastward_wind"],
             northward_wind=data["northward_wind"],
             surface_eastward_wind=data["surface_eastward_wind"],
             surface_northward_wind=data["surface_northward_wind"],
-            layer_depth=layer_depth,
         )
+
+        cbss = cape * shear
         coords = {dim: data.coords[dim] for dim in data.sizes.keys() if dim != "level"}
         return xr.DataArray(
             cbss,
