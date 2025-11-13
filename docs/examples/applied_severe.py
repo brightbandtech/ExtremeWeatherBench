@@ -1,5 +1,7 @@
 import logging
 
+from dask.distributed import Client
+
 from extremeweatherbench import cases, derived, evaluate, inputs, metrics
 
 logging.getLogger("urllib3.connectionpool").setLevel(logging.CRITICAL)
@@ -24,28 +26,39 @@ hres_forecast = inputs.ZarrForecast(
 
 # Option 1: Use the cached factory functions directly (simplest approach)
 # These will automatically share the global cache for the same thresholds
-simple_metrics = [
-    metrics.CSI(forecast_threshold=15000, target_threshold=0.3),
-    metrics.FAR(forecast_threshold=15000, target_threshold=0.3),
-    metrics.TP(forecast_threshold=15000, target_threshold=0.3),
-    metrics.FP(forecast_threshold=15000, target_threshold=0.3),
-    metrics.TN(forecast_threshold=15000, target_threshold=0.3),
-    metrics.FN(forecast_threshold=15000, target_threshold=0.3),
+threshold_metrics = [
+    metrics.ThresholdMetric(
+        metrics=[
+            metrics.CSI,
+            metrics.FAR,
+            metrics.TP,
+            metrics.FP,
+            metrics.TN,
+            metrics.FN,
+        ],
+        forecast_threshold=15000,
+        target_threshold=0.3,
+        aggregate_func="max",
+        aggregate_dims=["valid_time"],
+    )
 ]
+
 
 # just one for now
 severe_convection_evaluation_objects = [
     inputs.EvaluationObject(
         event_type="severe_convection",
-        metric_list=simple_metrics,  # These will use global cache automatically
+        metric_list=threshold_metrics,  # These will use global cache automatically
         target=pph_target,
         forecast=hres_forecast,
     ),
 ]
-
-test_ewb = evaluate.ExtremeWeatherBench(
-    case_metadata=case_yaml, evaluation_objects=severe_convection_evaluation_objects
-)
-logger.info("Starting EWB run")
-outputs = test_ewb.run(n_jobs=1)
-outputs.to_csv("applied_severe_results.csv")
+if __name__ == "__main__":
+    with Client() as client:
+        test_ewb = evaluate.ExtremeWeatherBench(
+            case_metadata=case_yaml,
+            evaluation_objects=severe_convection_evaluation_objects,
+        )
+        logger.info("Starting EWB run")
+        outputs = test_ewb.run(parallel_config={"backend": "dask"})
+        outputs.to_csv("applied_severe_results.csv")
