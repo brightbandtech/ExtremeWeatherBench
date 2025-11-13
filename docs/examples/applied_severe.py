@@ -24,8 +24,6 @@ hres_forecast = inputs.ZarrForecast(
     storage_options={"remote_options": {"anon": True}},
 )
 
-# Option 1: Use the cached factory functions directly (simplest approach)
-# These will automatically share the global cache for the same thresholds
 threshold_metrics = [
     metrics.ThresholdMetric(
         metrics=[
@@ -48,7 +46,7 @@ threshold_metrics = [
 severe_convection_evaluation_objects = [
     inputs.EvaluationObject(
         event_type="severe_convection",
-        metric_list=threshold_metrics,  # These will use global cache automatically
+        metric_list=threshold_metrics,
         target=pph_target,
         forecast=hres_forecast,
     ),
