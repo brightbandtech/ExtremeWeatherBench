@@ -608,12 +608,11 @@ def plot_all_cases_and_obs(
         title = "ExtremeWeatherBench Cases (n = %d)" % sum(counts_by_type.values())
     else:
         title = (
-            f"ExtremeWeatherBench Cases: "
             f"{event_type.replace('_', ' ').title()} (n = %d)"
             % counts_by_type[event_type]
         )
 
-    ax.set_title(title, loc="left", fontsize=20)
+    ax.set_title(title, fontsize=20)
 
     # save if there is a filename specified (otherwise the user
     # just wants to see the plot)
@@ -1180,7 +1179,7 @@ def plot_results_by_metric(
         be shown in the legend, if False they will be grouped
     """
     if ax is None:
-        fig = plt.figure(figsize=(16, 4))
+        fig = plt.figure(figsize=(8, 4))
         ax = fig.add_axes([0, 0, 1, 1])
 
     sns.set_theme(style="whitegrid")
@@ -1248,7 +1247,7 @@ def plot_results_by_metric(
 
     ax.set_ylabel("Celsius")
     ax.set_xlabel("Lead Time (days)")
-    ax.set_title(title)
+    ax.set_title(title, fontsize=20)
 
     # Add a blank line to your legend_elements list
     legend_elements.append(plt.Line2D([0], [0], color="white", alpha=0, label=" "))
@@ -1329,3 +1328,162 @@ def subset_results_to_xarray(
     subset_xa = subset2.to_xarray()
 
     return subset_xa
+
+
+def plot_heatmap(
+    relative_error_array, error_array, settings, title=None, filename=None, ax=None
+):
+    """
+    Plots a heatmap of the relative error of the models versus the IFS HRES
+    parameters:
+        relative_error_array: xarray dataset containing the relative error
+        error_array: xarray dataset containing the error
+        settings: list of dictionaries containing the plot settings
+        title: string, the title of the plot
+        filename: string, filename to save the plot to (None if you don't want to
+            save it)
+        ax: matplotlib axis object, the axis to plot the heatmap on
+            (None if you are creating a new figure). If provided, the function
+            will create 3 subplots within this axis, effectively subdividing it.
+            The parent axis will be hidden and used as a container.
+    """
+    n_rows = 1
+    n_cols = 3
+    col_space = 0.5
+    row_space = 0.5
+    figsize = (
+        5 * n_cols + col_space * (n_cols - 1),
+        5 * n_rows + row_space * (n_rows - 1),
+    )
+
+    reds = sns.color_palette("Reds", 6)
+    blues = sns.color_palette("Blues_r", 6)
+    cmap = mcolors.ListedColormap(
+        blues + [(0.95, 0.95, 0.95)] + reds, name="wb_scorecard"
+    )
+    cb_levels = [-50, -20, -10, -5, -2, -1, 1, 2, 5, 10, 20, 50]
+    vmin = cb_levels[0]
+    vmax = cb_levels[-1]
+    norm = mcolors.BoundaryNorm(cb_levels, cmap.N, extend="both")
+    cbar_kws = dict(
+        orientation="horizontal",
+        extend="both",
+        fraction=0.05,
+        pad=0.05,
+    )
+
+    # Create figure and subplots
+    if ax is None:
+        # Create new figure and subplots
+        fig, axs = plt.subplots(n_rows, n_cols, figsize=figsize)
+        is_subplot = False
+    else:
+        # Use existing axis - create subplots within it
+        fig = ax.get_figure()
+        parent_pos = ax.get_position()
+
+        # Calculate positions for 3 subplots within the parent axis
+        # Account for spacing between subplots
+        total_width = parent_pos.width
+        total_height = parent_pos.height
+        # Use smaller spacing for nested subplots
+        spacing = 0.01  # spacing between subplots (as fraction of parent)
+
+        subplot_width = (total_width - spacing * (n_cols - 1)) / n_cols
+
+        # Leave some space at top and bottom for labels when used as subplot
+        label_padding = 0.05  # fraction of height to reserve for labels
+        plot_height = total_height * (1 - label_padding)
+        plot_bottom = parent_pos.y0 + total_height * label_padding * 0.3
+
+        axs = []
+        for i in range(n_cols):
+            left = parent_pos.x0 + i * (subplot_width + spacing)
+            # Create new axis within the parent axis's bounding box
+            sub_ax = fig.add_axes([left, plot_bottom, subplot_width, plot_height])
+            axs.append(sub_ax)
+
+        # Hide the parent axis since we're using it as a container
+        ax.set_visible(False)
+        is_subplot = True
+
+    # Adjust font sizes based on whether we're a subplot
+    if is_subplot:
+        title_fontsize = "large"
+        label_fontsize = "large"
+        tick_fontsize = "large"
+        title_y = 1.05
+    else:
+        title_fontsize = "xx-large"
+        label_fontsize = "large"
+        tick_fontsize = "large"
+        title_y = 1.1
+
+    # Adjust annotation font size for subplots
+    annot_fontsize = 12 if is_subplot else None
+
+    subplot_titles = settings["subplot_titles"]
+    for i, my_title in enumerate(subplot_titles):
+        ax = axs[i]
+        print(my_title)
+        metric = settings["metric_str"][i]
+
+        ax = sns.heatmap(
+            relative_error_array[metric],
+            annot=error_array[metric],
+            fmt=".3g",
+            cmap=cmap,
+            norm=norm,
+            vmin=vmin,
+            vmax=vmax,
+            square=True,
+            linecolor="w",
+            linewidths=0.5 if is_subplot else 1.0,
+            cbar=False,
+            ax=ax,
+            annot_kws={"size": annot_fontsize} if annot_fontsize else {},
+        )
+
+        if is_subplot and i == 0 or not is_subplot:
+            ax.set_yticklabels(
+                settings["model_order"], fontsize=tick_fontsize, rotation=0
+            )
+        else:
+            ax.set_yticklabels([])
+
+        ax.set_xticklabels(settings["lead_time_days"], fontsize=tick_fontsize)
+        ax.set_xlabel("Lead time [days]", fontsize=label_fontsize)
+        ax.set_title(my_title, fontsize=title_fontsize, y=title_y)
+
+        # Add padding for labels when used as subplot
+        if is_subplot:
+            ax.tick_params(axis="both", which="major", pad=2)
+
+    # Position colorbar appropriately based on whether we're a subplot
+    if is_subplot:
+        # When used as subplot, position colorbar relative to the subplot axes
+        # Get bounding box of all subplot axes
+        bboxes = [ax.get_position() for ax in axs]
+        left = min(bbox.x0 for bbox in bboxes)
+        right = max(bbox.x1 for bbox in bboxes)
+        bottom = min(bbox.y0 for bbox in bboxes)
+        width = right - left
+        # Position colorbar below the subplots
+        # cax = fig.add_axes((left + width * 0.25, bottom - 0.08, width * 0.5, 0.03))
+    else:
+        # Original positioning for standalone figure
+        cax = fig.add_axes((0.25, -0.05, 0.5, 0.05))
+
+        cb = fig.colorbar(mappable=ax.collections[0], cax=cax, **cbar_kws)
+        cb.ax.set_xticks(cb_levels)
+        cbar_fontsize = "small" if is_subplot else "large"
+        cb.ax.set_xlabel(
+            "Better ← % difference vs IFS HRES → Worse", fontsize=cbar_fontsize
+        )
+
+    # Only call tight_layout if we created the figure ourselves
+    if not is_subplot:
+        fig.tight_layout()
+
+    if filename is not None:
+        plt.savefig(filename, bbox_inches="tight", dpi=300)
