@@ -1179,10 +1179,12 @@ def plot_results_by_metric(
         show_all_in_legend: boolean, if True, then all labels will
         be shown in the legend, if False they will be grouped
     """
+    if ax is None:
+        fig = plt.figure(figsize=(16, 4))
+        ax = fig.add_axes([0, 0, 1, 1])
+
     sns.set_theme(style="whitegrid")
     _ = sns.color_palette("tab10")
-    if ax is None:
-        _, ax = plt.figure(figsize=(16, 4))
 
     legend_elements = []
     legend_labels = list()

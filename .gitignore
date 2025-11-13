@@ -22,3 +22,7 @@ docs/notebooks/figs/gc_heat_results.pkl
 docs/notebooks/figs/hres_heat_results.pkl
 docs/notebooks/figs/pang_heat_results.pkl
 docs/notebooks/09_scorecard.ipynb
+docs/notebooks/figs/extreme_weather_heat_cases_AU.png
+docs/notebooks/figs/extreme_weather_heat_cases_EU.png
+docs/notebooks/figs/extreme_weather_heat_cases_NA.png
+docs/notebooks/figs/figure3_part1_regions.png
