@@ -1,6 +1,6 @@
 cases:
   - case_id_number: 1000
-    title: Yearlong Test
+    title: Yearlong Heat Wave Test
     start_date: 2024-01-01 00:00:00
     end_date: 2024-12-31 18:00:00
     location:
@@ -12,7 +12,7 @@ cases:
         longitude_max: 359.75
     event_type: heat_wave
   - case_id_number: 1001
-    title: Yearlong Test
+    title: Yearlong Freeze Test
     start_date: 2024-01-01 00:00:00
     end_date: 2024-12-31 18:00:00
     location:
