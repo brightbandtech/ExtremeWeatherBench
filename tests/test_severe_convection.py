@@ -563,7 +563,7 @@ class TestComputeCapeCin:
             dewpoint_profile,
             geopotential,
         )
-        print(cape.values)
+
         # Check that the output has the correct shape (scalars)
         assert cape.values.shape == ()
         assert "level" not in cape.dims
@@ -601,7 +601,7 @@ class TestComputeCapeCin:
             dewpoint_profile,
             geopotential,
         )
-        print(cape.values)
+
         # Check that the output has the correct shape (scalars)
         assert cape.values.shape == ()
         assert "level" not in cape.dims
