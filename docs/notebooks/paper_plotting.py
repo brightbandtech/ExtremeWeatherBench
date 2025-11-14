@@ -1425,7 +1425,7 @@ def plot_heatmap(
     subplot_titles = settings["subplot_titles"]
     for i, my_title in enumerate(subplot_titles):
         ax = axs[i]
-        print(my_title)
+        # print(my_title)
         metric = settings["metric_str"][i]
 
         ax = sns.heatmap(
@@ -1459,15 +1459,21 @@ def plot_heatmap(
         if is_subplot:
             ax.tick_params(axis="both", which="major", pad=2)
 
+    # if there are less than n_cols subplots, add a blank subplot
+    if len(subplot_titles) < n_cols:
+        for i in range(len(subplot_titles), n_cols):
+            print(f"adding blank subplot {i}")
+            axs[i].set_visible(False)
+
     # Position colorbar appropriately based on whether we're a subplot
     if is_subplot:
         # When used as subplot, position colorbar relative to the subplot axes
         # Get bounding box of all subplot axes
         bboxes = [ax.get_position() for ax in axs]
         left = min(bbox.x0 for bbox in bboxes)
-        right = max(bbox.x1 for bbox in bboxes)
-        bottom = min(bbox.y0 for bbox in bboxes)
-        width = right - left
+        # right = max(bbox.x1 for bbox in bboxes)
+        # bottom = min(bbox.y0 for bbox in bboxes)
+        # width = right - left
         # Position colorbar below the subplots
         # cax = fig.add_axes((left + width * 0.25, bottom - 0.08, width * 0.5, 0.03))
     else:
