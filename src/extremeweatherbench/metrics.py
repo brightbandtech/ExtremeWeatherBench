@@ -118,6 +118,8 @@ class BaseMetric(abc.ABC, metaclass=ComputeDocstringMetaclass):
         forecast_variable: Optional[str | derived.DerivedVariable] = None,
         target_variable: Optional[str | derived.DerivedVariable] = None,
     ):
+        # Store the original variables (str or DerivedVariable instances)
+        # Do NOT convert to string to preserve output_variables info
         self.name = name
         self.preserve_dims = preserve_dims
         self.forecast_variable = forecast_variable
@@ -130,14 +132,6 @@ class BaseMetric(abc.ABC, metaclass=ComputeDocstringMetaclass):
             raise ValueError(
                 "Both forecast_variable and target_variable must be provided, "
                 "or both must be None"
-            )
-        else:
-            # Convert DerivedVariable object/class to string using .name
-            self.forecast_variable = derived._maybe_convert_variable_to_string(
-                self.forecast_variable
-            )
-            self.target_variable = derived._maybe_convert_variable_to_string(
-                self.target_variable
             )
 
     @abc.abstractmethod
