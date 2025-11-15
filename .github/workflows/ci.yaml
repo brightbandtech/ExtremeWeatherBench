@@ -13,8 +13,7 @@ jobs:
         python-version: ["3.12"]
     steps:
       - uses: actions/checkout@v4
-        with:
-          lfs: true
+
       - name: Set up Python env with uv
         uses: astral-sh/setup-uv@v4
         with:
