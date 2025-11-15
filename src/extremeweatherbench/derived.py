@@ -4,6 +4,8 @@ from typing import List, Optional, Sequence, Union
 
 import xarray as xr
 
+import extremeweatherbench.events.atmospheric_river as ar
+
 logger = logging.getLogger(__name__)
 
 
@@ -72,6 +74,30 @@ class DerivedVariable(abc.ABC):
             A DataArray with the derived variable.
         """
         return self.derive_variable(data, *args, **kwargs)
+
+
+class AtmosphericRiverVariables(DerivedVariable):
+    """A derived variable that computes atmospheric river related variables.
+
+    Calculates the IVT (Integrated Vapor Transport) and its Laplacian from a dataset.IVT
+    is calculated using the method described in Newell et al. 1992 and elsewhere
+    (e.g. Mo 2024).
+
+    The Laplacian of IVT is calculated using a Gaussian blurring kernel with a
+    sigma of 3 grid points, meant to smooth out 0.25 degree grid scale features.
+    """
+
+    variables = [
+        "eastward_wind",
+        "northward_wind",
+        "specific_humidity",
+    ]
+
+    name = "atmospheric_river"
+
+    def derive_variable(self, data: xr.Dataset, *args, **kwargs) -> xr.Dataset:
+        """Derive the atmospheric river mask using xr.apply_ufunc approach."""
+        return ar.build_atmospheric_river_mask_and_land_intersection(data)
 
 
 def maybe_derive_variables(

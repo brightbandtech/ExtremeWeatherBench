@@ -170,7 +170,6 @@ class TestBaseMetric:
         metric = TestMetricWithParams()
         forecast = xr.DataArray([1, 2, 3])
         target = xr.DataArray([0, 1, 2])
-
         # Should handle extra kwargs without error
         result = metric.compute_metric(
             forecast,
@@ -179,9 +178,214 @@ class TestBaseMetric:
             preserve_dims="init_time",
             invalid_param=999,
         )
-
-        # Just verify it runs without error
         assert result is not None
+
+
+class TestThresholdMetrics:
+    """Tests for ThresholdMetric classes."""
+
+    def test_csi_threshold_metric(self):
+        """Test CSI threshold metric instantiation and properties."""
+        csi_metric = metrics.CSI(forecast_threshold=15000, target_threshold=0.3)
+        assert isinstance(csi_metric, metrics.ThresholdMetric)
+        assert isinstance(csi_metric, metrics.BaseMetric)
+        assert hasattr(csi_metric, "compute_metric")
+        assert hasattr(csi_metric, "__call__")
+        assert csi_metric.name == "critical_success_index"
+        assert csi_metric.forecast_threshold == 15000
+        assert csi_metric.target_threshold == 0.3
+
+    def test_far_threshold_metric(self):
+        """Test FAR threshold metric instantiation and properties."""
+        far_metric = metrics.FAR(forecast_threshold=15000, target_threshold=0.3)
+        assert isinstance(far_metric, metrics.ThresholdMetric)
+        assert far_metric.name == "false_alarm_ratio"
+        assert far_metric.forecast_threshold == 15000
+        assert far_metric.target_threshold == 0.3
+
+    def test_tp_threshold_metric(self):
+        """Test TP threshold metric instantiation and properties."""
+        tp_metric = metrics.TP(forecast_threshold=15000, target_threshold=0.3)
+        assert isinstance(tp_metric, metrics.ThresholdMetric)
+        assert tp_metric.name == "true_positive"
+        assert tp_metric.forecast_threshold == 15000
+        assert tp_metric.target_threshold == 0.3
+
+    def test_fp_threshold_metric(self):
+        """Test FP threshold metric instantiation and properties."""
+        fp_metric = metrics.FP(forecast_threshold=15000, target_threshold=0.3)
+        assert isinstance(fp_metric, metrics.ThresholdMetric)
+        assert fp_metric.name == "false_positive"
+        assert fp_metric.forecast_threshold == 15000
+        assert fp_metric.target_threshold == 0.3
+
+    def test_tn_threshold_metric(self):
+        """Test TN threshold metric instantiation and properties."""
+        tn_metric = metrics.TN(forecast_threshold=15000, target_threshold=0.3)
+        assert isinstance(tn_metric, metrics.ThresholdMetric)
+        assert tn_metric.name == "true_negative"
+        assert tn_metric.forecast_threshold == 15000
+        assert tn_metric.target_threshold == 0.3
+
+    def test_fn_threshold_metric(self):
+        """Test FN threshold metric instantiation and properties."""
+        fn_metric = metrics.FN(forecast_threshold=15000, target_threshold=0.3)
+        assert isinstance(fn_metric, metrics.ThresholdMetric)
+        assert fn_metric.name == "false_negative"
+        assert fn_metric.forecast_threshold == 15000
+        assert fn_metric.target_threshold == 0.3
+
+    def test_accuracy_threshold_metric(self):
+        """Test Accuracy threshold metric instantiation and properties."""
+        acc_metric = metrics.Accuracy(forecast_threshold=15000, target_threshold=0.3)
+        assert isinstance(acc_metric, metrics.ThresholdMetric)
+        assert acc_metric.name == "accuracy"
+        assert acc_metric.forecast_threshold == 15000
+        assert acc_metric.target_threshold == 0.3
+
+    def test_threshold_metric_instance_interface(self):
+        """Test that instance callable interface works."""
+        # Create test data
+        forecast = xr.DataArray([0.6, 0.8], dims=["x"])
+        target = xr.DataArray([0.7, 0.9], dims=["x"])
+
+        # Test instance callable usage
+        csi_instance = metrics.CSI(forecast_threshold=0.5, target_threshold=0.5)
+        csi_instance_result = csi_instance(forecast, target, preserve_dims="x")
+
+        # Should return a DataArray
+        assert isinstance(csi_instance_result, xr.DataArray)
+
+        # Test using compute_metric directly on instance
+        csi_direct_result = csi_instance.compute_metric(
+            forecast, target, preserve_dims="x"
+        )
+
+        # Both should return same type
+        assert isinstance(csi_direct_result, type(csi_instance_result))
+
+    def test_threshold_metric_parameter_override(self):
+        """Test that instance call can override configured thresholds."""
+        # Create instance with specific thresholds
+        csi_instance = metrics.CSI(forecast_threshold=0.7, target_threshold=0.8)
+
+        # Create test data
+        forecast = xr.DataArray([0.6, 0.8], dims=["x"])
+        target = xr.DataArray([0.7, 0.9], dims=["x"])
+
+        # Call with different thresholds (should override instance values)
+        result = csi_instance(
+            forecast,
+            target,
+            forecast_threshold=0.5,
+            target_threshold=0.5,
+            preserve_dims="x",
+        )
+
+        # Should not raise an exception
+        assert isinstance(result, xr.DataArray)
+
+    def test_threshold_metric_cannot_instantiate_base_class(self):
+        """Test that ThresholdMetric base class cannot be instantiated directly."""
+        with pytest.raises(TypeError):
+            metrics.ThresholdMetric()
+
+    def test_cached_metrics_computation(self):
+        """Test that cached metrics can compute results."""
+        # Clear cache first
+        metrics.clear_contingency_cache()
+
+        # Create simple test data
+        forecast = xr.DataArray([[15500, 14000], [16000, 14500]], dims=["x", "y"])
+        target = xr.DataArray([[0.4, 0.2], [0.5, 0.25]], dims=["x", "y"])
+
+        # Test all factory functions
+        csi_metric = metrics.CSI(forecast_threshold=15000, target_threshold=0.3)
+        far_metric = metrics.FAR(forecast_threshold=15000, target_threshold=0.3)
+        tp_metric = metrics.TP(forecast_threshold=15000, target_threshold=0.3)
+        fp_metric = metrics.FP(forecast_threshold=15000, target_threshold=0.3)
+
+        # Compute results using callable instances (should not raise exceptions)
+        csi_result = csi_metric(forecast, target, preserve_dims="x")
+        far_result = far_metric(forecast, target, preserve_dims="x")
+        tp_result = tp_metric(forecast, target, preserve_dims="x")
+        fp_result = fp_metric(forecast, target, preserve_dims="x")
+
+        # All should return xarray objects
+        assert isinstance(csi_result, xr.DataArray)
+        assert isinstance(far_result, xr.DataArray)
+        assert isinstance(tp_result, xr.DataArray)
+        assert isinstance(fp_result, xr.DataArray)
+
+    def test_cache_efficiency(self):
+        """Test that cache is shared across metrics with same thresholds."""
+        # Clear cache first
+        metrics.clear_contingency_cache()
+        initial_cache_size = len(metrics._GLOBAL_CONTINGENCY_CACHE)
+
+        forecast = xr.DataArray([[15500, 14000], [16000, 14500]], dims=["x", "y"])
+        target = xr.DataArray([[0.4, 0.2], [0.5, 0.25]], dims=["x", "y"])
+
+        # Create multiple metrics with same thresholds
+        csi_metric = metrics.CSI(forecast_threshold=15000, target_threshold=0.3)
+        far_metric = metrics.FAR(forecast_threshold=15000, target_threshold=0.3)
+        tp_metric = metrics.TP(forecast_threshold=15000, target_threshold=0.3)
+
+        # First computation should create cache entry
+        csi_metric.compute_metric(forecast, target, preserve_dims="x")
+        cache_size_after_first = len(metrics._GLOBAL_CONTINGENCY_CACHE)
+
+        # Subsequent computations should reuse cache
+        far_metric.compute_metric(forecast, target, preserve_dims="x")
+        tp_metric.compute_metric(forecast, target, preserve_dims="x")
+        cache_size_after_all = len(metrics._GLOBAL_CONTINGENCY_CACHE)
+
+        # Should have exactly one more cache entry than initial
+        assert cache_size_after_first == initial_cache_size + 1
+        assert cache_size_after_all == cache_size_after_first
+
+    def test_mathematical_correctness(self):
+        """Test that ratios sum to 1 and CSI/FAR are mathematically correct."""
+        # Clear cache
+        metrics.clear_contingency_cache()
+
+        # Simple test case for verification
+        forecast = xr.DataArray([[15500, 14000], [16000, 14500]], dims=["x", "y"])
+        target = xr.DataArray([[0.4, 0.2], [0.5, 0.25]], dims=["x", "y"])
+
+        # Get all contingency table components
+        tp_result = metrics.TP(15000, 0.3).compute_metric(
+            forecast, target, preserve_dims="x"
+        )
+        fp_result = metrics.FP(15000, 0.3).compute_metric(
+            forecast, target, preserve_dims="x"
+        )
+        tn_result = metrics.TN(15000, 0.3).compute_metric(
+            forecast, target, preserve_dims="x"
+        )
+        fn_result = metrics.FN(15000, 0.3).compute_metric(
+            forecast, target, preserve_dims="x"
+        )
+
+        # Ratios should sum to 1
+        total = tp_result + fp_result + tn_result + fn_result
+        np.testing.assert_allclose(total.values, [1.0, 1.0], rtol=1e-10)
+
+        # CSI and FAR should be reasonable
+        csi_result = metrics.CSI(15000, 0.3).compute_metric(
+            forecast, target, preserve_dims="x"
+        )
+        far_result = metrics.FAR(15000, 0.3).compute_metric(
+            forecast, target, preserve_dims="x"
+        )
+
+        # CSI should be between 0 and 1
+        assert np.all(csi_result.values >= 0)
+        assert np.all(csi_result.values <= 1)
+
+        # FAR should be between 0 and 1
+        assert np.all(far_result.values >= 0)
+        assert np.all(far_result.values <= 1)
 
 
 class TestMAE:
@@ -608,10 +812,6 @@ class TestIncompleteMetrics:
             metrics.SpatialDisplacement,
             metrics.FAR,
             metrics.CSI,
-            metrics.LeadTimeDetection,
-            metrics.RegionalHitsMisses,
-            metrics.HitsMisses,
-            metrics.EarlySignal,
         ]
 
         for metric_class in incomplete_metrics:
