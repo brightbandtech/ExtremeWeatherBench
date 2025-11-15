@@ -1,12 +1,14 @@
 import abc
 import logging
-from typing import List, Optional, Sequence, Union
+from typing import TYPE_CHECKING, List, Optional, Sequence, Union
 
 import xarray as xr
 
 import extremeweatherbench.events.severe_convection as sc
 from extremeweatherbench import calc
 
+if TYPE_CHECKING:
+    from extremeweatherbench import cases
 logger = logging.getLogger(__name__)
 
 
@@ -101,8 +103,23 @@ class CravenBrooksSignificantSevere(DerivedVariable):
         super().__init__(name=name)
         self.layer_depth = layer_depth
 
-    def derive_variable(self, data: xr.Dataset, *args, **kwargs) -> xr.DataArray:
+    def derive_variable(
+        self, data: xr.Dataset, case_metadata: "cases.IndividualCase", *args, **kwargs
+    ) -> xr.DataArray:
         """Derive the Craven-Brooks significant severe parameter."""
+        # Ensure 'level' is the last dimension for proper processing
+        if "level" in data.dims and list(data.dims)[-1] != "level":
+            # Get all dimensions and move 'level' to the end
+            dims = list(data.dims)
+            dims.remove("level")
+            dims.append("level")
+            data = data.transpose(*dims)
+        # Check if pressure levels need to be reversed
+        # CAPE expects descending order (surface to top)
+        needs_reverse = data["level"][0] < data["level"][-1]
+        if needs_reverse:
+            # Reverse and load to ensure contiguous arrays for Numba
+            data = data.isel(level=slice(None, None, -1))
         # calculate dewpoint temperature if not present
         if "dewpoint_temperature" not in data.data_vars:
             # using relative humidity if present
@@ -113,20 +130,12 @@ class CravenBrooksSignificantSevere(DerivedVariable):
             # or using specific humidity if present
             elif "specific_humidity" in data.data_vars:
                 data["dewpoint_temperature"] = calc.dewpoint_from_specific_humidity(
-                    data["specific_humidity"], data["level"]
+                    data["level"], data["specific_humidity"]
                 )
             # and if neither are present, raise an error
             else:
                 raise KeyError("No variable to compute dewpoint temperature.")
         layer_depth = self.layer_depth
-
-        # Check if pressure levels need to be reversed
-        # CAPE expects descending order (surface to top)
-        needs_reverse = data["level"][0] < data["level"][-1]
-        if needs_reverse:
-            # Reverse and load to ensure contiguous arrays for Numba
-            data = data.isel(level=slice(None, None, -1)).load()
-
         # Compute CAPE (geopotential in m²/s²)
         cape = sc.compute_mixed_layer_cape(
             pressure=data["level"],
@@ -145,7 +154,11 @@ class CravenBrooksSignificantSevere(DerivedVariable):
         )
 
         cbss = cape * shear
-        coords = {dim: data.coords[dim] for dim in data.sizes.keys() if dim != "level"}
+        cbss = cbss.max(
+            dim="valid_time",
+        )
+        cbss = cbss.expand_dims(valid_time=[case_metadata.start_date])
+        coords = {dim: cbss.coords[dim] for dim in cbss.sizes.keys() if dim != "level"}
         return xr.DataArray(
             cbss,
             coords=coords,
