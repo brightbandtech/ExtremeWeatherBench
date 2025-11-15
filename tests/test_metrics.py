@@ -673,29 +673,25 @@ class TestThresholdMetric:
             target_threshold=0.4,
         )
 
-        # Create test data
-        forecast = xr.DataArray(
-            data=[0.8, 0.3, 0.7, 0.2],
-            dims=["lead_time"],
-            coords={"lead_time": [0, 1, 2, 3]},
-        )
-        target = xr.DataArray(
-            data=[0.9, 0.1, 0.8, 0.1],
-            dims=["lead_time"],
-            coords={"lead_time": [0, 1, 2, 3]},
-        )
+        # Test is_composite
+        assert composite.is_composite()
 
-        # Compute all metrics
-        results = composite.compute_metric(forecast, target)
+        # Expand into individual metrics
+        expanded_metrics = composite.maybe_expand_composite()
 
-        # Should return dictionary with all results
-        assert isinstance(results, dict)
-        assert "critical_success_index" in results
-        assert "false_alarm_ratio" in results
-        assert "accuracy" in results
+        # Should return list of 3 metrics
+        assert isinstance(expanded_metrics, list)
+        assert len(expanded_metrics) == 3
 
-        # All results should be DataArrays
-        assert all(isinstance(v, xr.DataArray) for v in results.values())
+        # Each should be a ThresholdMetric instance
+        for metric in expanded_metrics:
+            assert isinstance(metric, metrics.ThresholdMetric)
+
+        # Verify we got the right metrics
+        metric_names = [m.name for m in expanded_metrics]
+        assert "critical_success_index" in metric_names
+        assert "false_alarm_ratio" in metric_names
+        assert "accuracy" in metric_names
 
     def test_composite_empty_raises_error(self):
         """Test that composite without metrics raises error."""
@@ -732,52 +728,38 @@ class TestThresholdMetric:
             target_threshold=0.5,
         )
 
-        forecast = xr.DataArray(
-            data=[0.8, 0.3, 0.7, 0.2, 0.6, 0.1],
-            dims=["lead_time"],
-            coords={"lead_time": [0, 1, 2, 3, 4, 5]},
-        )
-        target = xr.DataArray(
-            data=[0.9, 0.1, 0.8, 0.6, 0.7, 0.2],
-            dims=["lead_time"],
-            coords={"lead_time": [0, 1, 2, 3, 4, 5]},
-        )
-
-        results = composite.compute_metric(forecast, target)
+        # Test expansion
+        expanded_metrics = composite.maybe_expand_composite()
 
         # Should have all 7 metrics
-        assert len(results) == 7
-        assert "critical_success_index" in results
-        assert "false_alarm_ratio" in results
-        assert "true_positive" in results
-        assert "false_positive" in results
-        assert "true_negative" in results
-        assert "false_negative" in results
-        assert "accuracy" in results
+        assert len(expanded_metrics) == 7
 
-    def test_composite_callable_interface(self):
-        """Test that composite metrics work with callable interface."""
+        metric_names = [m.name for m in expanded_metrics]
+        assert "critical_success_index" in metric_names
+        assert "false_alarm_ratio" in metric_names
+        assert "true_positive" in metric_names
+        assert "false_positive" in metric_names
+        assert "true_negative" in metric_names
+        assert "false_negative" in metric_names
+        assert "accuracy" in metric_names
+
+    def test_composite_is_composite_method(self):
+        """Test is_composite method."""
+        # Regular metric is not composite
+        single = metrics.CSI()
+        assert not single.is_composite()
+
+        # Composite metric is composite
         composite = metrics.ThresholdMetric(
             metrics=[metrics.CSI, metrics.FAR],
             forecast_threshold=0.7,
             target_threshold=0.3,
         )
+        assert composite.is_composite()
 
-        forecast = xr.DataArray(
-            data=[0.8, 0.3, 0.7, 0.2],
-            dims=["lead_time"],
-            coords={"lead_time": [0, 1, 2, 3]},
-        )
-        target = xr.DataArray(
-            data=[0.9, 0.1, 0.8, 0.1],
-            dims=["lead_time"],
-            coords={"lead_time": [0, 1, 2, 3]},
-        )
-
-        # Should work with __call__ interface
-        results = composite(forecast, target)
-        assert isinstance(results, dict)
-        assert len(results) == 2
+        # Can expand composite
+        expanded = composite.maybe_expand_composite()
+        assert len(expanded) == 2
 
 
 class TestCSI:
