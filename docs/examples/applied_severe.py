@@ -36,8 +36,6 @@ threshold_metrics = [
         ],
         forecast_threshold=15000,
         target_threshold=0.3,
-        aggregate_func="max",
-        aggregate_dims=["valid_time"],
     )
 ]
 
