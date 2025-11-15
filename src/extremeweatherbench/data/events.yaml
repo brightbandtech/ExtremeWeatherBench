@@ -421,111 +421,111 @@ cases:
     event_type: freeze
   - case_id_number: 36
     title: July 2024 South Dakota
-    start_date: 2024-07-13 00:00:00
-    end_date: 2024-07-14 00:00:00
+    start_date: 2024-07-13 12:00:00
+    end_date: 2024-07-14 12:00:00
     location:
       type: bounded_region
       parameters:
-        latitude_min: 24.0
-        latitude_max: 49.0
-        longitude_min: 245.0
-        longitude_max: 295.0
+        latitude_min: 38.25
+        latitude_max: 58.5
+        longitude_min: 240.86
+        longitude_max: 285.64
     event_type: severe_convection
   - case_id_number: 37
     title: July 2024 Chicago
-    start_date: 2024-07-14 00:00:00
-    end_date: 2024-07-16 00:00:00
+    start_date: 2024-07-14 12:00:00
+    end_date: 2024-07-16 12:00:00
     location:
       type: bounded_region
       parameters:
-        latitude_min: 24.0
-        latitude_max: 49.0
-        longitude_min: 245.0
-        longitude_max: 295.0
+        latitude_min: 30.0
+        latitude_max: 57.75
+        longitude_min: 243.74
+        longitude_max: 289.69
     event_type: severe_convection
   - case_id_number: 38
     title: July 2024 New York
-    start_date: 2024-07-16 00:00:00
-    end_date: 2024-07-17 00:00:00
+    start_date: 2024-07-16 12:00:00
+    end_date: 2024-07-17 12:00:00
     location:
       type: bounded_region
       parameters:
-        latitude_min: 24.0
+        latitude_min: 31.0
         latitude_max: 49.0
-        longitude_min: 245.0
-        longitude_max: 295.0
+        longitude_min: 274.31
+        longitude_max: 293.44
     event_type: severe_convection
   - case_id_number: 39
     title: May 2024 Wisconsin
-    start_date: 2024-05-18 00:00:00
-    end_date: 2024-05-19 00:00:00
+    start_date: 2024-05-18 12:00:00
+    end_date: 2024-05-19 12:00:00
     location:
       type: bounded_region
       parameters:
-        latitude_min: 24.0
-        latitude_max: 54.0
-        longitude_min: 245.0
-        longitude_max: 295.0
+        latitude_min: 36.5
+        latitude_max: 55.5
+        longitude_min: 258.01
+        longitude_max: 277.99
     event_type: severe_convection
   - case_id_number: 40
     title: May 2024 Kansas
-    start_date: 2024-05-19 00:00:00
-    end_date: 2024-05-20 00:00:00
+    start_date: 2024-05-19 12:00:00
+    end_date: 2024-05-20 12:00:00
     location:
       type: bounded_region
       parameters:
-        latitude_min: 24.0
-        latitude_max: 54.0
-        longitude_min: 245.0
-        longitude_max: 295.0
+        latitude_min: 30.0
+        latitude_max: 51.0
+        longitude_min: 250.79
+        longitude_max: 276.46
     event_type: severe_convection
   - case_id_number: 41
     title: May 2024 Iowa + Nebraska
-    start_date: 2024-05-20 00:00:00
-    end_date: 2024-05-21 00:00:00
+    start_date: 2024-05-20 12:00:00
+    end_date: 2024-05-21 12:00:00
     location:
       type: bounded_region
       parameters:
-        latitude_min: 24.0
-        latitude_max: 54.0
-        longitude_min: 245.0
-        longitude_max: 295.0
+        latitude_min: 33.5
+        latitude_max: 49.25
+        longitude_min: 250.0
+        longitude_max: 282.75
     event_type: severe_convection
   - case_id_number: 42
     title: May 2024 Iowa + Wisconsin
-    start_date: 2024-05-21 00:00:00
-    end_date: 2024-05-22 00:00:00
+    start_date: 2024-05-21 12:00:00
+    end_date: 2024-05-22 12:00:00
     location:
       type: bounded_region
       parameters:
-        latitude_min: 24.0
-        latitude_max: 54.0
-        longitude_min: 245.0
-        longitude_max: 295.0
+        latitude_min: 26.75
+        latitude_max: 55.75
+        longitude_min: 254.25
+        longitude_max: 278.25
     event_type: severe_convection
   - case_id_number: 43
     title: May 2024 Texas
-    start_date: 2024-05-22 00:00:00
-    end_date: 2024-05-23 00:00:00
+    start_date: 2024-05-22 12:00:00
+    end_date: 2024-05-23 12:00:00
     location:
       type: bounded_region
       parameters:
-        latitude_min: 24.0
-        latitude_max: 54.0
-        longitude_min: 245.0
-        longitude_max: 295.0
+        latitude_min: 25.75
+        latitude_max: 50.0
+        longitude_min: 252.9
+        longitude_max: 291.35
     event_type: severe_convection
   - case_id_number: 44
     title: May 2024 Iowa + Nebraska 2
-    start_date: 2024-05-23 00:00:00
-    end_date: 2024-05-24 00:00:00
+    start_date: 2024-05-23 12:00:00
+    end_date: 2024-05-24 12:00:00
     location:
       type: bounded_region
       parameters:
-        latitude_min: 24.0
-        latitude_max: 54.0
-        longitude_min: 245.0
-        longitude_max: 295.0
+        latitude_min: 25.75
+        latitude_max: 51.5
+        longitude_min: 251.62
+        longitude_max: 281.13
     event_type: severe_convection
   - case_id_number: 45
     title: April 2024 Oklahoma
@@ -534,10 +534,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 24.0
-        latitude_max: 54.0
-        longitude_min: 245.0
-        longitude_max: 295.0
+        latitude_min: 24.25
+        latitude_max: 50.75
+        longitude_min: 242.87
+        longitude_max: 282.12
     event_type: severe_convection
   - case_id_number: 46
     title: April 2024 Midwest
@@ -546,10 +546,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 24.0
-        latitude_max: 54.0
-        longitude_min: 245.0
-        longitude_max: 295.0
+        latitude_min: 26.0
+        latitude_max: 46.0
+        longitude_min: 262.72
+        longitude_max: 284.78
     event_type: severe_convection
   - case_id_number: 47
     title: April 2024 Great Plains + Midwest
@@ -558,10 +558,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 24.0
-        latitude_max: 54.0
-        longitude_min: 245.0
-        longitude_max: 295.0
+        latitude_min: 24.25
+        latitude_max: 45.5
+        longitude_min: 254.5
+        longitude_max: 281.0
     event_type: severe_convection
   - case_id_number: 48
     title: March 2024 Midwest
@@ -570,10 +570,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 24.0
-        latitude_max: 54.0
-        longitude_min: 245.0
-        longitude_max: 295.0
+        latitude_min: 26.75
+        latitude_max: 46.75
+        longitude_min: 254.69
+        longitude_max: 284.81
     event_type: severe_convection
   - case_id_number: 49
     title: February 2024 Midwest
@@ -582,10 +582,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 24.0
-        latitude_max: 54.0
-        longitude_min: 245.0
-        longitude_max: 295.0
+        latitude_min: 32.25
+        latitude_max: 48.75
+        longitude_min: 263.54
+        longitude_max: 285.21
     event_type: severe_convection
   - case_id_number: 50
     title: January 2024 Southeast
@@ -594,10 +594,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 24.0
-        latitude_max: 54.0
-        longitude_min: 245.0
-        longitude_max: 295.0
+        latitude_min: 23.25
+        latitude_max: 40.25
+        longitude_min: 257.62
+        longitude_max: 287.9
     event_type: severe_convection
   - case_id_number: 51
     title: December 2023 South
@@ -606,10 +606,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 24.0
-        latitude_max: 54.0
-        longitude_min: 245.0
-        longitude_max: 295.0
+        latitude_min: 25.0
+        latitude_max: 42.5
+        longitude_min: 259.79
+        longitude_max: 280.96
     event_type: severe_convection
   - case_id_number: 52
     title: August 2023 East Coast
@@ -618,10 +618,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 24.0
-        latitude_max: 54.0
-        longitude_min: 245.0
-        longitude_max: 295.0
+        latitude_min: 27.0
+        latitude_max: 47.75
+        longitude_min: 243.17
+        longitude_max: 269.83
     event_type: severe_convection
   - case_id_number: 53
     title: August 2023 Minnesota
@@ -630,10 +630,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 24.0
-        latitude_max: 54.0
-        longitude_min: 245.0
-        longitude_max: 295.0
+        latitude_min: 32.5
+        latitude_max: 51.75
+        longitude_min: 256.96
+        longitude_max: 281.79
     event_type: severe_convection
   - case_id_number: 54
     title: July 2023 Midwest
@@ -642,10 +642,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 24.0
-        latitude_max: 54.0
-        longitude_min: 245.0
-        longitude_max: 295.0
+        latitude_min: 29.0
+        latitude_max: 46.75
+        longitude_min: 264.15
+        longitude_max: 289.85
     event_type: severe_convection
   - case_id_number: 55
     title: July 2023 Midwest 2
@@ -654,10 +654,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 24.0
-        latitude_max: 54.0
-        longitude_min: 245.0
-        longitude_max: 295.0
+        latitude_min: 39.25
+        latitude_max: 59.75
+        longitude_min: 239.53
+        longitude_max: 265.97
     event_type: severe_convection
   - case_id_number: 56
     title: June 2023 Midwest
@@ -666,10 +666,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 24.0
-        latitude_max: 54.0
-        longitude_min: 245.0
-        longitude_max: 295.0
+        latitude_min: 30.75
+        latitude_max: 45.0
+        longitude_min: 248.9
+        longitude_max: 279.6
     event_type: severe_convection
   - case_id_number: 57
     title: June 2023 Front Range
@@ -678,10 +678,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 24.0
-        latitude_max: 54.0
-        longitude_min: 245.0
-        longitude_max: 295.0
+        latitude_min: 25.5
+        latitude_max: 50.25
+        longitude_min: 248.4
+        longitude_max: 266.35
     event_type: severe_convection
   - case_id_number: 58
     title: June 2023 Texas
@@ -690,10 +690,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 24.0
-        latitude_max: 54.0
-        longitude_min: 245.0
-        longitude_max: 295.0
+        latitude_min: 25.5
+        latitude_max: 50.25
+        longitude_min: 248.4
+        longitude_max: 266.35
     event_type: severe_convection
   - case_id_number: 59
     title: June 2023 Great Plains
@@ -702,10 +702,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 24.0
-        latitude_max: 54.0
-        longitude_min: 245.0
-        longitude_max: 295.0
+        latitude_min: 24.5
+        latitude_max: 52.5
+        longitude_min: 242.12
+        longitude_max: 271.88
     event_type: severe_convection
   - case_id_number: 60
     title: June 2023 Iowa + Minnesota
@@ -714,10 +714,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 24.0
-        latitude_max: 54.0
-        longitude_min: 245.0
-        longitude_max: 295.0
+        latitude_min: 34.25
+        latitude_max: 53.0
+        longitude_min: 255.64
+        longitude_max: 275.11
     event_type: severe_convection
   - case_id_number: 61
     title: June 2023 South + Midwest
@@ -726,10 +726,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 24.0
-        latitude_max: 54.0
-        longitude_min: 245.0
-        longitude_max: 295.0
+        latitude_min: 27.25
+        latitude_max: 50.0
+        longitude_min: 259.62
+        longitude_max: 288.88
     event_type: severe_convection
   - case_id_number: 62
     title: June 2023 East Coast
@@ -738,10 +738,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 24.0
-        latitude_max: 54.0
-        longitude_min: 245.0
-        longitude_max: 295.0
+        latitude_min: 29.25
+        latitude_max: 49.5
+        longitude_min: 272.34
+        longitude_max: 292.91
     event_type: severe_convection
   - case_id_number: 63
     title: June 2023 Midwest + Great Plains
@@ -750,10 +750,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 24.0
-        latitude_max: 54.0
-        longitude_min: 245.0
-        longitude_max: 295.0
+        latitude_min: 25.5
+        latitude_max: 50.5
+        longitude_min: 248.64
+        longitude_max: 279.36
     event_type: severe_convection
   - case_id_number: 64
     title: June 2023 Southeast
@@ -762,10 +762,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 24.0
-        latitude_max: 54.0
-        longitude_min: 245.0
-        longitude_max: 295.0
+        latitude_min: 25.5
+        latitude_max: 41.75
+        longitude_min: 257.55
+        longitude_max: 283.7
     event_type: severe_convection
   - case_id_number: 65
     title: June 2023 OK + TX + South
@@ -774,10 +774,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 24.0
-        latitude_max: 54.0
-        longitude_min: 245.0
-        longitude_max: 295.0
+        latitude_min: 25.0
+        latitude_max: 48.0
+        longitude_min: 251.7
+        longitude_max: 284.55
     event_type: severe_convection
   - case_id_number: 66
     title: June 2023 South
@@ -786,10 +786,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 24.0
-        latitude_max: 54.0
-        longitude_min: 245.0
-        longitude_max: 295.0
+        latitude_min: 24.75
+        latitude_max: 45.25
+        longitude_min: 254.5
+        longitude_max: 290.5
     event_type: severe_convection
   - case_id_number: 67
     title: June 2023 Mid-Atlantic
@@ -798,10 +798,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 24.0
-        latitude_max: 54.0
-        longitude_min: 245.0
-        longitude_max: 295.0
+        latitude_min: 24.75
+        latitude_max: 45.25
+        longitude_min: 254.5
+        longitude_max: 290.5
     event_type: severe_convection
   - case_id_number: 68
     title: June 2023 Great Plains + South
@@ -810,10 +810,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 24.0
-        latitude_max: 54.0
-        longitude_min: 245.0
-        longitude_max: 295.0
+        latitude_min: 25.25
+        latitude_max: 46.5
+        longitude_min: 250.22
+        longitude_max: 279.78
     event_type: severe_convection
   - case_id_number: 69
     title: May 2023 Great Plains
@@ -822,10 +822,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 24.0
-        latitude_max: 54.0
-        longitude_min: 245.0
-        longitude_max: 295.0
+        latitude_min: 26.75
+        latitude_max: 55.5
+        longitude_min: 248.76
+        longitude_max: 275.74
     event_type: severe_convection
   - case_id_number: 70
     title: May 2023 Great Plains + South
@@ -834,10 +834,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 24.0
-        latitude_max: 54.0
-        longitude_min: 245.0
-        longitude_max: 295.0
+        latitude_min: 23.75
+        latitude_max: 47.25
+        longitude_min: 251.98
+        longitude_max: 283.77
     event_type: severe_convection
   - case_id_number: 71
     title: May 2023 Nebraska
@@ -846,10 +846,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 24.0
-        latitude_max: 54.0
-        longitude_min: 245.0
-        longitude_max: 295.0
+        latitude_min: 26.75
+        latitude_max: 47.75
+        longitude_min: 254.17
+        longitude_max: 270.58
     event_type: severe_convection
   - case_id_number: 72
     title: May 2024 Texas
@@ -1158,10 +1158,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 35.0
-        latitude_max: 50.0
-        longitude_min: 230.0
-        longitude_max: 245.0
+        latitude_min: 27.8
+        latitude_max: 54.2
+        longitude_min: 222.4
+        longitude_max: 245.3
     event_type: atmospheric_river
   - case_id_number: 98
     title: October 2024 British Columbia
@@ -1170,10 +1170,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 40.0
-        latitude_max: 55.0
-        longitude_min: 225.0
-        longitude_max: 245.0
+        latitude_min: 32.8
+        latitude_max: 56.0
+        longitude_min: 217.3
+        longitude_max: 247.0
     event_type: atmospheric_river
   - case_id_number: 99
     title: September 2024 SW Alaska and British Columbia
@@ -1182,10 +1182,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 45.0
-        latitude_max: 60.0
-        longitude_min: 220.0
-        longitude_max: 240.0
+        latitude_min: 37.8
+        latitude_max: 62.2
+        longitude_min: 212.1
+        longitude_max: 247.9
     event_type: atmospheric_river
   - case_id_number: 100
     title: October 2024 Bosnia
@@ -1194,10 +1194,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 42.0
-        latitude_max: 46.0
-        longitude_min: 16.0
-        longitude_max: 20.0
+        latitude_min: 34.8
+        latitude_max: 50.5
+        longitude_min: 8.2
+        longitude_max: 27.8
     event_type: atmospheric_river
   - case_id_number: 101
     title: April 2024 Eastern Australia
@@ -1206,10 +1206,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: -38.0
-        latitude_max: -25.0
-        longitude_min: 140.0
-        longitude_max: 155.0
+        latitude_min: -45.2
+        latitude_max: -17.8
+        longitude_min: 139.7
+        longitude_max: 163.1
     event_type: atmospheric_river
   - case_id_number: 102
     title: April 2024 Persian Gulf
@@ -1218,10 +1218,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 24.0
-        latitude_max: 30.0
-        longitude_min: 48.0
-        longitude_max: 58.0
+        latitude_min: 16.8
+        latitude_max: 31.2
+        longitude_min: 45.6
+        longitude_max: 65.4
     event_type: atmospheric_river
   - case_id_number: 103
     title: February 2024 Pacific Northwest
@@ -1230,10 +1230,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 40.0
-        latitude_max: 50.0
-        longitude_min: 235.0
-        longitude_max: 250.0
+        latitude_min: 35.8
+        latitude_max: 51.2
+        longitude_min: 227.1
+        longitude_max: 240.9
     event_type: atmospheric_river
   - case_id_number: 104
     title: February 2024 California
@@ -1242,10 +1242,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 32.0
-        latitude_max: 42.0
-        longitude_min: 235.0
-        longitude_max: 245.0
+        latitude_min: 24.8
+        latitude_max: 49.2
+        longitude_min: 227.5
+        longitude_max: 243.3
     event_type: atmospheric_river
   - case_id_number: 105
     title: February 2024 California
@@ -1254,10 +1254,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 32.0
-        latitude_max: 42.0
-        longitude_min: 235.0
-        longitude_max: 245.0
+        latitude_min: 24.8
+        latitude_max: 49.2
+        longitude_min: 227.5
+        longitude_max: 252.5
     event_type: atmospheric_river
   - case_id_number: 106
     title: January 2024 Alaska to California
@@ -1266,10 +1266,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 32.0
-        latitude_max: 65.0
-        longitude_min: 210.0
-        longitude_max: 245.0
+        latitude_min: 24.8
+        latitude_max: 62.5
+        longitude_min: 202.5
+        longitude_max: 249.3
     event_type: atmospheric_river
   - case_id_number: 107
     title: January 2024 California and Arizona
@@ -1278,10 +1278,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 32.0
-        latitude_max: 38.0
-        longitude_min: 240.0
-        longitude_max: 250.0
+        latitude_min: 24.8
+        latitude_max: 45.2
+        longitude_min: 232.5
+        longitude_max: 249.5
     event_type: atmospheric_river
   - case_id_number: 108
     title: December 2023 East Coast Cyclone
@@ -1290,10 +1290,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 25.0
-        latitude_max: 45.0
-        longitude_min: 275.0
-        longitude_max: 295.0
+        latitude_min: 17.8
+        latitude_max: 52.2
+        longitude_min: 267.6
+        longitude_max: 302.4
     event_type: atmospheric_river
   - case_id_number: 109
     title: June 2023 Northwest Cloudband
@@ -1302,10 +1302,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: -28.0
-        latitude_max: -15.0
-        longitude_min: 120.0
-        longitude_max: 140.0
+        latitude_min: -35.2
+        latitude_max: -7.8
+        longitude_min: 113.6
+        longitude_max: 147.7
     event_type: atmospheric_river
   - case_id_number: 110
     title: April 2023 Middle East
@@ -1314,10 +1314,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 20.0
-        latitude_max: 40.0
-        longitude_min: 30.0
-        longitude_max: 60.0
+        latitude_min: 17.5
+        latitude_max: 40.2
+        longitude_min: 22.6
+        longitude_max: 55.1
     event_type: atmospheric_river
   - case_id_number: 111
     title: March 2023 California and Arizona
@@ -1326,10 +1326,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 32.0
-        latitude_max: 38.0
-        longitude_min: 240.0
-        longitude_max: 250.0
+        latitude_min: 24.8
+        latitude_max: 45.2
+        longitude_min: 232.5
+        longitude_max: 252.5
     event_type: atmospheric_river
   - case_id_number: 112
     title: March 2023 California
@@ -1338,10 +1338,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 32.0
-        latitude_max: 42.0
-        longitude_min: 235.0
-        longitude_max: 245.0
+        latitude_min: 24.8
+        latitude_max: 46.2
+        longitude_min: 227.5
+        longitude_max: 252.5
     event_type: atmospheric_river
   - case_id_number: 113
     title: February 2023 Pacific Northwest
@@ -1350,34 +1350,34 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 40.0
-        latitude_max: 50.0
-        longitude_min: 235.0
-        longitude_max: 250.0
+        latitude_min: 41.3
+        latitude_max: 55.7
+        longitude_min: 226.9
+        longitude_max: 240.8
     event_type: atmospheric_river
   - case_id_number: 114
-    title: December 2022 - January 2023 California
-    start_date: 2022-12-01 00:00:00
-    end_date: 2023-02-01 00:00:00
+    title: January 2023 California
+    start_date: 2023-01-04 00:00:00
+    end_date: 2023-01-10 00:00:00
     location:
       type: bounded_region
       parameters:
-        latitude_min: 32.0
-        latitude_max: 42.0
-        longitude_min: 235.0
-        longitude_max: 245.0
+        latitude_min: 24.8
+        latitude_max: 49.2
+        longitude_min: 227.5
+        longitude_max: 252.5
     event_type: atmospheric_river
   - case_id_number: 115
     title: December 2022 California
     start_date: 2022-12-26 00:00:00
-    end_date: 2022-12-28 00:00:00
+    end_date: 2023-01-02 00:00:00
     location:
       type: bounded_region
       parameters:
-        latitude_min: 32.0
-        latitude_max: 42.0
-        longitude_min: 235.0
-        longitude_max: 245.0
+        latitude_min: 25.0
+        latitude_max: 56.2
+        longitude_min: 220.0
+        longitude_max: 252.8
     event_type: atmospheric_river
   - case_id_number: 116
     title: December 2022 Oregon and California
@@ -1386,10 +1386,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 32.0
-        latitude_max: 45.0
-        longitude_min: 235.0
-        longitude_max: 245.0
+        latitude_min: 29.3
+        latitude_max: 50.0
+        longitude_min: 227.4
+        longitude_max: 243.6
     event_type: atmospheric_river
   - case_id_number: 117
     title: November 2022 - December 2022 California
@@ -1398,10 +1398,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 32.0
-        latitude_max: 42.0
-        longitude_min: 235.0
-        longitude_max: 245.0
+        latitude_min: 27.3
+        latitude_max: 42.2
+        longitude_min: 227.4
+        longitude_max: 243.3
     event_type: atmospheric_river
   - case_id_number: 118
     title: October 2022 Victoria
@@ -1410,10 +1410,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: -39.0
-        latitude_max: -34.0
-        longitude_min: 140.0
-        longitude_max: 150.0
+        latitude_min: -53.2
+        latitude_max: -20.0
+        longitude_min: 116.4
+        longitude_max: 166.6
     event_type: atmospheric_river
   - case_id_number: 119
     title: October 2022 Victoria
@@ -1422,10 +1422,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: -39.0
-        latitude_max: -34.0
-        longitude_min: 140.0
-        longitude_max: 150.0
+        latitude_min: -53.2
+        latitude_max: -13.8
+        longitude_min: 116.4
+        longitude_max: 166.6
     event_type: atmospheric_river
   - case_id_number: 120
     title: November 2022 California
@@ -1434,10 +1434,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 32.0
-        latitude_max: 42.0
-        longitude_min: 235.0
-        longitude_max: 245.0
+        latitude_min: 33.0
+        latitude_max: 49.2
+        longitude_min: 227.2
+        longitude_max: 247.8
     event_type: atmospheric_river
   - case_id_number: 121
     title: November 2022 Pacific Northwest
@@ -1446,10 +1446,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 40.0
-        latitude_max: 50.0
-        longitude_min: 235.0
-        longitude_max: 250.0
+        latitude_min: 33.0
+        latitude_max: 54.5
+        longitude_min: 227.2
+        longitude_max: 247.8
     event_type: atmospheric_river
   - case_id_number: 122
     title: August 2022 Japan
@@ -1458,10 +1458,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 35.0
-        latitude_max: 45.0
-        longitude_min: 130.0
-        longitude_max: 145.0
+        latitude_min: 27.8
+        latitude_max: 52.2
+        longitude_min: 122.4
+        longitude_max: 152.6
     event_type: atmospheric_river
   - case_id_number: 123
     title: June 2022 Pacific Northwest, Wyoming, and Montana
@@ -1470,10 +1470,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 40.0
-        latitude_max: 50.0
-        longitude_min: 235.0
-        longitude_max: 255.0
+        latitude_min: 32.8
+        latitude_max: 57.2
+        longitude_min: 227.3
+        longitude_max: 262.7
     event_type: atmospheric_river
   - case_id_number: 124
     title: March 2022 East Antarctica
@@ -1482,10 +1482,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: -90.0
-        latitude_max: -70.0
-        longitude_min: 60.0
-        longitude_max: 160.0
+        latitude_min: -71.0
+        latitude_max: -62.8
+        longitude_min: 101.3
+        longitude_max: 146.9
     event_type: atmospheric_river
   - case_id_number: 125
     title: February 2022 Southeast QLD / Northern NSW
@@ -1494,10 +1494,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: -30.0
-        latitude_max: -25.0
-        longitude_min: 150.0
-        longitude_max: 155.0
+        latitude_min: -37.2
+        latitude_max: -17.8
+        longitude_min: 142.3
+        longitude_max: 162.7
     event_type: atmospheric_river
   - case_id_number: 126
     title: February 2022 Pacific Northwest
@@ -1506,10 +1506,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 40.0
-        latitude_max: 50.0
-        longitude_min: 235.0
-        longitude_max: 250.0
+        latitude_min: 34.8
+        latitude_max: 55.7
+        longitude_min: 227.2
+        longitude_max: 247.3
     event_type: atmospheric_river
   - case_id_number: 127
     title: January 2022 Norway and Sweden
@@ -1518,10 +1518,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 58.0
-        latitude_max: 65.0
-        longitude_min: 5.0
-        longitude_max: 20.0
+        latitude_min: 50.8
+        latitude_max: 72.2
+        longitude_min: 356.3
+        longitude_max: 28.7
     event_type: atmospheric_river
   - case_id_number: 128
     title: January 2022 Colorado
@@ -1530,10 +1530,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 37.0
-        latitude_max: 41.0
-        longitude_min: 251.0
-        longitude_max: 258.0
+        latitude_min: 29.8
+        latitude_max: 39.2
+        longitude_min: 251.3
+        longitude_max: 265.7
     event_type: atmospheric_river
   - case_id_number: 129
     title: January 2022 Pacific Northwest
@@ -1542,10 +1542,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 40.0
-        latitude_max: 50.0
-        longitude_min: 235.0
-        longitude_max: 250.0
+        latitude_min: 32.8
+        latitude_max: 57.2
+        longitude_min: 227.3
+        longitude_max: 245.7
     event_type: atmospheric_river
   - case_id_number: 130
     title: December 2021 - January 2022 Western US
@@ -1554,10 +1554,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 32.0
+        latitude_min: 24.8
         latitude_max: 50.0
-        longitude_min: 235.0
-        longitude_max: 255.0
+        longitude_min: 227.5
+        longitude_max: 262.5
     event_type: atmospheric_river
   - case_id_number: 131
     title: December 2021 Pacific NW
@@ -1566,10 +1566,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 40.0
-        latitude_max: 50.0
-        longitude_min: 235.0
-        longitude_max: 250.0
+        latitude_min: 32.8
+        latitude_max: 53.5
+        longitude_min: 227.3
+        longitude_max: 243.7
     event_type: atmospheric_river
   - case_id_number: 132
     title: November 2021 Pacific Northwest
@@ -1578,10 +1578,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 40.0
-        latitude_max: 50.0
-        longitude_min: 235.0
-        longitude_max: 250.0
+        latitude_min: 32.8
+        latitude_max: 56.2
+        longitude_min: 227.3
+        longitude_max: 257.7
     event_type: atmospheric_river
   - case_id_number: 133
     title: October 2021 California
@@ -1590,10 +1590,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 32.0
-        latitude_max: 42.0
-        longitude_min: 235.0
-        longitude_max: 245.0
+        latitude_min: 26.3
+        latitude_max: 49.2
+        longitude_min: 227.4
+        longitude_max: 251.1
     event_type: atmospheric_river
   - case_id_number: 134
     title: September 2021 Pacific Northwest
@@ -1602,10 +1602,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 40.0
-        latitude_max: 50.0
-        longitude_min: 235.0
-        longitude_max: 250.0
+        latitude_min: 33.5
+        latitude_max: 57.2
+        longitude_min: 227.2
+        longitude_max: 257.8
     event_type: atmospheric_river
   - case_id_number: 135
     title: June 2021 Bloomington Indiana
@@ -1614,10 +1614,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 39.0
-        latitude_max: 40.0
-        longitude_min: 273.0
-        longitude_max: 274.0
+        latitude_min: 31.8
+        latitude_max: 47.2
+        longitude_min: 265.3
+        longitude_max: 281.7
     event_type: atmospheric_river
   - case_id_number: 136
     title: June 2021 Alaska Trans-Pacific
@@ -1626,10 +1626,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 55.0
-        latitude_max: 70.0
-        longitude_min: 190.0
-        longitude_max: 230.0
+        latitude_min: 47.8
+        latitude_max: 63.7
+        longitude_min: 181.5
+        longitude_max: 238.5
     event_type: atmospheric_river
   - case_id_number: 137
     title: March 2021 Sydney
@@ -1638,10 +1638,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: -34.0
-        latitude_max: -33.0
-        longitude_min: 150.0
-        longitude_max: 152.0
+        latitude_min: -41.2
+        latitude_max: -25.8
+        longitude_min: 142.1
+        longitude_max: 159.9
     event_type: atmospheric_river
   - case_id_number: 138
     title: February 2021 Pacific Northwest
@@ -1650,10 +1650,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 40.0
-        latitude_max: 50.0
-        longitude_min: 235.0
-        longitude_max: 250.0
+        latitude_min: 34.5
+        latitude_max: 56.2
+        longitude_min: 227.2
+        longitude_max: 241.3
     event_type: atmospheric_river
   - case_id_number: 139
     title: January 2021 Pacific NW
@@ -1662,10 +1662,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 40.0
-        latitude_max: 50.0
-        longitude_min: 235.0
-        longitude_max: 250.0
+        latitude_min: 32.8
+        latitude_max: 56.2
+        longitude_min: 227.3
+        longitude_max: 252.0
     event_type: atmospheric_river
   - case_id_number: 140
     title: January 2021 Pacific Northwest
@@ -1674,10 +1674,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 40.0
-        latitude_max: 50.0
-        longitude_min: 235.0
-        longitude_max: 250.0
+        latitude_min: 32.8
+        latitude_max: 56.2
+        longitude_min: 227.3
+        longitude_max: 241.7
     event_type: atmospheric_river
   - case_id_number: 141
     title: December 2020 Pacific Northwest
@@ -1686,10 +1686,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 40.0
-        latitude_max: 50.0
-        longitude_min: 235.0
-        longitude_max: 250.0
+        latitude_min: 32.8
+        latitude_max: 55.5
+        longitude_min: 227.3
+        longitude_max: 247.0
     event_type: atmospheric_river
   - case_id_number: 142
     title: December 2020 Western US
@@ -1698,10 +1698,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 32.0
-        latitude_max: 50.0
-        longitude_min: 235.0
-        longitude_max: 255.0
+        latitude_min: 30.0
+        latitude_max: 55.5
+        longitude_min: 227.3
+        longitude_max: 246.9
     event_type: atmospheric_river
   - case_id_number: 143
     title: December 2020 Alaska
@@ -1710,10 +1710,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 55.0
-        latitude_max: 65.0
-        longitude_min: 200.0
-        longitude_max: 230.0
+        latitude_min: 47.8
+        latitude_max: 63.2
+        longitude_min: 191.5
+        longitude_max: 238.5
     event_type: atmospheric_river
   - case_id_number: 144
     title: November 2020 Western US
@@ -1722,10 +1722,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 32.0
-        latitude_max: 50.0
-        longitude_min: 235.0
-        longitude_max: 255.0
+        latitude_min: 28.8
+        latitude_max: 54.7
+        longitude_min: 227.4
+        longitude_max: 243.9
     event_type: atmospheric_river
   - case_id_number: 145
     title: October 2020 Western Alps
@@ -1734,10 +1734,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 44.0
-        latitude_max: 47.0
-        longitude_min: 5.0
-        longitude_max: 9.0
+        latitude_min: 36.8
+        latitude_max: 54.2
+        longitude_min: 357.1
+        longitude_max: 16.9
     event_type: atmospheric_river
   - case_id_number: 146
     title: September 2020 Pacific Northwest
@@ -1746,10 +1746,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 40.0
-        latitude_max: 50.0
-        longitude_min: 235.0
-        longitude_max: 250.0
+        latitude_min: 34.8
+        latitude_max: 57.2
+        longitude_min: 227.2
+        longitude_max: 257.8
     event_type: atmospheric_river
   - case_id_number: 147
     title: September 2020 Pacific Northwest
@@ -1758,10 +1758,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 40.0
-        latitude_max: 50.0
-        longitude_min: 235.0
-        longitude_max: 250.0
+        latitude_min: 32.8
+        latitude_max: 53.5
+        longitude_min: 227.3
+        longitude_max: 240.5
     event_type: atmospheric_river
   - case_id_number: 148
     title: May 2020 Western US
@@ -1770,10 +1770,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 32.0
-        latitude_max: 50.0
-        longitude_min: 235.0
-        longitude_max: 255.0
+        latitude_min: 28.0
+        latitude_max: 54.0
+        longitude_min: 227.4
+        longitude_max: 241.6
     event_type: atmospheric_river
   - case_id_number: 149
     title: March 2020 Southwestern US
@@ -1782,10 +1782,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 30.0
-        latitude_max: 40.0
-        longitude_min: 240.0
-        longitude_max: 255.0
+        latitude_min: 22.8
+        latitude_max: 39.2
+        longitude_min: 232.5
+        longitude_max: 262.5
     event_type: atmospheric_river
   - case_id_number: 150
     title: February 2020 Southwestern US
@@ -1794,10 +1794,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 30.0
-        latitude_max: 40.0
-        longitude_min: 240.0
-        longitude_max: 255.0
+        latitude_min: 22.8
+        latitude_max: 36.0
+        longitude_min: 235.8
+        longitude_max: 262.5
     event_type: atmospheric_river
   - case_id_number: 151
     title: February 2020 Western US
@@ -1806,10 +1806,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 32.0
-        latitude_max: 50.0
-        longitude_min: 235.0
-        longitude_max: 255.0
+        latitude_min: 38.8
+        latitude_max: 55.2
+        longitude_min: 227.0
+        longitude_max: 250.7
     event_type: atmospheric_river
   - case_id_number: 152
     title: January 2020 Pacific Northwest
@@ -1818,10 +1818,10 @@ cases:
     location:
       type: bounded_region
       parameters:
-        latitude_min: 40.0
-        latitude_max: 50.0
-        longitude_min: 235.0
-        longitude_max: 250.0
+        latitude_min: 32.8
+        latitude_max: 56.7
+        longitude_min: 227.3
+        longitude_max: 250.5
     event_type: atmospheric_river
   - case_id_number: 153
     title: Milton
@@ -3097,449 +3097,425 @@ cases:
     event_type: tropical_cyclone
   - case_id_number: 259
     title: January 2020 Australia
-    start_date: 2020-01-20 00:00:00
-    end_date: 2020-01-21 00:00:00
+    start_date: 2020-01-19 12:00:00
+    end_date: 2020-01-20 12:00:00
     location:
       type: bounded_region
       parameters:
-        latitude_min: -40.0
-        latitude_max: -10.0
-        longitude_min: 110.0
-        longitude_max: 155.0
+        latitude_min: -39.75
+        latitude_max: -29.5
+        longitude_min: 144.01
+        longitude_max: 155.74
     event_type: severe_convection
   - case_id_number: 260
     title: April 2020 Australia
-    start_date: 2020-04-03 00:00:00
-    end_date: 2020-04-04 00:00:00
+    start_date: 2020-04-02 12:00:00
+    end_date: 2020-04-03 12:00:00
     location:
       type: bounded_region
       parameters:
-        latitude_min: -40.0
-        latitude_max: -10.0
-        longitude_min: 110.0
-        longitude_max: 155.0
+        latitude_min: -41.75
+        latitude_max: -26.5
+        longitude_min: 138.03
+        longitude_max: 153.47
     event_type: severe_convection
   - case_id_number: 261
     title: May 2020 Australia
-    start_date: 2020-05-31 00:00:00
-    end_date: 2020-06-01 00:00:00
+    start_date: 2020-05-30 12:00:00
+    end_date: 2020-05-31 12:00:00
     location:
       type: bounded_region
       parameters:
-        latitude_min: -40.0
-        latitude_max: -10.0
-        longitude_min: 110.0
-        longitude_max: 155.0
+        latitude_min: -39.25
+        latitude_max: -28.75
+        longitude_min: 132.78
+        longitude_max: 143.72
     event_type: severe_convection
   - case_id_number: 262
     title: September 2020 Australia
-    start_date: 2020-09-05 00:00:00
-    end_date: 2020-09-06 00:00:00
+    start_date: 2020-09-24 12:00:00
+    end_date: 2020-09-25 12:00:00
     location:
       type: bounded_region
       parameters:
-        latitude_min: -40.0
-        latitude_max: -10.0
-        longitude_min: 110.0
-        longitude_max: 155.0
+        latitude_min: -38.5
+        latitude_max: -29.5
+        longitude_min: 146.03
+        longitude_max: 155.97
     event_type: severe_convection
   - case_id_number: 263
     title: October 2020 Australia
-    start_date: 2020-10-31 00:00:00
-    end_date: 2020-11-01 00:00:00
+    start_date: 2020-10-30 12:00:00
+    end_date: 2020-10-31 12:00:00
     location:
       type: bounded_region
       parameters:
-        latitude_min: -40.0
-        latitude_max: -10.0
-        longitude_min: 110.0
-        longitude_max: 155.0
+        latitude_min: -38.5
+        latitude_max: -23.25
+        longitude_min: 146.13
+        longitude_max: 157.87
     event_type: severe_convection
   - case_id_number: 264
     title: December 2020 Australia
-    start_date: 2020-12-05 00:00:00
-    end_date: 2020-12-06 00:00:00
+    start_date: 2020-12-04 12:00:00
+    end_date: 2020-12-05 12:00:00
     location:
       type: bounded_region
       parameters:
-        latitude_min: -40.0
-        latitude_max: -10.0
-        longitude_min: 110.0
-        longitude_max: 155.0
+        latitude_min: -36.5
+        latitude_max: -26.75
+        longitude_min: 142.1
+        longitude_max: 152.9
     event_type: severe_convection
   - case_id_number: 265
     title: September 2021 Australia
-    start_date: 2021-09-30 00:00:00
-    end_date: 2021-10-01 00:00:00
+    start_date: 2021-09-29 12:00:00
+    end_date: 2021-09-30 12:00:00
     location:
       type: bounded_region
       parameters:
-        latitude_min: -40.0
-        latitude_max: -10.0
-        longitude_min: 110.0
-        longitude_max: 155.0
+        latitude_min: -39.0
+        latitude_max: -25.5
+        longitude_min: 142.59
+        longitude_max: 156.16
     event_type: severe_convection
   - case_id_number: 266
     title: October 2021 Australia
-    start_date: 2021-10-14 00:00:00
-    end_date: 2021-10-15 00:00:00
+    start_date: 2021-10-13 12:00:00
+    end_date: 2021-10-14 12:00:00
     location:
       type: bounded_region
       parameters:
-        latitude_min: -40.0
-        latitude_max: -10.0
-        longitude_min: 110.0
-        longitude_max: 155.0
+        latitude_min: -39.5
+        latitude_max: -25.5
+        longitude_min: 143.83
+        longitude_max: 156.67
     event_type: severe_convection
   - case_id_number: 267
     title: October 2021 Australia
-    start_date: 2021-10-18 00:00:00
-    end_date: 2021-10-19 00:00:00
+    start_date: 2021-10-17 12:00:00
+    end_date: 2021-10-19 12:00:00
     location:
       type: bounded_region
       parameters:
-        latitude_min: -40.0
-        latitude_max: -10.0
-        longitude_min: 110.0
-        longitude_max: 155.0
+        latitude_min: -34.75
+        latitude_max: -16.25
+        longitude_min: 144.02
+        longitude_max: 157.86
     event_type: severe_convection
   - case_id_number: 268
     title: October 2021 Australia
-    start_date: 2021-10-19 00:00:00
-    end_date: 2021-10-20 00:00:00
+    start_date: 2021-10-27 12:00:00
+    end_date: 2021-10-28 12:00:00
     location:
       type: bounded_region
       parameters:
-        latitude_min: -40.0
-        latitude_max: -10.0
-        longitude_min: 110.0
-        longitude_max: 155.0
+        latitude_min: -39.75
+        latitude_max: -29.25
+        longitude_min: 130.77
+        longitude_max: 144.23
     event_type: severe_convection
   - case_id_number: 269
-    title: October 2021 Australia
-    start_date: 2021-10-28 00:00:00
-    end_date: 2021-10-29 00:00:00
+    title: December 2021 Australia
+    start_date: 2021-12-02 12:00:00
+    end_date: 2021-12-03 12:00:00
     location:
       type: bounded_region
       parameters:
-        latitude_min: -40.0
-        latitude_max: -10.0
-        longitude_min: 110.0
-        longitude_max: 155.0
+        latitude_min: -38.5
+        latitude_max: -28.75
+        longitude_min: 145.3
+        longitude_max: 155.95
     event_type: severe_convection
   - case_id_number: 270
     title: December 2021 Australia
-    start_date: 2021-12-03 00:00:00
-    end_date: 2021-12-04 00:00:00
+    start_date: 2021-12-08 12:00:00
+    end_date: 2021-12-09 12:00:00
     location:
       type: bounded_region
       parameters:
-        latitude_min: -40.0
-        latitude_max: -10.0
-        longitude_min: 110.0
-        longitude_max: 155.0
+        latitude_min: -33.0
+        latitude_max: -23.0
+        longitude_min: 145.45
+        longitude_max: 156.8
     event_type: severe_convection
   - case_id_number: 271
-    title: December 2021 Australia
-    start_date: 2021-12-09 00:00:00
-    end_date: 2021-12-10 00:00:00
+    title: January 2022 Australia
+    start_date: 2022-01-14 12:00:00
+    end_date: 2022-01-15 12:00:00
     location:
       type: bounded_region
       parameters:
-        latitude_min: -40.0
-        latitude_max: -10.0
-        longitude_min: 110.0
-        longitude_max: 155.0
+        latitude_min: -41.5
+        latitude_max: -29.25
+        longitude_min: 144.24
+        longitude_max: 155.76
     event_type: severe_convection
   - case_id_number: 272
-    title: January 2022 Australia
-    start_date: 2022-01-15 00:00:00
-    end_date: 2022-01-16 00:00:00
+    title: March 2022 Australia
+    start_date: 2022-03-03 12:00:00
+    end_date: 2022-03-04 12:00:00
     location:
       type: bounded_region
       parameters:
-        latitude_min: -40.0
-        latitude_max: -10.0
-        longitude_min: 110.0
-        longitude_max: 155.0
+        latitude_min: -31.25
+        latitude_max: -22.25
+        longitude_min: 148.23
+        longitude_max: 157.77
     event_type: severe_convection
   - case_id_number: 273
-    title: March 2022 Australia
-    start_date: 2022-03-04 00:00:00
-    end_date: 2022-03-05 00:00:00
+    title: December 2022 Australia
+    start_date: 2022-12-07 12:00:00
+    end_date: 2022-12-08 12:00:00
     location:
       type: bounded_region
       parameters:
-        latitude_min: -40.0
-        latitude_max: -10.0
-        longitude_min: 110.0
-        longitude_max: 155.0
+        latitude_min: -30.5
+        latitude_max: -21.5
+        longitude_min: 147.99
+        longitude_max: 157.51
     event_type: severe_convection
   - case_id_number: 274
-    title: December 2022 Australia
-    start_date: 2022-12-08 00:00:00
-    end_date: 2022-12-09 00:00:00
+    title: February 2023 Australia
+    start_date: 2023-02-13 12:00:00
+    end_date: 2023-02-14 12:00:00
     location:
       type: bounded_region
       parameters:
-        latitude_min: -40.0
-        latitude_max: -10.0
-        longitude_min: 110.0
-        longitude_max: 155.0
+        latitude_min: -32.5
+        latitude_max: -22.0
+        longitude_min: 146.97
+        longitude_max: 158.28
     event_type: severe_convection
   - case_id_number: 275
-    title: February 2023 Australia
-    start_date: 2023-02-14 00:00:00
-    end_date: 2023-02-15 00:00:00
+    title: December 2023 Australia
+    start_date: 2023-12-11 12:00:00
+    end_date: 2023-12-12 12:00:00
     location:
       type: bounded_region
       parameters:
-        latitude_min: -40.0
-        latitude_max: -10.0
-        longitude_min: 110.0
-        longitude_max: 155.0
+        latitude_min: -42.0
+        latitude_max: -33.0
+        longitude_min: 135.16
+        longitude_max: 145.34
     event_type: severe_convection
   - case_id_number: 276
     title: December 2023 Australia
-    start_date: 2023-12-12 00:00:00
-    end_date: 2023-12-13 00:00:00
+    start_date: 2023-12-24 12:00:00
+    end_date: 2023-12-26 12:00:00
     location:
       type: bounded_region
       parameters:
-        latitude_min: -40.0
-        latitude_max: -10.0
-        longitude_min: 110.0
-        longitude_max: 155.0
+        latitude_min: -37.25
+        latitude_max: -22.5
+        longitude_min: 146.57
+        longitude_max: 158.29
     event_type: severe_convection
   - case_id_number: 277
-    title: December 2023 Australia
-    start_date: 2023-12-25 00:00:00
-    end_date: 2023-12-26 00:00:00
+    title: August 2024 Australia
+    start_date: 2024-08-24 12:00:00
+    end_date: 2024-08-25 12:00:00
     location:
       type: bounded_region
       parameters:
-        latitude_min: -40.0
-        latitude_max: -10.0
-        longitude_min: 110.0
-        longitude_max: 155.0
+        latitude_min: -42.5
+        latitude_max: -30.75
+        longitude_min: 138.94
+        longitude_max: 152.56
     event_type: severe_convection
   - case_id_number: 278
-    title: December 2023 Australia
-    start_date: 2023-12-26 00:00:00
-    end_date: 2023-12-27 00:00:00
+    title: October 2024 Australia
+    start_date: 2024-10-08 12:00:00
+    end_date: 2024-10-09 12:00:00
     location:
       type: bounded_region
       parameters:
-        latitude_min: -40.0
-        latitude_max: -10.0
-        longitude_min: 110.0
-        longitude_max: 155.0
+        latitude_min: -31.75
+        latitude_max: -21.25
+        longitude_min: 143.73
+        longitude_max: 157.77
     event_type: severe_convection
   - case_id_number: 279
-    title: August 2024 Australia
-    start_date: 2024-08-25 00:00:00
-    end_date: 2024-08-26 00:00:00
+    title: October 2024 Australia
+    start_date: 2024-10-16 12:00:00
+    end_date: 2024-10-17 12:00:00
     location:
       type: bounded_region
       parameters:
-        latitude_min: -40.0
-        latitude_max: -10.0
-        longitude_min: 110.0
-        longitude_max: 155.0
+        latitude_min: -42.0
+        latitude_max: -32.0
+        longitude_min: 136.18
+        longitude_max: 147.32
     event_type: severe_convection
   - case_id_number: 280
-    title: October 2024 Australia
-    start_date: 2024-10-09 00:00:00
-    end_date: 2024-10-10 00:00:00
+    title: November 2024 Australia
+    start_date: 2024-10-31 12:00:00
+    end_date: 2024-11-01 12:00:00
     location:
       type: bounded_region
       parameters:
-        latitude_min: -40.0
-        latitude_max: -10.0
-        longitude_min: 110.0
-        longitude_max: 155.0
+        latitude_min: -32.5
+        latitude_max: -20.75
+        longitude_min: 147.73
+        longitude_max: 158.27
     event_type: severe_convection
   - case_id_number: 281
-    title: October 2024 Australia
-    start_date: 2024-10-17 00:00:00
-    end_date: 2024-10-18 00:00:00
+    title: November 2024 Australia
+    start_date: 2024-11-12 12:00:00
+    end_date: 2024-11-13 12:00:00
     location:
       type: bounded_region
       parameters:
-        latitude_min: -40.0
-        latitude_max: -10.0
-        longitude_min: 110.0
-        longitude_max: 155.0
+        latitude_min: -37.75
+        latitude_max: -23.5
+        longitude_min: 143.38
+        longitude_max: 158.37
     event_type: severe_convection
   - case_id_number: 282
-    title: November 2024 Australia
-    start_date: 2024-11-01 00:00:00
-    end_date: 2024-11-02 00:00:00
-    location:
-      type: bounded_region
-      parameters:
-        latitude_min: -40.0
-        latitude_max: -10.0
-        longitude_min: 110.0
-        longitude_max: 155.0
-    event_type: severe_convection
-  - case_id_number: 283
-    title: November 2024 Australia
-    start_date: 2024-11-13 00:00:00
-    end_date: 2024-11-14 00:00:00
-    location:
-      type: bounded_region
-      parameters:
-        latitude_min: -40.0
-        latitude_max: -10.0
-        longitude_min: 110.0
-        longitude_max: 155.0
-    event_type: severe_convection
-  - case_id_number: 284
     title: April 2023 Midwest
     start_date: 2023-04-05 12:00:00
     end_date: 2023-04-06 12:00:00
     location:
       type: bounded_region
       parameters:
-        latitude_min: 24.0
-        latitude_max: 54.0
-        longitude_min: 245.0
-        longitude_max: 295.0
+        latitude_min: 22.75
+        latitude_max: 44.75
+        longitude_min: 256.04
+        longitude_max: 282.71
     event_type: severe_convection
-  - case_id_number: 285
+  - case_id_number: 283
     title: March 2023 Midwest + Southeast
     start_date: 2023-03-31 12:00:00
     end_date: 2023-04-01 12:00:00
     location:
       type: bounded_region
       parameters:
-        latitude_min: 24.0
-        latitude_max: 54.0
-        longitude_min: 245.0
-        longitude_max: 295.0
+        latitude_min: 26.5
+        latitude_max: 49.0
+        longitude_min: 259.15
+        longitude_max: 284.1
     event_type: severe_convection
-  - case_id_number: 286
+  - case_id_number: 284
     title: March 2023 North America
     start_date: 2023-03-02 12:00:00
     end_date: 2023-03-03 12:00:00
     location:
       type: bounded_region
       parameters:
-        latitude_min: 24.0
-        latitude_max: 54.0
-        longitude_min: 245.0
-        longitude_max: 295.0
+        latitude_min: 24.5
+        latitude_max: 41.5
+        longitude_min: 254.81
+        longitude_max: 273.19
     event_type: severe_convection
-  - case_id_number: 287
+  - case_id_number: 285
     title: February 2023 North America
     start_date: 2023-02-26 12:00:00
     end_date: 2023-02-27 12:00:00
     location:
       type: bounded_region
       parameters:
-        latitude_min: 24.0
-        latitude_max: 54.0
-        longitude_min: 245.0
-        longitude_max: 295.0
+        latitude_min: 28.5
+        latitude_max: 43.0
+        longitude_min: 252.97
+        longitude_max: 271.78
     event_type: severe_convection
-  - case_id_number: 288
+  - case_id_number: 286
     title: July 2022 Great Plains
     start_date: 2022-07-22 12:00:00
     end_date: 2022-07-23 12:00:00
     location:
       type: bounded_region
       parameters:
-        latitude_min: 24.0
-        latitude_max: 54.0
-        longitude_min: 245.0
-        longitude_max: 295.0
+        latitude_min: 25.25
+        latitude_max: 54.25
+        longitude_min: 251.57
+        longitude_max: 280.43
     event_type: severe_convection
-  - case_id_number: 289
+  - case_id_number: 287
     title: June 2022 Southwest
     start_date: 2022-06-07 12:00:00
     end_date: 2022-06-08 12:00:00
     location:
       type: bounded_region
       parameters:
-        latitude_min: 24.0
-        latitude_max: 54.0
-        longitude_min: 245.0
-        longitude_max: 295.0
+        latitude_min: 30.25
+        latitude_max: 49.5
+        longitude_min: 249.57
+        longitude_max: 272.68
     event_type: severe_convection
-  - case_id_number: 290
+  - case_id_number: 288
     title: May 2022 Midwest
     start_date: 2022-05-12 12:00:00
     end_date: 2022-05-13 12:00:00
     location:
       type: bounded_region
       parameters:
-        latitude_min: 24.0
-        latitude_max: 54.0
-        longitude_min: 245.0
-        longitude_max: 295.0
+        latitude_min: 31.75
+        latitude_max: 52.75
+        longitude_min: 250.71
+        longitude_max: 277.79
     event_type: severe_convection
-  - case_id_number: 291
+  - case_id_number: 289
     title: April 2022 Great Plains
     start_date: 2022-04-12 12:00:00
     end_date: 2022-04-13 12:00:00
     location:
       type: bounded_region
       parameters:
-        latitude_min: 24.0
-        latitude_max: 54.0
-        longitude_min: 245.0
-        longitude_max: 295.0
+        latitude_min: 24.5
+        latitude_max: 50.5
+        longitude_min: 255.41
+        longitude_max: 278.09
     event_type: severe_convection
-  - case_id_number: 292
+  - case_id_number: 290
     title: April 2022 South
     start_date: 2022-04-05 12:00:00
     end_date: 2022-04-06 12:00:00
     location:
       type: bounded_region
       parameters:
-        latitude_min: 24.0
-        latitude_max: 54.0
-        longitude_min: 245.0
-        longitude_max: 295.0
+        latitude_min: 25.75
+        latitude_max: 45.0
+        longitude_min: 260.49
+        longitude_max: 285.51
     event_type: severe_convection
-  - case_id_number: 293
+  - case_id_number: 291
     title: December 2021 Midwest
     start_date: 2021-12-15 12:00:00
     end_date: 2021-12-16 12:00:00
     location:
       type: bounded_region
       parameters:
-        latitude_min: 24.0
-        latitude_max: 54.0
-        longitude_min: 245.0
-        longitude_max: 295.0
+        latitude_min: 32.5
+        latitude_max: 49.75
+        longitude_min: 255.01
+        longitude_max: 274.74
     event_type: severe_convection
-  - case_id_number: 294
+  - case_id_number: 292
     title: December 2021 Great Plains
     start_date: 2021-12-10 12:00:00
     end_date: 2021-12-11 12:00:00
     location:
       type: bounded_region
       parameters:
-        latitude_min: 24.0
-        latitude_max: 54.0
-        longitude_min: 245.0
-        longitude_max: 295.0
+        latitude_min: 28.25
+        latitude_max: 46.0
+        longitude_min: 258.43
+        longitude_max: 281.32
     event_type: severe_convection
-  - case_id_number: 295
+  - case_id_number: 293
     title: June 2021 Great Plains
     start_date: 2021-06-18 12:00:00
     end_date: 2021-06-19 12:00:00
     location:
       type: bounded_region
       parameters:
-        latitude_min: 24.0
-        latitude_max: 54.0
-        longitude_min: 245.0
-        longitude_max: 295.0
+        latitude_min: 25.0
+        latitude_max: 52.0
+        longitude_min: 258.87
+        longitude_max: 281.88
     event_type: severe_convection
-  - case_id_number: 296
+  - case_id_number: 294
     title: May 2021 Great Plains
     start_date: 2021-05-03 12:00:00
     end_date: 2021-05-05 12:00:00
@@ -3547,115 +3523,547 @@ cases:
       type: bounded_region
       parameters:
         latitude_min: 24.0
-        latitude_max: 54.0
-        longitude_min: 245.0
-        longitude_max: 295.0
+        latitude_max: 45.75
+        longitude_min: 250.26
+        longitude_max: 288.49
     event_type: severe_convection
-  - case_id_number: 297
+  - case_id_number: 295
     title: March 2021 South
     start_date: 2021-03-27 12:00:00
     end_date: 2021-03-28 12:00:00
     location:
       type: bounded_region
       parameters:
-        latitude_min: 24.0
-        latitude_max: 54.0
-        longitude_min: 245.0
-        longitude_max: 295.0
+        latitude_min: 26.5
+        latitude_max: 45.25
+        longitude_min: 259.22
+        longitude_max: 288.03
     event_type: severe_convection
-  - case_id_number: 298
+  - case_id_number: 296
     title: March 2021 South
     start_date: 2021-03-25 12:00:00
     end_date: 2021-03-26 12:00:00
     location:
       type: bounded_region
       parameters:
-        latitude_min: 24.0
-        latitude_max: 54.0
-        longitude_min: 245.0
-        longitude_max: 295.0
+        latitude_min: 26.5
+        latitude_max: 44.5
+        longitude_min: 264.48
+        longitude_max: 284.27
     event_type: severe_convection
-  - case_id_number: 299
+  - case_id_number: 297
     title: April 2020 South
     start_date: 2020-04-22 12:00:00
     end_date: 2020-04-23 12:00:00
     location:
       type: bounded_region
       parameters:
-        latitude_min: 24.0
-        latitude_max: 54.0
-        longitude_min: 245.0
-        longitude_max: 295.0
+        latitude_min: 25.0
+        latitude_max: 41.75
+        longitude_min: 256.05
+        longitude_max: 277.2
     event_type: severe_convection
-  - case_id_number: 300
+  - case_id_number: 298
     title: April 2020 Southeast
     start_date: 2020-04-12 12:00:00
     end_date: 2020-04-13 12:00:00
     location:
       type: bounded_region
       parameters:
-        latitude_min: 24.0
-        latitude_max: 54.0
-        longitude_min: 245.0
-        longitude_max: 295.0
+        latitude_min: 25.5
+        latitude_max: 40.75
+        longitude_min: 257.06
+        longitude_max: 285.94
     event_type: severe_convection
-  - case_id_number: 301
+  - case_id_number: 299
     title: April 2020 Midwest
     start_date: 2020-04-08 12:00:00
     end_date: 2020-04-09 12:00:00
     location:
       type: bounded_region
       parameters:
-        latitude_min: 24.0
-        latitude_max: 54.0
-        longitude_min: 245.0
-        longitude_max: 295.0
+        latitude_min: 26.25
+        latitude_max: 46.5
+        longitude_min: 262.2
+        longitude_max: 288.8
     event_type: severe_convection
-  - case_id_number: 302
+  - case_id_number: 300
     title: March 2020 South
     start_date: 2020-03-28 12:00:00
     end_date: 2020-03-29 12:00:00
     location:
       type: bounded_region
       parameters:
-        latitude_min: 24.0
-        latitude_max: 54.0
-        longitude_min: 245.0
-        longitude_max: 295.0
+        latitude_min: 27.25
+        latitude_max: 48.25
+        longitude_min: 257.9
+        longitude_max: 286.35
     event_type: severe_convection
-  - case_id_number: 303
+  - case_id_number: 301
     title: March 2020 Southeast
     start_date: 2020-03-02 12:00:00
     end_date: 2020-03-03 12:00:00
     location:
       type: bounded_region
       parameters:
-        latitude_min: 24.0
-        latitude_max: 54.0
-        longitude_min: 245.0
-        longitude_max: 295.0
+        latitude_min: 30.25
+        latitude_max: 43.5
+        longitude_min: 261.93
+        longitude_max: 280.82
     event_type: severe_convection
-  - case_id_number: 304
+  - case_id_number: 302
     title: February 2020 East
     start_date: 2020-02-05 12:00:00
     end_date: 2020-02-07 12:00:00
     location:
       type: bounded_region
       parameters:
-        latitude_min: 24.0
-        latitude_max: 54.0
-        longitude_min: 245.0
-        longitude_max: 295.0
+        latitude_min: 23.25
+        latitude_max: 41.25
+        longitude_min: 260.81
+        longitude_max: 288.16
     event_type: severe_convection
-  - case_id_number: 305
+  - case_id_number: 303
     title: January 2020 South
     start_date: 2020-01-10 12:00:00
     end_date: 2020-01-12 12:00:00
     location:
       type: bounded_region
       parameters:
-        latitude_min: 24.0
+        latitude_min: 24.5
+        latitude_max: 44.5
+        longitude_min: 255.04
+        longitude_max: 281.51
+    event_type: severe_convection
+  - case_id_number: 304
+    title: June 2020 Canada
+    start_date: 2020-06-10 12:00:00
+    end_date: 2020-06-11 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 34.0
+        latitude_max: 50.25
+        longitude_min: 265.96
+        longitude_max: 288.54
+    event_type: severe_convection
+  - case_id_number: 305
+    title: June 2020 Canada
+    start_date: 2020-06-12 12:00:00
+    end_date: 2020-06-13 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 41.25
+        latitude_max: 56.25
+        longitude_min: 236.83
+        longitude_max: 253.92
+    event_type: severe_convection
+  - case_id_number: 306
+    title: June 2020 Canada
+    start_date: 2020-06-28 12:00:00
+    end_date: 2020-06-29 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 38.5
+        latitude_max: 56.0
+        longitude_min: 243.43
+        longitude_max: 274.07
+    event_type: severe_convection
+  - case_id_number: 307
+    title: July 2020 Canada
+    start_date: 2020-07-04 12:00:00
+    end_date: 2020-07-05 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 31.0
+        latitude_max: 58.5
+        longitude_min: 241.83
+        longitude_max: 275.92
+    event_type: severe_convection
+  - case_id_number: 308
+    title: July 2020 Canada
+    start_date: 2020-07-12 12:00:00
+    end_date: 2020-07-13 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 33.0
+        latitude_max: 57.75
+        longitude_min: 239.04
+        longitude_max: 265.46
+    event_type: severe_convection
+  - case_id_number: 309
+    title: July 2020 Canada
+    start_date: 2020-07-19 12:00:00
+    end_date: 2020-07-20 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 37.75
         latitude_max: 54.0
-        longitude_min: 245.0
-        longitude_max: 295.0
+        longitude_min: 272.02
+        longitude_max: 292.73
+    event_type: severe_convection
+  - case_id_number: 310
+    title: July 2020 Canada
+    start_date: 2020-07-23 12:00:00
+    end_date: 2020-07-24 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 40.0
+        latitude_max: 58.5
+        longitude_min: 238.8
+        longitude_max: 268.2
+    event_type: severe_convection
+  - case_id_number: 311
+    title: August 2020 Canada
+    start_date: 2020-08-27 12:00:00
+    end_date: 2020-08-28 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 38.75
+        latitude_max: 56.5
+        longitude_min: 249.41
+        longitude_max: 268.84
+    event_type: severe_convection
+  - case_id_number: 312
+    title: June 2021 Canada
+    start_date: 2021-06-05 12:00:00
+    end_date: 2021-06-06 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 42.5
+        latitude_max: 57.5
+        longitude_min: 239.25
+        longitude_max: 274.0
+    event_type: severe_convection
+  - case_id_number: 313
+    title: June 2021 Canada
+    start_date: 2021-06-14 12:00:00
+    end_date: 2021-06-15 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 37.5
+        latitude_max: 58.75
+        longitude_min: 235.63
+        longitude_max: 263.62
+    event_type: severe_convection
+  - case_id_number: 314
+    title: July 2021 Canada
+    start_date: 2021-07-15 12:00:00
+    end_date: 2021-07-16 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 35.25
+        latitude_max: 52.75
+        longitude_min: 265.37
+        longitude_max: 289.38
+    event_type: severe_convection
+  - case_id_number: 315
+    title: July 2021 Canada
+    start_date: 2021-07-22 12:00:00
+    end_date: 2021-07-23 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 45.0
+        latitude_max: 60.25
+        longitude_min: 238.54
+        longitude_max: 263.46
+    event_type: severe_convection
+  - case_id_number: 316
+    title: August 2021 Canada
+    start_date: 2021-08-23 12:00:00
+    end_date: 2021-08-24 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 38.75
+        latitude_max: 57.0
+        longitude_min: 244.39
+        longitude_max: 272.11
+    event_type: severe_convection
+  - case_id_number: 317
+    title: August 2021 Canada
+    start_date: 2021-08-31 12:00:00
+    end_date: 2021-09-01 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 44.75
+        latitude_max: 59.75
+        longitude_min: 239.32
+        longitude_max: 261.93
+    event_type: severe_convection
+  - case_id_number: 318
+    title: June 2022 Canada
+    start_date: 2022-06-23 12:00:00
+    end_date: 2022-06-24 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 31.5
+        latitude_max: 56.5
+        longitude_min: 247.12
+        longitude_max: 273.88
+    event_type: severe_convection
+  - case_id_number: 319
+    title: June 2022 Canada
+    start_date: 2022-06-29 12:00:00
+    end_date: 2022-06-30 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 40.5
+        latitude_max: 57.5
+        longitude_min: 241.57
+        longitude_max: 274.18
+    event_type: severe_convection
+  - case_id_number: 320
+    title: July 2022 Canada
+    start_date: 2022-07-05 12:00:00
+    end_date: 2022-07-06 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 31.25
+        latitude_max: 58.0
+        longitude_min: 241.09
+        longitude_max: 289.41
+    event_type: severe_convection
+  - case_id_number: 321
+    title: July 2022 Canada
+    start_date: 2022-07-07 12:00:00
+    end_date: 2022-07-08 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 38.25
+        latitude_max: 57.5
+        longitude_min: 238.14
+        longitude_max: 266.86
+    event_type: severe_convection
+  - case_id_number: 322
+    title: July 2022 Canada
+    start_date: 2022-07-08 12:00:00
+    end_date: 2022-07-09 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 31.0
+        latitude_max: 58.0
+        longitude_min: 238.59
+        longitude_max: 267.66
+    event_type: severe_convection
+  - case_id_number: 323
+    title: July 2022 Canada
+    start_date: 2022-07-17 12:00:00
+    end_date: 2022-07-18 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 43.5
+        latitude_max: 57.0
+        longitude_min: 245.23
+        longitude_max: 271.27
+    event_type: severe_convection
+  - case_id_number: 324
+    title: July 2022 Canada
+    start_date: 2022-07-19 12:00:00
+    end_date: 2022-07-20 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 46.5
+        latitude_max: 58.25
+        longitude_min: 239.06
+        longitude_max: 255.19
+    event_type: severe_convection
+  - case_id_number: 325
+    title: July 2022 Canada
+    start_date: 2022-07-31 12:00:00
+    end_date: 2022-08-01 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 45.5
+        latitude_max: 58.5
+        longitude_min: 236.34
+        longitude_max: 258.41
+    event_type: severe_convection
+  - case_id_number: 326
+    title: May 2023 Canada
+    start_date: 2023-05-31 12:00:00
+    end_date: 2023-06-01 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 28.25
+        latitude_max: 48.25
+        longitude_min: 248.38
+        longitude_max: 261.87
+    event_type: severe_convection
+  - case_id_number: 327
+    title: June 2023 Canada
+    start_date: 2023-06-28 12:00:00
+    end_date: 2023-06-29 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 33.0
+        latitude_max: 56.25
+        longitude_min: 248.09
+        longitude_max: 278.91
+    event_type: severe_convection
+  - case_id_number: 328
+    title: July 2023 Canada
+    start_date: 2023-07-13 12:00:00
+    end_date: 2023-07-14 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 29.25
+        latitude_max: 54.5
+        longitude_min: 249.48
+        longitude_max: 294.02
+    event_type: severe_convection
+  - case_id_number: 329
+    title: July 2023 Canada
+    start_date: 2023-07-20 12:00:00
+    end_date: 2023-07-21 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 29.75
+        latitude_max: 49.0
+        longitude_min: 265.84
+        longitude_max: 287.16
+    event_type: severe_convection
+  - case_id_number: 330
+    title: July 2023 Canada
+    start_date: 2023-07-22 12:00:00
+    end_date: 2023-07-23 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 26.0
+        latitude_max: 55.5
+        longitude_min: 246.28
+        longitude_max: 279.97
+    event_type: severe_convection
+  - case_id_number: 331
+    title: July 2023 Canada
+    start_date: 2023-07-26 12:00:00
+    end_date: 2023-07-27 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 34.75
+        latitude_max: 56.5
+        longitude_min: 250.03
+        longitude_max: 284.47
+    event_type: severe_convection
+  - case_id_number: 332
+    title: August 2023 Canada
+    start_date: 2023-08-03 12:00:00
+    end_date: 2023-08-04 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 38.25
+        latitude_max: 52.5
+        longitude_min: 266.29
+        longitude_max: 292.71
+    event_type: severe_convection
+  - case_id_number: 333
+    title: June 2024 Canada
+    start_date: 2024-06-12 12:00:00
+    end_date: 2024-06-13 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 36.0
+        latitude_max: 57.0
+        longitude_min: 248.23
+        longitude_max: 274.52
+    event_type: severe_convection
+  - case_id_number: 334
+    title: June 2024 Canada
+    start_date: 2024-06-22 12:00:00
+    end_date: 2024-06-23 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 36.0
+        latitude_max: 57.5
+        longitude_min: 247.71
+        longitude_max: 293.54
+    event_type: severe_convection
+  - case_id_number: 335
+    title: June 2024 Canada
+    start_date: 2024-06-23 12:00:00
+    end_date: 2024-06-24 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 41.25
+        latitude_max: 58.25
+        longitude_min: 240.26
+        longitude_max: 274.24
+    event_type: severe_convection
+  - case_id_number: 336
+    title: July 2024 Canada
+    start_date: 2024-07-11 12:00:00
+    end_date: 2024-07-12 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 32.5
+        latitude_max: 50.25
+        longitude_min: 251.25
+        longitude_max: 272.5
+    event_type: severe_convection
+  - case_id_number: 337
+    title: July 2024 Canada
+    start_date: 2024-07-24 12:00:00
+    end_date: 2024-07-25 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 40.75
+        latitude_max: 58.75
+        longitude_min: 236.26
+        longitude_max: 252.74
+    event_type: severe_convection
+  - case_id_number: 338
+    title: August 2024 Canada
+    start_date: 2024-08-05 12:00:00
+    end_date: 2024-08-06 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 37.0
+        latitude_max: 49.5
+        longitude_min: 259.41
+        longitude_max: 293.84
+    event_type: severe_convection
+  - case_id_number: 339
+    title: August 2024 Canada
+    start_date: 2024-08-21 12:00:00
+    end_date: 2024-08-22 12:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 37.25
+        latitude_max: 58.25
+        longitude_min: 243.9
+        longitude_max: 265.35
     event_type: severe_convection

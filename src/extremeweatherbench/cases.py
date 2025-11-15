@@ -5,11 +5,11 @@ Some code similarly structured to WeatherBenchX (Rasp et al.).
 
 import dataclasses
 import datetime
+import importlib
 import itertools
 import logging
-from importlib import resources
-from pathlib import Path
-from typing import TYPE_CHECKING, Callable, Literal, Sequence, Union
+import pathlib
+from typing import TYPE_CHECKING, Literal, Sequence, Union
 
 import dacite
 import yaml  # type: ignore[import]
@@ -57,7 +57,7 @@ class IndividualCaseCollection:
         by: Literal["event_type", "case_id_number", "title", "location"],
         value: Union[str, int, regions.Region, Sequence[float], datetime.datetime],
         inplace: bool = False,
-    ) -> list[IndividualCase]:
+    ) -> "IndividualCaseCollection":
         """Select cases from the collection based on the given criteria.
 
         Args:
@@ -74,7 +74,7 @@ class IndividualCaseCollection:
             collection. Defaults to False.
 
         Returns:
-            A list of IndividualCase objects.
+            A new IndividualCaseCollection with the cases selected by the given criteria
         """
         match by:
             case "event_type":
@@ -84,9 +84,9 @@ class IndividualCaseCollection:
                     cases = [
                         case
                         for case in self.cases
-                        if case.location.geopandas.geometry.union_all().intersects(
-                            value.geopandas.geometry.union_all()
-                        )
+                        if case.location.as_geopandas()
+                        .geometry.union_all()
+                        .intersects(value.as_geopandas().geometry.union_all())
                     ]
                 elif isinstance(value, (tuple, list)):
                     longitude_min, latitude_min, longitude_max, latitude_max = value
@@ -99,19 +99,29 @@ class IndividualCaseCollection:
                     cases = [
                         case
                         for case in self.cases
-                        if case.location.geopandas.geometry.union_all().intersects(
-                            value_region.geopandas.geometry.union_all()
-                        )
+                        if case.location.as_geopandas()
+                        .geometry.union_all()
+                        .intersects(value_region.as_geopandas().geometry.union_all())
                     ]
             case "case_id_number":
-                cases = [case for case in self.cases if case.case_id_number == value]
+                if isinstance(value, int):
+                    cases = [
+                        case for case in self.cases if case.case_id_number == value
+                    ]
+                elif isinstance(value, list):
+                    cases = [
+                        case for case in self.cases if case.case_id_number in value
+                    ]
+                else:
+                    raise ValueError(f"Invalid value for case_id_number: {value}")
             case "title":
                 cases = [case for case in self.cases if case.title == value]
             case _:
                 raise ValueError(f"Invalid field to select cases by: {by}")
         if inplace:
             self.cases = cases
-        return cases
+            return self
+        return IndividualCaseCollection(cases=cases)
 
 
 @dataclasses.dataclass
@@ -125,13 +135,13 @@ class CaseOperator:
 
     Attributes:
         case_metadata: IndividualCase metadata
-        metric_list: A list of metrics that are intended to be evaluated for the case
+        metric_list: A list of metrics that are to be evaluated for the case operator
         target_config: A TargetConfig object
         forecast_config: A ForecastConfig object
     """
 
     case_metadata: IndividualCase
-    metric_list: list[Union[Callable, "metrics.BaseMetric", "metrics.AppliedMetric"]]
+    metric_list: list["metrics.BaseMetric"]
     target: "inputs.TargetBase"
     forecast: "inputs.ForecastBase"
 
@@ -206,7 +216,7 @@ def load_individual_cases(cases: dict[str, list]) -> IndividualCaseCollection:
 
 
 def load_individual_cases_from_yaml(
-    yaml_file: Union[str, Path],
+    yaml_file: Union[str, pathlib.Path],
 ) -> IndividualCaseCollection:
     """Load IndividualCase metadata directly from a yaml file.
 
@@ -248,14 +258,16 @@ def load_ewb_events_yaml_into_case_collection() -> IndividualCaseCollection:
     """Loads the EWB events yaml file into an IndividualCaseCollection."""
     import extremeweatherbench.data
 
-    events_yaml_file = resources.files(extremeweatherbench.data).joinpath("events.yaml")
-    with resources.as_file(events_yaml_file) as file:
+    events_yaml_file = importlib.resources.files(extremeweatherbench.data).joinpath(
+        "events.yaml"
+    )
+    with importlib.resources.as_file(events_yaml_file) as file:
         yaml_event_case = read_incoming_yaml(file)
 
     return load_individual_cases(yaml_event_case)
 
 
-def read_incoming_yaml(input_pth: Union[str, Path]) -> dict:
+def read_incoming_yaml(input_pth: Union[str, pathlib.Path]) -> dict:
     """Read events yaml from data into a dictionary.
 
     This function is a wrapper around yaml.safe_load that reads the yaml file directly.
@@ -267,7 +279,7 @@ def read_incoming_yaml(input_pth: Union[str, Path]) -> dict:
     Returns:
         A dictionary of case metadata.
     """
-    input_pth = Path(input_pth)
+    input_pth = pathlib.Path(input_pth)
     with open(input_pth, "rb") as f:
         yaml_event_case = yaml.safe_load(f)
     return yaml_event_case

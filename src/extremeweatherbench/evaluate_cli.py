@@ -1,14 +1,13 @@
 import importlib.util
 import os
+import pathlib
 import pickle
-from pathlib import Path
 from typing import Optional
 
 import click
 import pandas as pd
 
-from extremeweatherbench import defaults
-from extremeweatherbench.evaluate import ExtremeWeatherBench, _run_parallel
+from extremeweatherbench import cases, defaults, evaluate, utils
 
 
 @click.command()
@@ -99,7 +98,7 @@ def cli_runner(
     if output_dir is None:
         output_dir = os.getcwd()
 
-    output_path = Path(output_dir)
+    output_path = pathlib.Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
     # Validate that either default or config_file is provided
@@ -138,8 +137,8 @@ def cli_runner(
         evaluation_objects, cases_dict = _load_config_file(config_file)
 
     # Initialize ExtremeWeatherBench
-    ewb = ExtremeWeatherBench(
-        cases=cases_dict,
+    ewb = evaluate.ExtremeWeatherBench(
+        case_metadata=cases_dict,
         evaluation_objects=evaluation_objects,
         cache_dir=cache_dir if cache_dir else None,
     )
@@ -150,7 +149,7 @@ def cli_runner(
 
     # Save case operators if requested
     if save_case_operators:
-        save_path = Path(save_case_operators)
+        save_path = pathlib.Path(save_case_operators)
         save_path.parent.mkdir(parents=True, exist_ok=True)
         with open(save_path, "wb") as f:
             pickle.dump(case_operators, f)
@@ -159,7 +158,14 @@ def cli_runner(
     # Run evaluation
     if parallel > 1:
         click.echo(f"Running evaluation with {parallel} parallel jobs...")
-        results = _run_parallel(case_operators, parallel, pre_compute=precompute)
+        results_list = evaluate._run_parallel(
+            case_operators, parallel, pre_compute=precompute
+        )
+        results = (
+            utils._safe_concat(results_list, ignore_index=True)
+            if results_list
+            else pd.DataFrame()
+        )
     else:
         click.echo("Running evaluation in serial...")
         results = ewb.run(pre_compute=precompute)
@@ -174,11 +180,10 @@ def cli_runner(
         click.echo("No results to save")
 
 
-def _load_default_cases() -> dict:
+def _load_default_cases():
     """Load default case data for default evaluation objects."""
-    from extremeweatherbench.cases import load_ewb_events_yaml_into_case_collection
 
-    return load_ewb_events_yaml_into_case_collection()
+    return cases.load_ewb_events_yaml_into_case_collection()
 
 
 def _load_config_file(config_path: str) -> tuple:
@@ -188,7 +193,7 @@ def _load_config_file(config_path: str) -> tuple:
     - evaluation_objects: List of EvaluationObject instances
     - cases_dict: Dictionary containing case data
     """
-    config_path_obj = Path(config_path)
+    config_path_obj = pathlib.Path(config_path)
 
     # Load the config module
     spec = importlib.util.spec_from_file_location("config", str(config_path_obj))

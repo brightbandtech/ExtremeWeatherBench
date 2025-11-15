@@ -72,10 +72,10 @@ fcnv2_forecast = inputs.KerchunkForecast(
 )
 
 metrics_list = [
-    metrics.RMSE,
-    metrics.MinimumMAE,
-    metrics.OnsetME,
-    metrics.DurationME,
+    metrics.RMSE(),
+    metrics.MinimumMAE(),
+    metrics.OnsetME(),
+    metrics.DurationME(),
 ]
 # Create a list of evaluation objects for freeze
 freeze_evaluation_object = [
@@ -95,7 +95,7 @@ freeze_evaluation_object = [
 
 # Initialize ExtremeWeatherBench runner instance
 ewb = evaluate.ExtremeWeatherBench(
-    cases=case_yaml,
+    case_metadata=case_yaml,
     evaluation_objects=freeze_evaluation_object,
 )
 

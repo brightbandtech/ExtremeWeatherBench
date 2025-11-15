@@ -73,8 +73,8 @@ era5_freeze_target = inputs.ERA5(
 # era5_atmospheric_river_target = inputs.ERA5(
 #     source=inputs.ARCO_ERA5_FULL_URI,
 #     variables=[
-#         derived.IntegratedVaporTransport,
-#         derived.AtmosphericRiverMask,
+#         derived.IntegratedVaporTransport(),
+#         derived.AtmosphericRiverMask(),
 #     ],
 #     variable_mapping={
 #         "u_component_of_wind": "eastward_wind",
@@ -132,7 +132,7 @@ ghcn_freeze_target = inputs.GHCN(
 # TODO: Re-enable when IBTrACS target is implemented
 # ibtracs_target = inputs.IBTrACS(
 #     source=inputs.IBTRACS_URI,
-#     variables=[derived.TCTrackVariables],
+#     variables=[derived.TCTrackVariables()],
 #     variable_mapping={
 #         "vmax": "surface_wind_speed",
 #         "slp": "air_pressure_at_mean_sea_level",
@@ -172,8 +172,8 @@ cira_freeze_forecast = inputs.KerchunkForecast(
 # cira_atmospheric_river_forecast = inputs.KerchunkForecast(
 #     source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
 #     variables=[
-#         derived.IntegratedVaporTransport,
-#         derived.AtmosphericRiverMask,
+#         derived.IntegratedVaporTransport(),
+#         derived.AtmosphericRiverMask(),
 #     ],
 #     variable_mapping={
 #         "u_component_of_wind": "eastward_wind",
@@ -191,7 +191,7 @@ cira_freeze_forecast = inputs.KerchunkForecast(
 # TODO: Re-enable when CravenSignificantSevereParameter is implemented
 # cira_severe_convection_forecast = inputs.KerchunkForecast(
 #     source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
-#     variables=[derived.CravenSignificantSevereParameter],
+#     variables=[derived.CravenSignificantSevereParameter()],
 #     variable_mapping={
 #         "t": "air_temperature",
 #         "t2": "surface_air_temperature",
@@ -219,18 +219,18 @@ def get_brightband_evaluation_objects() -> list[inputs.EvaluationObject]:
     # Import metrics here to avoid circular import
     from extremeweatherbench import metrics
 
-    heatwave_metric_list = [
-        metrics.MaximumMAE,
-        metrics.RMSE,
-        metrics.OnsetME,
-        metrics.DurationME,
-        metrics.MaxMinMAE,
+    heatwave_metric_list: list[metrics.BaseMetric] = [
+        metrics.MaximumMAE(),
+        metrics.RMSE(),
+        metrics.OnsetME(),
+        metrics.DurationME(),
+        metrics.MaxMinMAE(),
     ]
-    freeze_metric_list = [
-        metrics.MinimumMAE,
-        metrics.RMSE,
-        metrics.OnsetME,
-        metrics.DurationME,
+    freeze_metric_list: list[metrics.BaseMetric] = [
+        metrics.MinimumMAE(),
+        metrics.RMSE(),
+        metrics.OnsetME(),
+        metrics.DurationME(),
     ]
 
     return [
@@ -262,10 +262,10 @@ def get_brightband_evaluation_objects() -> list[inputs.EvaluationObject]:
         # inputs.EvaluationObject(
         #     event_type="severe_convection",
         #     metric_list=[
-        #         metrics.CSI,
-        #         metrics.FAR,
-        #         metrics.RegionalHitsMisses,
-        #         metrics.HitsMisses,
+        #         metrics.CSI(),
+        #         metrics.FAR(),
+        #         metrics.RegionalHitsMisses(),
+        #         metrics.HitsMisses(),
         #     ],
         #     target=lsr_target,
         #     forecast=cira_severe_convection_forecast,
@@ -273,8 +273,8 @@ def get_brightband_evaluation_objects() -> list[inputs.EvaluationObject]:
         # TODO: Re-enable when atmospheric river forecast is implemented
         # inputs.EvaluationObject(
         #     event_type="atmospheric_river",
-        #     metric_list=[metrics.CSI, metrics.SpatialDisplacement,
-        #  metrics.EarlySignal],
+        #     metric_list=[metrics.CSI(), metrics.SpatialDisplacement(),
+        #  metrics.EarlySignal()],
         #     target=era5_atmospheric_river_target,
         #     forecast=cira_atmospheric_river_forecast,
         # ),
@@ -282,10 +282,10 @@ def get_brightband_evaluation_objects() -> list[inputs.EvaluationObject]:
         # inputs.EvaluationObject(
         #     event_type="tropical_cyclone",
         #     metric_list=[
-        #         metrics.EarlySignal,
-        #         metrics.LandfallDisplacement,
-        #         metrics.LandfallTimeME,
-        #         metrics.LandfallIntensityMAE,
+        #         metrics.EarlySignal(),
+        #         metrics.LandfallDisplacement(),
+        #         metrics.LandfallTimeME(),
+        #         metrics.LandfallIntensityMAE(),
         #     ],
         #     target=ibtracs_target,
         #     forecast=cira_tropical_cyclone_forecast,
