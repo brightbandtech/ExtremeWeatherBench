@@ -1,6 +1,6 @@
 import abc
 import logging
-from typing import List, Optional, Union
+from typing import List, Optional, Sequence, Union
 
 import xarray as xr
 
@@ -27,16 +27,24 @@ class DerivedVariable(abc.ABC):
 
     variables: List[str]
 
-    def __init__(self, name: Optional[str] = None):
+    def __init__(
+        self,
+        output_variables: Optional[List[str]] = None,
+        name: Optional[str] = None,
+    ):
         """Initialize the derived variable.
 
         Args:
-            name: The name of the derived variable. Defaults to the class name.
+            output_variables: Optional list of variable names that specify
+                which outputs to use from the derived computation.
+            name: The name of the derived variable. Defaults to class-level
+                name attribute if present, otherwise the class name.
         """
-        self.name = name or self.__class__.__name__
+        self.name = name or getattr(self.__class__, "name", self.__class__.__name__)
+        self.output_variables = output_variables
 
     @abc.abstractmethod
-    def derive_variable(self, data: xr.Dataset) -> xr.DataArray:
+    def derive_variable(self, data: xr.Dataset, *args, **kwargs) -> xr.DataArray:
         """Derive the variable from the required variables.
 
         The output of the derivation must be a single variable output returned as
@@ -50,24 +58,20 @@ class DerivedVariable(abc.ABC):
         """
         pass
 
-    def compute(self, data: xr.Dataset, **kwargs) -> xr.DataArray:
+    def compute(self, data: xr.Dataset, *args, **kwargs) -> xr.DataArray:
         """Build the derived variable from the input variables.
 
         This method is used to build the derived variable from the input variables.
-        It checks that the data has the variables required to build the variable,
-        and then derives the variable from the input variables.
 
         Args:
             data: The dataset to build the derived variable from.
-            **kwargs: Additional keyword arguments to pass to the derived variable.
+            *args: Additional positional arguments to pass to derive_variable.
+            **kwargs: Additional keyword arguments to pass to derive_variable.
 
         Returns:
             A DataArray with the derived variable.
         """
-        for v in self.variables:
-            if v not in data.data_vars:
-                raise ValueError(f"Input variable {v} not found in data")
-        return self.derive_variable(data)
+        return self.derive_variable(data, *args, **kwargs)
 
 
 def maybe_derive_variables(
@@ -92,6 +96,11 @@ def maybe_derive_variables(
         A dataset with derived variables, if any exist, else the original
         dataset.
     """
+    # If there are no valid times, return the dataset unaltered; saves time as case will
+    # be skipped
+    if data.valid_time.size == 0:
+        logger.debug("No valid times found in the dataset.")
+        return data
 
     maybe_derived_variables = [v for v in variables if not isinstance(v, str)]
 
@@ -121,25 +130,53 @@ def maybe_derive_variables(
             )
             output.name = derived_variable.name
         # Merge the derived variable into the dataset
-        return output.to_dataset()
+        output_ds = output.to_dataset()
 
     elif isinstance(output, xr.Dataset):
         # Check if derived dataset dimensions are compatible for merging
-        return output
+        output_ds = output
 
-    # If output is neither DataArray nor Dataset, return original
-    logger.warning(
-        f"Derived variable {derived_variable.name} returned neither DataArray nor "
-        "Dataset. Returning original dataset."
-    )
-    return data
+    else:
+        # If output is neither DataArray nor Dataset, return original
+        logger.warning(
+            f"Derived variable {derived_variable.name} returned neither "
+            "DataArray nor Dataset. Returning original dataset."
+        )
+        return data
+
+    # Subset to output_variables if specified
+    if (
+        hasattr(derived_variable, "output_variables")
+        and derived_variable.output_variables
+    ):
+        missing_vars = set(derived_variable.output_variables) - set(output_ds.data_vars)
+        if missing_vars:
+            logger.warning(
+                f"Derived variable {derived_variable.name} specified "
+                f"output_variables {derived_variable.output_variables}, but "
+                f"computed output is missing: {missing_vars}"
+            )
+        # Subset to only the requested output variables
+        available_vars = [
+            v for v in derived_variable.output_variables if v in output_ds.data_vars
+        ]
+        if available_vars:
+            output_ds = output_ds[available_vars]
+        else:
+            logger.warning(
+                f"None of the specified output_variables "
+                f"{derived_variable.output_variables} are in the computed "
+                f"dataset. Returning original dataset."
+            )
+            return data
+
+    return output_ds
 
 
-def maybe_pull_variables_from_derived_input(
-    incoming_variables: list[Union[str, DerivedVariable]],
+def maybe_include_variables_from_derived_input(
+    incoming_variables: Sequence[Union[str, DerivedVariable]],
 ) -> list[str]:
-    """Pull the required variables from a derived input and add to the list of
-    variables to pull.
+    """Identify and return variables that a derived variable needs to compute.
 
     Args:
         incoming_variables: a list of string and/or derived variables.
@@ -150,13 +187,27 @@ def maybe_pull_variables_from_derived_input(
     """
     string_variables = [v for v in incoming_variables if isinstance(v, str)]
 
-    derived_variables = []
+    derived_variables: list[str] = []
     for v in incoming_variables:
         if isinstance(v, DerivedVariable):
             # Handle instances of DerivedVariable
             derived_variables.extend(v.variables)
-        elif isinstance(v, type) and issubclass(v, DerivedVariable):
-            # Handle classes that inherit from DerivedVariable
-            derived_variables.extend(v.variables)
 
-    return string_variables + derived_variables
+    return list(set(string_variables + derived_variables))
+
+
+def _maybe_convert_variable_to_string(
+    variable: Union[str, DerivedVariable],
+) -> str:
+    """Convert a variable to its string representation.
+
+    Args:
+        variable: Either a string or a DerivedVariable instance.
+
+    Returns:
+        The string representation of the variable.
+    """
+    if isinstance(variable, str):
+        return variable
+    # variable is a DerivedVariable instance with .name set in __init__
+    return str(variable.name)
