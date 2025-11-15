@@ -2364,6 +2364,8 @@ class TestTropicalCycloneEvaluation:
 
         mock_metric_instance = mock.Mock(spec=metrics.BaseMetric)
         mock_metric_instance.name = "TestMetric"
+        mock_metric_instance.forecast_variable = None
+        mock_metric_instance.target_variable = None
         mock_metric_instance.compute_metric.return_value = xr.DataArray([1.0])
         sample_tc_case_operator.metric_list[0] = mock_metric_instance
 
