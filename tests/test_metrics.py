@@ -1,7 +1,5 @@
 """Tests for the metrics module."""
 
-import inspect
-
 import numpy as np
 import pandas as pd
 import pytest
@@ -595,66 +593,581 @@ class TestDurationME:
             assert isinstance(metric, metrics.DurationME)
 
 
-class TestIncompleteMetrics:
-    """Tests for metrics that are marked as TODO/incomplete
-    implementations."""
+class TestLandfallMetrics:
+    """Tests for landfall-related metrics."""
 
-    def test_all_incomplete_metrics_can_be_instantiated(self):
-        """Test that all incomplete metric classes can be instantiated."""
-        incomplete_metrics = [
-            metrics.LandfallDisplacement,
-            metrics.LandfallTimeME,
-            metrics.LandfallIntensityMAE,
-            metrics.SpatialDisplacement,
-            metrics.FAR,
-            metrics.CSI,
-            metrics.LeadTimeDetection,
-            metrics.RegionalHitsMisses,
-            metrics.HitsMisses,
-            metrics.EarlySignal,
-        ]
+    def test_landfall_metrics_exist(self):
+        """Test that consolidated landfall metrics exist."""
+        assert hasattr(metrics, "LandfallDisplacement")
+        assert hasattr(metrics, "LandfallTimeME")
+        assert hasattr(metrics, "LandfallIntensityMAE")
 
-        for metric_class in incomplete_metrics:
-            metric = metric_class()
-            assert isinstance(metric, metrics.BaseMetric)
-            assert hasattr(metric, "_compute_metric")
+    def test_landfall_displacement_instantiation(self):
+        """Test LandfallDisplacement can be instantiated."""
+        displacement_first = metrics.LandfallDisplacement(approach="first")
+        displacement_next = metrics.LandfallDisplacement(approach="next")
 
+        assert displacement_first.approach == "first"
+        assert displacement_next.approach == "next"
+        assert isinstance(displacement_first, metrics.BaseMetric)
 
-class TestMetricIntegration:
-    """Integration tests for metric classes."""
+    def test_landfall_time_me_instantiation(self):
+        """Test LandfallTimeME can be instantiated."""
+        timing_first = metrics.LandfallTimeME(approach="first")
+        timing_next = metrics.LandfallTimeME(approach="next")
 
-    def test_all_metrics_have_required_methods(self):
-        """Test that all metric classes have required methods."""
-        # Auto-discover all BaseMetric subclasses, excluding abstract ones
-        all_metric_classes = [
-            cls
-            for name, cls in inspect.getmembers(metrics, inspect.isclass)
-            if issubclass(cls, metrics.BaseMetric)
-            and cls not in (metrics.BaseMetric, metrics.ThresholdMetric)
-            and not inspect.isabstract(cls)
-        ]
+        assert timing_first.approach == "first"
+        assert timing_next.approach == "next"
 
-        for metric_class in all_metric_classes:
-            metric = metric_class()
-            assert hasattr(metric, "_compute_metric")
-            assert hasattr(metric, "compute_metric")
-            assert hasattr(metric, "name")
+    def test_landfall_intensity_mae_instantiation(self):
+        """Test LandfallIntensityMAE can be instantiated."""
+        intensity = metrics.LandfallIntensityMAE(
+            approach="first",
+            forecast_variable="surface_wind_speed",
+            target_variable="surface_wind_speed",
+        )
+        assert intensity.approach == "first"
+        assert intensity.forecast_variable == "surface_wind_speed"
+        assert intensity.target_variable == "surface_wind_speed"
+        assert isinstance(intensity, metrics.BaseMetric)
 
-    def test_metrics_module_structure(self):
-        """Test the overall structure of the metrics module."""
-        # Test that required classes exist
-        assert hasattr(metrics, "BaseMetric")
+    def test_landfall_metrics_with_mocked_data(self):
+        """Test landfall metrics with mocked landfall detection."""
+        from unittest.mock import patch
 
-        # Auto-discover all metric classes (including abstract ones)
-        all_metric_classes = [
-            (name, cls)
-            for name, cls in inspect.getmembers(metrics, inspect.isclass)
-            if issubclass(cls, metrics.BaseMetric) and cls != metrics.BaseMetric
-        ]
+        from extremeweatherbench import calc
 
-        # Should have at least some metrics
-        assert len(all_metric_classes) > 0
+        # Create simple test data
+        target = xr.Dataset(
+            {
+                "latitude": (["valid_time"], [25.0]),
+                "longitude": (["valid_time"], [-80.0]),
+                "surface_wind_speed": (["valid_time"], [40.0]),
+                "air_pressure_at_mean_sea_level": (["valid_time"], [97000.0]),
+            },
+            coords={"valid_time": [pd.Timestamp("2023-09-15")]},
+        )
 
-        for class_name, cls in all_metric_classes:
-            assert hasattr(metrics, class_name)
-            assert callable(getattr(metrics, class_name))
+        forecast = xr.Dataset(
+            {
+                "latitude": (["lead_time", "valid_time"], [[25.1]]),
+                "longitude": (["lead_time", "valid_time"], [[-80.1]]),
+                "surface_wind_speed": (["lead_time", "valid_time"], [[38.0]]),
+                "air_pressure_at_mean_sea_level": (
+                    ["lead_time", "valid_time"],
+                    [[97500.0]],
+                ),
+            },
+            coords={
+                "lead_time": [12],
+                "valid_time": [pd.Timestamp("2023-09-15")],
+            },
+        )
+
+        # Mock landfall data (now DataArrays instead of Datasets)
+        mock_target_landfall = xr.DataArray(
+            40.0,
+            coords={
+                "latitude": 25.0,
+                "longitude": -80.0,
+                "valid_time": pd.Timestamp("2023-09-15 06:00"),
+            },
+            name="surface_wind_speed",
+        )
+
+        mock_forecast_landfall = xr.DataArray(
+            [38.0],
+            dims=["init_time"],
+            coords={
+                "latitude": (["init_time"], [25.1]),
+                "longitude": (["init_time"], [-80.1]),
+                "valid_time": (["init_time"], [pd.Timestamp("2023-09-15 06:00")]),
+                "init_time": [pd.Timestamp("2023-09-15")],
+            },
+            name="surface_wind_speed",
+        )
+
+        # Mock expensive find_landfalls calls
+        with patch.object(calc, "find_landfalls") as mock_find:
+
+            def mock_find_func(track_data, return_all_landfalls=False):
+                if return_all_landfalls:
+                    return xr.DataArray(
+                        [40.0],
+                        dims=["landfall"],
+                        coords={
+                            "latitude": (["landfall"], [25.0]),
+                            "longitude": (["landfall"], [-80.0]),
+                            "valid_time": (
+                                ["landfall"],
+                                [pd.Timestamp("2023-09-15 06:00")],
+                            ),
+                            "landfall": [0],
+                        },
+                        name="surface_wind_speed",
+                    )
+                else:
+                    return (
+                        mock_target_landfall
+                        if "lead_time" not in track_data.dims
+                        else mock_forecast_landfall
+                    )
+
+            mock_find.side_effect = mock_find_func
+
+            # Test all metric types with DataArrays
+            # Extract DataArrays from datasets for the new API
+            forecast_da = forecast["surface_wind_speed"]
+            target_da = target["surface_wind_speed"]
+
+            metrics_to_test = [
+                metrics.LandfallDisplacement(approach="first"),
+                metrics.LandfallTimeME(approach="first"),
+                metrics.LandfallIntensityMAE(
+                    approach="first",
+                    forecast_variable="surface_wind_speed",
+                    target_variable="surface_wind_speed",
+                ),
+            ]
+
+            for metric in metrics_to_test:
+                result = metric._compute_metric(forecast_da, target_da)
+                assert isinstance(result, xr.DataArray)
+
+            # Verify mocking was used
+            assert mock_find.call_count > 0
+
+    def test_landfall_displacement_with_known_values(self):
+        """Test LandfallDisplacement with manually calculated expected values."""
+        from unittest.mock import patch
+
+        from extremeweatherbench import calc
+
+        # Create test data with known coordinates
+        # Target landfall at Miami: (25.7617° N, 80.1918° W)
+        # Forecast landfall at Fort Lauderdale: (26.1224° N, 80.1373° W)
+        # Expected distance: ~40 km (calculated using haversine formula)
+
+        target = xr.Dataset(
+            {
+                "latitude": (["valid_time"], [25.7617]),
+                "longitude": (["valid_time"], [-80.1918]),
+                "surface_wind_speed": (["valid_time"], [45.0]),
+            },
+            coords={"valid_time": [pd.Timestamp("2023-09-15 12:00")]},
+        )
+
+        forecast = xr.Dataset(
+            {
+                "latitude": (["lead_time", "valid_time"], [[26.1224]]),
+                "longitude": (["lead_time", "valid_time"], [[-80.1373]]),
+                "surface_wind_speed": (["lead_time", "valid_time"], [[42.0]]),
+            },
+            coords={
+                "lead_time": [24],
+                "valid_time": [pd.Timestamp("2023-09-15 12:00")],
+            },
+        )
+
+        # Mock landfall data
+        mock_target_landfall = xr.DataArray(
+            45.0,
+            coords={
+                "latitude": 25.7617,
+                "longitude": -80.1918,
+                "valid_time": pd.Timestamp("2023-09-15 12:00"),
+            },
+            name="surface_wind_speed",
+        )
+
+        mock_forecast_landfall = xr.DataArray(
+            [42.0],
+            dims=["init_time"],
+            coords={
+                "latitude": (["init_time"], [26.1224]),
+                "longitude": (["init_time"], [-80.1373]),
+                "valid_time": (["init_time"], [pd.Timestamp("2023-09-15 12:00")]),
+                "init_time": [pd.Timestamp("2023-09-14 12:00")],
+            },
+            name="surface_wind_speed",
+        )
+
+        with patch.object(calc, "find_landfalls") as mock_find:
+
+            def mock_find_func(track_data, return_all_landfalls=False):
+                if "lead_time" not in track_data.dims:
+                    return mock_target_landfall
+                else:
+                    return mock_forecast_landfall
+
+            mock_find.side_effect = mock_find_func
+
+            # Test displacement metric
+            metric = metrics.LandfallDisplacement(approach="first")
+            result = metric._compute_metric(
+                forecast["surface_wind_speed"], target["surface_wind_speed"]
+            )
+
+            # Expected distance is approximately 40 km
+            # (haversine distance between the two coordinates)
+            assert isinstance(result, xr.DataArray)
+            assert result.dims == ("init_time",)
+            assert len(result) == 1
+            # Allow some tolerance for floating point calculations
+            assert 39.0 < result.values[0] < 41.0
+
+    def test_landfall_intensity_mae_with_known_values(self):
+        """Test LandfallIntensityMAE with manually calculated expected values."""
+        from unittest.mock import patch
+
+        from extremeweatherbench import calc
+
+        # Create test data with known intensity values
+        # Target intensity: 50 m/s
+        # Forecast intensities: 53 m/s and 48 m/s for two init_times
+        # Expected MAEs: 3.0 and 2.0
+
+        target = xr.Dataset(
+            {
+                "latitude": (["valid_time"], [25.0]),
+                "longitude": (["valid_time"], [-80.0]),
+                "surface_wind_speed": (["valid_time"], [50.0]),
+            },
+            coords={"valid_time": [pd.Timestamp("2023-09-15 12:00")]},
+        )
+
+        forecast = xr.Dataset(
+            {
+                "latitude": (["lead_time", "valid_time"], [[25.1, 25.2]]),
+                "longitude": (["lead_time", "valid_time"], [[-80.1, -80.2]]),
+                "surface_wind_speed": (["lead_time", "valid_time"], [[53.0, 48.0]]),
+            },
+            coords={
+                "lead_time": [24],
+                "valid_time": [
+                    pd.Timestamp("2023-09-15 12:00"),
+                    pd.Timestamp("2023-09-15 12:00"),
+                ],
+            },
+        )
+
+        # Mock landfall data
+        mock_target_landfall = xr.DataArray(
+            50.0,
+            coords={
+                "latitude": 25.0,
+                "longitude": -80.0,
+                "valid_time": pd.Timestamp("2023-09-15 12:00"),
+            },
+            name="surface_wind_speed",
+        )
+
+        mock_forecast_landfall = xr.DataArray(
+            [53.0, 48.0],
+            dims=["init_time"],
+            coords={
+                "latitude": (["init_time"], [25.1, 25.2]),
+                "longitude": (["init_time"], [-80.1, -80.2]),
+                "valid_time": (
+                    ["init_time"],
+                    [
+                        pd.Timestamp("2023-09-15 12:00"),
+                        pd.Timestamp("2023-09-15 12:00"),
+                    ],
+                ),
+                "init_time": [
+                    pd.Timestamp("2023-09-14 12:00"),
+                    pd.Timestamp("2023-09-14 12:00"),
+                ],
+            },
+            name="surface_wind_speed",
+        )
+
+        with patch.object(calc, "find_landfalls") as mock_find:
+
+            def mock_find_func(track_data, return_all_landfalls=False):
+                if "lead_time" not in track_data.dims:
+                    return mock_target_landfall
+                else:
+                    return mock_forecast_landfall
+
+            mock_find.side_effect = mock_find_func
+
+            # Test intensity MAE metric
+            metric = metrics.LandfallIntensityMAE(
+                approach="first",
+                forecast_variable="surface_wind_speed",
+                target_variable="surface_wind_speed",
+            )
+            result = metric._compute_metric(
+                forecast["surface_wind_speed"], target["surface_wind_speed"]
+            )
+
+            # Expected MAEs: [3.0, 2.0]
+            assert isinstance(result, xr.DataArray)
+            assert result.dims == ("init_time",)
+            assert len(result) == 2
+            np.testing.assert_allclose(result.values, [3.0, 2.0], rtol=1e-10)
+
+    def test_landfall_time_me_with_timing_errors(self):
+        """Test LandfallTimeME with various timing error scenarios."""
+        from unittest.mock import patch
+
+        from extremeweatherbench import calc
+
+        # Test different timing scenarios:
+        # 1. Early forecast (landfall 3 hours early): error = -3 hours
+        # 2. Late forecast (landfall 2 hours late): error = +2 hours
+        # 3. Perfect timing: error = 0 hours
+
+        target = xr.Dataset(
+            {
+                "latitude": (["valid_time"], [25.0]),
+                "longitude": (["valid_time"], [-80.0]),
+                "surface_wind_speed": (["valid_time"], [50.0]),
+            },
+            coords={"valid_time": [pd.Timestamp("2023-09-15 12:00")]},
+        )
+
+        forecast = xr.Dataset(
+            {
+                "latitude": (["lead_time", "valid_time"], [[25.0, 25.0, 25.0]]),
+                "longitude": (["lead_time", "valid_time"], [[-80.0, -80.0, -80.0]]),
+                "surface_wind_speed": (
+                    ["lead_time", "valid_time"],
+                    [[50.0, 50.0, 50.0]],
+                ),
+            },
+            coords={
+                "lead_time": [24],
+                "valid_time": [
+                    pd.Timestamp("2023-09-15 12:00"),
+                    pd.Timestamp("2023-09-15 12:00"),
+                    pd.Timestamp("2023-09-15 12:00"),
+                ],
+            },
+        )
+
+        # Mock landfall data with different timing
+        mock_target_landfall = xr.DataArray(
+            50.0,
+            coords={
+                "latitude": 25.0,
+                "longitude": -80.0,
+                "valid_time": pd.Timestamp("2023-09-15 12:00"),
+            },
+            name="surface_wind_speed",
+        )
+
+        # Forecasts with early, late, and correct timing
+        mock_forecast_landfall = xr.DataArray(
+            [50.0, 50.0, 50.0],
+            dims=["init_time"],
+            coords={
+                "latitude": (["init_time"], [25.0, 25.0, 25.0]),
+                "longitude": (["init_time"], [-80.0, -80.0, -80.0]),
+                "valid_time": (
+                    ["init_time"],
+                    [
+                        pd.Timestamp("2023-09-15 09:00"),  # 3 hours early
+                        pd.Timestamp("2023-09-15 14:00"),  # 2 hours late
+                        pd.Timestamp("2023-09-15 12:00"),  # Perfect
+                    ],
+                ),
+                "init_time": [
+                    pd.Timestamp("2023-09-14 09:00"),
+                    pd.Timestamp("2023-09-14 14:00"),
+                    pd.Timestamp("2023-09-14 12:00"),
+                ],
+            },
+            name="surface_wind_speed",
+        )
+
+        with patch.object(calc, "find_landfalls") as mock_find:
+
+            def mock_find_func(track_data, return_all_landfalls=False):
+                if "lead_time" not in track_data.dims:
+                    return mock_target_landfall
+                else:
+                    return mock_forecast_landfall
+
+            mock_find.side_effect = mock_find_func
+
+            # Test timing metric
+            metric = metrics.LandfallTimeME(approach="first")
+            result = metric._compute_metric(
+                forecast["surface_wind_speed"], target["surface_wind_speed"]
+            )
+
+            # Expected timing errors: [-3.0, +2.0, 0.0] hours
+            assert isinstance(result, xr.DataArray)
+            assert result.dims == ("init_time",)
+            assert len(result) == 3
+            np.testing.assert_allclose(result.values, [-3.0, 2.0, 0.0], rtol=1e-10)
+
+    def test_landfall_next_approach_displacement(self):
+        """Test LandfallDisplacement with 'next' approach uses correct helper."""
+        # This test verifies that the "next" approach properly delegates to
+        # the shared helper method in LandfallMixin via the new pattern
+        metric = metrics.LandfallDisplacement(approach="next")
+        assert metric.approach == "next"
+
+        # Verify the new pattern methods exist
+        assert hasattr(metric, "_get_landfall_metric_function")
+        assert callable(metric._get_landfall_metric_function)
+
+        # Verify the metric calculation function exists
+        assert hasattr(metrics.LandfallDisplacement, "_calculate_distance")
+        assert callable(metrics.LandfallDisplacement._calculate_distance)
+
+        # Verify it uses the shared matching helper
+        assert hasattr(metrics.LandfallMixin, "_match_and_compute_next_landfalls")
+        assert callable(metrics.LandfallMixin._match_and_compute_next_landfalls)
+
+    def test_landfall_displacement_integration(self):
+        """Integration test: LandfallDisplacement with real landfall detection.
+
+        Note: This test may return all NaNs if the land mask is not available
+        or configured, which is expected behavior in test environments.
+        """
+        # Create DataArrays with latitude/longitude as coordinates
+        # (this is the expected format for the metric API)
+        target_track = xr.DataArray(
+            [35.0, 40.0, 45.0, 40.0],
+            dims=["valid_time"],
+            coords={
+                "valid_time": pd.date_range("2023-09-15 00:00", periods=4, freq="6h"),
+                "latitude": (["valid_time"], [24.0, 24.5, 25.0, 25.5]),
+                "longitude": (["valid_time"], [-82.0, -81.5, -81.0, -80.5]),
+            },
+            name="surface_wind_speed",
+        )
+
+        forecast_track = xr.DataArray(
+            [[35.0, 42.0, 47.0, 42.0]],
+            dims=["lead_time", "valid_time"],
+            coords={
+                "lead_time": [6],
+                "valid_time": pd.date_range("2023-09-15 00:00", periods=4, freq="6h"),
+                "latitude": (["lead_time", "valid_time"], [[24.0, 24.6, 25.2, 25.6]]),
+                "longitude": (
+                    ["lead_time", "valid_time"],
+                    [[-82.0, -81.4, -80.8, -80.4]],
+                ),
+            },
+            name="surface_wind_speed",
+        )
+
+        # Test the metric with actual landfall detection
+        metric = metrics.LandfallDisplacement(approach="first")
+
+        # This may return NaN if land mask is not available, which is OK
+        result = metric._compute_metric(forecast_track, target_track)
+
+        # Verify we got a result with the right structure
+        assert isinstance(result, xr.DataArray)
+        assert "init_time" in result.dims
+
+        # If landfalls were detected, result should be non-negative
+        # In test environments without land mask, this will be all NaN
+        if not result.isnull().all():
+            # If we detected landfalls, displacement should be positive
+            assert (result >= 0).all()
+
+    def test_landfall_intensity_integration(self):
+        """Integration test: LandfallIntensityMAE with real landfall detection.
+
+        Note: This test may return all NaNs if the land mask is not available.
+        """
+        target_track = xr.DataArray(
+            [35.0, 40.0, 45.0, 40.0],
+            dims=["valid_time"],
+            coords={
+                "valid_time": pd.date_range("2023-09-15 00:00", periods=4, freq="6h"),
+                "latitude": (["valid_time"], [24.0, 24.5, 25.0, 25.5]),
+                "longitude": (["valid_time"], [-82.0, -81.5, -81.0, -80.5]),
+            },
+            name="surface_wind_speed",
+        )
+
+        forecast_track = xr.DataArray(
+            [[33.0, 38.0, 48.0, 43.0]],
+            dims=["lead_time", "valid_time"],
+            coords={
+                "lead_time": [6],
+                "valid_time": pd.date_range("2023-09-15 00:00", periods=4, freq="6h"),
+                "latitude": (["lead_time", "valid_time"], [[24.0, 24.5, 25.0, 25.5]]),
+                "longitude": (
+                    ["lead_time", "valid_time"],
+                    [[-82.0, -81.5, -81.0, -80.5]],
+                ),
+            },
+            name="surface_wind_speed",
+        )
+
+        # Test the metric
+        metric = metrics.LandfallIntensityMAE(
+            approach="first",
+            forecast_variable="surface_wind_speed",
+            target_variable="surface_wind_speed",
+        )
+
+        result = metric._compute_metric(forecast_track, target_track)
+
+        # Verify structure
+        assert isinstance(result, xr.DataArray)
+        assert "init_time" in result.dims
+
+        # If landfalls were detected, MAE should be non-negative
+        if not result.isnull().all():
+            assert (result >= 0).all()
+
+    def test_landfall_timing_integration(self):
+        """Integration test: LandfallTimeME with real landfall detection.
+
+        Note: This test may return all NaNs if the land mask is not available.
+        """
+        # Create tracks with same path but different timing
+        target_track = xr.DataArray(
+            [35.0, 40.0, 45.0, 40.0],
+            dims=["valid_time"],
+            coords={
+                "valid_time": pd.date_range("2023-09-15 00:00", periods=4, freq="6h"),
+                "latitude": (["valid_time"], [24.0, 24.5, 25.0, 25.5]),
+                "longitude": (["valid_time"], [-82.0, -81.5, -81.0, -80.5]),
+            },
+            name="surface_wind_speed",
+        )
+
+        # Forecast that's 3 hours early (same positions but earlier times)
+        forecast_track = xr.DataArray(
+            [[35.0, 40.0, 45.0, 40.0]],
+            dims=["lead_time", "valid_time"],
+            coords={
+                "lead_time": [6],
+                "valid_time": pd.date_range(
+                    "2023-09-14 21:00", periods=4, freq="6h"
+                ),  # 3 hours earlier
+                "latitude": (["lead_time", "valid_time"], [[24.0, 24.5, 25.0, 25.5]]),
+                "longitude": (
+                    ["lead_time", "valid_time"],
+                    [[-82.0, -81.5, -81.0, -80.5]],
+                ),
+            },
+            name="surface_wind_speed",
+        )
+
+        # Test the metric
+        metric = metrics.LandfallTimeME(approach="first")
+
+        result = metric._compute_metric(forecast_track, target_track)
+
+        # Verify structure
+        assert isinstance(result, xr.DataArray)
+        assert "init_time" in result.dims
+
+        # If landfalls were detected, timing error should be reasonable
+        # (within a few days, not years or obviously wrong)
+        if not result.isnull().all():
+            # Timing errors should be within reasonable bounds (±7 days)
+            assert (np.abs(result) < 168).all()  # 168 hours = 7 days

@@ -18,12 +18,15 @@ def safely_pull_variables(
 ) -> xr.Dataset:
     """Handle variable extraction for xarray Dataset.
 
+    Preserves essential coordinate variables (latitude, longitude, valid_time)
+    even if not explicitly requested, as they may be needed by derived variables.
+
     Args:
         data: The xarray Dataset to extract variables from.
         variables: List of required variable names to extract.
 
     Returns:
-        The dataset containing only the found variables.
+        The dataset containing the found variables plus essential coordinates.
 
     Raises:
         KeyError: If any required variables are missing from the dataset.
@@ -46,6 +49,13 @@ def safely_pull_variables(
             f"Required variables {missing_variables} not found in dataset. "
             f"Available variables: {available_vars}"
         )
+
+    # Add essential coordinate variables if they exist as data variables
+    # (needed for track-based metrics like TC tracks)
+    essential_coords = ["latitude", "longitude", "valid_time"]
+    for coord in essential_coords:
+        if coord in data.data_vars and coord not in found_variables:
+            found_variables.append(coord)
 
     # Return dataset with only the found variables
     return data[found_variables]

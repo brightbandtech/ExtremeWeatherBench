@@ -746,11 +746,101 @@ class PPH(TargetBase):
         return align_forecast_to_target(forecast_data, target_data)
 
 
+def _ibtracs_preprocess(data: IncomingDataInput) -> IncomingDataInput:
+    """Preprocess IBTrACS data.
+
+    Preprocessing is done before any variable mapping is applied, thus using the
+    original variable names is required."""
+
+    schema = data.collect_schema()
+    # Convert pressure and surface wind columns to float, replacing " " with null
+    # Get column names that contain "pressure" or "wind"
+    pressure_cols = [col for col in schema if "PRES" in col.lower()]
+    wind_cols = [col for col in schema if "WIND" in col.lower()]
+
+    # Apply transformations to strip whitespace, replace empty with null, cast
+    subset_target_data = data.with_columns(
+        [
+            pl.col(col)
+            .str.strip_chars()
+            .replace("", None)
+            .cast(pl.Float64, strict=False)
+            .alias(col)
+            for col in pressure_cols + wind_cols
+        ]
+    )
+
+    # Drop rows where ALL columns are null (equivalent to pandas dropna(how="all"))
+    subset_target_data = subset_target_data.filter(
+        ~pl.all_horizontal(pl.all().is_null())
+    )
+
+    # Create unified pressure and wind columns by preferring USA and WMO data
+    # For surface wind speed - reuse wind_cols from earlier
+    wind_priority = ["USA_WIND", "WMO_WIND"] + [
+        col for col in wind_cols if col not in ["USA_WIND", "WMO_WIND"]
+    ]
+
+    # For pressure at mean sea level - reuse pressure_cols from earlier
+    pressure_priority = [
+        "USA_PRES",
+        "WMO_PRES",
+    ] + [
+        col
+        for col in pressure_cols
+        if col
+        not in [
+            "USA_PRES",
+            "WMO_PRES",
+        ]
+    ]
+
+    # Create unified columns using coalesce (equivalent to pandas bfill)
+    # Filter to only include columns that exist in the schema
+    schema_names = subset_target_data.collect_schema().names()
+    available_wind_cols = [col for col in wind_priority if col in schema_names]
+    available_pressure_cols = [col for col in pressure_priority if col in schema_names]
+
+    # If no columns available, return early with empty dataframe
+    if not available_wind_cols or not available_pressure_cols:
+        return subset_target_data.filter(pl.lit(False))
+
+    subset_target_data = subset_target_data.with_columns(
+        [
+            pl.coalesce([pl.col(col) for col in available_wind_cols]).alias(
+                "surface_wind_speed"
+            ),
+            pl.coalesce([pl.col(col) for col in available_pressure_cols]).alias(
+                "air_pressure_at_mean_sea_level"
+            ),
+        ]
+    )
+
+    # Drop rows where wind speed OR pressure are null
+    subset_target_data = subset_target_data.filter(
+        pl.col("surface_wind_speed").is_not_null()
+        & pl.col("air_pressure_at_mean_sea_level").is_not_null()
+    )
+    # Cast to float64 and convert knots to m/s
+    # Use strict=False to handle any edge cases
+    subset_target_data = subset_target_data.with_columns(
+        [
+            pl.col("surface_wind_speed").cast(pl.Float64, strict=False) * 0.514444,
+            pl.col("air_pressure_at_mean_sea_level").cast(pl.Float64, strict=False),
+        ]
+    )
+    return subset_target_data
+
+
 @dataclasses.dataclass
 class IBTrACS(TargetBase):
     """Target class for IBTrACS data."""
 
     name: str = "IBTrACS"
+    preprocess: Callable = _ibtracs_preprocess
+    variable_mapping: dict = dataclasses.field(
+        default_factory=lambda: IBTrACS_metadata_variable_mapping.copy()
+    )
     source: str = IBTRACS_URI
 
     def _open_data_from_source(self) -> IncomingDataInput:
@@ -814,8 +904,6 @@ class IBTrACS(TargetBase):
             pl.col("surface_wind_speed").is_not_null()
             & pl.col("air_pressure_at_mean_sea_level").is_not_null()
         )
-        self._current_case_id = case_metadata.case_id_number
-
         return subset_target_data
 
     def _custom_convert_to_dataset(self, data: IncomingDataInput) -> xr.Dataset:
@@ -828,6 +916,9 @@ class IBTrACS(TargetBase):
             # Due to missing data in the IBTrACS dataset, polars doesn't convert
             # the valid_time to a datetime by default
             data["valid_time"] = pd.to_datetime(data["valid_time"])
+
+            # Keep latitude and longitude as data variables, not index
+            # Only valid_time should be the index
             data = data.set_index(["valid_time"])
 
             try:
@@ -839,6 +930,14 @@ class IBTrACS(TargetBase):
                     data = xr.Dataset.from_dataframe(data)
                 else:
                     raise
+
+            # Reset latitude and longitude to be data variables if they
+            # became coordinates during conversion
+            if "latitude" in data.coords:
+                data = data.reset_coords("latitude")
+            if "longitude" in data.coords:
+                data = data.reset_coords("longitude")
+
             return data
         else:
             raise ValueError(f"Data is not a polars LazyFrame: {type(data)}")

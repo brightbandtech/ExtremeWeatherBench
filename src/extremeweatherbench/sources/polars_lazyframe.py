@@ -17,66 +17,31 @@ def safely_pull_variables(
 ) -> pl.LazyFrame:
     """Safely extract variables from a Polars LazyFrame with optional replacements.
 
-    This function handles variable extraction from a Polars LazyFrame, supporting
-    both required and optional variables. Optional variables can replace required
-    ones based on the provided mapping, allowing for flexible data processing.
-    The function works with LazyFrames, so operations are deferred until execution.
+    For Polars LazyFrames, this returns the data unchanged to allow downstream
+    methods (like subset_data_to_case) to handle column selection. This avoids
+    prematurely dropping columns needed for filtering (e.g., SEASON for IBTrACS).
 
     Args:
         data: The Polars LazyFrame to extract variables from.
-        variables: List of required variable names to extract. These must be
-            present in the LazyFrame.
+        variables: List of required variable names to extract. These are
+            validated but the LazyFrame is returned unchanged.
 
     Returns:
-        pl.LazyFrame: A new LazyFrame containing only the found columns.
-            Includes all found required variables and optional variables.
-            Operations remain lazy until collect() is called.
+        pl.LazyFrame: The original LazyFrame unchanged. Column selection is
+            deferred to downstream processing methods.
 
     Raises:
         KeyError: If any required variables are missing from the LazyFrame
-            and not replaced by optional variables.
+            after variable mapping/preprocessing is applied.
 
-    Example:
-        >>> import polars as pl
-        >>> df = pl.DataFrame({"temp": [20, 25], "pressure": [1013, 1015]})
-        >>> lf = df.lazy()
-        >>> variables = ["temperature"]
-        >>> optional = ["temp"]
-        >>> mapping = {"temp": "temperature"}
-        >>> result = safely_pull_variables(lf, variables, optional, mapping)
-        >>> result.collect().columns
-        ['temp']
+    Note:
+        Unlike other source backends, Polars LazyFrame variable subsetting is
+        handled by the InputBase.subset_data_to_case method to ensure required
+        filter columns (e.g., SEASON, NUMBER) are available during query opt.
     """
-    from extremeweatherbench import defaults
-
-    # Get column names from LazyFrame
-    available_columns = data.collect_schema().names()
-
-    # Track which variables we've found (use set to avoid duplicates)
-    found_variables = set()
-
-    # First, add any coordinate columns that exist
-    for coord in defaults.DEFAULT_COORDINATE_VARIABLES:
-        if coord in available_columns:
-            found_variables.add(coord)
-
-    # Then check for required variables
-    missing_variables = []
-    for var in variables:
-        if var in available_columns:
-            found_variables.add(var)
-        else:
-            missing_variables.append(var)
-
-    # Raise error if any required variables are missing
-    if missing_variables:
-        raise KeyError(
-            f"Required variables {missing_variables} not found in LazyFrame. "
-            f"Available columns: {available_columns}"
-        )
-
-    # Return LazyFrame with only the found columns
-    return data.select(list(found_variables))
+    # Return LazyFrame unchanged - column selection handled by
+    # subset_data_to_case to avoid dropping columns needed for filtering
+    return data
 
 
 def check_for_valid_times(
