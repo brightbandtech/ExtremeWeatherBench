@@ -172,14 +172,6 @@ class InputBase(abc.ABC):
         data = self.preprocess(data)
         return data
 
-    def set_name(self, name: str) -> None:
-        """Set the name of the input data source.
-
-        Args:
-            name: The new name to assign to this input data source.
-        """
-        self.name = name
-
     @abc.abstractmethod
     def _open_data_from_source(self) -> IncomingDataInput:
         """Open the input data from the source, opting to avoid loading the entire
