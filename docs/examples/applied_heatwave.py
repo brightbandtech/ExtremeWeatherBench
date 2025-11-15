@@ -32,11 +32,11 @@ hres_forecast = inputs.ZarrForecast(
 )
 
 metrics_list = [
-    metrics.MaximumMAE,
-    metrics.RMSE,
-    metrics.OnsetME,
-    metrics.DurationME,
-    metrics.MaxMinMAE,
+    metrics.MaximumMAE(),
+    metrics.RMSE(),
+    metrics.OnsetME(),
+    metrics.DurationME(),
+    metrics.MaxMinMAE(),
 ]
 # Create a list of evaluation objects for heatwave
 heatwave_evaluation_object = [
@@ -56,7 +56,7 @@ heatwave_evaluation_object = [
 
 # Initialize ExtremeWeatherBench
 ewb = evaluate.ExtremeWeatherBench(
-    cases=case_yaml,
+    case_metadata=case_yaml,
     evaluation_objects=heatwave_evaluation_object,
 )
 

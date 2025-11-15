@@ -1,13 +1,12 @@
 """Tests for the cases module."""
 
 import datetime
-from unittest.mock import Mock, patch
+from unittest import mock
 
 import pytest
 import yaml
 
-from extremeweatherbench import cases
-from extremeweatherbench.regions import BoundingBoxRegion, CenteredRegion
+from extremeweatherbench import cases, regions
 
 
 class TestIndividualCase:
@@ -15,7 +14,7 @@ class TestIndividualCase:
 
     def test_individual_case_creation(self):
         """Test IndividualCase creation with valid parameters."""
-        region = CenteredRegion.create_region(
+        region = regions.CenteredRegion.create_region(
             latitude=40.0, longitude=-100.0, bounding_box_degrees=5.0
         )
 
@@ -37,8 +36,8 @@ class TestIndividualCase:
 
     def test_individual_case_with_different_region_types(self):
         """Test IndividualCase with different region types."""
-        # Test with CenteredRegion
-        centered_region = CenteredRegion.create_region(
+        # Test with regions.CenteredRegion
+        centered_region = regions.CenteredRegion.create_region(
             latitude=45.0, longitude=-120.0, bounding_box_degrees=10.0
         )
 
@@ -51,10 +50,10 @@ class TestIndividualCase:
             event_type="heat_wave",
         )
 
-        assert isinstance(case1.location, CenteredRegion)
+        assert isinstance(case1.location, regions.CenteredRegion)
 
-        # Test with BoundingBoxRegion
-        bbox_region = BoundingBoxRegion.create_region(
+        # Test with regions.BoundingBoxRegion
+        bbox_region = regions.BoundingBoxRegion.create_region(
             latitude_min=40.0,
             latitude_max=50.0,
             longitude_min=-125.0,
@@ -70,11 +69,11 @@ class TestIndividualCase:
             event_type="drought",
         )
 
-        assert isinstance(case2.location, BoundingBoxRegion)
+        assert isinstance(case2.location, regions.BoundingBoxRegion)
 
     def test_individual_case_validation(self):
         """Test IndividualCase with various edge cases."""
-        region = CenteredRegion.create_region(
+        region = regions.CenteredRegion.create_region(
             latitude=40.0, longitude=-100.0, bounding_box_degrees=5.0
         )
 
@@ -96,10 +95,10 @@ class TestIndividualCaseCollection:
 
     def test_case_collection_creation(self):
         """Test IndividualCaseCollection creation."""
-        region1 = CenteredRegion.create_region(
+        region1 = regions.CenteredRegion.create_region(
             latitude=40.0, longitude=-100.0, bounding_box_degrees=5.0
         )
-        region2 = CenteredRegion.create_region(
+        region2 = regions.CenteredRegion.create_region(
             latitude=45.0, longitude=-120.0, bounding_box_degrees=8.0
         )
 
@@ -138,7 +137,7 @@ class TestCaseOperator:
 
     def test_case_operator_creation(self):
         """Test CaseOperator creation with mock objects."""
-        region = CenteredRegion.create_region(
+        region = regions.CenteredRegion.create_region(
             latitude=40.0, longitude=-100.0, bounding_box_degrees=5.0
         )
 
@@ -152,9 +151,9 @@ class TestCaseOperator:
         )
 
         # Create mock objects for metric, target, and forecast
-        mock_metric = Mock()
-        mock_target = Mock()
-        mock_forecast = Mock()
+        mock_metric = mock.Mock()
+        mock_target = mock.Mock()
+        mock_forecast = mock.Mock()
 
         operator = cases.CaseOperator(
             case_metadata=case,
@@ -220,14 +219,14 @@ class TestLoadIndividualCases:
         assert case1.case_id_number == 1
         assert case1.title == "Test Case 1"
         assert case1.event_type == "heat_wave"
-        assert isinstance(case1.location, CenteredRegion)
+        assert isinstance(case1.location, regions.CenteredRegion)
 
         # Check second case
         case2 = collection.cases[1]
         assert case2.case_id_number == 2
         assert case2.title == "Test Case 2"
         assert case2.event_type == "drought"
-        assert isinstance(case2.location, BoundingBoxRegion)
+        assert isinstance(case2.location, regions.BoundingBoxRegion)
 
     def test_load_individual_cases_empty(self):
         """Test loading empty cases list."""
@@ -280,17 +279,17 @@ class TestBuildCaseOperators:
         }
 
         # Create mock evaluation objects
-        mock_eval_obj1 = Mock()
+        mock_eval_obj1 = mock.Mock()
         mock_eval_obj1.event_type = ["heat_wave"]
-        mock_eval_obj1.metric_list = Mock()
-        mock_eval_obj1.target = Mock()
-        mock_eval_obj1.forecast = Mock()
+        mock_eval_obj1.metric_list = mock.Mock()
+        mock_eval_obj1.target = mock.Mock()
+        mock_eval_obj1.forecast = mock.Mock()
 
-        mock_eval_obj2 = Mock()
+        mock_eval_obj2 = mock.Mock()
         mock_eval_obj2.event_type = ["drought", "heat_wave"]
-        mock_eval_obj2.metric_list = Mock()
-        mock_eval_obj2.target = Mock()
-        mock_eval_obj2.forecast = Mock()
+        mock_eval_obj2.metric_list = mock.Mock()
+        mock_eval_obj2.target = mock.Mock()
+        mock_eval_obj2.forecast = mock.Mock()
 
         evaluation_objects = [mock_eval_obj1, mock_eval_obj2]
 
@@ -333,11 +332,11 @@ class TestBuildCaseOperators:
         }
 
         # Create evaluation object that doesn't match storm
-        mock_eval_obj = Mock()
+        mock_eval_obj = mock.Mock()
         mock_eval_obj.event_type = ["heat_wave", "drought"]
-        mock_eval_obj.metric_list = Mock()
-        mock_eval_obj.target = Mock()
-        mock_eval_obj.forecast = Mock()
+        mock_eval_obj.metric_list = mock.Mock()
+        mock_eval_obj.target = mock.Mock()
+        mock_eval_obj.forecast = mock.Mock()
 
         evaluation_objects = [mock_eval_obj]
 
@@ -351,7 +350,7 @@ class TestBuildCaseOperators:
         import dacite
 
         invalid_cases_dict = {"cases": "not_a_list"}
-        mock_eval_obj = Mock()
+        mock_eval_obj = mock.Mock()
 
         with pytest.raises(
             dacite.exceptions.WrongTypeError,
@@ -362,10 +361,10 @@ class TestBuildCaseOperators:
     def test_build_case_operators_with_individual_case_collection_passthrough(self):
         """Test build_case_operators with IndividualCaseCollection passthrough."""
         # Create individual cases directly
-        region1 = CenteredRegion.create_region(
+        region1 = regions.CenteredRegion.create_region(
             latitude=40.0, longitude=-100.0, bounding_box_degrees=5.0
         )
-        region2 = CenteredRegion.create_region(
+        region2 = regions.CenteredRegion.create_region(
             latitude=35.0, longitude=-105.0, bounding_box_degrees=8.0
         )
 
@@ -391,17 +390,17 @@ class TestBuildCaseOperators:
         case_collection = cases.IndividualCaseCollection(cases=[case1, case2])
 
         # Create mock evaluation objects
-        mock_eval_obj1 = Mock()
+        mock_eval_obj1 = mock.Mock()
         mock_eval_obj1.event_type = ["heat_wave"]
-        mock_eval_obj1.metric_list = Mock()
-        mock_eval_obj1.target = Mock()
-        mock_eval_obj1.forecast = Mock()
+        mock_eval_obj1.metric_list = mock.Mock()
+        mock_eval_obj1.target = mock.Mock()
+        mock_eval_obj1.forecast = mock.Mock()
 
-        mock_eval_obj2 = Mock()
+        mock_eval_obj2 = mock.Mock()
         mock_eval_obj2.event_type = ["drought", "heat_wave"]
-        mock_eval_obj2.metric_list = Mock()
-        mock_eval_obj2.target = Mock()
-        mock_eval_obj2.forecast = Mock()
+        mock_eval_obj2.metric_list = mock.Mock()
+        mock_eval_obj2.target = mock.Mock()
+        mock_eval_obj2.forecast = mock.Mock()
 
         evaluation_objects = [mock_eval_obj1, mock_eval_obj2]
 
@@ -473,10 +472,10 @@ class TestBuildCaseOperators:
         }
 
         # Create equivalent IndividualCaseCollection
-        region1 = CenteredRegion.create_region(
+        region1 = regions.CenteredRegion.create_region(
             latitude=42.0, longitude=-95.0, bounding_box_degrees=6.0
         )
-        region2 = BoundingBoxRegion.create_region(
+        region2 = regions.BoundingBoxRegion.create_region(
             latitude_min=30.0,
             latitude_max=40.0,
             longitude_min=-100.0,
@@ -504,17 +503,17 @@ class TestBuildCaseOperators:
         case_collection = cases.IndividualCaseCollection(cases=[case1, case2])
 
         # Create evaluation objects
-        heat_wave_eval = Mock()
+        heat_wave_eval = mock.Mock()
         heat_wave_eval.event_type = ["heat_wave"]
-        heat_wave_eval.metric_list = Mock()
-        heat_wave_eval.target = Mock()
-        heat_wave_eval.forecast = Mock()
+        heat_wave_eval.metric_list = mock.Mock()
+        heat_wave_eval.target = mock.Mock()
+        heat_wave_eval.forecast = mock.Mock()
 
-        storm_eval = Mock()
+        storm_eval = mock.Mock()
         storm_eval.event_type = ["storm"]
-        storm_eval.metric_list = Mock()
-        storm_eval.target = Mock()
-        storm_eval.forecast = Mock()
+        storm_eval.metric_list = mock.Mock()
+        storm_eval.target = mock.Mock()
+        storm_eval.forecast = mock.Mock()
 
         evaluation_objects = [heat_wave_eval, storm_eval]
 
@@ -573,11 +572,11 @@ class TestBuildCaseOperators:
         """Test build_case_operators with empty IndividualCaseCollection."""
         empty_collection = cases.IndividualCaseCollection(cases=[])
 
-        mock_eval_obj = Mock()
+        mock_eval_obj = mock.Mock()
         mock_eval_obj.event_type = ["heat_wave"]
-        mock_eval_obj.metric_list = Mock()
-        mock_eval_obj.target = Mock()
-        mock_eval_obj.forecast = Mock()
+        mock_eval_obj.metric_list = mock.Mock()
+        mock_eval_obj.target = mock.Mock()
+        mock_eval_obj.forecast = mock.Mock()
 
         operators = cases.build_case_operators(empty_collection, [mock_eval_obj])
 
@@ -586,7 +585,7 @@ class TestBuildCaseOperators:
 
     def test_build_case_operators_collection_with_no_matching_events(self):
         """Test IndividualCaseCollection passthrough with no matching event types."""
-        region = CenteredRegion.create_region(
+        region = regions.CenteredRegion.create_region(
             latitude=40.0, longitude=-100.0, bounding_box_degrees=5.0
         )
 
@@ -602,11 +601,11 @@ class TestBuildCaseOperators:
         case_collection = cases.IndividualCaseCollection(cases=[flood_case])
 
         # Evaluation object that doesn't match flood
-        mock_eval_obj = Mock()
+        mock_eval_obj = mock.Mock()
         mock_eval_obj.event_type = ["heat_wave", "drought"]
-        mock_eval_obj.metric_list = Mock()
-        mock_eval_obj.target = Mock()
-        mock_eval_obj.forecast = Mock()
+        mock_eval_obj.metric_list = mock.Mock()
+        mock_eval_obj.target = mock.Mock()
+        mock_eval_obj.forecast = mock.Mock()
 
         operators = cases.build_case_operators(case_collection, [mock_eval_obj])
 
@@ -652,7 +651,7 @@ class TestLoadIndividualCasesFromYaml:
         assert case.case_id_number == 42
         assert case.title == "YAML Test Case"
         assert case.event_type == "severe_storm"
-        assert isinstance(case.location, CenteredRegion)
+        assert isinstance(case.location, regions.CenteredRegion)
 
     def test_load_from_yaml_string_path(self, tmp_path):
         """Test loading with string path instead of Path object."""
@@ -686,7 +685,7 @@ class TestLoadIndividualCasesFromYaml:
 
         assert len(collection.cases) == 1
         assert collection.cases[0].title == "String Path Test"
-        assert isinstance(collection.cases[0].location, BoundingBoxRegion)
+        assert isinstance(collection.cases[0].location, regions.BoundingBoxRegion)
 
     def test_load_from_yaml_malformed_file(self, tmp_path):
         """Test error handling with malformed YAML."""
@@ -708,11 +707,11 @@ class TestLoadIndividualCasesFromYaml:
 class TestLoadEventsYaml:
     """Test the load_ewb_events_yaml_into_case_collection function."""
 
-    @patch("extremeweatherbench.cases.resources")
+    @mock.patch("importlib.resources")
     def test_load_ewb_events_yaml_into_case_collection_success(self, mock_resources):
         """Test successful loading of events YAML."""
         # Mock the resource access
-        mock_files = Mock()
+        mock_files = mock.Mock()
         mock_resources.files.return_value = mock_files
         mock_files.joinpath.return_value = "/mock/path/events.yaml"
 
@@ -737,8 +736,10 @@ class TestLoadEventsYaml:
             ]
         }
 
-        with patch("extremeweatherbench.cases.resources.as_file") as mock_as_file:
-            with patch("extremeweatherbench.cases.read_incoming_yaml") as mock_read:
+        with mock.patch("importlib.resources.as_file") as mock_as_file:
+            with mock.patch(
+                "extremeweatherbench.cases.read_incoming_yaml"
+            ) as mock_read:
                 mock_read.return_value = mock_yaml_content
                 mock_as_file.return_value.__enter__.return_value = "/mock/file"
 
@@ -808,7 +809,7 @@ class TestCasesEdgeCases:
 
     def test_individual_case_date_validation(self):
         """Test cases with edge case dates."""
-        region = CenteredRegion.create_region(
+        region = regions.CenteredRegion.create_region(
             latitude=0.0, longitude=0.0, bounding_box_degrees=1.0
         )
 
@@ -826,7 +827,7 @@ class TestCasesEdgeCases:
 
     def test_case_operator_with_list_metrics(self):
         """Test CaseOperator with list of metrics."""
-        region = CenteredRegion.create_region(
+        region = regions.CenteredRegion.create_region(
             latitude=40.0, longitude=-100.0, bounding_box_degrees=5.0
         )
 
@@ -840,9 +841,9 @@ class TestCasesEdgeCases:
         )
 
         # Test with list of metrics
-        metric_list = [Mock(), Mock(), Mock()]
-        mock_target = Mock()
-        mock_forecast = Mock()
+        metric_list = [mock.Mock(), mock.Mock(), mock.Mock()]
+        mock_target = mock.Mock()
+        mock_forecast = mock.Mock()
 
         operator = cases.CaseOperator(
             case_metadata=case,
@@ -932,11 +933,11 @@ class TestCasesEdgeCases:
         }
 
         # Evaluation object that only matches heat_wave and drought
-        eval_obj = Mock()
+        eval_obj = mock.Mock()
         eval_obj.event_type = ["heat_wave", "drought"]
-        eval_obj.metric = Mock()
-        eval_obj.target = Mock()
-        eval_obj.forecast = Mock()
+        eval_obj.metric = mock.Mock()
+        eval_obj.target = mock.Mock()
+        eval_obj.forecast = mock.Mock()
 
         operators = cases.build_case_operators(cases_dict, [eval_obj])
 
@@ -996,17 +997,17 @@ class TestCasesIntegration:
         assert len(collection.cases) == 2
 
         # Create mock evaluation objects
-        heat_wave_eval = Mock()
+        heat_wave_eval = mock.Mock()
         heat_wave_eval.event_type = ["heat_wave"]
-        heat_wave_eval.metric_list = Mock()
-        heat_wave_eval.target = Mock()
-        heat_wave_eval.forecast = Mock()
+        heat_wave_eval.metric_list = mock.Mock()
+        heat_wave_eval.target = mock.Mock()
+        heat_wave_eval.forecast = mock.Mock()
 
-        multi_event_eval = Mock()
+        multi_event_eval = mock.Mock()
         multi_event_eval.event_type = ["heat_wave", "drought", "storm"]
-        multi_event_eval.metric_list = Mock()
-        multi_event_eval.target = Mock()
-        multi_event_eval.forecast = Mock()
+        multi_event_eval.metric_list = mock.Mock()
+        multi_event_eval.target = mock.Mock()
+        multi_event_eval.forecast = mock.Mock()
 
         evaluation_objects = [heat_wave_eval, multi_event_eval]
 
@@ -1035,11 +1036,15 @@ class TestCasesIntegration:
             if operator.case_metadata.case_id_number == 100:
                 assert operator.case_metadata.title == "California Heat Wave 2021"
                 assert operator.case_metadata.event_type == "heat_wave"
-                assert isinstance(operator.case_metadata.location, CenteredRegion)
+                assert isinstance(
+                    operator.case_metadata.location, regions.CenteredRegion
+                )
             elif operator.case_metadata.case_id_number == 101:
                 assert operator.case_metadata.title == "Texas Drought 2021"
                 assert operator.case_metadata.event_type == "drought"
-                assert isinstance(operator.case_metadata.location, BoundingBoxRegion)
+                assert isinstance(
+                    operator.case_metadata.location, regions.BoundingBoxRegion
+                )
 
 
 class TestSelectCases:
@@ -1047,19 +1052,19 @@ class TestSelectCases:
 
     def create_test_collection(self):
         """Helper to create a test case collection."""
-        region1 = BoundingBoxRegion.create_region(
+        region1 = regions.BoundingBoxRegion.create_region(
             latitude_min=30.0,
             latitude_max=40.0,
             longitude_min=-110.0,
             longitude_max=-100.0,
         )
-        region2 = BoundingBoxRegion.create_region(
+        region2 = regions.BoundingBoxRegion.create_region(
             latitude_min=35.0,
             latitude_max=45.0,
             longitude_min=-105.0,
             longitude_max=-95.0,
         )
-        region3 = CenteredRegion.create_region(
+        region3 = regions.CenteredRegion.create_region(
             latitude=50.0, longitude=-120.0, bounding_box_degrees=5.0
         )
 
@@ -1098,9 +1103,10 @@ class TestSelectCases:
 
         selected = collection.select_cases(by="event_type", value="heat_wave")
 
-        assert len(selected) == 1
-        assert selected[0].case_id_number == 1
-        assert selected[0].event_type == "heat_wave"
+        assert isinstance(selected, cases.IndividualCaseCollection)
+        assert len(selected.cases) == 1
+        assert selected.cases[0].case_id_number == 1
+        assert selected.cases[0].event_type == "heat_wave"
 
     def test_select_by_case_id_number(self):
         """Test selecting cases by case ID number."""
@@ -1108,9 +1114,123 @@ class TestSelectCases:
 
         selected = collection.select_cases(by="case_id_number", value=2)
 
-        assert len(selected) == 1
-        assert selected[0].case_id_number == 2
-        assert selected[0].title == "Central Drought"
+        assert isinstance(selected, cases.IndividualCaseCollection)
+        assert len(selected.cases) == 1
+        assert selected.cases[0].case_id_number == 2
+        assert selected.cases[0].title == "Central Drought"
+
+    def test_select_by_multiple_case_id_numbers(self):
+        """Test selecting cases by list of case ID numbers."""
+        collection = self.create_test_collection()
+
+        selected = collection.select_cases(by="case_id_number", value=[1, 3])
+
+        assert isinstance(selected, cases.IndividualCaseCollection)
+        assert len(selected.cases) == 2
+        case_ids = [case.case_id_number for case in selected.cases]
+        assert 1 in case_ids
+        assert 3 in case_ids
+        assert 2 not in case_ids
+
+    def test_select_by_case_id_number_list_all_cases(self):
+        """Test selecting all cases by providing list of all IDs."""
+        collection = self.create_test_collection()
+
+        selected = collection.select_cases(by="case_id_number", value=[1, 2, 3])
+
+        assert isinstance(selected, cases.IndividualCaseCollection)
+        assert len(selected.cases) == 3
+        case_ids = [case.case_id_number for case in selected.cases]
+        assert 1 in case_ids
+        assert 2 in case_ids
+        assert 3 in case_ids
+
+    def test_select_by_case_id_number_list_single_id(self):
+        """Test selecting by list with single case ID number."""
+        collection = self.create_test_collection()
+
+        selected = collection.select_cases(by="case_id_number", value=[2])
+
+        assert isinstance(selected, cases.IndividualCaseCollection)
+        assert len(selected.cases) == 1
+        assert selected.cases[0].case_id_number == 2
+
+    def test_select_by_case_id_number_list_no_matches(self):
+        """Test selecting by list with no matching case IDs."""
+        collection = self.create_test_collection()
+
+        selected = collection.select_cases(by="case_id_number", value=[99, 100])
+
+        assert isinstance(selected, cases.IndividualCaseCollection)
+        assert len(selected.cases) == 0
+
+    def test_select_by_case_id_number_list_partial_matches(self):
+        """Test selecting by list with partial matches."""
+        collection = self.create_test_collection()
+
+        # List includes both existing (1, 2) and non-existing (99) IDs
+        selected = collection.select_cases(by="case_id_number", value=[1, 2, 99])
+
+        assert isinstance(selected, cases.IndividualCaseCollection)
+        assert len(selected.cases) == 2
+        case_ids = [case.case_id_number for case in selected.cases]
+        assert 1 in case_ids
+        assert 2 in case_ids
+        assert 99 not in case_ids
+
+    def test_select_by_case_id_number_list_empty(self):
+        """Test selecting by empty list of case IDs."""
+        collection = self.create_test_collection()
+
+        selected = collection.select_cases(by="case_id_number", value=[])
+
+        assert isinstance(selected, cases.IndividualCaseCollection)
+        assert len(selected.cases) == 0
+
+    def test_select_by_case_id_number_list_with_duplicates(self):
+        """Test selecting by list with duplicate case IDs."""
+        collection = self.create_test_collection()
+
+        # List with duplicate ID 1
+        selected = collection.select_cases(by="case_id_number", value=[1, 1, 2])
+
+        assert isinstance(selected, cases.IndividualCaseCollection)
+        # Should still return 2 unique cases
+        assert len(selected.cases) == 2
+        case_ids = [case.case_id_number for case in selected.cases]
+        assert 1 in case_ids
+        assert 2 in case_ids
+
+    def test_select_by_case_id_number_list_inplace_false(self):
+        """Test list selection doesn't modify original collection."""
+        collection = self.create_test_collection()
+        original_length = len(collection.cases)
+
+        selected = collection.select_cases(
+            by="case_id_number", value=[1, 3], inplace=False
+        )
+
+        # Collection should be unchanged
+        assert len(collection.cases) == original_length
+        # Returned collection should be filtered
+        assert len(selected.cases) == 2
+
+    def test_select_by_case_id_number_list_inplace_true(self):
+        """Test list selection modifies collection in place."""
+        collection = self.create_test_collection()
+
+        selected = collection.select_cases(
+            by="case_id_number", value=[2, 3], inplace=True
+        )
+
+        # Collection should be modified
+        assert len(collection.cases) == 2
+        case_ids = [case.case_id_number for case in collection.cases]
+        assert 2 in case_ids
+        assert 3 in case_ids
+        assert 1 not in case_ids
+        # Returned collection should match
+        assert len(selected.cases) == 2
 
     def test_select_by_title(self):
         """Test selecting cases by title."""
@@ -1118,16 +1238,17 @@ class TestSelectCases:
 
         selected = collection.select_cases(by="title", value="Northern Storm")
 
-        assert len(selected) == 1
-        assert selected[0].case_id_number == 3
-        assert selected[0].title == "Northern Storm"
+        assert isinstance(selected, cases.IndividualCaseCollection)
+        assert len(selected.cases) == 1
+        assert selected.cases[0].case_id_number == 3
+        assert selected.cases[0].title == "Northern Storm"
 
     def test_select_by_region_object_overlapping(self):
         """Test selecting cases by Region that overlaps with cases."""
         collection = self.create_test_collection()
 
         # Create a region that overlaps with case1 and case2
-        search_region = BoundingBoxRegion.create_region(
+        search_region = regions.BoundingBoxRegion.create_region(
             latitude_min=32.0,
             latitude_max=38.0,
             longitude_min=-108.0,
@@ -1137,8 +1258,8 @@ class TestSelectCases:
         selected = collection.select_cases(by="location", value=search_region)
 
         # Should select cases 1 and 2 (both overlap with search_region)
-        assert len(selected) == 2
-        case_ids = [case.case_id_number for case in selected]
+        assert len(selected.cases) == 2
+        case_ids = [case.case_id_number for case in selected.cases]
         assert 1 in case_ids
         assert 2 in case_ids
 
@@ -1147,7 +1268,7 @@ class TestSelectCases:
         collection = self.create_test_collection()
 
         # Create a region that doesn't overlap with any cases
-        search_region = BoundingBoxRegion.create_region(
+        search_region = regions.BoundingBoxRegion.create_region(
             latitude_min=10.0,
             latitude_max=20.0,
             longitude_min=-80.0,
@@ -1156,21 +1277,21 @@ class TestSelectCases:
 
         selected = collection.select_cases(by="location", value=search_region)
 
-        assert len(selected) == 0
+        assert len(selected.cases) == 0
 
     def test_select_by_region_object_single_match(self):
         """Test selecting cases by Region matching single case."""
         collection = self.create_test_collection()
 
         # Create a region that only overlaps with case3
-        search_region = CenteredRegion.create_region(
+        search_region = regions.CenteredRegion.create_region(
             latitude=50.0, longitude=-120.0, bounding_box_degrees=3.0
         )
 
         selected = collection.select_cases(by="location", value=search_region)
 
-        assert len(selected) == 1
-        assert selected[0].case_id_number == 3
+        assert len(selected.cases) == 1
+        assert selected.cases[0].case_id_number == 3
 
     def test_select_by_tuple_coordinates_overlapping(self):
         """Test selecting cases by tuple of coordinates."""
@@ -1182,8 +1303,8 @@ class TestSelectCases:
         selected = collection.select_cases(by="location", value=search_coords)
 
         # Should select cases 1 and 2
-        assert len(selected) == 2
-        case_ids = [case.case_id_number for case in selected]
+        assert len(selected.cases) == 2
+        case_ids = [case.case_id_number for case in selected.cases]
         assert 1 in case_ids
         assert 2 in case_ids
 
@@ -1197,8 +1318,8 @@ class TestSelectCases:
         selected = collection.select_cases(by="location", value=search_coords)
 
         # Should select cases 1 and 2
-        assert len(selected) == 2
-        case_ids = [case.case_id_number for case in selected]
+        assert len(selected.cases) == 2
+        case_ids = [case.case_id_number for case in selected.cases]
         assert 1 in case_ids
         assert 2 in case_ids
 
@@ -1211,7 +1332,7 @@ class TestSelectCases:
 
         selected = collection.select_cases(by="location", value=search_coords)
 
-        assert len(selected) == 0
+        assert len(selected.cases) == 0
 
     def test_select_by_coordinates_contains_case(self):
         """Test selecting when search region contains a case."""
@@ -1223,8 +1344,8 @@ class TestSelectCases:
         selected = collection.select_cases(by="location", value=search_coords)
 
         # Should select cases 1 and 2 (both within or overlapping)
-        assert len(selected) >= 1
-        case_ids = [case.case_id_number for case in selected]
+        assert len(selected.cases) >= 1
+        case_ids = [case.case_id_number for case in selected.cases]
         assert 1 in case_ids
 
     def test_select_by_coordinates_contained_by_case(self):
@@ -1237,8 +1358,8 @@ class TestSelectCases:
         selected = collection.select_cases(by="location", value=search_coords)
 
         # Should select case1 (contains the search region)
-        assert len(selected) >= 1
-        case_ids = [case.case_id_number for case in selected]
+        assert len(selected.cases) >= 1
+        case_ids = [case.case_id_number for case in selected.cases]
         assert 1 in case_ids
 
     def test_select_inplace_false(self):
@@ -1253,7 +1374,7 @@ class TestSelectCases:
         # Collection should be unchanged
         assert len(collection.cases) == original_length
         # But returned list should be filtered
-        assert len(selected) == 1
+        assert len(selected.cases) == 1
 
     def test_select_inplace_true(self):
         """Test select_cases modifying collection in place."""
@@ -1267,8 +1388,8 @@ class TestSelectCases:
         assert len(collection.cases) == 1
         assert collection.cases[0].event_type == "drought"
         # Returned list should match
-        assert len(selected) == 1
-        assert selected[0].event_type == "drought"
+        assert len(selected.cases) == 1
+        assert selected.cases[0].event_type == "drought"
 
     def test_select_invalid_field_raises_error(self):
         """Test that selecting by invalid field raises ValueError."""
@@ -1283,15 +1404,15 @@ class TestSelectCases:
 
         selected = collection.select_cases(by="event_type", value="nonexistent_type")
 
-        assert len(selected) == 0
-        assert isinstance(selected, list)
+        assert len(selected.cases) == 0
+        assert isinstance(selected, cases.IndividualCaseCollection)
 
     def test_select_all_cases_by_large_region(self):
         """Test selecting all cases with very large region."""
         collection = self.create_test_collection()
 
         # Very large region that encompasses everything
-        large_region = BoundingBoxRegion.create_region(
+        large_region = regions.BoundingBoxRegion.create_region(
             latitude_min=0.0,
             latitude_max=90.0,
             longitude_min=-180.0,
@@ -1301,11 +1422,12 @@ class TestSelectCases:
         selected = collection.select_cases(by="location", value=large_region)
 
         # Should select all 3 cases
-        assert len(selected) == 3
+        assert len(selected.cases) == 3
+        assert isinstance(selected, cases.IndividualCaseCollection)
 
     def test_select_by_region_edge_touching(self):
         """Test selection when regions share an edge."""
-        region1 = BoundingBoxRegion.create_region(
+        region1 = regions.BoundingBoxRegion.create_region(
             latitude_min=30.0,
             latitude_max=40.0,
             longitude_min=-110.0,
@@ -1324,7 +1446,7 @@ class TestSelectCases:
         collection = cases.IndividualCaseCollection(cases=[case1])
 
         # Region sharing an edge (touches at longitude=-100.0)
-        edge_region = BoundingBoxRegion.create_region(
+        edge_region = regions.BoundingBoxRegion.create_region(
             latitude_min=30.0,
             latitude_max=40.0,
             longitude_min=-100.0,
@@ -1334,4 +1456,4 @@ class TestSelectCases:
         selected = collection.select_cases(by="location", value=edge_region)
 
         # Should select the case (edges touching count as intersecting)
-        assert len(selected) == 1
+        assert len(selected.cases) == 1
