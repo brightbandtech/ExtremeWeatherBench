@@ -957,10 +957,12 @@ def align_forecast_to_target(
     ]
 
     spatial_dims = {str(dim): target_data[dim] for dim in intersection_dims}
-    # Align time dimensions - find overlapping times
+
+    # Align time dimensions if they exist in both datasets
     time_aligned_target, time_aligned_forecast = xr.align(
-        target_data,
-        forecast_data,
+        # Squeeze the data to remove any single-value dimensions
+        target_data.squeeze(),
+        forecast_data.squeeze(),
         join="inner",
         exclude=spatial_dims.keys(),
     )

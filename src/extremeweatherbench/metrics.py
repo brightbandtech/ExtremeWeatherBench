@@ -1,6 +1,7 @@
 import abc
 import logging
-from typing import Any, Optional, Type
+import operator
+from typing import Any, Callable, Optional, Sequence, Type
 
 import numpy as np
 import scores
@@ -149,12 +150,20 @@ class ThresholdMetric(BaseMetric):
         self,
         name: str = "threshold_metrics",
         preserve_dims: str = "lead_time",
+        forecast_variable: Optional[str | derived.DerivedVariable] = None,
+        target_variable: Optional[str | derived.DerivedVariable] = None,
         forecast_threshold: float = 0.5,
         target_threshold: float = 0.5,
         metrics: Optional[list[Type["ThresholdMetric"]]] = None,
         **kwargs,
     ):
-        super().__init__(name, **kwargs)
+        super().__init__(
+            name,
+            preserve_dims=preserve_dims,
+            forecast_variable=forecast_variable,
+            target_variable=target_variable,
+            **kwargs,
+        )
         self.forecast_threshold = forecast_threshold
         self.target_threshold = target_threshold
         self.preserve_dims = preserve_dims
@@ -165,9 +174,9 @@ class ThresholdMetric(BaseMetric):
             self._metric_instances = [
                 (
                     metric_cls(
-                        forecast_threshold=forecast_threshold,
-                        target_threshold=target_threshold,
-                        preserve_dims=preserve_dims,
+                        forecast_threshold=self.forecast_threshold,
+                        target_threshold=self.target_threshold,
+                        preserve_dims=self.preserve_dims,
                     )
                     if isinstance(metric_cls, type)
                     else metric_cls
@@ -194,6 +203,7 @@ class ThresholdMetric(BaseMetric):
         forecast_threshold: float,
         target_threshold: float,
         preserve_dims: str,
+        op_func: Callable = operator.ge,
     ) -> scores.categorical.BasicContingencyManager:
         """Create and transform a contingency manager.
 
@@ -208,8 +218,8 @@ class ThresholdMetric(BaseMetric):
             Transformed contingency manager.
         """
         # Apply thresholds to binarize the data
-        binary_forecast = (forecast >= forecast_threshold).astype(float)
-        binary_target = (target >= target_threshold).astype(float)
+        binary_forecast = (op_func(forecast, forecast_threshold)).astype(float)
+        binary_target = (op_func(target, target_threshold)).astype(float)
 
         # Create and transform contingency manager
         binary_contingency_manager = scores.categorical.BinaryContingencyManager(
@@ -219,69 +229,48 @@ class ThresholdMetric(BaseMetric):
 
         return transformed
 
+    def maybe_expand_composite(self) -> Sequence["BaseMetric"]:
+        """Expand composite metrics into individual metrics.
+
+        Returns sub-metrics for composites, or [self] for regular.
+
+        Returns:
+            List of metrics to evaluate.
+        """
+        if self._metric_instances:
+            return self._metric_instances
+        return [self]
+
+    def is_composite(self) -> bool:
+        """Check if this is a composite metric.
+
+        Returns:
+            True if composite (has sub-metrics), False otherwise.
+        """
+        return bool(self._metric_instances)
+
     def _compute_metric(
         self,
         forecast: xr.DataArray,
         target: xr.DataArray,
         **kwargs: Any,
     ) -> Any:
-        """Compute metrics using ThresholdMetric as composite.
+        """Compute metric (not supported for ThresholdMetric base).
 
-        If no metrics are specified, this acts as abstract base.
-        If metrics are specified, computes all efficiently by
-        sharing the transformed contingency manager.
+        ThresholdMetric must be subclassed (like CSI, FAR) or used
+        as a composite with metrics list.
 
         Args:
             forecast: The forecast DataArray.
             target: The target DataArray.
             **kwargs: Additional keyword arguments.
-
-        Returns:
-            Dictionary of metric results if used as composite,
-            otherwise raises NotImplementedError.
         """
-        if not self._metric_instances:
-            raise NotImplementedError(
-                "ThresholdMetric._compute_metric must be implemented "
-                "by subclasses or initialized with metrics list."
-            )
-
-        # Get threshold parameters
-        forecast_threshold = kwargs.get("forecast_threshold", self.forecast_threshold)
-        target_threshold = kwargs.get("target_threshold", self.target_threshold)
-        preserve_dims = kwargs.get("preserve_dims", self.preserve_dims)
-
-        # Compute transformed manager once
-        transformed = self.transformed_contingency_manager(
-            forecast=forecast,
-            target=target,
-            forecast_threshold=forecast_threshold,
-            target_threshold=target_threshold,
-            preserve_dims=preserve_dims,
+        raise NotImplementedError(
+            "ThresholdMetric._compute_metric must be implemented "
+            "by subclasses (CSI, FAR, etc.) or use ThresholdMetric "
+            "as a composite with metrics=[...] list. Composites are "
+            "automatically expanded in the evaluation pipeline."
         )
-
-        # Compute all metrics using shared manager
-        results = {}
-        # Remove threshold params from kwargs to avoid duplicates
-        filtered_kwargs = {
-            k: v
-            for k, v in kwargs.items()
-            if k not in ["forecast_threshold", "target_threshold", "preserve_dims"]
-        }
-
-        for metric_instance in self._metric_instances:
-            result = metric_instance._compute_metric(
-                forecast=forecast,
-                target=target,
-                transformed_manager=transformed,
-                forecast_threshold=forecast_threshold,
-                target_threshold=target_threshold,
-                preserve_dims=preserve_dims,
-                **filtered_kwargs,
-            )
-            results[metric_instance.name] = result
-
-        return results
 
 
 class CSI(ThresholdMetric):
