@@ -123,6 +123,47 @@ class BaseMetric(abc.ABC, metaclass=ComputeDocstringMetaclass):
         """
         return self._compute_metric(forecast, target, **kwargs)
 
+    def maybe_expand_composite(self) -> Sequence["BaseMetric"]:
+        """Expand composite metrics into individual metrics.
+
+        Base implementation returns [self]. Override for composites.
+
+        Returns:
+            List containing just this metric.
+        """
+        return [self]
+
+    def is_composite(self) -> bool:
+        """Check if this is a composite metric.
+
+        Base implementation returns False. Override for composites.
+
+        Returns:
+            False for base metrics.
+        """
+        return False
+
+    def maybe_prepare_composite_kwargs(
+        self,
+        forecast_data: xr.DataArray,
+        target_data: xr.DataArray,
+        **base_kwargs,
+    ) -> dict:
+        """Prepare kwargs for metric evaluation.
+
+        Base implementation just returns kwargs as-is.
+        Override for metrics that need special preparation.
+
+        Args:
+            forecast_data: The forecast DataArray.
+            target_data: The target DataArray.
+            **base_kwargs: Base kwargs to include in result.
+
+        Returns:
+            Dictionary of kwargs (unchanged for base metrics).
+        """
+        return base_kwargs.copy()
+
 
 class ThresholdMetric(BaseMetric):
     """Base class for threshold-based metrics.
@@ -248,6 +289,41 @@ class ThresholdMetric(BaseMetric):
             True if composite (has sub-metrics), False otherwise.
         """
         return bool(self._metric_instances)
+
+    def maybe_prepare_composite_kwargs(
+        self,
+        forecast_data: xr.DataArray,
+        target_data: xr.DataArray,
+        **base_kwargs,
+    ) -> dict:
+        """Prepare kwargs for composite metric evaluation.
+
+        Computes the transformed contingency manager once and adds
+        it to kwargs for efficient composite evaluation.
+
+        Args:
+            forecast_data: The forecast DataArray.
+            target_data: The target DataArray.
+            **base_kwargs: Base kwargs to include in result.
+
+        Returns:
+            Dictionary of kwargs including transformed_manager.
+        """
+        kwargs = base_kwargs.copy()
+
+        if self.is_composite() and len(self._metric_instances) > 1:
+            kwargs["transformed_manager"] = self.transformed_contingency_manager(
+                forecast=forecast_data,
+                target=target_data,
+                forecast_threshold=self.forecast_threshold,
+                target_threshold=self.target_threshold,
+                preserve_dims=self.preserve_dims,
+            )
+            kwargs["forecast_threshold"] = self.forecast_threshold
+            kwargs["target_threshold"] = self.target_threshold
+            kwargs["preserve_dims"] = self.preserve_dims
+
+        return kwargs
 
     def _compute_metric(
         self,
