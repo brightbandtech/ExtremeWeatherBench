@@ -103,59 +103,44 @@ tc_evaluation_object = [
             metrics.LandfallTimeME(
                 forecast_variable="surface_wind_speed",
                 target_variable="surface_wind_speed",
+                preserve_dims="init_time",
             ),
             metrics.LandfallDisplacement(
                 forecast_variable="surface_wind_speed",
                 target_variable="surface_wind_speed",
+                preserve_dims="init_time",
             ),
             metrics.LandfallIntensityMAE(
                 forecast_variable="surface_wind_speed",
                 target_variable="surface_wind_speed",
+                preserve_dims="init_time",
             ),
         ],
         target=ibtracs_target,
         forecast=hres_forecast,
     ),
-    # Pangu forecast
-    inputs.EvaluationObject(
-        event_type="tropical_cyclone",
-        metric_list=[
-            metrics.LandfallTimeME(
-                forecast_variable="surface_wind_speed",
-                target_variable="surface_wind_speed",
-            ),
-            metrics.LandfallDisplacement(
-                forecast_variable="surface_wind_speed",
-                target_variable="surface_wind_speed",
-            ),
-            metrics.LandfallIntensityMAE(
-                forecast_variable="surface_wind_speed",
-                target_variable="surface_wind_speed",
-            ),
-        ],
-        target=ibtracs_target,
-        forecast=pangu_forecast,
-    ),
-    # FCN forecast
-    inputs.EvaluationObject(
-        event_type="tropical_cyclone",
-        metric_list=[
-            metrics.LandfallTimeME(
-                forecast_variable="surface_wind_speed",
-                target_variable="surface_wind_speed",
-            ),
-            metrics.LandfallDisplacement(
-                forecast_variable="surface_wind_speed",
-                target_variable="surface_wind_speed",
-            ),
-            metrics.LandfallIntensityMAE(
-                forecast_variable="surface_wind_speed",
-                target_variable="surface_wind_speed",
-            ),
-        ],
-        target=ibtracs_target,
-        forecast=fcn_forecast,
-    ),
+    # # Pangu forecast
+    # inputs.EvaluationObject(
+    #     event_type="tropical_cyclone",
+    #     metric_list=[
+    #         metrics.LandfallTimeME(),
+    #         metrics.LandfallDisplacement(),
+    #         metrics.LandfallIntensityMAE(),
+    #     ],
+    #     target=ibtracs_target,
+    #     forecast=pangu_forecast,
+    # ),
+    # # FCN forecast
+    # inputs.EvaluationObject(
+    #     event_type="tropical_cyclone",
+    #     metric_list=[
+    #         metrics.LandfallTimeME(),
+    #         metrics.LandfallDisplacement(),
+    #         metrics.LandfallIntensityMAE(),
+    #     ],
+    #     target=ibtracs_target,
+    #     forecast=fcn_forecast,
+    # ),
 ]
 
 test_ewb = evaluate.ExtremeWeatherBench(

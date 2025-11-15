@@ -1391,6 +1391,10 @@ class LandfallDisplacement(LandfallMixin, BaseMetric):
 
     def __init__(
         self,
+        name: str = "LandfallDisplacement",
+        preserve_dims: str = "init_time",
+        forecast_variable: Optional[str | derived.DerivedVariable] = None,
+        target_variable: Optional[str | derived.DerivedVariable] = None,
         approach: Literal["first", "next"] = "first",
         exclude_post_landfall: bool = False,
     ):
@@ -1401,10 +1405,12 @@ class LandfallDisplacement(LandfallMixin, BaseMetric):
             exclude_post_landfall: Whether to exclude init_times after all landfalls
         """
         super().__init__(
-            name="LandfallDisplacement",
+            name=name,
+            forecast_variable=forecast_variable,
+            target_variable=target_variable,
             approach=approach,
             exclude_post_landfall=exclude_post_landfall,
-            preserve_dims="init_time",
+            preserve_dims=preserve_dims,
         )
 
     def _get_landfall_metric_function(
@@ -1478,14 +1484,25 @@ class LandfallTimeME(LandfallMixin, ME):
         approach: Landfall detection approach ('first', 'next')
     """
 
-    def __init__(self, approach: Literal["first", "next"] = "first"):
+    def __init__(
+        self,
+        name: str = "LandfallTimeME",
+        preserve_dims: str = "init_time",
+        forecast_variable: Optional[str | derived.DerivedVariable] = None,
+        target_variable: Optional[str | derived.DerivedVariable] = None,
+        approach: Literal["first", "next"] = "first",
+    ):
         """Initialize the landfall timing metric.
 
         Args:
             approach: Landfall detection approach ('first', 'next')
         """
         super().__init__(
-            name="LandfallTimeME", approach=approach, preserve_dims="init_time"
+            name=name,
+            approach=approach,
+            preserve_dims=preserve_dims,
+            forecast_variable=forecast_variable,
+            target_variable=target_variable,
         )
 
     def _get_landfall_metric_function(
@@ -1569,6 +1586,8 @@ class LandfallIntensityMAE(LandfallMixin, MAE):
 
     def __init__(
         self,
+        name: str = "LandfallIntensityMAE",
+        preserve_dims: str = "init_time",
         approach: Literal["first", "next"] = "first",
         forecast_variable: Optional[str | derived.DerivedVariable] = None,
         target_variable: Optional[str | derived.DerivedVariable] = None,
@@ -1581,9 +1600,9 @@ class LandfallIntensityMAE(LandfallMixin, MAE):
             target_variable: Variable for target intensity (optional)
         """
         super().__init__(
-            name="landfall_intensity_mae",
+            name=name,
             approach=approach,
-            preserve_dims="init_time",
+            preserve_dims=preserve_dims,
             forecast_variable=forecast_variable,
             target_variable=target_variable,
         )

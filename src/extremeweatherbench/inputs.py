@@ -913,6 +913,9 @@ class IBTrACS(TargetBase):
             # Due to missing data in the IBTrACS dataset, polars doesn't convert
             # the valid_time to a datetime by default
             data["valid_time"] = pd.to_datetime(data["valid_time"])
+
+            # Keep latitude and longitude as data variables, not index
+            # Only valid_time should be the index
             data = data.set_index(["valid_time"])
 
             try:
@@ -924,6 +927,14 @@ class IBTrACS(TargetBase):
                     data = xr.Dataset.from_dataframe(data)
                 else:
                     raise
+
+            # Reset latitude and longitude to be data variables if they
+            # became coordinates during conversion
+            if "latitude" in data.coords:
+                data = data.reset_coords("latitude")
+            if "longitude" in data.coords:
+                data = data.reset_coords("longitude")
+
             return data
         else:
             raise ValueError(f"Data is not a polars LazyFrame: {type(data)}")
