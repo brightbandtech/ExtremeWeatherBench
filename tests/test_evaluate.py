@@ -3361,10 +3361,100 @@ class TestMetricVariableHandling:
 
             result = evaluate.compute_case_operator(case_operator)
 
-            # metric1 called once (own vars), metric2 called once (InputBase)
+            # metric1 called once (own vars)
+            # metric2 NOT called because metric1 claims all available variables
+            # This is the expected behavior: metrics with explicit variables
+            # claim those variables exclusively
             assert metric1.compute_metric.call_count == 1
-            assert metric2.compute_metric.call_count == 1
+            assert metric2.compute_metric.call_count == 0
             assert isinstance(result, pd.DataFrame)
+
+    def test_compute_case_operator_claimed_variables_excluded(
+        self, sample_individual_case
+    ):
+        """Test that variables claimed by metrics with explicit vars are
+        excluded from metrics without explicit vars."""
+        # Create datasets with multiple variables
+        time = pd.date_range("2021-06-20", freq="6h", periods=2)
+        lat = [45.0]
+        lon = [-120.0]
+
+        ds = xr.Dataset(
+            {
+                "surface_air_temperature": (
+                    ["lead_time", "latitude", "longitude"],
+                    [[[20.0]]],
+                ),
+                "2m_temperature": (
+                    ["lead_time", "latitude", "longitude"],
+                    [[[18.0]]],
+                ),
+                "total_precipitation": (
+                    ["lead_time", "latitude", "longitude"],
+                    [[[5.0]]],
+                ),
+                "precipitation": (
+                    ["lead_time", "latitude", "longitude"],
+                    [[[4.5]]],
+                ),
+            },
+            coords={
+                "lead_time": [0],
+                "latitude": lat,
+                "longitude": lon,
+                "valid_time": ("lead_time", time[:1]),
+            },
+        )
+
+        # Metric with specific variable (claims "surface_air_temperature")
+        metric1 = mock.Mock(spec=metrics.BaseMetric)
+        metric1.name = "MetricWithVars"
+        metric1.forecast_variable = "surface_air_temperature"
+        metric1.target_variable = "2m_temperature"
+        metric1.compute_metric.return_value = xr.DataArray(
+            data=[1.0], dims=["lead_time"], coords={"lead_time": [0]}
+        )
+
+        # Metric without variables (should only use unclaimed variables)
+        metric2 = mock.Mock(spec=metrics.BaseMetric)
+        metric2.name = "MetricWithoutVars"
+        metric2.forecast_variable = None
+        metric2.target_variable = None
+        metric2.compute_metric.return_value = xr.DataArray(
+            data=[2.0], dims=["lead_time"], coords={"lead_time": [0]}
+        )
+
+        # Setup InputBase with TWO variables
+        mock_target = mock.Mock(spec=inputs.TargetBase)
+        mock_target.name = "MockTarget"
+        mock_target.variables = ["2m_temperature", "precipitation"]
+        mock_target.maybe_align_forecast_to_target.return_value = (ds, ds)
+
+        mock_forecast = mock.Mock(spec=inputs.ForecastBase)
+        mock_forecast.name = "MockForecast"
+        mock_forecast.variables = ["surface_air_temperature", "total_precipitation"]
+
+        case_operator = cases.CaseOperator(
+            case_metadata=sample_individual_case,
+            metric_list=[metric1, metric2],
+            target=mock_target,
+            forecast=mock_forecast,
+        )
+
+        with mock.patch("extremeweatherbench.evaluate.run_pipeline") as mock_pipeline:
+            mock_pipeline.return_value = ds
+
+            result = evaluate.compute_case_operator(case_operator)
+
+            # metric1 called once with its specific variables
+            assert metric1.compute_metric.call_count == 1
+
+            # metric2 called once with the unclaimed variable pair
+            # (total_precipitation, precipitation)
+            assert metric2.compute_metric.call_count == 1
+
+            assert isinstance(result, pd.DataFrame)
+            assert len(result) == 2  # Two metric evaluations
 
     def test_compute_case_operator_instantiates_uninstantiated_metrics(
         self, sample_individual_case, mock_target_base, mock_forecast_base, caplog
@@ -3452,6 +3542,461 @@ class TestMetricVariableHandling:
         assert "metric_target_var" in augmented_target.variables
         assert "base_forecast_var" in augmented_forecast.variables
         assert "metric_forecast_var" in augmented_forecast.variables
+
+
+class MockDerivedVariableWithOutputs(derived.DerivedVariable):
+    """Mock DerivedVariable for testing output_variables."""
+
+    variables = ["input_var"]
+
+    def derive_variable(self, data: xr.Dataset, **kwargs) -> xr.Dataset:
+        """Return a dataset with multiple output variables."""
+        return xr.Dataset(
+            {
+                "output_1": data["input_var"] * 1,
+                "output_2": data["input_var"] * 2,
+                "output_3": data["input_var"] * 3,
+            }
+        )
+
+
+class TestExpandDerivedVariableToOutputVariables:
+    """Test _expand_derived_variable_to_output_variables function."""
+
+    def test_expand_string_variable(self):
+        """String variables return as single-item list."""
+        result = evaluate._maybe_expand_derived_variable_to_output_variables("temp")
+        assert result == ["temp"]
+        assert isinstance(result, list)
+
+    def test_expand_derived_variable_with_output_variables(self):
+        """DerivedVariable with output_variables returns those names."""
+        derived_var = MockDerivedVariableWithOutputs(
+            output_variables=["output_1", "output_2"]
+        )
+        result = evaluate._maybe_expand_derived_variable_to_output_variables(
+            derived_var
+        )
+        assert result == ["output_1", "output_2"]
+
+    def test_expand_derived_variable_without_output_variables(self):
+        """DerivedVariable without output_variables returns its name."""
+        derived_var = MockDerivedVariableWithOutputs()
+        result = evaluate._maybe_expand_derived_variable_to_output_variables(
+            derived_var
+        )
+        assert result == ["MockDerivedVariableWithOutputs"]
+
+    def test_expand_derived_variable_empty_output_variables(self):
+        """DerivedVariable with empty output_variables returns its name."""
+        derived_var = MockDerivedVariableWithOutputs(output_variables=[])
+        result = evaluate._maybe_expand_derived_variable_to_output_variables(
+            derived_var
+        )
+        assert result == ["MockDerivedVariableWithOutputs"]
+
+    def test_expand_derived_variable_single_output(self):
+        """DerivedVariable with single output_variable returns list."""
+        derived_var = MockDerivedVariableWithOutputs(output_variables=["output_1"])
+        result = evaluate._maybe_expand_derived_variable_to_output_variables(
+            derived_var
+        )
+        assert result == ["output_1"]
+
+
+class TestMetricWithOutputVariables:
+    """Test metric evaluation with DerivedVariable output_variables."""
+
+    def test_compute_case_operator_with_matching_output_variables(
+        self, sample_individual_case
+    ):
+        """Test metrics with matching number of output_variables."""
+        # Create datasets
+        time = pd.date_range("2021-06-20", freq="6h", periods=10)
+        lat = np.linspace(42.5, 47.5, 5)
+        lon = np.linspace(-122.5, -117.5, 5)
+
+        # Create with lead_time as a dimension
+        output_1_data = xr.DataArray(
+            np.random.randn(10, 5, 5),
+            dims=["lead_time", "latitude", "longitude"],
+            coords={
+                "lead_time": np.arange(0, 60, 6),
+                "latitude": lat,
+                "longitude": lon,
+                "valid_time": ("lead_time", time),
+            },
+        )
+        output_2_data = xr.DataArray(
+            np.random.randn(10, 5, 5),
+            dims=["lead_time", "latitude", "longitude"],
+            coords={
+                "lead_time": np.arange(0, 60, 6),
+                "latitude": lat,
+                "longitude": lon,
+                "valid_time": ("lead_time", time),
+            },
+        )
+
+        forecast_ds = xr.Dataset(
+            {
+                "output_1": output_1_data,
+                "output_2": output_2_data,
+            }
+        )
+
+        target_ds = forecast_ds.copy(deep=True)
+
+        # Create derived variables
+        forecast_derived = MockDerivedVariableWithOutputs(
+            output_variables=["output_1", "output_2"]
+        )
+        target_derived = MockDerivedVariableWithOutputs(
+            output_variables=["output_1", "output_2"]
+        )
+
+        # Create metric with derived variables
+        metric = metrics.RMSE(
+            forecast_variable=forecast_derived,
+            target_variable=target_derived,
+        )
+
+        # Create case operator
+        mock_forecast = mock.Mock(spec=inputs.ForecastBase)
+        mock_forecast.name = "MockForecast"
+        mock_forecast.variables = []
+        mock_forecast.maybe_align_forecast_to_target = mock.Mock(
+            return_value=(forecast_ds, target_ds)
+        )
+
+        mock_target = mock.Mock(spec=inputs.TargetBase)
+        mock_target.name = "MockTarget"
+        mock_target.variables = []
+        mock_target.maybe_align_forecast_to_target = mock.Mock(
+            return_value=(forecast_ds, target_ds)
+        )
+
+        case_operator = cases.CaseOperator(
+            case_metadata=sample_individual_case,
+            metric_list=[metric],
+            target=mock_target,
+            forecast=mock_forecast,
+        )
+
+        with mock.patch("extremeweatherbench.evaluate.run_pipeline") as mock_run:
+            mock_run.side_effect = [target_ds, forecast_ds]
+            result = evaluate.compute_case_operator(case_operator)
+
+        # Should have 20 rows (2 output variables * 10 lead_times)
+        assert len(result) == 20
+        assert "target_variable" in result.columns
+        # Check that both output variables were evaluated
+        target_vars = result["target_variable"].unique()
+        assert set(target_vars) == {"output_1", "output_2"}
+        # Each output variable should have 10 lead_time values
+        assert len(result[result["target_variable"] == "output_1"]) == 10
+        assert len(result[result["target_variable"] == "output_2"]) == 10
+
+    def test_compute_case_operator_mismatched_output_variables(
+        self, sample_individual_case
+    ):
+        """Test metrics with different numbers of output_variables."""
+        time = pd.date_range("2021-06-20", freq="6h", periods=10)
+        lat = np.linspace(42.5, 47.5, 5)
+        lon = np.linspace(-122.5, -117.5, 5)
+
+        # Create with lead_time as a dimension
+        output_1_data = xr.DataArray(
+            np.random.randn(10, 5, 5),
+            dims=["lead_time", "latitude", "longitude"],
+            coords={
+                "lead_time": np.arange(0, 60, 6),
+                "latitude": lat,
+                "longitude": lon,
+                "valid_time": ("lead_time", time),
+            },
+        )
+        output_2_data = xr.DataArray(
+            np.random.randn(10, 5, 5),
+            dims=["lead_time", "latitude", "longitude"],
+            coords={
+                "lead_time": np.arange(0, 60, 6),
+                "latitude": lat,
+                "longitude": lon,
+                "valid_time": ("lead_time", time),
+            },
+        )
+        output_3_data = xr.DataArray(
+            np.random.randn(10, 5, 5),
+            dims=["lead_time", "latitude", "longitude"],
+            coords={
+                "lead_time": np.arange(0, 60, 6),
+                "latitude": lat,
+                "longitude": lon,
+                "valid_time": ("lead_time", time),
+            },
+        )
+
+        forecast_ds = xr.Dataset(
+            {
+                "output_1": output_1_data,
+                "output_2": output_2_data,
+                "output_3": output_3_data,
+            }
+        )
+
+        target_ds = forecast_ds.copy(deep=True)
+
+        # Forecast has 3 outputs, target has 2
+        forecast_derived = MockDerivedVariableWithOutputs(
+            output_variables=["output_1", "output_2", "output_3"]
+        )
+        target_derived = MockDerivedVariableWithOutputs(
+            output_variables=["output_1", "output_2"]
+        )
+
+        metric = metrics.RMSE(
+            forecast_variable=forecast_derived,
+            target_variable=target_derived,
+        )
+
+        mock_forecast = mock.Mock(spec=inputs.ForecastBase)
+        mock_forecast.name = "MockForecast"
+        mock_forecast.variables = []
+        mock_forecast.maybe_align_forecast_to_target = mock.Mock(
+            return_value=(forecast_ds, target_ds)
+        )
+
+        mock_target = mock.Mock(spec=inputs.TargetBase)
+        mock_target.name = "MockTarget"
+        mock_target.variables = []
+        mock_target.maybe_align_forecast_to_target = mock.Mock(
+            return_value=(forecast_ds, target_ds)
+        )
+
+        case_operator = cases.CaseOperator(
+            case_metadata=sample_individual_case,
+            metric_list=[metric],
+            target=mock_target,
+            forecast=mock_forecast,
+        )
+
+        with mock.patch("extremeweatherbench.evaluate.run_pipeline") as mock_run:
+            mock_run.side_effect = [target_ds, forecast_ds]
+            result = evaluate.compute_case_operator(case_operator)
+
+        # Should have 20 rows (2 output variables * 10 lead_times)
+        # Limited by target's 2 outputs
+        assert len(result) == 20
+        target_vars = result["target_variable"].unique()
+        assert set(target_vars) == {"output_1", "output_2"}
+        # Each output variable should have 10 lead_time values
+        assert len(result[result["target_variable"] == "output_1"]) == 10
+        assert len(result[result["target_variable"] == "output_2"]) == 10
+
+    def test_compute_case_operator_one_string_one_derived(self, sample_individual_case):
+        """Test metric with one string and one DerivedVariable."""
+        time = pd.date_range("2021-06-20", freq="6h", periods=10)
+        lat = np.linspace(42.5, 47.5, 5)
+        lon = np.linspace(-122.5, -117.5, 5)
+
+        # Create with lead_time as a dimension
+        output_1_data = xr.DataArray(
+            np.random.randn(10, 5, 5),
+            dims=["lead_time", "latitude", "longitude"],
+            coords={
+                "lead_time": np.arange(0, 60, 6),
+                "latitude": lat,
+                "longitude": lon,
+                "valid_time": ("lead_time", time),
+            },
+        )
+        output_2_data = xr.DataArray(
+            np.random.randn(10, 5, 5),
+            dims=["lead_time", "latitude", "longitude"],
+            coords={
+                "lead_time": np.arange(0, 60, 6),
+                "latitude": lat,
+                "longitude": lon,
+                "valid_time": ("lead_time", time),
+            },
+        )
+        temp_data = xr.DataArray(
+            np.random.randn(10, 5, 5),
+            dims=["lead_time", "latitude", "longitude"],
+            coords={
+                "lead_time": np.arange(0, 60, 6),
+                "latitude": lat,
+                "longitude": lon,
+                "valid_time": ("lead_time", time),
+            },
+        )
+
+        forecast_ds = xr.Dataset(
+            {
+                "output_1": output_1_data,
+                "output_2": output_2_data,
+                "temp": temp_data,
+            }
+        )
+
+        target_ds = forecast_ds.copy(deep=True)
+
+        # Forecast is string, target is derived with 2 outputs
+        target_derived = MockDerivedVariableWithOutputs(
+            output_variables=["output_1", "output_2"]
+        )
+
+        metric = metrics.RMSE(forecast_variable="temp", target_variable=target_derived)
+
+        mock_forecast = mock.Mock(spec=inputs.ForecastBase)
+        mock_forecast.name = "MockForecast"
+        mock_forecast.variables = []
+        mock_forecast.maybe_align_forecast_to_target = mock.Mock(
+            return_value=(forecast_ds, target_ds)
+        )
+
+        mock_target = mock.Mock(spec=inputs.TargetBase)
+        mock_target.name = "MockTarget"
+        mock_target.variables = []
+        mock_target.maybe_align_forecast_to_target = mock.Mock(
+            return_value=(forecast_ds, target_ds)
+        )
+
+        case_operator = cases.CaseOperator(
+            case_metadata=sample_individual_case,
+            metric_list=[metric],
+            target=mock_target,
+            forecast=mock_forecast,
+        )
+
+        with mock.patch("extremeweatherbench.evaluate.run_pipeline") as mock_run:
+            mock_run.side_effect = [target_ds, forecast_ds]
+            # This should fail because we're pairing 1 forecast var with 2
+            # target vars - they need to match
+            result = evaluate.compute_case_operator(case_operator)
+
+        # Should create 10 rows (1 pair: "temp" with first output * 10 lead_times)
+        assert len(result) == 10
+
+    def test_compute_case_operator_single_output_each(self, sample_individual_case):
+        """Test metrics with single output_variable on each side."""
+        time = pd.date_range("2021-06-20", freq="6h", periods=10)
+        lat = np.linspace(42.5, 47.5, 5)
+        lon = np.linspace(-122.5, -117.5, 5)
+
+        # Create as data arrays with lead_time as a dimension
+        output_1_data = xr.DataArray(
+            np.random.randn(10, 5, 5),
+            dims=["lead_time", "latitude", "longitude"],
+            coords={
+                "lead_time": np.arange(0, 60, 6),
+                "latitude": lat,
+                "longitude": lon,
+                "valid_time": ("lead_time", time),
+            },
+        )
+
+        forecast_ds = xr.Dataset({"output_1": output_1_data})
+
+        target_ds = forecast_ds.copy(deep=True)
+
+        forecast_derived = MockDerivedVariableWithOutputs(output_variables=["output_1"])
+        target_derived = MockDerivedVariableWithOutputs(output_variables=["output_1"])
+
+        metric = metrics.RMSE(
+            forecast_variable=forecast_derived,
+            target_variable=target_derived,
+        )
+
+        mock_forecast = mock.Mock(spec=inputs.ForecastBase)
+        mock_forecast.name = "MockForecast"
+        mock_forecast.variables = []
+        mock_forecast.maybe_align_forecast_to_target = mock.Mock(
+            return_value=(forecast_ds, target_ds)
+        )
+
+        mock_target = mock.Mock(spec=inputs.TargetBase)
+        mock_target.name = "MockTarget"
+        mock_target.variables = []
+        mock_target.maybe_align_forecast_to_target = mock.Mock(
+            return_value=(forecast_ds, target_ds)
+        )
+
+        case_operator = cases.CaseOperator(
+            case_metadata=sample_individual_case,
+            metric_list=[metric],
+            target=mock_target,
+            forecast=mock_forecast,
+        )
+
+        with mock.patch("extremeweatherbench.evaluate.run_pipeline") as mock_run:
+            mock_run.side_effect = [target_ds, forecast_ds]
+            result = evaluate.compute_case_operator(case_operator)
+
+        # Should have 10 rows (1 output variable * 10 lead_times)
+        assert len(result) == 10
+        assert all(result["target_variable"] == "output_1")
+
+    def test_compute_case_operator_no_output_variables(self, sample_individual_case):
+        """Test DerivedVariable without output_variables specified."""
+        time = pd.date_range("2021-06-20", freq="6h", periods=10)
+        lat = np.linspace(42.5, 47.5, 5)
+        lon = np.linspace(-122.5, -117.5, 5)
+
+        # Create with lead_time as a dimension
+        mock_data = xr.DataArray(
+            np.random.randn(10, 5, 5),
+            dims=["lead_time", "latitude", "longitude"],
+            coords={
+                "lead_time": np.arange(0, 60, 6),
+                "latitude": lat,
+                "longitude": lon,
+                "valid_time": ("lead_time", time),
+            },
+        )
+
+        forecast_ds = xr.Dataset({"MockDerivedVariableWithOutputs": mock_data})
+
+        target_ds = forecast_ds.copy(deep=True)
+
+        # No output_variables specified - uses derived variable name
+        forecast_derived = MockDerivedVariableWithOutputs()
+        target_derived = MockDerivedVariableWithOutputs()
+
+        metric = metrics.RMSE(
+            forecast_variable=forecast_derived,
+            target_variable=target_derived,
+        )
+
+        mock_forecast = mock.Mock(spec=inputs.ForecastBase)
+        mock_forecast.name = "MockForecast"
+        mock_forecast.variables = []
+        mock_forecast.maybe_align_forecast_to_target = mock.Mock(
+            return_value=(forecast_ds, target_ds)
+        )
+
+        mock_target = mock.Mock(spec=inputs.TargetBase)
+        mock_target.name = "MockTarget"
+        mock_target.variables = []
+        mock_target.maybe_align_forecast_to_target = mock.Mock(
+            return_value=(forecast_ds, target_ds)
+        )
+
+        case_operator = cases.CaseOperator(
+            case_metadata=sample_individual_case,
+            metric_list=[metric],
+            target=mock_target,
+            forecast=mock_forecast,
+        )
+
+        with mock.patch("extremeweatherbench.evaluate.run_pipeline") as mock_run:
+            mock_run.side_effect = [target_ds, forecast_ds]
+            result = evaluate.compute_case_operator(case_operator)
+
+        # Should use the derived variable name, 10 rows (10 lead_times)
+        assert len(result) == 10
+        assert all(result["target_variable"] == "MockDerivedVariableWithOutputs")
 
 
 if __name__ == "__main__":
