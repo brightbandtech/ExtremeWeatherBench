@@ -133,6 +133,7 @@ def plot_all_cases(
             "tropical_cyclone": 0,
         }
     )
+
     zorders = {
         "freeze": 9,
         "heat_wave": 8,
@@ -362,6 +363,15 @@ def plot_all_cases_and_obs(
             "tropical_cyclone": 0,
         }
     )
+
+    severe_report_counts = dict(
+        {
+            "hail": 0,
+            "tor": 0,
+            "wind": 0,
+        }
+    )
+
     zorders = {
         "freeze": 9,
         "heat_wave": 8,
@@ -490,9 +500,6 @@ def plot_all_cases_and_obs(
                 # antimeridian handling with Cartopy
                 lon_values_180 = utils.convert_longitude_to_180(lon_values)
 
-                # if (np.min(lat_values) <= 0):
-                #     print(data)
-
                 ax.scatter(
                     lon_values_180,
                     lat_values,
@@ -525,6 +532,7 @@ def plot_all_cases_and_obs(
                 for my_data in data:
                     # print(my_data)
                     hail_reports = my_data[my_data == "hail"]
+                    severe_report_counts["hail"] += len(hail_reports)
                     # print(hail_reports)
                     lat_values = hail_reports.latitude.values
                     lon_values = hail_reports.longitude.values
@@ -539,6 +547,7 @@ def plot_all_cases_and_obs(
                     )
 
                     tor_reports = my_data[my_data == "tor"]
+                    severe_report_counts["tor"] += len(tor_reports)
                     # print(tor_reports)
                     lat_values = tor_reports.latitude.values
                     lon_values = tor_reports.longitude.values
@@ -554,14 +563,34 @@ def plot_all_cases_and_obs(
     # Create a custom legend for event types
     if event_type is not None:
         # if we are only plotting one event type, only show that in the legend
-        legend_elements = [
-            Patch(
-                facecolor=event_colors[event_type],
-                alpha=0.9,
-                label=f"{event_type.replace('_', ' ').title()} (n = %d)"
-                % counts_by_type[event_type],
-            ),
-        ]
+        if event_type == "severe_convection":
+            legend_elements = [
+                Patch(
+                    facecolor="black",
+                    alpha=0.9,
+                    label="Hail Reports (n = %d)" % severe_report_counts["hail"],
+                ),
+                Patch(
+                    facecolor="red",
+                    alpha=0.9,
+                    label="Tornado Reports (n = %d)" % severe_report_counts["tor"],
+                ),
+                Patch(
+                    facecolor=event_colors[event_type],
+                    alpha=0.9,
+                    label="Severe Convective Events (n = %d)"
+                    % counts_by_type[event_type],
+                ),
+            ]
+        else:
+            legend_elements = [
+                Patch(
+                    facecolor=event_colors[event_type],
+                    alpha=0.9,
+                    label=f"{event_type.replace('_', ' ').title()} (n = %d)"
+                    % counts_by_type[event_type],
+                ),
+            ]
     else:
         # otherwise show all event types in the legend
         legend_elements = [
