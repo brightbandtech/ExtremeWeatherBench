@@ -46,21 +46,33 @@ case_yaml.cases[0].start_date = datetime.datetime(2022, 12, 27, 11, 0, 0)
 case_yaml.cases[0].end_date = datetime.datetime(2022, 12, 27, 13, 0, 0)
 # Define ERA5 target
 era5_target = inputs.ERA5(
-    variables=[derived.AtmosphericRiverVariables()],
+    variables=[
+        derived.AtmosphericRiverVariables(
+            output_variables=["atmospheric_river_land_intersection"]
+        )
+    ],
 )
 
 # Define forecast (HRES)
 hres_forecast = inputs.ZarrForecast(
     source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
     name="HRES",
-    variables=[derived.AtmosphericRiverVariables()],
+    variables=[
+        derived.AtmosphericRiverVariables(
+            output_variables=["atmospheric_river_land_intersection"]
+        )
+    ],
     variable_mapping=inputs.HRES_metadata_variable_mapping,
 )
 
 grap_forecast = inputs.KerchunkForecast(
     name="Graphcast",
     source="gs://extremeweatherbench/GRAP_v100_IFS.parq",
-    variables=[derived.AtmosphericRiverVariables()],
+    variables=[
+        derived.AtmosphericRiverVariables(
+            output_variables=["atmospheric_river_land_intersection"]
+        )
+    ],
     variable_mapping=inputs.CIRA_metadata_variable_mapping,
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
     preprocess=_preprocess_bb_cira_forecast_dataset,
@@ -69,7 +81,11 @@ grap_forecast = inputs.KerchunkForecast(
 pang_forecast = inputs.KerchunkForecast(
     name="Pangu",
     source="gs://extremeweatherbench/PANG_v100_IFS.parq",
-    variables=[derived.AtmosphericRiverVariables()],
+    variables=[
+        derived.AtmosphericRiverVariables(
+            output_variables=["atmospheric_river_land_intersection"]
+        )
+    ],
     variable_mapping=inputs.CIRA_metadata_variable_mapping,
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
     preprocess=_preprocess_bb_cira_forecast_dataset,
@@ -78,19 +94,31 @@ pang_forecast = inputs.KerchunkForecast(
 ar_evaluation_objects = [
     inputs.EvaluationObject(
         event_type="atmospheric_river",
-        metric_list=[metrics.CSI(), metrics.Signal(), metrics.SpatialDisplacement()],
+        metric_list=[
+            metrics.CSI(),
+            metrics.EarlySignal(),
+            metrics.SpatialDisplacement(),
+        ],
         target=era5_target,
         forecast=hres_forecast,
     ),
     inputs.EvaluationObject(
         event_type="atmospheric_river",
-        metric_list=[metrics.CSI(), metrics.Signal(), metrics.SpatialDisplacement()],
+        metric_list=[
+            metrics.CSI(),
+            metrics.EarlySignal(),
+            metrics.SpatialDisplacement(),
+        ],
         target=era5_target,
         forecast=grap_forecast,
     ),
     inputs.EvaluationObject(
         event_type="atmospheric_river",
-        metric_list=[metrics.CSI(), metrics.Signal(), metrics.SpatialDisplacement()],
+        metric_list=[
+            metrics.CSI(),
+            metrics.EarlySignal(),
+            metrics.SpatialDisplacement(),
+        ],
         target=era5_target,
         forecast=pang_forecast,
     ),
@@ -103,8 +131,8 @@ ar_ewb = evaluate.ExtremeWeatherBench(
     evaluation_objects=ar_evaluation_objects,
 )
 
-# Run the workflow using 8 jobs
-outputs = ar_ewb.run(n_jobs=8)
+# Run the workflow using 3 jobs
+outputs = ar_ewb.run(parallel_config={"backend": "loky", "n_jobs": 3})
 
 # Save the evaluation outputs to a csv file
 outputs.to_csv("ar_signal_outputs.csv")
