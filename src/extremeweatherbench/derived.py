@@ -122,6 +122,7 @@ class CravenBrooksSignificantSevere(DerivedVariable):
         needs_reverse = data["level"][0] < data["level"][-1]
         if needs_reverse:
             # Reverse and load to ensure contiguous arrays for Numba
+            logger.info("Reversing pressure levels")
             data = data.isel(level=slice(None, None, -1))
         # calculate dewpoint temperature if not present
         if "dewpoint_temperature" not in data.data_vars:
