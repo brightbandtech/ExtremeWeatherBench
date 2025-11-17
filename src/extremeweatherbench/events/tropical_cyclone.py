@@ -52,6 +52,7 @@ def generate_tc_tracks_by_init_time(
     """
     logger.info("Generating TC tracks by init_time")
     # Convert TC track data to DataFrame
+    logger.debug("tc_track_analysis_data %s", tc_track_analysis_data)
     tc_track_data_df = tc_track_analysis_data.to_dataframe().reset_index()
     tc_track_data_df["valid_time"] = pd.to_datetime(tc_track_data_df["valid_time"])
 
@@ -139,7 +140,6 @@ def generate_tc_tracks_by_init_time(
         n_detections = len(all_detections)
         lt_indices = np.array([d["lt_idx"] for d in all_detections])
         vt_indices = np.array([d["vt_idx"] for d in all_detections])
-        track_ids = np.array([d["track_id"] for d in all_detections])
         lats = np.array([d["latitude"] for d in all_detections])
         lons = np.array([d["longitude"] for d in all_detections])
         slp_vals = np.array([d["slp"] for d in all_detections])
@@ -148,7 +148,6 @@ def generate_tc_tracks_by_init_time(
         n_detections = 0
         lt_indices = np.array([])
         vt_indices = np.array([])
-        track_ids = np.array([])
         lats = np.array([])
         lons = np.array([])
         slp_vals = np.array([])
@@ -159,7 +158,6 @@ def generate_tc_tracks_by_init_time(
         n_detections,
         lt_indices,
         vt_indices,
-        track_ids,
         lats,
         lons,
         slp_vals,
@@ -415,7 +413,6 @@ def _convert_detections_to_dataset(
     n_detections: int,
     lt_indices: npt.NDArray,
     vt_indices: npt.NDArray,
-    track_ids: npt.NDArray,
     lats: npt.NDArray,
     lons: npt.NDArray,
     slp_vals: npt.NDArray,
@@ -478,17 +475,8 @@ def _convert_detections_to_dataset(
         lead_times = np.array([])
         valid_times = np.array([])
 
-    # Handle multiple detections per time step by creating additional
-    # track_id dimension
-    max_tracks_per_timestep = (
-        max(len(indices) for indices in unique_combinations.values())
-        if unique_combinations
-        else 0
-    )
-
     # Initialize output arrays
-    output_shape = (len(lead_times), len(valid_times), max_tracks_per_timestep)
-    track_id_out = np.full(output_shape, -1, dtype=int)
+    output_shape = (len(lead_times), len(valid_times))
     slp_out = np.full(output_shape, np.nan)
     wind_out = np.full(output_shape, np.nan)
     lat_out = np.full(output_shape, np.nan)
@@ -496,36 +484,26 @@ def _convert_detections_to_dataset(
 
     # Fill arrays
     for (lt_idx, vt_idx), detection_indices in unique_combinations.items():
-        for track_idx, det_idx in enumerate(detection_indices):
-            # Extract values from numpy arrays
-            track_id_val = int(track_ids[det_idx])
-            slp_val = float(slp_vals[det_idx])
-            wind_val = float(wind_vals[det_idx])
-            lat_val = float(lats[det_idx])
-            lon_val = float(lons[det_idx])
-
-            track_id_out[lt_idx, vt_idx, track_idx] = track_id_val
-            slp_out[lt_idx, vt_idx, track_idx] = slp_val
-            wind_out[lt_idx, vt_idx, track_idx] = wind_val
-            lat_out[lt_idx, vt_idx, track_idx] = lat_val
-            lon_out[lt_idx, vt_idx, track_idx] = lon_val
+        det_idx = detection_indices[0]  # Take first detection only
+        slp_out[lt_idx, vt_idx] = float(slp_vals[det_idx])
+        wind_out[lt_idx, vt_idx] = float(wind_vals[det_idx])
+        lat_out[lt_idx, vt_idx] = float(lats[det_idx])
+        lon_out[lt_idx, vt_idx] = float(lons[det_idx])
 
     # Create dataset
     return xr.Dataset(
         {
-            "track_id": (["lead_time", "valid_time", "track"], track_id_out),
             "air_pressure_at_mean_sea_level": (
-                ["lead_time", "valid_time", "track"],
+                ["lead_time", "valid_time"],
                 slp_out,
             ),
-            "surface_wind_speed": (["lead_time", "valid_time", "track"], wind_out),
-            "latitude": (["lead_time", "valid_time", "track"], lat_out),
-            "longitude": (["lead_time", "valid_time", "track"], lon_out),
+            "surface_wind_speed": (["lead_time", "valid_time"], wind_out),
+            "latitude": (["lead_time", "valid_time"], lat_out),
+            "longitude": (["lead_time", "valid_time"], lon_out),
         },
         coords={
             "lead_time": lead_times,
             "valid_time": valid_times,
-            "track": np.arange(max_tracks_per_timestep),
         },
     )
 
