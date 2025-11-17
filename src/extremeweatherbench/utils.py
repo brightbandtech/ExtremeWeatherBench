@@ -9,9 +9,11 @@ import pathlib
 import threading
 from typing import Any, Callable, Optional, Sequence, Union
 
+import cartopy.io.shapereader as shpreader
 import numpy as np
 import pandas as pd  # type: ignore[import-untyped]
 import regionmask
+import shapely
 import sparse
 import tqdm
 import xarray as xr
@@ -656,3 +658,16 @@ def reduce_dataarray(
         )
     else:
         raise TypeError(f"method must be str or callable, got {type(method)}")
+
+
+def load_land_geometry(resolution: str = "10m") -> shapely.geometry.Polygon:
+    """Load the land geometry.
+
+    Returns:
+        The land geometry as a shapely Polygon.
+    """
+    land = shpreader.natural_earth(
+        category="physical", name="land", resolution=resolution
+    )
+    land_geoms = list(shpreader.Reader(land).geometries())
+    return shapely.ops.unary_union(land_geoms).buffer(0.1)
