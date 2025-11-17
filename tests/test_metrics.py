@@ -1296,6 +1296,38 @@ class TestThresholdMetricComposite:
 class TestThresholdMetricMethods:
     """Tests for specific ThresholdMetric methods."""
 
+    def test_metrics_parameter_defaults_to_empty_list_when_none(self):
+        """Test that metrics parameter defaults to [] when None."""
+        metric = metrics.ThresholdMetric(
+            metrics=None,
+            forecast_threshold=15000,
+            target_threshold=0.3,
+        )
+        assert metric.metrics == []
+        assert metric._metric_instances == []
+        assert metric.is_composite() is False
+
+    def test_metrics_parameter_accepts_empty_list(self):
+        """Test that metrics parameter accepts empty list."""
+        metric = metrics.ThresholdMetric(
+            metrics=[],
+            forecast_threshold=15000,
+            target_threshold=0.3,
+        )
+        assert metric.metrics == []
+        assert metric._metric_instances == []
+        assert metric.is_composite() is False
+
+    def test_metrics_parameter_not_provided_defaults_to_empty_list(self):
+        """Test that metrics parameter defaults to [] when not provided."""
+        metric = metrics.ThresholdMetric(
+            forecast_threshold=15000,
+            target_threshold=0.3,
+        )
+        assert metric.metrics == []
+        assert metric._metric_instances == []
+        assert metric.is_composite() is False
+
     def test_is_composite_returns_true_for_composite(self):
         """Test is_composite returns True for composite metrics."""
         composite = metrics.ThresholdMetric(
