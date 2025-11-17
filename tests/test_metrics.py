@@ -1,5 +1,7 @@
 """Tests for the metrics module."""
 
+import inspect
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -810,16 +812,6 @@ class TestDurationME:
             assert isinstance(metric, metrics.DurationME)
 
 
-class TestLandfallMetrics:
-    """Tests for landfall-related metrics."""
-
-    def test_landfall_metrics_exist(self):
-        """Test that consolidated landfall metrics exist."""
-        assert hasattr(metrics, "LandfallDisplacement")
-        assert hasattr(metrics, "LandfallTimeME")
-        assert hasattr(metrics, "LandfallIntensityMAE")
-
-
 class TestThresholdMetric:
     """Tests for the ThresholdMetric parent class."""
 
@@ -1183,6 +1175,56 @@ class TestAccuracy:
 
         result = metric._compute_metric(forecast, target)
         assert isinstance(result, xr.DataArray)
+
+
+class TestMetricIntegration:
+    """Integration tests for metric classes."""
+
+    def test_all_metrics_have_required_methods(self):
+        """Test that all metric classes have required methods."""
+        # Auto-discover all BaseMetric subclasses, excluding abstract ones
+        all_metric_classes = [
+            cls
+            for name, cls in inspect.getmembers(metrics, inspect.isclass)
+            if issubclass(cls, metrics.BaseMetric)
+            and cls not in (metrics.BaseMetric, metrics.ThresholdMetric)
+            and not inspect.isabstract(cls)
+        ]
+
+        for metric_class in all_metric_classes:
+            metric = metric_class()
+            assert hasattr(metric, "_compute_metric")
+            assert hasattr(metric, "compute_metric")
+            assert hasattr(metric, "name")
+
+    def test_metrics_module_structure(self):
+        """Test the overall structure of the metrics module."""
+        # Test that required classes exist
+        assert hasattr(metrics, "BaseMetric")
+
+        # Auto-discover all metric classes (including abstract ones)
+        all_metric_classes = [
+            (name, cls)
+            for name, cls in inspect.getmembers(metrics, inspect.isclass)
+            if issubclass(cls, metrics.BaseMetric) and cls != metrics.BaseMetric
+        ]
+
+        # Should have at least some metrics
+        assert len(all_metric_classes) > 0
+
+        for class_name, cls in all_metric_classes:
+            assert hasattr(metrics, class_name)
+            assert callable(getattr(metrics, class_name))
+
+
+class TestLandfallMetrics:
+    """Tests for landfall-related metrics."""
+
+    def test_landfall_metrics_exist(self):
+        """Test that consolidated landfall metrics exist."""
+        assert hasattr(metrics, "LandfallDisplacement")
+        assert hasattr(metrics, "LandfallTimeME")
+        assert hasattr(metrics, "LandfallIntensityMAE")
 
     def test_landfall_displacement_instantiation(self):
         """Test LandfallDisplacement can be instantiated."""
