@@ -79,9 +79,13 @@ class DerivedVariable(abc.ABC):
 class AtmosphericRiverVariables(DerivedVariable):
     """A derived variable that computes atmospheric river related variables.
 
-    Calculates the IVT (Integrated Vapor Transport) and its Laplacian from a dataset.IVT
-    is calculated using the method described in Newell et al. 1992 and elsewhere
-    (e.g. Mo 2024).
+    Calculates the IVT (Integrated Vapor Transport), atmospheric river mask, and land
+    intersection. IVT is calculated using the method described in Newell et al. 1992 and
+    elsewhere (e.g. Mo 2024).
+
+    Output variables are: integrated_vapor_transport, atmospheric_river_mask, and
+    atmospheric_river_land_intersection. Users must declare at least one of the output
+    variables they want when calling the derived variable.
 
     The Laplacian of IVT is calculated using a Gaussian blurring kernel with a
     sigma of 3 grid points, meant to smooth out 0.25 degree grid scale features.
@@ -96,7 +100,7 @@ class AtmosphericRiverVariables(DerivedVariable):
     name = "atmospheric_river"
 
     def derive_variable(self, data: xr.Dataset, *args, **kwargs) -> xr.Dataset:
-        """Derive the atmospheric river mask using xr.apply_ufunc approach."""
+        """Derive the atmospheric river mask and land intersection."""
         return ar.build_atmospheric_river_mask_and_land_intersection(data)
 
 

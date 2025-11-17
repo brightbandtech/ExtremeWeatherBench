@@ -1,7 +1,7 @@
 import abc
 import logging
 import operator
-from typing import Any, Callable, Optional, Type
+from typing import Any, Callable, Literal, Optional, Type
 
 import numpy as np
 import scores
@@ -535,6 +535,21 @@ class EarlySignal(BaseMetric):
     threshold criteria and returns the corresponding init_time, lead_time, and
     valid_time information. The metric is designed to be flexible for different
     signal detection criteria that can be specified in applied metrics downstream.
+
+    Args:
+        name: The name of the metric.
+        comparison_operator: The comparison operator to use for signal detection.
+        threshold: The threshold value for signal detection.
+        spatial_aggregation: The spatial aggregation method to use for signal detection.
+            any: Return True if any gridpoint meets the criteria.
+            all: Return True if all gridpoints meet the criteria.
+            half: Return True if at least half of the gridpoints meet the criteria.
+        **kwargs: Additional keyword arguments. Supported kwargs:
+            preserve_dims (str): Dimension(s) to preserve. Defaults to "lead_time".
+
+    Returns:
+        A DataArray with dims [init_time, lead_time] indicating
+        whether criteria are met for each init_time and lead_time pair.
     """
 
     def __init__(
@@ -542,7 +557,7 @@ class EarlySignal(BaseMetric):
         name: str = "early_signal",
         comparison_operator: Callable = operator.ge,
         threshold: float = 0.5,
-        spatial_aggregation: str = "any",
+        spatial_aggregation: Literal["any", "all", "half"] = "any",
         **kwargs: Any,
     ):
         # Extract threshold params before passing to super
@@ -562,9 +577,6 @@ class EarlySignal(BaseMetric):
         Args:
             forecast: The forecast dataarray with init_time, lead_time, valid_time
             target: The target dataarray (used for reference/validation)
-            threshold: Threshold value for signal detection
-            comparison: Comparison operator (">=", "<=", ">", "<", "==", "!=")
-            spatial_aggregation: How to aggregate spatially ("any", "all", "mean")
             **kwargs: Additional arguments
 
         Returns:
@@ -602,8 +614,8 @@ class EarlySignal(BaseMetric):
                 detection_mask = detection_mask.any(spatial_dims)
             elif self.spatial_aggregation == "all":
                 detection_mask = detection_mask.all(spatial_dims)
-            elif self.spatial_aggregation == "mean":
-                detection_mask = detection_mask.mean(spatial_dims) > 0.5
+            elif self.spatial_aggregation == "half":
+                detection_mask = operator.ge(detection_mask.mean(spatial_dims), 0.5)
             else:
                 raise ValueError(
                     f"Spatial aggregation '{self.spatial_aggregation}' not supported"

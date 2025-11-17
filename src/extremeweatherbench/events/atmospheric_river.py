@@ -44,8 +44,8 @@ def atmospheric_river_mask(
     has_high_laplacian = np.abs(ivt_laplacian) >= laplacian_threshold
     has_high_ivt = ivt >= ivt_threshold
 
-    # For the Laplacian condition, we want to check if there's a value >= 2.5 within 8
-    # gridpoints (0.25 degrees)
+    # For the Laplacian condition, we want to check if there's a value >=
+    # laplacian_threshold within 8 gridpoints (0.25 degrees)
     dilation_radius = dilation_radius * 2 + 1
     struct = np.ones((dilation_radius, dilation_radius))
     dilated_laplacian = ndimage.binary_dilation(
@@ -64,7 +64,7 @@ def atmospheric_river_mask(
         np.where((label_counts >= min_size_gridpoints) & (unique_labels != 0))
     ]
 
-    # Check centroids of each feature
+    # Collect all size-valid feature labels
     valid_features = []
     for label_num in size_valid_labels:
         valid_features.append(label_num)
