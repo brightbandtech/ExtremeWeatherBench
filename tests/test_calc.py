@@ -576,7 +576,7 @@ class TestGeopotentialCalculations:
     def test_geopotential_thickness_with_geopotential_height(self, sample_calc_dataset):
         """Test geopotential thickness with geopotential height."""
         # Create geopotential height data (not geopotential)
-        geopotential_height = sample_calc_dataset["geopotential"] / 9.80665
+        geopotential_height = sample_calc_dataset["geopotential"] / calc.g0
 
         # Test with geopotential=False (default)
         thickness = calc.geopotential_thickness(
