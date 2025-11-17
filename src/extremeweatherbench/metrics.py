@@ -1,12 +1,14 @@
 import abc
 import logging
-from typing import Any, Optional, Type
+import operator
+from typing import Any, Callable, Literal, Optional, Type
 
 import numpy as np
 import scores
 import xarray as xr
+from scipy import ndimage
 
-from extremeweatherbench import derived, utils
+from extremeweatherbench import calc, derived, utils
 
 logger = logging.getLogger(__name__)
 
@@ -533,19 +535,41 @@ class EarlySignal(BaseMetric):
     threshold criteria and returns the corresponding init_time, lead_time, and
     valid_time information. The metric is designed to be flexible for different
     signal detection criteria that can be specified in applied metrics downstream.
+
+    Args:
+        name: The name of the metric.
+        comparison_operator: The comparison operator to use for signal detection.
+        threshold: The threshold value for signal detection.
+        spatial_aggregation: The spatial aggregation method to use for signal detection.
+            any: Return True if any gridpoint meets the criteria.
+            all: Return True if all gridpoints meet the criteria.
+            half: Return True if at least half of the gridpoints meet the criteria.
+        **kwargs: Additional keyword arguments. Supported kwargs:
+            preserve_dims (str): Dimension(s) to preserve. Defaults to "lead_time".
+
+    Returns:
+        A DataArray with dims [init_time, lead_time] indicating
+        whether criteria are met for each init_time and lead_time pair.
     """
 
-    def __init__(self, *args, **kwargs):
-        super().__init__("early_signal", *args, **kwargs)
+    def __init__(
+        self,
+        name: str = "early_signal",
+        comparison_operator: Callable = operator.ge,
+        threshold: float = 0.5,
+        spatial_aggregation: Literal["any", "all", "half"] = "any",
+        **kwargs: Any,
+    ):
+        # Extract threshold params before passing to super
+        self.comparison_operator = comparison_operator
+        self.threshold = threshold
+        self.spatial_aggregation = spatial_aggregation
+        super().__init__(name, **kwargs)
 
     def _compute_metric(
         self,
         forecast: xr.DataArray,
         target: xr.DataArray,
-        threshold: Optional[float] = None,
-        variable: Optional[str] = None,
-        comparison: str = ">=",
-        spatial_aggregation: str = "any",
         **kwargs: Any,
     ) -> xr.DataArray:
         """Compute early signal detection.
@@ -553,50 +577,30 @@ class EarlySignal(BaseMetric):
         Args:
             forecast: The forecast dataarray with init_time, lead_time, valid_time
             target: The target dataarray (used for reference/validation)
-            threshold: Threshold value for signal detection
-            variable: Variable name to analyze for signal detection
-            comparison: Comparison operator (">=", "<=", ">", "<", "==", "!=")
-            spatial_aggregation: How to aggregate spatially ("any", "all", "mean")
             **kwargs: Additional arguments
 
         Returns:
-            DataArray containing earliest detection times with coordinates:
-            - earliest_init_time: First init_time when signal was detected
-            - earliest_lead_time: Corresponding lead_time
-            - earliest_valid_time: Corresponding valid_time
-            - detection_found: Boolean indicating if any detection occurred
+            Boolean DataArray with dims [init_time, lead_time] indicating
+            whether criteria are met for each init_time and lead_time pair.
         """
-        if threshold is None or variable is None:
-            # Return structure for when no detection criteria specified
-            return xr.Dataset(
-                {
-                    "earliest_init_time": xr.DataArray(np.datetime64("NaT")),
-                    "earliest_lead_time": xr.DataArray(np.timedelta64("NaT")),
-                    "earliest_valid_time": xr.DataArray(np.datetime64("NaT")),
-                    "detection_found": xr.DataArray(False),
-                }
+        if self.threshold is None:
+            # Return False for all when no detection criteria specified
+            dims = ["init_time", "lead_time"]
+            coords = {
+                "init_time": forecast.valid_time - forecast.lead_time,
+                "lead_time": forecast.lead_time,
+            }
+            if "valid_time" in forecast.dims:
+                dims.append("valid_time")
+                coords["valid_time"] = forecast.valid_time
+            return xr.DataArray(
+                False,
+                dims=dims,
+                coords=coords,
+                name=self.name,
             )
-
-        if variable not in forecast.data_vars:
-            raise ValueError(f"Variable '{variable}' not found in forecast dataset")
-
-        data = forecast[variable]
-
-        # Apply threshold comparison
-        comparison_ops = {
-            ">=": lambda x, t: x >= t,
-            "<=": lambda x, t: x <= t,
-            ">": lambda x, t: x > t,
-            "<": lambda x, t: x < t,
-            "==": lambda x, t: x == t,
-            "!=": lambda x, t: x != t,
-        }
-
-        if comparison not in comparison_ops:
-            raise ValueError(f"Comparison '{comparison}' not supported")
-
         # Create detection mask
-        detection_mask = comparison_ops[comparison](data, threshold)
+        detection_mask = self.comparison_operator(forecast, self.threshold)
 
         # Apply spatial aggregation
         spatial_dims = [
@@ -606,77 +610,19 @@ class EarlySignal(BaseMetric):
         ]
 
         if spatial_dims:
-            if spatial_aggregation == "any":
+            if self.spatial_aggregation == "any":
                 detection_mask = detection_mask.any(spatial_dims)
-            elif spatial_aggregation == "all":
+            elif self.spatial_aggregation == "all":
                 detection_mask = detection_mask.all(spatial_dims)
-            elif spatial_aggregation == "mean":
-                detection_mask = detection_mask.mean(spatial_dims) > 0.5
+            elif self.spatial_aggregation == "half":
+                detection_mask = operator.ge(detection_mask.mean(spatial_dims), 0.5)
             else:
                 raise ValueError(
-                    f"Spatial aggregation '{spatial_aggregation}' not supported"
+                    f"Spatial aggregation '{self.spatial_aggregation}' not supported"
                 )
 
-        # Find earliest detection for each init_time
-        earliest_results = {}
-
-        for init_t in forecast.init_time:
-            init_mask = detection_mask.sel(init_time=init_t)
-
-            # Find first occurrence along lead_time dimension
-            if init_mask.any():
-                # Get the first True index along lead_time
-                first_detection_idx = init_mask.argmax("lead_time")
-                earliest_lead = forecast.lead_time[first_detection_idx]
-                earliest_valid = init_t.values + np.timedelta64(int(earliest_lead), "h")
-
-                earliest_results[init_t.values] = {
-                    "init_time": init_t.values,
-                    "lead_time": earliest_lead.values,
-                    "valid_time": earliest_valid,
-                    "found": True,
-                }
-            else:
-                earliest_results[init_t.values] = {
-                    "init_time": init_t.values,
-                    "lead_time": np.timedelta64("NaT"),
-                    "valid_time": np.datetime64("NaT"),
-                    "found": False,
-                }
-
-        # Convert to xarray Dataset
-        init_times = list(earliest_results.keys())
-        earliest_init_times = [r["init_time"] for r in earliest_results.values()]
-        earliest_lead_times = [r["lead_time"] for r in earliest_results.values()]
-        earliest_valid_times = [r["valid_time"] for r in earliest_results.values()]
-        detection_found = [r["found"] for r in earliest_results.values()]
-
-        result = xr.Dataset(
-            {
-                "earliest_init_time": xr.DataArray(
-                    earliest_init_times,
-                    coords={"init_time": init_times},
-                    dims=["init_time"],
-                ),
-                "earliest_lead_time": xr.DataArray(
-                    earliest_lead_times,
-                    coords={"init_time": init_times},
-                    dims=["init_time"],
-                ),
-                "earliest_valid_time": xr.DataArray(
-                    earliest_valid_times,
-                    coords={"init_time": init_times},
-                    dims=["init_time"],
-                ),
-                "detection_found": xr.DataArray(
-                    detection_found,
-                    coords={"init_time": init_times},
-                    dims=["init_time"],
-                ),
-            }
-        )
-
-        return result
+        detection_mask.name = self.name
+        return detection_mask
 
 
 class MaximumMAE(MAE):
@@ -1120,77 +1066,82 @@ class LandfallIntensityMAE(BaseMetric):
         raise NotImplementedError("LandfallIntensityMAE is not implemented yet")
 
 
-# TODO: complete spatial displacement implementation
 class SpatialDisplacement(BaseMetric):
-    """Spatial displacement error metric.
-
-    Note: Not yet implemented.
-    """
-
-    def __init__(self, *args, **kwargs):
-        super().__init__("SpatialDisplacement", *args, **kwargs)
+    def __init__(
+        self,
+        name: str = "spatial_displacement",
+        **kwargs: Any,
+    ):
+        super().__init__(name, **kwargs)
 
     def _compute_metric(
-        self,
-        forecast: xr.DataArray,
-        target: xr.DataArray,
-        **kwargs: Any,
+        self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
     ) -> Any:
-        raise NotImplementedError("SpatialDisplacement is not implemented yet")
+        def center_of_mass_ufunc(data):
+            """ufunc tooling to calculate the center of mass of a 2D array, returning
+            a tuple of the latitude and longitude indices, or np.nan tuple if no
+            non-zero values are present.
+            """
+            if (data > 0).any():
+                return ndimage.center_of_mass(data)
+            else:
+                return (np.nan, np.nan)
 
+        target_lat_idx, target_lon_idx = xr.apply_ufunc(
+            center_of_mass_ufunc,
+            target,
+            input_core_dims=[["latitude", "longitude"]],
+            output_core_dims=[[], []],
+            vectorize=True,
+            dask="allowed",
+        )
 
-# TODO: complete lead time detection implementation
-class LeadTimeDetection(BaseMetric):
-    """Lead time detection metric.
+        # Process target coordinates
+        target_lat_idx = np.round(target_lat_idx)
+        target_lon_idx = np.round(target_lon_idx)
+        target_lat_coords, target_lon_coords = utils.idx_to_coords(
+            target_lat_idx,
+            target_lon_idx,
+            target.latitude.values,
+            target.longitude.values,
+        )
+        target_coordinates = np.array([target_lat_coords, target_lon_coords])
 
-    Note: Not yet implemented.
-    """
+        # Process forecast coordinates
+        forecast_lat_idx, forecast_lon_idx = xr.apply_ufunc(
+            center_of_mass_ufunc,
+            forecast,
+            input_core_dims=[["latitude", "longitude"]],
+            output_core_dims=[[], []],
+            vectorize=True,
+            dask="allowed",
+        )
+        forecast_lat_idx = np.round(forecast_lat_idx)
+        forecast_lon_idx = np.round(forecast_lon_idx)
+        forecast_lat_coords, forecast_lon_coords = utils.idx_to_coords(
+            forecast_lat_idx,
+            forecast_lon_idx,
+            forecast.latitude.values,
+            forecast.longitude.values,
+        )
+        forecast_coordinates = np.array([forecast_lat_coords, forecast_lon_coords])
 
-    def __init__(self, *args, **kwargs):
-        super().__init__("LeadTimeDetection", *args, **kwargs)
+        # Calculate haversine distance
+        distance = calc.haversine_distance(forecast_coordinates, target_coordinates)
 
-    def _compute_metric(
-        self,
-        forecast: xr.DataArray,
-        target: xr.DataArray,
-        **kwargs: Any,
-    ) -> Any:
-        raise NotImplementedError("LeadTimeDetection is not implemented yet")
+        # Create DataArray with all dimensions
+        result = xr.DataArray(
+            distance,
+            coords={"lead_time": forecast.lead_time, "valid_time": forecast.valid_time},
+            dims=["lead_time", "valid_time"],
+            name="spatial_displacement",
+        )
 
+        # Reduce over non-preserved dimensions (valid_time) by taking mean
+        time_dims_to_reduce = [
+            dim for dim in result.dims if dim not in self.preserve_dims
+        ]
+        if time_dims_to_reduce:
+            result = result.mean(dim=time_dims_to_reduce)
 
-# TODO: complete regional hits and misses implementation
-class RegionalHitsMisses(BaseMetric):
-    """Regional hits and misses metric.
-
-    Note: Not yet implemented.
-    """
-
-    def __init__(self, *args, **kwargs):
-        super().__init__("RegionalHitsMisses", *args, **kwargs)
-
-    def _compute_metric(
-        self,
-        forecast: xr.DataArray,
-        target: xr.DataArray,
-        **kwargs: Any,
-    ) -> Any:
-        raise NotImplementedError("RegionalHitsMisses is not implemented yet")
-
-
-# TODO: complete hits and misses implementation
-class HitsMisses(BaseMetric):
-    """Hits and misses metric.
-
-    Note: Not yet implemented.
-    """
-
-    def __init__(self, *args, **kwargs):
-        super().__init__("HitsMisses", *args, **kwargs)
-
-    def _compute_metric(
-        self,
-        forecast: xr.DataArray,
-        target: xr.DataArray,
-        **kwargs: Any,
-    ) -> Any:
-        raise NotImplementedError("HitsMisses is not implemented yet")
+        return result
