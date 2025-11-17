@@ -126,6 +126,8 @@ def mock_base_metric():
     mock_metric.compute_metric.return_value = xr.DataArray(
         data=[1.0], dims=["lead_time"], coords={"lead_time": [0]}
     )
+    mock_metric.maybe_expand_composite.return_value = [mock_metric]
+    mock_metric.maybe_prepare_composite_kwargs.side_effect = lambda **kwargs: kwargs
     return mock_metric
 
 
@@ -1014,6 +1016,8 @@ class TestComputeCaseOperator:
         mock_metric = mock.Mock(spec=metrics.BaseMetric)
         mock_metric.forecast_variable = None
         mock_metric.target_variable = None
+        mock_metric.maybe_expand_composite.return_value = [mock_metric]
+        mock_metric.maybe_prepare_composite_kwargs.side_effect = lambda **kwargs: kwargs
         sample_case_operator.metric_list = [mock_metric]
 
         with mock.patch(
@@ -1054,9 +1058,13 @@ class TestComputeCaseOperator:
         metric_1 = mock.Mock(spec=metrics.BaseMetric)
         metric_1.forecast_variable = None
         metric_1.target_variable = None
+        metric_1.maybe_expand_composite.return_value = [metric_1]
+        metric_1.maybe_prepare_composite_kwargs.side_effect = lambda **kwargs: kwargs
         metric_2 = mock.Mock(spec=metrics.BaseMetric)
         metric_2.forecast_variable = None
         metric_2.target_variable = None
+        metric_2.maybe_expand_composite.return_value = [metric_2]
+        metric_2.maybe_prepare_composite_kwargs.side_effect = lambda **kwargs: kwargs
         sample_case_operator.metric_list = [metric_1, metric_2]
 
         sample_case_operator.target.maybe_align_forecast_to_target.return_value = (
@@ -1868,6 +1876,8 @@ class TestIntegration:
         metric_1.return_value.compute_metric.return_value = xr.DataArray(
             data=[1.0], dims=["lead_time"], coords={"lead_time": [0]}
         )
+        metric_1.maybe_expand_composite.return_value = [metric_1]
+        metric_1.maybe_prepare_composite_kwargs.side_effect = lambda **kwargs: kwargs
 
         metric_2 = mock.Mock(spec=metrics.BaseMetric)
         metric_2.name = "Metric2"
@@ -1877,6 +1887,8 @@ class TestIntegration:
         metric_2.return_value.compute_metric.return_value = xr.DataArray(
             data=[2.0], dims=["lead_time"], coords={"lead_time": [0]}
         )
+        metric_2.maybe_expand_composite.return_value = [metric_2]
+        metric_2.maybe_prepare_composite_kwargs.side_effect = lambda **kwargs: kwargs
 
         # Create evaluation object with multiple metrics and variables
         eval_obj = mock.Mock(spec=inputs.EvaluationObject)
@@ -3575,6 +3587,8 @@ class TestMetricVariableHandling:
         metric.compute_metric.return_value = xr.DataArray(
             data=[1.0], dims=["lead_time"], coords={"lead_time": [0]}
         )
+        metric.maybe_expand_composite.return_value = [metric]
+        metric.maybe_prepare_composite_kwargs.side_effect = lambda **kwargs: kwargs
 
         # Create case operator
         case_operator = cases.CaseOperator(
@@ -3622,6 +3636,8 @@ class TestMetricVariableHandling:
         metric1.compute_metric.return_value = xr.DataArray(
             data=[1.0], dims=["lead_time"], coords={"lead_time": [0]}
         )
+        metric1.maybe_expand_composite.return_value = [metric1]
+        metric1.maybe_prepare_composite_kwargs.side_effect = lambda **kwargs: kwargs
 
         # Metric without variables
         metric2 = mock.Mock(spec=metrics.BaseMetric)
@@ -3631,6 +3647,8 @@ class TestMetricVariableHandling:
         metric2.compute_metric.return_value = xr.DataArray(
             data=[2.0], dims=["lead_time"], coords={"lead_time": [0]}
         )
+        metric2.maybe_expand_composite.return_value = [metric2]
+        metric2.maybe_prepare_composite_kwargs.side_effect = lambda **kwargs: kwargs
 
         # Setup InputBase with variables
         mock_target = mock.Mock(spec=inputs.TargetBase)
@@ -3712,6 +3730,8 @@ class TestMetricVariableHandling:
         metric1.compute_metric.return_value = xr.DataArray(
             data=[1.0], dims=["lead_time"], coords={"lead_time": [0]}
         )
+        metric1.maybe_expand_composite.return_value = [metric1]
+        metric1.maybe_prepare_composite_kwargs.side_effect = lambda **kwargs: kwargs
 
         # Metric without variables (should only use unclaimed variables)
         metric2 = mock.Mock(spec=metrics.BaseMetric)
@@ -3721,6 +3741,8 @@ class TestMetricVariableHandling:
         metric2.compute_metric.return_value = xr.DataArray(
             data=[2.0], dims=["lead_time"], coords={"lead_time": [0]}
         )
+        metric2.maybe_expand_composite.return_value = [metric2]
+        metric2.maybe_prepare_composite_kwargs.side_effect = lambda **kwargs: kwargs
 
         # Setup InputBase with TWO variables
         mock_target = mock.Mock(spec=inputs.TargetBase)

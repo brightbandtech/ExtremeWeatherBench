@@ -6,11 +6,11 @@ import importlib
 import inspect
 import logging
 import pathlib
-import threading
 from typing import Any, Callable, Optional, Sequence, Union
 
 import cartopy.io.shapereader as shpreader
 import numpy as np
+import numpy.typing as npt
 import pandas as pd  # type: ignore[import-untyped]
 import regionmask
 import shapely
@@ -21,62 +21,6 @@ import yaml  # type: ignore[import]
 from joblib import Parallel
 
 logger = logging.getLogger(__name__)
-
-
-class ThreadSafeDict:
-    """A thread-safe dictionary implementation using locks.
-
-    This class provides a thread-safe wrapper around a standard dictionary,
-    ensuring atomic operations for getting, setting, and deleting items.
-    Useful for caching data that needs to be shared between threads safely.
-    """
-
-    def __init__(self):
-        self._data = {}
-        self._lock = threading.Lock()
-
-    def __setitem__(self, key, value):
-        with self._lock:
-            self._data[key] = value
-
-    def __getitem__(self, key):
-        with self._lock:
-            return self._data[key]
-
-    def __delitem__(self, key):
-        with self._lock:
-            del self._data[key]
-
-    def __contains__(self, key):
-        with self._lock:
-            return key in self._data
-
-    def get(self, key, default=None):
-        with self._lock:
-            return self._data.get(key, default)
-
-    def clear(self):
-        with self._lock:
-            self._data.clear()
-
-    def __len__(self):
-        with self._lock:
-            return len(self._data)
-
-    def keys(self):
-        with self._lock:
-            # Return a copy to prevent concurrent modification during iteration
-            return list(self._data.keys())
-
-    def values(self):
-        with self._lock:
-            # Return a copy to prevent concurrent modification during iteration
-            return list(self._data.values())
-
-    def items(self):
-        with self._lock:
-            # Return a copy to prevent concurrent modification during iteration
-            return list(self._data.items())
 
 
 def convert_longitude_to_360(longitude: float) -> float:
@@ -547,6 +491,42 @@ class ParallelTqdm(Parallel):
             self.progress_bar.refresh()
         # update progressbar
         self.progress_bar.update(self.n_completed_tasks - self.progress_bar.n)
+
+
+def idx_to_coords(
+    lat_idx: npt.NDArray,
+    lon_idx: npt.NDArray,
+    lat_coords: npt.NDArray,
+    lon_coords: npt.NDArray,
+) -> tuple[npt.NDArray, npt.NDArray]:
+    """Convert indices to coordinates, handling NaN indices.
+
+    Args:
+        lat_idx: The latitude indices.
+        lon_idx: The longitude indices.
+        lat_coords: The latitude coordinates.
+        lon_coords: The longitude coordinates.
+
+    Returns:
+        The latitude and longitude coordinates.
+    """
+    # Create output arrays with NaN
+    lat_coords_out = np.full_like(lat_idx, np.nan)
+    lon_coords_out = np.full_like(lon_idx, np.nan)
+
+    # Find valid (non-NaN) indices
+    valid_mask = ~(np.isnan(lat_idx) | np.isnan(lon_idx))
+
+    if valid_mask.any():
+        # Convert to integer indices only where valid
+        int_lat_idx = np.where(valid_mask, lat_idx.astype(int), 0)
+        int_lon_idx = np.where(valid_mask, lon_idx.astype(int), 0)
+
+        # Use advanced indexing to get coordinates
+        lat_coords_out[valid_mask] = lat_coords[int_lat_idx[valid_mask]]
+        lon_coords_out[valid_mask] = lon_coords[int_lon_idx[valid_mask]]
+
+    return lat_coords_out, lon_coords_out
 
 
 def convert_day_yearofday_to_time(

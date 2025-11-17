@@ -1,69 +1,16 @@
 import abc
 import logging
-from typing import Any, Callable, Literal, Optional, Type
+import operator
+from typing import Any, Callable, Literal, Optional, Sequence, Type
 
 import numpy as np
 import scores
 import xarray as xr
+from scipy import ndimage
 
 from extremeweatherbench import calc, derived, utils
 
 logger = logging.getLogger(__name__)
-
-
-# Global cache for transformed contingency managers
-_GLOBAL_CONTINGENCY_CACHE = utils.ThreadSafeDict()  # type: ignore
-
-
-def get_cached_transformed_manager(
-    forecast: xr.DataArray,
-    target: xr.DataArray,
-    forecast_threshold: float = 0.5,
-    target_threshold: float = 0.5,
-    preserve_dims: str = "lead_time",
-) -> scores.categorical.BasicContingencyManager:
-    """Get cached transformed contingency manager, creating if needed.
-
-    This function provides a global cache that can be used by any metric
-    with the same thresholds and data, regardless of how the metrics are created.
-    """
-    # Create cache key from data content hash and parameters
-    forecast_hash = hash(forecast.data.tobytes())
-    target_hash = hash(target.data.tobytes())
-
-    cache_key = (
-        forecast_hash,
-        target_hash,
-        forecast_threshold,
-        target_threshold,
-        preserve_dims,
-    )
-
-    # Return cached result if available
-    if cache_key in _GLOBAL_CONTINGENCY_CACHE:
-        logger.info(f"Cache found for {cache_key}")
-        return _GLOBAL_CONTINGENCY_CACHE[cache_key]
-
-    # Apply thresholds to binarize the data
-    binary_forecast = (forecast >= forecast_threshold).astype(float)
-    binary_target = (target >= target_threshold).astype(float)
-
-    # Create and transform contingency manager
-    binary_contingency_manager = scores.categorical.BinaryContingencyManager(
-        binary_forecast, binary_target
-    )
-    transformed = binary_contingency_manager.transform(preserve_dims=preserve_dims)
-
-    # Cache the result
-    _GLOBAL_CONTINGENCY_CACHE[cache_key] = transformed
-
-    return transformed
-
-
-def clear_contingency_cache():
-    """Clear the global contingency manager cache."""
-    global _GLOBAL_CONTINGENCY_CACHE
-    _GLOBAL_CONTINGENCY_CACHE.clear()
 
 
 class ComputeDocstringMetaclass(abc.ABCMeta):
@@ -177,26 +124,109 @@ class BaseMetric(abc.ABC, metaclass=ComputeDocstringMetaclass):
         """
         return self._compute_metric(forecast, target, **kwargs)
 
+    def maybe_expand_composite(self) -> Sequence["BaseMetric"]:
+        """Expand composite metrics into individual metrics.
+
+        Base implementation returns [self]. Override for composites.
+
+        Returns:
+            List containing just this metric.
+        """
+        return [self]
+
+    def is_composite(self) -> bool:
+        """Check if this is a composite metric.
+
+        Base implementation returns False. Override for composites.
+
+        Returns:
+            False for base metrics.
+        """
+        return False
+
+    def maybe_prepare_composite_kwargs(
+        self,
+        forecast_data: xr.DataArray,
+        target_data: xr.DataArray,
+        **base_kwargs,
+    ) -> dict:
+        """Prepare kwargs for metric evaluation.
+
+        Base implementation just returns kwargs as-is.
+        Override for metrics that need special preparation.
+
+        Args:
+            forecast_data: The forecast DataArray.
+            target_data: The target DataArray.
+            **base_kwargs: Base kwargs to include in result.
+
+        Returns:
+            Dictionary of kwargs (unchanged for base metrics).
+        """
+        return base_kwargs.copy()
+
 
 class ThresholdMetric(BaseMetric):
     """Base class for threshold-based metrics.
 
     This class provides common functionality for metrics that require
     forecast and target thresholds for binarization.
+
+    Can be used in two ways:
+    1. As a base class for specific threshold metrics (CSI, FAR, etc.)
+    2. As a composite metric to compute multiple threshold metrics
+       efficiently by reusing the transformed contingency manager.
+
+    Example of composite usage:
+        composite = ThresholdMetric(
+            metrics=[CSI, FAR, Accuracy],
+            forecast_threshold=0.7,
+            target_threshold=0.5
+        )
+        results = composite.compute_metric(forecast, target)
+        # Returns: {"critical_success_index": ...,
+        #           "false_alarm_ratio": ..., "accuracy": ...}
     """
 
     def __init__(
         self,
-        name: str,
+        name: str = "threshold_metrics",
         preserve_dims: str = "lead_time",
+        forecast_variable: Optional[str | derived.DerivedVariable] = None,
+        target_variable: Optional[str | derived.DerivedVariable] = None,
         forecast_threshold: float = 0.5,
         target_threshold: float = 0.5,
+        metrics: Optional[list[Type["ThresholdMetric"]]] = None,
         **kwargs,
     ):
-        super().__init__(name, **kwargs)
+        super().__init__(
+            name,
+            preserve_dims=preserve_dims,
+            forecast_variable=forecast_variable,
+            target_variable=target_variable,
+            **kwargs,
+        )
         self.forecast_threshold = forecast_threshold
         self.target_threshold = target_threshold
         self.preserve_dims = preserve_dims
+        self.metrics = metrics or []
+
+        # If metrics provided, instantiate them
+        if self.metrics is not None:
+            self._metric_instances = [
+                (
+                    metric_cls(
+                        forecast_threshold=self.forecast_threshold,
+                        target_threshold=self.target_threshold,
+                        preserve_dims=self.preserve_dims,
+                    )
+                    if isinstance(metric_cls, type)
+                    else metric_cls
+                )
+                for metric_cls in self.metrics
+            ]
+        else:
+            self._metric_instances = []
 
     def __call__(self, forecast: xr.DataArray, target: xr.DataArray, **kwargs) -> Any:
         """Make instances callable using their configured thresholds."""
@@ -207,6 +237,117 @@ class ThresholdMetric(BaseMetric):
 
         # Call the instance method with the configured parameters
         return self.compute_metric(forecast, target, **kwargs)
+
+    def transformed_contingency_manager(
+        self,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
+        forecast_threshold: float,
+        target_threshold: float,
+        preserve_dims: str,
+        op_func: Callable = operator.ge,
+    ) -> scores.categorical.BasicContingencyManager:
+        """Create and transform a contingency manager.
+
+        Args:
+            forecast: The forecast DataArray.
+            target: The target DataArray.
+            forecast_threshold: Threshold for binarizing forecast.
+            target_threshold: Threshold for binarizing target.
+            preserve_dims: Dimension(s) to preserve during transform.
+
+        Returns:
+            Transformed contingency manager.
+        """
+        # Apply thresholds to binarize the data
+        binary_forecast = (op_func(forecast, forecast_threshold)).astype(float)
+        binary_target = (op_func(target, target_threshold)).astype(float)
+
+        # Create and transform contingency manager
+        binary_contingency_manager = scores.categorical.BinaryContingencyManager(
+            binary_forecast, binary_target
+        )
+        transformed = binary_contingency_manager.transform(preserve_dims=preserve_dims)
+
+        return transformed
+
+    def maybe_expand_composite(self) -> Sequence["BaseMetric"]:
+        """Expand composite metrics into individual metrics.
+
+        Returns sub-metrics for composites, or [self] for regular.
+
+        Returns:
+            List of metrics to evaluate.
+        """
+        if self._metric_instances:
+            return self._metric_instances
+        return [self]
+
+    def is_composite(self) -> bool:
+        """Check if this is a composite metric.
+
+        Returns:
+            True if composite (has sub-metrics), False otherwise.
+        """
+        return bool(self._metric_instances)
+
+    def maybe_prepare_composite_kwargs(
+        self,
+        forecast_data: xr.DataArray,
+        target_data: xr.DataArray,
+        **base_kwargs,
+    ) -> dict:
+        """Prepare kwargs for composite metric evaluation.
+
+        Computes the transformed contingency manager once and adds
+        it to kwargs for efficient composite evaluation.
+
+        Args:
+            forecast_data: The forecast DataArray.
+            target_data: The target DataArray.
+            **base_kwargs: Base kwargs to include in result.
+
+        Returns:
+            Dictionary of kwargs including transformed_manager.
+        """
+        kwargs = base_kwargs.copy()
+
+        if self.is_composite() and len(self._metric_instances) > 1:
+            kwargs["transformed_manager"] = self.transformed_contingency_manager(
+                forecast=forecast_data,
+                target=target_data,
+                forecast_threshold=self.forecast_threshold,
+                target_threshold=self.target_threshold,
+                preserve_dims=self.preserve_dims,
+            )
+            kwargs["forecast_threshold"] = self.forecast_threshold
+            kwargs["target_threshold"] = self.target_threshold
+            kwargs["preserve_dims"] = self.preserve_dims
+
+        return kwargs
+
+    def _compute_metric(
+        self,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
+        **kwargs: Any,
+    ) -> Any:
+        """Compute metric (not supported for ThresholdMetric base).
+
+        ThresholdMetric must be subclassed (like CSI, FAR) or used
+        as a composite with metrics list.
+
+        Args:
+            forecast: The forecast DataArray.
+            target: The target DataArray.
+            **kwargs: Additional keyword arguments.
+        """
+        raise NotImplementedError(
+            "ThresholdMetric._compute_metric must be implemented "
+            "by subclasses (CSI, FAR, etc.) or use ThresholdMetric "
+            "as a composite with metrics=[...] list. Composites are "
+            "automatically expanded in the evaluation pipeline."
+        )
 
 
 class CSI(ThresholdMetric):
@@ -225,13 +366,16 @@ class CSI(ThresholdMetric):
         target_threshold = kwargs.get("target_threshold", 0.5)
         preserve_dims = kwargs.get("preserve_dims", "lead_time")
 
-        transformed = get_cached_transformed_manager(
-            forecast=forecast,
-            target=target,
-            forecast_threshold=forecast_threshold,
-            target_threshold=target_threshold,
-            preserve_dims=preserve_dims,
-        )
+        # Use pre-computed manager if provided, else compute
+        transformed = kwargs.get("transformed_manager")
+        if transformed is None:
+            transformed = self.transformed_contingency_manager(
+                forecast=forecast,
+                target=target,
+                forecast_threshold=forecast_threshold,
+                target_threshold=target_threshold,
+                preserve_dims=preserve_dims,
+            )
         return transformed.critical_success_index()
 
 
@@ -251,13 +395,16 @@ class FAR(ThresholdMetric):
         target_threshold = kwargs.get("target_threshold", 0.5)
         preserve_dims = kwargs.get("preserve_dims", "lead_time")
 
-        transformed = get_cached_transformed_manager(
-            forecast=forecast,
-            target=target,
-            forecast_threshold=forecast_threshold,
-            target_threshold=target_threshold,
-            preserve_dims=preserve_dims,
-        )
+        # Use pre-computed manager if provided, else compute
+        transformed = kwargs.get("transformed_manager")
+        if transformed is None:
+            transformed = self.transformed_contingency_manager(
+                forecast=forecast,
+                target=target,
+                forecast_threshold=forecast_threshold,
+                target_threshold=target_threshold,
+                preserve_dims=preserve_dims,
+            )
         return transformed.false_alarm_ratio()
 
 
@@ -277,13 +424,16 @@ class TP(ThresholdMetric):
         target_threshold = kwargs.get("target_threshold", 0.5)
         preserve_dims = kwargs.get("preserve_dims", "lead_time")
 
-        transformed = get_cached_transformed_manager(
-            forecast=forecast,
-            target=target,
-            forecast_threshold=forecast_threshold,
-            target_threshold=target_threshold,
-            preserve_dims=preserve_dims,
-        )
+        # Use pre-computed manager if provided, else compute
+        transformed = kwargs.get("transformed_manager")
+        if transformed is None:
+            transformed = self.transformed_contingency_manager(
+                forecast=forecast,
+                target=target,
+                forecast_threshold=forecast_threshold,
+                target_threshold=target_threshold,
+                preserve_dims=preserve_dims,
+            )
         counts = transformed.get_counts()
         return counts["tp_count"] / counts["total_count"]
 
@@ -304,13 +454,16 @@ class FP(ThresholdMetric):
         target_threshold = kwargs.get("target_threshold", 0.5)
         preserve_dims = kwargs.get("preserve_dims", "lead_time")
 
-        transformed = get_cached_transformed_manager(
-            forecast=forecast,
-            target=target,
-            forecast_threshold=forecast_threshold,
-            target_threshold=target_threshold,
-            preserve_dims=preserve_dims,
-        )
+        # Use pre-computed manager if provided, else compute
+        transformed = kwargs.get("transformed_manager")
+        if transformed is None:
+            transformed = self.transformed_contingency_manager(
+                forecast=forecast,
+                target=target,
+                forecast_threshold=forecast_threshold,
+                target_threshold=target_threshold,
+                preserve_dims=preserve_dims,
+            )
         counts = transformed.get_counts()
         return counts["fp_count"] / counts["total_count"]
 
@@ -331,13 +484,16 @@ class TN(ThresholdMetric):
         target_threshold = kwargs.get("target_threshold", 0.5)
         preserve_dims = kwargs.get("preserve_dims", "lead_time")
 
-        transformed = get_cached_transformed_manager(
-            forecast=forecast,
-            target=target,
-            forecast_threshold=forecast_threshold,
-            target_threshold=target_threshold,
-            preserve_dims=preserve_dims,
-        )
+        # Use pre-computed manager if provided, else compute
+        transformed = kwargs.get("transformed_manager")
+        if transformed is None:
+            transformed = self.transformed_contingency_manager(
+                forecast=forecast,
+                target=target,
+                forecast_threshold=forecast_threshold,
+                target_threshold=target_threshold,
+                preserve_dims=preserve_dims,
+            )
         counts = transformed.get_counts()
         return counts["tn_count"] / counts["total_count"]
 
@@ -358,13 +514,16 @@ class FN(ThresholdMetric):
         target_threshold = kwargs.get("target_threshold", 0.5)
         preserve_dims = kwargs.get("preserve_dims", "lead_time")
 
-        transformed = get_cached_transformed_manager(
-            forecast=forecast,
-            target=target,
-            forecast_threshold=forecast_threshold,
-            target_threshold=target_threshold,
-            preserve_dims=preserve_dims,
-        )
+        # Use pre-computed manager if provided, else compute
+        transformed = kwargs.get("transformed_manager")
+        if transformed is None:
+            transformed = self.transformed_contingency_manager(
+                forecast=forecast,
+                target=target,
+                forecast_threshold=forecast_threshold,
+                target_threshold=target_threshold,
+                preserve_dims=preserve_dims,
+            )
         counts = transformed.get_counts()
         return counts["fn_count"] / counts["total_count"]
 
@@ -385,64 +544,17 @@ class Accuracy(ThresholdMetric):
         target_threshold = kwargs.get("target_threshold", 0.5)
         preserve_dims = kwargs.get("preserve_dims", "lead_time")
 
-        transformed = get_cached_transformed_manager(
-            forecast=forecast,
-            target=target,
-            forecast_threshold=forecast_threshold,
-            target_threshold=target_threshold,
-            preserve_dims=preserve_dims,
-        )
+        # Use pre-computed manager if provided, else compute
+        transformed = kwargs.get("transformed_manager")
+        if transformed is None:
+            transformed = self.transformed_contingency_manager(
+                forecast=forecast,
+                target=target,
+                forecast_threshold=forecast_threshold,
+                target_threshold=target_threshold,
+                preserve_dims=preserve_dims,
+            )
         return transformed.accuracy()
-
-
-def create_threshold_metrics(
-    forecast_threshold: float = 0.5,
-    target_threshold: float = 0.5,
-    preserve_dims: str = "lead_time",
-    metrics: Optional[list[str]] = None,
-):
-    """Create multiple threshold-based metrics with the specified thresholds.
-
-    Args:
-        forecast_threshold: Threshold for binarizing forecast data
-        target_threshold: Threshold for binarizing target data
-        preserve_dims: Dimensions to preserve during contingency table computation
-        metrics: List of metric names to create (e.g., ['CSI', 'FAR', 'TP'])
-
-    Returns:
-        A list of metric objects with the specified thresholds
-    """
-    if metrics is None:
-        metrics = ["CSI", "FAR", "Accuracy", "TP", "FP", "TN", "FN"]
-
-    # Mapping of metric names to their classes (all threshold-based metrics)
-    metric_classes: dict[str, Type[ThresholdMetric]] = {
-        "CSI": CSI,
-        "FAR": FAR,
-        "Accuracy": Accuracy,
-        "TP": TP,
-        "FP": FP,
-        "TN": TN,
-        "FN": FN,
-    }
-
-    result_metrics = []
-
-    # Create metrics by instantiating their classes
-    for metric_name in metrics:
-        if metric_name not in metric_classes:
-            raise ValueError(f"Unknown metric: {metric_name}")
-
-        metric_class = metric_classes[metric_name]
-        metric = metric_class(
-            name=metric_name,
-            forecast_threshold=forecast_threshold,
-            target_threshold=target_threshold,
-            preserve_dims=preserve_dims,
-        )
-        result_metrics.append(metric)
-
-    return result_metrics
 
 
 class MAE(BaseMetric):
@@ -533,19 +645,41 @@ class EarlySignal(BaseMetric):
     threshold criteria and returns the corresponding init_time, lead_time, and
     valid_time information. The metric is designed to be flexible for different
     signal detection criteria that can be specified in applied metrics downstream.
+
+    Args:
+        name: The name of the metric.
+        comparison_operator: The comparison operator to use for signal detection.
+        threshold: The threshold value for signal detection.
+        spatial_aggregation: The spatial aggregation method to use for signal detection.
+            any: Return True if any gridpoint meets the criteria.
+            all: Return True if all gridpoints meet the criteria.
+            half: Return True if at least half of the gridpoints meet the criteria.
+        **kwargs: Additional keyword arguments. Supported kwargs:
+            preserve_dims (str): Dimension(s) to preserve. Defaults to "lead_time".
+
+    Returns:
+        A DataArray with dims [init_time, lead_time] indicating
+        whether criteria are met for each init_time and lead_time pair.
     """
 
-    def __init__(self, *args, **kwargs):
-        super().__init__("early_signal", *args, **kwargs)
+    def __init__(
+        self,
+        name: str = "early_signal",
+        comparison_operator: Callable = operator.ge,
+        threshold: float = 0.5,
+        spatial_aggregation: Literal["any", "all", "half"] = "any",
+        **kwargs: Any,
+    ):
+        # Extract threshold params before passing to super
+        self.comparison_operator = comparison_operator
+        self.threshold = threshold
+        self.spatial_aggregation = spatial_aggregation
+        super().__init__(name, **kwargs)
 
     def _compute_metric(
         self,
         forecast: xr.DataArray,
         target: xr.DataArray,
-        threshold: Optional[float] = None,
-        variable: Optional[str] = None,
-        comparison: str = ">=",
-        spatial_aggregation: str = "any",
         **kwargs: Any,
     ) -> xr.DataArray:
         """Compute early signal detection.
@@ -553,50 +687,30 @@ class EarlySignal(BaseMetric):
         Args:
             forecast: The forecast dataarray with init_time, lead_time, valid_time
             target: The target dataarray (used for reference/validation)
-            threshold: Threshold value for signal detection
-            variable: Variable name to analyze for signal detection
-            comparison: Comparison operator (">=", "<=", ">", "<", "==", "!=")
-            spatial_aggregation: How to aggregate spatially ("any", "all", "mean")
             **kwargs: Additional arguments
 
         Returns:
-            DataArray containing earliest detection times with coordinates:
-            - earliest_init_time: First init_time when signal was detected
-            - earliest_lead_time: Corresponding lead_time
-            - earliest_valid_time: Corresponding valid_time
-            - detection_found: Boolean indicating if any detection occurred
+            Boolean DataArray with dims [init_time, lead_time] indicating
+            whether criteria are met for each init_time and lead_time pair.
         """
-        if threshold is None or variable is None:
-            # Return structure for when no detection criteria specified
-            return xr.Dataset(
-                {
-                    "earliest_init_time": xr.DataArray(np.datetime64("NaT")),
-                    "earliest_lead_time": xr.DataArray(np.timedelta64("NaT")),
-                    "earliest_valid_time": xr.DataArray(np.datetime64("NaT")),
-                    "detection_found": xr.DataArray(False),
-                }
+        if self.threshold is None:
+            # Return False for all when no detection criteria specified
+            dims = ["init_time", "lead_time"]
+            coords = {
+                "init_time": forecast.valid_time - forecast.lead_time,
+                "lead_time": forecast.lead_time,
+            }
+            if "valid_time" in forecast.dims:
+                dims.append("valid_time")
+                coords["valid_time"] = forecast.valid_time
+            return xr.DataArray(
+                False,
+                dims=dims,
+                coords=coords,
+                name=self.name,
             )
-
-        if variable not in forecast.data_vars:
-            raise ValueError(f"Variable '{variable}' not found in forecast dataset")
-
-        data = forecast[variable]
-
-        # Apply threshold comparison
-        comparison_ops = {
-            ">=": lambda x, t: x >= t,
-            "<=": lambda x, t: x <= t,
-            ">": lambda x, t: x > t,
-            "<": lambda x, t: x < t,
-            "==": lambda x, t: x == t,
-            "!=": lambda x, t: x != t,
-        }
-
-        if comparison not in comparison_ops:
-            raise ValueError(f"Comparison '{comparison}' not supported")
-
         # Create detection mask
-        detection_mask = comparison_ops[comparison](data, threshold)
+        detection_mask = self.comparison_operator(forecast, self.threshold)
 
         # Apply spatial aggregation
         spatial_dims = [
@@ -606,77 +720,19 @@ class EarlySignal(BaseMetric):
         ]
 
         if spatial_dims:
-            if spatial_aggregation == "any":
+            if self.spatial_aggregation == "any":
                 detection_mask = detection_mask.any(spatial_dims)
-            elif spatial_aggregation == "all":
+            elif self.spatial_aggregation == "all":
                 detection_mask = detection_mask.all(spatial_dims)
-            elif spatial_aggregation == "mean":
-                detection_mask = detection_mask.mean(spatial_dims) > 0.5
+            elif self.spatial_aggregation == "half":
+                detection_mask = operator.ge(detection_mask.mean(spatial_dims), 0.5)
             else:
                 raise ValueError(
-                    f"Spatial aggregation '{spatial_aggregation}' not supported"
+                    f"Spatial aggregation '{self.spatial_aggregation}' not supported"
                 )
 
-        # Find earliest detection for each init_time
-        earliest_results = {}
-
-        for init_t in forecast.init_time:
-            init_mask = detection_mask.sel(init_time=init_t)
-
-            # Find first occurrence along lead_time dimension
-            if init_mask.any():
-                # Get the first True index along lead_time
-                first_detection_idx = init_mask.argmax("lead_time")
-                earliest_lead = forecast.lead_time[first_detection_idx]
-                earliest_valid = init_t.values + np.timedelta64(int(earliest_lead), "h")
-
-                earliest_results[init_t.values] = {
-                    "init_time": init_t.values,
-                    "lead_time": earliest_lead.values,
-                    "valid_time": earliest_valid,
-                    "found": True,
-                }
-            else:
-                earliest_results[init_t.values] = {
-                    "init_time": init_t.values,
-                    "lead_time": np.timedelta64("NaT"),
-                    "valid_time": np.datetime64("NaT"),
-                    "found": False,
-                }
-
-        # Convert to xarray Dataset
-        init_times = list(earliest_results.keys())
-        earliest_init_times = [r["init_time"] for r in earliest_results.values()]
-        earliest_lead_times = [r["lead_time"] for r in earliest_results.values()]
-        earliest_valid_times = [r["valid_time"] for r in earliest_results.values()]
-        detection_found = [r["found"] for r in earliest_results.values()]
-
-        result = xr.Dataset(
-            {
-                "earliest_init_time": xr.DataArray(
-                    earliest_init_times,
-                    coords={"init_time": init_times},
-                    dims=["init_time"],
-                ),
-                "earliest_lead_time": xr.DataArray(
-                    earliest_lead_times,
-                    coords={"init_time": init_times},
-                    dims=["init_time"],
-                ),
-                "earliest_valid_time": xr.DataArray(
-                    earliest_valid_times,
-                    coords={"init_time": init_times},
-                    dims=["init_time"],
-                ),
-                "detection_found": xr.DataArray(
-                    detection_found,
-                    coords={"init_time": init_times},
-                    dims=["init_time"],
-                ),
-            }
-        )
-
-        return result
+        detection_mask.name = self.name
+        return detection_mask
 
 
 class MaximumMAE(MAE):
@@ -1355,23 +1411,91 @@ class LandfallMixin:
         )
 
 
-# TODO: complete spatial displacement implementation
 class SpatialDisplacement(BaseMetric):
-    """Spatial displacement error metric.
+    """Spatial displacement error metric for atmospheric rivers and similar events.
 
-    Note: Not yet implemented.
+    Computes the great circle distance between the center of mass of forecast
+    and target spatial patterns.
     """
 
-    def __init__(self, *args, **kwargs):
-        super().__init__("LandfallDisplacement", *args, **kwargs)
+    def __init__(
+        self,
+        name: str = "spatial_displacement",
+        **kwargs: Any,
+    ):
+        super().__init__(name, **kwargs)
 
     def _compute_metric(
-        self,
-        forecast: xr.DataArray,
-        target: xr.DataArray,
-        **kwargs: Any,
+        self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
     ) -> Any:
-        raise NotImplementedError("SpatialDisplacement is not implemented yet")
+        def center_of_mass_ufunc(data):
+            """ufunc tooling to calculate the center of mass of a 2D array, returning
+            a tuple of the latitude and longitude indices, or np.nan tuple if no
+            non-zero values are present.
+            """
+            if (data > 0).any():
+                return ndimage.center_of_mass(data)
+            else:
+                return (np.nan, np.nan)
+
+        target_lat_idx, target_lon_idx = xr.apply_ufunc(
+            center_of_mass_ufunc,
+            target,
+            input_core_dims=[["latitude", "longitude"]],
+            output_core_dims=[[], []],
+            vectorize=True,
+            dask="allowed",
+        )
+
+        # Process target coordinates
+        target_lat_idx = np.round(target_lat_idx)
+        target_lon_idx = np.round(target_lon_idx)
+        target_lat_coords, target_lon_coords = utils.idx_to_coords(
+            target_lat_idx,
+            target_lon_idx,
+            target.latitude.values,
+            target.longitude.values,
+        )
+        target_coordinates = np.array([target_lat_coords, target_lon_coords])
+
+        # Process forecast coordinates
+        forecast_lat_idx, forecast_lon_idx = xr.apply_ufunc(
+            center_of_mass_ufunc,
+            forecast,
+            input_core_dims=[["latitude", "longitude"]],
+            output_core_dims=[[], []],
+            vectorize=True,
+            dask="allowed",
+        )
+        forecast_lat_idx = np.round(forecast_lat_idx)
+        forecast_lon_idx = np.round(forecast_lon_idx)
+        forecast_lat_coords, forecast_lon_coords = utils.idx_to_coords(
+            forecast_lat_idx,
+            forecast_lon_idx,
+            forecast.latitude.values,
+            forecast.longitude.values,
+        )
+        forecast_coordinates = np.array([forecast_lat_coords, forecast_lon_coords])
+
+        # Calculate haversine distance
+        distance = calc.haversine_distance(forecast_coordinates, target_coordinates)
+
+        # Create DataArray with all dimensions
+        result = xr.DataArray(
+            distance,
+            coords={"lead_time": forecast.lead_time, "valid_time": forecast.valid_time},
+            dims=["lead_time", "valid_time"],
+            name="spatial_displacement",
+        )
+
+        # Reduce over non-preserved dimensions (valid_time) by taking mean
+        time_dims_to_reduce = [
+            dim for dim in result.dims if dim not in self.preserve_dims
+        ]
+        if time_dims_to_reduce:
+            result = result.mean(dim=time_dims_to_reduce)
+
+        return result
 
 
 class LandfallDisplacement(LandfallMixin, BaseMetric):

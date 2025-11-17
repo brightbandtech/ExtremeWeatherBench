@@ -1,16 +1,17 @@
 from typing import Literal, Optional, Sequence, Union
 
 import numpy as np
+import numpy.typing as npt
+import regionmask
+import scores.categorical as categorical
 import shapely
 import xarray as xr
 
 from extremeweatherbench import utils
-from extremeweatherbench._cape import (
-    _compute_batch_parallel as compute_ml_cape_cin_parallel,
-)
-from extremeweatherbench._cape import (
-    _compute_batch_serial as compute_ml_cape_cin_serial,
-)
+
+epsilon: float = 0.6219569100577033  # Ratio of molecular weights (H2O/dry air)
+sat_press_0c: float = 6.112  # Saturation vapor pressure at 0°C (hPa)
+g0: float = 9.80665  # Standard gravity (m/s^2)
 
 
 def convert_from_cartesian_to_latlon(
@@ -34,6 +35,72 @@ def convert_from_cartesian_to_latlon(
         latitude.isel(latitude=lat_idx).values,
         longitude.isel(longitude=lon_idx).values,
     )
+
+
+def mixing_ratio(
+    partial_pressure: float | npt.NDArray, total_pressure: float | npt.NDArray
+) -> float | npt.NDArray[np.float64]:
+    r"""Calculate the mixing ratio of water vapor in air.
+
+    Uses the formula: $w = (\epsilon * e) / (p - e)$ where $\epsilon = 0.622$.
+
+    Args:
+        partial_pressure: Water vapor partial pressure in hPa.
+        total_pressure: Total atmospheric pressure in hPa.
+
+    Returns:
+        numpy.ndarray: Mixing ratio in kg/kg (dimensionless).
+
+    Notes:
+        - Mixing ratio is approximately constant with height for unsaturated air
+        - Values typically range from 0 to ~0.025 kg/kg in the atmosphere
+        - ε (epsilon) = 0.622 is the ratio of molecular weights (H2O/dry air)
+    """
+    # Suppress warnings for this specific calculation
+    with np.errstate(divide="ignore", invalid="ignore"):
+        return epsilon * partial_pressure / (total_pressure - partial_pressure)
+
+
+def saturation_vapor_pressure(
+    temperature: float | npt.NDArray,
+) -> npt.NDArray[np.float64]:
+    r"""Calculate saturation vapor pressure using the Clausius-Clapeyron equation.
+
+    Uses the Magnus formula approximation which is accurate for temperatures
+    between -40°C and +50°C. Formula:
+
+    $$e_ = 6.112 \times \exp\left(\frac{17.67*T}{T+243.5}\right)$$
+
+    Args:
+        temperature: Temperature values in Celsius (can be scalar or array).
+
+    Returns:
+        numpy.ndarray: Saturation vapor pressure values in hPa.
+
+    Notes:
+        - Based on the Magnus formula which is accurate within ±0.1% for typical
+          atmospheric temperatures
+        - Saturation vapor pressure increases exponentially with temperature
+        - At 0°C: ~6.11 hPa, at 20°C: ~23.4 hPa, at 30°C: ~42.4 hPa
+    """
+    # Suppress overflow warnings for this calculation
+    with np.errstate(over="ignore", invalid="ignore"):
+        return sat_press_0c * np.exp(17.67 * temperature / (temperature + 243.5))
+
+
+def saturation_mixing_ratio(
+    pressure: float | npt.NDArray, temperature: float | npt.NDArray
+) -> npt.NDArray[np.float64]:
+    """Calculates the saturation mixing ratio of a parcel.
+
+    Args:
+        pressure: Pressure values in hPa
+        temperature: Temperature values in C
+
+    Returns:
+        Saturation mixing ratio values in kg/kg
+    """
+    return mixing_ratio(saturation_vapor_pressure(temperature), pressure)
 
 
 def haversine_distance(
@@ -110,7 +177,7 @@ def orography(ds: xr.Dataset) -> xr.DataArray:
     """
 
     if "geopotential_at_surface" in ds.variables:
-        return ds["geopotential_at_surface"].isel(time=0) / 9.80665
+        return ds["geopotential_at_surface"].isel(time=0) / g0
     else:
         # Import inputs here to avoid circular import
         from extremeweatherbench import inputs
@@ -124,7 +191,7 @@ def orography(ds: xr.Dataset) -> xr.DataArray:
             era5.isel(time=1000000)["geopotential_at_surface"].sel(
                 latitude=ds.latitude, longitude=ds.longitude
             )
-            / 9.80665
+            / g0
         )
 
 
@@ -196,7 +263,7 @@ def geopotential_thickness(
     if geopotential:
         geopotential_thickness = (
             geopotential_heights - geopotential_height_bottom
-        ) / 9.80665
+        ) / g0
     else:
         geopotential_thickness = geopotential_heights - geopotential_height_bottom
     geopotential_thickness.attrs = dict(
@@ -251,12 +318,64 @@ def nantrapezoid(
     return ret
 
 
+def specific_humidity_from_relative_humidity(
+    air_temperature: xr.DataArray, relative_humidity: xr.DataArray, levels: xr.DataArray
+) -> xr.DataArray:
+    """Compute specific humidity from relative humidity and air temperature.
+
+    Args:
+        air_temperature: Air temperature in Kelvin.
+        relative_humidity: Relative humidity (0-1 or 0-100 depending on data).
+        levels: Pressure levels in hPa.
+
+    Returns:
+        A DataArray of specific humidity in kg/kg.
+    """
+    # Compute saturation mixing ratio; air temperature must be in Kelvin
+    sat_mixing_ratio = saturation_mixing_ratio(levels, air_temperature - 273.15)
+
+    # Calculate specific humidity using saturation mixing ratio, epsilon,
+    # and relative humidity
+    mixing_ratio = (
+        epsilon
+        * sat_mixing_ratio
+        * relative_humidity
+        / (epsilon + sat_mixing_ratio * (1 - relative_humidity))
+    )
+    specific_humidity = mixing_ratio / (1 + mixing_ratio)
+    return specific_humidity
+
+
+def find_land_intersection(
+    mask: xr.DataArray, land_mask: Optional[xr.DataArray] = None
+) -> xr.DataArray:
+    """Find points where a data mask intersects with a land mask.
+
+    Args:
+        mask: a boolean mask of data locations that includes latitude and longitude
+        land_mask: a boolean mask of land locations
+
+    Returns:
+        a mask of points where AR overlaps with land
+    """
+    if land_mask is None:
+        land_mask = regionmask.defined_regions.natural_earth_v5_0_0.land_110.mask(
+            mask.longitude, mask.latitude
+        )
+        land_mask = land_mask.where(np.isnan(land_mask), 1).where(land_mask == 0, 0)
+
+    # Use the scores.categorical library to compute the binary mask (true positives)
+    contingency_manager = categorical.BinaryContingencyManager(mask, land_mask)
+    # return the true positive mask, where mask is true and land is true
+    return contingency_manager.tp
+
+
 def dewpoint_from_specific_humidity(pressure: float, specific_humidity: float) -> float:
     r"""Calculate dewpoint from specific humidity.
 
     This computation follows the methodology used in
-    `metpy.calc.dewpoint_from_specific_humidity`. Given specific humidity $q$,
-    mixing ratio $w$, and pressure $p$, we compute first $w = q / (1 - q)$ and
+    `metpy.calc.dewpoint_from_specific_humidity`. Given specific humidity $q$, mixing
+    ratio $w$, and pressure $p$, we compute first $w = q / (1 - q)$ and
     $e = p w / (w + \epsilon)$ where $\epsilon=0.622$ is the ratio of the molecular
     weights of water and dry air and $e$ is the partial pressure of water vapor.
 
@@ -276,183 +395,9 @@ def dewpoint_from_specific_humidity(pressure: float, specific_humidity: float) -
     # humidity to the interval [1e-10, 1], which addresses this and should preserve the
     # remaining physical constraints.
     w = specific_humidity / (1.0 - specific_humidity)
-    e = pressure * w / (w + 0.622)
-    T_d = 243.5 * np.log(e / 6.112) / (17.67 - np.log(e / 6.112))
+    e = pressure * w / (w + epsilon)
+    T_d = 243.5 * np.log(e / sat_press_0c) / (17.67 - np.log(e / sat_press_0c))
     return T_d + 273.15
-
-
-def compute_mixed_layer_cape(
-    pressure: xr.DataArray,
-    temperature: xr.DataArray,
-    dewpoint: xr.DataArray,
-    geopotential: xr.DataArray,
-    pressure_dim: str = "level",
-    depth: float = 100.0,
-    parallel: bool = True,
-) -> xr.DataArray:
-    """Compute mixed-layer CAPE from thermodynamic profiles.
-
-    This function applies the optimized CAPE/CIN calculation to xarray DataArrays,
-    handling both in-memory and Dask-backed arrays automatically. It supports arbitrary
-    dimensional layouts including multi-dimensional grids.
-
-    In general, we recommend using parallel=False whenever you are processing data with
-    less than ~1,000 profiles per chunk; otherwise, use parallel=True to take advantage
-    of batching at the chunk level.
-
-    We don't return the computed CIN here because it's not yet implemented correctly.
-
-    Args:
-        pressure: Pressure in hPa. Must have pressure_dim as one of its dimensions.
-        temperature: Temperature in Kelvin. Must be broadcastable against pressure.
-        dewpoint: Dewpoint in Kelvin. Must be broadcastable against pressure.
-        geopotential: Geopotential in m2/s2. Must be broadcastable against pressure.
-        pressure_dim: Name of the pressure level dimension (default: 'level').
-        depth: Mixed layer depth in hPa (default: 100.0).
-        parallel: If True, use Numba parallel processing within chunks (default: True).
-            Uses batched computation with prange for multi-threaded computation. Set to
-            False for serial processing
-
-    Returns:
-        Tuple of (cape, cin) as xarray DataArrays with pressure_dim removed.
-
-    Examples:
-        # Basic usage with parallel processing (default, recommended)
-        >>> cape, cin = compute_mixed_layer_cape(
-        ...     ds["pressure"],
-        ...     ds["temperature"],
-        ...     ds["dewpoint"],
-        ...     ds["geopotential"],
-        ...     pressure_dim="level",
-        ... )
-
-        # Dask distributed with large chunks - use parallel (excellent performance)
-        >>> # Dataset: 61 timesteps, 160 lat * 280 lon = ~45k profiles/chunk
-        >>> ds = xr.open_zarr("era5.zarr", chunks={"time": 1})
-        >>> cape, cin = compute_mixed_layer_cape(
-        ...     ds["pressure"],
-        ...     ds["temperature"],
-        ...     ds["dewpoint"],
-        ...     ds["geopotential"],
-        ...     parallel=True,  # Multi-threaded within each chunk
-        ... )
-
-        # Small chunks or debugging - use serial
-        >>> ds_small = xr.open_zarr("data.zarr", chunks={"profile": 100})
-        >>> cape, cin = compute_mixed_layer_cape(
-        ...     ds_small["pressure"],
-        ...     ds_small["temperature"],
-        ...     ds_small["dewpoint"],
-        ...     ds_small["geopotential"],
-        ...     parallel=False,  # Single-threaded, simpler behavior
-        ... )
-
-        # Isobaric data (pressure is 1D, others are multi-dimensional)
-        >>> cape, cin = compute_mixed_layer_cape(
-        ...     ds["pressure"],  # shape: (level,) - isobaric levels
-        ...     ds["temperature"],  # shape: (time, lat, lon, level)
-        ...     ds["dewpoint"],  # shape: (time, lat, lon, level)
-        ...     ds["geopotential"],  # shape: (time, lat, lon, level)
-        ...     pressure_dim="level",
-        ... )
-        # xarray automatically broadcasts pressure to match other dimensions
-
-    Notes:
-        - Temperature, dewpoint, and geopotential must have matching dimensions/shape
-        - Pressure can be 1D (just level) for isobaric data - will be broadcast
-            automatically
-        - The pressure_dim must be present in all input arrays with the same size
-        - Pressure levels should be in descending order (surface to top)
-        - For Dask arrays, pressure_dim MUST be in a single chunk
-        - Recommended chunking: All spatial dims in one chunk, 1 time step per chunk
-          Example: (time=1, lat=*, lon=*, level=*) where * means all values
-        - For large ERA5-like grids (lat * lon > 10k points): parallel=True is optimal
-        - Dask distributed + large chunks + parallel=True: ~8-10x speedup vs serial
-        - NumPy arrays: parallel=True provides multi-core speedup automatically
-        - The parallel overhead is negligible for chunks >1000 profiles
-    """
-
-    cape_batch_func = (
-        compute_ml_cape_cin_parallel if parallel else compute_ml_cape_cin_serial
-    )
-
-    # Define the wrapper function that will be applied
-    def _compute_cape_cin_wrapper(p, t, td, z):
-        """Wrapper to handle the conversion and calling of Numba function.
-
-        This expects p, t, td, z with shape (..., n_levels) where ... represents
-        any number of batch dimensions that will be flattened into n_profiles.
-
-        Note: Pressure (p) might be 1D (level,) for isobaric data while others
-        are multi-dimensional. We broadcast it to match if needed.
-        """
-
-        # Get the original shape (excluding the pressure level dimension which is last)
-        # Use temperature's shape as reference
-        original_shape = t.shape[:-1]
-        n_levels = t.shape[-1]
-
-        # Broadcast pressure if it's 1D (isobaric data)
-        if p.ndim == 1:
-            # Pressure is 1D: (level,) - broadcast to match temperature shape
-            # Create the target shape: (..., n_levels)
-            target_shape = t.shape
-            p = np.broadcast_to(p, target_shape)
-
-        # Reshape to (n_profiles, n_levels) by flattening all batch dimensions
-        n_profiles = np.prod(original_shape, dtype=int)
-
-        p_batch = p.reshape(n_profiles, n_levels)
-        t_batch = t.reshape(n_profiles, n_levels)
-        td_batch = td.reshape(n_profiles, n_levels)
-        z_batch = z.reshape(n_profiles, n_levels)
-
-        # Ensure arrays are contiguous and correct dtype
-        p_batch = np.ascontiguousarray(p_batch, dtype=np.float64)
-        t_batch = np.ascontiguousarray(t_batch, dtype=np.float64)
-        td_batch = np.ascontiguousarray(td_batch, dtype=np.float64)
-        z_batch = np.ascontiguousarray(z_batch, dtype=np.float64)
-
-        # Call the selected Numba batch function (parallel or serial)
-        cape_array, _ = cape_batch_func(
-            p_batch, t_batch, td_batch, z_batch, depth=depth
-        )
-
-        # Reshape back to original batch dimensions (removing pressure dimension)
-        cape_array = cape_array.reshape(original_shape)
-
-        return cape_array
-
-    # Use xarray.apply_ufunc to apply the wrapped interface
-    cape = xr.apply_ufunc(
-        _compute_cape_cin_wrapper,
-        pressure,
-        temperature,
-        dewpoint,
-        geopotential,
-        input_core_dims=[
-            [pressure_dim],
-            [pressure_dim],
-            [pressure_dim],
-            [pressure_dim],
-        ],
-        output_core_dims=[[]],  # CAPE has no pressure dimension
-        vectorize=False,  # We handle the batching ourselves
-        dask="parallelized",  # Enable Dask support
-        output_dtypes=[np.float64],  # Specify output types
-        dask_gufunc_kwargs={
-            "output_sizes": {},  # No new dimensions created
-        },
-    )
-
-    # Add metadata
-    cape.name = "cape"
-    cape.attrs = {
-        "long_name": "Convective Available Potential Energy",
-        "units": "J/kg",
-        "description": f"Mixed-layer CAPE computed over {depth} hPa depth",
-    }
-    return cape
 
 
 def find_landfalls(
