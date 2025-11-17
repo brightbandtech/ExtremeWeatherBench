@@ -260,7 +260,7 @@ def geopotential_thickness(
     if geopotential:
         geopotential_thickness = (
             geopotential_heights - geopotential_height_bottom
-        ) / 9.80665
+        ) / g0
     else:
         geopotential_thickness = geopotential_heights - geopotential_height_bottom
     geopotential_thickness.attrs = dict(
@@ -321,12 +321,12 @@ def specific_humidity_from_relative_humidity(
     """Compute specific humidity from relative humidity and air temperature.
 
     Args:
-        data: The xarray dataset to compute the specific humidity from containing
-        levels (hPa), air_temperature (Kelvin), and relative_humidity. If level is not
-        included in the dataset, assumed to be surface pressure.
+        air_temperature: Air temperature in Kelvin.
+        relative_humidity: Relative humidity (0-1 or 0-100 depending on data).
+        levels: Pressure levels in hPa.
 
     Returns:
-        A DataArray of specific humidity.
+        A DataArray of specific humidity in kg/kg.
     """
     # Compute saturation mixing ratio; air temperature must be in Kelvin
     sat_mixing_ratio = saturation_mixing_ratio(levels, air_temperature - 273.15)
@@ -392,6 +392,6 @@ def dewpoint_from_specific_humidity(pressure: float, specific_humidity: float) -
     # humidity to the interval [1e-10, 1], which addresses this and should preserve the
     # remaining physical constraints.
     w = specific_humidity / (1.0 - specific_humidity)
-    e = pressure * w / (w + 0.622)
-    T_d = 243.5 * np.log(e / 6.112) / (17.67 - np.log(e / 6.112))
+    e = pressure * w / (w + epsilon)
+    T_d = 243.5 * np.log(e / sat_press_0c) / (17.67 - np.log(e / sat_press_0c))
     return T_d + 273.15
