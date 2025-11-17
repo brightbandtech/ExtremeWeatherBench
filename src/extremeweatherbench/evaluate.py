@@ -298,6 +298,7 @@ def compute_case_operator(
     # Or, check if there aren't any dimensions
     elif len(forecast_ds.sizes) == 0 or len(target_ds.sizes) == 0:
         return pd.DataFrame(columns=OUTPUT_COLUMNS)
+
     # spatiotemporally align the target and forecast datasets dependent on the target
     aligned_forecast_ds, aligned_target_ds = (
         case_operator.target.maybe_align_forecast_to_target(forecast_ds, target_ds)
@@ -322,6 +323,7 @@ def compute_case_operator(
     explicitly_claimed_target_vars = set()
 
     for metric in case_operator.metric_list:
+        # Determine which variable pairs to evaluate for this metric
         if (metric.forecast_variable is not None) and (
             metric.target_variable is not None
         ):
@@ -338,6 +340,10 @@ def compute_case_operator(
             )
 
     for metric in case_operator.metric_list:
+        # Expand composite metrics into individual metrics
+        # (returns [self] for non-composite metrics)
+        metrics_to_evaluate = metric.maybe_expand_composite()
+
         # Determine which variable pairs to evaluate for this metric
         if metric.forecast_variable is not None and metric.target_variable is not None:
             # Expand DerivedVariable to output_variables if applicable
@@ -379,19 +385,31 @@ def compute_case_operator(
 
             variable_pairs = list(zip(forecast_vars_available, target_vars_available))
 
-        # Evaluate the metric for each variable pair
+        # Evaluate the metric(s) for each variable pair
         for forecast_var, target_var in variable_pairs:
-            results.append(
-                _evaluate_metric_and_return_df(
-                    forecast_ds=aligned_forecast_ds,
-                    target_ds=aligned_target_ds,
-                    forecast_variable=forecast_var,
-                    target_variable=target_var,
-                    metric=metric,
-                    case_operator=case_operator,
-                    **kwargs,
-                )
+            # Prepare kwargs for metric evaluation (handles composite setup)
+            forecast_var_str = derived._maybe_convert_variable_to_string(forecast_var)
+            target_var_str = derived._maybe_convert_variable_to_string(target_var)
+
+            metric_kwargs = metric.maybe_prepare_composite_kwargs(
+                forecast_data=aligned_forecast_ds[forecast_var_str],
+                target_data=aligned_target_ds[target_var_str],
+                **kwargs,
             )
+
+            # Evaluate each expanded metric
+            for single_metric in metrics_to_evaluate:
+                results.append(
+                    _evaluate_metric_and_return_df(
+                        forecast_ds=aligned_forecast_ds,
+                        target_ds=aligned_target_ds,
+                        forecast_variable=forecast_var,
+                        target_variable=target_var,
+                        metric=single_metric,
+                        case_operator=case_operator,
+                        **metric_kwargs,
+                    )
+                )
 
         # Cache the results of each metric if caching
         cache_dir = kwargs.get("cache_dir", None)
@@ -504,11 +522,13 @@ def _evaluate_metric_and_return_df(
         forecast_variable: The forecast variable to evaluate.
         target_variable: The target variable to evaluate.
         metric: The metric to evaluate.
-        case_operator: The case operator with metadata for the evaluation.
-        **kwargs: Additional keyword arguments to pass to metric computation.
+        case_operator: The case operator with metadata for evaluation.
+        **kwargs: Additional keyword arguments to pass to metric
+            computation.
 
     Returns:
-        A dataframe of the results with standard output schema columns.
+        A dataframe of the results with standard output schema
+        columns.
     """
 
     # Normalize variables to their string names if needed
@@ -706,6 +726,7 @@ def _build_datasets(
         forecast_ds = run_pipeline(
             case_operator.case_metadata, augmented_forecast, **kwargs
         )
+
     # Check if any dimension has zero length
     zero_length_dims = [dim for dim, size in forecast_ds.sizes.items() if size == 0]
     if zero_length_dims:

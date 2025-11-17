@@ -6,7 +6,6 @@ import importlib
 import inspect
 import logging
 import pathlib
-import threading
 from typing import Any, Callable, Optional, Sequence, Union
 
 import numpy as np
@@ -20,62 +19,6 @@ import yaml  # type: ignore[import]
 from joblib import Parallel
 
 logger = logging.getLogger(__name__)
-
-
-class ThreadSafeDict:
-    """A thread-safe dictionary implementation using locks.
-
-    This class provides a thread-safe wrapper around a standard dictionary,
-    ensuring atomic operations for getting, setting, and deleting items.
-    Useful for caching data that needs to be shared between threads safely.
-    """
-
-    def __init__(self):
-        self._data = {}
-        self._lock = threading.Lock()
-
-    def __setitem__(self, key, value):
-        with self._lock:
-            self._data[key] = value
-
-    def __getitem__(self, key):
-        with self._lock:
-            return self._data[key]
-
-    def __delitem__(self, key):
-        with self._lock:
-            del self._data[key]
-
-    def __contains__(self, key):
-        with self._lock:
-            return key in self._data
-
-    def get(self, key, default=None):
-        with self._lock:
-            return self._data.get(key, default)
-
-    def clear(self):
-        with self._lock:
-            self._data.clear()
-
-    def __len__(self):
-        with self._lock:
-            return len(self._data)
-
-    def keys(self):
-        with self._lock:
-            # Return a copy to prevent concurrent modification during iteration
-            return list(self._data.keys())
-
-    def values(self):
-        with self._lock:
-            # Return a copy to prevent concurrent modification during iteration
-            return list(self._data.values())
-
-    def items(self):
-        with self._lock:
-            # Return a copy to prevent concurrent modification during iteration
-            return list(self._data.items())
 
 
 def convert_longitude_to_360(longitude: float) -> float:

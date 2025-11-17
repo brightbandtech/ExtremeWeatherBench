@@ -1,10 +1,16 @@
 import abc
 import logging
-from typing import List, Optional, Sequence, Union
+from typing import TYPE_CHECKING, List, Optional, Sequence, Union
 
 import xarray as xr
 
 import extremeweatherbench.events.atmospheric_river as ar
+import extremeweatherbench.events.severe_convection as sc
+from extremeweatherbench import calc
+
+if TYPE_CHECKING:
+    from extremeweatherbench import cases
+
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +80,99 @@ class DerivedVariable(abc.ABC):
             A DataArray with the derived variable.
         """
         return self.derive_variable(data, *args, **kwargs)
+
+
+class CravenBrooksSignificantSevere(DerivedVariable):
+    """A derived variable that computes the Craven-Brooks significant severe
+    convection index.
+    """
+
+    variables = [
+        "air_temperature",
+        "eastward_wind",
+        "northward_wind",
+        "surface_eastward_wind",
+        "surface_northward_wind",
+        "air_pressure_at_mean_sea_level",
+        "geopotential",
+        "specific_humidity",
+    ]
+
+    def __init__(
+        self,
+        name: Optional[str] = "craven_brooks_significant_severe",
+        layer_depth: float = 100,
+    ):
+        super().__init__(name=name)
+        self.layer_depth = layer_depth
+
+    def derive_variable(
+        self, data: xr.Dataset, case_metadata: "cases.IndividualCase", *args, **kwargs
+    ) -> xr.DataArray:
+        """Derive the Craven-Brooks significant severe parameter."""
+        # Ensure 'level' is the last dimension for proper processing
+        if "level" in data.dims and list(data.dims)[-1] != "level":
+            # Get all dimensions and move 'level' to the end
+            dims = list(data.dims)
+            dims.remove("level")
+            dims.append("level")
+            data = data.transpose(*dims)
+        # Check if pressure levels need to be reversed
+        # CAPE expects descending order (surface to top)
+        needs_reverse = data["level"][0] < data["level"][-1]
+        if needs_reverse:
+            # Reverse and load to ensure contiguous arrays for Numba
+            logger.info("Reversing pressure levels")
+            data = data.isel(level=slice(None, None, -1))
+        # calculate dewpoint temperature if not present
+        if "dewpoint_temperature" not in data.data_vars:
+            # using relative humidity if present
+            if "relative_humidity" in data.data_vars:
+                data["dewpoint_temperature"] = data[
+                    "relative_humidity"
+                ] * calc.saturation_vapor_pressure(data["air_temperature"])
+            # or using specific humidity if present
+            elif "specific_humidity" in data.data_vars:
+                data["dewpoint_temperature"] = calc.dewpoint_from_specific_humidity(
+                    data["level"], data["specific_humidity"]
+                )
+            # and if neither are present, raise an error
+            else:
+                raise KeyError("No variable to compute dewpoint temperature.")
+        layer_depth = self.layer_depth
+        # Compute CAPE (geopotential in m²/s²)
+        cape = sc.compute_mixed_layer_cape(
+            pressure=data["level"],
+            temperature=data["air_temperature"],
+            dewpoint=data["dewpoint_temperature"],
+            geopotential=data["geopotential"],
+            pressure_dim="level",
+            depth=layer_depth,
+        )
+
+        shear = sc.low_level_shear(
+            eastward_wind=data["eastward_wind"],
+            northward_wind=data["northward_wind"],
+            surface_eastward_wind=data["surface_eastward_wind"],
+            surface_northward_wind=data["surface_northward_wind"],
+        )
+
+        cbss = cape * shear
+        logger.warning(
+            "CBSS evaluation requires max over valid_time dimension to "
+            "coincide with PPH/LSR being daily aggregates of reports"
+        )
+        cbss = cbss.max(
+            dim="valid_time",
+        )
+        cbss = cbss.expand_dims(valid_time=[case_metadata.start_date])
+        coords = {dim: cbss.coords[dim] for dim in cbss.sizes.keys() if dim != "level"}
+        return xr.DataArray(
+            cbss,
+            coords=coords,
+            dims=coords.keys(),
+            name=self.name,
+        )
 
 
 class AtmosphericRiverVariables(DerivedVariable):
