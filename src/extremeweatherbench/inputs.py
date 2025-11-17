@@ -928,12 +928,18 @@ class IBTrACS(TargetBase):
                 else:
                     raise
 
-            # Reset latitude and longitude to be data variables if they
-            # became coordinates during conversion
-            if "latitude" in data.coords:
-                data = data.reset_coords("latitude")
-            if "longitude" in data.coords:
-                data = data.reset_coords("longitude")
+            # Move latitude, longitude, and tc_name to coordinates,
+            # keeping only surface_wind_speed and
+            # air_pressure_at_mean_sea_level as data variables
+            coords_to_set = {}
+            for var in ["latitude", "longitude", "tc_name"]:
+                if var in data.data_vars:
+                    coords_to_set[var] = data[var]
+                elif var in data.coords:
+                    coords_to_set[var] = data.coords[var]
+
+            if coords_to_set:
+                data = data.set_coords(list(coords_to_set.keys()))
 
             return data
         else:
