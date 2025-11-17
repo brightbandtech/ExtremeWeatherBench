@@ -158,7 +158,10 @@ class CravenBrooksSignificantSevere(DerivedVariable):
         )
 
         cbss = cape * shear
-        logger.warning("CBSS evaluation requires max over valid_time dimension")
+        logger.warning(
+            "CBSS evaluation requires max over valid_time dimension to "
+            "coincide with PPH/LSR being daily aggregates of reports"
+        )
         cbss = cbss.max(
             dim="valid_time",
         )
