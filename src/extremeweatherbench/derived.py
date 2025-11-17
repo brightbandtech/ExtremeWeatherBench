@@ -127,8 +127,12 @@ def maybe_derive_variables(
         dataset.
     """
     # If there are no valid times, return the dataset unaltered; saves time as case will
-    # be skipped
-    if data.valid_time.size == 0:
+    # be skipped. Check for multiple possible time coordinate names.
+    time_coords = ["valid_time", "time", "init_time"]
+    has_time_data = any(
+        coord in data.coords and data[coord].size > 0 for coord in time_coords
+    )
+    if not has_time_data:
         logger.debug("No valid times found in the dataset.")
         return data
 
