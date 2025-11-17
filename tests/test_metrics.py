@@ -10,6 +10,14 @@ import xarray as xr
 from extremeweatherbench import metrics
 
 
+class TestConcreteMetric(metrics.BaseMetric):
+    def __init__(self, *args, **kwargs):
+        super().__init__("TestConcreteMetric", *args, **kwargs)
+
+    def _compute_metric(self, forecast, target, **kwargs):
+        return forecast - target
+
+
 class TestComputeDocstringMetaclass:
     """Tests for the ComputeDocstringMetaclass functionality."""
 
@@ -124,25 +132,36 @@ class TestBaseMetric:
     def test_name_property(self):
         """Test that the name property returns the class name."""
 
-        class TestConcreteMetric(metrics.BaseMetric):
-            def __init__(self, *args, **kwargs):
-                super().__init__("TestConcreteMetric", *args, **kwargs)
-
-            def _compute_metric(self, forecast, target, **kwargs):
-                return forecast - target
-
         metric = TestConcreteMetric()
         assert metric.name == "TestConcreteMetric"
 
+    def test_basemetric_maybe_prepare_composite_kwargs(self):
+        """Test that BaseMetric maybe_prepare_composite_kwargs method exists and is
+        callable."""
+        metric = TestConcreteMetric()
+        assert hasattr(metric, "maybe_prepare_composite_kwargs")
+        assert callable(metric.maybe_prepare_composite_kwargs)
+        forecast = xr.DataArray([1, 2, 3])
+        target = xr.DataArray([0, 1, 2])
+        assert metric.maybe_prepare_composite_kwargs(forecast, target) == {}
+
+    def test_basemetric_maybe_expand_composite(self):
+        """Test that BaseMetric maybe_expand_composite method exists and is
+        callable."""
+        metric = TestConcreteMetric()
+        assert hasattr(metric, "maybe_expand_composite")
+        assert callable(metric.maybe_expand_composite)
+        assert metric.maybe_expand_composite() == [metric]
+
+    def test_basemetric_is_composite(self):
+        """Test that BaseMetric is_composite method exists and is callable."""
+        metric = TestConcreteMetric()
+        assert hasattr(metric, "is_composite")
+        assert callable(metric.is_composite)
+        assert not metric.is_composite()
+
     def test_compute_metric_method_exists(self):
         """Test that compute_metric method exists and is callable."""
-
-        class TestConcreteMetric(metrics.BaseMetric):
-            def __init__(self, *args, **kwargs):
-                super().__init__("TestConcreteMetric", *args, **kwargs)
-
-            def _compute_metric(self, forecast, target, **kwargs):
-                return forecast - target
 
         metric = TestConcreteMetric()
         assert hasattr(metric, "compute_metric")
@@ -1196,3 +1215,225 @@ class TestMetricIntegration:
         for class_name, cls in all_metric_classes:
             assert hasattr(metrics, class_name)
             assert callable(getattr(metrics, class_name))
+
+
+class TestThresholdMetricComposite:
+    """Tests for ThresholdMetric composite functionality."""
+
+    def test_composite_with_multiple_metrics(self):
+        """Test composite metric with multiple threshold metrics."""
+        # Create composite metric with multiple metrics
+        composite = metrics.ThresholdMetric(
+            metrics=[metrics.CSI, metrics.FAR, metrics.Accuracy],
+            forecast_threshold=15000,
+            target_threshold=0.3,
+        )
+
+        # Composite should have instances
+        assert composite.is_composite()
+        assert len(composite._metric_instances) == 3
+
+        # Each instance should be properly configured
+        for inst in composite._metric_instances:
+            assert inst.forecast_threshold == 15000
+            assert inst.target_threshold == 0.3
+
+    def test_composite_maybe_prepare_kwargs(self):
+        """Test that composite prepares kwargs with transformed manager."""
+        composite = metrics.ThresholdMetric(
+            metrics=[metrics.CSI, metrics.FAR],
+            forecast_threshold=15000,
+            target_threshold=0.3,
+            preserve_dims="x",
+        )
+
+        forecast = xr.DataArray([[15500, 14000]], dims=["x", "y"])
+        target = xr.DataArray([[0.4, 0.2]], dims=["x", "y"])
+
+        # Should prepare kwargs with transformed manager
+        kwargs = composite.maybe_prepare_composite_kwargs(
+            forecast, target, some_param="value"
+        )
+
+        assert "transformed_manager" in kwargs
+        assert "forecast_threshold" in kwargs
+        assert "target_threshold" in kwargs
+        assert "preserve_dims" in kwargs
+        assert kwargs["some_param"] == "value"
+
+    def test_composite_with_single_metric_no_transformed_manager(self):
+        """Test that single metric composite doesn't add transformed manager."""
+        composite = metrics.ThresholdMetric(
+            metrics=[metrics.CSI],
+            forecast_threshold=15000,
+            target_threshold=0.3,
+        )
+
+        forecast = xr.DataArray([[15500, 14000]], dims=["x", "y"])
+        target = xr.DataArray([[0.4, 0.2]], dims=["x", "y"])
+
+        # Should NOT add transformed_manager for single metric
+        kwargs = composite.maybe_prepare_composite_kwargs(forecast, target)
+
+        assert "transformed_manager" not in kwargs
+
+    def test_non_composite_maybe_prepare_kwargs(self):
+        """Test that non-composite metrics don't add transformed manager."""
+        metric = metrics.CSI(forecast_threshold=15000, target_threshold=0.3)
+
+        forecast = xr.DataArray([[15500, 14000]], dims=["x", "y"])
+        target = xr.DataArray([[0.4, 0.2]], dims=["x", "y"])
+
+        kwargs = metric.maybe_prepare_composite_kwargs(
+            forecast, target, test_param="test"
+        )
+
+        # Should just copy base kwargs
+        assert "transformed_manager" not in kwargs
+        assert kwargs["test_param"] == "test"
+
+
+class TestThresholdMetricMethods:
+    """Tests for specific ThresholdMetric methods."""
+
+    def test_is_composite_returns_true_for_composite(self):
+        """Test is_composite returns True for composite metrics."""
+        composite = metrics.ThresholdMetric(
+            metrics=[metrics.CSI, metrics.FAR],
+            forecast_threshold=15000,
+            target_threshold=0.3,
+        )
+        assert composite.is_composite() is True
+
+    def test_is_composite_returns_false_for_non_composite(self):
+        """Test is_composite returns False for non-composite metrics."""
+        metric = metrics.CSI(forecast_threshold=15000, target_threshold=0.3)
+        assert metric.is_composite() is False
+
+    def test_is_composite_returns_false_for_empty_metrics_list(self):
+        """Test is_composite returns False when metrics list is empty."""
+        metric = metrics.ThresholdMetric(
+            metrics=[],
+            forecast_threshold=15000,
+            target_threshold=0.3,
+        )
+        assert metric.is_composite() is False
+
+    def test_maybe_expand_composite_returns_instances(self):
+        """Test maybe_expand_composite returns metric instances."""
+        composite = metrics.ThresholdMetric(
+            metrics=[metrics.CSI, metrics.FAR, metrics.Accuracy],
+            forecast_threshold=15000,
+            target_threshold=0.3,
+        )
+        expanded = composite.maybe_expand_composite()
+
+        assert len(expanded) == 3
+        assert isinstance(expanded[0], metrics.CSI)
+        assert isinstance(expanded[1], metrics.FAR)
+        assert isinstance(expanded[2], metrics.Accuracy)
+
+    def test_maybe_expand_composite_returns_self_for_non_composite(self):
+        """Test maybe_expand_composite returns [self] for non-composite."""
+        metric = metrics.CSI(forecast_threshold=15000, target_threshold=0.3)
+        expanded = metric.maybe_expand_composite()
+
+        assert len(expanded) == 1
+        assert expanded[0] is metric
+
+    def test_maybe_expand_composite_empty_list(self):
+        """Test maybe_expand_composite with empty metrics list."""
+        metric = metrics.ThresholdMetric(
+            metrics=[],
+            forecast_threshold=15000,
+            target_threshold=0.3,
+        )
+        expanded = metric.maybe_expand_composite()
+
+        assert len(expanded) == 1
+        assert expanded[0] is metric
+
+    def test_maybe_prepare_composite_kwargs_preserves_base_kwargs(self):
+        """Test that base kwargs are preserved."""
+        metric = metrics.CSI(forecast_threshold=15000, target_threshold=0.3)
+        forecast = xr.DataArray([[15500, 14000]], dims=["x", "y"])
+        target = xr.DataArray([[0.4, 0.2]], dims=["x", "y"])
+
+        kwargs = metric.maybe_prepare_composite_kwargs(
+            forecast, target, custom_param="test_value", another_param=42
+        )
+
+        assert kwargs["custom_param"] == "test_value"
+        assert kwargs["another_param"] == 42
+
+    def test_maybe_prepare_composite_kwargs_no_manager_for_non_composite(self):
+        """Test no transformed_manager added for non-composite."""
+        metric = metrics.CSI(forecast_threshold=15000, target_threshold=0.3)
+        forecast = xr.DataArray([[15500, 14000]], dims=["x", "y"])
+        target = xr.DataArray([[0.4, 0.2]], dims=["x", "y"])
+
+        kwargs = metric.maybe_prepare_composite_kwargs(forecast, target)
+
+        assert "transformed_manager" not in kwargs
+
+    def test_maybe_prepare_composite_kwargs_adds_manager_for_composite(self):
+        """Test transformed_manager added for multi-metric composite."""
+        composite = metrics.ThresholdMetric(
+            metrics=[metrics.CSI, metrics.FAR],
+            forecast_threshold=15000,
+            target_threshold=0.3,
+            preserve_dims="x",
+        )
+        forecast = xr.DataArray([[15500, 14000]], dims=["x", "y"])
+        target = xr.DataArray([[0.4, 0.2]], dims=["x", "y"])
+
+        kwargs = composite.maybe_prepare_composite_kwargs(forecast, target)
+
+        assert "transformed_manager" in kwargs
+        assert kwargs["forecast_threshold"] == 15000
+        assert kwargs["target_threshold"] == 0.3
+        assert kwargs["preserve_dims"] == "x"
+
+    def test_maybe_prepare_composite_kwargs_no_manager_single_metric(self):
+        """Test no transformed_manager for single-metric composite."""
+        composite = metrics.ThresholdMetric(
+            metrics=[metrics.CSI],
+            forecast_threshold=15000,
+            target_threshold=0.3,
+            preserve_dims="x",
+        )
+        forecast = xr.DataArray([[15500, 14000]], dims=["x", "y"])
+        target = xr.DataArray([[0.4, 0.2]], dims=["x", "y"])
+
+        kwargs = composite.maybe_prepare_composite_kwargs(forecast, target)
+
+        # Single metric composite shouldn't add transformed_manager
+        assert "transformed_manager" not in kwargs
+
+
+class TestBaseMetricVariableValidation:
+    """Tests for BaseMetric variable validation."""
+
+    def test_only_forecast_variable_raises_error(self):
+        """Test that providing only forecast_variable raises error."""
+        with pytest.raises(ValueError, match="Both forecast_variable"):
+            metrics.MAE(forecast_variable="temp", target_variable=None)
+
+    def test_only_target_variable_raises_error(self):
+        """Test that providing only target_variable raises error."""
+        with pytest.raises(ValueError, match="Both forecast_variable"):
+            metrics.MAE(forecast_variable=None, target_variable="temp")
+
+    def test_both_variables_provided(self):
+        """Test that providing both variables works."""
+        # Should not raise error
+        metric = metrics.MAE(forecast_variable="temp", target_variable="temp")
+        assert metric.forecast_variable == "temp"
+        assert metric.target_variable == "temp"
+
+    def test_no_variables_provided(self):
+        """Test that providing no variables works."""
+        # Should not raise error
+        metric = metrics.MAE()
+        assert metric.forecast_variable is None
+        assert metric.target_variable is None
