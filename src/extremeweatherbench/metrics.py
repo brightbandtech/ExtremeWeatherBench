@@ -212,7 +212,7 @@ class ThresholdMetric(BaseMetric):
         self.metrics = metrics or []
 
         # If metrics provided, instantiate them
-        if self.metrics:
+        if self.metrics is not None:
             self._metric_instances = [
                 (
                     metric_cls(
