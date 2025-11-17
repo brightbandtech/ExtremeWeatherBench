@@ -7,6 +7,8 @@ import pytest
 import xarray as xr
 from click import testing
 
+from extremeweatherbench import calc
+
 
 def make_sample_gridded_obs_dataset():
     time = pd.date_range("2021-06-20", freq="3h", periods=200)
@@ -391,11 +393,11 @@ def sample_calc_dataset():
             ),
             "geopotential": (
                 ["time", "level", "latitude", "longitude"],
-                np.random.normal(5000, 1000, data_shape_4d) * 9.80665,
+                np.random.normal(5000, 1000, data_shape_4d) * calc.g0,
             ),
             "geopotential_at_surface": (
                 ["time", "latitude", "longitude"],
-                np.random.normal(500, 200, data_shape_3d) * 9.80665,
+                np.random.normal(500, 200, data_shape_3d) * calc.g0,
             ),
             "eastward_wind": (
                 ["time", "level", "latitude", "longitude"],

@@ -283,7 +283,8 @@ def compute_case_operator(
         if isinstance(metric, type):
             case_operator.metric_list[i] = metric()
             logger.warning(
-                "Metric %s instantiated with default parameters", metric.name
+                "Metric %s instantiated with default parameters",
+                case_operator.metric_list[i].name,
             )
         if not isinstance(case_operator.metric_list[i], metrics.BaseMetric):
             raise TypeError(f"Metric must be a BaseMetric instance, got {type(metric)}")

@@ -1,9 +1,16 @@
-from typing import Literal, Sequence, Union
+from typing import Literal, Optional, Sequence, Union
 
 import numpy as np
+import numpy.typing as npt
+import regionmask
+import scores.categorical as categorical
 import xarray as xr
 
 sat_press_0c: float = 6.112  # Saturation vapor pressure at 0°C (hPa)
+
+epsilon: float = 0.6219569100577033  # Ratio of molecular weights (H2O/dry air)
+sat_press_0c: float = 6.112  # Saturation vapor pressure at 0°C (hPa)
+g0: float = 9.80665  # Standard gravity (m/s^2)
 
 
 def convert_from_cartesian_to_latlon(
@@ -27,6 +34,72 @@ def convert_from_cartesian_to_latlon(
         latitude.isel(latitude=lat_idx).values,
         longitude.isel(longitude=lon_idx).values,
     )
+
+
+def mixing_ratio(
+    partial_pressure: float | npt.NDArray, total_pressure: float | npt.NDArray
+) -> float | npt.NDArray[np.float64]:
+    r"""Calculate the mixing ratio of water vapor in air.
+
+    Uses the formula: $w = (\epsilon * e) / (p - e)$ where $\epsilon = 0.622$.
+
+    Args:
+        partial_pressure: Water vapor partial pressure in hPa.
+        total_pressure: Total atmospheric pressure in hPa.
+
+    Returns:
+        numpy.ndarray: Mixing ratio in kg/kg (dimensionless).
+
+    Notes:
+        - Mixing ratio is approximately constant with height for unsaturated air
+        - Values typically range from 0 to ~0.025 kg/kg in the atmosphere
+        - ε (epsilon) = 0.622 is the ratio of molecular weights (H2O/dry air)
+    """
+    # Suppress warnings for this specific calculation
+    with np.errstate(divide="ignore", invalid="ignore"):
+        return epsilon * partial_pressure / (total_pressure - partial_pressure)
+
+
+def saturation_vapor_pressure(
+    temperature: float | npt.NDArray,
+) -> npt.NDArray[np.float64]:
+    r"""Calculate saturation vapor pressure using the Clausius-Clapeyron equation.
+
+    Uses the Magnus formula approximation which is accurate for temperatures
+    between -40°C and +50°C. Formula:
+
+    $$e_ = 6.112 \times \exp\left(\frac{17.67*T}{T+243.5}\right)$$
+
+    Args:
+        temperature: Temperature values in Celsius (can be scalar or array).
+
+    Returns:
+        numpy.ndarray: Saturation vapor pressure values in hPa.
+
+    Notes:
+        - Based on the Magnus formula which is accurate within ±0.1% for typical
+          atmospheric temperatures
+        - Saturation vapor pressure increases exponentially with temperature
+        - At 0°C: ~6.11 hPa, at 20°C: ~23.4 hPa, at 30°C: ~42.4 hPa
+    """
+    # Suppress overflow warnings for this calculation
+    with np.errstate(over="ignore", invalid="ignore"):
+        return sat_press_0c * np.exp(17.67 * temperature / (temperature + 243.5))
+
+
+def saturation_mixing_ratio(
+    pressure: float | npt.NDArray, temperature: float | npt.NDArray
+) -> npt.NDArray[np.float64]:
+    """Calculates the saturation mixing ratio of a parcel.
+
+    Args:
+        pressure: Pressure values in hPa
+        temperature: Temperature values in C
+
+    Returns:
+        Saturation mixing ratio values in kg/kg
+    """
+    return mixing_ratio(saturation_vapor_pressure(temperature), pressure)
 
 
 def haversine_distance(
@@ -103,7 +176,7 @@ def orography(ds: xr.Dataset) -> xr.DataArray:
     """
 
     if "geopotential_at_surface" in ds.variables:
-        return ds["geopotential_at_surface"].isel(time=0) / 9.80665
+        return ds["geopotential_at_surface"].isel(time=0) / g0
     else:
         # Import inputs here to avoid circular import
         from extremeweatherbench import inputs
@@ -117,7 +190,7 @@ def orography(ds: xr.Dataset) -> xr.DataArray:
             era5.isel(time=1000000)["geopotential_at_surface"].sel(
                 latitude=ds.latitude, longitude=ds.longitude
             )
-            / 9.80665
+            / g0
         )
 
 
@@ -244,6 +317,58 @@ def nantrapezoid(
     return ret
 
 
+def specific_humidity_from_relative_humidity(
+    air_temperature: xr.DataArray, relative_humidity: xr.DataArray, levels: xr.DataArray
+) -> xr.DataArray:
+    """Compute specific humidity from relative humidity and air temperature.
+
+    Args:
+        data: The xarray dataset to compute the specific humidity from containing
+        levels (hPa), air_temperature (Kelvin), and relative_humidity. If level is not
+        included in the dataset, assumed to be surface pressure.
+
+    Returns:
+        A DataArray of specific humidity.
+    """
+    # Compute saturation mixing ratio; air temperature must be in Kelvin
+    sat_mixing_ratio = saturation_mixing_ratio(levels, air_temperature - 273.15)
+
+    # Calculate specific humidity using saturation mixing ratio, epsilon,
+    # and relative humidity
+    mixing_ratio = (
+        epsilon
+        * sat_mixing_ratio
+        * relative_humidity
+        / (epsilon + sat_mixing_ratio * (1 - relative_humidity))
+    )
+    specific_humidity = mixing_ratio / (1 + mixing_ratio)
+    return specific_humidity
+
+
+def find_land_intersection(
+    mask: xr.DataArray, land_mask: Optional[xr.DataArray] = None
+) -> xr.DataArray:
+    """Find points where a data mask intersects with a land mask.
+
+    Args:
+        mask: a boolean mask of data locations that includes latitude and longitude
+        land_mask: a boolean mask of land locations
+
+    Returns:
+        a mask of points where AR overlaps with land
+    """
+    if land_mask is None:
+        land_mask = regionmask.defined_regions.natural_earth_v5_0_0.land_110.mask(
+            mask.longitude, mask.latitude
+        )
+        land_mask = land_mask.where(np.isnan(land_mask), 1).where(land_mask == 0, 0)
+
+    # Use the scores.categorical library to compute the binary mask (true positives)
+    contingency_manager = categorical.BinaryContingencyManager(mask, land_mask)
+    # return the true positive mask, where mask is true and land is true
+    return contingency_manager.tp
+
+
 def dewpoint_from_specific_humidity(pressure: float, specific_humidity: float) -> float:
     r"""Calculate dewpoint from specific humidity.
 
@@ -272,26 +397,3 @@ def dewpoint_from_specific_humidity(pressure: float, specific_humidity: float) -
     e = pressure * w / (w + 0.622)
     T_d = 243.5 * np.log(e / 6.112) / (17.67 - np.log(e / 6.112))
     return T_d + 273.15
-
-
-def saturation_vapor_pressure(temperature: Union[float, np.ndarray]) -> np.ndarray:
-    """Calculate saturation vapor pressure using the Clausius-Clapeyron equation.
-
-    Uses the Magnus formula approximation which is accurate for temperatures
-    between -40°C and +50°C. Formula: es = 6.112 * exp(17.67*T/(T+243.5))
-
-    Args:
-        temperature: Temperature values in Celsius (can be scalar or array).
-
-    Returns:
-        numpy.ndarray: Saturation vapor pressure values in hPa.
-
-    Notes:
-        - Based on the Magnus formula which is accurate within ±0.1% for typical
-          atmospheric temperatures
-        - Saturation vapor pressure increases exponentially with temperature
-        - At 0°C: ~6.11 hPa, at 20°C: ~23.4 hPa, at 30°C: ~42.4 hPa
-    """
-    # Suppress overflow warnings for this calculation
-    with np.errstate(over="ignore", invalid="ignore"):
-        return sat_press_0c * np.exp(17.67 * temperature / (temperature + 243.5))
