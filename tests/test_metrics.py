@@ -286,15 +286,19 @@ class TestThresholdMetrics:
         assert isinstance(result, xr.DataArray)
 
     def test_threshold_metric_cannot_instantiate_base_class(self):
-        """Test that ThresholdMetric base class cannot be instantiated directly."""
-        with pytest.raises(TypeError):
-            metrics.ThresholdMetric()
+        """Test that ThresholdMetric raises error when used without
+        subclass."""
+        # ThresholdMetric can be instantiated (for composite use), but
+        # calling _compute_metric directly should raise NotImplementedError
+        metric = metrics.ThresholdMetric()
+        forecast = xr.DataArray([[15500, 14000]], dims=["x", "y"])
+        target = xr.DataArray([[0.4, 0.2]], dims=["x", "y"])
+
+        with pytest.raises(NotImplementedError):
+            metric.compute_metric(forecast, target)
 
     def test_cached_metrics_computation(self):
-        """Test that cached metrics can compute results."""
-        # Clear cache first
-        metrics.clear_contingency_cache()
-
+        """Test that metrics can compute results."""
         # Create simple test data
         forecast = xr.DataArray([[15500, 14000], [16000, 14500]], dims=["x", "y"])
         target = xr.DataArray([[0.4, 0.2], [0.5, 0.25]], dims=["x", "y"])
@@ -318,11 +322,7 @@ class TestThresholdMetrics:
         assert isinstance(fp_result, xr.DataArray)
 
     def test_cache_efficiency(self):
-        """Test that cache is shared across metrics with same thresholds."""
-        # Clear cache first
-        metrics.clear_contingency_cache()
-        initial_cache_size = len(metrics._GLOBAL_CONTINGENCY_CACHE)
-
+        """Test that multiple metrics with same thresholds compute correctly."""
         forecast = xr.DataArray([[15500, 14000], [16000, 14500]], dims=["x", "y"])
         target = xr.DataArray([[0.4, 0.2], [0.5, 0.25]], dims=["x", "y"])
 
@@ -331,53 +331,47 @@ class TestThresholdMetrics:
         far_metric = metrics.FAR(forecast_threshold=15000, target_threshold=0.3)
         tp_metric = metrics.TP(forecast_threshold=15000, target_threshold=0.3)
 
-        # First computation should create cache entry
-        csi_metric.compute_metric(forecast, target, preserve_dims="x")
-        cache_size_after_first = len(metrics._GLOBAL_CONTINGENCY_CACHE)
+        # All metrics should compute successfully
+        csi_result = csi_metric.compute_metric(forecast, target, preserve_dims="x")
+        far_result = far_metric.compute_metric(forecast, target, preserve_dims="x")
+        tp_result = tp_metric.compute_metric(forecast, target, preserve_dims="x")
 
-        # Subsequent computations should reuse cache
-        far_metric.compute_metric(forecast, target, preserve_dims="x")
-        tp_metric.compute_metric(forecast, target, preserve_dims="x")
-        cache_size_after_all = len(metrics._GLOBAL_CONTINGENCY_CACHE)
-
-        # Should have exactly one more cache entry than initial
-        assert cache_size_after_first == initial_cache_size + 1
-        assert cache_size_after_all == cache_size_after_first
+        # All should return valid xarray DataArrays
+        assert isinstance(csi_result, xr.DataArray)
+        assert isinstance(far_result, xr.DataArray)
+        assert isinstance(tp_result, xr.DataArray)
 
     def test_mathematical_correctness(self):
         """Test that ratios sum to 1 and CSI/FAR are mathematically correct."""
-        # Clear cache
-        metrics.clear_contingency_cache()
-
         # Simple test case for verification
         forecast = xr.DataArray([[15500, 14000], [16000, 14500]], dims=["x", "y"])
         target = xr.DataArray([[0.4, 0.2], [0.5, 0.25]], dims=["x", "y"])
 
         # Get all contingency table components
-        tp_result = metrics.TP(15000, 0.3).compute_metric(
-            forecast, target, preserve_dims="x"
-        )
-        fp_result = metrics.FP(15000, 0.3).compute_metric(
-            forecast, target, preserve_dims="x"
-        )
-        tn_result = metrics.TN(15000, 0.3).compute_metric(
-            forecast, target, preserve_dims="x"
-        )
-        fn_result = metrics.FN(15000, 0.3).compute_metric(
-            forecast, target, preserve_dims="x"
-        )
+        tp_result = metrics.TP(
+            forecast_threshold=15000, target_threshold=0.3
+        ).compute_metric(forecast, target, preserve_dims="x")
+        fp_result = metrics.FP(
+            forecast_threshold=15000, target_threshold=0.3
+        ).compute_metric(forecast, target, preserve_dims="x")
+        tn_result = metrics.TN(
+            forecast_threshold=15000, target_threshold=0.3
+        ).compute_metric(forecast, target, preserve_dims="x")
+        fn_result = metrics.FN(
+            forecast_threshold=15000, target_threshold=0.3
+        ).compute_metric(forecast, target, preserve_dims="x")
 
         # Ratios should sum to 1
         total = tp_result + fp_result + tn_result + fn_result
         np.testing.assert_allclose(total.values, [1.0, 1.0], rtol=1e-10)
 
         # CSI and FAR should be reasonable
-        csi_result = metrics.CSI(15000, 0.3).compute_metric(
-            forecast, target, preserve_dims="x"
-        )
-        far_result = metrics.FAR(15000, 0.3).compute_metric(
-            forecast, target, preserve_dims="x"
-        )
+        csi_result = metrics.CSI(
+            forecast_threshold=15000, target_threshold=0.3
+        ).compute_metric(forecast, target, preserve_dims="x")
+        far_result = metrics.FAR(
+            forecast_threshold=15000, target_threshold=0.3
+        ).compute_metric(forecast, target, preserve_dims="x")
 
         # CSI should be between 0 and 1
         assert np.all(csi_result.values >= 0)
