@@ -32,7 +32,6 @@ class DerivedVariable(abc.ABC):
     """
 
     variables: List[str]
-    requires_target_dataset: bool = False
 
     def __init__(
         self,
@@ -112,6 +111,16 @@ class TropicalCycloneTrackVariables(DerivedVariable):
     ]
     # Needs target data for track filtering
     requires_target_dataset = True
+
+    def __init__(
+        self,
+        output_variables: Optional[List[str]] = [
+            "surface_wind_speed",
+            "air_pressure_at_mean_sea_level",
+        ],
+        name: Optional[str] = None,
+    ):
+        super().__init__(output_variables=output_variables, name=name)
 
     def get_or_compute_tracks(self, data: xr.Dataset, *args, **kwargs) -> xr.Dataset:
         """Get cached track data or compute if not already cached.
