@@ -33,17 +33,26 @@ def generate_tc_tracks_by_init_time(
 ) -> xr.Dataset:
     """Process all init_times and detect tropical cyclones.
 
+    This function is the main entry point for the tropical cyclone track detection
+    algorithms. It utilizes valid_time and init_times (in the case of forecasts) to
+    calculate tropical cyclone tracks.
+
+    The validation process follows TempestExtremes's approach closely, which involves
+    identifying peaks in the sea level pressure field, closed contours of sea level
+    pressure and geopotential thickness, a minimum spatiotemporal distance between valid
+    track points, and a minimum number of points in a track.
+
     Args:
         sea_level_pressure: Sea level pressure DataArray
         wind_speed: Wind speed DataArray
         geopotential_thickness: Geopotential thickness DataArray (optional)
         tc_track_analysis_data: Tropical cyclone track analysis data
-        max_temporal_hours: Maximum temporal window from init_time
-        max_spatial_distance_degrees: Max spatial distance for TC track
-            data filtering
-        min_distance: Minimum distance between detected peaks
         slp_contour_magnitude: SLP contour threshold for validation
         dz_contour_magnitude: DZ contour threshold for validation
+        min_distance: Minimum distance between detected peaks
+        max_spatial_distance_degrees: Max spatial distance for TC track
+            data filtering
+        max_temporal_hours: Maximum temporal window from init_time
         use_contour_validation: Whether to use contour validation
         min_track_length: Minimum consecutive lead times for valid tracks
 
@@ -186,7 +195,7 @@ def _process_single_init_time(
     use_contour_validation: bool,
     min_track_length: int,
 ) -> dict:
-    """Process TC detection for single init_time (vectorized version).
+    """Process tropical cyclone track detection for a single init_time.
 
     Args:
         slp_data: Sea level pressure (lead_time, lat, lon)
@@ -252,7 +261,6 @@ def _process_single_init_time(
 
         peaks = _find_peaks_batch(
             slp_slice,
-            wind_slice,
             dz_slice,
             timestep_idx,
             valid_times=valid_times_seq,
@@ -685,7 +693,6 @@ def _safe_extract_value(
 
 def _find_peaks_batch(
     slp_slice: npt.NDArray,
-    wind_slice: npt.NDArray,
     dz_slice: Optional[npt.NDArray],
     timestep_idx: int,
     valid_times: list,
@@ -705,7 +712,6 @@ def _find_peaks_batch(
 
     Args:
         slp_slice: Single time slice of SLP data
-        wind_slice: Single time slice of wind data (unused here)
         dz_slice: Single time slice of DZ data
         timestep_idx: Index of current timestep
         valid_times: List of valid times for all timesteps
