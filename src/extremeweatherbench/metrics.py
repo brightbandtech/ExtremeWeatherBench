@@ -166,7 +166,69 @@ class BaseMetric(abc.ABC, metaclass=ComputeDocstringMetaclass):
         return base_kwargs.copy()
 
 
-class ThresholdMetric(BaseMetric):
+class CompositeMetric(BaseMetric):
+    """Base class for composite metrics.
+
+    This class provides common functionality for composite metrics.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._metric_instances: list["BaseMetric"] = []
+
+    def maybe_expand_composite(self) -> Sequence["BaseMetric"]:
+        """Expand composite metrics into individual metrics.
+
+        Returns:
+            List containing just this metric.
+        """
+        if self._metric_instances:
+            return self._metric_instances
+        return [self]
+
+    def is_composite(self) -> bool:
+        """Check if this is a composite metric.
+
+        Returns:
+            True if composite (has sub-metrics), False otherwise.
+        """
+        return bool(self._metric_instances)
+
+    @abc.abstractmethod
+    def maybe_prepare_composite_kwargs(
+        self,
+        forecast_data: xr.DataArray,
+        target_data: xr.DataArray,
+        **base_kwargs,
+    ) -> dict:
+        """Prepare kwargs for composite metric evaluation.
+
+        Returns:
+            Dictionary of kwargs (unchanged for composite metrics).
+        """
+
+    def _compute_metric(
+        self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
+    ) -> Any:
+        """Compute metric (not supported for CompositeMetric base).
+
+        CompositeMetric must be subclassed (like ThresholdMetric, LandfallMetric)
+        or used as a composite with metrics list.
+
+        Args:
+            forecast: The forecast DataArray.
+            target: The target DataArray.
+            **kwargs: Additional keyword arguments.
+        """
+        raise NotImplementedError(
+            "CompositeMetric._compute_metric must be implemented "
+            "by subclasses (ThresholdMetric, LandfallMetric) or use "
+            "CompositeMetric as a composite with metrics=[...] list. Composites are "
+            "automatically expanded in the evaluation pipeline."
+        )
+
+
+class ThresholdMetric(CompositeMetric):
     """Base class for threshold-based metrics.
 
     This class provides common functionality for metrics that require
@@ -270,26 +332,6 @@ class ThresholdMetric(BaseMetric):
         transformed = binary_contingency_manager.transform(preserve_dims=preserve_dims)
 
         return transformed
-
-    def maybe_expand_composite(self) -> Sequence["BaseMetric"]:
-        """Expand composite metrics into individual metrics.
-
-        Returns sub-metrics for composites, or [self] for regular.
-
-        Returns:
-            List of metrics to evaluate.
-        """
-        if self._metric_instances:
-            return self._metric_instances
-        return [self]
-
-    def is_composite(self) -> bool:
-        """Check if this is a composite metric.
-
-        Returns:
-            True if composite (has sub-metrics), False otherwise.
-        """
-        return bool(self._metric_instances)
 
     def maybe_prepare_composite_kwargs(
         self,
@@ -1119,295 +1161,145 @@ class DurationME(ME):
         )
 
 
-class LandfallMixin:
-    """Mixin that adds landfall detection and extraction to metrics.
+class LandfallMetric(CompositeMetric):
+    """Base class for landfall metrics.
 
-    This mixin provides the landfall detection logic that can be
-    combined with any error metric (MAE, ME, etc.) to compute
-    metrics specifically at landfall points.
+    This class provides common functionality for landfall metrics, including:
+    - Landfall detection
+    - Landfall extraction
+    - Landfall metric computation
 
-    The mixin uses Python's Method Resolution Order (MRO) to properly
-    chain with parent metric classes.
+    Can be used as a base class for custom landfall metrics, as a mixin with other
+    metrics, or as a composite metric for multiple landfall metrics (with the same
+    landfall values per case).
     """
 
     def __init__(
         self,
+        name: str = "landfall_metrics",
+        preserve_dims: str = "init_time",
         approach: Literal["first", "next"] = "first",
         exclude_post_landfall: bool = False,
+        forecast_variable: Optional[str | derived.DerivedVariable] = None,
+        target_variable: Optional[str | derived.DerivedVariable] = None,
+        metrics: Optional[list[Type["LandfallMetric"]]] = None,
+        *args,
         **kwargs,
     ):
-        """Initialize the landfall mixin.
-
-        Args:
-            approach: Landfall detection approach ('first', 'next')
-            exclude_post_landfall: Whether to exclude init_times
-                after all landfalls
-            **kwargs: Additional arguments passed to parent classes
-        """
+        super().__init__(
+            name=name,
+            preserve_dims=preserve_dims,
+            forecast_variable=forecast_variable,
+            target_variable=target_variable,
+            *args,
+            **kwargs,
+        )
         self.approach = approach
         self.exclude_post_landfall = exclude_post_landfall
-        super().__init__(**kwargs)
+        self.metrics = metrics or []
 
-    @abc.abstractmethod
-    def _get_landfall_metric_function(
-        self, forecast: xr.DataArray, target: xr.DataArray
-    ) -> Callable[[xr.DataArray, xr.DataArray], Any]:
-        """Return the function to compute metric between two landfalls.
-
-        Each subclass must implement this to provide their specific
-        metric calculation function.
-
-        Args:
-            forecast: Original forecast DataArray (for context)
-            target: Original target DataArray (for context)
-
-        Returns:
-            A callable that takes (forecast_landfall, target_landfall)
-            and returns the computed metric
-        """
-        pass
-
-    @staticmethod
-    def _get_nan_result_for_forecast(forecast: xr.DataArray) -> xr.DataArray:
-        """Create NaN result with appropriate dimensions based on forecast."""
-        if "lead_time" in forecast.dims:
-            # Calculate init_times from lead_time and valid_time
-            init_times_calc = forecast.coords["valid_time"] - forecast.lead_time
-            unique_init_times = np.unique(init_times_calc.values)
-
-            return xr.DataArray(
-                np.full(len(unique_init_times), np.nan),
-                dims=["init_time"],
-                coords={"init_time": unique_init_times},
-            )
-        elif "init_time" in forecast.coords:
-            return xr.DataArray(
-                np.full(len(forecast.init_time), np.nan),
-                dims=["init_time"],
-                coords={"init_time": forecast.init_time},
-            )
+        # If metrics provided, instantiate them
+        if self.metrics is not None:
+            self._metric_instances = [
+                (
+                    metric_cls(
+                        preserve_dims=self.preserve_dims,
+                        forecast_variable=self.forecast_variable,
+                        target_variable=self.target_variable,
+                    )
+                    if isinstance(metric_cls, type)
+                    else metric_cls
+                )
+                for metric_cls in self.metrics
+            ]
         else:
-            return xr.DataArray(np.nan)
+            self._metric_instances = []
 
-    def _get_landfall_data(
-        self,
-        forecast: xr.DataArray,
-        target: xr.DataArray,
-    ) -> tuple[Optional[xr.DataArray], Optional[xr.DataArray]]:
-        """Get forecast and target landfall DataArrays based on approach.
-
-        Uses calc.find_landfalls() for landfall detection. The DataArrays
-        must have latitude, longitude, and valid_time as coordinates.
-
-        Args:
-            forecast: Forecast track DataArray with lat/lon/valid_time coords
-            target: Target track DataArray with lat/lon/valid_time coords
-
-        Returns:
-            Tuple of (forecast_landfall, target_landfall) DataArrays
-            with latitude, longitude, valid_time as coordinates
-        """
-        if self.approach == "first":
-            # First landfall approach - simple
-            forecast_landfall = calc.find_landfalls(
-                forecast, return_all_landfalls=False
-            )
-            target_landfall = calc.find_landfalls(target, return_all_landfalls=False)
-            return forecast_landfall, target_landfall
-
-        elif self.approach == "next":
-            # Next landfall approach - more complex
-            target_landfalls = calc.find_landfalls(target, return_all_landfalls=True)
-            if target_landfalls is None:
-                return None, None
-
-            next_target_landfalls = calc.find_next_landfall_for_init_time(
-                forecast, target_landfalls
-            )
-            if next_target_landfalls is None:
-                return None, None
-
-            forecast_landfalls = calc.find_landfalls(
-                forecast, return_all_landfalls=True
-            )
-            if forecast_landfalls is None:
-                return None, next_target_landfalls
-
-            # Match forecast landfalls to target for each init_time
-            return forecast_landfalls, next_target_landfalls
-
-        else:
-            raise ValueError(f"Unknown approach: {self.approach}")
-
-    def _get_landfall_values(
-        self, forecast: xr.DataArray, target: xr.DataArray
-    ) -> tuple[Optional[xr.DataArray], Optional[xr.DataArray]]:
-        """Extract landfall points from forecast and target tracks.
-
-        Uses the configured approach to find landfall points and
-        returns the forecast and target values at those points.
-
-        Args:
-            forecast: Forecast TC track DataArray with lat/lon/time
-            target: Target TC track DataArray with lat/lon/time
-
-        Returns:
-            Tuple of (forecast_landfall, target_landfall) DataArrays,
-            or (None, None) if no landfalls found
-        """
-        return self._get_landfall_data(forecast, target)
-
-    def _compute_metric(
+    def __call__(
         self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
     ) -> Any:
-        """Compute metric at landfall points using configured approach.
-
-        This method handles the common pattern for all landfall metrics:
-        1. Extract landfall values
-        2. Handle None case
-        3. Branch on approach and delegate to appropriate computation
+        """Compute the metric.
 
         Args:
-            forecast: Forecast TC track DataArray
-            target: Target TC track DataArray
-            **kwargs: Additional arguments
-
-        Returns:
-            Computed metric result
+            forecast: The forecast DataArray.
+            target: The target DataArray.
+            **kwargs: Additional keyword arguments.
         """
-        # Get landfall values using mixin
-        forecast_landfall, target_landfall = self._get_landfall_values(forecast, target)
+        return self.compute_metric(forecast, target, **kwargs)
 
-        # Handle case where no landfall is found
-        if forecast_landfall is None or target_landfall is None:
-            return self._get_nan_result_for_forecast(forecast)
-
-        # Branch on approach and compute metric
-        if self.approach == "next":
-            # Use approach-specific "next" computation
-            return self._compute_next_approach(
-                forecast, target, forecast_landfall, target_landfall, **kwargs
-            )
-        else:
-            # Use simple "first" approach - delegate to parent or custom
-            return self._compute_first_approach(
-                forecast, target, forecast_landfall, target_landfall, **kwargs
-            )
-
-    def _compute_first_approach(
-        self,
-        forecast: xr.DataArray,
-        target: xr.DataArray,
-        forecast_landfall: xr.DataArray,
-        target_landfall: xr.DataArray,
-        **kwargs: Any,
+    def compute_landfalls(
+        self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
     ) -> Any:
-        """Compute metric for 'first' approach.
-
-        Uses the metric function from _get_landfall_metric_function
-        to compute the metric between landfall points.
+        """Compute landfalls for a given forecast and target.
 
         Args:
-            forecast: Original forecast DataArray
-            target: Original target DataArray
-            forecast_landfall: Forecast values at landfall
-            target_landfall: Target values at landfall
-            **kwargs: Additional arguments
-
-        Returns:
-            Computed metric result
+            forecast: The forecast DataArray.
+            target: The target DataArray.
+            **kwargs: Additional keyword arguments.
         """
-        metric_func = self._get_landfall_metric_function(forecast, target)
-        return metric_func(forecast_landfall, target_landfall)
-
-    def _compute_next_approach(
-        self,
-        forecast: xr.DataArray,
-        target: xr.DataArray,
-        forecast_landfall: xr.DataArray,
-        target_landfall: xr.DataArray,
-        **kwargs: Any,
-    ) -> Any:
-        """Compute metric for 'next' approach.
-
-        Uses _match_and_compute_next_landfalls with the metric function
-        from _get_landfall_metric_function.
-
-        Args:
-            forecast: Original forecast DataArray
-            target: Original target DataArray
-            forecast_landfall: Forecast landfalls (multi-dimensional)
-            target_landfall: Target landfalls (multi-dimensional)
-            **kwargs: Additional arguments
-
-        Returns:
-            Computed metric result
-        """
-        metric_func = self._get_landfall_metric_function(forecast, target)
-        return self._match_and_compute_next_landfalls(
-            forecast_landfall, target_landfall, metric_func
+        forecast_landfall = calc.find_landfalls(
+            forecast, return_all_landfalls=self.approach == "next"
         )
+        target_landfall = calc.find_landfalls(
+            target, return_all_landfalls=self.approach == "next"
+        )
+        if self.approach == "next":
+            target_landfall = calc.find_next_landfall_for_init_time(
+                forecast, target_landfall
+            )
+        return forecast_landfall, target_landfall
 
-    @staticmethod
-    def _match_and_compute_next_landfalls(
-        forecast_landfalls: xr.DataArray,
-        target_landfalls: xr.DataArray,
-        metric_func: Callable[[xr.DataArray, xr.DataArray], Any],
-    ) -> xr.DataArray:
-        """Generic helper for computing next landfall metrics.
+    def maybe_prepare_composite_kwargs(
+        self,
+        forecast_data: xr.DataArray,
+        target_data: xr.DataArray,
+        **base_kwargs,
+    ) -> dict:
+        """Prepare kwargs for composite metric evaluation.
 
-        This helper encapsulates the common pattern of:
-        1. Looping through target landfalls by init_time
-        2. Finding matching forecast landfall for each init_time
-        3. Finding the forecast landfall closest in time to the target
-        4. Computing a metric using the provided function
+        Computes the transformed contingency manager once and adds
+        it to kwargs for efficient composite evaluation.
 
         Args:
-            forecast_landfalls: Forecast landfalls with init_time and landfall dims
-            target_landfalls: Target landfalls with init_time dim
-            metric_func: Function that takes (closest_forecast, target_landfall)
-                and returns a scalar metric value
+            forecast_data: The forecast DataArray.
+            target_data: The target DataArray.
+            **base_kwargs: Base kwargs to include in result.
 
         Returns:
-            DataArray with init_time dimension containing metric values
+            Dictionary of kwargs including transformed_manager.
         """
-        results = []
-        init_times_out = []
+        kwargs = base_kwargs.copy()
 
-        for i, init_time in enumerate(target_landfalls.coords["init_time"]):
-            target_landfall = target_landfalls.isel(init_time=i)
-            target_time = target_landfall.coords["valid_time"].values
+        if self.is_composite() and len(self._metric_instances) > 1:
+            kwargs["forecast_landfall"], kwargs["target_landfall"] = (
+                self.compute_landfalls(forecast=forecast_data, target=target_data)
+            )
 
-            # Find matching forecast landfall for this init_time
-            init_time_match = forecast_landfalls.coords["init_time"] == init_time
-            if not init_time_match.any():
-                results.append(np.nan)
-                init_times_out.append(init_time.values)
-                continue
+        kwargs["preserve_dims"] = self.preserve_dims
 
-            forecast_for_init = forecast_landfalls.where(init_time_match, drop=True)
+        return kwargs
 
-            if len(forecast_for_init.coords["init_time"]) == 0:
-                results.append(np.nan)
-                init_times_out.append(init_time.values)
-                continue
+    def _compute_metric(
+        self,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
+        **kwargs: Any,
+    ) -> Any:
+        """Compute metric (not supported for ThresholdMetric base).
 
-            # Find forecast landfall closest to target time
-            time_diffs = np.abs(forecast_for_init.coords["valid_time"] - target_time)
-            closest_idx = time_diffs.argmin()
-            closest_forecast = forecast_for_init.isel(landfall=closest_idx)
+        LandfallMetric must be subclassed (like LandfallDisplacement, LandfallTimeME)
+        or used as a composite with metrics list.
 
-            # Calculate metric using provided function
-            try:
-                result = metric_func(closest_forecast, target_landfall)
-                results.append(float(result.values))
-            except (KeyError, AttributeError, ValueError):
-                results.append(np.nan)
-
-            init_times_out.append(init_time.values)
-
-        return xr.DataArray(
-            results, dims=["init_time"], coords={"init_time": init_times_out}
+        Args:
+            forecast: The forecast DataArray.
+            target: The target DataArray.
+            **kwargs: Additional keyword arguments.
+        """
+        raise NotImplementedError(
+            "LandfallMetric._compute_metric must be implemented "
+            "by subclasses (LandfallDisplacement, LandfallTimeME, etc.) or use "
+            "LandfallMetric as a composite with metrics=[...] list. Composites are "
+            "automatically expanded in the evaluation pipeline."
         )
 
 
@@ -1498,7 +1390,7 @@ class SpatialDisplacement(BaseMetric):
         return result
 
 
-class LandfallDisplacement(LandfallMixin, BaseMetric):
+class LandfallDisplacement(LandfallMetric, BaseMetric):
     """Landfall displacement metric with configurable landfall detection
     approaches.
 
@@ -1515,27 +1407,10 @@ class LandfallDisplacement(LandfallMixin, BaseMetric):
 
     def __init__(
         self,
-        name: str = "LandfallDisplacement",
-        preserve_dims: str = "init_time",
-        forecast_variable: Optional[str | derived.DerivedVariable] = None,
-        target_variable: Optional[str | derived.DerivedVariable] = None,
-        approach: Literal["first", "next"] = "first",
-        exclude_post_landfall: bool = False,
+        *args,
+        **kwargs,
     ):
-        """Initialize the landfall displacement metric.
-
-        Args:
-            approach: Landfall detection approach ('first', 'next')
-            exclude_post_landfall: Whether to exclude init_times after all landfalls
-        """
-        super().__init__(
-            name=name,
-            forecast_variable=forecast_variable,
-            target_variable=target_variable,
-            approach=approach,
-            exclude_post_landfall=exclude_post_landfall,
-            preserve_dims=preserve_dims,
-        )
+        super().__init__(name="LandfallDisplacement", *args, **kwargs)
 
     def _get_landfall_metric_function(
         self, forecast: xr.DataArray, target: xr.DataArray
@@ -1577,7 +1452,12 @@ class LandfallDisplacement(LandfallMixin, BaseMetric):
             t_lon = landfall2.coords["longitude"].values
 
             # Skip if any coordinates are NaN
-            if np.isnan(f_lat) or np.isnan(f_lon) or np.isnan(t_lat) or np.isnan(t_lon):
+            if (
+                any(np.isnan(f_lat))
+                or any(np.isnan(f_lon))
+                or any(np.isnan(t_lat))
+                or any(np.isnan(t_lon))
+            ):
                 distances.append(np.nan)
             else:
                 dist = calc.haversine_distance(
@@ -1594,8 +1474,22 @@ class LandfallDisplacement(LandfallMixin, BaseMetric):
             coords={"init_time": landfall1.coords["init_time"]},
         )
 
+    def _compute_metric(
+        self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
+    ) -> Any:
+        """Compute the landfall displacement metric."""
+        forecast_landfall, target_landfall = (
+            kwargs.get("forecast_landfall"),
+            kwargs.get("target_landfall"),
+        )
+        if forecast_landfall is None or target_landfall is None:
+            forecast_landfall, target_landfall = self.compute_landfalls(
+                forecast=forecast, target=target
+            )
+        return self._calculate_distance(forecast_landfall, target_landfall)
 
-class LandfallTimeME(LandfallMixin, ME):
+
+class LandfallTimeME(LandfallMetric, ME):
     """Landfall timing metric with configurable landfall detection approaches.
 
     This metric computes the time difference between forecast and target landfall
@@ -1610,24 +1504,10 @@ class LandfallTimeME(LandfallMixin, ME):
 
     def __init__(
         self,
-        name: str = "LandfallTimeME",
-        preserve_dims: str = "init_time",
-        forecast_variable: Optional[str | derived.DerivedVariable] = None,
-        target_variable: Optional[str | derived.DerivedVariable] = None,
-        approach: Literal["first", "next"] = "first",
+        *args,
+        **kwargs,
     ):
-        """Initialize the landfall timing metric.
-
-        Args:
-            approach: Landfall detection approach ('first', 'next')
-        """
-        super().__init__(
-            name=name,
-            approach=approach,
-            preserve_dims=preserve_dims,
-            forecast_variable=forecast_variable,
-            target_variable=target_variable,
-        )
+        super().__init__(name="LandfallTimeME", *args, **kwargs)
 
     def _get_landfall_metric_function(
         self, forecast: xr.DataArray, target: xr.DataArray
@@ -1679,12 +1559,30 @@ class LandfallTimeME(LandfallMixin, ME):
 
         return xr.DataArray(
             values,
-            dims=["init_time"],
-            coords={"init_time": landfall1.coords["init_time"]},
+            dims=["init_time", "landfall"],
+            coords={
+                "init_time": landfall1.coords["init_time"],
+                "landfall": landfall1.coords["landfall"],
+            },
         )
 
+    def _compute_metric(
+        self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
+    ) -> Any:
+        """Compute the landfall time metric."""
+        forecast_landfall, target_landfall = (
+            kwargs.get("forecast_landfall"),
+            kwargs.get("target_landfall"),
+        )
 
-class LandfallIntensityMAE(LandfallMixin, MAE):
+        if forecast_landfall is None or target_landfall is None:
+            forecast_landfall, target_landfall = self.compute_landfalls(
+                forecast=forecast, target=target
+            )
+        return self._calculate_time_difference(forecast_landfall, target_landfall)
+
+
+class LandfallIntensityMAE(LandfallMetric, MAE):
     """Landfall intensity metric with configurable landfall detection approaches.
 
     This metric computes the mean absolute error between forecast and target
@@ -1710,26 +1608,10 @@ class LandfallIntensityMAE(LandfallMixin, MAE):
 
     def __init__(
         self,
-        name: str = "LandfallIntensityMAE",
-        preserve_dims: str = "init_time",
-        approach: Literal["first", "next"] = "first",
-        forecast_variable: Optional[str | derived.DerivedVariable] = None,
-        target_variable: Optional[str | derived.DerivedVariable] = None,
+        *args,
+        **kwargs,
     ):
-        """Initialize the landfall intensity metric.
-
-        Args:
-            approach: Landfall detection approach ('first', 'next')
-            forecast_variable: Variable for forecast intensity (optional)
-            target_variable: Variable for target intensity (optional)
-        """
-        super().__init__(
-            name=name,
-            approach=approach,
-            preserve_dims=preserve_dims,
-            forecast_variable=forecast_variable,
-            target_variable=target_variable,
-        )
+        super().__init__(name="LandfallIntensityMAE", *args, **kwargs)
 
     def _get_landfall_metric_function(
         self, forecast: xr.DataArray, target: xr.DataArray
@@ -1760,3 +1642,17 @@ class LandfallIntensityMAE(LandfallMixin, MAE):
         """
         # Landfall points are already extracted, just compute absolute error
         return np.abs(forecast_landfall - target_landfall)
+
+    def _compute_metric(
+        self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
+    ) -> Any:
+        """Compute the landfall intensity metric."""
+        forecast_landfall, target_landfall = (
+            kwargs.get("forecast_landfall"),
+            kwargs.get("target_landfall"),
+        )
+        if forecast_landfall is None or target_landfall is None:
+            forecast_landfall, target_landfall = self.compute_landfalls(
+                forecast=forecast, target=target
+            )
+        return self._compute_absolute_error(forecast_landfall, target_landfall)
