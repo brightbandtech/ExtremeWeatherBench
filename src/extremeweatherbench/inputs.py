@@ -821,12 +821,15 @@ def _ibtracs_preprocess(data: IncomingDataInput) -> IncomingDataInput:
         pl.col("surface_wind_speed").is_not_null()
         & pl.col("air_pressure_at_mean_sea_level").is_not_null()
     )
-    # Cast to float64 and convert knots to m/s
-    # Use strict=False to handle any edge cases
+
+    # Cast to float64 and use strict=False to handle any edge cases
     subset_target_data = subset_target_data.with_columns(
         [
+            # Convert knots to m/s
             pl.col("surface_wind_speed").cast(pl.Float64, strict=False) * 0.514444,
-            pl.col("air_pressure_at_mean_sea_level").cast(pl.Float64, strict=False),
+            # Convert hPa to Pa
+            pl.col("air_pressure_at_mean_sea_level").cast(pl.Float64, strict=False)
+            * 100,
         ]
     )
     return subset_target_data
