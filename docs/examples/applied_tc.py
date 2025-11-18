@@ -13,6 +13,8 @@ logger = logging.getLogger("extremeweatherbench")
 logger.setLevel(logging.DEBUG)
 
 
+# Preprocessing function for CIRA data that includes geopotential thickness calculation
+# required for tropical cyclone tracks
 def _preprocess_bb_cira_tc_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
     """An example preprocess function that renames the time coordinate to lead_time,
     creates a valid_time coordinate, and sets the lead time range and resolution not
@@ -35,6 +37,8 @@ def _preprocess_bb_cira_tc_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
     return ds
 
 
+# Preprocessing function for HRES data that includes geopotential thickness calculation
+# required for tropical cyclone tracks
 def _preprocess_hres_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
     """An example preprocess function that renames the time coordinate to lead_time,
     creates a valid_time coordinate, and sets the lead time range and resolution not
@@ -52,96 +56,109 @@ def _preprocess_hres_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
     return ds
 
 
+# Load the case collection from the YAML file
 case_yaml = cases.load_ewb_events_yaml_into_case_collection()
+
+# Select single case (TC Ida)
 case_yaml.select_cases(by="case_id_number", value=220, inplace=True)
 
-
+# Define IBTrACS target, no arguments needed as defaults are sufficient
 ibtracs_target = inputs.IBTrACS()
 
-
+# Define HRES forecast
 hres_forecast = inputs.ZarrForecast(
     name="hres_forecast",
     source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
+    # Define tropical cyclone track derivedvariable to include in the forecast
     variables=[derived.TropicalCycloneTrackVariables()],
+    # Define metadata variable mapping for HRES forecast
     variable_mapping=inputs.HRES_metadata_variable_mapping,
     storage_options={"remote_options": {"anon": True}},
+    # Preprocess the HRES forecast to include geopotential thickness calculation
     preprocess=_preprocess_hres_forecast_dataset,
 )
 
-fcn_forecast = inputs.KerchunkForecast(
+# Define FCNv2 forecast
+fcnv2_forecast = inputs.KerchunkForecast(
     name="fcn_forecast",
     source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
     variables=[derived.TropicalCycloneTrackVariables()],
+    # Define metadata variable mapping for FCNv2 forecast
     variable_mapping=inputs.CIRA_metadata_variable_mapping,
+    # Preprocess the FCNv2 forecast to include geopotential thickness calculation
     preprocess=_preprocess_bb_cira_tc_forecast_dataset,
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
 )
 
+# Define Pangu forecast
 pangu_forecast = inputs.KerchunkForecast(
     name="pangu_forecast",
     source="gs://extremeweatherbench/PANG_v100_GFS.parq",
     variables=[derived.TropicalCycloneTrackVariables()],
+    # Define metadata variable mapping for Pangu forecast
     variable_mapping=inputs.CIRA_metadata_variable_mapping,
+    # Preprocess the Pangu forecast to include geopotential thickness calculation
+    # which uses the same preprocessing function as the FCNv2 forecast
     preprocess=_preprocess_bb_cira_tc_forecast_dataset,
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
 )
 
 
-composite = metrics.LandfallMetric(
-    metrics=[
-        metrics.LandfallIntensityMAE,
-        metrics.LandfallTimeME,
-        metrics.LandfallDisplacement,
-    ],
-    approach="next",
-    forecast_variable="air_pressure_at_mean_sea_level",
-    target_variable="air_pressure_at_mean_sea_level",
-)
-# Note: compute_metric() requires DataArrays, not InputBase objects.
-# Use the evaluation pipeline below to properly extract DataArrays and compute metrics.
-# Evaluation objects for tropical cyclone metrics
-# Note: Landfall metrics work with DataArrays that have lat/lon/time coords
-# For intensity metrics, specify variables explicitly to evaluate different
-# intensity measures (e.g., wind speed vs. pressure)
+# Define composite metric for tropical cyclone track metrics. Using a composite metric
+# prevents recomputation of landfalls, saving significant time. approach="next" sets
+# the evaluation to occur, in the case of multiple landfalls, for the next landfall in
+# time to be evaluated against
+composite_landfall_metrics = [
+    metrics.LandfallMetric(
+        metrics=[
+            metrics.LandfallIntensityMAE,
+            metrics.LandfallTimeME,
+            metrics.LandfallDisplacement,
+        ],
+        approach="next",
+        # Set the intensity variable to use for the metric
+        forecast_variable="air_pressure_at_mean_sea_level",
+        target_variable="air_pressure_at_mean_sea_level",
+    )
+]
+
+# Define evaluation objects for tropical cyclone metrics. Setting event type subsets
+# the relevant cases inside the events YAML file
 tc_evaluation_object = [
     # HRES forecast
     inputs.EvaluationObject(
         event_type="tropical_cyclone",
-        metric_list=[composite],
+        metric_list=composite_landfall_metrics,
         target=ibtracs_target,
         forecast=hres_forecast,
     ),
-    # # Pangu forecast
-    # inputs.EvaluationObject(
-    #     event_type="tropical_cyclone",
-    #     metric_list=[
-    #         metrics.LandfallTimeME(),
-    #         metrics.LandfallDisplacement(),
-    #         metrics.LandfallIntensityMAE(),
-    #     ],
-    #     target=ibtracs_target,
-    #     forecast=pangu_forecast,
-    # ),
-    # # FCN forecast
-    # inputs.EvaluationObject(
-    #     event_type="tropical_cyclone",
-    #     metric_list=[
-    #         metrics.LandfallTimeME(),
-    #         metrics.LandfallDisplacement(),
-    #         metrics.LandfallIntensityMAE(),
-    #     ],
-    #     target=ibtracs_target,
-    #     forecast=fcn_forecast,
-    # ),
+    # Pangu forecast
+    inputs.EvaluationObject(
+        event_type="tropical_cyclone",
+        metric_list=composite_landfall_metrics,
+        target=ibtracs_target,
+        forecast=pangu_forecast,
+    ),
+    # FCNv2 forecast
+    inputs.EvaluationObject(
+        event_type="tropical_cyclone",
+        metric_list=composite_landfall_metrics,
+        target=ibtracs_target,
+        forecast=fcnv2_forecast,
+    ),
 ]
+
 if __name__ == "__main__":
-    test_ewb = evaluate.ExtremeWeatherBench(
+    # Initialize ExtremeWeatherBench
+    ewb = evaluate.ExtremeWeatherBench(
         case_metadata=case_yaml,
         evaluation_objects=tc_evaluation_object,
     )
-    with Client():
+    # Set up dask client for parallel execution
+    with Client() as client:
         logger.info("Starting EWB run")
-        outputs = test_ewb.run(
-            parallel_config={"backend": "dask", "n_jobs": 1},
+        # Run the workflow with parllel_config backend set to dask
+        outputs = ewb.run(
+            parallel_config={"backend": "dask", "n_jobs": 3},
         )
         outputs.to_csv("tc_metric_test_results.csv")
