@@ -640,7 +640,7 @@ def reduce_dataarray(
         raise TypeError(f"method must be str or callable, got {type(method)}")
 
 
-def load_land_geometry(resolution: str = "10m") -> shapely.geometry.Polygon:
+def load_land_geometry(resolution: str = "50m") -> shapely.geometry.Polygon:
     """Load the land geometry.
 
     Returns:
