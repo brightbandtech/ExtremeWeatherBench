@@ -1237,17 +1237,17 @@ class LandfallMetric(CompositeMetric):
             target: The target DataArray.
             **kwargs: Additional keyword arguments.
         """
-        forecast_landfall = calc.find_landfalls(
-            forecast, return_all_landfalls=self.approach == "next"
+        # return_all_landfalls should be True for "next", False for "first"
+        return_all = self.approach == "next"
+        forecast_landfalls = calc.find_landfalls(
+            forecast, return_all_landfalls=return_all
         )
-        target_landfall = calc.find_landfalls(
-            target, return_all_landfalls=self.approach == "next"
-        )
-        if self.approach == "next":
-            target_landfall = calc.find_next_landfall_for_init_time(
-                forecast, target_landfall
+        target_landfalls = calc.find_landfalls(target, return_all_landfalls=return_all)
+        if return_all:
+            target_landfalls = calc.find_next_landfall_for_init_time(
+                forecast_landfalls, target_landfalls
             )
-        return forecast_landfall, target_landfall
+        return forecast_landfalls, target_landfalls
 
     def maybe_prepare_composite_kwargs(
         self,
