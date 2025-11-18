@@ -1,13 +1,14 @@
 """Tests for the metrics module."""
 
 import inspect
+from unittest import mock
 
 import numpy as np
 import pandas as pd
 import pytest
 import xarray as xr
 
-from extremeweatherbench import metrics
+from extremeweatherbench import calc, metrics
 
 
 class TestConcreteMetric(metrics.BaseMetric):
@@ -1257,10 +1258,6 @@ class TestLandfallMetrics:
 
     def test_landfall_metrics_with_mocked_data(self):
         """Test landfall metrics with mocked landfall detection."""
-        from unittest.mock import patch
-
-        from extremeweatherbench import calc
-
         # Create simple test data
         target = xr.Dataset(
             {
@@ -1312,7 +1309,7 @@ class TestLandfallMetrics:
         )
 
         # Mock expensive find_landfalls calls
-        with patch.object(calc, "find_landfalls") as mock_find:
+        with mock.patch.object(calc, "find_landfalls") as mock_find:
 
             def mock_find_func(track_data, return_all_landfalls=False):
                 if return_all_landfalls:
@@ -1363,10 +1360,6 @@ class TestLandfallMetrics:
 
     def test_landfall_displacement_with_known_values(self):
         """Test LandfallDisplacement with manually calculated expected values."""
-        from unittest.mock import patch
-
-        from extremeweatherbench import calc
-
         # Create test data with known coordinates
         # Target landfall at Miami: (25.7617° N, 80.1918° W)
         # Forecast landfall at Fort Lauderdale: (26.1224° N, 80.1373° W)
@@ -1416,7 +1409,7 @@ class TestLandfallMetrics:
             name="surface_wind_speed",
         )
 
-        with patch.object(calc, "find_landfalls") as mock_find:
+        with mock.patch.object(calc, "find_landfalls") as mock_find:
 
             def mock_find_func(track_data, return_all_landfalls=False):
                 if "lead_time" not in track_data.dims:
@@ -1442,10 +1435,6 @@ class TestLandfallMetrics:
 
     def test_landfall_intensity_mae_with_known_values(self):
         """Test LandfallIntensityMAE with manually calculated expected values."""
-        from unittest.mock import patch
-
-        from extremeweatherbench import calc
-
         # Create test data with known intensity values
         # Target intensity: 50 m/s
         # Forecast intensities: 53 m/s and 48 m/s for two init_times
@@ -1507,7 +1496,7 @@ class TestLandfallMetrics:
             name="surface_wind_speed",
         )
 
-        with patch.object(calc, "find_landfalls") as mock_find:
+        with mock.patch.object(calc, "find_landfalls") as mock_find:
 
             def mock_find_func(track_data, return_all_landfalls=False):
                 if "lead_time" not in track_data.dims:
@@ -1535,10 +1524,6 @@ class TestLandfallMetrics:
 
     def test_landfall_time_me_with_timing_errors(self):
         """Test LandfallTimeME with various timing error scenarios."""
-        from unittest.mock import patch
-
-        from extremeweatherbench import calc
-
         # Test different timing scenarios:
         # 1. Early forecast (landfall 3 hours early): error = -3 hours
         # 2. Late forecast (landfall 2 hours late): error = +2 hours
@@ -1607,7 +1592,7 @@ class TestLandfallMetrics:
             name="surface_wind_speed",
         )
 
-        with patch.object(calc, "find_landfalls") as mock_find:
+        with mock.patch.object(calc, "find_landfalls") as mock_find:
 
             def mock_find_func(track_data, return_all_landfalls=False):
                 if "lead_time" not in track_data.dims:
