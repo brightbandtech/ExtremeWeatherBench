@@ -469,32 +469,35 @@ def find_landfalls(
 
 
 def find_next_landfall_for_init_time(
-    forecast_data: xr.DataArray,
+    forecast_landfalls: xr.DataArray,
     target_landfalls: xr.DataArray,
 ) -> Optional[xr.DataArray]:
-    """Find next upcoming landfall from target data for each init_time.
+    """Find unique next upcoming landfalls from target data.
 
     For each forecast initialization time, finds the next landfall
-    event in the target data that occurs after that init_time.
+    event in the target data that occurs after that init_time. Only
+    unique landfalls are returned (multiple init_times mapping to the
+    same landfall are deduplicated). Init_times without future
+    landfalls are excluded.
 
     Args:
-        forecast_data: Forecast DataArray with init_time dimension
+        forecast_landfalls: Forecast landfall DataArray with init_time
+            dimension (from find_landfalls)
         target_landfalls: Target landfall DataArray from find_landfalls
             with return_all=True (has landfall dimension)
 
     Returns:
-        DataArray with next landfall for each init_time, or None if
-        no future landfalls exist
+        DataArray with unique next landfalls indexed by init_time, or
+        None if no future landfalls exist
     """
-    # Extract init_times from forecast
-    if "init_time" in forecast_data.dims:
-        init_times = forecast_data.init_time.values
-    elif "lead_time" in forecast_data.coords and "valid_time" in forecast_data.coords:
-        # Calculate init_times from lead_time and valid_time
-        init_times_calc = forecast_data.coords["valid_time"] - forecast_data.lead_time
-        init_times = np.unique(init_times_calc.values)
+    # Extract init_times from forecast landfalls
+    if "init_time" in forecast_landfalls.dims:
+        init_times = forecast_landfalls.init_time.values
+    elif "init_time" in forecast_landfalls.coords:
+        # init_time as coordinate (scalar case)
+        init_times = np.array([forecast_landfalls.coords["init_time"].values])
     else:
-        return None
+        raise KeyError("Missing init_time dimension or coordinate.")
 
     # Get target landfall times
     target_times = target_landfalls.coords["valid_time"].values
@@ -502,20 +505,28 @@ def find_next_landfall_for_init_time(
     # Use searchsorted to find next landfall index for each init_time
     next_indices = np.searchsorted(target_times, init_times, side="right")
 
-    # Filter to only valid indices (where future landfall exists)
+    # Create mask for init_times with future landfalls
     valid_mask = next_indices < len(target_times)
 
-    if not valid_mask.any():
-        return None
+    # Build result for all init_times, keeping only unique landfalls
+    results = []
+    seen_landfalls = set()  # Track unique landfalls by valid_time
 
-    # Select the next landfalls and corresponding init_times
-    selected_landfalls = target_landfalls.isel(landfall=next_indices[valid_mask])
-    selected_init_times = init_times[valid_mask]
+    for i, init_t in enumerate(init_times):
+        if valid_mask[i]:
+            # There is a future landfall for this init_time
+            landfall_idx = next_indices[i]
 
-    # Assign init_time coordinate and return
-    return selected_landfalls.assign_coords(
-        init_time=("landfall", selected_init_times)
-    ).swap_dims({"landfall": "init_time"})
+            # Check if we've already seen this landfall
+            landfall_time = target_times[landfall_idx]
+            if landfall_time not in seen_landfalls:
+                seen_landfalls.add(landfall_time)
+                landfall = target_landfalls.isel(landfall=landfall_idx)
+                landfall = landfall.assign_coords(init_time=init_t)
+                results.append(landfall)
+
+    # Combine unique landfalls or return None if no results
+    return xr.concat(results, dim="init_time") if results else None
 
 
 def _detect_landfalls_wrapper(
