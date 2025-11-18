@@ -1,10 +1,9 @@
 import logging
-from typing import Any, Callable, Union
 
 import numpy as np
 import xarray as xr
 
-from extremeweatherbench import inputs
+from extremeweatherbench import derived, inputs
 
 # Suppress noisy log messages
 logging.getLogger("urllib3.connectionpool").setLevel(logging.CRITICAL)
@@ -58,10 +57,8 @@ era5_freeze_target = inputs.ERA5(
     storage_options={"remote_options": {"anon": True}},
 )
 
-# TODO: Re-enable when atmospheric river target is implemented
 era5_atmospheric_river_target = inputs.ERA5(
-    source=inputs.ARCO_ERA5_FULL_URI,
-    variables=["surface_eastward_wind"],
+    variables=[derived.AtmosphericRiverVariables()],
     storage_options={"remote_options": {"anon": True}},
 )
 
@@ -175,14 +172,14 @@ def get_brightband_evaluation_objects() -> list[inputs.EvaluationObject]:
     # Import metrics here to avoid circular import
     from extremeweatherbench import metrics
 
-    heatwave_metric_list: list[Union[Callable[..., Any], metrics.BaseMetric]] = [
+    heatwave_metric_list: list[metrics.BaseMetric] = [
         metrics.MaximumMAE(),
         metrics.RMSE(),
         metrics.OnsetME(),
         metrics.DurationME(),
         metrics.MaxMinMAE(),
     ]
-    freeze_metric_list: list[Union[Callable[..., Any], metrics.BaseMetric]] = [
+    freeze_metric_list: list[metrics.BaseMetric] = [
         metrics.MinimumMAE(),
         metrics.RMSE(),
         metrics.OnsetME(),

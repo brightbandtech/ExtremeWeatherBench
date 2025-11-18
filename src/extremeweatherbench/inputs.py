@@ -34,11 +34,14 @@ DEFAULT_GHCN_URI = "gs://extremeweatherbench/datasets/ghcnh_all_2020_2024.parq"
 
 #: Storage/access options for local storm report (LSR) tabular data.
 LSR_URI = "gs://extremeweatherbench/datasets/combined_canada_australia_us_lsr_01012020_09272025.parq"  # noqa: E501
+
+#: Storage/access options for practically perfect hindcast data.
 PPH_URI = (
     "gs://extremeweatherbench/datasets/"
-    "practically_perfect_hindcast_20200104_20250430.zarr"
+    "practically_perfect_hindcast_20200104_20250927.zarr"
 )
 
+#: Storage/access options for IBTrACS data.
 IBTRACS_URI = (
     "https://www.ncei.noaa.gov/data/international-best-track-archive-for-"
     "climate-stewardship-ibtracs/v04r01/access/csv/ibtracs.ALL.list.v04r01.csv"
@@ -168,14 +171,6 @@ class InputBase(abc.ABC):
         data = self._open_data_from_source()
         data = self.preprocess(data)
         return data
-
-    def set_name(self, name: str) -> None:
-        """Set the name of the input data source.
-
-        Args:
-            name: The new name to assign to this input data source.
-        """
-        self.name = name
 
     @abc.abstractmethod
     def _open_data_from_source(self) -> IncomingDataInput:
@@ -390,12 +385,7 @@ class EvaluationObject:
     """
 
     event_type: str
-    metric_list: list[
-        Union[
-            Callable[..., Any],
-            "metrics.BaseMetric",
-        ]
-    ]
+    metric_list: list["metrics.BaseMetric"]
     target: "TargetBase"
     forecast: "ForecastBase"
 
@@ -1056,10 +1046,12 @@ def align_forecast_to_target(
     ]
 
     spatial_dims = {str(dim): target_data[dim] for dim in intersection_dims}
-    # Align time dimensions - find overlapping times
+
+    # Align time dimensions if they exist in both datasets
     time_aligned_target, time_aligned_forecast = xr.align(
-        target_data,
-        forecast_data,
+        # Squeeze the data to remove any single-value dimensions
+        target_data.squeeze(),
+        forecast_data.squeeze(),
         join="inner",
         exclude=spatial_dims.keys(),
     )

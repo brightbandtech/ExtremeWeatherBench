@@ -1,20 +1,3 @@
-# ---
-# jupyter:
-#   jupytext:
-#     cell_metadata_filter: -all
-#     custom_cell_magics: kql
-#     text_representation:
-#       extension: .py
-#       format_name: percent
-#       format_version: '1.3'
-#       jupytext_version: 1.11.2
-#   kernelspec:
-#     display_name: .venv
-#     language: python
-#     name: python3
-# ---
-
-# %%
 from datetime import datetime
 
 import cartopy.crs as ccrs
@@ -31,12 +14,11 @@ from tqdm.auto import tqdm
 from extremeweatherbench import inputs, utils
 
 
-# %%
 def sparse_practically_perfect_hindcast(
     da: xr.DataArray,
     resolution: float = 0.25,
     # 1 is wind, 2 is hail, 3 is tornado
-    sigma: float = 3,
+    sigma: float = 5,
 ) -> xr.Dataset:
     """Compute the Practically Perfect Hindcast (PPH) using storm report data
     using latitude/longitude grid spacing instead of the NCEP 212 Eta Lambert
@@ -49,7 +31,7 @@ def sparse_practically_perfect_hindcast(
         resolution: The resolution of the grid in degrees to use. Default is
             0.25 degrees.
         sigma: The standard deviation of the gaussian filter to use. Default
-            is 1.5.
+            is 5.
 
     Returns:
         pph: An xarray Dataset containing the PPH and storm report data.
@@ -98,17 +80,11 @@ def sparse_practically_perfect_hindcast(
     # Normalize longitudes to [0, 360)
     coords_df["longitude"] = utils.convert_longitude_to_360(coords_df["longitude"])
 
-    # Underreporting adjustment
+    # Underreporting adjustment; 10 for hail and tornado globally
     mapped_coords_df = coords_df.copy()
-    if any(coords_df.longitude < 180):
-        mapped_coords_df["report_type"] = coords_df["report_type"].map(
-            {0: 0, 1: 0, 2: 50, 3: 10}
-        )
-        sigma = 5
-    else:
-        mapped_coords_df["report_type"] = coords_df["report_type"].map(
-            {0: 0, 1: 0, 2: 2, 3: 3}
-        )
+    mapped_coords_df["report_type"] = coords_df["report_type"].map(
+        {0: 0, 1: 0, 2: 10, 3: 10}
+    )
 
     if len(mapped_coords_df) == 0:
         return None
@@ -161,53 +137,6 @@ def sparse_practically_perfect_hindcast(
     if pph_sparse.data.nnz == 0:
         return None
     return pph_sparse
-
-
-# %%
-lsr = inputs.LSR(
-    source=inputs.LSR_URI,
-    variables=["report"],
-    variable_mapping={"report": "reports"},
-    storage_options={"anon": True},
-)
-lsr_df = lsr.open_and_maybe_preprocess_data_from_source()
-lsr_ds = lsr._custom_convert_to_dataset(lsr_df)
-
-# %%
-unique_valid_times = np.unique(lsr_ds["valid_time"].values)
-
-# %% [markdown]
-# parallel:
-
-# %%
-pph_sparse_list = joblib.Parallel(n_jobs=-1)(
-    joblib.delayed(sparse_practically_perfect_hindcast)(
-        lsr_ds["report_type"].sel(valid_time=time)
-    )
-    for time in tqdm(unique_valid_times)
-)
-# Find indices where pph_sparse_list is None and filter them out
-valid_indices = [i for i, item in enumerate(pph_sparse_list) if item is not None]
-filtered_valid_times = [unique_valid_times[i] for i in valid_indices]
-
-pph_sparse = xr.concat(
-    [n for n in pph_sparse_list if n is not None],
-    pd.Index(filtered_valid_times, name="valid_time"),
-)
-pph_sparse
-
-# %% [markdown]
-# serial:
-
-# %%
-# pph_sparse = [
-#     sparse_practically_perfect_hindcast(lsr_ds['report_type'].sel(valid_time=time))
-#     for time in tqdm(unique_valid_times)
-# ]
-# pph_sparse = xr.concat(pph_sparse, unique_valid_times, name='valid_time')
-# pph_sparse
-
-# %%
 
 
 def plot_pph_contours(dt: datetime, da: xr.DataArray):
@@ -270,76 +199,47 @@ def plot_pph_contours(dt: datetime, da: xr.DataArray):
 
     # Add title
     plt.title(
-        f"Practically Perfect Hindcast - {pd.to_datetime(dt).strftime('%Y-%m-%d %H:%M UTC')}, N={n_points}"
+        f"Practically Perfect Hindcast - {pd.to_datetime(dt).strftime('%Y-%m-%d %H:%M UTC')}, N={n_points}"  # noqa: E501
     )
 
     plt.tight_layout()
     plt.show()
 
 
-# %%
+if __name__ == "__main__":
+    lsr = inputs.LSR(
+        source=inputs.LSR_URI,
+        variables=["report"],
+        variable_mapping={"report": "reports"},
+        storage_options={"anon": True},
+    )
+    lsr_df = lsr.open_and_maybe_preprocess_data_from_source()
+    lsr_ds = lsr._custom_convert_to_dataset(lsr_df)
 
-fig = plt.figure(figsize=(12, 8))
-ax = plt.axes(projection=ccrs.PlateCarree())
+    unique_valid_times = np.unique(lsr_ds["valid_time"].values)
 
+    pph_sparse_list = joblib.Parallel(n_jobs=-1)(
+        joblib.delayed(sparse_practically_perfect_hindcast)(
+            lsr_ds["report_type"].sel(valid_time=time)
+        )
+        for time in tqdm(unique_valid_times)
+    )
+    # Find indices where pph_sparse_list is None and filter them out
+    valid_indices = [i for i, item in enumerate(pph_sparse_list) if item is not None]
+    filtered_valid_times = [unique_valid_times[i] for i in valid_indices]
 
-ax.add_feature(cfeature.COASTLINE, linewidth=0.5)
-ax.add_feature(cfeature.BORDERS, linewidth=0.5)
-ax.add_feature(cfeature.STATES, linewidth=0.2)
-ax.add_feature(cfeature.OCEAN, alpha=0.3)
-ax.add_feature(cfeature.LAND, alpha=0.3)
-ax.set_extent([-125, -66.5, 20, 50])
-
-# Get the data for this time
-time_filtered_data = lsr_df[lsr_df["valid_time"] == filtered_valid_times[865]]
-
-# Plot the original reports on top - red for tornado (3), green for hail (2)
-tornado_reports = time_filtered_data[time_filtered_data["report_type"] == 3]
-hail_reports = time_filtered_data[time_filtered_data["report_type"] == 2]
-
-if len(tornado_reports) > 0:
-    ax.scatter(
-        tornado_reports["longitude"],
-        tornado_reports["latitude"],
-        c="red",
-        s=50,
-        alpha=0.9,
-        transform=ccrs.PlateCarree(),
-        label="Tornado Reports",
-        marker="^",
-        edgecolors="darkred",
-        linewidths=1,
+    pph_sparse = xr.concat(
+        [n for n in pph_sparse_list if n is not None],
+        pd.Index(filtered_valid_times, name="valid_time"),
     )
 
-if len(hail_reports) > 0:
-    ax.scatter(
-        hail_reports["longitude"],
-        hail_reports["latitude"],
-        c="green",
-        s=50,
-        alpha=0.9,
-        transform=ccrs.PlateCarree(),
-        label="Hail Reports",
-        marker="s",
-        edgecolors="darkgreen",
-        linewidths=1,
-    )
+    # Optionally plot a PPH example (uncomment to plot)
+    # plot_pph_contours(filtered_valid_times[865], pph_sparse)
 
-ax.legend()
-plt.title(
-    f"Test Regridded Data & Storm Reports - {pd.to_datetime(filtered_valid_times[865]).strftime('%Y-%m-%d %H:%M UTC')}"
-)
-plt.tight_layout()
+    # Convert sparse array to dense and back to DataArray
+    pph_dense = pph_sparse.copy()
+    pph_dense.data = pph_sparse.data.todense()
+    pph_dense.name = "practically_perfect_hindcast"
 
-# %%
-plot_pph_contours(filtered_valid_times[865], pph_sparse)
-
-# %%
-# Convert sparse array to dense and back to DataArray
-pph_dense = pph_sparse.copy()
-pph_dense.data = pph_sparse.data.todense()
-pph_dense.name = "practically_perfect_hindcast"
-
-# %%
-# will become dataset on load
-pph_dense.to_zarr("practically_perfect_hindcast_20200104_20250430.zarr", mode="w")
+    # will become dataset on load
+    pph_dense.to_zarr("practically_perfect_hindcast_20200104_20250927.zarr", mode="w")

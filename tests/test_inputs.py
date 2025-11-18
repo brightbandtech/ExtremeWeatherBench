@@ -239,37 +239,6 @@ class TestInputBase:
         assert result.attrs["existing_attr"] == "existing_value"
         assert result.attrs["description"] == "Test dataset"
 
-    def test_set_name(self):
-        """Test setting the name using the set_name method."""
-
-        class TestInput(inputs.InputBase):
-            def _open_data_from_source(self):
-                return None
-
-            def subset_data_to_case(self, data, case_operator):
-                return data
-
-        test_input = TestInput(
-            name="original_name",
-            source="test",
-            variables=["test"],
-            variable_mapping={},
-            storage_options={},
-        )
-
-        # Verify original name
-        assert test_input.name == "original_name"
-
-        # Change the name using set_name method
-        test_input.set_name("new_name")
-
-        # Verify the name was changed
-        assert test_input.name == "new_name"
-
-        # Test with different name types
-        test_input.set_name("forecast_v2")
-        assert test_input.name == "forecast_v2"
-
 
 class TestMaybeMapVariableNames:
     """Test the maybe_map_variable_names method across different data types."""
@@ -583,25 +552,6 @@ class TestForecastBase:
         result = forecast.subset_data_to_case(sample_forecast_dataset, mock_case)
         assert isinstance(result, xr.Dataset)
 
-    def test_forecast_base_set_name_inheritance(self):
-        """Test that ForecastBase inherits set_name method from InputBase."""
-        forecast = inputs.ZarrForecast(
-            name="original_forecast",
-            source="test.zarr",
-            variables=["temperature"],
-            variable_mapping={},
-            storage_options={},
-        )
-
-        # Verify original name
-        assert forecast.name == "original_forecast"
-
-        # Use inherited set_name method
-        forecast.set_name("updated_forecast")
-
-        # Verify the name was changed
-        assert forecast.name == "updated_forecast"
-
     def test_forecast_base_subset_data_to_case_with_duplicate_init_times(
         self, sample_forecast_dataset
     ):
@@ -883,25 +833,6 @@ class TestTargetBase:
         # Default implementation should return inputs unchanged
         assert forecast_result is sample_forecast_dataset
         assert target_result is sample_era5_dataset
-
-    def test_target_base_set_name_inheritance(self):
-        """Test that TargetBase inherits set_name method from InputBase."""
-        target = inputs.ERA5(
-            name="original_era5",
-            source="gs://test-bucket/era5.zarr",
-            variables=["2m_temperature"],
-            variable_mapping={},
-            storage_options={},
-        )
-
-        # Verify original name
-        assert target.name == "original_era5"
-
-        # Use inherited set_name method
-        target.set_name("updated_era5")
-
-        # Verify the name was changed
-        assert target.name == "updated_era5"
 
 
 class TestEvaluationObject:

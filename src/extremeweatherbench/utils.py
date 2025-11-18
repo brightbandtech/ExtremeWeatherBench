@@ -6,10 +6,10 @@ import importlib
 import inspect
 import logging
 import pathlib
-import threading
 from typing import Any, Callable, Optional, Sequence, Union
 
 import numpy as np
+import numpy.typing as npt
 import pandas as pd  # type: ignore[import-untyped]
 import regionmask
 import sparse
@@ -19,62 +19,6 @@ import yaml  # type: ignore[import]
 from joblib import Parallel
 
 logger = logging.getLogger(__name__)
-
-
-class ThreadSafeDict:
-    """A thread-safe dictionary implementation using locks.
-
-    This class provides a thread-safe wrapper around a standard dictionary,
-    ensuring atomic operations for getting, setting, and deleting items.
-    Useful for caching data that needs to be shared between threads safely.
-    """
-
-    def __init__(self):
-        self._data = {}
-        self._lock = threading.Lock()
-
-    def __setitem__(self, key, value):
-        with self._lock:
-            self._data[key] = value
-
-    def __getitem__(self, key):
-        with self._lock:
-            return self._data[key]
-
-    def __delitem__(self, key):
-        with self._lock:
-            del self._data[key]
-
-    def __contains__(self, key):
-        with self._lock:
-            return key in self._data
-
-    def get(self, key, default=None):
-        with self._lock:
-            return self._data.get(key, default)
-
-    def clear(self):
-        with self._lock:
-            self._data.clear()
-
-    def __len__(self):
-        with self._lock:
-            return len(self._data)
-
-    def keys(self):
-        with self._lock:
-            # Return a copy to prevent concurrent modification during iteration
-            return list(self._data.keys())
-
-    def values(self):
-        with self._lock:
-            # Return a copy to prevent concurrent modification during iteration
-            return list(self._data.values())
-
-    def items(self):
-        with self._lock:
-            # Return a copy to prevent concurrent modification during iteration
-            return list(self._data.items())
 
 
 def convert_longitude_to_360(longitude: float) -> float:
@@ -545,6 +489,99 @@ class ParallelTqdm(Parallel):
             self.progress_bar.refresh()
         # update progressbar
         self.progress_bar.update(self.n_completed_tasks - self.progress_bar.n)
+
+
+def idx_to_coords(
+    lat_idx: npt.NDArray,
+    lon_idx: npt.NDArray,
+    lat_coords: npt.NDArray,
+    lon_coords: npt.NDArray,
+) -> tuple[npt.NDArray, npt.NDArray]:
+    """Convert indices to coordinates, handling NaN indices.
+
+    Args:
+        lat_idx: The latitude indices.
+        lon_idx: The longitude indices.
+        lat_coords: The latitude coordinates.
+        lon_coords: The longitude coordinates.
+
+    Returns:
+        The latitude and longitude coordinates.
+    """
+    # Create output arrays with NaN
+    lat_coords_out = np.full_like(lat_idx, np.nan)
+    lon_coords_out = np.full_like(lon_idx, np.nan)
+
+    # Find valid (non-NaN) indices
+    valid_mask = ~(np.isnan(lat_idx) | np.isnan(lon_idx))
+
+    if valid_mask.any():
+        # Convert to integer indices only where valid
+        int_lat_idx = np.where(valid_mask, lat_idx.astype(int), 0)
+        int_lon_idx = np.where(valid_mask, lon_idx.astype(int), 0)
+
+        # Use advanced indexing to get coordinates
+        lat_coords_out[valid_mask] = lat_coords[int_lat_idx[valid_mask]]
+        lon_coords_out[valid_mask] = lon_coords[int_lon_idx[valid_mask]]
+
+    return lat_coords_out, lon_coords_out
+
+
+def convert_day_yearofday_to_time(
+    dataset: Union[xr.Dataset, xr.DataArray], year: int
+) -> Union[xr.Dataset, xr.DataArray]:
+    """Convert dayofyear and hour to new time coordinate.
+
+    Args:
+        dataset: The input xarray dataset or dataarray.
+        year: The base year to use for the time coordinate.
+
+    Returns:
+        The dataset or dataarray with a new time coordinate.
+    """
+    # Create a new time coordinate by combining dayofyear and hour
+    time_dim = pd.date_range(
+        start=f"{year}-01-01",
+        periods=len(dataset["dayofyear"]) * len(dataset["hour"]),
+        freq="6h",
+    )
+    dataset = dataset.stack(valid_time=("dayofyear", "hour")).drop_vars(
+        ["dayofyear", "hour"]
+    )
+    # Assign the new time coordinate to the dataset
+    dataset = dataset.assign_coords(valid_time=time_dim)
+
+    return dataset
+
+
+def interp_climatology_to_target(
+    target: xr.DataArray, climatology: xr.DataArray
+) -> xr.DataArray:
+    """Interpolate a climatology to a target data array.
+
+    Args:
+        target: The target data array to interpolate the climatology to.
+        climatology: The climatology data array to interpolate.
+
+    Returns:
+        The interpolated climatology data array. If the target is sparse, the
+        climatology is interpolated to the target coordinates. If the target is not
+        sparse, the climatology is interpolated to the target coordinates.
+    """
+    # If the target is sparse or has less than 3 dimensions, interpolate the
+    # climatology using stacked dim
+    if isinstance(target.data, sparse.COO) or target.ndim < 3:
+        return climatology.interp(
+            # stacked as a data variable is enforced by stack_sparse_data_from_dims
+            latitude=target["stacked"]["latitude"],
+            longitude=target["stacked"]["longitude"],
+            method="nearest",
+            kwargs={"fill_value": None},
+        )
+    # Otherwise, interpolate the climatology to the target coordinates
+    return climatology.interp_like(
+        target, method="nearest", kwargs={"fill_value": None}
+    )
 
 
 def reduce_dataarray(

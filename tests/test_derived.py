@@ -919,3 +919,112 @@ class TestNormalizeVariable:
         assert string_result != derived_result
         assert isinstance(string_result, str)
         assert isinstance(derived_result, str)
+
+
+class MultiOutputDerivedVariable(derived.DerivedVariable):
+    """A derived variable that outputs multiple variables."""
+
+    variables = ["eastward_wind", "northward_wind"]
+
+    def derive_variable(self, data: xr.Dataset, **kwargs) -> xr.Dataset:
+        """Compute multiple output variables."""
+        u_component = data["eastward_wind"].mean(dim="level")
+        v_component = data["northward_wind"].mean(dim="level")
+        magnitude = np.sqrt(u_component**2 + v_component**2)
+
+        return xr.Dataset(
+            {
+                "u_output": u_component,
+                "v_output": v_component,
+                "magnitude": magnitude,
+            }
+        )
+
+
+class TestOutputVariables:
+    """Test the output_variables parameter functionality."""
+
+    def test_output_variables_none_returns_all(self, sample_dataset):
+        """When output_variables is None, all computed vars returned."""
+        derived_var = MultiOutputDerivedVariable(output_variables=None)
+        result = derived.maybe_derive_variables(sample_dataset, [derived_var])
+
+        assert isinstance(result, xr.Dataset)
+        # All three output variables should be present
+        assert "u_output" in result.data_vars
+        assert "v_output" in result.data_vars
+        assert "magnitude" in result.data_vars
+
+    def test_output_variables_empty_returns_all(self, sample_dataset):
+        """When output_variables is empty list, all computed vars returned."""
+        derived_var = MultiOutputDerivedVariable(output_variables=[])
+        result = derived.maybe_derive_variables(sample_dataset, [derived_var])
+
+        assert isinstance(result, xr.Dataset)
+        # All three output variables should be present
+        assert "u_output" in result.data_vars
+        assert "v_output" in result.data_vars
+        assert "magnitude" in result.data_vars
+
+    def test_output_variables_single_subset(self, sample_dataset):
+        """When output_variables has one var, only that is returned."""
+        derived_var = MultiOutputDerivedVariable(output_variables=["u_output"])
+        result = derived.maybe_derive_variables(sample_dataset, [derived_var])
+
+        assert isinstance(result, xr.Dataset)
+        # Only u_output should be present
+        assert "u_output" in result.data_vars
+        assert "v_output" not in result.data_vars
+        assert "magnitude" not in result.data_vars
+
+    def test_output_variables_multiple_subset(self, sample_dataset):
+        """When output_variables has multiple vars, only those returned."""
+        derived_var = MultiOutputDerivedVariable(
+            output_variables=["u_output", "v_output"]
+        )
+        result = derived.maybe_derive_variables(sample_dataset, [derived_var])
+
+        assert isinstance(result, xr.Dataset)
+        # Only u_output and v_output should be present
+        assert "u_output" in result.data_vars
+        assert "v_output" in result.data_vars
+        assert "magnitude" not in result.data_vars
+
+    def test_output_variables_missing_warns(self, sample_dataset, caplog):
+        """When output_variables includes missing vars, warning logged."""
+        derived_var = MultiOutputDerivedVariable(
+            output_variables=["u_output", "nonexistent_var"]
+        )
+
+        result = derived.maybe_derive_variables(sample_dataset, [derived_var])
+
+        assert isinstance(result, xr.Dataset)
+        # Only u_output should be present
+        assert "u_output" in result.data_vars
+        assert "nonexistent_var" not in result.data_vars
+        # Check that a warning was logged
+        assert "missing: {'nonexistent_var'}" in caplog.text
+
+    def test_output_variables_all_missing_returns_original(
+        self, sample_dataset, caplog
+    ):
+        """When all output_variables missing, return original dataset."""
+        derived_var = MultiOutputDerivedVariable(output_variables=["var1", "var2"])
+
+        result = derived.maybe_derive_variables(sample_dataset, [derived_var])
+
+        # Should return original dataset since no vars available
+        xr.testing.assert_equal(result, sample_dataset)
+        assert "None of the specified output_variables" in caplog.text
+
+    def test_output_variables_preserves_data_values(self, sample_dataset):
+        """output_variables correctly filters but preserves data."""
+        derived_var = MultiOutputDerivedVariable(output_variables=["magnitude"])
+        result = derived.maybe_derive_variables(sample_dataset, [derived_var])
+
+        # Compute expected magnitude
+        u = sample_dataset["eastward_wind"].mean(dim="level")
+        v = sample_dataset["northward_wind"].mean(dim="level")
+        expected_mag = np.sqrt(u**2 + v**2)
+
+        xr.testing.assert_allclose(result["magnitude"], expected_mag)
