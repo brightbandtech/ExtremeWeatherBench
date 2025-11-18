@@ -2,6 +2,7 @@ import logging
 
 import numpy as np
 import xarray as xr
+from dask.distributed import Client
 
 from extremeweatherbench import calc, cases, derived, evaluate, inputs, metrics
 
@@ -61,9 +62,7 @@ ibtracs_target = inputs.IBTrACS()
 hres_forecast = inputs.ZarrForecast(
     name="hres_forecast",
     source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
-    variables=[
-        derived.TropicalCycloneTrackVariables(output_variables=["surface_wind_speed"])
-    ],
+    variables=[derived.TropicalCycloneTrackVariables()],
     variable_mapping=inputs.HRES_metadata_variable_mapping,
     storage_options={"remote_options": {"anon": True}},
     preprocess=_preprocess_hres_forecast_dataset,
@@ -72,9 +71,7 @@ hres_forecast = inputs.ZarrForecast(
 fcn_forecast = inputs.KerchunkForecast(
     name="fcn_forecast",
     source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
-    variables=[
-        derived.TropicalCycloneTrackVariables(output_variables=["surface_wind_speed"])
-    ],
+    variables=[derived.TropicalCycloneTrackVariables()],
     variable_mapping=inputs.CIRA_metadata_variable_mapping,
     preprocess=_preprocess_bb_cira_tc_forecast_dataset,
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
@@ -83,14 +80,25 @@ fcn_forecast = inputs.KerchunkForecast(
 pangu_forecast = inputs.KerchunkForecast(
     name="pangu_forecast",
     source="gs://extremeweatherbench/PANG_v100_GFS.parq",
-    variables=[
-        derived.TropicalCycloneTrackVariables(output_variables=["surface_wind_speed"])
-    ],
+    variables=[derived.TropicalCycloneTrackVariables()],
     variable_mapping=inputs.CIRA_metadata_variable_mapping,
     preprocess=_preprocess_bb_cira_tc_forecast_dataset,
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
 )
 
+
+composite = metrics.LandfallMetric(
+    metrics=[
+        metrics.LandfallIntensityMAE,
+        metrics.LandfallTimeME,
+        metrics.LandfallDisplacement,
+    ],
+    approach="next",
+    forecast_variable="air_pressure_at_mean_sea_level",
+    target_variable="air_pressure_at_mean_sea_level",
+)
+# Note: compute_metric() requires DataArrays, not InputBase objects.
+# Use the evaluation pipeline below to properly extract DataArrays and compute metrics.
 # Evaluation objects for tropical cyclone metrics
 # Note: Landfall metrics work with DataArrays that have lat/lon/time coords
 # For intensity metrics, specify variables explicitly to evaluate different
@@ -99,23 +107,7 @@ tc_evaluation_object = [
     # HRES forecast
     inputs.EvaluationObject(
         event_type="tropical_cyclone",
-        metric_list=[
-            metrics.LandfallTimeME(
-                forecast_variable="surface_wind_speed",
-                target_variable="surface_wind_speed",
-                preserve_dims="init_time",
-            ),
-            metrics.LandfallDisplacement(
-                forecast_variable="surface_wind_speed",
-                target_variable="surface_wind_speed",
-                preserve_dims="init_time",
-            ),
-            metrics.LandfallIntensityMAE(
-                forecast_variable="surface_wind_speed",
-                target_variable="surface_wind_speed",
-                preserve_dims="init_time",
-            ),
-        ],
+        metric_list=[composite],
         target=ibtracs_target,
         forecast=hres_forecast,
     ),
@@ -142,13 +134,14 @@ tc_evaluation_object = [
     #     forecast=fcn_forecast,
     # ),
 ]
-
-test_ewb = evaluate.ExtremeWeatherBench(
-    case_metadata=case_yaml,
-    evaluation_objects=tc_evaluation_object,
-)
-logger.info("Starting EWB run")
-outputs = test_ewb.run(
-    n_jobs=1,
-)
-outputs.to_csv("tc_metric_test_results.csv")
+if __name__ == "__main__":
+    test_ewb = evaluate.ExtremeWeatherBench(
+        case_metadata=case_yaml,
+        evaluation_objects=tc_evaluation_object,
+    )
+    with Client():
+        logger.info("Starting EWB run")
+        outputs = test_ewb.run(
+            parallel_config={"backend": "dask", "n_jobs": 1},
+        )
+        outputs.to_csv("tc_metric_test_results.csv")
