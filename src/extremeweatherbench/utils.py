@@ -650,4 +650,4 @@ def load_land_geometry(resolution: str = "10m") -> shapely.geometry.Polygon:
         category="physical", name="land", resolution=resolution
     )
     land_geoms = list(shpreader.Reader(land).geometries())
-    return shapely.ops.unary_union(land_geoms).buffer(0.1)
+    return shapely.ops.unary_union(land_geoms)
