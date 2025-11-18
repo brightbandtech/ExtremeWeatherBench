@@ -439,12 +439,12 @@ def _convert_detections_to_dataset(
                     ["lead_time", "valid_time"],
                     np.full((0, 0), np.nan),
                 ),
-                "latitude": (["lead_time", "valid_time"], np.full((0, 0), np.nan)),
-                "longitude": (["lead_time", "valid_time"], np.full((0, 0), np.nan)),
             },
             coords={
                 "lead_time": [],
                 "valid_time": [],
+                "latitude": (["lead_time", "valid_time"], np.full((0, 0), np.nan)),
+                "longitude": (["lead_time", "valid_time"], np.full((0, 0), np.nan)),
             },
         )
 
@@ -490,22 +490,23 @@ def _convert_detections_to_dataset(
         lat_out[lt_idx, vt_idx] = float(lats[det_idx])
         lon_out[lt_idx, vt_idx] = float(lons[det_idx])
 
-    # Create dataset
-    return xr.Dataset(
+    # Build dataset with MSLP and wind speed
+    ds = xr.Dataset(
         {
             "air_pressure_at_mean_sea_level": (
                 ["lead_time", "valid_time"],
                 slp_out,
             ),
             "surface_wind_speed": (["lead_time", "valid_time"], wind_out),
-            "latitude": (["lead_time", "valid_time"], lat_out),
-            "longitude": (["lead_time", "valid_time"], lon_out),
         },
         coords={
             "lead_time": lead_times,
             "valid_time": valid_times,
+            "latitude": (["lead_time", "valid_time"], lat_out),
+            "longitude": (["lead_time", "valid_time"], lon_out),
         },
     )
+    return ds
 
 
 Location = namedtuple("Location", ["latitude", "longitude"])
