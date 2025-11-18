@@ -437,7 +437,7 @@ def find_landfalls(
         track_data = utils.convert_valid_time_to_init_time(track_data)
 
         # Flatten to single time dimension for vectorized processing
-        track_data_flat = track_data.stack(time=("lead_time", "init_time"))
+        track_data_flat = track_data.stack(time=("init_time", "lead_time"))
 
         # Vectorized landfall detection
         landfall_mask = _detect_landfalls_wrapper(track_data_flat, land_geom)
