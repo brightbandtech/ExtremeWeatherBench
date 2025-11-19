@@ -695,7 +695,16 @@ class LSR(TargetBase):
 
             data.loc[eastern_hemisphere_mask] = eastern_data
 
+        # Convert longitude back to 0 - 360
+        data["longitude"] = utils.convert_longitude_to_360(data["longitude"])
         data = data.set_index(["valid_time", "latitude", "longitude"])
+
+        # Convert string columns to binary indicators (1.0)
+        # String presence indicates an event occurred at that location
+        for col in data.columns:
+            if data[col].dtype == object or data[col].dtype.name == "string":
+                data[col] = 1.0
+
         data = xr.Dataset.from_dataframe(
             data[~data.index.duplicated(keep="first")], sparse=True
         )
@@ -1098,7 +1107,10 @@ def align_forecast_to_target(
             "nearest" if method == "nearest" else "linear"
         )
 
-        interp_kwargs = cast(dict[str, Any], {"method": interp_method})
+        interp_kwargs = cast(
+            dict[str, Any],
+            {"method": interp_method, "kwargs": {"fill_value": "extrapolate"}},
+        )
         interp_kwargs.update(spatial_dims)
 
         time_space_aligned_forecast = time_aligned_forecast.interp(**interp_kwargs)

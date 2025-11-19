@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import polars as pl
 import pytest
+import sparse
 import xarray as xr
 
 from extremeweatherbench import inputs
@@ -1495,6 +1496,13 @@ class TestLSR:
         result = lsr._custom_convert_to_dataset(sample_lsr_dataframe)
 
         assert isinstance(result, xr.Dataset)
+        # Verify string columns (like report_type) are converted to 1.0
+        if "report_type" in result.data_vars:
+            # Check that underlying data is numeric
+            assert np.issubdtype(result["report_type"].dtype, np.number)
+            # Check that non-fill values equal 1.0
+            if isinstance(result["report_type"].data, sparse.COO):
+                assert (result["report_type"].data.data == 1.0).all()
 
     def test_lsr_custom_convert_to_dataset_invalid_input(self):
         """Test LSR custom conversion with invalid input."""
