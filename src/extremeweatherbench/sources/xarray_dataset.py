@@ -18,9 +18,6 @@ def safely_pull_variables(
 ) -> xr.Dataset:
     """Handle variable extraction for xarray Dataset.
 
-    Preserves essential coordinate variables (latitude, longitude, valid_time)
-    even if not explicitly requested, as they may be needed by derived variables.
-
     Args:
         data: The xarray Dataset to extract variables from.
         variables: List of required variable names to extract.
