@@ -735,6 +735,11 @@ def _interpolate_and_format_landfalls(
     if not landfall_data:
         return None
 
+    # Check if all landfall values are NaN
+    all_nan = all(np.isnan(d.get("value", np.nan)) for d in landfall_data)
+    if all_nan:
+        return None
+
     # Format output based on grouping
     if group_by == "init_time" and init_times is not None:
         # Group by init_time and optionally keep first per group

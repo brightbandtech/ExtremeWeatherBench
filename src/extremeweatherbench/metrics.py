@@ -1249,20 +1249,31 @@ class LandfallMetric(CompositeMetric):
             forecast, return_next_landfall=return_next_landfall
         )
 
+        if forecast_landfalls is None:
+            return None, None
+
         # Get only first forecast landfall per init_time
-        forecast_landfalls = forecast_landfalls.isel(landfall=0)
+        if "landfall" in forecast_landfalls.dims:
+            forecast_landfalls = forecast_landfalls.isel(landfall=0)
 
         # Get all target landfalls
         target_landfalls_pre_init = calc.find_landfalls(
             target, return_next_landfall=return_next_landfall
         )
+
+        if target_landfalls_pre_init is None:
+            return None, None
+
         if return_next_landfall:
             # Find next target landfall for each init_time
             target_landfalls = calc.find_next_landfall_for_init_time(
                 forecast_landfalls, target_landfalls_pre_init
             )
         else:
-            target_landfalls = target_landfalls_pre_init.isel(landfall=0)
+            if "landfall" in target_landfalls_pre_init.dims:
+                target_landfalls = target_landfalls_pre_init.isel(landfall=0)
+            else:
+                target_landfalls = target_landfalls_pre_init
             forecast_landfalls = forecast_landfalls.where(
                 forecast_landfalls.init_time < target_landfalls.valid_time.values,
                 drop=True,
@@ -1514,6 +1525,8 @@ class LandfallDisplacement(LandfallMetric, BaseMetric):
             forecast_landfall, target_landfall = self.compute_landfalls(
                 forecast=forecast, target=target
             )
+        if forecast_landfall is None or target_landfall is None:
+            return xr.DataArray(np.nan)
         return self._calculate_distance(forecast_landfall, target_landfall)
 
 
@@ -1605,6 +1618,8 @@ class LandfallTimeME(LandfallMetric, ME):
             forecast_landfall, target_landfall = self.compute_landfalls(
                 forecast=forecast, target=target
             )
+        if forecast_landfall is None or target_landfall is None:
+            return xr.DataArray(np.nan)
         return self._calculate_time_difference(forecast_landfall, target_landfall)
 
 
@@ -1681,4 +1696,6 @@ class LandfallIntensityMAE(LandfallMetric, MAE):
             forecast_landfall, target_landfall = self.compute_landfalls(
                 forecast=forecast, target=target
             )
+        if forecast_landfall is None or target_landfall is None:
+            return xr.DataArray(np.nan)
         return self._compute_absolute_error(forecast_landfall, target_landfall)
