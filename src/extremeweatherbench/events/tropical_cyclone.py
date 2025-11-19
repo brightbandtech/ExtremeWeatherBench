@@ -21,15 +21,20 @@ logger = logging.getLogger(__name__)
 def generate_tc_tracks_by_init_time(
     sea_level_pressure: xr.DataArray,
     wind_speed: xr.DataArray,
-    geopotential_thickness: Optional[xr.DataArray],
     tc_track_analysis_data: xr.DataArray,
-    slp_contour_magnitude: float = 200,
-    dz_contour_magnitude: float = -6,
-    min_distance: int = 5,
+    geopotential_thickness: xr.DataArray,
+    slp_contour_magnitude: float = 200.0,
+    dz_contour_magnitude: float = -6.0,
+    min_distance_between_peaks: int = 5,
     max_spatial_distance_degrees: float = 5.0,
-    max_temporal_hours: float = 48,
+    max_temporal_hours: float = 48.0,
     use_contour_validation: bool = True,
-    min_track_length: int = 10,
+    min_track_timesteps: int = 10,
+    latitude_max_degrees: float = 50.0,
+    surface_pressure_threshold: float = 100500.0,
+    orography: Optional[xr.DataArray] = None,
+    max_gc_distance_slp_contour_degrees: float = 5.5,
+    max_gc_distance_dz_contour_degrees: float = 6.5,
 ) -> xr.Dataset:
     """Process all init_times and detect tropical cyclones.
 
@@ -45,19 +50,23 @@ def generate_tc_tracks_by_init_time(
     Args:
         sea_level_pressure: Sea level pressure DataArray
         wind_speed: Wind speed DataArray
-        geopotential_thickness: Geopotential thickness DataArray (optional)
+        geopotential_thickness: Geopotential thickness DataArray
         tc_track_analysis_data: Tropical cyclone track analysis data
         slp_contour_magnitude: SLP contour threshold for validation
         dz_contour_magnitude: DZ contour threshold for validation
-        min_distance: Minimum distance between detected peaks
+        min_distance_between_peaks: Minimum distance between detected peaks
         max_spatial_distance_degrees: Max spatial distance for TC track
             data filtering
         max_temporal_hours: Maximum temporal window from init_time
         use_contour_validation: Whether to use contour validation
-        min_track_length: Minimum consecutive lead times for valid tracks
-
+        min_track_timesteps: Minimum consecutive lead times for valid tracks
+        latitude_max_degrees: Maximum latitude for valid tracks
+        surface_pressure_threshold: Maximum surface pressure threshold for valid peaks
+        orography: Orography dataarray
+        max_gc_distance_slp_contour_degrees: Max great circle distance for SLP contour
+        max_gc_distance_dz_contour_degrees: Max great circle distance for DZ contour
     Returns:
-        xr.Dataset with detected tropical cyclone tracks
+        xarray Dataset with detected tropical cyclone tracks
     """
     logger.info("Generating TC tracks by init_time")
     # Convert TC track data to DataFrame
@@ -86,11 +95,7 @@ def generate_tc_tracks_by_init_time(
     # Transform data to have init_time as a dimension
     slp_transformed = utils.convert_valid_time_to_init_time(sea_level_pressure)
     wind_transformed = utils.convert_valid_time_to_init_time(wind_speed)
-    if geopotential_thickness is not None:
-        dz_transformed = utils.convert_valid_time_to_init_time(geopotential_thickness)
-    else:
-        # Create NaN-filled array as sentinel for "no dz data"
-        dz_transformed = xr.full_like(slp_transformed, np.nan)
+    dz_transformed = utils.convert_valid_time_to_init_time(geopotential_thickness)
 
     # Create init_time_idx array for tracking
     n_init_times = len(slp_transformed.init_time)
@@ -102,7 +107,6 @@ def generate_tc_tracks_by_init_time(
 
     # Use apply_ufunc to parallelize over init_time
     logger.debug("Processing %d init_times", n_init_times)
-    use_validation = use_contour_validation and geopotential_thickness is not None
     results = xr.apply_ufunc(
         _process_single_init_time,
         slp_transformed,
@@ -116,13 +120,13 @@ def generate_tc_tracks_by_init_time(
             "latitude": latitude.values,
             "longitude": longitude.values,
             "tc_track_data_df": tc_track_data_df,
-            "min_distance": min_distance,
+            "min_distance_between_peaks": min_distance_between_peaks,
             "max_spatial_distance_degrees": max_spatial_distance_degrees,
             "max_temporal_hours": max_temporal_hours,
             "slp_contour_magnitude": slp_contour_magnitude,
             "dz_contour_magnitude": dz_contour_magnitude,
-            "use_contour_validation": use_validation,
-            "min_track_length": min_track_length,
+            "use_contour_validation": use_contour_validation,
+            "min_track_timesteps": min_track_timesteps,
         },
         input_core_dims=[
             ["lead_time", "latitude", "longitude"],
@@ -179,7 +183,7 @@ def generate_tc_tracks_by_init_time(
 def _process_single_init_time(
     slp_data: npt.NDArray,  # (lead_time, lat, lon)
     wind_data: npt.NDArray,  # (lead_time, lat, lon)
-    dz_data: npt.NDArray,  # (lead_time, lat, lon) or all NaN
+    dz_data: npt.NDArray,  # (lead_time, lat, lon)
     init_time_idx: int,
     init_time_values: npt.NDArray,  # Unique init_time values from transform
     init_time_coord: xr.DataArray,  # Original 2D init_time coordinate
@@ -187,13 +191,13 @@ def _process_single_init_time(
     latitude: npt.NDArray,
     longitude: npt.NDArray,
     tc_track_data_df: pd.DataFrame,
-    min_distance: int,
+    min_distance_between_peaks: int,
     max_spatial_distance_degrees: float,
     max_temporal_hours: float,
     slp_contour_magnitude: float,
     dz_contour_magnitude: float,
     use_contour_validation: bool,
-    min_track_length: int,
+    min_track_timesteps: int,
 ) -> dict:
     """Process tropical cyclone track detection for a single init_time.
 
@@ -208,13 +212,13 @@ def _process_single_init_time(
         latitude: Latitude coordinates
         longitude: Longitude coordinates
         tc_track_data_df: TC track data for validation
-        min_distance: Min distance between peaks
+        min_distance_between_peaks: Min distance between peaks
         max_spatial_distance_degrees: Max spatial distance
         max_temporal_hours: Max temporal buffer
         slp_contour_magnitude: SLP contour threshold
         dz_contour_magnitude: DZ contour threshold
         use_contour_validation: Whether to use contour validation
-        min_track_length: Minimum consecutive lead times for valid tracks
+        min_track_timesteps: Minimum consecutive lead times for valid tracks
 
     Returns:
         Dict containing filtered list of detections for this init_time
@@ -251,7 +255,7 @@ def _process_single_init_time(
     for timestep_idx in range(n_timesteps):
         slp_slice = slp_data[timestep_idx]
         wind_slice = wind_data[timestep_idx]
-        dz_slice = dz_data[timestep_idx] if dz_data is not None else None
+        dz_slice = dz_data[timestep_idx]
 
         peaks = _find_peaks_batch(
             slp_slice,
@@ -259,7 +263,7 @@ def _process_single_init_time(
             timestep_idx,
             valid_times=valid_times_seq,
             tc_track_data_df=tc_track_data_df,
-            min_distance=min_distance,
+            min_distance_between_peaks=min_distance_between_peaks,
             latitude=latitude,
             longitude=longitude,
             max_spatial_distance_degrees=max_spatial_distance_degrees,
@@ -357,7 +361,7 @@ def _process_single_init_time(
                 }
 
     # Filter tracks by min_track_length consecutive lead times
-    if detections and min_track_length > 1:
+    if detections and min_track_timesteps > 1:
         # Group detections by track_id and collect lead time indices
         track_lead_times: dict[int, set[int]] = {}
         for detection in detections:
@@ -392,7 +396,7 @@ def _process_single_init_time(
                     current_consecutive = 1
 
             # Only keep tracks with min_track_length consecutive lead times
-            if max_consecutive >= min_track_length:
+            if max_consecutive >= min_track_timesteps:
                 valid_track_ids.add(track_id)
 
         # Filter detections to only include valid tracks
@@ -400,11 +404,11 @@ def _process_single_init_time(
             d for d in detections if d["track_id"] in valid_track_ids
         ]
         logger.debug(
-            "Init %d: Filtered %d -> %d detections (min_track_length=%d)",
+            "Init %d: Filtered %d -> %d detections (min_track_timesteps=%d)",
             init_time_idx,
             len(detections),
             len(filtered_detections),
-            min_track_length,
+            min_track_timesteps,
         )
         detections = filtered_detections
 
@@ -672,11 +676,11 @@ def find_valid_candidates(
 
 def _find_peaks_batch(
     slp_slice: npt.NDArray,
-    dz_slice: Optional[npt.NDArray],
+    dz_slice: npt.NDArray,
     timestep_idx: int,
     valid_times: list,
     tc_track_data_df: pd.DataFrame,
-    min_distance: int,
+    min_distance_between_peaks: int,
     latitude: npt.NDArray,
     longitude: npt.NDArray,
     max_spatial_distance_degrees: float,
@@ -695,7 +699,7 @@ def _find_peaks_batch(
         timestep_idx: Index of current timestep
         valid_times: List of valid times for all timesteps
         tc_track_data_df: TC track data
-        min_distance: Minimum distance between peaks
+        min_distance_between_peaks: Minimum distance between peaks
         latitude: Latitude coordinates
         longitude: Longitude coordinates
         max_spatial_distance_degrees: Max spatial distance
@@ -718,14 +722,14 @@ def _find_peaks_batch(
 
     return _find_peaks_for_time_slice(
         slp_slice,
+        dz_slice,
         current_valid_time,
         tc_track_data_df,
-        min_distance,
+        min_distance_between_peaks,
         latitude,
         longitude,
         max_spatial_distance_degrees,
         max_temporal_hours,
-        dz_slice if dz_slice is not None else np.array([]),
         slp_contour_magnitude,
         dz_contour_magnitude,
         use_contour_validation,
@@ -735,14 +739,14 @@ def _find_peaks_batch(
 
 def _find_peaks_for_time_slice(
     slp_slice: npt.NDArray,
+    dz_slice: npt.NDArray,
     current_valid_time: pd.Timestamp,
     tc_track_data_df: pd.DataFrame,
-    min_distance: int,
+    min_distance_between_peaks: int,
     lat_coords: Optional[npt.NDArray] = None,
     lon_coords: Optional[npt.NDArray] = None,
     max_spatial_distance_degrees: float = 5.0,
     max_temporal_hours: float = 48.0,
-    dz_slice: Optional[npt.NDArray] = None,
     slp_contour_magnitude: float = 200,
     dz_contour_magnitude: float = -6,
     use_contour_validation: bool = True,
@@ -752,14 +756,14 @@ def _find_peaks_for_time_slice(
 
     Args:
         slp_slice: Sea level pressure slice
+        dz_slice: Geopotential thickness slice
         current_valid_time: Current valid time being processed
         tc_track_data_df: Tropical cyclone track data
-        min_distance: Minimum distance between peaks
+        min_distance_between_peaks: Minimum distance between peaks
         lat_coords: Latitude coordinates
         lon_coords: Longitude coordinates
         max_spatial_distance_degrees: Max spatial distance
         max_temporal_hours: Max temporal buffer for genesis
-        dz_slice: Geopotential thickness slice
         slp_contour_magnitude: SLP contour magnitude
         dz_contour_magnitude: DZ contour magnitude
         use_contour_validation: Whether to use contour validation
@@ -816,13 +820,13 @@ def _find_peaks_for_time_slice(
     # Find peaks
     peaks = peak_local_max(
         masked_slp,
-        min_distance=min_distance,
+        min_distance=min_distance_between_peaks,
         exclude_border=False,
         threshold_abs=-pressure_threshold,
     )
 
     # Apply contour validation if requested and DZ data is available
-    if use_contour_validation and dz_slice is not None and len(peaks) > 0:
+    if use_contour_validation and len(peaks) > 0:
         validated_peaks = []
 
         # Create temporary DataArrays for contour analysis

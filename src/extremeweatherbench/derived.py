@@ -186,10 +186,16 @@ class TropicalCycloneTrackVariables(DerivedVariable):
             )
 
         tctracks_ds = tropical_cyclone.generate_tc_tracks_by_init_time(
-            prepared_data["air_pressure_at_mean_sea_level"],
-            prepared_data["surface_wind_speed"],
-            prepared_data.get("geopotential_thickness", None),
-            tc_track_data,
+            sea_level_pressure=prepared_data["air_pressure_at_mean_sea_level"],
+            wind_speed=prepared_data["surface_wind_speed"],
+            tc_track_analysis_data=tc_track_data,
+            geopotential_thickness=prepared_data.get("geopotential_thickness", None),
+            slp_contour_magnitude=200.0,
+            dz_contour_magnitude=-6.0,
+            min_distance_between_peaks=5,
+            max_spatial_distance_degrees=5.0,
+            max_temporal_hours=48.0,
+            use_contour_validation=True,
         )
         return tctracks_ds
 
