@@ -56,34 +56,34 @@ def generate_tc_tracks_by_init_time(
     Note that orography filtering is not currently supported.
 
     Args:
-        sea_level_pressure: Sea level pressure DataArray in Pa.
-        wind_speed: Wind speed DataArray in m/s.
-        geopotential_thickness: Geopotential thickness DataArray in m.
-        tc_track_analysis_data: Tropical cyclone track analysis data.
+        sea_level_pressure: Sea level pressure DataArray in Pa
+        wind_speed: Wind speed DataArray in m/s
+        geopotential_thickness: Geopotential thickness DataArray in m
+        tc_track_analysis_data: Tropical cyclone track analysis data
         slp_contour_magnitude: SLP contour threshold for validation in Pa. Defaults to
-            200.0 Pa.
+            200.0 Pa
         dz_contour_magnitude: DZ contour threshold for validation in m. Defaults to
-            -6.0 m.
+            -6.0 m
         min_distance_between_peaks: Minimum distance between detected peaks in grid
-            points. Defaults to 5.
+            points. Defaults to 5
         max_spatial_distance_degrees: Max spatial distance for TC track data filtering
-            in degrees. Defaults to 5.0 degrees.
+            in degrees. Defaults to 5.0 degrees
         max_temporal_hours: Maximum temporal window from init_time in hours. Defaults
-            to 48.0 hours.
-        use_contour_validation: Whether to use contour validation. Defaults to True.
+            to 48.0 hours
+        use_contour_validation: Whether to use contour validation. Defaults to True
         min_track_timesteps: Minimum consecutive lead times for valid tracks. Defaults
-            to 10.
+            to 10
         latitude_max_degrees: Maximum latitude for valid tracks in degrees. Defaults
-            to 50.0 degrees.
+            to 50.0 degrees
         surface_pressure_threshold: Maximum surface pressure threshold for valid peaks
-            in Pa. Defaults to 100500.0 Pa.
-        orography: Orography dataarray in m. Defaults to None.
+            in Pa. Defaults to 100500.0 Pa
+        orography: Orography dataarray in m. Defaults to None
         max_gc_distance_slp_contour_degrees: Max great circle distance for SLP contour
-            in degrees. Defaults to 5.5 degrees.
+            in degrees. Defaults to 5.5 degrees
         max_gc_distance_dz_contour_degrees: Max great circle distance for DZ contour
-            in degrees. Defaults to 6.5 degrees.
+            in degrees. Defaults to 6.5 degrees
         orography_filter_threshold: Threshold for the orography filter's max height
-            in m. Defaults to 150.0 m.
+            in m. Defaults to 150.0 m
 
     Returns:
         xarray Dataset with detected tropical cyclone tracks
@@ -242,33 +242,33 @@ def _process_single_init_time(
     Note that orography filtering is not currently supported.
 
     Args:
-        slp_data: Sea level pressure (lead_time, lat, lon) in Pa.
-        wind_data: Wind speed (lead_time, lat, lon) in m/s.
-        dz_data: Geopotential thickness (lead_time, lat, lon) in m.
-        init_time_idx: Index of this init_time (for global track IDs).
-        init_time_values: Unique init_time values from transformed data.
-        init_time_coord: Original 2D init_time coordinate.
-        time_coord: Original valid_time coordinate.
-        latitude: Latitude coordinates in degrees.
-        longitude: Longitude coordinates in degrees.
-        tc_track_data_df: TC track data for validation.
-        min_distance_between_peaks: Min distance between peaks in grid points.
-        max_spatial_distance_degrees: Max spatial distance in degrees.
-        max_temporal_hours: Max temporal buffer in hours.
-        slp_contour_magnitude: SLP contour threshold in Pa.
-        dz_contour_magnitude: DZ contour threshold in m.
-        use_contour_validation: Whether to use contour validation.
-        min_track_timesteps: Minimum consecutive lead times for valid tracks.
-        latitude_max_degrees: Maximum latitude for valid tracks in degrees.
+        slp_data: Sea level pressure (lead_time, lat, lon) in Pa
+        wind_data: Wind speed (lead_time, lat, lon) in m/s
+        dz_data: Geopotential thickness (lead_time, lat, lon) in m
+        init_time_idx: Index of this init_time (for global track IDs)
+        init_time_values: Unique init_time values from transformed data
+        init_time_coord: Original 2D init_time coordinate
+        time_coord: Original valid_time coordinate
+        latitude: Latitude coordinates in degrees
+        longitude: Longitude coordinates in degrees
+        tc_track_data_df: TC track data for validation
+        min_distance_between_peaks: Min distance between peaks in grid points
+        max_spatial_distance_degrees: Max spatial distance in degrees
+        max_temporal_hours: Max temporal buffer in hours
+        slp_contour_magnitude: SLP contour threshold in Pa
+        dz_contour_magnitude: DZ contour threshold in m
+        use_contour_validation: Whether to use contour validation
+        min_track_timesteps: Minimum consecutive lead times for valid tracks
+        latitude_max_degrees: Maximum latitude for valid tracks in degrees
         surface_pressure_threshold: Maximum surface pressure threshold for valid peaks
-            in Pa.
-        orography: Orography dataarray in m.
+            in Pa
+        orography: Orography dataarray in m
         max_gc_distance_slp_contour_degrees: Max great circle distance for SLP contour
-            in degrees.
+            in degrees
         max_gc_distance_dz_contour_degrees: Max great circle distance for DZ contour
-            in degrees.
+            in degrees
         orography_filter_threshold: Threshold for the orography filter's max height
-            in m.
+            in m
 
     Returns:
         Dict containing filtered list of detections for this init_time
@@ -480,8 +480,8 @@ def find_furthest_contour_from_point(
     in-plot-with-many-points-in-python
 
     Args:
-        contour: The contour to find the furthest point from.
-        point: The point to find the furthest point from.
+        contour: The contour to find the furthest point from
+        point: The point to find the furthest point from
 
     Returns:
         The furthest point from the contour as a tuple of x,y coordinates.
@@ -509,10 +509,10 @@ def find_contours_from_point_specified_field(
     """Find the contours from a point for a specified field.
 
     Args:
-        field: The field to find the contours from.
+        field: The field to find the contours from
         point: The point at which the field is subtracted from to find the
-            anomaly contours.
-        level: The anomaly level to find the contours at in units of the field.
+            anomaly contours
+        level: The anomaly level to find the contours at
 
     Returns:
         The contours as a list of tuples of latitude and longitude.
@@ -533,10 +533,10 @@ def find_valid_contour_from_point(
     """Find the great circle distance from a point to a contour.
 
     Args:
-        contour: The contour to find the great circle distance to.
-        point: The point to find the great circle distance to.
-        latitude: Latitude DataArray for coordinate mapping in degrees.
-        longitude: Longitude DataArray for coordinate mapping in degrees.
+        contour: The contour to find the great circle distance to
+        point: The point to find the great circle distance to
+        latitude: Latitude DataArray for coordinate mapping in degrees
+        longitude: Longitude DataArray for coordinate mapping in degrees
 
     Returns:
         Great circle distance from the point to the contour in degrees.
@@ -570,17 +570,17 @@ def find_valid_candidates(
     """Find valid candidate coordinate for a TC.
 
     Args:
-        slp_contours: List of SLP contours.
-        dz_contours: List of DZ contours.
-        point: Point to find the valid candidate for.
-        latitude: Latitude DataArray for coordinate mapping in degrees.
-        longitude: Longitude DataArray for coordinate mapping in degrees.
+        slp_contours: List of SLP contours
+        dz_contours: List of DZ contours
+        point: Point to find the valid candidate for
+        latitude: Latitude DataArray for coordinate mapping in degrees
+        longitude: Longitude DataArray for coordinate mapping in degrees
         max_gc_distance_slp_contour: Max great circle distance for SLP contour in
-            degrees. Defaults to 5.5 degrees.
+            degrees. Defaults to 5.5 degrees
         max_gc_distance_dz_contour: Max great circle distance for DZ contour in
-            degrees. Defaults to 6.5 degrees.
+            degrees. Defaults to 6.5 degrees
         latitude_max_degrees: Maximum latitude for valid tracks in degrees. Defaults
-            to 50 degrees.
+            to 50 degrees
 
     Returns:
         Valid candidate Location or None
@@ -629,26 +629,26 @@ def _find_peaks_batch(
     """Wrapper for peak finding across time slices.
 
     Args:
-        slp_slice: Single time slice of SLP data in Pa.
-        dz_slice: Single time slice of DZ data in m.
-        timestep_idx: Index of current timestep.
-        valid_times: List of valid times for all timesteps.
-        tc_track_data_df: TC track data.
-        min_distance_between_peaks: Minimum distance between peaks in grid points.
-        latitude: Latitude coordinates in degrees.
-        longitude: Longitude coordinates in degrees.
-        max_spatial_distance_degrees: Max spatial distance in degrees.
-        max_temporal_hours: Max temporal buffer for genesis in hours.
-        slp_contour_magnitude: SLP contour magnitude in Pa.
-        dz_contour_magnitude: DZ contour magnitude in m.
-        use_contour_validation: Whether to use contour validation.
+        slp_slice: Single time slice of SLP data in Pa
+        dz_slice: Single time slice of DZ data in m
+        timestep_idx: Index of current timestep
+        valid_times: List of valid times for all timesteps
+        tc_track_data_df: TC track data
+        min_distance_between_peaks: Minimum distance between peaks in grid points
+        latitude: Latitude coordinates in degrees
+        longitude: Longitude coordinates in degrees
+        max_spatial_distance_degrees: Max spatial distance in degrees
+        max_temporal_hours: Max temporal buffer for genesis in hours
+        slp_contour_magnitude: SLP contour magnitude in Pa
+        dz_contour_magnitude: DZ contour magnitude in m
+        use_contour_validation: Whether to use contour validation
         surface_pressure_threshold: Maximum surface pressure threshold for valid peaks
-            in Pa.
-        latitude_max_degrees: Maximum latitude for valid tracks in degrees.
+            in Pa
+        latitude_max_degrees: Maximum latitude for valid tracks in degrees
         max_gc_distance_slp_contour_degrees: Max great circle distance for SLP contour
-            in degrees.
+            in degrees
         max_gc_distance_dz_contour_degrees: Max great circle distance for DZ contour
-            in degrees.
+            in degrees
     Returns:
         Array of peak coordinates
     """
@@ -708,29 +708,29 @@ def _find_peaks_for_time_slice(
     defaultvalues.
 
     Args:
-        slp_slice: Sea level pressure slice in Pa.
-        dz_slice: Geopotential thickness slice in m.
-        current_valid_time: Current valid time being processed.
-        tc_track_data_df: Tropical cyclone track data.
-        min_distance_between_peaks: Minimum distance between peaks in grid points.
-        lat_coords: Latitude coordinates in degrees. Defaults to None.
-        lon_coords: Longitude coordinates in degrees. Defaults to None.
+        slp_slice: Sea level pressure slice in Pa
+        dz_slice: Geopotential thickness slice in m
+        current_valid_time: Current valid time being processed
+        tc_track_data_df: Tropical cyclone track data
+        min_distance_between_peaks: Minimum distance between peaks in grid points
+        lat_coords: Latitude coordinates in degrees. Defaults to None
+        lon_coords: Longitude coordinates in degrees. Defaults to None
         max_spatial_distance_degrees: Max spatial distance in degrees. Defaults to
-            5.0 degrees.
+            5.0 degrees
         max_temporal_hours: Max temporal buffer for genesis in hours. Defaults to
-            48.0 hours.
-        slp_contour_magnitude: SLP contour magnitude in Pa. Defaults to 200.0 Pa.
-        dz_contour_magnitude: DZ contour magnitude in m. Defaults to -6.0 m.
-        use_contour_validation: Whether to use contour validation. Defaults to True.
-        is_first_timestep: If True, applies temporal buffer. Defaults to False.
+            48.0 hours
+        slp_contour_magnitude: SLP contour magnitude in Pa. Defaults to 200.0 Pa
+        dz_contour_magnitude: DZ contour magnitude in m. Defaults to -6.0 m
+        use_contour_validation: Whether to use contour validation. Defaults to True
+        is_first_timestep: If True, applies temporal buffer. Defaults to False
         surface_pressure_threshold: Maximum surface pressure threshold for valid peaks
-            in Pa. Defaults to 100500.0 Pa.
+            in Pa. Defaults to 100500.0 Pa
         latitude_max_degrees: Maximum latitude for valid tracks in degrees. Defaults
-            to 50.0 degrees.
+            to 50.0 degrees
         max_gc_distance_slp_contour_degrees: Max great circle distance for SLP contour
-            in degrees. Defaults to 5.5 degrees.
+            in degrees. Defaults to 5.5 degrees
         max_gc_distance_dz_contour_degrees: Max great circle distance for DZ contour
-            in degrees. Defaults to 6.5 degrees.
+            in degrees. Defaults to 6.5 degrees
     """
 
     # Filter tropical cyclone track data temporally
@@ -849,10 +849,10 @@ def _create_spatial_mask(
     surrounding the track data points.
 
     Args:
-        lat_coords: Latitude coordinates in degrees.
-        lon_coords: Longitude coordinates in degrees.
-        nearby_tc_track_data: Nearby tropical cyclone track data.
-        max_distance_degrees: Max distance in degrees.
+        lat_coords: Latitude coordinates in degrees
+        lon_coords: Longitude coordinates in degrees
+        nearby_tc_track_data: Nearby tropical cyclone track data
+        max_distance_degrees: Max distance in degrees
 
     Returns:
         Spatial mask as a boolean array
@@ -897,15 +897,15 @@ def _convert_detections_to_dataset(
     """Convert detection arrays to xarray Dataset.
 
     Args:
-        n_detections: Number of detections.
-        lead_time_indices: Array of lead time indices for detections.
-        valid_time_indices: Array of valid time indices.
-        lats: Array of latitude values in degrees.
-        lons: Array of longitude values in degrees.
-        slp_vals: Array of sea level pressure values in Pa.
-        wind_vals: Array of wind speed values in m/s.
-        lead_time_coord: Lead time coordinate.
-        valid_time_coord: Valid time coordinate.
+        n_detections: Number of detections
+        lead_time_indices: Array of lead time indices for detections
+        valid_time_indices: Array of valid time indices
+        lats: Array of latitude values in degrees
+        lons: Array of longitude values in degrees
+        slp_vals: Array of sea level pressure values in Pa
+        wind_vals: Array of wind speed values in m/s
+        lead_time_coord: Lead time coordinate
+        valid_time_coord: Valid time coordinate
 
     Returns:
         xarray Dataset with detected tropical cyclone tracks
