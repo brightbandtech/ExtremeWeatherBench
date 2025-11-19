@@ -643,8 +643,8 @@ class LSR(TargetBase):
             raise ValueError(f"Data is not a pandas DataFrame: {type(data)}")
 
         # Map report_type column to numeric values
+        report_type_mapping = {"wind": 1, "hail": 2, "tor": 3}
         if "report_type" in data.columns:
-            report_type_mapping = {"wind": 1, "hail": 2, "tor": 3}
             data["report_type"] = data["report_type"].map(report_type_mapping)
 
         # Normalize these times for the LSR data
