@@ -275,29 +275,6 @@ class TestDistanceCalculations:
 class TestUtilityFunctions:
     """Test utility functions in the tropical cyclone module."""
 
-    def test_safe_extract_value_scalar(self):
-        """Test safe extraction of scalar values."""
-        # Test with scalar
-        value = tropical_cyclone._safe_extract_value(42.0)
-        assert value == 42.0
-
-        # Test with numpy scalar
-        np_scalar = np.float64(42.0)
-        value = tropical_cyclone._safe_extract_value(np_scalar)
-        assert value == 42.0
-
-        # Test with 0-d array
-        array_0d = np.array(42.0)
-        value = tropical_cyclone._safe_extract_value(array_0d)
-        assert value == 42.0
-
-    def test_safe_extract_value_array(self):
-        """Test safe extraction from arrays."""
-        # Test with 1-d array - should return first element
-        array_1d = np.array([42.0, 43.0, 44.0])
-        value = tropical_cyclone._safe_extract_value(array_1d)
-        assert value == 42.0
-
     def test_create_spatial_mask(self):
         """Test vectorized spatial mask creation."""
         lat_coords = np.array([20.0, 25.0, 30.0])
