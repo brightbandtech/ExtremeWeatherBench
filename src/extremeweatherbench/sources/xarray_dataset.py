@@ -26,7 +26,7 @@ def safely_pull_variables(
         variables: List of required variable names to extract.
 
     Returns:
-        The dataset containing the found variables plus essential coordinates.
+        The dataset containing only the found variables.
 
     Raises:
         KeyError: If any required variables are missing from the dataset.
@@ -49,13 +49,6 @@ def safely_pull_variables(
             f"Required variables {missing_variables} not found in dataset. "
             f"Available variables: {available_vars}"
         )
-
-    # Add essential coordinate variables if they exist as data variables
-    # (needed for track-based metrics like TC tracks)
-    essential_coords = ["latitude", "longitude", "valid_time"]
-    for coord in essential_coords:
-        if coord in data.data_vars and coord not in found_variables:
-            found_variables.append(coord)
 
     # Return dataset with only the found variables
     return data[found_variables]
