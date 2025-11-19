@@ -67,9 +67,7 @@ ghcn_heatwave_target = inputs.GHCN(
 )
 
 ghcn_freeze_target = inputs.GHCN(
-    variables=[
-        "surface_air_temperature",
-    ],
+    variables=["surface_air_temperature"],
     storage_options={},
 )
 
