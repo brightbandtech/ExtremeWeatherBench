@@ -1641,10 +1641,6 @@ class TestLandfallMetrics:
         metric = metrics.LandfallDisplacement(approach="next")
         assert metric.approach == "next"
 
-        # Verify the new pattern methods exist
-        assert hasattr(metric, "_get_landfall_metric_function")
-        assert callable(metric._get_landfall_metric_function)
-
         # Verify the metric calculation function exists
         assert hasattr(metrics.LandfallDisplacement, "_calculate_distance")
         assert callable(metrics.LandfallDisplacement._calculate_distance)
