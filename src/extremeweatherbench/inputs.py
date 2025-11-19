@@ -106,6 +106,8 @@ IBTrACS_metadata_variable_mapping = {
     "NAME": "tc_name",
     "LAT": "latitude",
     "LON": "longitude",
+    "SEASON": "season",
+    "NUMBER": "number",
     "WMO_WIND": "wmo_surface_wind_speed",
     "WMO_PRES": "wmo_air_pressure_at_mean_sea_level",
     "USA_WIND": "usa_surface_wind_speed",
@@ -846,6 +848,21 @@ class IBTrACS(TargetBase):
     )
     source: str = IBTRACS_URI
 
+    def __post_init__(self):
+        """Ensure season variable is included in variables list."""
+        # If variables are specified (non-empty list), ensure required variables are
+        # included for subsetting logic in subset_data_to_case. This approach is unique
+        # to deal with a polars LazyFrame or pandas DataFrame.
+        self.variables.extend(
+            [
+                "season",
+                "number",
+                "tc_name",
+                "surface_wind_speed",
+                "air_pressure_at_mean_sea_level",
+            ]
+        )
+
     def _open_data_from_source(self) -> IncomingDataInput:
         # not using storage_options in this case due to NetCDF4Backend not
         # supporting them
@@ -874,8 +891,8 @@ class IBTrACS(TargetBase):
 
         # Create a subquery to find all storm numbers in the same season
         matching_numbers = (
-            data.filter(pl.col("SEASON").cast(pl.Int64) == season)
-            .select("NUMBER")
+            data.filter(pl.col("season").cast(pl.Int64) == season)
+            .select("number")
             .unique()
         )
 
@@ -886,8 +903,8 @@ class IBTrACS(TargetBase):
         # This maintains the lazy evaluation
         name_filter = pl.col("tc_name").is_in(possible_names)
         subset_target_data = data.join(
-            matching_numbers, on="NUMBER", how="inner"
-        ).filter(name_filter & (pl.col("SEASON").cast(pl.Int64) == season))
+            matching_numbers, on="number", how="inner"
+        ).filter(name_filter & (pl.col("season").cast(pl.Int64) == season))
 
         # Select only the columns to keep
         columns_to_keep = [
