@@ -205,7 +205,7 @@ class AtmosphericRiverVariables(DerivedVariable):
 
 def maybe_derive_variables(
     data: xr.Dataset,
-    variables: list[Union[str, DerivedVariable]],
+    variables: Sequence[Union[str, DerivedVariable]],
     **kwargs,
 ) -> xr.Dataset:
     """Derive variable from the data if it exists in a list of variables.

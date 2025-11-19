@@ -7,6 +7,7 @@ from typing import (
     Callable,
     Literal,
     Optional,
+    Sequence,
     TypeAlias,
     Union,
     cast,
@@ -158,7 +159,7 @@ class InputBase(abc.ABC):
 
     source: str
     name: str
-    variables: list[Union[str, "derived.DerivedVariable"]] = dataclasses.field(
+    variables: Sequence[Union[str, "derived.DerivedVariable"]] = dataclasses.field(
         default_factory=list
     )
     variable_mapping: dict = dataclasses.field(default_factory=dict)
@@ -595,7 +596,9 @@ class LSR(TargetBase):
 
     name: str = "local_storm_reports"
     source: str = LSR_URI
-    variables: list[str] = dataclasses.field(default_factory=lambda: ["report_type"])
+    variables: Sequence[str] = dataclasses.field(
+        default_factory=lambda: ["report_type"]
+    )
 
     def _open_data_from_source(self) -> IncomingDataInput:
         # force LSR to use anon token to prevent google reauth issues for users
@@ -716,7 +719,7 @@ class PPH(TargetBase):
     variable_mapping: dict = dataclasses.field(
         default_factory=lambda: IBTrACS_metadata_variable_mapping.copy()
     )
-    variables: list[str] = dataclasses.field(
+    variables: Sequence[str] = dataclasses.field(
         default_factory=lambda: ["practically_perfect_hindcast"]
     )
 
@@ -982,7 +985,7 @@ def align_forecast_to_target(
 
 def maybe_subset_variables(
     data: IncomingDataInput,
-    variables: list[Union[str, "derived.DerivedVariable"]],
+    variables: Sequence[Union[str, "derived.DerivedVariable"]],
     source_module: Optional["sources.base.Source"] = None,
 ) -> IncomingDataInput:
     """Subset the variables from the data, if required.
@@ -993,7 +996,7 @@ def maybe_subset_variables(
         Args:
         data: The dataset to subset (xr.Dataset, xr.DataArray, pl.LazyFrame,
             or pd.DataFrame).
-        variables: List of variable names and/or derived variable classes.
+        variables: Sequence of variable names and/or derived variable classes.
         source_module: Optional pre-created source module. If None, creates one.
 
     Returns:
