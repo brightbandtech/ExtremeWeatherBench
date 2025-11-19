@@ -107,8 +107,7 @@ cira_tropical_cyclone_forecast = inputs.KerchunkForecast(
     name="FourCastNetv2",
     source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
     variables=[
-        "surface_wind_speed",
-        "air_pressure_at_mean_sea_level",
+        derived.TropicalCycloneTrackVariables(),
     ],
     variable_mapping=inputs.CIRA_metadata_variable_mapping,
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
@@ -206,9 +205,7 @@ def get_brightband_evaluation_objects() -> list[inputs.EvaluationObject]:
         ),
         inputs.EvaluationObject(
             event_type="tropical_cyclone",
-            metric_list=[
-                metrics.EarlySignal,
-            ],
+            metric_list=[],
             target=ibtracs_target,
             forecast=cira_tropical_cyclone_forecast,
         ),

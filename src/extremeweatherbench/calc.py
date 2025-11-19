@@ -4,7 +4,10 @@ import numpy as np
 import numpy.typing as npt
 import regionmask
 import scores.categorical as categorical
+import shapely
 import xarray as xr
+
+from extremeweatherbench import utils
 
 epsilon: float = 0.6219569100577033  # Ratio of molecular weights (H2O/dry air)
 sat_press_0c: float = 6.112  # Saturation vapor pressure at 0°C (hPa)
@@ -395,3 +398,472 @@ def dewpoint_from_specific_humidity(pressure: float, specific_humidity: float) -
     e = pressure * w / (w + epsilon)
     T_d = 243.5 * np.log(e / sat_press_0c) / (17.67 - np.log(e / sat_press_0c))
     return T_d + 273.15
+
+
+def find_landfalls(
+    track_data: xr.DataArray,
+    land_geom: Optional[shapely.geometry.Polygon] = None,
+    return_next_landfall: bool = False,
+) -> xr.DataArray:
+    """Find landfall point(s) where tracked object intersects land.
+
+    Generalized landfall detection for any object (TC, AR, etc).
+    Expects DataArray with latitude, longitude, valid_time as coords.
+
+    Args:
+        track_data: Track DataArray with latitude, longitude,
+            valid_time coords. Data values are interpolated at landfall.
+            Shape: (valid_time,) or (lead_time, valid_time)
+        return_next_landfall: If True, return next landfall; else only first landfall
+        land_geom: Shapely geometry for land intersection testing
+
+    Returns:
+        DataArray with landfall values and lat/lon/time as coords,
+        or None if no landfall found
+    """
+    # If no land geometry is provided, use default
+    if land_geom is None:
+        land_geom = utils.load_land_geometry()
+
+    # Squeeze track dimension if needed
+    if "track" in track_data.dims and track_data.sizes["track"] == 1:
+        track_data = track_data.squeeze("track", drop=True)
+
+    # Detect forecast vs single track data
+    is_forecast = "lead_time" in track_data.dims and "valid_time" in track_data.dims
+
+    if is_forecast:
+        # Convert to init_time coords for boundary detection
+        track_data = utils.convert_valid_time_to_init_time(track_data)
+
+        # Flatten to single time dimension for vectorized processing
+        track_data_flat = track_data.stack(time=("init_time", "lead_time"))
+
+        # Vectorized landfall detection
+        landfall_mask = _detect_landfalls_wrapper(track_data_flat, land_geom)
+
+        # Mask init_time boundaries
+        landfall_mask = _mask_init_time_boundaries(landfall_mask, track_data_flat)
+
+        # Interpolate at landfall points
+        result = _interpolate_and_format_landfalls(
+            track_data_flat,
+            landfall_mask,
+            land_geom,
+            return_next_landfall,
+            group_by="init_time",
+        )
+
+        return result
+    else:
+        # Process single track data
+        landfall_mask = _detect_landfalls_wrapper(track_data, land_geom)
+
+        return _interpolate_and_format_landfalls(
+            track_data,
+            landfall_mask,
+            land_geom,
+            return_next_landfall,
+            group_by=None,
+        )
+
+
+def find_next_landfall_for_init_time(
+    forecast_landfalls: xr.DataArray,
+    target_landfalls: xr.DataArray,
+) -> Optional[xr.DataArray]:
+    """Find unique next upcoming landfalls from target data.
+
+    For each forecast initialization time, finds the next landfall
+    event in the target data that occurs after that init_time. Only
+    unique landfalls are returned (multiple init_times mapping to the
+    same landfall are deduplicated). Init_times without future
+    landfalls are excluded.
+
+    Args:
+        forecast_landfalls: Forecast landfall DataArray with init_time
+            dimension (from find_landfalls)
+        target_landfalls: Target landfall DataArray from find_landfalls
+            with return_all=True (has landfall dimension)
+
+    Returns:
+        DataArray with unique next landfalls indexed by init_time, or
+        None if no future landfalls exist
+    """
+    # Extract init_times from forecast landfalls
+    if "init_time" in forecast_landfalls.dims:
+        init_times = forecast_landfalls.init_time.values
+    elif "init_time" in forecast_landfalls.coords:
+        # init_time as coordinate (scalar case)
+        init_times = np.array([forecast_landfalls.coords["init_time"].values])
+    else:
+        raise KeyError("Missing init_time dimension or coordinate.")
+
+    # Get target landfall times
+    target_times = target_landfalls.coords["valid_time"].values
+
+    # Use searchsorted to find next landfall index for each init_time
+    next_indices = np.searchsorted(target_times, init_times, side="right")
+
+    # Create mask for init_times with future landfalls
+    valid_mask = next_indices < len(target_times)
+
+    # Build result for all init_times, keeping only unique landfalls
+    results = []
+
+    for i, init_t in enumerate(init_times):
+        if valid_mask[i]:
+            # There is a future landfall for this init_time
+            landfall_idx = next_indices[i]
+            landfall = target_landfalls.isel(landfall=landfall_idx)
+            landfall = landfall.assign_coords(init_time=init_t)
+
+            results.append(landfall)
+
+    # Combine landfalls indexed by init_time or return None if no results
+    return (
+        xr.concat(
+            results, dim="init_time", coords="different", compat="equals", join="outer"
+        )
+        if results
+        else None
+    )
+
+
+def _detect_landfalls_wrapper(
+    track_data: xr.DataArray,
+    land_geom: shapely.geometry.Polygon,
+) -> xr.DataArray:
+    """Landfall detection across consecutive point pairs.
+
+    Args:
+        track_data: Track data with latitude, longitude coords
+        land_geom: Land geometry for intersection testing
+
+    Returns:
+        Boolean DataArray where True indicates a landfall between
+        point i and point i+1
+    """
+    # Determine time dimension name
+    time_dims = [d for d in track_data.dims if "time" in d.lower()]
+    if not time_dims:
+        return xr.DataArray(
+            np.array([], dtype=bool),
+            dims=track_data.dims,
+        )
+    time_dim = time_dims[0]
+
+    # Extract coordinates
+    lats = track_data.coords["latitude"]
+    lons = track_data.coords["longitude"]
+
+    # Convert to -180/180
+    lons_180 = (lons + 180) % 360 - 180
+
+    # Get shifted versions for consecutive pairs
+    lats_next = lats.shift({time_dim: -1})
+    lons_180_next = lons_180.shift({time_dim: -1})
+
+    # Vectorize the landfall check function
+    def _check_landfall_scalar(lon1, lat1, lon2, lat2):
+        """Scalar landfall check for vectorization."""
+        # Handle NaN values (from shift at boundaries)
+        if np.isnan(lon1) or np.isnan(lat1) or np.isnan(lon2) or np.isnan(lat2):
+            return False
+        return _is_true_landfall(lon1, lat1, lon2, lat2, land_geom)
+
+    # Apply to get landfall mask
+    landfall_mask = xr.apply_ufunc(
+        _check_landfall_scalar,
+        lons_180,
+        lats,
+        lons_180_next,
+        lats_next,
+        vectorize=True,  # We already vectorized with np.vectorize
+        dask="parallelized",
+        output_dtypes=[bool],
+    )
+
+    return landfall_mask
+
+
+def _mask_init_time_boundaries(
+    landfall_mask: xr.DataArray,
+    track_data: xr.DataArray,
+) -> xr.DataArray:
+    """Mask out landfalls at init_time boundaries.
+
+    Prevents comparing last point of one init_time with
+    first point of next init_time.
+
+    Args:
+        landfall_mask: Boolean mask of potential landfalls
+        track_data: Original track data with init_time coord
+
+    Returns:
+        Masked landfall array with boundaries set to False
+    """
+    if "init_time" not in track_data.coords:
+        return landfall_mask
+
+    # Determine time dimension
+    time_dims = [d for d in track_data.dims if "time" in d.lower()]
+    if not time_dims:
+        return landfall_mask
+    time_dim = time_dims[0]
+
+    # Get init_time for each point and the next point
+    init_curr = track_data.coords["init_time"]
+    init_next = init_curr.shift({time_dim: -1})
+
+    # Only keep landfalls where init_time doesn't change
+    same_init = init_curr == init_next
+
+    # Also handle NaN from shift operation
+    same_init = same_init.fillna(False)
+
+    return landfall_mask & same_init
+
+
+def _interpolate_and_format_landfalls(
+    track_data: xr.DataArray,
+    landfall_mask: xr.DataArray,
+    land_geom: shapely.geometry.Polygon,
+    return_all_landfalls: bool,
+    group_by: Optional[str] = None,
+) -> Optional[xr.DataArray]:
+    """Interpolate landfall points and format output.
+
+    Args:
+        track_data: Original track data
+        landfall_mask: Boolean mask of landfall locations
+        land_geom: Land geometry for intersection
+        return_all_landfalls: Whether to return all or just first
+        group_by: If not None, group by this coord (e.g., "init_time")
+
+    Returns:
+        Formatted landfall DataArray or None if no landfalls
+    """
+    # Determine time dimension
+    time_dims = [d for d in track_data.dims if "time" in d.lower()]
+    if not time_dims:
+        return None
+
+    # Get indices where landfalls occur
+    landfall_indices = np.where(landfall_mask.values)[0]
+
+    if len(landfall_indices) == 0:
+        return None
+
+    # Extract coordinate arrays
+    lats_vals = track_data.coords["latitude"].values
+    lons_vals = track_data.coords["longitude"].values
+    times_vals = track_data.coords["valid_time"].values
+    track_vals = track_data.values
+
+    # Convert longitudes to -180/180
+    lons_180 = (lons_vals + 180) % 360 - 180
+
+    # Get init_time if available
+    init_times = None
+    if "init_time" in track_data.coords:
+        init_times = track_data.coords["init_time"].values
+
+    # Process each landfall
+    landfall_data = []
+
+    for i in landfall_indices:
+        try:
+            # Create segment
+            segment = shapely.geometry.LineString(
+                [(lons_180[i], lats_vals[i]), (lons_180[i + 1], lats_vals[i + 1])]
+            )
+
+            # Get intersection point
+            intersection = segment.intersection(land_geom)
+
+            # Handle different intersection types
+            if intersection.is_empty:
+                continue
+
+            # Get first intersection point based on geometry type
+            geom_type = intersection.geom_type
+
+            if geom_type == "Point":
+                landfall_lon, landfall_lat = intersection.x, intersection.y
+            elif geom_type == "LineString":
+                landfall_lon, landfall_lat = intersection.coords[0]
+            elif geom_type in ("MultiPoint", "MultiLineString", "GeometryCollection"):
+                # Get first geometry from collection
+                first_geom = intersection.geoms[0]
+                if first_geom.geom_type == "Point":
+                    landfall_lon, landfall_lat = first_geom.x, first_geom.y
+                else:
+                    landfall_lon, landfall_lat = first_geom.coords[0]
+            else:
+                continue
+
+            # Interpolate
+            full_dist = segment.length
+            if full_dist == 0:
+                continue
+
+            landfall_dist = shapely.geometry.LineString(
+                [(lons_180[i], lats_vals[i]), (landfall_lon, landfall_lat)]
+            ).length
+            frac = landfall_dist / full_dist
+
+            landfall_point = {
+                "latitude": landfall_lat,
+                "longitude": utils.convert_longitude_to_360(landfall_lon),
+                "valid_time": times_vals[i]
+                + frac * (times_vals[i + 1] - times_vals[i]),
+                "value": track_vals[i] + frac * (track_vals[i + 1] - track_vals[i])
+                if not np.isnan(track_vals[i])
+                else np.nan,
+            }
+
+            # Add init_time if available
+            if init_times is not None:
+                landfall_point["init_time"] = init_times[i]
+
+            landfall_data.append(landfall_point)
+
+        except (IndexError, AttributeError, ValueError, TypeError, ZeroDivisionError):
+            continue
+
+    if not landfall_data:
+        return None
+
+    # Check if all landfall values are NaN
+    all_nan = all(np.isnan(d.get("value", np.nan)) for d in landfall_data)
+    if all_nan:
+        return None
+
+    # Format output based on grouping
+    if group_by == "init_time" and init_times is not None:
+        # Group by init_time and optionally keep first per group
+        results = []
+        unique_inits = np.unique([d["init_time"] for d in landfall_data])
+
+        for init_t in unique_inits:
+            init_landfalls = [d for d in landfall_data if d["init_time"] == init_t]
+
+            if not return_all_landfalls:
+                # Keep only first landfall for this init_time
+                init_landfalls = sorted(init_landfalls, key=lambda x: x["valid_time"])
+                init_landfalls = [init_landfalls[0]]
+
+            # Create DataArray with consistent landfall dimension
+            values = [d["value"] for d in init_landfalls]
+            coords = {
+                "latitude": (["landfall"], [d["latitude"] for d in init_landfalls]),
+                "longitude": (["landfall"], [d["longitude"] for d in init_landfalls]),
+                "valid_time": (["landfall"], [d["valid_time"] for d in init_landfalls]),
+                "landfall": np.arange(len(init_landfalls)),
+                "init_time": init_t,
+            }
+            da = xr.DataArray(
+                values,
+                dims=["landfall"],
+                coords=coords,
+                name=track_data.name or "landfall_value",
+            )
+            results.append(da)
+
+        return (
+            xr.concat(
+                results,
+                dim="init_time",
+                coords="different",
+                compat="equals",
+                join="outer",
+            )
+            if results
+            else None
+        )
+
+    else:
+        # No grouping - format as single or multiple landfalls
+        if return_all_landfalls:
+            # Return with landfall dimension
+            values = [d["value"] for d in landfall_data]
+            coords = {
+                "latitude": (["landfall"], [d["latitude"] for d in landfall_data]),
+                "longitude": (["landfall"], [d["longitude"] for d in landfall_data]),
+                "valid_time": (["landfall"], [d["valid_time"] for d in landfall_data]),
+                "landfall": np.arange(len(landfall_data)),
+            }
+            return xr.DataArray(
+                values,
+                dims=["landfall"],
+                coords=coords,
+                name=track_data.name or "landfall_value",
+            )
+        else:
+            # Return first landfall as scalar
+            d = landfall_data[0]
+            coords = {
+                "latitude": d["latitude"],
+                "longitude": d["longitude"],
+                "valid_time": d["valid_time"],
+            }
+            if "init_time" in d:
+                coords["init_time"] = d["init_time"]
+            return xr.DataArray(
+                d["value"],
+                coords=coords,
+                name=track_data.name or "landfall_value",
+            )
+
+
+# Keep existing _process_single_track_landfall for backward compatibility
+# or remove if fully replaced
+
+
+def _is_true_landfall(
+    lon1: float,
+    lat1: float,
+    lon2: float,
+    lat2: float,
+    land_geom: shapely.geometry.Polygon,
+) -> bool:
+    """Detect true landfall (ocean to land movement).
+
+    This function is a way to detect if a track crosses land. There are a few scenarios,
+    being ocean to land, ocean to ocean, and land to ocean. Ocean to ocean can have a
+    landfall if there is land between the two points.
+
+    Args:
+        lon1, lat1: Starting point coordinates
+        lon2, lat2: Ending point coordinates
+        land_geom: Land geometry for intersection testing
+
+    Returns:
+        True if this represents a landfall, False otherwise
+    """
+    try:
+        start_point = shapely.geometry.Point(lon1, lat1)
+        end_point = shapely.geometry.Point(lon2, lat2)
+
+        start_over_land = land_geom.contains(start_point)
+        end_over_land = land_geom.contains(end_point)
+
+        # Ocean -> Land = LANDFALL
+        if not start_over_land and end_over_land:
+            return True
+
+        # Ocean -> Ocean, check if land is between
+        if not start_over_land and not end_over_land:
+            segment = shapely.geometry.LineString([(lon1, lat1), (lon2, lat2)])
+            if segment.intersects(land_geom):
+                return True
+
+        # Land -> Ocean or Ocean -> Ocean (no intersection) = NOT LANDFALL
+        return False
+
+    except (AttributeError, ValueError, TypeError):
+        # Return False if geometry operations fail:
+        # - AttributeError: invalid/None geometry
+        # - ValueError/TypeError: invalid coordinate values
+        return False

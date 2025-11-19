@@ -8,10 +8,12 @@ import logging
 import pathlib
 from typing import Any, Callable, Optional, Sequence, Union
 
+import cartopy.io.shapereader as shpreader
 import numpy as np
 import numpy.typing as npt
 import pandas as pd  # type: ignore[import-untyped]
 import regionmask
+import shapely
 import sparse
 import tqdm
 import xarray as xr
@@ -636,3 +638,32 @@ def reduce_dataarray(
         )
     else:
         raise TypeError(f"method must be str or callable, got {type(method)}")
+
+
+def load_land_geometry(resolution: str = "10m") -> shapely.geometry.Polygon:
+    """Load the land geometry, excluding lakes.
+
+    Returns:
+        The land geometry as a shapely Polygon with lakes excluded.
+    """
+    land = shpreader.natural_earth(
+        category="physical", name="land", resolution=resolution
+    )
+    land_geoms = list(shpreader.Reader(land).geometries())
+    land_union = shapely.ops.unary_union(land_geoms)
+
+    # Exclude lakes to avoid false landfall detections in lakes/bays
+    try:
+        lakes = shpreader.natural_earth(
+            category="physical", name="lakes", resolution=resolution
+        )
+        lake_geoms = list(shpreader.Reader(lakes).geometries())
+        if lake_geoms:
+            lakes_union = shapely.ops.unary_union(lake_geoms)
+            land_union = land_union.difference(lakes_union)
+    except (OSError, ValueError):
+        # If lakes dataset is not available, return land without lakes
+        # This can happen if the dataset doesn't exist for the resolution
+        pass
+
+    return land_union
