@@ -5,7 +5,7 @@ import logging
 import pathlib
 from typing import TYPE_CHECKING, Optional, Sequence, Union
 
-import dask.array
+import dask.array as da
 import joblib
 import pandas as pd
 import sparse
