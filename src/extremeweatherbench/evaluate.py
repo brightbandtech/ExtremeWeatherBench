@@ -3,7 +3,7 @@
 import copy
 import logging
 import pathlib
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING, Optional, Sequence, Union
 
 import dask.array as da
 import joblib
@@ -605,12 +605,12 @@ def _maybe_expand_derived_variable_to_output_variables(
 
 
 def _get_all_derived_output_variables(
-    variables: list[Union[str, "derived.DerivedVariable"]],
+    variables: Sequence[Union[str, "derived.DerivedVariable"]],
 ) -> set[str]:
     """Get all output_variables from DerivedVariables in a list.
 
     Args:
-        variables: List that may contain DerivedVariable instances.
+        variables: Sequence that may contain DerivedVariable instances.
 
     Returns:
         Set of all output_variable names from DerivedVariables.
