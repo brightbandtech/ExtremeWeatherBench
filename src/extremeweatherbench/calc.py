@@ -403,7 +403,7 @@ def dewpoint_from_specific_humidity(pressure: float, specific_humidity: float) -
 def find_landfalls(
     track_data: xr.DataArray,
     land_geom: Optional[shapely.geometry.Polygon] = None,
-    return_all_landfalls: bool = False,
+    return_next_landfall: bool = False,
 ) -> xr.DataArray:
     """Find landfall point(s) where tracked object intersects land.
 
@@ -414,7 +414,7 @@ def find_landfalls(
         track_data: Track DataArray with latitude, longitude,
             valid_time coords. Data values are interpolated at landfall.
             Shape: (valid_time,) or (lead_time, valid_time)
-        return_all_landfalls: If True, return all landfalls; else first
+        return_next_landfall: If True, return next landfall; else only first landfall
         land_geom: Shapely geometry for land intersection testing
 
     Returns:
@@ -450,7 +450,7 @@ def find_landfalls(
             track_data_flat,
             landfall_mask,
             land_geom,
-            return_all_landfalls,
+            return_next_landfall,
             group_by="init_time",
         )
 
@@ -463,7 +463,7 @@ def find_landfalls(
             track_data,
             landfall_mask,
             land_geom,
-            return_all_landfalls,
+            return_next_landfall,
             group_by=None,
         )
 
@@ -510,30 +510,31 @@ def find_next_landfall_for_init_time(
 
     # Build result for all init_times, keeping only unique landfalls
     results = []
-    seen_landfalls = set()  # Track unique landfalls by valid_time
 
     for i, init_t in enumerate(init_times):
         if valid_mask[i]:
             # There is a future landfall for this init_time
             landfall_idx = next_indices[i]
+            landfall = target_landfalls.isel(landfall=landfall_idx)
+            landfall = landfall.assign_coords(init_time=init_t)
 
-            # Check if we've already seen this landfall
-            landfall_time = target_times[landfall_idx]
-            if landfall_time not in seen_landfalls:
-                seen_landfalls.add(landfall_time)
-                landfall = target_landfalls.isel(landfall=landfall_idx)
-                landfall = landfall.assign_coords(init_time=init_t)
-                results.append(landfall)
+            results.append(landfall)
 
-    # Combine unique landfalls or return None if no results
-    return xr.concat(results, dim="init_time") if results else None
+    # Combine landfalls indexed by init_time or return None if no results
+    return (
+        xr.concat(
+            results, dim="init_time", coords="different", compat="equals", join="outer"
+        )
+        if results
+        else None
+    )
 
 
 def _detect_landfalls_wrapper(
     track_data: xr.DataArray,
     land_geom: shapely.geometry.Polygon,
 ) -> xr.DataArray:
-    """Vectorized landfall detection across consecutive point pairs.
+    """Landfall detection across consecutive point pairs.
 
     Args:
         track_data: Track data with latitude, longitude coords
@@ -571,17 +572,14 @@ def _detect_landfalls_wrapper(
             return False
         return _is_true_landfall(lon1, lat1, lon2, lat2, land_geom)
 
-    # Vectorize the function
-    check_vectorized = np.vectorize(_check_landfall_scalar, otypes=[bool])
-
     # Apply to get landfall mask
     landfall_mask = xr.apply_ufunc(
-        check_vectorized,
+        _check_landfall_scalar,
         lons_180,
         lats,
         lons_180_next,
         lats_next,
-        vectorize=False,  # We already vectorized with np.vectorize
+        vectorize=True,  # We already vectorized with np.vectorize
         dask="parallelized",
         output_dtypes=[bool],
     )
@@ -748,46 +746,37 @@ def _interpolate_and_format_landfalls(
 
             if not return_all_landfalls:
                 # Keep only first landfall for this init_time
+                init_landfalls = sorted(init_landfalls, key=lambda x: x["valid_time"])
                 init_landfalls = [init_landfalls[0]]
 
-            # Create DataArray for this init_time
-            if len(init_landfalls) == 1:
-                d = init_landfalls[0]
-                da = xr.DataArray(
-                    d["value"],
-                    coords={
-                        "latitude": d["latitude"],
-                        "longitude": d["longitude"],
-                        "valid_time": d["valid_time"],
-                        "init_time": init_t,
-                    },
-                    name=track_data.name or "landfall_value",
-                )
-            else:
-                # Multiple landfalls for this init_time
-                values = [d["value"] for d in init_landfalls]
-                coords = {
-                    "latitude": (["landfall"], [d["latitude"] for d in init_landfalls]),
-                    "longitude": (
-                        ["landfall"],
-                        [d["longitude"] for d in init_landfalls],
-                    ),
-                    "valid_time": (
-                        ["landfall"],
-                        [d["valid_time"] for d in init_landfalls],
-                    ),
-                    "landfall": np.arange(len(init_landfalls)),
-                    "init_time": init_t,
-                }
-                da = xr.DataArray(
-                    values,
-                    dims=["landfall"],
-                    coords=coords,
-                    name=track_data.name or "landfall_value",
-                )
+            # Create DataArray with consistent landfall dimension
+            values = [d["value"] for d in init_landfalls]
+            coords = {
+                "latitude": (["landfall"], [d["latitude"] for d in init_landfalls]),
+                "longitude": (["landfall"], [d["longitude"] for d in init_landfalls]),
+                "valid_time": (["landfall"], [d["valid_time"] for d in init_landfalls]),
+                "landfall": np.arange(len(init_landfalls)),
+                "init_time": init_t,
+            }
+            da = xr.DataArray(
+                values,
+                dims=["landfall"],
+                coords=coords,
+                name=track_data.name or "landfall_value",
+            )
             results.append(da)
 
-        return xr.concat(results, dim="init_time") if results else None
+        return (
+            xr.concat(
+                results,
+                dim="init_time",
+                coords="different",
+                compat="equals",
+                join="outer",
+            )
+            if results
+            else None
+        )
 
     else:
         # No grouping - format as single or multiple landfalls

@@ -1164,6 +1164,9 @@ class DurationME(ME):
 class LandfallMetric(CompositeMetric):
     """Base class for landfall metrics.
 
+    Landfall metrics utilize the computation of landfalls based upon a land geometry and
+    coordinates to determine intersections.
+
     This class provides common functionality for landfall metrics, including:
     - Landfall detection
     - Landfall extraction
@@ -1237,15 +1240,32 @@ class LandfallMetric(CompositeMetric):
             target: The target DataArray.
             **kwargs: Additional keyword arguments.
         """
-        # return_all_landfalls should be True for "next", False for "first"
-        return_all = self.approach == "next"
+        # For "first" approach: get only first landfall
+        # For "next" approach: get all target landfalls, then filter
+        return_next_landfall = self.approach == "next"
+
+        # Get first forecast landfall per init_time
         forecast_landfalls = calc.find_landfalls(
-            forecast, return_all_landfalls=return_all
+            forecast, return_next_landfall=return_next_landfall
         )
-        target_landfalls = calc.find_landfalls(target, return_all_landfalls=return_all)
-        if return_all:
+
+        # Get only first forecast landfall per init_time
+        forecast_landfalls = forecast_landfalls.isel(landfall=0)
+
+        # Get all target landfalls
+        target_landfalls_pre_init = calc.find_landfalls(
+            target, return_next_landfall=return_next_landfall
+        )
+        if return_next_landfall:
+            # Find next target landfall for each init_time
             target_landfalls = calc.find_next_landfall_for_init_time(
-                forecast_landfalls, target_landfalls
+                forecast_landfalls, target_landfalls_pre_init
+            )
+        else:
+            target_landfalls = target_landfalls_pre_init.isel(landfall=0)
+            forecast_landfalls = forecast_landfalls.where(
+                forecast_landfalls.init_time < target_landfalls.valid_time.values,
+                drop=True,
             )
         return forecast_landfalls, target_landfalls
 
@@ -1443,20 +1463,28 @@ class LandfallDisplacement(LandfallMetric, BaseMetric):
         if landfall1 is None or landfall2 is None:
             return xr.DataArray(np.nan)
 
-        # Compute distance for each init_time
+        # Find common init_times between forecast and target
+        init_times_1 = set(landfall1.coords["init_time"].values)
+        init_times_2 = set(landfall2.coords["init_time"].values)
+        common_init_times = sorted(init_times_1.intersection(init_times_2))
+
+        if not common_init_times:
+            return xr.DataArray(np.nan)
+
+        # Compute distance for each common init_time
         distances = []
-        for i in range(len(landfall1.coords["init_time"])):
-            f_lat = landfall1.coords["latitude"].isel(init_time=i).values
-            f_lon = landfall1.coords["longitude"].isel(init_time=i).values
-            t_lat = landfall2.coords["latitude"].values
-            t_lon = landfall2.coords["longitude"].values
+        for init_time in common_init_times:
+            f_lat = landfall1.coords["latitude"].sel(init_time=init_time).values
+            f_lon = landfall1.coords["longitude"].sel(init_time=init_time).values
+            t_lat = landfall2.coords["latitude"].sel(init_time=init_time).values
+            t_lon = landfall2.coords["longitude"].sel(init_time=init_time).values
 
             # Skip if any coordinates are NaN
             if (
-                any(np.isnan(f_lat))
-                or any(np.isnan(f_lon))
-                or any(np.isnan(t_lat))
-                or any(np.isnan(t_lon))
+                np.any(np.isnan(f_lat))
+                or np.any(np.isnan(f_lon))
+                or np.any(np.isnan(t_lat))
+                or np.any(np.isnan(t_lon))
             ):
                 distances.append(np.nan)
             else:
@@ -1471,7 +1499,7 @@ class LandfallDisplacement(LandfallMetric, BaseMetric):
         return xr.DataArray(
             distances,
             dims=["init_time"],
-            coords={"init_time": landfall1.coords["init_time"]},
+            coords={"init_time": common_init_times},
         )
 
     def _compute_metric(
@@ -1535,35 +1563,33 @@ class LandfallTimeME(LandfallMetric, ME):
 
         Returns:
             Time difference in hours (landfall1 - landfall2)
-            as xarray DataArray with init_time as the sole dimension
+            as xarray DataArray with init_time dimension
         """
         if landfall1 is None or landfall2 is None:
             return xr.DataArray(np.nan)
 
-        # Get time values from landfall DataArrays (as coordinates)
-        time1 = landfall1.coords["valid_time"]
-        time2 = landfall2.coords["valid_time"]
+        # Find common init_times between forecast and target
+        init_times_1 = set(landfall1.coords["init_time"].values)
+        init_times_2 = set(landfall2.coords["init_time"].values)
+        common_init_times = sorted(init_times_1.intersection(init_times_2))
 
-        # Calculate time difference in hours
-        time_diff = time1 - time2
-        time_diff_hours = time_diff / np.timedelta64(1, "h")
+        if not common_init_times:
+            return xr.DataArray(np.nan)
 
-        # Return with init_time as the only dimension
-        # Ensure the values are properly shaped for init_time dimension
-        if time_diff_hours.dims == ():
-            # Scalar case - broadcast to all init_times
-            values = np.full(len(landfall1.init_time), float(time_diff_hours.values))
-        else:
-            # Already has the right dimensions
-            values = time_diff_hours.values
+        # Calculate time difference for each common init_time
+        time_diffs = []
+        for init_time in common_init_times:
+            time1 = landfall1.coords["valid_time"].sel(init_time=init_time)
+            time2 = landfall2.coords["valid_time"].sel(init_time=init_time)
+
+            # Calculate time difference in hours
+            time_diff = (time1 - time2) / np.timedelta64(1, "h")
+            time_diffs.append(float(time_diff.values))
 
         return xr.DataArray(
-            values,
-            dims=["init_time", "landfall"],
-            coords={
-                "init_time": landfall1.coords["init_time"],
-                "landfall": landfall1.coords["landfall"],
-            },
+            time_diffs,
+            dims=["init_time"],
+            coords={"init_time": common_init_times},
         )
 
     def _compute_metric(
