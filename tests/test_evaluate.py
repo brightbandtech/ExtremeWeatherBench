@@ -1,7 +1,6 @@
 """Tests for evaluate module."""
 
 import datetime
-import logging
 import pathlib
 import tempfile
 from unittest import mock
@@ -121,9 +120,13 @@ def mock_base_metric():
     """Create a mock BaseMetric object."""
     mock_metric = mock.Mock(spec=metrics.BaseMetric)
     mock_metric.name = "MockMetric"
+    mock_metric.forecast_variable = None
+    mock_metric.target_variable = None
     mock_metric.compute_metric.return_value = xr.DataArray(
         data=[1.0], dims=["lead_time"], coords={"lead_time": [0]}
     )
+    mock_metric.maybe_expand_composite.return_value = [mock_metric]
+    mock_metric.maybe_prepare_composite_kwargs.side_effect = lambda **kwargs: kwargs
     return mock_metric
 
 
@@ -142,10 +145,15 @@ def sample_evaluation_object(mock_target_base, mock_forecast_base, mock_base_met
 def sample_case_operator(
     sample_individual_case, mock_target_base, mock_forecast_base, mock_base_metric
 ):
+    mock_base_metric.forecast_variable = None
+    mock_base_metric.target_variable = None
     """Create a sample CaseOperator."""
+    # Ensure metric has forecast_variable and target_variable attributes
+    mock_base_metric.forecast_variable = None
+    mock_base_metric.target_variable = None
     return cases.CaseOperator(
         case_metadata=sample_individual_case,
-        metric_list=mock_base_metric,
+        metric_list=[mock_base_metric],
         target=mock_target_base,
         forecast=mock_forecast_base,
     )
@@ -972,8 +980,7 @@ class TestComputeCaseOperator:
         )
         mock_evaluate_metric.return_value = mock_result
 
-        # Setup the case operator mocks - metric should be a list for iteration
-        sample_case_operator.metric_list = [mock_base_metric]
+        # Setup the case operator mocks
         sample_case_operator.target.maybe_align_forecast_to_target.return_value = (
             sample_forecast_dataset,
             sample_target_dataset,
@@ -1005,7 +1012,12 @@ class TestComputeCaseOperator:
             sample_forecast_dataset,
             sample_target_dataset,
         )
-        sample_case_operator.metric_list = [mock.Mock()]
+        mock_metric = mock.Mock(spec=metrics.BaseMetric)
+        mock_metric.forecast_variable = None
+        mock_metric.target_variable = None
+        mock_metric.maybe_expand_composite.return_value = [mock_metric]
+        mock_metric.maybe_prepare_composite_kwargs.side_effect = lambda **kwargs: kwargs
+        sample_case_operator.metric_list = [mock_metric]
 
         with mock.patch(
             "extremeweatherbench.evaluate._compute_and_maybe_cache"
@@ -1042,8 +1054,16 @@ class TestComputeCaseOperator:
         )
 
         # Create multiple metrics
-        metric_1 = mock.Mock()
-        metric_2 = mock.Mock()
+        metric_1 = mock.Mock(spec=metrics.BaseMetric)
+        metric_1.forecast_variable = None
+        metric_1.target_variable = None
+        metric_1.maybe_expand_composite.return_value = [metric_1]
+        metric_1.maybe_prepare_composite_kwargs.side_effect = lambda **kwargs: kwargs
+        metric_2 = mock.Mock(spec=metrics.BaseMetric)
+        metric_2.forecast_variable = None
+        metric_2.target_variable = None
+        metric_2.maybe_expand_composite.return_value = [metric_2]
+        metric_2.maybe_prepare_composite_kwargs.side_effect = lambda **kwargs: kwargs
         sample_case_operator.metric_list = [metric_1, metric_2]
 
         sample_case_operator.target.maybe_align_forecast_to_target.return_value = (
@@ -1512,8 +1532,8 @@ class TestMetricEvaluation:
         result = evaluate._evaluate_metric_and_return_df(
             forecast_ds=forecast_ds,
             target_ds=target_ds,
-            forecast_variable=ForecastDerivedVariable,
-            target_variable=TargetDerivedVariable,
+            forecast_variable="derived_forecast_var",
+            target_variable="derived_target_var",
             metric=mock_base_metric,
             case_operator=sample_case_operator,
         )
@@ -1849,17 +1869,25 @@ class TestIntegration:
         # Create multiple metrics
         metric_1 = mock.Mock(spec=metrics.BaseMetric)
         metric_1.name = "Metric1"
+        metric_1.forecast_variable = None
+        metric_1.target_variable = None
         metric_1.return_value.name = "Metric1"
         metric_1.return_value.compute_metric.return_value = xr.DataArray(
             data=[1.0], dims=["lead_time"], coords={"lead_time": [0]}
         )
+        metric_1.maybe_expand_composite.return_value = [metric_1]
+        metric_1.maybe_prepare_composite_kwargs.side_effect = lambda **kwargs: kwargs
 
         metric_2 = mock.Mock(spec=metrics.BaseMetric)
         metric_2.name = "Metric2"
+        metric_2.forecast_variable = None
+        metric_2.target_variable = None
         metric_2.return_value.name = "Metric2"
         metric_2.return_value.compute_metric.return_value = xr.DataArray(
             data=[2.0], dims=["lead_time"], coords={"lead_time": [0]}
         )
+        metric_2.maybe_expand_composite.return_value = [metric_2]
+        metric_2.maybe_prepare_composite_kwargs.side_effect = lambda **kwargs: kwargs
 
         # Create evaluation object with multiple metrics and variables
         eval_obj = mock.Mock(spec=inputs.EvaluationObject)
@@ -2215,948 +2243,459 @@ class TestIntegration:
             mock_parallel_class.assert_called_once_with(total_tasks=100)
 
 
-class TestEnsureOutputSchema:
-    """Test the _ensure_output_schema function."""
+class MockDerivedVariableWithOutputs(derived.DerivedVariable):
+    """Mock DerivedVariable for testing output_variables."""
 
-    def test_ensure_output_schema_init_time_valid_time(self):
-        """Test _ensure_output_schema with init_time and valid_time columns.
+    variables = ["input_var"]
 
-        init_time is now in evaluate.OUTPUT_COLUMNS, valid_time is not and will be
-        dropped.
-        """
-        df = pd.DataFrame(
+    def derive_variable(self, data: xr.Dataset, **kwargs) -> xr.Dataset:
+        """Return a dataset with multiple output variables."""
+        return xr.Dataset(
             {
-                "value": [1.0, 2.0],
-                "init_time": pd.to_datetime(["2021-06-20", "2021-06-21"]),
-                "valid_time": pd.to_datetime(["2021-06-21", "2021-06-22"]),
+                "output_1": data["input_var"] * 1,
+                "output_2": data["input_var"] * 2,
+                "output_3": data["input_var"] * 3,
             }
         )
 
-        result = evaluate._ensure_output_schema(
-            df,
-            target_variable="temperature",
-            metric="TestMetric",
-            case_id_number=1,
-            event_type="heat_wave",
+
+class TestExpandDerivedVariableToOutputVariables:
+    """Test _expand_derived_variable_to_output_variables function."""
+
+    def test_expand_string_variable(self):
+        """String variables return as single-item list."""
+        result = evaluate._maybe_expand_derived_variable_to_output_variables("temp")
+        assert result == ["temp"]
+        assert isinstance(result, list)
+
+    def test_expand_derived_variable_with_output_variables(self):
+        """DerivedVariable with output_variables returns those names."""
+        derived_var = MockDerivedVariableWithOutputs(
+            output_variables=["output_1", "output_2"]
+        )
+        result = evaluate._maybe_expand_derived_variable_to_output_variables(
+            derived_var
+        )
+        assert result == ["output_1", "output_2"]
+
+    def test_expand_derived_variable_without_output_variables(self):
+        """DerivedVariable without output_variables returns its name."""
+        derived_var = MockDerivedVariableWithOutputs()
+        result = evaluate._maybe_expand_derived_variable_to_output_variables(
+            derived_var
+        )
+        assert result == ["MockDerivedVariableWithOutputs"]
+
+    def test_expand_derived_variable_empty_output_variables(self):
+        """DerivedVariable with empty output_variables returns its name."""
+        derived_var = MockDerivedVariableWithOutputs(output_variables=[])
+        result = evaluate._maybe_expand_derived_variable_to_output_variables(
+            derived_var
+        )
+        assert result == ["MockDerivedVariableWithOutputs"]
+
+    def test_expand_derived_variable_single_output(self):
+        """DerivedVariable with single output_variable returns list."""
+        derived_var = MockDerivedVariableWithOutputs(output_variables=["output_1"])
+        result = evaluate._maybe_expand_derived_variable_to_output_variables(
+            derived_var
+        )
+        assert result == ["output_1"]
+
+
+class TestMetricWithOutputVariables:
+    """Test metric evaluation with DerivedVariable output_variables."""
+
+    def test_compute_case_operator_with_matching_output_variables(
+        self, sample_individual_case
+    ):
+        """Test metrics with matching number of output_variables."""
+        # Create datasets
+        time = pd.date_range("2021-06-20", freq="6h", periods=10)
+        lat = np.linspace(42.5, 47.5, 5)
+        lon = np.linspace(-122.5, -117.5, 5)
+
+        # Create with lead_time as a dimension
+        output_1_data = xr.DataArray(
+            np.random.randn(10, 5, 5),
+            dims=["lead_time", "latitude", "longitude"],
+            coords={
+                "lead_time": np.arange(0, 60, 6),
+                "latitude": lat,
+                "longitude": lon,
+                "valid_time": ("lead_time", time),
+            },
+        )
+        output_2_data = xr.DataArray(
+            np.random.randn(10, 5, 5),
+            dims=["lead_time", "latitude", "longitude"],
+            coords={
+                "lead_time": np.arange(0, 60, 6),
+                "latitude": lat,
+                "longitude": lon,
+                "valid_time": ("lead_time", time),
+            },
         )
 
-        # Check all evaluate.OUTPUT_COLUMNS are present
-        assert list(result.columns) == evaluate.OUTPUT_COLUMNS
-        # Check metadata was added
-        assert all(result["target_variable"] == "temperature")
-        assert all(result["metric"] == "TestMetric")
-        assert all(result["case_id_number"] == 1)
-        assert all(result["event_type"] == "heat_wave")
-        # Check original columns preserved for those in evaluate.OUTPUT_COLUMNS
-        assert len(result) == 2
-        assert list(result["value"]) == [1.0, 2.0]
-        # init_time should be preserved (now in evaluate.OUTPUT_COLUMNS)
-        assert "init_time" in result.columns
-        assert list(result["init_time"]) == [
-            pd.to_datetime("2021-06-20"),
-            pd.to_datetime("2021-06-21"),
-        ]
-        # valid_time should be dropped (not in evaluate.OUTPUT_COLUMNS)
-        assert "valid_time" not in result.columns
-
-    def test_ensure_output_schema_init_time_only(self):
-        """Test _ensure_output_schema with init_time only.
-
-        init_time is now in evaluate.OUTPUT_COLUMNS so will be preserved.
-        """
-        df = pd.DataFrame({"value": [1.5], "init_time": pd.to_datetime(["2021-06-20"])})
-
-        result = evaluate._ensure_output_schema(
-            df,
-            target_variable="wind_speed",
-            metric="RMSE",
-            case_id_number=2,
-            event_type="storm",
-        )
-
-        # Check all columns present
-        assert list(result.columns) == evaluate.OUTPUT_COLUMNS
-        # lead_time should be NaN since not provided and is in evaluate.OUTPUT_COLUMNS
-        assert pd.isna(result["lead_time"].iloc[0])
-        # init_time should be preserved (now in evaluate.OUTPUT_COLUMNS)
-        assert "init_time" in result.columns
-        assert result["init_time"].iloc[0] == pd.to_datetime("2021-06-20")
-
-    def test_ensure_output_schema_lead_time_only(self):
-        """Test _ensure_output_schema with lead_time only.
-
-        lead_time is in evaluate.OUTPUT_COLUMNS so will be preserved.
-        """
-        df = pd.DataFrame({"value": [2.5, 3.0], "lead_time": [6, 12]})
-
-        result = evaluate._ensure_output_schema(
-            df,
-            target_variable="pressure",
-            metric="MAE",
-            case_id_number=3,
-            event_type="freeze",
-        )
-
-        # Check all columns present
-        assert list(result.columns) == evaluate.OUTPUT_COLUMNS
-        # lead_time should be preserved (it's in evaluate.OUTPUT_COLUMNS)
-        assert list(result["lead_time"]) == [6, 12]
-        # init_time should be NaN since not provided and is in evaluate.OUTPUT_COLUMNS
-        assert pd.isna(result["init_time"].iloc[0])
-
-    def test_ensure_output_schema_lead_time_valid_time(self):
-        """Test _ensure_output_schema with lead_time and valid_time.
-
-        lead_time is in evaluate.OUTPUT_COLUMNS, valid_time is not and will be dropped.
-        """
-        df = pd.DataFrame(
+        forecast_ds = xr.Dataset(
             {
-                "value": [0.8],
-                "lead_time": [24],
-                "valid_time": pd.to_datetime(["2021-06-22"]),
+                "output_1": output_1_data,
+                "output_2": output_2_data,
             }
         )
 
-        result = evaluate._ensure_output_schema(
-            df,
-            target_variable="humidity",
-            metric="Bias",
-            case_id_number=4,
-            event_type="drought",
+        target_ds = forecast_ds.copy(deep=True)
+
+        # Create derived variables
+        forecast_derived = MockDerivedVariableWithOutputs(
+            output_variables=["output_1", "output_2"]
+        )
+        target_derived = MockDerivedVariableWithOutputs(
+            output_variables=["output_1", "output_2"]
         )
 
-        assert list(result.columns) == evaluate.OUTPUT_COLUMNS
-        assert result["lead_time"].iloc[0] == 24
-        # init_time should be NaN since not provided and is in evaluate.OUTPUT_COLUMNS
-        assert pd.isna(result["init_time"].iloc[0])
-        # valid_time should be dropped (not in evaluate.OUTPUT_COLUMNS)
-        assert "valid_time" not in result.columns
+        # Create metric with derived variables
+        metric = metrics.RMSE(
+            forecast_variable=forecast_derived,
+            target_variable=target_derived,
+        )
 
-    def test_ensure_output_schema_init_time_temperature(self):
-        """Test _ensure_output_schema with init_time and temperature."""
-        df = pd.DataFrame(
+        # Create case operator
+        mock_forecast = mock.Mock(spec=inputs.ForecastBase)
+        mock_forecast.name = "MockForecast"
+        mock_forecast.variables = []
+        mock_forecast.maybe_align_forecast_to_target = mock.Mock(
+            return_value=(forecast_ds, target_ds)
+        )
+
+        mock_target = mock.Mock(spec=inputs.TargetBase)
+        mock_target.name = "MockTarget"
+        mock_target.variables = []
+        mock_target.maybe_align_forecast_to_target = mock.Mock(
+            return_value=(forecast_ds, target_ds)
+        )
+
+        case_operator = cases.CaseOperator(
+            case_metadata=sample_individual_case,
+            metric_list=[metric],
+            target=mock_target,
+            forecast=mock_forecast,
+        )
+
+        with mock.patch("extremeweatherbench.evaluate.run_pipeline") as mock_run:
+            mock_run.side_effect = [target_ds, forecast_ds]
+            result = evaluate.compute_case_operator(case_operator)
+
+        # Should have 20 rows (2 output variables * 10 lead_times)
+        assert len(result) == 20
+        assert "target_variable" in result.columns
+        # Check that both output variables were evaluated
+        target_vars = result["target_variable"].unique()
+        assert set(target_vars) == {"output_1", "output_2"}
+        # Each output variable should have 10 lead_time values
+        assert len(result[result["target_variable"] == "output_1"]) == 10
+        assert len(result[result["target_variable"] == "output_2"]) == 10
+
+    def test_compute_case_operator_mismatched_output_variables(
+        self, sample_individual_case
+    ):
+        """Test metrics with different numbers of output_variables."""
+        time = pd.date_range("2021-06-20", freq="6h", periods=10)
+        lat = np.linspace(42.5, 47.5, 5)
+        lon = np.linspace(-122.5, -117.5, 5)
+
+        # Create with lead_time as a dimension
+        output_1_data = xr.DataArray(
+            np.random.randn(10, 5, 5),
+            dims=["lead_time", "latitude", "longitude"],
+            coords={
+                "lead_time": np.arange(0, 60, 6),
+                "latitude": lat,
+                "longitude": lon,
+                "valid_time": ("lead_time", time),
+            },
+        )
+        output_2_data = xr.DataArray(
+            np.random.randn(10, 5, 5),
+            dims=["lead_time", "latitude", "longitude"],
+            coords={
+                "lead_time": np.arange(0, 60, 6),
+                "latitude": lat,
+                "longitude": lon,
+                "valid_time": ("lead_time", time),
+            },
+        )
+        output_3_data = xr.DataArray(
+            np.random.randn(10, 5, 5),
+            dims=["lead_time", "latitude", "longitude"],
+            coords={
+                "lead_time": np.arange(0, 60, 6),
+                "latitude": lat,
+                "longitude": lon,
+                "valid_time": ("lead_time", time),
+            },
+        )
+
+        forecast_ds = xr.Dataset(
             {
-                "value": [15.5, 16.2],
-                "init_time": pd.to_datetime(["2021-06-20", "2021-06-21"]),
-                "temperature": [298.15, 299.15],
+                "output_1": output_1_data,
+                "output_2": output_2_data,
+                "output_3": output_3_data,
             }
         )
 
-        result = evaluate._ensure_output_schema(
-            df,
-            target_variable="air_temp",
-            metric="Correlation",
-            case_id_number=5,
-            event_type="heat_wave",
+        target_ds = forecast_ds.copy(deep=True)
+
+        # Forecast has 3 outputs, target has 2
+        forecast_derived = MockDerivedVariableWithOutputs(
+            output_variables=["output_1", "output_2", "output_3"]
+        )
+        target_derived = MockDerivedVariableWithOutputs(
+            output_variables=["output_1", "output_2"]
         )
 
-        assert list(result.columns) == evaluate.OUTPUT_COLUMNS
-        # Custom column should be preserved but not part of evaluate.OUTPUT_COLUMNS
-        # temperature column should not appear in final result
-        assert "temperature" not in result.columns
-        assert len(result) == 2
+        metric = metrics.RMSE(
+            forecast_variable=forecast_derived,
+            target_variable=target_derived,
+        )
 
-    def test_ensure_output_schema_init_time_multiple_variables(self):
-        """Test _ensure_output_schema with init_time and multiple variables."""
-        df = pd.DataFrame(
+        mock_forecast = mock.Mock(spec=inputs.ForecastBase)
+        mock_forecast.name = "MockForecast"
+        mock_forecast.variables = []
+        mock_forecast.maybe_align_forecast_to_target = mock.Mock(
+            return_value=(forecast_ds, target_ds)
+        )
+
+        mock_target = mock.Mock(spec=inputs.TargetBase)
+        mock_target.name = "MockTarget"
+        mock_target.variables = []
+        mock_target.maybe_align_forecast_to_target = mock.Mock(
+            return_value=(forecast_ds, target_ds)
+        )
+
+        case_operator = cases.CaseOperator(
+            case_metadata=sample_individual_case,
+            metric_list=[metric],
+            target=mock_target,
+            forecast=mock_forecast,
+        )
+
+        with mock.patch("extremeweatherbench.evaluate.run_pipeline") as mock_run:
+            mock_run.side_effect = [target_ds, forecast_ds]
+            result = evaluate.compute_case_operator(case_operator)
+
+        # Should have 20 rows (2 output variables * 10 lead_times)
+        # Limited by target's 2 outputs
+        assert len(result) == 20
+        target_vars = result["target_variable"].unique()
+        assert set(target_vars) == {"output_1", "output_2"}
+        # Each output variable should have 10 lead_time values
+        assert len(result[result["target_variable"] == "output_1"]) == 10
+        assert len(result[result["target_variable"] == "output_2"]) == 10
+
+    def test_compute_case_operator_one_string_one_derived(self, sample_individual_case):
+        """Test metric with one string and one DerivedVariable."""
+        time = pd.date_range("2021-06-20", freq="6h", periods=10)
+        lat = np.linspace(42.5, 47.5, 5)
+        lon = np.linspace(-122.5, -117.5, 5)
+
+        # Create with lead_time as a dimension
+        output_1_data = xr.DataArray(
+            np.random.randn(10, 5, 5),
+            dims=["lead_time", "latitude", "longitude"],
+            coords={
+                "lead_time": np.arange(0, 60, 6),
+                "latitude": lat,
+                "longitude": lon,
+                "valid_time": ("lead_time", time),
+            },
+        )
+        output_2_data = xr.DataArray(
+            np.random.randn(10, 5, 5),
+            dims=["lead_time", "latitude", "longitude"],
+            coords={
+                "lead_time": np.arange(0, 60, 6),
+                "latitude": lat,
+                "longitude": lon,
+                "valid_time": ("lead_time", time),
+            },
+        )
+        temp_data = xr.DataArray(
+            np.random.randn(10, 5, 5),
+            dims=["lead_time", "latitude", "longitude"],
+            coords={
+                "lead_time": np.arange(0, 60, 6),
+                "latitude": lat,
+                "longitude": lon,
+                "valid_time": ("lead_time", time),
+            },
+        )
+
+        forecast_ds = xr.Dataset(
             {
-                "value": [1.0, 2.0, 3.0],
-                "init_time": pd.to_datetime(["2021-06-20", "2021-06-21", "2021-06-22"]),
-                "variable1": [10, 11, 12],
-                "variable2": [20, 21, 22],
-                "variable3": [30, 31, 32],
+                "output_1": output_1_data,
+                "output_2": output_2_data,
+                "temp": temp_data,
             }
         )
 
-        result = evaluate._ensure_output_schema(
-            df,
-            target_variable="composite",
-            metric="MultiMetric",
-            case_id_number=6,
-            event_type="complex",
+        target_ds = forecast_ds.copy(deep=True)
+
+        # Forecast is string, target is derived with 2 outputs
+        target_derived = MockDerivedVariableWithOutputs(
+            output_variables=["output_1", "output_2"]
         )
 
-        assert list(result.columns) == evaluate.OUTPUT_COLUMNS
-        # Extra variables should not appear in final result
-        assert "variable1" not in result.columns
-        assert "variable2" not in result.columns
-        assert "variable3" not in result.columns
-        assert len(result) == 3
+        metric = metrics.RMSE(forecast_variable="temp", target_variable=target_derived)
 
-    def test_ensure_output_schema_lead_time_multiple_variables(self):
-        """Test _ensure_output_schema with lead_time and multiple variables."""
-        df = pd.DataFrame(
-            {
-                "value": [5.0, 6.0],
-                "lead_time": [48, 72],
-                "variable1": [100, 101],
-                "variable2": [200, 201],
-                "variable3": [300, 301],
-            }
+        mock_forecast = mock.Mock(spec=inputs.ForecastBase)
+        mock_forecast.name = "MockForecast"
+        mock_forecast.variables = []
+        mock_forecast.maybe_align_forecast_to_target = mock.Mock(
+            return_value=(forecast_ds, target_ds)
         )
 
-        result = evaluate._ensure_output_schema(
-            df,
-            target_variable="multi_var",
-            metric="EnsembleMetric",
-            case_id_number=7,
-            event_type="ensemble",
+        mock_target = mock.Mock(spec=inputs.TargetBase)
+        mock_target.name = "MockTarget"
+        mock_target.variables = []
+        mock_target.maybe_align_forecast_to_target = mock.Mock(
+            return_value=(forecast_ds, target_ds)
         )
 
-        assert list(result.columns) == evaluate.OUTPUT_COLUMNS
-        assert list(result["lead_time"]) == [48, 72]
-        assert "variable1" not in result.columns
-        assert len(result) == 2
-
-    def test_ensure_output_schema_missing_columns_warning(self, caplog):
-        """Test that missing columns generate appropriate warnings."""
-        df = pd.DataFrame({"value": [1.0], "some_other_column": [42]})
-
-        with caplog.at_level(logging.WARNING):
-            result = evaluate._ensure_output_schema(
-                df,
-                target_variable="test_var",
-                metric="TestMetric",
-                case_id_number=1,
-                event_type="test",
-            )
-
-        # Should warn about missing columns
-        assert "Missing expected columns" in caplog.text
-        # But still return properly structured DataFrame
-        assert list(result.columns) == evaluate.OUTPUT_COLUMNS
-        assert result["value"].iloc[0] == 1.0
-
-    def test_ensure_output_schema_no_warning_init_time_when_lead_time_present(
-        self, caplog
-    ):
-        """Test no warning when init_time missing but lead_time present."""
-        df = pd.DataFrame({"value": [1.0], "lead_time": [6]})
-
-        with caplog.at_level(logging.WARNING):
-            result = evaluate._ensure_output_schema(
-                df,
-                target_variable="test_var",
-                metric="TestMetric",
-                case_id_number=1,
-                event_type="test",
-            )
-
-        # Should not warn about missing init_time when lead_time present
-        warning_messages = [
-            record.message for record in caplog.records if record.levelname == "WARNING"
-        ]
-        init_time_warnings = [msg for msg in warning_messages if "init_time" in msg]
-        assert len(init_time_warnings) == 0
-
-        assert list(result.columns) == evaluate.OUTPUT_COLUMNS
-
-    def test_ensure_output_schema_no_warning_lead_time_when_init_time_present(
-        self, caplog
-    ):
-        """Test no warning when lead_time missing but init_time present."""
-        df = pd.DataFrame({"value": [1.0], "init_time": pd.to_datetime(["2021-06-20"])})
-
-        with caplog.at_level(logging.WARNING):
-            result = evaluate._ensure_output_schema(
-                df,
-                target_variable="test_var",
-                metric="TestMetric",
-                case_id_number=1,
-                event_type="test",
-            )
-
-        # Should not warn about missing lead_time when init_time present
-        warning_messages = [
-            record.message for record in caplog.records if record.levelname == "WARNING"
-        ]
-        lead_time_warnings = [msg for msg in warning_messages if "lead_time" in msg]
-        assert len(lead_time_warnings) == 0
-
-        assert list(result.columns) == evaluate.OUTPUT_COLUMNS
-
-    def test_ensure_output_schema_no_missing_variables(self):
-        """Test _ensure_output_schema when no variables are missing."""
-        # Create a dataframe with all required evaluate.OUTPUT_COLUMNS already present
-        df = pd.DataFrame(
-            {
-                "value": [1.0, 2.0],
-                "lead_time": [1, 2],
-                "target_variable": ["temperature", "temperature"],
-                "metric": ["TestMetric", "TestMetric"],
-                "target_source": ["test_target", "test_target"],
-                "forecast_source": ["test_forecast", "test_forecast"],
-                "case_id_number": [1, 1],
-                "event_type": ["heat_wave", "heat_wave"],
-            }
+        case_operator = cases.CaseOperator(
+            case_metadata=sample_individual_case,
+            metric_list=[metric],
+            target=mock_target,
+            forecast=mock_forecast,
         )
 
-        # Call _ensure_output_schema without any additional metadata
-        result = evaluate._ensure_output_schema(df)
+        with mock.patch("extremeweatherbench.evaluate.run_pipeline") as mock_run:
+            mock_run.side_effect = [target_ds, forecast_ds]
+            # This should fail because we're pairing 1 forecast var with 2
+            # target vars - they need to match
+            result = evaluate.compute_case_operator(case_operator)
 
-        # Should work without warnings and preserve all columns
-        assert list(result.columns) == evaluate.OUTPUT_COLUMNS
-        assert len(result) == 2
-        assert result["value"].tolist() == [1.0, 2.0]
-        assert result["lead_time"].tolist() == [1, 2]
+        # Should create 10 rows (1 pair: "temp" with first output * 10 lead_times)
+        assert len(result) == 10
 
-    def test_ensure_output_schema_no_missing_with_metadata(self, caplog):
-        """Test _ensure_output_schema when no variables are missing with metadata."""
-        # Create a dataframe with all required evaluate.OUTPUT_COLUMNS already present
-        df = pd.DataFrame(
-            {
-                "value": [1.5, 2.5],
-                "init_time": pd.to_datetime(["2021-06-20", "2021-06-21"]),
-                "target_variable": ["pressure", "pressure"],
-                "metric": ["NewMetric", "NewMetric"],
-                "target_source": ["obs_target", "obs_target"],
-                "forecast_source": ["model_forecast", "model_forecast"],
-                "case_id_number": [2, 2],
-                "event_type": ["cold_wave", "cold_wave"],
-            }
+    def test_compute_case_operator_single_output_each(self, sample_individual_case):
+        """Test metrics with single output_variable on each side."""
+        time = pd.date_range("2021-06-20", freq="6h", periods=10)
+        lat = np.linspace(42.5, 47.5, 5)
+        lon = np.linspace(-122.5, -117.5, 5)
+
+        # Create as data arrays with lead_time as a dimension
+        output_1_data = xr.DataArray(
+            np.random.randn(10, 5, 5),
+            dims=["lead_time", "latitude", "longitude"],
+            coords={
+                "lead_time": np.arange(0, 60, 6),
+                "latitude": lat,
+                "longitude": lon,
+                "valid_time": ("lead_time", time),
+            },
         )
 
-        # Add some additional metadata that should overwrite existing values
-        result = evaluate._ensure_output_schema(
-            df,
-            target_variable="updated_pressure",
-            metric="UpdatedMetric",
-            case_id_number=3,
-            event_type="updated_event",
+        forecast_ds = xr.Dataset({"output_1": output_1_data})
+
+        target_ds = forecast_ds.copy(deep=True)
+
+        forecast_derived = MockDerivedVariableWithOutputs(output_variables=["output_1"])
+        target_derived = MockDerivedVariableWithOutputs(output_variables=["output_1"])
+
+        metric = metrics.RMSE(
+            forecast_variable=forecast_derived,
+            target_variable=target_derived,
         )
 
-        # Should work without warnings since no columns are missing
-        warning_messages = [
-            record.message for record in caplog.records if record.levelname == "WARNING"
-        ]
-        missing_warnings = [msg for msg in warning_messages if "Missing" in msg]
-        assert len(missing_warnings) == 0
-
-        # Should preserve structure and update metadata
-        assert list(result.columns) == evaluate.OUTPUT_COLUMNS
-        assert len(result) == 2
-        assert result["value"].tolist() == [1.5, 2.5]
-        assert all(result["target_variable"] == "updated_pressure")
-        assert all(result["metric"] == "UpdatedMetric")
-        assert all(result["case_id_number"] == 3)
-        assert all(result["event_type"] == "updated_event")
-
-
-class ForecastDerivedVariable(derived.DerivedVariable):
-    """Test derived variable for forecast data."""
-
-    name = "derived_forecast_var"
-    variables = ["surface_air_temperature"]
-
-    @classmethod
-    def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
-        """Simple derivation - just return the temperature variable."""
-        return data["surface_air_temperature"]
-
-
-class TargetDerivedVariable(derived.DerivedVariable):
-    """Test derived variable for target data."""
-
-    name = "derived_target_var"
-    variables = ["2m_temperature"]
-
-    @classmethod
-    def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
-        """Simple derivation - just return the temperature variable."""
-        return data["2m_temperature"]
-
-
-class TestRegionSubsettingIntegration:
-    """Test integration of region subsetting with ExtremeWeatherBench evaluation."""
-
-    @pytest.fixture
-    def multi_case_dict(self):
-        """Create a cases dictionary with multiple cases."""
-        return {
-            "cases": [
-                {
-                    "case_id_number": 1,
-                    "title": "Heat Wave California",
-                    "start_date": datetime.datetime(2021, 6, 20),
-                    "end_date": datetime.datetime(2021, 6, 25),
-                    "location": {
-                        "type": "bounded_region",
-                        "parameters": {
-                            "latitude_min": 35.0,
-                            "latitude_max": 40.0,
-                            "longitude_min": -125.0,
-                            "longitude_max": -120.0,
-                        },
-                    },
-                    "event_type": "heat_wave",
-                },
-                {
-                    "case_id_number": 2,
-                    "title": "Heat Wave Texas",
-                    "start_date": datetime.datetime(2021, 7, 15),
-                    "end_date": datetime.datetime(2021, 7, 20),
-                    "location": {
-                        "type": "bounded_region",
-                        "parameters": {
-                            "latitude_min": 28.0,
-                            "latitude_max": 33.0,
-                            "longitude_min": -105.0,
-                            "longitude_max": -95.0,
-                        },
-                    },
-                    "event_type": "heat_wave",
-                },
-                {
-                    "case_id_number": 3,
-                    "title": "Cold Wave Canada",
-                    "start_date": datetime.datetime(2021, 12, 10),
-                    "end_date": datetime.datetime(2021, 12, 15),
-                    "location": {
-                        "type": "bounded_region",
-                        "parameters": {
-                            "latitude_min": 50.0,
-                            "latitude_max": 55.0,
-                            "longitude_min": -115.0,
-                            "longitude_max": -105.0,
-                        },
-                    },
-                    "event_type": "cold_wave",
-                },
-            ]
-        }
-
-    def test_region_filtered_evaluation_setup(
-        self, multi_case_dict, sample_evaluation_object
-    ):
-        """Test that ExtremeWeatherBench with RegionSubsetter filters cases
-        correctly."""
-        # Create region subsetter for west coast only
-        west_coast_region = regions.BoundingBoxRegion.create_region(
-            latitude_min=30.0,
-            latitude_max=45.0,
-            longitude_min=-130.0,
-            longitude_max=-115.0,
+        mock_forecast = mock.Mock(spec=inputs.ForecastBase)
+        mock_forecast.name = "MockForecast"
+        mock_forecast.variables = []
+        mock_forecast.maybe_align_forecast_to_target = mock.Mock(
+            return_value=(forecast_ds, target_ds)
         )
 
-        subsetter = regions.RegionSubsetter(
-            region=west_coast_region, method="intersects"
+        mock_target = mock.Mock(spec=inputs.TargetBase)
+        mock_target.name = "MockTarget"
+        mock_target.variables = []
+        mock_target.maybe_align_forecast_to_target = mock.Mock(
+            return_value=(forecast_ds, target_ds)
         )
 
-        # Create evaluation WITH the region subsetter
-        ewb_with_region = evaluate.ExtremeWeatherBench(
-            case_metadata=multi_case_dict,
-            evaluation_objects=[sample_evaluation_object],
-            region_subsetter=subsetter,
+        case_operator = cases.CaseOperator(
+            case_metadata=sample_individual_case,
+            metric_list=[metric],
+            target=mock_target,
+            forecast=mock_forecast,
         )
 
-        # Create evaluation WITHOUT region subsetter for comparison
-        ewb_without_region = evaluate.ExtremeWeatherBench(
-            case_metadata=multi_case_dict,
-            evaluation_objects=[sample_evaluation_object],
+        with mock.patch("extremeweatherbench.evaluate.run_pipeline") as mock_run:
+            mock_run.side_effect = [target_ds, forecast_ds]
+            result = evaluate.compute_case_operator(case_operator)
+
+        # Should have 10 rows (1 output variable * 10 lead_times)
+        assert len(result) == 10
+        assert all(result["target_variable"] == "output_1")
+
+    def test_compute_case_operator_no_output_variables(self, sample_individual_case):
+        """Test DerivedVariable without output_variables specified."""
+        time = pd.date_range("2021-06-20", freq="6h", periods=10)
+        lat = np.linspace(42.5, 47.5, 5)
+        lon = np.linspace(-122.5, -117.5, 5)
+
+        # Create with lead_time as a dimension
+        mock_data = xr.DataArray(
+            np.random.randn(10, 5, 5),
+            dims=["lead_time", "latitude", "longitude"],
+            coords={
+                "lead_time": np.arange(0, 60, 6),
+                "latitude": lat,
+                "longitude": lon,
+                "valid_time": ("lead_time", time),
+            },
         )
 
-        # Access case_operators to trigger region subsetting
-        filtered_operators = ewb_with_region.case_operators
-        all_operators = ewb_without_region.case_operators
+        forecast_ds = xr.Dataset({"MockDerivedVariableWithOutputs": mock_data})
 
-        # The filtered evaluation should have fewer or equal case operators
-        assert len(filtered_operators) <= len(all_operators)
+        target_ds = forecast_ds.copy(deep=True)
 
-        # Verify that the California case (case_id_number=1) is included
-        # since it intersects with the west coast region
-        filtered_case_ids = {
-            op.case_metadata.case_id_number for op in filtered_operators
-        }
-        all_case_ids = {op.case_metadata.case_id_number for op in all_operators}
+        # No output_variables specified - uses derived variable name
+        forecast_derived = MockDerivedVariableWithOutputs()
+        target_derived = MockDerivedVariableWithOutputs()
 
-        # California case should be in filtered results
-        assert 1 in filtered_case_ids
-
-        # All filtered case IDs should be a subset of all case IDs
-        assert filtered_case_ids.issubset(all_case_ids)
-
-        # Verify that region subsetting actually happened
-        # (unless all cases happen to be in the region)
-        if len(multi_case_dict["cases"]) > 1:
-            # At least verify the subsetter was applied
-            assert ewb_with_region.region_subsetter is not None
-            assert ewb_without_region.region_subsetter is None
-
-    def test_region_subsetter_actually_filters_cases(
-        self, multi_case_dict, sample_evaluation_object
-    ):
-        """Test that RegionSubsetter actually filters out cases outside the region."""
-        # Create a very restrictive region that should only include California case
-        california_only_region = regions.BoundingBoxRegion.create_region(
-            latitude_min=35.0,
-            latitude_max=40.0,
-            longitude_min=-125.0,
-            longitude_max=-120.0,
+        metric = metrics.RMSE(
+            forecast_variable=forecast_derived,
+            target_variable=target_derived,
         )
 
-        subsetter = regions.RegionSubsetter(
-            region=california_only_region,
-            method="all",  # Use "all" method to be more restrictive
+        mock_forecast = mock.Mock(spec=inputs.ForecastBase)
+        mock_forecast.name = "MockForecast"
+        mock_forecast.variables = []
+        mock_forecast.maybe_align_forecast_to_target = mock.Mock(
+            return_value=(forecast_ds, target_ds)
         )
 
-        # Create evaluation with restrictive region subsetter
-        ewb_filtered = evaluate.ExtremeWeatherBench(
-            case_metadata=multi_case_dict,
-            evaluation_objects=[sample_evaluation_object],
-            region_subsetter=subsetter,
+        mock_target = mock.Mock(spec=inputs.TargetBase)
+        mock_target.name = "MockTarget"
+        mock_target.variables = []
+        mock_target.maybe_align_forecast_to_target = mock.Mock(
+            return_value=(forecast_ds, target_ds)
         )
 
-        # Create evaluation without filtering
-        ewb_unfiltered = evaluate.ExtremeWeatherBench(
-            case_metadata=multi_case_dict,
-            evaluation_objects=[sample_evaluation_object],
+        case_operator = cases.CaseOperator(
+            case_metadata=sample_individual_case,
+            metric_list=[metric],
+            target=mock_target,
+            forecast=mock_forecast,
         )
 
-        # Get case operators
-        filtered_operators = ewb_filtered.case_operators
-        unfiltered_operators = ewb_unfiltered.case_operators
-
-        # Should have fewer filtered operators than unfiltered
-        assert len(filtered_operators) < len(unfiltered_operators)
-
-        # Should have exactly 1 case (California) or 0 cases if none match
-        assert len(filtered_operators) <= 1
-
-        # If we have any filtered cases, they should be the California case
-        if len(filtered_operators) > 0:
-            filtered_case_ids = {
-                op.case_metadata.case_id_number for op in filtered_operators
-            }
-            assert filtered_case_ids == {1}  # Only California case
-
-    def test_region_subsetter_in_ewb_with_run(
-        self, multi_case_dict, sample_evaluation_object
-    ):
-        """Test complete workflow with RegionSubsetter in ExtremeWeatherBench."""
-        # Create region subsetter for west coast only
-        west_coast_region = regions.BoundingBoxRegion.create_region(
-            latitude_min=30.0,
-            latitude_max=45.0,
-            longitude_min=-130.0,
-            longitude_max=-115.0,
-        )
-
-        subsetter = regions.RegionSubsetter(
-            region=west_coast_region, method="intersects"
-        )
-
-        # Create evaluation WITH region subsetter
-        ewb_with_region = evaluate.ExtremeWeatherBench(
-            case_metadata=multi_case_dict,
-            evaluation_objects=[sample_evaluation_object],
-            region_subsetter=subsetter,
-        )
-
-        # Create evaluation WITHOUT region subsetter for comparison
-        ewb_without_region = evaluate.ExtremeWeatherBench(
-            case_metadata=multi_case_dict,
-            evaluation_objects=[sample_evaluation_object],
-        )
-
-        # Compare the case operators (should be fewer with region subsetter)
-        with_region_operators = ewb_with_region.case_operators
-        without_region_operators = ewb_without_region.case_operators
-
-        # With region subsetting should have fewer or equal case operators
-        assert len(with_region_operators) <= len(without_region_operators)
-
-        # Both should be valid case operator lists
-        assert isinstance(with_region_operators, list)
-        assert isinstance(without_region_operators, list)
-
-    @mock.patch("extremeweatherbench.evaluate.compute_case_operator")
-    def test_region_subset_evaluation_results(
-        self, mock_compute_operator, multi_case_dict, sample_evaluation_object
-    ):
-        """Test that region subsetting produces expected evaluation results."""
-
-        # Mock the compute_case_operator to return predictable results
-        def mock_compute_side_effect(case_operator, *args, **kwargs):
-            case_id = case_operator.case_metadata.case_id_number
-            return pd.DataFrame(
-                {
-                    "value": [0.1 * case_id],
-                    "metric": ["TestMetric"],
-                    "case_id_number": [case_id],
-                    "event_type": [case_operator.case_metadata.event_type],
-                    "target_variable": ["temperature"],
-                    "forecast_source": ["test_forecast"],
-                    "target_source": ["test_target"],
-                }
-            )
-
-        mock_compute_operator.side_effect = mock_compute_side_effect
-
-        # Create evaluation with all cases
-        ewb = evaluate.ExtremeWeatherBench(
-            case_metadata=multi_case_dict,
-            evaluation_objects=[sample_evaluation_object],
-        )
-
-        # Create region subsetter
-        west_coast_region = regions.BoundingBoxRegion.create_region(
-            latitude_min=30.0,
-            latitude_max=45.0,
-            longitude_min=-130.0,
-            longitude_max=-115.0,
-        )
-
-        subsetter = regions.RegionSubsetter(
-            region=west_coast_region, method="intersects"
-        )
-
-        # Load cases and apply subsetting
-        original_cases = cases.load_individual_cases(multi_case_dict)
-        subset_cases = subsetter.subset_case_collection(original_cases)
-        # Create new evaluation with subset cases
-        subset_cases_dict = {
-            "cases": [
-                {
-                    "case_id_number": case.case_id_number,
-                    "title": case.title,
-                    "start_date": case.start_date,
-                    "end_date": case.end_date,
-                    "location": {
-                        "type": "bounded_region",
-                        "parameters": {
-                            key: bound
-                            for key, bound in zip(
-                                [
-                                    "latitude_min",
-                                    "latitude_max",
-                                    "longitude_min",
-                                    "longitude_max",
-                                ],
-                                case.location.as_geopandas().total_bounds,
-                            )
-                        },
-                    },
-                    "event_type": case.event_type,
-                }
-                for case in subset_cases.cases
-            ]
-        }
-
-        subset_ewb = evaluate.ExtremeWeatherBench(
-            case_metadata=subset_cases_dict,
-            evaluation_objects=[sample_evaluation_object],
-        )
-
-        # Run both evaluations
-        all_results = ewb.run(n_jobs=1)
-        subset_results = subset_ewb.run(n_jobs=1)
-
-        # Subset results should have fewer or equal cases
-        assert len(subset_results) <= len(all_results)
-
-        # All case IDs in subset should also be in full results
-        subset_case_ids = set(subset_results["case_id_number"])
-        all_case_ids = set(all_results["case_id_number"])
-        assert subset_case_ids.issubset(all_case_ids)
-
-    def test_region_subsetting_with_results_dataframe(
-        self, multi_case_dict, sample_evaluation_object
-    ):
-        """Test subsetting of results DataFrame after evaluation."""
-        # Create mock results that would come from evaluation
-        mock_results = pd.DataFrame(
-            {
-                "case_id_number": [1, 1, 2, 2, 3, 3],
-                "metric": ["mae", "rmse", "mae", "rmse", "mae", "rmse"],
-                "value": [0.1, 0.15, 0.2, 0.25, 0.3, 0.35],
-                "event_type": [
-                    "heat_wave",
-                    "heat_wave",
-                    "heat_wave",
-                    "heat_wave",
-                    "cold_wave",
-                    "cold_wave",
-                ],
-                "target_variable": ["temperature"] * 6,
-                "forecast_source": ["test_forecast"] * 6,
-                "target_source": ["test_target"] * 6,
-            }
-        )
-
-        # Create region subsetter for west coast
-        west_coast_region = regions.BoundingBoxRegion.create_region(
-            latitude_min=30.0,
-            latitude_max=45.0,
-            longitude_min=-130.0,
-            longitude_max=-115.0,
-        )
-
-        subsetter = regions.RegionSubsetter(
-            region=west_coast_region, method="intersects"
-        )
-
-        # Load original cases for reference
-        original_cases = cases.load_individual_cases(multi_case_dict)
-
-        # Subset the results
-        from extremeweatherbench.regions import subset_results_to_region
-
-        subset_results = subset_results_to_region(
-            subsetter, mock_results, original_cases
-        )
-
-        # Should have fewer results (only for cases in the region)
-        assert len(subset_results) <= len(mock_results)
-
-        # All remaining case IDs should be from the original results
-        subset_case_ids = set(subset_results["case_id_number"])
-        original_case_ids = set(mock_results["case_id_number"])
-        assert subset_case_ids.issubset(original_case_ids)
-
-    def test_different_subsetting_methods_produce_different_results(
-        self, multi_case_dict
-    ):
-        """Test that different subsetting methods produce different results."""
-        # Load cases
-        case_collection = cases.load_individual_cases(multi_case_dict)
-
-        # Create a region that partially overlaps with cases
-        partial_region = regions.BoundingBoxRegion.create_region(
-            latitude_min=32.0,
-            latitude_max=37.0,
-            longitude_min=-122.0,
-            longitude_max=-100.0,
-        )
-
-        # Test different methods
-        intersects_subsetter = regions.RegionSubsetter(
-            region=partial_region, method="intersects"
-        )
-
-        all_subsetter = regions.RegionSubsetter(region=partial_region, method="all")
-
-        percent_low_subsetter = regions.RegionSubsetter(
-            region=partial_region, method="percent", percent_threshold=0.1
-        )
-
-        percent_high_subsetter = regions.RegionSubsetter(
-            region=partial_region, method="percent", percent_threshold=0.9
-        )
-
-        # Apply different methods
-        intersects_cases = intersects_subsetter.subset_case_collection(case_collection)
-        all_cases = all_subsetter.subset_case_collection(case_collection)
-        percent_low_cases = percent_low_subsetter.subset_case_collection(
-            case_collection
-        )
-        percent_high_cases = percent_high_subsetter.subset_case_collection(
-            case_collection
-        )
-
-        # "all" should be most restrictive
-        assert len(all_cases.cases) <= len(intersects_cases.cases)
-        assert len(all_cases.cases) <= len(percent_low_cases.cases)
-        assert len(all_cases.cases) <= len(percent_high_cases.cases)
-
-        # High percent threshold should be more restrictive than low
-        assert len(percent_high_cases.cases) <= len(percent_low_cases.cases)
-
-    def test_region_subsetting_with_centered_regions(self, multi_case_dict):
-        """Test region subsetting works with CenteredRegion targets."""
-        case_collection = cases.load_individual_cases(multi_case_dict)
-
-        # Create a centered region in Texas area
-        texas_region = regions.CenteredRegion.create_region(
-            latitude=30.0, longitude=-100.0, bounding_box_degrees=8.0
-        )
-
-        subsetter = regions.RegionSubsetter(region=texas_region, method="intersects")
-
-        subset_cases = subsetter.subset_case_collection(case_collection)
-
-        # Should work without errors
-        assert isinstance(subset_cases, cases.IndividualCaseCollection)
-
-    def test_region_subsetting_preserves_case_metadata(self, multi_case_dict):
-        """Test that region subsetting preserves all case metadata."""
-        case_collection = cases.load_individual_cases(multi_case_dict)
-
-        # Create subsetter
-        region = regions.BoundingBoxRegion.create_region(
-            latitude_min=20.0,
-            latitude_max=60.0,
-            longitude_min=-130.0,
-            longitude_max=-90.0,
-        )
-
-        subsetter = regions.RegionSubsetter(region=region, method="intersects")
-
-        subset_cases = subsetter.subset_case_collection(case_collection)
-
-        # Check that all metadata is preserved for included cases
-        for case in subset_cases.cases:
-            # Find the original case
-            original_case = next(
-                c
-                for c in case_collection.cases
-                if c.case_id_number == case.case_id_number
-            )
-
-            # All attributes should be identical
-            assert case.title == original_case.title
-            assert case.start_date == original_case.start_date
-            assert case.end_date == original_case.end_date
-            assert case.event_type == original_case.event_type
-            assert case.case_id_number == original_case.case_id_number
-            # Location regions should be equivalent (but may be different objects)
-            assert isinstance(case.location, type(original_case.location))
-
-
-class TestSafeConcat:
-    """Test the _safe_concat helper function."""
-
-    def test_safe_concat_with_non_empty_dataframes(self):
-        """Test _safe_concat with non-empty DataFrames."""
-        df1 = pd.DataFrame({"a": [1, 2], "b": [3, 4]})
-        df2 = pd.DataFrame({"a": [5, 6], "b": [7, 8]})
-        dataframes = [df1, df2]
-
-        result = evaluate._safe_concat(dataframes)
-
-        # Should concatenate normally
-        assert isinstance(result, pd.DataFrame)
-        assert len(result) == 4
-        assert list(result.columns) == ["a", "b"]
-        assert result["a"].tolist() == [1, 2, 5, 6]
-
-    def test_safe_concat_with_all_empty_dataframes(self):
-        """Test _safe_concat when all DataFrames are empty."""
-
-        df1 = pd.DataFrame()
-        df2 = pd.DataFrame()
-        dataframes = [df1, df2]
-
-        result = evaluate._safe_concat(dataframes)
-
-        # Should return empty DataFrame with OUTPUT_COLUMNS
-        assert isinstance(result, pd.DataFrame)
-        assert len(result) == 0
-        assert list(result.columns) == evaluate.OUTPUT_COLUMNS
-
-    def test_safe_concat_with_mixed_empty_and_non_empty(self):
-        """Test _safe_concat with mix of empty and non-empty DataFrames."""
-        df1 = pd.DataFrame()  # Empty
-        df2 = pd.DataFrame({"value": [1.0], "metric": ["test"]})
-        df3 = pd.DataFrame()  # Empty
-        df4 = pd.DataFrame({"value": [2.0], "metric": ["test2"]})
-        dataframes = [df1, df2, df3, df4]
-
-        result = evaluate._safe_concat(dataframes)
-
-        # Should only concatenate non-empty DataFrames
-        assert isinstance(result, pd.DataFrame)
-        assert len(result) == 2
-        assert result["value"].tolist() == [1.0, 2.0]
-        assert result["metric"].tolist() == ["test", "test2"]
-
-    def test_safe_concat_with_ignore_index_false(self):
-        """Test _safe_concat with ignore_index=False."""
-        df1 = pd.DataFrame({"a": [1, 2]}, index=[0, 1])
-        df2 = pd.DataFrame({"a": [3, 4]}, index=[0, 1])
-        dataframes = [df1, df2]
-
-        result = evaluate._safe_concat(dataframes, ignore_index=False)
-
-        # Should preserve original indices
-        assert isinstance(result, pd.DataFrame)
-        assert len(result) == 4
-        assert list(result.index) == [0, 1, 0, 1]
-
-    def test_safe_concat_with_ignore_index_true(self):
-        """Test _safe_concat with ignore_index=True (default)."""
-        df1 = pd.DataFrame({"a": [1, 2]}, index=[10, 11])
-        df2 = pd.DataFrame({"a": [3, 4]}, index=[20, 21])
-        dataframes = [df1, df2]
-
-        result = evaluate._safe_concat(dataframes, ignore_index=True)
-
-        # Should create new sequential index
-        assert isinstance(result, pd.DataFrame)
-        assert len(result) == 4
-        assert list(result.index) == [0, 1, 2, 3]
-
-    def test_safe_concat_with_empty_list(self):
-        """Test _safe_concat with empty list of DataFrames."""
-
-        dataframes = []
-
-        result = evaluate._safe_concat(dataframes)
-
-        # Should return empty DataFrame with OUTPUT_COLUMNS
-        assert isinstance(result, pd.DataFrame)
-        assert len(result) == 0
-        assert list(result.columns) == evaluate.OUTPUT_COLUMNS
-
-    def test_safe_concat_prevents_future_warning(self):
-        """Test that _safe_concat prevents the specific pandas FutureWarning."""
-        import warnings
-
-        # Create DataFrames that would trigger the specific FutureWarning
-        # about empty or all-NA entries
-        df1 = pd.DataFrame()  # Empty DataFrame
-        df2 = pd.DataFrame({"a": [1], "b": [2]})
-        df3 = pd.DataFrame({"a": [None], "b": [None]})  # All-NA DataFrame
-        dataframes = [df1, df2, df3]
-
-        # Test that our _safe_concat prevents the warning
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            result = evaluate._safe_concat(dataframes)
-
-            # Check that no FutureWarnings about concatenation were raised
-            future_warnings = [
-                warning
-                for warning in w
-                if issubclass(warning.category, FutureWarning)
-                and "DataFrame concatenation with empty or all-NA entries"
-                in str(warning.message)
-            ]
-            assert len(future_warnings) == 0, (
-                f"FutureWarning was raised: {future_warnings}"
-            )
-
-        # Should successfully concatenate without warnings
-        assert isinstance(result, pd.DataFrame)
-        assert len(result) >= 1  # Should have at least the non-empty DataFrame
-
-    def test_safe_concat_preserves_dtypes_when_consistent(self):
-        """Test that _safe_concat preserves dtypes when they are consistent."""
-        df1 = pd.DataFrame({"a": [1, 2], "b": [3.0, 4.0]})  # int64, float64
-        df2 = pd.DataFrame({"a": [5, 6], "b": [7.0, 8.0]})  # int64, float64
-        dataframes = [df1, df2]
-
-        result = evaluate._safe_concat(dataframes)
-
-        # Should preserve original dtypes
-        assert result["a"].dtype == "int64"
-        assert result["b"].dtype == "float64"
-        assert len(result) == 4
-
-    def test_safe_concat_converts_to_object_when_mismatched(self):
-        """Test that _safe_concat converts to object dtype when dtypes mismatch."""
-
-        df1 = pd.DataFrame({"a": [1, 2], "b": [3.0, 4.0]})  # int64, float64
-        df2 = pd.DataFrame(
-            {"a": [pd.Timestamp("2021-01-01")], "b": ["text"]}
-        )  # datetime, object
-        dataframes = [df1, df2]
-
-        result = evaluate._safe_concat(dataframes)
-
-        # Should convert to object dtypes due to mismatches
-        assert result["a"].dtype == "object"
-        assert result["b"].dtype == "object"
-        assert len(result) == 3
+        with mock.patch("extremeweatherbench.evaluate.run_pipeline") as mock_run:
+            mock_run.side_effect = [target_ds, forecast_ds]
+            result = evaluate.compute_case_operator(case_operator)
+
+        # Should use the derived variable name, 10 rows (10 lead_times)
+        assert len(result) == 10
+        assert all(result["target_variable"] == "MockDerivedVariableWithOutputs")
 
 
 if __name__ == "__main__":

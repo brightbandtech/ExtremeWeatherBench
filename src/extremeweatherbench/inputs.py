@@ -7,6 +7,7 @@ from typing import (
     Callable,
     Literal,
     Optional,
+    Sequence,
     TypeAlias,
     Union,
     cast,
@@ -34,11 +35,14 @@ DEFAULT_GHCN_URI = "gs://extremeweatherbench/datasets/ghcnh_all_2020_2024.parq"
 
 #: Storage/access options for local storm report (LSR) tabular data.
 LSR_URI = "gs://extremeweatherbench/datasets/combined_canada_australia_us_lsr_01012020_09272025.parq"  # noqa: E501
+
+#: Storage/access options for practically perfect hindcast data.
 PPH_URI = (
     "gs://extremeweatherbench/datasets/"
-    "practically_perfect_hindcast_20200104_20250430.zarr"
+    "practically_perfect_hindcast_20200104_20250927.zarr"
 )
 
+#: Storage/access options for IBTrACS data.
 IBTRACS_URI = (
     "https://www.ncei.noaa.gov/data/international-best-track-archive-for-"
     "climate-stewardship-ibtracs/v04r01/access/csv/ibtracs.ALL.list.v04r01.csv"
@@ -103,6 +107,8 @@ IBTrACS_metadata_variable_mapping = {
     "NAME": "tc_name",
     "LAT": "latitude",
     "LON": "longitude",
+    "SEASON": "season",
+    "NUMBER": "number",
     "WMO_WIND": "wmo_surface_wind_speed",
     "WMO_PRES": "wmo_air_pressure_at_mean_sea_level",
     "USA_WIND": "usa_surface_wind_speed",
@@ -155,7 +161,7 @@ class InputBase(abc.ABC):
 
     source: str
     name: str
-    variables: list[Union[str, "derived.DerivedVariable"]] = dataclasses.field(
+    variables: Sequence[Union[str, "derived.DerivedVariable"]] = dataclasses.field(
         default_factory=list
     )
     variable_mapping: dict = dataclasses.field(default_factory=dict)
@@ -168,14 +174,6 @@ class InputBase(abc.ABC):
         data = self._open_data_from_source()
         data = self.preprocess(data)
         return data
-
-    def set_name(self, name: str) -> None:
-        """Set the name of the input data source.
-
-        Args:
-            name: The new name to assign to this input data source.
-        """
-        self.name = name
 
     @abc.abstractmethod
     def _open_data_from_source(self) -> IncomingDataInput:
@@ -390,12 +388,7 @@ class EvaluationObject:
     """
 
     event_type: str
-    metric_list: list[
-        Union[
-            Callable[..., Any],
-            "metrics.BaseMetric",
-        ]
-    ]
+    metric_list: list["metrics.BaseMetric"]
     target: "TargetBase"
     forecast: "ForecastBase"
 
@@ -605,6 +598,9 @@ class LSR(TargetBase):
 
     name: str = "local_storm_reports"
     source: str = LSR_URI
+    variables: Sequence[str] = dataclasses.field(
+        default_factory=lambda: ["report_type"]
+    )
 
     def _open_data_from_source(self) -> IncomingDataInput:
         # force LSR to use anon token to prevent google reauth issues for users
@@ -725,6 +721,9 @@ class PPH(TargetBase):
     variable_mapping: dict = dataclasses.field(
         default_factory=lambda: IBTrACS_metadata_variable_mapping.copy()
     )
+    variables: Sequence[str] = dataclasses.field(
+        default_factory=lambda: ["practically_perfect_hindcast"]
+    )
 
     def _open_data_from_source(
         self,
@@ -756,12 +755,120 @@ class PPH(TargetBase):
         return align_forecast_to_target(forecast_data, target_data)
 
 
+def _ibtracs_preprocess(data: IncomingDataInput) -> IncomingDataInput:
+    """Preprocess IBTrACS data.
+
+    Preprocessing is done before any variable mapping is applied, thus using the
+    original variable names is required."""
+
+    schema = data.collect_schema()
+    # Convert pressure and surface wind columns to float, replacing " " with null
+    # Get column names that contain "pressure" or "wind"
+    pressure_cols = [col for col in schema if "PRES" in col.lower()]
+    wind_cols = [col for col in schema if "WIND" in col.lower()]
+
+    # Apply transformations to strip whitespace, replace empty with null, cast
+    subset_target_data = data.with_columns(
+        [
+            pl.col(col)
+            .str.strip_chars()
+            .replace("", None)
+            .cast(pl.Float64, strict=False)
+            .alias(col)
+            for col in pressure_cols + wind_cols
+        ]
+    )
+
+    # Drop rows where ALL columns are null (equivalent to pandas dropna(how="all"))
+    subset_target_data = subset_target_data.filter(
+        ~pl.all_horizontal(pl.all().is_null())
+    )
+
+    # Create unified pressure and wind columns by preferring USA and WMO data
+    # For surface wind speed - reuse wind_cols from earlier
+    wind_priority = ["USA_WIND", "WMO_WIND"] + [
+        col for col in wind_cols if col not in ["USA_WIND", "WMO_WIND"]
+    ]
+
+    # For pressure at mean sea level - reuse pressure_cols from earlier
+    pressure_priority = [
+        "USA_PRES",
+        "WMO_PRES",
+    ] + [
+        col
+        for col in pressure_cols
+        if col
+        not in [
+            "USA_PRES",
+            "WMO_PRES",
+        ]
+    ]
+
+    # Create unified columns using coalesce (equivalent to pandas bfill)
+    # Filter to only include columns that exist in the schema
+    schema_names = subset_target_data.collect_schema().names()
+    available_wind_cols = [col for col in wind_priority if col in schema_names]
+    available_pressure_cols = [col for col in pressure_priority if col in schema_names]
+
+    # If no columns available, return early with empty dataframe
+    if not available_wind_cols or not available_pressure_cols:
+        return subset_target_data.filter(pl.lit(False))
+
+    subset_target_data = subset_target_data.with_columns(
+        [
+            pl.coalesce([pl.col(col) for col in available_wind_cols]).alias(
+                "surface_wind_speed"
+            ),
+            pl.coalesce([pl.col(col) for col in available_pressure_cols]).alias(
+                "air_pressure_at_mean_sea_level"
+            ),
+        ]
+    )
+
+    # Drop rows where wind speed OR pressure are null
+    subset_target_data = subset_target_data.filter(
+        pl.col("surface_wind_speed").is_not_null()
+        & pl.col("air_pressure_at_mean_sea_level").is_not_null()
+    )
+
+    # Cast to float64 and use strict=False to handle any edge cases
+    subset_target_data = subset_target_data.with_columns(
+        [
+            # Convert knots to m/s
+            pl.col("surface_wind_speed").cast(pl.Float64, strict=False) * 0.514444,
+            # Convert hPa to Pa
+            pl.col("air_pressure_at_mean_sea_level").cast(pl.Float64, strict=False)
+            * 100,
+        ]
+    )
+    return subset_target_data
+
+
 @dataclasses.dataclass
 class IBTrACS(TargetBase):
     """Target class for IBTrACS data."""
 
     name: str = "IBTrACS"
+    preprocess: Callable = _ibtracs_preprocess
+    variable_mapping: dict = dataclasses.field(
+        default_factory=lambda: IBTrACS_metadata_variable_mapping.copy()
+    )
     source: str = IBTRACS_URI
+
+    def __post_init__(self):
+        """Ensure season variable is included in variables list."""
+        # If variables are specified (non-empty list), ensure required variables are
+        # included for subsetting logic in subset_data_to_case. This approach is unique
+        # to deal with a polars LazyFrame or pandas DataFrame.
+        self.variables.extend(
+            [
+                "season",
+                "number",
+                "tc_name",
+                "surface_wind_speed",
+                "air_pressure_at_mean_sea_level",
+            ]
+        )
 
     def _open_data_from_source(self) -> IncomingDataInput:
         # not using storage_options in this case due to NetCDF4Backend not
@@ -791,8 +898,8 @@ class IBTrACS(TargetBase):
 
         # Create a subquery to find all storm numbers in the same season
         matching_numbers = (
-            data.filter(pl.col("SEASON").cast(pl.Int64) == season)
-            .select("NUMBER")
+            data.filter(pl.col("season").cast(pl.Int64) == season)
+            .select("number")
             .unique()
         )
 
@@ -803,8 +910,8 @@ class IBTrACS(TargetBase):
         # This maintains the lazy evaluation
         name_filter = pl.col("tc_name").is_in(possible_names)
         subset_target_data = data.join(
-            matching_numbers, on="NUMBER", how="inner"
-        ).filter(name_filter & (pl.col("SEASON").cast(pl.Int64) == season))
+            matching_numbers, on="number", how="inner"
+        ).filter(name_filter & (pl.col("season").cast(pl.Int64) == season))
 
         # Select only the columns to keep
         columns_to_keep = [
@@ -824,8 +931,6 @@ class IBTrACS(TargetBase):
             pl.col("surface_wind_speed").is_not_null()
             & pl.col("air_pressure_at_mean_sea_level").is_not_null()
         )
-        self._current_case_id = case_metadata.case_id_number
-
         return subset_target_data
 
     def _custom_convert_to_dataset(self, data: IncomingDataInput) -> xr.Dataset:
@@ -838,6 +943,9 @@ class IBTrACS(TargetBase):
             # Due to missing data in the IBTrACS dataset, polars doesn't convert
             # the valid_time to a datetime by default
             data["valid_time"] = pd.to_datetime(data["valid_time"])
+
+            # Keep latitude and longitude as data variables, not index
+            # Only valid_time should be the index
             data = data.set_index(["valid_time"])
 
             try:
@@ -849,6 +957,20 @@ class IBTrACS(TargetBase):
                     data = xr.Dataset.from_dataframe(data)
                 else:
                     raise
+
+            # Move latitude, longitude, and tc_name to coordinates,
+            # keeping only surface_wind_speed and
+            # air_pressure_at_mean_sea_level as data variables
+            coords_to_set = {}
+            for var in ["latitude", "longitude", "tc_name"]:
+                if var in data.data_vars:
+                    coords_to_set[var] = data[var]
+                elif var in data.coords:
+                    coords_to_set[var] = data.coords[var]
+
+            if coords_to_set:
+                data = data.set_coords(list(coords_to_set.keys()))
+
             return data
         else:
             raise ValueError(f"Data is not a polars LazyFrame: {type(data)}")
@@ -959,10 +1081,12 @@ def align_forecast_to_target(
     ]
 
     spatial_dims = {str(dim): target_data[dim] for dim in intersection_dims}
-    # Align time dimensions - find overlapping times
+
+    # Align time dimensions if they exist in both datasets
     time_aligned_target, time_aligned_forecast = xr.align(
-        target_data,
-        forecast_data,
+        # Squeeze the data to remove any single-value dimensions
+        target_data.squeeze(),
+        forecast_data.squeeze(),
         join="inner",
         exclude=spatial_dims.keys(),
     )
@@ -986,7 +1110,7 @@ def align_forecast_to_target(
 
 def maybe_subset_variables(
     data: IncomingDataInput,
-    variables: list[Union[str, "derived.DerivedVariable"]],
+    variables: Sequence[Union[str, "derived.DerivedVariable"]],
     source_module: Optional["sources.base.Source"] = None,
 ) -> IncomingDataInput:
     """Subset the variables from the data, if required.
@@ -997,7 +1121,7 @@ def maybe_subset_variables(
         Args:
         data: The dataset to subset (xr.Dataset, xr.DataArray, pl.LazyFrame,
             or pd.DataFrame).
-        variables: List of variable names and/or derived variable classes.
+        variables: Sequence of variable names and/or derived variable classes.
         source_module: Optional pre-created source module. If None, creates one.
 
     Returns:
