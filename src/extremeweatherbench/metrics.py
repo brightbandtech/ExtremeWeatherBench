@@ -5,6 +5,7 @@ from typing import Any, Callable, Literal, Optional, Sequence, Type
 
 import numpy as np
 import scores
+import sparse
 import xarray as xr
 from scipy import ndimage
 
@@ -324,7 +325,10 @@ class ThresholdMetric(CompositeMetric):
         # Apply thresholds to binarize the data
         binary_forecast = (op_func(forecast, forecast_threshold)).astype(float)
         binary_target = (op_func(target, target_threshold)).astype(float)
-
+        if isinstance(binary_target.data, sparse.COO):
+            binary_target.data = binary_target.data.maybe_densify()
+        if isinstance(binary_forecast.data, sparse.COO):
+            binary_forecast.data = binary_forecast.data.maybe_densify()
         # Create and transform contingency manager
         binary_contingency_manager = scores.categorical.BinaryContingencyManager(
             binary_forecast, binary_target
