@@ -641,6 +641,11 @@ class LSR(TargetBase):
         if not isinstance(data, pd.DataFrame):
             raise ValueError(f"Data is not a pandas DataFrame: {type(data)}")
 
+        # Map report_type column to numeric values
+        report_type_mapping = {"wind": 1, "hail": 2, "tor": 3}
+        if "report_type" in data.columns:
+            data["report_type"] = data["report_type"].map(report_type_mapping)
+
         # Normalize these times for the LSR data
         # Western hemisphere reports get bucketed to 12Z on the date they fall
         # between 12Z-12Z
