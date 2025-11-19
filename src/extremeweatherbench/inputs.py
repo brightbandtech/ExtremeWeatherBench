@@ -595,6 +595,7 @@ class LSR(TargetBase):
 
     name: str = "local_storm_reports"
     source: str = LSR_URI
+    variables: list[str] = dataclasses.field(default_factory=lambda: ["report_type"])
 
     def _open_data_from_source(self) -> IncomingDataInput:
         # force LSR to use anon token to prevent google reauth issues for users
@@ -714,6 +715,9 @@ class PPH(TargetBase):
     source: str = PPH_URI
     variable_mapping: dict = dataclasses.field(
         default_factory=lambda: IBTrACS_metadata_variable_mapping.copy()
+    )
+    variables: list[str] = dataclasses.field(
+        default_factory=lambda: ["practically_perfect_hindcast"]
     )
 
     def _open_data_from_source(
