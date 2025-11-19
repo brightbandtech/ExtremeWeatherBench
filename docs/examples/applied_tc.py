@@ -157,7 +157,7 @@ if __name__ == "__main__":
     # Set up dask client for parallel execution
     with Client() as client:
         logger.info("Starting EWB run")
-        # Run the workflow with parllel_config backend set to dask
+        # Run the workflow with parallel_config backend set to dask
         outputs = ewb.run(
             parallel_config={"backend": "dask", "n_jobs": 3},
         )
