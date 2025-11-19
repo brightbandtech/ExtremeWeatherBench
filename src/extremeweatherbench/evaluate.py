@@ -665,6 +665,10 @@ def _build_datasets(
     It augments the InputBase variables with any variables defined in metrics to
     ensure all required variables are loaded and derived.
 
+    If any forecast variable has `requires_target_dataset=True`, the target dataset
+    will be passed to the forecast pipeline via `_target_dataset` in kwargs. This
+    allows derived variables to automatically access target/reference data when needed.
+
     Args:
         case_operator: The case operator containing metadata and input sources.
         **kwargs: Additional keyword arguments to pass to pipeline steps.
@@ -718,6 +722,20 @@ def _build_datasets(
         target_ds = run_pipeline(
             case_operator.case_metadata, augmented_target, **kwargs
         )
+
+    # Pass target dataset to forecast pipeline only if needed
+    # Check if any forecast variable requires target dataset
+    needs_target = any(
+        getattr(var, "requires_target_dataset", False)
+        for var in case_operator.forecast.variables
+        if hasattr(var, "requires_target_dataset")
+    )
+    if needs_target:
+        kwargs["_target_dataset"] = target_ds
+        logger.debug(
+            "Passing target dataset to forecast pipeline (required by derived variable)"
+        )
+
     logger.info("Running forecast pipeline... ")
     with TqdmCallback(
         desc=f"Running forecast pipeline for case "
@@ -811,6 +829,7 @@ def run_pipeline(
                     ds,
                     variables=input_data.variables,
                     case_metadata=case_metadata,
+                    **kwargs,
                 )
             )
         )

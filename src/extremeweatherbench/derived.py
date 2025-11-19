@@ -7,10 +7,10 @@ import xarray as xr
 import extremeweatherbench.events.atmospheric_river as ar
 import extremeweatherbench.events.severe_convection as sc
 from extremeweatherbench import calc
+from extremeweatherbench.events import tropical_cyclone
 
 if TYPE_CHECKING:
     from extremeweatherbench import cases
-
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +28,9 @@ class DerivedVariable(abc.ABC):
             Defaults to the class name.
         variables: A list of variables that are used to build the
             derived variable.
+        requires_target_dataset: If True, target dataset will be passed to
+            this derived variable via kwargs. Set to False for memory efficiency
+            when target data is not needed.
         compute: A method that generates the derived variable from the variables.
         derive_variable: An abstract method that defines the computation to
             derive the derived_variable from variables.
@@ -80,6 +83,139 @@ class DerivedVariable(abc.ABC):
             A DataArray with the derived variable.
         """
         return self.derive_variable(data, *args, **kwargs)
+
+
+class TropicalCycloneTrackVariables(DerivedVariable):
+    """A derived variable abstract class for tropical cyclone (TC) variables.
+
+    This class serves as a parent for TC-related derived variables and provides
+    shared track computation with caching to avoid reprocessing the same data
+    multiple times across different child classes.
+
+    The track data is computed once and cached, then child classes can extract
+    specific variables (like sea level pressure, wind speed) from the cached
+    track dataset.
+
+    Deriving the track locations using default TempestExtremes criteria:
+    https://doi.org/10.5194/gmd-14-5023-2021
+
+    For forecast data, when track data is provided, the valid candidates
+    approach is filtered to only include candidates within 5 great circle
+    degrees of track data points and within 48 hours of the valid_time.
+
+    Track data is automatically obtained from the target dataset when using
+    the evaluation pipeline (via `requires_target_dataset=True` flag).
+    """
+
+    # required variables for TC track identification
+    variables = [
+        "air_pressure_at_mean_sea_level",
+        "geopotential_thickness",
+        "surface_eastward_wind",
+        "surface_northward_wind",
+    ]
+    # Needs target data for track filtering
+    requires_target_dataset = True
+
+    def __init__(
+        self,
+        output_variables: Optional[List[str]] = [
+            "surface_wind_speed",
+            "air_pressure_at_mean_sea_level",
+        ],
+        name: Optional[str] = None,
+    ):
+        super().__init__(output_variables=output_variables, name=name)
+
+    def get_or_compute_tracks(self, data: xr.Dataset, *args, **kwargs) -> xr.Dataset:
+        """Get cached track data or compute if not already cached.
+
+        This method handles the caching logic to ensure track computation
+        is only done once per unique dataset.
+
+        Track data is automatically obtained from `_target_dataset` in kwargs,
+        which is provided by the evaluation pipeline when
+        `requires_target_dataset=True`.
+
+        Args:
+            data: Input dataset containing required variables
+            **kwargs: Must include:
+                - _target_dataset: Target dataset with lat/lon/valid_time
+                - case_metadata: IndividualCase with case_id_number (optional)
+
+        Returns:
+            3D dataset containing tropical cyclone track information
+
+        Raises:
+            ValueError: If _target_dataset is missing or lacks required vars
+        """
+
+        # Prepare the data with wind variables as needed
+        prepared_data = calc.maybe_calculate_wind_speed(data)
+
+        # Generates the variables needed for the TC track calculation
+        # (geop. thickness, winds, temps, slp)
+
+        # Get track data from target dataset (auto-provided by pipeline)
+        tc_track_data = kwargs.get("_target_dataset", None)
+
+        if tc_track_data is not None:
+            # Verify it has the required variables for TC tracking
+            required = ["latitude", "longitude", "valid_time"]
+            has_required = all(
+                var in tc_track_data.coords or var in tc_track_data.data_vars
+                for var in required
+            )
+            if not has_required:
+                case_metadata = kwargs.get("case_metadata", None)
+                case_id = case_metadata.case_id_number if case_metadata else "unknown"
+                raise ValueError(
+                    f"Target dataset for case {case_id} missing required "
+                    f"track variables (latitude, longitude, valid_time). "
+                    f"Available coords: {list(tc_track_data.coords.keys())}, "
+                    f"vars: {list(tc_track_data.data_vars.keys())}"
+                )
+            logger.debug("Using target dataset as track data for TC detection")
+        else:
+            case_metadata = kwargs.get("case_metadata", None)
+            case_id = case_metadata.case_id_number if case_metadata else "unknown"
+            raise ValueError(
+                f"No track data provided for case {case_id}. "
+                "Ensure requires_target_dataset=True is set and target data "
+                "is available in the evaluation pipeline."
+            )
+
+        tctracks_ds = tropical_cyclone.generate_tc_tracks_by_init_time(
+            sea_level_pressure=prepared_data["air_pressure_at_mean_sea_level"],
+            wind_speed=prepared_data["surface_wind_speed"],
+            tc_track_analysis_data=tc_track_data,
+            geopotential_thickness=prepared_data.get("geopotential_thickness", None),
+            slp_contour_magnitude=200.0,
+            dz_contour_magnitude=-6.0,
+            min_distance_between_peaks=5,
+            max_spatial_distance_degrees=5.0,
+            max_temporal_hours=48.0,
+            use_contour_validation=True,
+        )
+        return tctracks_ds
+
+    def derive_variable(self, data: xr.Dataset, *args, **kwargs) -> xr.DataArray:
+        """Derive the TC track variables.
+
+        This base method returns the full track dataset. Child classes should
+        override this method to extract specific variables from the track data.
+
+        Args:
+            data: Input dataset containing required meteorological variables
+
+        Returns:
+            DataArray containing the derived variable
+        """
+        # Get the cached or computed track data
+        tracks_dataset = self.get_or_compute_tracks(data, *args, **kwargs)
+
+        # Squeeze the dataset to remove the track dimension if only one track is present
+        return tracks_dataset.squeeze()
 
 
 class CravenBrooksSignificantSevere(DerivedVariable):
