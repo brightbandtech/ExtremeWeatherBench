@@ -51,8 +51,6 @@ era5_freeze_target = inputs.ERA5(
     source=inputs.ARCO_ERA5_FULL_URI,
     variables=[
         "surface_air_temperature",
-        "surface_eastward_wind",
-        "surface_northward_wind",
     ],
     storage_options={"remote_options": {"anon": True}},
 )
@@ -64,37 +62,21 @@ era5_atmospheric_river_target = inputs.ERA5(
 
 # GHCN targets
 ghcn_heatwave_target = inputs.GHCN(
-    source=inputs.DEFAULT_GHCN_URI,
+    variables=["surface_air_temperature"],
+)
+
+ghcn_freeze_target = inputs.GHCN(
     variables=["surface_air_temperature"],
     storage_options={},
 )
 
-ghcn_freeze_target = inputs.GHCN(
-    source=inputs.DEFAULT_GHCN_URI,
-    variables=[
-        "surface_air_temperature",
-        "surface_eastward_wind",
-        "surface_northward_wind",
-    ],
-    variable_mapping={
-        "surface_temperature": "surface_air_temperature",
-        "surface_eastward_wind": "surface_eastward_wind",
-        "surface_northward_wind": "surface_northward_wind",
-    },
-    storage_options={},
-)
-
 # LSR/PPH target
-# TODO: Re-enable when severe convection is implemented
 lsr_target = inputs.LSR(
-    source=inputs.LSR_URI,
-    variables=["report_type"],
-    variable_mapping={},
+    variables=["local_storm_reports"],
     storage_options={"remote_options": {"anon": True}},
 )
 
 pph_target = inputs.PPH(
-    source=inputs.PPH_URI,
     variables=["practically_perfect_hindcast"],
     variable_mapping={},
     storage_options={"remote_options": {"anon": True}},
@@ -110,7 +92,7 @@ cira_heatwave_forecast = inputs.KerchunkForecast(
     name="FourCastNetv2",
     source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
     variables=["surface_air_temperature"],
-    variable_mapping={"t2": "surface_air_temperature"},
+    variable_mapping=inputs.CIRA_metadata_variable_mapping,
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
     preprocess=_preprocess_bb_cira_forecast_dataset,
 )
@@ -118,16 +100,8 @@ cira_heatwave_forecast = inputs.KerchunkForecast(
 cira_freeze_forecast = inputs.KerchunkForecast(
     name="FourCastNetv2",
     source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
-    variables=[
-        "surface_air_temperature",
-        "surface_eastward_wind",
-        "surface_northward_wind",
-    ],
-    variable_mapping={
-        "t2": "surface_air_temperature",
-        "10u": "surface_eastward_wind",
-        "10v": "surface_northward_wind",
-    },
+    variables=["surface_air_temperature"],
+    variable_mapping=inputs.CIRA_metadata_variable_mapping,
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
     preprocess=_preprocess_bb_cira_forecast_dataset,
 )
@@ -151,9 +125,8 @@ cira_atmospheric_river_forecast = inputs.KerchunkForecast(
 )
 
 cira_severe_convection_forecast = inputs.KerchunkForecast(
-    name="FourCastNetv2",
     source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
-    variables=["surface_air_temperature"],
+    variables=[derived.CravenSignificantSevereParameter()],
     variable_mapping=inputs.CIRA_metadata_variable_mapping,
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
 )
@@ -216,8 +189,9 @@ def get_brightband_evaluation_objects() -> list[inputs.EvaluationObject]:
             metric_list=[
                 metrics.CSI(),
                 metrics.FAR(),
-                metrics.RegionalHitsMisses(),
-                metrics.HitsMisses(),
+                # Need to add regional hits/misses and hits/misses metrics
+                # metrics.RegionalHitsMisses(),
+                # metrics.HitsMisses(),
             ],
             target=lsr_target,
             forecast=cira_severe_convection_forecast,
