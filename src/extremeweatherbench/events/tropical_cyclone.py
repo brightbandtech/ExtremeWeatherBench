@@ -147,16 +147,16 @@ def generate_tc_tracks_by_init_time(
     # Extract arrays from detections
     if all_detections:
         n_detections = len(all_detections)
-        lt_indices = np.array([d["lt_idx"] for d in all_detections])
-        vt_indices = np.array([d["vt_idx"] for d in all_detections])
+        lead_time_indices = np.array([d["lead_time_index"] for d in all_detections])
+        valid_time_indices = np.array([d["valid_time_index"] for d in all_detections])
         lats = np.array([d["latitude"] for d in all_detections])
         lons = np.array([d["longitude"] for d in all_detections])
         slp_vals = np.array([d["slp"] for d in all_detections])
         wind_vals = np.array([d["wind"] for d in all_detections])
     else:
         n_detections = 0
-        lt_indices = np.array([])
-        vt_indices = np.array([])
+        lead_time_indices = np.array([])
+        valid_time_indices = np.array([])
         lats = np.array([])
         lons = np.array([])
         slp_vals = np.array([])
@@ -165,8 +165,8 @@ def generate_tc_tracks_by_init_time(
     # Convert to xarray Dataset
     return _convert_detections_to_dataset(
         n_detections,
-        lt_indices,
-        vt_indices,
+        lead_time_indices,
+        valid_time_indices,
         lats,
         lons,
         slp_vals,
@@ -224,28 +224,22 @@ def _process_single_init_time(
 
     # Find all (lead_time, valid_time) pairs for this init_time
     mask = np.abs(init_time_coord - current_init_time) <= np.timedelta64(1, "s")
-    lt_indices, vt_indices = np.where(mask)
+    lead_time_indices, valid_time_indices = np.where(mask)
 
     # Get valid times and sort by them
     valid_times = pd.to_datetime(
         [
             time_coord[vt].item() if hasattr(time_coord[vt], "item") else time_coord[vt]
-            for vt in vt_indices
+            for vt in valid_time_indices
         ]
     )
     sort_order = np.argsort(valid_times)
 
     # Sorted indices and valid times
-    lt_indices_seq = lt_indices[sort_order].astype(np.intp)
-    vt_indices_seq = vt_indices[sort_order].astype(np.intp)
+    lead_time_indices_seq = lead_time_indices[sort_order].astype(np.intp)
+    valid_time_indices_seq = valid_time_indices[sort_order].astype(np.intp)
     valid_times_seq = [valid_times[i] for i in sort_order]
-    n_timesteps = len(lt_indices_seq)
-
-    # Data is already (lead_time, lat, lon) for this init_time
-    # Check if dz_data is all NaN (sentinel for None)
-    has_dz = not np.all(np.isnan(dz_data))
-    if not has_dz:
-        dz_data = None
+    n_timesteps = len(lead_time_indices_seq)
 
     detections = []
     active_tracks: dict[int, dict[str, float]] = {}
@@ -292,8 +286,8 @@ def _process_single_init_time(
         wind_slice = peak_data["wind_slice"]
         timestep_idx = peak_data["timestep_idx"]
 
-        lt_idx = lt_indices_seq[timestep_idx]
-        vt_idx = vt_indices_seq[timestep_idx]
+        lead_time_index = lead_time_indices_seq[timestep_idx]
+        valid_time_index = valid_time_indices_seq[timestep_idx]
 
         if len(peaks) > 0:
             peak_lats = latitude[peaks[:, 0]]
@@ -324,8 +318,8 @@ def _process_single_init_time(
                 if best_idx is not None:
                     detections.append(
                         {
-                            "lt_idx": lt_idx,
-                            "vt_idx": vt_idx,
+                            "lead_time_index": lead_time_index,
+                            "valid_time_index": valid_time_index,
                             "track_id": track_id + track_id_offset,
                             "latitude": peak_lats[best_idx],
                             "longitude": peak_lons[best_idx],
@@ -347,8 +341,8 @@ def _process_single_init_time(
 
                 detections.append(
                     {
-                        "lt_idx": lt_idx,
-                        "vt_idx": vt_idx,
+                        "lead_time_index": lead_time_index,
+                        "valid_time_index": valid_time_index,
                         "track_id": track_id + track_id_offset,
                         "latitude": peak_lats[peak_idx],
                         "longitude": peak_lons[peak_idx],
@@ -368,30 +362,30 @@ def _process_single_init_time(
         track_lead_times: dict[int, set[int]] = {}
         for detection in detections:
             track_id = detection["track_id"]
-            lt_idx = detection["lt_idx"]
+            lead_time_index = detection["lead_time_index"]
 
             if track_id not in track_lead_times:
                 track_lead_times[track_id] = set()
-            # Convert lt_idx to int
-            lt_idx_int: int
-            if hasattr(lt_idx, "item"):
-                lt_idx_int = int(lt_idx.item())
+            # Convert lead_time_index to int
+            lead_time_index_int: int
+            if hasattr(lead_time_index, "item"):
+                lead_time_index_int = int(lead_time_index.item())
             else:
-                lt_idx_int = int(lt_idx)
-            track_lead_times[track_id].add(lt_idx_int)
+                lead_time_index_int = int(lead_time_index)
+            track_lead_times[track_id].add(lead_time_index_int)
 
         # Check for consecutive lead times for each track
         valid_track_ids: set[int] = set()
-        for track_id, lt_indices in track_lead_times.items():
+        for track_id, lead_time_indices in track_lead_times.items():
             # Sort lead time indices to check for consecutive sequences
-            sorted_lt_indices = sorted(lt_indices)
+            sorted_lead_time_indices = sorted(lead_time_indices)
 
             # Find longest consecutive sequence
             max_consecutive = 1
             current_consecutive = 1
 
-            for i in range(1, len(sorted_lt_indices)):
-                if sorted_lt_indices[i] == sorted_lt_indices[i - 1] + 1:
+            for i in range(1, len(sorted_lead_time_indices)):
+                if sorted_lead_time_indices[i] == sorted_lead_time_indices[i - 1] + 1:
                     current_consecutive += 1
                     max_consecutive = max(max_consecutive, current_consecutive)
                 else:
@@ -419,8 +413,8 @@ def _process_single_init_time(
 
 def _convert_detections_to_dataset(
     n_detections: int,
-    lt_indices: npt.NDArray,
-    vt_indices: npt.NDArray,
+    lead_time_indices: npt.NDArray,
+    valid_time_indices: npt.NDArray,
     lats: npt.NDArray,
     lons: npt.NDArray,
     slp_vals: npt.NDArray,
@@ -460,25 +454,25 @@ def _convert_detections_to_dataset(
     unique_combinations: dict[tuple[int, int], list[int]] = {}
     for i in range(n_detections):
         # Convert numpy scalars to regular integers for use as dictionary keys
-        lt_idx = int(lt_indices[i])
-        vt_idx = int(vt_indices[i])
-        key = (lt_idx, vt_idx)
+        lead_time_index = int(lead_time_indices[i])
+        valid_time_index = int(valid_time_indices[i])
+        key = (lead_time_index, valid_time_index)
         if key not in unique_combinations:
             unique_combinations[key] = []
         unique_combinations[key].append(i)
 
     # Determine output dimensions
     if unique_combinations:
-        max_lt = max(key[0] for key in unique_combinations.keys())
-        max_vt = max(key[1] for key in unique_combinations.keys())
+        max_lead_time = max(key[0] for key in unique_combinations.keys())
+        max_valid_time = max(key[1] for key in unique_combinations.keys())
 
         # Get the actual lead_time values
-        lead_times = lead_time_coord.values[: max_lt + 1]
+        lead_times = lead_time_coord.values[: max_lead_time + 1]
 
         # Get valid_time values
         # Flatten (works for any dimensionality) and get unique sorted values
         valid_times = np.unique(valid_time_coord.values.ravel())
-        valid_times = valid_times[: max_vt + 1]
+        valid_times = valid_times[: max_valid_time + 1]
     else:
         lead_times = np.array([])
         valid_times = np.array([])
@@ -491,12 +485,15 @@ def _convert_detections_to_dataset(
     lon_out = np.full(output_shape, np.nan)
 
     # Fill arrays
-    for (lt_idx, vt_idx), detection_indices in unique_combinations.items():
+    for (
+        lead_time_index,
+        valid_time_index,
+    ), detection_indices in unique_combinations.items():
         det_idx = detection_indices[0]  # Take first detection only
-        slp_out[lt_idx, vt_idx] = float(slp_vals[det_idx])
-        wind_out[lt_idx, vt_idx] = float(wind_vals[det_idx])
-        lat_out[lt_idx, vt_idx] = float(lats[det_idx])
-        lon_out[lt_idx, vt_idx] = float(lons[det_idx])
+        slp_out[lead_time_index, valid_time_index] = float(slp_vals[det_idx])
+        wind_out[lead_time_index, valid_time_index] = float(wind_vals[det_idx])
+        lat_out[lead_time_index, valid_time_index] = float(lats[det_idx])
+        lon_out[lead_time_index, valid_time_index] = float(lons[det_idx])
 
     # Build dataset with MSLP and wind speed
     ds = xr.Dataset(
@@ -671,24 +668,6 @@ def find_valid_candidates(
         ):
             return Location(latitude=lat_val, longitude=lon_val)
     return None
-
-
-def _safe_extract_value(
-    array_or_scalar: Union[xr.DataArray, npt.NDArray, float],
-) -> Union[float, str]:
-    """Safely extract scalar value from DataArray or return as-is."""
-    if hasattr(array_or_scalar, "item") and hasattr(array_or_scalar, "ndim"):
-        # Handle numpy arrays and xarray DataArrays
-        if array_or_scalar.ndim == 0:
-            return array_or_scalar.item()
-        else:
-            # For arrays with more than 0 dimensions, return the first element
-            if hasattr(array_or_scalar, "flat"):
-                return array_or_scalar.flat[0]
-            else:
-                return array_or_scalar
-    else:
-        return array_or_scalar
 
 
 def _find_peaks_batch(
