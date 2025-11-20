@@ -377,8 +377,9 @@ def stack_sparse_data_from_dims(
     # return the data densified as an empty dataarray
     if da.size != 0:
         da = da.stack(stacked=reduce_dim_names).sel(stacked=coord_values)
-    da.data = da.data.maybe_densify(max_size=max_size)
-    return da
+
+    # Densify the sparse data using the utility function
+    return maybe_densify_dataarray(da, max_size=max_size)
 
 
 def check_for_vars(variable_list: list[str], source: Sequence) -> Optional[str]:
@@ -584,6 +585,22 @@ def interp_climatology_to_target(
     return climatology.interp_like(
         target, method="nearest", kwargs={"fill_value": None}
     )
+
+
+def maybe_densify_dataarray(da: xr.DataArray, max_size: float = 1e9) -> xr.DataArray:
+    """Densify a dataarray's data if it is sparse.
+
+    Args:
+        da: The xarray dataarray to densify.
+        max_size: Max size for densification. Default is 1e9 to
+            avoid issues with Dask and sparse.
+
+    Returns:
+        The densified xarray dataarray.
+    """
+    if isinstance(da.data, sparse.COO):
+        da.data = da.data.maybe_densify(max_size=max_size)
+    return da
 
 
 def reduce_dataarray(
