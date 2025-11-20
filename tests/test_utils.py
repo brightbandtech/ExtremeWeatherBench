@@ -689,12 +689,19 @@ class TestStackSparseDataFromDims:
             coords={"latitude": [10.0, 20.0, 30.0], "longitude": [100.0, 110.0]},
         )
 
-        # This should raise ValueError since coords must be provided for
-        # non-sparse data
-        with pytest.raises(
-            ValueError, match="coords must be provided if da.data is not sparse.COO"
-        ):
-            utils.stack_dataarray_from_dims(da, stack_dims=["latitude", "longitude"])
+        # Should handle non-sparse data by using regular stacking
+        result = utils.stack_dataarray_from_dims(
+            da, stack_dims=["latitude", "longitude"]
+        )
+
+        # Verify it creates a stacked dimension
+        assert isinstance(result, xr.DataArray)
+        assert "stacked" in result.dims
+        # Should have 3 * 2 = 6 stacked coordinates
+        assert len(result.stacked) == 6
+        # Original dimensions should be gone
+        assert "latitude" not in result.dims
+        assert "longitude" not in result.dims
 
     def test_empty_stack_dims_list(self):
         """Test with empty stack_dims list."""
