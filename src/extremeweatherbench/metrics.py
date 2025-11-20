@@ -5,7 +5,6 @@ from typing import Any, Callable, Literal, Optional, Sequence, Type
 
 import numpy as np
 import scores
-import sparse
 import xarray as xr
 from scipy import ndimage
 
@@ -123,6 +122,12 @@ class BaseMetric(abc.ABC, metaclass=ComputeDocstringMetaclass):
         Returns:
             The computed metric result.
         """
+
+        # If the forecast or target is sparse, densify it.
+        # Ideally we would keep the sparse data structure, but Dask and sparse
+        # do not play well together as of Nov 2025.
+        forecast = utils.maybe_densify_dataarray(forecast)
+        target = utils.maybe_densify_dataarray(target)
         return self._compute_metric(forecast, target, **kwargs)
 
     def maybe_expand_composite(self) -> Sequence["BaseMetric"]:
@@ -323,10 +328,13 @@ class ThresholdMetric(CompositeMetric):
             Transformed contingency manager.
         """
         # Apply thresholds to binarize the data
-        binary_forecast = (op_func(forecast, forecast_threshold)).astype(float)
-        binary_target = (op_func(target, target_threshold)).astype(float)
-        if isinstance(binary_target.data, sparse.COO):
-            binary_target.data = binary_target.data.maybe_densify(max_size=100000)
+        binary_forecast = utils.maybe_densify_dataarray(
+            op_func(forecast, forecast_threshold)
+        ).astype(float)
+        binary_target = utils.maybe_densify_dataarray(
+            op_func(target, target_threshold)
+        ).astype(float)
+
         # Create and transform contingency manager
         binary_contingency_manager = scores.categorical.BinaryContingencyManager(
             binary_forecast, binary_target
@@ -1063,13 +1071,6 @@ class DurationME(ME):
 
         forecast_mask = self.op_func(forecast, threshold)
         target_mask = self.op_func(target, threshold)
-
-        # Densify sparse masks to avoid mixing sparse/dense in groupby operations
-        if isinstance(forecast_mask.data, sparse.COO):
-            forecast_mask.data = forecast_mask.data.maybe_densify(max_size=100000)
-        if isinstance(target_mask.data, sparse.COO):
-            target_mask.data = target_mask.data.maybe_densify(max_size=100000)
-
         # Track NaN locations in forecast data
         forecast_valid_mask = ~forecast.isnull()
 

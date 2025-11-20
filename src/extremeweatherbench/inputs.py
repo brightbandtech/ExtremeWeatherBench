@@ -645,7 +645,7 @@ class LSR(TargetBase):
         # Map report_type column to numeric values
         report_type_mapping = {"wind": 1, "hail": 2, "tor": 3}
         if "report_type" in data.columns:
-            data["report_type"] = data["report_type"].map(report_type_mapping)
+            data.loc[:, "report_type"] = data["report_type"].map(report_type_mapping)
 
         # Normalize these times for the LSR data
         # Western hemisphere reports get bucketed to 12Z on the date they fall
@@ -696,7 +696,7 @@ class LSR(TargetBase):
             data.loc[eastern_hemisphere_mask] = eastern_data
 
         # Convert longitude back to 0 - 360
-        data["longitude"] = utils.convert_longitude_to_360(data["longitude"])
+        data.loc[:, "longitude"] = utils.convert_longitude_to_360(data["longitude"])
         data = data.set_index(["valid_time", "latitude", "longitude"])
 
         # Convert string columns to binary indicators (1.0)

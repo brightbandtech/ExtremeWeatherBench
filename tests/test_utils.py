@@ -1418,3 +1418,157 @@ class TestReduceXarrayMethod:
         assert isinstance(result, xr.DataArray)
         # Result should be scalar after reducing all dims
         assert result.ndim == 0
+
+
+class TestMaybeDensifyDataArray:
+    """Test the maybe_densify_dataarray function."""
+
+    def test_densify_sparse_data(self):
+        """Test densifying sparse data with default max_size."""
+        import sparse
+
+        # Create sparse array
+        coords = ([0, 1, 2], [0, 1, 0])
+        data = [1.0, 2.0, 3.0]
+        shape = (3, 2)
+        sparse_array = sparse.COO(coords, data, shape=shape)
+
+        da = xr.DataArray(
+            sparse_array,
+            dims=["latitude", "longitude"],
+            coords={"latitude": [10.0, 20.0, 30.0], "longitude": [100.0, 110.0]},
+        )
+
+        # Verify input is sparse
+        assert isinstance(da.data, sparse.COO)
+
+        # Densify
+        result = utils.maybe_densify_dataarray(da)
+
+        # Should be densified
+        assert not isinstance(result.data, sparse.COO)
+        assert isinstance(result.data, np.ndarray)
+
+        # Values should be preserved
+        assert result.values[0, 0] == 1.0
+        assert result.values[1, 1] == 2.0
+        assert result.values[2, 0] == 3.0
+
+    def test_dense_data_unchanged(self):
+        """Test that dense data remains unchanged."""
+        # Create dense array
+        da = xr.DataArray(
+            np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]),
+            dims=["latitude", "longitude"],
+            coords={"latitude": [10.0, 20.0, 30.0], "longitude": [100.0, 110.0]},
+        )
+
+        # Verify input is dense
+        assert isinstance(da.data, np.ndarray)
+
+        # Apply function
+        result = utils.maybe_densify_dataarray(da)
+
+        # Should remain dense
+        assert isinstance(result.data, np.ndarray)
+
+        # Values should be unchanged
+        xr.testing.assert_equal(result, da)
+
+    def test_custom_max_size_allows_densification(self):
+        """Test custom max_size for small arrays allows densification."""
+        import sparse
+
+        # Create small sparse array
+        coords = ([0, 1], [0, 1])
+        data = [10.0, 20.0]
+        shape = (2, 2)
+        sparse_array = sparse.COO(coords, data, shape=shape)
+
+        da = xr.DataArray(
+            sparse_array,
+            dims=["x", "y"],
+            coords={"x": [0, 1], "y": [0, 1]},
+        )
+
+        # With large max_size, should densify
+        result = utils.maybe_densify_dataarray(da, max_size=1000)
+
+        assert not isinstance(result.data, sparse.COO)
+        assert isinstance(result.data, np.ndarray)
+
+    def test_small_max_size_raises_error(self):
+        """Test very small max_size raises error for large sparse arrays."""
+        import sparse
+
+        # Create large sparse array with shape > max_size
+        # Shape is 100x100 = 10,000 elements but only 3 non-zero
+        coords = ([0, 50, 99], [0, 50, 99])
+        data = [1.0, 2.0, 3.0]
+        shape = (100, 100)
+        sparse_array = sparse.COO(coords, data, shape=shape)
+
+        da = xr.DataArray(
+            sparse_array,
+            dims=["x", "y"],
+            coords={"x": range(100), "y": range(100)},
+        )
+
+        # max_size smaller than array size and low density raises error
+        with pytest.raises(ValueError, match="large sparse array"):
+            utils.maybe_densify_dataarray(da, max_size=100)
+
+    def test_empty_sparse_array(self):
+        """Test empty sparse array can be densified."""
+        import sparse
+
+        # Create empty sparse array
+        coords = ([], [])
+        data = []
+        shape = (3, 2)
+        sparse_array = sparse.COO(coords, data, shape=shape)
+
+        da = xr.DataArray(
+            sparse_array,
+            dims=["latitude", "longitude"],
+            coords={"latitude": [10.0, 20.0, 30.0], "longitude": [100.0, 110.0]},
+        )
+
+        result = utils.maybe_densify_dataarray(da)
+
+        # Should be densified
+        assert not isinstance(result.data, sparse.COO)
+        assert isinstance(result.data, np.ndarray)
+
+        # All values should be zero (default fill value)
+        assert (result.values == 0).all()
+
+    def test_multidimensional_sparse_array(self):
+        """Test densifying multidimensional sparse arrays."""
+        import sparse
+
+        # Create 3D sparse array
+        coords = ([0, 1, 2], [0, 1, 0], [0, 0, 1])
+        data = [1.0, 2.0, 3.0]
+        shape = (3, 2, 2)
+        sparse_array = sparse.COO(coords, data, shape=shape)
+
+        da = xr.DataArray(
+            sparse_array,
+            dims=["time", "latitude", "longitude"],
+            coords={
+                "time": pd.date_range("2020-01-01", periods=3),
+                "latitude": [10.0, 20.0],
+                "longitude": [100.0, 110.0],
+            },
+        )
+
+        result = utils.maybe_densify_dataarray(da)
+
+        # Should be densified
+        assert not isinstance(result.data, sparse.COO)
+        assert isinstance(result.data, np.ndarray)
+
+        # Check dimensions preserved
+        assert result.shape == (3, 2, 2)
+        assert list(result.dims) == ["time", "latitude", "longitude"]

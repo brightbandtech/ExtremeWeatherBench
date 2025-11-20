@@ -6,6 +6,7 @@ from unittest import mock
 import numpy as np
 import pandas as pd
 import pytest
+import sparse
 import xarray as xr
 
 from extremeweatherbench import calc, metrics
@@ -1384,6 +1385,95 @@ class TestThresholdMetric:
         assert manager is not None
         assert hasattr(manager, "critical_success_index")
         assert hasattr(manager, "false_alarm_ratio")
+
+    def test_transformed_contingency_manager_with_sparse(self):
+        """Test transformed_contingency_manager with sparse arrays."""
+
+        metric = metrics.CSI()
+
+        # Create dense test data first
+        forecast_dense = np.array([[0.8, 0.3, 0.0], [0.7, 0.0, 0.2]])
+        target_dense = np.array([[0.9, 0.0, 0.1], [0.8, 0.1, 0.0]])
+
+        # Convert to sparse arrays
+        forecast_sparse = sparse.COO.from_numpy(forecast_dense)
+        target_sparse = sparse.COO.from_numpy(target_dense)
+
+        # Create DataArrays with sparse data
+        forecast = xr.DataArray(
+            data=forecast_sparse,
+            dims=["lead_time", "location"],
+            coords={"lead_time": [0, 1], "location": [0, 1, 2]},
+        )
+        target = xr.DataArray(
+            data=target_sparse,
+            dims=["lead_time", "location"],
+            coords={"lead_time": [0, 1], "location": [0, 1, 2]},
+        )
+
+        # Verify input is sparse
+        assert isinstance(forecast.data, sparse.SparseArray)
+        assert isinstance(target.data, sparse.SparseArray)
+
+        # Call the method
+        manager = metric.transformed_contingency_manager(
+            forecast=forecast,
+            target=target,
+            forecast_threshold=0.5,
+            target_threshold=0.5,
+            preserve_dims="lead_time",
+        )
+
+        # Should return a BasicContingencyManager without errors
+        assert manager is not None
+        assert hasattr(manager, "critical_success_index")
+        assert hasattr(manager, "false_alarm_ratio")
+
+        # Verify results are reasonable
+        csi = manager.critical_success_index()
+        assert csi is not None
+        assert len(csi) == 2  # Should have 2 lead times
+
+    def test_transformed_contingency_manager_mixed_sparse_dense(self):
+        """Test with dense forecast and sparse target."""
+        import sparse
+
+        metric = metrics.FAR()
+
+        # Create dense forecast
+        forecast = xr.DataArray(
+            data=np.array([[0.8, 0.3, 0.6], [0.7, 0.4, 0.2]]),
+            dims=["lead_time", "location"],
+            coords={"lead_time": [0, 1], "location": [0, 1, 2]},
+        )
+
+        # Create sparse target (typical for PPH/LSR data)
+        target_dense = np.array([[0.9, 0.0, 0.1], [0.8, 0.0, 0.0]])
+        target_sparse = sparse.COO.from_numpy(target_dense)
+        target = xr.DataArray(
+            data=target_sparse,
+            dims=["lead_time", "location"],
+            coords={"lead_time": [0, 1], "location": [0, 1, 2]},
+        )
+
+        # Verify input types
+        assert isinstance(forecast.data, np.ndarray)
+        assert isinstance(target.data, sparse.SparseArray)
+
+        # Call the method - should handle mixed types gracefully
+        manager = metric.transformed_contingency_manager(
+            forecast=forecast,
+            target=target,
+            forecast_threshold=0.5,
+            target_threshold=0.5,
+            preserve_dims="lead_time",
+        )
+
+        # Should work without errors
+        assert manager is not None
+        far = manager.false_alarm_ratio()
+        assert far is not None
+        assert len(far) == 2
 
     def test_composite_with_metric_classes(self):
         """Test ThresholdMetric as composite with metric classes."""
