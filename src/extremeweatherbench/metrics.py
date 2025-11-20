@@ -1064,6 +1064,12 @@ class DurationME(ME):
         forecast_mask = self.op_func(forecast, threshold)
         target_mask = self.op_func(target, threshold)
 
+        # Densify sparse masks to avoid mixing sparse/dense in groupby operations
+        if isinstance(forecast_mask.data, sparse.COO):
+            forecast_mask.data = forecast_mask.data.maybe_densify(max_size=100000)
+        if isinstance(target_mask.data, sparse.COO):
+            target_mask.data = target_mask.data.maybe_densify(max_size=100000)
+
         # Track NaN locations in forecast data
         forecast_valid_mask = ~forecast.isnull()
 

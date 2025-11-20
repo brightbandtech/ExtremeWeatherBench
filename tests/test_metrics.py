@@ -1256,6 +1256,65 @@ class TestDurationME:
         # Results should be the same
         assert np.isclose(result_clim.values[0], result_float.values[0])
 
+    def test_sparse_array_handling(self):
+        """Test that sparse arrays are properly densified to avoid mixing errors."""
+        import sparse
+
+        climatology = self.create_climatology()
+        forecast_vals = np.full(10, 305.0)
+        target_vals = np.full(10, 295.0)
+
+        forecast, target = self.create_test_case(
+            forecast_vals, target_vals, climatology
+        )
+
+        # Convert forecast data to sparse array
+        forecast_sparse = forecast.copy()
+        forecast_sparse.data = sparse.COO.from_numpy(forecast.values)
+
+        # Convert target data to sparse array
+        target_sparse = target.copy()
+        target_sparse.data = sparse.COO.from_numpy(target.values)
+
+        # Test with sparse data - should not raise "All arrays must be instances of
+        # SparseArray"
+        metric = metrics.DurationME(criteria=300.0)
+        result = metric.compute_metric(forecast=forecast_sparse, target=target_sparse)
+
+        # Result should be valid (not NaN) and correct
+        assert not np.isnan(result.values[0])
+        assert np.isclose(
+            result.values[0], 1.0
+        )  # All forecast exceeds, all target below
+
+    def test_sparse_array_with_climatology(self):
+        """Test sparse arrays with climatology criteria."""
+        import sparse
+
+        climatology = self.create_climatology()
+        forecast_vals = np.concatenate([np.full(6, 305.0), np.full(4, 295.0)])
+        target_vals = np.concatenate([np.full(3, 305.0), np.full(7, 295.0)])
+
+        forecast, target = self.create_test_case(
+            forecast_vals, target_vals, climatology
+        )
+
+        # Convert to sparse arrays
+        forecast_sparse = forecast.copy()
+        forecast_sparse.data = sparse.COO.from_numpy(forecast.values)
+
+        target_sparse = target.copy()
+        target_sparse.data = sparse.COO.from_numpy(target.values)
+
+        # Test with climatology and sparse data
+        metric = metrics.DurationME(criteria=climatology)
+        result = metric.compute_metric(forecast=forecast_sparse, target=target_sparse)
+
+        # Result should be valid
+        assert not np.isnan(result.values[0])
+        # Forecast: 6 timesteps exceed, Target: 3 timesteps exceed
+        assert np.isclose(result.values[0], 0.3)
+
 
 class TestThresholdMetric:
     """Tests for the ThresholdMetric parent class."""
