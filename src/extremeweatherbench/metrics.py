@@ -1,7 +1,7 @@
 import abc
 import logging
 import operator
-from typing import Any, Callable, Literal, Optional, Sequence, Type
+from typing import Any, Callable, Literal, Optional, Sequence, Type, Union
 
 import numpy as np
 import scores
@@ -313,7 +313,9 @@ class ThresholdMetric(CompositeMetric):
         forecast_threshold: float,
         target_threshold: float,
         preserve_dims: str,
-        op_func: Callable = operator.ge,
+        op_func: Union[
+            Callable, Literal[">", ">=", "<", "<=", "==", "!="]
+        ] = operator.ge,
     ) -> scores.categorical.BasicContingencyManager:
         """Create and transform a contingency manager.
 
@@ -328,6 +330,7 @@ class ThresholdMetric(CompositeMetric):
             Transformed contingency manager.
         """
         # Apply thresholds to binarize the data
+        op_func = utils.maybe_get_operator(op_func)
         binary_forecast = utils.maybe_densify_dataarray(
             op_func(forecast, forecast_threshold)
         ).astype(float)
@@ -717,13 +720,15 @@ class EarlySignal(BaseMetric):
     def __init__(
         self,
         name: str = "early_signal",
-        comparison_operator: Callable = operator.ge,
+        comparison_operator: Union[
+            Callable, Literal[">", ">=", "<", "<=", "==", "!="]
+        ] = ">=",
         threshold: float = 0.5,
         spatial_aggregation: Literal["any", "all", "half"] = "any",
         **kwargs: Any,
     ):
         # Extract threshold params before passing to super
-        self.comparison_operator = comparison_operator
+        self.comparison_operator = utils.maybe_get_operator(comparison_operator)
         self.threshold = threshold
         self.spatial_aggregation = spatial_aggregation
         super().__init__(name, **kwargs)
@@ -1009,7 +1014,7 @@ class DurationME(ME):
         criteria: The criteria for event detection. Can be either:
             - xr.DataArray: A climatology dataset for threshold criteria
             - float: A fixed threshold value
-        op_func: Comparison operator (e.g., operator.ge for >=)
+        op_func: Comparison operator or string (e.g., operator.ge for >=)
         name: Name of the metric
         preserve_dims: Dimensions to preserve during aggregation
 
@@ -1020,13 +1025,13 @@ class DurationME(ME):
     def __init__(
         self,
         criteria: xr.DataArray | float,
-        op_func: Callable = operator.ge,
+        op_func: Union[Callable, Literal[">", ">=", "<", "<=", "==", "!="]] = ">=",
         name: str = "duration_me",
         preserve_dims: str = "init_time",
     ):
         super().__init__(name=name, preserve_dims=preserve_dims)
         self.criteria = criteria
-        self.op_func = op_func
+        self.op_func = utils.maybe_get_operator(op_func)
 
     def _compute_metric(
         self,

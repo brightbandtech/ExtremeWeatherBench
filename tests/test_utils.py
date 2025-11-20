@@ -1,6 +1,7 @@
 """Tests for the utils module."""
 
 import datetime
+import operator
 
 import numpy as np
 import pandas as pd
@@ -1418,6 +1419,174 @@ class TestReduceXarrayMethod:
         assert isinstance(result, xr.DataArray)
         # Result should be scalar after reducing all dims
         assert result.ndim == 0
+
+
+class TestMaybeGetOperator:
+    """Test the maybe_get_operator function."""
+
+    def test_greater_than_operator(self):
+        """Test '>' operator string returns operator.gt."""
+        op = utils.maybe_get_operator(">")
+        assert op is operator.gt
+        assert op(5, 3) is True
+        assert op(3, 5) is False
+
+    def test_greater_than_or_equal_operator(self):
+        """Test '>=' operator string returns operator.ge."""
+        op = utils.maybe_get_operator(">=")
+        assert op is operator.ge
+        assert op(5, 3) is True
+        assert op(5, 5) is True
+        assert op(3, 5) is False
+
+    def test_less_than_operator(self):
+        """Test '<' operator string returns operator.lt."""
+        op = utils.maybe_get_operator("<")
+        assert op is operator.lt
+        assert op(3, 5) is True
+        assert op(5, 3) is False
+
+    def test_less_than_or_equal_operator(self):
+        """Test '<=' operator string returns operator.le."""
+        op = utils.maybe_get_operator("<=")
+        assert op is operator.le
+        assert op(3, 5) is True
+        assert op(5, 5) is True
+        assert op(5, 3) is False
+
+    def test_equal_operator(self):
+        """Test '==' operator string returns operator.eq."""
+        op = utils.maybe_get_operator("==")
+        assert op is operator.eq
+        assert op(5, 5) is True
+        assert op(5, 3) is False
+
+    def test_not_equal_operator(self):
+        """Test '!=' operator string returns operator.ne."""
+        op = utils.maybe_get_operator("!=")
+        assert op is operator.ne
+        assert op(5, 3) is True
+        assert op(5, 5) is False
+
+    def test_callable_passthrough(self):
+        """Test passing a callable returns it unchanged."""
+
+        def custom_op(a, b):
+            return a + b > 10
+
+        result = utils.maybe_get_operator(custom_op)
+        assert result is custom_op
+        assert result(5, 6) is True
+        assert result(3, 4) is False
+
+    def test_lambda_passthrough(self):
+        """Test passing a lambda returns it unchanged."""
+        # Create lambda inline to avoid linter warning
+        result = utils.maybe_get_operator(lambda a, b: a * b > 20)
+        # Test the returned callable works correctly
+        assert callable(result)
+        assert result(5, 5) is True
+        assert result(2, 3) is False
+
+    def test_builtin_function_passthrough(self):
+        """Test passing a builtin function works."""
+        result = utils.maybe_get_operator(max)
+        assert result is max
+        assert result(5, 3) == 5
+
+    def test_operator_module_function_passthrough(self):
+        """Test passing an operator module function works."""
+        result = utils.maybe_get_operator(operator.add)
+        assert result is operator.add
+        assert result(5, 3) == 8
+
+    def test_invalid_string_raises_keyerror(self):
+        """Test invalid operator string raises KeyError."""
+        with pytest.raises(KeyError):
+            utils.maybe_get_operator("invalid")
+
+    def test_similar_but_invalid_strings(self):
+        """Test strings that look like operators raise KeyError."""
+        invalid_ops = ["=>", "=<", "===", ">==", "<<", ">>"]
+        for invalid_op in invalid_ops:
+            with pytest.raises(KeyError):
+                utils.maybe_get_operator(invalid_op)
+
+    def test_empty_string_raises_keyerror(self):
+        """Test empty string raises KeyError."""
+        with pytest.raises(KeyError):
+            utils.maybe_get_operator("")
+
+    def test_none_returns_none(self):
+        """Test None input returns None (treated as callable)."""
+        # None is technically callable-like in isinstance check
+        # isinstance(None, str) == False
+        result = utils.maybe_get_operator(None)
+        # Should return None since it's not a string
+        assert result is None
+
+    def test_integer_returns_integer(self):
+        """Test integer input returns integer (not a string)."""
+        # Edge case: non-string, non-callable input
+        result = utils.maybe_get_operator(123)
+        assert result == 123
+
+    def test_operators_with_arrays(self):
+        """Test operator functions work with numpy arrays."""
+        op_gt = utils.maybe_get_operator(">")
+        arr1 = np.array([1, 2, 3, 4])
+        arr2 = np.array([2, 2, 2, 2])
+        result = op_gt(arr1, arr2)
+        expected = np.array([False, False, True, True])
+        np.testing.assert_array_equal(result, expected)
+
+    def test_operators_with_xarray(self):
+        """Test operator functions work with xarray objects."""
+        op_lt = utils.maybe_get_operator("<")
+        da1 = xr.DataArray([1, 2, 3])
+        da2 = xr.DataArray([2, 2, 2])
+        result = op_lt(da1, da2)
+        expected = xr.DataArray([True, False, False])
+        xr.testing.assert_equal(result, expected)
+
+    def test_all_operators_in_dict(self):
+        """Test all operators in module dict are accessible."""
+        # Verify the operators dict at module level
+        expected_ops = {
+            ">": operator.gt,
+            ">=": operator.ge,
+            "<": operator.lt,
+            "<=": operator.le,
+            "==": operator.eq,
+            "!=": operator.ne,
+        }
+
+        for op_str, op_func in expected_ops.items():
+            result = utils.maybe_get_operator(op_str)
+            assert result is op_func
+
+    def test_operator_return_types(self):
+        """Test operators return correct boolean types."""
+        ops = [">", ">=", "<", "<=", "==", "!="]
+        for op_str in ops:
+            op = utils.maybe_get_operator(op_str)
+            result = op(5, 3)
+            assert isinstance(result, bool)
+
+    def test_case_sensitivity(self):
+        """Test operator strings are case-sensitive."""
+        # Uppercase versions should raise KeyError
+        with pytest.raises(KeyError):
+            utils.maybe_get_operator("GT")
+        with pytest.raises(KeyError):
+            utils.maybe_get_operator("LT")
+
+    def test_whitespace_in_string(self):
+        """Test whitespace in operator string raises KeyError."""
+        with pytest.raises(KeyError):
+            utils.maybe_get_operator(" > ")
+        with pytest.raises(KeyError):
+            utils.maybe_get_operator("> ")
 
 
 class TestMaybeDensifyDataArray:

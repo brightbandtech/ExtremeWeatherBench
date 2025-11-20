@@ -5,8 +5,9 @@ import datetime
 import importlib
 import inspect
 import logging
+import operator
 import pathlib
-from typing import Any, Callable, Optional, Sequence, Union
+from typing import Any, Callable, Literal, Optional, Sequence, Union
 
 import cartopy.io.shapereader as shpreader
 import numpy as np
@@ -21,6 +22,32 @@ import yaml  # type: ignore[import]
 from joblib import Parallel
 
 logger = logging.getLogger(__name__)
+
+operators = {
+    ">": operator.gt,
+    ">=": operator.ge,
+    "<": operator.lt,
+    "<=": operator.le,
+    "==": operator.eq,
+    "!=": operator.ne,
+}
+
+
+def maybe_get_operator(
+    operator_method: Union[Literal[">", ">=", "<", "<=", "==", "!="], Callable],
+) -> Callable:
+    """Get the operator function from the operator string. If the operator_method is a
+    callable, return it.
+
+    Args:
+        operator_method: The operator method to get. Can be a string or a callable.
+
+    Returns:
+        The operator function.
+    """
+    if isinstance(operator_method, str):
+        return operators[operator_method]
+    return operator_method
 
 
 def convert_longitude_to_360(longitude: float) -> float:
