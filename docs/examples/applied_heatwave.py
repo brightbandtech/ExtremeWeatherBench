@@ -1,11 +1,11 @@
 import logging
-import time
+import operator
 
 import xarray as xr
+from dask.distributed import Client
 
 from extremeweatherbench import cases, evaluate, inputs, metrics
 
-start_time = time.time()
 # Set the logger level to INFO
 logger = logging.getLogger("extremeweatherbench")
 logger.setLevel(logging.INFO)
@@ -35,18 +35,22 @@ hres_forecast = inputs.ZarrForecast(
     variable_mapping=inputs.HRES_metadata_variable_mapping,
 )
 
+# Load the climatology for DurationME
 climatology = xr.open_zarr(
     "gs://extremeweatherbench/datasets/surface_air_temperature_1990_2019_climatology.zarr",  # noqa: E501
     storage_options={"anon": True},
     chunks="auto",
 )
 climatology = climatology["2m_temperature"].sel(quantile=0.85)
+
+# Define the metrics
 metrics_list = [
-    metrics.DurationME(climatology),
+    metrics.DurationME(criteria=climatology, op_func=operator.ge),
     metrics.MaximumMAE(),
     metrics.RMSE(),
     metrics.MaxMinMAE(),
 ]
+
 # Create a list of evaluation objects for heatwave
 heatwave_evaluation_object = [
     inputs.EvaluationObject(
@@ -62,25 +66,23 @@ heatwave_evaluation_object = [
         forecast=hres_forecast,
     ),
 ]
+if __name__ == "__main__":
+    with Client() as client:
+        # Initialize ExtremeWeatherBench
+        ewb = evaluate.ExtremeWeatherBench(
+            case_metadata=case_yaml,
+            evaluation_objects=heatwave_evaluation_object,
+        )
 
-# Initialize ExtremeWeatherBench
-ewb = evaluate.ExtremeWeatherBench(
-    case_metadata=case_yaml,
-    evaluation_objects=heatwave_evaluation_object,
-)
-
-# Run the workflow
-outputs = ewb.run(
-    parallel_config={"backend": "threading", "n_jobs": 1},
-    # tolerance range is the number of hours before and after the timestamp a
-    # validating occurrence is checked in the forecasts for certain metrics
-    # such as minimum temperature MAE
-    tolerance_range=48,
-    # precompute the datasets before metrics are calculated, to avoid IO costs loading
-    # them into memory for each metric
-    pre_compute=False,
-)
-outputs.to_csv("outputs.csv")
-# Print the outputs; can be saved if desired
-logger.info(f"Time taken: {time.time() - start_time} seconds")
-print(f"Time taken: {time.time() - start_time} seconds")
+        # Run the workflow
+        outputs = ewb.run(
+            parallel_config={"backend": "dask", "n_jobs": 1},
+            # tolerance range is the number of hours before and after the timestamp a
+            # validating occurrence is checked in the forecasts for certain metrics
+            # such as minimum temperature MAE
+            tolerance_range=48,
+            # precompute the datasets before metrics are calculated, to avoid IO costs
+            # loading them into memory for each metric
+            pre_compute=False,
+        )
+        outputs.to_csv("applied_heatwave_outputs.csv")
