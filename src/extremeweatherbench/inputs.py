@@ -696,7 +696,7 @@ class LSR(TargetBase):
             data.loc[eastern_hemisphere_mask] = eastern_data
 
         # Convert longitude back to 0 - 360
-        data["longitude"] = utils.convert_longitude_to_360(data["longitude"])
+        data.loc[:, "longitude"] = utils.convert_longitude_to_360(data["longitude"])
         data = data.set_index(["valid_time", "latitude", "longitude"])
 
         # Convert string columns to binary indicators (1.0)
