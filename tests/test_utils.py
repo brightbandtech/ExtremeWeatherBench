@@ -381,7 +381,7 @@ def test_maybe_get_closest_timestamp_to_center_of_valid_times_even_valid_times()
 
 
 class TestStackSparseDataFromDims:
-    """Test the stack_sparse_data_from_dims function."""
+    """Test the stack_dataarray_from_dims function."""
 
     def test_basic_functionality(self):
         """Test basic functionality with valid sparse data."""
@@ -402,7 +402,7 @@ class TestStackSparseDataFromDims:
         )
 
         # Test stacking both dimensions
-        result = utils.stack_sparse_data_from_dims(
+        result = utils.stack_dataarray_from_dims(
             da, stack_dims=["latitude", "longitude"]
         )
 
@@ -430,7 +430,7 @@ class TestStackSparseDataFromDims:
         )
 
         # Test with empty data
-        result = utils.stack_sparse_data_from_dims(
+        result = utils.stack_dataarray_from_dims(
             da, stack_dims=["latitude", "longitude"]
         )
 
@@ -456,7 +456,7 @@ class TestStackSparseDataFromDims:
         )
 
         # Test stacking only latitude
-        result = utils.stack_sparse_data_from_dims(da, stack_dims=["latitude"])
+        result = utils.stack_dataarray_from_dims(da, stack_dims=["latitude"])
 
         assert isinstance(result, xr.DataArray)
         assert "stacked" in result.dims
@@ -485,7 +485,7 @@ class TestStackSparseDataFromDims:
         )
 
         # Test stacking lat and lon, keeping time
-        result = utils.stack_sparse_data_from_dims(
+        result = utils.stack_dataarray_from_dims(
             da, stack_dims=["latitude", "longitude"]
         )
 
@@ -511,10 +511,10 @@ class TestStackSparseDataFromDims:
         )
 
         # Test with different max_size values
-        result_small = utils.stack_sparse_data_from_dims(
+        result_small = utils.stack_dataarray_from_dims(
             da, stack_dims=["latitude", "longitude"], max_size=1
         )
-        result_large = utils.stack_sparse_data_from_dims(
+        result_large = utils.stack_dataarray_from_dims(
             da, stack_dims=["latitude", "longitude"], max_size=1000000
         )
 
@@ -540,7 +540,7 @@ class TestStackSparseDataFromDims:
 
         # Test with non-existent dimension
         with pytest.raises((ValueError, KeyError)):
-            utils.stack_sparse_data_from_dims(da, stack_dims=["nonexistent"])
+            utils.stack_dataarray_from_dims(da, stack_dims=["nonexistent"])
 
     def test_no_sparse_coordinates(self):
         """Test with sparse data that has minimal coordinates."""
@@ -559,7 +559,7 @@ class TestStackSparseDataFromDims:
             coords={"latitude": [10.0], "longitude": [100.0]},
         )
 
-        result = utils.stack_sparse_data_from_dims(
+        result = utils.stack_dataarray_from_dims(
             da, stack_dims=["latitude", "longitude"]
         )
 
@@ -584,7 +584,7 @@ class TestStackSparseDataFromDims:
         )
 
         # Should handle duplicate coordinate scenarios
-        result = utils.stack_sparse_data_from_dims(
+        result = utils.stack_dataarray_from_dims(
             da, stack_dims=["latitude", "longitude"]
         )
 
@@ -604,7 +604,7 @@ class TestStackSparseDataFromDims:
             coords={"latitude": [], "longitude": []},
         )
 
-        result = utils.stack_sparse_data_from_dims(
+        result = utils.stack_dataarray_from_dims(
             da, stack_dims=["latitude", "longitude"]
         )
 
@@ -642,7 +642,7 @@ class TestStackSparseDataFromDims:
         )
 
         # Test with very small max_size
-        result = utils.stack_sparse_data_from_dims(
+        result = utils.stack_dataarray_from_dims(
             da, stack_dims=["latitude", "longitude"], max_size=10
         )
 
@@ -671,7 +671,7 @@ class TestStackSparseDataFromDims:
         )
 
         # Stack all dimensions
-        result = utils.stack_sparse_data_from_dims(
+        result = utils.stack_dataarray_from_dims(
             da, stack_dims=["time", "latitude", "longitude"]
         )
 
@@ -694,7 +694,7 @@ class TestStackSparseDataFromDims:
         with pytest.raises(
             ValueError, match="coords must be provided if da.data is not sparse.COO"
         ):
-            utils.stack_sparse_data_from_dims(da, stack_dims=["latitude", "longitude"])
+            utils.stack_dataarray_from_dims(da, stack_dims=["latitude", "longitude"])
 
     def test_empty_stack_dims_list(self):
         """Test with empty stack_dims list."""
@@ -714,7 +714,7 @@ class TestStackSparseDataFromDims:
 
         # Test with empty stack_dims - should raise error
         with pytest.raises((ValueError, IndexError)):
-            utils.stack_sparse_data_from_dims(da, stack_dims=[])
+            utils.stack_dataarray_from_dims(da, stack_dims=[])
 
     def test_coordinate_value_extraction(self):
         """Test that coordinate values are correctly extracted."""
@@ -736,7 +736,7 @@ class TestStackSparseDataFromDims:
             },
         )
 
-        result = utils.stack_sparse_data_from_dims(
+        result = utils.stack_dataarray_from_dims(
             da, stack_dims=["latitude", "longitude"]
         )
 
@@ -764,7 +764,7 @@ class TestStackSparseDataFromDims:
             coords={"latitude": [10.0, 20.0], "longitude": [100.0, 110.0]},
         )
 
-        result = utils.stack_sparse_data_from_dims(
+        result = utils.stack_dataarray_from_dims(
             da, stack_dims=["latitude", "longitude"]
         )
 
@@ -788,7 +788,7 @@ class TestStackSparseDataFromDims:
         )
 
         # Test with very large max_size
-        result = utils.stack_sparse_data_from_dims(
+        result = utils.stack_dataarray_from_dims(
             da,
             stack_dims=["latitude", "longitude"],
             max_size=10**10,  # Very large number

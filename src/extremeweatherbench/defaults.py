@@ -158,19 +158,13 @@ def get_brightband_evaluation_objects() -> list[inputs.EvaluationObject]:
     heatwave_metric_list: list[metrics.BaseMetric] = [
         metrics.MaximumMAE(),
         metrics.RMSE(),
-        metrics.OnsetME(
-            get_climatology(0.85), op_func=operator.ge, min_consecutive_timesteps=4
-        ),
-        metrics.DurationME(get_climatology(0.85), op_func=operator.ge),
+        metrics.DurationME(criteria=get_climatology(0.85), op_func=operator.ge),
         metrics.MaxMinMAE(),
     ]
     freeze_metric_list: list[metrics.BaseMetric] = [
         metrics.MinimumMAE(),
         metrics.RMSE(),
-        metrics.OnsetME(
-            get_climatology(0.15), op_func=operator.le, min_consecutive_timesteps=4
-        ),
-        metrics.DurationME(get_climatology(0.15), op_func=operator.le),
+        metrics.DurationME(criteria=get_climatology(0.15), op_func=operator.le),
     ]
 
     return [

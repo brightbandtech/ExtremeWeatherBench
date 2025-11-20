@@ -338,7 +338,7 @@ def extract_tc_names(title: str) -> list[str]:
     return names
 
 
-def stack_sparse_data_from_dims(
+def stack_dataarray_from_dims(
     da: xr.DataArray,
     stack_dims: list[str],
     max_size: int = 100000,
@@ -360,7 +360,10 @@ def stack_sparse_data_from_dims(
     if coords is None and isinstance(da.data, sparse.COO):
         coords = da.data.coords
     elif coords is None:
-        raise ValueError("coords must be provided if da.data is not sparse.COO")
+        if da.size != 0:
+            return da.stack(stacked=stack_dims)
+        return da
+
     # Check if da dimensions size equals number of rows in coords
     if len(da.dims) != coords.shape[0]:
         # Add a new dimension to coords for the missing dimension
@@ -594,7 +597,7 @@ def interp_climatology_to_target(
     # climatology using stacked dim
     if isinstance(target.data, sparse.COO) or target.ndim < 3:
         return climatology.interp(
-            # stacked as a data variable is enforced by stack_sparse_data_from_dims
+            # stacked as a data variable is enforced by stack_dataarray_from_dims
             latitude=target["stacked"]["latitude"],
             longitude=target["stacked"]["longitude"],
             method="nearest",
@@ -635,7 +638,7 @@ def reduce_dataarray(
         The reduced xarray dataarray.
     """
     if isinstance(da.data, sparse.COO):
-        da = stack_sparse_data_from_dims(da, reduce_dims)
+        da = stack_dataarray_from_dims(da, reduce_dims)
         reduce_dims = ["stacked"]
 
     if callable(method):

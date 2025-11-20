@@ -993,111 +993,32 @@ class MaxMinMAE(MAE):
         )
 
 
-class OnsetME(ME):
-    """Mean error of heatwave onset time.
-
-    Computes the mean error between forecast and observed timing
-    of event onset (currently configured for heatwaves).
-    """
-
-    def __init__(self, *args, **kwargs):
-        super().__init__("OnsetME", *args, **kwargs)
-
-    def onset(self, forecast: xr.DataArray, **kwargs: Any) -> xr.DataArray:
-        """Identify onset time from forecast data.
-
-        Args:
-            forecast: The forecast DataArray.
-
-        Returns:
-            DataArray containing the onset datetime, or NaT if
-            onset criteria not met.
-        """
-        if (forecast.valid_time.max() - forecast.valid_time.min()).values.astype(
-            "timedelta64[h]"
-        ) >= 48:
-            # get the forecast resolution hours from the kwargs, otherwise default to 6
-            num_timesteps = 24 // kwargs.get("forecast_resolution_hours", 6)
-            if num_timesteps is None:
-                return xr.DataArray(np.datetime64("NaT", "ns"))
-            min_daily_vals = forecast.groupby("valid_time.dayofyear").map(
-                utils.min_if_all_timesteps_present,
-                time_resolution_hours=utils.determine_temporal_resolution(forecast),
-            )
-            if min_daily_vals.size >= 2:  # Check if we have at least 2 values
-                for i in range(min_daily_vals.size - 1):
-                    # TODO: CHANGE LOGIC; define forecast heatwave onset
-                    if min_daily_vals[i] >= 288.15 and min_daily_vals[i + 1] >= 288.15:
-                        return xr.DataArray(
-                            forecast.where(
-                                forecast["valid_time"].dt.dayofyear
-                                == min_daily_vals.dayofyear[i],
-                                drop=True,
-                            )
-                            .valid_time[0]
-                            .values
-                        )
-        return xr.DataArray(np.datetime64("NaT", "ns"))
-
-    def _compute_metric(
-        self,
-        forecast: xr.DataArray,
-        target: xr.DataArray,
-        **kwargs: Any,
-    ) -> Any:
-        """Compute OnsetME.
-
-        Args:
-            forecast: The forecast DataArray.
-            target: The target DataArray.
-            **kwargs: Additional keyword arguments. Supported kwargs:
-                preserve_dims (str): Dimension(s) to preserve. Defaults to "init_time".
-
-        Returns:
-            Mean error of onset timing.
-        """
-        preserve_dims = kwargs.get("preserve_dims", "init_time")
-
-        target_time = target.valid_time[0] + np.timedelta64(48, "h")
-        forecast = (
-            utils.reduce_dataarray(
-                forecast,
-                method="mean",
-                reduce_dims=["latitude", "longitude"],
-                skipna=True,
-            )
-            .groupby("init_time")
-            .map(self.onset)
-        )
-        return super()._compute_metric(
-            forecast=forecast,
-            target=target_time,
-            preserve_dims=preserve_dims,
-        )
-
-
 class DurationME(ME):
     """Compute the duration of a case's event.
     This metric computes the mean error between the forecast and target durations.
 
     Args:
-        climatology: The climatology dataset for the heatwave criteria.
+        criteria: The criteria for event detection. Can be either:
+            - xr.DataArray: A climatology dataset for threshold criteria
+            - float: A fixed threshold value
+        op_func: Comparison operator (e.g., operator.ge for >=)
+        name: Name of the metric
+        preserve_dims: Dimensions to preserve during aggregation
 
     Returns:
-        The mean error between the forecast and target heatwave durations.
+        The mean error between the forecast and target event durations.
     """
 
     def __init__(
         self,
-        climatology: xr.DataArray,
+        criteria: xr.DataArray | float,
         op_func: Callable = operator.ge,
-        name: str = "heatwave_duration_me",
+        name: str = "duration_me",
         preserve_dims: str = "init_time",
     ):
-        self.climatology = climatology
+        super().__init__(name=name, preserve_dims=preserve_dims)
+        self.criteria = criteria
         self.op_func = op_func
-        self.name = name
-        self.preserve_dims = preserve_dims
 
     def _compute_metric(
         self,
@@ -1112,21 +1033,36 @@ class DurationME(ME):
             target: Target dataset with dims (valid_time)
 
         Returns:
-            Mean error between forecast and target heatwave durations
+            Mean error between forecast and target event durations
         """
-        climatology_time = utils.convert_day_yearofday_to_time(
-            self.climatology, forecast.valid_time.dt.year.values[0]
-        )
-        spatial_dims = [
-            dim
-            for dim in forecast.dims
-            if dim not in ["init_time", "lead_time", "valid_time"]
-        ]
-        forecast = utils.stack_sparse_data_from_dims(forecast, spatial_dims)
-        target = utils.stack_sparse_data_from_dims(target, spatial_dims)
-        climatology_time = utils.interp_climatology_to_target(target, climatology_time)
-        forecast_mask = self.op_func(forecast, climatology_time)
-        target_mask = self.op_func(target, climatology_time)
+        # Handle criteria - either climatology (xr.DataArray) or float threshold
+        if isinstance(self.criteria, xr.DataArray):
+            # Climatology case
+            criteria_time = utils.convert_day_yearofday_to_time(
+                self.criteria, forecast.valid_time.dt.year.values[0]
+            )
+            spatial_dims = [
+                dim
+                for dim in forecast.dims
+                if dim not in ["init_time", "lead_time", "valid_time"]
+            ]
+            forecast = utils.stack_dataarray_from_dims(forecast, spatial_dims)
+            target = utils.stack_dataarray_from_dims(target, spatial_dims)
+            criteria_time = utils.interp_climatology_to_target(target, criteria_time)
+            threshold = criteria_time
+        else:
+            # Float threshold case
+            spatial_dims = [
+                dim
+                for dim in forecast.dims
+                if dim not in ["init_time", "lead_time", "valid_time"]
+            ]
+            forecast = utils.stack_dataarray_from_dims(forecast, spatial_dims)
+            target = utils.stack_dataarray_from_dims(target, spatial_dims)
+            threshold = self.criteria
+
+        forecast_mask = self.op_func(forecast, threshold)
+        target_mask = self.op_func(target, threshold)
 
         # Track NaN locations in forecast data
         forecast_valid_mask = ~forecast.isnull()
