@@ -785,23 +785,23 @@ class TestDurationME:
         return forecast, target
 
     def test_instantiation(self):
-        """Test that DurationME can be instantiated with criteria."""
+        """Test that DurationME can be instantiated with threshold criteria."""
         climatology = self.create_climatology()
-        metric = metrics.DurationME(criteria=climatology)
+        metric = metrics.DurationME(threshold_criteria=climatology)
         assert isinstance(metric, metrics.ME)
         assert metric.name == "duration_me"
 
     def test_base_metric_inheritance(self):
         """Test that DurationME inherits from ME."""
         climatology = self.create_climatology()
-        metric = metrics.DurationME(criteria=climatology)
+        metric = metrics.DurationME(threshold_criteria=climatology)
         assert isinstance(metric, metrics.ME)
         assert isinstance(metric, metrics.BaseMetric)
 
     def test_compute_applied_metric_structure(self):
         """Test that _compute_applied_metric returns expected structure."""
         climatology = self.create_climatology()
-        metric = metrics.DurationME(criteria=climatology)
+        metric = metrics.DurationME(threshold_criteria=climatology)
 
         forecast_vals = np.full(10, 305.0)
         target_vals = np.full(10, 295.0)
@@ -830,7 +830,7 @@ class TestDurationME:
             forecast_vals, target_vals, climatology
         )
 
-        metric = metrics.DurationME(criteria=climatology)
+        metric = metrics.DurationME(threshold_criteria=climatology)
         result = metric.compute_metric(forecast=forecast, target=target)
 
         # Should be 1.0: forecast mask all 1s, target mask all 0s
@@ -847,7 +847,7 @@ class TestDurationME:
             forecast_vals, target_vals, climatology
         )
 
-        metric = metrics.DurationME(criteria=climatology)
+        metric = metrics.DurationME(threshold_criteria=climatology)
         result = metric.compute_metric(forecast=forecast, target=target)
 
         # Should be 0.5: forecast mask: 5 ones, 5 zeros; target: all zeros
@@ -863,7 +863,7 @@ class TestDurationME:
             forecast_vals, target_vals, climatology
         )
 
-        metric = metrics.DurationME(criteria=climatology)
+        metric = metrics.DurationME(threshold_criteria=climatology)
         result = metric.compute_metric(forecast=forecast, target=target)
 
         # Should be -1.0: forecast mask all 0s, target mask all 1s
@@ -879,7 +879,7 @@ class TestDurationME:
             forecast_vals, target_vals, climatology
         )
 
-        metric = metrics.DurationME(criteria=climatology)
+        metric = metrics.DurationME(threshold_criteria=climatology)
         result = metric.compute_metric(forecast=forecast, target=target)
 
         # Should be 0.0: forecast and target masks both all 1s
@@ -896,7 +896,7 @@ class TestDurationME:
             forecast_vals, target_vals, climatology
         )
 
-        metric = metrics.DurationME(criteria=climatology)
+        metric = metrics.DurationME(threshold_criteria=climatology)
         result = metric.compute_metric(forecast=forecast, target=target)
 
         # Should be 0.3: forecast mask: 3 ones, 7 zeros; target: all zeros
@@ -960,7 +960,7 @@ class TestDurationME:
         )
 
         # Compute metric
-        metric = metrics.DurationME(criteria=climatology)
+        metric = metrics.DurationME(threshold_criteria=climatology)
         result = metric.compute_metric(forecast=forecast, target=target)
 
         # Result will have init_time dimension from preserve_dims
@@ -1044,7 +1044,7 @@ class TestDurationME:
         )
 
         # Compute metric
-        metric = metrics.DurationME(criteria=climatology)
+        metric = metrics.DurationME(threshold_criteria=climatology)
         result = metric.compute_metric(forecast=forecast, target=target)
 
         # Result will have init_time dimension from preserve_dims
@@ -1087,7 +1087,7 @@ class TestDurationME:
         forecast_with_nans = forecast.copy()
         forecast_with_nans.values[0, 2:4, 0, 0] = np.nan  # timesteps 2-3, first loc
 
-        metric = metrics.DurationME(criteria=climatology)
+        metric = metrics.DurationME(threshold_criteria=climatology)
         result = metric.compute_metric(forecast=forecast_with_nans, target=target)
 
         # Should still be positive (forecast exceeds where not NaN)
@@ -1120,7 +1120,7 @@ class TestDurationME:
         forecast_with_nans = forecast.copy()
         forecast_with_nans.values[0, 5:7, 0, 0] = np.nan  # timesteps 5-6, first loc
 
-        metric = metrics.DurationME(criteria=climatology)
+        metric = metrics.DurationME(threshold_criteria=climatology)
         result = metric.compute_metric(forecast=forecast_with_nans, target=target)
 
         # Should be less than 1.0 because:
@@ -1150,7 +1150,7 @@ class TestDurationME:
         forecast_with_nans = forecast.copy()
         forecast_with_nans.values[0, 3:5, :, :] = np.nan  # timesteps 3-4, all locs
 
-        metric = metrics.DurationME(criteria=climatology)
+        metric = metrics.DurationME(threshold_criteria=climatology)
         result = metric.compute_metric(forecast=forecast_with_nans, target=target)
 
         # Should be 0 because wherever both have valid data, both exceed
@@ -1183,7 +1183,7 @@ class TestDurationME:
         # NaN at timestep 8 (neither exceeds)
         forecast_with_nans.values[0, 8, 0, 1] = np.nan
 
-        metric = metrics.DurationME(criteria=climatology)
+        metric = metrics.DurationME(threshold_criteria=climatology)
         result = metric.compute_metric(forecast=forecast_with_nans, target=target)
 
         # Result should be positive but less than previous tests
@@ -1194,12 +1194,12 @@ class TestDurationME:
         # Verify that the computation completed without errors
         assert not np.isnan(result.values[0])
 
-    def test_instantiation_with_float_criteria(self):
-        """Test that DurationME can be instantiated with float criteria."""
-        metric = metrics.DurationME(criteria=300.0)
+    def test_instantiation_with_float_threshold_criteria(self):
+        """Test that DurationME can be instantiated with float threshold criteria."""
+        metric = metrics.DurationME(threshold_criteria=300.0)
         assert isinstance(metric, metrics.ME)
         assert metric.name == "duration_me"
-        assert metric.criteria == 300.0
+        assert metric.threshold_criteria == 300.0
 
     def test_me_with_float_threshold_all_forecast_exceeds(self):
         """Test ME with float threshold when all forecast exceeds."""
@@ -1211,7 +1211,7 @@ class TestDurationME:
             forecast_vals, target_vals, climatology
         )
 
-        metric = metrics.DurationME(criteria=300.0)
+        metric = metrics.DurationME(threshold_criteria=300.0)
         result = metric.compute_metric(forecast=forecast, target=target)
 
         # Should be 1.0: forecast mask all 1s, target mask all 0s
@@ -1229,7 +1229,7 @@ class TestDurationME:
             forecast_vals, target_vals, climatology
         )
 
-        metric = metrics.DurationME(criteria=300.0)
+        metric = metrics.DurationME(threshold_criteria=300.0)
         result = metric.compute_metric(forecast=forecast, target=target)
 
         # Forecast: 6 timesteps exceed, Target: 3 timesteps exceed
@@ -1247,11 +1247,11 @@ class TestDurationME:
         )
 
         # Test with climatology (constant 300K)
-        metric_clim = metrics.DurationME(criteria=climatology)
+        metric_clim = metrics.DurationME(threshold_criteria=climatology)
         result_clim = metric_clim.compute_metric(forecast=forecast, target=target)
 
         # Test with float threshold (300.0)
-        metric_float = metrics.DurationME(criteria=300.0)
+        metric_float = metrics.DurationME(threshold_criteria=300.0)
         result_float = metric_float.compute_metric(forecast=forecast, target=target)
 
         # Results should be the same
@@ -1279,7 +1279,7 @@ class TestDurationME:
 
         # Test with sparse data - should not raise "All arrays must be instances of
         # SparseArray"
-        metric = metrics.DurationME(criteria=300.0)
+        metric = metrics.DurationME(threshold_criteria=300.0)
         result = metric.compute_metric(forecast=forecast_sparse, target=target_sparse)
 
         # Result should be valid (not NaN) and correct
@@ -1289,7 +1289,7 @@ class TestDurationME:
         )  # All forecast exceeds, all target below
 
     def test_sparse_array_with_climatology(self):
-        """Test sparse arrays with climatology criteria."""
+        """Test sparse arrays with climatology threshold criteria."""
         import sparse
 
         climatology = self.create_climatology()
@@ -1308,7 +1308,7 @@ class TestDurationME:
         target_sparse.data = sparse.COO.from_numpy(target.values)
 
         # Test with climatology and sparse data
-        metric = metrics.DurationME(criteria=climatology)
+        metric = metrics.DurationME(threshold_criteria=climatology)
         result = metric.compute_metric(forecast=forecast_sparse, target=target_sparse)
 
         # Result should be valid
@@ -1786,9 +1786,9 @@ class TestMetricIntegration:
         ]
 
         for metric_class in all_metric_classes:
-            # DurationME requires criteria parameter
+            # DurationME requires threshold criteria parameter
             if metric_class.__name__ == "DurationME":
-                metric = metric_class(criteria=300.0)
+                metric = metric_class(threshold_criteria=300.0)
             else:
                 metric = metric_class()
             assert hasattr(metric, "_compute_metric")
