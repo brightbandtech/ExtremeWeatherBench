@@ -1011,7 +1011,7 @@ class DurationME(ME):
     This metric computes the mean error between the forecast and target durations.
 
     Args:
-        criteria: The criteria for event detection. Can be either:
+        threshold_criteria: The criteria for event detection. Can be either:
             - xr.DataArray: A climatology dataset for threshold criteria
             - float: A fixed threshold value
         op_func: Comparison operator or string (e.g., operator.ge for >=)
@@ -1024,13 +1024,13 @@ class DurationME(ME):
 
     def __init__(
         self,
-        criteria: xr.DataArray | float,
+        threshold_criteria: xr.DataArray | float,
         op_func: Union[Callable, Literal[">", ">=", "<", "<=", "==", "!="]] = ">=",
         name: str = "duration_me",
         preserve_dims: str = "init_time",
     ):
         super().__init__(name=name, preserve_dims=preserve_dims)
-        self.criteria = criteria
+        self.threshold_criteria = threshold_criteria
         self.op_func = utils.maybe_get_operator(op_func)
 
     def _compute_metric(
@@ -1049,10 +1049,10 @@ class DurationME(ME):
             Mean error between forecast and target event durations
         """
         # Handle criteria - either climatology (xr.DataArray) or float threshold
-        if isinstance(self.criteria, xr.DataArray):
+        if isinstance(self.threshold_criteria, xr.DataArray):
             # Climatology case
             criteria_time = utils.convert_day_yearofday_to_time(
-                self.criteria, forecast.valid_time.dt.year.values[0]
+                self.threshold_criteria, forecast.valid_time.dt.year.values[0]
             )
             spatial_dims = [
                 dim
@@ -1072,7 +1072,7 @@ class DurationME(ME):
             ]
             forecast = utils.stack_dataarray_from_dims(forecast, spatial_dims)
             target = utils.stack_dataarray_from_dims(target, spatial_dims)
-            threshold = self.criteria
+            threshold = self.threshold_criteria
 
         forecast_mask = self.op_func(forecast, threshold)
         target_mask = self.op_func(target, threshold)

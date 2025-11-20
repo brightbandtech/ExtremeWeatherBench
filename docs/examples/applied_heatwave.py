@@ -1,10 +1,9 @@
 import logging
 import operator
 
-import xarray as xr
 from dask.distributed import Client
 
-from extremeweatherbench import cases, evaluate, inputs, metrics
+from extremeweatherbench import cases, defaults, evaluate, inputs, metrics
 
 # Set the logger level to INFO
 logger = logging.getLogger("extremeweatherbench")
@@ -36,12 +35,7 @@ hres_forecast = inputs.ZarrForecast(
 )
 
 # Load the climatology for DurationME
-climatology = xr.open_zarr(
-    "gs://extremeweatherbench/datasets/surface_air_temperature_1990_2019_climatology.zarr",  # noqa: E501
-    storage_options={"anon": True},
-    chunks="auto",
-)
-climatology = climatology["2m_temperature"].sel(quantile=0.85)
+climatology = defaults.get_climatology(quantile=0.85)
 
 # Define the metrics
 metrics_list = [
