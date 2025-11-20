@@ -338,53 +338,6 @@ def extract_tc_names(title: str) -> list[str]:
     return names
 
 
-def map_sparse_array_to_dense_array(
-    sparse_ds: xr.Dataset, dense_ds: xr.Dataset, variable: str
-) -> xr.DataArray:
-    """Map a sparse array to a dense array, preserving the dense array's shape and
-    dimensions.
-
-    This function is used to map a sparse array to a dense array, preserving the dense
-    array's shape and dimensions. It is used to map a sparse array to a dense array with
-    n+1 dimensions, preserving the dense array's shape and dimensions. The first dim
-    in the dense array is the dim not in the sparse array.
-
-    Args:
-        sparse_ds: The sparse dataset with n dimensions.
-        dense_ds: The dense dataset with n+1 dimensions.
-        variable: The variable to map.
-
-    Returns:
-        The dense dataset with the sparse variable mapped to the dense variable.
-    """
-    coords = sparse_ds[variable].data.coords
-
-    # Create a condition array that's True only at sparse locations
-    forecast_shape = dense_ds[variable].shape
-    condition = np.zeros(forecast_shape, dtype=bool)
-
-    # Use numpy advanced indexing with paired coordinates
-    condition[
-        :,  # all lead_time values
-        coords[0],  # time indices (paired)
-        coords[1],  # latitude indices (paired)
-        coords[2],  # longitude indices (paired)
-    ] = True
-
-    # Convert to xarray DataArray
-    condition = xr.DataArray(
-        condition,
-        dims=dense_ds[variable].dims,
-    )
-
-    # Apply condition directly in xr.where
-    masked_data = xr.where(condition, dense_ds[variable], 0)
-
-    # Convert to sparse
-    dense_ds[variable].data = masked_data.data.map_blocks(sparse.COO)
-    return dense_ds[variable]
-
-
 def stack_sparse_data_from_dims(
     da: xr.DataArray,
     stack_dims: list[str],
