@@ -750,8 +750,10 @@ def _build_datasets(
     if zero_length_dims:
         if "valid_time" in zero_length_dims:
             logger.warning(
-                "Forecast dataset for case %s has no data for case time range %s to %s."
+                "Forecast dataset %s for case %s has no data for case time range %s to "
+                "%s."
                 % (
+                    case_operator.forecast.name,
                     case_operator.case_metadata.case_id_number,
                     case_operator.case_metadata.start_date,
                     case_operator.case_metadata.end_date,
@@ -759,9 +761,10 @@ def _build_datasets(
             )
         else:
             logger.warning(
-                "Forecast dataset for case %s has zero-length dimensions %s for case "
-                "time range %s to %s."
+                "Forecast dataset %s for case %s has zero-length dimensions %s for "
+                "case time range %s to %s."
                 % (
+                    case_operator.forecast.name,
                     case_operator.case_metadata.case_id_number,
                     zero_length_dims,
                     case_operator.case_metadata.start_date,
@@ -836,8 +839,9 @@ def run_pipeline(
         return valid_data
     else:
         logger.warning(
-            "Forecast dataset for case %s has no data for case time range %s to %s."
+            "Data input %s for case %s has no data for case time range %s to %s."
             % (
+                input_data.name,
                 case_metadata.case_id_number,
                 case_metadata.start_date.strftime("%Y-%m-%d %H:%M:%S"),
                 case_metadata.end_date.strftime("%Y-%m-%d %H:%M:%S"),

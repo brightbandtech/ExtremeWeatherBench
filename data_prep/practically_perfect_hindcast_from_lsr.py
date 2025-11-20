@@ -26,7 +26,7 @@ def sparse_practically_perfect_hindcast(
     https://doi.org/10.1175/WAF-D-12-00113.1
 
     Args:
-        ds: An xarray Dataset containing the storm report data as a sparse
+        da: An xarray DataArray containing the storm report data as a sparse
             (COO) array.
         resolution: The resolution of the grid in degrees to use. Default is
             0.25 degrees.
@@ -208,14 +208,10 @@ def plot_pph_contours(dt: datetime, da: xr.DataArray):
 
 if __name__ == "__main__":
     lsr = inputs.LSR(
-        source=inputs.LSR_URI,
-        variables=["report"],
-        variable_mapping={"report": "reports"},
         storage_options={"anon": True},
     )
     lsr_df = lsr.open_and_maybe_preprocess_data_from_source()
     lsr_ds = lsr._custom_convert_to_dataset(lsr_df)
-
     unique_valid_times = np.unique(lsr_ds["valid_time"].values)
 
     pph_sparse_list = joblib.Parallel(n_jobs=-1)(

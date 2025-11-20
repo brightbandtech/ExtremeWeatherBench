@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import polars as pl
 import pytest
+import sparse
 import xarray as xr
 
 from extremeweatherbench import inputs
@@ -1495,6 +1496,14 @@ class TestLSR:
         result = lsr._custom_convert_to_dataset(sample_lsr_dataframe)
 
         assert isinstance(result, xr.Dataset)
+        # Verify report_type preserves numeric values (1, 2, 3)
+        if "report_type" in result.data_vars:
+            # Check that underlying data is numeric
+            assert np.issubdtype(result["report_type"].dtype, np.number)
+            # Check values are from the mapping (1=wind, 2=hail, 3=tor)
+            if isinstance(result["report_type"].data, sparse.COO):
+                unique_values = np.unique(result["report_type"].data.data)
+                assert all(val in [1.0, 2.0, 3.0] for val in unique_values)
 
     def test_lsr_custom_convert_to_dataset_invalid_input(self):
         """Test LSR custom conversion with invalid input."""
