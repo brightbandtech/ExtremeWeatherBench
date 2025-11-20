@@ -309,6 +309,7 @@ class ThresholdMetric(CompositeMetric):
         target_threshold: float,
         preserve_dims: str,
         op_func: Callable = operator.ge,
+        densify_max_size: int = 10000000,
     ) -> scores.categorical.BasicContingencyManager:
         """Create and transform a contingency manager.
 
@@ -326,7 +327,9 @@ class ThresholdMetric(CompositeMetric):
         binary_forecast = (op_func(forecast, forecast_threshold)).astype(float)
         binary_target = (op_func(target, target_threshold)).astype(float)
         if isinstance(binary_target.data, sparse.COO):
-            binary_target.data = binary_target.data.maybe_densify(max_size=100000)
+            binary_target.data = binary_target.data.maybe_densify(
+                max_size=densify_max_size
+            )
         # Create and transform contingency manager
         binary_contingency_manager = scores.categorical.BinaryContingencyManager(
             binary_forecast, binary_target
