@@ -328,8 +328,12 @@ class ThresholdMetric(CompositeMetric):
             Transformed contingency manager.
         """
         # Apply thresholds to binarize the data
-        binary_forecast = (op_func(forecast, forecast_threshold)).astype(float)
-        binary_target = (op_func(target, target_threshold)).astype(float)
+        binary_forecast = utils.maybe_densify_dataarray(
+            op_func(forecast, forecast_threshold)
+        ).astype(float)
+        binary_target = utils.maybe_densify_dataarray(
+            op_func(target, target_threshold)
+        ).astype(float)
 
         # Create and transform contingency manager
         binary_contingency_manager = scores.categorical.BinaryContingencyManager(
