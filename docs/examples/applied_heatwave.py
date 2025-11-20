@@ -34,11 +34,11 @@ hres_forecast = inputs.ZarrForecast(
 )
 
 metrics_list = [
-    metrics.MaximumMAE(),
-    metrics.RMSE(),
-    metrics.OnsetME(),
-    metrics.DurationME(),
-    metrics.MaxMinMAE(),
+    metrics.MaximumMeanAbsoluteError(),
+    metrics.RootMeanSquaredError(),
+    metrics.OnsetMeanError(),
+    metrics.DurationMeanError(),
+    metrics.MaxMinMeanAbsoluteError(),
 ]
 
 # Create a list of evaluation objects for heatwave

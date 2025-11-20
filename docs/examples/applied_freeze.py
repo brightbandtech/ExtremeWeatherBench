@@ -72,10 +72,10 @@ fcnv2_forecast = inputs.KerchunkForecast(
 )
 
 metrics_list = [
-    metrics.RMSE(),
-    metrics.MinimumMAE(),
-    metrics.OnsetME(),
-    metrics.DurationME(),
+    metrics.RootMeanSquaredError(),
+    metrics.MinimumMeanAbsoluteError(),
+    metrics.OnsetMeanError(),
+    metrics.DurationMeanError(),
 ]
 # Create a list of evaluation objects for freeze
 freeze_evaluation_object = [

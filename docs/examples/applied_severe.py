@@ -35,8 +35,8 @@ hres_forecast = inputs.ZarrForecast(
 pph_metrics = [
     metrics.ThresholdMetric(
         metrics=[
-            metrics.CSI,
-            metrics.FAR,
+            metrics.CriticalSuccessIndex,
+            metrics.FalseAlarmRatio,
         ],
         forecast_threshold=15000,
         target_threshold=0.3,

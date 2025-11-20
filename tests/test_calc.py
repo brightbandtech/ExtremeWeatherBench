@@ -1974,7 +1974,6 @@ class TestLandfallMetricAlignment:
 
     def test_time_difference_aligned_calculation(self):
         """Test that time difference uses aligned init_times."""
-        from extremeweatherbench.metrics import LandfallTimeME
 
         # Create forecast and target with different init_times
         forecast_landfalls = xr.DataArray(
@@ -2011,7 +2010,7 @@ class TestLandfallMetricAlignment:
             name="surface_wind_speed",
         )
 
-        metric = LandfallTimeME()
+        metric = LandfallTimeMeanError()
         result = metric._calculate_time_difference(forecast_landfalls, target_landfalls)
 
         # Result should only have common init_times

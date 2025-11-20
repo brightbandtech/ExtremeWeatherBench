@@ -94,11 +94,11 @@ heatwave_evaluation_list = [
     inputs.EvaluationObject(
         event_type="heat_wave",
         metric_list=[
-            metrics.MaximumMAE,
+            metrics.MaximumMeanAbsoluteError,
             metrics.RMSE,
-            metrics.OnsetME,
-            metrics.DurationME,
-            metrics.MaxMinMAE,
+            metrics.OnsetMeanError,
+            metrics.DurationMeanError,
+            metrics.MaxAggregatedLowestMeanAbsoluteError,
         ],
         target=era5_heatwave_target,
         forecast=fcnv2_forecast,
