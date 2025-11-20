@@ -14,10 +14,13 @@ logger = logging.getLogger(__name__)
 case_yaml = cases.load_ewb_events_yaml_into_case_collection()
 case_yaml.select_cases("case_id_number", 305, inplace=True)
 
-# Define PPH targets
+# Define PPH target
 pph_target = inputs.PPH(
     variables=["practically_perfect_hindcast"],
 )
+
+# Define LSR target
+lsr_target = inputs.LSR()
 
 # Define HRES forecast
 hres_forecast = inputs.ZarrForecast(
@@ -28,29 +31,48 @@ hres_forecast = inputs.ZarrForecast(
     storage_options={"remote_options": {"anon": True}},
 )
 
-# Define threshold metrics
-threshold_metrics = [
+# Define pph metrics as thresholdmetric to share scores contingency table
+pph_metrics = [
     metrics.ThresholdMetric(
         metrics=[
             metrics.CSI,
             metrics.FAR,
-            metrics.TP,
-            metrics.FP,
-            metrics.TN,
-            metrics.FN,
         ],
         forecast_threshold=15000,
         target_threshold=0.3,
+    ),
+    metrics.EarlySignal(threshold=15000),
+]
+
+# Define LSR metrics as thresholdmetric to share scores contingency table
+lsr_metrics = [
+    metrics.ThresholdMetric(
+        metrics=[
+            metrics.TP,
+            metrics.FN,
+        ],
+        forecast_threshold=15000,
+        target_threshold=0.5,
     )
 ]
 
-
-# Define evaluation objects for severe convection
-severe_convection_evaluation_objects = [
+# Define evaluation objects for severe convection:
+# One evaluation object for PPH
+pph_evaluation_objects = [
     inputs.EvaluationObject(
         event_type="severe_convection",
-        metric_list=threshold_metrics,
+        metric_list=pph_metrics,
         target=pph_target,
+        forecast=hres_forecast,
+    ),
+]
+
+# One evaluation object for LSR
+lsr_evaluation_objects = [
+    inputs.EvaluationObject(
+        event_type="severe_convection",
+        metric_list=lsr_metrics,
+        target=lsr_target,
         forecast=hres_forecast,
     ),
 ]
@@ -58,15 +80,15 @@ severe_convection_evaluation_objects = [
 if __name__ == "__main__":
     # Set up dask client for parallel execution
     with Client() as client:
-        # Initialize ExtremeWeatherBench
-        test_ewb = evaluate.ExtremeWeatherBench(
+        # Initialize ExtremeWeatherBench with both evaluation objects
+        ewb = evaluate.ExtremeWeatherBench(
             case_metadata=case_yaml,
-            evaluation_objects=severe_convection_evaluation_objects,
+            evaluation_objects=lsr_evaluation_objects + pph_evaluation_objects,
         )
         logger.info("Starting EWB run")
 
         # Run the workflow with parllel_config backend set to dask
-        outputs = test_ewb.run(parallel_config={"backend": "dask"})
+        outputs = ewb.run(parallel_config={"backend": "dask"})
 
         # Save the results to a CSV file
-        outputs.to_csv("applied_severe_results.csv")
+        outputs.to_csv("applied_severe_convection_results.csv")
