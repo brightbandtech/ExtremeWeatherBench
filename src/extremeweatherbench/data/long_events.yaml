@@ -46,3 +46,4 @@ cases:
         latitude_max: 90.0
         longitude_min: 0
         longitude_max: 359.75
+    event_type: freeze
