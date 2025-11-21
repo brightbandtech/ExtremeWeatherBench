@@ -696,7 +696,31 @@ class Accuracy(ThresholdMetric):
 
 
 class MeanSquaredError(BaseMetric):
-    """Mean Squared Error metric."""
+    """Mean Squared Error metric.
+
+    Args:
+        name: The name of the metric. Defaults to "MeanSquaredError".
+        interval_where_one: From scores: endpoints of the interval where the threshold
+        weights are 1. Must be increasing. Infinite endpoints are permissible. By
+        supplying a tuple of arrays, endpoints can vary with dimension.
+        interval_where_positive: From scores:endpoints of the interval where the
+        threshold weights are positive. Must be increasing. Infinite endpoints are only
+        permissible when the corresponding interval_where_one endpoint is infinite. By
+        supplying a tuple of arrays, endpoints can vary with dimension.
+        weights: From scores: an array of weights to apply to the score (e.g., weighting
+        a grid by latitude). If None, no weights are applied. If provided, the weights
+        must be broadcastable to the data dimensions and must not contain negative or
+        NaN values. If appropriate, users can choose to replace NaN values in weights
+        by calling weights.fillna(0). The weighting approach follows
+        xarray.computation.weighted.DataArrayWeighted. See the scores weighting tutorial
+        for more information on how to use weights.
+        *args: Additional arguments.
+        **kwargs: Additional keyword arguments.
+
+    Returns:
+        The Mean or threshold-weighted Squared Error between the forecast and target
+        as a DataArray.
+    """
 
     def __init__(
         self,
@@ -740,11 +764,26 @@ class MeanAbsoluteError(BaseMetric):
 
     Args:
         name: The name of the metric. Defaults to "MeanAbsoluteError".
+        interval_where_one: From scores: endpoints of the interval where the threshold
+        weights are 1. Must be increasing. Infinite endpoints are permissible. By
+        supplying a tuple of arrays, endpoints can vary with dimension.
+        interval_where_positive: From scores:endpoints of the interval where the
+        threshold weights are positive. Must be increasing. Infinite endpoints are only
+        permissible when the corresponding interval_where_one endpoint is infinite. By
+        supplying a tuple of arrays, endpoints can vary with dimension.
+        weights: From scores: an array of weights to apply to the score (e.g., weighting
+        a grid by latitude). If None, no weights are applied. If provided, the weights
+        must be broadcastable to the data dimensions and must not contain negative or
+        NaN values. If appropriate, users can choose to replace NaN values in weights
+        by calling weights.fillna(0). The weighting approach follows
+        xarray.computation.weighted.DataArrayWeighted. See the scores weighting tutorial
+        for more information on how to use weights.
         *args: Additional arguments.
         **kwargs: Additional keyword arguments.
 
     Returns:
-        The Mean Absolute Error between the forecast and target as a DataArray.
+        The Mean or threshold-weighted Absolute Error between the forecast and target
+        as a DataArray.
     """
 
     def __init__(
