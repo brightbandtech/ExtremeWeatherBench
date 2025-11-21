@@ -1093,13 +1093,14 @@ def align_forecast_to_target(
 
     # Align time dimensions if they exist in both datasets
     time_aligned_target, time_aligned_forecast = xr.align(
-        # Squeeze the data to remove any single-value dimensions
-        target_data.squeeze(),
-        forecast_data.squeeze(),
+        target_data,
+        forecast_data,
         join="inner",
         exclude=spatial_dims.keys(),
     )
-
+    # Squeeze the data to remove any single-value dimensions
+    target_data = target_data.squeeze()
+    forecast_data = forecast_data.squeeze()
     # Regrid forecast to target grid using nearest neighbor interpolation
     # extrapolate in the case of targets slightly outside the forecast domain
     if spatial_dims:

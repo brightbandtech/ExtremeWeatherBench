@@ -313,7 +313,7 @@ def compute_mixed_layer_cape(
         ],
         output_core_dims=[[]],  # CAPE has no pressure dimension
         vectorize=False,  # We handle the batching ourselves
-        dask="parallelized",  # Enable Dask support
+        dask="allowed",  # Enable Dask support
         output_dtypes=[np.float64],  # Specify output types
         dask_gufunc_kwargs={
             "output_sizes": {},  # No new dimensions created
