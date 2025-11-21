@@ -319,12 +319,19 @@ class ThresholdMetric(CompositeMetric):
     ) -> scores.categorical.BasicContingencyManager:
         """Create and transform a contingency manager.
 
+        This method is used to create and transform a contingency manager from the
+        scores module. The op_func is used to binarize the forecast and target data with
+        either a string representation of the operator, e.g. ">=", or a callable
+        function from the operator module, e.g. operator.ge.
+
         Args:
             forecast: The forecast DataArray.
             target: The target DataArray.
             forecast_threshold: Threshold for binarizing forecast.
             target_threshold: Threshold for binarizing target.
             preserve_dims: Dimension(s) to preserve during transform.
+            op_func: Function or string representation of the operator to apply to the
+            forecast and target. Defaults to operator.ge (greater than or equal to).
 
         Returns:
             Transformed contingency manager.
