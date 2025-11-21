@@ -2,7 +2,7 @@
 
 **EWB is currently in limited pre-release. Bugs are likely to occur for now.**
 
-**v1.0.0 expected in October 2025.**
+**v0.2 leading to v1.0 to be published alongside EWB preprint.**
 
 [Read our blog post here](https://www.brightband.com/blog/extreme-weather-bench)
 

@@ -1,7 +1,9 @@
 import logging
+import operator
 
 import numpy as np
 import xarray as xr
+from dask.distributed import Client
 
 from extremeweatherbench import cases, evaluate, inputs, metrics
 
@@ -71,12 +73,22 @@ fcnv2_forecast = inputs.KerchunkForecast(
     preprocess=_preprocess_bb_cira_forecast_dataset,
 )
 
+# Load the climatology for DurationME
+climatology = xr.open_zarr(
+    "gs://extremeweatherbench/datasets/surface_air_temperature_1990_2019_climatology.zarr",  # noqa: E501
+    storage_options={"anon": True},
+    chunks="auto",
+)
+climatology = climatology["2m_temperature"].sel(quantile=0.15)
+
+# Define the metrics
 metrics_list = [
     metrics.RootMeanSquaredError(),
     metrics.MinimumMeanAbsoluteError(),
     metrics.OnsetMeanError(),
-    metrics.DurationMeanError(),
+    metrics.DurationMeanError(criteria=climatology, op_func=operator.le),
 ]
+
 # Create a list of evaluation objects for freeze
 freeze_evaluation_object = [
     inputs.EvaluationObject(
@@ -93,22 +105,24 @@ freeze_evaluation_object = [
     ),
 ]
 
-# Initialize ExtremeWeatherBench runner instance
-ewb = evaluate.ExtremeWeatherBench(
-    case_metadata=case_yaml,
-    evaluation_objects=freeze_evaluation_object,
-)
+if __name__ == "__main__":
+    with Client() as client:
+        # Initialize ExtremeWeatherBench runner instance
+        ewb = evaluate.ExtremeWeatherBench(
+            case_metadata=case_yaml,
+            evaluation_objects=freeze_evaluation_object,
+        )
 
-# Run the workflow
-outputs = ewb.run(
-    # tolerance range is the number of hours before and after the timestamp a
-    # validating occurrence is checked in the forecasts for certain metrics
-    # such as minimum temperature MAE
-    tolerance_range=48,
-    # precompute is false by default, but can be set to True to avoid IO costs loading
-    # the datasets into memory for each metric
-    pre_compute=False,
-)
+        # Run the workflow
+        outputs = ewb.run(
+            # tolerance range is the number of hours before and after the timestamp a
+            # validating occurrence is checked in the forecasts for certain metrics
+            # such as minimum temperature MAE
+            tolerance_range=48,
+            # precompute is false by default, but can be set to True to avoid IO costs
+            # loading the datasets into memory for each metric
+            pre_compute=False,
+        )
 
-# Print the outputs; can be saved if desired
-logger.info(outputs.head())
+        # Print the outputs; can be saved if desired
+        logger.info(outputs.head())

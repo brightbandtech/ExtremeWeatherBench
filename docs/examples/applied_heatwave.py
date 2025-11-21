@@ -1,8 +1,9 @@
 import logging
+import operator
 
 from dask.distributed import Client
 
-from extremeweatherbench import cases, evaluate, inputs, metrics
+from extremeweatherbench import cases, defaults, evaluate, inputs, metrics
 
 # Set the logger level to INFO
 logger = logging.getLogger("extremeweatherbench")
@@ -33,12 +34,16 @@ hres_forecast = inputs.ZarrForecast(
     variable_mapping=inputs.HRES_metadata_variable_mapping,
 )
 
+# Load the climatology for DurationME
+climatology = defaults.get_climatology(quantile=0.85)
+
+# Define the metrics
 metrics_list = [
     metrics.MaximumMeanAbsoluteError(),
     metrics.RootMeanSquaredError(),
     metrics.OnsetMeanError(),
-    metrics.DurationMeanError(),
-    metrics.MaxMinMeanAbsoluteError(),
+    metrics.DurationMeanError(criteria=climatology, op_func=operator.ge),
+    metrics.MaximumLowestMeanAbsoluteError(),
 ]
 
 # Create a list of evaluation objects for heatwave

@@ -1,7 +1,7 @@
 import abc
 import logging
 import operator
-from typing import Any, Callable, Literal, Optional, Sequence, Type
+from typing import Any, Callable, Literal, Optional, Sequence, Type, Union
 
 import numpy as np
 import scores
@@ -342,9 +342,16 @@ class ThresholdMetric(CompositeMetric):
         forecast_threshold: float,
         target_threshold: float,
         preserve_dims: str,
-        op_func: Callable = operator.ge,
+        op_func: Union[
+            Callable, Literal[">", ">=", "<", "<=", "==", "!="]
+        ] = operator.ge,
     ) -> scores.categorical.BasicContingencyManager:
         """Create and transform a contingency manager.
+
+        This method is used to create and transform a contingency manager from the
+        scores module. The op_func is used to binarize the forecast and target data with
+        either a string representation of the operator, e.g. ">=", or a callable
+        function from the operator module, e.g. operator.ge.
 
         Args:
             forecast: The forecast DataArray.
@@ -352,11 +359,14 @@ class ThresholdMetric(CompositeMetric):
             forecast_threshold: Threshold for binarizing forecast.
             target_threshold: Threshold for binarizing target.
             preserve_dims: Dimension(s) to preserve during transform.
+            op_func: Function or string representation of the operator to apply to the
+            forecast and target. Defaults to operator.ge (greater than or equal to).
 
         Returns:
             Transformed contingency manager.
         """
         # Apply thresholds to binarize the data
+        op_func = utils.maybe_get_operator(op_func)
         binary_forecast = utils.maybe_densify_dataarray(
             op_func(forecast, forecast_threshold)
         ).astype(float)
@@ -943,13 +953,15 @@ class EarlySignal(BaseMetric):
     def __init__(
         self,
         name: str = "EarlySignal",
-        comparison_operator: Callable = operator.ge,
+        comparison_operator: Union[
+            Callable, Literal[">", ">=", "<", "<=", "==", "!="]
+        ] = ">=",
         threshold: float = 0.5,
         spatial_aggregation: Literal["any", "all", "half"] = "any",
         **kwargs,
     ):
         # Extract threshold params before passing to super
-        self.comparison_operator = comparison_operator
+        self.comparison_operator = utils.maybe_get_operator(comparison_operator)
         self.threshold = threshold
         self.spatial_aggregation = spatial_aggregation
         super().__init__(name, **kwargs)
@@ -1280,97 +1292,29 @@ class MaximumLowestMeanAbsoluteError(MeanAbsoluteError):
         )
 
 
-class OnsetMeanError(MeanError):
-    """Mean error of heatwave onset time.
-
-    Computes the mean error between forecast and observed timing
-    of event onset (currently configured for heatwaves).
-    """
-
-    def __init__(self, *args, **kwargs):
-        super().__init__("OnsetMeanError", *args, **kwargs)
-
-    def onset(self, forecast: xr.DataArray, **kwargs: Any) -> xr.DataArray:
-        """Identify onset time from forecast data.
-
-        Args:
-            forecast: The forecast DataArray.
-
-        Returns:
-            DataArray containing the onset datetime, or NaT if
-            onset criteria not met.
-        """
-        if (forecast.valid_time.max() - forecast.valid_time.min()).values.astype(
-            "timedelta64[h]"
-        ) >= 48:
-            # get the forecast resolution hours from the kwargs, otherwise default to 6
-            num_timesteps = 24 // kwargs.get("forecast_resolution_hours", 6)
-            if num_timesteps is None:
-                return xr.DataArray(np.datetime64("NaT", "ns"))
-            min_daily_vals = forecast.groupby("valid_time.dayofyear").map(
-                utils.min_if_all_timesteps_present,
-                time_resolution_hours=utils.determine_temporal_resolution(forecast),
-            )
-            if min_daily_vals.size >= 2:  # Check if we have at least 2 values
-                for i in range(min_daily_vals.size - 1):
-                    # TODO: CHANGE LOGIC; define forecast heatwave onset
-                    if min_daily_vals[i] >= 288.15 and min_daily_vals[i + 1] >= 288.15:
-                        return xr.DataArray(
-                            forecast.where(
-                                forecast["valid_time"].dt.dayofyear
-                                == min_daily_vals.dayofyear[i],
-                                drop=True,
-                            )
-                            .valid_time[0]
-                            .values
-                        )
-        return xr.DataArray(np.datetime64("NaT", "ns"))
-
-    def _compute_metric(
-        self,
-        forecast: xr.DataArray,
-        target: xr.DataArray,
-        **kwargs: Any,
-    ) -> Any:
-        """Compute OnsetMeanError.
-
-        Args:
-            forecast: The forecast DataArray.
-            target: The target DataArray.
-            **kwargs: Additional keyword arguments. Supported kwargs:
-                preserve_dims (str): Dimension(s) to preserve. Defaults to "init_time".
-
-        Returns:
-            Mean error of onset timing.
-        """
-
-        target_time = target.valid_time[0] + np.timedelta64(48, "h")
-        forecast = (
-            utils.reduce_dataarray(
-                forecast,
-                method="mean",
-                reduce_dims=["latitude", "longitude"],
-                skipna=True,
-            )
-            .groupby("init_time")
-            .map(self.onset)
-        )
-        return super()._compute_metric(
-            forecast=forecast,
-            target=target_time,
-            preserve_dims=self.preserve_dims,
-        )
-
-
 class DurationMeanError(MeanError):
-    """Mean error of event duration.
+    """Compute the duration of a case's event.
+    This metric computes the mean error between the forecast and target durations.
 
-    Computes the mean error between forecast and observed duration
-    of an event (currently configured for heatwaves).
+    Args:
+        threshold_criteria: The criteria for event detection. Can be either a DataArray
+        of a climatology with dimensions (dayofyear, hour, latitude, longitude) or a
+        float value representing a fixed threshold.
+        op_func: Comparison operator or string (e.g., operator.ge for >=)
+        name: Name of the metric
+        preserve_dims: Dimensions to preserve during aggregation. Defaults to "init_time".
     """
 
-    def __init__(self, name: str = "DurationMeanError", *args, **kwargs):
-        super().__init__("DurationMeanError", *args, **kwargs)
+    def __init__(
+        self,
+        threshold_criteria: xr.DataArray | float,
+        op_func: Union[Callable, Literal[">", ">=", "<", "<=", "==", "!="]] = ">=",
+        name: str = "duration_me",
+        preserve_dims: str = "init_time",
+    ):
+        super().__init__(name=name, preserve_dims=preserve_dims)
+        self.threshold_criteria = threshold_criteria
+        self.op_func = utils.maybe_get_operator(op_func)
 
     def duration(self, forecast: xr.DataArray, **kwargs: Any) -> xr.DataArray:
         """Calculate event duration from forecast data.
@@ -1413,39 +1357,68 @@ class DurationMeanError(MeanError):
         self,
         forecast: xr.DataArray,
         target: xr.DataArray,
-        **kwargs: Any,
+        **kwargs,
     ) -> Any:
-        """Compute DurationMeanError.
+        """Compute spatially averaged duration mean error.
 
         Args:
-            forecast: The forecast DataArray.
-            target: The target DataArray.
-            **kwargs: Additional keyword arguments. Supported kwargs:
-                preserve_dims (str): Dimension(s) to preserve. Defaults to "init_time".
+            forecast: Forecast dataset with dims (init_time, lead_time, valid_time)
+            target: Target dataset with dims (valid_time)
 
         Returns:
-            Mean error of event duration.
+            Mean error between forecast and target event durations
         """
-        preserve_dims = kwargs.get("preserve_dims", "init_time")
+        # Handle criteria - either climatology (xr.DataArray) or float threshold
+        if isinstance(self.threshold_criteria, xr.DataArray):
+            # Climatology case
+            criteria_time = utils.convert_day_yearofday_to_time(
+                self.threshold_criteria, forecast.valid_time.dt.year.values[0]
+            )
+            spatial_dims = [
+                dim
+                for dim in forecast.dims
+                if dim not in ["init_time", "lead_time", "valid_time"]
+            ]
+            forecast = utils.stack_dataarray_from_dims(forecast, spatial_dims)
+            target = utils.stack_dataarray_from_dims(target, spatial_dims)
+            criteria_time = utils.interp_climatology_to_target(target, criteria_time)
+            threshold = criteria_time
+        else:
+            # Float threshold case
+            spatial_dims = [
+                dim
+                for dim in forecast.dims
+                if dim not in ["init_time", "lead_time", "valid_time"]
+            ]
+            forecast = utils.stack_dataarray_from_dims(forecast, spatial_dims)
+            target = utils.stack_dataarray_from_dims(target, spatial_dims)
+            threshold = self.threshold_criteria
 
-        # Dummy implementation for duration mean error
-        target_duration = target.valid_time[-1] - target.valid_time[0]
-        forecast = (
-            utils.reduce_dataarray(
-                forecast,
-                method="mean",
-                reduce_dims=["latitude", "longitude"],
-                skipna=True,
+        forecast_mask = self.op_func(forecast, threshold)
+        target_mask = self.op_func(target, threshold)
+        # Track NaN locations in forecast data
+        forecast_valid_mask = ~forecast.isnull()
+
+        # Apply valid data mask (exclude NaN positions in forecast)
+        forecast_mask_final = forecast_mask.where(forecast_valid_mask)
+        try:
+            target_mask_final = target_mask.where(forecast_valid_mask)
+        # If sparse, will need to expand_dims first as transpose is not supported
+        except AttributeError:
+            print("target_mask is sparse")
+            target_mask_final = target_mask.expand_dims(dim={"lead_time": 41}).where(
+                forecast_valid_mask
             )
-            .groupby("init_time")
-            .map(
-                self.duration,
-            )
-        )
+
+        # Sum to get durations (NaN values are excluded by default)
+        forecast_duration = forecast_mask_final.groupby(self.preserve_dims).sum()
+        target_duration = target_mask_final.groupby(self.preserve_dims).sum()
+
+        # TODO: product of time resolution hours and duration
         return super()._compute_metric(
-            forecast=forecast,
+            forecast=forecast_duration,
             target=target_duration,
-            preserve_dims=preserve_dims,
+            preserve_dims=self.preserve_dims,
         )
 
 

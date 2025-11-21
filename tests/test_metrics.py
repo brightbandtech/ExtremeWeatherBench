@@ -94,25 +94,6 @@ class TestComputeDocstringMetaclass:
         # Check all are unique
         assert len(set(docs)) == len(docs), "All docstrings should be unique"
 
-    def test_onset_and_duration_me_have_distinct_docstrings(self):
-        """Test that OnsetMeanError and DurationMeanError have their own distinct
-        docstrings."""
-        onset_metric = metrics.OnsetMeanError()
-        duration_metric = metrics.DurationMeanError()
-
-        onset_doc = onset_metric.compute_metric.__doc__
-        duration_doc = duration_metric.compute_metric.__doc__
-
-        assert onset_doc is not None
-        assert duration_doc is not None
-
-        # Should contain method-specific content
-        assert "OnsetMeanError" in onset_doc or "onset" in onset_doc.lower()
-        assert "DurationMeanError" in duration_doc or "duration" in duration_doc.lower()
-
-        # Should be different from each other
-        assert onset_doc != duration_doc
-
     def test_metric_without_custom_docstring(self):
         """Test metrics that might not have custom docstrings on _compute_metric."""
         me_metric = metrics.MeanError()
@@ -943,39 +924,111 @@ class TestMaximumLowestMeanAbsoluteError:
             assert isinstance(metric, metrics.MaximumLowestMeanAbsoluteError)
 
 
-class TestOnsetMeanError:
-    """Tests for the OnsetMeanError metric."""
+class TestDurationMeanError:
+    """Tests for the DurationMeanError metric.
 
-    def test_instantiation(self):
-        """Test that OnsetMeanError can be instantiated."""
-        metric = metrics.OnsetMeanError()
-        assert isinstance(metric, metrics.BaseMetric)
+    DurationMeanError works by:
+    1. Comparing data to climatology threshold (>= for heatwaves)
+    2. Creating binary masks (1 where condition met, 0 otherwise)
+    3. Computing MeanError = mean(forecast_mask - target_mask)
+    4. Averaging over all spatial and temporal dimensions
+    """
 
-    def test_onset_method_exists(self):
-        """Test that onset method exists and is callable."""
-        metric = metrics.OnsetMeanError()
-        assert hasattr(metric, "onset")
-        assert callable(metric.onset)
+    @staticmethod
+    def create_climatology():
+        """Create climatology with threshold at 300K."""
+        dayofyear = np.array([1])
+        hours = np.arange(0, 10) * 6
+        lats = np.array([40.0, 41.0])
+        lons = np.array([50.0, 51.0])
 
-    def test_compute_metric_structure(self):
-        """Test that _compute_metric returns expected structure."""
-        metric = metrics.OnsetMeanError()
+        return xr.DataArray(
+            np.full((len(dayofyear), len(hours), len(lats), len(lons)), 300.0),
+            dims=["dayofyear", "hour", "latitude", "longitude"],
+            coords={
+                "dayofyear": dayofyear,
+                "hour": hours,
+                "latitude": lats,
+                "longitude": lons,
+            },
+        )
 
-        # Create minimal test data
-        times = pd.date_range("2020-01-01", periods=8, freq="6h")
+    @staticmethod
+    def create_test_case(forecast_vals, target_vals, climatology):
+        """Create test data with specified temperature values.
+
+        Args:
+            forecast_vals: Array of temperature values for forecast
+            target_vals: Array of temperature values for target
+            climatology: Climatology dataset
+
+        Returns:
+            forecast, target xr.DataArrays
+        """
+        init_time = np.array(["2020-01-01T00:00:00"], dtype="datetime64[ns]")
+        lead_times = np.arange(0, 10) * np.timedelta64(6, "h")
+        valid_times = init_time[0] + lead_times
+        lats = climatology.latitude.values
+        lons = climatology.longitude.values
+
+        # Expand forecast_vals to spatial dimensions
+        forecast_values = np.tile(
+            forecast_vals[:, np.newaxis, np.newaxis], (1, len(lats), len(lons))
+        )
 
         forecast = xr.DataArray(
-            data=[[280, 285, 290, 291, 289, 286, 284, 282]],
-            dims=["init_time", "valid_time"],
-            coords={"init_time": [pd.Timestamp("2020-01-01")], "valid_time": times},
-            attrs={"forecast_resolution_hours": 6},
-        ).expand_dims(["latitude", "longitude"])
+            forecast_values[np.newaxis, :, :, :],
+            dims=["init_time", "valid_time", "latitude", "longitude"],
+            coords={
+                "init_time": init_time,
+                "valid_time": valid_times,
+                "latitude": lats,
+                "longitude": lons,
+            },
+        )
+
+        # Expand target_vals to spatial dimensions
+        target_values = np.tile(
+            target_vals[:, np.newaxis, np.newaxis], (1, len(lats), len(lons))
+        )
 
         target = xr.DataArray(
-            data=[280, 285, 290, 291, 289, 286, 284, 282],
-            dims=["valid_time"],
-            coords={"valid_time": times},
-        ).expand_dims(["latitude", "longitude"])
+            target_values,
+            dims=["valid_time", "latitude", "longitude"],
+            coords={
+                "valid_time": valid_times,
+                "latitude": lats,
+                "longitude": lons,
+            },
+        )
+
+        return forecast, target
+
+    def test_instantiation(self):
+        """Test that DurationME can be instantiated with threshold criteria."""
+        climatology = self.create_climatology()
+        metric = metrics.DurationME(threshold_criteria=climatology)
+        assert isinstance(metric, metrics.ME)
+        assert metric.name == "duration_me"
+
+    def test_base_metric_inheritance(self):
+        """Test that DurationME inherits from ME."""
+        climatology = self.create_climatology()
+        metric = metrics.DurationME(threshold_criteria=climatology)
+        assert isinstance(metric, metrics.ME)
+        assert isinstance(metric, metrics.BaseMetric)
+
+    def test_compute_applied_metric_structure(self):
+        """Test that _compute_applied_metric returns expected structure."""
+        climatology = self.create_climatology()
+        metric = metrics.DurationME(threshold_criteria=climatology)
+
+        forecast_vals = np.full(10, 305.0)
+        target_vals = np.full(10, 295.0)
+
+        forecast, target = self.create_test_case(
+            forecast_vals, target_vals, climatology
+        )
 
         # Test should not crash - actual computation might be complex
         try:
@@ -987,50 +1040,501 @@ class TestOnsetMeanError:
             # at least test instantiation works
             assert isinstance(metric, metrics.OnsetMeanError)
 
+    def test_me_1_0_all_forecast_exceeds(self):
+        """Test ME = 1.0 when all forecast exceeds, all target below."""
+        climatology = self.create_climatology()
+        forecast_vals = np.full(10, 305.0)  # All exceed 300K
+        target_vals = np.full(10, 295.0)  # All below 300K
 
-class TestDurationMeanError:
-    """Tests for the DurationMeanError metric."""
+        forecast, target = self.create_test_case(
+            forecast_vals, target_vals, climatology
+        )
 
-    def test_instantiation(self):
-        """Test that DurationMeanError can be instantiated."""
-        metric = metrics.DurationMeanError()
-        assert isinstance(metric, metrics.BaseMetric)
+        metric = metrics.DurationME(threshold_criteria=climatology)
+        result = metric.compute_metric(forecast=forecast, target=target)
 
-    def test_duration_method_exists(self):
-        """Test that duration method exists and is callable."""
-        metric = metrics.DurationMeanError()
-        assert hasattr(metric, "duration")
-        assert callable(metric.duration)
+        # Should be 1.0: forecast mask all 1s, target mask all 0s
+        assert np.isclose(result.values[0], 1.0)
 
-    def test_compute_metric_structure(self):
-        """Test that _compute_metric returns expected structure."""
-        metric = metrics.DurationMeanError()
+    def test_me_0_5_half_forecast_exceeds(self):
+        """Test ME = 0.5 when half forecast exceeds, all target below."""
+        climatology = self.create_climatology()
+        # First 5 timesteps exceed, last 5 below
+        forecast_vals = np.concatenate([np.full(5, 305.0), np.full(5, 295.0)])
+        target_vals = np.full(10, 295.0)  # All below 300K
 
-        # Create minimal test data
-        times = pd.date_range("2020-01-01", periods=8, freq="6h")
+        forecast, target = self.create_test_case(
+            forecast_vals, target_vals, climatology
+        )
+
+        metric = metrics.DurationME(threshold_criteria=climatology)
+        result = metric.compute_metric(forecast=forecast, target=target)
+
+        # Should be 0.5: forecast mask: 5 ones, 5 zeros; target: all zeros
+        assert np.isclose(result.values[0], 0.5)
+
+    def test_me_neg_1_0_all_target_exceeds(self):
+        """Test ME = -1.0 when all forecast below, all target exceeds."""
+        climatology = self.create_climatology()
+        forecast_vals = np.full(10, 295.0)  # All below 300K
+        target_vals = np.full(10, 305.0)  # All exceed 300K
+
+        forecast, target = self.create_test_case(
+            forecast_vals, target_vals, climatology
+        )
+
+        metric = metrics.DurationME(threshold_criteria=climatology)
+        result = metric.compute_metric(forecast=forecast, target=target)
+
+        # Should be -1.0: forecast mask all 0s, target mask all 1s
+        assert np.isclose(result.values[0], -1.0)
+
+    def test_me_0_0_forecast_equals_target(self):
+        """Test ME = 0.0 when forecast equals target."""
+        climatology = self.create_climatology()
+        forecast_vals = np.full(10, 305.0)  # All exceed 300K
+        target_vals = np.full(10, 305.0)  # All exceed 300K
+
+        forecast, target = self.create_test_case(
+            forecast_vals, target_vals, climatology
+        )
+
+        metric = metrics.DurationME(threshold_criteria=climatology)
+        result = metric.compute_metric(forecast=forecast, target=target)
+
+        # Should be 0.0: forecast and target masks both all 1s
+        assert np.isclose(result.values[0], 0.0)
+
+    def test_me_0_3_three_timesteps_differ(self):
+        """Test ME = 0.3 when 3/10 timesteps differ."""
+        climatology = self.create_climatology()
+        # First 3 exceed, rest below
+        forecast_vals = np.concatenate([np.full(3, 305.0), np.full(7, 295.0)])
+        target_vals = np.full(10, 295.0)  # All below 300K
+
+        forecast, target = self.create_test_case(
+            forecast_vals, target_vals, climatology
+        )
+
+        metric = metrics.DurationME(threshold_criteria=climatology)
+        result = metric.compute_metric(forecast=forecast, target=target)
+
+        # Should be 0.3: forecast mask: 3 ones, 7 zeros; target: all zeros
+        assert np.isclose(result.values[0], 0.3)
+
+    def test_me_with_lead_time_dimension(self):
+        """Test ME with forecast having lead_time dimension.
+
+        This tests the alternative forecast structure where:
+        - dims are (lead_time, valid_time, latitude, longitude)
+        - init_time is a coordinate computed from valid_time - lead_time
+
+        With this structure, the metric groups by init_time, and each
+        init_time may appear multiple times (from different lead_time/
+        valid_time combinations). The sum over these groups reflects
+        the overlap pattern.
+        """
+        climatology = self.create_climatology()
+
+        # Create test data with lead_time dimension
+        n_lead_times = 5
+        n_valid_times = 10
+        lats = climatology.latitude.values
+        lons = climatology.longitude.values
+
+        # Create valid_time and lead_time coordinates
+        valid_times = pd.date_range("2020-01-01", periods=n_valid_times, freq="6h")
+        lead_times = pd.timedelta_range(start="0h", periods=n_lead_times, freq="6h")
+
+        # Create init_time as 2D coordinate: init_time = valid_time - lead_time
+        init_time_2d = np.array([[vt - lt for vt in valid_times] for lt in lead_times])
+
+        # Create forecast: all values exceed threshold (305K > 300K)
+        forecast_values = np.full(
+            (n_lead_times, n_valid_times, len(lats), len(lons)), 305.0
+        )
 
         forecast = xr.DataArray(
-            data=[[280, 285, 290, 291, 289, 286, 284, 282]],
-            dims=["init_time", "valid_time"],
-            coords={"init_time": [pd.Timestamp("2020-01-01")], "valid_time": times},
-            attrs={"forecast_resolution_hours": 6},
-        ).expand_dims(["latitude", "longitude"])
+            forecast_values,
+            dims=["lead_time", "valid_time", "latitude", "longitude"],
+            coords={
+                "lead_time": lead_times,
+                "valid_time": valid_times,
+                "latitude": lats,
+                "longitude": lons,
+                "init_time": (["lead_time", "valid_time"], init_time_2d),
+            },
+        )
+
+        # Create target: all values below threshold (295K < 300K)
+        target_values = np.full((n_valid_times, len(lats), len(lons)), 295.0)
 
         target = xr.DataArray(
-            data=[280, 285, 290, 291, 289, 286, 284, 282],
-            dims=["valid_time"],
-            coords={"valid_time": times},
-        ).expand_dims(["latitude", "longitude"])
+            target_values,
+            dims=["valid_time", "latitude", "longitude"],
+            coords={
+                "valid_time": valid_times,
+                "latitude": lats,
+                "longitude": lons,
+            },
+        )
 
-        # Test should not crash - actual computation might be complex
-        try:
-            result = metric._compute_metric(forecast, target)
-            # If it succeeds, check it returns something
-            assert result is not None
-        except Exception:
-            # If computation fails due to data structure issues,
-            # at least test instantiation works
-            assert isinstance(metric, metrics.DurationMeanError)
+        # Compute metric
+        metric = metrics.DurationMeanError(threshold_criteria=climatology)
+        result = metric.compute_metric(forecast=forecast, target=target)
+
+        # Result will have init_time dimension from preserve_dims
+        assert result.dims == ("init_time",)
+
+        # With lead_time structure, each init_time has different overlap:
+        # - Early/late init_times appear fewer times (edge effects)
+        # - Middle init_times appear more times (up to n_lead_times)
+        # Expected pattern: [1, 2, 3, 4, 5, 5, 5, 5, 5, 5, 4, 3, 2, 1]
+        # This reflects the number of (lead_time, valid_time) combos per init
+
+        # All values should be positive (forecast exceeds, target doesn't)
+        assert np.all(result.values > 0)
+
+        # Middle init_times should have the maximum value (n_lead_times)
+        max_value = np.max(result.values)
+        assert max_value == n_lead_times
+
+        # Edge init_times should have value 1 (only one combination)
+        assert result.values[0] == 1
+        assert result.values[-1] == 1
+
+    def test_me_with_lead_time_partial_target_exceedance(self):
+        """Test ME with lead_time dims where target partially exceeds.
+
+        This tests the alternative forecast structure with:
+        - dims are (lead_time, valid_time, latitude, longitude)
+        - init_time is a coordinate computed from valid_time - lead_time
+        - Both forecast and target have some exceedances
+
+        If forecast exceeds at all times and target exceeds at 1/10 times,
+        the difference per point is:
+        - 9 timesteps: forecast=1, target=0, diff=1
+        - 1 timestep: forecast=1, target=1, diff=0
+        With groupby, this gets summed across overlapping init_times.
+        """
+        climatology = self.create_climatology()
+
+        # Create test data with lead_time dimension
+        n_lead_times = 5
+        n_valid_times = 10
+        lats = climatology.latitude.values
+        lons = climatology.longitude.values
+
+        # Create valid_time and lead_time coordinates
+        valid_times = pd.date_range("2020-01-01", periods=n_valid_times, freq="6h")
+        lead_times = pd.timedelta_range(start="0h", periods=n_lead_times, freq="6h")
+
+        # Create init_time as 2D coordinate: init_time = valid_time - lead_time
+        init_time_2d = np.array([[vt - lt for vt in valid_times] for lt in lead_times])
+
+        # Create forecast: all values exceed threshold (305K > 300K)
+        forecast_values = np.full(
+            (n_lead_times, n_valid_times, len(lats), len(lons)), 305.0
+        )
+
+        forecast = xr.DataArray(
+            forecast_values,
+            dims=["lead_time", "valid_time", "latitude", "longitude"],
+            coords={
+                "lead_time": lead_times,
+                "valid_time": valid_times,
+                "latitude": lats,
+                "longitude": lons,
+                "init_time": (["lead_time", "valid_time"], init_time_2d),
+            },
+        )
+
+        # Create target: first timestep exceeds (305K), rest below (295K)
+        target_values = np.full((n_valid_times, len(lats), len(lons)), 295.0)
+        target_values[0, :, :] = 305.0  # First timestep exceeds threshold
+
+        target = xr.DataArray(
+            target_values,
+            dims=["valid_time", "latitude", "longitude"],
+            coords={
+                "valid_time": valid_times,
+                "latitude": lats,
+                "longitude": lons,
+            },
+        )
+
+        # Compute metric
+        metric = metrics.DurationME(threshold_criteria=climatology)
+        result = metric.compute_metric(forecast=forecast, target=target)
+
+        # Result will have init_time dimension from preserve_dims
+        assert result.dims == ("init_time",)
+
+        # First init_time (2020-01-01) should have lower ME
+        # because target also exceeds at that time (diff=0)
+        # Later init_times should have higher ME (only forecast exceeds)
+        first_init_me = result.values[0]
+        middle_init_me = result.values[len(result) // 2]
+
+        # First init should be 0 (both forecast and target exceed at that time)
+        # It only has one valid_time (2020-01-01), which is when target exceeds
+        assert first_init_me == 0.0
+
+        # Middle init_times should have positive ME
+        # They have multiple valid_times where forecast=1, target=0
+        assert middle_init_me > 0
+
+        # All values should be non-negative (forecast always >= target in mask)
+        assert np.all(result.values >= 0)
+
+    def test_me_with_nans_no_target_exceedance(self):
+        """Test ME with NaNs when no target values exceed threshold.
+
+        Forecast has NaNs at specific locations, and target never exceeds.
+        NaNs should be excluded from the calculation.
+        """
+        climatology = self.create_climatology()
+
+        # All forecast values exceed threshold (305K)
+        forecast_vals = np.full(10, 305.0)
+        target_vals = np.full(10, 295.0)  # No exceedance
+
+        forecast, target = self.create_test_case(
+            forecast_vals, target_vals, climatology
+        )
+
+        # Add NaNs to forecast at specific timesteps
+        forecast_with_nans = forecast.copy()
+        forecast_with_nans.values[0, 2:4, 0, 0] = np.nan  # timesteps 2-3, first loc
+
+        metric = metrics.DurationME(threshold_criteria=climatology)
+        result = metric.compute_metric(forecast=forecast_with_nans, target=target)
+
+        # Should still be positive (forecast exceeds where not NaN)
+        # Result is reduced to scalar per init_time
+        mean_result = float(result.values[0])
+        assert mean_result > 0
+        # Most positions have diff=1, but NaN positions excluded from calc
+        # So result should be less than 1.0 (e.g., 0.95 = 38/40 positions)
+        assert mean_result < 1.0
+
+    def test_me_with_nans_one_target_exceedance(self):
+        """Test ME with NaNs when one target value exceeds threshold.
+
+        Forecast has NaNs and all non-NaN values exceed.
+        Target has one timestep that exceeds.
+        """
+        climatology = self.create_climatology()
+
+        # All forecast values exceed threshold (305K)
+        forecast_vals = np.full(10, 305.0)
+        # First target value exceeds, rest below
+        target_vals = np.full(10, 295.0)
+        target_vals[0] = 305.0
+
+        forecast, target = self.create_test_case(
+            forecast_vals, target_vals, climatology
+        )
+
+        # Add NaNs to forecast at later timesteps
+        forecast_with_nans = forecast.copy()
+        forecast_with_nans.values[0, 5:7, 0, 0] = np.nan  # timesteps 5-6, first loc
+
+        metric = metrics.DurationME(threshold_criteria=climatology)
+        result = metric.compute_metric(forecast=forecast_with_nans, target=target)
+
+        # Should be less than 1.0 because:
+        # - timestep 0: both exceed (diff=0)
+        # - timesteps 1-4, 7-9: forecast exceeds, target doesn't (diff=1)
+        # - timesteps 5-6: NaN positions excluded
+        assert result.values[0] < 1.0
+        assert result.values[0] > 0
+
+    def test_me_with_nans_all_but_nan_exceed(self):
+        """Test ME when all non-NaN forecast/target values exceed threshold.
+
+        Both forecast and target exceed at all non-NaN positions.
+        Should result in ME close to 0.
+        """
+        climatology = self.create_climatology()
+
+        # All values exceed threshold (305K)
+        forecast_vals = np.full(10, 305.0)
+        target_vals = np.full(10, 305.0)
+
+        forecast, target = self.create_test_case(
+            forecast_vals, target_vals, climatology
+        )
+
+        # Add NaNs to forecast at specific positions
+        forecast_with_nans = forecast.copy()
+        forecast_with_nans.values[0, 3:5, :, :] = np.nan  # timesteps 3-4, all locs
+
+        metric = metrics.DurationME(threshold_criteria=climatology)
+        result = metric.compute_metric(forecast=forecast_with_nans, target=target)
+
+        # Should be 0 because wherever both have valid data, both exceed
+        # NaN positions are excluded from both forecast and target comparison
+        assert np.isclose(result.values[0], 0.0)
+
+    def test_me_with_nans_mixed_pattern(self):
+        """Test ME with NaNs and mixed exceedance pattern.
+
+        Complex scenario with NaNs at different locations and varying
+        exceedance patterns across timesteps and spatial points.
+        """
+        climatology = self.create_climatology()
+
+        # Forecast: first 6 exceed, last 4 below
+        forecast_vals = np.concatenate([np.full(6, 305.0), np.full(4, 295.0)])
+        # Target: first 3 exceed, rest below
+        target_vals = np.concatenate([np.full(3, 305.0), np.full(7, 295.0)])
+
+        forecast, target = self.create_test_case(
+            forecast_vals, target_vals, climatology
+        )
+
+        # Add NaNs to forecast at various positions
+        forecast_with_nans = forecast.copy()
+        # NaN at timestep 1 (both would exceed)
+        forecast_with_nans.values[0, 1, 0, 0] = np.nan
+        # NaN at timestep 4 (forecast exceeds, target doesn't)
+        forecast_with_nans.values[0, 4, 1, 1] = np.nan
+        # NaN at timestep 8 (neither exceeds)
+        forecast_with_nans.values[0, 8, 0, 1] = np.nan
+
+        metric = metrics.DurationME(threshold_criteria=climatology)
+        result = metric.compute_metric(forecast=forecast_with_nans, target=target)
+
+        # Result should be positive but less than previous tests
+        # because some positions where forecast>target are NaN
+        assert result.values[0] > 0
+        assert result.values[0] < 1.0
+
+        # Verify that the computation completed without errors
+        assert not np.isnan(result.values[0])
+
+    def test_instantiation_with_float_threshold_criteria(self):
+        """Test that DurationME can be instantiated with float threshold criteria."""
+        metric = metrics.DurationME(threshold_criteria=300.0)
+        assert isinstance(metric, metrics.ME)
+        assert metric.name == "duration_me"
+        assert metric.threshold_criteria == 300.0
+
+    def test_me_with_float_threshold_all_forecast_exceeds(self):
+        """Test ME with float threshold when all forecast exceeds."""
+        climatology = self.create_climatology()
+        forecast_vals = np.full(10, 305.0)  # All exceed 300.0
+        target_vals = np.full(10, 295.0)  # All below 300.0
+
+        forecast, target = self.create_test_case(
+            forecast_vals, target_vals, climatology
+        )
+
+        metric = metrics.DurationME(threshold_criteria=300.0)
+        result = metric.compute_metric(forecast=forecast, target=target)
+
+        # Should be 1.0: forecast mask all 1s, target mask all 0s
+        assert np.isclose(result.values[0], 1.0)
+
+    def test_me_with_float_threshold_mixed(self):
+        """Test ME with float threshold and mixed exceedance."""
+        climatology = self.create_climatology()
+        # First 6 exceed 300.0, last 4 below
+        forecast_vals = np.concatenate([np.full(6, 305.0), np.full(4, 295.0)])
+        # First 3 exceed 300.0, rest below
+        target_vals = np.concatenate([np.full(3, 305.0), np.full(7, 295.0)])
+
+        forecast, target = self.create_test_case(
+            forecast_vals, target_vals, climatology
+        )
+
+        metric = metrics.DurationME(threshold_criteria=300.0)
+        result = metric.compute_metric(forecast=forecast, target=target)
+
+        # Forecast: 6 timesteps exceed, Target: 3 timesteps exceed
+        # ME = (6 - 3) / 10 = 0.3
+        assert np.isclose(result.values[0], 0.3)
+
+    def test_float_and_climatology_produce_same_result(self):
+        """Test that float threshold and equivalent climatology give same result."""
+        climatology = self.create_climatology()
+        forecast_vals = np.full(10, 305.0)
+        target_vals = np.full(10, 295.0)
+
+        forecast, target = self.create_test_case(
+            forecast_vals, target_vals, climatology
+        )
+
+        # Test with climatology (constant 300K)
+        metric_clim = metrics.DurationME(threshold_criteria=climatology)
+        result_clim = metric_clim.compute_metric(forecast=forecast, target=target)
+
+        # Test with float threshold (300.0)
+        metric_float = metrics.DurationME(threshold_criteria=300.0)
+        result_float = metric_float.compute_metric(forecast=forecast, target=target)
+
+        # Results should be the same
+        assert np.isclose(result_clim.values[0], result_float.values[0])
+
+    def test_sparse_array_handling(self):
+        """Test that sparse arrays are properly densified to avoid mixing errors."""
+        import sparse
+
+        climatology = self.create_climatology()
+        forecast_vals = np.full(10, 305.0)
+        target_vals = np.full(10, 295.0)
+
+        forecast, target = self.create_test_case(
+            forecast_vals, target_vals, climatology
+        )
+
+        # Convert forecast data to sparse array
+        forecast_sparse = forecast.copy()
+        forecast_sparse.data = sparse.COO.from_numpy(forecast.values)
+
+        # Convert target data to sparse array
+        target_sparse = target.copy()
+        target_sparse.data = sparse.COO.from_numpy(target.values)
+
+        # Test with sparse data - should not raise "All arrays must be instances of
+        # SparseArray"
+        metric = metrics.DurationME(threshold_criteria=300.0)
+        result = metric.compute_metric(forecast=forecast_sparse, target=target_sparse)
+
+        # Result should be valid (not NaN) and correct
+        assert not np.isnan(result.values[0])
+        assert np.isclose(
+            result.values[0], 1.0
+        )  # All forecast exceeds, all target below
+
+    def test_sparse_array_with_climatology(self):
+        """Test sparse arrays with climatology threshold criteria."""
+        import sparse
+
+        climatology = self.create_climatology()
+        forecast_vals = np.concatenate([np.full(6, 305.0), np.full(4, 295.0)])
+        target_vals = np.concatenate([np.full(3, 305.0), np.full(7, 295.0)])
+
+        forecast, target = self.create_test_case(
+            forecast_vals, target_vals, climatology
+        )
+
+        # Convert to sparse arrays
+        forecast_sparse = forecast.copy()
+        forecast_sparse.data = sparse.COO.from_numpy(forecast.values)
+
+        target_sparse = target.copy()
+        target_sparse.data = sparse.COO.from_numpy(target.values)
+
+        # Test with climatology and sparse data
+        metric = metrics.DurationME(threshold_criteria=climatology)
+        result = metric.compute_metric(forecast=forecast_sparse, target=target_sparse)
+
+        # Result should be valid
+        assert not np.isnan(result.values[0])
+        # Forecast: 6 timesteps exceed, Target: 3 timesteps exceed
+        assert np.isclose(result.values[0], 0.3)
 
 
 class TestThresholdMetric:
@@ -1488,7 +1992,11 @@ class TestMetricIntegration:
         ]
 
         for metric_class in all_metric_classes:
-            metric = metric_class()
+            # DurationME requires threshold criteria parameter
+            if metric_class.__name__ == "DurationME":
+                metric = metric_class(threshold_criteria=300.0)
+            else:
+                metric = metric_class()
             assert hasattr(metric, "_compute_metric")
             assert hasattr(metric, "compute_metric")
             assert hasattr(metric, "name")
