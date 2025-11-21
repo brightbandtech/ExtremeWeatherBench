@@ -23,35 +23,36 @@ OUTPUT_COLUMNS = [
 ]
 
 DEFAULT_VARIABLE_NAMES = [
-    "valid_time",  # valid time of the data
-    "lead_time",  # lead time of the forecast
-    "init_time",  # initialization time of the forecast model; t0
-    "level",  # pressure level of the data
-    "latitude",
-    "longitude",
-    "storm_id",  # storm identifier for data such as tropical cyclones
     "100m_eastward_wind",  # 100-meter u component of wind
     "100m_northward_wind",  # 100-meter v component of wind
+    "air_pressure",
+    "air_pressure_at_mean_sea_level",
+    "air_temperature",
+    "dewpoint_temperature",
+    "eastward_wind",
+    "geopotential",
+    "geopotential_height",
+    "init_time",  # initialization time of the forecast model; t0
+    "latitude",
+    "lead_time",  # lead time of the forecast
+    "level",  # pressure level of the data
+    "longitude",
+    "northward_wind",
+    "relative_humidity",
+    "specific_humidity",
+    "storm_id",  # storm identifier for data such as tropical cyclones
+    "surface_air_pressure_at_mean_sea_level",  # mean sea level pressure
     "surface_air_temperature",  # 2-meter temperature
+    "surface_dewpoint_temperature",  # 2-meter dewpoint temperature
     "surface_eastward_wind",  # 10-meter u component of wind
     "surface_northward_wind",  # 10-meter v component of wind
-    "surface_wind_speed",  # 10-meter wind speed
-    "surface_wind_from_direction",  # 10-meter wind direction (degrees from)
     "surface_relative_humidity",  # 2-meter relative humidity
     "surface_specific_humidity",  # 2-meter specific humidity
-    "surface_dewpoint_temperature",  # 2-meter dewpoint temperature
-    "surface_air_pressure_at_mean_sea_level",  # mean sea level pressure
-    "air_temperature",
-    "specific_humidity",
-    "dewpoint_temperature",
-    "air_pressure_at_mean_sea_level",
-    "eastward_wind",
-    "northward_wind",
-    "wind_speed",
+    "surface_wind_from_direction",  # 10-meter wind direction (degrees from)
+    "surface_wind_speed",  # 10-meter wind speed
+    "valid_time",  # valid time of the data
     "wind_from_direction",
-    "relative_humidity",
-    "geopotential_height",
-    "geopotential",
+    "wind_speed",
 ]
 
 
