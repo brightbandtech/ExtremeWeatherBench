@@ -1020,7 +1020,7 @@ class TestComputeCaseOperator:
         sample_case_operator.metric_list = [mock_metric]
 
         with mock.patch(
-            "extremeweatherbench.evaluate._compute_and_maybe_cache"
+            "extremeweatherbench.utils.compute_and_maybe_cache"
         ) as mock_compute_cache:
             mock_compute_cache.return_value = [
                 sample_forecast_dataset,
@@ -1381,36 +1381,94 @@ class TestPipelineFunctions:
         with pytest.raises(AttributeError, match="'str' object has no attribute"):
             evaluate.run_pipeline(sample_case_operator.case_metadata, "invalid")
 
-    def test_compute_and_maybe_cache(
-        self, sample_forecast_dataset, sample_target_dataset
+    def test_maybe_compute_and_maybe_cache_with_precompute(
+        self, sample_forecast_dataset, sample_target_dataset, sample_individual_case
     ):
-        """Test _compute_and_maybe_cache function."""
+        """Test maybe_compute_and_maybe_cache with pre_compute=True."""
+        from extremeweatherbench import utils
+
         # Create lazy datasets
         lazy_forecast = sample_forecast_dataset.chunk()
         lazy_target = sample_target_dataset.chunk()
 
-        result = evaluate._compute_and_maybe_cache(
-            lazy_forecast, lazy_target, cache_dir=None
+        # Add names to datasets
+        lazy_forecast.attrs["name"] = "forecast"
+        lazy_target.attrs["name"] = "target"
+
+        result = utils.maybe_compute_and_maybe_cache(
+            lazy_forecast,
+            lazy_target,
+            pre_compute=True,
+            cache_dir=None,
+            case_metadata=sample_individual_case,
         )
 
         assert len(result) == 2
         assert isinstance(result[0], xr.Dataset)
         assert isinstance(result[1], xr.Dataset)
+        # Should be computed
+        assert not hasattr(
+            result[0].data_vars[list(result[0].data_vars)[0]].data, "chunks"
+        )
 
-    def test_compute_and_maybe_cache_with_cache_dir(
-        self, sample_forecast_dataset, sample_target_dataset
+    def test_maybe_compute_and_maybe_cache_with_cache_dir(
+        self, sample_forecast_dataset, sample_target_dataset, sample_individual_case
     ):
-        """Test _compute_and_maybe_cache with cache directory (should raise
-        NotImplementedError)."""
+        """Test maybe_compute_and_maybe_cache with cache directory."""
+        from extremeweatherbench import utils
+
         with tempfile.TemporaryDirectory() as temp_dir:
             cache_dir = pathlib.Path(temp_dir)
 
-            with pytest.raises(
-                NotImplementedError, match="Caching is not implemented yet"
-            ):
-                evaluate._compute_and_maybe_cache(
-                    sample_forecast_dataset, sample_target_dataset, cache_dir=cache_dir
-                )
+            # Add names to datasets for caching
+            sample_forecast_dataset.attrs["name"] = "forecast"
+            sample_target_dataset.attrs["name"] = "target"
+
+            result = utils.maybe_compute_and_maybe_cache(
+                sample_forecast_dataset,
+                sample_target_dataset,
+                pre_compute=False,
+                cache_dir=cache_dir,
+                case_metadata=sample_individual_case,
+            )
+
+            # Verify result is returned correctly
+            assert len(result) == 2
+            assert isinstance(result[0], xr.Dataset)
+            assert isinstance(result[1], xr.Dataset)
+
+            # Verify cache files were created
+            assert len(list(cache_dir.glob("*.nc"))) == 2
+
+    def test_maybe_compute_and_maybe_cache_no_op(
+        self, sample_forecast_dataset, sample_target_dataset, sample_individual_case
+    ):
+        """Test maybe_compute_and_maybe_cache as no-op (lazy preserved)."""
+        from extremeweatherbench import utils
+
+        # Create lazy datasets
+        lazy_forecast = sample_forecast_dataset.chunk()
+        lazy_target = sample_target_dataset.chunk()
+
+        # Add names to datasets
+        lazy_forecast.attrs["name"] = "forecast"
+        lazy_target.attrs["name"] = "target"
+
+        # Call with both flags False/None (should be no-op)
+        result = utils.maybe_compute_and_maybe_cache(
+            lazy_forecast,
+            lazy_target,
+            pre_compute=False,
+            cache_dir=None,
+            case_metadata=sample_individual_case,
+        )
+
+        assert len(result) == 2
+        assert isinstance(result[0], xr.Dataset)
+        assert isinstance(result[1], xr.Dataset)
+        # Should still be lazy
+        first_var = list(result[0].data_vars)[0]
+        assert hasattr(result[0].data_vars[first_var].data, "chunks")
 
 
 class TestMetricEvaluation:

@@ -7,7 +7,7 @@ import inspect
 import logging
 import operator
 import pathlib
-from typing import Any, Callable, Literal, Optional, Sequence, Union
+from typing import Any, Callable, Literal, Optional, Sequence, Union, TYPE_CHECKING
 
 import cartopy.io.shapereader as shpreader
 import numpy as np
@@ -20,6 +20,9 @@ import tqdm
 import xarray as xr
 import yaml  # type: ignore[import]
 from joblib import Parallel
+
+if TYPE_CHECKING:
+    from extremeweatherbench import cases
 
 logger = logging.getLogger(__name__)
 
@@ -731,3 +734,44 @@ def load_land_geometry(resolution: str = "10m") -> shapely.geometry.Polygon:
         pass
 
     return land_union
+
+
+def maybe_compute_and_maybe_cache(
+    *datasets: xr.Dataset,
+    pre_compute: bool = False,
+    cache_dir: Optional[Union[str, pathlib.Path]] = None,
+    case_metadata: "cases.IndividualCase",
+) -> list[xr.Dataset]:
+    """Compute and/or cache datasets based on flags.
+
+    Args:
+        *datasets: The datasets to compute and cache.
+        pre_compute: Whether to eagerly compute the datasets. If False
+            and cache_dir is None, datasets remain lazy.
+        cache_dir: The directory to cache the datasets. If provided,
+            datasets will be computed and cached. Default None.
+        case_metadata: The case metadata for naming cached files.
+
+    Returns:
+        The computed datasets if pre_compute or cache_dir is set,
+        otherwise the original datasets (potentially lazy).
+    """
+    # Compute if pre_compute is True OR caching is enabled
+    if pre_compute or cache_dir is not None:
+        logger.info("Computing datasets...")
+        computed_datasets = [dataset.compute() for dataset in datasets]
+    else:
+        # Return datasets as-is (lazy if they were lazy)
+        computed_datasets = list(datasets)
+
+    # Cache if cache_dir is provided
+    if cache_dir:
+        cache_path = pathlib.Path(cache_dir)
+        for i, dataset in enumerate(computed_datasets):
+            dataset_name = dataset.attrs.get("name", f"dataset_{i}")
+            dataset.to_netcdf(
+                cache_path
+                / f"case_id_number_{case_metadata.case_id_number}_{dataset_name}.nc"
+            )
+
+    return computed_datasets
