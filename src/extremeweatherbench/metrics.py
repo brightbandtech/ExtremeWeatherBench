@@ -708,7 +708,22 @@ class MeanAbsoluteError(BaseMetric):
         The Mean Absolute Error between the forecast and target as a DataArray.
     """
 
-    def __init__(self, name: str = "MeanAbsoluteError", *args, **kwargs):
+    def __init__(
+        self,
+        name: str = "MeanAbsoluteError",
+        interval_where_one: Optional[
+            tuple[int | float | xr.DataArray, int | float | xr.DataArray]
+        ] = None,
+        interval_where_positive: Optional[
+            tuple[int | float | xr.DataArray, int | float | xr.DataArray]
+        ] = None,
+        weights: Optional[xr.DataArray] = None,
+        *args,
+        **kwargs,
+    ):
+        self.interval_where_one = interval_where_one
+        self.interval_where_positive = interval_where_positive
+        self.weights = weights
         super().__init__(name, *args, **kwargs)
 
     def _compute_metric(
@@ -728,6 +743,15 @@ class MeanAbsoluteError(BaseMetric):
         Returns:
             The computed Mean Absolute Error result.
         """
+        if self.interval_where_one is not None:
+            return scores.continuous.tw_absolute_error(
+                forecast,
+                target,
+                interval_where_one=self.interval_where_one,
+                interval_where_positive=self.interval_where_positive,
+                weights=self.weights,
+                preserve_dims=self.preserve_dims,
+            )
         return scores.continuous.mae(forecast, target, preserve_dims=self.preserve_dims)
 
 
