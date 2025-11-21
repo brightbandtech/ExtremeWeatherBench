@@ -30,6 +30,7 @@ dependencies = [
     "eccodes==2.42.0",
     "frozenlist==1.5.0",
     "pyogrio==0.10.0",
+    "scikit-image>=0.25.2",
 ]
 
 [project.optional-dependencies]
