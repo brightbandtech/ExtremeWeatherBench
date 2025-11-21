@@ -695,6 +695,45 @@ class Accuracy(ThresholdMetric):
         return transformed.accuracy()
 
 
+class MeanSquaredError(BaseMetric):
+    """Mean Squared Error metric."""
+
+    def __init__(
+        self,
+        name: str = "MeanSquaredError",
+        interval_where_one: Optional[
+            tuple[int | float | xr.DataArray, int | float | xr.DataArray]
+        ] = None,
+        interval_where_positive: Optional[
+            tuple[int | float | xr.DataArray, int | float | xr.DataArray]
+        ] = None,
+        weights: Optional[xr.DataArray] = None,
+        *args,
+        **kwargs,
+    ):
+        super().__init__(name, *args, **kwargs)
+        self.interval_where_one = interval_where_one
+        self.interval_where_positive = interval_where_positive
+        self.weights = weights
+
+    def _compute_metric(
+        self,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
+        **kwargs: Any,
+    ) -> Any:
+        if self.interval_where_one is not None:
+            return scores.continuous.tw_squared_error(
+                forecast,
+                target,
+                interval_where_one=self.interval_where_one,
+                interval_where_positive=self.interval_where_positive,
+                weights=self.weights,
+                preserve_dims=self.preserve_dims,
+            )
+        return scores.continuous.mse(forecast, target, preserve_dims=self.preserve_dims)
+
+
 class MeanAbsoluteError(BaseMetric):
     """Mean Absolute Error metric.
 

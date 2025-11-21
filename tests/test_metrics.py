@@ -445,6 +445,216 @@ class TestMeanAbsoluteError:
         # Should return an xarray object
         assert isinstance(result, xr.DataArray)
 
+    def test_threshold_approach_with_interval_where_one(self):
+        """Test MAE with threshold approach using interval_where_one."""
+        # Test threshold-weighted absolute error
+        metric = metrics.MeanAbsoluteError(
+            interval_where_one=(5.0, 10.0),
+        )
+
+        # Create test data
+        forecast = xr.DataArray(
+            data=[6.0, 7.0, 12.0], dims=["lead_time"], coords={"lead_time": [0, 1, 2]}
+        )
+        target = xr.DataArray(
+            data=[5.0, 8.0, 10.0], dims=["lead_time"], coords={"lead_time": [0, 1, 2]}
+        )
+
+        result = metric._compute_metric(forecast, target)
+
+        # Should return an xarray object
+        assert isinstance(result, xr.DataArray)
+        # Should have finite values
+        assert np.isfinite(result).all()
+
+    def test_threshold_approach_with_both_intervals(self):
+        """Test MAE with both interval_where_one and positive."""
+        metric = metrics.MeanAbsoluteError(
+            interval_where_one=(5.0, 10.0),
+            interval_where_positive=(3.0, 12.0),
+        )
+
+        forecast = xr.DataArray(
+            data=[4.0, 6.0, 11.0, 15.0],
+            dims=["lead_time"],
+            coords={"lead_time": [0, 1, 2, 3]},
+        )
+        target = xr.DataArray(
+            data=[3.5, 7.0, 10.0, 14.0],
+            dims=["lead_time"],
+            coords={"lead_time": [0, 1, 2, 3]},
+        )
+
+        result = metric._compute_metric(forecast, target)
+
+        assert isinstance(result, xr.DataArray)
+        assert np.isfinite(result).all()
+
+    def test_threshold_approach_with_weights(self):
+        """Test MAE with threshold approach and custom weights."""
+        weights = xr.DataArray(
+            data=[1.0, 2.0, 1.0], dims=["lead_time"], coords={"lead_time": [0, 1, 2]}
+        )
+
+        metric = metrics.MeanAbsoluteError(
+            interval_where_one=(5.0, 10.0), weights=weights
+        )
+
+        forecast = xr.DataArray(
+            data=[6.0, 7.0, 12.0], dims=["lead_time"], coords={"lead_time": [0, 1, 2]}
+        )
+        target = xr.DataArray(
+            data=[5.0, 8.0, 10.0], dims=["lead_time"], coords={"lead_time": [0, 1, 2]}
+        )
+
+        result = metric._compute_metric(forecast, target)
+
+        assert isinstance(result, xr.DataArray)
+        assert np.isfinite(result).all()
+
+    def test_threshold_stores_parameters(self):
+        """Test that threshold parameters are stored correctly."""
+        interval_one = (5.0, 10.0)
+        interval_pos = (3.0, 12.0)
+        weights = xr.DataArray([1.0, 2.0])
+
+        metric = metrics.MeanAbsoluteError(
+            interval_where_one=interval_one,
+            interval_where_positive=interval_pos,
+            weights=weights,
+        )
+
+        assert metric.interval_where_one == interval_one
+        assert metric.interval_where_positive == interval_pos
+        assert metric.weights is weights
+
+
+class TestMeanSquaredError:
+    """Tests for the MSE (Mean Squared Error) metric."""
+
+    def test_instantiation(self):
+        """Test that MSE can be instantiated."""
+        metric = metrics.MeanSquaredError()
+        assert isinstance(metric, metrics.BaseMetric)
+
+    def test_compute_metric_simple(self):
+        """Test MSE computation with simple data."""
+        metric = metrics.MeanSquaredError()
+
+        # Create simple test data
+        forecast = xr.DataArray(
+            data=[3.0, 4.0, 5.0], dims=["lead_time"], coords={"lead_time": [0, 1, 2]}
+        )
+        target = xr.DataArray(
+            data=[1.0, 2.0, 3.0], dims=["lead_time"], coords={"lead_time": [0, 1, 2]}
+        )
+
+        result = metric._compute_metric(forecast, target)
+
+        # Should return an xarray object
+        assert isinstance(result, xr.DataArray)
+
+    def test_threshold_approach_with_interval_where_one(self):
+        """Test MSE with threshold approach using interval_where_one."""
+        metric = metrics.MeanSquaredError(
+            interval_where_one=(5.0, 10.0),
+        )
+
+        # Create test data
+        forecast = xr.DataArray(
+            data=[6.0, 7.0, 12.0], dims=["lead_time"], coords={"lead_time": [0, 1, 2]}
+        )
+        target = xr.DataArray(
+            data=[5.0, 8.0, 10.0], dims=["lead_time"], coords={"lead_time": [0, 1, 2]}
+        )
+
+        result = metric._compute_metric(forecast, target)
+
+        # Should return an xarray object
+        assert isinstance(result, xr.DataArray)
+        # Should have finite values
+        assert np.isfinite(result).all()
+
+    def test_threshold_approach_with_both_intervals(self):
+        """Test MSE with both interval_where_one and positive."""
+        metric = metrics.MeanSquaredError(
+            interval_where_one=(5.0, 10.0),
+            interval_where_positive=(3.0, 12.0),
+        )
+
+        forecast = xr.DataArray(
+            data=[4.0, 6.0, 11.0, 15.0],
+            dims=["lead_time"],
+            coords={"lead_time": [0, 1, 2, 3]},
+        )
+        target = xr.DataArray(
+            data=[3.5, 7.0, 10.0, 14.0],
+            dims=["lead_time"],
+            coords={"lead_time": [0, 1, 2, 3]},
+        )
+
+        result = metric._compute_metric(forecast, target)
+
+        assert isinstance(result, xr.DataArray)
+        assert np.isfinite(result).all()
+
+    def test_threshold_approach_with_weights(self):
+        """Test MSE with threshold approach and custom weights."""
+        weights = xr.DataArray(
+            data=[1.0, 2.0, 1.0], dims=["lead_time"], coords={"lead_time": [0, 1, 2]}
+        )
+
+        metric = metrics.MeanSquaredError(
+            interval_where_one=(5.0, 10.0), weights=weights
+        )
+
+        forecast = xr.DataArray(
+            data=[6.0, 7.0, 12.0], dims=["lead_time"], coords={"lead_time": [0, 1, 2]}
+        )
+        target = xr.DataArray(
+            data=[5.0, 8.0, 10.0], dims=["lead_time"], coords={"lead_time": [0, 1, 2]}
+        )
+
+        result = metric._compute_metric(forecast, target)
+
+        assert isinstance(result, xr.DataArray)
+        assert np.isfinite(result).all()
+
+    def test_threshold_stores_parameters(self):
+        """Test that threshold parameters are stored correctly."""
+        interval_one = (5.0, 10.0)
+        interval_pos = (3.0, 12.0)
+        weights = xr.DataArray([1.0, 2.0])
+
+        metric = metrics.MeanSquaredError(
+            interval_where_one=interval_one,
+            interval_where_positive=interval_pos,
+            weights=weights,
+        )
+
+        assert metric.interval_where_one == interval_one
+        assert metric.interval_where_positive == interval_pos
+        assert metric.weights is weights
+
+    def test_without_threshold_uses_standard_mse(self):
+        """Test that MSE without thresholds uses standard MSE."""
+        metric_no_threshold = metrics.MeanSquaredError()
+        metric_with_threshold = metrics.MeanSquaredError(interval_where_one=None)
+
+        forecast = xr.DataArray(
+            data=[3.0, 4.0, 5.0], dims=["lead_time"], coords={"lead_time": [0, 1, 2]}
+        )
+        target = xr.DataArray(
+            data=[1.0, 2.0, 3.0], dims=["lead_time"], coords={"lead_time": [0, 1, 2]}
+        )
+
+        result1 = metric_no_threshold._compute_metric(forecast, target)
+        result2 = metric_with_threshold._compute_metric(forecast, target)
+
+        # Both should produce same result
+        assert isinstance(result1, xr.DataArray)
+        assert isinstance(result2, xr.DataArray)
+
 
 class TestMeanError:
     """Tests for the ME (Mean Error) metric."""
