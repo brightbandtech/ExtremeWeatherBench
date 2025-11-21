@@ -6,7 +6,7 @@ import pytest
 import xarray as xr
 from numpy import testing
 
-from extremeweatherbench import calc
+from extremeweatherbench import calc, metrics
 
 
 class TestBasicCalculations:
@@ -2010,7 +2010,7 @@ class TestLandfallMetricAlignment:
             name="surface_wind_speed",
         )
 
-        metric = LandfallTimeMeanError()
+        metric = metrics.LandfallTimeMeanError()
         result = metric._calculate_time_difference(forecast_landfalls, target_landfalls)
 
         # Result should only have common init_times

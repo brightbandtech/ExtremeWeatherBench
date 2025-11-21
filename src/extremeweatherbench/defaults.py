@@ -149,7 +149,7 @@ def get_brightband_evaluation_objects() -> list[inputs.EvaluationObject]:
         metrics.RootMeanSquaredError(),
         metrics.OnsetMeanError(),
         metrics.DurationMeanError(),
-        metrics.MaxMinMeanAbsoluteError(),
+        metrics.MaxAggregatedLowestMeanAbsoluteError(),
     ]
     freeze_metric_list: list[metrics.BaseMetric] = [
         metrics.MinimumMeanAbsoluteError(),

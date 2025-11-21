@@ -447,7 +447,7 @@ class CriticalSuccessIndex(ThresholdMetric):
     """
 
     def __init__(self, name: str = "CriticalSuccessIndex", *args, **kwargs):
-        super().__init__(name=name, *args, **kwargs)
+        super().__init__(name, *args, **kwargs)
 
     def _compute_metric(
         self,
@@ -484,7 +484,7 @@ class FalseAlarmRatio(ThresholdMetric):
     """
 
     def __init__(self, name: str = "FalseAlarmRatio", *args, **kwargs):
-        super().__init__(name=name, *args, **kwargs)
+        super().__init__(name, *args, **kwargs)
 
     def _compute_metric(
         self,
@@ -521,7 +521,7 @@ class TruePositives(ThresholdMetric):
     """
 
     def __init__(self, name: str = "TruePositives", *args, **kwargs):
-        super().__init__(name=name, *args, **kwargs)
+        super().__init__(name, *args, **kwargs)
 
     def _compute_metric(
         self,
@@ -559,7 +559,7 @@ class FalsePositives(ThresholdMetric):
     """
 
     def __init__(self, name: str = "FalsePositives", *args, **kwargs):
-        super().__init__(name=name, *args, **kwargs)
+        super().__init__(name, *args, **kwargs)
 
     def _compute_metric(
         self,
@@ -597,7 +597,7 @@ class TrueNegatives(ThresholdMetric):
     """
 
     def __init__(self, name: str = "TrueNegatives", *args, **kwargs):
-        super().__init__(name=name, *args, **kwargs)
+        super().__init__(name, *args, **kwargs)
 
     def _compute_metric(
         self,
@@ -635,7 +635,7 @@ class FalseNegatives(ThresholdMetric):
     """
 
     def __init__(self, name: str = "FalseNegatives", *args, **kwargs):
-        super().__init__(name=name, *args, **kwargs)
+        super().__init__(name, *args, **kwargs)
 
     def _compute_metric(
         self,
@@ -674,7 +674,7 @@ class Accuracy(ThresholdMetric):
     """
 
     def __init__(self, name: str = "Accuracy", *args, **kwargs):
-        super().__init__(name=name, *args, **kwargs)
+        super().__init__(name, *args, **kwargs)
 
     def _compute_metric(
         self,
@@ -709,7 +709,7 @@ class MeanAbsoluteError(BaseMetric):
     """
 
     def __init__(self, name: str = "MeanAbsoluteError", *args, **kwargs):
-        super().__init__(name=name, *args, **kwargs)
+        super().__init__(name, *args, **kwargs)
 
     def _compute_metric(
         self,
@@ -747,7 +747,7 @@ class MeanError(BaseMetric):
     """
 
     def __init__(self, name: str = "MeanError", *args, **kwargs):
-        super().__init__(name=name, *args, **kwargs)
+        super().__init__(name, *args, **kwargs)
 
     def _compute_metric(
         self,
@@ -790,7 +790,7 @@ class RootMeanSquaredError(BaseMetric):
     """
 
     def __init__(self, name: str = "RootMeanSquaredError", *args, **kwargs):
-        super().__init__(name=name, *args, **kwargs)
+        super().__init__(name, *args, **kwargs)
 
     def _compute_metric(
         self,
@@ -850,7 +850,7 @@ class EarlySignal(BaseMetric):
         self.comparison_operator = comparison_operator
         self.threshold = threshold
         self.spatial_aggregation = spatial_aggregation
-        super().__init__(name=name, **kwargs)
+        super().__init__(name, **kwargs)
 
     def _compute_metric(
         self,
@@ -933,12 +933,14 @@ class MaximumMeanAbsoluteError(MeanAbsoluteError):
     def __init__(
         self,
         tolerance_range_hours: int = 24,
+        reduce_spatial_dims: list[str] = ["latitude", "longitude"],
         name: str = "MaximumMeanAbsoluteError",
         *args,
         **kwargs,
     ):
         self.tolerance_range_hours = tolerance_range_hours
-        super().__init__(name=name, *args, **kwargs)
+        self.reduce_spatial_dims = reduce_spatial_dims
+        super().__init__(name, *args, **kwargs)
 
     def _compute_metric(
         self,
@@ -956,8 +958,10 @@ class MaximumMeanAbsoluteError(MeanAbsoluteError):
         Returns:
             MeanAbsoluteError of the maximum values.
         """
+        # Enforced spatial reduction for MaximumMeanAbsoluteError
+        reduce_spatial_dims = ["latitude", "longitude"]
         target_spatial_mean = utils.reduce_dataarray(
-            target, method="mean", reduce_dims=["latitude", "longitude"], skipna=True
+            target, method="mean", reduce_dims=reduce_spatial_dims, skipna=True
         )
         maximum_timestep = target_spatial_mean.idxmax("valid_time")
         maximum_value = target_spatial_mean.sel(valid_time=maximum_timestep)
@@ -967,7 +971,7 @@ class MaximumMeanAbsoluteError(MeanAbsoluteError):
             maximum_timestep, target.valid_time
         ).compute()
         forecast_spatial_mean = utils.reduce_dataarray(
-            forecast, method="mean", reduce_dims=["latitude", "longitude"], skipna=True
+            forecast, method="mean", reduce_dims=reduce_spatial_dims, skipna=True
         )
         filtered_max_forecast = forecast_spatial_mean.where(
             (
@@ -1011,12 +1015,14 @@ class MinimumMeanAbsoluteError(MeanAbsoluteError):
     def __init__(
         self,
         tolerance_range_hours: int = 24,
+        reduce_spatial_dims: list[str] = ["latitude", "longitude"],
         name: str = "MinimumMeanAbsoluteError",
         *args,
         **kwargs,
     ):
         self.tolerance_range_hours = tolerance_range_hours
-        super().__init__(name=name, *args, **kwargs)
+        self.reduce_spatial_dims = reduce_spatial_dims
+        super().__init__(name, *args, **kwargs)
 
     def _compute_metric(
         self,
@@ -1035,12 +1041,12 @@ class MinimumMeanAbsoluteError(MeanAbsoluteError):
             MeanAbsoluteError of the minimum values.
         """
         target_spatial_mean = utils.reduce_dataarray(
-            target, method="mean", reduce_dims=["latitude", "longitude"], skipna=True
+            target, method="mean", reduce_dims=self.reduce_spatial_dims, skipna=True
         )
         minimum_timestep = target_spatial_mean.idxmin("valid_time")
         minimum_value = target_spatial_mean.sel(valid_time=minimum_timestep)
         forecast_spatial_mean = utils.reduce_dataarray(
-            forecast, method="mean", reduce_dims=["latitude", "longitude"], skipna=True
+            forecast, method="mean", reduce_dims=self.reduce_spatial_dims, skipna=True
         )
         # Handle the case where there are >1 resulting target values
         minimum_timestep = utils.maybe_get_closest_timestamp_to_center_of_valid_times(
@@ -1087,7 +1093,7 @@ class MaxAggregatedLowestMeanAbsoluteError(MeanAbsoluteError):
         **kwargs,
     ):
         self.tolerance_range_hours = tolerance_range_hours
-        super().__init__(name=name, *args, **kwargs)
+        super().__init__(name, *args, **kwargs)
 
     def _compute_metric(
         self,
@@ -1562,7 +1568,7 @@ class SpatialDisplacement(BaseMetric):
         name: str = "spatial_displacement",
         **kwargs: Any,
     ):
-        super().__init__(name=name, **kwargs)
+        super().__init__(name, **kwargs)
 
     def _compute_metric(
         self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
