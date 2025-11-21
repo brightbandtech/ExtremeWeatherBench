@@ -41,6 +41,17 @@ def _preprocess_bb_cira_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
     return ds
 
 
+def get_climatology(quantile: float = 0.85) -> xr.DataArray:
+    """Get the climatology dataset for the heatwave criteria."""
+    if quantile not in [0.15, 0.85]:
+        raise ValueError("Quantile must be 0.15 or 0.85")
+    return xr.open_zarr(
+        "gs://extremeweatherbench/datasets/surface_air_temperature_1990_2019_climatology.zarr",  # noqa: E501
+        storage_options={"anon": True},
+        chunks="auto",
+    )["2m_temperature"].sel(quantile=quantile)
+
+
 # ERA5 targets
 era5_heatwave_target = inputs.ERA5(
     source=inputs.ARCO_ERA5_FULL_URI,
@@ -147,15 +158,17 @@ def get_brightband_evaluation_objects() -> list[inputs.EvaluationObject]:
     heatwave_metric_list: list[metrics.BaseMetric] = [
         metrics.MaximumMAE(),
         metrics.RMSE(),
-        metrics.OnsetME(),
-        metrics.DurationME(),
+        metrics.DurationME(
+            threshold_criteria=get_climatology(0.85), op_func=operator.ge
+        ),
         metrics.MaxMinMAE(),
     ]
     freeze_metric_list: list[metrics.BaseMetric] = [
         metrics.MinimumMAE(),
         metrics.RMSE(),
-        metrics.OnsetME(),
-        metrics.DurationME(),
+        metrics.DurationME(
+            threshold_criteria=get_climatology(0.15), op_func=operator.le
+        ),
     ]
 
     return [

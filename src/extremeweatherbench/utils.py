@@ -5,8 +5,9 @@ import datetime
 import importlib
 import inspect
 import logging
+import operator
 import pathlib
-from typing import Any, Callable, Optional, Sequence, Union
+from typing import Any, Callable, Literal, Optional, Sequence, Union
 
 import cartopy.io.shapereader as shpreader
 import numpy as np
@@ -21,6 +22,32 @@ import yaml  # type: ignore[import]
 from joblib import Parallel
 
 logger = logging.getLogger(__name__)
+
+operators = {
+    ">": operator.gt,
+    ">=": operator.ge,
+    "<": operator.lt,
+    "<=": operator.le,
+    "==": operator.eq,
+    "!=": operator.ne,
+}
+
+
+def maybe_get_operator(
+    operator_method: Union[Literal[">", ">=", "<", "<=", "==", "!="], Callable],
+) -> Callable:
+    """Get the operator function from the operator string. If the operator_method is a
+    callable, return it.
+
+    Args:
+        operator_method: The operator method to get. Can be a string or a callable.
+
+    Returns:
+        The operator function.
+    """
+    if isinstance(operator_method, str):
+        return operators[operator_method]
+    return operator_method
 
 
 def convert_longitude_to_360(longitude: float) -> float:
@@ -338,8 +365,11 @@ def extract_tc_names(title: str) -> list[str]:
     return names
 
 
-def stack_sparse_data_from_dims(
-    da: xr.DataArray, stack_dims: list[str], max_size: int = 100000
+def stack_dataarray_from_dims(
+    da: xr.DataArray,
+    stack_dims: list[str],
+    max_size: float = 1e9,
+    coords: Optional[npt.NDArray] = None,
 ) -> xr.DataArray:
     """Stack sparse data with n-dimensions.
 
@@ -354,8 +384,25 @@ def stack_sparse_data_from_dims(
     Returns:
         The densified xarray dataarray reduced to (time, location).
     """
+    if coords is None and isinstance(da.data, sparse.COO):
+        coords = da.data.coords
+    elif coords is None:
+        if da.size != 0:
+            return da.stack(stacked=stack_dims)
+        return da
 
-    coords = da.data.coords
+    # Check if da dimensions size equals number of rows in coords
+    if len(da.dims) != coords.shape[0]:
+        # Add a new dimension to coords for the missing dimension
+        missing_dim_size = da.shape[0]
+        nnz = coords.shape[1]
+        # Create indices for the missing dimension (all values)
+        new_dim_indices = np.repeat(np.arange(missing_dim_size), nnz)
+        # Replicate existing coords for each value in the missing dim
+        expanded_coords = np.tile(coords, missing_dim_size)
+        # Prepend the new dimension indices
+        coords = np.vstack([new_dim_indices, expanded_coords])
+
     # Get the indices of the dimensions to stack
     reduce_dim_indices = [da.dims.index(dim) for dim in stack_dims]
     reduce_dim_names = [da.dims[n] for n in reduce_dim_indices]
@@ -575,7 +622,7 @@ def interp_climatology_to_target(
     # climatology using stacked dim
     if isinstance(target.data, sparse.COO) or target.ndim < 3:
         return climatology.interp(
-            # stacked as a data variable is enforced by stack_sparse_data_from_dims
+            # stacked as a data variable is enforced by stack_dataarray_from_dims
             latitude=target["stacked"]["latitude"],
             longitude=target["stacked"]["longitude"],
             method="nearest",
@@ -632,7 +679,7 @@ def reduce_dataarray(
         The reduced xarray dataarray.
     """
     if isinstance(da.data, sparse.COO):
-        da = stack_sparse_data_from_dims(da, reduce_dims)
+        da = stack_dataarray_from_dims(da, reduce_dims)
         reduce_dims = ["stacked"]
 
     if callable(method):
