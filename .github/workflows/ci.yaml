@@ -20,9 +20,6 @@ jobs:
         python-version: ["3.12"]
     steps:
       - uses: actions/checkout@v4
-      - uses: extractions/setup-just@v3
-        with:
-          just-version: 1.43.1
 
       - name: Set up Python env with uv
         uses: astral-sh/setup-uv@v4
@@ -43,6 +40,14 @@ jobs:
 
       - name: Generate Coverage Report
         run: uv run coverage report -m
+
+  golden-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: extractions/setup-just@v3
+        with:
+          just-version: 1.43.1
 
       - name: Run golden tests with just
         run: just golden-tests
