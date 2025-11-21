@@ -695,20 +695,113 @@ class Accuracy(ThresholdMetric):
         return transformed.accuracy()
 
 
+class MeanSquaredError(BaseMetric):
+    """Mean Squared Error metric.
+
+    Args:
+        name: The name of the metric. Defaults to "MeanSquaredError".
+        interval_where_one: From scores: endpoints of the interval where the threshold
+        weights are 1. Must be increasing. Infinite endpoints are permissible. By
+        supplying a tuple of arrays, endpoints can vary with dimension.
+        interval_where_positive: From scores:endpoints of the interval where the
+        threshold weights are positive. Must be increasing. Infinite endpoints are only
+        permissible when the corresponding interval_where_one endpoint is infinite. By
+        supplying a tuple of arrays, endpoints can vary with dimension.
+        weights: From scores: an array of weights to apply to the score (e.g., weighting
+        a grid by latitude). If None, no weights are applied. If provided, the weights
+        must be broadcastable to the data dimensions and must not contain negative or
+        NaN values. If appropriate, users can choose to replace NaN values in weights
+        by calling weights.fillna(0). The weighting approach follows
+        xarray.computation.weighted.DataArrayWeighted. See the scores weighting tutorial
+        for more information on how to use weights.
+        *args: Additional arguments.
+        **kwargs: Additional keyword arguments.
+
+    Returns:
+        The Mean or threshold-weighted Squared Error between the forecast and target
+        as a DataArray.
+    """
+
+    def __init__(
+        self,
+        name: str = "MeanSquaredError",
+        interval_where_one: Optional[
+            tuple[int | float | xr.DataArray, int | float | xr.DataArray]
+        ] = None,
+        interval_where_positive: Optional[
+            tuple[int | float | xr.DataArray, int | float | xr.DataArray]
+        ] = None,
+        weights: Optional[xr.DataArray] = None,
+        *args,
+        **kwargs,
+    ):
+        super().__init__(name, *args, **kwargs)
+        self.interval_where_one = interval_where_one
+        self.interval_where_positive = interval_where_positive
+        self.weights = weights
+
+    def _compute_metric(
+        self,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
+        **kwargs: Any,
+    ) -> Any:
+        if self.interval_where_one is not None:
+            return scores.continuous.tw_squared_error(
+                forecast,
+                target,
+                interval_where_one=self.interval_where_one,
+                interval_where_positive=self.interval_where_positive,
+                weights=self.weights,
+                preserve_dims=self.preserve_dims,
+            )
+        return scores.continuous.mse(forecast, target, preserve_dims=self.preserve_dims)
+
+
 class MeanAbsoluteError(BaseMetric):
     """Mean Absolute Error metric.
 
 
     Args:
         name: The name of the metric. Defaults to "MeanAbsoluteError".
+        interval_where_one: From scores: endpoints of the interval where the threshold
+        weights are 1. Must be increasing. Infinite endpoints are permissible. By
+        supplying a tuple of arrays, endpoints can vary with dimension.
+        interval_where_positive: From scores:endpoints of the interval where the
+        threshold weights are positive. Must be increasing. Infinite endpoints are only
+        permissible when the corresponding interval_where_one endpoint is infinite. By
+        supplying a tuple of arrays, endpoints can vary with dimension.
+        weights: From scores: an array of weights to apply to the score (e.g., weighting
+        a grid by latitude). If None, no weights are applied. If provided, the weights
+        must be broadcastable to the data dimensions and must not contain negative or
+        NaN values. If appropriate, users can choose to replace NaN values in weights
+        by calling weights.fillna(0). The weighting approach follows
+        xarray.computation.weighted.DataArrayWeighted. See the scores weighting tutorial
+        for more information on how to use weights.
         *args: Additional arguments.
         **kwargs: Additional keyword arguments.
 
     Returns:
-        The Mean Absolute Error between the forecast and target as a DataArray.
+        The Mean or threshold-weighted Absolute Error between the forecast and target
+        as a DataArray.
     """
 
-    def __init__(self, name: str = "MeanAbsoluteError", *args, **kwargs):
+    def __init__(
+        self,
+        name: str = "MeanAbsoluteError",
+        interval_where_one: Optional[
+            tuple[int | float | xr.DataArray, int | float | xr.DataArray]
+        ] = None,
+        interval_where_positive: Optional[
+            tuple[int | float | xr.DataArray, int | float | xr.DataArray]
+        ] = None,
+        weights: Optional[xr.DataArray] = None,
+        *args,
+        **kwargs,
+    ):
+        self.interval_where_one = interval_where_one
+        self.interval_where_positive = interval_where_positive
+        self.weights = weights
         super().__init__(name, *args, **kwargs)
 
     def _compute_metric(
@@ -728,6 +821,15 @@ class MeanAbsoluteError(BaseMetric):
         Returns:
             The computed Mean Absolute Error result.
         """
+        if self.interval_where_one is not None:
+            return scores.continuous.tw_absolute_error(
+                forecast,
+                target,
+                interval_where_one=self.interval_where_one,
+                interval_where_positive=self.interval_where_positive,
+                weights=self.weights,
+                preserve_dims=self.preserve_dims,
+            )
         return scores.continuous.mae(forecast, target, preserve_dims=self.preserve_dims)
 
 
