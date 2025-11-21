@@ -1072,7 +1072,7 @@ class MinimumMeanAbsoluteError(MeanAbsoluteError):
         )
 
 
-class MaxAggregatedLowestMeanAbsoluteError(MeanAbsoluteError):
+class MaximumLowestMeanAbsoluteError(MeanAbsoluteError):
     """Mean Absolute Error of the maximum of aggregated minimum values.
 
     Meant for heatwave evaluation by aggregating the minimum values over a day and then
@@ -1080,7 +1080,7 @@ class MaxAggregatedLowestMeanAbsoluteError(MeanAbsoluteError):
     temperature in the target and forecast.
 
     Args:
-        name: The name of the metric. Defaults to "MaxAggregatedLowestMeanAbsoluteError"
+        name: The name of the metric. Defaults to "MaximumLowestMeanAbsoluteError"
         *args: Additional arguments
         **kwargs: Additional keyword arguments
     """
@@ -1088,7 +1088,7 @@ class MaxAggregatedLowestMeanAbsoluteError(MeanAbsoluteError):
     def __init__(
         self,
         tolerance_range_hours: int = 24,
-        name: str = "MaxAggregatedLowestMeanAbsoluteError",
+        name: str = "MaximumLowestMeanAbsoluteError",
         *args,
         **kwargs,
     ):
@@ -1101,7 +1101,7 @@ class MaxAggregatedLowestMeanAbsoluteError(MeanAbsoluteError):
         target: xr.DataArray,
         **kwargs: Any,
     ) -> Any:
-        """Compute MaxAggregatedLowestMeanAbsoluteError.
+        """Compute MaximumLowestMeanAbsoluteError.
 
         Args:
             forecast: The forecast DataArray.

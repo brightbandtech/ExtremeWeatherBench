@@ -48,8 +48,8 @@ pph_metrics = [
 lsr_metrics = [
     metrics.ThresholdMetric(
         metrics=[
-            metrics.TP,
-            metrics.FN,
+            metrics.TruePositives,
+            metrics.FalseNegatives,
         ],
         forecast_threshold=15000,
         target_threshold=0.5,

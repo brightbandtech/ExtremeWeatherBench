@@ -78,7 +78,7 @@ class TestComputeDocstringMetaclass:
         mae_metric = metrics.MeanAbsoluteError()
         max_mae_metric = metrics.MaximumMeanAbsoluteError()
         min_mae_metric = metrics.MinimumMeanAbsoluteError()
-        maxmin_mae_metric = metrics.MaxAggregatedLowestMeanAbsoluteError()
+        maxmin_mae_metric = metrics.MaximumLowestMeanAbsoluteError()
 
         # All should have different docstrings
         docs = [
@@ -568,17 +568,17 @@ class TestMinimumMeanAbsoluteError:
             assert isinstance(metric, metrics.MinimumMeanAbsoluteError)
 
 
-class TestMaxAggregatedLowestMeanAbsoluteError:
-    """Tests for the MaxAggregatedLowestMeanAbsoluteError metric."""
+class TestMaximumLowestMeanAbsoluteError:
+    """Tests for the MaximumLowestMeanAbsoluteError metric."""
 
     def test_instantiation(self):
-        """Test that MaxAggregatedLowestMeanAbsoluteError can be instantiated."""
-        metric = metrics.MaxAggregatedLowestMeanAbsoluteError()
+        """Test that MaximumLowestMeanAbsoluteError can be instantiated."""
+        metric = metrics.MaximumLowestMeanAbsoluteError()
         assert isinstance(metric, metrics.BaseMetric)
 
     def test_compute_metric_structure(self):
         """Test that _compute_metric returns the expected structure."""
-        metric = metrics.MaxAggregatedLowestMeanAbsoluteError()
+        metric = metrics.MaximumLowestMeanAbsoluteError()
 
         # Create test data spanning multiple days with 6-hourly data
         times = pd.date_range("2020-01-01", periods=16, freq="6h")  # 4 days
@@ -619,13 +619,13 @@ class TestMaxAggregatedLowestMeanAbsoluteError:
         except Exception:
             # If computation fails due to data structure issues, at least test
             # instantiation works
-            assert isinstance(metric, metrics.MaxAggregatedLowestMeanAbsoluteError)
+            assert isinstance(metric, metrics.MaximumLowestMeanAbsoluteError)
 
     def test_compute_metric_with_lead_time(self):
-        """Test MaxAggregatedLowestMeanAbsoluteError with proper forecast structure
+        """Test MaximumLowestMeanAbsoluteError with proper forecast structure
         including lead_time dimension to cover lines 213-250.
         """
-        metric = metrics.MaxAggregatedLowestMeanAbsoluteError()
+        metric = metrics.MaximumLowestMeanAbsoluteError()
 
         # Create 4 complete days of 6-hourly data
         times = pd.date_range("2020-01-01", periods=16, freq="6h")
@@ -673,13 +673,13 @@ class TestMaxAggregatedLowestMeanAbsoluteError:
         except Exception:
             # If it still fails due to complex data requirements,
             # just verify the metric can be instantiated
-            assert isinstance(metric, metrics.MaxAggregatedLowestMeanAbsoluteError)
+            assert isinstance(metric, metrics.MaximumLowestMeanAbsoluteError)
 
     def test_compute_metric_via_public_method(self):
-        """Test MaxAggregatedLowestMeanAbsoluteError through compute_metric to cover
+        """Test MaximumLowestMeanAbsoluteError through compute_metric to cover
         kwargs filtering (line 47).
         """
-        metric = metrics.MaxAggregatedLowestMeanAbsoluteError()
+        metric = metrics.MaximumLowestMeanAbsoluteError()
 
         # Create simple test data
         times = pd.date_range("2020-01-01", periods=16, freq="6h")
@@ -730,7 +730,7 @@ class TestMaxAggregatedLowestMeanAbsoluteError:
         except Exception:
             # If it fails due to data structure, at least we tested
             # the kwargs filtering path
-            assert isinstance(metric, metrics.MaxAggregatedLowestMeanAbsoluteError)
+            assert isinstance(metric, metrics.MaximumLowestMeanAbsoluteError)
 
 
 class TestOnsetMeanError:
