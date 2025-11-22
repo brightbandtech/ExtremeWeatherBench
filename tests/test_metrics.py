@@ -1005,23 +1005,23 @@ class TestDurationMeanError:
         return forecast, target
 
     def test_instantiation(self):
-        """Test that DurationME can be instantiated with threshold criteria."""
+        """Test that DurationMeanError can be instantiated with threshold criteria."""
         climatology = self.create_climatology()
-        metric = metrics.DurationME(threshold_criteria=climatology)
+        metric = metrics.DurationMeanError(threshold_criteria=climatology)
         assert isinstance(metric, metrics.ME)
         assert metric.name == "duration_me"
 
     def test_base_metric_inheritance(self):
-        """Test that DurationME inherits from ME."""
+        """Test that DurationMeanError inherits from ME."""
         climatology = self.create_climatology()
-        metric = metrics.DurationME(threshold_criteria=climatology)
+        metric = metrics.DurationMeanError(threshold_criteria=climatology)
         assert isinstance(metric, metrics.ME)
         assert isinstance(metric, metrics.BaseMetric)
 
     def test_compute_applied_metric_structure(self):
         """Test that _compute_applied_metric returns expected structure."""
         climatology = self.create_climatology()
-        metric = metrics.DurationME(threshold_criteria=climatology)
+        metric = metrics.DurationMeanError(threshold_criteria=climatology)
 
         forecast_vals = np.full(10, 305.0)
         target_vals = np.full(10, 295.0)
@@ -1050,7 +1050,7 @@ class TestDurationMeanError:
             forecast_vals, target_vals, climatology
         )
 
-        metric = metrics.DurationME(threshold_criteria=climatology)
+        metric = metrics.DurationMeanError(threshold_criteria=climatology)
         result = metric.compute_metric(forecast=forecast, target=target)
 
         # Should be 1.0: forecast mask all 1s, target mask all 0s
@@ -1067,7 +1067,7 @@ class TestDurationMeanError:
             forecast_vals, target_vals, climatology
         )
 
-        metric = metrics.DurationME(threshold_criteria=climatology)
+        metric = metrics.DurationMeanError(threshold_criteria=climatology)
         result = metric.compute_metric(forecast=forecast, target=target)
 
         # Should be 0.5: forecast mask: 5 ones, 5 zeros; target: all zeros
@@ -1083,7 +1083,7 @@ class TestDurationMeanError:
             forecast_vals, target_vals, climatology
         )
 
-        metric = metrics.DurationME(threshold_criteria=climatology)
+        metric = metrics.DurationMeanError(threshold_criteria=climatology)
         result = metric.compute_metric(forecast=forecast, target=target)
 
         # Should be -1.0: forecast mask all 0s, target mask all 1s
@@ -1099,7 +1099,7 @@ class TestDurationMeanError:
             forecast_vals, target_vals, climatology
         )
 
-        metric = metrics.DurationME(threshold_criteria=climatology)
+        metric = metrics.DurationMeanError(threshold_criteria=climatology)
         result = metric.compute_metric(forecast=forecast, target=target)
 
         # Should be 0.0: forecast and target masks both all 1s
@@ -1116,7 +1116,7 @@ class TestDurationMeanError:
             forecast_vals, target_vals, climatology
         )
 
-        metric = metrics.DurationME(threshold_criteria=climatology)
+        metric = metrics.DurationMeanError(threshold_criteria=climatology)
         result = metric.compute_metric(forecast=forecast, target=target)
 
         # Should be 0.3: forecast mask: 3 ones, 7 zeros; target: all zeros
@@ -1264,7 +1264,7 @@ class TestDurationMeanError:
         )
 
         # Compute metric
-        metric = metrics.DurationME(threshold_criteria=climatology)
+        metric = metrics.DurationMeanError(threshold_criteria=climatology)
         result = metric.compute_metric(forecast=forecast, target=target)
 
         # Result will have init_time dimension from preserve_dims
@@ -1307,7 +1307,7 @@ class TestDurationMeanError:
         forecast_with_nans = forecast.copy()
         forecast_with_nans.values[0, 2:4, 0, 0] = np.nan  # timesteps 2-3, first loc
 
-        metric = metrics.DurationME(threshold_criteria=climatology)
+        metric = metrics.DurationMeanError(threshold_criteria=climatology)
         result = metric.compute_metric(forecast=forecast_with_nans, target=target)
 
         # Should still be positive (forecast exceeds where not NaN)
@@ -1340,7 +1340,7 @@ class TestDurationMeanError:
         forecast_with_nans = forecast.copy()
         forecast_with_nans.values[0, 5:7, 0, 0] = np.nan  # timesteps 5-6, first loc
 
-        metric = metrics.DurationME(threshold_criteria=climatology)
+        metric = metrics.DurationMeanError(threshold_criteria=climatology)
         result = metric.compute_metric(forecast=forecast_with_nans, target=target)
 
         # Should be less than 1.0 because:
@@ -1370,7 +1370,7 @@ class TestDurationMeanError:
         forecast_with_nans = forecast.copy()
         forecast_with_nans.values[0, 3:5, :, :] = np.nan  # timesteps 3-4, all locs
 
-        metric = metrics.DurationME(threshold_criteria=climatology)
+        metric = metrics.DurationMeanError(threshold_criteria=climatology)
         result = metric.compute_metric(forecast=forecast_with_nans, target=target)
 
         # Should be 0 because wherever both have valid data, both exceed
@@ -1403,7 +1403,7 @@ class TestDurationMeanError:
         # NaN at timestep 8 (neither exceeds)
         forecast_with_nans.values[0, 8, 0, 1] = np.nan
 
-        metric = metrics.DurationME(threshold_criteria=climatology)
+        metric = metrics.DurationMeanError(threshold_criteria=climatology)
         result = metric.compute_metric(forecast=forecast_with_nans, target=target)
 
         # Result should be positive but less than previous tests
@@ -1415,8 +1415,9 @@ class TestDurationMeanError:
         assert not np.isnan(result.values[0])
 
     def test_instantiation_with_float_threshold_criteria(self):
-        """Test that DurationME can be instantiated with float threshold criteria."""
-        metric = metrics.DurationME(threshold_criteria=300.0)
+        """Test that DurationMeanError can be instantiated with float threshold
+        criteria."""
+        metric = metrics.DurationMeanError(threshold_criteria=300.0)
         assert isinstance(metric, metrics.ME)
         assert metric.name == "duration_me"
         assert metric.threshold_criteria == 300.0
@@ -1431,7 +1432,7 @@ class TestDurationMeanError:
             forecast_vals, target_vals, climatology
         )
 
-        metric = metrics.DurationME(threshold_criteria=300.0)
+        metric = metrics.DurationMeanError(threshold_criteria=300.0)
         result = metric.compute_metric(forecast=forecast, target=target)
 
         # Should be 1.0: forecast mask all 1s, target mask all 0s
@@ -1449,7 +1450,7 @@ class TestDurationMeanError:
             forecast_vals, target_vals, climatology
         )
 
-        metric = metrics.DurationME(threshold_criteria=300.0)
+        metric = metrics.DurationMeanError(threshold_criteria=300.0)
         result = metric.compute_metric(forecast=forecast, target=target)
 
         # Forecast: 6 timesteps exceed, Target: 3 timesteps exceed
@@ -1467,11 +1468,11 @@ class TestDurationMeanError:
         )
 
         # Test with climatology (constant 300K)
-        metric_clim = metrics.DurationME(threshold_criteria=climatology)
+        metric_clim = metrics.DurationMeanError(threshold_criteria=climatology)
         result_clim = metric_clim.compute_metric(forecast=forecast, target=target)
 
         # Test with float threshold (300.0)
-        metric_float = metrics.DurationME(threshold_criteria=300.0)
+        metric_float = metrics.DurationMeanError(threshold_criteria=300.0)
         result_float = metric_float.compute_metric(forecast=forecast, target=target)
 
         # Results should be the same
@@ -1499,7 +1500,7 @@ class TestDurationMeanError:
 
         # Test with sparse data - should not raise "All arrays must be instances of
         # SparseArray"
-        metric = metrics.DurationME(threshold_criteria=300.0)
+        metric = metrics.DurationMeanError(threshold_criteria=300.0)
         result = metric.compute_metric(forecast=forecast_sparse, target=target_sparse)
 
         # Result should be valid (not NaN) and correct
@@ -1528,7 +1529,7 @@ class TestDurationMeanError:
         target_sparse.data = sparse.COO.from_numpy(target.values)
 
         # Test with climatology and sparse data
-        metric = metrics.DurationME(threshold_criteria=climatology)
+        metric = metrics.DurationMeanError(threshold_criteria=climatology)
         result = metric.compute_metric(forecast=forecast_sparse, target=target_sparse)
 
         # Result should be valid
@@ -1992,8 +1993,8 @@ class TestMetricIntegration:
         ]
 
         for metric_class in all_metric_classes:
-            # DurationME requires threshold criteria parameter
-            if metric_class.__name__ == "DurationME":
+            # DurationMeanError requires threshold criteria parameter
+            if metric_class.__name__ == "DurationMeanError":
                 metric = metric_class(threshold_criteria=300.0)
             else:
                 metric = metric_class()

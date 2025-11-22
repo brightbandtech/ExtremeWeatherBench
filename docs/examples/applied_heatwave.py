@@ -34,7 +34,7 @@ hres_forecast = inputs.ZarrForecast(
     variable_mapping=inputs.HRES_metadata_variable_mapping,
 )
 
-# Load the climatology for DurationME
+# Load the climatology for DurationMeanError
 climatology = defaults.get_climatology(quantile=0.85)
 
 # Define the metrics

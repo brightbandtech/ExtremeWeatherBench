@@ -1302,7 +1302,8 @@ class DurationMeanError(MeanError):
         float value representing a fixed threshold.
         op_func: Comparison operator or string (e.g., operator.ge for >=)
         name: Name of the metric
-        preserve_dims: Dimensions to preserve during aggregation. Defaults to "init_time".
+        preserve_dims: Dimensions to preserve during aggregation. Defaults to
+        "init_time".
     """
 
     def __init__(
