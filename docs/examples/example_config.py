@@ -29,10 +29,10 @@ evaluation_objects = [
     inputs.EvaluationObject(
         event_type="heat_wave",
         metric_list=[
-            metrics.MaximumMAE(),
-            metrics.RMSE(),
-            metrics.OnsetME(),
-            metrics.DurationME(),
+            metrics.MaximumMeanAbsoluteError(),
+            metrics.RootMeanSquaredError(),
+            metrics.OnsetMeanError(),
+            metrics.DurationMeanError(),
         ],
         target=era5_heatwave_target,
         forecast=fcnv2_forecast,
