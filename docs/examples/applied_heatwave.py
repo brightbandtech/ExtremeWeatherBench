@@ -34,15 +34,16 @@ hres_forecast = inputs.ZarrForecast(
     variable_mapping=inputs.HRES_metadata_variable_mapping,
 )
 
-# Load the climatology for DurationME
+# Load the climatology for DurationMeanError
 climatology = defaults.get_climatology(quantile=0.85)
 
 # Define the metrics
 metrics_list = [
-    metrics.DurationME(criteria=climatology, op_func=operator.ge),
-    metrics.MaximumMAE(),
-    metrics.RMSE(),
-    metrics.MaxMinMAE(),
+    metrics.MaximumMeanAbsoluteError(),
+    metrics.RootMeanSquaredError(),
+    metrics.OnsetMeanError(),
+    metrics.DurationMeanError(criteria=climatology, op_func=operator.ge),
+    metrics.MaximumLowestMeanAbsoluteError(),
 ]
 
 # Create a list of evaluation objects for heatwave

@@ -25,7 +25,7 @@ class TestComputeDocstringMetaclass:
 
     def test_docstring_transfer_from_private_to_public_method(self):
         """Test that _compute_metric docstring is transferred to compute_metric."""
-        metric = metrics.MAE()
+        metric = metrics.MeanAbsoluteError()
 
         # The compute_metric method should have the docstring from _compute_metric
         assert metric.compute_metric.__doc__ is not None
@@ -36,9 +36,9 @@ class TestComputeDocstringMetaclass:
 
     def test_each_metric_has_unique_docstring(self):
         """Test that metrics with custom docstrings get them transferred correctly."""
-        mae_metric = metrics.MAE()
-        me_metric = metrics.ME()
-        rmse_metric = metrics.RMSE()
+        mae_metric = metrics.MeanAbsoluteError()
+        me_metric = metrics.MeanError()
+        rmse_metric = metrics.RootMeanSquaredError()
 
         # Get the docstrings
         mae_doc = mae_metric.compute_metric.__doc__
@@ -53,7 +53,7 @@ class TestComputeDocstringMetaclass:
         assert rmse_doc is not None
         assert "Root Mean Square Error" in rmse_doc
 
-        # All three should have different docstrings (ME falls back to base class)
+        # All three should have different docstrings (MeanErrorfalls back to base class)
         assert me_doc != mae_doc
         assert rmse_doc != mae_doc
         assert me_doc != rmse_doc
@@ -61,25 +61,24 @@ class TestComputeDocstringMetaclass:
     def test_inherited_metric_docstring_transfer(self):
         """Test that docstring transfer works for metrics inheriting from other
         metrics."""
-        max_mae_metric = metrics.MaximumMAE()
+        max_mae_metric = metrics.MaximumMeanAbsoluteError()
 
-        # MaximumMAE inherits from MAE but should have its own docstring
+        # MaximumMeanAbsoluteError inherits from MAE but should have its own docstring
         assert max_mae_metric.compute_metric.__doc__ is not None
-        assert "MaximumMAE" in max_mae_metric.compute_metric.__doc__
-        assert "tolerance_range" in max_mae_metric.compute_metric.__doc__
+        assert "MaximumMeanAbsoluteError" in max_mae_metric.compute_metric.__doc__
 
         # Should not have the base MAE docstring
-        mae_metric = metrics.MAE()
+        mae_metric = metrics.MeanAbsoluteError()
         assert (
             max_mae_metric.compute_metric.__doc__ != mae_metric.compute_metric.__doc__
         )
 
     def test_multi_level_inheritance_docstrings(self):
         """Test that docstring transfer works correctly with multi-level inheritance."""
-        mae_metric = metrics.MAE()
-        max_mae_metric = metrics.MaximumMAE()
-        min_mae_metric = metrics.MinimumMAE()
-        maxmin_mae_metric = metrics.MaxMinMAE()
+        mae_metric = metrics.MeanAbsoluteError()
+        max_mae_metric = metrics.MaximumMeanAbsoluteError()
+        min_mae_metric = metrics.MinimumMeanAbsoluteError()
+        maxmin_mae_metric = metrics.MaximumLowestMeanAbsoluteError()
 
         # All should have different docstrings
         docs = [
@@ -97,9 +96,9 @@ class TestComputeDocstringMetaclass:
 
     def test_metric_without_custom_docstring(self):
         """Test metrics that might not have custom docstrings on _compute_metric."""
-        me_metric = metrics.ME()
+        me_metric = metrics.MeanError()
 
-        # ME class has _compute_metric but might not have a detailed docstring
+        # MeanErrorclass has _compute_metric but might not have a detailed docstring
         # The metaclass should handle this gracefully
         assert hasattr(me_metric, "compute_metric")
         assert callable(me_metric.compute_metric)
@@ -188,53 +187,59 @@ class TestThresholdMetrics:
     """Tests for ThresholdMetric classes."""
 
     def test_csi_threshold_metric(self):
-        """Test CSI threshold metric instantiation and properties."""
-        csi_metric = metrics.CSI(forecast_threshold=15000, target_threshold=0.3)
+        """Test CriticalSuccessIndex threshold metric instantiation and properties."""
+        csi_metric = metrics.CriticalSuccessIndex(
+            forecast_threshold=15000, target_threshold=0.3
+        )
         assert isinstance(csi_metric, metrics.ThresholdMetric)
         assert isinstance(csi_metric, metrics.BaseMetric)
         assert hasattr(csi_metric, "compute_metric")
         assert hasattr(csi_metric, "__call__")
-        assert csi_metric.name == "critical_success_index"
         assert csi_metric.forecast_threshold == 15000
         assert csi_metric.target_threshold == 0.3
 
     def test_far_threshold_metric(self):
-        """Test FAR threshold metric instantiation and properties."""
-        far_metric = metrics.FAR(forecast_threshold=15000, target_threshold=0.3)
+        """Test FalseAlarmRatio threshold metric instantiation and properties."""
+        far_metric = metrics.FalseAlarmRatio(
+            forecast_threshold=15000, target_threshold=0.3
+        )
         assert isinstance(far_metric, metrics.ThresholdMetric)
-        assert far_metric.name == "false_alarm_ratio"
         assert far_metric.forecast_threshold == 15000
         assert far_metric.target_threshold == 0.3
 
     def test_tp_threshold_metric(self):
         """Test TP threshold metric instantiation and properties."""
-        tp_metric = metrics.TP(forecast_threshold=15000, target_threshold=0.3)
+        tp_metric = metrics.TruePositives(
+            forecast_threshold=15000, target_threshold=0.3
+        )
         assert isinstance(tp_metric, metrics.ThresholdMetric)
-        assert tp_metric.name == "true_positive"
         assert tp_metric.forecast_threshold == 15000
         assert tp_metric.target_threshold == 0.3
 
     def test_fp_threshold_metric(self):
         """Test FP threshold metric instantiation and properties."""
-        fp_metric = metrics.FP(forecast_threshold=15000, target_threshold=0.3)
+        fp_metric = metrics.FalsePositives(
+            forecast_threshold=15000, target_threshold=0.3
+        )
         assert isinstance(fp_metric, metrics.ThresholdMetric)
-        assert fp_metric.name == "false_positive"
         assert fp_metric.forecast_threshold == 15000
         assert fp_metric.target_threshold == 0.3
 
     def test_tn_threshold_metric(self):
         """Test TN threshold metric instantiation and properties."""
-        tn_metric = metrics.TN(forecast_threshold=15000, target_threshold=0.3)
+        tn_metric = metrics.TrueNegatives(
+            forecast_threshold=15000, target_threshold=0.3
+        )
         assert isinstance(tn_metric, metrics.ThresholdMetric)
-        assert tn_metric.name == "true_negative"
         assert tn_metric.forecast_threshold == 15000
         assert tn_metric.target_threshold == 0.3
 
     def test_fn_threshold_metric(self):
         """Test FN threshold metric instantiation and properties."""
-        fn_metric = metrics.FN(forecast_threshold=15000, target_threshold=0.3)
+        fn_metric = metrics.FalseNegatives(
+            forecast_threshold=15000, target_threshold=0.3
+        )
         assert isinstance(fn_metric, metrics.ThresholdMetric)
-        assert fn_metric.name == "false_negative"
         assert fn_metric.forecast_threshold == 15000
         assert fn_metric.target_threshold == 0.3
 
@@ -242,7 +247,6 @@ class TestThresholdMetrics:
         """Test Accuracy threshold metric instantiation and properties."""
         acc_metric = metrics.Accuracy(forecast_threshold=15000, target_threshold=0.3)
         assert isinstance(acc_metric, metrics.ThresholdMetric)
-        assert acc_metric.name == "accuracy"
         assert acc_metric.forecast_threshold == 15000
         assert acc_metric.target_threshold == 0.3
 
@@ -253,37 +257,33 @@ class TestThresholdMetrics:
         target = xr.DataArray([0.7, 0.9], dims=["x"])
 
         # Test instance callable usage
-        csi_instance = metrics.CSI(forecast_threshold=0.5, target_threshold=0.5)
-        csi_instance_result = csi_instance(forecast, target, preserve_dims="x")
+        csi_instance = metrics.CriticalSuccessIndex(
+            forecast_threshold=0.5, target_threshold=0.5, preserve_dims="x"
+        )
+        csi_instance_result = csi_instance(forecast, target)
 
         # Should return a DataArray
         assert isinstance(csi_instance_result, xr.DataArray)
 
         # Test using compute_metric directly on instance
-        csi_direct_result = csi_instance.compute_metric(
-            forecast, target, preserve_dims="x"
-        )
+        csi_direct_result = csi_instance.compute_metric(forecast, target)
 
         # Both should return same type
         assert isinstance(csi_direct_result, type(csi_instance_result))
 
     def test_threshold_metric_parameter_override(self):
-        """Test that instance call can override configured thresholds."""
-        # Create instance with specific thresholds
-        csi_instance = metrics.CSI(forecast_threshold=0.7, target_threshold=0.8)
+        """Test that instance works with configured thresholds and preserve_dims."""
+        # Create instance with specific thresholds and preserve_dims
+        csi_instance = metrics.CriticalSuccessIndex(
+            forecast_threshold=0.7, target_threshold=0.8, preserve_dims="x"
+        )
 
         # Create test data
         forecast = xr.DataArray([0.6, 0.8], dims=["x"])
         target = xr.DataArray([0.7, 0.9], dims=["x"])
 
-        # Call with different thresholds (should override instance values)
-        result = csi_instance(
-            forecast,
-            target,
-            forecast_threshold=0.5,
-            target_threshold=0.5,
-            preserve_dims="x",
-        )
+        # Call with configured parameters
+        result = csi_instance(forecast, target)
 
         # Should not raise an exception
         assert isinstance(result, xr.DataArray)
@@ -307,16 +307,24 @@ class TestThresholdMetrics:
         target = xr.DataArray([[0.4, 0.2], [0.5, 0.25]], dims=["x", "y"])
 
         # Test all factory functions
-        csi_metric = metrics.CSI(forecast_threshold=15000, target_threshold=0.3)
-        far_metric = metrics.FAR(forecast_threshold=15000, target_threshold=0.3)
-        tp_metric = metrics.TP(forecast_threshold=15000, target_threshold=0.3)
-        fp_metric = metrics.FP(forecast_threshold=15000, target_threshold=0.3)
+        csi_metric = metrics.CriticalSuccessIndex(
+            forecast_threshold=15000, target_threshold=0.3, preserve_dims="x"
+        )
+        far_metric = metrics.FalseAlarmRatio(
+            forecast_threshold=15000, target_threshold=0.3, preserve_dims="x"
+        )
+        tp_metric = metrics.TruePositives(
+            forecast_threshold=15000, target_threshold=0.3, preserve_dims="x"
+        )
+        fp_metric = metrics.FalsePositives(
+            forecast_threshold=15000, target_threshold=0.3, preserve_dims="x"
+        )
 
         # Compute results using callable instances (should not raise exceptions)
-        csi_result = csi_metric(forecast, target, preserve_dims="x")
-        far_result = far_metric(forecast, target, preserve_dims="x")
-        tp_result = tp_metric(forecast, target, preserve_dims="x")
-        fp_result = fp_metric(forecast, target, preserve_dims="x")
+        csi_result = csi_metric(forecast, target)
+        far_result = far_metric(forecast, target)
+        tp_result = tp_metric(forecast, target)
+        fp_result = fp_metric(forecast, target)
 
         # All should return xarray objects
         assert isinstance(csi_result, xr.DataArray)
@@ -330,14 +338,20 @@ class TestThresholdMetrics:
         target = xr.DataArray([[0.4, 0.2], [0.5, 0.25]], dims=["x", "y"])
 
         # Create multiple metrics with same thresholds
-        csi_metric = metrics.CSI(forecast_threshold=15000, target_threshold=0.3)
-        far_metric = metrics.FAR(forecast_threshold=15000, target_threshold=0.3)
-        tp_metric = metrics.TP(forecast_threshold=15000, target_threshold=0.3)
+        csi_metric = metrics.CriticalSuccessIndex(
+            forecast_threshold=15000, target_threshold=0.3, preserve_dims="x"
+        )
+        far_metric = metrics.FalseAlarmRatio(
+            forecast_threshold=15000, target_threshold=0.3, preserve_dims="x"
+        )
+        tp_metric = metrics.TruePositives(
+            forecast_threshold=15000, target_threshold=0.3, preserve_dims="x"
+        )
 
         # All metrics should compute successfully
-        csi_result = csi_metric.compute_metric(forecast, target, preserve_dims="x")
-        far_result = far_metric.compute_metric(forecast, target, preserve_dims="x")
-        tp_result = tp_metric.compute_metric(forecast, target, preserve_dims="x")
+        csi_result = csi_metric.compute_metric(forecast, target)
+        far_result = far_metric.compute_metric(forecast, target)
+        tp_result = tp_metric.compute_metric(forecast, target)
 
         # All should return valid xarray DataArrays
         assert isinstance(csi_result, xr.DataArray)
@@ -345,58 +359,59 @@ class TestThresholdMetrics:
         assert isinstance(tp_result, xr.DataArray)
 
     def test_mathematical_correctness(self):
-        """Test that ratios sum to 1 and CSI/FAR are mathematically correct."""
+        """Test that ratios sum to 1 and CriticalSuccessIndex/FalseAlarmRatio are
+        mathematically correct.
+        """
         # Simple test case for verification
         forecast = xr.DataArray([[15500, 14000], [16000, 14500]], dims=["x", "y"])
         target = xr.DataArray([[0.4, 0.2], [0.5, 0.25]], dims=["x", "y"])
 
         # Get all contingency table components
-        tp_result = metrics.TP(
-            forecast_threshold=15000, target_threshold=0.3
-        ).compute_metric(forecast, target, preserve_dims="x")
-        fp_result = metrics.FP(
-            forecast_threshold=15000, target_threshold=0.3
-        ).compute_metric(forecast, target, preserve_dims="x")
-        tn_result = metrics.TN(
-            forecast_threshold=15000, target_threshold=0.3
-        ).compute_metric(forecast, target, preserve_dims="x")
-        fn_result = metrics.FN(
-            forecast_threshold=15000, target_threshold=0.3
-        ).compute_metric(forecast, target, preserve_dims="x")
+        tp_result = metrics.TruePositives(
+            forecast_threshold=15000, target_threshold=0.3, preserve_dims="x"
+        ).compute_metric(forecast, target)
+        fp_result = metrics.FalsePositives(
+            forecast_threshold=15000, target_threshold=0.3, preserve_dims="x"
+        ).compute_metric(forecast, target)
+        tn_result = metrics.TrueNegatives(
+            forecast_threshold=15000, target_threshold=0.3, preserve_dims="x"
+        ).compute_metric(forecast, target)
+        fn_result = metrics.FalseNegatives(
+            forecast_threshold=15000, target_threshold=0.3, preserve_dims="x"
+        ).compute_metric(forecast, target)
 
         # Ratios should sum to 1
         total = tp_result + fp_result + tn_result + fn_result
         np.testing.assert_allclose(total.values, [1.0, 1.0], rtol=1e-10)
 
-        # CSI and FAR should be reasonable
-        csi_result = metrics.CSI(
-            forecast_threshold=15000, target_threshold=0.3
-        ).compute_metric(forecast, target, preserve_dims="x")
-        far_result = metrics.FAR(
-            forecast_threshold=15000, target_threshold=0.3
-        ).compute_metric(forecast, target, preserve_dims="x")
+        # CriticalSuccessIndex and FalseAlarmRatio should be reasonable
+        csi_result = metrics.CriticalSuccessIndex(
+            forecast_threshold=15000, target_threshold=0.3, preserve_dims="x"
+        ).compute_metric(forecast, target)
+        far_result = metrics.FalseAlarmRatio(
+            forecast_threshold=15000, target_threshold=0.3, preserve_dims="x"
+        ).compute_metric(forecast, target)
 
-        # CSI should be between 0 and 1
+        # CriticalSuccessIndex should be between 0 and 1
         assert np.all(csi_result.values >= 0)
         assert np.all(csi_result.values <= 1)
 
-        # FAR should be between 0 and 1
+        # FalseAlarmRatio should be between 0 and 1
         assert np.all(far_result.values >= 0)
         assert np.all(far_result.values <= 1)
 
 
-class TestMAE:
+class TestMeanAbsoluteError:
     """Tests for the MAE (Mean Absolute Error) metric."""
 
     def test_instantiation(self):
         """Test that MAE can be instantiated."""
-        metric = metrics.MAE()
+        metric = metrics.MeanAbsoluteError()
         assert isinstance(metric, metrics.BaseMetric)
-        assert metric.name == "MAE"
 
     def test_compute_metric_simple(self):
         """Test MAE computation with simple data."""
-        metric = metrics.MAE()
+        metric = metrics.MeanAbsoluteError()
 
         # Create simple test data where MAE should be 1.0
         forecast = xr.DataArray(
@@ -411,19 +426,228 @@ class TestMAE:
         # Should return an xarray object
         assert isinstance(result, xr.DataArray)
 
+    def test_threshold_approach_with_interval_where_one(self):
+        """Test MAE with threshold approach using interval_where_one."""
+        # Test threshold-weighted absolute error
+        metric = metrics.MeanAbsoluteError(
+            interval_where_one=(5.0, 10.0),
+        )
 
-class TestME:
-    """Tests for the ME (Mean Error) metric."""
+        # Create test data
+        forecast = xr.DataArray(
+            data=[6.0, 7.0, 12.0], dims=["lead_time"], coords={"lead_time": [0, 1, 2]}
+        )
+        target = xr.DataArray(
+            data=[5.0, 8.0, 10.0], dims=["lead_time"], coords={"lead_time": [0, 1, 2]}
+        )
+
+        result = metric._compute_metric(forecast, target)
+
+        # Should return an xarray object
+        assert isinstance(result, xr.DataArray)
+        # Should have finite values
+        assert np.isfinite(result).all()
+
+    def test_threshold_approach_with_both_intervals(self):
+        """Test MAE with both interval_where_one and positive."""
+        metric = metrics.MeanAbsoluteError(
+            interval_where_one=(5.0, 10.0),
+            interval_where_positive=(3.0, 12.0),
+        )
+
+        forecast = xr.DataArray(
+            data=[4.0, 6.0, 11.0, 15.0],
+            dims=["lead_time"],
+            coords={"lead_time": [0, 1, 2, 3]},
+        )
+        target = xr.DataArray(
+            data=[3.5, 7.0, 10.0, 14.0],
+            dims=["lead_time"],
+            coords={"lead_time": [0, 1, 2, 3]},
+        )
+
+        result = metric._compute_metric(forecast, target)
+
+        assert isinstance(result, xr.DataArray)
+        assert np.isfinite(result).all()
+
+    def test_threshold_approach_with_weights(self):
+        """Test MAE with threshold approach and custom weights."""
+        weights = xr.DataArray(
+            data=[1.0, 2.0, 1.0], dims=["lead_time"], coords={"lead_time": [0, 1, 2]}
+        )
+
+        metric = metrics.MeanAbsoluteError(
+            interval_where_one=(5.0, 10.0), weights=weights
+        )
+
+        forecast = xr.DataArray(
+            data=[6.0, 7.0, 12.0], dims=["lead_time"], coords={"lead_time": [0, 1, 2]}
+        )
+        target = xr.DataArray(
+            data=[5.0, 8.0, 10.0], dims=["lead_time"], coords={"lead_time": [0, 1, 2]}
+        )
+
+        result = metric._compute_metric(forecast, target)
+
+        assert isinstance(result, xr.DataArray)
+        assert np.isfinite(result).all()
+
+    def test_threshold_stores_parameters(self):
+        """Test that threshold parameters are stored correctly."""
+        interval_one = (5.0, 10.0)
+        interval_pos = (3.0, 12.0)
+        weights = xr.DataArray([1.0, 2.0])
+
+        metric = metrics.MeanAbsoluteError(
+            interval_where_one=interval_one,
+            interval_where_positive=interval_pos,
+            weights=weights,
+        )
+
+        assert metric.interval_where_one == interval_one
+        assert metric.interval_where_positive == interval_pos
+        assert metric.weights is weights
+
+
+class TestMeanSquaredError:
+    """Tests for the MSE (Mean Squared Error) metric."""
 
     def test_instantiation(self):
-        """Test that ME can be instantiated."""
-        metric = metrics.ME()
+        """Test that MSE can be instantiated."""
+        metric = metrics.MeanSquaredError()
         assert isinstance(metric, metrics.BaseMetric)
-        assert metric.name == "ME"
 
     def test_compute_metric_simple(self):
-        """Test ME computation with simple data."""
-        metric = metrics.ME()
+        """Test MSE computation with simple data."""
+        metric = metrics.MeanSquaredError()
+
+        # Create simple test data
+        forecast = xr.DataArray(
+            data=[3.0, 4.0, 5.0], dims=["lead_time"], coords={"lead_time": [0, 1, 2]}
+        )
+        target = xr.DataArray(
+            data=[1.0, 2.0, 3.0], dims=["lead_time"], coords={"lead_time": [0, 1, 2]}
+        )
+
+        result = metric._compute_metric(forecast, target)
+
+        # Should return an xarray object
+        assert isinstance(result, xr.DataArray)
+
+    def test_threshold_approach_with_interval_where_one(self):
+        """Test MSE with threshold approach using interval_where_one."""
+        metric = metrics.MeanSquaredError(
+            interval_where_one=(5.0, 10.0),
+        )
+
+        # Create test data
+        forecast = xr.DataArray(
+            data=[6.0, 7.0, 12.0], dims=["lead_time"], coords={"lead_time": [0, 1, 2]}
+        )
+        target = xr.DataArray(
+            data=[5.0, 8.0, 10.0], dims=["lead_time"], coords={"lead_time": [0, 1, 2]}
+        )
+
+        result = metric._compute_metric(forecast, target)
+
+        # Should return an xarray object
+        assert isinstance(result, xr.DataArray)
+        # Should have finite values
+        assert np.isfinite(result).all()
+
+    def test_threshold_approach_with_both_intervals(self):
+        """Test MSE with both interval_where_one and positive."""
+        metric = metrics.MeanSquaredError(
+            interval_where_one=(5.0, 10.0),
+            interval_where_positive=(3.0, 12.0),
+        )
+
+        forecast = xr.DataArray(
+            data=[4.0, 6.0, 11.0, 15.0],
+            dims=["lead_time"],
+            coords={"lead_time": [0, 1, 2, 3]},
+        )
+        target = xr.DataArray(
+            data=[3.5, 7.0, 10.0, 14.0],
+            dims=["lead_time"],
+            coords={"lead_time": [0, 1, 2, 3]},
+        )
+
+        result = metric._compute_metric(forecast, target)
+
+        assert isinstance(result, xr.DataArray)
+        assert np.isfinite(result).all()
+
+    def test_threshold_approach_with_weights(self):
+        """Test MSE with threshold approach and custom weights."""
+        weights = xr.DataArray(
+            data=[1.0, 2.0, 1.0], dims=["lead_time"], coords={"lead_time": [0, 1, 2]}
+        )
+
+        metric = metrics.MeanSquaredError(
+            interval_where_one=(5.0, 10.0), weights=weights
+        )
+
+        forecast = xr.DataArray(
+            data=[6.0, 7.0, 12.0], dims=["lead_time"], coords={"lead_time": [0, 1, 2]}
+        )
+        target = xr.DataArray(
+            data=[5.0, 8.0, 10.0], dims=["lead_time"], coords={"lead_time": [0, 1, 2]}
+        )
+
+        result = metric._compute_metric(forecast, target)
+
+        assert isinstance(result, xr.DataArray)
+        assert np.isfinite(result).all()
+
+    def test_threshold_stores_parameters(self):
+        """Test that threshold parameters are stored correctly."""
+        interval_one = (5.0, 10.0)
+        interval_pos = (3.0, 12.0)
+        weights = xr.DataArray([1.0, 2.0])
+
+        metric = metrics.MeanSquaredError(
+            interval_where_one=interval_one,
+            interval_where_positive=interval_pos,
+            weights=weights,
+        )
+
+        assert metric.interval_where_one == interval_one
+        assert metric.interval_where_positive == interval_pos
+        assert metric.weights is weights
+
+    def test_without_threshold_uses_standard_mse(self):
+        """Test that MSE without thresholds uses standard MSE."""
+        metric_no_threshold = metrics.MeanSquaredError()
+        metric_with_threshold = metrics.MeanSquaredError(interval_where_one=None)
+
+        forecast = xr.DataArray(
+            data=[3.0, 4.0, 5.0], dims=["lead_time"], coords={"lead_time": [0, 1, 2]}
+        )
+        target = xr.DataArray(
+            data=[1.0, 2.0, 3.0], dims=["lead_time"], coords={"lead_time": [0, 1, 2]}
+        )
+
+        result1 = metric_no_threshold._compute_metric(forecast, target)
+        result2 = metric_with_threshold._compute_metric(forecast, target)
+
+        # Both should produce same result
+        assert isinstance(result1, xr.DataArray)
+        assert isinstance(result2, xr.DataArray)
+
+
+class TestMeanError:
+    """Tests for the MeanError(Mean Error) metric."""
+
+    def test_instantiation(self):
+        """Test that MeanErrorcan be instantiated."""
+        metric = metrics.MeanError()
+        assert isinstance(metric, metrics.BaseMetric)
+
+    def test_compute_metric_simple(self):
+        """Test MeanErrorcomputation with simple data."""
+        metric = metrics.MeanError()
 
         # Create test data with known bias
         forecast = xr.DataArray(
@@ -439,18 +663,17 @@ class TestME:
         assert isinstance(result, xr.DataArray)
 
 
-class TestRMSE:
+class TestRootMeanSquaredError:
     """Tests for the RMSE (Root Mean Square Error) metric."""
 
     def test_instantiation(self):
         """Test that RMSE can be instantiated."""
-        metric = metrics.RMSE()
+        metric = metrics.RootMeanSquaredError()
         assert isinstance(metric, metrics.BaseMetric)
-        assert metric.name == "rmse"
 
     def test_compute_metric_simple(self):
         """Test RMSE computation with simple data."""
-        metric = metrics.RMSE()
+        metric = metrics.RootMeanSquaredError()
 
         # Create test data
         forecast = xr.DataArray(
@@ -466,18 +689,17 @@ class TestRMSE:
         assert isinstance(result, xr.DataArray)
 
 
-class TestMaximumMAE:
-    """Tests for the MaximumMAE metric."""
+class TestMaximumMeanAbsoluteError:
+    """Tests for the MaximumMeanAbsoluteError metric."""
 
     def test_instantiation(self):
-        """Test that MaximumMAE can be instantiated."""
-        metric = metrics.MaximumMAE()
+        """Test that MaximumMeanAbsoluteError can be instantiated."""
+        metric = metrics.MaximumMeanAbsoluteError()
         assert isinstance(metric, metrics.BaseMetric)
-        assert metric.name == "MaximumMAE"
 
     def test_compute_metric_structure(self):
         """Test that _compute_metric returns the expected structure."""
-        metric = metrics.MaximumMAE()
+        metric = metrics.MaximumMeanAbsoluteError()
 
         # Create minimal test data
         times = pd.date_range("2020-01-01", periods=8, freq="h")
@@ -499,21 +721,20 @@ class TestMaximumMAE:
         except Exception:
             # If computation fails due to data structure issues,
             # at least test instantiation works
-            assert isinstance(metric, metrics.MaximumMAE)
+            assert isinstance(metric, metrics.MaximumMeanAbsoluteError)
 
 
-class TestMinimumMAE:
-    """Tests for the MinimumMAE metric."""
+class TestMinimumMeanAbsoluteError:
+    """Tests for the MinimumMeanAbsoluteError metric."""
 
     def test_instantiation(self):
-        """Test that MinimumMAE can be instantiated."""
-        metric = metrics.MinimumMAE()
+        """Test that MinimumMeanAbsoluteError can be instantiated."""
+        metric = metrics.MinimumMeanAbsoluteError()
         assert isinstance(metric, metrics.BaseMetric)
-        assert metric.name == "MinimumMAE"
 
     def test_compute_metric_structure(self):
         """Test that _compute_metric returns the expected structure."""
-        metric = metrics.MinimumMAE()
+        metric = metrics.MinimumMeanAbsoluteError()
 
         # Create minimal test data
         times = pd.date_range("2020-01-01", periods=8, freq="h")
@@ -535,21 +756,20 @@ class TestMinimumMAE:
         except Exception:
             # If computation fails due to data structure issues,
             # at least test instantiation works
-            assert isinstance(metric, metrics.MinimumMAE)
+            assert isinstance(metric, metrics.MinimumMeanAbsoluteError)
 
 
-class TestMaxMinMAE:
-    """Tests for the MaxMinMAE metric."""
+class TestMaximumLowestMeanAbsoluteError:
+    """Tests for the MaximumLowestMeanAbsoluteError metric."""
 
     def test_instantiation(self):
-        """Test that MaxMinMAE can be instantiated."""
-        metric = metrics.MaxMinMAE()
+        """Test that MaximumLowestMeanAbsoluteError can be instantiated."""
+        metric = metrics.MaximumLowestMeanAbsoluteError()
         assert isinstance(metric, metrics.BaseMetric)
-        assert metric.name == "MaxMinMAE"
 
     def test_compute_metric_structure(self):
         """Test that _compute_metric returns the expected structure."""
-        metric = metrics.MaxMinMAE()
+        metric = metrics.MaximumLowestMeanAbsoluteError()
 
         # Create test data spanning multiple days with 6-hourly data
         times = pd.date_range("2020-01-01", periods=16, freq="6h")  # 4 days
@@ -590,13 +810,13 @@ class TestMaxMinMAE:
         except Exception:
             # If computation fails due to data structure issues, at least test
             # instantiation works
-            assert isinstance(metric, metrics.MaxMinMAE)
+            assert isinstance(metric, metrics.MaximumLowestMeanAbsoluteError)
 
     def test_compute_metric_with_lead_time(self):
-        """Test MaxMinMAE with proper forecast structure including
-        lead_time dimension to cover lines 213-250.
+        """Test MaximumLowestMeanAbsoluteError with proper forecast structure
+        including lead_time dimension to cover lines 213-250.
         """
-        metric = metrics.MaxMinMAE()
+        metric = metrics.MaximumLowestMeanAbsoluteError()
 
         # Create 4 complete days of 6-hourly data
         times = pd.date_range("2020-01-01", periods=16, freq="6h")
@@ -644,13 +864,13 @@ class TestMaxMinMAE:
         except Exception:
             # If it still fails due to complex data requirements,
             # just verify the metric can be instantiated
-            assert isinstance(metric, metrics.MaxMinMAE)
+            assert isinstance(metric, metrics.MaximumLowestMeanAbsoluteError)
 
     def test_compute_metric_via_public_method(self):
-        """Test MaxMinMAE through compute_metric to cover kwargs
-        filtering (line 47).
+        """Test MaximumLowestMeanAbsoluteError through compute_metric to cover
+        kwargs filtering (line 47).
         """
-        metric = metrics.MaxMinMAE()
+        metric = metrics.MaximumLowestMeanAbsoluteError()
 
         # Create simple test data
         times = pd.date_range("2020-01-01", periods=16, freq="6h")
@@ -701,16 +921,16 @@ class TestMaxMinMAE:
         except Exception:
             # If it fails due to data structure, at least we tested
             # the kwargs filtering path
-            assert isinstance(metric, metrics.MaxMinMAE)
+            assert isinstance(metric, metrics.MaximumLowestMeanAbsoluteError)
 
 
-class TestDurationME:
-    """Tests for the DurationME applied metric.
+class TestDurationMeanError:
+    """Tests for the DurationMeanError metric.
 
-    DurationME works by:
+    DurationMeanError works by:
     1. Comparing data to climatology threshold (>= for heatwaves)
     2. Creating binary masks (1 where condition met, 0 otherwise)
-    3. Computing ME = mean(forecast_mask - target_mask)
+    3. Computing MeanError = mean(forecast_mask - target_mask)
     4. Averaging over all spatial and temporal dimensions
     """
 
@@ -785,23 +1005,23 @@ class TestDurationME:
         return forecast, target
 
     def test_instantiation(self):
-        """Test that DurationME can be instantiated with threshold criteria."""
+        """Test that DurationMeanError can be instantiated with threshold criteria."""
         climatology = self.create_climatology()
-        metric = metrics.DurationME(threshold_criteria=climatology)
-        assert isinstance(metric, metrics.ME)
+        metric = metrics.DurationMeanError(threshold_criteria=climatology)
+        assert isinstance(metric, metrics.MeanError)
         assert metric.name == "duration_me"
 
     def test_base_metric_inheritance(self):
-        """Test that DurationME inherits from ME."""
+        """Test that DurationMeanError inherits from ME."""
         climatology = self.create_climatology()
-        metric = metrics.DurationME(threshold_criteria=climatology)
-        assert isinstance(metric, metrics.ME)
+        metric = metrics.DurationMeanError(threshold_criteria=climatology)
+        assert isinstance(metric, metrics.MeanError)
         assert isinstance(metric, metrics.BaseMetric)
 
     def test_compute_applied_metric_structure(self):
         """Test that _compute_applied_metric returns expected structure."""
         climatology = self.create_climatology()
-        metric = metrics.DurationME(threshold_criteria=climatology)
+        metric = metrics.DurationMeanError(threshold_criteria=climatology)
 
         forecast_vals = np.full(10, 305.0)
         target_vals = np.full(10, 295.0)
@@ -818,10 +1038,10 @@ class TestDurationME:
         except Exception:
             # If computation fails due to data structure issues,
             # at least test instantiation works
-            assert isinstance(metric, metrics.OnsetME)
+            assert isinstance(metric, metrics.OnsetMeanError)
 
     def test_me_1_0_all_forecast_exceeds(self):
-        """Test ME = 1.0 when all forecast exceeds, all target below."""
+        """Test MeanError= 1.0 when all forecast exceeds, all target below."""
         climatology = self.create_climatology()
         forecast_vals = np.full(10, 305.0)  # All exceed 300K
         target_vals = np.full(10, 295.0)  # All below 300K
@@ -830,14 +1050,14 @@ class TestDurationME:
             forecast_vals, target_vals, climatology
         )
 
-        metric = metrics.DurationME(threshold_criteria=climatology)
+        metric = metrics.DurationMeanError(threshold_criteria=climatology)
         result = metric.compute_metric(forecast=forecast, target=target)
 
         # Should be 1.0: forecast mask all 1s, target mask all 0s
         assert np.isclose(result.values[0], 1.0)
 
     def test_me_0_5_half_forecast_exceeds(self):
-        """Test ME = 0.5 when half forecast exceeds, all target below."""
+        """Test MeanError= 0.5 when half forecast exceeds, all target below."""
         climatology = self.create_climatology()
         # First 5 timesteps exceed, last 5 below
         forecast_vals = np.concatenate([np.full(5, 305.0), np.full(5, 295.0)])
@@ -847,14 +1067,14 @@ class TestDurationME:
             forecast_vals, target_vals, climatology
         )
 
-        metric = metrics.DurationME(threshold_criteria=climatology)
+        metric = metrics.DurationMeanError(threshold_criteria=climatology)
         result = metric.compute_metric(forecast=forecast, target=target)
 
         # Should be 0.5: forecast mask: 5 ones, 5 zeros; target: all zeros
         assert np.isclose(result.values[0], 0.5)
 
     def test_me_neg_1_0_all_target_exceeds(self):
-        """Test ME = -1.0 when all forecast below, all target exceeds."""
+        """Test MeanError= -1.0 when all forecast below, all target exceeds."""
         climatology = self.create_climatology()
         forecast_vals = np.full(10, 295.0)  # All below 300K
         target_vals = np.full(10, 305.0)  # All exceed 300K
@@ -863,14 +1083,14 @@ class TestDurationME:
             forecast_vals, target_vals, climatology
         )
 
-        metric = metrics.DurationME(threshold_criteria=climatology)
+        metric = metrics.DurationMeanError(threshold_criteria=climatology)
         result = metric.compute_metric(forecast=forecast, target=target)
 
         # Should be -1.0: forecast mask all 0s, target mask all 1s
         assert np.isclose(result.values[0], -1.0)
 
     def test_me_0_0_forecast_equals_target(self):
-        """Test ME = 0.0 when forecast equals target."""
+        """Test MeanError= 0.0 when forecast equals target."""
         climatology = self.create_climatology()
         forecast_vals = np.full(10, 305.0)  # All exceed 300K
         target_vals = np.full(10, 305.0)  # All exceed 300K
@@ -879,14 +1099,14 @@ class TestDurationME:
             forecast_vals, target_vals, climatology
         )
 
-        metric = metrics.DurationME(threshold_criteria=climatology)
+        metric = metrics.DurationMeanError(threshold_criteria=climatology)
         result = metric.compute_metric(forecast=forecast, target=target)
 
         # Should be 0.0: forecast and target masks both all 1s
         assert np.isclose(result.values[0], 0.0)
 
     def test_me_0_3_three_timesteps_differ(self):
-        """Test ME = 0.3 when 3/10 timesteps differ."""
+        """Test MeanError= 0.3 when 3/10 timesteps differ."""
         climatology = self.create_climatology()
         # First 3 exceed, rest below
         forecast_vals = np.concatenate([np.full(3, 305.0), np.full(7, 295.0)])
@@ -896,14 +1116,14 @@ class TestDurationME:
             forecast_vals, target_vals, climatology
         )
 
-        metric = metrics.DurationME(threshold_criteria=climatology)
+        metric = metrics.DurationMeanError(threshold_criteria=climatology)
         result = metric.compute_metric(forecast=forecast, target=target)
 
         # Should be 0.3: forecast mask: 3 ones, 7 zeros; target: all zeros
         assert np.isclose(result.values[0], 0.3)
 
     def test_me_with_lead_time_dimension(self):
-        """Test ME with forecast having lead_time dimension.
+        """Test MeanErrorwith forecast having lead_time dimension.
 
         This tests the alternative forecast structure where:
         - dims are (lead_time, valid_time, latitude, longitude)
@@ -960,7 +1180,7 @@ class TestDurationME:
         )
 
         # Compute metric
-        metric = metrics.DurationME(threshold_criteria=climatology)
+        metric = metrics.DurationMeanError(threshold_criteria=climatology)
         result = metric.compute_metric(forecast=forecast, target=target)
 
         # Result will have init_time dimension from preserve_dims
@@ -984,7 +1204,7 @@ class TestDurationME:
         assert result.values[-1] == 1
 
     def test_me_with_lead_time_partial_target_exceedance(self):
-        """Test ME with lead_time dims where target partially exceeds.
+        """Test MeanErrorwith lead_time dims where target partially exceeds.
 
         This tests the alternative forecast structure with:
         - dims are (lead_time, valid_time, latitude, longitude)
@@ -1044,7 +1264,7 @@ class TestDurationME:
         )
 
         # Compute metric
-        metric = metrics.DurationME(threshold_criteria=climatology)
+        metric = metrics.DurationMeanError(threshold_criteria=climatology)
         result = metric.compute_metric(forecast=forecast, target=target)
 
         # Result will have init_time dimension from preserve_dims
@@ -1052,7 +1272,7 @@ class TestDurationME:
 
         # First init_time (2020-01-01) should have lower ME
         # because target also exceeds at that time (diff=0)
-        # Later init_times should have higher ME (only forecast exceeds)
+        # Later init_times should have higher MeanError(only forecast exceeds)
         first_init_me = result.values[0]
         middle_init_me = result.values[len(result) // 2]
 
@@ -1068,7 +1288,7 @@ class TestDurationME:
         assert np.all(result.values >= 0)
 
     def test_me_with_nans_no_target_exceedance(self):
-        """Test ME with NaNs when no target values exceed threshold.
+        """Test MeanErrorwith NaNs when no target values exceed threshold.
 
         Forecast has NaNs at specific locations, and target never exceeds.
         NaNs should be excluded from the calculation.
@@ -1087,7 +1307,7 @@ class TestDurationME:
         forecast_with_nans = forecast.copy()
         forecast_with_nans.values[0, 2:4, 0, 0] = np.nan  # timesteps 2-3, first loc
 
-        metric = metrics.DurationME(threshold_criteria=climatology)
+        metric = metrics.DurationMeanError(threshold_criteria=climatology)
         result = metric.compute_metric(forecast=forecast_with_nans, target=target)
 
         # Should still be positive (forecast exceeds where not NaN)
@@ -1099,7 +1319,7 @@ class TestDurationME:
         assert mean_result < 1.0
 
     def test_me_with_nans_one_target_exceedance(self):
-        """Test ME with NaNs when one target value exceeds threshold.
+        """Test MeanErrorwith NaNs when one target value exceeds threshold.
 
         Forecast has NaNs and all non-NaN values exceed.
         Target has one timestep that exceeds.
@@ -1120,7 +1340,7 @@ class TestDurationME:
         forecast_with_nans = forecast.copy()
         forecast_with_nans.values[0, 5:7, 0, 0] = np.nan  # timesteps 5-6, first loc
 
-        metric = metrics.DurationME(threshold_criteria=climatology)
+        metric = metrics.DurationMeanError(threshold_criteria=climatology)
         result = metric.compute_metric(forecast=forecast_with_nans, target=target)
 
         # Should be less than 1.0 because:
@@ -1131,10 +1351,10 @@ class TestDurationME:
         assert result.values[0] > 0
 
     def test_me_with_nans_all_but_nan_exceed(self):
-        """Test ME when all non-NaN forecast/target values exceed threshold.
+        """Test MeanErrorwhen all non-NaN forecast/target values exceed threshold.
 
         Both forecast and target exceed at all non-NaN positions.
-        Should result in ME close to 0.
+        Should result in MeanErrorclose to 0.
         """
         climatology = self.create_climatology()
 
@@ -1150,7 +1370,7 @@ class TestDurationME:
         forecast_with_nans = forecast.copy()
         forecast_with_nans.values[0, 3:5, :, :] = np.nan  # timesteps 3-4, all locs
 
-        metric = metrics.DurationME(threshold_criteria=climatology)
+        metric = metrics.DurationMeanError(threshold_criteria=climatology)
         result = metric.compute_metric(forecast=forecast_with_nans, target=target)
 
         # Should be 0 because wherever both have valid data, both exceed
@@ -1158,7 +1378,7 @@ class TestDurationME:
         assert np.isclose(result.values[0], 0.0)
 
     def test_me_with_nans_mixed_pattern(self):
-        """Test ME with NaNs and mixed exceedance pattern.
+        """Test MeanErrorwith NaNs and mixed exceedance pattern.
 
         Complex scenario with NaNs at different locations and varying
         exceedance patterns across timesteps and spatial points.
@@ -1183,7 +1403,7 @@ class TestDurationME:
         # NaN at timestep 8 (neither exceeds)
         forecast_with_nans.values[0, 8, 0, 1] = np.nan
 
-        metric = metrics.DurationME(threshold_criteria=climatology)
+        metric = metrics.DurationMeanError(threshold_criteria=climatology)
         result = metric.compute_metric(forecast=forecast_with_nans, target=target)
 
         # Result should be positive but less than previous tests
@@ -1195,14 +1415,15 @@ class TestDurationME:
         assert not np.isnan(result.values[0])
 
     def test_instantiation_with_float_threshold_criteria(self):
-        """Test that DurationME can be instantiated with float threshold criteria."""
-        metric = metrics.DurationME(threshold_criteria=300.0)
-        assert isinstance(metric, metrics.ME)
+        """Test that DurationMeanError can be instantiated with float threshold
+        criteria."""
+        metric = metrics.DurationMeanError(threshold_criteria=300.0)
+        assert isinstance(metric, metrics.MeanError)
         assert metric.name == "duration_me"
         assert metric.threshold_criteria == 300.0
 
     def test_me_with_float_threshold_all_forecast_exceeds(self):
-        """Test ME with float threshold when all forecast exceeds."""
+        """Test MeanErrorwith float threshold when all forecast exceeds."""
         climatology = self.create_climatology()
         forecast_vals = np.full(10, 305.0)  # All exceed 300.0
         target_vals = np.full(10, 295.0)  # All below 300.0
@@ -1211,14 +1432,14 @@ class TestDurationME:
             forecast_vals, target_vals, climatology
         )
 
-        metric = metrics.DurationME(threshold_criteria=300.0)
+        metric = metrics.DurationMeanError(threshold_criteria=300.0)
         result = metric.compute_metric(forecast=forecast, target=target)
 
         # Should be 1.0: forecast mask all 1s, target mask all 0s
         assert np.isclose(result.values[0], 1.0)
 
     def test_me_with_float_threshold_mixed(self):
-        """Test ME with float threshold and mixed exceedance."""
+        """Test MeanErrorwith float threshold and mixed exceedance."""
         climatology = self.create_climatology()
         # First 6 exceed 300.0, last 4 below
         forecast_vals = np.concatenate([np.full(6, 305.0), np.full(4, 295.0)])
@@ -1229,11 +1450,11 @@ class TestDurationME:
             forecast_vals, target_vals, climatology
         )
 
-        metric = metrics.DurationME(threshold_criteria=300.0)
+        metric = metrics.DurationMeanError(threshold_criteria=300.0)
         result = metric.compute_metric(forecast=forecast, target=target)
 
         # Forecast: 6 timesteps exceed, Target: 3 timesteps exceed
-        # ME = (6 - 3) / 10 = 0.3
+        # MeanError= (6 - 3) / 10 = 0.3
         assert np.isclose(result.values[0], 0.3)
 
     def test_float_and_climatology_produce_same_result(self):
@@ -1247,11 +1468,11 @@ class TestDurationME:
         )
 
         # Test with climatology (constant 300K)
-        metric_clim = metrics.DurationME(threshold_criteria=climatology)
+        metric_clim = metrics.DurationMeanError(threshold_criteria=climatology)
         result_clim = metric_clim.compute_metric(forecast=forecast, target=target)
 
         # Test with float threshold (300.0)
-        metric_float = metrics.DurationME(threshold_criteria=300.0)
+        metric_float = metrics.DurationMeanError(threshold_criteria=300.0)
         result_float = metric_float.compute_metric(forecast=forecast, target=target)
 
         # Results should be the same
@@ -1279,7 +1500,7 @@ class TestDurationME:
 
         # Test with sparse data - should not raise "All arrays must be instances of
         # SparseArray"
-        metric = metrics.DurationME(threshold_criteria=300.0)
+        metric = metrics.DurationMeanError(threshold_criteria=300.0)
         result = metric.compute_metric(forecast=forecast_sparse, target=target_sparse)
 
         # Result should be valid (not NaN) and correct
@@ -1308,7 +1529,7 @@ class TestDurationME:
         target_sparse.data = sparse.COO.from_numpy(target.values)
 
         # Test with climatology and sparse data
-        metric = metrics.DurationME(threshold_criteria=climatology)
+        metric = metrics.DurationMeanError(threshold_criteria=climatology)
         result = metric.compute_metric(forecast=forecast_sparse, target=target_sparse)
 
         # Result should be valid
@@ -1322,13 +1543,13 @@ class TestThresholdMetric:
 
     def test_instantiation(self):
         """Test that ThresholdMetric can be instantiated via subclass."""
-        metric = metrics.CSI()
+        metric = metrics.CriticalSuccessIndex()
         assert isinstance(metric, metrics.ThresholdMetric)
         assert isinstance(metric, metrics.BaseMetric)
 
     def test_threshold_parameters(self):
         """Test that threshold parameters are set correctly."""
-        metric = metrics.CSI(
+        metric = metrics.CriticalSuccessIndex(
             forecast_threshold=0.7, target_threshold=0.3, preserve_dims="time"
         )
         assert metric.forecast_threshold == 0.7
@@ -1337,7 +1558,9 @@ class TestThresholdMetric:
 
     def test_callable_interface(self):
         """Test that ThresholdMetric instances are callable."""
-        metric = metrics.CSI(forecast_threshold=0.6, target_threshold=0.4)
+        metric = metrics.CriticalSuccessIndex(
+            forecast_threshold=0.6, target_threshold=0.4
+        )
 
         # Create simple binary-like test data
         forecast = xr.DataArray(
@@ -1358,7 +1581,7 @@ class TestThresholdMetric:
 
     def test_transformed_contingency_manager_method(self):
         """Test the transformed_contingency_manager method."""
-        metric = metrics.CSI()
+        metric = metrics.CriticalSuccessIndex()
 
         # Create test data
         forecast = xr.DataArray(
@@ -1389,7 +1612,7 @@ class TestThresholdMetric:
     def test_transformed_contingency_manager_with_sparse(self):
         """Test transformed_contingency_manager with sparse arrays."""
 
-        metric = metrics.CSI()
+        metric = metrics.CriticalSuccessIndex()
 
         # Create dense test data first
         forecast_dense = np.array([[0.8, 0.3, 0.0], [0.7, 0.0, 0.2]])
@@ -1438,7 +1661,7 @@ class TestThresholdMetric:
         """Test with dense forecast and sparse target."""
         import sparse
 
-        metric = metrics.FAR()
+        metric = metrics.FalseAlarmRatio()
 
         # Create dense forecast
         forecast = xr.DataArray(
@@ -1479,7 +1702,11 @@ class TestThresholdMetric:
         """Test ThresholdMetric as composite with metric classes."""
         # Create composite metric
         composite = metrics.ThresholdMetric(
-            metrics=[metrics.CSI, metrics.FAR, metrics.Accuracy],
+            metrics=[
+                metrics.CriticalSuccessIndex,
+                metrics.FalseAlarmRatio,
+                metrics.Accuracy,
+            ],
             forecast_threshold=0.6,
             target_threshold=0.4,
         )
@@ -1497,12 +1724,6 @@ class TestThresholdMetric:
         # Each should be a ThresholdMetric instance
         for metric in expanded_metrics:
             assert isinstance(metric, metrics.ThresholdMetric)
-
-        # Verify we got the right metrics
-        metric_names = [m.name for m in expanded_metrics]
-        assert "critical_success_index" in metric_names
-        assert "false_alarm_ratio" in metric_names
-        assert "accuracy" in metric_names
 
     def test_composite_empty_raises_error(self):
         """Test that composite without metrics raises error."""
@@ -1527,12 +1748,12 @@ class TestThresholdMetric:
         """Test composite with all threshold metrics."""
         composite = metrics.ThresholdMetric(
             metrics=[
-                metrics.CSI,
-                metrics.FAR,
-                metrics.TP,
-                metrics.FP,
-                metrics.TN,
-                metrics.FN,
+                metrics.CriticalSuccessIndex,
+                metrics.FalseAlarmRatio,
+                metrics.TruePositives,
+                metrics.FalsePositives,
+                metrics.TrueNegatives,
+                metrics.FalseNegatives,
                 metrics.Accuracy,
             ],
             forecast_threshold=0.5,
@@ -1545,24 +1766,15 @@ class TestThresholdMetric:
         # Should have all 7 metrics
         assert len(expanded_metrics) == 7
 
-        metric_names = [m.name for m in expanded_metrics]
-        assert "critical_success_index" in metric_names
-        assert "false_alarm_ratio" in metric_names
-        assert "true_positive" in metric_names
-        assert "false_positive" in metric_names
-        assert "true_negative" in metric_names
-        assert "false_negative" in metric_names
-        assert "accuracy" in metric_names
-
     def test_composite_is_composite_method(self):
         """Test is_composite method."""
         # Regular metric is not composite
-        single = metrics.CSI()
+        single = metrics.CriticalSuccessIndex()
         assert not single.is_composite()
 
         # Composite metric is composite
         composite = metrics.ThresholdMetric(
-            metrics=[metrics.CSI, metrics.FAR],
+            metrics=[metrics.CriticalSuccessIndex, metrics.FalseAlarmRatio],
             forecast_threshold=0.7,
             target_threshold=0.3,
         )
@@ -1573,21 +1785,22 @@ class TestThresholdMetric:
         assert len(expanded) == 2
 
 
-class TestCSI:
-    """Tests for the CSI (Critical Success Index) metric."""
+class TestCriticalSuccessIndex:
+    """Tests for the CriticalSuccessIndex (Critical Success Index) metric."""
 
     def test_instantiation(self):
-        """Test that CSI can be instantiated."""
-        metric = metrics.CSI()
+        """Test that CriticalSuccessIndex can be instantiated."""
+        metric = metrics.CriticalSuccessIndex()
         assert isinstance(metric, metrics.ThresholdMetric)
-        assert metric.name == "critical_success_index"
 
     def test_compute_metric(self):
-        """Test CSI computation with simple data."""
-        metric = metrics.CSI(forecast_threshold=0.5, target_threshold=0.5)
+        """Test CriticalSuccessIndex computation with simple data."""
+        metric = metrics.CriticalSuccessIndex(
+            forecast_threshold=0.5, target_threshold=0.5
+        )
 
         # Test data: TP=2, FP=1, FN=1, TN=0
-        # CSI = TP/(TP+FP+FN) = 2/4 = 0.5
+        # CriticalSuccessIndex = TP/(TP+FP+FN) = 2/4 = 0.5
         forecast = xr.DataArray(
             data=[0.8, 0.3, 0.7, 0.2],
             dims=["lead_time"],
@@ -1603,18 +1816,17 @@ class TestCSI:
         assert isinstance(result, xr.DataArray)
 
 
-class TestFAR:
-    """Tests for the FAR (False Alarm Ratio) metric."""
+class TestFalseAlarmRatio:
+    """Tests for the FalseAlarmRatio (False Alarm Ratio) metric."""
 
     def test_instantiation(self):
-        """Test that FAR can be instantiated."""
-        metric = metrics.FAR()
+        """Test that FalseAlarmRatio can be instantiated."""
+        metric = metrics.FalseAlarmRatio()
         assert isinstance(metric, metrics.ThresholdMetric)
-        assert metric.name == "false_alarm_ratio"
 
     def test_compute_metric(self):
-        """Test FAR computation with simple data."""
-        metric = metrics.FAR(forecast_threshold=0.5, target_threshold=0.5)
+        """Test FalseAlarmRatio computation with simple data."""
+        metric = metrics.FalseAlarmRatio(forecast_threshold=0.5, target_threshold=0.5)
 
         forecast = xr.DataArray(
             data=[0.8, 0.3, 0.7, 0.2],
@@ -1636,13 +1848,12 @@ class TestTP:
 
     def test_instantiation(self):
         """Test that TP can be instantiated."""
-        metric = metrics.TP()
+        metric = metrics.TruePositives()
         assert isinstance(metric, metrics.ThresholdMetric)
-        assert metric.name == "true_positive"
 
     def test_compute_metric(self):
         """Test TP computation."""
-        metric = metrics.TP(forecast_threshold=0.5, target_threshold=0.5)
+        metric = metrics.TruePositives(forecast_threshold=0.5, target_threshold=0.5)
 
         forecast = xr.DataArray(
             data=[0.8, 0.3, 0.7, 0.2],
@@ -1664,13 +1875,12 @@ class TestFP:
 
     def test_instantiation(self):
         """Test that FP can be instantiated."""
-        metric = metrics.FP()
+        metric = metrics.FalsePositives()
         assert isinstance(metric, metrics.ThresholdMetric)
-        assert metric.name == "false_positive"
 
     def test_compute_metric(self):
         """Test FP computation."""
-        metric = metrics.FP(forecast_threshold=0.5, target_threshold=0.5)
+        metric = metrics.FalsePositives(forecast_threshold=0.5, target_threshold=0.5)
 
         forecast = xr.DataArray(
             data=[0.8, 0.3, 0.7, 0.2],
@@ -1692,13 +1902,12 @@ class TestTN:
 
     def test_instantiation(self):
         """Test that TN can be instantiated."""
-        metric = metrics.TN()
+        metric = metrics.TrueNegatives()
         assert isinstance(metric, metrics.ThresholdMetric)
-        assert metric.name == "true_negative"
 
     def test_compute_metric(self):
         """Test TN computation."""
-        metric = metrics.TN(forecast_threshold=0.5, target_threshold=0.5)
+        metric = metrics.TrueNegatives(forecast_threshold=0.5, target_threshold=0.5)
 
         forecast = xr.DataArray(
             data=[0.8, 0.3, 0.7, 0.2],
@@ -1720,13 +1929,12 @@ class TestFN:
 
     def test_instantiation(self):
         """Test that FN can be instantiated."""
-        metric = metrics.FN()
+        metric = metrics.FalseNegatives()
         assert isinstance(metric, metrics.ThresholdMetric)
-        assert metric.name == "false_negative"
 
     def test_compute_metric(self):
         """Test FN computation."""
-        metric = metrics.FN(forecast_threshold=0.5, target_threshold=0.5)
+        metric = metrics.FalseNegatives(forecast_threshold=0.5, target_threshold=0.5)
 
         forecast = xr.DataArray(
             data=[0.8, 0.3, 0.7, 0.2],
@@ -1750,7 +1958,6 @@ class TestAccuracy:
         """Test that Accuracy can be instantiated."""
         metric = metrics.Accuracy()
         assert isinstance(metric, metrics.ThresholdMetric)
-        assert metric.name == "accuracy"
 
     def test_compute_metric(self):
         """Test Accuracy computation."""
@@ -1786,8 +1993,8 @@ class TestMetricIntegration:
         ]
 
         for metric_class in all_metric_classes:
-            # DurationME requires threshold criteria parameter
-            if metric_class.__name__ == "DurationME":
+            # DurationMeanError requires threshold criteria parameter
+            if metric_class.__name__ == "DurationMeanError":
                 metric = metric_class(threshold_criteria=300.0)
             else:
                 metric = metric_class()
@@ -1821,8 +2028,8 @@ class TestLandfallMetrics:
     def test_landfall_metrics_exist(self):
         """Test that consolidated landfall metrics exist."""
         assert hasattr(metrics, "LandfallDisplacement")
-        assert hasattr(metrics, "LandfallTimeME")
-        assert hasattr(metrics, "LandfallIntensityMAE")
+        assert hasattr(metrics, "LandfallTimeMeanError")
+        assert hasattr(metrics, "LandfallIntensityMeanAbsoluteError")
 
     def test_landfall_displacement_instantiation(self):
         """Test LandfallDisplacement can be instantiated."""
@@ -1834,16 +2041,16 @@ class TestLandfallMetrics:
         assert isinstance(displacement_first, metrics.BaseMetric)
 
     def test_landfall_time_me_instantiation(self):
-        """Test LandfallTimeME can be instantiated."""
-        timing_first = metrics.LandfallTimeME(approach="first")
-        timing_next = metrics.LandfallTimeME(approach="next")
+        """Test LandfallTimeMeanError can be instantiated."""
+        timing_first = metrics.LandfallTimeMeanError(approach="first")
+        timing_next = metrics.LandfallTimeMeanError(approach="next")
 
         assert timing_first.approach == "first"
         assert timing_next.approach == "next"
 
     def test_landfall_intensity_mae_instantiation(self):
-        """Test LandfallIntensityMAE can be instantiated."""
-        intensity = metrics.LandfallIntensityMAE(
+        """Test LandfallIntensityMeanAbsoluteError can be instantiated."""
+        intensity = metrics.LandfallIntensityMeanAbsoluteError(
             approach="first",
             forecast_variable="surface_wind_speed",
             target_variable="surface_wind_speed",
@@ -1942,8 +2149,8 @@ class TestLandfallMetrics:
 
             metrics_to_test = [
                 metrics.LandfallDisplacement(approach="first"),
-                metrics.LandfallTimeME(approach="first"),
-                metrics.LandfallIntensityMAE(
+                metrics.LandfallTimeMeanError(approach="first"),
+                metrics.LandfallIntensityMeanAbsoluteError(
                     approach="first",
                     forecast_variable="surface_wind_speed",
                     target_variable="surface_wind_speed",
@@ -2035,7 +2242,8 @@ class TestLandfallMetrics:
             assert 39.0 < result.values[0] < 41.0
 
     def test_landfall_intensity_mae_with_known_values(self):
-        """Test LandfallIntensityMAE with manually calculated expected values."""
+        """Test LandfallIntensityMeanAbsoluteError with manually calculated expected
+        values."""
         # Create test data with known intensity values
         # Target intensity: 50 m/s
         # Forecast intensities: 53 m/s and 48 m/s for two init_times
@@ -2108,7 +2316,7 @@ class TestLandfallMetrics:
             mock_find.side_effect = mock_find_func
 
             # Test intensity MAE metric
-            metric = metrics.LandfallIntensityMAE(
+            metric = metrics.LandfallIntensityMeanAbsoluteError(
                 approach="first",
                 forecast_variable="surface_wind_speed",
                 target_variable="surface_wind_speed",
@@ -2124,7 +2332,7 @@ class TestLandfallMetrics:
             np.testing.assert_allclose(result.values, [3.0, 2.0], rtol=1e-10)
 
     def test_landfall_time_me_with_timing_errors(self):
-        """Test LandfallTimeME with various timing error scenarios."""
+        """Test LandfallTimeMeanError with various timing error scenarios."""
         # Test different timing scenarios:
         # 1. Early forecast (landfall 3 hours early): error = -3 hours
         # 2. Late forecast (landfall 2 hours late): error = +2 hours
@@ -2215,7 +2423,7 @@ class TestLandfallMetrics:
             mock_find.side_effect = mock_find_func
 
             # Test timing metric
-            metric = metrics.LandfallTimeME(approach="first")
+            metric = metrics.LandfallTimeMeanError(approach="first")
             result = metric._compute_metric(
                 forecast["surface_wind_speed"], target["surface_wind_speed"]
             )
@@ -2292,7 +2500,8 @@ class TestLandfallMetrics:
             assert (result >= 0).all()
 
     def test_landfall_intensity_integration(self):
-        """Integration test: LandfallIntensityMAE with real landfall detection.
+        """Integration test: LandfallIntensityMeanAbsoluteError with real landfall
+        detection.
 
         Note: This test may return all NaNs if the land mask is not available.
         """
@@ -2323,7 +2532,7 @@ class TestLandfallMetrics:
         )
 
         # Test the metric
-        metric = metrics.LandfallIntensityMAE(
+        metric = metrics.LandfallIntensityMeanAbsoluteError(
             approach="first",
             forecast_variable="surface_wind_speed",
             target_variable="surface_wind_speed",
@@ -2341,7 +2550,7 @@ class TestLandfallMetrics:
             assert (result >= 0).all()
 
     def test_landfall_timing_integration(self):
-        """Integration test: LandfallTimeME with real landfall detection.
+        """Integration test: LandfallTimeMeanError with real landfall detection.
 
         Note: This test may return all NaNs if the land mask is not available.
         """
@@ -2376,7 +2585,7 @@ class TestLandfallMetrics:
         )
 
         # Test the metric
-        metric = metrics.LandfallTimeME(approach="first")
+        metric = metrics.LandfallTimeMeanError(approach="first")
 
         result = metric._compute_metric(forecast_track, target_track)
 
@@ -2471,8 +2680,8 @@ class TestLandfallMetrics:
         assert np.isnan(result.values)
 
     def test_landfall_time_me_with_none_landfalls(self):
-        """Test LandfallTimeME handles None landfalls."""
-        metric = metrics.LandfallTimeME(approach="first")
+        """Test LandfallTimeMeanError handles None landfalls."""
+        metric = metrics.LandfallTimeMeanError(approach="first")
 
         # Test with None landfalls
         result = metric._calculate_time_difference(None, None)
@@ -2480,8 +2689,8 @@ class TestLandfallMetrics:
         assert np.isnan(result.values)
 
     def test_landfall_time_me_no_common_init_times(self):
-        """Test LandfallTimeME with no common init_times."""
-        metric = metrics.LandfallTimeME(approach="first")
+        """Test LandfallTimeMeanError with no common init_times."""
+        metric = metrics.LandfallTimeMeanError(approach="first")
 
         forecast_landfall = xr.DataArray(
             [35.0],
@@ -2506,8 +2715,8 @@ class TestLandfallMetrics:
         assert np.isnan(result.values)
 
     def test_landfall_intensity_mae_basic(self):
-        """Test LandfallIntensityMAE._compute_absolute_error."""
-        metric = metrics.LandfallIntensityMAE(approach="first")
+        """Test LandfallIntensityMeanAbsoluteError._compute_absolute_error."""
+        metric = metrics.LandfallIntensityMeanAbsoluteError(approach="first")
 
         forecast_landfall = xr.DataArray(
             [50.0],
@@ -2645,7 +2854,11 @@ class TestThresholdMetricComposite:
         """Test composite metric with multiple threshold metrics."""
         # Create composite metric with multiple metrics
         composite = metrics.ThresholdMetric(
-            metrics=[metrics.CSI, metrics.FAR, metrics.Accuracy],
+            metrics=[
+                metrics.CriticalSuccessIndex,
+                metrics.FalseAlarmRatio,
+                metrics.Accuracy,
+            ],
             forecast_threshold=15000,
             target_threshold=0.3,
         )
@@ -2662,7 +2875,7 @@ class TestThresholdMetricComposite:
     def test_composite_maybe_prepare_kwargs(self):
         """Test that composite prepares kwargs with transformed manager."""
         composite = metrics.ThresholdMetric(
-            metrics=[metrics.CSI, metrics.FAR],
+            metrics=[metrics.CriticalSuccessIndex, metrics.FalseAlarmRatio],
             forecast_threshold=15000,
             target_threshold=0.3,
             preserve_dims="x",
@@ -2685,7 +2898,7 @@ class TestThresholdMetricComposite:
     def test_composite_with_single_metric_no_transformed_manager(self):
         """Test that single metric composite doesn't add transformed manager."""
         composite = metrics.ThresholdMetric(
-            metrics=[metrics.CSI],
+            metrics=[metrics.CriticalSuccessIndex],
             forecast_threshold=15000,
             target_threshold=0.3,
         )
@@ -2700,7 +2913,9 @@ class TestThresholdMetricComposite:
 
     def test_non_composite_maybe_prepare_kwargs(self):
         """Test that non-composite metrics don't add transformed manager."""
-        metric = metrics.CSI(forecast_threshold=15000, target_threshold=0.3)
+        metric = metrics.CriticalSuccessIndex(
+            forecast_threshold=15000, target_threshold=0.3
+        )
 
         forecast = xr.DataArray([[15500, 14000]], dims=["x", "y"])
         target = xr.DataArray([[0.4, 0.2]], dims=["x", "y"])
@@ -2752,7 +2967,7 @@ class TestThresholdMetricMethods:
     def test_is_composite_returns_true_for_composite(self):
         """Test is_composite returns True for composite metrics."""
         composite = metrics.ThresholdMetric(
-            metrics=[metrics.CSI, metrics.FAR],
+            metrics=[metrics.CriticalSuccessIndex, metrics.FalseAlarmRatio],
             forecast_threshold=15000,
             target_threshold=0.3,
         )
@@ -2760,7 +2975,9 @@ class TestThresholdMetricMethods:
 
     def test_is_composite_returns_false_for_non_composite(self):
         """Test is_composite returns False for non-composite metrics."""
-        metric = metrics.CSI(forecast_threshold=15000, target_threshold=0.3)
+        metric = metrics.CriticalSuccessIndex(
+            forecast_threshold=15000, target_threshold=0.3
+        )
         assert metric.is_composite() is False
 
     def test_is_composite_returns_false_for_empty_metrics_list(self):
@@ -2775,20 +2992,26 @@ class TestThresholdMetricMethods:
     def test_maybe_expand_composite_returns_instances(self):
         """Test maybe_expand_composite returns metric instances."""
         composite = metrics.ThresholdMetric(
-            metrics=[metrics.CSI, metrics.FAR, metrics.Accuracy],
+            metrics=[
+                metrics.CriticalSuccessIndex,
+                metrics.FalseAlarmRatio,
+                metrics.Accuracy,
+            ],
             forecast_threshold=15000,
             target_threshold=0.3,
         )
         expanded = composite.maybe_expand_composite()
 
         assert len(expanded) == 3
-        assert isinstance(expanded[0], metrics.CSI)
-        assert isinstance(expanded[1], metrics.FAR)
+        assert isinstance(expanded[0], metrics.CriticalSuccessIndex)
+        assert isinstance(expanded[1], metrics.FalseAlarmRatio)
         assert isinstance(expanded[2], metrics.Accuracy)
 
     def test_maybe_expand_composite_returns_self_for_non_composite(self):
         """Test maybe_expand_composite returns [self] for non-composite."""
-        metric = metrics.CSI(forecast_threshold=15000, target_threshold=0.3)
+        metric = metrics.CriticalSuccessIndex(
+            forecast_threshold=15000, target_threshold=0.3
+        )
         expanded = metric.maybe_expand_composite()
 
         assert len(expanded) == 1
@@ -2808,7 +3031,9 @@ class TestThresholdMetricMethods:
 
     def test_maybe_prepare_composite_kwargs_preserves_base_kwargs(self):
         """Test that base kwargs are preserved."""
-        metric = metrics.CSI(forecast_threshold=15000, target_threshold=0.3)
+        metric = metrics.CriticalSuccessIndex(
+            forecast_threshold=15000, target_threshold=0.3
+        )
         forecast = xr.DataArray([[15500, 14000]], dims=["x", "y"])
         target = xr.DataArray([[0.4, 0.2]], dims=["x", "y"])
 
@@ -2821,7 +3046,9 @@ class TestThresholdMetricMethods:
 
     def test_maybe_prepare_composite_kwargs_no_manager_for_non_composite(self):
         """Test no transformed_manager added for non-composite."""
-        metric = metrics.CSI(forecast_threshold=15000, target_threshold=0.3)
+        metric = metrics.CriticalSuccessIndex(
+            forecast_threshold=15000, target_threshold=0.3
+        )
         forecast = xr.DataArray([[15500, 14000]], dims=["x", "y"])
         target = xr.DataArray([[0.4, 0.2]], dims=["x", "y"])
 
@@ -2832,7 +3059,7 @@ class TestThresholdMetricMethods:
     def test_maybe_prepare_composite_kwargs_adds_manager_for_composite(self):
         """Test transformed_manager added for multi-metric composite."""
         composite = metrics.ThresholdMetric(
-            metrics=[metrics.CSI, metrics.FAR],
+            metrics=[metrics.CriticalSuccessIndex, metrics.FalseAlarmRatio],
             forecast_threshold=15000,
             target_threshold=0.3,
             preserve_dims="x",
@@ -2850,7 +3077,7 @@ class TestThresholdMetricMethods:
     def test_maybe_prepare_composite_kwargs_no_manager_single_metric(self):
         """Test no transformed_manager for single-metric composite."""
         composite = metrics.ThresholdMetric(
-            metrics=[metrics.CSI],
+            metrics=[metrics.CriticalSuccessIndex],
             forecast_threshold=15000,
             target_threshold=0.3,
             preserve_dims="x",
@@ -2870,23 +3097,25 @@ class TestBaseMetricVariableValidation:
     def test_only_forecast_variable_raises_error(self):
         """Test that providing only forecast_variable raises error."""
         with pytest.raises(ValueError, match="Both forecast_variable"):
-            metrics.MAE(forecast_variable="temp", target_variable=None)
+            metrics.MeanAbsoluteError(forecast_variable="temp", target_variable=None)
 
     def test_only_target_variable_raises_error(self):
         """Test that providing only target_variable raises error."""
         with pytest.raises(ValueError, match="Both forecast_variable"):
-            metrics.MAE(forecast_variable=None, target_variable="temp")
+            metrics.MeanAbsoluteError(forecast_variable=None, target_variable="temp")
 
     def test_both_variables_provided(self):
         """Test that providing both variables works."""
         # Should not raise error
-        metric = metrics.MAE(forecast_variable="temp", target_variable="temp")
+        metric = metrics.MeanAbsoluteError(
+            forecast_variable="temp", target_variable="temp"
+        )
         assert metric.forecast_variable == "temp"
         assert metric.target_variable == "temp"
 
     def test_no_variables_provided(self):
         """Test that providing no variables works."""
         # Should not raise error
-        metric = metrics.MAE()
+        metric = metrics.MeanAbsoluteError()
         assert metric.forecast_variable is None
         assert metric.target_variable is None
