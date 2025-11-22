@@ -53,7 +53,7 @@ class TestComputeDocstringMetaclass:
         assert rmse_doc is not None
         assert "Root Mean Square Error" in rmse_doc
 
-        # All three should have different docstrings (ME falls back to base class)
+        # All three should have different docstrings (MeanErrorfalls back to base class)
         assert me_doc != mae_doc
         assert rmse_doc != mae_doc
         assert me_doc != rmse_doc
@@ -98,7 +98,7 @@ class TestComputeDocstringMetaclass:
         """Test metrics that might not have custom docstrings on _compute_metric."""
         me_metric = metrics.MeanError()
 
-        # ME class has _compute_metric but might not have a detailed docstring
+        # MeanErrorclass has _compute_metric but might not have a detailed docstring
         # The metaclass should handle this gracefully
         assert hasattr(me_metric, "compute_metric")
         assert callable(me_metric.compute_metric)
@@ -638,15 +638,15 @@ class TestMeanSquaredError:
 
 
 class TestMeanError:
-    """Tests for the ME (Mean Error) metric."""
+    """Tests for the MeanError(Mean Error) metric."""
 
     def test_instantiation(self):
-        """Test that ME can be instantiated."""
+        """Test that MeanErrorcan be instantiated."""
         metric = metrics.MeanError()
         assert isinstance(metric, metrics.BaseMetric)
 
     def test_compute_metric_simple(self):
-        """Test ME computation with simple data."""
+        """Test MeanErrorcomputation with simple data."""
         metric = metrics.MeanError()
 
         # Create test data with known bias
@@ -1008,14 +1008,14 @@ class TestDurationMeanError:
         """Test that DurationMeanError can be instantiated with threshold criteria."""
         climatology = self.create_climatology()
         metric = metrics.DurationMeanError(threshold_criteria=climatology)
-        assert isinstance(metric, metrics.ME)
+        assert isinstance(metric, metrics.MeanError)
         assert metric.name == "duration_me"
 
     def test_base_metric_inheritance(self):
         """Test that DurationMeanError inherits from ME."""
         climatology = self.create_climatology()
         metric = metrics.DurationMeanError(threshold_criteria=climatology)
-        assert isinstance(metric, metrics.ME)
+        assert isinstance(metric, metrics.MeanError)
         assert isinstance(metric, metrics.BaseMetric)
 
     def test_compute_applied_metric_structure(self):
@@ -1041,7 +1041,7 @@ class TestDurationMeanError:
             assert isinstance(metric, metrics.OnsetMeanError)
 
     def test_me_1_0_all_forecast_exceeds(self):
-        """Test ME = 1.0 when all forecast exceeds, all target below."""
+        """Test MeanError= 1.0 when all forecast exceeds, all target below."""
         climatology = self.create_climatology()
         forecast_vals = np.full(10, 305.0)  # All exceed 300K
         target_vals = np.full(10, 295.0)  # All below 300K
@@ -1057,7 +1057,7 @@ class TestDurationMeanError:
         assert np.isclose(result.values[0], 1.0)
 
     def test_me_0_5_half_forecast_exceeds(self):
-        """Test ME = 0.5 when half forecast exceeds, all target below."""
+        """Test MeanError= 0.5 when half forecast exceeds, all target below."""
         climatology = self.create_climatology()
         # First 5 timesteps exceed, last 5 below
         forecast_vals = np.concatenate([np.full(5, 305.0), np.full(5, 295.0)])
@@ -1074,7 +1074,7 @@ class TestDurationMeanError:
         assert np.isclose(result.values[0], 0.5)
 
     def test_me_neg_1_0_all_target_exceeds(self):
-        """Test ME = -1.0 when all forecast below, all target exceeds."""
+        """Test MeanError= -1.0 when all forecast below, all target exceeds."""
         climatology = self.create_climatology()
         forecast_vals = np.full(10, 295.0)  # All below 300K
         target_vals = np.full(10, 305.0)  # All exceed 300K
@@ -1090,7 +1090,7 @@ class TestDurationMeanError:
         assert np.isclose(result.values[0], -1.0)
 
     def test_me_0_0_forecast_equals_target(self):
-        """Test ME = 0.0 when forecast equals target."""
+        """Test MeanError= 0.0 when forecast equals target."""
         climatology = self.create_climatology()
         forecast_vals = np.full(10, 305.0)  # All exceed 300K
         target_vals = np.full(10, 305.0)  # All exceed 300K
@@ -1106,7 +1106,7 @@ class TestDurationMeanError:
         assert np.isclose(result.values[0], 0.0)
 
     def test_me_0_3_three_timesteps_differ(self):
-        """Test ME = 0.3 when 3/10 timesteps differ."""
+        """Test MeanError= 0.3 when 3/10 timesteps differ."""
         climatology = self.create_climatology()
         # First 3 exceed, rest below
         forecast_vals = np.concatenate([np.full(3, 305.0), np.full(7, 295.0)])
@@ -1123,7 +1123,7 @@ class TestDurationMeanError:
         assert np.isclose(result.values[0], 0.3)
 
     def test_me_with_lead_time_dimension(self):
-        """Test ME with forecast having lead_time dimension.
+        """Test MeanErrorwith forecast having lead_time dimension.
 
         This tests the alternative forecast structure where:
         - dims are (lead_time, valid_time, latitude, longitude)
@@ -1204,7 +1204,7 @@ class TestDurationMeanError:
         assert result.values[-1] == 1
 
     def test_me_with_lead_time_partial_target_exceedance(self):
-        """Test ME with lead_time dims where target partially exceeds.
+        """Test MeanErrorwith lead_time dims where target partially exceeds.
 
         This tests the alternative forecast structure with:
         - dims are (lead_time, valid_time, latitude, longitude)
@@ -1272,7 +1272,7 @@ class TestDurationMeanError:
 
         # First init_time (2020-01-01) should have lower ME
         # because target also exceeds at that time (diff=0)
-        # Later init_times should have higher ME (only forecast exceeds)
+        # Later init_times should have higher MeanError(only forecast exceeds)
         first_init_me = result.values[0]
         middle_init_me = result.values[len(result) // 2]
 
@@ -1288,7 +1288,7 @@ class TestDurationMeanError:
         assert np.all(result.values >= 0)
 
     def test_me_with_nans_no_target_exceedance(self):
-        """Test ME with NaNs when no target values exceed threshold.
+        """Test MeanErrorwith NaNs when no target values exceed threshold.
 
         Forecast has NaNs at specific locations, and target never exceeds.
         NaNs should be excluded from the calculation.
@@ -1319,7 +1319,7 @@ class TestDurationMeanError:
         assert mean_result < 1.0
 
     def test_me_with_nans_one_target_exceedance(self):
-        """Test ME with NaNs when one target value exceeds threshold.
+        """Test MeanErrorwith NaNs when one target value exceeds threshold.
 
         Forecast has NaNs and all non-NaN values exceed.
         Target has one timestep that exceeds.
@@ -1351,10 +1351,10 @@ class TestDurationMeanError:
         assert result.values[0] > 0
 
     def test_me_with_nans_all_but_nan_exceed(self):
-        """Test ME when all non-NaN forecast/target values exceed threshold.
+        """Test MeanErrorwhen all non-NaN forecast/target values exceed threshold.
 
         Both forecast and target exceed at all non-NaN positions.
-        Should result in ME close to 0.
+        Should result in MeanErrorclose to 0.
         """
         climatology = self.create_climatology()
 
@@ -1378,7 +1378,7 @@ class TestDurationMeanError:
         assert np.isclose(result.values[0], 0.0)
 
     def test_me_with_nans_mixed_pattern(self):
-        """Test ME with NaNs and mixed exceedance pattern.
+        """Test MeanErrorwith NaNs and mixed exceedance pattern.
 
         Complex scenario with NaNs at different locations and varying
         exceedance patterns across timesteps and spatial points.
@@ -1418,12 +1418,12 @@ class TestDurationMeanError:
         """Test that DurationMeanError can be instantiated with float threshold
         criteria."""
         metric = metrics.DurationMeanError(threshold_criteria=300.0)
-        assert isinstance(metric, metrics.ME)
+        assert isinstance(metric, metrics.MeanError)
         assert metric.name == "duration_me"
         assert metric.threshold_criteria == 300.0
 
     def test_me_with_float_threshold_all_forecast_exceeds(self):
-        """Test ME with float threshold when all forecast exceeds."""
+        """Test MeanErrorwith float threshold when all forecast exceeds."""
         climatology = self.create_climatology()
         forecast_vals = np.full(10, 305.0)  # All exceed 300.0
         target_vals = np.full(10, 295.0)  # All below 300.0
@@ -1439,7 +1439,7 @@ class TestDurationMeanError:
         assert np.isclose(result.values[0], 1.0)
 
     def test_me_with_float_threshold_mixed(self):
-        """Test ME with float threshold and mixed exceedance."""
+        """Test MeanErrorwith float threshold and mixed exceedance."""
         climatology = self.create_climatology()
         # First 6 exceed 300.0, last 4 below
         forecast_vals = np.concatenate([np.full(6, 305.0), np.full(4, 295.0)])
@@ -1454,7 +1454,7 @@ class TestDurationMeanError:
         result = metric.compute_metric(forecast=forecast, target=target)
 
         # Forecast: 6 timesteps exceed, Target: 3 timesteps exceed
-        # ME = (6 - 3) / 10 = 0.3
+        # MeanError= (6 - 3) / 10 = 0.3
         assert np.isclose(result.values[0], 0.3)
 
     def test_float_and_climatology_produce_same_result(self):
