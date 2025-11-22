@@ -993,15 +993,16 @@ class TestComputeCaseOperator:
 
     @mock.patch("extremeweatherbench.evaluate._build_datasets")
     @mock.patch("extremeweatherbench.derived.maybe_derive_variables")
-    def test_compute_case_operator_with_precompute(
+    def test_compute_case_operator_with_cache(
         self,
         mock_derive_variables,
         mock_build_datasets,
         sample_case_operator,
         sample_forecast_dataset,
         sample_target_dataset,
+        tmp_path,
     ):
-        """Test compute_case_operator with pre_compute=True."""
+        """Test compute_case_operator with cache_dir."""
         mock_build_datasets.return_value = (
             sample_forecast_dataset,
             sample_target_dataset,
@@ -1019,8 +1020,11 @@ class TestComputeCaseOperator:
         mock_metric.maybe_prepare_composite_kwargs.side_effect = lambda **kwargs: kwargs
         sample_case_operator.metric_list = [mock_metric]
 
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir()
+
         with mock.patch(
-            "extremeweatherbench.utils.compute_and_maybe_cache"
+            "extremeweatherbench.utils.maybe_cache_and_compute"
         ) as mock_compute_cache:
             mock_compute_cache.return_value = [
                 sample_forecast_dataset,
@@ -1033,7 +1037,7 @@ class TestComputeCaseOperator:
                 mock_evaluate.return_value = pd.DataFrame({"value": [1.0]})
 
                 result = evaluate.compute_case_operator(
-                    sample_case_operator, pre_compute=True
+                    sample_case_operator, cache_dir=cache_dir
                 )
 
                 mock_compute_cache.assert_called_once()
@@ -1381,40 +1385,10 @@ class TestPipelineFunctions:
         with pytest.raises(AttributeError, match="'str' object has no attribute"):
             evaluate.run_pipeline(sample_case_operator.case_metadata, "invalid")
 
-    def test_maybe_compute_and_maybe_cache_with_precompute(
+    def test_maybe_cache_and_compute_with_cache_dir(
         self, sample_forecast_dataset, sample_target_dataset, sample_individual_case
     ):
-        """Test maybe_compute_and_maybe_cache with pre_compute=True."""
-        from extremeweatherbench import utils
-
-        # Create lazy datasets
-        lazy_forecast = sample_forecast_dataset.chunk()
-        lazy_target = sample_target_dataset.chunk()
-
-        # Add names to datasets
-        lazy_forecast.attrs["name"] = "forecast"
-        lazy_target.attrs["name"] = "target"
-
-        result = utils.maybe_compute_and_maybe_cache(
-            lazy_forecast,
-            lazy_target,
-            pre_compute=True,
-            cache_dir=None,
-            case_metadata=sample_individual_case,
-        )
-
-        assert len(result) == 2
-        assert isinstance(result[0], xr.Dataset)
-        assert isinstance(result[1], xr.Dataset)
-        # Should be computed
-        assert not hasattr(
-            result[0].data_vars[list(result[0].data_vars)[0]].data, "chunks"
-        )
-
-    def test_maybe_compute_and_maybe_cache_with_cache_dir(
-        self, sample_forecast_dataset, sample_target_dataset, sample_individual_case
-    ):
-        """Test maybe_compute_and_maybe_cache with cache directory."""
+        """Test maybe_cache_and_compute with cache directory."""
         from extremeweatherbench import utils
 
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -1424,10 +1398,9 @@ class TestPipelineFunctions:
             sample_forecast_dataset.attrs["name"] = "forecast"
             sample_target_dataset.attrs["name"] = "target"
 
-            result = utils.maybe_compute_and_maybe_cache(
+            result = utils.maybe_cache_and_compute(
                 sample_forecast_dataset,
                 sample_target_dataset,
-                pre_compute=False,
                 cache_dir=cache_dir,
                 case_metadata=sample_individual_case,
             )
@@ -1437,13 +1410,13 @@ class TestPipelineFunctions:
             assert isinstance(result[0], xr.Dataset)
             assert isinstance(result[1], xr.Dataset)
 
-            # Verify cache files were created
-            assert len(list(cache_dir.glob("*.nc"))) == 2
+            # Verify cache files were created as zarrs
+            assert len(list(cache_dir.glob("*.zarr"))) == 2
 
-    def test_maybe_compute_and_maybe_cache_no_op(
+    def test_maybe_cache_and_compute_no_op(
         self, sample_forecast_dataset, sample_target_dataset, sample_individual_case
     ):
-        """Test maybe_compute_and_maybe_cache as no-op (lazy preserved)."""
+        """Test maybe_cache_and_compute as no-op (lazy preserved)."""
         from extremeweatherbench import utils
 
         # Create lazy datasets
@@ -1454,11 +1427,10 @@ class TestPipelineFunctions:
         lazy_forecast.attrs["name"] = "forecast"
         lazy_target.attrs["name"] = "target"
 
-        # Call with both flags False/None (should be no-op)
-        result = utils.maybe_compute_and_maybe_cache(
+        # Call with no cache_dir (should be no-op)
+        result = utils.maybe_cache_and_compute(
             lazy_forecast,
             lazy_target,
-            pre_compute=False,
             cache_dir=None,
             case_metadata=sample_individual_case,
         )

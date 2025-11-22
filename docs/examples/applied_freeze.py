@@ -118,9 +118,6 @@ if __name__ == "__main__":
             # validating occurrence is checked in the forecasts for certain metrics
             # such as minimum temperature MAE
             tolerance_range=48,
-            # precompute is false by default, but can be set to True to avoid IO costs
-            # loading the datasets into memory for each metric
-            pre_compute=False,
         )
 
         # Print the outputs; can be saved if desired

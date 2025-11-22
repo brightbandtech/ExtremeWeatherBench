@@ -7,7 +7,7 @@ import inspect
 import logging
 import operator
 import pathlib
-from typing import Any, Callable, Literal, Optional, Sequence, Union, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, Sequence, Union
 
 import cartopy.io.shapereader as shpreader
 import numpy as np
@@ -736,42 +736,40 @@ def load_land_geometry(resolution: str = "10m") -> shapely.geometry.Polygon:
     return land_union
 
 
-def maybe_compute_and_maybe_cache(
+def maybe_cache_and_compute(
     *datasets: xr.Dataset,
-    pre_compute: bool = False,
     cache_dir: Optional[Union[str, pathlib.Path]] = None,
     case_metadata: "cases.IndividualCase",
 ) -> list[xr.Dataset]:
-    """Compute and/or cache datasets based on flags.
+    """Compute and cache datasets if cache_dir is provided.
 
     Args:
         *datasets: The datasets to compute and cache.
-        pre_compute: Whether to eagerly compute the datasets. If False
-            and cache_dir is None, datasets remain lazy.
         cache_dir: The directory to cache the datasets. If provided,
-            datasets will be computed and cached. Default None.
+            datasets will be cached as zarrs and loaded from the cache.
+            Default is None.
         case_metadata: The case metadata for naming cached files.
 
     Returns:
-        The computed datasets if pre_compute or cache_dir is set,
-        otherwise the original datasets (potentially lazy).
+        The computed datasets if cache_dir is set, otherwise the
+        original datasets.
     """
-    # Compute if pre_compute is True OR caching is enabled
-    if pre_compute or cache_dir is not None:
-        logger.info("Computing datasets...")
-        computed_datasets = [dataset.compute() for dataset in datasets]
-    else:
-        # Return datasets as-is (lazy if they were lazy)
-        computed_datasets = list(datasets)
+    # If no caching, return as list
+    if cache_dir is None:
+        return list(datasets)
 
-    # Cache if cache_dir is provided
-    if cache_dir:
-        cache_path = pathlib.Path(cache_dir)
-        for i, dataset in enumerate(computed_datasets):
-            dataset_name = dataset.attrs.get("name", f"dataset_{i}")
-            dataset.to_netcdf(
-                cache_path
-                / f"case_id_number_{case_metadata.case_id_number}_{dataset_name}.nc"
-            )
+    # Compute and cache datasets
+    logger.info("Computing datasets and storing at %s...", cache_dir)
+    cache_path = pathlib.Path(cache_dir)
+    result = []
 
-    return computed_datasets
+    for i, dataset in enumerate(datasets):
+        dataset_name = dataset.attrs.get("name", f"dataset_{i}")
+        zarr_path = (
+            cache_path
+            / f"case_id_number_{case_metadata.case_id_number}_{dataset_name}.zarr"
+        )
+        dataset.to_zarr(zarr_path)
+        result.append(xr.open_zarr(zarr_path))
+
+    return result

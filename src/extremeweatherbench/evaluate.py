@@ -304,13 +304,10 @@ def compute_case_operator(
         case_operator.target.maybe_align_forecast_to_target(forecast_ds, target_ds)
     )
 
-    # Compute and cache the datasets if requested
-    pre_compute = kwargs.get("pre_compute", False)
-    cache_dir = kwargs.get("cache_dir", None)
-    aligned_forecast_ds, aligned_target_ds = utils.maybe_compute_and_maybe_cache(
+    # Compute and cache the datasets if cache_dir is set
+    aligned_forecast_ds, aligned_target_ds = utils.maybe_cache_and_compute(
         aligned_forecast_ds,
         aligned_target_ds,
-        pre_compute=pre_compute,
         cache_dir=cache_dir,
         case_metadata=case_operator.case_metadata,
     )

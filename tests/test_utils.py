@@ -1422,7 +1422,7 @@ class TestReduceXarrayMethod:
 
 
 class TestMaybeComputeAndMaybeCache:
-    """Test the maybe_compute_and_maybe_cache function."""
+    """Test the maybe_cache_and_compute function."""
 
     @pytest.fixture
     def sample_case(self):
@@ -1441,7 +1441,7 @@ class TestMaybeComputeAndMaybeCache:
         )
 
     def test_no_compute_no_cache(self, sample_case):
-        """Test with pre_compute=False and no cache - stays lazy."""
+        """Test with no cache - stays lazy."""
         # Create lazy datasets
         ds1 = xr.Dataset(
             {"temp": (["time", "lat"], [[1, 2], [3, 4]])},
@@ -1455,9 +1455,9 @@ class TestMaybeComputeAndMaybeCache:
         ).chunk()
         ds2.attrs["name"] = "target"
 
-        # Call with pre_compute=False and no cache_dir
-        result = utils.maybe_compute_and_maybe_cache(
-            ds1, ds2, pre_compute=False, cache_dir=None, case_metadata=sample_case
+        # Call with no cache_dir
+        result = utils.maybe_cache_and_compute(
+            ds1, ds2, cache_dir=None, case_metadata=sample_case
         )
 
         # Check results
@@ -1467,35 +1467,8 @@ class TestMaybeComputeAndMaybeCache:
         assert hasattr(result[0].temp.data, "chunks")
         assert hasattr(result[1].temp.data, "chunks")
 
-    def test_compute_without_caching(self, sample_case):
-        """Test with pre_compute=True without cache directory."""
-        # Create lazy datasets with names
-        ds1 = xr.Dataset(
-            {"temp": (["time", "lat"], [[1, 2], [3, 4]])},
-            coords={"time": [0, 1], "lat": [10, 20]},
-        ).chunk()
-        ds1.attrs["name"] = "forecast"
-
-        ds2 = xr.Dataset(
-            {"temp": (["time", "lat"], [[5, 6], [7, 8]])},
-            coords={"time": [0, 1], "lat": [10, 20]},
-        ).chunk()
-        ds2.attrs["name"] = "target"
-
-        # Call with pre_compute=True but no cache_dir
-        result = utils.maybe_compute_and_maybe_cache(
-            ds1, ds2, pre_compute=True, cache_dir=None, case_metadata=sample_case
-        )
-
-        # Check results
-        assert len(result) == 2
-        assert all(isinstance(ds, xr.Dataset) for ds in result)
-        # Should be computed (not lazy)
-        assert not hasattr(result[0].temp.data, "chunks")
-        assert not hasattr(result[1].temp.data, "chunks")
-
-    def test_cache_without_precompute(self, sample_case, tmp_path):
-        """Test caching (pre_compute=False) still computes for caching."""
+    def test_cache_computes_and_caches(self, sample_case, tmp_path):
+        """Test caching computes and stores as zarr."""
         # Create lazy datasets with names
         ds1 = xr.Dataset(
             {"temp": (["time", "lat"], [[1, 2], [3, 4]])},
@@ -1512,9 +1485,9 @@ class TestMaybeComputeAndMaybeCache:
         cache_dir = tmp_path / "cache"
         cache_dir.mkdir()
 
-        # Call with cache_dir but pre_compute=False (still computes for cache)
-        result = utils.maybe_compute_and_maybe_cache(
-            ds1, ds2, pre_compute=False, cache_dir=cache_dir, case_metadata=sample_case
+        # Call with cache_dir (computes and caches as zarr)
+        result = utils.maybe_cache_and_compute(
+            ds1, ds2, cache_dir=cache_dir, case_metadata=sample_case
         )
 
         # Check results
@@ -1523,87 +1496,29 @@ class TestMaybeComputeAndMaybeCache:
         assert not hasattr(result[0].temp.data, "chunks")
         assert not hasattr(result[1].temp.data, "chunks")
 
-        # Verify cache files were created
+        # Verify cache files were created as zarrs
         expected_files = [
-            cache_dir / f"case_id_number_{sample_case.case_id_number}_forecast.nc",
-            cache_dir / f"case_id_number_{sample_case.case_id_number}_target.nc",
+            cache_dir / f"case_id_number_{sample_case.case_id_number}_forecast.zarr",
+            cache_dir / f"case_id_number_{sample_case.case_id_number}_target.zarr",
         ]
         for expected_file in expected_files:
             assert expected_file.exists()
 
         # Verify cached files can be loaded
-        cached_ds1 = xr.open_dataset(expected_files[0])
-        cached_ds2 = xr.open_dataset(expected_files[1])
+        cached_ds1 = xr.open_zarr(expected_files[0])
+        cached_ds2 = xr.open_zarr(expected_files[1])
         xr.testing.assert_equal(result[0], cached_ds1)
         xr.testing.assert_equal(result[1], cached_ds2)
 
-    def test_compute_with_caching(self, sample_case, tmp_path):
-        """Test with both pre_compute=True and cache_dir."""
-        # Create datasets with names
-        ds1 = xr.Dataset(
-            {"temp": (["time", "lat"], [[1, 2], [3, 4]])},
-            coords={"time": [0, 1], "lat": [10, 20]},
-        ).chunk()
-        ds1.attrs["name"] = "forecast"
-
-        ds2 = xr.Dataset(
-            {"temp": (["time", "lat"], [[5, 6], [7, 8]])},
-            coords={"time": [0, 1], "lat": [10, 20]},
-        ).chunk()
-        ds2.attrs["name"] = "target"
-
-        cache_dir = tmp_path / "cache"
-        cache_dir.mkdir()
-
-        # Call with both pre_compute=True and cache_dir
-        result = utils.maybe_compute_and_maybe_cache(
-            ds1, ds2, pre_compute=True, cache_dir=cache_dir, case_metadata=sample_case
-        )
-
-        # Check results
-        assert len(result) == 2
-        # Should be computed
-        assert not hasattr(result[0].temp.data, "chunks")
-        assert not hasattr(result[1].temp.data, "chunks")
-
-        # Verify cache files were created
-        expected_files = [
-            cache_dir / f"case_id_number_{sample_case.case_id_number}_forecast.nc",
-            cache_dir / f"case_id_number_{sample_case.case_id_number}_target.nc",
-        ]
-        for expected_file in expected_files:
-            assert expected_file.exists()
-
-    def test_compute_multiple_datasets(self, sample_case):
-        """Test with more than 2 datasets and pre_compute=True."""
-        # Create 4 datasets
-        datasets = []
-        for i in range(4):
-            ds = xr.Dataset({"var": (["x"], [i, i + 1])}, coords={"x": [0, 1]}).chunk()
-            ds.attrs["name"] = f"dataset_{i}"
-            datasets.append(ds)
-
-        # Call function with pre_compute=True
-        result = utils.maybe_compute_and_maybe_cache(
-            *datasets, pre_compute=True, cache_dir=None, case_metadata=sample_case
-        )
-
-        # Check results
-        assert len(result) == 4
-        assert all(isinstance(ds, xr.Dataset) for ds in result)
-        # All should be computed
-        for ds in result:
-            assert not hasattr(ds["var"].data, "chunks")
-
     def test_single_dataset_stays_lazy(self, sample_case):
-        """Test single dataset with no compute or cache stays lazy."""
+        """Test single dataset with no cache stays lazy."""
         ds = xr.Dataset(
             {"temp": (["time"], [1, 2, 3])}, coords={"time": [0, 1, 2]}
         ).chunk()
         ds.attrs["name"] = "single"
 
-        result = utils.maybe_compute_and_maybe_cache(
-            ds, pre_compute=False, cache_dir=None, case_metadata=sample_case
+        result = utils.maybe_cache_and_compute(
+            ds, cache_dir=None, case_metadata=sample_case
         )
 
         assert len(result) == 1
@@ -1619,8 +1534,8 @@ class TestMaybeComputeAndMaybeCache:
         ds2 = xr.Dataset({"var2": (["x"], [3, 4])}, coords={"x": [0, 1]})
         ds2.attrs["name"] = "my_target"
 
-        result = utils.maybe_compute_and_maybe_cache(
-            ds1, ds2, pre_compute=True, cache_dir=None, case_metadata=sample_case
+        result = utils.maybe_cache_and_compute(
+            ds1, ds2, cache_dir=None, case_metadata=sample_case
         )
 
         # Names should be preserved in attrs if set
@@ -1636,21 +1551,21 @@ class TestMaybeComputeAndMaybeCache:
         cache_dir.mkdir()
 
         # Pass as string instead of Path
-        result = utils.maybe_compute_and_maybe_cache(
-            ds, pre_compute=False, cache_dir=str(cache_dir), case_metadata=sample_case
+        result = utils.maybe_cache_and_compute(
+            ds, cache_dir=str(cache_dir), case_metadata=sample_case
         )
 
         assert len(result) == 1
         # Should be computed due to cache_dir
         assert not hasattr(result[0].temp.data, "chunks")
-        # Verify cache file was created
+        # Verify cache file was created as zarr
         expected_file = (
-            cache_dir / f"case_id_number_{sample_case.case_id_number}_test.nc"
+            cache_dir / f"case_id_number_{sample_case.case_id_number}_test.zarr"
         )
         assert expected_file.exists()
 
-    def test_with_lazy_dask_arrays_precompute(self, sample_case):
-        """Test lazy dask arrays with pre_compute=True."""
+    def test_with_lazy_dask_arrays_with_cache(self, sample_case, tmp_path):
+        """Test lazy dask arrays with cache_dir."""
         import dask.array as da
 
         # Create dataset with dask arrays
@@ -1660,8 +1575,11 @@ class TestMaybeComputeAndMaybeCache:
         )
         ds.attrs["name"] = "lazy"
 
-        result = utils.maybe_compute_and_maybe_cache(
-            ds, pre_compute=True, cache_dir=None, case_metadata=sample_case
+        cache_dir = tmp_path / "cache_lazy"
+        cache_dir.mkdir()
+
+        result = utils.maybe_cache_and_compute(
+            ds, cache_dir=cache_dir, case_metadata=sample_case
         )
 
         # Should be computed
@@ -1678,8 +1596,8 @@ class TestMaybeComputeAndMaybeCache:
         cache_dir.mkdir()
 
         # This should work using default name
-        result = utils.maybe_compute_and_maybe_cache(
-            ds, pre_compute=False, cache_dir=cache_dir, case_metadata=sample_case
+        result = utils.maybe_cache_and_compute(
+            ds, cache_dir=cache_dir, case_metadata=sample_case
         )
 
         assert len(result) == 1
@@ -1700,15 +1618,14 @@ class TestNoCircularImports:
             del sys.modules[mod]
 
         # Import utils first
-        from extremeweatherbench import utils as utils_module
-
         # Then import evaluate
         from extremeweatherbench import evaluate as evaluate_module
+        from extremeweatherbench import utils as utils_module
 
         # Verify both imported successfully
         assert utils_module is not None
         assert evaluate_module is not None
-        assert hasattr(utils_module, "maybe_compute_and_maybe_cache")
+        assert hasattr(utils_module, "maybe_cache_and_compute")
 
     def test_import_evaluate_then_utils(self):
         """Test importing evaluate then utils works fine."""
@@ -1736,8 +1653,8 @@ class TestNoCircularImports:
         from extremeweatherbench import utils
 
         # Verify evaluate can call the function from utils
-        assert hasattr(utils, "maybe_compute_and_maybe_cache")
-        assert callable(utils.maybe_compute_and_maybe_cache)
+        assert hasattr(utils, "maybe_cache_and_compute")
+        assert callable(utils.maybe_cache_and_compute)
 
     def test_function_accessible_from_both_modules(self):
         """Test that function is accessible correctly from both modules."""
@@ -1760,7 +1677,7 @@ class TestNoCircularImports:
         ds.attrs["name"] = "test_ds"
 
         # Call the function through utils module with pre_compute
-        result = utils.maybe_compute_and_maybe_cache(
+        result = utils.maybe_cache_and_compute(
             ds, pre_compute=True, cache_dir=None, case_metadata=sample_case
         )
 

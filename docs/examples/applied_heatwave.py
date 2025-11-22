@@ -75,8 +75,5 @@ if __name__ == "__main__":
             # validating occurrence is checked in the forecasts for certain metrics
             # such as minimum temperature MAE
             tolerance_range=48,
-            # precompute the datasets before metrics are calculated, to avoid IO costs
-            # loading them into memory for each metric
-            pre_compute=False,
         )
         outputs.to_csv("applied_heatwave_outputs.csv")
