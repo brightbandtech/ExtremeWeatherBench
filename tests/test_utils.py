@@ -1676,9 +1676,9 @@ class TestNoCircularImports:
         ds = xr.Dataset({"temp": (["x"], [1, 2, 3])}, coords={"x": [0, 1, 2]})
         ds.attrs["name"] = "test_ds"
 
-        # Call the function through utils module with pre_compute
+        # Call the function through utils module
         result = utils.maybe_cache_and_compute(
-            ds, pre_compute=True, cache_dir=None, case_metadata=sample_case
+            ds, cache_dir=None, case_metadata=sample_case
         )
 
         assert len(result) == 1

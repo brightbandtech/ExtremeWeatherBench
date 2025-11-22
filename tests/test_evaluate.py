@@ -431,12 +431,11 @@ class TestExtremeWeatherBench:
                 evaluation_objects=[sample_evaluation_object],
             )
 
-            result = ewb.run(n_jobs=1, threshold=0.5, pre_compute=True)
+            result = ewb.run(n_jobs=1, threshold=0.5)
 
             # Check that kwargs were passed through
             call_args = mock_run_case_operators.call_args
             assert call_args[1]["threshold"] == 0.5
-            assert call_args[1]["pre_compute"] is True
             assert isinstance(result, pd.DataFrame)
 
     @mock.patch("extremeweatherbench.evaluate._run_case_operators")
@@ -591,14 +590,12 @@ class TestRunCaseOperators:
             [sample_case_operator],
             None,
             threshold=0.5,
-            pre_compute=True,
         )
 
         call_args = mock_run_serial.call_args
         assert call_args[0][0] == [sample_case_operator]
         assert call_args[0][1] is None  # cache_dir
         assert call_args[1]["threshold"] == 0.5
-        assert call_args[1]["pre_compute"] is True
         assert isinstance(result, list)
 
     @mock.patch("extremeweatherbench.evaluate._run_parallel")
