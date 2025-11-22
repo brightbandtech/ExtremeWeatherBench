@@ -7,7 +7,7 @@ import inspect
 import logging
 import operator
 import pathlib
-from typing import Any, Callable, Literal, Optional, Sequence, Union
+from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, Sequence, Union
 
 import cartopy.io.shapereader as shpreader
 import numpy as np
@@ -20,6 +20,9 @@ import tqdm
 import xarray as xr
 import yaml  # type: ignore[import]
 from joblib import Parallel
+
+if TYPE_CHECKING:
+    from extremeweatherbench import cases
 
 logger = logging.getLogger(__name__)
 
@@ -731,3 +734,47 @@ def load_land_geometry(resolution: str = "10m") -> shapely.geometry.Polygon:
         pass
 
     return land_union
+
+
+def maybe_cache_and_compute(
+    *datasets: xr.Dataset,
+    cache_dir: Optional[Union[str, pathlib.Path]] = None,
+    case_metadata: "cases.IndividualCase",
+) -> list[xr.Dataset]:
+    """Compute and cache datasets if cache_dir is provided.
+
+    Data is returned as technically lazily loaded from the cache, but will significantly
+    speed up subsequent computations with a copy of the data in memory. Note that if
+    many cases or cases with large spatiotemporal domains are to be computed, it may be
+    better to avoid caching with a limited disk size.
+
+    Args:
+        *datasets: The datasets to compute and cache.
+        cache_dir: The directory to cache the datasets. If provided,
+            datasets will be cached as zarrs and loaded from the cache.
+            Default is None.
+        case_metadata: The case metadata for naming cached files.
+
+    Returns:
+        The computed datasets if cache_dir is set, otherwise the
+        original datasets.
+    """
+    # If no caching, return as list
+    if cache_dir is None:
+        return list(datasets)
+
+    # Compute and cache datasets
+    logger.info("Computing datasets and storing at %s...", cache_dir)
+    cache_path = pathlib.Path(cache_dir)
+    result = []
+
+    for i, dataset in enumerate(datasets):
+        dataset_name = dataset.attrs.get("name", f"dataset_{i}")
+        zarr_path = (
+            cache_path
+            / f"case_id_number_{case_metadata.case_id_number}_{dataset_name}.zarr"
+        )
+        dataset.to_zarr(zarr_path)
+        result.append(xr.open_zarr(zarr_path))
+
+    return result
