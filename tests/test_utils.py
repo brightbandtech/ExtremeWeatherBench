@@ -1468,7 +1468,7 @@ class TestMaybeComputeAndMaybeCache:
         assert hasattr(result[1].temp.data, "chunks")
 
     def test_cache_computes_and_caches(self, sample_case, tmp_path):
-        """Test caching computes and stores as zarr."""
+        """Test caching stores as zarr and loads lazily."""
         # Create lazy datasets with names
         ds1 = xr.Dataset(
             {"temp": (["time", "lat"], [[1, 2], [3, 4]])},
@@ -1485,16 +1485,16 @@ class TestMaybeComputeAndMaybeCache:
         cache_dir = tmp_path / "cache"
         cache_dir.mkdir()
 
-        # Call with cache_dir (computes and caches as zarr)
+        # Call with cache_dir (caches as zarr)
         result = utils.maybe_cache_and_compute(
             ds1, ds2, cache_dir=cache_dir, case_metadata=sample_case
         )
 
         # Check results
         assert len(result) == 2
-        # Should be computed because cache_dir is set
-        assert not hasattr(result[0].temp.data, "chunks")
-        assert not hasattr(result[1].temp.data, "chunks")
+        # Should still be lazy (loaded from zarr cache)
+        assert hasattr(result[0].temp.data, "chunks")
+        assert hasattr(result[1].temp.data, "chunks")
 
         # Verify cache files were created as zarrs
         expected_files = [
@@ -1556,8 +1556,8 @@ class TestMaybeComputeAndMaybeCache:
         )
 
         assert len(result) == 1
-        # Should be computed due to cache_dir
-        assert not hasattr(result[0].temp.data, "chunks")
+        # Should still be lazy (loaded from zarr cache)
+        assert hasattr(result[0].temp.data, "chunks")
         # Verify cache file was created as zarr
         expected_file = (
             cache_dir / f"case_id_number_{sample_case.case_id_number}_test.zarr"
@@ -1565,7 +1565,7 @@ class TestMaybeComputeAndMaybeCache:
         assert expected_file.exists()
 
     def test_with_lazy_dask_arrays_with_cache(self, sample_case, tmp_path):
-        """Test lazy dask arrays with cache_dir."""
+        """Test lazy dask arrays remain lazy when cached."""
         import dask.array as da
 
         # Create dataset with dask arrays
@@ -1582,10 +1582,9 @@ class TestMaybeComputeAndMaybeCache:
             ds, cache_dir=cache_dir, case_metadata=sample_case
         )
 
-        # Should be computed
+        # Should still be lazy (loaded from zarr cache)
         assert len(result) == 1
-        assert not hasattr(result[0].temp.data, "chunks")
-        assert isinstance(result[0].temp.data, np.ndarray)
+        assert hasattr(result[0].temp.data, "chunks")
 
     def test_dataset_without_name_attribute(self, sample_case, tmp_path):
         """Test caching works even if dataset has no name attr."""

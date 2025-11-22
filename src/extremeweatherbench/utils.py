@@ -743,6 +743,11 @@ def maybe_cache_and_compute(
 ) -> list[xr.Dataset]:
     """Compute and cache datasets if cache_dir is provided.
 
+    Data is returned as technically lazily loaded from the cache, but will significantly
+    speed up subsequent computations with a copy of the data in memory. Note that if
+    many cases or cases with large spatiotemporal domains are to be computed, it may be
+    better to avoid caching with a limited disk size.
+
     Args:
         *datasets: The datasets to compute and cache.
         cache_dir: The directory to cache the datasets. If provided,
