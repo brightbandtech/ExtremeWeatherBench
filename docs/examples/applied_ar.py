@@ -95,7 +95,7 @@ ar_evaluation_objects = [
     inputs.EvaluationObject(
         event_type="atmospheric_river",
         metric_list=[
-            metrics.CSI(),
+            metrics.CriticalSuccessIndex(),
             metrics.EarlySignal(),
             metrics.SpatialDisplacement(),
         ],
@@ -105,7 +105,7 @@ ar_evaluation_objects = [
     inputs.EvaluationObject(
         event_type="atmospheric_river",
         metric_list=[
-            metrics.CSI(),
+            metrics.CriticalSuccessIndex(),
             metrics.EarlySignal(),
             metrics.SpatialDisplacement(),
         ],
@@ -115,7 +115,7 @@ ar_evaluation_objects = [
     inputs.EvaluationObject(
         event_type="atmospheric_river",
         metric_list=[
-            metrics.CSI(),
+            metrics.CriticalSuccessIndex(),
             metrics.EarlySignal(),
             metrics.SpatialDisplacement(),
         ],

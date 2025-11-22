@@ -2382,7 +2382,7 @@ class TestMetricWithOutputVariables:
         )
 
         # Create metric with derived variables
-        metric = metrics.RMSE(
+        metric = metrics.RootMeanSquaredError(
             forecast_variable=forecast_derived,
             target_variable=target_derived,
         )
@@ -2481,7 +2481,7 @@ class TestMetricWithOutputVariables:
             output_variables=["output_1", "output_2"]
         )
 
-        metric = metrics.RMSE(
+        metric = metrics.RootMeanSquaredError(
             forecast_variable=forecast_derived,
             target_variable=target_derived,
         )
@@ -2573,7 +2573,9 @@ class TestMetricWithOutputVariables:
             output_variables=["output_1", "output_2"]
         )
 
-        metric = metrics.RMSE(forecast_variable="temp", target_variable=target_derived)
+        metric = metrics.RootMeanSquaredError(
+            forecast_variable="temp", target_variable=target_derived
+        )
 
         mock_forecast = mock.Mock(spec=inputs.ForecastBase)
         mock_forecast.name = "MockForecast"
@@ -2630,7 +2632,7 @@ class TestMetricWithOutputVariables:
         forecast_derived = MockDerivedVariableWithOutputs(output_variables=["output_1"])
         target_derived = MockDerivedVariableWithOutputs(output_variables=["output_1"])
 
-        metric = metrics.RMSE(
+        metric = metrics.RootMeanSquaredError(
             forecast_variable=forecast_derived,
             target_variable=target_derived,
         )
@@ -2690,7 +2692,7 @@ class TestMetricWithOutputVariables:
         forecast_derived = MockDerivedVariableWithOutputs()
         target_derived = MockDerivedVariableWithOutputs()
 
-        metric = metrics.RMSE(
+        metric = metrics.RootMeanSquaredError(
             forecast_variable=forecast_derived,
             target_variable=target_derived,
         )

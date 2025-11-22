@@ -188,18 +188,18 @@ def get_brightband_evaluation_objects() -> list[inputs.EvaluationObject]:
     from extremeweatherbench import metrics
 
     heatwave_metric_list: list[metrics.BaseMetric] = [
-        metrics.MaximumMAE(),
-        metrics.RMSE(),
-        metrics.DurationME(
+        metrics.MaximumMeanAbsoluteError(),
+        metrics.RootMeanSquaredError(),
+        metrics.DurationMeanError(
             threshold_criteria=get_climatology(0.85), op_func=operator.ge
         ),
-        metrics.MaxMinMAE(),
+        metrics.MaximumLowestMeanAbsoluteError(),
     ]
     freeze_metric_list: list[metrics.BaseMetric] = [
-        metrics.MinimumMAE(),
-        metrics.RMSE(),
-        metrics.DurationME(
-            threshold_criteria=get_climatology(0.15), op_func=operator.le
+        metrics.MinimumMeanAbsoluteError(),
+        metrics.RootMeanSquaredError(),
+        metrics.DurationMeanError(
+            threshold_criteria=get_climatology(0.15), op_func=operator.ge
         ),
     ]
 
@@ -231,8 +231,8 @@ def get_brightband_evaluation_objects() -> list[inputs.EvaluationObject]:
         inputs.EvaluationObject(
             event_type="severe_convection",
             metric_list=[
-                metrics.CSI(),
-                metrics.FAR(),
+                metrics.CriticalSuccessIndex(),
+                metrics.FalseAlarmRatio(),
                 # Need to add regional hits/misses and hits/misses metrics
                 # metrics.RegionalHitsMisses(),
                 # metrics.HitsMisses(),
@@ -243,7 +243,7 @@ def get_brightband_evaluation_objects() -> list[inputs.EvaluationObject]:
         inputs.EvaluationObject(
             event_type="atmospheric_river",
             metric_list=[
-                metrics.CSI(),
+                metrics.CriticalSuccessIndex(),
                 metrics.SpatialDisplacement(),
                 metrics.EarlySignal(
                     comparison_operator=operator.ge,
@@ -260,8 +260,8 @@ def get_brightband_evaluation_objects() -> list[inputs.EvaluationObject]:
         #     metric_list=[
         #         metrics.EarlySignal(),
         #         metrics.LandfallDisplacement(),
-        #         metrics.LandfallTimeME(),
-        #         metrics.LandfallIntensityMAE(),
+        #         metrics.LandfallTimeMeanError(),
+        #         metrics.LandfallIntensityMeanAbsoluteError(),
         #     ],
         #     target=ibtracs_target,
         #     forecast=cira_tropical_cyclone_forecast,
