@@ -216,10 +216,9 @@ else:
     # load in the results for all heat waves in parallel
     # this will take awhile to run if you do them all in one code box 
     # if you have already saved them (from running this once), then skip this box
-    n_threads_per_process = 4
-    n_processes = 16
+    parallel_config={"backend":"loky","n_jobs":16}
 
-    fourv2_results = ewb_fourv2.run(parallel=True, n_jobs=n_processes, pre_compute=True)
+    fourv2_results = ewb_fourv2.run(n_jobs=1)
     # gc_results = ewb_gc.run(parallel=True, n_jobs=n_processes, pre_compute=True)
     # pang_results = ewb_pang.run(parallel=True, n_jobs=n_processes, pre_compute=True)
     # hres_results = ewb_hres.run(parallel=True, n_jobs=n_processes, pre_compute=True)

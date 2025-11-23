@@ -91,12 +91,9 @@ hres_forecast = inputs.ZarrForecast(
     name="ECMWF HRES",
 )
 
-climatology = defaults.get_climatology(quantile=0.85)
-
 heat_metrics = [
             metrics.MaximumMeanAbsoluteError,
             metrics.RootMeanSquaredError,
-            metrics.DurationMeanError(threshold_criteria=climatology, op_func=operator.ge),
             metrics.MaximumLowestMeanAbsoluteError,
         ]
 
