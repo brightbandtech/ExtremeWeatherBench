@@ -22,6 +22,38 @@ OUTPUT_COLUMNS = [
     "event_type",
 ]
 
+DEFAULT_VARIABLE_NAMES = [
+    "100m_eastward_wind",  # 100-meter u component of wind, m/s
+    "100m_northward_wind",  # 100-meter v component of wind, m/s
+    "air_pressure",  # Pa
+    "air_pressure_at_mean_sea_level",  # mean sea level pressure, Pa
+    "air_temperature",  # K
+    "dewpoint_temperature",  # K
+    "eastward_wind",  # u component of wind, m/s
+    "geopotential",  # m^2/s^2
+    "geopotential_height",  # m
+    "init_time",  # initialization time of the forecast model; t0
+    "latitude",  # degrees
+    "lead_time",  # lead time of the forecast
+    "level",  # pressure level of the data, hPa
+    "longitude",  # degrees
+    "northward_wind",  # v component of wind, m/s
+    "relative_humidity",  # %
+    "specific_humidity",  # kg/kg
+    "storm_id",  # storm identifier for data such as tropical cyclones
+    "surface_air_temperature",  # 2-meter temperature
+    "surface_dewpoint_temperature",  # 2-meter dewpoint temperature, K
+    "surface_eastward_wind",  # 10-meter u component of wind, m/s
+    "surface_northward_wind",  # 10-meter v component of wind, m/s
+    "surface_relative_humidity",  # 2-meter relative humidity, %
+    "surface_specific_humidity",  # 2-meter specific humidity, kg/kg
+    "surface_wind_from_direction",  # 10-meter wind direction, degrees (from, not to)
+    "surface_wind_speed",  # 10-meter wind speed, m/s
+    "valid_time",  # valid time of the data slice
+    "wind_from_direction",  # degrees (from, not to)
+    "wind_speed",  # m/s
+]
+
 
 def _preprocess_bb_cira_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
     """An example preprocess function that renames the time coordinate to lead_time,
