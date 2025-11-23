@@ -1290,8 +1290,8 @@ class TestDurationMeanError:
     def test_me_with_nans_no_target_exceedance(self):
         """Test MeanErrorwith NaNs when no target values exceed threshold.
 
-        Forecast has NaNs at specific locations, and target never exceeds.
-        NaNs should be excluded from the calculation.
+        Forecast has NaNs at specific timesteps (all locations), and
+        target never exceeds. NaNs should be excluded from calculation.
         """
         climatology = self.create_climatology()
 
@@ -1303,9 +1303,10 @@ class TestDurationMeanError:
             forecast_vals, target_vals, climatology
         )
 
-        # Add NaNs to forecast at specific timesteps
+        # Add NaNs to forecast at specific timesteps (all locations)
+        # This ensures NaNs affect spatially averaged result
         forecast_with_nans = forecast.copy()
-        forecast_with_nans.values[0, 2:4, 0, 0] = np.nan  # timesteps 2-3, first loc
+        forecast_with_nans.values[0, 2:4, :, :] = np.nan  # timesteps 2-3
 
         metric = metrics.DurationMeanError(threshold_criteria=climatology)
         result = metric.compute_metric(forecast=forecast_with_nans, target=target)
@@ -1314,9 +1315,9 @@ class TestDurationMeanError:
         # Result is reduced to scalar per init_time
         mean_result = float(result.values[0])
         assert mean_result > 0
-        # Most positions have diff=1, but NaN positions excluded from calc
-        # So result should be less than 1.0 (e.g., 0.95 = 38/40 positions)
-        assert mean_result < 1.0
+        # 8 out of 10 timesteps exceed (2 are NaN), target never exceeds
+        # So result should be 0.8 (8 timesteps where forecast=1, target=0)
+        assert np.isclose(mean_result, 0.8)
 
     def test_me_with_nans_one_target_exceedance(self):
         """Test MeanErrorwith NaNs when one target value exceeds threshold.

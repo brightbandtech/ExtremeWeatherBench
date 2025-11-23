@@ -1317,43 +1317,6 @@ class DurationMeanError(MeanError):
         self.threshold_criteria = threshold_criteria
         self.op_func = utils.maybe_get_operator(op_func)
 
-    def duration(self, forecast: xr.DataArray, **kwargs: Any) -> xr.DataArray:
-        """Calculate event duration from forecast data.
-
-        Args:
-            forecast: The forecast DataArray.
-
-        Returns:
-            DataArray containing the duration as timedelta, or
-            NaT if duration criteria not met.
-        """
-        if (forecast.valid_time.max() - forecast.valid_time.min()).values.astype(
-            "timedelta64[h]"
-        ) >= 48:
-            # get the forecast resolution hours from the kwargs, otherwise default to 6
-            num_timesteps = 24 // kwargs.get("forecast_resolution_hours", 6)
-            if num_timesteps is None:
-                return xr.DataArray(np.datetime64("NaT", "ns"))
-            min_daily_vals = forecast.groupby("valid_time.dayofyear").map(
-                utils.min_if_all_timesteps_present,
-                time_resolution_hours=utils.determine_temporal_resolution(forecast),
-            )
-            # need to determine logic for 2+ consecutive days to find the date
-            # that the heatwave starts
-            if min_daily_vals.size >= 2:  # Check if we have at least 2 values
-                for i in range(min_daily_vals.size - 1):
-                    if min_daily_vals[i] >= 288.15 and min_daily_vals[i + 1] >= 288.15:
-                        consecutive_days = np.timedelta64(
-                            2, "D"
-                        )  # Start with 2 since we found first pair
-                        for j in range(i + 2, min_daily_vals.size):
-                            if min_daily_vals[j] >= 288.15:
-                                consecutive_days += np.timedelta64(1, "D")
-                            else:
-                                break
-                        return xr.DataArray(consecutive_days.astype("timedelta64[ns]"))
-        return xr.DataArray(np.timedelta64("NaT", "ns"))
-
     def _compute_metric(
         self,
         forecast: xr.DataArray,
@@ -1369,34 +1332,30 @@ class DurationMeanError(MeanError):
         Returns:
             Mean error between forecast and target event durations
         """
+        spatial_dims = [
+            dim
+            for dim in forecast.dims
+            if dim not in ["init_time", "lead_time", "valid_time"]
+        ]
         # Handle criteria - either climatology (xr.DataArray) or float threshold
         if isinstance(self.threshold_criteria, xr.DataArray):
-            # Climatology case
-            criteria_time = utils.convert_day_yearofday_to_time(
+            # Climatology case, convert from dayofyear/hour to valid_time
+            self.threshold_criteria = utils.convert_day_yearofday_to_time(
                 self.threshold_criteria, forecast.valid_time.dt.year.values[0]
             )
-            spatial_dims = [
-                dim
-                for dim in forecast.dims
-                if dim not in ["init_time", "lead_time", "valid_time"]
-            ]
-            forecast = utils.stack_dataarray_from_dims(forecast, spatial_dims)
-            target = utils.stack_dataarray_from_dims(target, spatial_dims)
-            criteria_time = utils.interp_climatology_to_target(target, criteria_time)
-            threshold = criteria_time
-        else:
-            # Float threshold case
-            spatial_dims = [
-                dim
-                for dim in forecast.dims
-                if dim not in ["init_time", "lead_time", "valid_time"]
-            ]
-            forecast = utils.stack_dataarray_from_dims(forecast, spatial_dims)
-            target = utils.stack_dataarray_from_dims(target, spatial_dims)
-            threshold = self.threshold_criteria
 
-        forecast_mask = self.op_func(forecast, threshold)
-        target_mask = self.op_func(target, threshold)
+            # Interpolate climatology to target coordinates
+            self.threshold_criteria = utils.interp_climatology_to_target(
+                target, self.threshold_criteria
+            )
+        forecast = utils.reduce_dataarray(
+            forecast, method="mean", reduce_dims=spatial_dims
+        )
+        target = utils.reduce_dataarray(target, method="mean", reduce_dims=spatial_dims)
+        forecast = forecast.compute()
+        target = target.compute()
+        forecast_mask = self.op_func(forecast, self.threshold_criteria)
+        target_mask = self.op_func(target, self.threshold_criteria)
         # Track NaN locations in forecast data
         forecast_valid_mask = ~forecast.isnull()
 
@@ -1412,8 +1371,10 @@ class DurationMeanError(MeanError):
             )
 
         # Sum to get durations (NaN values are excluded by default)
-        forecast_duration = forecast_mask_final.groupby(self.preserve_dims).sum()
-        target_duration = target_mask_final.groupby(self.preserve_dims).sum()
+        forecast_duration = forecast_mask_final.groupby(self.preserve_dims).sum(
+            skipna=True
+        )
+        target_duration = target_mask_final.groupby(self.preserve_dims).sum(skipna=True)
 
         # TODO: product of time resolution hours and duration
         return super()._compute_metric(
