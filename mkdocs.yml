@@ -24,7 +24,7 @@ nav:
       - Wind Events: events/WindEvents.md
       - Winter Weather: events/WinterWeather.md
   - API Reference: $src:extremeweatherbench/extremeweatherbench.***
-  - FAQ: faq.md
+  - Cookbook: cookbook.md
   - Contributing: contributing.md
   - License: license.md
 theme:
