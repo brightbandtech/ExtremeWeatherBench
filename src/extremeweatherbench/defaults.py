@@ -4,7 +4,7 @@ import operator
 import numpy as np
 import xarray as xr
 
-from extremeweatherbench import derived, inputs
+from extremeweatherbench import calc, derived, inputs
 
 # Suppress noisy log messages
 logging.getLogger("urllib3.connectionpool").setLevel(logging.CRITICAL)
@@ -70,6 +70,36 @@ def _preprocess_bb_cira_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
     ds["lead_time"] = np.array(
         [i for i in range(0, 241, 6)], dtype="timedelta64[h]"
     ).astype("timedelta64[ns]")
+    return ds
+
+
+# Preprocessing function for CIRA data that includes geopotential thickness calculation
+# required for tropical cyclone tracks
+def _preprocess_bb_cira_tc_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
+    """A preprocess function for CIRA data that includes geopotential thickness
+    calculation required for tropical cyclone tracks.
+
+    This function renames the time coordinate to lead_time,
+    creates a valid_time coordinate, and sets the lead time range and resolution not
+    present in the original dataset.
+
+    Args:
+        ds: The forecast dataset to rename.
+
+    Returns:
+        The renamed forecast dataset.
+    """
+    ds = ds.rename({"time": "lead_time"})
+
+    # The evaluation configuration is used to set the lead time range and resolution.
+    ds["lead_time"] = np.array(
+        [i for i in range(0, 241, 6)], dtype="timedelta64[h]"
+    ).astype("timedelta64[ns]")
+
+    # Calculate the geopotential thickness required for tropical cyclone tracks
+    ds["geopotential_thickness"] = calc.geopotential_thickness(
+        ds["z"], top_level_value=300, bottom_level_value=500
+    )
     return ds
 
 
@@ -155,6 +185,7 @@ cira_tropical_cyclone_forecast = inputs.KerchunkForecast(
     ],
     variable_mapping=inputs.CIRA_metadata_variable_mapping,
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
+    preprocess=_preprocess_bb_cira_tc_forecast_dataset,
 )
 cira_atmospheric_river_forecast = inputs.KerchunkForecast(
     name="FourCastNetv2",
@@ -162,6 +193,7 @@ cira_atmospheric_river_forecast = inputs.KerchunkForecast(
     variables=["surface_eastward_wind"],
     variable_mapping=inputs.CIRA_metadata_variable_mapping,
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
+    preprocess=_preprocess_bb_cira_forecast_dataset,
 )
 
 cira_severe_convection_forecast = inputs.KerchunkForecast(
@@ -170,6 +202,7 @@ cira_severe_convection_forecast = inputs.KerchunkForecast(
     variables=[derived.CravenBrooksSignificantSevere()],
     variable_mapping=inputs.CIRA_metadata_variable_mapping,
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
+    preprocess=_preprocess_bb_cira_forecast_dataset,
 )
 
 
