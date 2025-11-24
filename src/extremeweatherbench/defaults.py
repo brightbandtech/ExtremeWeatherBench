@@ -1,4 +1,5 @@
 import logging
+import operator
 
 import numpy as np
 import xarray as xr
@@ -248,16 +249,14 @@ def get_brightband_evaluation_objects() -> list[inputs.EvaluationObject]:
             target=era5_atmospheric_river_target,
             forecast=cira_atmospheric_river_forecast,
         ),
-        # TODO: Re-enable when tropical cyclone forecast is implemented
-        # inputs.EvaluationObject(
-        #     event_type="tropical_cyclone",
-        #     metric_list=[
-        #         metrics.EarlySignal(),
-        #         metrics.LandfallDisplacement(),
-        #         metrics.LandfallTimeMeanError(),
-        #         metrics.LandfallIntensityMeanAbsoluteError(),
-        #     ],
-        #     target=ibtracs_target,
-        #     forecast=cira_tropical_cyclone_forecast,
-        # ),
+        inputs.EvaluationObject(
+            event_type="tropical_cyclone",
+            metric_list=[
+                metrics.LandfallDisplacement(),
+                metrics.LandfallTimeMeanError(),
+                metrics.LandfallIntensityMeanAbsoluteError(),
+            ],
+            target=ibtracs_target,
+            forecast=cira_tropical_cyclone_forecast,
+        ),
     ]
