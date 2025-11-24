@@ -55,8 +55,8 @@
 [data-md-color-scheme="bb-light"] .highlight .n,
 [data-md-color-scheme="bb-light"] .highlight .o,
 [data-md-color-scheme="bb-light"] .highlight .p {
-    color: #262620 !important;
-    /* Dark text for variables/operators in light mode */
+    color: #dfdfcb !important;
+    /* Light text on dark background in light mode */
 }
 
 /* Comments in light mode - bright green for visibility */
@@ -76,6 +76,13 @@
     color: #b19cd9 !important;
     /* Light purple for True/False/None */
     font-weight: 600;
+}
+
+/* Add contrasting background to code blocks in light mode */
+[data-md-color-scheme="bb-light"] .highlight {
+    background-color: #262620 !important;
+    padding: 0.5rem;
+    border-radius: 0.25rem;
 }
 
 [data-md-color-scheme="bb-dark"] {
@@ -144,8 +151,8 @@
 [data-md-color-scheme="bb-dark"] .highlight .n,
 [data-md-color-scheme="bb-dark"] .highlight .o,
 [data-md-color-scheme="bb-dark"] .highlight .p {
-    color: #dfdfcb !important;
-    /* Light text for variables/operators in dark mode */
+    color: #262620 !important;
+    /* Dark text on light background in dark mode */
 }
 
 /* Comments in dark mode - bright orange for visibility */
@@ -157,6 +164,13 @@
     color: #ff8c42 !important;
     /* Bright orange for comments */
     font-style: italic;
+}
+
+/* Add contrasting background to code blocks in dark mode */
+[data-md-color-scheme="bb-dark"] .highlight {
+    background-color: #dfdfcb !important;
+    padding: 0.5rem;
+    border-radius: 0.25rem;
 }
 
 /* Logo switching - CORRECTED: dark logo on light page, light logo on dark page */
