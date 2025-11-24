@@ -23,7 +23,7 @@ nav:
       - Tropical Cyclone Tornadic Outbreaks: events/TCTornadoOutbreaks.md
       - Wind Events: events/WindEvents.md
       - Winter Weather: events/WinterWeather.md
-  - API Reference: $src:extremeweatherbench/extremeweatherbench.***
+  - API Reference: $api/src:extremeweatherbench/extremeweatherbench.**
   - Cookbook:
       - CIRA Forecast: recipes/cira_forecast.md
       - BYOF (Bring Your Own Forecast): recipes/your_own_forecast.md
