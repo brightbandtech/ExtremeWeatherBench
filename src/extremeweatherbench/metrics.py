@@ -1884,8 +1884,10 @@ class LandfallTimeMeanError(LandfallMetric, MeanError):
         time_diffs = []
         for init_time in common_init_times:
             time1 = forecast_landfall.coords["valid_time"].sel(init_time=init_time)
-            time2 = target_landfall.coords["valid_time"].sel(init_time=init_time)
-
+            if target_landfall.coords["valid_time"].size == 1:
+                time2 = target_landfall.coords["valid_time"].values
+            else:
+                time2 = target_landfall.coords["valid_time"].sel(init_time=init_time)
             # Calculate time difference in hours
             time_diff = (time1 - time2) / np.timedelta64(1, "h")
             time_diffs.append(float(time_diff.values))
