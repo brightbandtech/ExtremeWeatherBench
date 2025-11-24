@@ -55,15 +55,15 @@ DEFAULT_VARIABLE_NAMES = [
 
 
 def _preprocess_bb_cira_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
-    """An example preprocess function that renames the time coordinate to lead_time,
-    creates a valid_time coordinate, and sets the lead time range and resolution not
-    present in the original dataset.
+    """A preprocess function for CIRA data that renames the time coordinate to
+    lead_time, creates a valid_time coordinate, and sets the lead time range and
+    resolution not present in the original dataset.
 
     Args:
-        ds: The forecast dataset to rename.
+        ds: The forecast dataset to preprocess.
 
     Returns:
-        The renamed forecast dataset.
+        The preprocessed forecast dataset.
     """
     ds = ds.rename({"time": "lead_time"})
     # The evaluation configuration is used to set the lead time range and resolution.
@@ -123,9 +123,7 @@ era5_heatwave_target = inputs.ERA5(
 
 era5_freeze_target = inputs.ERA5(
     source=inputs.ARCO_ERA5_FULL_URI,
-    variables=[
-        "surface_air_temperature",
-    ],
+    variables=["surface_air_temperature"],
     storage_options={"remote_options": {"anon": True}},
 )
 
@@ -180,9 +178,7 @@ cira_freeze_forecast = inputs.KerchunkForecast(
 cira_tropical_cyclone_forecast = inputs.KerchunkForecast(
     name="FourCastNetv2",
     source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
-    variables=[
-        derived.TropicalCycloneTrackVariables(),
-    ],
+    variables=[derived.TropicalCycloneTrackVariables()],
     variable_mapping=inputs.CIRA_metadata_variable_mapping,
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
     preprocess=_preprocess_bb_cira_tc_forecast_dataset,
@@ -231,7 +227,7 @@ def get_brightband_evaluation_objects() -> list[inputs.EvaluationObject]:
         metrics.MinimumMeanAbsoluteError(),
         metrics.RootMeanSquaredError(),
         metrics.DurationMeanError(
-            threshold_criteria=get_climatology(0.15), op_func=operator.ge
+            threshold_criteria=get_climatology(0.15), op_func=operator.le
         ),
     ]
 
@@ -265,9 +261,6 @@ def get_brightband_evaluation_objects() -> list[inputs.EvaluationObject]:
             metric_list=[
                 metrics.CriticalSuccessIndex(),
                 metrics.FalseAlarmRatio(),
-                # Need to add regional hits/misses and hits/misses metrics
-                # metrics.RegionalHitsMisses(),
-                # metrics.HitsMisses(),
             ],
             target=lsr_target,
             forecast=cira_severe_convection_forecast,
