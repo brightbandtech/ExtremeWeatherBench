@@ -24,7 +24,17 @@ nav:
       - Wind Events: events/WindEvents.md
       - Winter Weather: events/WinterWeather.md
   - API Reference: $src:extremeweatherbench/extremeweatherbench.***
-  - Cookbook: cookbook.md
+  - Cookbook:
+      - CIRA Forecast: recipes/cira_forecast.md
+      - BYOF (Bring Your Own Forecast): recipes/your_own_forecast.md
+      - BYOT (Bring Your Own Target): recipes/your_own_target.md
+      - BYOM (Bring Your Own Metrics): recipes/your_own_metrics.md
+      - BYOV (Bring Your Own Variable): recipes/your_own_variable.md
+      - Evaluate Recent Tropical Cyclones: recipes/evaluate_recent_tropical_cyclones.md
+      - Near Real-Time Point Observations: recipes/near_real_time_point_observations.md
+      - Single Case: recipes/single_case.md
+      - One Forecast, Two Targets: recipes/one_forecast_two_targets.md
+      - Multi Model Evaluation: recipes/multi_model_evaluation.md
   - Contributing: contributing.md
   - License: license.md
 theme:
