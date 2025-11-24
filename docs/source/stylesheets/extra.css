@@ -55,8 +55,8 @@
 [data-md-color-scheme="bb-light"] .highlight .n,
 [data-md-color-scheme="bb-light"] .highlight .o,
 [data-md-color-scheme="bb-light"] .highlight .p {
-    color: #dfdfcb !important;
-    /* Light text for variables/operators */
+    color: #262620 !important;
+    /* Dark text for variables/operators in light mode */
 }
 
 /* Comments in light mode - bright green for visibility */
@@ -144,8 +144,8 @@
 [data-md-color-scheme="bb-dark"] .highlight .n,
 [data-md-color-scheme="bb-dark"] .highlight .o,
 [data-md-color-scheme="bb-dark"] .highlight .p {
-    color: #262620 !important;
-    /* Dark text for variables/operators */
+    color: #dfdfcb !important;
+    /* Light text for variables/operators in dark mode */
 }
 
 /* Comments in dark mode - bright orange for visibility */
