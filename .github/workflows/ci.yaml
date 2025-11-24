@@ -6,6 +6,13 @@ on:
     branches: [main]
 
 jobs:
+  pre-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v3
+      - uses: pre-commit/action@v3.0.1
+
   test:
     runs-on: ubuntu-latest
     strategy:
@@ -34,9 +41,13 @@ jobs:
       - name: Generate Coverage Report
         run: uv run coverage report -m
 
-  pre-commit:
+  golden-tests:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v3
-      - uses: pre-commit/action@v3.0.1
+      - uses: actions/checkout@v4
+      - uses: extractions/setup-just@v3
+        with:
+          just-version: 1.43.1
+
+      - name: Run golden tests with just
+        run: just golden-tests
