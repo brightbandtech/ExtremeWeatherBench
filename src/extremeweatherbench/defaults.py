@@ -128,7 +128,11 @@ era5_freeze_target = inputs.ERA5(
 )
 
 era5_atmospheric_river_target = inputs.ERA5(
-    variables=[derived.AtmosphericRiverVariables()],
+    variables=[
+        derived.AtmosphericRiverVariables(
+            output_variables=["atmospheric_river_land_intersection"]
+        )
+    ],
     storage_options={"remote_options": {"anon": True}},
 )
 
@@ -186,7 +190,11 @@ cira_tropical_cyclone_forecast = inputs.KerchunkForecast(
 cira_atmospheric_river_forecast = inputs.KerchunkForecast(
     name="FourCastNetv2",
     source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
-    variables=["surface_eastward_wind"],
+    variables=[
+        derived.AtmosphericRiverVariables(
+            output_variables=["atmospheric_river_land_intersection"]
+        )
+    ],
     variable_mapping=inputs.CIRA_metadata_variable_mapping,
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
     preprocess=_preprocess_bb_cira_forecast_dataset,
