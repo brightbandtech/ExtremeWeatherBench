@@ -7,7 +7,7 @@ from typing import Optional
 import click
 import pandas as pd
 
-from extremeweatherbench import cases, defaults, evaluate, utils
+from extremeweatherbench import cases, defaults, evaluate
 
 
 @click.command()
@@ -32,11 +32,20 @@ from extremeweatherbench import cases, defaults, evaluate, utils
     help="Optional directory for caching intermediate data",
 )
 @click.option(
-    "--parallel",
-    "-p",
+    "--n-jobs",
     type=int,
     default=1,
-    help="Number of parallel jobs using joblib (default: 1 for serial execution)",
+    help="Number of parallel jobs to run (default: 1 for serial execution)",
+)
+@click.option(
+    "--parallel-config",
+    "-p",
+    type=dict,
+    default=None,
+    help=(
+        "Advanced parallel configuration using joblib. Takes precedence over "
+        "--n-jobs if provided."
+    ),
 )
 @click.option(
     "--save-case-operators",
@@ -51,12 +60,15 @@ from extremeweatherbench import cases, defaults, evaluate, utils
         "uses more memory)"
     ),
 )
+@click.pass_context
 def cli_runner(
+    ctx: click.Context,
     default: bool,
     config_file: Optional[str],
     output_dir: Optional[str],
     cache_dir: Optional[str],
-    parallel: int,
+    n_jobs: int,
+    parallel_config: Optional[dict],
     save_case_operators: Optional[str],
     precompute: bool,
 ):
@@ -75,12 +87,24 @@ def cli_runner(
     The CLI can run evaluations in serial or parallel using joblib, and optionally
     save CaseOperator objects for later use or inspection.
 
+    Args:
+        default: Use default Brightband evaluation objects with current directory as
+        output
+        config_file: Path to a config.py file containing evaluation objects
+        output_dir: Directory for analysis outputs (default: current directory)
+        cache_dir: Optional directory for caching intermediate data
+        parallel_config: Parallel configuration using joblib (default: {'backend':
+        'threading', 'n_jobs': 8})
+        save_case_operators: Save CaseOperator objects to a pickle file at this path
+        precompute: Pre-compute datasets before running metrics to avoid recomputing
+        them for each metric (faster but uses more memory)
+
     Examples:
         # Use default evaluation objects
         $ ewb --default
 
         # Use custom config file with parallel execution
-        $ ewb --config-file my_config.py --parallel 4
+        $ ewb --config-file my_config.py --n-jobs 4
 
         # Save case operators to pickle file
         $ ewb --default --save-case-operators case_ops.pkl
@@ -90,9 +114,14 @@ def cli_runner(
 
         # Use precompute for faster execution (higher memory usage)
         $ ewb --default --precompute
+
+        # Use custom parallel configuration
+        $ ewb --default --parallel-config '{"backend": "dask", "n_jobs": 4}'
     """
-    # Store original output_dir value before setting default
-    original_output_dir = output_dir
+    # Show help if no arguments provided
+    if not default and not config_file:
+        click.echo(ctx.get_help())
+        ctx.exit()
 
     # Set default output directory to current working directory
     if output_dir is None:
@@ -100,28 +129,6 @@ def cli_runner(
 
     output_path = pathlib.Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
-
-    # Validate that either default or config_file is provided
-    if not default and not config_file:
-        ctx = click.get_current_context()
-        # Check if any non-default arguments were provided
-        args_provided = (
-            original_output_dir is not None
-            or cache_dir is not None
-            or parallel != 1
-            or save_case_operators is not None
-            or precompute
-        )
-
-        if not args_provided:
-            # No arguments provided, show help and exit 0
-            click.echo(ctx.get_help())
-            ctx.exit(0)
-        else:
-            # Some arguments provided but missing required flags, show error
-            raise click.UsageError(
-                "Either --default or --config-file must be specified"
-            )
 
     if default and config_file:
         raise click.UsageError("Cannot specify both --default and --config-file")
@@ -156,19 +163,12 @@ def cli_runner(
         click.echo(f"Case operators saved to {save_case_operators}")
 
     # Run evaluation
-    if parallel > 1:
-        click.echo(f"Running evaluation with {parallel} parallel jobs...")
-        results_list = evaluate._run_parallel(
-            case_operators, parallel, pre_compute=precompute
-        )
-        results = (
-            utils._safe_concat(results_list, ignore_index=True)
-            if results_list
-            else pd.DataFrame()
-        )
-    else:
-        click.echo("Running evaluation in serial...")
-        results = ewb.run(pre_compute=precompute)
+    click.echo("Running evaluation...")
+    results = ewb.run(
+        n_jobs=n_jobs,
+        parallel_config=parallel_config,
+        pre_compute=precompute,
+    )
 
     # Save results
     output_file = output_path / "evaluation_results.csv"

@@ -94,11 +94,9 @@ heatwave_evaluation_list = [
     inputs.EvaluationObject(
         event_type="heat_wave",
         metric_list=[
-            metrics.MaximumMAE,
-            metrics.RMSE,
-            metrics.OnsetME,
-            metrics.DurationME,
-            metrics.MaxMinMAE,
+            metrics.MaximumMeanAbsoluteError(),
+            metrics.RootMeanSquaredError(),
+            metrics.MaximumLowestMeanAbsoluteError(),
         ],
         target=era5_heatwave_target,
         forecast=fcnv2_forecast,
@@ -115,8 +113,8 @@ ewb_instance = evaluate.ExtremeWeatherBench(
 
 # Execute a parallel run and return the evaluation results as a pandas DataFrame
 heatwave_outputs = ewb_instance.run(
-    n_jobs=16, # use 16 processes
-    pre_compute=True, # load case data into memory before metrics are computed. Useful with smaller evaluation datasets with many metrics
+    parallel_config={'backend':'loky','n_jobs':16} # Uses 16 jobs with the loky backend
+    pre_compute=True, # load case data into memory before metrics are computed. Useful with smaller evaluation regions with many metrics
 )
 
 # Save the results
