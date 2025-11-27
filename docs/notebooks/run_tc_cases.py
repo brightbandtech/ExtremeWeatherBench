@@ -111,10 +111,10 @@ HRES_TC_EVALUATION_OBJECTS = [
 ewb_cases = cases.load_ewb_events_yaml_into_case_collection()
 ewb_cases = ewb_cases.select_cases("event_type", "tropical_cyclone")
 
-# downselect the TC cases to only include those before case_id_number 202
-my_cases = [case for case in ewb_cases.cases if case.case_id_number < 175]
+# # downselect the TC cases to only include those before case_id_number 202
+# my_cases = [case for case in ewb_cases.cases if case.case_id_number < 175]
 
-ewb_cases = cases.IndividualCaseCollection(cases=my_cases)
+# ewb_cases = cases.IndividualCaseCollection(cases=my_cases)
 
 ewb_fourv2 = evaluate.ExtremeWeatherBench(ewb_cases, FOURv2_TC_EVALUATION_OBJECTS)
 ewb_gc = evaluate.ExtremeWeatherBench(ewb_cases, GC_TC_EVALUATION_OBJECTS)
@@ -127,13 +127,13 @@ ewb_hres = evaluate.ExtremeWeatherBench(ewb_cases, HRES_TC_EVALUATION_OBJECTS)
 # if you have already saved them (from running this once), then skip this box
 parallel_config = {"backend": "loky", "n_jobs": 24}
 
-# fourv2_results = ewb_fourv2.run(parallel_config=parallel_config)
+fourv2_results = ewb_fourv2.run(parallel_config=parallel_config)
 # gc_results = ewb_gc.run(parallel_config=parallel_config)
 # pang_results = ewb_pang.run(parallel_config=parallel_config)
-hres_results = ewb_hres.run(parallel_config=parallel_config)
+# hres_results = ewb_hres.run(parallel_config=parallel_config)
 
 # save the results to make it more efficient
-# fourv2_results.to_pickle(basepath + "docs/notebooks/figs/fourv2_tc_results.pkl")
+fourv2_results.to_pickle(basepath + "docs/notebooks/figs/fourv2_tc_results.pkl")
 # gc_results.to_pickle(basepath + "docs/notebooks/figs/gc_tc_results.pkl")
 # pang_results.to_pickle(basepath + "docs/notebooks/figs/pang_tc_results.pkl")
-hres_results.to_pickle(basepath + "docs/notebooks/figs/hres_tc_results.pkl")
+# hres_results.to_pickle(basepath + "docs/notebooks/figs/hres_tc_results.pkl")

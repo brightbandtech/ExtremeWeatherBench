@@ -2411,18 +2411,18 @@ cases:
         longitude_min: 258.6
         longitude_max: 267.7
     event_type: tropical_cyclone
-  # - case_id_number: 202
-  #   title: Kay
-  #   start_date: 2022-09-02 12:00:00
-  #   end_date: 2022-09-15 00:00:00
-  #   location:
-  #     type: bounded_region
-  #     parameters:
-  #       latitude_min: 11.9
-  #       latitude_max: 33.4
-  #       longitude_min: 235.8
-  #       longitude_max: 261.4
-  #   event_type: tropical_cyclone
+  - case_id_number: 202
+    title: Kay
+    start_date: 2022-09-02 12:00:00
+    end_date: 2022-09-15 00:00:00
+    location:
+      type: bounded_region
+      parameters:
+        latitude_min: 11.9
+        latitude_max: 33.4
+        longitude_min: 235.8
+        longitude_max: 261.4
+    event_type: tropical_cyclone
   - case_id_number: 203
     title: Roslyn
     start_date: 2022-10-18 00:00:00
