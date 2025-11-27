@@ -864,21 +864,6 @@ class IBTrACS(TargetBase):
     )
     source: str = IBTRACS_URI
 
-    def __post_init__(self):
-        """Ensure season variable is included in variables list."""
-        # If variables are specified (non-empty list), ensure required variables are
-        # included for subsetting logic in subset_data_to_case. This approach is unique
-        # to deal with a polars LazyFrame or pandas DataFrame.
-        self.variables.extend(
-            [
-                "season",
-                "number",
-                "tc_name",
-                "surface_wind_speed",
-                "air_pressure_at_mean_sea_level",
-            ]
-        )
-
     def _open_data_from_source(self) -> IncomingDataInput:
         # not using storage_options in this case due to NetCDF4Backend not
         # supporting them
@@ -926,6 +911,8 @@ class IBTrACS(TargetBase):
         columns_to_keep = [
             "valid_time",
             "tc_name",
+            "season",
+            "number",
             "latitude",
             "longitude",
             "surface_wind_speed",

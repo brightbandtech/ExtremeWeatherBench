@@ -4,7 +4,7 @@ import operator
 import numpy as np
 import xarray as xr
 
-from extremeweatherbench import derived, inputs
+from extremeweatherbench import calc, derived, inputs
 
 # Suppress noisy log messages
 logging.getLogger("urllib3.connectionpool").setLevel(logging.CRITICAL)
@@ -55,7 +55,31 @@ DEFAULT_VARIABLE_NAMES = [
 
 
 def _preprocess_bb_cira_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
-    """An example preprocess function that renames the time coordinate to lead_time,
+    """A preprocess function for CIRA data that renames the time coordinate to
+    lead_time, creates a valid_time coordinate, and sets the lead time range and
+    resolution not present in the original dataset.
+
+    Args:
+        ds: The forecast dataset to preprocess.
+
+    Returns:
+        The preprocessed forecast dataset.
+    """
+    ds = ds.rename({"time": "lead_time"})
+    # The evaluation configuration is used to set the lead time range and resolution.
+    ds["lead_time"] = np.array(
+        [i for i in range(0, 241, 6)], dtype="timedelta64[h]"
+    ).astype("timedelta64[ns]")
+    return ds
+
+
+# Preprocessing function for CIRA data that includes geopotential thickness calculation
+# required for tropical cyclone tracks
+def _preprocess_bb_cira_tc_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
+    """A preprocess function for CIRA data that includes geopotential thickness
+    calculation required for tropical cyclone tracks.
+
+    This function renames the time coordinate to lead_time,
     creates a valid_time coordinate, and sets the lead time range and resolution not
     present in the original dataset.
 
@@ -66,10 +90,16 @@ def _preprocess_bb_cira_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
         The renamed forecast dataset.
     """
     ds = ds.rename({"time": "lead_time"})
+
     # The evaluation configuration is used to set the lead time range and resolution.
     ds["lead_time"] = np.array(
         [i for i in range(0, 241, 6)], dtype="timedelta64[h]"
     ).astype("timedelta64[ns]")
+
+    # Calculate the geopotential thickness required for tropical cyclone tracks
+    ds["geopotential_thickness"] = calc.geopotential_thickness(
+        ds["z"], top_level_value=300, bottom_level_value=500
+    )
     return ds
 
 
@@ -93,15 +123,13 @@ era5_heatwave_target = inputs.ERA5(
 
 era5_freeze_target = inputs.ERA5(
     source=inputs.ARCO_ERA5_FULL_URI,
-    variables=[
-        "surface_air_temperature",
-    ],
+    variables=["surface_air_temperature"],
     storage_options={"remote_options": {"anon": True}},
 )
 
-
 era5_atmospheric_river_target = inputs.ERA5(
     variables=[derived.AtmosphericRiverVariables()],
+    storage_options={"remote_options": {"anon": True}},
 )
 
 # GHCN targets
@@ -125,16 +153,7 @@ pph_target = inputs.PPH(
 
 # IBTrACS target
 
-# TODO: Re-enable when IBTrACS target is implemented
-# ibtracs_target = inputs.IBTrACS(
-#     source=inputs.IBTRACS_URI,
-#     variables=[derived.TCTrackVariables()],
-#     variable_mapping={
-#         "vmax": "surface_wind_speed",
-#         "slp": "air_pressure_at_mean_sea_level",
-#     },
-#     storage_options={"remote_options": {"anon": True}},
-# )
+ibtracs_target = inputs.IBTrACS()
 
 # Forecast Examples
 
@@ -156,6 +175,14 @@ cira_freeze_forecast = inputs.KerchunkForecast(
     preprocess=_preprocess_bb_cira_forecast_dataset,
 )
 
+cira_tropical_cyclone_forecast = inputs.KerchunkForecast(
+    name="FourCastNetv2",
+    source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
+    variables=[derived.TropicalCycloneTrackVariables()],
+    variable_mapping=inputs.CIRA_metadata_variable_mapping,
+    storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
+    preprocess=_preprocess_bb_cira_tc_forecast_dataset,
+)
 cira_atmospheric_river_forecast = inputs.KerchunkForecast(
     name="FourCastNetv2",
     source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
@@ -171,6 +198,7 @@ cira_severe_convection_forecast = inputs.KerchunkForecast(
     variables=[derived.CravenBrooksSignificantSevere()],
     variable_mapping=inputs.CIRA_metadata_variable_mapping,
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
+    preprocess=_preprocess_bb_cira_forecast_dataset,
 )
 
 
@@ -199,7 +227,7 @@ def get_brightband_evaluation_objects() -> list[inputs.EvaluationObject]:
         metrics.MinimumMeanAbsoluteError(),
         metrics.RootMeanSquaredError(),
         metrics.DurationMeanError(
-            threshold_criteria=get_climatology(0.15), op_func=operator.ge
+            threshold_criteria=get_climatology(0.15), op_func=operator.le
         ),
     ]
 
@@ -233,9 +261,6 @@ def get_brightband_evaluation_objects() -> list[inputs.EvaluationObject]:
             metric_list=[
                 metrics.CriticalSuccessIndex(),
                 metrics.FalseAlarmRatio(),
-                # Need to add regional hits/misses and hits/misses metrics
-                # metrics.RegionalHitsMisses(),
-                # metrics.HitsMisses(),
             ],
             target=lsr_target,
             forecast=cira_severe_convection_forecast,
@@ -245,25 +270,19 @@ def get_brightband_evaluation_objects() -> list[inputs.EvaluationObject]:
             metric_list=[
                 metrics.CriticalSuccessIndex(),
                 metrics.SpatialDisplacement(),
-                metrics.EarlySignal(
-                    comparison_operator=operator.ge,
-                    threshold=0.5,
-                    spatial_aggregation="any",
-                ),
+                metrics.EarlySignal(),
             ],
             target=era5_atmospheric_river_target,
             forecast=cira_atmospheric_river_forecast,
         ),
-        # TODO: Re-enable when tropical cyclone forecast is implemented
-        # inputs.EvaluationObject(
-        #     event_type="tropical_cyclone",
-        #     metric_list=[
-        #         metrics.EarlySignal(),
-        #         metrics.LandfallDisplacement(),
-        #         metrics.LandfallTimeMeanError(),
-        #         metrics.LandfallIntensityMeanAbsoluteError(),
-        #     ],
-        #     target=ibtracs_target,
-        #     forecast=cira_tropical_cyclone_forecast,
-        # ),
+        inputs.EvaluationObject(
+            event_type="tropical_cyclone",
+            metric_list=[
+                metrics.LandfallDisplacement(),
+                metrics.LandfallTimeMeanError(),
+                metrics.LandfallIntensityMeanAbsoluteError(),
+            ],
+            target=ibtracs_target,
+            forecast=cira_tropical_cyclone_forecast,
+        ),
     ]
