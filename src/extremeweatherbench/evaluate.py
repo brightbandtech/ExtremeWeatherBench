@@ -131,12 +131,6 @@ class ExtremeWeatherBench:
                 )
                 parallel_config = {"backend": "threading", "n_jobs": n_jobs}
             kwargs["parallel_config"] = parallel_config
-
-            # Caching does not work in parallel mode as of now
-            if self.cache_dir:
-                logger.warning(
-                    "Caching is not supported in parallel mode, ignoring cache_dir"
-                )
         else:
             # Running in serial mode - instantiate cache dir if needed
             if self.cache_dir:
