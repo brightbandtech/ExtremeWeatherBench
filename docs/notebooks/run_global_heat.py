@@ -181,7 +181,10 @@ HRES_HEAT_EVALUATION_OBJECTS = [
 ]
 
 # load in all of the events in the yaml file
-ewb_cases = cases.load_ewb_events_yaml_into_case_collection()
+ewb_cases = cases.load_individual_cases_from_yaml(
+    basepath + "src/extremeweatherbench/data/long_events.yaml"
+)
+
 ewb_cases = ewb_cases.select_cases("event_type", "heat_wave")
 
 ewb_fourv2 = evaluate.ExtremeWeatherBench(ewb_cases, FOURv2_HEAT_EVALUATION_OBJECTS)
@@ -201,7 +204,7 @@ pang_results = ewb_pang.run(parallel_config=parallel_config)
 hres_results = ewb_hres.run(parallel_config=parallel_config)
 
 # save the results to make it more efficient
-fourv2_results.to_pickle(basepath + "docs/notebooks/figs/fourv2_heat_results.pkl")
-gc_results.to_pickle(basepath + "docs/notebooks/figs/gc_heat_results.pkl")
-pang_results.to_pickle(basepath + "docs/notebooks/figs/pang_heat_results.pkl")
-hres_results.to_pickle(basepath + "docs/notebooks/figs/hres_heat_results.pkl")
+fourv2_results.to_pickle(basepath + "docs/notebooks/figs/fourv2_long_heat_results.pkl")
+gc_results.to_pickle(basepath + "docs/notebooks/figs/gc_long_heat_results.pkl")
+pang_results.to_pickle(basepath + "docs/notebooks/figs/pang_long_heat_results.pkl")
+hres_results.to_pickle(basepath + "docs/notebooks/figs/hres_long_heat_results.pkl")

@@ -1,17 +1,15 @@
 # setup all the imports
-import seaborn as sns
 
-from extremeweatherbench import cases, defaults, evaluate, inputs, metrics
-
-sns.set_theme(style="whitegrid")
 from pathlib import Path
+
+from extremeweatherbench import cases, defaults, derived, evaluate, inputs, metrics
 
 # make the basepath - change this to your local path
 basepath = Path.home() / "ExtremeWeatherBench" / ""
 basepath = str(basepath) + "/"
 
 # ugly hack to load in our plotting scripts
-import sys
+import sys  # noqa: E402
 
 sys.path.append(basepath + "/docs/notebooks/")
 
@@ -23,34 +21,50 @@ sys.path.append(basepath + "/docs/notebooks/")
 
 cira_AR_FOURv2_GFSforecast = inputs.KerchunkForecast(
     source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
-    variables=["surface_eastward_wind"],
+    variables=[
+        derived.AtmosphericRiverVariables(
+            output_variables=["atmospheric_river_land_intersection"]
+        )
+    ],
     variable_mapping=inputs.CIRA_metadata_variable_mapping,
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
-    preprocess=defaults._preprocess_bb_cira_forecast_dataset,
+    preprocess=defaults._preprocess_bb_ar_cira_forecast_dataset,
     name="CIRA FOURv2 GFS",
 )
 
 cira_AR_GC_GFSforecast = inputs.KerchunkForecast(
     source="gs://extremeweatherbench/GRAP_v100_GFS.parq",
-    variables=["surface_eastward_wind"],
+    variables=[
+        derived.AtmosphericRiverVariables(
+            output_variables=["atmospheric_river_land_intersection"]
+        )
+    ],
     variable_mapping=inputs.CIRA_metadata_variable_mapping,
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
-    preprocess=defaults._preprocess_bb_cira_forecast_dataset,
+    preprocess=defaults._preprocess_bb_ar_cira_forecast_dataset,
     name="CIRA GC GFS",
 )
 
 cira_AR_PANG_GFSforecast = inputs.KerchunkForecast(
     source="gs://extremeweatherbench/PANG_v100_GFS.parq",
-    variables=["surface_eastward_wind"],
+    variables=[
+        derived.AtmosphericRiverVariables(
+            output_variables=["atmospheric_river_land_intersection"]
+        )
+    ],
     variable_mapping=inputs.CIRA_metadata_variable_mapping,
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
-    preprocess=defaults._preprocess_bb_cira_forecast_dataset,
+    preprocess=defaults._preprocess_bb_ar_cira_forecast_dataset,
     name="CIRA PANG GFS",
 )
 
 hres_forecast = inputs.ZarrForecast(
     source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
-    variables=["surface_eastward_wind"],
+    variables=[
+        derived.AtmosphericRiverVariables(
+            output_variables=["atmospheric_river_land_intersection"]
+        )
+    ],
     variable_mapping=inputs.HRES_metadata_variable_mapping,
     storage_options={"remote_options": {"anon": True}},
     name="ECMWF HRES",
@@ -113,7 +127,7 @@ ewb_hres = evaluate.ExtremeWeatherBench(ewb_cases, HRES_AR_EVALUATION_OBJECTS)
 # load in the results for all heat waves in parallel
 # this will take awhile to run if you do them all in one code box
 # if you have already saved them (from running this once), then skip this box
-parallel_config = {"backend": "loky", "n_jobs": 48}
+parallel_config = {"backend": "loky", "n_jobs": 24}
 
 fourv2_results = ewb_fourv2.run(parallel_config=parallel_config)
 gc_results = ewb_gc.run(parallel_config=parallel_config)

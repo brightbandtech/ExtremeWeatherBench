@@ -1,17 +1,14 @@
 # setup all the imports
-import seaborn as sns
+from pathlib import Path  # noqa: E402
 
 from extremeweatherbench import cases, defaults, evaluate, inputs, metrics
-
-sns.set_theme(style="whitegrid")
-from pathlib import Path
 
 # make the basepath - change this to your local path
 basepath = Path.home() / "ExtremeWeatherBench" / ""
 basepath = str(basepath) + "/"
 
 # ugly hack to load in our plotting scripts
-import sys
+import sys  # noqa: E402
 
 sys.path.append(basepath + "/docs/notebooks/")
 

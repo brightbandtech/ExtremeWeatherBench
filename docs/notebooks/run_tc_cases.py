@@ -1,17 +1,14 @@
 # setup all the imports
-import seaborn as sns
+from pathlib import Path
 
 from extremeweatherbench import cases, defaults, derived, evaluate, inputs, metrics
-
-sns.set_theme(style="whitegrid")
-from pathlib import Path
 
 # make the basepath - change this to your local path
 basepath = Path.home() / "ExtremeWeatherBench" / ""
 basepath = str(basepath) + "/"
 
 # ugly hack to load in our plotting scripts
-import sys
+import sys  # noqa: E402
 
 sys.path.append(basepath + "/docs/notebooks/")
 
@@ -28,6 +25,7 @@ cira_TC_FOURv2_GFS_forecast = inputs.KerchunkForecast(
     ],
     variable_mapping=inputs.CIRA_metadata_variable_mapping,
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
+    preprocess=defaults._preprocess_bb_cira_tc_forecast_dataset,
     name="CIRA FOURv2 GFS",
 )
 
@@ -38,6 +36,7 @@ cira_TC_GC_GFS_forecast = inputs.KerchunkForecast(
     ],
     variable_mapping=inputs.CIRA_metadata_variable_mapping,
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
+    preprocess=defaults._preprocess_bb_cira_tc_forecast_dataset,
     name="CIRA GC GFS",
 )
 
@@ -49,6 +48,7 @@ cira_TC_PANG_GFS_forecast = inputs.KerchunkForecast(
     ],
     variable_mapping=inputs.CIRA_metadata_variable_mapping,
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
+    preprocess=defaults._preprocess_bb_cira_tc_forecast_dataset,
     name="CIRA PANG GFS",
 )
 
@@ -59,6 +59,7 @@ hres_forecast = inputs.ZarrForecast(
     ],
     variable_mapping=inputs.HRES_metadata_variable_mapping,
     storage_options={"remote_options": {"anon": True}},
+    preprocess=defaults._preprocess_bb_hres_tc_forecast_dataset,
     name="ECMWF HRES",
 )
 
@@ -110,6 +111,11 @@ HRES_TC_EVALUATION_OBJECTS = [
 ewb_cases = cases.load_ewb_events_yaml_into_case_collection()
 ewb_cases = ewb_cases.select_cases("event_type", "tropical_cyclone")
 
+# downselect the TC cases to only include those before case_id_number 202
+my_cases = [case for case in ewb_cases.cases if case.case_id_number < 175]
+
+ewb_cases = cases.IndividualCaseCollection(cases=my_cases)
+
 ewb_fourv2 = evaluate.ExtremeWeatherBench(ewb_cases, FOURv2_TC_EVALUATION_OBJECTS)
 ewb_gc = evaluate.ExtremeWeatherBench(ewb_cases, GC_TC_EVALUATION_OBJECTS)
 ewb_pang = evaluate.ExtremeWeatherBench(ewb_cases, PANG_TC_EVALUATION_OBJECTS)
@@ -119,15 +125,15 @@ ewb_hres = evaluate.ExtremeWeatherBench(ewb_cases, HRES_TC_EVALUATION_OBJECTS)
 # load in the results for all heat waves in parallel
 # this will take awhile to run if you do them all in one code box
 # if you have already saved them (from running this once), then skip this box
-parallel_config = {"backend": "loky", "n_jobs": 48}
+parallel_config = {"backend": "loky", "n_jobs": 24}
 
-fourv2_results = ewb_fourv2.run(parallel_config=parallel_config)
-gc_results = ewb_gc.run(parallel_config=parallel_config)
-pang_results = ewb_pang.run(parallel_config=parallel_config)
+# fourv2_results = ewb_fourv2.run(parallel_config=parallel_config)
+# gc_results = ewb_gc.run(parallel_config=parallel_config)
+# pang_results = ewb_pang.run(parallel_config=parallel_config)
 hres_results = ewb_hres.run(parallel_config=parallel_config)
 
 # save the results to make it more efficient
-fourv2_results.to_pickle(basepath + "docs/notebooks/figs/fourv2_tc_results.pkl")
-gc_results.to_pickle(basepath + "docs/notebooks/figs/gc_tc_results.pkl")
-pang_results.to_pickle(basepath + "docs/notebooks/figs/pang_tc_results.pkl")
+# fourv2_results.to_pickle(basepath + "docs/notebooks/figs/fourv2_tc_results.pkl")
+# gc_results.to_pickle(basepath + "docs/notebooks/figs/gc_tc_results.pkl")
+# pang_results.to_pickle(basepath + "docs/notebooks/figs/pang_tc_results.pkl")
 hres_results.to_pickle(basepath + "docs/notebooks/figs/hres_tc_results.pkl")

@@ -102,6 +102,31 @@ def _preprocess_bb_cira_tc_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
     )
     return ds
 
+
+# Preprocessing function for HRES data that includes geopotential thickness calculation
+# required for tropical cyclone tracks
+def _preprocess_bb_hres_tc_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
+    """A preprocess function for CIRA data that includes geopotential thickness
+    calculation required for tropical cyclone tracks.
+
+    This function renames the time coordinate to lead_time,
+    creates a valid_time coordinate, and sets the lead time range and resolution not
+    present in the original dataset.
+
+    Args:
+        ds: The forecast dataset to rename.
+
+    Returns:
+        The renamed forecast dataset.
+    """
+
+    # Calculate the geopotential thickness required for tropical cyclone tracks
+    ds["geopotential_thickness"] = calc.geopotential_thickness(
+        ds["geopotential"], top_level_value=300, bottom_level_value=500
+    )
+    return ds
+
+
 # Preprocess function for CIRA data using Brightband kerchunk parquets
 def _preprocess_bb_ar_cira_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
     """An example preprocess function that renames the time coordinate to lead_time,
@@ -127,6 +152,35 @@ def _preprocess_bb_ar_cira_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
             relative_humidity=ds["r"],
             levels=ds["level"],
         )
+    return ds
+
+
+# Preprocess function for CIRA data using Brightband kerchunk parquets
+def _preprocess_bb_severe_cira_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
+    """An example preprocess function that renames the time coordinate to lead_time,
+    creates a valid_time coordinate, and sets the lead time range and resolution not
+    present in the original dataset.
+
+    Args:
+        ds: The forecast dataset to rename.
+
+    Returns:
+        The renamed forecast dataset.
+    """
+    ds = ds.rename({"time": "lead_time"})
+
+    # The evaluation configuration is used to set the lead time range and resolution.
+    ds["lead_time"] = np.array(
+        [i for i in range(0, 241, 6)], dtype="timedelta64[h]"
+    ).astype("timedelta64[ns]")
+    if "q" not in ds.variables:
+        # Calculate specific humidity from relative humidity and air temperature
+        ds["specific_humidity"] = calc.specific_humidity_from_relative_humidity(
+            air_temperature=ds["t"],
+            relative_humidity=ds["r"],
+            levels=ds["level"],
+        )
+    ds["geopotential"] = ds["z"] * calc.g0
     return ds
 
 
