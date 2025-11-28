@@ -737,10 +737,10 @@ def load_land_geometry(resolution: str = "10m") -> shapely.geometry.Polygon:
 
 
 def maybe_cache_and_compute(
-    *datasets: xr.Dataset,
+    ds: xr.Dataset | xr.DataArray,
+    name: str,
     cache_dir: Optional[Union[str, pathlib.Path]] = None,
-    case_metadata: "cases.IndividualCase",
-) -> list[xr.Dataset]:
+) -> xr.Dataset | xr.DataArray:
     """Compute and cache datasets if cache_dir is provided.
 
     Data is returned as technically lazily loaded from the cache, but will significantly
@@ -749,32 +749,26 @@ def maybe_cache_and_compute(
     better to avoid caching with a limited disk size.
 
     Args:
-        *datasets: The datasets to compute and cache.
+        dataset: The dataset to compute and cache.
+        name: The name of the dataset for naming cached files.
         cache_dir: The directory to cache the datasets. If provided,
             datasets will be cached as zarrs and loaded from the cache.
             Default is None.
-        case_metadata: The case metadata for naming cached files.
 
     Returns:
-        The computed datasets if cache_dir is set, otherwise the
-        original datasets.
+        The computed dataset if cache_dir is set, otherwise the
+        original dataset.
     """
-    # If no caching, return as list
+    # If no caching, return as dataset or dataarray
     if cache_dir is None:
-        return list(datasets)
+        return ds
 
-    # Compute and cache datasets
+    # Compute and cache dataset or dataarray
     logger.info("Computing datasets and storing at %s...", cache_dir)
     cache_path = pathlib.Path(cache_dir)
-    result = []
-
-    for i, dataset in enumerate(datasets):
-        dataset_name = dataset.attrs.get("name", f"dataset_{i}")
-        zarr_path = (
-            cache_path
-            / f"case_id_number_{case_metadata.case_id_number}_{dataset_name}.zarr"
-        )
-        dataset.to_zarr(zarr_path)
-        result.append(xr.open_zarr(zarr_path))
-
-    return result
+    try:
+        zarr_path = cache_path / f"{name}.zarr"
+        ds.to_zarr(zarr_path)
+    except FileExistsError:
+        logger.warning("cached %s already exists, skipping", name)
+    return xr.open_zarr(zarr_path)

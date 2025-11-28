@@ -137,7 +137,7 @@ class ExtremeWeatherBench:
                 if not self.cache_dir.exists():
                     self.cache_dir.mkdir(parents=True, exist_ok=True)
 
-        run_results = _run_case_operators(self.case_operators, self.cache_dir, **kwargs)
+        run_results = _run_case_operators(self.case_operators, cache_dir=self.cache_dir, **kwargs)
 
         # If there are results, concatenate them and return, else return an empty
         # DataFrame with the expected columns
@@ -169,10 +169,10 @@ def _run_case_operators(
         # Run in parallel if parallel_config exists and n_jobs != 1
         if parallel_config is not None:
             logger.info("Running case operators in parallel...")
-            return _run_parallel(case_operators, **kwargs)
+            return _run_parallel(case_operators, cache_dir=cache_dir, **kwargs)
         else:
             logger.info("Running case operators in serial...")
-            return _run_serial(case_operators, cache_dir, **kwargs)
+            return _run_serial(case_operators, cache_dir=cache_dir, **kwargs)
 
 
 def _run_serial(
@@ -191,6 +191,7 @@ def _run_serial(
 
 def _run_parallel(
     case_operators: list["cases.CaseOperator"],
+    cache_dir: Optional[pathlib.Path] = None,
     **kwargs,
 ) -> list[pd.DataFrame]:
     """Run the case operators in parallel.
@@ -236,7 +237,7 @@ def _run_parallel(
         with joblib.parallel_config(**parallel_config):
             run_results = utils.ParallelTqdm(total_tasks=len(case_operators))(
                 # None is the cache_dir, we can't cache in parallel mode
-                joblib.delayed(compute_case_operator)(case_operator, None, **kwargs)
+                joblib.delayed(compute_case_operator)(case_operator, cache_dir=cache_dir, **kwargs)
                 for case_operator in case_operators
             )
         return run_results
@@ -299,11 +300,15 @@ def compute_case_operator(
     )
 
     # Compute and cache the datasets if cache_dir is set
-    aligned_forecast_ds, aligned_target_ds = utils.maybe_cache_and_compute(
+    aligned_forecast_ds = utils.maybe_cache_and_compute(
         aligned_forecast_ds,
-        aligned_target_ds,
         cache_dir=cache_dir,
-        case_metadata=case_operator.case_metadata,
+        name=f"{case_operator.case_metadata.case_id_number}_{case_operator.forecast.name}",
+    )
+    aligned_target_ds = utils.maybe_cache_and_compute(
+        aligned_target_ds, 
+        cache_dir=cache_dir, 
+        name=f"{case_operator.case_metadata.case_id_number}_{case_operator.target.name}"
     )
     logger.info(
         "Datasets built for case %s.", case_operator.case_metadata.case_id_number
@@ -406,7 +411,6 @@ def compute_case_operator(
                 )
 
         # Cache the results of each metric if caching
-        cache_dir = kwargs.get("cache_dir", None)
         if cache_dir:
             cache_path = (
                 pathlib.Path(cache_dir) if isinstance(cache_dir, str) else cache_dir
