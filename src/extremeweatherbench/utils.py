@@ -766,9 +766,6 @@ def maybe_cache_and_compute(
     # Compute and cache dataset or dataarray
     logger.info("Computing datasets and storing at %s...", cache_dir)
     cache_path = pathlib.Path(cache_dir)
-    try:
-        zarr_path = cache_path / f"{name}.zarr"
-        ds.to_zarr(zarr_path)
-    except FileExistsError:
-        logger.warning("cached %s already exists, skipping", name)
-    return xr.open_zarr(zarr_path)
+    if not cache_path.exists():
+        ds.to_zarr(cache_path / f"{name}.zarr")   
+    return xr.open_zarr(cache_path / f"{name}.zarr")
