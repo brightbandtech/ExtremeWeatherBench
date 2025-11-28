@@ -155,12 +155,20 @@ ewb_hres = evaluate.ExtremeWeatherBench(ewb_cases, HRES_SEVERE_EVALUATION_OBJECT
 
 parallel_config = {"backend": "loky", "n_jobs": 48}
 
+<<<<<<< Updated upstream
 # fourv2_results = ewb_fourv2.run(parallel_config=parallel_config)
+=======
+fourv2_results = ewb_fourv2.run(parallel_config=parallel_config)
+>>>>>>> Stashed changes
 # gc_results = ewb_gc.run(parallel_config=parallel_config)
-pang_results = ewb_pang.run(parallel_config=parallel_config)
+# pang_results = ewb_pang.run(parallel_config=parallel_config)
 # hres_results = ewb_hres.run(parallel_config=parallel_config)
 
+<<<<<<< Updated upstream
 # fourv2_results.to_pickle(basepath + "docs/notebooks/figs/fourv2_severe_results.pkl")
+=======
+fourv2_results.to_pickle(basepath + "docs/notebooks/figs/fourv2_severe_results.pkl")
+>>>>>>> Stashed changes
 # gc_results.to_pickle(basepath + "docs/notebooks/figs/gc_severe_results.pkl")
-pang_results.to_pickle(basepath + "docs/notebooks/figs/pang_severe_results.pkl")
+# pang_results.to_pickle(basepath + "docs/notebooks/figs/pang_severe_results.pkl")
 # hres_results.to_pickle(basepath + "docs/notebooks/figs/hres_severe_results.pkl")
