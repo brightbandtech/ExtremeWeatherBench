@@ -114,7 +114,6 @@ ewb_instance = evaluate.ExtremeWeatherBench(
 # Execute a parallel run and return the evaluation results as a pandas DataFrame
 heatwave_outputs = ewb_instance.run(
     parallel_config={'backend':'loky','n_jobs':16} # Uses 16 jobs with the loky backend
-    pre_compute=True, # load case data into memory before metrics are computed. Useful with smaller evaluation regions with many metrics
 )
 
 # Save the results

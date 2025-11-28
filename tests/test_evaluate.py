@@ -431,12 +431,11 @@ class TestExtremeWeatherBench:
                 evaluation_objects=[sample_evaluation_object],
             )
 
-            result = ewb.run(n_jobs=1, threshold=0.5, pre_compute=True)
+            result = ewb.run(n_jobs=1, threshold=0.5)
 
             # Check that kwargs were passed through
             call_args = mock_run_case_operators.call_args
             assert call_args[1]["threshold"] == 0.5
-            assert call_args[1]["pre_compute"] is True
             assert isinstance(result, pd.DataFrame)
 
     @mock.patch("extremeweatherbench.evaluate._run_case_operators")
@@ -591,14 +590,12 @@ class TestRunCaseOperators:
             [sample_case_operator],
             None,
             threshold=0.5,
-            pre_compute=True,
         )
 
         call_args = mock_run_serial.call_args
         assert call_args[0][0] == [sample_case_operator]
         assert call_args[0][1] is None  # cache_dir
         assert call_args[1]["threshold"] == 0.5
-        assert call_args[1]["pre_compute"] is True
         assert isinstance(result, list)
 
     @mock.patch("extremeweatherbench.evaluate._run_parallel")
@@ -993,15 +990,16 @@ class TestComputeCaseOperator:
 
     @mock.patch("extremeweatherbench.evaluate._build_datasets")
     @mock.patch("extremeweatherbench.derived.maybe_derive_variables")
-    def test_compute_case_operator_with_precompute(
+    def test_compute_case_operator_with_cache(
         self,
         mock_derive_variables,
         mock_build_datasets,
         sample_case_operator,
         sample_forecast_dataset,
         sample_target_dataset,
+        tmp_path,
     ):
-        """Test compute_case_operator with pre_compute=True."""
+        """Test compute_case_operator with cache_dir."""
         mock_build_datasets.return_value = (
             sample_forecast_dataset,
             sample_target_dataset,
@@ -1019,8 +1017,11 @@ class TestComputeCaseOperator:
         mock_metric.maybe_prepare_composite_kwargs.side_effect = lambda **kwargs: kwargs
         sample_case_operator.metric_list = [mock_metric]
 
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir()
+
         with mock.patch(
-            "extremeweatherbench.evaluate._compute_and_maybe_cache"
+            "extremeweatherbench.utils.maybe_cache_and_compute"
         ) as mock_compute_cache:
             mock_compute_cache.return_value = [
                 sample_forecast_dataset,
@@ -1033,7 +1034,7 @@ class TestComputeCaseOperator:
                 mock_evaluate.return_value = pd.DataFrame({"value": [1.0]})
 
                 result = evaluate.compute_case_operator(
-                    sample_case_operator, pre_compute=True
+                    sample_case_operator, cache_dir=cache_dir
                 )
 
                 mock_compute_cache.assert_called_once()
@@ -1381,36 +1382,62 @@ class TestPipelineFunctions:
         with pytest.raises(AttributeError, match="'str' object has no attribute"):
             evaluate.run_pipeline(sample_case_operator.case_metadata, "invalid")
 
-    def test_compute_and_maybe_cache(
-        self, sample_forecast_dataset, sample_target_dataset
+    def test_maybe_cache_and_compute_with_cache_dir(
+        self, sample_forecast_dataset, sample_target_dataset, sample_individual_case
     ):
-        """Test _compute_and_maybe_cache function."""
+        """Test maybe_cache_and_compute with cache directory."""
+        from extremeweatherbench import utils
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            cache_dir = pathlib.Path(temp_dir)
+
+            # Add names to datasets for caching
+            sample_forecast_dataset.attrs["name"] = "forecast"
+            sample_target_dataset.attrs["name"] = "target"
+
+            result = utils.maybe_cache_and_compute(
+                sample_forecast_dataset,
+                sample_target_dataset,
+                cache_dir=cache_dir,
+                case_metadata=sample_individual_case,
+            )
+
+            # Verify result is returned correctly
+            assert len(result) == 2
+            assert isinstance(result[0], xr.Dataset)
+            assert isinstance(result[1], xr.Dataset)
+
+            # Verify cache files were created as zarrs
+            assert len(list(cache_dir.glob("*.zarr"))) == 2
+
+    def test_maybe_cache_and_compute_no_op(
+        self, sample_forecast_dataset, sample_target_dataset, sample_individual_case
+    ):
+        """Test maybe_cache_and_compute as no-op (lazy preserved)."""
+        from extremeweatherbench import utils
+
         # Create lazy datasets
         lazy_forecast = sample_forecast_dataset.chunk()
         lazy_target = sample_target_dataset.chunk()
 
-        result = evaluate._compute_and_maybe_cache(
-            lazy_forecast, lazy_target, cache_dir=None
+        # Add names to datasets
+        lazy_forecast.attrs["name"] = "forecast"
+        lazy_target.attrs["name"] = "target"
+
+        # Call with no cache_dir (should be no-op)
+        result = utils.maybe_cache_and_compute(
+            lazy_forecast,
+            lazy_target,
+            cache_dir=None,
+            case_metadata=sample_individual_case,
         )
 
         assert len(result) == 2
         assert isinstance(result[0], xr.Dataset)
         assert isinstance(result[1], xr.Dataset)
-
-    def test_compute_and_maybe_cache_with_cache_dir(
-        self, sample_forecast_dataset, sample_target_dataset
-    ):
-        """Test _compute_and_maybe_cache with cache directory (should raise
-        NotImplementedError)."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            cache_dir = pathlib.Path(temp_dir)
-
-            with pytest.raises(
-                NotImplementedError, match="Caching is not implemented yet"
-            ):
-                evaluate._compute_and_maybe_cache(
-                    sample_forecast_dataset, sample_target_dataset, cache_dir=cache_dir
-                )
+        # Should still be lazy
+        first_var = list(result[0].data_vars)[0]
+        assert hasattr(result[0].data_vars[first_var].data, "chunks")
 
 
 class TestMetricEvaluation:
