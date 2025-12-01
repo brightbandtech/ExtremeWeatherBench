@@ -13,3 +13,4 @@ wheels/
 .mypy_cache
 .vscode/
 docs/source/_build/
+docs/notebooks/figs/hres_tc_results.pkl
