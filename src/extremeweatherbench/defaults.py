@@ -11,14 +11,18 @@ logging.getLogger("urllib3.connectionpool").setLevel(logging.CRITICAL)
 logging.getLogger("botocore.httpchecksum").setLevel(logging.CRITICAL)
 
 
-# The core coordinate variables that are always required, even if not dimensions
-# (e.g. latitude and longitude for xarray datasets)
+# The core coordinate variables that are selected if they exist, even if not dimensions
+# (e.g. latitude and longitude for xarray datasets). These are used currently for 
+# selecting columns in pandas dataframes and polars lazyframes.
 DEFAULT_COORDINATE_VARIABLES = [
     "valid_time",
     "lead_time",
     "init_time",
     "latitude",
     "longitude",
+    "season", # for tropical cyclone data
+    "tc_name", # for tropical cyclone data
+    "number", # for tropical cyclone data
 ]
 
 DEFAULT_VARIABLE_NAMES = [
