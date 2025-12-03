@@ -1451,9 +1451,7 @@ class TestMaybeComputeAndMaybeCache:
         cache_dir.mkdir()
 
         # Call with cache_dir (caches as zarr)
-        result = utils.maybe_cache_and_compute(
-            ds, name="forecast", cache_dir=cache_dir
-        )
+        result = utils.maybe_cache_and_compute(ds, name="forecast", cache_dir=cache_dir)
 
         # Should return dataset
         assert isinstance(result, xr.Dataset)

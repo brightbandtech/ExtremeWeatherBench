@@ -557,9 +557,7 @@ class TestRunCaseOperators:
         # Serial mode: don't pass parallel_config
         result = evaluate._run_case_operators([sample_case_operator], cache_dir=None)
 
-        mock_run_serial.assert_called_once_with(
-            [sample_case_operator], cache_dir=None
-        )
+        mock_run_serial.assert_called_once_with([sample_case_operator], cache_dir=None)
         assert result == mock_results
 
     @mock.patch("extremeweatherbench.evaluate._run_parallel")
