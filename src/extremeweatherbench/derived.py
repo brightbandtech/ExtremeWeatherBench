@@ -24,13 +24,10 @@ class DerivedVariable(abc.ABC):
     practically perfect hindcast, MLCAPE, IVT, or atmospheric river masks.
 
     Attributes:
-        name: The name that is used for applications of derived variables.
-            Defaults to the class name.
         variables: A list of variables that are used to build the
             derived variable.
-        requires_target_dataset: If True, target dataset will be passed to
-            this derived variable via kwargs. Set to False for memory efficiency
-            when target data is not needed.
+        output_variables: Optional list of variable names that specify
+            which outputs to use from the derived computation.
         compute: A method that generates the derived variable from the variables.
         derive_variable: An abstract method that defines the computation to
             derive the derived_variable from variables.
@@ -105,6 +102,14 @@ class TropicalCycloneTrackVariables(DerivedVariable):
 
     Track data is automatically obtained from the target dataset when using
     the evaluation pipeline (via `requires_target_dataset=True` flag).
+
+    Attributes:
+        output_variables: Optional list of variable names that specify
+            which outputs to use from the derived computation.
+        name: The name of the derived variable. Defaults to class-level
+            name attribute if present, otherwise the class name.
+        requires_target_dataset: If True, target dataset will be passed to
+            this derived variable via kwargs.
     """
 
     # required variables for TC track identification
@@ -125,6 +130,14 @@ class TropicalCycloneTrackVariables(DerivedVariable):
         ],
         name: Optional[str] = None,
     ):
+        """Initialize the TropicalCycloneTrackVariables variable.
+
+        Args:
+            output_variables: Optional list of variable names that specify
+                which outputs to use from the derived computation.
+            name: The name of the derived variable. Defaults to class-level
+                name attribute if present, otherwise the class name.
+        """
         super().__init__(output_variables=output_variables, name=name)
 
     def get_or_compute_tracks(self, data: xr.Dataset, *args, **kwargs) -> xr.Dataset:
@@ -236,10 +249,21 @@ class CravenBrooksSignificantSevere(DerivedVariable):
 
     def __init__(
         self,
+        output_variables: Optional[List[str]] = None,
         name: Optional[str] = "craven_brooks_significant_severe",
         layer_depth: float = 100,
     ):
-        super().__init__(name=name)
+        """Initialize the Craven-Brooks significant severe variable.
+
+        Args:
+            output_variables: Optional list of variable names that specify
+                which outputs to use from the derived computation.
+            name: The name of the derived variable. Defaults to class-level
+                name attribute if present, otherwise the class name.
+            layer_depth: The depth of the layer to compute the CAPE for. 
+            Defaults to 100 hPa.
+        """
+        super().__init__(output_variables=output_variables, name=name)
         self.layer_depth = layer_depth
 
     def derive_variable(
@@ -334,14 +358,22 @@ class AtmosphericRiverVariables(DerivedVariable):
 
     def __init__(
         self,
-        name: Optional[str] = "atmospheric_river",
         output_variables: Optional[List[str]] = [
             "atmospheric_river_mask",
             "integrated_vapor_transport",
             "atmospheric_river_land_intersection",
         ],
+        name: Optional[str] = "atmospheric_river",
     ):
-        super().__init__(name=name)
+        """Initialize the AtmosphericRiverVariables variable.
+
+        Args:
+            output_variables: Optional list of variable names that specify
+                which outputs to use from the derived computation.
+            name: The name of the derived variable. Defaults to class-level
+                name attribute if present, otherwise the class name.
+        """
+        super().__init__(output_variables=output_variables, name=name)
 
     def derive_variable(self, data: xr.Dataset, *args, **kwargs) -> xr.Dataset:
         """Derive the atmospheric river mask and land intersection."""
