@@ -40,7 +40,7 @@ def _preprocess_bb_cira_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
 # Load case data from the default events.yaml
 # Users can also define their own cases_dict structure
 case_yaml = cases.load_ewb_events_yaml_into_case_collection()
-case_yaml = case_yaml.select_cases(by="case_id_number", value=115)
+case_yaml = case_yaml.select_cases(by="case_id_number", value=114)
 
 case_yaml.cases[0].start_date = datetime.datetime(2022, 12, 27, 11, 0, 0)
 case_yaml.cases[0].end_date = datetime.datetime(2022, 12, 27, 13, 0, 0)
@@ -124,15 +124,16 @@ ar_evaluation_objects = [
     ),
 ]
 
-# Initialize ExtremeWeatherBench; will only run on cases with event_type
-# atmospheric_river
-ar_ewb = evaluate.ExtremeWeatherBench(
-    case_metadata=case_yaml,
-    evaluation_objects=ar_evaluation_objects,
-)
+if __name__ == "__main__":
+    # Initialize ExtremeWeatherBench; will only run on cases with event_type
+    # atmospheric_river
+    ar_ewb = evaluate.ExtremeWeatherBench(
+        case_metadata=case_yaml,
+        evaluation_objects=ar_evaluation_objects,
+    )
 
-# Run the workflow using 3 jobs
-outputs = ar_ewb.run(parallel_config={"backend": "loky", "n_jobs": 3})
+    # Run the workflow using 3 jobs
+    outputs = ar_ewb.run(parallel_config={"backend": "loky", "n_jobs": 3})
 
-# Save the evaluation outputs to a csv file
-outputs.to_csv("ar_signal_outputs.csv")
+    # Save the evaluation outputs to a csv file
+    outputs.to_csv("ar_signal_outputs.csv")

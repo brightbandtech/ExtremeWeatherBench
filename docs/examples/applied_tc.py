@@ -2,15 +2,12 @@ import logging
 
 import numpy as np
 import xarray as xr
-from dask.distributed import Client
 
 from extremeweatherbench import calc, cases, derived, evaluate, inputs, metrics
 
-logging.getLogger("urllib3.connectionpool").setLevel(logging.CRITICAL)
-logging.getLogger("botocore.httpchecksum").setLevel(logging.CRITICAL)
-logging.basicConfig()
+# Set the logger level to INFO
 logger = logging.getLogger("extremeweatherbench")
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 
 
 # Preprocessing function for CIRA data that includes geopotential thickness calculation
@@ -111,9 +108,9 @@ pangu_forecast = inputs.KerchunkForecast(
 composite_landfall_metrics = [
     metrics.LandfallMetric(
         metrics=[
-            metrics.LandfallIntensityMeanAbsoluteError(),
-            metrics.LandfallTimeMeanError(),
-            metrics.LandfallDisplacement(),
+            metrics.LandfallIntensityMeanAbsoluteError,
+            metrics.LandfallTimeMeanError,
+            metrics.LandfallDisplacement,
         ],
         approach="next",
         # Set the intensity variable to use for the metric
@@ -154,11 +151,9 @@ if __name__ == "__main__":
         case_metadata=case_yaml,
         evaluation_objects=tc_evaluation_object,
     )
-    # Set up dask client for parallel execution
-    with Client() as client:
-        logger.info("Starting EWB run")
-        # Run the workflow with parallel_config backend set to dask
-        outputs = ewb.run(
-            parallel_config={"backend": "dask", "n_jobs": 3},
-        )
-        outputs.to_csv("tc_metric_test_results.csv")
+    logger.info("Starting EWB run")
+    # Run the workflow with parallel_config backend set to dask
+    outputs = ewb.run(
+        parallel_config={"backend": "loky", "n_jobs": 3},
+    )
+    outputs.to_csv("tc_metric_test_results.csv")
