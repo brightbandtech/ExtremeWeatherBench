@@ -141,7 +141,7 @@ class CaseOperator:
     """
 
     case_metadata: IndividualCase
-    metric_list: list["metrics.BaseMetric"]
+    metric_list: Sequence["metrics.BaseMetric"]
     target: "inputs.TargetBase"
     forecast: "inputs.ForecastBase"
 
