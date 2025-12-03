@@ -388,7 +388,7 @@ class EvaluationObject:
     """
 
     event_type: str
-    metric_list: list["metrics.BaseMetric"]
+    metric_list: Sequence["metrics.BaseMetric"]
     target: "TargetBase"
     forecast: "ForecastBase"
 
