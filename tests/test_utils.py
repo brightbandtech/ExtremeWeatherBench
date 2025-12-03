@@ -1424,147 +1424,81 @@ class TestReduceXarrayMethod:
 class TestMaybeComputeAndMaybeCache:
     """Test the maybe_cache_and_compute function."""
 
-    @pytest.fixture
-    def sample_case(self):
-        """Create a sample IndividualCase for testing."""
-        from extremeweatherbench import cases, regions
-
-        return cases.IndividualCase(
-            case_id_number=42,
-            title="Test Case",
-            start_date=datetime.datetime(2023, 1, 1),
-            end_date=datetime.datetime(2023, 1, 5),
-            location=regions.CenteredRegion(
-                latitude=40.0, longitude=-100.0, bounding_box_degrees=5.0
-            ),
-            event_type="test_event",
-        )
-
-    def test_no_compute_no_cache(self, sample_case):
-        """Test with no cache - stays lazy."""
-        # Create lazy datasets
-        ds1 = xr.Dataset(
+    def test_no_cache_returns_original(self):
+        """Test with no cache - returns original dataset."""
+        ds = xr.Dataset(
             {"temp": (["time", "lat"], [[1, 2], [3, 4]])},
             coords={"time": [0, 1], "lat": [10, 20]},
         ).chunk()
-        ds1.attrs["name"] = "forecast"
-
-        ds2 = xr.Dataset(
-            {"temp": (["time", "lat"], [[5, 6], [7, 8]])},
-            coords={"time": [0, 1], "lat": [10, 20]},
-        ).chunk()
-        ds2.attrs["name"] = "target"
 
         # Call with no cache_dir
-        result = utils.maybe_cache_and_compute(
-            ds1, ds2, cache_dir=None, case_metadata=sample_case
-        )
+        result = utils.maybe_cache_and_compute(ds, name="forecast", cache_dir=None)
 
-        # Check results
-        assert len(result) == 2
-        assert all(isinstance(ds, xr.Dataset) for ds in result)
+        # Should return original dataset
+        assert isinstance(result, xr.Dataset)
         # Should still be lazy
-        assert hasattr(result[0].temp.data, "chunks")
-        assert hasattr(result[1].temp.data, "chunks")
+        assert hasattr(result.temp.data, "chunks")
+        xr.testing.assert_equal(result, ds)
 
-    def test_cache_computes_and_caches(self, sample_case, tmp_path):
+    def test_cache_computes_and_caches(self, tmp_path):
         """Test caching stores as zarr and loads lazily."""
-        # Create lazy datasets with names
-        ds1 = xr.Dataset(
+        ds = xr.Dataset(
             {"temp": (["time", "lat"], [[1, 2], [3, 4]])},
             coords={"time": [0, 1], "lat": [10, 20]},
         ).chunk()
-        ds1.attrs["name"] = "forecast"
-
-        ds2 = xr.Dataset(
-            {"temp": (["time", "lat"], [[5, 6], [7, 8]])},
-            coords={"time": [0, 1], "lat": [10, 20]},
-        ).chunk()
-        ds2.attrs["name"] = "target"
 
         cache_dir = tmp_path / "cache"
         cache_dir.mkdir()
 
         # Call with cache_dir (caches as zarr)
         result = utils.maybe_cache_and_compute(
-            ds1, ds2, cache_dir=cache_dir, case_metadata=sample_case
+            ds, name="forecast", cache_dir=cache_dir
         )
 
-        # Check results
-        assert len(result) == 2
+        # Should return dataset
+        assert isinstance(result, xr.Dataset)
         # Should still be lazy (loaded from zarr cache)
-        assert hasattr(result[0].temp.data, "chunks")
-        assert hasattr(result[1].temp.data, "chunks")
+        assert hasattr(result.temp.data, "chunks")
 
-        # Verify cache files were created as zarrs
-        expected_files = [
-            cache_dir / f"case_id_number_{sample_case.case_id_number}_forecast.zarr",
-            cache_dir / f"case_id_number_{sample_case.case_id_number}_target.zarr",
-        ]
-        for expected_file in expected_files:
-            assert expected_file.exists()
+        # Verify cache file was created as zarr
+        expected_file = cache_dir / "forecast.zarr"
+        assert expected_file.exists()
 
-        # Verify cached files can be loaded
-        cached_ds1 = xr.open_zarr(expected_files[0])
-        cached_ds2 = xr.open_zarr(expected_files[1])
-        xr.testing.assert_equal(result[0], cached_ds1)
-        xr.testing.assert_equal(result[1], cached_ds2)
+        # Verify cached file can be loaded and matches
+        cached_ds = xr.open_zarr(expected_file)
+        xr.testing.assert_equal(result, cached_ds)
 
-    def test_single_dataset_stays_lazy(self, sample_case):
+    def test_single_dataset_stays_lazy(self):
         """Test single dataset with no cache stays lazy."""
         ds = xr.Dataset(
             {"temp": (["time"], [1, 2, 3])}, coords={"time": [0, 1, 2]}
         ).chunk()
-        ds.attrs["name"] = "single"
 
-        result = utils.maybe_cache_and_compute(
-            ds, cache_dir=None, case_metadata=sample_case
-        )
+        result = utils.maybe_cache_and_compute(ds, name="single", cache_dir=None)
 
-        assert len(result) == 1
-        assert isinstance(result[0], xr.Dataset)
+        assert isinstance(result, xr.Dataset)
         # Should still be lazy
-        assert hasattr(result[0].temp.data, "chunks")
+        assert hasattr(result.temp.data, "chunks")
 
-    def test_dataset_names_preserved(self, sample_case):
-        """Test that dataset names from attrs are preserved."""
-        ds1 = xr.Dataset({"var1": (["x"], [1, 2])}, coords={"x": [0, 1]})
-        ds1.attrs["name"] = "my_forecast"
-
-        ds2 = xr.Dataset({"var2": (["x"], [3, 4])}, coords={"x": [0, 1]})
-        ds2.attrs["name"] = "my_target"
-
-        result = utils.maybe_cache_and_compute(
-            ds1, ds2, cache_dir=None, case_metadata=sample_case
-        )
-
-        # Names should be preserved in attrs if set
-        assert result[0].attrs.get("name") == "my_forecast"
-        assert result[1].attrs.get("name") == "my_target"
-
-    def test_cache_dir_as_string(self, sample_case, tmp_path):
+    def test_cache_dir_as_string(self, tmp_path):
         """Test that cache_dir works as string path."""
         ds = xr.Dataset({"temp": (["x"], [1, 2])}, coords={"x": [0, 1]}).chunk()
-        ds.attrs["name"] = "test"
 
         cache_dir = tmp_path / "cache_str"
         cache_dir.mkdir()
 
         # Pass as string instead of Path
         result = utils.maybe_cache_and_compute(
-            ds, cache_dir=str(cache_dir), case_metadata=sample_case
+            ds, name="test", cache_dir=str(cache_dir)
         )
 
-        assert len(result) == 1
         # Should still be lazy (loaded from zarr cache)
-        assert hasattr(result[0].temp.data, "chunks")
+        assert hasattr(result.temp.data, "chunks")
         # Verify cache file was created as zarr
-        expected_file = (
-            cache_dir / f"case_id_number_{sample_case.case_id_number}_test.zarr"
-        )
+        expected_file = cache_dir / "test.zarr"
         assert expected_file.exists()
 
-    def test_with_lazy_dask_arrays_with_cache(self, sample_case, tmp_path):
+    def test_with_lazy_dask_arrays_with_cache(self, tmp_path):
         """Test lazy dask arrays remain lazy when cached."""
         import dask.array as da
 
@@ -1573,33 +1507,31 @@ class TestMaybeComputeAndMaybeCache:
             {"temp": (["time", "lat"], da.ones((5, 10), chunks=(2, 5)))},
             coords={"time": range(5), "lat": range(10)},
         )
-        ds.attrs["name"] = "lazy"
 
         cache_dir = tmp_path / "cache_lazy"
         cache_dir.mkdir()
 
-        result = utils.maybe_cache_and_compute(
-            ds, cache_dir=cache_dir, case_metadata=sample_case
-        )
+        result = utils.maybe_cache_and_compute(ds, name="lazy", cache_dir=cache_dir)
 
         # Should still be lazy (loaded from zarr cache)
-        assert len(result) == 1
-        assert hasattr(result[0].temp.data, "chunks")
+        assert isinstance(result, xr.Dataset)
+        assert hasattr(result.temp.data, "chunks")
 
-    def test_dataset_without_name_attribute(self, sample_case, tmp_path):
-        """Test caching works even if dataset has no name attr."""
-        ds = xr.Dataset({"temp": (["x"], [1, 2])}, coords={"x": [0, 1]})
-        # Don't set name attribute
-
-        cache_dir = tmp_path / "cache_noname"
+    def test_existing_cache_loads_from_cache(self, tmp_path):
+        """Test that existing cache is loaded instead of recomputed."""
+        cache_dir = tmp_path / "cache"
         cache_dir.mkdir()
 
-        # This should work using default name
-        result = utils.maybe_cache_and_compute(
-            ds, cache_dir=cache_dir, case_metadata=sample_case
-        )
+        ds = xr.Dataset({"temp": (["x"], [1, 2])}, coords={"x": [0, 1]}).chunk()
 
-        assert len(result) == 1
+        # First call - caches the data
+        result1 = utils.maybe_cache_and_compute(ds, name="test", cache_dir=cache_dir)
+
+        # Second call - should load from cache
+        result2 = utils.maybe_cache_and_compute(ds, name="test", cache_dir=cache_dir)
+
+        # Both should be equal
+        xr.testing.assert_equal(result1, result2)
 
 
 class TestNoCircularImports:
@@ -1657,31 +1589,15 @@ class TestNoCircularImports:
 
     def test_function_accessible_from_both_modules(self):
         """Test that function is accessible correctly from both modules."""
-        from extremeweatherbench import cases, regions, utils
-
-        # Create a sample case
-        sample_case = cases.IndividualCase(
-            case_id_number=1,
-            title="Test",
-            start_date=datetime.datetime(2023, 1, 1),
-            end_date=datetime.datetime(2023, 1, 2),
-            location=regions.CenteredRegion(
-                latitude=40.0, longitude=-100.0, bounding_box_degrees=5.0
-            ),
-            event_type="test",
-        )
+        from extremeweatherbench import utils
 
         # Create a simple dataset
         ds = xr.Dataset({"temp": (["x"], [1, 2, 3])}, coords={"x": [0, 1, 2]})
-        ds.attrs["name"] = "test_ds"
 
         # Call the function through utils module
-        result = utils.maybe_cache_and_compute(
-            ds, cache_dir=None, case_metadata=sample_case
-        )
+        result = utils.maybe_cache_and_compute(ds, name="test_ds", cache_dir=None)
 
-        assert len(result) == 1
-        assert isinstance(result[0], xr.Dataset)
+        assert isinstance(result, xr.Dataset)
 
 
 class TestMaybeGetOperator:

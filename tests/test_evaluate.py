@@ -368,7 +368,7 @@ class TestExtremeWeatherBench:
             # Serial mode should not pass parallel_config
             mock_run_case_operators.assert_called_once_with(
                 [sample_case_operator],
-                None,
+                cache_dir=None,
             )
             assert isinstance(result, pd.DataFrame)
             assert len(result) == 1
@@ -405,7 +405,7 @@ class TestExtremeWeatherBench:
 
             mock_run_case_operators.assert_called_once_with(
                 [sample_case_operator],
-                None,
+                cache_dir=None,
                 parallel_config={"backend": "threading", "n_jobs": 2},
             )
             assert isinstance(result, pd.DataFrame)
@@ -555,9 +555,11 @@ class TestRunCaseOperators:
         mock_run_serial.return_value = mock_results
 
         # Serial mode: don't pass parallel_config
-        result = evaluate._run_case_operators([sample_case_operator], None)
+        result = evaluate._run_case_operators([sample_case_operator], cache_dir=None)
 
-        mock_run_serial.assert_called_once_with([sample_case_operator], None)
+        mock_run_serial.assert_called_once_with(
+            [sample_case_operator], cache_dir=None
+        )
         assert result == mock_results
 
     @mock.patch("extremeweatherbench.evaluate._run_parallel")
@@ -568,11 +570,13 @@ class TestRunCaseOperators:
 
         result = evaluate._run_case_operators(
             [sample_case_operator],
+            cache_dir=None,
             parallel_config={"backend": "threading", "n_jobs": 4},
         )
 
         mock_run_parallel.assert_called_once_with(
             [sample_case_operator],
+            cache_dir=None,
             parallel_config={"backend": "threading", "n_jobs": 4},
         )
         assert result == mock_results
@@ -588,13 +592,13 @@ class TestRunCaseOperators:
         # Serial mode: don't pass parallel_config
         result = evaluate._run_case_operators(
             [sample_case_operator],
-            None,
+            cache_dir=None,
             threshold=0.5,
         )
 
         call_args = mock_run_serial.call_args
         assert call_args[0][0] == [sample_case_operator]
-        assert call_args[0][1] is None  # cache_dir
+        assert call_args[1]["cache_dir"] is None
         assert call_args[1]["threshold"] == 0.5
         assert isinstance(result, list)
 
@@ -624,9 +628,9 @@ class TestRunCaseOperators:
             mock_serial.return_value = []
 
             # Serial mode: don't pass parallel_config
-            result = evaluate._run_case_operators([], None)
+            result = evaluate._run_case_operators([], cache_dir=None)
 
-            mock_serial.assert_called_once_with([], None)
+            mock_serial.assert_called_once_with([], cache_dir=None)
             assert result == []
 
 
@@ -1023,7 +1027,9 @@ class TestComputeCaseOperator:
         with mock.patch(
             "extremeweatherbench.utils.maybe_cache_and_compute"
         ) as mock_compute_cache:
-            mock_compute_cache.return_value = [
+            # maybe_cache_and_compute is called twice (once per dataset)
+            # and returns a single dataset each time
+            mock_compute_cache.side_effect = [
                 sample_forecast_dataset,
                 sample_target_dataset,
             ]
@@ -1037,7 +1043,8 @@ class TestComputeCaseOperator:
                     sample_case_operator, cache_dir=cache_dir
                 )
 
-                mock_compute_cache.assert_called_once()
+                # Called twice: once for forecast, once for target
+                assert mock_compute_cache.call_count == 2
                 assert isinstance(result, pd.DataFrame)
 
     @mock.patch("extremeweatherbench.evaluate._build_datasets")
@@ -1391,21 +1398,23 @@ class TestPipelineFunctions:
         with tempfile.TemporaryDirectory() as temp_dir:
             cache_dir = pathlib.Path(temp_dir)
 
-            # Add names to datasets for caching
-            sample_forecast_dataset.attrs["name"] = "forecast"
-            sample_target_dataset.attrs["name"] = "target"
-
-            result = utils.maybe_cache_and_compute(
-                sample_forecast_dataset,
-                sample_target_dataset,
+            # Cache forecast dataset
+            result_forecast = utils.maybe_cache_and_compute(
+                sample_forecast_dataset.chunk(),
+                name="forecast",
                 cache_dir=cache_dir,
-                case_metadata=sample_individual_case,
             )
 
-            # Verify result is returned correctly
-            assert len(result) == 2
-            assert isinstance(result[0], xr.Dataset)
-            assert isinstance(result[1], xr.Dataset)
+            # Cache target dataset
+            result_target = utils.maybe_cache_and_compute(
+                sample_target_dataset.chunk(),
+                name="target",
+                cache_dir=cache_dir,
+            )
+
+            # Verify results are returned correctly
+            assert isinstance(result_forecast, xr.Dataset)
+            assert isinstance(result_target, xr.Dataset)
 
             # Verify cache files were created as zarrs
             assert len(list(cache_dir.glob("*.zarr"))) == 2
@@ -1418,26 +1427,18 @@ class TestPipelineFunctions:
 
         # Create lazy datasets
         lazy_forecast = sample_forecast_dataset.chunk()
-        lazy_target = sample_target_dataset.chunk()
 
-        # Add names to datasets
-        lazy_forecast.attrs["name"] = "forecast"
-        lazy_target.attrs["name"] = "target"
-
-        # Call with no cache_dir (should be no-op)
+        # Call with no cache_dir (should be no-op - returns original)
         result = utils.maybe_cache_and_compute(
             lazy_forecast,
-            lazy_target,
+            name="forecast",
             cache_dir=None,
-            case_metadata=sample_individual_case,
         )
 
-        assert len(result) == 2
-        assert isinstance(result[0], xr.Dataset)
-        assert isinstance(result[1], xr.Dataset)
+        assert isinstance(result, xr.Dataset)
         # Should still be lazy
-        first_var = list(result[0].data_vars)[0]
-        assert hasattr(result[0].data_vars[first_var].data, "chunks")
+        first_var = list(result.data_vars)[0]
+        assert hasattr(result.data_vars[first_var].data, "chunks")
 
 
 class TestMetricEvaluation:
