@@ -7,7 +7,7 @@ import inspect
 import logging
 import operator
 import pathlib
-from typing import Any, Callable, Literal, Optional, Sequence, Union
+from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, Sequence, Union
 
 import cartopy.io.shapereader as shpreader
 import numpy as np
@@ -20,6 +20,9 @@ import tqdm
 import xarray as xr
 import yaml  # type: ignore[import]
 from joblib import Parallel
+
+if TYPE_CHECKING:
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -731,3 +734,38 @@ def load_land_geometry(resolution: str = "10m") -> shapely.geometry.Polygon:
         pass
 
     return land_union
+
+
+def maybe_cache_and_compute(
+    ds: xr.Dataset | xr.DataArray,
+    name: str,
+    cache_dir: Optional[Union[str, pathlib.Path]] = None,
+) -> xr.Dataset | xr.DataArray:
+    """Compute and cache datasets if cache_dir is provided.
+
+    Data is returned as technically lazily loaded from the cache, but will significantly
+    speed up subsequent computations with a copy of the data in memory. Note that if
+    many cases or cases with large spatiotemporal domains are to be computed, it may be
+    better to avoid caching with a limited disk size.
+
+    Args:
+        dataset: The dataset to compute and cache.
+        name: The name of the dataset for naming cached files.
+        cache_dir: The directory to cache the datasets. If provided,
+            datasets will be cached as zarrs and loaded from the cache.
+            Default is None.
+
+    Returns:
+        The computed dataset if cache_dir is set, otherwise the
+        original dataset.
+    """
+    # If no caching, return as dataset or dataarray
+    if cache_dir is None:
+        return ds
+
+    # Compute and cache dataset or dataarray
+    logger.info("Computing datasets and storing at %s...", cache_dir)
+    cache_path = pathlib.Path(cache_dir)
+    if not (cache_path / f"{name}.zarr").exists():
+        ds.to_zarr(cache_path / f"{name}.zarr", zarr_format=2, mode="w")
+    return xr.open_zarr(cache_path / f"{name}.zarr")

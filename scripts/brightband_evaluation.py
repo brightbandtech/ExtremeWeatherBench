@@ -36,5 +36,5 @@ ewb = evaluate.ExtremeWeatherBench(
 n_threads_per_process = 4
 n_processes = max(1, multiprocessing.cpu_count() // n_threads_per_process)
 
-results = ewb.run(n_jobs=n_processes, pre_compute=True)
+results = ewb.run(n_jobs=n_processes)
 results.to_csv("brightband_evaluation_results.csv", index=False)
