@@ -332,7 +332,16 @@ class AtmosphericRiverVariables(DerivedVariable):
         "specific_humidity",
     ]
 
-    name = "atmospheric_river"
+    def __init__(
+        self,
+        name: Optional[str] = "atmospheric_river",
+        output_variables: Optional[List[str]] = [
+            "atmospheric_river_mask",
+            "integrated_vapor_transport",
+            "atmospheric_river_land_intersection",
+        ],
+    ):
+        super().__init__(name=name)
 
     def derive_variable(self, data: xr.Dataset, *args, **kwargs) -> xr.Dataset:
         """Derive the atmospheric river mask and land intersection."""
