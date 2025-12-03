@@ -13,7 +13,6 @@ EWB has cases broken down by multiple event types within `src/extremeweatherbenc
 
 ## Available: 
 
-340 total cases
 | Event Type | Number of Cases |
 | ---------- | --------------- | 
 | 🌇 Heat Waves | 46 |
@@ -21,7 +20,7 @@ EWB has cases broken down by multiple event types within `src/extremeweatherbenc
 | 🌀 Tropical Cyclones | 107 |
 | ☔️ Atmospheric Rivers | 56 |
 | 🌪️ Severe Convection | 117 | 
-
+| **Total Cases** | 340 |
 
 # EWB paper and talks
 
