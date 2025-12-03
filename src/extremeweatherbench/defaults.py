@@ -352,8 +352,8 @@ def get_brightband_evaluation_objects() -> list[inputs.EvaluationObject]:
         inputs.EvaluationObject(
             event_type="severe_convection",
             metric_list=[
-                metrics.CriticalSuccessIndex(),
-                metrics.FalseAlarmRatio(),
+                metrics.CriticalSuccessIndex,
+                metrics.FalseAlarmRatio,
             ],
             target=lsr_target,
             forecast=cira_severe_convection_forecast,
@@ -361,9 +361,9 @@ def get_brightband_evaluation_objects() -> list[inputs.EvaluationObject]:
         inputs.EvaluationObject(
             event_type="atmospheric_river",
             metric_list=[
-                metrics.CriticalSuccessIndex(),
-                metrics.SpatialDisplacement(),
-                metrics.EarlySignal(),
+                metrics.CriticalSuccessIndex,
+                metrics.SpatialDisplacement,
+                metrics.EarlySignal,
             ],
             target=era5_atmospheric_river_target,
             forecast=cira_atmospheric_river_forecast,
@@ -371,9 +371,9 @@ def get_brightband_evaluation_objects() -> list[inputs.EvaluationObject]:
         inputs.EvaluationObject(
             event_type="tropical_cyclone",
             metric_list=[
-                metrics.LandfallDisplacement(),
-                metrics.LandfallTimeMeanError(),
-                metrics.LandfallIntensityMeanAbsoluteError(),
+                metrics.LandfallDisplacement,
+                metrics.LandfallTimeMeanError,
+                metrics.LandfallIntensityMeanAbsoluteError,
             ],
             target=ibtracs_target,
             forecast=cira_tropical_cyclone_forecast,
