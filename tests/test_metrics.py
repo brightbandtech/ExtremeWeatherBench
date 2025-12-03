@@ -743,12 +743,8 @@ class TestMaximumMeanAbsoluteError:
         target_data = temp_data.astype(float)
 
         if use_sparse:
-            forecast_data = sparse.COO.from_numpy(
-                forecast_data.reshape(8, 1, 1)
-            )
-            target_data = sparse.COO.from_numpy(
-                target_data.reshape(8, 1, 1)
-            )
+            forecast_data = sparse.COO.from_numpy(forecast_data.reshape(8, 1, 1))
+            target_data = sparse.COO.from_numpy(target_data.reshape(8, 1, 1))
             forecast = xr.DataArray(
                 forecast_data,
                 dims=["valid_time", "latitude", "longitude"],
@@ -761,7 +757,9 @@ class TestMaximumMeanAbsoluteError:
             )
         else:
             forecast = xr.DataArray(
-                forecast_data, dims=["valid_time"], coords={"valid_time": forecast_times}
+                forecast_data,
+                dims=["valid_time"],
+                coords={"valid_time": forecast_times},
             ).expand_dims(["latitude", "longitude"])
             target = xr.DataArray(
                 target_data, dims=["valid_time"], coords={"valid_time": target_times}
@@ -827,12 +825,8 @@ class TestMinimumMeanAbsoluteError:
         target_data = temp_data.astype(float)
 
         if use_sparse:
-            forecast_data = sparse.COO.from_numpy(
-                forecast_data.reshape(8, 1, 1)
-            )
-            target_data = sparse.COO.from_numpy(
-                target_data.reshape(8, 1, 1)
-            )
+            forecast_data = sparse.COO.from_numpy(forecast_data.reshape(8, 1, 1))
+            target_data = sparse.COO.from_numpy(target_data.reshape(8, 1, 1))
             forecast = xr.DataArray(
                 forecast_data,
                 dims=["valid_time", "latitude", "longitude"],
@@ -845,7 +839,9 @@ class TestMinimumMeanAbsoluteError:
             )
         else:
             forecast = xr.DataArray(
-                forecast_data, dims=["valid_time"], coords={"valid_time": forecast_times}
+                forecast_data,
+                dims=["valid_time"],
+                coords={"valid_time": forecast_times},
             ).expand_dims(["latitude", "longitude"])
             target = xr.DataArray(
                 target_data, dims=["valid_time"], coords={"valid_time": target_times}
