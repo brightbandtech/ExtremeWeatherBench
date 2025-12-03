@@ -22,7 +22,7 @@ import yaml  # type: ignore[import]
 from joblib import Parallel
 
 if TYPE_CHECKING:
-    from extremeweatherbench import cases
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -767,5 +767,5 @@ def maybe_cache_and_compute(
     logger.info("Computing datasets and storing at %s...", cache_dir)
     cache_path = pathlib.Path(cache_dir)
     if not (cache_path / f"{name}.zarr").exists():
-        ds.to_zarr(cache_path / f"{name}.zarr")   
+        ds.to_zarr(cache_path / f"{name}.zarr")
     return xr.open_zarr(cache_path / f"{name}.zarr")

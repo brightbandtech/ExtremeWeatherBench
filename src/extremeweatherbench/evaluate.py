@@ -137,7 +137,9 @@ class ExtremeWeatherBench:
                 if not self.cache_dir.exists():
                     self.cache_dir.mkdir(parents=True, exist_ok=True)
 
-        run_results = _run_case_operators(self.case_operators, cache_dir=self.cache_dir, **kwargs)
+        run_results = _run_case_operators(
+            self.case_operators, cache_dir=self.cache_dir, **kwargs
+        )
 
         # If there are results, concatenate them and return, else return an empty
         # DataFrame with the expected columns
@@ -237,7 +239,9 @@ def _run_parallel(
         with joblib.parallel_config(**parallel_config):
             run_results = utils.ParallelTqdm(total_tasks=len(case_operators))(
                 # None is the cache_dir, we can't cache in parallel mode
-                joblib.delayed(compute_case_operator)(case_operator, cache_dir=cache_dir, **kwargs)
+                joblib.delayed(compute_case_operator)(
+                    case_operator, cache_dir=cache_dir, **kwargs
+                )
                 for case_operator in case_operators
             )
         return run_results
@@ -306,9 +310,9 @@ def compute_case_operator(
         name=f"{case_operator.case_metadata.case_id_number}_{case_operator.forecast.name}",
     )
     aligned_target_ds = utils.maybe_cache_and_compute(
-        aligned_target_ds, 
-        cache_dir=cache_dir, 
-        name=f"{case_operator.case_metadata.case_id_number}_{case_operator.target.name}"
+        aligned_target_ds,
+        cache_dir=cache_dir,
+        name=f"{case_operator.case_metadata.case_id_number}_{case_operator.target.name}",
     )
     logger.info(
         "Datasets built for case %s.", case_operator.case_metadata.case_id_number
