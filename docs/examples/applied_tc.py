@@ -9,6 +9,7 @@ from extremeweatherbench import calc, cases, derived, evaluate, inputs, metrics
 logger = logging.getLogger("extremeweatherbench")
 logger.setLevel(logging.INFO)
 
+
 # Preprocessing function for CIRA data that includes geopotential thickness calculation
 # required for tropical cyclone tracks
 def _preprocess_bb_cira_tc_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:

@@ -1,6 +1,5 @@
 import logging
 
-from dask.distributed import Client
 
 from extremeweatherbench import cases, derived, evaluate, inputs, metrics
 
@@ -77,7 +76,6 @@ lsr_evaluation_objects = [
 ]
 
 if __name__ == "__main__":
-
     # Initialize ExtremeWeatherBench with both evaluation objects
     ewb = evaluate.ExtremeWeatherBench(
         case_metadata=case_yaml,

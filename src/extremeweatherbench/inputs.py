@@ -862,7 +862,7 @@ class IBTrACS(TargetBase):
     variable_mapping: dict = dataclasses.field(
         default_factory=lambda: IBTrACS_metadata_variable_mapping.copy()
     )
-    
+
     # Keep both variables for IBTrACS data to ensure they are always present
     variables: Sequence[Union[str, "derived.DerivedVariable"]] = dataclasses.field(
         default_factory=lambda: ["surface_wind_speed", "air_pressure_at_mean_sea_level"]

@@ -260,7 +260,7 @@ class CravenBrooksSignificantSevere(DerivedVariable):
                 which outputs to use from the derived computation.
             name: The name of the derived variable. Defaults to class-level
                 name attribute if present, otherwise the class name.
-            layer_depth: The depth of the layer to compute the CAPE for. 
+            layer_depth: The depth of the layer to compute the CAPE for.
             Defaults to 100 hPa.
         """
         super().__init__(output_variables=output_variables, name=name)
