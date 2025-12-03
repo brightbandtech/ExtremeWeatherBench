@@ -111,9 +111,9 @@ pangu_forecast = inputs.KerchunkForecast(
 composite_landfall_metrics = [
     metrics.LandfallMetric(
         metrics=[
-            metrics.LandfallIntensityMeanAbsoluteError(),
-            metrics.LandfallTimeMeanError(),
-            metrics.LandfallDisplacement(),
+            metrics.LandfallIntensityMeanAbsoluteError,
+            metrics.LandfallTimeMeanError,
+            metrics.LandfallDisplacement,
         ],
         approach="next",
         # Set the intensity variable to use for the metric
