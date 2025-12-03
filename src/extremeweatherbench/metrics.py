@@ -1099,7 +1099,11 @@ class MaximumMeanAbsoluteError(MeanAbsoluteError):
                 + np.timedelta64(self.tolerance_range_hours // 2, "h")
             ),
             drop=True,
-        ).max("valid_time")
+        )
+        # Handle case where no forecast times fall within the tolerance window
+        if filtered_max_forecast.sizes.get("valid_time", 0) == 0:
+            return xr.DataArray(np.nan)
+        filtered_max_forecast = filtered_max_forecast.max("valid_time")
         return super()._compute_metric(
             forecast=filtered_max_forecast,
             target=maximum_value,
@@ -1178,7 +1182,11 @@ class MinimumMeanAbsoluteError(MeanAbsoluteError):
                 + np.timedelta64(self.tolerance_range_hours // 2, "h")
             ),
             drop=True,
-        ).min("valid_time")
+        )
+        # Handle case where no forecast times fall within the tolerance window
+        if filtered_min_forecast.sizes.get("valid_time", 0) == 0:
+            return xr.DataArray(np.nan)
+        filtered_min_forecast = filtered_min_forecast.min("valid_time")
         return super()._compute_metric(
             forecast=filtered_min_forecast,
             target=minimum_value,

@@ -767,5 +767,5 @@ def maybe_cache_and_compute(
     logger.info("Computing datasets and storing at %s...", cache_dir)
     cache_path = pathlib.Path(cache_dir)
     if not (cache_path / f"{name}.zarr").exists():
-        ds.to_zarr(cache_path / f"{name}.zarr")
+        ds.to_zarr(cache_path / f"{name}.zarr", zarr_format=2, mode="w")
     return xr.open_zarr(cache_path / f"{name}.zarr")
