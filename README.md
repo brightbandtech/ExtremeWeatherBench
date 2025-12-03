@@ -22,7 +22,7 @@ EWB has cases broken down by multiple event types within `src/extremeweatherbenc
 | ---------- | --------------- | 
 | 🌀 Tropical Cyclones | 107 |
 | ☔️ Atmospheric Rivers | 56 |
-| 🌪️ Severe Convection | 83 | 
+| 🌪️ Severe Convection | 117 | 
 
 
 # EWB paper and talks

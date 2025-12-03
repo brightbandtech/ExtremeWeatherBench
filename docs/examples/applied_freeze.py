@@ -1,40 +1,11 @@
 import logging
 import operator
 
-import numpy as np
-import xarray as xr
-from dask.distributed import Client
-
-from extremeweatherbench import cases, evaluate, inputs, metrics
+from extremeweatherbench import cases, evaluate, inputs, metrics, defaults
 
 # Set the logger level to INFO
 logger = logging.getLogger("extremeweatherbench")
 logger.setLevel(logging.INFO)
-
-
-# Preprocess function for CIRA data using Brightband kerchunk parquets
-def _preprocess_bb_cira_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
-    """An example preprocess function that renames the time coordinate to lead_time,
-    creates a valid_time coordinate, and sets the lead time range and resolution not
-    present in the original dataset.
-
-    Args:
-        ds: The forecast dataset to rename.
-
-    Returns:
-        The renamed forecast dataset.
-    """
-    ds = ds.rename({"time": "lead_time"})
-    # The evaluation configuration is used to set the lead time range and resolution.
-    ds["lead_time"] = np.array(
-        [i for i in range(0, 241, 6)], dtype="timedelta64[h]"
-    ).astype("timedelta64[ns]")
-    ds["surface_wind_speed"] = np.hypot(ds["u10"], ds["v10"])
-    ds["surface_wind_from_direction"] = (
-        np.degrees(np.arctan2(ds["u10"], ds["v10"])) % 360
-    )
-    return ds
-
 
 # Load case data from the default events.yaml
 # Users can also define their own cases_dict structure
@@ -43,50 +14,31 @@ case_yaml = cases.load_ewb_events_yaml_into_case_collection()
 # Define targets
 # ERA5 target
 era5_freeze_target = inputs.ERA5(
-    variables=[
-        "surface_air_temperature",
-        "surface_eastward_wind",
-        "surface_northward_wind",
-    ],
+    variables=["surface_air_temperature"],
     chunks=None,
 )
 
 # GHCN target
-ghcn_freeze_target = inputs.GHCN(
-    variables=[
-        "surface_air_temperature",
-        "surface_eastward_wind",
-        "surface_northward_wind",
-    ],
-)
+ghcn_freeze_target = inputs.GHCN(variables=["surface_air_temperature"])
 
 # Define forecast (FCNv2 CIRA Virtualizarr)
 fcnv2_forecast = inputs.KerchunkForecast(
     name="fcnv2_forecast",
     source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
-    variables=[
-        "surface_air_temperature",
-        "surface_eastward_wind",
-        "surface_northward_wind",
-    ],
+    variables=["surface_air_temperature"],
     variable_mapping=inputs.CIRA_metadata_variable_mapping,
-    preprocess=_preprocess_bb_cira_forecast_dataset,
+    storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
+    preprocess=defaults._preprocess_bb_cira_forecast_dataset,
 )
 
 # Load the climatology for DurationMeanError
-climatology = xr.open_zarr(
-    "gs://extremeweatherbench/datasets/surface_air_temperature_1990_2019_climatology.zarr",  # noqa: E501
-    storage_options={"anon": True},
-    chunks="auto",
-)
-climatology = climatology["2m_temperature"].sel(quantile=0.15)
+climatology = defaults.get_climatology(quantile=0.85)
 
 # Define the metrics
 metrics_list = [
     metrics.RootMeanSquaredError(),
     metrics.MinimumMeanAbsoluteError(),
-    metrics.OnsetMeanError(),
-    metrics.DurationMeanError(criteria=climatology, op_func=operator.le),
+    metrics.DurationMeanError(threshold_criteria=climatology, op_func=operator.le),
 ]
 
 # Create a list of evaluation objects for freeze
@@ -106,23 +58,14 @@ freeze_evaluation_object = [
 ]
 
 if __name__ == "__main__":
-    with Client() as client:
-        # Initialize ExtremeWeatherBench runner instance
-        ewb = evaluate.ExtremeWeatherBench(
-            case_metadata=case_yaml,
-            evaluation_objects=freeze_evaluation_object,
-        )
+    # Initialize ExtremeWeatherBench runner instance
+    ewb = evaluate.ExtremeWeatherBench(
+        case_metadata=case_yaml,
+        evaluation_objects=freeze_evaluation_object,
+    )
 
-        # Run the workflow
-        outputs = ewb.run(
-            # tolerance range is the number of hours before and after the timestamp a
-            # validating occurrence is checked in the forecasts for certain metrics
-            # such as minimum temperature MAE
-            tolerance_range=48,
-            # precompute is false by default, but can be set to True to avoid IO costs
-            # loading the datasets into memory for each metric
-            pre_compute=False,
-        )
+    # Run the workflow
+    outputs = ewb.run(parallel_config={"backend": "loky", "n_jobs": 1})
 
-        # Print the outputs; can be saved if desired
-        logger.info(outputs.head())
+    # Print the outputs; can be saved if desired
+    outputs.to_csv("freeze_outputs.csv")
