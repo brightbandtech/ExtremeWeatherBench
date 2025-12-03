@@ -1,14 +1,24 @@
 import abc
 import dataclasses
 import logging
-from typing import TYPE_CHECKING, Callable, Optional, TypeAlias, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Literal,
+    Optional,
+    Sequence,
+    TypeAlias,
+    Union,
+    cast,
+)
 
 import numpy as np
 import pandas as pd
 import polars as pl
 import xarray as xr
 
-from extremeweatherbench import cases, derived, utils
+from extremeweatherbench import cases, derived, sources, utils
 
 if TYPE_CHECKING:
     from extremeweatherbench import metrics
@@ -24,17 +34,20 @@ ARCO_ERA5_FULL_URI = (
 DEFAULT_GHCN_URI = "gs://extremeweatherbench/datasets/ghcnh_all_2020_2024.parq"
 
 #: Storage/access options for local storm report (LSR) tabular data.
-LSR_URI = "gs://extremeweatherbench/datasets/lsr_01012020_04302025.parq"
+LSR_URI = "gs://extremeweatherbench/datasets/combined_canada_australia_us_lsr_01012020_09272025.parq"  # noqa: E501
 
+#: Storage/access options for practically perfect hindcast data.
 PPH_URI = (
     "gs://extremeweatherbench/datasets/"
-    "practically_perfect_hindcast_20200104_20250430.zarr"
+    "practically_perfect_hindcast_20200104_20250927.zarr"
 )
 
+#: Storage/access options for IBTrACS data.
 IBTRACS_URI = (
     "https://www.ncei.noaa.gov/data/international-best-track-archive-for-"
     "climate-stewardship-ibtracs/v04r01/access/csv/ibtracs.ALL.list.v04r01.csv"
 )
+
 
 # ERA5 metadata variable mapping
 ERA5_metadata_variable_mapping = {
@@ -68,6 +81,8 @@ CIRA_metadata_variable_mapping = {
     "v10": "surface_northward_wind",
     "u100": "100m_eastward_wind",
     "v100": "100m_northward_wind",
+    "msl": "air_pressure_at_mean_sea_level",
+    "apcp": "accumulated_precipitation",
 }
 
 # HRES forecast (weatherbench2)metadata variable mapping
@@ -92,6 +107,8 @@ IBTrACS_metadata_variable_mapping = {
     "NAME": "tc_name",
     "LAT": "latitude",
     "LON": "longitude",
+    "SEASON": "season",
+    "NUMBER": "number",
     "WMO_WIND": "wmo_surface_wind_speed",
     "WMO_PRES": "wmo_air_pressure_at_mean_sea_level",
     "USA_WIND": "usa_surface_wind_speed",
@@ -120,6 +137,7 @@ IBTrACS_metadata_variable_mapping = {
     "MLC_WIND": "mlc_surface_wind_speed",
     "MLC_PRES": "mlc_air_pressure_at_mean_sea_level",
 }
+
 IncomingDataInput: TypeAlias = xr.Dataset | xr.DataArray | pl.LazyFrame | pd.DataFrame
 
 
@@ -134,6 +152,7 @@ class InputBase(abc.ABC):
 
     Attributes:
         source: The source of the data, which can be a local path or a remote URL/URI.
+        name: The name of the input data source.
         variables: A list of variables to select from the data.
         variable_mapping: A dictionary of variable names to map to the data.
         storage_options: Storage/access options for the data.
@@ -142,7 +161,7 @@ class InputBase(abc.ABC):
 
     source: str
     name: str
-    variables: list[Union[str, "derived.DerivedVariable"]] = dataclasses.field(
+    variables: Sequence[Union[str, "derived.DerivedVariable"]] = dataclasses.field(
         default_factory=list
     )
     variable_mapping: dict = dataclasses.field(default_factory=dict)
@@ -156,59 +175,51 @@ class InputBase(abc.ABC):
         data = self.preprocess(data)
         return data
 
-    def set_name(self, name: str) -> None:
-        """Set the name of the input data source.
-
-        Args:
-            name: The new name to assign to this input data source.
-        """
-        self.name = name
-
     @abc.abstractmethod
     def _open_data_from_source(self) -> IncomingDataInput:
-        """Open the target data from the source, opting to avoid loading the entire
+        """Open the input data from the source, opting to avoid loading the entire
         dataset into memory if possible.
 
         Returns:
-            The target data with a type determined by the user.
+            The input data with a type determined by the user.
         """
 
     @abc.abstractmethod
     def subset_data_to_case(
         self,
         data: IncomingDataInput,
-        case_operator: "cases.CaseOperator",
+        case_metadata: "cases.IndividualCase",
         **kwargs,
     ) -> IncomingDataInput:
-        """Subset the target data to the case information provided in CaseOperator.
+        """Subset the input data to the case information provided in IndividualCase.
 
         Time information, spatial bounds, and variables are captured in the case
         metadata
         where this method is used to subset.
 
         Args:
-            data: The target data to subset, which should be a xarray dataset,
+            data: The input data to subset, which should be a xarray dataset,
                 xarray dataarray, polars lazyframe, pandas dataframe, or numpy
                 array.
-            case_operator: The case operator to subset the data to; includes time
+            case_metadata: The case metadata to subset the data to; includes time
                 information, spatial bounds, and variables.
 
         Returns:
-            The target data with the variables subset to the case metadata.
+            The input data with the variables subset to the case metadata.
         """
 
     def maybe_convert_to_dataset(self, data: IncomingDataInput) -> xr.Dataset:
-        """Convert the target data to an xarray dataset if it is not already.
+        """Convert the input data to an xarray dataset if it is not already.
 
         This method handles the common conversion cases automatically. Override
         this method
         only if you need custom conversion logic beyond the standard cases.
 
         Args:
-            data: The target data to convert.
+            data: The input data to convert.
 
         Returns:
-            The target data as an xarray dataset.
+            The input data as an xarray dataset.
         """
         if isinstance(data, xr.Dataset):
             return data
@@ -226,26 +237,18 @@ class InputBase(abc.ABC):
         of custom data types.
 
         Args:
-            data: The target data to convert.
+            data: The input data to convert.
 
         Returns:
-            The target data as an xarray dataset.
+            The input data as an xarray dataset.
         """
         raise NotImplementedError(
             f"Conversion from {type(data)} to xarray.Dataset not implemented. "
-            f"Override _custom_convert_to_dataset in your TargetBase subclass."
+            f"Override _custom_convert_to_dataset in your InputBase subclass."
         )
 
     def add_source_to_dataset_attrs(self, ds: xr.Dataset) -> xr.Dataset:
-        """Add the name and type of the dataset to the dataset attributes."""
-        # Check if this instance is a ForecastBase or TargetBase subclass
-        if isinstance(self, ForecastBase):
-            ds.attrs["dataset_type"] = "forecast"
-        elif isinstance(self, TargetBase):
-            ds.attrs["dataset_type"] = "target"
-        else:
-            # Fallback to class name for other InputBase subclasses
-            ds.attrs["dataset_type"] = self.__class__.__name__
+        """Add the name of the source to the dataset attributes."""
         ds.attrs["source"] = self.name
         return ds
 
@@ -302,39 +305,52 @@ class ForecastBase(InputBase):
     def subset_data_to_case(
         self,
         data: IncomingDataInput,
-        case_operator: "cases.CaseOperator",
+        case_metadata: "cases.IndividualCase",
         **kwargs,
     ) -> IncomingDataInput:
         drop = kwargs.get("drop", False)
         if not isinstance(data, xr.Dataset):
             raise ValueError(f"Expected xarray Dataset, got {type(data)}")
+        # Drop duplicate init_time values
+        if len(np.unique(data.init_time)) != len(data.init_time):
+            _, index = np.unique(data.init_time, return_index=True)
+            data = data.isel(init_time=index)
 
         # subset time first to avoid OOM masking issues
         subset_time_indices = utils.derive_indices_from_init_time_and_lead_time(
             data,
-            case_operator.case_metadata.start_date,
-            case_operator.case_metadata.end_date,
+            case_metadata.start_date,
+            case_metadata.end_date,
         )
 
-        subset_time_data = data.sel(
-            init_time=data.init_time[np.unique(subset_time_indices[0])]
+        # If there are no valid times, return an empty dataset
+        if len(subset_time_indices[0]) == 0:
+            return xr.Dataset(coords={"valid_time": []})
+
+        # Use only valid init_time indices, but keep all lead_times
+        unique_init_indices = np.unique(subset_time_indices[0])
+        subset_time_data = data.sel(init_time=data.init_time[unique_init_indices])
+
+        # Create a mask indicating which (init_time, lead_time) combinations
+        # result in valid_times within the case date range
+        valid_combinations_mask = np.zeros(
+            (len(subset_time_data.init_time), len(subset_time_data.lead_time)),
+            dtype=bool,
         )
 
-        # use the list of required variables from the derived variables in the
-        # eval to add to the list of variables
-        expected_and_maybe_derived_variables = (
-            derived.maybe_pull_variables_from_derived_input(
-                list(case_operator.forecast.variables)
-            )
+        # Map the valid indices back to the subset data coordinates
+        for i, j in zip(subset_time_indices[0], subset_time_indices[1]):
+            # Find the position of this init_time in the subset data
+            init_pos = np.where(unique_init_indices == i)[0]
+            if len(init_pos) > 0:
+                valid_combinations_mask[init_pos[0], j] = True
+
+        # Add the mask as a coordinate so downstream code can use it
+        subset_time_data = subset_time_data.assign_coords(
+            valid_time_mask=(["init_time", "lead_time"], valid_combinations_mask)
         )
-        try:
-            subset_time_data = subset_time_data[expected_and_maybe_derived_variables]
-        except KeyError:
-            raise KeyError(
-                f"One of the variables {expected_and_maybe_derived_variables} not "
-                f"found in forecast data"
-            )
-        spatiotemporally_subset_data = case_operator.case_metadata.location.mask(
+
+        spatiotemporally_subset_data = case_metadata.location.mask(
             subset_time_data, drop=drop
         )
 
@@ -342,7 +358,14 @@ class ForecastBase(InputBase):
         spatiotemporally_subset_data = utils.convert_init_time_to_valid_time(
             spatiotemporally_subset_data
         )
-        return spatiotemporally_subset_data
+
+        # Now filter to only include valid_times within the case date range
+        # This eliminates the actual time steps that fall outside the range
+        time_filtered_data = spatiotemporally_subset_data.sel(
+            valid_time=slice(case_metadata.start_date, case_metadata.end_date)
+        )
+
+        return time_filtered_data
 
 
 @dataclasses.dataclass
@@ -365,7 +388,7 @@ class EvaluationObject:
     """
 
     event_type: str
-    metric_list: list["metrics.BaseMetric"]
+    metric_list: Sequence["metrics.BaseMetric"]
     target: "TargetBase"
     forecast: "ForecastBase"
 
@@ -374,7 +397,6 @@ class EvaluationObject:
 class KerchunkForecast(ForecastBase):
     """Forecast class for kerchunked forecast data."""
 
-    name: str = "kerchunk_forecast"
     chunks: Optional[Union[dict, str]] = "auto"
     storage_options: dict = dataclasses.field(default_factory=dict)
 
@@ -390,7 +412,6 @@ class KerchunkForecast(ForecastBase):
 class ZarrForecast(ForecastBase):
     """Forecast class for zarr forecast data."""
 
-    name: str = "zarr_forecast"
     chunks: Optional[Union[dict, str]] = "auto"
 
     def _open_data_from_source(self) -> IncomingDataInput:
@@ -420,9 +441,8 @@ class TargetBase(InputBase):
         """Align the forecast data to the target data.
 
         This method is used to align the forecast data to the target data (not
-        vice versa). Implementation is useful for non-gridded targets that need
-        to be aligned to the forecast
-        data.
+        vice versa). Implementation is key for non-gridded targets that have dims
+        unlike the forecast data.
 
         Args:
             forecast_data: The forecast data to align.
@@ -438,12 +458,8 @@ class TargetBase(InputBase):
 
 @dataclasses.dataclass
 class ERA5(TargetBase):
-    """Target class for ERA5 gridded data.
-
-    The easiest approach to using this class is to use the ARCO ERA5 dataset provided by
-    Google for a source. Otherwise, either a different zarr source or modifying the
-    open_data_from_source method to open the data using another method is required. If
-    there are multiple variables in the ta
+    """Target class for ERA5 gridded data, ideally using the ARCO ERA5 dataset provided
+    by Google. Otherwise, either a different zarr source for ERA5.
     """
 
     name: str = "ERA5"
@@ -464,13 +480,13 @@ class ERA5(TargetBase):
     def subset_data_to_case(
         self,
         data: IncomingDataInput,
-        case_operator: "cases.CaseOperator",
+        case_metadata: "cases.IndividualCase",
         **kwargs,
     ) -> IncomingDataInput:
         drop = kwargs.get("drop", False)
         if not isinstance(data, xr.Dataset):
             raise ValueError(f"Expected xarray Dataset, got {type(data)}")
-        return zarr_target_subsetter(data, case_operator, drop=drop)
+        return zarr_target_subsetter(data, case_metadata, drop=drop)
 
     def maybe_align_forecast_to_target(
         self,
@@ -517,70 +533,41 @@ class GHCN(TargetBase):
     def subset_data_to_case(
         self,
         data: IncomingDataInput,
-        case_operator: "cases.CaseOperator",
+        case_metadata: "cases.IndividualCase",
         **kwargs,
     ) -> IncomingDataInput:
         if not isinstance(data, pl.LazyFrame):
             raise ValueError(f"Expected polars LazyFrame, got {type(data)}")
 
         # Create filter expressions for LazyFrame
-        time_min = case_operator.case_metadata.start_date - pd.Timedelta(days=2)
-        time_max = case_operator.case_metadata.end_date + pd.Timedelta(days=2)
-
+        time_min = case_metadata.start_date - pd.Timedelta(days=2)
+        time_max = case_metadata.end_date + pd.Timedelta(days=2)
+        case_location = case_metadata.location.as_geopandas()
         # Apply filters using proper polars expressions
         subset_target_data = data.filter(
             (pl.col("valid_time") >= time_min)
             & (pl.col("valid_time") <= time_max)
-            & (
-                pl.col("latitude")
-                >= case_operator.case_metadata.location.as_geopandas().total_bounds[1]
-            )
-            & (
-                pl.col("latitude")
-                <= case_operator.case_metadata.location.as_geopandas().total_bounds[3]
-            )
-            & (
-                pl.col("longitude")
-                >= case_operator.case_metadata.location.as_geopandas().total_bounds[0]
-            )
-            & (
-                pl.col("longitude")
-                <= case_operator.case_metadata.location.as_geopandas().total_bounds[2]
-            )
-        )
-        # convert to Kelvin
-        subset_target_data = subset_target_data.with_columns(
-            pl.col("surface_air_temperature").add(273.15)
-        )
-        # Add time, latitude, and longitude to the variables, polars doesn't do indexes
-        target_variables = [
-            v for v in case_operator.target.variables if isinstance(v, str)
-        ]
-        if target_variables is None:
-            all_variables = ["valid_time", "latitude", "longitude"]
-        else:
-            all_variables = target_variables + ["valid_time", "latitude", "longitude"]
-
-        # check that the variables are in the target data
-        schema_fields = [field for field in subset_target_data.collect_schema()]
-        if target_variables and any(var not in schema_fields for var in all_variables):
-            raise ValueError(f"Variables {all_variables} not found in target data")
-
-        # subset the variables
-        if target_variables:
-            subset_target_data = subset_target_data.select(all_variables)
-        subset_target_data = subset_target_data.sort("valid_time")
+            & (pl.col("latitude") >= case_location.total_bounds[1])
+            & (pl.col("latitude") <= case_location.total_bounds[3])
+            & (pl.col("longitude") >= case_location.total_bounds[0])
+            & (pl.col("longitude") <= case_location.total_bounds[2])
+        ).sort("valid_time")
         return subset_target_data
 
     def _custom_convert_to_dataset(self, data: IncomingDataInput) -> xr.Dataset:
         if isinstance(data, pl.LazyFrame):
-            data = data.collect().to_pandas()
-            data["longitude"] = data["longitude"].apply(utils.convert_longitude_to_360)
+            # convert to Kelvin, GHCN data is in Celsius by default
+            if "surface_air_temperature" in data.collect_schema().names():
+                data = data.with_columns(pl.col("surface_air_temperature").add(273.15))
+            data = data.collect(engine="streaming").to_pandas()
+            data["longitude"] = utils.convert_longitude_to_360(data["longitude"])
 
             data = data.set_index(["valid_time", "latitude", "longitude"])
             # GHCN data can have duplicate values right now, dropping here if it occurs
             try:
-                data = data[~data.index.duplicated()].to_xarray()
+                data = xr.Dataset.from_dataframe(
+                    data[~data.index.duplicated(keep="first")], sparse=True
+                )
             except Exception as e:
                 logger.warning(
                     "Error converting GHCN data to xarray: %s, returning empty Dataset",
@@ -611,6 +598,9 @@ class LSR(TargetBase):
 
     name: str = "local_storm_reports"
     source: str = LSR_URI
+    variables: Sequence[str] = dataclasses.field(
+        default_factory=lambda: ["report_type"]
+    )
 
     def _open_data_from_source(self) -> IncomingDataInput:
         # force LSR to use anon token to prevent google reauth issues for users
@@ -621,11 +611,13 @@ class LSR(TargetBase):
     def subset_data_to_case(
         self,
         data: IncomingDataInput,
-        case_operator: "cases.CaseOperator",
+        case_metadata: "cases.IndividualCase",
         **kwargs,
     ) -> IncomingDataInput:
         if not isinstance(data, pd.DataFrame):
             raise ValueError(f"Expected pandas DataFrame, got {type(data)}")
+
+        data = data.copy()
 
         # latitude, longitude are strings by default, convert to float
         data["latitude"] = data["latitude"].astype(float)
@@ -633,10 +625,10 @@ class LSR(TargetBase):
         data["valid_time"] = pd.to_datetime(data["valid_time"])
 
         # filters to apply to the target data including datetimes and location bounds
-        bounds = case_operator.case_metadata.location.as_geopandas().total_bounds
+        bounds = case_metadata.location.as_geopandas().total_bounds
         filters = (
-            (data["valid_time"] >= case_operator.case_metadata.start_date)
-            & (data["valid_time"] <= case_operator.case_metadata.end_date)
+            (data["valid_time"] >= case_metadata.start_date)
+            & (data["valid_time"] <= case_metadata.end_date)
             & (data["latitude"] >= bounds[1])
             & (data["latitude"] <= bounds[3])
             & (data["longitude"] >= utils.convert_longitude_to_180(bounds[0]))
@@ -651,9 +643,9 @@ class LSR(TargetBase):
             raise ValueError(f"Data is not a pandas DataFrame: {type(data)}")
 
         # Map report_type column to numeric values
+        report_type_mapping = {"wind": 1, "hail": 2, "tor": 3}
         if "report_type" in data.columns:
-            report_type_mapping = {"wind": 1, "hail": 2, "tor": 3}
-            data["report_type"] = data["report_type"].map(report_type_mapping)
+            data.loc[:, "report_type"] = data["report_type"].map(report_type_mapping)
 
         # Normalize these times for the LSR data
         # Western hemisphere reports get bucketed to 12Z on the date they fall
@@ -703,7 +695,16 @@ class LSR(TargetBase):
 
             data.loc[eastern_hemisphere_mask] = eastern_data
 
+        # Convert longitude back to 0 - 360
+        data.loc[:, "longitude"] = utils.convert_longitude_to_360(data["longitude"])
         data = data.set_index(["valid_time", "latitude", "longitude"])
+
+        # Convert string columns to binary indicators (1.0)
+        # String presence indicates an event occurred at that location
+        for col in data.columns:
+            if data[col].dtype == object or data[col].dtype.name == "string":
+                data[col] = 1.0
+
         data = xr.Dataset.from_dataframe(
             data[~data.index.duplicated(keep="first")], sparse=True
         )
@@ -726,6 +727,12 @@ class PPH(TargetBase):
 
     name: str = "practically_perfect_hindcast"
     source: str = PPH_URI
+    variable_mapping: dict = dataclasses.field(
+        default_factory=lambda: IBTrACS_metadata_variable_mapping.copy()
+    )
+    variables: Sequence[str] = dataclasses.field(
+        default_factory=lambda: ["practically_perfect_hindcast"]
+    )
 
     def _open_data_from_source(
         self,
@@ -735,13 +742,13 @@ class PPH(TargetBase):
     def subset_data_to_case(
         self,
         data: IncomingDataInput,
-        case_operator: "cases.CaseOperator",
+        case_metadata: "cases.IndividualCase",
         **kwargs,
     ) -> IncomingDataInput:
         drop = kwargs.get("drop", False)
         if not isinstance(data, xr.Dataset):
             raise ValueError(f"Expected xarray Dataset, got {type(data)}")
-        return zarr_target_subsetter(data, case_operator, drop=drop)
+        return zarr_target_subsetter(data, case_metadata, drop=drop)
 
     def _custom_convert_to_dataset(self, data: IncomingDataInput) -> xr.Dataset:
         if isinstance(data, xr.Dataset):
@@ -757,11 +764,109 @@ class PPH(TargetBase):
         return align_forecast_to_target(forecast_data, target_data)
 
 
+def _ibtracs_preprocess(data: IncomingDataInput) -> IncomingDataInput:
+    """Preprocess IBTrACS data.
+
+    Preprocessing is done before any variable mapping is applied, thus using the
+    original variable names is required."""
+
+    schema = data.collect_schema()
+    # Convert pressure and surface wind columns to float, replacing " " with null
+    # Get column names that contain "pressure" or "wind"
+    pressure_cols = [col for col in schema if "PRES" in col.lower()]
+    wind_cols = [col for col in schema if "WIND" in col.lower()]
+
+    # Apply transformations to strip whitespace, replace empty with null, cast
+    subset_target_data = data.with_columns(
+        [
+            pl.col(col)
+            .str.strip_chars()
+            .replace("", None)
+            .cast(pl.Float64, strict=False)
+            .alias(col)
+            for col in pressure_cols + wind_cols
+        ]
+    )
+
+    # Drop rows where ALL columns are null (equivalent to pandas dropna(how="all"))
+    subset_target_data = subset_target_data.filter(
+        ~pl.all_horizontal(pl.all().is_null())
+    )
+
+    # Create unified pressure and wind columns by preferring USA and WMO data
+    # For surface wind speed - reuse wind_cols from earlier
+    wind_priority = ["USA_WIND", "WMO_WIND"] + [
+        col for col in wind_cols if col not in ["USA_WIND", "WMO_WIND"]
+    ]
+
+    # For pressure at mean sea level - reuse pressure_cols from earlier
+    pressure_priority = [
+        "USA_PRES",
+        "WMO_PRES",
+    ] + [
+        col
+        for col in pressure_cols
+        if col
+        not in [
+            "USA_PRES",
+            "WMO_PRES",
+        ]
+    ]
+
+    # Create unified columns using coalesce (equivalent to pandas bfill)
+    # Filter to only include columns that exist in the schema
+    schema_names = subset_target_data.collect_schema().names()
+    available_wind_cols = [col for col in wind_priority if col in schema_names]
+    available_pressure_cols = [col for col in pressure_priority if col in schema_names]
+
+    # If no columns available, return early with empty dataframe
+    if not available_wind_cols or not available_pressure_cols:
+        return subset_target_data.filter(pl.lit(False))
+
+    subset_target_data = subset_target_data.with_columns(
+        [
+            pl.coalesce([pl.col(col) for col in available_wind_cols]).alias(
+                "surface_wind_speed"
+            ),
+            pl.coalesce([pl.col(col) for col in available_pressure_cols]).alias(
+                "air_pressure_at_mean_sea_level"
+            ),
+        ]
+    )
+
+    # Drop rows where wind speed OR pressure are null
+    subset_target_data = subset_target_data.filter(
+        pl.col("surface_wind_speed").is_not_null()
+        & pl.col("air_pressure_at_mean_sea_level").is_not_null()
+    )
+
+    # Cast to float64 and use strict=False to handle any edge cases
+    subset_target_data = subset_target_data.with_columns(
+        [
+            # Convert knots to m/s
+            pl.col("surface_wind_speed").cast(pl.Float64, strict=False) * 0.514444,
+            # Convert hPa to Pa
+            pl.col("air_pressure_at_mean_sea_level").cast(pl.Float64, strict=False)
+            * 100,
+        ]
+    )
+    return subset_target_data
+
+
 @dataclasses.dataclass
 class IBTrACS(TargetBase):
     """Target class for IBTrACS data."""
 
     name: str = "IBTrACS"
+    preprocess: Callable = _ibtracs_preprocess
+    variable_mapping: dict = dataclasses.field(
+        default_factory=lambda: IBTrACS_metadata_variable_mapping.copy()
+    )
+
+    # Keep both variables for IBTrACS data to ensure they are always present
+    variables: Sequence[Union[str, "derived.DerivedVariable"]] = dataclasses.field(
+        default_factory=lambda: ["surface_wind_speed", "air_pressure_at_mean_sea_level"]
+    )
     source: str = IBTRACS_URI
 
     def _open_data_from_source(self) -> IncomingDataInput:
@@ -777,7 +882,7 @@ class IBTrACS(TargetBase):
     def subset_data_to_case(
         self,
         data: IncomingDataInput,
-        case_operator: "cases.CaseOperator",
+        case_metadata: "cases.IndividualCase",
         **kwargs,
     ) -> IncomingDataInput:
         # Note: drop parameter not applicable for polars LazyFrame data
@@ -786,92 +891,33 @@ class IBTrACS(TargetBase):
 
         # Get the season (year) from the case start date, cast as string as
         # polars is interpreting the schema as strings
-        season = case_operator.case_metadata.start_date.year
-        if case_operator.case_metadata.start_date.month > 11:
+        season = case_metadata.start_date.year
+        if case_metadata.start_date.month > 11:
             season += 1
 
         # Create a subquery to find all storm numbers in the same season
         matching_numbers = (
-            data.filter(pl.col("SEASON").cast(pl.Int64) == season)
-            .select("NUMBER")
+            data.filter(pl.col("season").cast(pl.Int64) == season)
+            .select("number")
             .unique()
         )
 
+        possible_names = utils.extract_tc_names(case_metadata.title)
+
         # Apply the filter to get all data for storms with the same number in
-        # the same season
+        # the same season, matching any of the possible names
         # This maintains the lazy evaluation
+        name_filter = pl.col("tc_name").is_in(possible_names)
         subset_target_data = data.join(
-            matching_numbers, on="NUMBER", how="inner"
-        ).filter(
-            (pl.col("tc_name") == case_operator.case_metadata.title.upper())
-            & (pl.col("SEASON").cast(pl.Int64) == season)
-        )
-
-        all_variables = IBTrACS_metadata_variable_mapping.values()
-        # subset the variables
-        subset_target_data = subset_target_data.select(all_variables)
-
-        schema = subset_target_data.collect_schema()
-        # Convert pressure and surface wind columns to float, replacing " " with null
-        # Get column names that contain "pressure" or "wind"
-        pressure_cols = [col for col in schema if "pressure" in col.lower()]
-        wind_cols = [col for col in schema if "wind" in col.lower()]
-
-        # Apply transformations to convert " " to null and cast to float
-        subset_target_data = subset_target_data.with_columns(
-            [
-                pl.when(pl.col(col) == " ")
-                .then(None)
-                .otherwise(pl.col(col))
-                .cast(pl.Float64, strict=False)
-                .alias(col)
-                for col in pressure_cols + wind_cols
-            ]
-        )
-
-        # Drop rows where ALL columns are null (equivalent to pandas dropna(how="all"))
-        subset_target_data = subset_target_data.filter(
-            ~pl.all_horizontal(pl.all().is_null())
-        )
-
-        # Create unified pressure and wind columns by preferring USA and WMO data
-        # For surface wind speed
-        wind_columns = [col for col in schema if "surface_wind_speed" in col]
-        wind_priority = ["usa_surface_wind_speed", "wmo_surface_wind_speed"] + [
-            col
-            for col in wind_columns
-            if col not in ["usa_surface_wind_speed", "wmo_surface_wind_speed"]
-        ]
-
-        # For pressure at mean sea level
-        pressure_columns = [
-            col for col in schema if "air_pressure_at_mean_sea_level" in col
-        ]
-        pressure_priority = [
-            "usa_air_pressure_at_mean_sea_level",
-            "wmo_air_pressure_at_mean_sea_level",
-        ] + [
-            col
-            for col in pressure_columns
-            if col
-            not in [
-                "usa_air_pressure_at_mean_sea_level",
-                "wmo_air_pressure_at_mean_sea_level",
-            ]
-        ]
-
-        # Create unified columns using coalesce (equivalent to pandas bfill)
-        subset_target_data = subset_target_data.with_columns(
-            [
-                pl.coalesce(wind_priority).alias("surface_wind_speed"),
-                pl.coalesce(pressure_priority).alias("air_pressure_at_mean_sea_level"),
-            ]
-        )
+            matching_numbers, on="number", how="inner"
+        ).filter(name_filter & (pl.col("season").cast(pl.Int64) == season))
 
         # Select only the columns to keep
         columns_to_keep = [
             "valid_time",
             "tc_name",
+            "season",
+            "number",
             "latitude",
             "longitude",
             "surface_wind_speed",
@@ -886,12 +932,11 @@ class IBTrACS(TargetBase):
             pl.col("surface_wind_speed").is_not_null()
             & pl.col("air_pressure_at_mean_sea_level").is_not_null()
         )
-
         return subset_target_data
 
     def _custom_convert_to_dataset(self, data: IncomingDataInput) -> xr.Dataset:
         if isinstance(data, pl.LazyFrame):
-            data = data.collect().to_pandas()
+            data = data.collect(engine="streaming").to_pandas()
 
             # IBTrACS data is in -180 to 180, convert to 0 to 360
             data["longitude"] = data["longitude"].apply(utils.convert_longitude_to_360)
@@ -899,17 +944,34 @@ class IBTrACS(TargetBase):
             # Due to missing data in the IBTrACS dataset, polars doesn't convert
             # the valid_time to a datetime by default
             data["valid_time"] = pd.to_datetime(data["valid_time"])
-            data = data.set_index(["valid_time", "latitude", "longitude"])
+
+            # Keep latitude and longitude as data variables, not index
+            # Only valid_time should be the index
+            data = data.set_index(["valid_time"])
 
             try:
-                data = xr.Dataset.from_dataframe(data, sparse=True)
+                data = xr.Dataset.from_dataframe(data)
             except ValueError as e:
                 if "non-unique" in str(e):
                     # Drop duplicates from the pandas DataFrame before converting
-                    data_df = data.drop_duplicates()
-                    data = xr.Dataset.from_dataframe(data_df, sparse=True)
+                    data = data.drop_duplicates()
+                    data = xr.Dataset.from_dataframe(data)
                 else:
                     raise
+
+            # Move latitude, longitude, and tc_name to coordinates,
+            # keeping only surface_wind_speed and
+            # air_pressure_at_mean_sea_level as data variables
+            coords_to_set = {}
+            for var in ["latitude", "longitude", "tc_name"]:
+                if var in data.data_vars:
+                    coords_to_set[var] = data[var]
+                elif var in data.coords:
+                    coords_to_set[var] = data.coords[var]
+
+            if coords_to_set:
+                data = data.set_coords(list(coords_to_set.keys()))
+
             return data
         else:
             raise ValueError(f"Data is not a polars LazyFrame: {type(data)}")
@@ -927,8 +989,9 @@ def open_kerchunk_reference(
     schema is identical to the CIRA schema.
 
     Args:
-        file: The path to the kerchunked reference file.
-        remote_protocol: The remote protocol to use.
+        forecast_dir: The path to the kerchunked reference file.
+        storage_options: The storage options to use.
+        chunks: The chunks to use; defaults to "auto".
 
     Returns:
         The opened dataset.
@@ -961,11 +1024,20 @@ def open_kerchunk_reference(
 
 def zarr_target_subsetter(
     data: xr.Dataset,
-    case_operator: "cases.CaseOperator",
+    case_metadata: "cases.IndividualCase",
     time_variable: str = "valid_time",
     drop: bool = False,
 ) -> xr.Dataset:
-    """Subset a zarr dataset to a case operator."""
+    """Subset a zarr dataset to a case operator.
+
+    Args:
+        data: The dataset to subset.
+        case_metadata: The case metadata to subset the dataset to.
+        time_variable: The time variable to use; defaults to "valid_time".
+
+    Returns:
+        The subset dataset.
+    """
     # Determine the actual time variable in the dataset
     if time_variable not in data.dims:
         if "time" in data.dims:
@@ -982,64 +1054,17 @@ def zarr_target_subsetter(
     subset_time_data = data.sel(
         {
             time_variable: slice(
-                case_operator.case_metadata.start_date,
-                case_operator.case_metadata.end_date,
+                case_metadata.start_date,
+                case_metadata.end_date,
             )
         }
     )
-
-    if case_operator.target.variables is None:
-        target_and_maybe_derived_variables = []
-    else:
-        target_and_maybe_derived_variables = (
-            derived.maybe_pull_variables_from_derived_input(
-                list(case_operator.target.variables)
-            )
-        )
-    # check that the variables are in the target data
-    if target_and_maybe_derived_variables and any(
-        var not in subset_time_data.data_vars
-        for var in target_and_maybe_derived_variables
-    ):
-        raise ValueError(
-            f"Variables {target_and_maybe_derived_variables} not found in target data"
-        )
-    # subset the variables if they exist in the target data
-    elif target_and_maybe_derived_variables:
-        subset_time_variable_data = subset_time_data[target_and_maybe_derived_variables]
-    else:
-        raise ValueError(
-            "Variables not defined. Please list at least one target variable to select."
-        )
     # mask the data to the case location
-    fully_subset_data = case_operator.case_metadata.location.mask(
-        subset_time_variable_data, drop=drop
-    )
+    fully_subset_data = case_metadata.location.mask(subset_time_data, drop=drop)
     # chunk the data if it doesn't have chunks, e.g. ARCO ERA5
     if not fully_subset_data.chunks:
         fully_subset_data = fully_subset_data.chunk()
     return fully_subset_data
-
-
-def align_forecast_to_point_obs_target(
-    forecast_data: xr.Dataset,
-    target_data: xr.Dataset,
-) -> tuple[xr.Dataset, xr.Dataset]:
-    lons = xr.DataArray(target_data["longitude"].values, dims="location")
-    lats = xr.DataArray(target_data["latitude"].values, dims="location")
-
-    time_aligned_target_data, time_aligned_forecast_data = xr.align(
-        target_data, forecast_data, exclude=["latitude", "longitude"]
-    )
-
-    time_aligned_forecast_data = time_aligned_forecast_data.interp(
-        latitude=lats, longitude=lons, method="nearest"
-    )
-    # TODO: improve performance on chunks here (PerformanceWarning)
-    time_aligned_forecast_data = time_aligned_forecast_data.set_index(
-        location=("latitude", "longitude")
-    ).unstack("location")
-    return time_aligned_forecast_data, time_aligned_target_data
 
 
 def align_forecast_to_target(
@@ -1057,29 +1082,28 @@ def align_forecast_to_target(
     ]
 
     spatial_dims = {str(dim): target_data[dim] for dim in intersection_dims}
-    # Align time dimensions - find overlapping times
+
+    # Align time dimensions if they exist in both datasets
     time_aligned_target, time_aligned_forecast = xr.align(
         target_data,
         forecast_data,
         join="inner",
         exclude=spatial_dims.keys(),
     )
-
+    # Squeeze the data to remove any single-value dimensions
+    target_data = target_data.squeeze()
+    forecast_data = forecast_data.squeeze()
     # Regrid forecast to target grid using nearest neighbor interpolation
     # extrapolate in the case of targets slightly outside the forecast domain
     if spatial_dims:
-        # Use explicit keyword arguments to avoid mypy issues with **kwargs
-        from typing import Literal
-
         interp_method: Literal["nearest", "linear"] = (
             "nearest" if method == "nearest" else "linear"
         )
 
-        # Build interpolation arguments properly
-        # Cast to Any to avoid mypy issues with mixed dict types
-        from typing import Any, cast
-
-        interp_kwargs = cast(dict[str, Any], {"method": interp_method})
+        interp_kwargs = cast(
+            dict[str, Any],
+            {"method": interp_method, "kwargs": {"fill_value": "extrapolate"}},
+        )
         interp_kwargs.update(spatial_dims)
 
         time_space_aligned_forecast = time_aligned_forecast.interp(**interp_kwargs)
@@ -1087,3 +1111,62 @@ def align_forecast_to_target(
         time_space_aligned_forecast = time_aligned_forecast
 
     return time_space_aligned_forecast, time_aligned_target
+
+
+def maybe_subset_variables(
+    data: IncomingDataInput,
+    variables: Sequence[Union[str, "derived.DerivedVariable"]],
+    source_module: Optional["sources.base.Source"] = None,
+) -> IncomingDataInput:
+    """Subset the variables from the data, if required.
+
+    If the variables list includes derived variables, extracts their required
+    and optional variables for subsetting.
+
+        Args:
+        data: The dataset to subset (xr.Dataset, xr.DataArray, pl.LazyFrame,
+            or pd.DataFrame).
+        variables: Sequence of variable names and/or derived variable classes.
+        source_module: Optional pre-created source module. If None, creates one.
+
+    Returns:
+        The data subset to only the specified variables.
+    """
+    # If there are no variables, return the data unaltered
+    if len(variables) == 0:
+        return data
+
+    expected_and_maybe_derived_variables = (
+        derived.maybe_include_variables_from_derived_input(variables)
+    )
+
+    # Use provided source module or get one
+    if source_module is None:
+        source_module = sources.get_backend_module(type(data))
+    data = source_module.safely_pull_variables(
+        data,
+        expected_and_maybe_derived_variables,
+    )
+    return data
+
+
+def check_for_missing_data(
+    data: IncomingDataInput,
+    case_metadata: "cases.IndividualCase",
+    source_module: Optional["sources.base.Source"] = None,
+) -> bool:
+    """Check if the data has missing data in the given date range."""
+    # Use provided source module or get one
+    if source_module is None:
+        source_module = sources.get_backend_module(type(data))
+
+    # First check if the data has valid times in the given date range
+    if not source_module.check_for_valid_times(
+        data, case_metadata.start_date, case_metadata.end_date
+    ):
+        return False
+    # Then check if the data has spatial data for the given location
+    elif not source_module.check_for_spatial_data(data, case_metadata.location):
+        return False
+    else:
+        return True
