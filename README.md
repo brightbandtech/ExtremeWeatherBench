@@ -59,7 +59,7 @@ Running EWB on sample data (included) is straightforward.
 ```shell
 $ ewb --default
 ```
-**Note**: this will run every event type, case, target source, and metric for the individual event type as they become available (currently heat waves and freezes) for GFS initialized FourCastNetv2. It is expected a full evaluation will take some time, even on a large VM.
+**Note**: this will run every event type, case, target source, and metric for the individual event type as they become available for GFS initialized FourCastNetv2. It is expected a full evaluation will take some time, even on a large VM.
 ## Using Jupyter Notebook or a Script:
  
 ```python
