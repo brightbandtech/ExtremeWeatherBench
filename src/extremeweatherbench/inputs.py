@@ -699,12 +699,6 @@ class LSR(TargetBase):
         data.loc[:, "longitude"] = utils.convert_longitude_to_360(data["longitude"])
         data = data.set_index(["valid_time", "latitude", "longitude"])
 
-        # Convert string columns to binary indicators (1.0)
-        # String presence indicates an event occurred at that location
-        for col in data.columns:
-            if data[col].dtype == object or data[col].dtype.name == "string":
-                data[col] = 1.0
-
         data = xr.Dataset.from_dataframe(
             data[~data.index.duplicated(keep="first")], sparse=True
         )
