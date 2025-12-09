@@ -590,8 +590,7 @@ class GHCN(TargetBase):
 class LSR(TargetBase):
     """Target class for local storm report (LSR) tabular data.
 
-    run_pipeline() returns a dataset with LSRs and practically perfect hindcast gridded
-    probability data. IndividualCase date ranges for LSRs should ideally be 12 UTC to
+    run_pipeline() returns a dataset with LSRs as mapped to numeric values (1=wind, 2=hail, 3=tor). IndividualCase date ranges for LSRs should ideally be 12 UTC to
     the next day at 12 UTC to match SPC methods for US data. Australia data should be 00
     UTC to 00 UTC.
     """
