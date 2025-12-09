@@ -1493,8 +1493,7 @@ class TestLSR:
             storage_options={},
         )
 
-        result = lsr._custom_convert_to_dataset(sample_lsr_dataframe)
-
+        result = lsr._custom_convert_to_dataset(sample_lsr_dataframe.copy())
         assert isinstance(result, xr.Dataset)
         # Verify report_type preserves numeric values (1, 2, 3)
         if "report_type" in result.data_vars:
