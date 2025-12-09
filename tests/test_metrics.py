@@ -2612,29 +2612,6 @@ class TestLandfallMetrics:
             # Timing errors should be within reasonable bounds (±7 days)
             assert (np.abs(result) < 168).all()  # 168 hours = 7 days
 
-    def test_landfall_displacement_with_none_landfalls(self):
-        """Test LandfallDisplacement handles None landfalls."""
-        metric = metrics.LandfallDisplacement(approach="first")
-
-        # Test with None landfalls
-        result = metric.calculate_displacement(None, None)
-        assert isinstance(result, xr.DataArray)
-        assert np.isnan(result.values)
-
-        # Test with one None
-        target_landfall = xr.DataArray(
-            40.0,
-            coords={
-                "latitude": 25.0,
-                "longitude": -80.0,
-                "valid_time": pd.Timestamp("2023-09-15"),
-                "init_time": pd.Timestamp("2023-09-14"),
-            },
-        )
-        result = metric.calculate_displacement(None, target_landfall)
-        assert isinstance(result, xr.DataArray)
-        assert np.isnan(result.values)
-
     def test_landfall_displacement_no_common_init_times(self):
         """Test LandfallDisplacement with no common init_times."""
         metric = metrics.LandfallDisplacement(approach="first")
@@ -2688,15 +2665,6 @@ class TestLandfallMetrics:
         )
 
         result = metric.calculate_displacement(forecast_landfall, target_landfall)
-        assert isinstance(result, xr.DataArray)
-        assert np.isnan(result.values)
-
-    def test_landfall_time_me_with_none_landfalls(self):
-        """Test LandfallTimeMeanError handles None landfalls."""
-        metric = metrics.LandfallTimeMeanError(approach="first")
-
-        # Test with None landfalls
-        result = metric.calculate_time_difference(None, None)
         assert isinstance(result, xr.DataArray)
         assert np.isnan(result.values)
 

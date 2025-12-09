@@ -1744,12 +1744,6 @@ class LandfallDisplacement(LandfallMetric):
         Returns:
             Distance in the specified units as xarray DataArray
         """
-        # Check if landfalls are valid before processing
-        if not utils.is_valid_landfall(
-            forecast_landfall
-        ) or not utils.is_valid_landfall(target_landfall):
-            return utils._create_nan_dataarray(self.preserve_dims)
-
         # Find common init_times between forecast and target
         common_init_times = utils.find_common_init_times(
             forecast_landfall, target_landfall
@@ -1837,7 +1831,7 @@ class LandfallTimeMeanError(LandfallMetric):
         forecast_landfall: xr.DataArray,
         target_landfall: xr.DataArray,
     ) -> xr.DataArray:
-        """Calculate the time difference between two landfall points in hours
+        """Calculate the time difference between two landfall points in hours.
 
         Args:
             forecast_landfall: Forecast landfall xarray DataArray
@@ -1847,7 +1841,6 @@ class LandfallTimeMeanError(LandfallMetric):
             Time difference in hours (forecast_landfall - target_landfall)
             as xarray DataArray with init_time dimension
         """
-
         # Find common init_times between forecast and target
         common_init_times = utils.find_common_init_times(
             forecast_landfall, target_landfall
