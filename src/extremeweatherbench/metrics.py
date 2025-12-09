@@ -1475,7 +1475,9 @@ class LandfallMetric(CompositeMetric):
         """
         return self.compute_metric(forecast, target, **kwargs)
 
-    def compute_landfalls(self, forecast: xr.DataArray, target: xr.DataArray) -> Any:
+    def maybe_compute_landfalls(
+        self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
+    ) -> tuple[xr.DataArray, xr.DataArray]:
         """Compute landfalls for a given forecast and target dataarray.
 
         This function computes the landfalls for a given forecast and target dataarray
@@ -1491,6 +1493,13 @@ class LandfallMetric(CompositeMetric):
         Returns:
             Tuple of forecast and target landfalls, or None if no landfalls are found
         """
+        forecast_landfall, target_landfall = (
+            kwargs.get("forecast_landfall", None),
+            kwargs.get("target_landfall", None),
+        )
+        if forecast_landfall is not None and target_landfall is not None:
+            return forecast_landfall, target_landfall
+
         # For "first" approach: get only first landfall
         # For "next" approach: get all target landfalls, then filter
         return_next_landfall = self.approach == "next"
@@ -1501,7 +1510,7 @@ class LandfallMetric(CompositeMetric):
         )
 
         if forecast_landfalls is None:
-            return None, None
+            return xr.DataArray(np.nan), xr.DataArray(np.nan)
 
         # Get only first forecast landfall per init_time
         if "landfall" in forecast_landfalls.dims:
@@ -1513,7 +1522,7 @@ class LandfallMetric(CompositeMetric):
         )
 
         if target_landfalls_pre_init is None:
-            return None, None
+            return xr.DataArray(np.nan), xr.DataArray(np.nan)
 
         if return_next_landfall:
             # Find next target landfall for each init_time
@@ -1554,45 +1563,12 @@ class LandfallMetric(CompositeMetric):
 
         if self.is_composite() and len(self._metric_instances) > 1:
             kwargs["forecast_landfall"], kwargs["target_landfall"] = (
-                self.compute_landfalls(forecast=forecast_data, target=target_data)
+                self.maybe_compute_landfalls(forecast=forecast_data, target=target_data)
             )
 
         kwargs["preserve_dims"] = self.preserve_dims
 
         return kwargs
-
-    def maybe_compute_landfalls(
-        self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
-    ) -> tuple[xr.DataArray, xr.DataArray]:
-        """Compute landfalls from kwargs or by calling compute_landfalls.
-
-        Checks if forecast_landfall and target_landfall are already provided in
-        kwargs (e.g., from composite metric preparation). If not, computes them
-        using compute_landfalls.
-
-        Args:
-            forecast: The forecast DataArray
-            target: The target DataArray
-            **kwargs: Additional keyword arguments, may include pre-computed
-                forecast_landfall and target_landfall
-
-        Returns:
-            Tuple of (forecast_landfall, target_landfall). If no landfalls were
-            found, returns (xr.DataArray(np.nan), xr.DataArray(np.nan)).
-        """
-        # Get pre-computed landfalls from kwargs, if provided
-        forecast_landfall, target_landfall = (
-            kwargs.get("forecast_landfall", None),
-            kwargs.get("target_landfall", None),
-        )
-        if forecast_landfall is None or target_landfall is None:
-            forecast_landfall, target_landfall = self.compute_landfalls(
-                forecast=forecast, target=target
-            )
-        # Return NaN DataArrays if no landfalls found
-        if forecast_landfall is None or target_landfall is None:
-            return xr.DataArray(np.nan), xr.DataArray(np.nan)
-        return forecast_landfall, target_landfall
 
     def _compute_metric(
         self,

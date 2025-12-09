@@ -2736,8 +2736,8 @@ class TestLandfallMetrics:
         # Should be absolute difference: |50 - 45| = 5
         assert abs(result.values[0] - 5.0) < 1e-10
 
-    def test_landfall_metric_compute_landfalls_with_none(self):
-        """Test LandfallMetric.compute_landfalls handles None results."""
+    def test_landfall_metric_returns_nan_when_no_landfalls(self):
+        """Test maybe_compute_landfalls returns NaN DataArrays when no landfalls."""
         metric = metrics.LandfallDisplacement(approach="first")
 
         # Create tracks that won't produce landfalls (ocean only)
@@ -2767,15 +2767,17 @@ class TestLandfallMetrics:
             name="surface_wind_speed",
         )
 
-        # This may return None if no landfalls detected
-        forecast_landfall, target_landfall = metric.compute_landfalls(forecast, target)
+        # Returns NaN DataArrays when no landfalls detected
+        forecast_landfall, target_landfall = metric.maybe_compute_landfalls(
+            forecast, target
+        )
 
-        # Should handle None gracefully
-        assert forecast_landfall is None or isinstance(forecast_landfall, xr.DataArray)
-        assert target_landfall is None or isinstance(target_landfall, xr.DataArray)
+        # Should return DataArrays (possibly NaN)
+        assert isinstance(forecast_landfall, xr.DataArray)
+        assert isinstance(target_landfall, xr.DataArray)
 
-    def test_landfall_metric_compute_landfalls_next_approach(self):
-        """Test LandfallMetric.compute_landfalls with 'next' approach."""
+    def test_landfall_metric_next_approach(self):
+        """Test maybe_compute_landfalls with 'next' approach."""
         metric = metrics.LandfallDisplacement(approach="next")
 
         # Create simple test data
@@ -2840,12 +2842,13 @@ class TestLandfallMetrics:
 
             mock_find.side_effect = mock_find_func
 
-            forecast_landfall, target_landfall = metric.compute_landfalls(
+            forecast_landfall, target_landfall = metric.maybe_compute_landfalls(
                 forecast, target
             )
 
-            # Should handle next approach
-            assert forecast_landfall is not None or target_landfall is not None
+            # Should return DataArrays
+            assert isinstance(forecast_landfall, xr.DataArray)
+            assert isinstance(target_landfall, xr.DataArray)
 
 
 class TestThresholdMetricComposite:
@@ -3168,30 +3171,52 @@ class TestMaybeComputeLandfalls:
             name="surface_wind_speed",
         )
 
-        # Mock compute_landfalls to verify it's called
-        with mock.patch.object(metric, "compute_landfalls") as mock_compute:
-            mock_forecast = xr.DataArray([1.0])
-            mock_target = xr.DataArray([2.0])
-            mock_compute.return_value = (mock_forecast, mock_target)
+        # Mock calc.find_landfalls to verify it's called
+        with mock.patch.object(calc, "find_landfalls") as mock_find:
+            mock_forecast = xr.DataArray(
+                [1.0],
+                dims=["init_time"],
+                coords={
+                    "init_time": [pd.Timestamp("2023-09-14")],
+                    "valid_time": (["init_time"], [pd.Timestamp("2023-09-15")]),
+                    "latitude": (["init_time"], [25.0]),
+                    "longitude": (["init_time"], [-80.0]),
+                },
+            )
+            mock_target = xr.DataArray(
+                [2.0],
+                dims=["init_time"],
+                coords={
+                    "init_time": [pd.Timestamp("2023-09-14")],
+                    "valid_time": (["init_time"], [pd.Timestamp("2023-09-16")]),
+                    "latitude": (["init_time"], [25.0]),
+                    "longitude": (["init_time"], [-80.0]),
+                },
+            )
+
+            def mock_find_func(track_data, return_next_landfall=False):
+                if "lead_time" in track_data.dims:
+                    return mock_forecast
+                return mock_target
+
+            mock_find.side_effect = mock_find_func
 
             result_forecast, result_target = metric.maybe_compute_landfalls(
                 forecast, target
             )
 
-            # compute_landfalls should have been called
-            mock_compute.assert_called_once_with(forecast=forecast, target=target)
-            xr.testing.assert_identical(result_forecast, mock_forecast)
-            xr.testing.assert_identical(result_target, mock_target)
+            # calc.find_landfalls should have been called
+            assert mock_find.call_count == 2
 
-    def test_returns_nan_dataarrays_when_compute_landfalls_returns_none(self):
+    def test_returns_nan_dataarrays_when_no_landfalls_found(self):
         """Test that NaN DataArrays are returned when no landfalls are found."""
         metric = metrics.LandfallDisplacement(approach="first")
 
         forecast = xr.DataArray([1.0], dims=["valid_time"])
         target = xr.DataArray([1.0], dims=["valid_time"])
 
-        with mock.patch.object(metric, "compute_landfalls") as mock_compute:
-            mock_compute.return_value = (None, None)
+        with mock.patch.object(calc, "find_landfalls") as mock_find:
+            mock_find.return_value = None
 
             result_forecast, result_target = metric.maybe_compute_landfalls(
                 forecast, target
@@ -3203,47 +3228,43 @@ class TestMaybeComputeLandfalls:
             assert np.isnan(result_forecast.values)
             assert np.isnan(result_target.values)
 
-    def test_recomputes_when_only_forecast_landfall_in_kwargs(self):
-        """Test that both landfalls are recomputed if only one is in kwargs."""
+    def test_computes_when_only_forecast_landfall_in_kwargs(self):
+        """Test that landfalls are computed if only one is in kwargs."""
         metric = metrics.LandfallDisplacement(approach="first")
 
         forecast_landfall = xr.DataArray([38.0], dims=["init_time"])
         forecast = xr.DataArray([1.0], dims=["valid_time"])
         target = xr.DataArray([1.0], dims=["valid_time"])
 
-        with mock.patch.object(metric, "compute_landfalls") as mock_compute:
-            mock_forecast = xr.DataArray([1.0])
-            mock_target = xr.DataArray([2.0])
-            mock_compute.return_value = (mock_forecast, mock_target)
+        with mock.patch.object(calc, "find_landfalls") as mock_find:
+            mock_find.return_value = None
 
             # Only provide forecast_landfall, not target_landfall
             result_forecast, result_target = metric.maybe_compute_landfalls(
                 forecast, target, forecast_landfall=forecast_landfall
             )
 
-            # Should recompute both since target_landfall is missing
-            mock_compute.assert_called_once()
+            # Should compute since target_landfall is missing
+            assert mock_find.call_count >= 1
 
-    def test_recomputes_when_only_target_landfall_in_kwargs(self):
-        """Test that both landfalls are recomputed if only target is in kwargs."""
+    def test_computes_when_only_target_landfall_in_kwargs(self):
+        """Test that landfalls are computed if only target is in kwargs."""
         metric = metrics.LandfallDisplacement(approach="first")
 
         target_landfall = xr.DataArray([40.0], dims=["init_time"])
         forecast = xr.DataArray([1.0], dims=["valid_time"])
         target = xr.DataArray([1.0], dims=["valid_time"])
 
-        with mock.patch.object(metric, "compute_landfalls") as mock_compute:
-            mock_forecast = xr.DataArray([1.0])
-            mock_target = xr.DataArray([2.0])
-            mock_compute.return_value = (mock_forecast, mock_target)
+        with mock.patch.object(calc, "find_landfalls") as mock_find:
+            mock_find.return_value = None
 
             # Only provide target_landfall, not forecast_landfall
             result_forecast, result_target = metric.maybe_compute_landfalls(
                 forecast, target, target_landfall=target_landfall
             )
 
-            # Should recompute both since forecast_landfall is missing
-            mock_compute.assert_called_once()
+            # Should compute since forecast_landfall is missing
+            assert mock_find.call_count >= 1
 
     def test_returns_tuple_type(self):
         """Test that maybe_compute_landfalls returns a tuple."""
@@ -3252,8 +3273,8 @@ class TestMaybeComputeLandfalls:
         forecast = xr.DataArray([1.0], dims=["valid_time"])
         target = xr.DataArray([1.0], dims=["valid_time"])
 
-        with mock.patch.object(metric, "compute_landfalls") as mock_compute:
-            mock_compute.return_value = (None, None)
+        with mock.patch.object(calc, "find_landfalls") as mock_find:
+            mock_find.return_value = None
 
             result = metric.maybe_compute_landfalls(forecast, target)
 
@@ -3294,7 +3315,7 @@ class TestMaybeComputeLandfalls:
             xr.testing.assert_identical(result[0], forecast_landfall)
             xr.testing.assert_identical(result[1], target_landfall)
 
-    def test_compute_metric_handles_none_from_maybe_compute_landfalls(self):
+    def test_compute_metric_handles_no_landfalls(self):
         """Test _compute_metric returns NaN DataArray when no landfalls found."""
         metrics_to_test = [
             metrics.LandfallDisplacement(approach="first"),
@@ -3306,8 +3327,8 @@ class TestMaybeComputeLandfalls:
         target = xr.DataArray([1.0], dims=["valid_time"])
 
         for metric in metrics_to_test:
-            with mock.patch.object(metric, "compute_landfalls") as mock_compute:
-                mock_compute.return_value = (None, None)
+            with mock.patch.object(calc, "find_landfalls") as mock_find:
+                mock_find.return_value = None
 
                 result = metric._compute_metric(forecast, target)
 
