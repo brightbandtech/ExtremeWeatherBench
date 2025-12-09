@@ -2274,13 +2274,24 @@ class TestLandfallMetrics:
             },
         )
 
-        # Mock landfall data
+        # Mock landfall data - both need init_time dimension
         mock_target_landfall = xr.DataArray(
-            50.0,
+            [50.0, 50.0],
+            dims=["init_time"],
             coords={
-                "latitude": 25.0,
-                "longitude": -80.0,
-                "valid_time": pd.Timestamp("2023-09-15 12:00"),
+                "init_time": [
+                    pd.Timestamp("2023-09-14 12:00"),
+                    pd.Timestamp("2023-09-14 12:00"),
+                ],
+                "latitude": (["init_time"], [25.0, 25.0]),
+                "longitude": (["init_time"], [-80.0, -80.0]),
+                "valid_time": (
+                    ["init_time"],
+                    [
+                        pd.Timestamp("2023-09-15 12:00"),
+                        pd.Timestamp("2023-09-15 12:00"),
+                    ],
+                ),
             },
             name="surface_wind_speed",
         )
@@ -2289,6 +2300,10 @@ class TestLandfallMetrics:
             [53.0, 48.0],
             dims=["init_time"],
             coords={
+                "init_time": [
+                    pd.Timestamp("2023-09-14 12:00"),
+                    pd.Timestamp("2023-09-14 12:00"),
+                ],
                 "latitude": (["init_time"], [25.1, 25.2]),
                 "longitude": (["init_time"], [-80.1, -80.2]),
                 "valid_time": (
@@ -2298,10 +2313,6 @@ class TestLandfallMetrics:
                         pd.Timestamp("2023-09-15 12:00"),
                     ],
                 ),
-                "init_time": [
-                    pd.Timestamp("2023-09-14 12:00"),
-                    pd.Timestamp("2023-09-14 12:00"),
-                ],
             },
             name="surface_wind_speed",
         )
@@ -2448,8 +2459,8 @@ class TestLandfallMetrics:
         assert metric.approach == "next"
 
         # Verify the metric calculation function exists
-        assert hasattr(metrics.LandfallDisplacement, "_calculate_distance")
-        assert callable(metrics.LandfallDisplacement._calculate_distance)
+        assert hasattr(metrics.LandfallDisplacement, "calculate_displacement")
+        assert callable(metrics.LandfallDisplacement.calculate_displacement)
 
     def test_landfall_displacement_integration(self):
         """Integration test: LandfallDisplacement with real landfall detection.
@@ -2606,7 +2617,7 @@ class TestLandfallMetrics:
         metric = metrics.LandfallDisplacement(approach="first")
 
         # Test with None landfalls
-        result = metric._calculate_distance(None, None)
+        result = metric.calculate_displacement(None, None)
         assert isinstance(result, xr.DataArray)
         assert np.isnan(result.values)
 
@@ -2620,7 +2631,7 @@ class TestLandfallMetrics:
                 "init_time": pd.Timestamp("2023-09-14"),
             },
         )
-        result = metric._calculate_distance(None, target_landfall)
+        result = metric.calculate_displacement(None, target_landfall)
         assert isinstance(result, xr.DataArray)
         assert np.isnan(result.values)
 
@@ -2648,7 +2659,7 @@ class TestLandfallMetrics:
             },
         )
 
-        result = metric._calculate_distance(forecast_landfall, target_landfall)
+        result = metric.calculate_displacement(forecast_landfall, target_landfall)
         assert isinstance(result, xr.DataArray)
         assert np.isnan(result.values)
 
@@ -2676,7 +2687,7 @@ class TestLandfallMetrics:
             },
         )
 
-        result = metric._calculate_distance(forecast_landfall, target_landfall)
+        result = metric.calculate_displacement(forecast_landfall, target_landfall)
         assert isinstance(result, xr.DataArray)
         assert np.isnan(result.values)
 
@@ -2685,7 +2696,7 @@ class TestLandfallMetrics:
         metric = metrics.LandfallTimeMeanError(approach="first")
 
         # Test with None landfalls
-        result = metric._calculate_time_difference(None, None)
+        result = metric.calculate_time_difference(None, None)
         assert isinstance(result, xr.DataArray)
         assert np.isnan(result.values)
 
@@ -2711,12 +2722,12 @@ class TestLandfallMetrics:
             },
         )
 
-        result = metric._calculate_time_difference(forecast_landfall, target_landfall)
+        result = metric.calculate_time_difference(forecast_landfall, target_landfall)
         assert isinstance(result, xr.DataArray)
         assert np.isnan(result.values)
 
     def test_landfall_intensity_mae_basic(self):
-        """Test LandfallIntensityMeanAbsoluteError._compute_absolute_error."""
+        """Test LandfallIntensityMeanAbsoluteError with pre-computed landfalls."""
         metric = metrics.LandfallIntensityMeanAbsoluteError(approach="first")
 
         forecast_landfall = xr.DataArray(
@@ -2731,7 +2742,16 @@ class TestLandfallMetrics:
             coords={"init_time": [pd.Timestamp("2023-09-14")]},
         )
 
-        result = metric._compute_absolute_error(forecast_landfall, target_landfall)
+        # Create dummy forecast/target (won't be used since we pass landfalls)
+        forecast = xr.DataArray([1.0], dims=["valid_time"])
+        target = xr.DataArray([1.0], dims=["valid_time"])
+
+        result = metric._compute_metric(
+            forecast,
+            target,
+            forecast_landfall=forecast_landfall,
+            target_landfall=target_landfall,
+        )
         assert isinstance(result, xr.DataArray)
         # Should be absolute difference: |50 - 45| = 5
         assert abs(result.values[0] - 5.0) < 1e-10

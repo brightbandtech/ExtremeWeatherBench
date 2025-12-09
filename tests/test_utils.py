@@ -1743,6 +1743,61 @@ class TestMaybeDensifyDataArray:
         assert list(result.dims) == ["time", "latitude", "longitude"]
 
 
+class TestCreateNanDataArray:
+    """Tests for _create_nan_dataarray function."""
+
+    def test_single_string_dim(self):
+        """Test with a single string dimension."""
+        result = utils._create_nan_dataarray("init_time")
+
+        assert isinstance(result, xr.DataArray)
+        assert result.dims == ("init_time",)
+        assert result.shape == (1,)
+        assert np.isnan(result.values).all()
+
+    def test_single_string_dim_different_name(self):
+        """Test with a different single string dimension."""
+        result = utils._create_nan_dataarray("lead_time")
+
+        assert isinstance(result, xr.DataArray)
+        assert result.dims == ("lead_time",)
+        assert result.shape == (1,)
+        assert np.isnan(result.values).all()
+
+    def test_two_string_dims_as_list(self):
+        """Test with two dimensions provided as a list."""
+        result = utils._create_nan_dataarray(["init_time", "lead_time"])
+
+        assert isinstance(result, xr.DataArray)
+        assert result.dims == ("init_time", "lead_time")
+        assert result.shape == (1, 1)
+        assert np.isnan(result.values).all()
+
+    def test_three_string_dims_as_list(self):
+        """Test with three dimensions provided as a list."""
+        result = utils._create_nan_dataarray(["init_time", "lead_time", "valid_time"])
+
+        assert isinstance(result, xr.DataArray)
+        assert result.dims == ("init_time", "lead_time", "valid_time")
+        assert result.shape == (1, 1, 1)
+        assert np.isnan(result.values).all()
+
+    def test_preserves_dim_order(self):
+        """Test that dimension order is preserved."""
+        dims = ["time", "latitude", "longitude"]
+        result = utils._create_nan_dataarray(dims)
+
+        assert result.dims == ("time", "latitude", "longitude")
+
+    def test_default_preserved_dims(self):
+        """Test with default preserved_dims value."""
+        result = utils._create_nan_dataarray()
+
+        assert result.dims == ("init_time",)
+        assert result.shape == (1,)
+        assert np.isnan(result.values).all()
+
+
 class TestIsValidLandfall:
     """Tests for is_valid_landfall function."""
 
@@ -1792,10 +1847,21 @@ class TestIsValidLandfall:
         )
         assert utils.is_valid_landfall(da) is True
 
-    def test_nan_values_with_valid_structure_returns_true(self):
-        """Test that NaN values don't affect validity (structure matters)."""
+    def test_all_nan_values_returns_false(self):
+        """Test that all-NaN arrays return False (no actual data)."""
         da = xr.DataArray(
             [np.nan, np.nan],
+            dims=["init_time"],
+            coords={
+                "init_time": pd.date_range("2023-09-14", periods=2),
+            },
+        )
+        assert utils.is_valid_landfall(da) is False
+
+    def test_partial_nan_values_returns_true(self):
+        """Test that arrays with some non-NaN values return True."""
+        da = xr.DataArray(
+            [np.nan, 1.0],
             dims=["init_time"],
             coords={
                 "init_time": pd.date_range("2023-09-14", periods=2),

@@ -1483,15 +1483,17 @@ class LandfallMetric(CompositeMetric):
         This function computes the landfalls for a given forecast and target dataarray
         using calc.find_landfalls. Currently, this access pattern doesn't include
         passing land geometry in, but calc.find_landfalls will use NaturalEarth's 10m
-        land
-        geometry by default.
+        land geometry by default.
 
         Args:
             forecast: The forecast DataArray
             target: The target DataArray
+            **kwargs: Additional keyword arguments, may include pre-computed
+                forecast_landfall and target_landfall
 
         Returns:
-            Tuple of forecast and target landfalls, or None if no landfalls are found
+            Tuple of (forecast_landfall, target_landfall). If no landfalls are found,
+            returns NaN DataArrays with init_time dimension.
         """
         forecast_landfall, target_landfall = (
             kwargs.get("forecast_landfall", None),
@@ -1509,8 +1511,10 @@ class LandfallMetric(CompositeMetric):
             forecast, return_next_landfall=return_next_landfall
         )
 
+        # If no forecast landfalls, return NaN DataArrays for both forecast and target
         if forecast_landfalls is None:
-            return xr.DataArray(np.nan), xr.DataArray(np.nan)
+            nan_landfalls = utils._create_nan_dataarray(self.preserve_dims)
+            return (nan_landfalls, nan_landfalls.copy())
 
         # Get only first forecast landfall per init_time
         if "landfall" in forecast_landfalls.dims:
@@ -1521,8 +1525,10 @@ class LandfallMetric(CompositeMetric):
             target, return_next_landfall=return_next_landfall
         )
 
+        # If no target landfalls, return NaN DataArrays for both forecast and target
         if target_landfalls_pre_init is None:
-            return xr.DataArray(np.nan), xr.DataArray(np.nan)
+            nan_landfalls = utils._create_nan_dataarray(self.preserve_dims)
+            return (nan_landfalls, nan_landfalls.copy())
 
         if return_next_landfall:
             # Find next target landfall for each init_time
@@ -1721,8 +1727,8 @@ class LandfallDisplacement(LandfallMetric):
         super().__init__(name, *args, **kwargs)
         self.units = kwargs.get("units", "km")
 
-    @staticmethod
-    def _calculate_distance(
+    def calculate_displacement(
+        self,
         forecast_landfall: xr.DataArray,
         target_landfall: xr.DataArray,
         units: Literal["km", "kilometers", "deg", "degrees"] = "km",
@@ -1738,19 +1744,20 @@ class LandfallDisplacement(LandfallMetric):
         Returns:
             Distance in the specified units as xarray DataArray
         """
-        if not (
-            utils.is_valid_landfall(forecast_landfall)
-            and utils.is_valid_landfall(target_landfall)
-        ):
-            return xr.DataArray(np.nan)
+        # Check if landfalls are valid before processing
+        if not utils.is_valid_landfall(
+            forecast_landfall
+        ) or not utils.is_valid_landfall(target_landfall):
+            return utils._create_nan_dataarray(self.preserve_dims)
 
         # Find common init_times between forecast and target
-        init_times_1 = set(forecast_landfall.coords["init_time"].values)
-        init_times_2 = set(target_landfall.coords["init_time"].values)
-        common_init_times = sorted(init_times_1.intersection(init_times_2))
+        common_init_times = utils.find_common_init_times(
+            forecast_landfall, target_landfall
+        )
 
+        # If no common init_times, return NaN DataArray
         if not common_init_times:
-            return xr.DataArray(np.nan)
+            return utils._create_nan_dataarray(self.preserve_dims)
 
         # Compute distance for each common init_time
         distances = []
@@ -1792,7 +1799,11 @@ class LandfallDisplacement(LandfallMetric):
         forecast_landfall, target_landfall = self.maybe_compute_landfalls(
             forecast, target, **kwargs
         )
-        return self._calculate_distance(
+        if not utils.is_valid_landfall(
+            forecast_landfall
+        ) or not utils.is_valid_landfall(target_landfall):
+            return utils._create_nan_dataarray(self.preserve_dims)
+        return self.calculate_displacement(
             forecast_landfall,
             target_landfall,
             units=self.units,
@@ -1821,9 +1832,10 @@ class LandfallTimeMeanError(LandfallMetric):
     ):
         super().__init__(name, *args, **kwargs)
 
-    @staticmethod
-    def _calculate_time_difference(
-        forecast_landfall: xr.DataArray, target_landfall: xr.DataArray
+    def calculate_time_difference(
+        self,
+        forecast_landfall: xr.DataArray,
+        target_landfall: xr.DataArray,
     ) -> xr.DataArray:
         """Calculate the time difference between two landfall points in hours
 
@@ -1835,19 +1847,15 @@ class LandfallTimeMeanError(LandfallMetric):
             Time difference in hours (forecast_landfall - target_landfall)
             as xarray DataArray with init_time dimension
         """
-        if not (
-            utils.is_valid_landfall(forecast_landfall)
-            and utils.is_valid_landfall(target_landfall)
-        ):
-            return xr.DataArray(np.nan)
 
         # Find common init_times between forecast and target
-        init_times_1 = set(forecast_landfall.coords["init_time"].values)
-        init_times_2 = set(target_landfall.coords["init_time"].values)
-        common_init_times = sorted(init_times_1.intersection(init_times_2))
+        common_init_times = utils.find_common_init_times(
+            forecast_landfall, target_landfall
+        )
 
+        # If no common init_times, return NaN DataArray
         if not common_init_times:
-            return xr.DataArray(np.nan)
+            return utils._create_nan_dataarray(self.preserve_dims)
 
         # Calculate time difference for each common init_time
         time_diffs = []
@@ -1861,8 +1869,8 @@ class LandfallTimeMeanError(LandfallMetric):
 
         return xr.DataArray(
             time_diffs,
-            dims=["init_time"],
-            coords={"init_time": common_init_times},
+            dims=self.preserve_dims,
+            coords={self.preserve_dims: common_init_times},
         )
 
     def _compute_metric(
@@ -1872,7 +1880,11 @@ class LandfallTimeMeanError(LandfallMetric):
         forecast_landfall, target_landfall = self.maybe_compute_landfalls(
             forecast, target, **kwargs
         )
-        return self._calculate_time_difference(forecast_landfall, target_landfall)
+        if not utils.is_valid_landfall(
+            forecast_landfall
+        ) or not utils.is_valid_landfall(target_landfall):
+            return utils._create_nan_dataarray(self.preserve_dims)
+        return self.calculate_time_difference(forecast_landfall, target_landfall)
 
 
 class LandfallIntensityMeanAbsoluteError(LandfallMetric, MeanAbsoluteError):
@@ -1902,22 +1914,6 @@ class LandfallIntensityMeanAbsoluteError(LandfallMetric, MeanAbsoluteError):
     ):
         super().__init__(name, *args, **kwargs)
 
-    @staticmethod
-    def _compute_absolute_error(
-        forecast_landfall: xr.DataArray, target_landfall: xr.DataArray
-    ) -> xr.DataArray:
-        """Compute absolute error between landfall intensity values
-
-        Args:
-            forecast_landfall: Forecast intensity at landfall
-            target_landfall: Target intensity at landfall
-
-        Returns:
-            Absolute error at landfall points
-        """
-        # Landfall points are already extracted, just compute absolute error
-        return np.abs(forecast_landfall - target_landfall)
-
     def _compute_metric(
         self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
     ) -> Any:
@@ -1925,4 +1921,10 @@ class LandfallIntensityMeanAbsoluteError(LandfallMetric, MeanAbsoluteError):
         forecast_landfall, target_landfall = self.maybe_compute_landfalls(
             forecast, target, **kwargs
         )
-        return self._compute_absolute_error(forecast_landfall, target_landfall)
+        if not utils.is_valid_landfall(
+            forecast_landfall
+        ) or not utils.is_valid_landfall(target_landfall):
+            return utils._create_nan_dataarray(self.preserve_dims)
+
+        # The complexity of the landfall outputs makes it easier just to use np.abs here
+        return np.abs(forecast_landfall - target_landfall)
