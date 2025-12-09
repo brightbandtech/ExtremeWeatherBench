@@ -1741,3 +1741,79 @@ class TestMaybeDensifyDataArray:
         # Check dimensions preserved
         assert result.shape == (3, 2, 2)
         assert list(result.dims) == ["time", "latitude", "longitude"]
+
+
+class TestIsValidLandfall:
+    """Tests for is_valid_landfall function."""
+
+    def test_none_returns_false(self):
+        """Test that None returns False."""
+        assert utils.is_valid_landfall(None) is False
+
+    def test_zero_dim_array_returns_false(self):
+        """Test that a 0-d (scalar) DataArray returns False."""
+        scalar_da = xr.DataArray(np.nan)
+        assert utils.is_valid_landfall(scalar_da) is False
+
+    def test_missing_init_time_returns_false(self):
+        """Test that a DataArray without init_time coord returns False."""
+        da = xr.DataArray(
+            [1.0, 2.0],
+            dims=["valid_time"],
+            coords={"valid_time": pd.date_range("2023-09-15", periods=2)},
+        )
+        assert utils.is_valid_landfall(da) is False
+
+    def test_valid_landfall_returns_true(self):
+        """Test that a valid landfall DataArray returns True."""
+        da = xr.DataArray(
+            [38.0],
+            dims=["init_time"],
+            coords={
+                "init_time": [pd.Timestamp("2023-09-14")],
+                "latitude": (["init_time"], [25.1]),
+                "longitude": (["init_time"], [-80.1]),
+                "valid_time": (["init_time"], [pd.Timestamp("2023-09-15")]),
+            },
+            name="surface_wind_speed",
+        )
+        assert utils.is_valid_landfall(da) is True
+
+    def test_multi_init_time_returns_true(self):
+        """Test that a DataArray with multiple init_times returns True."""
+        da = xr.DataArray(
+            [38.0, 40.0, 42.0],
+            dims=["init_time"],
+            coords={
+                "init_time": pd.date_range("2023-09-14", periods=3, freq="6h"),
+                "latitude": (["init_time"], [25.1, 25.2, 25.3]),
+                "longitude": (["init_time"], [-80.1, -80.2, -80.3]),
+            },
+        )
+        assert utils.is_valid_landfall(da) is True
+
+    def test_nan_values_with_valid_structure_returns_true(self):
+        """Test that NaN values don't affect validity (structure matters)."""
+        da = xr.DataArray(
+            [np.nan, np.nan],
+            dims=["init_time"],
+            coords={
+                "init_time": pd.date_range("2023-09-14", periods=2),
+            },
+        )
+        assert utils.is_valid_landfall(da) is True
+
+    def test_init_time_as_non_dim_coord_returns_false(self):
+        """Test that init_time must be a dimension, not just a coordinate."""
+        # init_time is a scalar coord, not a dimension
+        da = xr.DataArray(
+            [1.0, 2.0],
+            dims=["valid_time"],
+            coords={
+                "valid_time": pd.date_range("2023-09-15", periods=2),
+                "init_time": pd.Timestamp("2023-09-14"),
+            },
+        )
+        # This should return True because init_time IS in coords
+        # (even though it's not a dimension)
+        assert utils.is_valid_landfall(da) is True

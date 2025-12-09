@@ -50,6 +50,21 @@ def maybe_get_operator(
     return operator_method
 
 
+def is_valid_landfall(landfall: xr.DataArray | None) -> bool:
+    """Check if a landfall DataArray is valid for processing.
+
+    A valid landfall has dimensions and contains the init_time coordinate
+    needed for landfall metric calculations.
+
+    Args:
+        landfall: The landfall DataArray to check
+
+    Returns:
+        True if the landfall is valid, False otherwise
+    """
+    return landfall is not None and landfall.ndim > 0 and "init_time" in landfall.coords
+
+
 def convert_longitude_to_360(longitude: float) -> float:
     """Convert a longitude from the range [-180, 180) to [0, 360)."""
     return np.mod(longitude, 360)
