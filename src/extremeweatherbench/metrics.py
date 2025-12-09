@@ -1743,12 +1743,12 @@ class LandfallDisplacement(LandfallMetric, BaseMetric):
         # Compute distance for each common init_time
         distances = []
         for init_time in common_init_times:
-            f_lat = forecast_landfall.coords["latitude"].sel(init_time=init_time).values
+            f_lat = forecast_landfall.sel(init_time=init_time).coords["latitude"].values
             f_lon = (
-                forecast_landfall.coords["longitude"].sel(init_time=init_time).values
+                forecast_landfall.sel(init_time=init_time).coords["longitude"].values
             )
-            t_lat = target_landfall.coords["latitude"].sel(init_time=init_time).values
-            t_lon = target_landfall.coords["longitude"].sel(init_time=init_time).values
+            t_lat = target_landfall.sel(init_time=init_time).coords["latitude"].values
+            t_lon = target_landfall.sel(init_time=init_time).coords["longitude"].values
 
             # Skip if any coordinates are NaN
             if (
@@ -1844,8 +1844,8 @@ class LandfallTimeMeanError(LandfallMetric, MeanError):
         # Calculate time difference for each common init_time
         time_diffs = []
         for init_time in common_init_times:
-            time1 = forecast_landfall.coords["valid_time"].sel(init_time=init_time)
-            time2 = target_landfall.coords["valid_time"].sel(init_time=init_time)
+            time1 = forecast_landfall.sel(init_time=init_time).coords["valid_time"]
+            time2 = target_landfall.sel(init_time=init_time).coords["valid_time"]
 
             # Calculate time difference in hours
             time_diff = (time1 - time2) / np.timedelta64(1, "h")
