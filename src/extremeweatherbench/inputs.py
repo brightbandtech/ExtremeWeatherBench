@@ -704,7 +704,6 @@ class LSR(TargetBase):
         data.attrs["report_type_mapping"] = report_type_mapping
         return data
 
-    # TODO: keep forecasts on original grid for LSRs
     def maybe_align_forecast_to_target(
         self,
         forecast_data: xr.Dataset,
