@@ -646,7 +646,7 @@ class LSR(TargetBase):
         report_type_mapping = {"wind": 1, "hail": 2, "tor": 3}
         if "report_type" in data.columns:
             data.loc[:, "report_type"] = data["report_type"].map(report_type_mapping)
-
+            data["report_type"] = data["report_type"].astype(int)
         # Normalize these times for the LSR data
         # Western hemisphere reports get bucketed to 12Z on the date they fall
         # between 12Z-12Z
