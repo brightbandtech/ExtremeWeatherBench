@@ -285,9 +285,9 @@ def compute_case_operator(
             metric_list[i] = metric()
             logger.warning(
                 "Metric %s instantiated with default parameters",
-                case_operator.metric_list[i].name,
+                metric_list[i].name,
             )
-        if not isinstance(case_operator.metric_list[i], metrics.BaseMetric):
+        if not isinstance(metric_list[i], metrics.BaseMetric):
             raise TypeError(f"Metric must be a BaseMetric instance, got {type(metric)}")
     case_operator = dataclasses.replace(case_operator, metric_list=metric_list)
 
