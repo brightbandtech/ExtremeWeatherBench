@@ -134,7 +134,7 @@ def create_atmospheric_river_plot(data, output_path):
 
     # IVT color plot - use a colormap similar to the reference image
     ivt_levels = np.array([50, 100, 150, 200, 250, 300, 400, 500, 600, 750, 1000])
-    
+
     # Use a colormap that goes from blue through green/yellow to red
     # This matches the reference image color scheme
     cf = ax.contourf(
@@ -142,7 +142,7 @@ def create_atmospheric_river_plot(data, output_path):
         data.latitude,
         ivt_magnitude,
         levels=ivt_levels,
-        cmap='viridis',  # Good alternative colormap
+        cmap="viridis",  # Good alternative colormap
         transform=ccrs.PlateCarree(),
         extend="max",
     )
@@ -162,14 +162,16 @@ def create_atmospheric_river_plot(data, output_path):
     )
 
     # Add geographic features
-    ax.coastlines(resolution="50m", linewidth=1.5, color='black')
-    ax.add_feature(cfeature.BORDERS, linestyle=":", linewidth=1, color='black')
-    ax.add_feature(cfeature.STATES, linestyle="-", linewidth=0.5, color='black', alpha=0.8)
+    ax.coastlines(resolution="50m", linewidth=1.5, color="black")
+    ax.add_feature(cfeature.BORDERS, linestyle=":", linewidth=1, color="black")
+    ax.add_feature(
+        cfeature.STATES, linestyle="-", linewidth=0.5, color="black", alpha=0.8
+    )
     ax.add_feature(cfeature.LAND, color="lightgray", alpha=0.5)
     ax.add_feature(cfeature.OCEAN, color="white", alpha=0.3)
 
     # Add gridlines
-    gl = ax.gridlines(draw_labels=True, alpha=0.5, color='gray', linestyle='--')
+    gl = ax.gridlines(draw_labels=True, alpha=0.5, color="gray", linestyle="--")
     gl.top_labels = False
     gl.right_labels = False
     gl.xformatter = LongitudeFormatter()
@@ -184,14 +186,14 @@ def create_atmospheric_river_plot(data, output_path):
         f"Integrated Water Vapor Transport - {EVENT_PEAK.strftime('%Y-%m-%d %H:%M UTC')}",
         fontsize=16,
         pad=20,
-        fontweight='bold'
+        fontweight="bold",
     )
 
     # Add colorbar for IVT
     divider = make_axes_locatable(ax)
     cax = divider.append_axes("right", size="4%", pad=0.1, axes_class=plt.Axes)
     cbar = fig.colorbar(cf, cax=cax)
-    cbar.set_label("Integrated Water Vapor (kg/m²)", fontsize=12, fontweight='bold')
+    cbar.set_label("Integrated Water Vapor (kg/m²)", fontsize=12, fontweight="bold")
     cbar.ax.tick_params(labelsize=10)
 
     plt.tight_layout()
