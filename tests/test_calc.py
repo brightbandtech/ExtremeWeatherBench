@@ -1961,7 +1961,7 @@ class TestLandfallMetricAlignment:
         )
 
         metric = LandfallDisplacement()
-        result = metric._calculate_distance(forecast_landfalls, target_landfalls)
+        result = metric.calculate_displacement(forecast_landfalls, target_landfalls)
 
         # Result should only have 2 init_times (the common ones)
         assert len(result.init_time) == 2
@@ -2011,7 +2011,7 @@ class TestLandfallMetricAlignment:
         )
 
         metric = metrics.LandfallTimeMeanError()
-        result = metric._calculate_time_difference(forecast_landfalls, target_landfalls)
+        result = metric.calculate_time_difference(forecast_landfalls, target_landfalls)
 
         # Result should only have common init_times
         assert len(result.init_time) == 2
