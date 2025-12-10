@@ -1,6 +1,7 @@
 """Evaluation routines for use during ExtremeWeatherBench case studies / analyses."""
 
 import copy
+import dataclasses
 import logging
 import pathlib
 from typing import TYPE_CHECKING, Optional, Sequence, Union
@@ -278,15 +279,17 @@ def compute_case_operator(
         or child class of BaseMetric).
     """
     # Validate that all metrics are instantiated (not classes or callables)
-    for i, metric in enumerate(case_operator.metric_list):
+    metric_list = list(case_operator.metric_list)
+    for i, metric in enumerate(metric_list):
         if isinstance(metric, type):
-            case_operator.metric_list[i] = metric()
+            metric_list[i] = metric()
             logger.warning(
                 "Metric %s instantiated with default parameters",
                 case_operator.metric_list[i].name,
             )
         if not isinstance(case_operator.metric_list[i], metrics.BaseMetric):
             raise TypeError(f"Metric must be a BaseMetric instance, got {type(metric)}")
+    case_operator = dataclasses.replace(case_operator, metric_list=metric_list)
 
     forecast_ds, target_ds = _build_datasets(case_operator, **kwargs)
 
@@ -626,7 +629,7 @@ def _get_all_derived_output_variables(
 
 
 def _collect_metric_variables(
-    metric_list: list["metrics.BaseMetric"],
+    metric_list: Sequence["metrics.BaseMetric"],
 ) -> tuple[
     set[Union[str, "derived.DerivedVariable"]],
     set[Union[str, "derived.DerivedVariable"]],
@@ -638,7 +641,7 @@ def _collect_metric_variables(
     during pipeline execution.
 
     Args:
-        metric_list: List of metrics to extract variables from.
+        metric_list: Sequence of metrics to extract variables from.
 
     Returns:
         Tuple of (forecast_variables, target_variables) as sets.

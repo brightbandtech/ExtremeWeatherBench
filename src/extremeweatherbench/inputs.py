@@ -388,7 +388,7 @@ class EvaluationObject:
     """
 
     event_type: str
-    metric_list: list["metrics.BaseMetric"]
+    metric_list: Sequence["metrics.BaseMetric"]
     target: "TargetBase"
     forecast: "ForecastBase"
 
@@ -590,8 +590,7 @@ class GHCN(TargetBase):
 class LSR(TargetBase):
     """Target class for local storm report (LSR) tabular data.
 
-    run_pipeline() returns a dataset with LSRs and practically perfect hindcast gridded
-    probability data. IndividualCase date ranges for LSRs should ideally be 12 UTC to
+    run_pipeline() returns a dataset with LSRs as mapped to numeric values (1=wind, 2=hail, 3=tor). IndividualCase date ranges for LSRs should ideally be 12 UTC to
     the next day at 12 UTC to match SPC methods for US data. Australia data should be 00
     UTC to 00 UTC.
     """
@@ -646,7 +645,7 @@ class LSR(TargetBase):
         report_type_mapping = {"wind": 1, "hail": 2, "tor": 3}
         if "report_type" in data.columns:
             data.loc[:, "report_type"] = data["report_type"].map(report_type_mapping)
-
+            data["report_type"] = data["report_type"].astype(int)
         # Normalize these times for the LSR data
         # Western hemisphere reports get bucketed to 12Z on the date they fall
         # between 12Z-12Z
@@ -699,19 +698,12 @@ class LSR(TargetBase):
         data.loc[:, "longitude"] = utils.convert_longitude_to_360(data["longitude"])
         data = data.set_index(["valid_time", "latitude", "longitude"])
 
-        # Convert string columns to binary indicators (1.0)
-        # String presence indicates an event occurred at that location
-        for col in data.columns:
-            if data[col].dtype == object or data[col].dtype.name == "string":
-                data[col] = 1.0
-
         data = xr.Dataset.from_dataframe(
             data[~data.index.duplicated(keep="first")], sparse=True
         )
         data.attrs["report_type_mapping"] = report_type_mapping
         return data
 
-    # TODO: keep forecasts on original grid for LSRs
     def maybe_align_forecast_to_target(
         self,
         forecast_data: xr.Dataset,

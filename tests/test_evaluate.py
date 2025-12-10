@@ -17,6 +17,7 @@ from extremeweatherbench import (
     inputs,
     metrics,
     regions,
+    utils,
 )
 
 # Check if dask.distributed is available
@@ -1421,8 +1422,6 @@ class TestPipelineFunctions:
         self, sample_forecast_dataset, sample_target_dataset, sample_individual_case
     ):
         """Test maybe_cache_and_compute as no-op (lazy preserved)."""
-        from extremeweatherbench import utils
-
         # Create lazy datasets
         lazy_forecast = sample_forecast_dataset.chunk()
 

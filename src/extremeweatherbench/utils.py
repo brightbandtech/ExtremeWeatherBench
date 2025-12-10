@@ -7,7 +7,7 @@ import inspect
 import logging
 import operator
 import pathlib
-from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, Sequence, Union
+from typing import Any, Callable, Literal, Optional, Sequence, Union
 
 import cartopy.io.shapereader as shpreader
 import numpy as np
@@ -20,9 +20,6 @@ import tqdm
 import xarray as xr
 import yaml  # type: ignore[import]
 from joblib import Parallel
-
-if TYPE_CHECKING:
-    pass
 
 logger = logging.getLogger(__name__)
 

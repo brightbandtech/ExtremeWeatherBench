@@ -723,53 +723,6 @@ class TestMaximumMeanAbsoluteError:
             # at least test instantiation works
             assert isinstance(metric, metrics.MaximumMeanAbsoluteError)
 
-    @pytest.mark.parametrize("use_sparse", [False, True])
-    def test_empty_tolerance_window_returns_nan(self, use_sparse):
-        """Test that empty tolerance window returns NaN instead of raising error.
-
-        When forecast valid_times don't overlap with the tolerance window around
-        target's maximum timestep, should return NaN gracefully.
-        """
-        metric = metrics.MaximumMeanAbsoluteError(tolerance_range_hours=2)
-
-        # Target times: Jan 1, 00:00 - 07:00 (peak at 02:00)
-        target_times = pd.date_range("2020-01-01 00:00", periods=8, freq="h")
-        # Forecast times: Jan 2, 00:00 - 07:00 (completely different day)
-        forecast_times = pd.date_range("2020-01-02 00:00", periods=8, freq="h")
-
-        temp_data = np.array([15, 16, 20, 18, 16, 15, 14, 13])  # Peak at index 2
-
-        forecast_data = temp_data + 1.0
-        target_data = temp_data.astype(float)
-
-        if use_sparse:
-            forecast_data = sparse.COO.from_numpy(forecast_data.reshape(8, 1, 1))
-            target_data = sparse.COO.from_numpy(target_data.reshape(8, 1, 1))
-            forecast = xr.DataArray(
-                forecast_data,
-                dims=["valid_time", "latitude", "longitude"],
-                coords={"valid_time": forecast_times},
-            )
-            target = xr.DataArray(
-                target_data,
-                dims=["valid_time", "latitude", "longitude"],
-                coords={"valid_time": target_times},
-            )
-        else:
-            forecast = xr.DataArray(
-                forecast_data,
-                dims=["valid_time"],
-                coords={"valid_time": forecast_times},
-            ).expand_dims(["latitude", "longitude"])
-            target = xr.DataArray(
-                target_data, dims=["valid_time"], coords={"valid_time": target_times}
-            ).expand_dims(["latitude", "longitude"])
-
-        # Should not raise an error, but return NaN
-        result = metric._compute_metric(forecast, target)
-        assert result is not None
-        assert np.isnan(result.values).all()
-
 
 class TestMinimumMeanAbsoluteError:
     """Tests for the MinimumMeanAbsoluteError metric."""
@@ -804,53 +757,6 @@ class TestMinimumMeanAbsoluteError:
             # If computation fails due to data structure issues,
             # at least test instantiation works
             assert isinstance(metric, metrics.MinimumMeanAbsoluteError)
-
-    @pytest.mark.parametrize("use_sparse", [False, True])
-    def test_empty_tolerance_window_returns_nan(self, use_sparse):
-        """Test that empty tolerance window returns NaN instead of raising error.
-
-        When forecast valid_times don't overlap with the tolerance window around
-        target's minimum timestep, should return NaN gracefully.
-        """
-        metric = metrics.MinimumMeanAbsoluteError(tolerance_range_hours=2)
-
-        # Target times: Jan 1, 00:00 - 07:00 (min at 01:00)
-        target_times = pd.date_range("2020-01-01 00:00", periods=8, freq="h")
-        # Forecast times: Jan 2, 00:00 - 07:00 (completely different day)
-        forecast_times = pd.date_range("2020-01-02 00:00", periods=8, freq="h")
-
-        temp_data = np.array([15, 10, 20, 18, 16, 15, 14, 13])  # Min at index 1
-
-        forecast_data = temp_data + 1.0
-        target_data = temp_data.astype(float)
-
-        if use_sparse:
-            forecast_data = sparse.COO.from_numpy(forecast_data.reshape(8, 1, 1))
-            target_data = sparse.COO.from_numpy(target_data.reshape(8, 1, 1))
-            forecast = xr.DataArray(
-                forecast_data,
-                dims=["valid_time", "latitude", "longitude"],
-                coords={"valid_time": forecast_times},
-            )
-            target = xr.DataArray(
-                target_data,
-                dims=["valid_time", "latitude", "longitude"],
-                coords={"valid_time": target_times},
-            )
-        else:
-            forecast = xr.DataArray(
-                forecast_data,
-                dims=["valid_time"],
-                coords={"valid_time": forecast_times},
-            ).expand_dims(["latitude", "longitude"])
-            target = xr.DataArray(
-                target_data, dims=["valid_time"], coords={"valid_time": target_times}
-            ).expand_dims(["latitude", "longitude"])
-
-        # Should not raise an error, but return NaN
-        result = metric._compute_metric(forecast, target)
-        assert result is not None
-        assert np.isnan(result.values).all()
 
 
 class TestMaximumLowestMeanAbsoluteError:

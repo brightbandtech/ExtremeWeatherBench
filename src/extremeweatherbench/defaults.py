@@ -235,17 +235,14 @@ ghcn_freeze_target = inputs.GHCN(
 lsr_target = inputs.LSR(
     storage_options={"remote_options": {"anon": True}},
 )
-
 pph_target = inputs.PPH(
     storage_options={"remote_options": {"anon": True}},
 )
 
 # IBTrACS target
-
 ibtracs_target = inputs.IBTrACS()
 
-# Forecast Examples
-
+# Forecasts
 cira_heatwave_forecast = inputs.KerchunkForecast(
     name="FourCastNetv2",
     source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
@@ -291,7 +288,7 @@ cira_severe_convection_forecast = inputs.KerchunkForecast(
     variables=[derived.CravenBrooksSignificantSevere()],
     variable_mapping=inputs.CIRA_metadata_variable_mapping,
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
-    preprocess=_preprocess_bb_cira_forecast_dataset,
+    preprocess=_preprocess_bb_severe_cira_forecast_dataset,
 )
 
 
@@ -323,7 +320,44 @@ def get_brightband_evaluation_objects() -> list[inputs.EvaluationObject]:
             threshold_criteria=get_climatology(0.15), op_func=operator.le
         ),
     ]
+    # Define pph metrics as thresholdmetric to share scores contingency table
+    pph_metric_list = [
+        metrics.ThresholdMetric(
+            metrics=[
+                metrics.CriticalSuccessIndex,
+                metrics.FalseAlarmRatio,
+            ],
+            forecast_threshold=15000,
+            target_threshold=0.3,
+        ),
+        metrics.EarlySignal(threshold=15000),
+    ]
 
+    # Define LSR metrics as thresholdmetric to share scores contingency table
+    lsr_metric_list = [
+        metrics.ThresholdMetric(
+            metrics=[
+                metrics.TruePositives,
+                metrics.FalseNegatives,
+            ],
+            forecast_threshold=15000,
+            target_threshold=0.5,
+        )
+    ]
+
+    composite_landfall_metrics = [
+        metrics.LandfallMetric(
+            metrics=[
+                metrics.LandfallIntensityMeanAbsoluteError,
+                metrics.LandfallTimeMeanError,
+                metrics.LandfallDisplacement,
+            ],
+            approach="next",
+            # Set the intensity variable to use for the metric
+            forecast_variable="air_pressure_at_mean_sea_level",
+            target_variable="air_pressure_at_mean_sea_level",
+        )
+    ]
     return [
         inputs.EvaluationObject(
             event_type="heat_wave",
@@ -351,10 +385,13 @@ def get_brightband_evaluation_objects() -> list[inputs.EvaluationObject]:
         ),
         inputs.EvaluationObject(
             event_type="severe_convection",
-            metric_list=[
-                metrics.CriticalSuccessIndex(),
-                metrics.FalseAlarmRatio(),
-            ],
+            metric_list=pph_metric_list,
+            target=pph_target,
+            forecast=cira_severe_convection_forecast,
+        ),
+        inputs.EvaluationObject(
+            event_type="severe_convection",
+            metric_list=lsr_metric_list,
             target=lsr_target,
             forecast=cira_severe_convection_forecast,
         ),
@@ -370,11 +407,7 @@ def get_brightband_evaluation_objects() -> list[inputs.EvaluationObject]:
         ),
         inputs.EvaluationObject(
             event_type="tropical_cyclone",
-            metric_list=[
-                metrics.LandfallDisplacement(),
-                metrics.LandfallTimeMeanError(),
-                metrics.LandfallIntensityMeanAbsoluteError(),
-            ],
+            metric_list=composite_landfall_metrics,
             target=ibtracs_target,
             forecast=cira_tropical_cyclone_forecast,
         ),
