@@ -1,25 +1,28 @@
 import logging
+import operator
 
 import numpy as np
 import xarray as xr
 
-from extremeweatherbench import inputs
+from extremeweatherbench import calc, derived, inputs
 
 # Suppress noisy log messages
 logging.getLogger("urllib3.connectionpool").setLevel(logging.CRITICAL)
 logging.getLogger("botocore.httpchecksum").setLevel(logging.CRITICAL)
 
-# Columns for the evaluation output dataframe
-OUTPUT_COLUMNS = [
-    "value",
+
+# The core coordinate variables that are selected if they exist, even if not dimensions
+# (e.g. latitude and longitude for xarray datasets). These are used currently for
+# selecting columns in pandas dataframes and polars lazyframes.
+DEFAULT_COORDINATE_VARIABLES = [
+    "valid_time",
     "lead_time",
     "init_time",
-    "target_variable",
-    "metric",
-    "forecast_source",
-    "target_source",
-    "case_id_number",
-    "event_type",
+    "latitude",
+    "longitude",
+    "season",  # for tropical cyclone data
+    "tc_name",  # for tropical cyclone data
+    "number",  # for tropical cyclone data
 ]
 
 DEFAULT_VARIABLE_NAMES = [
@@ -56,6 +59,80 @@ DEFAULT_VARIABLE_NAMES = [
 
 
 def _preprocess_bb_cira_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
+    """A preprocess function for CIRA data that renames the time coordinate to
+    lead_time, creates a valid_time coordinate, and sets the lead time range and
+    resolution not present in the original dataset.
+
+    Args:
+        ds: The forecast dataset to preprocess.
+
+    Returns:
+        The preprocessed forecast dataset.
+    """
+    ds = ds.rename({"time": "lead_time"})
+    # The evaluation configuration is used to set the lead time range and resolution.
+    ds["lead_time"] = np.array(
+        [i for i in range(0, 241, 6)], dtype="timedelta64[h]"
+    ).astype("timedelta64[ns]")
+    return ds
+
+
+# Preprocessing function for CIRA data that includes geopotential thickness calculation
+# required for tropical cyclone tracks
+def _preprocess_bb_cira_tc_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
+    """A preprocess function for CIRA data that includes geopotential thickness
+    calculation required for tropical cyclone tracks.
+
+    This function renames the time coordinate to lead_time,
+    creates a valid_time coordinate, and sets the lead time range and resolution not
+    present in the original dataset.
+
+    Args:
+        ds: The forecast dataset to rename.
+
+    Returns:
+        The renamed forecast dataset.
+    """
+    ds = ds.rename({"time": "lead_time"})
+
+    # The evaluation configuration is used to set the lead time range and resolution.
+    ds["lead_time"] = np.array(
+        [i for i in range(0, 241, 6)], dtype="timedelta64[h]"
+    ).astype("timedelta64[ns]")
+
+    # Calculate the geopotential thickness required for tropical cyclone tracks
+    ds["geopotential_thickness"] = calc.geopotential_thickness(
+        ds["z"], top_level_value=300, bottom_level_value=500
+    )
+    return ds
+
+
+# Preprocessing function for HRES data that includes geopotential thickness calculation
+# required for tropical cyclone tracks
+def _preprocess_bb_hres_tc_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
+    """A preprocess function for CIRA data that includes geopotential thickness
+    calculation required for tropical cyclone tracks.
+
+    This function renames the time coordinate to lead_time,
+    creates a valid_time coordinate, and sets the lead time range and resolution not
+    present in the original dataset.
+
+    Args:
+        ds: The forecast dataset to rename.
+
+    Returns:
+        The renamed forecast dataset.
+    """
+
+    # Calculate the geopotential thickness required for tropical cyclone tracks
+    ds["geopotential_thickness"] = calc.geopotential_thickness(
+        ds["geopotential"], top_level_value=300, bottom_level_value=500
+    )
+    return ds
+
+
+# Preprocess function for CIRA data using Brightband kerchunk parquets
+def _preprocess_bb_ar_cira_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
     """An example preprocess function that renames the time coordinate to lead_time,
     creates a valid_time coordinate, and sets the lead time range and resolution not
     present in the original dataset.
@@ -67,118 +144,110 @@ def _preprocess_bb_cira_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
         The renamed forecast dataset.
     """
     ds = ds.rename({"time": "lead_time"})
+
     # The evaluation configuration is used to set the lead time range and resolution.
     ds["lead_time"] = np.array(
         [i for i in range(0, 241, 6)], dtype="timedelta64[h]"
     ).astype("timedelta64[ns]")
+    if "q" not in ds.variables:
+        # Calculate specific humidity from relative humidity and air temperature
+        ds["specific_humidity"] = calc.specific_humidity_from_relative_humidity(
+            air_temperature=ds["t"],
+            relative_humidity=ds["r"],
+            levels=ds["level"],
+        )
     return ds
+
+
+# Preprocess function for CIRA data using Brightband kerchunk parquets
+def _preprocess_bb_severe_cira_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
+    """An example preprocess function that renames the time coordinate to lead_time,
+    creates a valid_time coordinate, and sets the lead time range and resolution not
+    present in the original dataset.
+
+    Args:
+        ds: The forecast dataset to rename.
+
+    Returns:
+        The renamed forecast dataset.
+    """
+    ds = ds.rename({"time": "lead_time"})
+
+    # The evaluation configuration is used to set the lead time range and resolution.
+    ds["lead_time"] = np.array(
+        [i for i in range(0, 241, 6)], dtype="timedelta64[h]"
+    ).astype("timedelta64[ns]")
+    if "q" not in ds.variables:
+        # Calculate specific humidity from relative humidity and air temperature
+        ds["specific_humidity"] = calc.specific_humidity_from_relative_humidity(
+            air_temperature=ds["t"],
+            relative_humidity=ds["r"],
+            levels=ds["level"],
+        )
+    ds["geopotential"] = ds["z"] * calc.g0
+    return ds
+
+
+def get_climatology(quantile: float = 0.85) -> xr.DataArray:
+    """Get the climatology dataset for the heatwave criteria."""
+    if quantile not in [0.15, 0.85]:
+        raise ValueError("Quantile must be 0.15 or 0.85")
+    return xr.open_zarr(
+        "gs://extremeweatherbench/datasets/surface_air_temperature_1990_2019_climatology.zarr",  # noqa: E501
+        storage_options={"anon": True},
+        chunks="auto",
+    )["2m_temperature"].sel(quantile=quantile)
 
 
 # ERA5 targets
 era5_heatwave_target = inputs.ERA5(
     source=inputs.ARCO_ERA5_FULL_URI,
     variables=["surface_air_temperature"],
-    variable_mapping={
-        "2m_temperature": "surface_air_temperature",
-        "time": "valid_time",
-    },
     storage_options={"remote_options": {"anon": True}},
 )
 
 era5_freeze_target = inputs.ERA5(
     source=inputs.ARCO_ERA5_FULL_URI,
-    variables=[
-        "surface_air_temperature",
-        "surface_eastward_wind",
-        "surface_northward_wind",
-    ],
-    variable_mapping={
-        "2m_temperature": "surface_air_temperature",
-        "10m_u_component_of_wind": "surface_eastward_wind",
-        "10m_v_component_of_wind": "surface_northward_wind",
-        "time": "valid_time",
-    },
+    variables=["surface_air_temperature"],
     storage_options={"remote_options": {"anon": True}},
 )
 
-# TODO: Re-enable when atmospheric river target is implemented
-# era5_atmospheric_river_target = inputs.ERA5(
-#     source=inputs.ARCO_ERA5_FULL_URI,
-#     variables=[
-#         derived.IntegratedVaporTransport(),
-#         derived.AtmosphericRiverMask(),
-#     ],
-#     variable_mapping={
-#         "u_component_of_wind": "eastward_wind",
-#         "v_component_of_wind": "northward_wind",
-#         "temperature": "air_temperature",
-#         "vertical_integral_of_northward_water_vapour_flux":
-#             "northward_water_vapour_flux",
-#         "vertical_integral_of_eastward_water_vapour_flux":
-#             "eastward_water_vapour_flux",
-#     },
-#     storage_options={"remote_options": {"anon": True}},
-# )
+era5_atmospheric_river_target = inputs.ERA5(
+    variables=[
+        derived.AtmosphericRiverVariables(
+            output_variables=["atmospheric_river_land_intersection"]
+        )
+    ],
+    storage_options={"remote_options": {"anon": True}},
+)
 
 # GHCN targets
 ghcn_heatwave_target = inputs.GHCN(
-    source=inputs.DEFAULT_GHCN_URI,
     variables=["surface_air_temperature"],
-    variable_mapping={"t2": "surface_air_temperature"},
-    storage_options={},
 )
 
 ghcn_freeze_target = inputs.GHCN(
-    source=inputs.DEFAULT_GHCN_URI,
-    variables=[
-        "surface_air_temperature",
-        "surface_eastward_wind",
-        "surface_northward_wind",
-    ],
-    variable_mapping={
-        "surface_temperature": "surface_air_temperature",
-        "surface_eastward_wind": "surface_eastward_wind",
-        "surface_northward_wind": "surface_northward_wind",
-    },
+    variables=["surface_air_temperature"],
     storage_options={},
 )
 
 # LSR/PPH target
-# TODO: Re-enable when severe convection is implemented
-# lsr_target = inputs.LSR(
-#     source=inputs.LSR_URI,
-#     variables=["local_storm_reports"],
-#     variable_mapping={},
-#     storage_options={"remote_options": {"anon": True}},
-# )
-
-# pph_target = inputs.PPH(
-#     source=inputs.PPH_URI,
-#     variables=["practically_perfect_hindcast"],
-#     variable_mapping={},
-#     storage_options={"remote_options": {"anon": True}},
-# )
+lsr_target = inputs.LSR(
+    storage_options={"remote_options": {"anon": True}},
+)
+pph_target = inputs.PPH(
+    storage_options={"remote_options": {"anon": True}},
+)
 
 # IBTrACS target
+ibtracs_target = inputs.IBTrACS()
 
-# TODO: Re-enable when IBTrACS target is implemented
-# ibtracs_target = inputs.IBTrACS(
-#     source=inputs.IBTRACS_URI,
-#     variables=[derived.TCTrackVariables()],
-#     variable_mapping={
-#         "vmax": "surface_wind_speed",
-#         "slp": "air_pressure_at_mean_sea_level",
-#     },
-#     storage_options={"remote_options": {"anon": True}},
-# )
-
-# Forecast Examples
-
+# Forecasts
 cira_heatwave_forecast = inputs.KerchunkForecast(
     name="FourCastNetv2",
     source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
     variables=["surface_air_temperature"],
-    variable_mapping={"t2": "surface_air_temperature"},
+    variable_mapping=inputs.CIRA_metadata_variable_mapping,
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
     preprocess=_preprocess_bb_cira_forecast_dataset,
 )
@@ -186,56 +255,41 @@ cira_heatwave_forecast = inputs.KerchunkForecast(
 cira_freeze_forecast = inputs.KerchunkForecast(
     name="FourCastNetv2",
     source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
-    variables=[
-        "surface_air_temperature",
-        "surface_eastward_wind",
-        "surface_northward_wind",
-    ],
-    variable_mapping={
-        "t2": "surface_air_temperature",
-        "10u": "surface_eastward_wind",
-        "10v": "surface_northward_wind",
-    },
+    variables=["surface_air_temperature"],
+    variable_mapping=inputs.CIRA_metadata_variable_mapping,
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
     preprocess=_preprocess_bb_cira_forecast_dataset,
 )
 
-# TODO: Re-enable when atmospheric river forecast is implemented
-# cira_atmospheric_river_forecast = inputs.KerchunkForecast(
-#     source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
-#     variables=[
-#         derived.IntegratedVaporTransport(),
-#         derived.AtmosphericRiverMask(),
-#     ],
-#     variable_mapping={
-#         "u_component_of_wind": "eastward_wind",
-#         "v_component_of_wind": "northward_wind",
-#         "specific_humidity": "specific_humidity",
-#         "temperature": "air_temperature",
-#         "vertical_integral_of_northward_water_vapour_flux":
-#             "northward_water_vapour_flux",
-#         "vertical_integral_of_eastward_water_vapour_flux":
-#             "eastward_water_vapour_flux",
-#     },
-#     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
-# )
+cira_tropical_cyclone_forecast = inputs.KerchunkForecast(
+    name="FourCastNetv2",
+    source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
+    variables=[derived.TropicalCycloneTrackVariables()],
+    variable_mapping=inputs.CIRA_metadata_variable_mapping,
+    storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
+    preprocess=_preprocess_bb_cira_tc_forecast_dataset,
+)
+cira_atmospheric_river_forecast = inputs.KerchunkForecast(
+    name="FourCastNetv2",
+    source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
+    variables=[
+        derived.AtmosphericRiverVariables(
+            output_variables=["atmospheric_river_land_intersection"]
+        )
+    ],
+    variable_mapping=inputs.CIRA_metadata_variable_mapping,
+    storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
+    preprocess=_preprocess_bb_ar_cira_forecast_dataset,
+)
 
-# TODO: Re-enable when CravenSignificantSevereParameter is implemented
-# cira_severe_convection_forecast = inputs.KerchunkForecast(
-#     source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
-#     variables=[derived.CravenSignificantSevereParameter()],
-#     variable_mapping={
-#         "t": "air_temperature",
-#         "t2": "surface_air_temperature",
-#         "z": "geopotential",
-#         "r": "relative_humidity",
-#         "u": "eastward_wind",
-#         "v": "northward_wind",
-#         "10u": "surface_eastward_wind",
-#         "10v": "surface_northward_wind",
-#     },
-#     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
-# )
+cira_severe_convection_forecast = inputs.KerchunkForecast(
+    name="FourCastNetv2",
+    source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
+    variables=[derived.CravenBrooksSignificantSevere()],
+    variable_mapping=inputs.CIRA_metadata_variable_mapping,
+    storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
+    preprocess=_preprocess_bb_severe_cira_forecast_dataset,
+)
 
 
 def get_brightband_evaluation_objects() -> list[inputs.EvaluationObject]:
@@ -252,19 +306,58 @@ def get_brightband_evaluation_objects() -> list[inputs.EvaluationObject]:
     from extremeweatherbench import metrics
 
     heatwave_metric_list: list[metrics.BaseMetric] = [
-        metrics.MaximumMAE(),
-        metrics.RMSE(),
-        metrics.OnsetME(),
-        metrics.DurationME(),
-        metrics.MaxMinMAE(),
+        metrics.MaximumMeanAbsoluteError(),
+        metrics.RootMeanSquaredError(),
+        metrics.DurationMeanError(
+            threshold_criteria=get_climatology(0.85), op_func=operator.ge
+        ),
+        metrics.MaximumLowestMeanAbsoluteError(),
     ]
     freeze_metric_list: list[metrics.BaseMetric] = [
-        metrics.MinimumMAE(),
-        metrics.RMSE(),
-        metrics.OnsetME(),
-        metrics.DurationME(),
+        metrics.MinimumMeanAbsoluteError(),
+        metrics.RootMeanSquaredError(),
+        metrics.DurationMeanError(
+            threshold_criteria=get_climatology(0.15), op_func=operator.le
+        ),
+    ]
+    # Define pph metrics as thresholdmetric to share scores contingency table
+    pph_metric_list = [
+        metrics.ThresholdMetric(
+            metrics=[
+                metrics.CriticalSuccessIndex,
+                metrics.FalseAlarmRatio,
+            ],
+            forecast_threshold=15000,
+            target_threshold=0.3,
+        ),
+        metrics.EarlySignal(threshold=15000),
     ]
 
+    # Define LSR metrics as thresholdmetric to share scores contingency table
+    lsr_metric_list = [
+        metrics.ThresholdMetric(
+            metrics=[
+                metrics.TruePositives,
+                metrics.FalseNegatives,
+            ],
+            forecast_threshold=15000,
+            target_threshold=0.5,
+        )
+    ]
+
+    composite_landfall_metrics = [
+        metrics.LandfallMetric(
+            metrics=[
+                metrics.LandfallIntensityMeanAbsoluteError,
+                metrics.LandfallTimeMeanError,
+                metrics.LandfallDisplacement,
+            ],
+            approach="next",
+            # Set the intensity variable to use for the metric
+            forecast_variable="air_pressure_at_mean_sea_level",
+            target_variable="air_pressure_at_mean_sea_level",
+        )
+    ]
     return [
         inputs.EvaluationObject(
             event_type="heat_wave",
@@ -290,36 +383,32 @@ def get_brightband_evaluation_objects() -> list[inputs.EvaluationObject]:
             target=ghcn_freeze_target,
             forecast=cira_freeze_forecast,
         ),
-        # TODO: Re-enable when severe convection forecast is implemented
-        # inputs.EvaluationObject(
-        #     event_type="severe_convection",
-        #     metric_list=[
-        #         metrics.CSI(),
-        #         metrics.FAR(),
-        #         metrics.RegionalHitsMisses(),
-        #         metrics.HitsMisses(),
-        #     ],
-        #     target=lsr_target,
-        #     forecast=cira_severe_convection_forecast,
-        # ),
-        # TODO: Re-enable when atmospheric river forecast is implemented
-        # inputs.EvaluationObject(
-        #     event_type="atmospheric_river",
-        #     metric_list=[metrics.CSI(), metrics.SpatialDisplacement(),
-        #  metrics.EarlySignal()],
-        #     target=era5_atmospheric_river_target,
-        #     forecast=cira_atmospheric_river_forecast,
-        # ),
-        # TODO: Re-enable when tropical cyclone forecast is implemented
-        # inputs.EvaluationObject(
-        #     event_type="tropical_cyclone",
-        #     metric_list=[
-        #         metrics.EarlySignal(),
-        #         metrics.LandfallDisplacement(),
-        #         metrics.LandfallTimeME(),
-        #         metrics.LandfallIntensityMAE(),
-        #     ],
-        #     target=ibtracs_target,
-        #     forecast=cira_tropical_cyclone_forecast,
-        # ),
+        inputs.EvaluationObject(
+            event_type="severe_convection",
+            metric_list=pph_metric_list,
+            target=pph_target,
+            forecast=cira_severe_convection_forecast,
+        ),
+        inputs.EvaluationObject(
+            event_type="severe_convection",
+            metric_list=lsr_metric_list,
+            target=lsr_target,
+            forecast=cira_severe_convection_forecast,
+        ),
+        inputs.EvaluationObject(
+            event_type="atmospheric_river",
+            metric_list=[
+                metrics.CriticalSuccessIndex(),
+                metrics.SpatialDisplacement(),
+                metrics.EarlySignal(),
+            ],
+            target=era5_atmospheric_river_target,
+            forecast=cira_atmospheric_river_forecast,
+        ),
+        inputs.EvaluationObject(
+            event_type="tropical_cyclone",
+            metric_list=composite_landfall_metrics,
+            target=ibtracs_target,
+            forecast=cira_tropical_cyclone_forecast,
+        ),
     ]

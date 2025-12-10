@@ -4,7 +4,7 @@
 
 **EWB is currently in limited pre-release. Bugs are likely to occur for now.**
 
-**v0.2 leading to v1.0 to be published alongside EWB preprint.**
+**v1.0 to be published alongside EWB preprint.**
 
 [Read our blog post here](https://www.brightband.com/blog/extreme-weather-bench)
 
@@ -13,19 +13,16 @@ As AI weather models are growing in popularity, we need a standardized set of co
 # Events
 EWB has cases broken down by multiple event types within `src/extremeweatherbench/data/events.yaml` between 2020 and 2024. EWB case studies are documented [here](docs/events/AllCaseStudies.md).  
 
-## Available:
+## Available: 
+
 | Event Type | Number of Cases |
 | ---------- | --------------- | 
 | 🌇 Heat Waves | 46 |
 | 🧊 Freezes | 14 |
-
-# Events in Development:
-| Event Type | Number of Cases |
-| ---------- | --------------- | 
 | 🌀 Tropical Cyclones | 107 |
 | ☔️ Atmospheric Rivers | 56 |
 | 🌪️ Severe Convection | 117 | 
-
+| **Total Cases** | 340 |
 
 # EWB paper and talks
 
@@ -64,7 +61,7 @@ Running EWB on sample data (included) is straightforward.
 ```shell
 $ ewb --default
 ```
-**Note**: this will run every event type, case, target source, and metric for the individual event type as they become available (currently heat waves and freezes) for GFS initialized FourCastNetv2. It is expected a full evaluation will take some time, even on a large VM.
+**Note**: this will run every event type, case, target source, and metric for the individual event type as they become available for GFS initialized FourCastNetv2. It is expected a full evaluation will take some time, even on a large VM.
 ## Using Jupyter Notebook or a Script:
  
 ```python
@@ -96,31 +93,28 @@ heatwave_evaluation_list = [
     inputs.EvaluationObject(
         event_type="heat_wave",
         metric_list=[
-            metrics.MaximumMAE,
-            metrics.RMSE,
-            metrics.OnsetME,
-            metrics.DurationME,
-            metrics.MaxMinMAE,
+            metrics.MaximumMeanAbsoluteError(),
+            metrics.RootMeanSquaredError(),
+            metrics.MaximumLowestMeanAbsoluteError(),
         ],
         target=era5_heatwave_target,
         forecast=fcnv2_forecast,
     ),
 ]
 # Load in the EWB default list of event cases
-cases = utils.load_events_yaml()
+case_metadata = cases.load_ewb_events_yaml_into_case_collection()
 
 # Create the evaluation class, with cases and evaluation objects declared
 ewb_instance = evaluate.ExtremeWeatherBench(
-    case_metadata=cases,
+    case_metadata=case_metadata,
     evaluation_objects=heatwave_evaluation_list,
 )
 
 # Execute a parallel run and return the evaluation results as a pandas DataFrame
 heatwave_outputs = ewb_instance.run(
-    n_jobs=16, # use 16 processes
-    pre_compute=True, # load case data into memory before metrics are computed. Useful with smaller evaluation datasets with many metrics
+    parallel_config={'backend':'loky','n_jobs':16} # Uses 16 jobs with the loky backend
 )
 
 # Save the results
-outputs.to_csv('heatwave_evaluation_results.csv')
+heatwave_outputs.to_csv('heatwave_evaluation_results.csv')
 ```
