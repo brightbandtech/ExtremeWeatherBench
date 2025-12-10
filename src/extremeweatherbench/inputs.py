@@ -590,9 +590,8 @@ class GHCN(TargetBase):
 class LSR(TargetBase):
     """Target class for local storm report (LSR) tabular data.
 
-    run_pipeline() returns a dataset with LSRs as mapped to numeric values (1=wind, 2=hail, 3=tor). IndividualCase date ranges for LSRs should ideally be 12 UTC to
-    the next day at 12 UTC to match SPC methods for US data. Australia data should be 00
-    UTC to 00 UTC.
+    run_pipeline() returns a dataset with LSRs as mapped to numeric values (1=wind, 2=hail, 3=tor). IndividualCase date ranges for LSRs should be 12 UTC to
+    the next day at 12 UTC (exclusive) to match SPC's reporting window.
     """
 
     name: str = "local_storm_reports"
@@ -646,53 +645,29 @@ class LSR(TargetBase):
         if "report_type" in data.columns:
             data.loc[:, "report_type"] = data["report_type"].map(report_type_mapping)
             data["report_type"] = data["report_type"].astype(int)
-        # Normalize these times for the LSR data
-        # Western hemisphere reports get bucketed to 12Z on the date they fall
-        # between 12Z-12Z
-        # Eastern hemisphere reports get bucketed to 00Z on the date they occur
 
-        # First, let's figure out which hemisphere each report is in
-        western_hemisphere_mask = data["longitude"] < 0
-        eastern_hemisphere_mask = data["longitude"] >= 0
-
-        # For western hemisphere: if report is between today 12Z and tomorrow
+        # If report is between today 12Z and tomorrow
         # 12Z, assign to today 12Z
-        if western_hemisphere_mask.any():
-            western_data = data[western_hemisphere_mask].copy()
-            # Get the date portion and create 12Z times
-            report_dates = western_data["valid_time"].dt.date
-            twelve_z_times = pd.to_datetime(report_dates) + pd.Timedelta(hours=12)
-            next_day_twelve_z = twelve_z_times + pd.Timedelta(days=1)
+        data = data.copy()
+        report_dates = data["valid_time"].dt.date
+        twelve_z_times = pd.to_datetime(report_dates) + pd.Timedelta(hours=12)
+        next_day_twelve_z = twelve_z_times + pd.Timedelta(days=1)
 
-            # Check if report falls in the 12Z to 12Z+1day window
-            in_window_mask = (western_data["valid_time"] >= twelve_z_times) & (
-                western_data["valid_time"] < next_day_twelve_z
-            )
-            # For reports that don't fall in today's 12Z window, try yesterday's window
-            yesterday_twelve_z = twelve_z_times - pd.Timedelta(days=1)
-            in_yesterday_window = (western_data["valid_time"] >= yesterday_twelve_z) & (
-                western_data["valid_time"] < twelve_z_times
-            )
+        # Check if report falls in the 12Z to 12Z+1day window
+        in_window_mask = (data["valid_time"] >= twelve_z_times) & (
+            data["valid_time"] < next_day_twelve_z
+        )
+        # For reports that don't fall in today's 12Z window, try yesterday's window
+        yesterday_twelve_z = twelve_z_times - pd.Timedelta(days=1)
+        in_yesterday_window = (data["valid_time"] >= yesterday_twelve_z) & (
+            data["valid_time"] < twelve_z_times
+        )
 
-            # Assign 12Z times
-            western_data.loc[in_window_mask, "valid_time"] = twelve_z_times[
-                in_window_mask
-            ]
-            western_data.loc[in_yesterday_window, "valid_time"] = yesterday_twelve_z[
-                in_yesterday_window
-            ]
-
-            data.loc[western_hemisphere_mask] = western_data
-
-        # For eastern hemisphere: assign to 00Z of the same date
-        if eastern_hemisphere_mask.any():
-            eastern_data = data[eastern_hemisphere_mask].copy()
-            # Get the date portion and create 00Z times
-            report_dates = eastern_data["valid_time"].dt.date
-            zero_z_times = pd.to_datetime(report_dates)
-            eastern_data["valid_time"] = zero_z_times
-
-            data.loc[eastern_hemisphere_mask] = eastern_data
+        # Assign 12Z times
+        data.loc[in_window_mask, "valid_time"] = twelve_z_times[in_window_mask]
+        data.loc[in_yesterday_window, "valid_time"] = yesterday_twelve_z[
+            in_yesterday_window
+        ]
 
         # Convert longitude back to 0 - 360
         data.loc[:, "longitude"] = utils.convert_longitude_to_360(data["longitude"])
