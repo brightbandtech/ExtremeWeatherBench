@@ -129,6 +129,12 @@ class TropicalCycloneTrackVariables(DerivedVariable):
             "air_pressure_at_mean_sea_level",
         ],
         name: Optional[str] = None,
+        slp_contour_magnitude: float = 200.0,
+        dz_contour_magnitude: float = -6.0,
+        min_distance_between_peaks: int = 5,
+        max_spatial_distance_degrees: float = 5.0,
+        max_temporal_hours: float = 48.0,
+        use_contour_validation: bool = True,
     ):
         """Initialize the TropicalCycloneTrackVariables variable.
 
@@ -139,6 +145,13 @@ class TropicalCycloneTrackVariables(DerivedVariable):
                 name attribute if present, otherwise the class name.
         """
         super().__init__(output_variables=output_variables, name=name)
+        self.slp_contour_magnitude = slp_contour_magnitude
+        self.dz_contour_magnitude = dz_contour_magnitude
+        self.min_distance_between_peaks = min_distance_between_peaks
+        self.max_spatial_distance_degrees = max_spatial_distance_degrees
+        self.max_temporal_hours = max_temporal_hours
+        self.use_contour_validation = use_contour_validation
+
 
     def get_or_compute_tracks(self, data: xr.Dataset, *args, **kwargs) -> xr.Dataset:
         """Get cached track data or compute if not already cached.
@@ -203,12 +216,12 @@ class TropicalCycloneTrackVariables(DerivedVariable):
             wind_speed=prepared_data["surface_wind_speed"],
             tc_track_analysis_data=tc_track_data,
             geopotential_thickness=prepared_data.get("geopotential_thickness", None),
-            slp_contour_magnitude=200.0,
-            dz_contour_magnitude=-6.0,
-            min_distance_between_peaks=5,
-            max_spatial_distance_degrees=5.0,
-            max_temporal_hours=48.0,
-            use_contour_validation=True,
+            slp_contour_magnitude=self.slp_contour_magnitude,
+            dz_contour_magnitude=-self.dz_contour_magnitude,
+            min_distance_between_peaks=self.min_distance_between_peaks,
+            max_spatial_distance_degrees=self.max_spatial_distance_degrees,
+            max_temporal_hours=self.max_temporal_hours,
+            use_contour_validation=self.use_contour_validation,
         )
         return tctracks_ds
 
