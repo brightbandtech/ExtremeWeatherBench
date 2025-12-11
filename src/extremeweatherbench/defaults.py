@@ -153,7 +153,7 @@ def _preprocess_bb_ar_cira_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
         # Calculate specific humidity from relative humidity and air temperature
         ds["specific_humidity"] = calc.specific_humidity_from_relative_humidity(
             air_temperature=ds["t"],
-            relative_humidity=ds["r"],
+            relative_humidity=ds["r"] / 100,  # Convert relative humidity to percentage
             levels=ds["level"],
         )
     return ds
@@ -181,7 +181,7 @@ def _preprocess_bb_severe_cira_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
         # Calculate specific humidity from relative humidity and air temperature
         ds["specific_humidity"] = calc.specific_humidity_from_relative_humidity(
             air_temperature=ds["t"],
-            relative_humidity=ds["r"],
+            relative_humidity=ds["r"] / 100,  # Convert relative humidity to percentage
             levels=ds["level"],
         )
     ds["geopotential"] = ds["z"] * calc.g0
