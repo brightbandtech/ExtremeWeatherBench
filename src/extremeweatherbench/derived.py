@@ -135,6 +135,13 @@ class TropicalCycloneTrackVariables(DerivedVariable):
         max_spatial_distance_degrees: float = 5.0,
         max_temporal_hours: float = 48.0,
         use_contour_validation: bool = True,
+        min_track_timesteps: int = 10,
+        latitude_max_degrees: float = 50.0,
+        surface_pressure_threshold: float = 100500.0,
+        orography: Optional[xr.DataArray] = None,
+        max_gc_distance_slp_contour_degrees: float = 5.5,
+        max_gc_distance_dz_contour_degrees: float = 6.5,
+        orography_filter_threshold: float = 150.0,
     ):
         """Initialize the TropicalCycloneTrackVariables variable.
 
@@ -143,6 +150,34 @@ class TropicalCycloneTrackVariables(DerivedVariable):
                 which outputs to use from the derived computation.
             name: The name of the derived variable. Defaults to class-level
                 name attribute if present, otherwise the class name.
+            slp_contour_magnitude: Sea level pressure contour threshold in Pa.
+                Defaults to 200.0.
+            dz_contour_magnitude: Geopotential thickness contour threshold in m.
+                Defaults to -6.0.
+            min_distance_between_peaks: Minimum grid points between detected peaks.
+                Defaults to 5.
+            max_spatial_distance_degrees: Maximum distance in degrees for track matching. 
+                Defaults to 5.0.
+            max_temporal_hours: Maximum hours between detections for track continuity. 
+                Defaults to 48.0.
+            use_contour_validation: Whether to apply closed contour validation.
+                Defaults to True.
+            min_track_timesteps: Minimum number of timesteps required for a valid track. 
+                Defaults to 10.
+            latitude_max_degrees: Maximum latitude in degrees for TC detection.
+                Defaults to 50.0.
+            surface_pressure_threshold: Surface pressure threshold in Pa.
+                Defaults to 100500.0.
+            orography: Optional orography DataArray for terrain filtering.
+                Defaults to None.
+            max_gc_distance_slp_contour_degrees: Maximum great circle distance for 
+            SLP contour validation in degrees. 
+                Defaults to 5.5.
+            max_gc_distance_dz_contour_degrees: Maximum great circle distance for
+            geopotential thickness contour validation in degrees. 
+                Defaults to 6.5.
+            orography_filter_threshold: Orography filter threshold in meters.
+                Defaults to 150.0.
         """
         super().__init__(output_variables=output_variables, name=name)
         self.slp_contour_magnitude = slp_contour_magnitude
@@ -151,7 +186,13 @@ class TropicalCycloneTrackVariables(DerivedVariable):
         self.max_spatial_distance_degrees = max_spatial_distance_degrees
         self.max_temporal_hours = max_temporal_hours
         self.use_contour_validation = use_contour_validation
-
+        self.min_track_timesteps = min_track_timesteps
+        self.latitude_max_degrees = latitude_max_degrees
+        self.surface_pressure_threshold = surface_pressure_threshold
+        self.orography = orography
+        self.max_gc_distance_slp_contour_degrees = max_gc_distance_slp_contour_degrees
+        self.max_gc_distance_dz_contour_degrees = max_gc_distance_dz_contour_degrees
+        self.orography_filter_threshold = orography_filter_threshold
 
     def get_or_compute_tracks(self, data: xr.Dataset, *args, **kwargs) -> xr.Dataset:
         """Get cached track data or compute if not already cached.
@@ -217,11 +258,18 @@ class TropicalCycloneTrackVariables(DerivedVariable):
             tc_track_analysis_data=tc_track_data,
             geopotential_thickness=prepared_data.get("geopotential_thickness", None),
             slp_contour_magnitude=self.slp_contour_magnitude,
-            dz_contour_magnitude=-self.dz_contour_magnitude,
+            dz_contour_magnitude=self.dz_contour_magnitude,
             min_distance_between_peaks=self.min_distance_between_peaks,
             max_spatial_distance_degrees=self.max_spatial_distance_degrees,
             max_temporal_hours=self.max_temporal_hours,
             use_contour_validation=self.use_contour_validation,
+            min_track_timesteps=self.min_track_timesteps,
+            latitude_max_degrees=self.latitude_max_degrees,
+            surface_pressure_threshold=self.surface_pressure_threshold,
+            orography=self.orography,
+            max_gc_distance_slp_contour_degrees=self.max_gc_distance_slp_contour_degrees,
+            max_gc_distance_dz_contour_degrees=self.max_gc_distance_dz_contour_degrees,
+            orography_filter_threshold=self.orography_filter_threshold,
         )
         return tctracks_ds
 
