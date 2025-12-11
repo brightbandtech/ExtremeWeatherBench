@@ -1421,6 +1421,183 @@ class TestReduceXarrayMethod:
         assert result.ndim == 0
 
 
+class TestMaybeComputeAndMaybeCache:
+    """Test the maybe_cache_and_compute function."""
+
+    def test_no_cache_returns_original(self):
+        """Test with no cache - returns original dataset."""
+        ds = xr.Dataset(
+            {"temp": (["time", "lat"], [[1, 2], [3, 4]])},
+            coords={"time": [0, 1], "lat": [10, 20]},
+        ).chunk()
+
+        # Call with no cache_dir
+        result = utils.maybe_cache_and_compute(ds, name="forecast", cache_dir=None)
+
+        # Should return original dataset
+        assert isinstance(result, xr.Dataset)
+        # Should still be lazy
+        assert hasattr(result.temp.data, "chunks")
+        xr.testing.assert_equal(result, ds)
+
+    def test_cache_computes_and_caches(self, tmp_path):
+        """Test caching stores as zarr and loads lazily."""
+        ds = xr.Dataset(
+            {"temp": (["time", "lat"], [[1, 2], [3, 4]])},
+            coords={"time": [0, 1], "lat": [10, 20]},
+        ).chunk()
+
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir()
+
+        # Call with cache_dir (caches as zarr)
+        result = utils.maybe_cache_and_compute(ds, name="forecast", cache_dir=cache_dir)
+
+        # Should return dataset
+        assert isinstance(result, xr.Dataset)
+        # Should still be lazy (loaded from zarr cache)
+        assert hasattr(result.temp.data, "chunks")
+
+        # Verify cache file was created as zarr
+        expected_file = cache_dir / "forecast.zarr"
+        assert expected_file.exists()
+
+        # Verify cached file can be loaded and matches
+        cached_ds = xr.open_zarr(expected_file)
+        xr.testing.assert_equal(result, cached_ds)
+
+    def test_single_dataset_stays_lazy(self):
+        """Test single dataset with no cache stays lazy."""
+        ds = xr.Dataset(
+            {"temp": (["time"], [1, 2, 3])}, coords={"time": [0, 1, 2]}
+        ).chunk()
+
+        result = utils.maybe_cache_and_compute(ds, name="single", cache_dir=None)
+
+        assert isinstance(result, xr.Dataset)
+        # Should still be lazy
+        assert hasattr(result.temp.data, "chunks")
+
+    def test_cache_dir_as_string(self, tmp_path):
+        """Test that cache_dir works as string path."""
+        ds = xr.Dataset({"temp": (["x"], [1, 2])}, coords={"x": [0, 1]}).chunk()
+
+        cache_dir = tmp_path / "cache_str"
+        cache_dir.mkdir()
+
+        # Pass as string instead of Path
+        result = utils.maybe_cache_and_compute(
+            ds, name="test", cache_dir=str(cache_dir)
+        )
+
+        # Should still be lazy (loaded from zarr cache)
+        assert hasattr(result.temp.data, "chunks")
+        # Verify cache file was created as zarr
+        expected_file = cache_dir / "test.zarr"
+        assert expected_file.exists()
+
+    def test_with_lazy_dask_arrays_with_cache(self, tmp_path):
+        """Test lazy dask arrays remain lazy when cached."""
+        import dask.array as da
+
+        # Create dataset with dask arrays
+        ds = xr.Dataset(
+            {"temp": (["time", "lat"], da.ones((5, 10), chunks=(2, 5)))},
+            coords={"time": range(5), "lat": range(10)},
+        )
+
+        cache_dir = tmp_path / "cache_lazy"
+        cache_dir.mkdir()
+
+        result = utils.maybe_cache_and_compute(ds, name="lazy", cache_dir=cache_dir)
+
+        # Should still be lazy (loaded from zarr cache)
+        assert isinstance(result, xr.Dataset)
+        assert hasattr(result.temp.data, "chunks")
+
+    def test_existing_cache_loads_from_cache(self, tmp_path):
+        """Test that existing cache is loaded instead of recomputed."""
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir()
+
+        ds = xr.Dataset({"temp": (["x"], [1, 2])}, coords={"x": [0, 1]}).chunk()
+
+        # First call - caches the data
+        result1 = utils.maybe_cache_and_compute(ds, name="test", cache_dir=cache_dir)
+
+        # Second call - should load from cache
+        result2 = utils.maybe_cache_and_compute(ds, name="test", cache_dir=cache_dir)
+
+        # Both should be equal
+        xr.testing.assert_equal(result1, result2)
+
+
+class TestNoCircularImports:
+    """Test that there are no circular imports."""
+
+    def test_import_utils_then_evaluate(self):
+        """Test importing utils then evaluate doesn't cause circular imports."""
+        import sys
+
+        # Remove modules if already imported
+        modules_to_remove = [
+            k for k in sys.modules.keys() if k.startswith("extremeweatherbench")
+        ]
+        for mod in modules_to_remove:
+            del sys.modules[mod]
+
+        # Import utils first
+        # Then import evaluate
+        from extremeweatherbench import evaluate as evaluate_module
+        from extremeweatherbench import utils as utils_module
+
+        # Verify both imported successfully
+        assert utils_module is not None
+        assert evaluate_module is not None
+        assert hasattr(utils_module, "maybe_cache_and_compute")
+
+    def test_import_evaluate_then_utils(self):
+        """Test importing evaluate then utils works fine."""
+        import sys
+
+        # Remove modules if already imported
+        modules_to_remove = [
+            k for k in sys.modules.keys() if k.startswith("extremeweatherbench")
+        ]
+        for mod in modules_to_remove:
+            del sys.modules[mod]
+
+        # Import evaluate first
+        from extremeweatherbench import evaluate as evaluate_module
+
+        # Then import utils
+        from extremeweatherbench import utils as utils_module
+
+        # Verify both imported successfully
+        assert evaluate_module is not None
+        assert utils_module is not None
+
+    def test_evaluate_uses_utils_function(self):
+        """Test that evaluate module can access the function."""
+        from extremeweatherbench import utils
+
+        # Verify evaluate can call the function from utils
+        assert hasattr(utils, "maybe_cache_and_compute")
+        assert callable(utils.maybe_cache_and_compute)
+
+    def test_function_accessible_from_both_modules(self):
+        """Test that function is accessible correctly from both modules."""
+        from extremeweatherbench import utils
+
+        # Create a simple dataset
+        ds = xr.Dataset({"temp": (["x"], [1, 2, 3])}, coords={"x": [0, 1, 2]})
+
+        # Call the function through utils module
+        result = utils.maybe_cache_and_compute(ds, name="test_ds", cache_dir=None)
+
+        assert isinstance(result, xr.Dataset)
+
+
 class TestMaybeGetOperator:
     """Test the maybe_get_operator function."""
 

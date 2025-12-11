@@ -17,6 +17,7 @@ from extremeweatherbench import (
     inputs,
     metrics,
     regions,
+    utils,
 )
 
 # Check if dask.distributed is available
@@ -368,7 +369,7 @@ class TestExtremeWeatherBench:
             # Serial mode should not pass parallel_config
             mock_run_case_operators.assert_called_once_with(
                 [sample_case_operator],
-                None,
+                cache_dir=None,
             )
             assert isinstance(result, pd.DataFrame)
             assert len(result) == 1
@@ -405,7 +406,7 @@ class TestExtremeWeatherBench:
 
             mock_run_case_operators.assert_called_once_with(
                 [sample_case_operator],
-                None,
+                cache_dir=None,
                 parallel_config={"backend": "threading", "n_jobs": 2},
             )
             assert isinstance(result, pd.DataFrame)
@@ -431,12 +432,11 @@ class TestExtremeWeatherBench:
                 evaluation_objects=[sample_evaluation_object],
             )
 
-            result = ewb.run(n_jobs=1, threshold=0.5, pre_compute=True)
+            result = ewb.run(n_jobs=1, threshold=0.5)
 
             # Check that kwargs were passed through
             call_args = mock_run_case_operators.call_args
             assert call_args[1]["threshold"] == 0.5
-            assert call_args[1]["pre_compute"] is True
             assert isinstance(result, pd.DataFrame)
 
     @mock.patch("extremeweatherbench.evaluate._run_case_operators")
@@ -556,9 +556,9 @@ class TestRunCaseOperators:
         mock_run_serial.return_value = mock_results
 
         # Serial mode: don't pass parallel_config
-        result = evaluate._run_case_operators([sample_case_operator], None)
+        result = evaluate._run_case_operators([sample_case_operator], cache_dir=None)
 
-        mock_run_serial.assert_called_once_with([sample_case_operator], None)
+        mock_run_serial.assert_called_once_with([sample_case_operator], cache_dir=None)
         assert result == mock_results
 
     @mock.patch("extremeweatherbench.evaluate._run_parallel")
@@ -569,11 +569,13 @@ class TestRunCaseOperators:
 
         result = evaluate._run_case_operators(
             [sample_case_operator],
+            cache_dir=None,
             parallel_config={"backend": "threading", "n_jobs": 4},
         )
 
         mock_run_parallel.assert_called_once_with(
             [sample_case_operator],
+            cache_dir=None,
             parallel_config={"backend": "threading", "n_jobs": 4},
         )
         assert result == mock_results
@@ -589,16 +591,14 @@ class TestRunCaseOperators:
         # Serial mode: don't pass parallel_config
         result = evaluate._run_case_operators(
             [sample_case_operator],
-            None,
+            cache_dir=None,
             threshold=0.5,
-            pre_compute=True,
         )
 
         call_args = mock_run_serial.call_args
         assert call_args[0][0] == [sample_case_operator]
-        assert call_args[0][1] is None  # cache_dir
+        assert call_args[1]["cache_dir"] is None
         assert call_args[1]["threshold"] == 0.5
-        assert call_args[1]["pre_compute"] is True
         assert isinstance(result, list)
 
     @mock.patch("extremeweatherbench.evaluate._run_parallel")
@@ -627,9 +627,9 @@ class TestRunCaseOperators:
             mock_serial.return_value = []
 
             # Serial mode: don't pass parallel_config
-            result = evaluate._run_case_operators([], None)
+            result = evaluate._run_case_operators([], cache_dir=None)
 
-            mock_serial.assert_called_once_with([], None)
+            mock_serial.assert_called_once_with([], cache_dir=None)
             assert result == []
 
 
@@ -993,15 +993,16 @@ class TestComputeCaseOperator:
 
     @mock.patch("extremeweatherbench.evaluate._build_datasets")
     @mock.patch("extremeweatherbench.derived.maybe_derive_variables")
-    def test_compute_case_operator_with_precompute(
+    def test_compute_case_operator_with_cache(
         self,
         mock_derive_variables,
         mock_build_datasets,
         sample_case_operator,
         sample_forecast_dataset,
         sample_target_dataset,
+        tmp_path,
     ):
-        """Test compute_case_operator with pre_compute=True."""
+        """Test compute_case_operator with cache_dir."""
         mock_build_datasets.return_value = (
             sample_forecast_dataset,
             sample_target_dataset,
@@ -1019,10 +1020,15 @@ class TestComputeCaseOperator:
         mock_metric.maybe_prepare_composite_kwargs.side_effect = lambda **kwargs: kwargs
         sample_case_operator.metric_list = [mock_metric]
 
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir()
+
         with mock.patch(
-            "extremeweatherbench.evaluate._compute_and_maybe_cache"
+            "extremeweatherbench.utils.maybe_cache_and_compute"
         ) as mock_compute_cache:
-            mock_compute_cache.return_value = [
+            # maybe_cache_and_compute is called twice (once per dataset)
+            # and returns a single dataset each time
+            mock_compute_cache.side_effect = [
                 sample_forecast_dataset,
                 sample_target_dataset,
             ]
@@ -1033,10 +1039,11 @@ class TestComputeCaseOperator:
                 mock_evaluate.return_value = pd.DataFrame({"value": [1.0]})
 
                 result = evaluate.compute_case_operator(
-                    sample_case_operator, pre_compute=True
+                    sample_case_operator, cache_dir=cache_dir
                 )
 
-                mock_compute_cache.assert_called_once()
+                # Called twice: once for forecast, once for target
+                assert mock_compute_cache.call_count == 2
                 assert isinstance(result, pd.DataFrame)
 
     @mock.patch("extremeweatherbench.evaluate._build_datasets")
@@ -1381,36 +1388,54 @@ class TestPipelineFunctions:
         with pytest.raises(AttributeError, match="'str' object has no attribute"):
             evaluate.run_pipeline(sample_case_operator.case_metadata, "invalid")
 
-    def test_compute_and_maybe_cache(
-        self, sample_forecast_dataset, sample_target_dataset
+    def test_maybe_cache_and_compute_with_cache_dir(
+        self, sample_forecast_dataset, sample_target_dataset, sample_individual_case
     ):
-        """Test _compute_and_maybe_cache function."""
-        # Create lazy datasets
-        lazy_forecast = sample_forecast_dataset.chunk()
-        lazy_target = sample_target_dataset.chunk()
+        """Test maybe_cache_and_compute with cache directory."""
+        from extremeweatherbench import utils
 
-        result = evaluate._compute_and_maybe_cache(
-            lazy_forecast, lazy_target, cache_dir=None
-        )
-
-        assert len(result) == 2
-        assert isinstance(result[0], xr.Dataset)
-        assert isinstance(result[1], xr.Dataset)
-
-    def test_compute_and_maybe_cache_with_cache_dir(
-        self, sample_forecast_dataset, sample_target_dataset
-    ):
-        """Test _compute_and_maybe_cache with cache directory (should raise
-        NotImplementedError)."""
         with tempfile.TemporaryDirectory() as temp_dir:
             cache_dir = pathlib.Path(temp_dir)
 
-            with pytest.raises(
-                NotImplementedError, match="Caching is not implemented yet"
-            ):
-                evaluate._compute_and_maybe_cache(
-                    sample_forecast_dataset, sample_target_dataset, cache_dir=cache_dir
-                )
+            # Cache forecast dataset
+            result_forecast = utils.maybe_cache_and_compute(
+                sample_forecast_dataset.chunk(),
+                name="forecast",
+                cache_dir=cache_dir,
+            )
+
+            # Cache target dataset
+            result_target = utils.maybe_cache_and_compute(
+                sample_target_dataset.chunk(),
+                name="target",
+                cache_dir=cache_dir,
+            )
+
+            # Verify results are returned correctly
+            assert isinstance(result_forecast, xr.Dataset)
+            assert isinstance(result_target, xr.Dataset)
+
+            # Verify cache files were created as zarrs
+            assert len(list(cache_dir.glob("*.zarr"))) == 2
+
+    def test_maybe_cache_and_compute_no_op(
+        self, sample_forecast_dataset, sample_target_dataset, sample_individual_case
+    ):
+        """Test maybe_cache_and_compute as no-op (lazy preserved)."""
+        # Create lazy datasets
+        lazy_forecast = sample_forecast_dataset.chunk()
+
+        # Call with no cache_dir (should be no-op - returns original)
+        result = utils.maybe_cache_and_compute(
+            lazy_forecast,
+            name="forecast",
+            cache_dir=None,
+        )
+
+        assert isinstance(result, xr.Dataset)
+        # Should still be lazy
+        first_var = list(result.data_vars)[0]
+        assert hasattr(result.data_vars[first_var].data, "chunks")
 
 
 class TestMetricEvaluation:
