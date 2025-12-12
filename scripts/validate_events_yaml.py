@@ -4,7 +4,7 @@
 This script validates that the events.yaml file follows the required format:
 1. All start_date and end_date are in format YYYY-MM-DD HH:MM:SS
 2. All spacing is consistent throughout the file
-3. case_id_numbers are monotonically increasing by 1
+3. case_id_numbers are monotonically increasing (not necessarily by 1)
 4. Locations have valid types and required parameters
 5. Titles are strings
 6. Comments are preserved
@@ -35,7 +35,8 @@ def validate_datetime_format(
         if date_value.count("-") == 2 and len(date_value) in [10, 19]:
             errors.append(
                 f"Case {case_num}: {field_name} '{date_value}' appears to be "
-                f"quoted in YAML. Dates should be unquoted to be parsed as datetime objects"
+                f"quoted in YAML. Dates should be unquoted to be parsed as datetime "
+                "objects. "
             )
         else:
             try:
@@ -222,7 +223,7 @@ def validate_events_yaml(file_path: Path) -> List[str]:
         return ["'cases' list is empty"]
 
     # Validate each case
-    expected_case_id = 1
+    previous_case_id = None
     for i, case in enumerate(cases):
         if not isinstance(case, dict):
             errors.append(f"Case {i + 1}: must be a dictionary")
@@ -241,17 +242,18 @@ def validate_events_yaml(file_path: Path) -> List[str]:
             if field not in case:
                 errors.append(f"Case {i + 1}: missing required field '{field}'")
 
-        # Validate case_id_number
+        # Validate case_id_number (must be monotonically increasing)
         if "case_id_number" in case:
             case_id = case["case_id_number"]
             if not isinstance(case_id, int):
                 errors.append(f"Case {i + 1}: case_id_number must be an integer")
-            elif case_id != expected_case_id:
+            elif previous_case_id is not None and case_id <= previous_case_id:
                 errors.append(
-                    f"Case {i + 1}: case_id_number is {case_id}, "
-                    f"expected {expected_case_id}"
+                    f"Case {i + 1}: case_id_number {case_id} is not greater than "
+                    f"previous case_id_number {previous_case_id}. "
+                    f"Case IDs must be monotonically increasing."
                 )
-            expected_case_id = case_id + 1
+            previous_case_id = case_id
 
         # Validate title is a string
         if "title" in case:
@@ -281,20 +283,28 @@ def validate_events_yaml(file_path: Path) -> List[str]:
 
 def main():
     """Main entry point."""
-    if len(sys.argv) != 2:
-        print("Usage: python validate_events_yaml.py <path_to_events.yaml>")
+    if len(sys.argv) < 2:
+        print("Usage: python validate_events_yaml.py <path_to_events.yaml> [...]")
         sys.exit(1)
 
-    file_path = Path(sys.argv[1])
-    errors = validate_events_yaml(file_path)
+    # Validate all provided files
+    all_errors = {}
+    for file_arg in sys.argv[1:]:
+        file_path = Path(file_arg)
+        errors = validate_events_yaml(file_path)
+        if errors:
+            all_errors[file_path] = errors
 
-    if errors:
-        print(f"Validation failed for {file_path}:")
-        for error in errors:
-            print(f"  - {error}")
+    # Report results
+    if all_errors:
+        for file_path, errors in all_errors.items():
+            print(f"Validation failed for {file_path}:")
+            for error in errors:
+                print(f"  - {error}")
         sys.exit(1)
     else:
-        print(f"✓ {file_path} validation passed")
+        for file_arg in sys.argv[1:]:
+            print(f"✓ {file_arg} validation passed")
         sys.exit(0)
 
 
