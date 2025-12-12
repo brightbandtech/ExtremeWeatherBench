@@ -63,7 +63,7 @@ $ ewb --default
 ## Using Jupyter Notebook or a Script:
  
 ```python
-from extremeweatherbench import inputs, metrics, evaluate, utils
+from extremeweatherbench import cases, inputs, metrics, evaluate, utils
 
 # Select model
 model = 'FOUR_v200_GFS'
@@ -73,6 +73,7 @@ forecast_dir = f'gs://extremeweatherbench/{model}.parq'
 
 # Define a forecast object; in this case, a KerchunkForecast
 fcnv2_forecast = inputs.KerchunkForecast(
+    name="fcnv2_forecast", # identifier for this forecast in results
     source=forecast_dir, # source path
     variables=["surface_air_temperature"], # variables to use in the evaluation
     variable_mapping=inputs.CIRA_metadata_variable_mapping, # mapping to use for variables in forecast dataset to EWB variable names
