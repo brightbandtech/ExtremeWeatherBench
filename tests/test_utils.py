@@ -1,4 +1,7 @@
+"""Tests for the utils module."""
+
 import datetime
+import operator
 
 import numpy as np
 import pandas as pd
@@ -110,19 +113,6 @@ def test_derive_indices_from_init_time_and_lead_time():
     assert len(indices) == 2
     assert isinstance(indices[0], np.ndarray)
     assert isinstance(indices[1], np.ndarray)
-
-
-def test_default_preprocess():
-    """Test default preprocess function."""
-    # Test with xarray Dataset
-    ds = xr.Dataset({"temp": (["x"], [1, 2, 3])})
-    result = utils._default_preprocess(ds)
-    assert result is ds  # Should return the same object unchanged
-
-    # Test with pandas DataFrame
-    df = pd.DataFrame({"a": [1, 2, 3]})
-    result_df = utils._default_preprocess(df)
-    assert result_df is df
 
 
 def test_filter_kwargs_for_callable():
@@ -391,150 +381,1363 @@ def test_maybe_get_closest_timestamp_to_center_of_valid_times_even_valid_times()
     xr.testing.assert_equal(result, expected)
 
 
-class TestSafeConcat:
-    """Test the _safe_concat helper function."""
+class TestStackSparseDataFromDims:
+    """Test the stack_dataarray_from_dims function."""
 
-    def test_safe_concat_with_non_empty_dataframes(self):
-        """Test _safe_concat with non-empty DataFrames."""
-        df1 = pd.DataFrame({"a": [1, 2], "b": [3, 4]})
-        df2 = pd.DataFrame({"a": [5, 6], "b": [7, 8]})
-        dataframes = [df1, df2]
+    def test_basic_functionality(self):
+        """Test basic functionality with valid sparse data."""
+        import sparse
 
-        result = utils._safe_concat(dataframes)
+        # Create a simple sparse array with known coordinates
+        coords = ([0, 1, 2], [0, 1, 0])  # (lat_indices, lon_indices)
+        data = [1.0, 2.0, 3.0]  # values at those coordinates
+        shape = (3, 2)  # (lat, lon)
 
-        # Should concatenate normally
-        assert isinstance(result, pd.DataFrame)
-        assert len(result) == 4
-        assert list(result.columns) == ["a", "b"]
-        assert result["a"].tolist() == [1, 2, 5, 6]
+        sparse_array = sparse.COO(coords, data, shape=shape)
 
-    def test_safe_concat_with_all_empty_dataframes(self):
-        """Test _safe_concat when all DataFrames are empty."""
-        from extremeweatherbench.defaults import OUTPUT_COLUMNS
+        # Create xarray DataArray with sparse data
+        da = xr.DataArray(
+            sparse_array,
+            dims=["latitude", "longitude"],
+            coords={"latitude": [10.0, 20.0, 30.0], "longitude": [100.0, 110.0]},
+        )
 
-        df1 = pd.DataFrame()
-        df2 = pd.DataFrame()
-        dataframes = [df1, df2]
+        # Test stacking both dimensions
+        result = utils.stack_dataarray_from_dims(
+            da, stack_dims=["latitude", "longitude"]
+        )
 
-        result = utils._safe_concat(dataframes)
+        # Should return a DataArray with stacked dimension
+        assert isinstance(result, xr.DataArray)
+        assert "stacked" in result.dims
+        # Should be densified (no longer sparse)
+        assert not isinstance(result.data, sparse.COO)
 
-        # Should return empty DataFrame with OUTPUT_COLUMNS
-        assert isinstance(result, pd.DataFrame)
-        assert len(result) == 0
-        assert list(result.columns) == OUTPUT_COLUMNS
+    def test_empty_sparse_data(self):
+        """Test edge case with empty sparse data."""
+        import sparse
 
-    def test_safe_concat_with_mixed_empty_and_non_empty(self):
-        """Test _safe_concat with mix of empty and non-empty DataFrames."""
-        df1 = pd.DataFrame()  # Empty
-        df2 = pd.DataFrame({"value": [1.0], "metric": ["test"]})
-        df3 = pd.DataFrame()  # Empty
-        df4 = pd.DataFrame({"value": [2.0], "metric": ["test2"]})
-        dataframes = [df1, df2, df3, df4]
+        # Create empty sparse array
+        coords = ([], [])  # No coordinates
+        data = []  # No data
+        shape = (3, 2)
 
-        result = utils._safe_concat(dataframes)
+        sparse_array = sparse.COO(coords, data, shape=shape)
 
-        # Should only concatenate non-empty DataFrames
-        assert isinstance(result, pd.DataFrame)
-        assert len(result) == 2
-        assert result["value"].tolist() == [1.0, 2.0]
-        assert result["metric"].tolist() == ["test", "test2"]
+        da = xr.DataArray(
+            sparse_array,
+            dims=["latitude", "longitude"],
+            coords={"latitude": [10.0, 20.0, 30.0], "longitude": [100.0, 110.0]},
+        )
 
-    def test_safe_concat_with_ignore_index_false(self):
-        """Test _safe_concat with ignore_index=False."""
-        df1 = pd.DataFrame({"a": [1, 2]}, index=[0, 1])
-        df2 = pd.DataFrame({"a": [3, 4]}, index=[0, 1])
-        dataframes = [df1, df2]
+        # Test with empty data
+        result = utils.stack_dataarray_from_dims(
+            da, stack_dims=["latitude", "longitude"]
+        )
 
-        result = utils._safe_concat(dataframes, ignore_index=False)
+        # Should handle empty data gracefully
+        assert isinstance(result, xr.DataArray)
+        assert result.size == 0
 
-        # Should preserve original indices
-        assert isinstance(result, pd.DataFrame)
-        assert len(result) == 4
-        assert list(result.index) == [0, 1, 0, 1]
+    def test_single_dimension_stack(self):
+        """Test with single dimension to stack."""
+        import sparse
 
-    def test_safe_concat_with_ignore_index_true(self):
-        """Test _safe_concat with ignore_index=True (default)."""
-        df1 = pd.DataFrame({"a": [1, 2]}, index=[10, 11])
-        df2 = pd.DataFrame({"a": [3, 4]}, index=[20, 21])
-        dataframes = [df1, df2]
+        # Create sparse array with data in one dimension
+        coords = ([0, 2], [0, 0])  # Only latitude varies
+        data = [1.0, 2.0]
+        shape = (3, 1)
 
-        result = utils._safe_concat(dataframes, ignore_index=True)
+        sparse_array = sparse.COO(coords, data, shape=shape)
 
-        # Should create new sequential index
-        assert isinstance(result, pd.DataFrame)
-        assert len(result) == 4
-        assert list(result.index) == [0, 1, 2, 3]
+        da = xr.DataArray(
+            sparse_array,
+            dims=["latitude", "longitude"],
+            coords={"latitude": [10.0, 20.0, 30.0], "longitude": [100.0]},
+        )
 
-    def test_safe_concat_with_empty_list(self):
-        """Test _safe_concat with empty list of DataFrames."""
-        from extremeweatherbench.defaults import OUTPUT_COLUMNS
+        # Test stacking only latitude
+        result = utils.stack_dataarray_from_dims(da, stack_dims=["latitude"])
 
-        dataframes = []
+        assert isinstance(result, xr.DataArray)
+        assert "stacked" in result.dims
+        # Should preserve the longitude dimension
+        assert "longitude" in result.dims
 
-        result = utils._safe_concat(dataframes)
+    def test_multiple_dimensions_stack(self):
+        """Test with multiple dimensions to stack."""
+        import sparse
 
-        # Should return empty DataFrame with OUTPUT_COLUMNS
-        assert isinstance(result, pd.DataFrame)
-        assert len(result) == 0
-        assert list(result.columns) == OUTPUT_COLUMNS
+        # Create 3D sparse array
+        coords = ([0, 1, 2], [0, 1, 0], [0, 0, 1])  # (time, lat, lon)
+        data = [1.0, 2.0, 3.0]
+        shape = (3, 2, 2)
 
-    def test_safe_concat_prevents_future_warning(self):
-        """Test that _safe_concat prevents the specific pandas FutureWarning."""
-        import warnings
+        sparse_array = sparse.COO(coords, data, shape=shape)
 
-        # Create DataFrames that would trigger the specific FutureWarning
-        # about empty or all-NA entries
-        df1 = pd.DataFrame()  # Empty DataFrame
-        df2 = pd.DataFrame({"a": [1], "b": [2]})
-        df3 = pd.DataFrame({"a": [None], "b": [None]})  # All-NA DataFrame
-        dataframes = [df1, df2, df3]
+        da = xr.DataArray(
+            sparse_array,
+            dims=["time", "latitude", "longitude"],
+            coords={
+                "time": pd.date_range("2020-01-01", periods=3),
+                "latitude": [10.0, 20.0],
+                "longitude": [100.0, 110.0],
+            },
+        )
 
-        # Test that our _safe_concat prevents the warning
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            result = utils._safe_concat(dataframes)
+        # Test stacking lat and lon, keeping time
+        result = utils.stack_dataarray_from_dims(
+            da, stack_dims=["latitude", "longitude"]
+        )
 
-            # Check that no FutureWarnings about concatenation were raised
-            future_warnings = [
-                warning
-                for warning in w
-                if issubclass(warning.category, FutureWarning)
-                and "DataFrame concatenation with empty or all-NA entries"
-                in str(warning.message)
+        assert isinstance(result, xr.DataArray)
+        assert "stacked" in result.dims
+        assert "time" in result.dims
+
+    def test_max_size_parameter(self):
+        """Test max_size parameter behavior."""
+        import sparse
+
+        # Create sparse array
+        coords = ([0, 1], [0, 1])
+        data = [1.0, 2.0]
+        shape = (2, 2)
+
+        sparse_array = sparse.COO(coords, data, shape=shape)
+
+        da = xr.DataArray(
+            sparse_array,
+            dims=["latitude", "longitude"],
+            coords={"latitude": [10.0, 20.0], "longitude": [100.0, 110.0]},
+        )
+
+        # Test with different max_size values
+        result_small = utils.stack_dataarray_from_dims(
+            da, stack_dims=["latitude", "longitude"], max_size=1
+        )
+        result_large = utils.stack_dataarray_from_dims(
+            da, stack_dims=["latitude", "longitude"], max_size=1000000
+        )
+
+        # Both should work but may have different internal representations
+        assert isinstance(result_small, xr.DataArray)
+        assert isinstance(result_large, xr.DataArray)
+
+    def test_invalid_dimensions(self):
+        """Test error handling with invalid dimensions."""
+        import sparse
+
+        coords = ([0, 1], [0, 1])
+        data = [1.0, 2.0]
+        shape = (2, 2)
+
+        sparse_array = sparse.COO(coords, data, shape=shape)
+
+        da = xr.DataArray(
+            sparse_array,
+            dims=["latitude", "longitude"],
+            coords={"latitude": [10.0, 20.0], "longitude": [100.0, 110.0]},
+        )
+
+        # Test with non-existent dimension
+        with pytest.raises((ValueError, KeyError)):
+            utils.stack_dataarray_from_dims(da, stack_dims=["nonexistent"])
+
+    def test_no_sparse_coordinates(self):
+        """Test with sparse data that has minimal coordinates."""
+        import sparse
+
+        # Create sparse array with single point
+        coords = ([0], [0])
+        data = [5.0]
+        shape = (1, 1)
+
+        sparse_array = sparse.COO(coords, data, shape=shape)
+
+        da = xr.DataArray(
+            sparse_array,
+            dims=["latitude", "longitude"],
+            coords={"latitude": [10.0], "longitude": [100.0]},
+        )
+
+        result = utils.stack_dataarray_from_dims(
+            da, stack_dims=["latitude", "longitude"]
+        )
+
+        assert isinstance(result, xr.DataArray)
+        assert "stacked" in result.dims
+
+    def test_duplicate_coordinate_values(self):
+        """Test with duplicate coordinate values in sparse data."""
+        import sparse
+
+        # Create sparse array where multiple sparse indices map to same coords
+        coords = ([0, 0, 1], [0, 1, 0])  # Two points at lat[0]
+        data = [1.0, 2.0, 3.0]
+        shape = (2, 2)
+
+        sparse_array = sparse.COO(coords, data, shape=shape)
+
+        da = xr.DataArray(
+            sparse_array,
+            dims=["latitude", "longitude"],
+            coords={"latitude": [10.0, 20.0], "longitude": [100.0, 110.0]},
+        )
+
+        # Should handle duplicate coordinate scenarios
+        result = utils.stack_dataarray_from_dims(
+            da, stack_dims=["latitude", "longitude"]
+        )
+
+        assert isinstance(result, xr.DataArray)
+        assert "stacked" in result.dims
+
+    def test_zero_size_array(self):
+        """Test with zero-size sparse array."""
+        import sparse
+
+        # Create zero-size sparse array
+        sparse_array = sparse.COO([], [], shape=(0, 0))
+
+        da = xr.DataArray(
+            sparse_array,
+            dims=["latitude", "longitude"],
+            coords={"latitude": [], "longitude": []},
+        )
+
+        result = utils.stack_dataarray_from_dims(
+            da, stack_dims=["latitude", "longitude"]
+        )
+
+        # With empty data, function returns original DataArray with densified data
+        assert isinstance(result, xr.DataArray)
+        assert result.size == 0
+        # Should preserve original dimensions for empty data
+        assert "latitude" in result.dims
+        assert "longitude" in result.dims
+        # Data should be densified (no longer sparse)
+        assert not isinstance(result.data, sparse.COO)
+
+    def test_large_sparse_array_with_small_max_size(self):
+        """Test behavior with large sparse array and small max_size."""
+        import sparse
+
+        # Create a larger sparse array
+        n_points = 1000
+        coords = (
+            np.random.randint(0, 100, n_points),
+            np.random.randint(0, 100, n_points),
+        )
+        data = np.random.random(n_points)
+        shape = (100, 100)
+
+        sparse_array = sparse.COO(coords, data, shape=shape)
+
+        da = xr.DataArray(
+            sparse_array,
+            dims=["latitude", "longitude"],
+            coords={
+                "latitude": np.linspace(0, 90, 100),
+                "longitude": np.linspace(-180, 180, 100),
+            },
+        )
+
+        # Test with very small max_size
+        result = utils.stack_dataarray_from_dims(
+            da, stack_dims=["latitude", "longitude"], max_size=10
+        )
+
+        assert isinstance(result, xr.DataArray)
+        # Should still work even with small max_size
+
+    def test_all_dimensions_stacked(self):
+        """Test stacking all dimensions of the array."""
+        import sparse
+
+        # Create 3D sparse array
+        coords = ([0, 1, 2], [0, 1, 0], [1, 0, 1])
+        data = [1.0, 2.0, 3.0]
+        shape = (3, 2, 2)
+
+        sparse_array = sparse.COO(coords, data, shape=shape)
+
+        da = xr.DataArray(
+            sparse_array,
+            dims=["time", "latitude", "longitude"],
+            coords={
+                "time": pd.date_range("2020-01-01", periods=3),
+                "latitude": [10.0, 20.0],
+                "longitude": [100.0, 110.0],
+            },
+        )
+
+        # Stack all dimensions
+        result = utils.stack_dataarray_from_dims(
+            da, stack_dims=["time", "latitude", "longitude"]
+        )
+
+        assert isinstance(result, xr.DataArray)
+        assert "stacked" in result.dims
+        # Should only have the stacked dimension
+        assert len(result.dims) == 1
+
+    def test_non_sparse_data_input(self):
+        """Test that function handles non-sparse data appropriately."""
+        # Create regular (dense) DataArray
+        da = xr.DataArray(
+            np.random.random((3, 2)),
+            dims=["latitude", "longitude"],
+            coords={"latitude": [10.0, 20.0, 30.0], "longitude": [100.0, 110.0]},
+        )
+
+        # Should handle non-sparse data by using regular stacking
+        result = utils.stack_dataarray_from_dims(
+            da, stack_dims=["latitude", "longitude"]
+        )
+
+        # Verify it creates a stacked dimension
+        assert isinstance(result, xr.DataArray)
+        assert "stacked" in result.dims
+        # Should have 3 * 2 = 6 stacked coordinates
+        assert len(result.stacked) == 6
+        # Original dimensions should be gone
+        assert "latitude" not in result.dims
+        assert "longitude" not in result.dims
+
+    def test_empty_stack_dims_list(self):
+        """Test with empty stack_dims list."""
+        import sparse
+
+        coords = ([0, 1], [0, 1])
+        data = [1.0, 2.0]
+        shape = (2, 2)
+
+        sparse_array = sparse.COO(coords, data, shape=shape)
+
+        da = xr.DataArray(
+            sparse_array,
+            dims=["latitude", "longitude"],
+            coords={"latitude": [10.0, 20.0], "longitude": [100.0, 110.0]},
+        )
+
+        # Test with empty stack_dims - should raise error
+        with pytest.raises((ValueError, IndexError)):
+            utils.stack_dataarray_from_dims(da, stack_dims=[])
+
+    def test_coordinate_value_extraction(self):
+        """Test that coordinate values are correctly extracted."""
+        import sparse
+
+        # Create sparse array with specific pattern
+        coords = ([0, 2], [1, 0])  # Specific lat/lon indices
+        data = [10.0, 20.0]
+        shape = (3, 2)
+
+        sparse_array = sparse.COO(coords, data, shape=shape)
+
+        da = xr.DataArray(
+            sparse_array,
+            dims=["latitude", "longitude"],
+            coords={
+                "latitude": [1.0, 2.0, 3.0],  # lat[0]=1.0, lat[2]=3.0
+                "longitude": [100.0, 200.0],  # lon[1]=200.0, lon[0]=100.0
+            },
+        )
+
+        result = utils.stack_dataarray_from_dims(
+            da, stack_dims=["latitude", "longitude"]
+        )
+
+        assert isinstance(result, xr.DataArray)
+        assert "stacked" in result.dims
+        # Check that we have the expected coordinate combinations
+        # Should have coordinates for (lat[0], lon[1]) and (lat[2], lon[0])
+        # which are (1.0, 200.0) and (3.0, 100.0)
+        assert len(result.stacked) == 2
+
+    def test_mixed_data_types_in_sparse_array(self):
+        """Test with different data types in sparse array."""
+        import sparse
+
+        # Create sparse array with integer data
+        coords = ([0, 1], [0, 1])
+        data = [1, 2]  # integers instead of floats
+        shape = (2, 2)
+
+        sparse_array = sparse.COO(coords, data, shape=shape)
+
+        da = xr.DataArray(
+            sparse_array,
+            dims=["latitude", "longitude"],
+            coords={"latitude": [10.0, 20.0], "longitude": [100.0, 110.0]},
+        )
+
+        result = utils.stack_dataarray_from_dims(
+            da, stack_dims=["latitude", "longitude"]
+        )
+
+        assert isinstance(result, xr.DataArray)
+        assert "stacked" in result.dims
+
+    def test_very_large_max_size(self):
+        """Test with extremely large max_size parameter."""
+        import sparse
+
+        coords = ([0, 1], [0, 1])
+        data = [1.0, 2.0]
+        shape = (2, 2)
+
+        sparse_array = sparse.COO(coords, data, shape=shape)
+
+        da = xr.DataArray(
+            sparse_array,
+            dims=["latitude", "longitude"],
+            coords={"latitude": [10.0, 20.0], "longitude": [100.0, 110.0]},
+        )
+
+        # Test with very large max_size
+        result = utils.stack_dataarray_from_dims(
+            da,
+            stack_dims=["latitude", "longitude"],
+            max_size=10**10,  # Very large number
+        )
+
+        result = utils.reduce_dataarray(da, np.sum, ["latitude", "longitude"])
+        assert isinstance(result, xr.DataArray)
+        assert not isinstance(result.data, sparse.COO)
+
+    def test_sparse_data_stacked_dimension(self):
+        """Test sparse data creates stacked dimension."""
+        import sparse
+
+        coords = ([0, 1, 2], [0, 1, 0])
+        data = [10.0, 20.0, 30.0]
+        shape = (3, 2)
+        sparse_array = sparse.COO(coords, data, shape=shape)
+
+        da = xr.DataArray(
+            sparse_array,
+            dims=["latitude", "longitude"],
+            coords={
+                "latitude": [10.0, 20.0, 30.0],
+                "longitude": [100.0, 110.0],
+            },
+        )
+
+        # For sparse data, it should stack and reduce
+        result = utils.reduce_dataarray(da, "mean", ["latitude", "longitude"])
+        assert isinstance(result, xr.DataArray)
+        # Result should be scalar after reducing all dims
+        assert result.ndim == 0
+
+
+class TestConvertDayYearofDayToTime:
+    """Tests for convert_day_yearofday_to_time utility function."""
+
+    def test_basic_conversion(self):
+        """Test basic conversion of dayofyear and hour to time coordinate."""
+        # Create a simple dataset with dayofyear and hour coords
+        ds = xr.Dataset(
+            {"temperature": (["dayofyear", "hour"], np.random.randn(3, 2))},
+            coords={
+                "dayofyear": [1, 2, 3],
+                "hour": [0, 6],
+            },
+        )
+
+        result = utils.convert_day_yearofday_to_time(ds, year=2023)
+
+        # Check that valid_time coordinate was created
+        assert "valid_time" in result.coords
+        # Check that dayofyear and hour were removed
+        assert "dayofyear" not in result.coords
+        assert "hour" not in result.coords
+        # Check that the time dimension was stacked
+        assert "valid_time" in result.dims
+        # Should have 3 * 2 = 6 timesteps
+        assert len(result.valid_time) == 6
+
+    def test_year_parameter(self):
+        """Test that different years produce different dates."""
+        ds = xr.Dataset(
+            {"temperature": (["dayofyear", "hour"], np.random.randn(2, 2))},
+            coords={
+                "dayofyear": [1, 2],
+                "hour": [0, 6],
+            },
+        )
+
+        result_2023 = utils.convert_day_yearofday_to_time(ds, year=2023)
+        result_2024 = utils.convert_day_yearofday_to_time(ds, year=2024)
+
+        # First timestamp should be different years
+        assert result_2023.valid_time[0].dt.year.item() == 2023
+        assert result_2024.valid_time[0].dt.year.item() == 2024
+
+    def test_correct_time_sequence(self):
+        """Test that times are created in correct 6-hour intervals."""
+        ds = xr.Dataset(
+            {"temperature": (["dayofyear", "hour"], np.random.randn(2, 4))},
+            coords={
+                "dayofyear": [1, 2],
+                "hour": [0, 6, 12, 18],
+            },
+        )
+
+        result = utils.convert_day_yearofday_to_time(ds, year=2023)
+
+        # Check the time coordinate is correctly created
+        expected_times = pd.date_range(start="2023-01-01", periods=8, freq="6h")
+        pd.testing.assert_index_equal(
+            pd.DatetimeIndex(result.valid_time.values),
+            expected_times,
+        )
+
+    def test_preserves_data_values(self):
+        """Test that data values are preserved after transformation."""
+        data = np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]])
+        ds = xr.Dataset(
+            {"temperature": (["dayofyear", "hour"], data)},
+            coords={
+                "dayofyear": [1, 2, 3],
+                "hour": [0, 6],
+            },
+        )
+
+        result = utils.convert_day_yearofday_to_time(ds, year=2023)
+
+        # Data should be flattened in the stacked dimension
+        assert result["temperature"].shape == (6,)
+        # Values should match the flattened original data
+        np.testing.assert_array_equal(result["temperature"].values, data.flatten())
+
+    def test_with_additional_dimensions(self):
+        """Test conversion with additional dimensions like latitude."""
+        ds = xr.Dataset(
+            {
+                "temperature": (
+                    ["dayofyear", "hour", "latitude"],
+                    np.random.randn(2, 2, 3),
+                )
+            },
+            coords={
+                "dayofyear": [1, 2],
+                "hour": [0, 6],
+                "latitude": [10.0, 20.0, 30.0],
+            },
+        )
+
+        result = utils.convert_day_yearofday_to_time(ds, year=2023)
+
+        # Should preserve latitude dimension
+        assert "latitude" in result.dims
+        assert len(result.latitude) == 3
+        # Should have stacked time dimension
+        assert "valid_time" in result.dims
+        assert len(result.valid_time) == 4
+
+    def test_with_dataarray(self):
+        """Test that conversion works with DataArray as well as Dataset."""
+        # Create a DataArray with dayofyear and hour coords
+        da = xr.DataArray(
+            np.random.randn(3, 2),
+            dims=["dayofyear", "hour"],
+            coords={
+                "dayofyear": [1, 2, 3],
+                "hour": [0, 6],
+            },
+            name="temperature",
+        )
+
+        result = utils.convert_day_yearofday_to_time(da, year=2023)
+
+        # Check that valid_time coordinate was created
+        assert "valid_time" in result.coords
+        # Check that dayofyear and hour were removed
+        assert "dayofyear" not in result.coords
+        assert "hour" not in result.coords
+        # Check that the time dimension was stacked
+        assert "valid_time" in result.dims
+        # Should have 3 * 2 = 6 timesteps
+        assert len(result.valid_time) == 6
+        # Should still be a DataArray
+        assert isinstance(result, xr.DataArray)
+
+    def test_dataarray_preserves_data_values(self):
+        """Test that DataArray data values are preserved."""
+        data = np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]])
+        da = xr.DataArray(
+            data,
+            dims=["dayofyear", "hour"],
+            coords={
+                "dayofyear": [1, 2, 3],
+                "hour": [0, 6],
+            },
+        )
+
+        result = utils.convert_day_yearofday_to_time(da, year=2023)
+
+        # Data should be flattened in the stacked dimension
+        assert result.shape == (6,)
+        # Values should match the flattened original data
+        np.testing.assert_array_equal(result.values, data.flatten())
+
+    def test_dataarray_with_additional_dimensions(self):
+        """Test DataArray conversion with additional dimensions."""
+        da = xr.DataArray(
+            np.random.randn(2, 2, 3),
+            dims=["dayofyear", "hour", "latitude"],
+            coords={
+                "dayofyear": [1, 2],
+                "hour": [0, 6],
+                "latitude": [10.0, 20.0, 30.0],
+            },
+        )
+
+        result = utils.convert_day_yearofday_to_time(da, year=2023)
+
+        # Should preserve latitude dimension
+        assert "latitude" in result.dims
+        assert len(result.latitude) == 3
+        # Should have stacked time dimension
+        assert "valid_time" in result.dims
+        assert len(result.valid_time) == 4
+        # Should still be a DataArray
+        assert isinstance(result, xr.DataArray)
+
+
+class TestInterpClimatologyToTarget:
+    """Tests for interp_climatology_to_target utility function."""
+
+    def test_with_dense_3d_target(self):
+        """Test interpolation with dense 3D target data."""
+        # Create climatology
+        climatology = xr.DataArray(
+            np.random.randn(5, 5),
+            dims=["latitude", "longitude"],
+            coords={
+                "latitude": np.linspace(0, 40, 5),
+                "longitude": np.linspace(100, 140, 5),
+            },
+        )
+        # Create dense target with 3+ dimensions
+        target = xr.DataArray(
+            np.random.randn(10, 3, 3),
+            dims=["valid_time", "latitude", "longitude"],
+            coords={
+                "valid_time": pd.date_range("2023-01-01", periods=10, freq="1D"),
+                "latitude": [10.0, 20.0, 30.0],
+                "longitude": [110.0, 120.0, 130.0],
+            },
+        )
+
+        result = utils.interp_climatology_to_target(target, climatology)
+
+        # Should interpolate to target's lat/lon grid
+        assert result.dims == ("latitude", "longitude")
+        assert len(result.latitude) == 3
+        assert len(result.longitude) == 3
+        np.testing.assert_array_equal(result.latitude.values, target.latitude.values)
+        np.testing.assert_array_equal(result.longitude.values, target.longitude.values)
+
+    def test_ndim_less_than_3(self):
+        """Test that ndim < 3 triggers the stacked interpolation path."""
+        # Create climatology
+        climatology = xr.DataArray(
+            [[10.0, 20.0], [30.0, 40.0]],
+            dims=["latitude", "longitude"],
+            coords={
+                "latitude": [10.0, 20.0],
+                "longitude": [100.0, 110.0],
+            },
+        )
+        # Create a 1D target (ndim < 3)
+        target = xr.DataArray(
+            np.random.randn(5),
+            dims=["time"],
+            coords={"time": range(5)},
+        )
+
+        # The function checks ndim < 3, which is True here
+        # It will try to access target["stacked"]["latitude/longitude"]
+        # This will fail, but that's expected for this edge case
+        # The test verifies the branch logic exists
+        with pytest.raises((KeyError, TypeError)):
+            utils.interp_climatology_to_target(target, climatology)
+
+    def test_with_different_grid(self):
+        """Test that interpolation works when grids don't match."""
+        # Create climatology on one grid
+        climatology = xr.DataArray(
+            np.arange(9).reshape(3, 3),
+            dims=["latitude", "longitude"],
+            coords={
+                "latitude": [0.0, 10.0, 20.0],
+                "longitude": [100.0, 110.0, 120.0],
+            },
+        )
+        # Create target on a different grid
+        target = xr.DataArray(
+            np.random.randn(5, 2, 2),
+            dims=["valid_time", "latitude", "longitude"],
+            coords={
+                "valid_time": pd.date_range("2023-01-01", periods=5, freq="1D"),
+                "latitude": [5.0, 15.0],  # Different from climatology
+                "longitude": [105.0, 115.0],  # Different from climatology
+            },
+        )
+
+        result = utils.interp_climatology_to_target(target, climatology)
+
+        # Should interpolate to target's grid
+        assert result.dims == ("latitude", "longitude")
+        np.testing.assert_array_equal(result.latitude.values, [5.0, 15.0])
+        np.testing.assert_array_equal(result.longitude.values, [105.0, 115.0])
+
+    def test_nearest_neighbor_interpolation(self):
+        """Test that nearest neighbor method is used."""
+        # Create climatology with known values
+        climatology = xr.DataArray(
+            [[100.0, 200.0], [300.0, 400.0]],
+            dims=["latitude", "longitude"],
+            coords={
+                "latitude": [0.0, 20.0],
+                "longitude": [100.0, 120.0],
+            },
+        )
+        # Create target at exact climatology points
+        target = xr.DataArray(
+            np.random.randn(5, 2, 2),
+            dims=["valid_time", "latitude", "longitude"],
+            coords={
+                "valid_time": pd.date_range("2023-01-01", periods=5, freq="1D"),
+                "latitude": [0.0, 20.0],
+                "longitude": [100.0, 120.0],
+            },
+        )
+
+        result = utils.interp_climatology_to_target(target, climatology)
+
+        # Should have exact values since points match
+        np.testing.assert_array_almost_equal(result.values, climatology.values)
+
+
+class TestReduceXarrayMethod:
+    """Test the reduce_dataarray function."""
+
+    @pytest.fixture
+    def sample_dataarray(self):
+        """Create a sample DataArray for testing."""
+        data = np.array(
+            [
+                [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]],
+                [[7.0, 8.0, 9.0], [10.0, 11.0, 12.0]],
             ]
-            assert (
-                len(future_warnings) == 0
-            ), f"FutureWarning was raised: {future_warnings}"
+        )
+        return xr.DataArray(
+            data,
+            dims=["time", "latitude", "longitude"],
+            coords={
+                "time": pd.date_range("2020-01-01", periods=2),
+                "latitude": [10.0, 20.0],
+                "longitude": [100.0, 110.0, 120.0],
+            },
+        )
 
-        # Should successfully concatenate without warnings
-        assert isinstance(result, pd.DataFrame)
-        assert len(result) >= 1  # Should have at least the non-empty DataFrame
+    @pytest.fixture
+    def dataarray_with_nans(self):
+        """Create DataArray with NaN values for testing skipna."""
+        data = np.array(
+            [
+                [[1.0, np.nan, 3.0], [4.0, 5.0, np.nan]],
+                [[7.0, 8.0, 9.0], [np.nan, 11.0, 12.0]],
+            ]
+        )
+        return xr.DataArray(
+            data,
+            dims=["time", "latitude", "longitude"],
+            coords={
+                "time": pd.date_range("2020-01-01", periods=2),
+                "latitude": [10.0, 20.0],
+                "longitude": [100.0, 110.0, 120.0],
+            },
+        )
 
-    def test_safe_concat_preserves_dtypes_when_consistent(self):
-        """Test that _safe_concat preserves dtypes when they are consistent."""
-        df1 = pd.DataFrame({"a": [1, 2], "b": [3.0, 4.0]})  # int64, float64
-        df2 = pd.DataFrame({"a": [5, 6], "b": [7.0, 8.0]})  # int64, float64
-        dataframes = [df1, df2]
+    # Tests for numpy reduction functions (callables)
+    def test_numpy_mean(self, sample_dataarray):
+        """Test reduction using np.mean."""
+        result = utils.reduce_dataarray(sample_dataarray, np.mean, ["time"])
+        expected = sample_dataarray.mean(dim=["time"])
+        xr.testing.assert_allclose(result, expected)
 
-        result = utils._safe_concat(dataframes)
+    def test_numpy_sum(self, sample_dataarray):
+        """Test reduction using np.sum."""
+        result = utils.reduce_dataarray(sample_dataarray, np.sum, ["time"])
+        expected = sample_dataarray.sum(dim=["time"])
+        xr.testing.assert_allclose(result, expected)
 
-        # Should preserve original dtypes
-        assert result["a"].dtype == "int64"
-        assert result["b"].dtype == "float64"
-        assert len(result) == 4
+    def test_numpy_nanmean(self, dataarray_with_nans):
+        """Test reduction using np.nanmean."""
+        result = utils.reduce_dataarray(dataarray_with_nans, np.nanmean, ["time"])
+        # np.nanmean should ignore NaN values
+        assert not np.isnan(result.values).all()
 
-    def test_safe_concat_converts_to_object_when_mismatched(self):
-        """Test that _safe_concat converts to object dtype when dtypes mismatch."""
+    def test_numpy_nansum(self, dataarray_with_nans):
+        """Test reduction using np.nansum."""
+        result = utils.reduce_dataarray(
+            dataarray_with_nans, np.nansum, ["latitude", "longitude"]
+        )
+        # Result should have only time dimension
+        assert result.dims == ("time",)
+        assert not np.isnan(result.values).all()
 
-        df1 = pd.DataFrame({"a": [1, 2], "b": [3.0, 4.0]})  # int64, float64
-        df2 = pd.DataFrame(
-            {"a": [pd.Timestamp("2021-01-01")], "b": ["text"]}
-        )  # datetime, object
-        dataframes = [df1, df2]
+    def test_custom_callable(self, sample_dataarray):
+        """Test reduction using custom callable."""
 
-        result = utils._safe_concat(dataframes)
+        def custom_func(x, axis):
+            return np.max(x, axis=axis)
 
-        # Should convert to object dtypes due to mismatches
-        assert result["a"].dtype == "object"
-        assert result["b"].dtype == "object"
-        assert len(result) == 3
+        result = utils.reduce_dataarray(sample_dataarray, custom_func, ["time"])
+        expected = sample_dataarray.max(dim=["time"])
+        xr.testing.assert_allclose(result, expected)
+
+    def test_callable_ignores_method_kwargs(self, sample_dataarray):
+        """Test that method_kwargs are ignored for callables."""
+        # This should work and ignore skipna parameter
+        result = utils.reduce_dataarray(
+            sample_dataarray, np.mean, ["time"], skipna=True
+        )
+        expected = sample_dataarray.mean(dim=["time"])
+        xr.testing.assert_allclose(result, expected)
+
+    # Tests for xarray built-in methods (strings)
+    def test_xarray_mean_string(self, sample_dataarray):
+        """Test reduction using 'mean' string method."""
+        result = utils.reduce_dataarray(sample_dataarray, "mean", ["time"])
+        expected = sample_dataarray.mean(dim=["time"])
+        xr.testing.assert_allclose(result, expected)
+
+    def test_xarray_sum_string(self, sample_dataarray):
+        """Test reduction using 'sum' string method."""
+        result = utils.reduce_dataarray(
+            sample_dataarray, "sum", ["latitude", "longitude"]
+        )
+        expected = sample_dataarray.sum(dim=["latitude", "longitude"])
+        xr.testing.assert_allclose(result, expected)
+
+    def test_xarray_min_string(self, sample_dataarray):
+        """Test reduction using 'min' string method."""
+        result = utils.reduce_dataarray(sample_dataarray, "min", ["time"])
+        expected = sample_dataarray.min(dim=["time"])
+        xr.testing.assert_allclose(result, expected)
+
+    def test_xarray_max_string(self, sample_dataarray):
+        """Test reduction using 'max' string method."""
+        result = utils.reduce_dataarray(sample_dataarray, "max", ["longitude"])
+        expected = sample_dataarray.max(dim=["longitude"])
+        xr.testing.assert_allclose(result, expected)
+
+    def test_xarray_std_string(self, sample_dataarray):
+        """Test reduction using 'std' string method."""
+        result = utils.reduce_dataarray(sample_dataarray, "std", ["time"])
+        expected = sample_dataarray.std(dim=["time"])
+        xr.testing.assert_allclose(result, expected)
+
+    def test_xarray_median_string(self, sample_dataarray):
+        """Test reduction using 'median' string method."""
+        result = utils.reduce_dataarray(sample_dataarray, "median", ["latitude"])
+        expected = sample_dataarray.median(dim=["latitude"])
+        xr.testing.assert_allclose(result, expected)
+
+    def test_xarray_var_string(self, sample_dataarray):
+        """Test reduction using 'var' string method."""
+        result = utils.reduce_dataarray(sample_dataarray, "var", ["time"])
+        expected = sample_dataarray.var(dim=["time"])
+        xr.testing.assert_allclose(result, expected)
+
+    # Tests for dimension handling
+    def test_single_dimension_reduction(self, sample_dataarray):
+        """Test reducing a single dimension."""
+        result = utils.reduce_dataarray(sample_dataarray, "mean", ["time"])
+        assert "time" not in result.dims
+        assert "latitude" in result.dims
+        assert "longitude" in result.dims
+
+    def test_multiple_dimension_reduction(self, sample_dataarray):
+        """Test reducing multiple dimensions."""
+        result = utils.reduce_dataarray(
+            sample_dataarray, "sum", ["latitude", "longitude"]
+        )
+        assert "latitude" not in result.dims
+        assert "longitude" not in result.dims
+        assert "time" in result.dims
+
+    def test_all_dimensions_reduction(self, sample_dataarray):
+        """Test reducing all dimensions."""
+        result = utils.reduce_dataarray(
+            sample_dataarray, "mean", ["time", "latitude", "longitude"]
+        )
+        # Result should be scalar (0 dimensions)
+        assert len(result.dims) == 0
+        assert isinstance(result.values.item(), (float, np.floating))
+
+    def test_nonexistent_dimension_raises_error(self, sample_dataarray):
+        """Test that non-existent dimension raises error."""
+        with pytest.raises((ValueError, KeyError)):
+            utils.reduce_dataarray(sample_dataarray, "mean", ["nonexistent_dim"])
+
+    # Tests for error handling
+    def test_invalid_method_type_raises_typeerror(self, sample_dataarray):
+        """Test that invalid method type raises TypeError."""
+        with pytest.raises(TypeError, match="method must be str or callable"):
+            utils.reduce_dataarray(sample_dataarray, 123, ["time"])
+
+    def test_nonexistent_xarray_method_raises_valueerror(self, sample_dataarray):
+        """Test that non-existent xarray method raises ValueError."""
+        with pytest.raises(ValueError, match="DataArray has no method"):
+            utils.reduce_dataarray(sample_dataarray, "nonexistent_method", ["time"])
+
+    def test_xarray_attribute_without_method(self, sample_dataarray):
+        """Test that xarray attribute that isn't a method raises some kind of error."""
+        with pytest.raises(TypeError, match="not callable"):
+            utils.reduce_dataarray(sample_dataarray, "shape", ["time"])
+
+    def test_empty_reduce_dims(self, sample_dataarray):
+        """Test with empty reduce_dims list."""
+        # This is edge case - xarray handles it gracefully
+        result = utils.reduce_dataarray(sample_dataarray, "mean", [])
+        # Should return the same array
+        xr.testing.assert_equal(result, sample_dataarray)
+
+    # Tests for method_kwargs
+    def test_skipna_true(self, dataarray_with_nans):
+        """Test skipna=True skips NaN values."""
+        result = utils.reduce_dataarray(
+            dataarray_with_nans, "mean", ["time"], skipna=True
+        )
+        # With skipna=True, result should not have NaNs
+        assert not np.isnan(result.values).all()
+
+    def test_skipna_false(self, dataarray_with_nans):
+        """Test skipna=False propagates NaN values."""
+        result = utils.reduce_dataarray(
+            dataarray_with_nans, "mean", ["time"], skipna=False
+        )
+        # With skipna=False, NaNs should propagate
+        assert np.isnan(result.values).any()
+
+    def test_keep_attrs(self, sample_dataarray):
+        """Test keep_attrs parameter."""
+        sample_dataarray.attrs["test_attr"] = "test_value"
+        result = utils.reduce_dataarray(
+            sample_dataarray, "mean", ["time"], keep_attrs=True
+        )
+        assert result.attrs.get("test_attr") == "test_value"
+
+    def test_multiple_method_kwargs(self, dataarray_with_nans):
+        """Test multiple method_kwargs together."""
+        dataarray_with_nans.attrs["units"] = "K"
+        result = utils.reduce_dataarray(
+            dataarray_with_nans,
+            "sum",
+            ["latitude"],
+            skipna=True,
+            keep_attrs=True,
+        )
+        assert result.attrs.get("units") == "K"
+        assert not np.isnan(result.values).all()
+
+    # Tests for sparse data handling
+    def test_sparse_data_handling(self):
+        """Test that sparse data is handled correctly."""
+        import sparse
+
+        # Create sparse array
+        coords = ([0, 1, 2], [0, 1, 0])
+        data = [1.0, 2.0, 3.0]
+        shape = (3, 2)
+        sparse_array = sparse.COO(coords, data, shape=shape)
+
+        da = xr.DataArray(
+            sparse_array,
+            dims=["latitude", "longitude"],
+            coords={
+                "latitude": [10.0, 20.0, 30.0],
+                "longitude": [100.0, 110.0],
+            },
+        )
+
+        # Test that sparse data is handled
+        result = utils.reduce_dataarray(da, "sum", ["latitude", "longitude"])
+        assert isinstance(result, xr.DataArray)
+        # Result should be densified scalar
+        assert not isinstance(result.data, sparse.COO)
+
+    def test_sparse_data_with_callable(self):
+        """Test sparse data with callable method."""
+        import sparse
+
+        coords = ([0, 1, 0], [0, 1, 1], [0, 1, 0])
+        data = [1.0, 2.0, 3.0]
+        shape = (2, 2, 2)
+        sparse_array = sparse.COO(coords, data, shape=shape)
+
+        da = xr.DataArray(
+            sparse_array,
+            dims=["time", "latitude", "longitude"],
+            coords={
+                "time": pd.date_range("2020-01-01", periods=2),
+                "latitude": [10.0, 20.0],
+                "longitude": [100.0, 110.0],
+            },
+        )
+
+        result = utils.reduce_dataarray(da, np.sum, ["latitude", "longitude"])
+        assert isinstance(result, xr.DataArray)
+        assert not isinstance(result.data, sparse.COO)
+
+    def test_sparse_data_stacked_dimension(self):
+        """Test sparse data creates stacked dimension."""
+        import sparse
+
+        coords = ([0, 1, 2], [0, 1, 0])
+        data = [10.0, 20.0, 30.0]
+        shape = (3, 2)
+        sparse_array = sparse.COO(coords, data, shape=shape)
+
+        da = xr.DataArray(
+            sparse_array,
+            dims=["latitude", "longitude"],
+            coords={
+                "latitude": [10.0, 20.0, 30.0],
+                "longitude": [100.0, 110.0],
+            },
+        )
+
+        # For sparse data, it should stack and reduce
+        result = utils.reduce_dataarray(da, "mean", ["latitude", "longitude"])
+        assert isinstance(result, xr.DataArray)
+        # Result should be scalar after reducing all dims
+        assert result.ndim == 0
+
+
+class TestMaybeGetOperator:
+    """Test the maybe_get_operator function."""
+
+    def test_greater_than_operator(self):
+        """Test '>' operator string returns operator.gt."""
+        op = utils.maybe_get_operator(">")
+        assert op is operator.gt
+        assert op(5, 3) is True
+        assert op(3, 5) is False
+
+    def test_greater_than_or_equal_operator(self):
+        """Test '>=' operator string returns operator.ge."""
+        op = utils.maybe_get_operator(">=")
+        assert op is operator.ge
+        assert op(5, 3) is True
+        assert op(5, 5) is True
+        assert op(3, 5) is False
+
+    def test_less_than_operator(self):
+        """Test '<' operator string returns operator.lt."""
+        op = utils.maybe_get_operator("<")
+        assert op is operator.lt
+        assert op(3, 5) is True
+        assert op(5, 3) is False
+
+    def test_less_than_or_equal_operator(self):
+        """Test '<=' operator string returns operator.le."""
+        op = utils.maybe_get_operator("<=")
+        assert op is operator.le
+        assert op(3, 5) is True
+        assert op(5, 5) is True
+        assert op(5, 3) is False
+
+    def test_equal_operator(self):
+        """Test '==' operator string returns operator.eq."""
+        op = utils.maybe_get_operator("==")
+        assert op is operator.eq
+        assert op(5, 5) is True
+        assert op(5, 3) is False
+
+    def test_not_equal_operator(self):
+        """Test '!=' operator string returns operator.ne."""
+        op = utils.maybe_get_operator("!=")
+        assert op is operator.ne
+        assert op(5, 3) is True
+        assert op(5, 5) is False
+
+    def test_callable_passthrough(self):
+        """Test passing a callable returns it unchanged."""
+
+        def custom_op(a, b):
+            return a + b > 10
+
+        result = utils.maybe_get_operator(custom_op)
+        assert result is custom_op
+        assert result(5, 6) is True
+        assert result(3, 4) is False
+
+    def test_lambda_passthrough(self):
+        """Test passing a lambda returns it unchanged."""
+        # Create lambda inline to avoid linter warning
+        result = utils.maybe_get_operator(lambda a, b: a * b > 20)
+        # Test the returned callable works correctly
+        assert callable(result)
+        assert result(5, 5) is True
+        assert result(2, 3) is False
+
+    def test_builtin_function_passthrough(self):
+        """Test passing a builtin function works."""
+        result = utils.maybe_get_operator(max)
+        assert result is max
+        assert result(5, 3) == 5
+
+    def test_operator_module_function_passthrough(self):
+        """Test passing an operator module function works."""
+        result = utils.maybe_get_operator(operator.add)
+        assert result is operator.add
+        assert result(5, 3) == 8
+
+    def test_invalid_string_raises_keyerror(self):
+        """Test invalid operator string raises KeyError."""
+        with pytest.raises(KeyError):
+            utils.maybe_get_operator("invalid")
+
+    def test_similar_but_invalid_strings(self):
+        """Test strings that look like operators raise KeyError."""
+        invalid_ops = ["=>", "=<", "===", ">==", "<<", ">>"]
+        for invalid_op in invalid_ops:
+            with pytest.raises(KeyError):
+                utils.maybe_get_operator(invalid_op)
+
+    def test_empty_string_raises_keyerror(self):
+        """Test empty string raises KeyError."""
+        with pytest.raises(KeyError):
+            utils.maybe_get_operator("")
+
+    def test_none_returns_none(self):
+        """Test None input returns None (treated as callable)."""
+        # None is technically callable-like in isinstance check
+        # isinstance(None, str) == False
+        result = utils.maybe_get_operator(None)
+        # Should return None since it's not a string
+        assert result is None
+
+    def test_integer_returns_integer(self):
+        """Test integer input returns integer (not a string)."""
+        # Edge case: non-string, non-callable input
+        result = utils.maybe_get_operator(123)
+        assert result == 123
+
+    def test_operators_with_arrays(self):
+        """Test operator functions work with numpy arrays."""
+        op_gt = utils.maybe_get_operator(">")
+        arr1 = np.array([1, 2, 3, 4])
+        arr2 = np.array([2, 2, 2, 2])
+        result = op_gt(arr1, arr2)
+        expected = np.array([False, False, True, True])
+        np.testing.assert_array_equal(result, expected)
+
+    def test_operators_with_xarray(self):
+        """Test operator functions work with xarray objects."""
+        op_lt = utils.maybe_get_operator("<")
+        da1 = xr.DataArray([1, 2, 3])
+        da2 = xr.DataArray([2, 2, 2])
+        result = op_lt(da1, da2)
+        expected = xr.DataArray([True, False, False])
+        xr.testing.assert_equal(result, expected)
+
+    def test_all_operators_in_dict(self):
+        """Test all operators in module dict are accessible."""
+        # Verify the operators dict at module level
+        expected_ops = {
+            ">": operator.gt,
+            ">=": operator.ge,
+            "<": operator.lt,
+            "<=": operator.le,
+            "==": operator.eq,
+            "!=": operator.ne,
+        }
+
+        for op_str, op_func in expected_ops.items():
+            result = utils.maybe_get_operator(op_str)
+            assert result is op_func
+
+    def test_operator_return_types(self):
+        """Test operators return correct boolean types."""
+        ops = [">", ">=", "<", "<=", "==", "!="]
+        for op_str in ops:
+            op = utils.maybe_get_operator(op_str)
+            result = op(5, 3)
+            assert isinstance(result, bool)
+
+    def test_case_sensitivity(self):
+        """Test operator strings are case-sensitive."""
+        # Uppercase versions should raise KeyError
+        with pytest.raises(KeyError):
+            utils.maybe_get_operator("GT")
+        with pytest.raises(KeyError):
+            utils.maybe_get_operator("LT")
+
+    def test_whitespace_in_string(self):
+        """Test whitespace in operator string raises KeyError."""
+        with pytest.raises(KeyError):
+            utils.maybe_get_operator(" > ")
+        with pytest.raises(KeyError):
+            utils.maybe_get_operator("> ")
+
+
+class TestMaybeDensifyDataArray:
+    """Test the maybe_densify_dataarray function."""
+
+    def test_densify_sparse_data(self):
+        """Test densifying sparse data with default max_size."""
+        import sparse
+
+        # Create sparse array
+        coords = ([0, 1, 2], [0, 1, 0])
+        data = [1.0, 2.0, 3.0]
+        shape = (3, 2)
+        sparse_array = sparse.COO(coords, data, shape=shape)
+
+        da = xr.DataArray(
+            sparse_array,
+            dims=["latitude", "longitude"],
+            coords={"latitude": [10.0, 20.0, 30.0], "longitude": [100.0, 110.0]},
+        )
+
+        # Verify input is sparse
+        assert isinstance(da.data, sparse.COO)
+
+        # Densify
+        result = utils.maybe_densify_dataarray(da)
+
+        # Should be densified
+        assert not isinstance(result.data, sparse.COO)
+        assert isinstance(result.data, np.ndarray)
+
+        # Values should be preserved
+        assert result.values[0, 0] == 1.0
+        assert result.values[1, 1] == 2.0
+        assert result.values[2, 0] == 3.0
+
+    def test_dense_data_unchanged(self):
+        """Test that dense data remains unchanged."""
+        # Create dense array
+        da = xr.DataArray(
+            np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]),
+            dims=["latitude", "longitude"],
+            coords={"latitude": [10.0, 20.0, 30.0], "longitude": [100.0, 110.0]},
+        )
+
+        # Verify input is dense
+        assert isinstance(da.data, np.ndarray)
+
+        # Apply function
+        result = utils.maybe_densify_dataarray(da)
+
+        # Should remain dense
+        assert isinstance(result.data, np.ndarray)
+
+        # Values should be unchanged
+        xr.testing.assert_equal(result, da)
+
+    def test_custom_max_size_allows_densification(self):
+        """Test custom max_size for small arrays allows densification."""
+        import sparse
+
+        # Create small sparse array
+        coords = ([0, 1], [0, 1])
+        data = [10.0, 20.0]
+        shape = (2, 2)
+        sparse_array = sparse.COO(coords, data, shape=shape)
+
+        da = xr.DataArray(
+            sparse_array,
+            dims=["x", "y"],
+            coords={"x": [0, 1], "y": [0, 1]},
+        )
+
+        # With large max_size, should densify
+        result = utils.maybe_densify_dataarray(da, max_size=1000)
+
+        assert not isinstance(result.data, sparse.COO)
+        assert isinstance(result.data, np.ndarray)
+
+    def test_small_max_size_raises_error(self):
+        """Test very small max_size raises error for large sparse arrays."""
+        import sparse
+
+        # Create large sparse array with shape > max_size
+        # Shape is 100x100 = 10,000 elements but only 3 non-zero
+        coords = ([0, 50, 99], [0, 50, 99])
+        data = [1.0, 2.0, 3.0]
+        shape = (100, 100)
+        sparse_array = sparse.COO(coords, data, shape=shape)
+
+        da = xr.DataArray(
+            sparse_array,
+            dims=["x", "y"],
+            coords={"x": range(100), "y": range(100)},
+        )
+
+        # max_size smaller than array size and low density raises error
+        with pytest.raises(ValueError, match="large sparse array"):
+            utils.maybe_densify_dataarray(da, max_size=100)
+
+    def test_empty_sparse_array(self):
+        """Test empty sparse array can be densified."""
+        import sparse
+
+        # Create empty sparse array
+        coords = ([], [])
+        data = []
+        shape = (3, 2)
+        sparse_array = sparse.COO(coords, data, shape=shape)
+
+        da = xr.DataArray(
+            sparse_array,
+            dims=["latitude", "longitude"],
+            coords={"latitude": [10.0, 20.0, 30.0], "longitude": [100.0, 110.0]},
+        )
+
+        result = utils.maybe_densify_dataarray(da)
+
+        # Should be densified
+        assert not isinstance(result.data, sparse.COO)
+        assert isinstance(result.data, np.ndarray)
+
+        # All values should be zero (default fill value)
+        assert (result.values == 0).all()
+
+    def test_multidimensional_sparse_array(self):
+        """Test densifying multidimensional sparse arrays."""
+        import sparse
+
+        # Create 3D sparse array
+        coords = ([0, 1, 2], [0, 1, 0], [0, 0, 1])
+        data = [1.0, 2.0, 3.0]
+        shape = (3, 2, 2)
+        sparse_array = sparse.COO(coords, data, shape=shape)
+
+        da = xr.DataArray(
+            sparse_array,
+            dims=["time", "latitude", "longitude"],
+            coords={
+                "time": pd.date_range("2020-01-01", periods=3),
+                "latitude": [10.0, 20.0],
+                "longitude": [100.0, 110.0],
+            },
+        )
+
+        result = utils.maybe_densify_dataarray(da)
+
+        # Should be densified
+        assert not isinstance(result.data, sparse.COO)
+        assert isinstance(result.data, np.ndarray)
+
+        # Check dimensions preserved
+        assert result.shape == (3, 2, 2)
+        assert list(result.dims) == ["time", "latitude", "longitude"]

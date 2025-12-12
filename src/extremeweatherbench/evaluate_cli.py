@@ -1,14 +1,13 @@
 import importlib.util
 import os
+import pathlib
 import pickle
-from pathlib import Path
 from typing import Optional
 
 import click
 import pandas as pd
 
-from extremeweatherbench import defaults
-from extremeweatherbench.evaluate import ExtremeWeatherBench, _run_parallel
+from extremeweatherbench import cases, defaults, evaluate
 
 
 @click.command()
@@ -33,11 +32,20 @@ from extremeweatherbench.evaluate import ExtremeWeatherBench, _run_parallel
     help="Optional directory for caching intermediate data",
 )
 @click.option(
-    "--parallel",
-    "-p",
+    "--n-jobs",
     type=int,
     default=1,
-    help="Number of parallel jobs using joblib (default: 1 for serial execution)",
+    help="Number of parallel jobs to run (default: 1 for serial execution)",
+)
+@click.option(
+    "--parallel-config",
+    "-p",
+    type=dict,
+    default=None,
+    help=(
+        "Advanced parallel configuration using joblib. Takes precedence over "
+        "--n-jobs if provided."
+    ),
 )
 @click.option(
     "--save-case-operators",
@@ -52,12 +60,15 @@ from extremeweatherbench.evaluate import ExtremeWeatherBench, _run_parallel
         "uses more memory)"
     ),
 )
+@click.pass_context
 def cli_runner(
+    ctx: click.Context,
     default: bool,
     config_file: Optional[str],
     output_dir: Optional[str],
     cache_dir: Optional[str],
-    parallel: int,
+    n_jobs: int,
+    parallel_config: Optional[dict],
     save_case_operators: Optional[str],
     precompute: bool,
 ):
@@ -67,7 +78,8 @@ def cli_runner(
 
     1. Default mode (--default): Uses the predefined Brightband evaluation objects for
        comprehensive weather event evaluation including heat waves, freeze events,
-       severe convection, atmospheric rivers, and tropical cyclones.
+       [severe convection, atmospheric rivers, and tropical cyclones] (bracketed events
+       are not yet implemented).
 
     2. Custom mode (--config-file): Uses a Python config file containing custom
        evaluation objects defined by the user.
@@ -75,12 +87,24 @@ def cli_runner(
     The CLI can run evaluations in serial or parallel using joblib, and optionally
     save CaseOperator objects for later use or inspection.
 
+    Args:
+        default: Use default Brightband evaluation objects with current directory as
+        output
+        config_file: Path to a config.py file containing evaluation objects
+        output_dir: Directory for analysis outputs (default: current directory)
+        cache_dir: Optional directory for caching intermediate data
+        parallel_config: Parallel configuration using joblib (default: {'backend':
+        'threading', 'n_jobs': 8})
+        save_case_operators: Save CaseOperator objects to a pickle file at this path
+        precompute: Pre-compute datasets before running metrics to avoid recomputing
+        them for each metric (faster but uses more memory)
+
     Examples:
         # Use default evaluation objects
         $ ewb --default
 
         # Use custom config file with parallel execution
-        $ ewb --config-file my_config.py --parallel 4
+        $ ewb --config-file my_config.py --n-jobs 4
 
         # Save case operators to pickle file
         $ ewb --default --save-case-operators case_ops.pkl
@@ -90,38 +114,21 @@ def cli_runner(
 
         # Use precompute for faster execution (higher memory usage)
         $ ewb --default --precompute
+
+        # Use custom parallel configuration
+        $ ewb --default --parallel-config '{"backend": "dask", "n_jobs": 4}'
     """
-    # Store original output_dir value before setting default
-    original_output_dir = output_dir
+    # Show help if no arguments provided
+    if not default and not config_file:
+        click.echo(ctx.get_help())
+        ctx.exit()
 
     # Set default output directory to current working directory
     if output_dir is None:
         output_dir = os.getcwd()
 
-    output_path = Path(output_dir)
+    output_path = pathlib.Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
-
-    # Validate that either default or config_file is provided
-    if not default and not config_file:
-        ctx = click.get_current_context()
-        # Check if any non-default arguments were provided
-        args_provided = (
-            original_output_dir is not None
-            or cache_dir is not None
-            or parallel != 1
-            or save_case_operators is not None
-            or precompute
-        )
-
-        if not args_provided:
-            # No arguments provided, show help and exit 0
-            click.echo(ctx.get_help())
-            ctx.exit(0)
-        else:
-            # Some arguments provided but missing required flags, show error
-            raise click.UsageError(
-                "Either --default or --config-file must be specified"
-            )
 
     if default and config_file:
         raise click.UsageError("Cannot specify both --default and --config-file")
@@ -129,7 +136,7 @@ def cli_runner(
     # Load evaluation objects
     if default:
         click.echo("Using default Brightband evaluation objects...")
-        evaluation_objects = defaults.BRIGHTBAND_EVALUATION_OBJECTS
+        evaluation_objects = defaults.get_brightband_evaluation_objects()
         cases_dict = _load_default_cases()
     else:
         assert config_file is not None  # for mypy
@@ -137,8 +144,8 @@ def cli_runner(
         evaluation_objects, cases_dict = _load_config_file(config_file)
 
     # Initialize ExtremeWeatherBench
-    ewb = ExtremeWeatherBench(
-        cases=cases_dict,
+    ewb = evaluate.ExtremeWeatherBench(
+        case_metadata=cases_dict,
         evaluation_objects=evaluation_objects,
         cache_dir=cache_dir if cache_dir else None,
     )
@@ -149,19 +156,19 @@ def cli_runner(
 
     # Save case operators if requested
     if save_case_operators:
-        save_path = Path(save_case_operators)
+        save_path = pathlib.Path(save_case_operators)
         save_path.parent.mkdir(parents=True, exist_ok=True)
         with open(save_path, "wb") as f:
             pickle.dump(case_operators, f)
         click.echo(f"Case operators saved to {save_case_operators}")
 
     # Run evaluation
-    if parallel > 1:
-        click.echo(f"Running evaluation with {parallel} parallel jobs...")
-        results = _run_parallel(case_operators, parallel, pre_compute=precompute)
-    else:
-        click.echo("Running evaluation in serial...")
-        results = ewb.run(pre_compute=precompute)
+    click.echo("Running evaluation...")
+    results = ewb.run(
+        n_jobs=n_jobs,
+        parallel_config=parallel_config,
+        pre_compute=precompute,
+    )
 
     # Save results
     output_file = output_path / "evaluation_results.csv"
@@ -173,11 +180,10 @@ def cli_runner(
         click.echo("No results to save")
 
 
-def _load_default_cases() -> dict:
+def _load_default_cases():
     """Load default case data for default evaluation objects."""
-    from extremeweatherbench.cases import load_ewb_events_yaml_into_case_collection
 
-    return load_ewb_events_yaml_into_case_collection()
+    return cases.load_ewb_events_yaml_into_case_collection()
 
 
 def _load_config_file(config_path: str) -> tuple:
@@ -187,7 +193,7 @@ def _load_config_file(config_path: str) -> tuple:
     - evaluation_objects: List of EvaluationObject instances
     - cases_dict: Dictionary containing case data
     """
-    config_path_obj = Path(config_path)
+    config_path_obj = pathlib.Path(config_path)
 
     # Load the config module
     spec = importlib.util.spec_from_file_location("config", str(config_path_obj))
