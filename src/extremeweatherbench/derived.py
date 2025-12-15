@@ -156,13 +156,13 @@ class TropicalCycloneTrackVariables(DerivedVariable):
                 Defaults to -6.0.
             min_distance_between_peaks: Minimum grid points between detected peaks.
                 Defaults to 5.
-            max_spatial_distance_degrees: Maximum distance in degrees for track matching. 
+            max_spatial_distance_degrees: Maximum distance in degrees for track matching.
                 Defaults to 5.0.
-            max_temporal_hours: Maximum hours between detections for track continuity. 
+            max_temporal_hours: Maximum hours between detections for track continuity.
                 Defaults to 48.0.
             use_contour_validation: Whether to apply closed contour validation.
                 Defaults to True.
-            min_track_timesteps: Minimum number of timesteps required for a valid track. 
+            min_track_timesteps: Minimum number of timesteps required for a valid track.
                 Defaults to 10.
             latitude_max_degrees: Maximum latitude in degrees for TC detection.
                 Defaults to 50.0.
@@ -170,11 +170,11 @@ class TropicalCycloneTrackVariables(DerivedVariable):
                 Defaults to 100500.0.
             orography: Optional orography DataArray for terrain filtering.
                 Defaults to None.
-            max_gc_distance_slp_contour_degrees: Maximum great circle distance for 
-            SLP contour validation in degrees. 
+            max_gc_distance_slp_contour_degrees: Maximum great circle distance for
+            SLP contour validation in degrees.
                 Defaults to 5.5.
             max_gc_distance_dz_contour_degrees: Maximum great circle distance for
-            geopotential thickness contour validation in degrees. 
+            geopotential thickness contour validation in degrees.
                 Defaults to 6.5.
             orography_filter_threshold: Orography filter threshold in meters.
                 Defaults to 150.0.
