@@ -1703,7 +1703,7 @@ class TestThresholdMetric:
         """Test ThresholdMetric as composite with metric classes."""
         # Create composite metric
         composite = metrics.ThresholdMetric(
-            metrics=[
+            metric_list=[
                 metrics.CriticalSuccessIndex,
                 metrics.FalseAlarmRatio,
                 metrics.Accuracy,
@@ -1748,7 +1748,7 @@ class TestThresholdMetric:
     def test_composite_with_all_threshold_metrics(self):
         """Test composite with all threshold metrics."""
         composite = metrics.ThresholdMetric(
-            metrics=[
+            metric_list=[
                 metrics.CriticalSuccessIndex,
                 metrics.FalseAlarmRatio,
                 metrics.TruePositives,
@@ -1775,7 +1775,7 @@ class TestThresholdMetric:
 
         # Composite metric is composite
         composite = metrics.ThresholdMetric(
-            metrics=[metrics.CriticalSuccessIndex, metrics.FalseAlarmRatio],
+            metric_list=[metrics.CriticalSuccessIndex, metrics.FalseAlarmRatio],
             forecast_threshold=0.7,
             target_threshold=0.3,
         )
@@ -2855,7 +2855,7 @@ class TestThresholdMetricComposite:
         """Test composite metric with multiple threshold metrics."""
         # Create composite metric with multiple metrics
         composite = metrics.ThresholdMetric(
-            metrics=[
+            metric_list=[
                 metrics.CriticalSuccessIndex,
                 metrics.FalseAlarmRatio,
                 metrics.Accuracy,
@@ -2876,7 +2876,7 @@ class TestThresholdMetricComposite:
     def test_composite_maybe_prepare_kwargs(self):
         """Test that composite prepares kwargs with transformed manager."""
         composite = metrics.ThresholdMetric(
-            metrics=[metrics.CriticalSuccessIndex, metrics.FalseAlarmRatio],
+            metric_list=[metrics.CriticalSuccessIndex, metrics.FalseAlarmRatio],
             forecast_threshold=15000,
             target_threshold=0.3,
             preserve_dims="x",
@@ -2899,7 +2899,7 @@ class TestThresholdMetricComposite:
     def test_composite_with_single_metric_no_transformed_manager(self):
         """Test that single metric composite doesn't add transformed manager."""
         composite = metrics.ThresholdMetric(
-            metrics=[metrics.CriticalSuccessIndex],
+            metric_list=[metrics.CriticalSuccessIndex],
             forecast_threshold=15000,
             target_threshold=0.3,
         )
@@ -2936,22 +2936,22 @@ class TestThresholdMetricMethods:
     def test_metrics_parameter_defaults_to_empty_list_when_none(self):
         """Test that metrics parameter defaults to [] when None."""
         metric = metrics.ThresholdMetric(
-            metrics=None,
+            metric_list=None,
             forecast_threshold=15000,
             target_threshold=0.3,
         )
-        assert metric.metrics == []
+        assert metric.metric_list == []
         assert metric._metric_instances == []
         assert metric.is_composite() is False
 
     def test_metrics_parameter_accepts_empty_list(self):
         """Test that metrics parameter accepts empty list."""
         metric = metrics.ThresholdMetric(
-            metrics=[],
+            metric_list=[],
             forecast_threshold=15000,
             target_threshold=0.3,
         )
-        assert metric.metrics == []
+        assert metric.metric_list == []
         assert metric._metric_instances == []
         assert metric.is_composite() is False
 
@@ -2961,14 +2961,14 @@ class TestThresholdMetricMethods:
             forecast_threshold=15000,
             target_threshold=0.3,
         )
-        assert metric.metrics == []
+        assert metric.metric_list == []
         assert metric._metric_instances == []
         assert metric.is_composite() is False
 
     def test_is_composite_returns_true_for_composite(self):
         """Test is_composite returns True for composite metrics."""
         composite = metrics.ThresholdMetric(
-            metrics=[metrics.CriticalSuccessIndex, metrics.FalseAlarmRatio],
+            metric_list=[metrics.CriticalSuccessIndex, metrics.FalseAlarmRatio],
             forecast_threshold=15000,
             target_threshold=0.3,
         )
@@ -2984,7 +2984,7 @@ class TestThresholdMetricMethods:
     def test_is_composite_returns_false_for_empty_metrics_list(self):
         """Test is_composite returns False when metrics list is empty."""
         metric = metrics.ThresholdMetric(
-            metrics=[],
+            metric_list=[],
             forecast_threshold=15000,
             target_threshold=0.3,
         )
@@ -2993,7 +2993,7 @@ class TestThresholdMetricMethods:
     def test_maybe_expand_composite_returns_instances(self):
         """Test maybe_expand_composite returns metric instances."""
         composite = metrics.ThresholdMetric(
-            metrics=[
+            metric_list=[
                 metrics.CriticalSuccessIndex,
                 metrics.FalseAlarmRatio,
                 metrics.Accuracy,
@@ -3021,7 +3021,7 @@ class TestThresholdMetricMethods:
     def test_maybe_expand_composite_empty_list(self):
         """Test maybe_expand_composite with empty metrics list."""
         metric = metrics.ThresholdMetric(
-            metrics=[],
+            metric_list=[],
             forecast_threshold=15000,
             target_threshold=0.3,
         )
@@ -3060,7 +3060,7 @@ class TestThresholdMetricMethods:
     def test_maybe_prepare_composite_kwargs_adds_manager_for_composite(self):
         """Test transformed_manager added for multi-metric composite."""
         composite = metrics.ThresholdMetric(
-            metrics=[metrics.CriticalSuccessIndex, metrics.FalseAlarmRatio],
+            metric_list=[metrics.CriticalSuccessIndex, metrics.FalseAlarmRatio],
             forecast_threshold=15000,
             target_threshold=0.3,
             preserve_dims="x",
@@ -3078,7 +3078,7 @@ class TestThresholdMetricMethods:
     def test_maybe_prepare_composite_kwargs_no_manager_single_metric(self):
         """Test no transformed_manager for single-metric composite."""
         composite = metrics.ThresholdMetric(
-            metrics=[metrics.CriticalSuccessIndex],
+            metric_list=[metrics.CriticalSuccessIndex],
             forecast_threshold=15000,
             target_threshold=0.3,
             preserve_dims="x",

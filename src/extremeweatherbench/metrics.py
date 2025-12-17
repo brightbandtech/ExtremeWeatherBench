@@ -182,21 +182,61 @@ class BaseMetric(abc.ABC, metaclass=ComputeDocstringMetaclass):
 class CompositeMetric(BaseMetric):
     """Base class for composite metrics.
 
-    This class provides common functionality for composite metrics.
+    This class provides common functionality for composite metrics that can hold
+    multiple sub-metrics.
 
     Args:
         name: The name of the metric.
         preserve_dims: The dimensions to preserve in the computation. Defaults to
-        "lead_time".
+            "lead_time".
         forecast_variable: The forecast variable to use in the computation.
         target_variable: The target variable to use in the computation.
+        metric_list: List of metric classes to include in the composite metric.
+            Each class will be instantiated using the _instantiate_metric method.
         *args: Additional arguments to pass to the metric.
         **kwargs: Additional keyword arguments to pass to the metric.
     """
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(
+        self,
+        name: str,
+        preserve_dims: str = "lead_time",
+        forecast_variable: Optional[str | derived.DerivedVariable] = None,
+        target_variable: Optional[str | derived.DerivedVariable] = None,
+        metric_list: Optional[list[Type["BaseMetric"]]] = None,
+        *args,
+        **kwargs,
+    ):
+        super().__init__(
+            name,
+            preserve_dims=preserve_dims,
+            forecast_variable=forecast_variable,
+            target_variable=target_variable,
+        )
+        self.metric_list = metric_list or []
         self._metric_instances: list["BaseMetric"] = []
+
+        # If metric_list provided, instantiate them using subclass method
+        if self.metric_list:
+            self._metric_instances = [
+                self._instantiate_metric(metric_cls) for metric_cls in self.metric_list
+            ]
+
+    def _instantiate_metric(self, metric_cls: Type["BaseMetric"]) -> "BaseMetric":
+        """Instantiate a metric class with appropriate parameters.
+
+        Subclasses should override this method to pass subclass-specific parameters
+        when instantiating metrics from the metric_list.
+
+        Args:
+            metric_cls: The metric class to instantiate.
+
+        Returns:
+            An instantiated metric object.
+        """
+        if isinstance(metric_cls, type):
+            return metric_cls(preserve_dims=self.preserve_dims)  # type: ignore[call-arg]
+        return metric_cls
 
     def maybe_expand_composite(self) -> Sequence["BaseMetric"]:
         """Expand composite metrics into individual metrics.
@@ -245,7 +285,7 @@ class CompositeMetric(BaseMetric):
         raise NotImplementedError(
             "CompositeMetric._compute_metric must be implemented "
             "by subclasses (ThresholdMetric, LandfallMetric) or use "
-            "CompositeMetric as a composite with metrics=[...] list. Composites are "
+            "CompositeMetric as a composite with metric_list=[...]. Composites are "
             "automatically expanded in the evaluation pipeline."
         )
 
@@ -259,24 +299,23 @@ class ThresholdMetric(CompositeMetric):
     Args:
         name: The name of the metric. Defaults to "threshold_metrics".
         preserve_dims: The dimensions to preserve in the computation. Defaults to
-        "lead_time".
+            "lead_time".
         forecast_variable: The forecast variable to use in the computation.
         target_variable: The target variable to use in the computation.
         forecast_threshold: The threshold for binarizing the forecast. Defaults to 0.5.
         target_threshold: The threshold for binarizing the target. Defaults to 0.5.
-        metrics: A list of metrics to use as a composite. Defaults to None.
-        *args: Additional arguments to pass to the metric
-        **kwargs: Additional keyword arguments to pass to the metric
+        metric_list: A list of metric classes to use as a composite. Defaults to None.
+        **kwargs: Additional keyword arguments to pass to the metric.
 
     Can be used in two ways:
     1. As a base class for specific threshold metrics (CriticalSuccessIndex,
-    FalseAlarmRatio, etc.)
+       FalseAlarmRatio, etc.)
     2. As a composite metric to compute multiple threshold metrics
        efficiently by reusing the transformed contingency manager.
 
     Example of composite usage:
         composite = ThresholdMetric(
-            metrics=[CriticalSuccessIndex, FalseAlarmRatio, Accuracy],
+            metric_list=[CriticalSuccessIndex, FalseAlarmRatio, Accuracy],
             forecast_threshold=0.7,
             target_threshold=0.5
         )
@@ -293,37 +332,41 @@ class ThresholdMetric(CompositeMetric):
         target_variable: Optional[str | derived.DerivedVariable] = None,
         forecast_threshold: float = 0.5,
         target_threshold: float = 0.5,
-        metrics: Optional[list[Type["ThresholdMetric"]]] = None,
+        metric_list: Optional[list[Type["BaseMetric"]]] = None,
         **kwargs,
     ):
+        # Store threshold attributes BEFORE calling super().__init__
+        # because _instantiate_metric needs them
+        self.forecast_threshold = forecast_threshold
+        self.target_threshold = target_threshold
+
         super().__init__(
             name,
             preserve_dims=preserve_dims,
             forecast_variable=forecast_variable,
             target_variable=target_variable,
+            metric_list=metric_list,
             **kwargs,
         )
-        self.forecast_threshold = forecast_threshold
-        self.target_threshold = target_threshold
-        self.preserve_dims = preserve_dims
-        self.metrics = metrics or []
 
-        # If metrics provided, instantiate them
-        if self.metrics is not None:
-            self._metric_instances = [
-                (
-                    metric_cls(
-                        forecast_threshold=self.forecast_threshold,
-                        target_threshold=self.target_threshold,
-                        preserve_dims=self.preserve_dims,
-                    )
-                    if isinstance(metric_cls, type)
-                    else metric_cls
-                )
-                for metric_cls in self.metrics
-            ]
-        else:
-            self._metric_instances = []
+    def _instantiate_metric(self, metric_cls: Type["BaseMetric"]) -> "BaseMetric":
+        """Instantiate a threshold metric with threshold-specific parameters.
+
+        Overrides CompositeMetric._instantiate_metric to pass threshold parameters.
+
+        Args:
+            metric_cls: The metric class to instantiate.
+
+        Returns:
+            An instantiated metric object with threshold parameters.
+        """
+        if isinstance(metric_cls, type):
+            return metric_cls(
+                forecast_threshold=self.forecast_threshold,
+                target_threshold=self.target_threshold,
+                preserve_dims=self.preserve_dims,
+            )  # type: ignore[call-arg]
+        return metric_cls
 
     def __call__(self, forecast: xr.DataArray, target: xr.DataArray, **kwargs) -> Any:
         """Make instances callable using their configured thresholds."""
@@ -436,7 +479,7 @@ class ThresholdMetric(CompositeMetric):
         raise NotImplementedError(
             "ThresholdMetric._compute_metric must be implemented "
             "by subclasses (CriticalSuccessIndex, FalseAlarmRatio, etc.) or use "
-            "ThresholdMetric as a composite with metrics=[...] list. Composites are "
+            "ThresholdMetric as a composite with metric_list=[...]. Composites are "
             "automatically expanded in the evaluation pipeline."
         )
 
@@ -1394,6 +1437,17 @@ class LandfallMetric(CompositeMetric):
     Can be used as a base class for custom landfall metrics, as a mixin with other
     metrics, or as a composite metric for multiple landfall metrics (which utilize
     identical landfalling locations).
+
+    Args:
+        name: The name of the metric. Defaults to "landfall_metrics".
+        preserve_dims: The dimensions to preserve. Defaults to "init_time".
+        approach: The approach to use for landfall detection. Defaults to "first".
+        exclude_post_landfall: Whether to exclude post-landfall data. Defaults to
+            False.
+        forecast_variable: The forecast variable to use. Defaults to None.
+        target_variable: The target variable to use. Defaults to None.
+        metric_list: A list of metric classes to use as a composite. Defaults to None.
+        **kwargs: Additional keyword arguments to pass to the metric.
     """
 
     def __init__(
@@ -1404,8 +1458,7 @@ class LandfallMetric(CompositeMetric):
         exclude_post_landfall: bool = False,
         forecast_variable: Optional[str | derived.DerivedVariable] = None,
         target_variable: Optional[str | derived.DerivedVariable] = None,
-        metrics: Optional[list[Type["LandfallMetric"]]] = None,
-        *args,
+        metric_list: Optional[list[Type["BaseMetric"]]] = None,
         **kwargs,
     ):
         """Initialize LandfallMetric.
@@ -1423,45 +1476,48 @@ class LandfallMetric(CompositeMetric):
 
         Args:
             name: The name of the metric. Defaults to "landfall_metrics" for the base
-            class
-            preserve_dims: The dimensions to preserve. Defaults to "init_time"
-            approach: The approach to use for landfall detection. Defaults to "first"
+                class.
+            preserve_dims: The dimensions to preserve. Defaults to "init_time".
+            approach: The approach to use for landfall detection. Defaults to "first".
             exclude_post_landfall: Whether to exclude post-landfall data. Defaults to
-            False
-            forecast_variable: The forecast variable to use. Defaults to None
-            target_variable: The target variable to use. Defaults to None
-            metrics: A list of metrics to use as a composite. Defaults to None
-            *args: Additional arguments to pass to the metric
-            **kwargs: Additional keyword arguments to pass to the metric
+                False.
+            forecast_variable: The forecast variable to use. Defaults to None.
+            target_variable: The target variable to use. Defaults to None.
+            metric_list: A list of metric classes to use as a composite. Defaults to
+                None.
+            **kwargs: Additional keyword arguments to pass to the metric.
         """
+        # Store landfall-specific attributes BEFORE calling super().__init__
+        self.approach = approach
+        self.exclude_post_landfall = exclude_post_landfall
+
         super().__init__(
             name=name,
             preserve_dims=preserve_dims,
             forecast_variable=forecast_variable,
             target_variable=target_variable,
-            *args,
+            metric_list=metric_list,
             **kwargs,
         )
-        self.approach = approach
-        self.exclude_post_landfall = exclude_post_landfall
-        self.metrics = metrics or []
 
-        # If metrics provided, instantiate them
-        if self.metrics is not None:
-            self._metric_instances = [
-                (
-                    metric_cls(
-                        preserve_dims=self.preserve_dims,
-                        forecast_variable=self.forecast_variable,
-                        target_variable=self.target_variable,
-                    )
-                    if isinstance(metric_cls, type)
-                    else metric_cls
-                )
-                for metric_cls in self.metrics
-            ]
-        else:
-            self._metric_instances = []
+    def _instantiate_metric(self, metric_cls: Type["BaseMetric"]) -> "BaseMetric":
+        """Instantiate a landfall metric with landfall-specific parameters.
+
+        Overrides CompositeMetric._instantiate_metric to pass landfall parameters.
+
+        Args:
+            metric_cls: The metric class to instantiate.
+
+        Returns:
+            An instantiated metric object with landfall parameters.
+        """
+        if isinstance(metric_cls, type):
+            return metric_cls(
+                preserve_dims=self.preserve_dims,
+                forecast_variable=self.forecast_variable,
+                target_variable=self.target_variable,
+            )  # type: ignore[call-arg]
+        return metric_cls
 
     def __call__(
         self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
@@ -1581,7 +1637,7 @@ class LandfallMetric(CompositeMetric):
         raise NotImplementedError(
             "LandfallMetric._compute_metric must be implemented "
             "by subclasses (LandfallDisplacement, LandfallTimeMeanError, etc.) or use "
-            "LandfallMetric as a composite with metrics=[...] list. Composites are "
+            "LandfallMetric as a composite with metric_list=[...]. Composites are "
             "automatically expanded in the evaluation pipeline."
         )
 
