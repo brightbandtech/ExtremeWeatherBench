@@ -1,9 +1,0 @@
-# Defining the exact version will make sure things don't break
-sphinx
-sphinx_rtd_theme
-sphinx-notfound-page
-sphinx-book-theme
-myst-parser
-sphinx-autodoc2
-myst-nb
-nbsphinx

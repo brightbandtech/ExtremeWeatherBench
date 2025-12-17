@@ -1,8 +1,9 @@
 site_name: ExtremeWeatherBench
 site_url: https://extremeweatherbench.readthedocs.io/
-docs_dir: docs/source
+site_author: Brightband PBC
 repo_url: https://github.com/brightbandtech/extremeweatherbench
 repo_name: brightbandtech/extremeweatherbench
+
 nav:
   - Home: index.md
   - Installation: installation.md
@@ -24,7 +25,6 @@ nav:
       - Tropical Cyclone Tornadic Outbreaks: events/TCTornadoOutbreaks.md
       - Wind Events: events/WindEvents.md
       - Winter Weather: events/WinterWeather.md
-  - API Reference: $api/src:extremeweatherbench/extremeweatherbench.**
   - Cookbook:
       - CIRA Forecast: recipes/cira_forecast.md
       - BYOF (Bring Your Own Forecast): recipes/your_own_forecast.md
@@ -36,44 +36,44 @@ nav:
       - Single Case: recipes/single_case.md
       - One Forecast, Two Targets: recipes/one_forecast_two_targets.md
       - Multi Model Evaluation: recipes/multi_model_evaluation.md
-  - Contributing: contributing.md
-  - License: license.md
+
 theme:
   name: material
-  custom_dir: docs/source/overrides
-  logo_dark_mode: _static/bb_light.svg
-  logo_light_mode: _static/bb_dark.svg
+  logo: _static/bb_dark.svg
   favicon: _static/bb.svg
   palette:
-    # Palette toggle for automatic mode
-    - media: "(prefers-color-scheme)"
-      toggle:
-        icon: material/weather-cloudy-clock
-        name: Switch to light mode
-
-    # Palette toggle for light mode
-    - media: "(prefers-color-scheme: light)"
-      scheme: bb-light
-      toggle:
-        icon: material/weather-sunny
-        name: Switch to dark mode
-
-    # Palette toggle for dark mode
-    - media: "(prefers-color-scheme: dark)"
-      scheme: bb-dark
-      toggle:
-        icon: material/weather-night
-        name: Switch to system preference
-  font:
-    text: "DM Sans"
-    code: "DM Mono"
-  features:
-    - navigation.instant
-    - navigation.instant.prefetch
+    scheme: "brightband"
 
 extra_css:
-  - stylesheets/extra.css
+  - stylesheets/brightband.css
+  - https://unpkg.com/katex@0/dist/katex.min.css
+
+markdown_extensions:
+  - pymdownx.arithmatex:
+      generic: true
+
+extra_javascript:
+  - javascripts/katex.js
+  - https://unpkg.com/katex@0/dist/katex.min.js
+  - https://unpkg.com/katex@0/dist/contrib/auto-render.min.js
 
 plugins:
   - search
-  - mkapi
+  - mkdocs-autoapi:
+      autoapi_dir: src/extremeweatherbench
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+          options:
+            docstring_style: google
+            docstring_options:
+              ignore_init_summary: true
+            merge_init_into_class: true
+            group_by_category: true
+            # show_category_heading: true
+            docstring_section_style: list
+            show_source: false
+            separate_signature: true
+            signature_crossrefs: true
+            summary: true

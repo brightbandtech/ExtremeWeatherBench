@@ -21,11 +21,9 @@ dependencies = [
     "zarr>=3.0.9,<4",
     "kerchunk[dev]",
     "flox>=0.10.0",
-    "mkapi>=4.4.0",
     "click>=8.1.8",
     "sparse>=0.17.0",
     "polars>=1.32.1",
-    "scikit-image>=0.25.2",
     "numba>=0.61.2",
     "eccodes==2.42.0",
     "frozenlist==1.5.0",
@@ -51,8 +49,6 @@ dev = [
     "ipykernel>=6.29.5",
     "ipywidgets>=8.1.5",
     "isort>=6.0.1",
-    "mkdocs>=1.6.1",
-    "mkdocs-material>=9.6.14",
     "jupyterlab>=4.4.5",
     "lxml-stubs>=0.5.1",
     "mypy>=1.14.1",
@@ -65,7 +61,13 @@ dev = [
     "types-pytz>=2025.2.0.20250809",
     "types-pyyaml>=6.0.12.20241230",
     "types-tqdm>=4.67.0.20250809",
-    "mkapi>=4.5.0",
+]
+docs = [
+    "mkdocs>=1.6.1",
+    "mkdocs-autoapi[python]>=0.4.1",
+    "mkdocs-material>=9.7.0",
+    "mkdocstrings[python]>=1.0.0",
+    "pymdown-extensions>=10.19.1",
 ]
 
 [build-system]

@@ -1,0 +1,2457 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+        <meta name="author" content="Brightband PBC">
+      
+      
+        <link rel="canonical" href="https://extremeweatherbench.readthedocs.io/events/Heatwaves/">
+      
+      
+        <link rel="prev" href="../FreezeEvents/">
+      
+      
+        <link rel="next" href="../OtherFloods/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../_static/bb.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.0">
+    
+    
+      
+        <title>Heatwaves - ExtremeWeatherBench</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.618322db.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=DM+Sans:300,300i,400,400i,700,700i%7CDM+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"DM Sans";--md-code-font:"DM Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#land-based-heatwaves" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="ExtremeWeatherBench" class="md-header__button md-logo" aria-label="ExtremeWeatherBench" data-md-component="logo">
+      <img id="logo_dark_mode" src="../../_static/bb_light.svg" alt="logo">
+<img id="logo_light_mode" src="../../_static/bb_dark.svg" alt="logo">
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            ExtremeWeatherBench
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Heatwaves
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M15 13h1.5v2.82l2.44 1.41-.75 1.3L15 16.69zm3.13-3.67C17.23 6.81 14.83 5 12 5 9.3 5 7 6.65 6 9c-2.76 0-5 2.24-5 5s2.24 5 5 5h3.68c1.13 2.36 3.53 4 6.32 4 3.87 0 7-3.13 7-7 0-3.12-2.04-5.76-4.87-6.67M6 17c-1.66 0-3-1.34-3-3s1.34-3 3-3c.37 0 .73.07 1.06.19A5.004 5.004 0 0 1 12 7c1.63 0 3.07.79 4 2-3.88 0-7 3.14-7 7 0 .34.03.67.08 1zm10 4c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="bb-light" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_2" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="bb-dark" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to system preference"  type="radio" name="__palette" id="__palette_2">
+    
+      <label class="md-header__button md-icon" title="Switch to system preference" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/brightbandtech/extremeweatherbench" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    brightbandtech/extremeweatherbench
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="ExtremeWeatherBench" class="md-nav__button md-logo" aria-label="ExtremeWeatherBench" data-md-component="logo">
+      <img id="logo_dark_mode" src="../../_static/bb_light.svg" alt="logo">
+<img id="logo_light_mode" src="../../_static/bb_dark.svg" alt="logo">
+    </a>
+    ExtremeWeatherBench
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/brightbandtech/extremeweatherbench" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    brightbandtech/extremeweatherbench
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../usage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Usage
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../parallelism/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    A Note on Parallelism
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Event Categories
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Event Categories
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../AllCaseStudies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    All Case Studies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_2" id="__nav_5_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Atmospheric Rivers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Atmospheric Rivers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../AtmosphericRivers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../atmospheric_rivers/november_2024_west_coast_us/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    November 2024 West Coast US
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ConvectiveWx/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Severe Convection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../Derechos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Derechos
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../Flooding/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Flooding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../FreezeEvents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Freezes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Heatwaves
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Heatwaves
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#us-based-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        US-based events
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#worldwide-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Worldwide events
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../OtherFloods/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Other Floods
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TropicalCyclones/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tropical Cyclones
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TCFloods/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tropical Cyclone Flooding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TCTornadoOutbreaks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tropical Cyclone Tornadic Outbreaks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../WindEvents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wind Events
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../WinterWeather/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Winter Weather
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cookbook
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Cookbook
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recipes/cira_forecast/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CIRA Forecast
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recipes/your_own_forecast/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    BYOF (Bring Your Own Forecast)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recipes/your_own_target/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    BYOT (Bring Your Own Target)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recipes/your_own_metrics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    BYOM (Bring Your Own Metrics)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recipes/your_own_variable/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    BYOV (Bring Your Own Variable)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recipes/evaluate_recent_tropical_cyclones/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Evaluate Recent Tropical Cyclones
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recipes/near_real_time_point_observations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Near Real-Time Point Observations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recipes/single_case/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Single Case
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recipes/one_forecast_two_targets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    One Forecast, Two Targets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recipes/multi_model_evaluation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi Model Evaluation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../contributing.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../license.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    License
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_9_1" id="__nav_9_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    extremeweatherbench
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    extremeweatherbench
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../autoapi/extremeweatherbench/_cape/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    _cape
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../autoapi/extremeweatherbench/calc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    calc
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../autoapi/extremeweatherbench/cases/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    cases
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../autoapi/extremeweatherbench/defaults/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    defaults
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../autoapi/extremeweatherbench/derived/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    derived
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../autoapi/extremeweatherbench/evaluate/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    evaluate
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../autoapi/extremeweatherbench/evaluate_cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    evaluate_cli
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_1_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_9_1_8" id="__nav_9_1_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    events
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_9_1_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_1_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    events
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../autoapi/extremeweatherbench/events/atmospheric_river/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    atmospheric_river
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../autoapi/extremeweatherbench/events/severe_convection/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    severe_convection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../autoapi/extremeweatherbench/events/tropical_cyclone/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    tropical_cyclone
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../autoapi/extremeweatherbench/inputs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    inputs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../autoapi/extremeweatherbench/metrics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    metrics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../autoapi/extremeweatherbench/regions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    regions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_1_12" >
+        
+          
+          <label class="md-nav__link" for="__nav_9_1_12" id="__nav_9_1_12_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    sources
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_9_1_12_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_1_12">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    sources
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../autoapi/extremeweatherbench/sources/base/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    base
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../autoapi/extremeweatherbench/sources/pandas_dataframe/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    pandas_dataframe
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../autoapi/extremeweatherbench/sources/polars_lazyframe/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    polars_lazyframe
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../autoapi/extremeweatherbench/sources/xarray_dataarray/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    xarray_dataarray
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../autoapi/extremeweatherbench/sources/xarray_dataset/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    xarray_dataset
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../autoapi/extremeweatherbench/utils/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    utils
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#us-based-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        US-based events
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#worldwide-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Worldwide events
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="land-based-heatwaves">Land-based heatwaves</h1>
+<p>We identified the heatwaves from the following sources:</p>
+<ul>
+<li><a href="https://en.wikipedia.org/wiki/Category:Heat_waves_in_the_United_States">Heat waves in the United States</a>  </li>
+<li><a href="https://confluence.ecmwf.int/display/FCST/Severe+Event+Catalogue">Severe Event Catalogue</a>   </li>
+<li><a href="https://en.wikipedia.org/wiki/List_of_heat_waves">List of heat waves - Wikipedia</a>   </li>
+<li><a href="https://en.wikipedia.org/wiki/2024_European_heatwaves">2024 European heatwaves - Wikipedia</a>   </li>
+<li><a href="https://en.wikipedia.org/wiki/2023_heat_waves">2023 heat waves - Wikipedia</a>   </li>
+<li><a href="https://en.wikipedia.org/wiki/2023_European_heatwaves">2023 European heatwaves - Wikipedia</a>   </li>
+<li><a href="https://en.wikipedia.org/wiki/2023_Asia_heat_wave">2023 Asia heat wave - Wikipedia</a> </li>
+</ul>
+<p>Each heat wave was then validated by verifying that the 2m temperature of the event exceeds the 85th percentile of 2m temperature climatology as computed from ERA-5 data.</p>
+<h2 id="us-based-events">US-based events</h2>
+<ol>
+<li><a href="https://en.wikipedia.org/wiki/2021_Western_North_America_heat_wave">2021 Western North America heat wave - Wikipedia</a>  </li>
+<li><em><a href="https://www.nature.com/articles/s41467-023-36289-3">2021 PNW heat wave</a></em>  </li>
+<li><a href="https://confluence.ecmwf.int/display/FCST/202106+-+Heatwave+-+N.America">202106 - Heatwave - N.America</a>   </li>
+<li>Verification points:   <ul>
+<li>Seattle  </li>
+<li>Portland  </li>
+</ul>
+</li>
+<li>International points: Calgary AB, Lytton BC<br />
+     Id: 1  </li>
+<li>Upper midwest May 2022  </li>
+<li><a href="https://en.wikipedia.org/wiki/List_of_heat_waves#2022">List of heat waves - Wikipedia</a>   </li>
+<li><a href="https://en.wikipedia.org/wiki/2022_North_American_heat_waves">2022 North American heat waves - Wikipedia</a>   </li>
+<li>Chicago, Memphis, DC, Philadelphia<br />
+     Id: 2, 6  </li>
+<li>Western to southwestern US - 2nd week of June 2022  </li>
+<li><a href="https://en.wikipedia.org/wiki/List_of_heat_waves#2022">List of heat waves - Wikipedia</a>  </li>
+<li><a href="https://en.wikipedia.org/wiki/2022_North_American_heat_waves">2022 North American heat waves - Wikipedia</a>   </li>
+<li>California, Texas, St Louis   </li>
+<li>Id: 3  </li>
+<li>Arizona and Utah July 2022  </li>
+<li><a href="https://www.foxnews.com/us/heat-wave-responsible-multiple-deaths-across-us">Heat wave responsible for multiple deaths across US | Fox News</a>   </li>
+<li><a href="https://en.wikipedia.org/wiki/2022_North_American_heat_waves">2022 North American heat waves - Wikipedia</a>   </li>
+<li>Id: 4  </li>
+<li><a href="https://en.wikipedia.org/wiki/2023_Western_North_America_heat_wave">2023 Western North America heat wave - Wikipedia</a>   </li>
+<li>Verification points:   <ul>
+<li>Seattle  </li>
+<li>Portland  </li>
+</ul>
+</li>
+<li>International points: Lytton BC, Mexico City  </li>
+<li>Id: 5  </li>
+<li>Texas end of May 2024  </li>
+<li><a href="https://en.wikipedia.org/wiki/2024_North_America_heat_waves">2024 North America heat waves - Wikipedia</a>  </li>
+<li>Verification points: Brownsville TX  </li>
+<li>New England  June 2024  </li>
+<li><a href="https://en.wikipedia.org/wiki/2024_North_America_heat_waves">2024 North America heat waves - Wikipedia</a>  </li>
+<li>Verification points:   <ul>
+<li>Caribou Maine  </li>
+<li>Boston  </li>
+<li>NYC  </li>
+<li>DC  </li>
+</ul>
+</li>
+<li>Widespread US heat July 2024  </li>
+<li><a href="https://en.wikipedia.org/wiki/2024_North_America_heat_waves">2024 North America heat waves - Wikipedia</a>  </li>
+<li>Verification points  <ul>
+<li>Las Vegas, Palm Springs, NYC  </li>
+</ul>
+</li>
+<li>Upper midwest and mid atlantic August 2024  </li>
+<li><a href="https://en.wikipedia.org/wiki/2024_North_America_heat_waves">2024 North America heat waves - Wikipedia</a>   </li>
+<li><a href="https://www.newsweek.com/map-states-breaking-heat-records-1945513">Map Shows 2 States Break Heat Records Amid Soaring Temperatures - Newsweek</a>   </li>
+<li>Verification points:  <ul>
+<li>Chicago  </li>
+<li>Columbus  </li>
+<li>DC      </li>
+</ul>
+</li>
+<li>International points:  <ul>
+<li><a href="https://confluence.ecmwf.int/display/FCST/202408+-+Heatwave+-+Canada">202408 - Heatwave - Canada</a> </li>
+</ul>
+</li>
+</ol>
+<h2 id="worldwide-events">Worldwide events</h2>
+<p>Note 3 of the US-based events also cross into international events</p>
+<ol>
+<li>Antarctica 2024  </li>
+<li><a href="https://en.wikipedia.org/wiki/2024_Antarctica_heat_wave">2024 Antarctica heat wave - Wikipedia</a>  </li>
+<li>Aug 9-11 2024 - Canada  </li>
+<li><a href="https://confluence.ecmwf.int/display/FCST/202408+-+Heatwave+-+Canada">202408 - Heatwave - Canada</a>   </li>
+<li>Cross-listed with fires  </li>
+<li>August 2024 - Australia  </li>
+<li><a href="https://www.abc.net.au/news/2024-08-29/winter-ends-with-heatwave-as-climate-change-upends-seasons/104279250">Heatwave brings Australia's winter weather to an abrupt end as climate change up-ends the seasons - ABC News</a>  </li>
+<li>July 2024 - Japan  </li>
+<li><a href="https://en.wikipedia.org/wiki/2024_Japan_heatwaves">2024 Japan heatwaves - Wikipedia</a>   </li>
+<li>June 2024 - Saudi Arabia  </li>
+<li><a href="https://www.climameter.org/20240616-18-saudi-arabia-heatwave">ClimaMeter - 2024/06/16-18 Saudi Arabia Heatwave</a>   </li>
+<li>June 2024 - Europe   </li>
+<li><a href="https://en.wikipedia.org/wiki/2024_European_heatwaves">2024 European heatwaves - Wikipedia</a>   </li>
+<li>Lots of dates in here but many records broken in late June in UK, Ireland, Finland, Greece, Bosnia and more    </li>
+<li>May 2024 - Mexico city   </li>
+<li><a href="https://en.wikipedia.org/wiki/2024_North_America_heat_waves">2024 North America heat waves - Wikipedia</a>   </li>
+<li>May/June 2024 - India and Pakistan   </li>
+<li><a href="https://en.wikipedia.org/wiki/2024_Indian_heat_wave">2024 Indian heat wave - Wikipedia</a>   </li>
+<li><a href="https://en.wikipedia.org/wiki/2024_Pakistan_heat_wave">2024 Pakistan heat wave - Wikipedia</a>   </li>
+<li>Southwest Western Australia. Nov 2023.     </li>
+<li><a href="http://www.bom.gov.au/climate/current/statements/scs78.pdf?20240202">http://www.bom.gov.au/climate/current/statements/scs78.pdf?20240202</a>  </li>
+<li>Id: 7  </li>
+<li>Sep 2023 - UK and Ireland and France  <ol>
+<li><a href="https://en.wikipedia.org/wiki/2023_heat_waves">2023 heat waves - Wikipedia</a>   </li>
+<li>Id: 8  </li>
+</ol>
+</li>
+<li>Aug 19 - 25 2023 - South western Europe  <ol>
+<li><a href="https://confluence.ecmwf.int/display/FCST/202308+-+Heatwave+-+South-Western+Europe">202308 - Heatwave - South-Western Europe</a>   </li>
+<li>Id: 10  </li>
+</ol>
+</li>
+<li>South America - July- Sep 2023 winter/spring heatwave  <ol>
+<li><a href="https://en.wikipedia.org/wiki/2023_South_America_heat_wave">2023 South America heat wave - Wikipedia</a>  </li>
+<li>Id: 11  </li>
+</ol>
+</li>
+<li>July 16 2023 - China (x2)   <ol>
+<li><a href="https://en.wikipedia.org/wiki/2023_Asia_heat_wave">2023 Asia heat wave - Wikipedia</a>  </li>
+<li>Sanbu Township, Xinjiang    </li>
+<li>Id: 12, 13  </li>
+</ol>
+</li>
+<li>July 15 - 27 2023 - Southern Europe  <ol>
+<li><a href="https://confluence.ecmwf.int/display/FCST/202307-+Heatwave+-+Southern+Europe">202307- Heatwave - Southern Europe</a>  </li>
+<li>Id: 9  </li>
+</ol>
+</li>
+<li>July 18 2023 - Sub-Saharan Africa  <ol>
+<li><a href="https://en.wikipedia.org/wiki/2023_heat_waves">2023 heat waves - Wikipedia</a>   </li>
+<li>Id: 14  </li>
+</ol>
+</li>
+<li>April 24 - 28 2023 - Spain and Portugal   <ol>
+<li><a href="https://confluence.ecmwf.int/display/FCST/202304+-+Heatwave+-+Spain+and+Portugal">202304 - Heatwave - Spain and Portugal</a>  </li>
+<li><a href="https://en.wikipedia.org/wiki/2023_heat_waves">2023 heat waves - Wikipedia</a>   </li>
+<li><a href="https://en.wikipedia.org/wiki/2023_European_heatwaves">2023 European heatwaves - Wikipedia</a>  </li>
+<li>Id: 15  </li>
+</ol>
+</li>
+<li>April 26 to 28 2023 - North Africa  <ol>
+<li><a href="https://en.wikipedia.org/wiki/2023_heat_waves">2023 heat waves - Wikipedia</a>    </li>
+<li>Id: 16  </li>
+</ol>
+</li>
+<li>April 16 - 22 2023 - India  <ol>
+<li><a href="https://en.wikipedia.org/wiki/2023_Asia_heat_wave">2023 Asia heat wave - Wikipedia</a>  </li>
+<li>Id: 17  </li>
+</ol>
+</li>
+<li>Europe Dec 2022  <ol>
+<li><a href="https://confluence.ecmwf.int/display/FCST/202212+-+Heatwave+-+Europe">https://confluence.ecmwf.int/display/FCST/202212+-+Heatwave+-+Europe</a>     </li>
+<li>Id: 19  </li>
+</ol>
+</li>
+<li>UK - Aug 2022  <ol>
+<li><a href="https://confluence.ecmwf.int/display/FCST/202208+-+Heatwave+-+UK">202208 - Heatwave - UK</a>   </li>
+<li>Id: 20  </li>
+</ol>
+</li>
+<li>Western Europe - July 2022  <ol>
+<li><a href="https://confluence.ecmwf.int/display/FCST/202207+-+Heatwave++-+W+Europe">202207 - Heatwave - W Europe</a>   </li>
+<li><a href="https://en.wikipedia.org/wiki/2022_United_Kingdom_heatwaves">2022 United Kingdom heatwaves - Wikipedia</a>   </li>
+<li>Id: 21  </li>
+</ol>
+</li>
+<li>Western Europe - June 2022  <ol>
+<li><a href="https://confluence.ecmwf.int/display/FCST/202206+-+Heatwave+-+Western+Europe">https://confluence.ecmwf.int/display/FCST/202206+-+Heatwave+-+Western+Europe</a>   </li>
+<li>Id: 22  </li>
+</ol>
+</li>
+<li>Europe - June 2022  <ol>
+<li><a href="https://confluence.ecmwf.int/display/FCST/202206+-+Heatwave+-+Europe+2">https://confluence.ecmwf.int/display/FCST/202206+-+Heatwave+-+Europe+2</a>   </li>
+</ol>
+</li>
+<li>Japan - June- August 2022  <ol>
+<li><a href="https://en.wikipedia.org/wiki/2022_Japan_heat_wave">2022 Japan heat wave - Wikipedia</a>   </li>
+<li>Id: 23  </li>
+</ol>
+</li>
+<li>India and Pakistan - May 2022  <ol>
+<li><a href="https://confluence.ecmwf.int/display/FCST/202205+-+Heatwave+-+India%2C+Pakistan">https://confluence.ecmwf.int/display/FCST/202205+-+Heatwave+-+India%2C+Pakistan</a>  </li>
+<li>Id: 24   </li>
+</ol>
+</li>
+<li>March 15-19 2022 East Antarctica  <ol>
+<li><a href="https://journals.ametsoc.org/view/journals/clim/37/3/JCLI-D-23-0175.1.xml">The Extraordinary March 2022 East Antarctica “Heat” Wave. Part I: Observations and Meteorological Drivers in</a>  </li>
+<li>Cross-listed with heat  </li>
+<li>Id: 25    </li>
+</ol>
+</li>
+<li>Australia January 14-23 2022  <ol>
+<li><a href="https://en.wikipedia.org/wiki/2022_heat_waves">2022 heat waves - Wikipedia</a>   </li>
+<li>Id: 26  </li>
+</ol>
+</li>
+<li>Mediterranean - Aug 2021  <ol>
+<li><a href="https://confluence.ecmwf.int/display/FCST/202108+-+Heatwave+-+Mediterranean">https://confluence.ecmwf.int/display/FCST/202108+-+Heatwave+-+Mediterranean</a>   </li>
+</ol>
+</li>
+<li>Western Europe - Aug 2020  <ol>
+<li><a href="https://confluence.ecmwf.int/display/FCST/202008+-+Heatwave+-+Western+Europe">https://confluence.ecmwf.int/display/FCST/202008+-+Heatwave+-+Western+Europe</a>   </li>
+</ol>
+</li>
+<li>Eurasia winter heatwave - Feb 2021  <ol>
+<li><a href="https://en.wikipedia.org/wiki/2021_Eurasia_winter_heat_wave">2021 Eurasia winter heat wave - Wikipedia</a>   </li>
+</ol>
+</li>
+<li>South Eastern Europe - May 2020  <ol>
+<li>​​<a href="https://confluence.ecmwf.int/display/FCST/202005+-+Heatwave+-+SE+Europe">https://confluence.ecmwf.int/display/FCST/202005+-+Heatwave+-+SE+Europe</a>   </li>
+</ol>
+</li>
+<li>Russia - June 2021  <ol>
+<li><a href="https://en.wikipedia.org/wiki/2021_heat_waves#Eurasia">2021 heat waves - Wikipedia</a>  </li>
+</ol>
+</li>
+<li>Canada - early June 2021  <ol>
+<li><a href="https://en.wikipedia.org/wiki/List_of_heat_waves#2021">List of heat waves - Wikipedia</a>  </li>
+<li>Id: 27  </li>
+</ol>
+</li>
+<li>UK and Ireland - July 2021  <ol>
+<li><a href="https://en.wikipedia.org/wiki/2021_British_Isles_heatwave">2021 British Isles heatwave - Wikipedia</a>     </li>
+</ol>
+</li>
+<li>New Zealand 25-28 January  <ol>
+<li><a href="https://niwa.co.nz/climate-and-weather/annual/annual-climate-summary-2021">https://niwa.co.nz/climate-and-weather/annual/annual-climate-summary-2021</a>  </li>
+<li>Id: 28  </li>
+</ol>
+</li>
+<li>Australia Dec 2019 - Jan 2020 (black summer).  <ol>
+<li><a href="http://www.bom.gov.au/climate/current/statements/scs73.pdf">http://www.bom.gov.au/climate/current/statements/scs73.pdf</a>  </li>
+</ol>
+</li>
+<li>Australia 4 Nov - Dec 7 2020.   <ol>
+<li><a href="https://www.abc.net.au/news/2020-12-01/bom-says-hottest-november-and-spring-nights-on-record/12937620">Widespread heatwaves across much of Australia</a>.   </li>
+</ol>
+</li>
+<li>April 15-16 and April 18-19, 2020 Arctic  <ol>
+<li><a href="https://confluence.ecmwf.int/display/FCST/202004+-+Heatwave+-+Arctic">https://confluence.ecmwf.int/display/FCST/202004+-+Heatwave+-+Arctic</a>   </li>
+</ol>
+</li>
+<li>January 2023 South Africa  <ol>
+<li><a href="https://link.springer.com/article/10.1007/s42865-024-00068-9">https://link.springer.com/article/10.1007/s42865-024-00068-9</a></li>
+</ol>
+</li>
+</ol>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.instant.prefetch"], "search": "../../assets/javascripts/workers/search.7a47a382.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.e71a0d61.min.js"></script>
+      
+    
+  </body>
+</html>

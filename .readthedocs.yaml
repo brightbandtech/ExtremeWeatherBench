@@ -4,15 +4,20 @@
 # Required
 version: 2
 
+# Set the OS, Python version, and other tools you might need
 build:
-  os: "ubuntu-24.04"
+  os: ubuntu-24.04
   tools:
-    python: "3"
+    python: "3.13"
   jobs:
-    pre_install:
-      - pip install mkdocs
-      - pip install mkdocs-material
-      - pip install mkapi
+    pre_create_environment:
+      - asdf plugin add uv
+      - asdf install uv latest
+      - asdf global uv latest
+    create_environment:
+      - uv venv "${READTHEDOCS_VIRTUALENV_PATH}"
+    install:
+      - UV_PROJECT_ENVIRONMENT="${READTHEDOCS_VIRTUALENV_PATH}" uv sync --frozen --group docs
 
 mkdocs:
   configuration: mkdocs.yml
