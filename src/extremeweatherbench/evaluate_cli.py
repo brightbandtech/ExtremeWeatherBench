@@ -89,15 +89,15 @@ def cli_runner(
 
     Args:
         default: Use default Brightband evaluation objects with current directory as
-        output
-        config_file: Path to a config.py file containing evaluation objects
-        output_dir: Directory for analysis outputs (default: current directory)
-        cache_dir: Optional directory for caching intermediate data
-        parallel_config: Parallel configuration using joblib (default: {'backend':
-        'threading', 'n_jobs': 8})
-        save_case_operators: Save CaseOperator objects to a pickle file at this path
+            output.
+        config_file: Path to a config.py file containing evaluation objects.
+        output_dir: Directory for analysis outputs (default: current directory).
+        cache_dir: Optional directory for caching intermediate data.
+        n_jobs: Number of parallel jobs to run.
+        parallel_config: Parallel configuration using joblib.
+        save_case_operators: Save CaseOperator objects to a pickle file at this path.
         precompute: Pre-compute datasets before running metrics to avoid recomputing
-        them for each metric (faster but uses more memory)
+            them for each metric (faster but uses more memory).
 
     Examples:
         # Use default evaluation objects

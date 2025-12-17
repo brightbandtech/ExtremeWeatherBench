@@ -12,7 +12,7 @@ ExtremeWeatherBench provides a standardized framework for evaluating machine lea
 
 - Heat waves
 - Freezes (cold snaps)
-- Severe convection (hail, tornadoes)
+- Severe convection (hail and tornadoes)
 - Tropical cyclones
 - Atmospheric rivers
 
