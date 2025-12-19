@@ -249,6 +249,13 @@ class TestThresholdMetrics:
         assert isinstance(acc_metric, metrics.ThresholdMetric)
         assert acc_metric.forecast_threshold == 15000
         assert acc_metric.target_threshold == 0.3
+    
+    def test_roc_threshold_metric(self):
+        """Test ROC threshold metric instantiation and properties."""
+        roc_metric = metrics.ReceiverOperatingCharacteristic(forecast_threshold=15000, target_threshold=0.3)
+        assert isinstance(roc_metric, metrics.ThresholdMetric)
+        assert roc_metric.forecast_threshold == 15000
+        assert roc_metric.target_threshold == 0.3
 
     def test_threshold_metric_instance_interface(self):
         """Test that instance callable interface works."""
@@ -1978,6 +1985,31 @@ class TestAccuracy:
         result = metric._compute_metric(forecast, target)
         assert isinstance(result, xr.DataArray)
 
+class TestROCSS:
+    """Tests for the ROCSS metric."""
+
+    def test_instantiation(self):
+        """Test that ROCSS can be instantiated."""
+        metric = metrics.ReceiverOperatingCharacteristicSkillScore()
+        assert isinstance(metric, metrics.ReceiverOperatingCharacteristic)
+
+    def test_compute_metric(self):
+        """Test ROCSS computation."""
+        metric = metrics.ReceiverOperatingCharacteristicSkillScore(forecast_threshold=0.5, target_threshold=0.5)
+
+        forecast = xr.DataArray(
+            data=[0.8, 0.3, 0.7, 0.2],
+            dims=["lead_time"],
+            coords={"lead_time": [0, 1, 2, 3]},
+        )
+        target = xr.DataArray(
+            data=[0.9, 0.1, 0.8, 0.6],
+            dims=["lead_time"],
+            coords={"lead_time": [0, 1, 2, 3]},
+        )
+
+        result = metric._compute_metric(forecast, target)
+        assert isinstance(result, xr.DataArray)
 
 class TestMetricIntegration:
     """Integration tests for metric classes."""
