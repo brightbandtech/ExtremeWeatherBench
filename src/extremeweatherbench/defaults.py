@@ -184,7 +184,6 @@ def _preprocess_bb_severe_cira_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
             relative_humidity=ds["r"] / 100,  # Convert relative humidity to percentage
             levels=ds["level"],
         )
-    ds["geopotential"] = ds["z"] * calc.g0
     return ds
 
 
