@@ -50,6 +50,70 @@ def maybe_get_operator(
     return operator_method
 
 
+def find_common_init_times(
+    forecast_landfall: xr.DataArray, target_landfall: xr.DataArray
+) -> list[datetime.datetime]:
+    """Find the common init_times between forecast and target landfalls.
+
+    Args:
+        forecast_landfall: The forecast landfall DataArray.
+        target_landfall: The target landfall DataArray.
+
+    Returns:
+        Sorted list of init_times present in both forecast and target.
+    """
+    # Find common init_times between forecast and target
+    forecast_init_times = set(forecast_landfall.coords["init_time"].values)
+    target_init_times = set(target_landfall.coords["init_time"].values)
+    common_init_times = sorted(forecast_init_times.intersection(target_init_times))
+    return common_init_times
+
+
+def is_valid_landfall(landfall: xr.DataArray | None) -> bool:
+    """Check if a landfall DataArray is valid for processing.
+
+    A valid landfall has dimensions and contains the init_time coordinate
+    needed for landfall metric calculations. Also checks that the data
+    contains at least some non-NaN values.
+
+    Args:
+        landfall: The landfall DataArray to check
+
+    Returns:
+        True if the landfall is valid, False otherwise
+    """
+    if landfall is None or landfall.ndim == 0:
+        return False
+    if "init_time" not in landfall.coords:
+        return False
+    # Check that we have actual data (not all NaN)
+    if np.isnan(landfall.values).all():
+        return False
+    return True
+
+
+def _create_nan_dataarray(
+    preserved_dims: Union[str, list[str]] = "init_time",
+) -> xr.DataArray:
+    """Create a NaN DataArray with the given dimension(s).
+
+    Args:
+        preserved_dims: The dimension(s) to create the NaN DataArray for.
+            Can be a single string or a list of strings.
+
+    Returns:
+        A DataArray with the given dimension(s) and NaN values.
+    """
+    if isinstance(preserved_dims, str):
+        preserved_dims = [preserved_dims]
+
+    # Create shape with one element per dimension
+    shape = [1] * len(preserved_dims)
+    nan_values = np.full(shape, np.nan)
+    nan_da = xr.DataArray(nan_values, dims=preserved_dims)
+    return nan_da
+
+
 def convert_longitude_to_360(longitude: float) -> float:
     """Convert a longitude from the range [-180, 180) to [0, 360)."""
     return np.mod(longitude, 360)
