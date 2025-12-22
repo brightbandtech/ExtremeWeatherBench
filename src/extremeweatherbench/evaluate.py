@@ -424,7 +424,10 @@ def compute_case_operator(
             )
             concatenated = _safe_concat(results, ignore_index=True)
             if not concatenated.empty:
-                concatenated.to_pickle(cache_path / "results.pkl")
+                concatenated.to_pickle(
+                    cache_path
+                    / f"case_{case_operator.case_metadata.case_id_number}_results.pkl"
+                )
 
     return _safe_concat(results, ignore_index=True)
 
