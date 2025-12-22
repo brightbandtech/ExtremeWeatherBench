@@ -63,9 +63,9 @@ def find_common_init_times(
         Sorted list of init_times present in both forecast and target.
     """
     # Find common init_times between forecast and target
-    init_times_1 = set(forecast_landfall.coords["init_time"].values)
-    init_times_2 = set(target_landfall.coords["init_time"].values)
-    common_init_times = sorted(init_times_1.intersection(init_times_2))
+    forecast_init_times = set(forecast_landfall.coords["init_time"].values)
+    target_init_times = set(target_landfall.coords["init_time"].values)
+    common_init_times = sorted(forecast_init_times.intersection(target_init_times))
     return common_init_times
 
 
