@@ -1,48 +1,115 @@
-from typing import Literal, Sequence, Union
+from typing import Literal, Optional, Sequence, Union
 
 import numpy as np
+import numpy.typing as npt
+import regionmask
+import scores.categorical as categorical
+import shapely
 import xarray as xr
 
-from extremeweatherbench._cape import (
-    _compute_batch_parallel as compute_ml_cape_cin_parallel,
-)
-from extremeweatherbench._cape import (
-    _compute_batch_serial as compute_ml_cape_cin_serial,
-)
+from extremeweatherbench import utils
+
+epsilon: float = 0.6219569100577033  # Ratio of molecular weights (H2O/dry air)
+sat_press_0c: float = 6.112  # Saturation vapor pressure at 0°C (hPa)
+g0: float = 9.80665  # Standard gravity (m/s^2)
 
 
 def convert_from_cartesian_to_latlon(
-    input_point: Union[np.ndarray, tuple[float, float]], ds_mapping: xr.Dataset
+    input_point: Union[np.ndarray, tuple[float, float]],
+    latitude: xr.DataArray,
+    longitude: xr.DataArray,
 ) -> tuple[float, float]:
-    """Convert a point from the cartesian coordinate system to the lat/lon coordinate
-    system.
+    """Convert point from cartesian coordinate system to lat/lon.
 
     Args:
-        input_point: The point to convert, represented as a tuple (y, x) in the
-            cartesian coordinate system.
-        ds_mapping: The dataset containing the latitude and longitude
-            coordinates.
+        input_point: Point as tuple (y, x) in cartesian system
+        latitude: Latitude DataArray
+        longitude: Longitude DataArray
 
     Returns:
-        The point in the lat/lon coordinate system, represented as a tuple
-        (latitude, longitude) in degrees.
+        Tuple (latitude, longitude) in degrees
     """
+    lat_idx = int(input_point[0])
+    lon_idx = int(input_point[1])
     return (
-        ds_mapping.isel(
-            latitude=int(input_point[0]), longitude=int(input_point[1])
-        ).latitude.values,
-        ds_mapping.isel(
-            latitude=int(input_point[0]), longitude=int(input_point[1])
-        ).longitude.values,
+        latitude.isel(latitude=lat_idx).values,
+        longitude.isel(longitude=lon_idx).values,
     )
 
 
-def calculate_haversine_distance(
-    input_a: Sequence[float],
+def mixing_ratio(
+    partial_pressure: float | npt.NDArray, total_pressure: float | npt.NDArray
+) -> float | npt.NDArray[np.float64]:
+    r"""Calculate the mixing ratio of water vapor in air.
+
+    Uses the formula: $w = (\epsilon * e) / (p - e)$ where $\epsilon = 0.622$.
+
+    Args:
+        partial_pressure: Water vapor partial pressure in hPa.
+        total_pressure: Total atmospheric pressure in hPa.
+
+    Returns:
+        numpy.ndarray: Mixing ratio in kg/kg (dimensionless).
+
+    Notes:
+        - Mixing ratio is approximately constant with height for unsaturated air
+        - Values typically range from 0 to ~0.025 kg/kg in the atmosphere
+        - ε (epsilon) = 0.622 is the ratio of molecular weights (H2O/dry air)
+    """
+    # Suppress warnings for this specific calculation
+    with np.errstate(divide="ignore", invalid="ignore"):
+        return epsilon * partial_pressure / (total_pressure - partial_pressure)
+
+
+def saturation_vapor_pressure(
+    temperature: float | npt.NDArray,
+) -> npt.NDArray[np.float64]:
+    r"""Calculate saturation vapor pressure using the Clausius-Clapeyron equation.
+
+    Uses the Magnus formula approximation which is accurate for temperatures
+    between -40°C and +50°C. Formula:
+
+    $$e_ = 6.112 \times \exp\left(\frac{17.67*T}{T+243.5}\right)$$
+
+    Args:
+        temperature: Temperature values in Celsius (can be scalar or array).
+
+    Returns:
+        numpy.ndarray: Saturation vapor pressure values in hPa.
+
+    Notes:
+        - Based on the Magnus formula which is accurate within ±0.1% for typical
+          atmospheric temperatures
+        - Saturation vapor pressure increases exponentially with temperature
+        - At 0°C: ~6.11 hPa, at 20°C: ~23.4 hPa, at 30°C: ~42.4 hPa
+    """
+    # Suppress overflow warnings for this calculation
+    with np.errstate(over="ignore", invalid="ignore"):
+        return sat_press_0c * np.exp(17.67 * temperature / (temperature + 243.5))
+
+
+def saturation_mixing_ratio(
+    pressure: float | npt.NDArray, temperature: float | npt.NDArray
+) -> npt.NDArray[np.float64]:
+    """Calculates the saturation mixing ratio of a parcel.
+
+    Args:
+        pressure: Pressure values in hPa
+        temperature: Temperature values in C
+
+    Returns:
+        Saturation mixing ratio values in kg/kg
+    """
+    return mixing_ratio(saturation_vapor_pressure(temperature), pressure)
+
+
+def haversine_distance(
+    input_a: Sequence[Union[float, xr.DataArray]],
     input_b: Sequence[Union[float, xr.DataArray]],
     units: Literal["km", "kilometers", "deg", "degrees"] = "km",
 ) -> Union[float, xr.DataArray]:
-    """Calculate the great-circle distance between two points on the Earth's surface.
+    """Calculate the great-circle/haversine distance between two points on the Earth's
+    surface.
 
     Args:
         input_a: The first point, represented as an ndarray of shape (2,n) in
@@ -72,7 +139,7 @@ def calculate_haversine_distance(
         raise ValueError(f"Invalid units: {units}")
 
 
-def create_great_circle_mask(
+def great_circle_mask(
     ds: xr.Dataset, latlon_point: tuple[float, float], radius_degrees: float
 ) -> xr.DataArray:
     """Create a circular mask based on great circle distance for an xarray dataset.
@@ -86,7 +153,7 @@ def create_great_circle_mask(
         Boolean mask where True indicates points within the radius.
     """
 
-    distance = calculate_haversine_distance(
+    distance = haversine_distance(
         latlon_point, (ds.latitude, ds.longitude), units="deg"
     )
     # Create mask as xarray DataArray
@@ -110,7 +177,7 @@ def orography(ds: xr.Dataset) -> xr.DataArray:
     """
 
     if "geopotential_at_surface" in ds.variables:
-        return ds["geopotential_at_surface"].isel(time=0) / 9.80665
+        return ds["geopotential_at_surface"].isel(time=0) / g0
     else:
         # Import inputs here to avoid circular import
         from extremeweatherbench import inputs
@@ -124,11 +191,11 @@ def orography(ds: xr.Dataset) -> xr.DataArray:
             era5.isel(time=1000000)["geopotential_at_surface"].sel(
                 latitude=ds.latitude, longitude=ds.longitude
             )
-            / 9.80665
+            / g0
         )
 
 
-def calculate_pressure_at_surface(orography_da: xr.DataArray) -> xr.DataArray:
+def pressure_at_surface(orography_da: xr.DataArray) -> xr.DataArray:
     """Calculate the pressure at the surface, based on orography.
 
     The dataarray is orography (geopotential at the surface/g0).
@@ -171,32 +238,34 @@ def maybe_calculate_wind_speed(ds: xr.Dataset) -> xr.Dataset:
     return ds
 
 
-def generate_geopotential_thickness(
-    ds: xr.Dataset,
-    var_name: str = "geopotential",
-    level_name: str = "level",
+def geopotential_thickness(
+    da: xr.DataArray,
     top_level_value: int = 300,
     bottom_level_value: int = 500,
+    geopotential: bool = False,
 ) -> xr.DataArray:
     """Generate the geopotential thickness from the geopotential heights.
 
     Args:
-        ds: The xarray dataset to generate the geopotential thickness from.
-        var_name: The name of the variable to generate the geopotential thickness from.
-        level_name: The name of the level to generate the geopotential thickness from.
+        da: The xarray DataArray to generate the geopotential thickness from.
         top_level_value: The value of the top level to generate the geopotential
             thickness from.
         bottom_level_value: The value of the bottom level to generate the
             geopotential thickness from.
+        geopotential: Whether the input DataArray is geopotential height or
+        geopotential (default is geopotential height).
 
     Returns:
         The geopotential thickness as an xarray DataArray.
     """
-    geopotential_heights = ds[var_name].sel({level_name: top_level_value})
-    geopotential_height_bottom = ds[var_name].sel({level_name: bottom_level_value})
-    geopotential_thickness = (
-        geopotential_heights - geopotential_height_bottom
-    ) / 9.80665
+    geopotential_heights = da.sel({"level": top_level_value})
+    geopotential_height_bottom = da.sel({"level": bottom_level_value})
+    if geopotential:
+        geopotential_thickness = (
+            geopotential_heights - geopotential_height_bottom
+        ) / g0
+    else:
+        geopotential_thickness = geopotential_heights - geopotential_height_bottom
     geopotential_thickness.attrs = dict(
         description="Geopotential thickness of level and 500 hPa", units="m"
     )
@@ -249,13 +318,66 @@ def nantrapezoid(
     return ret
 
 
+def specific_humidity_from_relative_humidity(
+    air_temperature: xr.DataArray, relative_humidity: xr.DataArray, levels: xr.DataArray
+) -> xr.DataArray:
+    """Compute specific humidity from relative humidity and air temperature.
+
+    Args:
+        air_temperature: Air temperature in Kelvin.
+        relative_humidity: Relative humidity (0-1 or 0-100 depending on data).
+        levels: Pressure levels in hPa.
+
+    Returns:
+        A DataArray of specific humidity in kg/kg.
+    """
+    # Compute saturation mixing ratio; air temperature must be in Kelvin
+    sat_mixing_ratio = saturation_mixing_ratio(levels, air_temperature - 273.15)
+
+    # Calculate specific humidity using saturation mixing ratio, epsilon,
+    # and relative humidity
+    mixing_ratio = (
+        epsilon
+        * sat_mixing_ratio
+        * relative_humidity
+        / (epsilon + sat_mixing_ratio * (1 - relative_humidity))
+    )
+    specific_humidity = mixing_ratio / (1 + mixing_ratio)
+    return specific_humidity
+
+
+def find_land_intersection(
+    mask: xr.DataArray, land_mask: Optional[xr.DataArray] = None
+) -> xr.DataArray:
+    """Find points where a data mask intersects with a land mask.
+
+    Args:
+        mask: a boolean mask of data locations that includes latitude and longitude
+        land_mask: a boolean mask of land locations
+
+    Returns:
+        a mask of points where AR overlaps with land
+    """
+    if land_mask is None:
+        land_mask = regionmask.defined_regions.natural_earth_v5_0_0.land_110.mask(
+            mask.longitude, mask.latitude
+        )
+        land_mask = land_mask.where(np.isnan(land_mask), 1).where(land_mask == 0, 0)
+
+    # Use the scores.categorical library to compute the binary mask (true positives)
+    contingency_manager = categorical.BinaryContingencyManager(mask, land_mask)
+    # return the true positive mask, where mask is true and land is true
+    return contingency_manager.tp
+
+
 def dewpoint_from_specific_humidity(pressure: float, specific_humidity: float) -> float:
     r"""Calculate dewpoint from specific humidity.
 
-    This computation follows the methodology used in `metpy.calc.dewpoint_from_specific_humidity`.
-    Given specific humidity $q$, mixing ratio $w$, and pressure $p$, we compute first
-    $w = q / (1 - q)$ and $e = p w / (w + \epsilon)$ where $\epsilon=0.622$ is the ratio
-    of the molecular weights of water and dry air and $e$ is the partial pressure of water vapor.
+    This computation follows the methodology used in
+    `metpy.calc.dewpoint_from_specific_humidity`. Given specific humidity $q$, mixing
+    ratio $w$, and pressure $p$, we compute first $w = q / (1 - q)$ and
+    $e = p w / (w + \epsilon)$ where $\epsilon=0.622$ is the ratio of the molecular
+    weights of water and dry air and $e$ is the partial pressure of water vapor.
 
     Then, we invert the Bolton (1980) formula to get the dewpoint $T_d$ given $e$:
 
@@ -268,184 +390,480 @@ def dewpoint_from_specific_humidity(pressure: float, specific_humidity: float) -
     Returns:
         The dewpoint in Kelvin.
     """
-    # NOTE: there are some pathological cases where the specific humidity is negative in some
-    # NWP and MLWP data sources. For safety, you should restrict the specific humidity to the
-    # interval [1e-10, 1], which addresses this and should preserve the remaining physical
-    # constraints.
+    # NOTE: there are some pathological cases where the specific humidity is negative
+    # in some NWP and MLWP data sources. For safety, you should restrict the specific
+    # humidity to the interval [1e-10, 1], which addresses this and should preserve the
+    # remaining physical constraints.
     w = specific_humidity / (1.0 - specific_humidity)
-    e = pressure * w / (w + 0.622)
-    T_d = 243.5 * np.log(e / 6.112) / (17.67 - np.log(e / 6.112))
+    e = pressure * w / (w + epsilon)
+    T_d = 243.5 * np.log(e / sat_press_0c) / (17.67 - np.log(e / sat_press_0c))
     return T_d + 273.15
 
 
-def compute_mixed_layer_cape(
-    pressure: xr.DataArray,
-    temperature: xr.DataArray,
-    dewpoint: xr.DataArray,
-    geopotential: xr.DataArray,
-    pressure_dim: str = "level",
-    depth: float = 100.0,
-    parallel: bool = True,
+def find_landfalls(
+    track_data: xr.DataArray,
+    land_geom: Optional[shapely.geometry.Polygon] = None,
+    return_next_landfall: bool = False,
 ) -> xr.DataArray:
-    """Compute mixed-layer CAPE from thermodynamic profiles.
+    """Find landfall point(s) where tracked object intersects land.
 
-    This function applies the optimized CAPE/CIN calculation to xarray DataArrays,
-    handling both in-memory and Dask-backed arrays automatically. It supports arbitrary
-    dimensional layouts including multi-dimensional grids.
-
-    In general, we recommend using parallel=False whenever you are processing data with
-    less than ~1,000 profiles per chunk; otherwise, use parallel=True to take advantage
-    of batching at the chunk level.
-
-    We don't return the computed CIN here because it's not yet implemented correctly.
+    Generalized landfall detection for any object (TC, AR, etc).
+    Expects DataArray with latitude, longitude, valid_time as coords.
 
     Args:
-        pressure: Pressure in hPa. Must have pressure_dim as one of its dimensions.
-        temperature: Temperature in Kelvin. Must be broadcastable against pressure.
-        dewpoint: Dewpoint in Kelvin. Must be broadcastable against pressure.
-        geopotential: Geopotential in m2/s2. Must be broadcastable against pressure.
-        pressure_dim: Name of the pressure level dimension (default: 'level').
-        depth: Mixed layer depth in hPa (default: 100.0).
-        parallel: If True, use Numba parallel processing within chunks (default: True).
-            Uses batched computation with prange for multi-threaded computation. Set to
-            False for serial processing
+        track_data: Track DataArray with latitude, longitude,
+            valid_time coords. Data values are interpolated at landfall.
+            Shape: (valid_time,) or (lead_time, valid_time)
+        return_next_landfall: If True, return next landfall; else only first landfall
+        land_geom: Shapely geometry for land intersection testing
 
     Returns:
-        Tuple of (cape, cin) as xarray DataArrays with pressure_dim removed.
-
-    Examples:
-        # Basic usage with parallel processing (default, recommended)
-        >>> cape, cin = compute_mixed_layer_cape(
-        ...     ds["pressure"],
-        ...     ds["temperature"],
-        ...     ds["dewpoint"],
-        ...     ds["geopotential"],
-        ...     pressure_dim="level",
-        ... )
-
-        # Dask distributed with large chunks - use parallel (excellent performance)
-        >>> # Dataset: 61 timesteps, 160 lat * 280 lon = ~45k profiles/chunk
-        >>> ds = xr.open_zarr("era5.zarr", chunks={"time": 1})
-        >>> cape, cin = compute_mixed_layer_cape(
-        ...     ds["pressure"],
-        ...     ds["temperature"],
-        ...     ds["dewpoint"],
-        ...     ds["geopotential"],
-        ...     parallel=True,  # Multi-threaded within each chunk
-        ... )
-
-        # Small chunks or debugging - use serial
-        >>> ds_small = xr.open_zarr("data.zarr", chunks={"profile": 100})
-        >>> cape, cin = compute_mixed_layer_cape(
-        ...     ds_small["pressure"],
-        ...     ds_small["temperature"],
-        ...     ds_small["dewpoint"],
-        ...     ds_small["geopotential"],
-        ...     parallel=False,  # Single-threaded, simpler behavior
-        ... )
-
-        # Isobaric data (pressure is 1D, others are multi-dimensional)
-        >>> cape, cin = compute_mixed_layer_cape(
-        ...     ds["pressure"],  # shape: (level,) - isobaric levels
-        ...     ds["temperature"],  # shape: (time, lat, lon, level)
-        ...     ds["dewpoint"],  # shape: (time, lat, lon, level)
-        ...     ds["geopotential"],  # shape: (time, lat, lon, level)
-        ...     pressure_dim="level",
-        ... )
-        # xarray automatically broadcasts pressure to match other dimensions
-
-    Notes:
-        - Temperature, dewpoint, and geopotential must have matching dimensions/shape
-        - Pressure can be 1D (just level) for isobaric data - will be broadcast automatically
-        - The pressure_dim must be present in all input arrays with the same size
-        - Pressure levels should be in descending order (surface to top)
-        - For Dask arrays, pressure_dim MUST be in a single chunk
-        - Recommended chunking: All spatial dims in one chunk, 1 time step per chunk
-          Example: (time=1, lat=*, lon=*, level=*) where * means all values
-        - For large ERA5-like grids (lat * lon > 10k points): parallel=True is optimal
-        - Dask distributed + large chunks + parallel=True: ~8-10x speedup vs serial
-        - NumPy arrays: parallel=True provides multi-core speedup automatically
-        - The parallel overhead is negligible for chunks >1000 profiles
+        DataArray with landfall values and lat/lon/time as coords,
+        or None if no landfall found
     """
+    # If no land geometry is provided, use default
+    if land_geom is None:
+        land_geom = utils.load_land_geometry()
 
-    cape_batch_func = (
-        compute_ml_cape_cin_parallel if parallel else compute_ml_cape_cin_serial
-    )
+    # Squeeze track dimension if needed
+    if "track" in track_data.dims and track_data.sizes["track"] == 1:
+        track_data = track_data.squeeze("track", drop=True)
 
-    # Define the wrapper function that will be applied
-    def _compute_cape_cin_wrapper(p, t, td, z):
-        """Wrapper to handle the conversion and calling of Numba function.
+    # Detect forecast vs single track data
+    is_forecast = "lead_time" in track_data.dims and "valid_time" in track_data.dims
 
-        This expects p, t, td, z with shape (..., n_levels) where ... represents
-        any number of batch dimensions that will be flattened into n_profiles.
+    if is_forecast:
+        # Convert to init_time coords for boundary detection
+        track_data = utils.convert_valid_time_to_init_time(track_data)
 
-        Note: Pressure (p) might be 1D (level,) for isobaric data while others
-        are multi-dimensional. We broadcast it to match if needed.
-        """
+        # Flatten to single time dimension for vectorized processing
+        track_data_flat = track_data.stack(time=("init_time", "lead_time"))
 
-        # Get the original shape (excluding the pressure level dimension which is last)
-        # Use temperature's shape as reference
-        original_shape = t.shape[:-1]
-        n_levels = t.shape[-1]
+        # Vectorized landfall detection
+        landfall_mask = _detect_landfalls_wrapper(track_data_flat, land_geom)
 
-        # Broadcast pressure if it's 1D (isobaric data)
-        if p.ndim == 1:
-            # Pressure is 1D: (level,) - broadcast to match temperature shape
-            # Create the target shape: (..., n_levels)
-            target_shape = t.shape
-            p = np.broadcast_to(p, target_shape)
+        # Mask init_time boundaries
+        landfall_mask = _mask_init_time_boundaries(landfall_mask, track_data_flat)
 
-        # Reshape to (n_profiles, n_levels) by flattening all batch dimensions
-        n_profiles = np.prod(original_shape, dtype=int)
-
-        p_batch = p.reshape(n_profiles, n_levels)
-        t_batch = t.reshape(n_profiles, n_levels)
-        td_batch = td.reshape(n_profiles, n_levels)
-        z_batch = z.reshape(n_profiles, n_levels)
-
-        # Ensure arrays are contiguous and correct dtype
-        p_batch = np.ascontiguousarray(p_batch, dtype=np.float64)
-        t_batch = np.ascontiguousarray(t_batch, dtype=np.float64)
-        td_batch = np.ascontiguousarray(td_batch, dtype=np.float64)
-        z_batch = np.ascontiguousarray(z_batch, dtype=np.float64)
-
-        # Call the selected Numba batch function (parallel or serial)
-        cape_array, _ = cape_batch_func(
-            p_batch, t_batch, td_batch, z_batch, depth=depth
+        # Interpolate at landfall points
+        result = _interpolate_and_format_landfalls(
+            track_data_flat,
+            landfall_mask,
+            land_geom,
+            return_next_landfall,
+            group_by="init_time",
         )
 
-        # Reshape back to original batch dimensions (removing pressure dimension)
-        cape_array = cape_array.reshape(original_shape)
+        return result
+    else:
+        # Process single track data
+        landfall_mask = _detect_landfalls_wrapper(track_data, land_geom)
 
-        return cape_array
+        return _interpolate_and_format_landfalls(
+            track_data,
+            landfall_mask,
+            land_geom,
+            return_next_landfall,
+            group_by=None,
+        )
 
-    # Use xarray.apply_ufunc to apply the wrapped interface
-    cape = xr.apply_ufunc(
-        _compute_cape_cin_wrapper,
-        pressure,
-        temperature,
-        dewpoint,
-        geopotential,
-        input_core_dims=[
-            [pressure_dim],
-            [pressure_dim],
-            [pressure_dim],
-            [pressure_dim],
-        ],
-        output_core_dims=[[]],  # CAPE has no pressure dimension
-        vectorize=False,  # We handle the batching ourselves
-        dask="parallelized",  # Enable Dask support
-        output_dtypes=[np.float64],  # Specify output types
-        dask_gufunc_kwargs={
-            "output_sizes": {},  # No new dimensions created
-        },
+
+def find_next_landfall_for_init_time(
+    forecast_landfalls: xr.DataArray,
+    target_landfalls: xr.DataArray,
+) -> Optional[xr.DataArray]:
+    """Find unique next upcoming landfalls from target data.
+
+    For each forecast initialization time, finds the next landfall
+    event in the target data that occurs after that init_time. Only
+    unique landfalls are returned (multiple init_times mapping to the
+    same landfall are deduplicated). Init_times without future
+    landfalls are excluded.
+
+    Args:
+        forecast_landfalls: Forecast landfall DataArray with init_time
+            dimension (from find_landfalls)
+        target_landfalls: Target landfall DataArray from find_landfalls
+            with return_all=True (has landfall dimension)
+
+    Returns:
+        DataArray with unique next landfalls indexed by init_time, or
+        None if no future landfalls exist
+    """
+    # Extract init_times from forecast landfalls
+    if "init_time" in forecast_landfalls.dims:
+        init_times = forecast_landfalls.init_time.values
+    elif "init_time" in forecast_landfalls.coords:
+        # init_time as coordinate (scalar case)
+        init_times = np.array([forecast_landfalls.coords["init_time"].values])
+    else:
+        raise KeyError("Missing init_time dimension or coordinate.")
+
+    # Get target landfall times
+    target_times = target_landfalls.coords["valid_time"].values
+
+    # Use searchsorted to find next landfall index for each init_time
+    next_indices = np.searchsorted(target_times, init_times, side="right")
+
+    # Create mask for init_times with future landfalls
+    valid_mask = next_indices < len(target_times)
+
+    # Build result for all init_times, keeping only unique landfalls
+    results = []
+
+    for i, init_t in enumerate(init_times):
+        if valid_mask[i]:
+            # There is a future landfall for this init_time
+            landfall_idx = next_indices[i]
+            landfall = target_landfalls.isel(landfall=landfall_idx)
+            landfall = landfall.assign_coords(init_time=init_t)
+
+            results.append(landfall)
+
+    # Combine landfalls indexed by init_time or return None if no results
+    return (
+        xr.concat(
+            results, dim="init_time", coords="different", compat="equals", join="outer"
+        )
+        if results
+        else None
     )
 
-    # Add metadata
-    cape.name = "cape"
-    cape.attrs = {
-        "long_name": "Convective Available Potential Energy",
-        "units": "J/kg",
-        "description": f"Mixed-layer CAPE computed over {depth} hPa depth",
-    }
-    return cape
+
+def _detect_landfalls_wrapper(
+    track_data: xr.DataArray,
+    land_geom: shapely.geometry.Polygon,
+) -> xr.DataArray:
+    """Landfall detection across consecutive point pairs.
+
+    Args:
+        track_data: Track data with latitude, longitude coords
+        land_geom: Land geometry for intersection testing
+
+    Returns:
+        Boolean DataArray where True indicates a landfall between
+        point i and point i+1
+    """
+    # Determine time dimension name
+    time_dims = [d for d in track_data.dims if "time" in d.lower()]
+    if not time_dims:
+        return xr.DataArray(
+            np.array([], dtype=bool),
+            dims=track_data.dims,
+        )
+    time_dim = time_dims[0]
+
+    # Extract coordinates
+    lats = track_data.coords["latitude"]
+    lons = track_data.coords["longitude"]
+
+    # Convert to -180/180
+    lons_180 = (lons + 180) % 360 - 180
+
+    # Get shifted versions for consecutive pairs
+    lats_next = lats.shift({time_dim: -1})
+    lons_180_next = lons_180.shift({time_dim: -1})
+
+    # Vectorize the landfall check function
+    def _check_landfall_scalar(lon1, lat1, lon2, lat2):
+        """Scalar landfall check for vectorization."""
+        # Handle NaN values (from shift at boundaries)
+        if np.isnan(lon1) or np.isnan(lat1) or np.isnan(lon2) or np.isnan(lat2):
+            return False
+        return _is_true_landfall(lon1, lat1, lon2, lat2, land_geom)
+
+    # Apply to get landfall mask
+    landfall_mask = xr.apply_ufunc(
+        _check_landfall_scalar,
+        lons_180,
+        lats,
+        lons_180_next,
+        lats_next,
+        vectorize=True,  # We already vectorized with np.vectorize
+        dask="parallelized",
+        output_dtypes=[bool],
+    )
+
+    return landfall_mask
+
+
+def _mask_init_time_boundaries(
+    landfall_mask: xr.DataArray,
+    track_data: xr.DataArray,
+) -> xr.DataArray:
+    """Mask out landfalls at init_time boundaries.
+
+    Prevents comparing last point of one init_time with
+    first point of next init_time.
+
+    Args:
+        landfall_mask: Boolean mask of potential landfalls
+        track_data: Original track data with init_time coord
+
+    Returns:
+        Masked landfall array with boundaries set to False
+    """
+    if "init_time" not in track_data.coords:
+        return landfall_mask
+
+    # Determine time dimension
+    time_dims = [d for d in track_data.dims if "time" in d.lower()]
+    if not time_dims:
+        return landfall_mask
+    time_dim = time_dims[0]
+
+    # Get init_time for each point and the next point
+    init_curr = track_data.coords["init_time"]
+    init_next = init_curr.shift({time_dim: -1})
+
+    # Only keep landfalls where init_time doesn't change
+    same_init = init_curr == init_next
+
+    # Also handle NaN from shift operation
+    same_init = same_init.fillna(False)
+
+    return landfall_mask & same_init
+
+
+def _interpolate_and_format_landfalls(
+    track_data: xr.DataArray,
+    landfall_mask: xr.DataArray,
+    land_geom: shapely.geometry.Polygon,
+    return_all_landfalls: bool,
+    group_by: Optional[str] = None,
+) -> Optional[xr.DataArray]:
+    """Interpolate landfall points and format output.
+
+    Args:
+        track_data: Original track data
+        landfall_mask: Boolean mask of landfall locations
+        land_geom: Land geometry for intersection
+        return_all_landfalls: Whether to return all or just first
+        group_by: If not None, group by this coord (e.g., "init_time")
+
+    Returns:
+        Formatted landfall DataArray or None if no landfalls
+    """
+    # Determine time dimension
+    time_dims = [d for d in track_data.dims if "time" in d.lower()]
+    if not time_dims:
+        return None
+
+    # Get indices where landfalls occur
+    landfall_indices = np.where(landfall_mask.values)[0]
+
+    if len(landfall_indices) == 0:
+        return None
+
+    # Extract coordinate arrays
+    lats_vals = track_data.coords["latitude"].values
+    lons_vals = track_data.coords["longitude"].values
+    times_vals = track_data.coords["valid_time"].values
+    track_vals = track_data.values
+
+    # Convert longitudes to -180/180
+    lons_180 = (lons_vals + 180) % 360 - 180
+
+    # Get init_time if available
+    init_times = None
+    if "init_time" in track_data.coords:
+        init_times = track_data.coords["init_time"].values
+
+    # Process each landfall
+    landfall_data = []
+
+    for i in landfall_indices:
+        try:
+            # Create segment
+            segment = shapely.geometry.LineString(
+                [(lons_180[i], lats_vals[i]), (lons_180[i + 1], lats_vals[i + 1])]
+            )
+
+            # Get intersection point
+            intersection = segment.intersection(land_geom)
+
+            # Handle different intersection types
+            if intersection.is_empty:
+                continue
+
+            # Get first intersection point based on geometry type
+            geom_type = intersection.geom_type
+
+            if geom_type == "Point":
+                landfall_lon, landfall_lat = intersection.x, intersection.y
+            elif geom_type == "LineString":
+                landfall_lon, landfall_lat = intersection.coords[0]
+            elif geom_type in ("MultiPoint", "MultiLineString", "GeometryCollection"):
+                # Get first geometry from collection
+                first_geom = intersection.geoms[0]
+                if first_geom.geom_type == "Point":
+                    landfall_lon, landfall_lat = first_geom.x, first_geom.y
+                else:
+                    landfall_lon, landfall_lat = first_geom.coords[0]
+            else:
+                continue
+
+            # Interpolate
+            full_dist = segment.length
+            if full_dist == 0:
+                continue
+
+            landfall_dist = shapely.geometry.LineString(
+                [(lons_180[i], lats_vals[i]), (landfall_lon, landfall_lat)]
+            ).length
+            frac = landfall_dist / full_dist
+
+            landfall_point = {
+                "latitude": landfall_lat,
+                "longitude": utils.convert_longitude_to_360(landfall_lon),
+                "valid_time": times_vals[i]
+                + frac * (times_vals[i + 1] - times_vals[i]),
+                "value": track_vals[i] + frac * (track_vals[i + 1] - track_vals[i])
+                if not np.isnan(track_vals[i])
+                else np.nan,
+            }
+
+            # Add init_time if available
+            if init_times is not None:
+                landfall_point["init_time"] = init_times[i]
+
+            landfall_data.append(landfall_point)
+
+        except (IndexError, AttributeError, ValueError, TypeError, ZeroDivisionError):
+            continue
+
+    if not landfall_data:
+        return None
+
+    # Check if all landfall values are NaN
+    all_nan = all(np.isnan(d.get("value", np.nan)) for d in landfall_data)
+    if all_nan:
+        return None
+
+    # Format output based on grouping
+    if group_by == "init_time" and init_times is not None:
+        # Group by init_time and optionally keep first per group
+        results = []
+        unique_inits = np.unique([d["init_time"] for d in landfall_data])
+
+        for init_t in unique_inits:
+            init_landfalls = [d for d in landfall_data if d["init_time"] == init_t]
+
+            if not return_all_landfalls:
+                # Keep only first landfall for this init_time
+                init_landfalls = sorted(init_landfalls, key=lambda x: x["valid_time"])
+                init_landfalls = [init_landfalls[0]]
+
+            # Create DataArray with consistent landfall dimension
+            values = [d["value"] for d in init_landfalls]
+            coords = {
+                "latitude": (["landfall"], [d["latitude"] for d in init_landfalls]),
+                "longitude": (["landfall"], [d["longitude"] for d in init_landfalls]),
+                "valid_time": (["landfall"], [d["valid_time"] for d in init_landfalls]),
+                "landfall": np.arange(len(init_landfalls)),
+                "init_time": init_t,
+            }
+            da = xr.DataArray(
+                values,
+                dims=["landfall"],
+                coords=coords,
+                name=track_data.name or "landfall_value",
+            )
+            results.append(da)
+
+        return (
+            xr.concat(
+                results,
+                dim="init_time",
+                coords="different",
+                compat="equals",
+                join="outer",
+            )
+            if results
+            else None
+        )
+
+    else:
+        # No grouping - format as single or multiple landfalls
+        if return_all_landfalls:
+            # Return with landfall dimension
+            values = [d["value"] for d in landfall_data]
+            coords = {
+                "latitude": (["landfall"], [d["latitude"] for d in landfall_data]),
+                "longitude": (["landfall"], [d["longitude"] for d in landfall_data]),
+                "valid_time": (["landfall"], [d["valid_time"] for d in landfall_data]),
+                "landfall": np.arange(len(landfall_data)),
+            }
+            return xr.DataArray(
+                values,
+                dims=["landfall"],
+                coords=coords,
+                name=track_data.name or "landfall_value",
+            )
+        else:
+            # Return first landfall as scalar
+            d = landfall_data[0]
+            coords = {
+                "latitude": d["latitude"],
+                "longitude": d["longitude"],
+                "valid_time": d["valid_time"],
+            }
+            if "init_time" in d:
+                coords["init_time"] = d["init_time"]
+            return xr.DataArray(
+                d["value"],
+                coords=coords,
+                name=track_data.name or "landfall_value",
+            )
+
+
+# Keep existing _process_single_track_landfall for backward compatibility
+# or remove if fully replaced
+
+
+def _is_true_landfall(
+    lon1: float,
+    lat1: float,
+    lon2: float,
+    lat2: float,
+    land_geom: shapely.geometry.Polygon,
+) -> bool:
+    """Detect true landfall (ocean to land movement).
+
+    This function is a way to detect if a track crosses land. There are a few scenarios,
+    being ocean to land, ocean to ocean, and land to ocean. Ocean to ocean can have a
+    landfall if there is land between the two points.
+
+    Args:
+        lon1, lat1: Starting point coordinates
+        lon2, lat2: Ending point coordinates
+        land_geom: Land geometry for intersection testing
+
+    Returns:
+        True if this represents a landfall, False otherwise
+    """
+    try:
+        start_point = shapely.geometry.Point(lon1, lat1)
+        end_point = shapely.geometry.Point(lon2, lat2)
+
+        start_over_land = land_geom.contains(start_point)
+        end_over_land = land_geom.contains(end_point)
+
+        # Ocean -> Land = LANDFALL
+        if not start_over_land and end_over_land:
+            return True
+
+        # Ocean -> Ocean, check if land is between
+        if not start_over_land and not end_over_land:
+            segment = shapely.geometry.LineString([(lon1, lat1), (lon2, lat2)])
+            if segment.intersects(land_geom):
+                return True
+
+        # Land -> Ocean or Ocean -> Ocean (no intersection) = NOT LANDFALL
+        return False
+
+    except (AttributeError, ValueError, TypeError):
+        # Return False if geometry operations fail:
+        # - AttributeError: invalid/None geometry
+        # - ValueError/TypeError: invalid coordinate values
+        return False

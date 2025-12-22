@@ -20,9 +20,9 @@ repos:
           [tqdm-stubs, types-requests, types-ujson, types-pyyaml]
   - repo: local
     hooks:
-      - id: validate-events-yaml
-        name: Validate events.yaml format
+      - id: validate-event-yamls
+        name: Validating event YAMLs in data folder
         entry: python scripts/validate_events_yaml.py
         language: python
-        files: src/extremeweatherbench/data/events\.yaml$
+        files: src/extremeweatherbench/data/.*events\.yaml$
         additional_dependencies: [pyyaml]

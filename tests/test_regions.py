@@ -1168,7 +1168,7 @@ class TestTotalBounds:
         assert polar_coords[1] <= 90
 
     def test_bounding_coordinates_return_type(self):
-        """Test that get_bounding_coordinates returns correct type."""
+        """Test that total_bounds returns correct type."""
         region = regions.CenteredRegion.create_region(
             latitude=45.0, longitude=-120.0, bounding_box_degrees=10.0
         )
