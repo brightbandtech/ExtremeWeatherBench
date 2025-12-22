@@ -334,18 +334,16 @@ class ThresholdMetric(CompositeMetric):
 
         # Call the instance method with the configured parameters
         return self.compute_metric(forecast, target, **kwargs)
-
-    def transformed_contingency_manager(
-        self,
+    
+    def contingency_manager(self,
         forecast: xr.DataArray,
         target: xr.DataArray,
         forecast_threshold: float,
         target_threshold: float,
-        preserve_dims: str,
         op_func: Union[
             Callable, Literal[">", ">=", "<", "<=", "==", "!="]
         ] = operator.ge,
-    ) -> scores.categorical.BasicContingencyManager:
+    ) -> scores.categorical.BinaryContingencyManager:
         """Create and transform a contingency manager.
 
         This method is used to create and transform a contingency manager from the
@@ -378,9 +376,40 @@ class ThresholdMetric(CompositeMetric):
         binary_contingency_manager = scores.categorical.BinaryContingencyManager(
             binary_forecast, binary_target
         )
-        transformed = binary_contingency_manager.transform(preserve_dims=preserve_dims)
+  
+        return binary_contingency_manager
 
-        return transformed
+    def transformed_contingency_manager(
+        self,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
+        forecast_threshold: float,
+        target_threshold: float,
+        preserve_dims: str,
+        op_func: Union[
+            Callable, Literal[">", ">=", "<", "<=", "==", "!="]
+        ] = operator.ge,
+    ) -> scores.categorical.BasicContingencyManager:
+        """Create and transform a contingency manager.
+
+        This method is used to create and transform a contingency manager from the
+        scores module. The op_func is used to binarize the forecast and target data with
+        either a string representation of the operator, e.g. ">=", or a callable
+        function from the operator module, e.g. operator.ge.
+
+        Args:
+            forecast: The forecast DataArray.
+            target: The target DataArray.
+            forecast_threshold: Threshold for binarizing forecast.
+            target_threshold: Threshold for binarizing target.
+            preserve_dims: Dimension(s) to preserve during transform.
+            op_func: Function or string representation of the operator to apply to the
+            forecast and target. Defaults to operator.ge (greater than or equal to).
+
+        Returns:
+            Transformed contingency manager.
+        """
+        return self.contingency_manager(forecast, target, forecast_threshold, target_threshold, op_func).transform(preserve_dims=preserve_dims)
 
     def maybe_prepare_composite_kwargs(
         self,
@@ -703,7 +732,49 @@ class Accuracy(ThresholdMetric):
                 preserve_dims=self.preserve_dims,
             )
         return transformed.accuracy()
+    
+class ReceiverOperatingCharacteristic(ThresholdMetric):
+    """Receiver Operating Characteristic metric.
 
+    """
+
+    def __init__(self, name: str = "ReceiverOperatingCharacteristic", *args, **kwargs):
+        super().__init__(name, *args, **kwargs)
+
+    def _compute_metric(
+        self,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
+        **kwargs: Any,
+    ) -> Any:
+        # Use pre-computed manager if provided, else compute
+        transformed = kwargs.get("transformed_manager")
+        if transformed is None:
+            transformed = self.contingency_manager(
+                forecast=forecast,
+                target=target,
+                forecast_threshold=self.forecast_threshold,
+                target_threshold=self.target_threshold,
+            )
+        return scores.probability.roc_curve_data(transformed.fcst_events, transformed.obs_events, thresholds='auto', preserve_dims=self.preserve_dims, weights=None)
+    
+class ReceiverOperatingCharacteristicSkillScore(ReceiverOperatingCharacteristic):
+    """Receiver Operating Characteristic Skill Score metric.
+
+    """
+
+    def __init__(self, name: str = "ReceiverOperatingCharacteristicSkillScore", *args, **kwargs):
+        super().__init__(name, *args, **kwargs)
+
+    def _compute_metric(
+        self,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
+        auc_reference = 0.5,
+        **kwargs: Any,
+    ) -> Any:
+        roc_curve_data = super()._compute_metric(forecast, target, **kwargs)
+        return roc_curve_data["AUC"] - auc_reference / (1 - auc_reference)
 
 class MeanSquaredError(BaseMetric):
     """Mean Squared Error metric.
@@ -1933,3 +2004,4 @@ class LandfallIntensityMeanAbsoluteError(LandfallMetric, MeanAbsoluteError):
         if forecast_landfall is None or target_landfall is None:
             return xr.DataArray(np.nan)
         return self._compute_absolute_error(forecast_landfall, target_landfall)
+    
