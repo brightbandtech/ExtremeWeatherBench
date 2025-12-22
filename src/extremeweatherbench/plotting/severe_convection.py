@@ -15,18 +15,143 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
-from . import plotting
+from extremeweatherbench.plotting import plotting_utils
 
 logger = logging.getLogger(__name__)
+
+
+def create_storm_report_legend_elements(
+    tornado_reports: Optional[pd.DataFrame] = None,
+    hail_reports: Optional[pd.DataFrame] = None,
+    wind_reports: Optional[pd.DataFrame] = None,
+) -> List[plt.Line2D]:
+    """Create legend elements for storm reports.
+
+    Args:
+        tornado_reports: DataFrame with tornado reports.
+        hail_reports: DataFrame with hail reports.
+        wind_reports: DataFrame with wind reports.
+
+    Returns:
+        List of legend elements for the reports.
+    """
+    legend_elements = []
+
+    if tornado_reports is not None and len(tornado_reports) > 0:
+        legend_elements.append(
+            plt.Line2D(
+                [0],
+                [0],
+                marker="^",
+                color="w",
+                markerfacecolor="k",
+                markersize=8,
+                markeredgecolor="k",
+                label="Tornado Reports",
+            )
+        )
+
+    if hail_reports is not None and len(hail_reports) > 0:
+        legend_elements.append(
+            plt.Line2D(
+                [0],
+                [0],
+                marker="s",
+                color="w",
+                markerfacecolor="green",
+                markersize=8,
+                markeredgecolor="darkgreen",
+                label="Hail Reports",
+            )
+        )
+
+    if wind_reports is not None and len(wind_reports) > 0:
+        legend_elements.append(
+            plt.Line2D(
+                [0],
+                [0],
+                marker="o",
+                color="w",
+                markerfacecolor="blue",
+                markersize=8,
+                markeredgecolor="darkblue",
+                label="Wind Reports",
+            )
+        )
+
+    return legend_elements
+
+
+def plot_storm_reports_on_axis(
+    ax,
+    tornado_reports: Optional[pd.DataFrame] = None,
+    hail_reports: Optional[pd.DataFrame] = None,
+    wind_reports: Optional[pd.DataFrame] = None,
+    marker_size: int = 20,
+    alpha: float = 0.8,
+    zorder: int = 10,
+) -> None:
+    """Plot storm reports on a cartopy axis.
+
+    Args:
+        ax: Cartopy axis to plot on.
+        tornado_reports: DataFrame with tornado report locations.
+        hail_reports: DataFrame with hail report locations.
+        wind_reports: DataFrame with wind report locations.
+        marker_size: Size of report markers.
+        alpha: Transparency of markers.
+        zorder: Drawing order (higher values drawn on top).
+    """
+    if tornado_reports is not None and len(tornado_reports) > 0:
+        ax.scatter(
+            tornado_reports["longitude"],
+            tornado_reports["latitude"],
+            c="k",
+            s=marker_size,
+            alpha=alpha,
+            transform=ccrs.PlateCarree(),
+            marker="^",
+            edgecolors="k",
+            linewidths=1,
+            zorder=zorder,
+        )
+
+    if hail_reports is not None and len(hail_reports) > 0:
+        ax.scatter(
+            hail_reports["longitude"],
+            hail_reports["latitude"],
+            c="green",
+            s=marker_size,
+            alpha=alpha,
+            transform=ccrs.PlateCarree(),
+            marker="s",
+            edgecolors="darkgreen",
+            linewidths=1,
+            zorder=zorder,
+        )
+
+    if wind_reports is not None and len(wind_reports) > 0:
+        ax.scatter(
+            wind_reports["longitude"],
+            wind_reports["latitude"],
+            c="blue",
+            s=marker_size,
+            alpha=alpha,
+            transform=ccrs.PlateCarree(),
+            marker="o",
+            edgecolors="darkblue",
+            linewidths=1,
+            zorder=zorder,
+        )
 
 
 def setup_cbss_colormap_and_levels() -> Tuple[
     colors.ListedColormap, colors.BoundaryNorm, np.ndarray
 ]:
-    """Setup colormap and normalization for CBSS plotting.
+    """Setup colormap and normalization for CBSS plotting_utils.
 
     Returns:
-        Tuple of (colormap, normalization, levels) for CBSS plotting.
+        Tuple of (colormap, normalization, levels) for CBSS plotting_utils.
         Levels based on thresholds: < 10,000 (Low/transparent),
         10,000-22,500 (Marginal), > 22,500 (Significant).
     """
@@ -42,10 +167,10 @@ def setup_cbss_colormap_and_levels() -> Tuple[
 def setup_pph_colormap_and_levels() -> Tuple[
     plt.cm.ScalarMappable, colors.BoundaryNorm, List[float]
 ]:
-    """Setup colormap and normalization for PPH plotting.
+    """Setup colormap and normalization for PPH plotting_utils.
 
     Returns:
-        Tuple of (colormap, normalization, levels) for PPH plotting.
+        Tuple of (colormap, normalization, levels) for PPH plotting_utils.
     """
     pph_levels = [0.01, 0.05, 0.15, 0.30, 0.45, 0.60, 0.75]
     pph_cmap = plt.cm.viridis
@@ -53,16 +178,16 @@ def setup_pph_colormap_and_levels() -> Tuple[
     return pph_cmap, pph_norm, pph_levels
 
 
-# Use plotting.convert_longitude_for_plotting instead
+# Use plotting_utils.convert_longitude_for_plotting instead
 
 
-# Use plotting.add_geographic_features instead
+# Use plotting_utils.add_geographic_features instead
 
 
-# Use plotting.setup_gridlines instead
+# Use plotting_utils.setup_gridlines instead
 
 
-# Use plotting.convert_bbox_longitude instead
+# Use plotting_utils.convert_bbox_longitude instead
 
 
 def plot_storm_reports(
@@ -81,10 +206,10 @@ def plot_storm_reports(
         List of legend elements for the plotted reports.
     """
     # Use general plotting functions
-    plotting.plot_storm_reports_on_axis(
+    plot_storm_reports_on_axis(
         ax, tornado_reports=tornado_reports, hail_reports=hail_reports
     )
-    return plotting.create_storm_report_legend_elements(
+    return create_storm_report_legend_elements(
         tornado_reports=tornado_reports, hail_reports=hail_reports
     )
 
@@ -171,7 +296,7 @@ def plot_cbss_forecast_panel(
     cbss_lt = cbss_data.sel(lead_time=lead_time_td, method="nearest")
 
     # Convert longitude for plotting
-    lon_data = plotting.convert_longitude_for_plotting(cbss_lt.longitude.values)
+    lon_data = plotting_utils.convert_longitude_for_plotting(cbss_lt.longitude.values)
 
     # Plot CBSS values
     im = ax.contourf(
@@ -203,20 +328,20 @@ def plot_cbss_forecast_panel(
         plot_pph_contours(ax, pph_data, pph_cmap, pph_norm, pph_levels)
 
     # Add geographic features
-    plotting.add_geographic_features(ax)
+    plotting_utils.add_geographic_features(ax)
 
     # Plot storm reports
     plot_storm_reports(ax, tornado_reports, hail_reports)
 
     # Set extent
-    lon_min, lon_max = plotting.convert_bbox_longitude(bbox)
+    lon_min, lon_max = plotting_utils.convert_bbox_longitude(bbox)
     ax.set_extent(
         [lon_min, lon_max, bbox["latitude_min"], bbox["latitude_max"]],
         crs=ccrs.PlateCarree(),
     )
 
     # Add gridlines
-    plotting.setup_gridlines(ax)
+    plotting_utils.setup_gridlines(ax)
 
     # Set title
     valid_time = target_date + lead_time_td
@@ -299,7 +424,9 @@ def plot_cbss_forecast_multipanel(
         ax = axes[i]
 
         # Convert longitude for plotting
-        lon_data = plotting.convert_longitude_for_plotting(cbss_lt.longitude.values)
+        lon_data = plotting_utils.convert_longitude_for_plotting(
+            cbss_lt.longitude.values
+        )
 
         # Plot CBSS values
         im = ax.contourf(
@@ -332,7 +459,7 @@ def plot_cbss_forecast_multipanel(
                 all_legend_elements.extend(pph_legend)
 
         # Add geographic features
-        plotting.add_geographic_features(ax)
+        plotting_utils.add_geographic_features(ax)
 
         # Plot storm reports
         report_legend = plot_storm_reports(ax, tornado_reports, hail_reports)
@@ -340,14 +467,14 @@ def plot_cbss_forecast_multipanel(
             all_legend_elements.extend(report_legend)
 
         # Set extent
-        lon_min, lon_max = plotting.convert_bbox_longitude(bbox)
+        lon_min, lon_max = plotting_utils.convert_bbox_longitude(bbox)
         ax.set_extent(
             [lon_min, lon_max, bbox["latitude_min"], bbox["latitude_max"]],
             crs=ccrs.PlateCarree(),
         )
 
         # Add gridlines
-        plotting.setup_gridlines(ax, show_left_labels=(i == 0))
+        plotting_utils.setup_gridlines(ax, show_left_labels=(i == 0))
 
         # Set title
         valid_time = target_date + lead_time_td
