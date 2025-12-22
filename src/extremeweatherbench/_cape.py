@@ -11,7 +11,8 @@ Users can use the functions in this module directly, although we expect that the
 find it easier to use the xarray-based interfaces in the `cape.py` module.
 
 
-[1]: https://unidata.github.io/MetPy/latest/api/generated/metpy.calc.mixed_layer_cape_cin.html
+[1]: https://unidata.github.io/MetPy/latest/api/generated/
+     metpy.calc.mixed_layer_cape_cin.html
 """
 
 import numpy as np
@@ -178,7 +179,7 @@ def compute_buoyancy_energy_inline(
 # ============================================================================
 
 
-@njit(fastmath=True)
+@njit(fastmath=False)
 def lcl(pressure: float, temperature: float, dewpoint: float) -> tuple[float, float]:
     """Fast LCL calculation with inline math, following Bolton (1980).
 
@@ -202,7 +203,7 @@ def lcl(pressure: float, temperature: float, dewpoint: float) -> tuple[float, fl
     return p_lcl, t_lcl
 
 
-@njit(fastmath=True)
+@njit(fastmath=False)
 def insert_lcl_level(
     pressure: npt.NDArray[np.float64],
     temperature: npt.NDArray[np.float64],
@@ -219,10 +220,11 @@ def insert_lcl_level(
 ]:
     """Insert LCL as a new level in the profile for better resolution.
 
-    This function consumes 1D profiles of pressure, temperature, dewpoint, and geopotential
-    and determines the index at which thermodynamic values at the LCL should be inserted
-    into each profile. We directly compute the LCL pressure and temperature, and
-    logarithmically interpolate the dewpoint and geopotential to this level.
+    This function consumes 1D profiles of pressure, temperature, dewpoint,
+    and geopotential and determines the index at which thermodynamic
+    values at the LCL should be inserted into each profile. We directly
+    compute the LCL pressure and temperature, and logarithmically
+    interpolate the dewpoint and geopotential to this level.
 
     Args:
         pressure: The pressure in hPa.
@@ -318,9 +320,10 @@ def insert_lcl_level(
     return new_pressure, new_temperature, new_dewpoint, new_geopotential, insert_idx
 
 
-@njit(fastmath=True)
+@njit(fastmath=False)
 def moist_ascent(p_target: float, p_lcl: float, t_lcl: float) -> float:
-    """Compute the temperature of a parcel that is ascending moist adiabatically from the LCL.
+    """Compute the temperature of a parcel that is ascending moist adiabatically from
+    the LCL.
 
     Args:
         p_target: The target pressure in hPa.
@@ -364,7 +367,7 @@ def moist_ascent(p_target: float, p_lcl: float, t_lcl: float) -> float:
     return t_current
 
 
-@njit(fastmath=True)
+@njit(fastmath=False)
 def compute_ml_cape_cin_from_profile(
     pressure: np.ndarray,
     temperature: npt.NDArray[np.float64],
@@ -425,10 +428,19 @@ def compute_ml_cape_cin_from_profile(
 
     # Mixed layer dewpoint from mixing ratio
     e_ml = p_surface * w_ml / (EPSILON + w_ml)
-    ml_dewpoint = (
-        B_BOLTON * np.log(e_ml / E0_BOLTON) / (A_BOLTON - np.log(e_ml / E0_BOLTON))
-        + KELVIN_TO_CELSIUS
-    )
+
+    # Check for invalid e_ml values
+    if e_ml <= 0 or not np.isfinite(e_ml):
+        return 0.0, 0.0
+
+    log_ratio = np.log(e_ml / E0_BOLTON)
+    denominator = A_BOLTON - log_ratio
+
+    # Check for division by zero
+    if abs(denominator) < 1e-10:
+        return 0.0, 0.0
+
+    ml_dewpoint = (B_BOLTON * log_ratio / denominator) + KELVIN_TO_CELSIUS
 
     # Step 2: LCL
     p_lcl, t_lcl = lcl(p_surface, ml_temp, ml_dewpoint)
@@ -618,7 +630,7 @@ def compute_ml_cape_cin_from_profile(
 # ============================================================================
 
 
-@njit(parallel=True, fastmath=True, cache=True)
+@njit(parallel=True, fastmath=False, cache=True)
 def _compute_batch_parallel(
     pressure_batch: npt.NDArray[np.float64],
     temperature_batch: npt.NDArray[np.float64],
@@ -658,7 +670,7 @@ def _compute_batch_parallel(
     return cape_array, cin_array
 
 
-@njit(fastmath=True, cache=True)
+@njit(fastmath=False, cache=True)
 def _compute_batch_serial(
     pressure_batch: npt.NDArray[np.float64],
     temperature_batch: npt.NDArray[np.float64],

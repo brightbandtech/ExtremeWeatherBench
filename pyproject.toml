@@ -1,6 +1,6 @@
 [project]
 name = "extremeweatherbench"
-version = "0.1.0"
+version = "0.2.0"
 description = "Benchmarking weather and weather AI models using extreme events"
 readme = "README.md"
 requires-python = ">=3.11,<3.14"
@@ -28,12 +28,12 @@ dependencies = [
     "frozenlist==1.5.0",
     "pyogrio==0.10.0",
     "scikit-image>=0.25.2",
+    "cartopy==0.24.1",
 ]
 
 [project.optional-dependencies]
 data-prep = [
     "fsspec>=2024.12.0",
-    "cartopy==0.24.1",
     "matplotlib>=3.10.0",
     "seaborn>=0.13.2",
     "ujson>=5.10.0",

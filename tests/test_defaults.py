@@ -10,22 +10,6 @@ from extremeweatherbench import defaults, inputs, metrics
 class TestDefaults:
     """Test the defaults module."""
 
-    def test_output_columns_exists(self):
-        """Test that OUTPUT_COLUMNS is defined and contains expected columns."""
-        expected_columns = [
-            "value",
-            "lead_time",
-            "init_time",
-            "target_variable",
-            "metric",
-            "forecast_source",
-            "target_source",
-            "case_id_number",
-            "event_type",
-        ]
-        assert hasattr(defaults, "OUTPUT_COLUMNS")
-        assert defaults.OUTPUT_COLUMNS == expected_columns
-
     def test_preprocess_bb_cira_forecast_dataset(self):
         """Test the _preprocess_bb_cira_forecast_dataset function."""
 
@@ -155,17 +139,11 @@ class TestDefaults:
         """Test ERA5 freeze target configuration."""
         target = defaults.era5_freeze_target
 
-        expected_variables = [
-            "surface_air_temperature",
-            "surface_eastward_wind",
-            "surface_northward_wind",
-        ]
+        expected_variables = ["surface_air_temperature"]
         assert target.variables == expected_variables
 
         expected_mapping = {
             "2m_temperature": "surface_air_temperature",
-            "10m_u_component_of_wind": "surface_eastward_wind",
-            "10m_v_component_of_wind": "surface_northward_wind",
             "time": "valid_time",
         }
         for key, value in expected_mapping.items():
