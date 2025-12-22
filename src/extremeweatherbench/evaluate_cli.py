@@ -52,14 +52,6 @@ from extremeweatherbench import cases, defaults, evaluate
     type=click.Path(),
     help="Save CaseOperator objects to a pickle file at this path",
 )
-@click.option(
-    "--precompute",
-    is_flag=True,
-    help=(
-        "Pre-compute datasets to avoid recomputing them for each metric (faster but "
-        "uses more memory)"
-    ),
-)
 @click.pass_context
 def cli_runner(
     ctx: click.Context,
@@ -70,7 +62,6 @@ def cli_runner(
     n_jobs: int,
     parallel_config: Optional[dict],
     save_case_operators: Optional[str],
-    precompute: bool,
 ):
     """ExtremeWeatherBench command line interface.
 
@@ -92,12 +83,11 @@ def cli_runner(
         output
         config_file: Path to a config.py file containing evaluation objects
         output_dir: Directory for analysis outputs (default: current directory)
-        cache_dir: Optional directory for caching intermediate data
+        cache_dir: Optional directory for caching intermediate data. When set,
+        datasets are computed and cached as zarrs.
         parallel_config: Parallel configuration using joblib (default: {'backend':
         'threading', 'n_jobs': 8})
         save_case_operators: Save CaseOperator objects to a pickle file at this path
-        precompute: Pre-compute datasets before running metrics to avoid recomputing
-        them for each metric (faster but uses more memory)
 
     Examples:
         # Use default evaluation objects
@@ -109,11 +99,8 @@ def cli_runner(
         # Save case operators to pickle file
         $ ewb --default --save-case-operators case_ops.pkl
 
-        # Use custom output and cache directories
+        # Use custom output and cache directories (cache enables zarr storage)
         $ ewb --default --output-dir ./results --cache-dir ./cache
-
-        # Use precompute for faster execution (higher memory usage)
-        $ ewb --default --precompute
 
         # Use custom parallel configuration
         $ ewb --default --parallel-config '{"backend": "dask", "n_jobs": 4}'
@@ -167,7 +154,6 @@ def cli_runner(
     results = ewb.run(
         n_jobs=n_jobs,
         parallel_config=parallel_config,
-        pre_compute=precompute,
     )
 
     # Save results
