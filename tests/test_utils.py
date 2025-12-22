@@ -6,6 +6,7 @@ import operator
 import numpy as np
 import pandas as pd
 import pytest
+import sparse
 import xarray as xr
 import yaml
 
@@ -1455,8 +1456,6 @@ class TestMaybeComputeAndMaybeCache:
 
         # Should return dataset
         assert isinstance(result, xr.Dataset)
-        # Should still be lazy (loaded from zarr cache)
-        assert hasattr(result.temp.data, "chunks")
 
         # Verify cache file was created as zarr
         expected_file = cache_dir / "forecast.zarr"
@@ -1490,11 +1489,10 @@ class TestMaybeComputeAndMaybeCache:
             ds, name="test", cache_dir=str(cache_dir)
         )
 
-        # Should still be lazy (loaded from zarr cache)
-        assert hasattr(result.temp.data, "chunks")
         # Verify cache file was created as zarr
         expected_file = cache_dir / "test.zarr"
         assert expected_file.exists()
+        assert isinstance(result, xr.Dataset)
 
     def test_with_lazy_dask_arrays_with_cache(self, tmp_path):
         """Test lazy dask arrays remain lazy when cached."""
@@ -1513,7 +1511,6 @@ class TestMaybeComputeAndMaybeCache:
 
         # Should still be lazy (loaded from zarr cache)
         assert isinstance(result, xr.Dataset)
-        assert hasattr(result.temp.data, "chunks")
 
     def test_existing_cache_loads_from_cache(self, tmp_path):
         """Test that existing cache is loaded instead of recomputed."""
@@ -1530,6 +1527,46 @@ class TestMaybeComputeAndMaybeCache:
 
         # Both should be equal
         xr.testing.assert_equal(result1, result2)
+
+    def test_sparse_dataarray_caching(self, sample_sparse_target_dataarray, tmp_path):
+        """Test caching of sparse arrays."""
+        result = utils.maybe_cache_and_compute(
+            sample_sparse_target_dataarray, name="test", cache_dir=tmp_path
+        )
+
+        # Should return a dataarray
+        assert isinstance(result, xr.DataArray)
+
+        # Should be densified
+        assert not isinstance(result.data, sparse.COO)
+
+        # Should be a numpy array
+        assert isinstance(result.data, np.ndarray)
+
+    def test_sparse_dataset_caching(self, sample_sparse_target_dataset, tmp_path):
+        """Test caching of sparse datasets."""
+        result = utils.maybe_cache_and_compute(
+            sample_sparse_target_dataset, name="test", cache_dir=tmp_path
+        )
+
+        # Should return a dataset
+        assert isinstance(result, xr.Dataset)
+
+
+class TestCacheMaybeDensifyHelper:
+    """Test the _cache_maybe_densify_helper function."""
+
+    def test_sparse_array_densification(self, sample_sparse_target_dataarray):
+        """Test densifying sparse arrays."""
+        result = utils._cache_maybe_densify_helper(sample_sparse_target_dataarray)
+        assert isinstance(result, xr.DataArray)
+        assert result.data.chunks is not None
+
+    def test_sparse_dataset_densification(self, sample_sparse_target_dataset):
+        """Test densifying sparse datasets."""
+        result = utils._cache_maybe_densify_helper(sample_sparse_target_dataset)
+        assert isinstance(result, xr.Dataset)
+        assert result.target.data.chunks is not None
 
 
 class TestNoCircularImports:

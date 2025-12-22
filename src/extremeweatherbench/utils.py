@@ -733,8 +733,32 @@ def load_land_geometry(resolution: str = "10m") -> shapely.geometry.Polygon:
     return land_union
 
 
+def _cache_maybe_densify_helper(
+    data: xr.Dataset | xr.DataArray,
+) -> xr.Dataset | xr.DataArray:
+    """Helper function to maybe densify a dataset's variables or dataarray for caching.
+
+    Args:
+        data: The dataset or dataarray to format.
+
+    Returns:
+        The formatted dataset or dataarray.
+    """
+    # If the data is a dataset, map the helper function to each dataarray
+    if isinstance(data, xr.Dataset):
+        return data.map(_cache_maybe_densify_helper)
+
+    # If the data is a dataarray, densify the data if it is sparse
+    elif isinstance(data, xr.DataArray):
+        return maybe_densify_dataarray(da=data)
+
+    # Otherwise, raise an error
+    else:
+        raise TypeError(f"data must be xr.Dataset or xr.DataArray, got {type(data)}")
+
+
 def maybe_cache_and_compute(
-    ds: xr.Dataset | xr.DataArray,
+    data: xr.Dataset | xr.DataArray,
     name: str,
     cache_dir: Optional[Union[str, pathlib.Path]] = None,
 ) -> xr.Dataset | xr.DataArray:
@@ -758,11 +782,21 @@ def maybe_cache_and_compute(
     """
     # If no caching, return as dataset or dataarray
     if cache_dir is None:
-        return ds
+        return data
 
     # Compute and cache dataset or dataarray
     logger.info("Computing datasets and storing at %s...", cache_dir)
     cache_path = pathlib.Path(cache_dir)
+
+    # If the cache file does not exist, maybe densify the data and cache it. Sparse data
+    # must be densified to be stored in zarrs
     if not (cache_path / f"{name}.zarr").exists():
-        ds.to_zarr(cache_path / f"{name}.zarr", zarr_format=2, mode="w")
-    return xr.open_zarr(cache_path / f"{name}.zarr")
+        _cache_maybe_densify_helper(data).to_zarr(
+            cache_path / f"{name}.zarr", zarr_format=2, mode="w"
+        )
+
+    # Load the data from the cache, matching the type of the input data
+    if isinstance(data, xr.Dataset):
+        return xr.open_dataset(cache_path / f"{name}.zarr")
+    else:
+        return xr.open_dataarray(cache_path / f"{name}.zarr")
