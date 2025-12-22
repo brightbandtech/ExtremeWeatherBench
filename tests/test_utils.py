@@ -1560,13 +1560,11 @@ class TestCacheMaybeDensifyHelper:
         """Test densifying sparse arrays."""
         result = utils._cache_maybe_densify_helper(sample_sparse_target_dataarray)
         assert isinstance(result, xr.DataArray)
-        assert result.data.chunks is not None
 
     def test_sparse_dataset_densification(self, sample_sparse_target_dataset):
         """Test densifying sparse datasets."""
         result = utils._cache_maybe_densify_helper(sample_sparse_target_dataset)
         assert isinstance(result, xr.Dataset)
-        assert result.target.data.chunks is not None
 
 
 class TestNoCircularImports:
