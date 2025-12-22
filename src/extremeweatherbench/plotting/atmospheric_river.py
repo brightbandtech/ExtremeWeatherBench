@@ -10,8 +10,7 @@ import pandas as pd
 import xarray as xr
 
 from extremeweatherbench import utils
-
-from . import plotting
+from extremeweatherbench.plotting import plotting_utils
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -44,10 +43,12 @@ def plot_ar_mask_animation(
     fig.subplots_adjust(left=0.08, right=0.98, top=0.92, bottom=0.05)
     ax = plt.axes(projection=ccrs.PlateCarree())
     # Use general plotting functions for geographic features
-    plotting.add_geographic_features(ax, include_land_ocean=True, land_ocean_alpha=0.1)
+    plotting_utils.add_geographic_features(
+        ax, include_land_ocean=True, land_ocean_alpha=0.1
+    )
     # Override borders with custom linestyle
     ax.add_feature(cfeature.BORDERS, linestyle=":")
-    plotting.setup_gridlines(ax, show_top_labels=False, show_right_labels=False)
+    plotting_utils.setup_gridlines(ax, show_top_labels=False, show_right_labels=False)
 
     # Set extent to match ax2 domain (same as AR mask extent + 5 degrees)
     first_ar_slice = ar_mask.isel({time_dim: 0})
@@ -129,12 +130,14 @@ def plot_ar_mask_animation(
         ax.clear()
 
         # Re-add features using general plotting functions
-        plotting.add_geographic_features(
+        plotting_utils.add_geographic_features(
             ax, include_land_ocean=True, land_ocean_alpha=0.1
         )
         # Override borders with custom linestyle
         ax.add_feature(cfeature.BORDERS, linestyle=":")
-        plotting.setup_gridlines(ax, show_top_labels=False, show_right_labels=False)
+        plotting_utils.setup_gridlines(
+            ax, show_top_labels=False, show_right_labels=False
+        )
 
         # Reset extent
         ax.set_extent(

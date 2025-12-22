@@ -6,7 +6,7 @@ convection, tropical cyclones, etc.
 """
 
 import logging
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
@@ -14,7 +14,6 @@ import cartopy.mpl.ticker
 import matplotlib.colors as colors
 import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -173,7 +172,7 @@ def setup_figure_with_colorbar_layout(
     fig_height = figsize_per_panel[1]
 
     # Calculate height ratios
-    height_ratios = [1]  # Main plots
+    height_ratios = [1.0]  # Main plots
     if include_legend:
         height_ratios.append(0.06)  # Legend row
         fig_height += 0.4
@@ -326,128 +325,3 @@ def generate_extent(
         return lon_min_out, lon_max_out, lat_min_out, lat_max_out
 
     return lon_min_mercator, lon_max_mercator, lat_min, lat_max
-
-
-def create_storm_report_legend_elements(
-    tornado_reports: Optional[pd.DataFrame] = None,
-    hail_reports: Optional[pd.DataFrame] = None,
-    wind_reports: Optional[pd.DataFrame] = None,
-) -> List[plt.Line2D]:
-    """Create legend elements for storm reports.
-
-    Args:
-        tornado_reports: DataFrame with tornado reports.
-        hail_reports: DataFrame with hail reports.
-        wind_reports: DataFrame with wind reports.
-
-    Returns:
-        List of legend elements for the reports.
-    """
-    legend_elements = []
-
-    if tornado_reports is not None and len(tornado_reports) > 0:
-        legend_elements.append(
-            plt.Line2D(
-                [0],
-                [0],
-                marker="^",
-                color="w",
-                markerfacecolor="k",
-                markersize=8,
-                markeredgecolor="k",
-                label="Tornado Reports",
-            )
-        )
-
-    if hail_reports is not None and len(hail_reports) > 0:
-        legend_elements.append(
-            plt.Line2D(
-                [0],
-                [0],
-                marker="s",
-                color="w",
-                markerfacecolor="green",
-                markersize=8,
-                markeredgecolor="darkgreen",
-                label="Hail Reports",
-            )
-        )
-
-    if wind_reports is not None and len(wind_reports) > 0:
-        legend_elements.append(
-            plt.Line2D(
-                [0],
-                [0],
-                marker="o",
-                color="w",
-                markerfacecolor="blue",
-                markersize=8,
-                markeredgecolor="darkblue",
-                label="Wind Reports",
-            )
-        )
-
-    return legend_elements
-
-
-def plot_storm_reports_on_axis(
-    ax,
-    tornado_reports: Optional[pd.DataFrame] = None,
-    hail_reports: Optional[pd.DataFrame] = None,
-    wind_reports: Optional[pd.DataFrame] = None,
-    marker_size: int = 20,
-    alpha: float = 0.8,
-    zorder: int = 10,
-) -> None:
-    """Plot storm reports on a cartopy axis.
-
-    Args:
-        ax: Cartopy axis to plot on.
-        tornado_reports: DataFrame with tornado report locations.
-        hail_reports: DataFrame with hail report locations.
-        wind_reports: DataFrame with wind report locations.
-        marker_size: Size of report markers.
-        alpha: Transparency of markers.
-        zorder: Drawing order (higher values drawn on top).
-    """
-    if tornado_reports is not None and len(tornado_reports) > 0:
-        ax.scatter(
-            tornado_reports["longitude"],
-            tornado_reports["latitude"],
-            c="k",
-            s=marker_size,
-            alpha=alpha,
-            transform=ccrs.PlateCarree(),
-            marker="^",
-            edgecolors="k",
-            linewidths=1,
-            zorder=zorder,
-        )
-
-    if hail_reports is not None and len(hail_reports) > 0:
-        ax.scatter(
-            hail_reports["longitude"],
-            hail_reports["latitude"],
-            c="green",
-            s=marker_size,
-            alpha=alpha,
-            transform=ccrs.PlateCarree(),
-            marker="s",
-            edgecolors="darkgreen",
-            linewidths=1,
-            zorder=zorder,
-        )
-
-    if wind_reports is not None and len(wind_reports) > 0:
-        ax.scatter(
-            wind_reports["longitude"],
-            wind_reports["latitude"],
-            c="blue",
-            s=marker_size,
-            alpha=alpha,
-            transform=ccrs.PlateCarree(),
-            marker="o",
-            edgecolors="darkblue",
-            linewidths=1,
-            zorder=zorder,
-        )
