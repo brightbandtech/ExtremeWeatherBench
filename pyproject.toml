@@ -24,7 +24,6 @@ dependencies = [
     "click>=8.1.8",
     "sparse>=0.17.0",
     "polars>=1.32.1",
-    "numba>=0.61.2",
     "eccodes==2.42.0",
     "frozenlist==1.5.0",
     "pyogrio==0.10.0",
