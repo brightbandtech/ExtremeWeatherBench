@@ -832,10 +832,10 @@ def maybe_cache_and_compute(
     better to avoid caching with a limited disk size.
 
     Args:
-        dataset: The dataset to compute and cache.
+        data: The dataset or dataarray to compute and cache.
         name: The name of the dataset for naming cached files.
         cache_dir: The directory to cache the datasets. If provided,
-            datasets will be cached as zarrs and loaded from the cache.
+            datasets or dataarrays will be cached as zarrs and loaded from the cache.
             Default is None.
 
     Returns:

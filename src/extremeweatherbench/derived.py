@@ -169,11 +169,10 @@ class TropicalCycloneTrackVariables(DerivedVariable):
             orography: Optional orography DataArray for terrain filtering.
                 Defaults to None.
             max_gc_distance_slp_contour_degrees: Maximum great circle distance for
-            SLP contour validation in degrees.
-                Defaults to 5.5.
+                SLP contour validation in degrees. Defaults to 5.5 degrees.
             max_gc_distance_dz_contour_degrees: Maximum great circle distance for
-            geopotential thickness contour validation in degrees.
-                Defaults to 6.5.
+                geopotential thickness contour validation in degrees. Defaults to 6.5
+                degrees.
             orography_filter_threshold: Orography filter threshold in meters.
                 Defaults to 150.0.
         """
