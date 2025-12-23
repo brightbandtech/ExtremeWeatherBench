@@ -22,13 +22,14 @@ dependencies = [
     "kerchunk[dev]",
     "flox>=0.10.0",
     "click>=8.1.8",
-    "sparse>=0.17.0",
     "polars>=1.32.1",
     "eccodes==2.42.0",
     "frozenlist==1.5.0",
     "pyogrio==0.10.0",
     "scikit-image>=0.25.2",
     "cartopy==0.24.1",
+    "numba>=0.63.1",
+    "sparse>=0.17.0",
 ]
 
 [project.optional-dependencies]
@@ -43,7 +44,6 @@ multiprocessing = ["dask[complete]>=2025.1.0", "distributed>=2025.1.0"]
 
 [dependency-groups]
 dev = [
-    "bokeh>=3.6.3",
     "deptry>=0.23.0",
     "ipykernel>=6.29.5",
     "ipywidgets>=8.1.5",
@@ -115,6 +115,3 @@ docstring-code-line-length = "dynamic"
 
 [tool.ruff.lint.isort]
 case-sensitive = true
-
-[tool.uv]
-constraint-dependencies = ["llvm>0.43.0"]
