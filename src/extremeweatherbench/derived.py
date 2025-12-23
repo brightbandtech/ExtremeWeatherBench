@@ -73,8 +73,6 @@ class DerivedVariable(abc.ABC):
 
         Args:
             data: The dataset to build the derived variable from.
-            *args: Additional positional arguments to pass to derive_variable.
-            **kwargs: Additional keyword arguments to pass to derive_variable.
 
         Returns:
             A DataArray with the derived variable.
@@ -171,11 +169,10 @@ class TropicalCycloneTrackVariables(DerivedVariable):
             orography: Optional orography DataArray for terrain filtering.
                 Defaults to None.
             max_gc_distance_slp_contour_degrees: Maximum great circle distance for
-            SLP contour validation in degrees.
-                Defaults to 5.5.
+                SLP contour validation in degrees. Defaults to 5.5 degrees.
             max_gc_distance_dz_contour_degrees: Maximum great circle distance for
-            geopotential thickness contour validation in degrees.
-                Defaults to 6.5.
+                geopotential thickness contour validation in degrees. Defaults to 6.5
+                degrees.
             orography_filter_threshold: Orography filter threshold in meters.
                 Defaults to 150.0.
         """
@@ -205,16 +202,13 @@ class TropicalCycloneTrackVariables(DerivedVariable):
         `requires_target_dataset=True`.
 
         Args:
-            data: Input dataset containing required variables
-            **kwargs: Must include:
-                - _target_dataset: Target dataset with lat/lon/valid_time
-                - case_metadata: IndividualCase with case_id_number (optional)
+            data: Input dataset containing required variables.
 
         Returns:
-            3D dataset containing tropical cyclone track information
+            3D dataset containing tropical cyclone track information.
 
         Raises:
-            ValueError: If _target_dataset is missing or lacks required vars
+            ValueError: If _target_dataset is missing or lacks required vars.
         """
 
         # Prepare the data with wind variables as needed
@@ -322,7 +316,7 @@ class CravenBrooksSignificantSevere(DerivedVariable):
             name: The name of the derived variable. Defaults to class-level
                 name attribute if present, otherwise the class name.
             layer_depth: The depth of the layer to compute the CAPE for.
-            Defaults to 100 hPa.
+                Defaults to 100 hPa.
         """
         super().__init__(output_variables=output_variables, name=name)
         self.layer_depth = layer_depth
@@ -457,7 +451,6 @@ def maybe_derive_variables(
             in the derived variables.
         variables: The potential variables to derive as a list of strings or
             DerivedVariable objects.
-        **kwargs: Additional keyword arguments to pass to the derived variables.
 
     Returns:
         A dataset with derived variables, if any exist, else the original

@@ -71,7 +71,7 @@ class IndividualCaseCollection:
                     - tuple or list: The bounding coordinates in the order
                     longitude_min, latitude_min, longitude_max, latitude_max.
             inplace: Whether to modify the collection in place or return a new
-            collection. Defaults to False.
+                collection. Defaults to False.
 
         Returns:
             A new IndividualCaseCollection with the cases selected by the given criteria
