@@ -13,6 +13,7 @@ from typing import (
     cast,
 )
 
+import icechunk
 import numpy as np
 import pandas as pd
 import polars as pl
@@ -421,6 +422,29 @@ class ZarrForecast(ForecastBase):
             chunks=self.chunks,
             decode_timedelta=True,
         )
+
+
+@dataclasses.dataclass
+class IcechunkDataTreeForecast(ForecastBase):
+    """Forecast class for datatree icechunk store forecast data.
+
+    This class is used to open the icechunk store and return a datatree object. To be
+    able to apply the data to EWB, the groups need to be known to select as a Dataset
+    for evaluation. Access for this class is hard-coded to be read-only."""
+
+    chunks: Optional[Union[dict, str]] = "auto"
+    icechunk_storage: icechunk.Storage
+    group: str
+    branch: str = "main"
+
+    def _open_data_from_source(self) -> IncomingDataInput:
+        dataset = open_icechunk_dataset_from_datatree(
+            storage=self.icechunk_storage,
+            group=self.group,
+            branch=self.branch,
+            chunks=self.chunks,
+        )
+        return dataset
 
 
 @dataclasses.dataclass
@@ -987,6 +1011,31 @@ def open_kerchunk_reference(
             "parquet are supported."
         )
     return kerchunk_ds
+
+
+def open_icechunk_dataset_from_datatree(
+    storage: icechunk.Storage,
+    group: str,
+    branch: str = "main",
+    chunks: Optional[Union[dict, str]] = "auto",
+) -> xr.Dataset:
+    """Open an icechunk datatree from a storage.
+
+    Args:
+        storage: The icechunk Storage object to open.
+        group: The group within the datatree to open.
+        branch: The icechunk branch to open. Defaults to "main".
+        chunks: The chunk pattern for the datatree. defaults to "auto".
+    Returns:
+        The dataset for the specified group.
+    """
+    repo = icechunk.Repository.open(storage)
+    session = repo.readonly_session(branch=branch)
+    dt = xr.open_datatree(
+        filename_or_obj=session.store, engine="zarr", consolidated=False, chunks=chunks
+    )
+    # Return the dataset for the group
+    return dt[group].to_dataset()
 
 
 def zarr_target_subsetter(
