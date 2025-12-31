@@ -1,6 +1,7 @@
 """Handle variable extraction for Pandas DataFrames."""
 
 import datetime
+import logging
 from typing import TYPE_CHECKING
 
 import pandas as pd
@@ -9,6 +10,8 @@ from extremeweatherbench import utils
 
 if TYPE_CHECKING:
     from extremeweatherbench import regions
+
+logger = logging.getLogger(__name__)
 
 
 def safely_pull_variables(
@@ -188,3 +191,121 @@ def check_for_spatial_data(data: pd.DataFrame, location: "regions.Region") -> bo
     ]
 
     return len(filtered_data) > 0
+
+
+def safe_concat(data_objects: pd.DataFrame) -> pd.DataFrame:
+    """Safely concatenate DataFrames, filtering out empty ones.
+
+    This function prevents FutureWarnings from pd.concat when dealing with
+    empty or all-NA DataFrames by filtering them out before concatenation.
+    It also handles dtype mismatches by converting to object dtype only when
+    necessary to prevent concatenation warnings.
+
+    Args:
+        data_objects: List of DataFrames to concatenate
+        ignore_index: Whether to ignore index during concatenation
+
+    Returns:
+        Concatenated DataFrame, or empty DataFrame with OUTPUT_COLUMNS if all
+        input DataFrames are empty. Preserves original dtypes when consistent
+        across DataFrames, converts to object dtype only when there are
+        dtype mismatches.
+    """
+    # Filter out problematic DataFrames that would trigger FutureWarning
+    valid_data = []
+    for i, data in enumerate(data_objects):
+        # Skip empty DataFrames
+        if data.empty:
+            logger.debug("Skipping empty DataFrame %s", i)
+            continue
+        # Skip DataFrames where all values are NA
+        if data.isna().all().all():
+            logger.debug("Skipping all-NA DataFrame %s", i)
+            continue
+        # Skip DataFrames where all columns are empty/NA
+        if len(data.columns) > 0 and all(
+            data[col].isna().all() for col in data.columns
+        ):
+            logger.debug("Skipping DataFrame %s with all-NA columns", i)
+            continue
+
+        valid_data.append(data)
+
+    if valid_data:
+        # Check for dtype inconsistencies that cause FutureWarning
+        if len(valid_data) > 1:
+            # Check if there are dtype mismatches between DataFrames
+            reference_data = valid_data[0]
+            has_dtype_mismatch = False
+
+            for data in valid_data[1:]:
+                # Check if columns have different dtypes across DataFrames
+                for col in reference_data.columns:
+                    if col in data.columns:
+                        if reference_data[col].dtype != data[col].dtype:
+                            has_dtype_mismatch = True
+                            break
+                if has_dtype_mismatch:
+                    break
+
+            if has_dtype_mismatch:
+                # Only convert to object dtype if there are mismatches
+                consistent_datas = [data.astype(object) for data in valid_data]
+                return pd.concat(objs=consistent_datas, ignore_index=True)
+
+        # No dtype mismatches, concatenate normally
+        return pd.concat(objs=valid_data, ignore_index=True)
+    else:
+        return pd.DataFrame(columns=utils.OUTPUT_SCHEMA)
+
+
+def ensure_output_schema(data: pd.DataFrame, **metadata) -> pd.DataFrame:
+    """Ensure data conforms to OUTPUT_SCHEMA schema.
+
+    This function adds any provided metadata columns to the data and validates
+    that all OUTPUT_SCHEMA are present. Any missing columns will be filled with NaN
+    and a warning will be logged.
+
+    Args:
+        data: Base data, typically with 'value' column from metric result
+        **metadata: Key-value pairs for metadata columns (e.g., target_variable='temp')
+
+    Returns:
+        DataFrame with columns matching OUTPUT_SCHEMA specification.
+
+    Example:
+        data = ensure_output_schema(
+            metric_result,
+            target_variable=target_var,
+            metric=metric.name,
+            case_id_number=case_id,
+            event_type=event_type
+        )
+    """
+    # Add metadata columns
+    for col, value in metadata.items():
+        data[col] = value
+    incoming_schema = list(data.columns)
+    # Check for missing columns and warn
+    missing_cols = set(utils.OUTPUT_SCHEMA) - set(incoming_schema)
+
+    # An output requires one of init_time or lead_time. If aggregating over one or the
+    # other, it is expected that one will be missing. init_time will be present for a
+    # metric that assesses something in an entire model run, such as the onset error of
+    # an event. Lead_time will be present for a metric that assesses something at a
+    # specific forecast hour, such as RMSE. If neither are present, the output is
+    # invalid.
+    init_time_missing = "init_time" in missing_cols
+    lead_time_missing = "lead_time" in missing_cols
+
+    # Check if exactly one of init_time or lead_time is missing
+    if init_time_missing != lead_time_missing:
+        missing_cols.discard("init_time")
+        missing_cols.discard("lead_time")
+
+    if missing_cols:
+        logger.warning("Missing expected columns: %s.", missing_cols)
+
+    # Ensure all OUTPUT_SCHEMA are present (missing ones will be NaN)
+    # and reorder to match OUTPUT_SCHEMA specification
+    return data.reindex(columns=utils.OUTPUT_SCHEMA)

@@ -7,7 +7,7 @@ import inspect
 import logging
 import operator
 import pathlib
-from typing import Any, Callable, Literal, Optional, Sequence, Union
+from typing import Any, Callable, Hashable, Literal, Optional, Sequence, Union
 
 import cartopy.io.shapereader as shpreader
 import numpy as np
@@ -31,6 +31,19 @@ operators = {
     "==": operator.eq,
     "!=": operator.ne,
 }
+
+# Expected output schema
+OUTPUT_SCHEMA: list[Hashable] = [
+    "value",
+    "lead_time",
+    "init_time",
+    "target_variable",
+    "metric",
+    "forecast_source",
+    "target_source",
+    "case_id_number",
+    "event_type",
+]
 
 
 def maybe_get_operator(
@@ -822,10 +835,10 @@ def _cache_maybe_densify_helper(
 
 
 def maybe_cache_and_compute(
-    data: xr.Dataset | xr.DataArray,
+    data: xr.Dataset,
     name: str,
     cache_dir: Optional[Union[str, pathlib.Path]] = None,
-) -> xr.Dataset | xr.DataArray:
+) -> xr.Dataset:
     """Compute and cache datasets if cache_dir is provided.
 
     Data is returned as technically lazily loaded from the cache, but will significantly
