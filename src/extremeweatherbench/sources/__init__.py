@@ -1,5 +1,7 @@
 """Input source modules for different data types."""
 
+from types import ModuleType
+
 import pandas as pd
 import polars as pl
 import xarray as xr
@@ -7,9 +9,12 @@ import xarray as xr
 from . import pandas_dataframe, polars_lazyframe, xarray_dataarray, xarray_dataset
 from .base import Source
 
+# Satisfying mypy to allow for importing Source elsewhere in the codebase
+__all__ = ["get_backend_module", "Source"]
+
 # Registry mapping data types to their corresponding source modules
 # Each module implements the Source Protocol at module level
-DATA_BACKEND_REGISTRY: dict[type, Source] = {
+DATA_BACKEND_REGISTRY: dict[type, ModuleType] = {
     pd.DataFrame: pandas_dataframe,
     pl.LazyFrame: polars_lazyframe,
     xr.DataArray: xarray_dataarray,
@@ -17,7 +22,7 @@ DATA_BACKEND_REGISTRY: dict[type, Source] = {
 }
 
 
-def get_backend_module(data_type: type) -> Source:
+def get_backend_module(data_type: type) -> ModuleType:
     """Get the source module for a given data type.
 
     Args:
