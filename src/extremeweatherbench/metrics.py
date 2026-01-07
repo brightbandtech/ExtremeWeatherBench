@@ -1084,13 +1084,11 @@ class MaximumMeanAbsoluteError(MeanAbsoluteError):
                 skipna=True,
             )
 
-        maximum_timestep = target.idxmax("valid_time")
-        maximum_value = target.sel(valid_time=maximum_timestep)
-
         # Handle the case where there are >1 resulting target values
         maximum_timestep = utils.maybe_get_closest_timestamp_to_center_of_valid_times(
-            maximum_timestep, target.valid_time
+            target.idxmax("valid_time"), target.valid_time
         ).compute()
+        maximum_value = target.sel(valid_time=maximum_timestep)
 
         # Calculate the tolerance range for forecasts around the maximum target value
         start_time_range = maximum_timestep.data - np.timedelta64(
@@ -1181,12 +1179,12 @@ class MinimumMeanAbsoluteError(MeanAbsoluteError):
                 skipna=True,
             )
 
-        minimum_timestep = target.idxmin("valid_time")
-        minimum_value = target.sel(valid_time=minimum_timestep)
         # Handle the case where there are >1 resulting target values
         minimum_timestep = utils.maybe_get_closest_timestamp_to_center_of_valid_times(
-            minimum_timestep, target.valid_time
+            target.idxmin("valid_time"), target.valid_time
         ).compute()
+        minimum_value = target.sel(valid_time=minimum_timestep)
+
         # Calculate the tolerance range for forecasts around the minimum target value
         start_time_range = minimum_timestep.data - np.timedelta64(
             self.tolerance_range_hours // 2, "h"
