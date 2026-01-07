@@ -354,18 +354,12 @@ class ForecastBase(InputBase):
             subset_time_data, drop=drop
         )
 
-        # convert from init_time/lead_time to init_time/valid_time
-        spatiotemporally_subset_data = utils.convert_init_time_to_valid_time(
-            spatiotemporally_subset_data
+        # Subset to only include valid_times within the case date range
+        spatiotemporally_subset_data = spatiotemporally_subset_data.where(
+            spatiotemporally_subset_data["valid_time_mask"]
         )
 
-        # Now filter to only include valid_times within the case date range
-        # This eliminates the actual time steps that fall outside the range
-        time_filtered_data = spatiotemporally_subset_data.sel(
-            valid_time=slice(case_metadata.start_date, case_metadata.end_date)
-        )
-
-        return time_filtered_data
+        return spatiotemporally_subset_data
 
 
 @dataclasses.dataclass
