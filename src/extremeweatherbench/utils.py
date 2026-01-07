@@ -911,3 +911,66 @@ def create_time_range_mask(
         coords={"init_time": init_time_values, "lead_time": lead_time_values},
     )
     return valid_combinations_mask_da
+
+
+def create_complete_day_mask(
+    init_time: xr.DataArray,
+    lead_time: xr.DataArray,
+    time_resolution_hours: Optional[float],
+) -> xr.DataArray:
+    """Create a mask for cells belonging to days with all timesteps present.
+
+    For each init_time, checks which days have all required timesteps and marks
+    those cells as True. Days are considered complete per-init_time, not globally.
+
+    Args:
+        init_time: The init_time coordinate/dimension.
+        lead_time: The lead_time coordinate/dimension.
+        time_resolution_hours: Temporal resolution of the data in hours.
+            If None, returns a mask of all False (no complete days).
+
+    Returns:
+        Boolean DataArray mask with dims (init_time, lead_time) where True
+        indicates the cell belongs to a day with all timesteps present.
+    """
+    # Handle empty arrays
+    if len(init_time) == 0 or len(lead_time) == 0:
+        return xr.DataArray(
+            np.zeros((len(init_time), len(lead_time)), dtype=bool),
+            dims=["init_time", "lead_time"],
+            coords={"init_time": init_time, "lead_time": lead_time},
+        )
+
+    # If we can't determine resolution, no days can be verified as complete
+    if time_resolution_hours is None:
+        return xr.DataArray(
+            np.zeros((len(init_time), len(lead_time)), dtype=bool),
+            dims=["init_time", "lead_time"],
+            coords={"init_time": init_time, "lead_time": lead_time},
+        )
+
+    timesteps_per_day = int(24 / time_resolution_hours)
+
+    # Compute valid_time as a 2D array (convert lead_time hours to timedelta)
+    lead_time_td = pd.to_timedelta(lead_time.values, unit="h")
+    valid_time = init_time + xr.DataArray(
+        lead_time_td, dims=["lead_time"], coords={"lead_time": lead_time}
+    )
+
+    # Get dayofyear for each cell
+    dayofyear = valid_time.dt.dayofyear
+
+    # Create mask by checking completeness per init_time
+    mask = np.zeros((len(init_time), len(lead_time)), dtype=bool)
+
+    for i, _ in enumerate(init_time.values):
+        row_dayofyear = dayofyear.isel(init_time=i).values
+        unique_days, counts = np.unique(row_dayofyear, return_counts=True)
+        complete_days = unique_days[counts >= timesteps_per_day]
+        mask[i, :] = np.isin(row_dayofyear, complete_days)
+
+    return xr.DataArray(
+        mask,
+        dims=["init_time", "lead_time"],
+        coords={"init_time": init_time, "lead_time": lead_time},
+    )
