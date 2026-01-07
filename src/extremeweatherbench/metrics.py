@@ -1272,17 +1272,14 @@ class MaximumLowestMeanAbsoluteError(MeanAbsoluteError):
             )
 
         time_resolution_hours = utils.determine_temporal_resolution(target)
-        max_min_target_value = (
+        max_min_target_datetime = (
             target.groupby("valid_time.dayofyear")
             .map(
                 utils.min_if_all_timesteps_present,
                 time_resolution_hours=time_resolution_hours,
             )
-            .max()
+            .idxmax()
         )
-        max_min_target_datetime = target.where(
-            target == max_min_target_value, drop=True
-        ).valid_time
 
         # Handle the case where there are >1 resulting target values
         # Squeeze in case there are dimensions (should be one value)
@@ -1295,7 +1292,7 @@ class MaximumLowestMeanAbsoluteError(MeanAbsoluteError):
             .compute()
             .squeeze()
         )
-
+        max_min_target_value = target.sel(valid_time=max_min_target_datetime)
         # Calculate the tolerance range for forecasts around the maximum target value
         start_time_range = max_min_target_datetime.data - np.timedelta64(
             self.tolerance_range_hours // 2, "h"
