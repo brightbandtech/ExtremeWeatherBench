@@ -290,6 +290,233 @@ class TestCreateTimeRangeMask:
         assert mask.all().item()
 
 
+class TestCreateCompleteDayMask:
+    """Tests for create_complete_day_mask function."""
+
+    def test_typical_valid_dataarray_6h_resolution(self):
+        """Test mask creation with 6-hour resolution data having complete days."""
+        # 6-hour resolution means 4 timesteps per day
+        ds = xr.Dataset(
+            coords={
+                "init_time": pd.date_range("2020-01-01", periods=1, freq="D"),
+                "lead_time": [0, 6, 12, 18, 24, 30],  # hours - first 4 form day 1
+            }
+        )
+
+        mask = utils.create_complete_day_mask(
+            ds.init_time, ds.lead_time, time_resolution_hours=6.0
+        )
+
+        # Check return type
+        assert isinstance(mask, xr.DataArray)
+        assert mask.dtype == bool
+        assert set(mask.dims) == {"init_time", "lead_time"}
+
+        # Check shape matches input dimensions
+        assert mask.shape == (1, 6)
+
+        # Day 1 (lead_time 0, 6, 12, 18) should be complete (4 timesteps)
+        assert mask.sel(init_time="2020-01-01", lead_time=0).item() is True
+        assert mask.sel(init_time="2020-01-01", lead_time=6).item() is True
+        assert mask.sel(init_time="2020-01-01", lead_time=12).item() is True
+        assert mask.sel(init_time="2020-01-01", lead_time=18).item() is True
+
+        # Day 2 (lead_time 24, 30) is incomplete (only 2 timesteps)
+        assert mask.sel(init_time="2020-01-01", lead_time=24).item() is False
+        assert mask.sel(init_time="2020-01-01", lead_time=30).item() is False
+
+    def test_no_complete_days(self):
+        """Test mask when no days have all timesteps."""
+        # 6-hour resolution needs 4 timesteps, but we only provide 2 per day
+        ds = xr.Dataset(
+            coords={
+                "init_time": pd.date_range("2020-01-01", periods=1, freq="D"),
+                "lead_time": [0, 6, 24, 30],  # Only 2 timesteps per day
+            }
+        )
+
+        mask = utils.create_complete_day_mask(
+            ds.init_time, ds.lead_time, time_resolution_hours=6.0
+        )
+
+        # All values should be False (no complete days)
+        assert isinstance(mask, xr.DataArray)
+        assert mask.dtype == bool
+        assert not mask.any().item()
+
+    def test_time_resolution_hours_none(self):
+        """Test mask when time_resolution_hours is None."""
+        ds = xr.Dataset(
+            coords={
+                "init_time": pd.date_range("2020-01-01", "2020-01-03", freq="D"),
+                "lead_time": [0, 24, 48],
+            }
+        )
+
+        mask = utils.create_complete_day_mask(
+            ds.init_time, ds.lead_time, time_resolution_hours=None
+        )
+
+        # All values should be False when resolution is unknown
+        assert isinstance(mask, xr.DataArray)
+        assert mask.dtype == bool
+        assert mask.shape == (3, 3)
+        assert not mask.any().item()
+
+    def test_empty_init_time_dataarray(self):
+        """Test mask creation with empty init_time dataarray."""
+        empty_init_time = xr.DataArray(
+            pd.DatetimeIndex([], dtype="datetime64[ns]"),
+            dims=["init_time"],
+            coords={"init_time": pd.DatetimeIndex([], dtype="datetime64[ns]")},
+        )
+        lead_time = xr.DataArray(
+            [0, 6, 12, 18], dims=["lead_time"], coords={"lead_time": [0, 6, 12, 18]}
+        )
+
+        mask = utils.create_complete_day_mask(
+            empty_init_time, lead_time, time_resolution_hours=6.0
+        )
+
+        assert isinstance(mask, xr.DataArray)
+        assert mask.shape == (0, 4)
+
+    def test_empty_lead_time_dataarray(self):
+        """Test mask creation with empty lead_time dataarray."""
+        init_time = xr.DataArray(
+            pd.date_range("2020-01-01", "2020-01-03", freq="D"),
+            dims=["init_time"],
+            coords={"init_time": pd.date_range("2020-01-01", "2020-01-03", freq="D")},
+        )
+        empty_lead_time = xr.DataArray([], dims=["lead_time"], coords={"lead_time": []})
+
+        mask = utils.create_complete_day_mask(
+            init_time, empty_lead_time, time_resolution_hours=6.0
+        )
+
+        assert isinstance(mask, xr.DataArray)
+        assert mask.shape == (3, 0)
+
+    def test_both_empty_dataarrays(self):
+        """Test mask creation when both init_time and lead_time are empty."""
+        empty_init_time = xr.DataArray(
+            pd.DatetimeIndex([], dtype="datetime64[ns]"),
+            dims=["init_time"],
+            coords={"init_time": pd.DatetimeIndex([], dtype="datetime64[ns]")},
+        )
+        empty_lead_time = xr.DataArray(
+            np.array([], dtype=np.int64),
+            dims=["lead_time"],
+            coords={"lead_time": np.array([], dtype=np.int64)},
+        )
+
+        mask = utils.create_complete_day_mask(
+            empty_init_time, empty_lead_time, time_resolution_hours=6.0
+        )
+
+        assert isinstance(mask, xr.DataArray)
+        assert mask.shape == (0, 0)
+
+    def test_all_complete_days_24h_resolution(self):
+        """Test mask when all days are complete with 24-hour resolution."""
+        # 24-hour resolution means 1 timestep per day
+        ds = xr.Dataset(
+            coords={
+                "init_time": pd.date_range("2020-01-01", periods=1, freq="D"),
+                "lead_time": [0, 24, 48],  # Each is a different day, 1 timestep each
+            }
+        )
+
+        mask = utils.create_complete_day_mask(
+            ds.init_time, ds.lead_time, time_resolution_hours=24.0
+        )
+
+        # All values should be True (each day has its required 1 timestep)
+        assert isinstance(mask, xr.DataArray)
+        assert mask.all().item()
+
+    def test_1h_resolution_complete_day(self):
+        """Test with 1-hour resolution requiring 24 timesteps per day."""
+        ds = xr.Dataset(
+            coords={
+                "init_time": pd.date_range("2020-01-01", periods=1, freq="D"),
+                "lead_time": list(range(24)),  # 0-23 hours, complete day
+            }
+        )
+
+        mask = utils.create_complete_day_mask(
+            ds.init_time, ds.lead_time, time_resolution_hours=1.0
+        )
+
+        assert isinstance(mask, xr.DataArray)
+        assert mask.all().item()
+
+    def test_3h_resolution_incomplete_day(self):
+        """Test with 3-hour resolution (8 timesteps needed) but incomplete."""
+        ds = xr.Dataset(
+            coords={
+                "init_time": pd.date_range("2020-01-01", periods=1, freq="D"),
+                "lead_time": [0, 3, 6, 9],  # Only 4 of 8 needed timesteps
+            }
+        )
+
+        mask = utils.create_complete_day_mask(
+            ds.init_time, ds.lead_time, time_resolution_hours=3.0
+        )
+
+        # All False - day is incomplete
+        assert isinstance(mask, xr.DataArray)
+        assert not mask.any().item()
+
+    def test_12h_resolution_multiple_days(self):
+        """Test with 12-hour resolution across multiple days."""
+        # 12-hour resolution means 2 timesteps per day
+        ds = xr.Dataset(
+            coords={
+                "init_time": pd.date_range("2020-01-01", periods=1, freq="D"),
+                "lead_time": [0, 12, 24, 36, 48],  # Day 1: complete, Day 2: complete,
+                # Day 3: incomplete
+            }
+        )
+
+        mask = utils.create_complete_day_mask(
+            ds.init_time, ds.lead_time, time_resolution_hours=12.0
+        )
+
+        # Day 1 (lead_time 0, 12) - complete
+        assert mask.sel(init_time="2020-01-01", lead_time=0).item() is True
+        assert mask.sel(init_time="2020-01-01", lead_time=12).item() is True
+
+        # Day 2 (lead_time 24, 36) - complete
+        assert mask.sel(init_time="2020-01-01", lead_time=24).item() is True
+        assert mask.sel(init_time="2020-01-01", lead_time=36).item() is True
+
+        # Day 3 (lead_time 48 only) - incomplete
+        assert mask.sel(init_time="2020-01-01", lead_time=48).item() is False
+
+    def test_multiple_init_times(self):
+        """Test with multiple init_times creating overlapping valid_times."""
+        ds = xr.Dataset(
+            coords={
+                "init_time": pd.date_range("2020-01-01", periods=2, freq="D"),
+                "lead_time": [0, 6, 12, 18],  # 4 timesteps
+            }
+        )
+
+        mask = utils.create_complete_day_mask(
+            ds.init_time, ds.lead_time, time_resolution_hours=6.0
+        )
+
+        assert isinstance(mask, xr.DataArray)
+        assert mask.shape == (2, 4)
+
+        # Both init_times should have complete day 1 marked True
+        # Day for init_time 2020-01-01: complete (4 timesteps)
+        # Day for init_time 2020-01-02: complete (4 timesteps)
+        assert mask.sel(init_time="2020-01-01").all().item() is True
+        assert mask.sel(init_time="2020-01-02").all().item() is True
+
+
 def test_filter_kwargs_for_callable():
     """Test filtering kwargs to match callable signature."""
 
