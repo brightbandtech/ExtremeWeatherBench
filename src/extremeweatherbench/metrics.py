@@ -1375,15 +1375,17 @@ class DurationMeanError(MeanError):
             if dim not in ["init_time", "lead_time", "valid_time"]
         ]
         # Handle criteria - either climatology (xr.DataArray) or float threshold
-        if isinstance(self.threshold_criteria, xr.DataArray):
+        # Use local variable to avoid mutating self.threshold_criteria
+        threshold_criteria = self.threshold_criteria
+        if isinstance(threshold_criteria, xr.DataArray):
             # Climatology case, convert from dayofyear/hour to valid_time
-            self.threshold_criteria = utils.convert_day_yearofday_to_time(
-                self.threshold_criteria, forecast.valid_time.dt.year.values[0]
+            threshold_criteria = utils.convert_day_yearofday_to_time(
+                threshold_criteria, forecast.valid_time.dt.year.values[0]
             )
 
             # Interpolate climatology to target coordinates
-            self.threshold_criteria = utils.interp_climatology_to_target(
-                target, self.threshold_criteria
+            threshold_criteria = utils.interp_climatology_to_target(
+                target, threshold_criteria
             )
         forecast = utils.reduce_dataarray(
             forecast, method="mean", reduce_dims=spatial_dims
@@ -1391,8 +1393,8 @@ class DurationMeanError(MeanError):
         target = utils.reduce_dataarray(target, method="mean", reduce_dims=spatial_dims)
         forecast = forecast.compute()
         target = target.compute()
-        forecast_mask = self.op_func(forecast, self.threshold_criteria)
-        target_mask = self.op_func(target, self.threshold_criteria)
+        forecast_mask = self.op_func(forecast, threshold_criteria)
+        target_mask = self.op_func(target, threshold_criteria)
         # Track NaN locations in forecast data
         forecast_valid_mask = ~forecast.isnull()
 
