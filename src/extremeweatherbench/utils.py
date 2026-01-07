@@ -183,7 +183,8 @@ def read_event_yaml(input_pth: str | pathlib.Path) -> dict:
 
 
 def derive_indices_from_init_time_and_lead_time(
-    dataset: xr.Dataset,
+    init_times: npt.NDArray[np.datetime64],
+    lead_times: npt.NDArray[np.timedelta64],
     start_date: datetime.datetime,
     end_date: datetime.datetime,
 ) -> tuple[np.ndarray[Any, Any], ...]:
@@ -191,7 +192,8 @@ def derive_indices_from_init_time_and_lead_time(
     lead_time coordinates.
 
     Args:
-        dataset: The dataset to derive the indices from.
+        init_times: The init_time values to derive the indices from.
+        lead_times: The lead_time values to derive the indices from.
         start_date: The start date to derive the indices from.
         end_date: The end date to derive the indices from.
 
@@ -213,19 +215,26 @@ def derive_indices_from_init_time_and_lead_time(
         ... )
         >>> start = datetime.datetime(2020, 1, 1)
         >>> end = datetime.datetime(2020, 1, 4)
-        >>> indices = derive_indices_from_init_time_and_lead_time(ds, start, end)
+        >>> indices = derive_indices_from_init_time_and_lead_time(
+        ...     ds.init_time, ds.lead_time, start, end
+        ... )
         >>> print(indices)
         array([0, 0, 1, 1, 2])
     """
-    lead_time_grid, init_time_grid = np.meshgrid(dataset.lead_time, dataset.init_time)
+    # Check if init_times and lead_times are 1D arrays
+    if lead_times.ndim <= 1 and init_times.ndim <= 1:
+        lead_time_grid, init_time_grid = np.meshgrid(lead_times, init_times)
+    else:
+        raise ValueError("init_times and lead_times must be 1D arrays")
+
     valid_times = (
         init_time_grid.flatten()
         + pd.to_timedelta(lead_time_grid.flatten(), unit="h").to_numpy()
     )
     valid_times_reshaped = valid_times.reshape(
         (
-            dataset.init_time.shape[0],
-            dataset.lead_time.shape[0],
+            init_times.shape[0],
+            lead_times.shape[0],
         )
     )
     valid_time_mask = (valid_times_reshaped >= pd.to_datetime(start_date)) & (
@@ -864,3 +873,110 @@ def maybe_cache_and_compute(
         return xr.open_dataset(cache_path / f"{name}.zarr")
     else:
         return xr.open_dataarray(cache_path / f"{name}.zarr")
+
+
+def create_time_range_mask(
+    init_times: npt.NDArray[np.datetime64],
+    lead_times: npt.NDArray[np.timedelta64],
+    start_time: datetime.datetime,
+    end_time: datetime.datetime,
+) -> xr.DataArray:
+    """Create a mask for a time range from init and lead time values.
+
+    Args:
+        init_times: The init time values.
+        lead_times: The lead time values.
+        start_time: The start time.
+        end_time: The end time.
+
+    Returns:
+        The mask for the time range as a DataArray with init_time and lead_time dimensions.
+    """
+
+    # Derive the indexes of valid times within the case date range
+    subset_time_indices = derive_indices_from_init_time_and_lead_time(
+        init_times,
+        lead_times,
+        start_time,
+        end_time,
+    )
+
+    # Create a mask indicating which (init_time, lead_time) combinations
+    # result in valid_times within the case date range
+    valid_combinations_mask = np.zeros(
+        (len(init_times), len(lead_times)),
+        dtype=bool,
+    )
+
+    # Map the valid indices back to the subset data coordinates
+    valid_combinations_mask[subset_time_indices[0], subset_time_indices[1]] = True
+    valid_combinations_mask_da = xr.DataArray(
+        valid_combinations_mask,
+        dims=["init_time", "lead_time"],
+        coords={"init_time": init_times, "lead_time": lead_times},
+    )
+    return valid_combinations_mask_da
+
+
+def create_complete_day_mask(
+    init_times: npt.NDArray[np.datetime64],
+    lead_times: npt.NDArray[np.timedelta64],
+    time_resolution_hours: Optional[float],
+) -> xr.DataArray:
+    """Create a mask for cells belonging to days with all timesteps present.
+
+    For each init_time, checks which days have all required timesteps and marks
+    those cells as True. Days are considered complete per-init_time, not globally.
+
+    Args:
+        init_time: The init_time values.
+        lead_time: The lead_time values.
+        time_resolution_hours: Temporal resolution of the data in hours.
+            If None, returns a mask of all False (no complete days).
+
+    Returns:
+        Boolean DataArray mask with dims (init_time, lead_time) where True
+        indicates the cell belongs to a day with all timesteps present.
+    """
+    # Handle empty arrays
+    if len(init_times) == 0 or len(lead_times) == 0:
+        return xr.DataArray(
+            np.zeros((len(init_times), len(lead_times)), dtype=bool),
+            dims=["init_time", "lead_time"],
+            coords={"init_time": init_times, "lead_time": lead_times},
+        )
+
+    # If we can't determine resolution, no days can be verified as complete
+    if time_resolution_hours is None:
+        return xr.DataArray(
+            np.zeros((len(init_times), len(lead_times)), dtype=bool),
+            dims=["init_time", "lead_time"],
+            coords={"init_time": init_times, "lead_time": lead_times},
+        )
+
+    timesteps_per_day = int(24 / time_resolution_hours)
+
+    # Compute valid_time as a 2D array via broadcasting:
+    # init_times[:, None] has shape (n_init, 1), lead_times has shape (n_lead,)
+    # Result has shape (n_init, n_lead)
+    valid_times = init_times[:, None] + lead_times
+
+    # Get dayofyear for each cell using pandas
+    valid_times_flat = pd.to_datetime(valid_times.ravel())
+    dayofyear_flat = valid_times_flat.dayofyear.values
+    dayofyear = dayofyear_flat.reshape(valid_times.shape)
+
+    # Create mask by checking completeness per init_time
+    mask = np.zeros((len(init_times), len(lead_times)), dtype=bool)
+
+    for i, _ in enumerate(init_times):
+        row_dayofyear = dayofyear[i, :]
+        unique_days, counts = np.unique(row_dayofyear, return_counts=True)
+        complete_days = unique_days[counts >= timesteps_per_day]
+        mask[i, :] = np.isin(row_dayofyear, complete_days)
+
+    return xr.DataArray(
+        mask,
+        dims=["init_time", "lead_time"],
+        coords={"init_time": init_times, "lead_time": lead_times},
+    )
