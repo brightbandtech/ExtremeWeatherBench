@@ -1047,7 +1047,7 @@ class MaximumMeanAbsoluteError(MeanAbsoluteError):
     def __init__(
         self,
         tolerance_range_hours: int = 24,
-        reduce_spatial_dims: list[str] = ["latitude", "longitude"],
+        reduce_spatial_dims: Optional[list[str]] = ["latitude", "longitude"],
         name: str = "MaximumMeanAbsoluteError",
         *args,
         **kwargs,
@@ -1061,7 +1061,7 @@ class MaximumMeanAbsoluteError(MeanAbsoluteError):
         forecast: xr.DataArray,
         target: xr.DataArray,
         **kwargs,
-    ) -> dict[str, xr.DataArray]:
+    ) -> xr.DataArray:
         """Compute MaximumMeanAbsoluteError.
 
         Args:
@@ -1072,34 +1072,49 @@ class MaximumMeanAbsoluteError(MeanAbsoluteError):
         Returns:
             MeanAbsoluteError of the maximum values.
         """
-        # Enforced spatial reduction for MaximumMeanAbsoluteError
-        reduce_spatial_dims = ["latitude", "longitude"]
-        target_spatial_mean = utils.reduce_dataarray(
-            target, method="mean", reduce_dims=reduce_spatial_dims, skipna=True
-        )
-        maximum_timestep = target_spatial_mean.idxmax("valid_time")
-        maximum_value = target_spatial_mean.sel(valid_time=maximum_timestep)
+        # Reduce spatial dimensions if specified (default is to reduce)
+        if self.reduce_spatial_dims is not None:
+            target = utils.reduce_dataarray(
+                target, method="mean", reduce_dims=self.reduce_spatial_dims, skipna=True
+            )
+            forecast = utils.reduce_dataarray(
+                forecast,
+                method="mean",
+                reduce_dims=self.reduce_spatial_dims,
+                skipna=True,
+            )
+
+        maximum_timestep = target.idxmax("valid_time")
+        maximum_value = target.sel(valid_time=maximum_timestep)
 
         # Handle the case where there are >1 resulting target values
         maximum_timestep = utils.maybe_get_closest_timestamp_to_center_of_valid_times(
             maximum_timestep, target.valid_time
         ).compute()
-        forecast_spatial_mean = utils.reduce_dataarray(
-            forecast, method="mean", reduce_dims=reduce_spatial_dims, skipna=True
+
+        # Calculate the tolerance range for forecasts around the maximum target value
+        start_time_range = maximum_timestep.data - np.timedelta64(
+            self.tolerance_range_hours // 2, "h"
         )
-        filtered_max_forecast = forecast_spatial_mean.where(
-            (
-                forecast_spatial_mean.valid_time
-                >= maximum_timestep.data
-                - np.timedelta64(self.tolerance_range_hours // 2, "h")
-            )
-            & (
-                forecast_spatial_mean.valid_time
-                <= maximum_timestep.data
-                + np.timedelta64(self.tolerance_range_hours // 2, "h")
-            ),
+        end_time_range = maximum_timestep.data + np.timedelta64(
+            self.tolerance_range_hours // 2, "h"
+        )
+        tolerance_mask = utils.create_time_range_mask(
+            forecast.init_time,
+            forecast.lead_time,
+            start_time_range,
+            end_time_range,
+        )
+
+        # Apply the tolerance mask to the forecast and use preserve_dims to reduce the
+        # dimensions
+        filtered_forecast = forecast.where(
+            tolerance_mask,
             drop=True,
-        ).max("valid_time")
+        )
+
+        # Enforces capturing the maximum value for each forecast
+        filtered_max_forecast = filtered_forecast.max(keepdims=True)
         return super()._compute_metric(
             forecast=filtered_max_forecast,
             target=maximum_value,
@@ -1129,7 +1144,7 @@ class MinimumMeanAbsoluteError(MeanAbsoluteError):
     def __init__(
         self,
         tolerance_range_hours: int = 24,
-        reduce_spatial_dims: list[str] = ["latitude", "longitude"],
+        reduce_spatial_dims: Optional[list[str]] = ["latitude", "longitude"],
         name: str = "MinimumMeanAbsoluteError",
         *args,
         **kwargs,
@@ -1154,31 +1169,47 @@ class MinimumMeanAbsoluteError(MeanAbsoluteError):
         Returns:
             MeanAbsoluteError of the minimum values.
         """
-        target_spatial_mean = utils.reduce_dataarray(
-            target, method="mean", reduce_dims=self.reduce_spatial_dims, skipna=True
-        )
-        minimum_timestep = target_spatial_mean.idxmin("valid_time")
-        minimum_value = target_spatial_mean.sel(valid_time=minimum_timestep)
-        forecast_spatial_mean = utils.reduce_dataarray(
-            forecast, method="mean", reduce_dims=self.reduce_spatial_dims, skipna=True
-        )
+        # Reduce spatial dimensions if specified (default is to reduce)
+        if self.reduce_spatial_dims is not None:
+            target = utils.reduce_dataarray(
+                target, method="mean", reduce_dims=self.reduce_spatial_dims, skipna=True
+            )
+            forecast = utils.reduce_dataarray(
+                forecast,
+                method="mean",
+                reduce_dims=self.reduce_spatial_dims,
+                skipna=True,
+            )
+
+        minimum_timestep = target.idxmin("valid_time")
+        minimum_value = target.sel(valid_time=minimum_timestep)
         # Handle the case where there are >1 resulting target values
         minimum_timestep = utils.maybe_get_closest_timestamp_to_center_of_valid_times(
             minimum_timestep, target.valid_time
+        ).compute()
+        # Calculate the tolerance range for forecasts around the minimum target value
+        start_time_range = minimum_timestep.data - np.timedelta64(
+            self.tolerance_range_hours // 2, "h"
         )
-        filtered_min_forecast = forecast_spatial_mean.where(
-            (
-                forecast_spatial_mean.valid_time
-                >= minimum_timestep.data
-                - np.timedelta64(self.tolerance_range_hours // 2, "h")
-            )
-            & (
-                forecast_spatial_mean.valid_time
-                <= minimum_timestep.data
-                + np.timedelta64(self.tolerance_range_hours // 2, "h")
-            ),
+        end_time_range = minimum_timestep.data + np.timedelta64(
+            self.tolerance_range_hours // 2, "h"
+        )
+        tolerance_mask = utils.create_time_range_mask(
+            forecast.init_time,
+            forecast.lead_time,
+            start_time_range,
+            end_time_range,
+        )
+
+        # Apply the tolerance mask to the forecast and use preserve_dims to reduce the
+        # dimensions
+        filtered_forecast = forecast.where(
+            tolerance_mask,
             drop=True,
-        ).min("valid_time")
+        )
+
+        # Enforces capturing the minimum value for each forecast
+        filtered_min_forecast = filtered_forecast.min(keepdims=True)
         return super()._compute_metric(
             forecast=filtered_min_forecast,
             target=minimum_value,
@@ -1203,10 +1234,12 @@ class MaximumLowestMeanAbsoluteError(MeanAbsoluteError):
         self,
         tolerance_range_hours: int = 24,
         name: str = "MaximumLowestMeanAbsoluteError",
+        reduce_spatial_dims: Optional[list[str]] = ["latitude", "longitude"],
         *args,
         **kwargs,
     ):
         self.tolerance_range_hours = tolerance_range_hours
+        self.reduce_spatial_dims = reduce_spatial_dims
         super().__init__(name, *args, **kwargs)
 
     def _compute_metric(
@@ -1228,17 +1261,17 @@ class MaximumLowestMeanAbsoluteError(MeanAbsoluteError):
         Returns:
             MeanAbsoluteError of the highest aggregated minimum value.
         """
-        reduce_dims = [
-            dim
-            for dim in forecast.dims
-            if dim not in ["valid_time", "lead_time", "time"]
-        ]
-        forecast = utils.reduce_dataarray(
-            forecast, method="mean", reduce_dims=reduce_dims, skipna=True
-        )
-        target = utils.reduce_dataarray(
-            target, method="mean", reduce_dims=reduce_dims, skipna=True
-        )
+        # Reduce spatial dimensions if specified (default is to reduce)
+        if self.reduce_spatial_dims is not None:
+            target = utils.reduce_dataarray(
+                target, method="mean", reduce_dims=self.reduce_spatial_dims, skipna=True
+            )
+            forecast = utils.reduce_dataarray(
+                forecast,
+                method="mean",
+                reduce_dims=self.reduce_spatial_dims,
+                skipna=True,
+            )
 
         time_resolution_hours = utils.determine_temporal_resolution(target)
         max_min_target_value = (
@@ -1254,36 +1287,45 @@ class MaximumLowestMeanAbsoluteError(MeanAbsoluteError):
         ).valid_time
 
         # Handle the case where there are >1 resulting target values
+        # Squeeze in case there are dimensions (should be one value)
         max_min_target_datetime = (
-            utils.maybe_get_closest_timestamp_to_center_of_valid_times(
-                max_min_target_datetime, target.valid_time
-            )
-        )
-        subset_forecast = (
-            forecast.where(
-                (
-                    forecast.valid_time
-                    >= (
-                        max_min_target_datetime.data
-                        - np.timedelta64(self.tolerance_range_hours // 2, "h")
-                    )
+            (
+                utils.maybe_get_closest_timestamp_to_center_of_valid_times(
+                    max_min_target_datetime, target.valid_time
                 )
-                & (
-                    forecast.valid_time
-                    <= (
-                        max_min_target_datetime.data
-                        + np.timedelta64(self.tolerance_range_hours // 2, "h")
-                    )
-                ),
-                drop=True,
             )
-            .groupby("valid_time.dayofyear")
-            .map(
-                utils.min_if_all_timesteps_present_forecast,
-                time_resolution_hours=utils.determine_temporal_resolution(forecast),
-            )
-            .min("dayofyear")
+            .compute()
+            .squeeze()
         )
+
+        # Calculate the tolerance range for forecasts around the maximum target value
+        start_time_range = max_min_target_datetime.data - np.timedelta64(
+            self.tolerance_range_hours // 2, "h"
+        )
+        end_time_range = max_min_target_datetime.data + np.timedelta64(
+            self.tolerance_range_hours // 2, "h"
+        )
+        tolerance_mask = utils.create_time_range_mask(
+            forecast.init_time,
+            forecast.lead_time,
+            start_time_range,
+            end_time_range,
+        )
+
+        # Apply the tolerance mask to the forecast and use preserve_dims to reduce the
+        # dimensions
+        filtered_forecast = forecast.where(
+            tolerance_mask,
+            drop=True,
+        )
+
+        # Forecast resolution will be the same as the target resolution
+        complete_day_mask = utils.create_complete_day_mask(
+            filtered_forecast.init_time,
+            filtered_forecast.lead_time,
+            time_resolution_hours,
+        )
+        subset_forecast = filtered_forecast.where(complete_day_mask)
 
         return super()._compute_metric(
             forecast=subset_forecast,
