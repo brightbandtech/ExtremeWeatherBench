@@ -183,7 +183,8 @@ def read_event_yaml(input_pth: str | pathlib.Path) -> dict:
 
 
 def derive_indices_from_init_time_and_lead_time(
-    dataset: xr.Dataset,
+    init_time_values: xr.DataArray,
+    lead_time_values: xr.DataArray,
     start_date: datetime.datetime,
     end_date: datetime.datetime,
 ) -> tuple[np.ndarray[Any, Any], ...]:
@@ -191,7 +192,8 @@ def derive_indices_from_init_time_and_lead_time(
     lead_time coordinates.
 
     Args:
-        dataset: The dataset to derive the indices from.
+        init_time_values: The init_time values to derive the indices from.
+        lead_time_values: The lead_time values to derive the indices from.
         start_date: The start date to derive the indices from.
         end_date: The end date to derive the indices from.
 
@@ -213,19 +215,21 @@ def derive_indices_from_init_time_and_lead_time(
         ... )
         >>> start = datetime.datetime(2020, 1, 1)
         >>> end = datetime.datetime(2020, 1, 4)
-        >>> indices = derive_indices_from_init_time_and_lead_time(ds, start, end)
+        >>> indices = derive_indices_from_init_time_and_lead_time(
+        ...     ds.init_time, ds.lead_time, start, end
+        ... )
         >>> print(indices)
         array([0, 0, 1, 1, 2])
     """
-    lead_time_grid, init_time_grid = np.meshgrid(dataset.lead_time, dataset.init_time)
+    lead_time_grid, init_time_grid = np.meshgrid(lead_time_values, init_time_values)
     valid_times = (
         init_time_grid.flatten()
         + pd.to_timedelta(lead_time_grid.flatten(), unit="h").to_numpy()
     )
     valid_times_reshaped = valid_times.reshape(
         (
-            dataset.init_time.shape[0],
-            dataset.lead_time.shape[0],
+            init_time_values.shape[0],
+            lead_time_values.shape[0],
         )
     )
     valid_time_mask = (valid_times_reshaped >= pd.to_datetime(start_date)) & (
@@ -864,3 +868,46 @@ def maybe_cache_and_compute(
         return xr.open_dataset(cache_path / f"{name}.zarr")
     else:
         return xr.open_dataarray(cache_path / f"{name}.zarr")
+
+
+def create_time_range_mask(
+    init_time_values: xr.DataArray,
+    lead_time_values: xr.DataArray,
+    start_time: datetime.datetime,
+    end_time: datetime.datetime,
+) -> xr.DataArray:
+    """Create a mask for a time range from init and lead time dataarrays.
+
+    Args:
+        init_time_values: The init time dataarray.
+        lead_time_values: The lead time dataarray.
+        start_time: The start time.
+        end_time: The end time.
+
+    Returns:
+        The mask for the time range as a DataArray with init_time and lead_time dimensions.
+    """
+
+    # Derive the indexes of valid times within the case date range
+    subset_time_indices = derive_indices_from_init_time_and_lead_time(
+        init_time_values,
+        lead_time_values,
+        start_time,
+        end_time,
+    )
+
+    # Create a mask indicating which (init_time, lead_time) combinations
+    # result in valid_times within the case date range
+    valid_combinations_mask = np.zeros(
+        (len(init_time_values), len(lead_time_values)),
+        dtype=bool,
+    )
+
+    # Map the valid indices back to the subset data coordinates
+    valid_combinations_mask[subset_time_indices[0], subset_time_indices[1]] = True
+    valid_combinations_mask_da = xr.DataArray(
+        valid_combinations_mask,
+        dims=["init_time", "lead_time"],
+        coords={"init_time": init_time_values, "lead_time": lead_time_values},
+    )
+    return valid_combinations_mask_da

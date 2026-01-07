@@ -106,7 +106,7 @@ def test_derive_indices_from_init_time_and_lead_time():
     end_date = datetime.datetime(2020, 1, 4)
 
     indices = utils.derive_indices_from_init_time_and_lead_time(
-        ds, start_date, end_date
+        ds.init_time, ds.lead_time, start_date, end_date
     )
 
     # Should return tuple of arrays (init_time_indices, lead_time_indices)
@@ -114,6 +114,180 @@ def test_derive_indices_from_init_time_and_lead_time():
     assert len(indices) == 2
     assert isinstance(indices[0], np.ndarray)
     assert isinstance(indices[1], np.ndarray)
+
+
+def test_derive_indices_from_init_time_and_lead_time_empty():
+    """Test deriving indices when no valid times fall within the range."""
+    ds = xr.Dataset(
+        coords={
+            "init_time": pd.date_range("2020-01-01", "2020-01-03", freq="D"),
+            "lead_time": [0, 24, 48],  # hours
+        }
+    )
+
+    # Date range that doesn't overlap with any valid times
+    start_date = datetime.datetime(2025, 1, 1)
+    end_date = datetime.datetime(2025, 1, 4)
+
+    indices = utils.derive_indices_from_init_time_and_lead_time(
+        ds.init_time, ds.lead_time, start_date, end_date
+    )
+
+    # Should return empty arrays
+    assert isinstance(indices, tuple)
+    assert len(indices) == 2
+    assert len(indices[0]) == 0
+    assert len(indices[1]) == 0
+
+
+class TestCreateTimeRangeMask:
+    """Tests for create_time_range_mask function."""
+
+    def test_typical_valid_dataarray(self):
+        """Test mask creation with typical valid dataarrays."""
+        ds = xr.Dataset(
+            coords={
+                "init_time": pd.date_range("2020-01-01", "2020-01-03", freq="D"),
+                "lead_time": [0, 24, 48],  # hours
+            }
+        )
+
+        start_time = datetime.datetime(2020, 1, 2)
+        end_time = datetime.datetime(2020, 1, 3)
+
+        mask = utils.create_time_range_mask(
+            ds.init_time, ds.lead_time, start_time, end_time
+        )
+
+        # Check return type
+        assert isinstance(mask, xr.DataArray)
+        assert mask.dtype == bool
+        assert set(mask.dims) == {"init_time", "lead_time"}
+
+        # Check shape matches input dimensions
+        assert mask.shape == (3, 3)
+
+        # Verify some expected mask values:
+        # init_time=2020-01-01 + lead_time=24h -> 2020-01-02 (in range)
+        # init_time=2020-01-01 + lead_time=48h -> 2020-01-03 (in range)
+        # init_time=2020-01-02 + lead_time=0h -> 2020-01-02 (in range)
+        # init_time=2020-01-02 + lead_time=24h -> 2020-01-03 (in range)
+        # init_time=2020-01-03 + lead_time=0h -> 2020-01-03 (in range)
+        assert mask.sel(init_time="2020-01-01", lead_time=24).item() is True
+        assert mask.sel(init_time="2020-01-02", lead_time=0).item() is True
+        assert mask.sel(init_time="2020-01-03", lead_time=0).item() is True
+
+        # init_time=2020-01-01 + lead_time=0h -> 2020-01-01 (out of range)
+        assert mask.sel(init_time="2020-01-01", lead_time=0).item() is False
+
+        # init_time=2020-01-03 + lead_time=48h -> 2020-01-05 (out of range)
+        assert mask.sel(init_time="2020-01-03", lead_time=48).item() is False
+
+    def test_no_valid_times_in_range(self):
+        """Test mask when no valid times fall within the time range."""
+        ds = xr.Dataset(
+            coords={
+                "init_time": pd.date_range("2020-01-01", "2020-01-03", freq="D"),
+                "lead_time": [0, 24, 48],  # hours
+            }
+        )
+
+        # Date range that doesn't overlap with any valid times
+        start_time = datetime.datetime(2025, 1, 1)
+        end_time = datetime.datetime(2025, 1, 4)
+
+        mask = utils.create_time_range_mask(
+            ds.init_time, ds.lead_time, start_time, end_time
+        )
+
+        # All values should be False
+        assert isinstance(mask, xr.DataArray)
+        assert mask.dtype == bool
+        assert not mask.any().item()
+
+    def test_empty_init_time_dataarray(self):
+        """Test mask creation with empty init_time dataarray raises an error."""
+        empty_init_time = xr.DataArray(
+            pd.DatetimeIndex([], dtype="datetime64[ns]"),
+            dims=["init_time"],
+            coords={"init_time": pd.DatetimeIndex([], dtype="datetime64[ns]")},
+        )
+        lead_time = xr.DataArray(
+            [0, 24, 48], dims=["lead_time"], coords={"lead_time": [0, 24, 48]}
+        )
+
+        start_time = datetime.datetime(2020, 1, 1)
+        end_time = datetime.datetime(2020, 1, 4)
+
+        mask = utils.create_time_range_mask(
+            empty_init_time, lead_time, start_time, end_time
+        )
+
+        assert isinstance(mask, xr.DataArray)
+        assert mask.shape == (0, 3)
+
+    def test_empty_lead_time_dataarray(self):
+        """Test mask creation with empty lead_time dataarray."""
+        init_time = xr.DataArray(
+            pd.date_range("2020-01-01", "2020-01-03", freq="D"),
+            dims=["init_time"],
+            coords={"init_time": pd.date_range("2020-01-01", "2020-01-03", freq="D")},
+        )
+        empty_lead_time = xr.DataArray([], dims=["lead_time"], coords={"lead_time": []})
+
+        start_time = datetime.datetime(2020, 1, 1)
+        end_time = datetime.datetime(2020, 1, 4)
+
+        mask = utils.create_time_range_mask(
+            init_time, empty_lead_time, start_time, end_time
+        )
+
+        assert isinstance(mask, xr.DataArray)
+        assert mask.shape == (3, 0)
+
+    def test_both_empty_dataarrays(self):
+        """Test mask creation when both init_time and lead_time are empty."""
+        empty_init_time = xr.DataArray(
+            pd.DatetimeIndex([], dtype="datetime64[ns]"),
+            dims=["init_time"],
+            coords={"init_time": pd.DatetimeIndex([], dtype="datetime64[ns]")},
+        )
+        empty_lead_time = xr.DataArray(
+            np.array([], dtype=np.int64),
+            dims=["lead_time"],
+            coords={"lead_time": np.array([], dtype=np.int64)},
+        )
+
+        start_time = datetime.datetime(2020, 1, 1)
+        end_time = datetime.datetime(2020, 1, 4)
+
+        mask = utils.create_time_range_mask(
+            empty_init_time, empty_lead_time, start_time, end_time
+        )
+
+        assert isinstance(mask, xr.DataArray)
+        assert mask.shape == (0, 0)
+
+    def test_all_times_in_range(self):
+        """Test mask when all valid times fall within the range."""
+        ds = xr.Dataset(
+            coords={
+                "init_time": pd.date_range("2020-01-01", "2020-01-02", freq="D"),
+                "lead_time": [0, 24],  # hours
+            }
+        )
+
+        # Wide date range that includes all valid times
+        start_time = datetime.datetime(2019, 1, 1)
+        end_time = datetime.datetime(2021, 1, 1)
+
+        mask = utils.create_time_range_mask(
+            ds.init_time, ds.lead_time, start_time, end_time
+        )
+
+        # All values should be True
+        assert isinstance(mask, xr.DataArray)
+        assert mask.all().item()
 
 
 def test_filter_kwargs_for_callable():
