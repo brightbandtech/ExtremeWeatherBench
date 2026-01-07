@@ -1047,6 +1047,7 @@ class MaximumMeanAbsoluteError(MeanAbsoluteError):
     def __init__(
         self,
         tolerance_range_hours: int = 24,
+        # TODO(293): Determine if this pattern is the best approach
         reduce_spatial_dims: list[str] = ["latitude", "longitude"],
         name: str = "MaximumMeanAbsoluteError",
         *args,
