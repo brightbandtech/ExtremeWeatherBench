@@ -311,7 +311,8 @@ class ForecastBase(InputBase):
         drop = kwargs.get("drop", True)
         if not isinstance(data, xr.Dataset):
             raise ValueError(f"Expected xarray Dataset, got {type(data)}")
-        # # Drop duplicate init_time values
+
+        # Drop duplicate init_time values
         if len(np.unique(data.init_time)) != len(data.init_time):
             _, index = np.unique(data.init_time, return_index=True)
             data = data.isel(init_time=index)
