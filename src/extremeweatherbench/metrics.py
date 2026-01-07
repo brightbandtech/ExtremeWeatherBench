@@ -1097,8 +1097,8 @@ class MaximumMeanAbsoluteError(MeanAbsoluteError):
         start_time_range = maximum_timestep.data - tolerance_range_timedelta
         end_time_range = maximum_timestep.data + tolerance_range_timedelta
         tolerance_mask = utils.create_time_range_mask(
-            forecast.init_time,
-            forecast.lead_time,
+            forecast.init_time.values,
+            forecast.lead_time.values,
             start_time_range,
             end_time_range,
         )
@@ -1191,8 +1191,8 @@ class MinimumMeanAbsoluteError(MeanAbsoluteError):
         start_time_range = minimum_timestep.data - tolerance_range_timedelta
         end_time_range = minimum_timestep.data + tolerance_range_timedelta
         tolerance_mask = utils.create_time_range_mask(
-            forecast.init_time,
-            forecast.lead_time,
+            forecast.init_time.values,
+            forecast.lead_time.values,
             start_time_range,
             end_time_range,
         )
@@ -1298,8 +1298,8 @@ class MaximumLowestMeanAbsoluteError(MeanAbsoluteError):
         start_time_range = max_min_target_datetime.data - tolerance_range_timedelta
         end_time_range = max_min_target_datetime.data + tolerance_range_timedelta
         tolerance_mask = utils.create_time_range_mask(
-            forecast.init_time,
-            forecast.lead_time,
+            forecast.init_time.values,
+            forecast.lead_time.values,
             start_time_range,
             end_time_range,
         )
