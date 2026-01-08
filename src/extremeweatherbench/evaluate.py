@@ -49,8 +49,9 @@ class ExtremeWeatherBench:
         evaluation_objects: A list of evaluation objects to run.
         cache_dir: An optional directory to cache the mid-flight outputs of the
             workflow for serial runs.
-        region_subsetter: An optional region subsetter to subset the cases that are part
-        of the evaluation to a Region object or a dictionary of lat/lon bounds.
+        region_subsetter: An optional region subsetter to subset the cases that are
+            part of the evaluation to a Region object or a dictionary of lat/lon
+            bounds.
     """
 
     def __init__(
@@ -269,14 +270,13 @@ def compute_case_operator(
     Args:
         case_operator: The case operator to compute the results of.
         cache_dir: The directory to cache mid-flight outputs (serial mode).
-        kwargs: Keyword arguments to pass to the metric computations.
 
     Returns:
         A pd.DataFrame of results from the case operator.
 
     Raises:
-        TypeError: If any metric is not properly instantiated (i.e. isn't an instance
-        or child class of BaseMetric).
+        TypeError: If any metric is not properly instantiated (i.e. isn't an
+            instance or child class of BaseMetric).
     """
     # Validate that all metrics are instantiated (not classes or callables)
     metric_list = list(case_operator.metric_list)
@@ -793,7 +793,6 @@ def run_pipeline(
     Args:
         case_metadata: The case metadata to run the pipeline on.
         input_data: The input data to run the pipeline on.
-        **kwargs: Additional keyword arguments to pass to pipeline steps.
 
     Returns:
         The processed input data as an xarray dataset.
