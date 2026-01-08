@@ -540,8 +540,7 @@ class TestForecastBase:
         mock_case = mock.Mock()
         mock_case.start_date = pd.Timestamp("2021-06-20")
         mock_case.end_date = pd.Timestamp("2021-06-22")
-        # Use side_effect to return input data (preserves valid_time_mask coord)
-        mock_case.location.mask.side_effect = lambda data, **kwargs: data
+        mock_case.location.mask.return_value = forecast_with_valid_time
 
         forecast = inputs.ZarrForecast(
             name="test",
@@ -576,8 +575,7 @@ class TestForecastBase:
         mock_case = mock.Mock()
         mock_case.start_date = pd.Timestamp("2021-06-20")
         mock_case.end_date = pd.Timestamp("2021-06-22")
-        # Use side_effect to return input data (preserves valid_time_mask coord)
-        mock_case.location.mask.side_effect = lambda data, **kwargs: data
+        mock_case.location.mask.return_value = forecast_with_duplicates
 
         forecast = inputs.ZarrForecast(
             name="test",
@@ -655,8 +653,7 @@ class TestForecastBase:
         mock_case = mock.Mock()
         mock_case.start_date = pd.Timestamp("2021-06-20")
         mock_case.end_date = pd.Timestamp("2021-06-22")
-        # Use side_effect to return input data (preserves valid_time_mask coord)
-        mock_case.location.mask.side_effect = lambda data, **kwargs: data
+        mock_case.location.mask.return_value = test_data
 
         forecast = inputs.ZarrForecast(
             name="test",
@@ -715,8 +712,7 @@ class TestForecastBase:
         mock_case = mock.Mock()
         mock_case.start_date = pd.Timestamp("2021-06-20")
         mock_case.end_date = pd.Timestamp("2021-06-22")
-        # Use side_effect to return input data (preserves valid_time_mask coord)
-        mock_case.location.mask.side_effect = lambda data, **kwargs: data
+        mock_case.location.mask.return_value = sample_forecast_dataset
 
         forecast = inputs.ZarrForecast(
             name="test",
