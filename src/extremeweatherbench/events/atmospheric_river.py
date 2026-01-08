@@ -185,10 +185,10 @@ def build_atmospheric_river_mask_and_land_intersection(data: xr.Dataset) -> xr.D
 
     Args:
         data: Dataset with atmospheric data. Must contain eastward_wind,
-        northward_wind, specific_humidity, and level.
+            northward_wind, specific_humidity, and level.
 
     Returns:
-        Dataset containing atmospheric river mask and land intersection
+        Dataset containing atmospheric river mask and land intersection.
     """
     # Generate IVT
     ivt_data = integrated_vapor_transport(

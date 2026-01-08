@@ -365,13 +365,13 @@ def convert_init_time_to_valid_time(ds: xr.Dataset) -> xr.Dataset:
 
 
 def convert_valid_time_to_init_time(da: xr.DataArray) -> xr.DataArray:
-    """Convert the valid_time coordinate to a init_time coordinate.
+    """Convert the valid_time dimension to a init_time dimension.
 
     Args:
-        ds: The dataset to convert with lead_time and valid_time coordinates.
+        da: The dataarray to convert with lead_time and valid_time dimensions.
 
     Returns:
-        The dataset with a init_time coordinate.
+        The dataarray with an init_time dimension.
     """
     init_time = xr.DataArray(
         da.valid_time, coords={"valid_time": da.valid_time}
@@ -442,7 +442,7 @@ def stack_dataarray_from_dims(
 
     Args:
         da: An xarray dataarray with sparse.COO data
-        reduce_dims: The dimensions to reduce.
+        stack_dims: The dimensions to stack.
         max_size: The maximum size of records to densify; default is 100000.
 
     Returns:
@@ -719,7 +719,7 @@ def reduce_dataarray(
     method: str | Callable,
     reduce_dims: list[str],
     compute: bool = True,
-    **method_kwargs,
+    **method_kwargs: Any,
 ) -> xr.DataArray:
     """Reduce using xarray methods or numpy functions.
 
@@ -736,8 +736,6 @@ def reduce_dataarray(
             a callable function (e.g., np.nanmean).
         reduce_dims: The dimensions to reduce.
         compute: Whether to compute the dataarray before returning. Defaults to True.
-        **method_kwargs: Additional kwargs for the method. Only used
-            when method is a string (xarray method).
 
     Returns:
         The reduced xarray dataarray.
@@ -834,10 +832,10 @@ def maybe_cache_and_compute(
     better to avoid caching with a limited disk size.
 
     Args:
-        dataset: The dataset to compute and cache.
+        data: The dataset or dataarray to compute and cache.
         name: The name of the dataset for naming cached files.
         cache_dir: The directory to cache the datasets. If provided,
-            datasets will be cached as zarrs and loaded from the cache.
+            datasets or dataarrays will be cached as zarrs and loaded from the cache.
             Default is None.
 
     Returns:
