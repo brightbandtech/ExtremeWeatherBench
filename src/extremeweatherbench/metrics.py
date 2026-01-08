@@ -1340,6 +1340,8 @@ class DurationMeanError(MeanError):
         name: Name of the metric
         preserve_dims: Dimensions to preserve during aggregation. Defaults to
         "init_time".
+        product_time_resolution_hours: Whether to multiply the time resolution hours by
+        theduration. Defaults to False.
     """
 
     def __init__(
@@ -1349,11 +1351,13 @@ class DurationMeanError(MeanError):
         op_func: Union[Callable, Literal[">", ">=", "<", "<=", "==", "!="]] = ">=",
         name: str = "duration_me",
         preserve_dims: str = "init_time",
+        product_time_resolution_hours: bool = False,
     ):
         super().__init__(name=name, preserve_dims=preserve_dims)
         self.reduce_spatial_dims = reduce_spatial_dims
         self.threshold_criteria = threshold_criteria
         self.op_func = utils.maybe_get_operator(op_func)
+        self.product_time_resolution_hours = product_time_resolution_hours
 
     def _compute_metric(
         self,
@@ -1432,7 +1436,11 @@ class DurationMeanError(MeanError):
         )
         target_duration = target_mask_final.groupby(self.preserve_dims).sum(skipna=True)
 
-        # TODO: product of time resolution hours and duration
+        if self.product_time_resolution_hours:
+            time_resolution_hours = utils.determine_temporal_resolution(forecast)
+            forecast_duration = forecast_duration * time_resolution_hours
+            target_duration = target_duration * time_resolution_hours
+
         return super()._compute_metric(
             forecast=forecast_duration,
             target=target_duration,
