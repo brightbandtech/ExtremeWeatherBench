@@ -1341,7 +1341,7 @@ class DurationMeanError(MeanError):
         preserve_dims: Dimensions to preserve during aggregation. Defaults to
         "init_time".
         product_time_resolution_hours: Whether to multiply the time resolution hours by
-        theduration. Defaults to False.
+        the duration, which is the number of timesteps. Defaults to False.
     """
 
     def __init__(
