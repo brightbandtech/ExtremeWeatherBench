@@ -683,11 +683,11 @@ def interp_climatology_to_target(
     """Interpolate a climatology to a target data array.
 
     Args:
-        target: The target dataarray to interpolate the climatology to.
-        climatology: The climatology dataarray to interpolate.
+        target: The target DataArray to interpolate the climatology to.
+        climatology: The climatology DataArray to interpolate.
 
     Returns:
-        The interpolated climatology dataarray. If the target is sparse, the
+        The interpolated climatology DataArray. If the target is sparse, the
         climatology is interpolated to the target coordinates. If the target is not
         sparse, the climatology is interpolated to the target coordinates.
     """
