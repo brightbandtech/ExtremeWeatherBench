@@ -461,10 +461,12 @@ class TestExtremeWeatherBench:
             assert len(result) == 0
             assert list(result.columns) == evaluate.OUTPUT_COLUMNS
 
-    @mock.patch("extremeweatherbench.evaluate.compute_case_operator")
+    @mock.patch("extremeweatherbench.evaluate._compute_single_metric")
+    @mock.patch("extremeweatherbench.evaluate._build_metric_jobs")
     def test_run_with_caching(
         self,
-        mock_compute_case_operator,
+        mock_build_jobs,
+        mock_compute_metric,
         sample_cases_dict,
         sample_evaluation_object,
         sample_case_operator,
@@ -478,6 +480,8 @@ class TestExtremeWeatherBench:
                 "case_operators",
                 new=[sample_case_operator],
             ):
+                mock_job = mock.Mock()
+                mock_build_jobs.return_value = [mock_job]
                 mock_result = pd.DataFrame(
                     {
                         "value": [1.0],
@@ -487,17 +491,17 @@ class TestExtremeWeatherBench:
                 )
 
                 # Make the mock also perform caching like the real function would
-                def mock_compute_with_caching(case_operator, cache_dir_arg, **kwargs):
-                    if cache_dir_arg:
+                def mock_compute_with_caching(job, cache_dir=None, **kwargs):
+                    if cache_dir:
                         cache_path = (
-                            pathlib.Path(cache_dir_arg)
-                            if isinstance(cache_dir_arg, str)
-                            else cache_dir_arg
+                            pathlib.Path(cache_dir)
+                            if isinstance(cache_dir, str)
+                            else cache_dir
                         )
                         mock_result.to_pickle(cache_path / "case_results.pkl")
                     return mock_result
 
-                mock_compute_case_operator.side_effect = mock_compute_with_caching
+                mock_compute_metric.side_effect = mock_compute_with_caching
 
                 ewb = evaluate.ExtremeWeatherBench(
                     case_metadata=sample_cases_dict,
@@ -514,11 +518,12 @@ class TestExtremeWeatherBench:
                 cache_file = cache_dir / "case_results.pkl"
                 assert cache_file.exists()
 
-    @mock.patch("extremeweatherbench.evaluate.compute_case_operator")
+    @mock.patch("extremeweatherbench.evaluate._compute_single_metric")
+    @mock.patch("extremeweatherbench.evaluate._build_metric_jobs")
     def test_run_multiple_cases(
-        self, mock_compute_case_operator, sample_cases_dict, sample_evaluation_object
+        self, mock_build_jobs, mock_compute_metric, sample_cases_dict, sample_evaluation_object
     ):
-        """Test the run method with multiple case operators."""
+        """Test the run method with multiple case operators (creates multiple jobs)."""
         # Create multiple case operators
         case_operator_1 = mock.Mock()
         case_operator_2 = mock.Mock()
@@ -528,8 +533,13 @@ class TestExtremeWeatherBench:
             "case_operators",
             new=[case_operator_1, case_operator_2],
         ):
-            # Mock compute_case_operator to return different DataFrames
-            mock_compute_case_operator.side_effect = [
+            # Mock _build_metric_jobs to return two jobs
+            mock_job_1 = mock.Mock()
+            mock_job_2 = mock.Mock()
+            mock_build_jobs.return_value = [mock_job_1, mock_job_2]
+
+            # Mock _compute_single_metric to return different DataFrames
+            mock_compute_metric.side_effect = [
                 pd.DataFrame({"value": [1.0], "case_id_number": [1]}),
                 pd.DataFrame({"value": [2.0], "case_id_number": [2]}),
             ]
@@ -541,7 +551,7 @@ class TestExtremeWeatherBench:
 
             result = ewb.run()
 
-            assert mock_compute_case_operator.call_count == 2
+            assert mock_compute_metric.call_count == 2
             assert len(result) == 2
             assert result["case_id_number"].tolist() == [1, 2]
 
@@ -636,66 +646,81 @@ class TestRunCaseOperators:
 class TestRunSerial:
     """Test the _run_serial function."""
 
-    @mock.patch("extremeweatherbench.evaluate.compute_case_operator")
+    @mock.patch("extremeweatherbench.evaluate._compute_single_metric")
+    @mock.patch("extremeweatherbench.evaluate._build_metric_jobs")
     @mock.patch("tqdm.auto.tqdm")
     def test_run_serial_basic(
-        self, mock_tqdm, mock_compute_case_operator, sample_case_operator
+        self, mock_tqdm, mock_build_jobs, mock_compute_metric, sample_case_operator
     ):
         """Test basic _run_serial functionality."""
         # Setup mocks
-        mock_tqdm.return_value = [sample_case_operator]  # tqdm returns iterable
+        mock_job = mock.Mock()
+        mock_build_jobs.return_value = [mock_job]
+        mock_tqdm.return_value = [mock_job]  # tqdm returns iterable
         mock_result = pd.DataFrame({"value": [1.0], "case_id_number": [1]})
-        mock_compute_case_operator.return_value = mock_result
+        mock_compute_metric.return_value = mock_result
 
         result = evaluate._run_serial([sample_case_operator])
 
-        mock_compute_case_operator.assert_called_once_with(sample_case_operator, None)
+        mock_build_jobs.assert_called_once()
+        mock_compute_metric.assert_called_once()
         assert len(result) == 1
         assert result[0].equals(mock_result)
 
-    @mock.patch("extremeweatherbench.evaluate.compute_case_operator")
+    @mock.patch("extremeweatherbench.evaluate._compute_single_metric")
+    @mock.patch("extremeweatherbench.evaluate._build_metric_jobs")
     @mock.patch("tqdm.auto.tqdm")
-    def test_run_serial_multiple_cases(self, mock_tqdm, mock_compute_case_operator):
-        """Test _run_serial with multiple case operators."""
+    def test_run_serial_multiple_cases(
+        self, mock_tqdm, mock_build_jobs, mock_compute_metric
+    ):
+        """Test _run_serial with multiple case operators (creates multiple jobs)."""
         case_op_1 = mock.Mock()
         case_op_2 = mock.Mock()
         case_operators = [case_op_1, case_op_2]
 
-        mock_tqdm.return_value = case_operators
-        mock_compute_case_operator.side_effect = [
+        mock_job_1 = mock.Mock()
+        mock_job_2 = mock.Mock()
+        mock_build_jobs.return_value = [mock_job_1, mock_job_2]
+        mock_tqdm.return_value = [mock_job_1, mock_job_2]
+        mock_compute_metric.side_effect = [
             pd.DataFrame({"value": [1.0], "case_id_number": [1]}),
             pd.DataFrame({"value": [2.0], "case_id_number": [2]}),
         ]
 
         result = evaluate._run_serial(case_operators)
 
-        assert mock_compute_case_operator.call_count == 2
+        assert mock_compute_metric.call_count == 2
         assert len(result) == 2
         assert result[0]["case_id_number"].iloc[0] == 1
         assert result[1]["case_id_number"].iloc[0] == 2
 
-    @mock.patch("extremeweatherbench.evaluate.compute_case_operator")
+    @mock.patch("extremeweatherbench.evaluate._compute_single_metric")
+    @mock.patch("extremeweatherbench.evaluate._build_metric_jobs")
     @mock.patch("tqdm.auto.tqdm")
     def test_run_serial_with_kwargs(
-        self, mock_tqdm, mock_compute_case_operator, sample_case_operator
+        self, mock_tqdm, mock_build_jobs, mock_compute_metric, sample_case_operator
     ):
-        """Test _run_serial passes kwargs to compute_case_operator."""
-        mock_tqdm.return_value = [sample_case_operator]
+        """Test _run_serial passes kwargs to metric computation."""
+        mock_job = mock.Mock()
+        mock_build_jobs.return_value = [mock_job]
+        mock_tqdm.return_value = [mock_job]
         mock_result = pd.DataFrame({"value": [1.0]})
-        mock_compute_case_operator.return_value = mock_result
+        mock_compute_metric.return_value = mock_result
 
         result = evaluate._run_serial(
             [sample_case_operator], threshold=0.7, custom_param="test"
         )
 
-        call_args = mock_compute_case_operator.call_args
-        assert call_args[0][0] == sample_case_operator
-        assert call_args[1]["threshold"] == 0.7
-        assert call_args[1]["custom_param"] == "test"
+        # Verify kwargs are passed to _build_metric_jobs
+        call_args = mock_build_jobs.call_args
+        assert call_args[1].get("threshold") == 0.7
+        assert call_args[1].get("custom_param") == "test"
         assert isinstance(result, list)
 
-    def test_run_serial_empty_list(self):
+    @mock.patch("extremeweatherbench.evaluate._build_metric_jobs")
+    def test_run_serial_empty_list(self, mock_build_jobs):
         """Test _run_serial with empty case operator list."""
+        mock_build_jobs.return_value = []
         result = evaluate._run_serial([])
         assert result == []
 
@@ -703,15 +728,16 @@ class TestRunSerial:
 class TestRunParallel:
     """Test the _run_parallel function."""
 
+    @mock.patch("extremeweatherbench.evaluate._build_metric_jobs")
     @mock.patch("extremeweatherbench.utils.ParallelTqdm")
     @mock.patch("joblib.delayed")
-    @mock.patch("tqdm.auto.tqdm")
     def test_run_parallel_basic(
-        self, mock_tqdm, mock_delayed, mock_parallel_class, sample_case_operator
+        self, mock_delayed, mock_parallel_class, mock_build_jobs, sample_case_operator
     ):
         """Test basic _run_parallel functionality."""
         # Setup mocks
-        mock_tqdm.return_value = [sample_case_operator]
+        mock_job = mock.Mock()
+        mock_build_jobs.return_value = [mock_job]
         mock_delayed_func = mock.Mock()
         mock_delayed.return_value = mock_delayed_func
 
@@ -725,7 +751,10 @@ class TestRunParallel:
             parallel_config={"backend": "threading", "n_jobs": 2},
         )
 
-        # Verify Parallel was called with total_tasks (n_jobs via parallel_config)
+        # Verify _build_metric_jobs was called
+        mock_build_jobs.assert_called_once()
+
+        # Verify Parallel was called with total_tasks = number of metric jobs
         mock_parallel_class.assert_called_once_with(total_tasks=1)
 
         # Verify the parallel instance was called (generator consumed)
@@ -733,14 +762,15 @@ class TestRunParallel:
 
         assert result == mock_result
 
+    @mock.patch("extremeweatherbench.evaluate._build_metric_jobs")
     @mock.patch("extremeweatherbench.utils.ParallelTqdm")
     @mock.patch("joblib.delayed")
-    @mock.patch("tqdm.auto.tqdm")
     def test_run_parallel_with_none_n_jobs(
-        self, mock_tqdm, mock_delayed, mock_parallel_class, sample_case_operator
+        self, mock_delayed, mock_parallel_class, mock_build_jobs, sample_case_operator
     ):
         """Test _run_parallel with n_jobs=None (should use all CPUs)."""
-        mock_tqdm.return_value = [sample_case_operator]
+        mock_job = mock.Mock()
+        mock_build_jobs.return_value = [mock_job]
         mock_delayed_func = mock.Mock()
         mock_delayed.return_value = mock_delayed_func
 
@@ -760,17 +790,20 @@ class TestRunParallel:
                 "No number of jobs provided, using joblib backend default."
             )
 
-            # Verify Parallel was called with total_tasks (n_jobs via parallel_config)
+            # Verify Parallel was called with total_tasks = number of metric jobs
             mock_parallel_class.assert_called_once_with(total_tasks=1)
             assert isinstance(result, list)
 
+    @mock.patch("extremeweatherbench.evaluate._build_metric_jobs")
     @mock.patch("joblib.parallel_config")
     @mock.patch("extremeweatherbench.utils.ParallelTqdm")
     def test_run_parallel_n_jobs_in_config(
-        self, mock_parallel_class, mock_parallel_config
+        self, mock_parallel_class, mock_parallel_config, mock_build_jobs
     ):
         """Test that n_jobs is passed through parallel_config, not directly."""
         sample_case_operator = mock.Mock()
+        mock_job = mock.Mock()
+        mock_build_jobs.return_value = [mock_job]
         mock_parallel_instance = mock.Mock()
         mock_parallel_class.return_value = mock_parallel_instance
         mock_result = [pd.DataFrame({"value": [1.0]})]
@@ -794,22 +827,24 @@ class TestRunParallel:
         assert call_kwargs["backend"] == "threading"
         assert call_kwargs["n_jobs"] == 4
 
-        # Verify ParallelTqdm was called WITHOUT n_jobs
+        # Verify ParallelTqdm was called with number of metric jobs
         mock_parallel_class.assert_called_once_with(total_tasks=1)
         assert isinstance(result, list)
 
+    @mock.patch("extremeweatherbench.evaluate._build_metric_jobs")
     @mock.patch("extremeweatherbench.utils.ParallelTqdm")
     @mock.patch("joblib.delayed")
-    @mock.patch("tqdm.auto.tqdm")
     def test_run_parallel_multiple_cases(
-        self, mock_tqdm, mock_delayed, mock_parallel_class
+        self, mock_delayed, mock_parallel_class, mock_build_jobs
     ):
-        """Test _run_parallel with multiple case operators."""
+        """Test _run_parallel with multiple case operators (creates multiple jobs)."""
         case_op_1 = mock.Mock()
         case_op_2 = mock.Mock()
         case_operators = [case_op_1, case_op_2]
 
-        mock_tqdm.return_value = case_operators
+        mock_job_1 = mock.Mock()
+        mock_job_2 = mock.Mock()
+        mock_build_jobs.return_value = [mock_job_1, mock_job_2]
         mock_delayed_func = mock.Mock()
         mock_delayed.return_value = mock_delayed_func
 
@@ -825,18 +860,22 @@ class TestRunParallel:
             case_operators, parallel_config={"backend": "threading", "n_jobs": 4}
         )
 
+        # Verify _build_metric_jobs was called
+        mock_build_jobs.assert_called_once()
+
         assert len(result) == 2
         assert result[0]["case_id_number"].iloc[0] == 1
         assert result[1]["case_id_number"].iloc[0] == 2
 
+    @mock.patch("extremeweatherbench.evaluate._build_metric_jobs")
     @mock.patch("extremeweatherbench.utils.ParallelTqdm")
     @mock.patch("joblib.delayed")
-    @mock.patch("tqdm.auto.tqdm")
     def test_run_parallel_with_kwargs(
-        self, mock_tqdm, mock_delayed, mock_parallel_class, sample_case_operator
+        self, mock_delayed, mock_parallel_class, mock_build_jobs, sample_case_operator
     ):
         """Test _run_parallel passes kwargs correctly."""
-        mock_tqdm.return_value = [sample_case_operator]
+        mock_job = mock.Mock()
+        mock_build_jobs.return_value = [mock_job]
         mock_delayed_func = mock.Mock()
         mock_delayed.return_value = mock_delayed_func
 
@@ -852,42 +891,46 @@ class TestRunParallel:
             custom_param="parallel_test",
         )
 
+        # Verify kwargs are passed to _build_metric_jobs
+        call_args = mock_build_jobs.call_args
+        assert call_args[1].get("threshold") == 0.8
+        assert call_args[1].get("custom_param") == "parallel_test"
+
         # Check that the parallel instance was called with the delayed functions
         mock_parallel_instance.assert_called_once()
-
-        # The call should have created delayed functions with kwargs
-        call_args = mock_parallel_instance.call_args[0][0]  # Generator passed
-        # Convert generator to list to check
-        delayed_calls = list(call_args)
-        assert len(delayed_calls) == 1
         assert isinstance(result, list)
 
-    def test_run_parallel_empty_list(self):
+    @mock.patch("extremeweatherbench.evaluate._build_metric_jobs")
+    def test_run_parallel_empty_list(self, mock_build_jobs):
         """Test _run_parallel with empty case operator list."""
+        mock_build_jobs.return_value = []
         with mock.patch(
             "extremeweatherbench.utils.ParallelTqdm"
         ) as mock_parallel_class:
-            with mock.patch("tqdm.auto.tqdm") as mock_tqdm:
-                mock_tqdm.return_value = []
-                mock_parallel_instance = mock.Mock()
-                mock_parallel_class.return_value = mock_parallel_instance
-                mock_parallel_instance.return_value = []
+            mock_parallel_instance = mock.Mock()
+            mock_parallel_class.return_value = mock_parallel_instance
+            mock_parallel_instance.return_value = []
 
-                result = evaluate._run_parallel(
-                    [], parallel_config={"backend": "threading", "n_jobs": 2}
-                )
+            result = evaluate._run_parallel(
+                [], parallel_config={"backend": "threading", "n_jobs": 2}
+            )
 
-                assert result == []
+            assert result == []
 
     @pytest.mark.skipif(
         not HAS_DASK_DISTRIBUTED, reason="dask.distributed not installed"
     )
+    @mock.patch("extremeweatherbench.evaluate._build_metric_jobs")
     @mock.patch("dask.distributed.Client")
     @mock.patch("dask.distributed.LocalCluster")
     def test_run_parallel_dask_backend_auto_client(
-        self, mock_local_cluster, mock_client_class, sample_case_operator
+        self, mock_local_cluster, mock_client_class, mock_build_jobs, sample_case_operator
     ):
         """Test _run_parallel with dask backend automatically creates client."""
+        # Mock _build_metric_jobs
+        mock_job = mock.Mock()
+        mock_build_jobs.return_value = [mock_job]
+
         # Mock Client.current() to raise ValueError (no existing client)
         mock_client_class.current.side_effect = ValueError("No client found")
 
@@ -919,11 +962,16 @@ class TestRunParallel:
     @pytest.mark.skipif(
         not HAS_DASK_DISTRIBUTED, reason="dask.distributed not installed"
     )
+    @mock.patch("extremeweatherbench.evaluate._build_metric_jobs")
     @mock.patch("dask.distributed.Client")
     def test_run_parallel_dask_backend_existing_client(
-        self, mock_client_class, sample_case_operator
+        self, mock_client_class, mock_build_jobs, sample_case_operator
     ):
         """Test _run_parallel with dask backend uses existing client."""
+        # Mock _build_metric_jobs
+        mock_job = mock.Mock()
+        mock_build_jobs.return_value = [mock_job]
+
         # Mock existing client
         mock_existing_client = mock.Mock()
         mock_client_class.current.return_value = mock_existing_client
@@ -1672,26 +1720,30 @@ class TestErrorHandling:
                 parallel_config={"backend": "threading", "n_jobs": 2},
             )
 
-    @mock.patch("extremeweatherbench.evaluate.compute_case_operator")
+    @mock.patch("extremeweatherbench.evaluate._compute_single_metric")
+    @mock.patch("extremeweatherbench.evaluate._build_metric_jobs")
     @mock.patch("tqdm.auto.tqdm")
     def test_run_serial_case_operator_exception(
-        self, mock_tqdm, mock_compute_case_operator, sample_case_operator
+        self, mock_tqdm, mock_build_jobs, mock_compute_metric, sample_case_operator
     ):
-        """Test _run_serial handles exceptions from individual case operators."""
-        mock_tqdm.return_value = [sample_case_operator]
-        mock_compute_case_operator.side_effect = Exception("Case operator failed")
+        """Test _run_serial handles exceptions from individual metric jobs."""
+        mock_job = mock.Mock()
+        mock_build_jobs.return_value = [mock_job]
+        mock_tqdm.return_value = [mock_job]
+        mock_compute_metric.side_effect = Exception("Metric computation failed")
 
-        with pytest.raises(Exception, match="Case operator failed"):
+        with pytest.raises(Exception, match="Metric computation failed"):
             evaluate._run_serial([sample_case_operator])
 
+    @mock.patch("extremeweatherbench.evaluate._build_metric_jobs")
     @mock.patch("extremeweatherbench.utils.ParallelTqdm")
     @mock.patch("joblib.delayed")
-    @mock.patch("tqdm.auto.tqdm")
     def test_run_parallel_joblib_exception(
-        self, mock_tqdm, mock_delayed, mock_parallel_class, sample_case_operator
+        self, mock_delayed, mock_parallel_class, mock_build_jobs, sample_case_operator
     ):
         """Test _run_parallel handles joblib Parallel exceptions."""
-        mock_tqdm.return_value = [sample_case_operator]
+        mock_job = mock.Mock()
+        mock_build_jobs.return_value = [mock_job]
         mock_delayed_func = mock.Mock()
         mock_delayed.return_value = mock_delayed_func
 
@@ -1705,14 +1757,15 @@ class TestErrorHandling:
                 parallel_config={"backend": "threading", "n_jobs": 2},
             )
 
+    @mock.patch("extremeweatherbench.evaluate._build_metric_jobs")
     @mock.patch("extremeweatherbench.utils.ParallelTqdm")
     @mock.patch("joblib.delayed")
-    @mock.patch("tqdm.auto.tqdm")
     def test_run_parallel_delayed_function_exception(
-        self, mock_tqdm, mock_delayed, mock_parallel_class, sample_case_operator
+        self, mock_delayed, mock_parallel_class, mock_build_jobs, sample_case_operator
     ):
         """Test _run_parallel handles exceptions in delayed functions."""
-        mock_tqdm.return_value = [sample_case_operator]
+        mock_job = mock.Mock()
+        mock_build_jobs.return_value = [mock_job]
 
         # Mock delayed to raise an exception
         mock_delayed.side_effect = Exception("Delayed function creation failed")
@@ -1747,39 +1800,42 @@ class TestErrorHandling:
         with pytest.raises(Exception, match="Execution failed"):
             ewb.run()
 
-    @mock.patch("extremeweatherbench.evaluate.compute_case_operator")
+    @mock.patch("extremeweatherbench.evaluate._compute_single_metric")
+    @mock.patch("extremeweatherbench.evaluate._build_metric_jobs")
     @mock.patch("tqdm.auto.tqdm")
-    def test_run_serial_partial_failure(self, mock_tqdm, mock_compute_case_operator):
-        """Test _run_serial behavior when some case operators fail."""
-        case_op_1 = mock.Mock()
-        case_op_2 = mock.Mock()
-        case_op_3 = mock.Mock()
-        case_operators = [case_op_1, case_op_2, case_op_3]
-
-        mock_tqdm.return_value = case_operators
+    def test_run_serial_partial_failure(
+        self, mock_tqdm, mock_build_jobs, mock_compute_metric
+    ):
+        """Test _run_serial behavior when some metric jobs fail."""
+        mock_job_1 = mock.Mock()
+        mock_job_2 = mock.Mock()
+        mock_job_3 = mock.Mock()
+        mock_build_jobs.return_value = [mock_job_1, mock_job_2, mock_job_3]
+        mock_tqdm.return_value = [mock_job_1, mock_job_2, mock_job_3]
 
         # First succeeds, second fails, third never reached
-        mock_compute_case_operator.side_effect = [
+        mock_compute_metric.side_effect = [
             pd.DataFrame({"value": [1.0], "case_id_number": [1]}),
-            Exception("Case operator 2 failed"),
+            Exception("Metric job 2 failed"),
             pd.DataFrame({"value": [3.0], "case_id_number": [3]}),
         ]
 
-        # Should fail on the second case operator
-        with pytest.raises(Exception, match="Case operator 2 failed"):
-            evaluate._run_serial(case_operators)
+        # Should fail on the second metric job
+        with pytest.raises(Exception, match="Metric job 2 failed"):
+            evaluate._run_serial([mock.Mock()])
 
         # Should have tried only the first two
-        assert mock_compute_case_operator.call_count == 2
+        assert mock_compute_metric.call_count == 2
 
+    @mock.patch("extremeweatherbench.evaluate._build_metric_jobs")
     @mock.patch("extremeweatherbench.utils.ParallelTqdm")
     @mock.patch("joblib.delayed")
-    @mock.patch("tqdm.auto.tqdm")
     def test_run_parallel_invalid_n_jobs(
-        self, mock_tqdm, mock_delayed, mock_parallel_class, sample_case_operator
+        self, mock_delayed, mock_parallel_class, mock_build_jobs, sample_case_operator
     ):
         """Test _run_parallel with invalid n_jobs parameter."""
-        mock_tqdm.return_value = [sample_case_operator]
+        mock_job = mock.Mock()
+        mock_build_jobs.return_value = [mock_job]
         mock_delayed_func = mock.Mock()
         mock_delayed.return_value = mock_delayed_func
 
@@ -1981,9 +2037,10 @@ class TestIntegration:
                 # Should have results for each metric combination
                 assert len(result) >= 2  # At least 2 metrics * 1 case
 
-    @mock.patch("extremeweatherbench.evaluate.compute_case_operator")
+    @mock.patch("extremeweatherbench.evaluate._compute_single_metric")
+    @mock.patch("extremeweatherbench.evaluate._build_metric_jobs")
     def test_serial_vs_parallel_results_consistency(
-        self, mock_compute_case_operator, sample_cases_dict, sample_evaluation_object
+        self, mock_build_jobs, mock_compute_metric, sample_cases_dict, sample_evaluation_object
     ):
         """Test that serial and parallel execution produce identical results."""
         # Setup mock case operators
@@ -2014,16 +2071,21 @@ class TestIntegration:
             evaluation_objects=[sample_evaluation_object],
         )
 
+        # Mock _build_metric_jobs to return two jobs
+        mock_job_1 = mock.Mock()
+        mock_job_2 = mock.Mock()
+        mock_build_jobs.return_value = [mock_job_1, mock_job_2]
+
         with mock.patch("extremeweatherbench.cases.build_case_operators") as mock_build:
             mock_build.return_value = case_operators
 
             # Test serial execution
-            mock_compute_case_operator.side_effect = [result_1, result_2]
+            mock_compute_metric.side_effect = [result_1, result_2]
             serial_result = ewb.run(n_jobs=1)
 
             # Reset mock and test parallel execution
-            mock_compute_case_operator.reset_mock()
-            mock_compute_case_operator.side_effect = [result_1, result_2]
+            mock_compute_metric.reset_mock()
+            mock_compute_metric.side_effect = [result_1, result_2]
             parallel_result = ewb.run(n_jobs=2)
 
             # Both should produce valid DataFrames with same structure
@@ -2033,13 +2095,20 @@ class TestIntegration:
             assert len(parallel_result) == 2
             assert list(serial_result.columns) == list(parallel_result.columns)
 
-    @mock.patch("extremeweatherbench.evaluate.compute_case_operator")
-    def test_execution_method_performance_comparison(self, mock_compute_case_operator):
+    @mock.patch("extremeweatherbench.evaluate._compute_single_metric")
+    @mock.patch("extremeweatherbench.evaluate._build_metric_jobs")
+    def test_execution_method_performance_comparison(
+        self, mock_build_jobs, mock_compute_metric
+    ):
         """Test that both execution methods handle the same workload."""
         import time
 
         # Create many case operators to simulate realistic workload
         case_operators = [mock.Mock() for _ in range(10)]
+
+        # Create mock jobs - one per case operator for this test
+        mock_jobs = [mock.Mock() for _ in range(10)]
+        mock_build_jobs.return_value = mock_jobs
 
         # Mock results
         mock_results = [
@@ -2055,15 +2124,15 @@ class TestIntegration:
         ]
 
         # Test serial execution timing - call _run_serial directly
-        mock_compute_case_operator.side_effect = mock_results
+        mock_compute_metric.side_effect = mock_results
         start_time = time.time()
         serial_result = evaluate._run_serial(case_operators)
         serial_time = time.time() - start_time
 
         # Test parallel execution timing - call _run_parallel directly with mocked
         # Parallel
-        serial_call_count = mock_compute_case_operator.call_count
-        mock_compute_case_operator.side_effect = mock_results
+        serial_call_count = mock_compute_metric.call_count
+        mock_compute_metric.side_effect = mock_results
 
         with mock.patch(
             "extremeweatherbench.utils.ParallelTqdm"
@@ -2081,18 +2150,21 @@ class TestIntegration:
         # Both should produce the same number of results
         assert len(serial_result) == len(parallel_result) == 10
 
-        # Serial execution should have called compute_case_operator
+        # Serial execution should have called _compute_single_metric
         assert serial_call_count == 10  # Serial execution
         # Parallel execution is mocked, so the call count doesn't increase
-        assert mock_compute_case_operator.call_count == 10  # Only serial calls
+        assert mock_compute_metric.call_count == 10  # Only serial calls
         # Verify timing variables are used (avoid unused variable warnings)
         assert serial_time >= 0
         assert parallel_time >= 0
 
-    @mock.patch("extremeweatherbench.evaluate.compute_case_operator")
-    def test_mixed_execution_parameters(self, mock_compute_case_operator):
+    @mock.patch("extremeweatherbench.evaluate._compute_single_metric")
+    @mock.patch("extremeweatherbench.evaluate._build_metric_jobs")
+    def test_mixed_execution_parameters(self, mock_build_jobs, mock_compute_metric):
         """Test various parameter combinations for execution methods."""
         case_operators = [mock.Mock(), mock.Mock()]
+        mock_jobs = [mock.Mock(), mock.Mock()]
+        mock_build_jobs.return_value = mock_jobs
         mock_results = [
             pd.DataFrame({"value": [1.0], "case_id_number": [1]}),
             pd.DataFrame({"value": [2.0], "case_id_number": [2]}),
@@ -2111,15 +2183,15 @@ class TestIntegration:
         ]
 
         for config in test_configs:
-            mock_compute_case_operator.reset_mock()
-            mock_compute_case_operator.side_effect = mock_results
+            mock_compute_metric.reset_mock()
+            mock_compute_metric.side_effect = mock_results
 
             if config["method"] == "serial":
                 result = evaluate._run_serial(*config["args"])
                 # All configurations should produce valid results
                 assert isinstance(result, list)
                 assert len(result) == 2
-                assert mock_compute_case_operator.call_count == 2
+                assert mock_compute_metric.call_count == 2
             else:
                 # Mock parallel execution to avoid serialization issues
                 with mock.patch(
@@ -2143,57 +2215,62 @@ class TestIntegration:
                     # All configurations should produce valid results
                     assert isinstance(result, list)
                     assert len(result) == 2
-                    # Parallel execution is mocked, so compute_case_operator is not
-                    # called
-                    assert mock_compute_case_operator.call_count == 0
+                    # Parallel execution is mocked via ParallelTqdm, compute_metric
+                    # not called directly
+                    assert mock_compute_metric.call_count == 0
 
     def test_execution_method_kwargs_propagation(self):
         """Test that kwargs are properly propagated through execution methods."""
         case_operator = mock.Mock()
 
-        # Mock compute_case_operator to capture kwargs
-        def mock_compute_with_kwargs(case_op, cache_dir, **kwargs):
-            # Store kwargs for verification
-            mock_compute_with_kwargs.captured_kwargs = kwargs
+        # Mock _build_metric_jobs to capture kwargs
+        captured_kwargs = {}
+
+        def mock_build_jobs(case_operators, **kwargs):
+            captured_kwargs.update(kwargs)
+            return [mock.Mock()]
+
+        def mock_compute_metric(job, **kwargs):
             return pd.DataFrame({"value": [1.0]})
 
-        mock_compute_with_kwargs.captured_kwargs = {}
-
         with mock.patch(
-            "extremeweatherbench.evaluate.compute_case_operator",
-            side_effect=mock_compute_with_kwargs,
+            "extremeweatherbench.evaluate._build_metric_jobs",
+            side_effect=mock_build_jobs,
         ):
-            # Test serial kwargs propagation
-            result = evaluate._run_serial(
-                [case_operator], custom_param="serial_test", threshold=0.9
-            )
-
-            captured = mock_compute_with_kwargs.captured_kwargs
-            assert captured["custom_param"] == "serial_test"
-            assert captured["threshold"] == 0.9
-            assert isinstance(result, list)
-
-            # Test parallel kwargs propagation
             with mock.patch(
-                "extremeweatherbench.utils.ParallelTqdm"
-            ) as mock_parallel_class:
-                with mock.patch("joblib.delayed") as mock_delayed:
-                    mock_delayed.return_value = mock_compute_with_kwargs
-                    mock_parallel_instance = mock.Mock()
-                    mock_parallel_class.return_value = mock_parallel_instance
-                    mock_parallel_instance.return_value = [
-                        pd.DataFrame({"value": [1.0]})
-                    ]
+                "extremeweatherbench.evaluate._compute_single_metric",
+                side_effect=mock_compute_metric,
+            ):
+                # Test serial kwargs propagation
+                result = evaluate._run_serial(
+                    [case_operator], custom_param="serial_test", threshold=0.9
+                )
 
-                    # Reset captured kwargs
-                    mock_compute_with_kwargs.captured_kwargs = {}
+                assert captured_kwargs.get("custom_param") == "serial_test"
+                assert captured_kwargs.get("threshold") == 0.9
+                assert isinstance(result, list)
 
-                    result = evaluate._run_parallel(
-                        [case_operator],
-                        parallel_config={"backend": "threading", "n_jobs": 2},
-                        custom_param="parallel_test",
-                        threshold=0.8,
-                    )
+                # Test parallel kwargs propagation
+                with mock.patch(
+                    "extremeweatherbench.utils.ParallelTqdm"
+                ) as mock_parallel_class:
+                    with mock.patch("joblib.delayed") as mock_delayed:
+                        mock_delayed.return_value = mock_compute_metric
+                        mock_parallel_instance = mock.Mock()
+                        mock_parallel_class.return_value = mock_parallel_instance
+                        mock_parallel_instance.return_value = [
+                            pd.DataFrame({"value": [1.0]})
+                        ]
+
+                        # Reset captured kwargs
+                        captured_kwargs.clear()
+
+                        result = evaluate._run_parallel(
+                            [case_operator],
+                            parallel_config={"backend": "threading", "n_jobs": 2},
+                            custom_param="parallel_test",
+                            threshold=0.8,
+                        )
 
                     # Verify parallel execution was set up correctly
                     mock_parallel_class.assert_called_once_with(total_tasks=1)
@@ -2227,12 +2304,19 @@ class TestIntegration:
             )
             assert result == []
 
-    @mock.patch("extremeweatherbench.evaluate.compute_case_operator")
-    def test_large_case_operator_list_handling(self, mock_compute_case_operator):
-        """Test handling of large numbers of case operators."""
+    @mock.patch("extremeweatherbench.evaluate._compute_single_metric")
+    @mock.patch("extremeweatherbench.evaluate._build_metric_jobs")
+    def test_large_case_operator_list_handling(
+        self, mock_build_jobs, mock_compute_metric
+    ):
+        """Test handling of large numbers of case operators (metric jobs)."""
         # Create a large list of case operators
         num_cases = 100
         case_operators = [mock.Mock() for _ in range(num_cases)]
+
+        # Create mock jobs - one per case for simplicity
+        mock_jobs = [mock.Mock() for _ in range(num_cases)]
+        mock_build_jobs.return_value = mock_jobs
 
         # Create mock results
         mock_results = [
@@ -2243,15 +2327,15 @@ class TestIntegration:
         ]
 
         # Test serial execution
-        mock_compute_case_operator.side_effect = mock_results
+        mock_compute_metric.side_effect = mock_results
         serial_results = evaluate._run_serial(case_operators)
 
         assert len(serial_results) == num_cases
-        assert mock_compute_case_operator.call_count == num_cases
+        assert mock_compute_metric.call_count == num_cases
 
         # Test parallel execution
-        mock_compute_case_operator.reset_mock()
-        mock_compute_case_operator.side_effect = mock_results
+        mock_compute_metric.reset_mock()
+        mock_compute_metric.side_effect = mock_results
 
         with mock.patch(
             "extremeweatherbench.utils.ParallelTqdm"

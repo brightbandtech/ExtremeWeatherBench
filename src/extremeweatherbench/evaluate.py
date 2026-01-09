@@ -2,8 +2,10 @@
 
 import copy
 import dataclasses
+import hashlib
 import logging
 import pathlib
+import tempfile
 from typing import TYPE_CHECKING, Optional, Sequence, Union
 
 import dask.array as da
@@ -21,6 +23,67 @@ if TYPE_CHECKING:
     from extremeweatherbench import regions
 
 logger = logging.getLogger(__name__)
+
+# Module-level cache for dataset building (initialized lazily)
+_dataset_memory: Optional[joblib.Memory] = None
+_dataset_cache_dir: Optional[tempfile.TemporaryDirectory] = None
+# Simple in-memory cache for dataset results (cleared with clear_dataset_cache)
+_DATASET_RESULTS_CACHE: dict[str, tuple[xr.Dataset, xr.Dataset]] = {}
+
+
+def _get_dataset_cache() -> joblib.Memory:
+    """Get or create the joblib.Memory cache for dataset building."""
+    global _dataset_memory, _dataset_cache_dir
+    if _dataset_memory is None:
+        _dataset_cache_dir = tempfile.TemporaryDirectory(prefix="ewb_cache_")
+        _dataset_memory = joblib.Memory(_dataset_cache_dir.name, verbose=0)
+    return _dataset_memory
+
+
+def clear_dataset_cache() -> None:
+    """Clear the dataset cache and release resources."""
+    global _dataset_memory, _dataset_cache_dir
+    if _dataset_memory is not None:
+        _dataset_memory.clear()
+        _dataset_memory = None
+    if _dataset_cache_dir is not None:
+        _dataset_cache_dir.cleanup()
+        _dataset_cache_dir = None
+    # Clear the in-memory results cache
+    _DATASET_RESULTS_CACHE.clear()
+
+
+def _make_cache_key(case_operator: "cases.CaseOperator") -> str:
+    """Create a unique hash key for caching based on case operator properties."""
+    key_parts = [
+        str(case_operator.case_metadata.case_id_number),
+        case_operator.forecast.name,
+        case_operator.target.name,
+        str(case_operator.case_metadata.start_date),
+        str(case_operator.case_metadata.end_date),
+    ]
+    key_str = "|".join(key_parts)
+    return hashlib.md5(key_str.encode()).hexdigest()
+
+
+@dataclasses.dataclass
+class MetricJob:
+    """A single metric computation job for parallel execution.
+
+    Attributes:
+        case_operator: The case operator containing metadata and input sources.
+        metric: The metric instance to compute.
+        forecast_var: The forecast variable name.
+        target_var: The target variable name.
+        metric_kwargs: Pre-computed kwargs for metric evaluation.
+    """
+
+    case_operator: "cases.CaseOperator"
+    metric: "metrics.BaseMetric"
+    forecast_var: str
+    target_var: str
+    metric_kwargs: dict
+
 
 # Columns for the evaluation output dataframe
 OUTPUT_COLUMNS = [
@@ -184,13 +247,17 @@ def _run_serial(
     cache_dir: Optional[pathlib.Path] = None,
     **kwargs,
 ) -> list[pd.DataFrame]:
-    """Run the case operators in serial."""
-    run_results = []
-
-    # Loop over the case operators
-    for case_operator in tqdm(case_operators):
-        run_results.append(compute_case_operator(case_operator, cache_dir, **kwargs))
-    return run_results
+    """Run the case operators in serial using metric-level jobs."""
+    try:
+        metric_jobs = _build_metric_jobs(case_operators, cache_dir=cache_dir, **kwargs)
+        run_results = []
+        for job in tqdm(metric_jobs, desc="Computing metrics"):
+            run_results.append(
+                _compute_single_metric(job, cache_dir=cache_dir, **kwargs)
+            )
+        return run_results
+    finally:
+        clear_dataset_cache()
 
 
 def _run_parallel(
@@ -237,21 +304,233 @@ def _run_parallel(
             )
 
     try:
-        # TODO(198): return a generator and compute at a higher level
+        metric_jobs = _build_metric_jobs(case_operators, cache_dir=cache_dir, **kwargs)
         with joblib.parallel_config(**parallel_config):
-            run_results = utils.ParallelTqdm(total_tasks=len(case_operators))(
-                # None is the cache_dir, we can't cache in parallel mode
-                joblib.delayed(compute_case_operator)(
-                    case_operator, cache_dir=cache_dir, **kwargs
-                )
-                for case_operator in case_operators
+            run_results = utils.ParallelTqdm(total_tasks=len(metric_jobs))(
+                joblib.delayed(_compute_single_metric)(job, cache_dir=cache_dir, **kwargs)
+                for job in metric_jobs
             )
         return run_results
     finally:
-        # Clean up the dask client if we created it
+        clear_dataset_cache()
         if dask_client is not None:
             logger.info("Closing dask client")
             dask_client.close()
+
+
+def _build_metric_jobs(
+    case_operators: list["cases.CaseOperator"],
+    cache_dir: Optional[pathlib.Path] = None,
+    **kwargs,
+) -> list[MetricJob]:
+    """Build MetricJob objects from case operators for parallel execution.
+
+    This function pre-builds datasets and creates individual metric jobs.
+    Datasets are cached via joblib.Memory so multiple metrics sharing the
+    same case operator will reuse cached data.
+    """
+    jobs = []
+    for case_operator in case_operators:
+        # Validate and normalize metrics
+        metric_list = list(case_operator.metric_list)
+        for i, metric in enumerate(metric_list):
+            if isinstance(metric, type):
+                metric_list[i] = metric()
+                logger.warning(
+                    "Metric %s instantiated with default parameters",
+                    metric_list[i].name,
+                )
+            if not isinstance(metric_list[i], metrics.BaseMetric):
+                raise TypeError(
+                    f"Metric must be a BaseMetric instance, got {type(metric)}"
+                )
+        case_operator = dataclasses.replace(case_operator, metric_list=metric_list)
+
+        # Build and cache datasets for this case operator
+        forecast_ds, target_ds = _build_and_cache_datasets(
+            case_operator, cache_dir=cache_dir, **kwargs
+        )
+
+        # Skip if datasets are empty
+        if 0 in forecast_ds.sizes.values() or 0 in target_ds.sizes.values():
+            continue
+        if len(forecast_ds.sizes) == 0 or len(target_ds.sizes) == 0:
+            continue
+
+        # Align datasets
+        aligned_forecast_ds, aligned_target_ds = (
+            case_operator.target.maybe_align_forecast_to_target(forecast_ds, target_ds)
+        )
+
+        # Cache aligned datasets
+        aligned_forecast_ds = utils.maybe_cache_and_compute(
+            aligned_forecast_ds,
+            cache_dir=cache_dir,
+            name=f"{case_operator.case_metadata.case_id_number}_"
+            f"{case_operator.forecast.name}",
+        )
+        aligned_target_ds = utils.maybe_cache_and_compute(
+            aligned_target_ds,
+            cache_dir=cache_dir,
+            name=f"{case_operator.case_metadata.case_id_number}_"
+            f"{case_operator.target.name}",
+        )
+
+        # Build claimed variables set for metrics without explicit variables
+        explicitly_claimed_forecast_vars = set()
+        explicitly_claimed_target_vars = set()
+        for metric in case_operator.metric_list:
+            if metric.forecast_variable is not None and metric.target_variable is not None:
+                explicitly_claimed_forecast_vars.update(
+                    _maybe_expand_derived_variable_to_output_variables(
+                        metric.forecast_variable
+                    )
+                )
+                explicitly_claimed_target_vars.update(
+                    _maybe_expand_derived_variable_to_output_variables(
+                        metric.target_variable
+                    )
+                )
+
+        # Create jobs for each metric and variable pair
+        for metric in case_operator.metric_list:
+            metrics_to_evaluate = metric.maybe_expand_composite()
+            variable_pairs = _get_variable_pairs_for_metric(
+                metric, case_operator, explicitly_claimed_forecast_vars,
+                explicitly_claimed_target_vars
+            )
+
+            for forecast_var, target_var in variable_pairs:
+                forecast_var_str = derived._maybe_convert_variable_to_string(
+                    forecast_var
+                )
+                target_var_str = derived._maybe_convert_variable_to_string(target_var)
+                metric_kwargs = metric.maybe_prepare_composite_kwargs(
+                    forecast_data=aligned_forecast_ds[forecast_var_str],
+                    target_data=aligned_target_ds[target_var_str],
+                    **kwargs,
+                )
+
+                for single_metric in metrics_to_evaluate:
+                    jobs.append(
+                        MetricJob(
+                            case_operator=case_operator,
+                            metric=single_metric,
+                            forecast_var=forecast_var_str,
+                            target_var=target_var_str,
+                            metric_kwargs=metric_kwargs,
+                        )
+                    )
+    return jobs
+
+
+def _get_variable_pairs_for_metric(
+    metric: "metrics.BaseMetric",
+    case_operator: "cases.CaseOperator",
+    explicitly_claimed_forecast_vars: set,
+    explicitly_claimed_target_vars: set,
+) -> list[tuple[str, str]]:
+    """Get variable pairs for a single metric."""
+    if metric.forecast_variable is not None and metric.target_variable is not None:
+        forecast_vars = _maybe_expand_derived_variable_to_output_variables(
+            metric.forecast_variable
+        )
+        target_vars = _maybe_expand_derived_variable_to_output_variables(
+            metric.target_variable
+        )
+        return list(zip(forecast_vars, target_vars))
+
+    # Use all InputBase variable pairs, excluding claimed variables
+    forecast_vars_expanded = []
+    for var in case_operator.forecast.variables:
+        forecast_vars_expanded.extend(
+            _maybe_expand_derived_variable_to_output_variables(var)
+        )
+    target_vars_expanded = []
+    for var in case_operator.target.variables:
+        target_vars_expanded.extend(
+            _maybe_expand_derived_variable_to_output_variables(var)
+        )
+    forecast_vars_available = [
+        v for v in forecast_vars_expanded if v not in explicitly_claimed_forecast_vars
+    ]
+    target_vars_available = [
+        v for v in target_vars_expanded if v not in explicitly_claimed_target_vars
+    ]
+    return list(zip(forecast_vars_available, target_vars_available))
+
+
+def _build_and_cache_datasets(
+    case_operator: "cases.CaseOperator",
+    cache_dir: Optional[pathlib.Path] = None,
+    **kwargs,
+) -> tuple[xr.Dataset, xr.Dataset]:
+    """Build datasets with caching via joblib.Memory.
+
+    Uses _make_cache_key to create a unique cache identifier for the case operator.
+    The caching is based on the cache_key only - the case_operator and kwargs are
+    expected to be consistent for the same cache_key.
+    """
+    memory = _get_dataset_cache()
+    cache_key = _make_cache_key(case_operator)
+
+    # Check if result is already cached by storing in a module-level dict
+    # This avoids the complexity of joblib.Memory with non-hashable arguments
+    cached_result = _DATASET_RESULTS_CACHE.get(cache_key)
+    if cached_result is not None:
+        return cached_result
+
+    # Build the datasets
+    result = _build_datasets(case_operator, **kwargs)
+    _DATASET_RESULTS_CACHE[cache_key] = result
+    return result
+
+
+def _compute_single_metric(
+    job: MetricJob,
+    cache_dir: Optional[pathlib.Path] = None,
+    **kwargs,
+) -> pd.DataFrame:
+    """Compute a single metric from a MetricJob.
+
+    This function reloads cached datasets and computes one metric.
+    Memory is released after the job completes.
+    """
+    # Reload cached/aligned datasets
+    forecast_ds, target_ds = _build_and_cache_datasets(
+        job.case_operator, cache_dir=cache_dir, **kwargs
+    )
+
+    if 0 in forecast_ds.sizes.values() or 0 in target_ds.sizes.values():
+        return pd.DataFrame(columns=OUTPUT_COLUMNS)
+    if len(forecast_ds.sizes) == 0 or len(target_ds.sizes) == 0:
+        return pd.DataFrame(columns=OUTPUT_COLUMNS)
+
+    aligned_forecast_ds, aligned_target_ds = (
+        job.case_operator.target.maybe_align_forecast_to_target(forecast_ds, target_ds)
+    )
+    aligned_forecast_ds = utils.maybe_cache_and_compute(
+        aligned_forecast_ds,
+        cache_dir=cache_dir,
+        name=f"{job.case_operator.case_metadata.case_id_number}_"
+        f"{job.case_operator.forecast.name}",
+    )
+    aligned_target_ds = utils.maybe_cache_and_compute(
+        aligned_target_ds,
+        cache_dir=cache_dir,
+        name=f"{job.case_operator.case_metadata.case_id_number}_"
+        f"{job.case_operator.target.name}",
+    )
+
+    return _evaluate_metric_and_return_df(
+        forecast_ds=aligned_forecast_ds,
+        target_ds=aligned_target_ds,
+        forecast_variable=job.forecast_var,
+        target_variable=job.target_var,
+        metric=job.metric,
+        case_operator=job.case_operator,
+        **job.metric_kwargs,
+    )
 
 
 def compute_case_operator(
