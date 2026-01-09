@@ -35,11 +35,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-# =============================================================================
-# Constants
-# =============================================================================
-
-
 OUTPUT_COLUMNS = [
     "value",
     "lead_time",
@@ -51,11 +46,6 @@ OUTPUT_COLUMNS = [
     "case_id_number",
     "event_type",
 ]
-
-
-# =============================================================================
-# Data Classes
-# =============================================================================
 
 
 @dataclasses.dataclass
@@ -88,11 +78,6 @@ class PreparedDatasets:
 
     forecast: xr.Dataset
     target: xr.Dataset
-
-
-# =============================================================================
-# Caching - Context Manager Pattern (no globals)
-# =============================================================================
 
 
 @contextlib.contextmanager
@@ -142,11 +127,6 @@ def make_cache_key(case_operator: "cases.CaseOperator") -> str:
     return hashlib.md5(key_str.encode()).hexdigest()
 
 
-# =============================================================================
-# Validation Functions
-# =============================================================================
-
-
 def validate_case_operator_metrics(
     case_operator: "cases.CaseOperator",
 ) -> "cases.CaseOperator":
@@ -174,16 +154,9 @@ def validate_case_operator_metrics(
                 metric_list[i].name,
             )
         if not isinstance(metric_list[i], metrics.BaseMetric):
-            raise TypeError(
-                f"Metric must be a BaseMetric instance, got {type(metric)}"
-            )
+            raise TypeError(f"Metric must be a BaseMetric instance, got {type(metric)}")
 
     return dataclasses.replace(case_operator, metric_list=metric_list)
-
-
-# =============================================================================
-# Variable Collection Functions
-# =============================================================================
 
 
 def collect_claimed_variables(
@@ -209,9 +182,7 @@ def collect_claimed_variables(
             claimed_forecast.update(
                 expand_variable_to_strings(metric.forecast_variable)
             )
-            claimed_target.update(
-                expand_variable_to_strings(metric.target_variable)
-            )
+            claimed_target.update(expand_variable_to_strings(metric.target_variable))
 
     return claimed_forecast, claimed_target
 
@@ -327,11 +298,6 @@ def collect_metric_variables(
     return forecast_vars, target_vars
 
 
-# =============================================================================
-# Job Creation Functions
-# =============================================================================
-
-
 def create_jobs_for_case(
     case_operator: "cases.CaseOperator",
     datasets: PreparedDatasets,
@@ -381,11 +347,6 @@ def create_jobs_for_case(
                 )
 
     return jobs
-
-
-# =============================================================================
-# Pipeline Functions
-# =============================================================================
 
 
 def run_pipeline(
@@ -570,11 +531,6 @@ def build_datasets(
     return (forecast_ds, target_ds)
 
 
-# =============================================================================
-# Dataset Preparation Functions
-# =============================================================================
-
-
 def prepare_aligned_datasets(
     case_operator: "cases.CaseOperator",
     memory: joblib.Memory,
@@ -632,11 +588,6 @@ def prepare_aligned_datasets(
     return PreparedDatasets(forecast=aligned_forecast, target=aligned_target)
 
 
-# =============================================================================
-# Case Operator Processing
-# =============================================================================
-
-
 def process_case_operator(
     case_operator: "cases.CaseOperator",
     memory: joblib.Memory,
@@ -676,11 +627,6 @@ def process_case_operator(
     return create_jobs_for_case(case_operator, datasets)
 
 
-# =============================================================================
-# Metric Job Building (Serial and Parallel)
-# =============================================================================
-
-
 def build_metric_jobs(
     case_operators: list["cases.CaseOperator"],
     memory: joblib.Memory,
@@ -708,9 +654,7 @@ def build_metric_jobs(
             case_operators, memory, cache_dir, parallel_config, **kwargs
         )
     else:
-        return _build_metric_jobs_serial(
-            case_operators, memory, cache_dir, **kwargs
-        )
+        return _build_metric_jobs_serial(case_operators, memory, cache_dir, **kwargs)
 
 
 def _build_metric_jobs_serial(
@@ -747,11 +691,6 @@ def _build_metric_jobs_parallel(
 
     # Flatten list of lists
     return [job for jobs in nested_jobs for job in jobs]
-
-
-# =============================================================================
-# Metric Computation
-# =============================================================================
 
 
 def extract_standard_metadata(
@@ -914,11 +853,6 @@ def compute_single_metric(
     )
 
 
-# =============================================================================
-# Run Functions (Serial and Parallel Execution)
-# =============================================================================
-
-
 def run_case_operators(
     case_operators: list["cases.CaseOperator"],
     cache_dir: Optional[pathlib.Path] = None,
@@ -963,20 +897,9 @@ def _run_serial(
         return run_results
 
 
-def _run_parallel(
-    case_operators: list["cases.CaseOperator"],
-    cache_dir: Optional[pathlib.Path] = None,
-    **kwargs,
-) -> list[pd.DataFrame]:
-    """Run the case operators in parallel."""
-    parallel_config = kwargs.pop("parallel_config", None)
-
-    if parallel_config is None:
-        raise ValueError("parallel_config must be provided to _run_parallel")
-
-    if parallel_config.get("n_jobs") is None:
-        logger.warning("No number of jobs provided, using joblib backend default.")
-
+def _maybe_create_dask_client(
+    parallel_config: dict,
+):
     # Handle dask backend - create client if needed
     dask_client = None
     if parallel_config.get("backend") == "dask":
@@ -991,10 +914,25 @@ def _run_parallel(
                 dask_client = Client(LocalCluster(processes=True, silence_logs=False))
                 logger.info("Dask client created: %s", dask_client)
         except ImportError:
-            raise ImportError(
-                "Dask is required for dask backend. "
-                "Install with: pip install dask[distributed]"
-            )
+            raise ImportError("Dask is required for dask backend.")
+    return dask_client
+
+
+def _run_parallel(
+    case_operators: list["cases.CaseOperator"],
+    cache_dir: Optional[pathlib.Path] = None,
+    **kwargs,
+) -> list[pd.DataFrame]:
+    """Run the case operators in parallel."""
+    parallel_config = kwargs.pop("parallel_config", None)
+
+    if parallel_config is None:
+        raise ValueError("parallel_config must be provided to _run_parallel")
+
+    if parallel_config.get("n_jobs") is None:
+        logger.warning("No number of jobs provided, using joblib backend default.")
+
+    dask_client = _maybe_create_dask_client(parallel_config)
 
     try:
         with dataset_cache(cache_dir) as memory:
@@ -1017,11 +955,6 @@ def _run_parallel(
         if dask_client is not None:
             logger.info("Closing dask client")
             dask_client.close()
-
-
-# =============================================================================
-# Utility Functions
-# =============================================================================
 
 
 def safe_concat(
@@ -1075,11 +1008,6 @@ def safe_concat(
         return pd.concat(valid_dfs, ignore_index=ignore_index)
     else:
         return pd.DataFrame(columns=OUTPUT_COLUMNS)
-
-
-# =============================================================================
-# Legacy Compatibility (compute_case_operator)
-# =============================================================================
 
 
 def compute_case_operator(
