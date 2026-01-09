@@ -18,7 +18,14 @@ import polars as pl
 import pytest
 import xarray as xr
 
-from extremeweatherbench import cases, evaluate, inputs, metrics, regions
+from extremeweatherbench import (
+    cases,
+    evaluate,
+    evaluate_tools,
+    inputs,
+    metrics,
+    regions,
+)
 
 
 class MockMetric(metrics.BaseMetric):
@@ -298,7 +305,7 @@ class TestVariablePairingIntegration:
         )
 
         # Execute evaluation
-        result = evaluate.compute_case_operator(case_op)
+        result = evaluate_tools.compute_case_operator(case_op)
 
         # Verify results
         assert isinstance(result, pd.DataFrame)
@@ -329,7 +336,7 @@ class TestVariablePairingIntegration:
         )
 
         # Execute evaluation
-        result = evaluate.compute_case_operator(case_op)
+        result = evaluate_tools.compute_case_operator(case_op)
 
         # Verify results
         assert isinstance(result, pd.DataFrame)
@@ -362,7 +369,7 @@ class TestVariablePairingIntegration:
         )
 
         # Execute evaluation
-        result = evaluate.compute_case_operator(case_op)
+        result = evaluate_tools.compute_case_operator(case_op)
 
         # Verify results
         assert isinstance(result, pd.DataFrame)
@@ -395,7 +402,7 @@ class TestVariablePairingIntegration:
         )
 
         # Execute evaluation
-        result = evaluate.compute_case_operator(case_op)
+        result = evaluate_tools.compute_case_operator(case_op)
 
         # Verify results
         assert isinstance(result, pd.DataFrame)
@@ -425,7 +432,7 @@ class TestVariablePairingIntegration:
         )
 
         # Execute evaluation
-        result = evaluate.compute_case_operator(case_op)
+        result = evaluate_tools.compute_case_operator(case_op)
 
         # Verify results
         assert isinstance(result, pd.DataFrame)
@@ -455,7 +462,7 @@ class TestVariablePairingIntegration:
         )
 
         # Execute evaluation
-        result = evaluate.compute_case_operator(case_op)
+        result = evaluate_tools.compute_case_operator(case_op)
 
         # Verify results
         assert isinstance(result, pd.DataFrame)
@@ -489,7 +496,7 @@ class TestVariablePairingIntegration:
         )
 
         # Execute evaluation
-        result = evaluate.compute_case_operator(case_op)
+        result = evaluate_tools.compute_case_operator(case_op)
 
         # Verify results
         assert isinstance(result, pd.DataFrame)
@@ -521,7 +528,7 @@ class TestVariablePairingIntegration:
         )
 
         # Execute evaluation
-        result = evaluate.compute_case_operator(case_op)
+        result = evaluate_tools.compute_case_operator(case_op)
 
         # Verify that we get different metric values for different pairings
         # (since we created datasets with different base values for each variable)
