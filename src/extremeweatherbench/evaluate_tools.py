@@ -531,6 +531,29 @@ def build_datasets(
     return (forecast_ds, target_ds)
 
 
+def _build_datasets_with_key(
+    case_operator: "cases.CaseOperator",
+    cache_key: str,
+    **kwargs,
+) -> tuple[xr.Dataset, xr.Dataset]:
+    """Wrapper for build_datasets that includes cache_key for proper caching.
+
+    This function exists at module level to avoid joblib race conditions that
+    occur with nested cached functions in parallel execution.
+
+    Args:
+        case_operator: The case operator containing metadata and input sources.
+        cache_key: A hash key used by joblib for cache lookup (not used in
+            computation).
+        **kwargs: Additional keyword arguments to pass to pipeline steps.
+
+    Returns:
+        A tuple containing (forecast_dataset, target_dataset).
+    """
+    del cache_key  # Only used for cache lookup, not in computation
+    return build_datasets(case_operator, **kwargs)
+
+
 def prepare_aligned_datasets(
     case_operator: "cases.CaseOperator",
     memory: joblib.Memory,
@@ -552,12 +575,11 @@ def prepare_aligned_datasets(
     """
     cache_key = make_cache_key(case_operator)
 
-    # Create cached version of build_datasets
-    @memory.cache
-    def _cached_build(key: str):
-        return build_datasets(case_operator, **kwargs)
-
-    forecast_ds, target_ds = _cached_build(cache_key)
+    # Cache at call site using memory.cache on the module-level function.
+    # ignore=["case_operator"] ensures joblib uses cache_key for lookups while
+    # passing case_operator for computation.
+    cached_build = memory.cache(_build_datasets_with_key, ignore=["case_operator"])
+    forecast_ds, target_ds = cached_build(case_operator, cache_key, **kwargs)
 
     # Check for empty datasets
     if 0 in forecast_ds.sizes.values() or 0 in target_ds.sizes.values():
