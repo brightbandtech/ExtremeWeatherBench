@@ -820,10 +820,10 @@ def _cache_maybe_densify_helper(
 
 
 def maybe_cache_and_compute(
-    data: xr.Dataset | xr.DataArray,
+    data: xr.Dataset,
     name: str,
     cache_dir: Optional[Union[str, pathlib.Path]] = None,
-) -> xr.Dataset | xr.DataArray:
+) -> xr.Dataset:
     """Compute and cache datasets if cache_dir is provided.
 
     Data is returned as technically lazily loaded from the cache, but will significantly
@@ -857,8 +857,6 @@ def maybe_cache_and_compute(
             cache_path / f"{name}.zarr", zarr_format=2, mode="w"
         )
 
-    # Load the data from the cache, matching the type of the input data
-    if isinstance(data, xr.Dataset):
-        return xr.open_dataset(cache_path / f"{name}.zarr")
-    else:
-        return xr.open_dataarray(cache_path / f"{name}.zarr")
+    # Load the data from the cache
+    return xr.open_dataset(cache_path / f"{name}.zarr")
+

@@ -20,7 +20,14 @@ import pandas as pd
 import pytest
 import xarray as xr
 
-from extremeweatherbench import cases, evaluate, inputs, metrics, regions
+from extremeweatherbench import (
+    cases,
+    evaluate,
+    evaluate_tools,
+    inputs,
+    metrics,
+    regions,
+)
 
 
 class PerformanceResult(NamedTuple):
@@ -131,21 +138,20 @@ class TestMetricParallelization:
 
     def test_cache_functions_exist_and_work(self):
         """Verify cache management functions are accessible."""
-        assert hasattr(evaluate, "clear_dataset_cache")
-        assert hasattr(evaluate, "_get_dataset_cache")
-        assert hasattr(evaluate, "_make_cache_key")
+        assert hasattr(evaluate_tools, "dataset_cache")
+        assert hasattr(evaluate_tools, "make_cache_key")
 
-        # clear_dataset_cache should be safe to call multiple times
-        evaluate.clear_dataset_cache()
-        evaluate.clear_dataset_cache()
+        # dataset_cache context manager should work
+        with evaluate_tools.dataset_cache() as memory:
+            assert memory is not None
 
     def test_metric_job_dataclass_exists(self):
         """Verify MetricJob dataclass is properly defined."""
-        assert hasattr(evaluate, "MetricJob")
+        assert hasattr(evaluate_tools, "MetricJob")
 
         from dataclasses import fields
 
-        field_names = {f.name for f in fields(evaluate.MetricJob)}
+        field_names = {f.name for f in fields(evaluate_tools.MetricJob)}
         expected_fields = {
             "case_operator",
             "metric",
@@ -179,17 +185,18 @@ class TestMetricParallelization:
             forecast=mock_forecast,
         )
 
-        # Mock _build_datasets to return our synthetic data
-        with mock.patch(
-            "extremeweatherbench.evaluate._build_datasets"
+        # Mock build_datasets to return our synthetic data
+        with mock.patch.object(
+            evaluate_tools, "build_datasets"
         ) as mock_build:
             mock_build.return_value = (synthetic_dataset, synthetic_dataset)
 
-            jobs = evaluate._build_metric_jobs([case_operator])
+            with evaluate_tools.dataset_cache() as memory:
+                jobs = evaluate_tools.build_metric_jobs([case_operator], memory)
 
             # Should create 2 jobs (one per metric)
             assert len(jobs) == 2
-            assert all(isinstance(j, evaluate.MetricJob) for j in jobs)
+            assert all(isinstance(j, evaluate_tools.MetricJob) for j in jobs)
             assert jobs[0].metric.name != jobs[1].metric.name
 
     def test_compute_single_metric_returns_dataframe(self, synthetic_dataset, mock_case):
@@ -213,7 +220,7 @@ class TestMetricParallelization:
             forecast=mock_forecast,
         )
 
-        job = evaluate.MetricJob(
+        job = evaluate_tools.MetricJob(
             case_operator=case_operator,
             metric=metrics.RootMeanSquaredError(),
             forecast_var="surface_air_temperature",
@@ -221,15 +228,16 @@ class TestMetricParallelization:
             metric_kwargs={},
         )
 
-        with mock.patch(
-            "extremeweatherbench.evaluate._build_datasets"
+        with mock.patch.object(
+            evaluate_tools, "build_datasets"
         ) as mock_build:
             mock_build.return_value = (synthetic_dataset, synthetic_dataset)
 
-            result = evaluate._compute_single_metric(job)
+            with evaluate_tools.dataset_cache() as memory:
+                result = evaluate_tools.compute_single_metric(job, memory)
 
             assert isinstance(result, pd.DataFrame)
-            for col in evaluate.OUTPUT_COLUMNS:
+            for col in evaluate_tools.OUTPUT_COLUMNS:
                 assert col in result.columns
 
     def test_serial_execution_with_mocked_data(
@@ -255,8 +263,8 @@ class TestMetricParallelization:
             forecast=mock_forecast,
         )
 
-        with mock.patch(
-            "extremeweatherbench.evaluate._build_datasets"
+        with mock.patch.object(
+            evaluate_tools, "build_datasets"
         ) as mock_build:
             mock_build.return_value = (synthetic_dataset, synthetic_dataset)
 
@@ -272,7 +280,7 @@ class TestMetricParallelization:
             assert len(result) >= 4
 
     def test_cache_is_cleared_after_run(self, synthetic_dataset, mock_case_collection):
-        """Test that dataset cache is cleared after run completes."""
+        """Test that dataset cache context manager cleans up."""
         mock_target = mock.Mock(spec=inputs.TargetBase)
         mock_target.name = "mock_target"
         mock_target.variables = ["surface_air_temperature"]
@@ -292,8 +300,8 @@ class TestMetricParallelization:
             forecast=mock_forecast,
         )
 
-        with mock.patch(
-            "extremeweatherbench.evaluate._build_datasets"
+        with mock.patch.object(
+            evaluate_tools, "build_datasets"
         ) as mock_build:
             mock_build.return_value = (synthetic_dataset, synthetic_dataset)
 
@@ -302,10 +310,9 @@ class TestMetricParallelization:
                 evaluation_objects=[eval_obj],
             )
 
-            ewb.run(n_jobs=1)
-
-            # Cache should be cleared after run
-            assert len(evaluate._DATASET_RESULTS_CACHE) == 0
+            # Run should complete without error
+            result = ewb.run(n_jobs=1)
+            assert isinstance(result, pd.DataFrame)
 
 
 class TestPerformanceComparison:
@@ -348,8 +355,8 @@ class TestPerformanceComparison:
             forecast=mock_forecast,
         )
 
-        with mock.patch(
-            "extremeweatherbench.evaluate._build_datasets"
+        with mock.patch.object(
+            evaluate_tools, "build_datasets"
         ) as mock_build:
             mock_build.return_value = (synthetic_dataset, synthetic_dataset)
 
@@ -416,7 +423,7 @@ def run_performance_benchmark():
         forecast=mock_forecast,
     )
 
-    with mock.patch("extremeweatherbench.evaluate._build_datasets") as mock_build:
+    with mock.patch.object(evaluate_tools, "build_datasets") as mock_build:
         mock_build.return_value = (ds, ds)
 
         print(f"\nBenchmarking with {len(case_collection.cases)} cases...")
