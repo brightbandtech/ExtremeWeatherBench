@@ -1009,7 +1009,7 @@ class TestDurationMeanError:
         climatology = self.create_climatology()
         metric = metrics.DurationMeanError(threshold_criteria=climatology)
         assert isinstance(metric, metrics.MeanError)
-        assert metric.name == "duration_me"
+        assert metric.name == "DurationMeanError"
 
     def test_base_metric_inheritance(self):
         """Test that DurationMeanError inherits from ME."""
@@ -1420,7 +1420,7 @@ class TestDurationMeanError:
         criteria."""
         metric = metrics.DurationMeanError(threshold_criteria=300.0)
         assert isinstance(metric, metrics.MeanError)
-        assert metric.name == "duration_me"
+        assert metric.name == "DurationMeanError"
         assert metric.threshold_criteria == 300.0
 
     def test_me_with_float_threshold_all_forecast_exceeds(self):
