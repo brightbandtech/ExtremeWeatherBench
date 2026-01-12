@@ -1,5 +1,7 @@
 # Extreme Weather Bench (EWB)
 
+[![Documentation Status](https://readthedocs.org/projects/extremeweatherbench/badge/?version=latest)](https://extremeweatherbench.readthedocs.io/en/latest/?badge=latest)
+
 **EWB is currently in limited pre-release. Bugs are likely to occur for now.**
 
 **v1.0 to be published alongside EWB preprint.**

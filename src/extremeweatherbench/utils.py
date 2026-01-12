@@ -50,6 +50,70 @@ def maybe_get_operator(
     return operator_method
 
 
+def find_common_init_times(
+    forecast_landfall: xr.DataArray, target_landfall: xr.DataArray
+) -> list[datetime.datetime]:
+    """Find the common init_times between forecast and target landfalls.
+
+    Args:
+        forecast_landfall: The forecast landfall DataArray.
+        target_landfall: The target landfall DataArray.
+
+    Returns:
+        Sorted list of init_times present in both forecast and target.
+    """
+    # Find common init_times between forecast and target
+    forecast_init_times = set(forecast_landfall.coords["init_time"].values)
+    target_init_times = set(target_landfall.coords["init_time"].values)
+    common_init_times = sorted(forecast_init_times.intersection(target_init_times))
+    return common_init_times
+
+
+def is_valid_landfall(landfall: xr.DataArray | None) -> bool:
+    """Check if a landfall DataArray is valid for processing.
+
+    A valid landfall has dimensions and contains the init_time coordinate
+    needed for landfall metric calculations. Also checks that the data
+    contains at least some non-NaN values.
+
+    Args:
+        landfall: The landfall DataArray to check
+
+    Returns:
+        True if the landfall is valid, False otherwise
+    """
+    if landfall is None or landfall.ndim == 0:
+        return False
+    if "init_time" not in landfall.coords:
+        return False
+    # Check that we have actual data (not all NaN)
+    if np.isnan(landfall.values).all():
+        return False
+    return True
+
+
+def _create_nan_dataarray(
+    preserved_dims: Union[str, list[str]] = "init_time",
+) -> xr.DataArray:
+    """Create a NaN DataArray with the given dimension(s).
+
+    Args:
+        preserved_dims: The dimension(s) to create the NaN DataArray for.
+            Can be a single string or a list of strings.
+
+    Returns:
+        A DataArray with the given dimension(s) and NaN values.
+    """
+    if isinstance(preserved_dims, str):
+        preserved_dims = [preserved_dims]
+
+    # Create shape with one element per dimension
+    shape = [1] * len(preserved_dims)
+    nan_values = np.full(shape, np.nan)
+    nan_da = xr.DataArray(nan_values, dims=preserved_dims)
+    return nan_da
+
+
 def convert_longitude_to_360(longitude: float) -> float:
     """Convert a longitude from the range [-180, 180) to [0, 360)."""
     return np.mod(longitude, 360)
@@ -301,13 +365,13 @@ def convert_init_time_to_valid_time(ds: xr.Dataset) -> xr.Dataset:
 
 
 def convert_valid_time_to_init_time(da: xr.DataArray) -> xr.DataArray:
-    """Convert the valid_time coordinate to a init_time coordinate.
+    """Convert the valid_time dimension to a init_time dimension.
 
     Args:
-        ds: The dataset to convert with lead_time and valid_time coordinates.
+        da: The dataarray to convert with lead_time and valid_time dimensions.
 
     Returns:
-        The dataset with a init_time coordinate.
+        The dataarray with an init_time dimension.
     """
     init_time = xr.DataArray(
         da.valid_time, coords={"valid_time": da.valid_time}
@@ -378,7 +442,7 @@ def stack_dataarray_from_dims(
 
     Args:
         da: An xarray dataarray with sparse.COO data
-        reduce_dims: The dimensions to reduce.
+        stack_dims: The dimensions to stack.
         max_size: The maximum size of records to densify; default is 100000.
 
     Returns:
@@ -655,7 +719,7 @@ def reduce_dataarray(
     method: str | Callable,
     reduce_dims: list[str],
     compute: bool = True,
-    **method_kwargs,
+    **method_kwargs: Any,
 ) -> xr.DataArray:
     """Reduce using xarray methods or numpy functions.
 
@@ -672,8 +736,6 @@ def reduce_dataarray(
             a callable function (e.g., np.nanmean).
         reduce_dims: The dimensions to reduce.
         compute: Whether to compute the dataarray before returning. Defaults to True.
-        **method_kwargs: Additional kwargs for the method. Only used
-            when method is a string (xarray method).
 
     Returns:
         The reduced xarray dataarray.
@@ -731,3 +793,72 @@ def load_land_geometry(resolution: str = "10m") -> shapely.geometry.Polygon:
         pass
 
     return land_union
+
+
+def _cache_maybe_densify_helper(
+    data: xr.Dataset | xr.DataArray,
+) -> xr.Dataset | xr.DataArray:
+    """Helper function to maybe densify a dataset's variables or dataarray for caching.
+
+    Args:
+        data: The dataset or dataarray to format.
+
+    Returns:
+        The formatted dataset or dataarray.
+    """
+    # If the data is a dataset, map the helper function to each dataarray
+    if isinstance(data, xr.Dataset):
+        return data.map(_cache_maybe_densify_helper)
+
+    # If the data is a dataarray, densify the data if it is sparse
+    elif isinstance(data, xr.DataArray):
+        return maybe_densify_dataarray(da=data)
+
+    # Otherwise, raise an error
+    else:
+        raise TypeError(f"data must be xr.Dataset or xr.DataArray, got {type(data)}")
+
+
+def maybe_cache_and_compute(
+    data: xr.Dataset | xr.DataArray,
+    name: str,
+    cache_dir: Optional[Union[str, pathlib.Path]] = None,
+) -> xr.Dataset | xr.DataArray:
+    """Compute and cache datasets if cache_dir is provided.
+
+    Data is returned as technically lazily loaded from the cache, but will significantly
+    speed up subsequent computations with a copy of the data in memory. Note that if
+    many cases or cases with large spatiotemporal domains are to be computed, it may be
+    better to avoid caching with a limited disk size.
+
+    Args:
+        data: The dataset or dataarray to compute and cache.
+        name: The name of the dataset for naming cached files.
+        cache_dir: The directory to cache the datasets. If provided,
+            datasets or dataarrays will be cached as zarrs and loaded from the cache.
+            Default is None.
+
+    Returns:
+        The computed dataset if cache_dir is set, otherwise the
+        original dataset.
+    """
+    # If no caching, return as dataset or dataarray
+    if cache_dir is None:
+        return data
+
+    # Compute and cache dataset or dataarray
+    logger.info("Computing datasets and storing at %s...", cache_dir)
+    cache_path = pathlib.Path(cache_dir)
+
+    # If the cache file does not exist, maybe densify the data and cache it. Sparse data
+    # must be densified to be stored in zarrs
+    if not (cache_path / f"{name}.zarr").exists():
+        _cache_maybe_densify_helper(data).to_zarr(
+            cache_path / f"{name}.zarr", zarr_format=2, mode="w"
+        )
+
+    # Load the data from the cache, matching the type of the input data
+    if isinstance(data, xr.Dataset):
+        return xr.open_dataset(cache_path / f"{name}.zarr")
+    else:
+        return xr.open_dataarray(cache_path / f"{name}.zarr")

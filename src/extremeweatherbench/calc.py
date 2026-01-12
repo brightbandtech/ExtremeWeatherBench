@@ -253,7 +253,7 @@ def geopotential_thickness(
         bottom_level_value: The value of the bottom level to generate the
             geopotential thickness from.
         geopotential: Whether the input DataArray is geopotential height or
-        geopotential (default is geopotential height).
+            geopotential (default is geopotential height).
 
     Returns:
         The geopotential thickness as an xarray DataArray.
