@@ -1198,6 +1198,8 @@ class DurationMeanError(MeanError):
         name: Name of the metric.
         preserve_dims: Dimensions to preserve during aggregation. Defaults to
             "init_time".
+        product_time_resolution_hours: Whether to product the duration by the time
+            resolution of the forecast (in hours). Defaults to False.
     """
 
     def __init__(
