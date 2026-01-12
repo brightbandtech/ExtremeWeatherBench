@@ -1863,11 +1863,11 @@ class LandfallIntensityMeanAbsoluteError(LandfallMetric, MeanAbsoluteError):
         forecast_landfall, target_landfall = self.maybe_compute_landfalls(
             forecast, target, **kwargs
         )
-        if forecast_landfall is None or target_landfall is None:
-            forecast_landfall, target_landfall = self.compute_landfalls(
-                forecast=forecast, target=target
-            )
-        if forecast_landfall is None or target_landfall is None:
-            return xr.DataArray(np.nan)
-        return self._compute_absolute_error(forecast_landfall, target_landfall)
+        if not utils.is_valid_landfall(
+            forecast_landfall
+        ) or not utils.is_valid_landfall(target_landfall):
+            return utils._create_nan_dataarray(self.preserve_dims)
+
+        # The complexity of the landfall outputs makes it easier just to use np.abs here
+        return np.abs(forecast_landfall - target_landfall)
     
