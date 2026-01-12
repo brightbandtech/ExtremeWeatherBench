@@ -75,7 +75,7 @@ CIRA_metadata_variable_mapping = {
     "u": "eastward_wind",
     "v": "northward_wind",
     "p": "air_pressure",
-    "z": "geopotential",
+    "z": "geopotential_height",
     "r": "relative_humidity",
     "u10": "surface_eastward_wind",
     "v10": "surface_northward_wind",
@@ -424,6 +424,54 @@ class ZarrForecast(ForecastBase):
 
 
 @dataclasses.dataclass
+class XarrayForecast(ForecastBase):
+    """Forecast class for datasets that were previously constructed and opened using xarray.
+
+    This class is intended for situations where the user had to manually prepare a dataset to
+    use in their evaluation. This can happen when the user is manually constructed such a
+    dataset from a collection of NetCDF or Zarr archives which need to be assembled into a
+    single, master dataset.
+
+    Attributes:
+        ds: The xarray dataset containing the forecast data.
+        source: The source of the data, defaults to "memory" for in-memory datasets.
+        name: The name of the input data source, defaults to "in-memory dataset".
+    """
+
+    #: The xarray dataset containing the forecast data.
+    ds: Optional[xr.Dataset] = None
+    source: str = "memory"
+    name: str = "in-memory dataset"
+
+    def __post_init__(self):
+        """Validate that ds is provided and normalize None values to defaults.
+
+        This ensures backwards compatibility with the previous custom __init__ behavior
+        where None values for variables and variable_mapping were converted to empty
+        containers.
+        """
+        if self.ds is None:
+            raise ValueError(
+                "The 'ds' parameter is required for XarrayForecast. "
+                "Please provide an xarray.Dataset."
+            )
+
+        # Convert None to empty containers for backwards compatibility
+        if self.variables is None:
+            object.__setattr__(self, "variables", [])
+        if self.variable_mapping is None:
+            object.__setattr__(self, "variable_mapping", {})
+
+    def _open_data_from_source(self) -> xr.Dataset:
+        """Open the input data from the source.
+
+        Returns:
+            The xarray dataset that was provided during initialization.
+        """
+        return self.ds
+
+
+@dataclasses.dataclass
 class TargetBase(InputBase):
     """An abstract base class for target data.
 
@@ -590,8 +638,10 @@ class GHCN(TargetBase):
 class LSR(TargetBase):
     """Target class for local storm report (LSR) tabular data.
 
-    run_pipeline() returns a dataset with LSRs as mapped to numeric values (1=wind, 2=hail, 3=tor). IndividualCase date ranges for LSRs should be 12 UTC to
-    the next day at 12 UTC (exclusive) to match SPC's reporting window.
+    run_pipeline() returns a dataset with LSRs and practically perfect hindcast gridded
+    probability data. IndividualCase date ranges for LSRs should ideally be 12 UTC to
+    the next day at 12 UTC to match SPC methods for US data. Australia data should be 00
+    UTC to 00 UTC.
     """
 
     name: str = "local_storm_reports"
@@ -644,34 +694,64 @@ class LSR(TargetBase):
         report_type_mapping = {"wind": 1, "hail": 2, "tor": 3}
         if "report_type" in data.columns:
             data.loc[:, "report_type"] = data["report_type"].map(report_type_mapping)
-            data["report_type"] = data["report_type"].astype(int)
 
-        # If report is between today 12Z and tomorrow
+        # Normalize these times for the LSR data
+        # Western hemisphere reports get bucketed to 12Z on the date they fall
+        # between 12Z-12Z
+        # Eastern hemisphere reports get bucketed to 00Z on the date they occur
+
+        # First, let's figure out which hemisphere each report is in
+        western_hemisphere_mask = data["longitude"] < 0
+        eastern_hemisphere_mask = data["longitude"] >= 0
+
+        # For western hemisphere: if report is between today 12Z and tomorrow
         # 12Z, assign to today 12Z
-        data = data.copy()
-        report_dates = data["valid_time"].dt.date
-        twelve_z_times = pd.to_datetime(report_dates) + pd.Timedelta(hours=12)
-        next_day_twelve_z = twelve_z_times + pd.Timedelta(days=1)
+        if western_hemisphere_mask.any():
+            western_data = data[western_hemisphere_mask].copy()
+            # Get the date portion and create 12Z times
+            report_dates = western_data["valid_time"].dt.date
+            twelve_z_times = pd.to_datetime(report_dates) + pd.Timedelta(hours=12)
+            next_day_twelve_z = twelve_z_times + pd.Timedelta(days=1)
 
-        # Check if report falls in the 12Z to 12Z+1day window
-        in_window_mask = (data["valid_time"] >= twelve_z_times) & (
-            data["valid_time"] < next_day_twelve_z
-        )
-        # For reports that don't fall in today's 12Z window, try yesterday's window
-        yesterday_twelve_z = twelve_z_times - pd.Timedelta(days=1)
-        in_yesterday_window = (data["valid_time"] >= yesterday_twelve_z) & (
-            data["valid_time"] < twelve_z_times
-        )
+            # Check if report falls in the 12Z to 12Z+1day window
+            in_window_mask = (western_data["valid_time"] >= twelve_z_times) & (
+                western_data["valid_time"] < next_day_twelve_z
+            )
+            # For reports that don't fall in today's 12Z window, try yesterday's window
+            yesterday_twelve_z = twelve_z_times - pd.Timedelta(days=1)
+            in_yesterday_window = (western_data["valid_time"] >= yesterday_twelve_z) & (
+                western_data["valid_time"] < twelve_z_times
+            )
 
-        # Assign 12Z times
-        data.loc[in_window_mask, "valid_time"] = twelve_z_times[in_window_mask]
-        data.loc[in_yesterday_window, "valid_time"] = yesterday_twelve_z[
-            in_yesterday_window
-        ]
+            # Assign 12Z times
+            western_data.loc[in_window_mask, "valid_time"] = twelve_z_times[
+                in_window_mask
+            ]
+            western_data.loc[in_yesterday_window, "valid_time"] = yesterday_twelve_z[
+                in_yesterday_window
+            ]
+
+            data.loc[western_hemisphere_mask] = western_data
+
+        # For eastern hemisphere: assign to 00Z of the same date
+        if eastern_hemisphere_mask.any():
+            eastern_data = data[eastern_hemisphere_mask].copy()
+            # Get the date portion and create 00Z times
+            report_dates = eastern_data["valid_time"].dt.date
+            zero_z_times = pd.to_datetime(report_dates)
+            eastern_data["valid_time"] = zero_z_times
+
+            data.loc[eastern_hemisphere_mask] = eastern_data
 
         # Convert longitude back to 0 - 360
         data.loc[:, "longitude"] = utils.convert_longitude_to_360(data["longitude"])
         data = data.set_index(["valid_time", "latitude", "longitude"])
+
+        # Convert string columns to binary indicators (1.0)
+        # String presence indicates an event occurred at that location
+        for col in data.columns:
+            if data[col].dtype == object or data[col].dtype.name == "string":
+                data[col] = 1.0
 
         data = xr.Dataset.from_dataframe(
             data[~data.index.duplicated(keep="first")], sparse=True
@@ -679,6 +759,7 @@ class LSR(TargetBase):
         data.attrs["report_type_mapping"] = report_type_mapping
         return data
 
+    # TODO: keep forecasts on original grid for LSRs
     def maybe_align_forecast_to_target(
         self,
         forecast_data: xr.Dataset,
