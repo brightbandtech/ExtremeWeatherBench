@@ -1,4 +1,4 @@
-"""Streaming GHCN-H data download script that processes files immediately
+"""Streaming GHCNh data download script that processes files immediately
 to save disk space and skip already processed data.
 """
 
@@ -11,9 +11,26 @@ import pandas as pd
 import polars as pl
 from tqdm.asyncio import tqdm
 
+QC_CODE_MAPPING = {
+    220: ["1"],
+    221: ["1"],
+    222: ["1"],
+    223: ["1"],
+    313: ["0", "1", "4", "5", "9", "A", "P", "I", "C", "R"],
+    314: ["0", "1", "4", "5", "9", "A", "P", "I", "C", "R"],
+    315: ["0", "1", "4", "5", "9", "A", "P", "I", "C", "R"],
+    322: ["0", "1", "4", "5", "9", "A", "P", "I", "C", "R"],
+    335: ["0", "1", "4", "5", "9", "A", "P", "I", "C", "R"],
+    343: ["0", "1", "4", "5", "9", "A", "P", "I", "C", "R"],
+    344: ["0", "1", "4", "5", "9", "A", "P", "I", "C", "R"],
+    346: ["0", "1", "4", "5", "9", "A", "P", "I", "C", "R"],
+    347: ["1"],
+    348: ["1"],
+}
+
 
 async def download_station_list():
-    """Download and parse the official GHCN-H station list."""
+    """Download and parse the official GHCNh station list."""
     station_list_url = "https://www.ncei.noaa.gov/oa/global-historical-climatology-network/hourly/doc/ghcnh-station-list.txt"  # noqa: E501
 
     async with aiohttp.ClientSession() as session:
@@ -26,7 +43,7 @@ async def download_station_list():
 
 
 def parse_station_list(content):
-    """Parse the GHCN-H station list text format."""
+    """Parse the GHCNh station list text format."""
     stations = []
     lines = content.strip().split("\n")
 
@@ -253,22 +270,19 @@ def process_psv_file(file_path):
     """Process a single PSV file and return DataFrame or None."""
     try:
         df = pd.read_csv(file_path, sep="|", low_memory=False)
-
-        # Drop rows where temperature_quality_check is not 1 or 5
-        if "temperature_Quality_Code" in df.columns:
-            if isinstance(df["temperature_Quality_Code"].iloc[0], dict):
-                df = df[
-                    df["temperature_Quality_Code"].apply(
-                        lambda x: x.get("member0") in [1, 5]
-                        if x is not None and isinstance(x, dict)
-                        else False
-                    )
-                ]
-            else:
-                df["temperature_Quality_Code"] = df["temperature_Quality_Code"].astype(
-                    str
+        source_code_cols = [col for col in df.columns if "Source_Code" in col]
+        quality_code_cols = [
+            col.split("_")[0] + "_Quality_Code" for col in source_code_cols
+        ]
+        for source_code_col, quality_code_col in zip(
+            source_code_cols, quality_code_cols
+        ):
+            quality_code_str = df[quality_code_col].astype(str)
+            df = df[
+                quality_code_str.isin(
+                    QC_CODE_MAPPING.get(df[source_code_col].unique()[0])
                 )
-                df = df[df["temperature_Quality_Code"].isin(["1", "5"])]
+            ]
 
         # Select required columns
         required_cols = [
@@ -365,10 +379,10 @@ async def download_and_process_station_file_with_semaphore(
 
 
 async def download_all_stations_streaming(
-    years, output_dir, overwrite=False, max_concurrent=10
+    years, output_dir, overwrite=False, max_concurrent=100
 ):
-    """Download and immediately process GHCN-H stations to save disk space."""
-    print("Downloading and processing GHCN-H stations with streaming approach...")
+    """Download and immediately process GHCNh stations to save disk space."""
+    print("Downloading and processing GHCNh stations with streaming approach...")
     station_df = await download_station_list()
     print(f"Found {len(station_df)} stations in official list")
 
@@ -542,8 +556,8 @@ async def download_all_stations_streaming(
 
 
 def main():
-    """Main function for streaming GHCN-H download."""
-    print("GHCN-H Streaming Download Script")
+    """Main function for streaming GHCNh download."""
+    print("GHCNh Streaming Download Script")
     print("===============================")
     print("This script downloads, processes, and deletes files immediately!")
     print("Files are checked for existing data and skipped if already processed.")
@@ -563,7 +577,7 @@ def main():
     print(f"Streaming data for years: {years}")
     asyncio.run(
         download_all_stations_streaming(
-            years, output_dir, overwrite=False, max_concurrent=10
+            years, output_dir, overwrite=False, max_concurrent=1000
         )
     )
 
