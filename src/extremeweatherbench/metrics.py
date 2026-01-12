@@ -774,7 +774,7 @@ class ReceiverOperatingCharacteristicSkillScore(ReceiverOperatingCharacteristic)
         **kwargs: Any,
     ) -> Any:
         roc_curve_data = super()._compute_metric(forecast, target, **kwargs)
-        return roc_curve_data["AUC"] - auc_reference / (1 - auc_reference)
+        return (roc_curve_data["AUC"] - auc_reference) / (1 - auc_reference)
 
 class MeanSquaredError(BaseMetric):
     """Mean Squared Error metric.
