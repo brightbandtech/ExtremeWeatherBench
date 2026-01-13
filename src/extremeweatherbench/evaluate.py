@@ -94,6 +94,49 @@ class ExtremeWeatherBench:
             subset_collection = self.case_metadata
         return cases.build_case_operators(subset_collection, self.evaluation_objects)
 
+    def run(
+        self,
+        n_jobs: Optional[int] = None,
+        parallel_config: Optional[dict] = None,
+        **kwargs,
+    ) -> pd.DataFrame:
+        """Runs the ExtremeWeatherBench evaluation workflow.
+
+        This method will run the evaluation workflow in the order of the case operators,
+        optionally caching the mid-flight outputs of the workflow if cache_dir was
+        provided for serial runs.
+
+        Args:
+            n_jobs: The number of jobs to run in parallel. If None, defaults to the
+                joblib backend default value. If 1, the workflow will run serially.
+                Ignored if parallel_config is provided.
+            parallel_config: Optional dictionary of joblib parallel configuration.
+                If provided, this takes precedence over n_jobs. If not provided and
+                n_jobs is specified, a default config with threading backend is used.
+            **kwargs: Additional arguments to pass to compute_case_operator.
+        Returns:
+            A concatenated dataframe of the evaluation results.
+        """
+        logger.warning("The run method is deprecated. Use run_evaluation instead.")
+        logger.info("Running ExtremeWeatherBench evaluations...")
+
+        # Check for serial or parallel configuration
+        parallel_config = _parallel_serial_config_check(n_jobs, parallel_config)
+
+        run_results = _run_evaluation(
+            self.case_operators,
+            cache_dir=self.cache_dir,
+            parallel_config=parallel_config,
+            **kwargs,
+        )
+
+        # If there are results, concatenate them and return, else return an empty
+        # DataFrame with the expected columns
+        if run_results:
+            return _safe_concat(run_results, ignore_index=True)
+        else:
+            return pd.DataFrame(columns=OUTPUT_COLUMNS)
+
     def run_evaluation(
         self,
         n_jobs: Optional[int] = None,
