@@ -567,17 +567,18 @@ class TestIntegrationWithSyntheticData:
     ):
         """Test complete flow from case operator to jobs."""
         with et.dataset_cache() as memory:
-            # Mock validation and data loading
+            # Mock validation and prepare_aligned_datasets to avoid caching
+            # issues with mock objects (mocks can't be pickled by joblib)
             with mock.patch.object(
                 et, "validate_case_operator_metrics"
             ) as mock_validate:
                 mock_validate.return_value = mock_case_operator
                 with mock.patch.object(
-                    et, "build_datasets"
-                ) as mock_build:
-                    mock_build.return_value = (
-                        synthetic_forecast_ds,
-                        synthetic_target_ds,
+                    et, "prepare_aligned_datasets"
+                ) as mock_prepare:
+                    mock_prepare.return_value = et.PreparedDatasets(
+                        forecast=synthetic_forecast_ds,
+                        target=synthetic_target_ds,
                     )
 
                     jobs = et.process_case_operator(mock_case_operator, memory)
