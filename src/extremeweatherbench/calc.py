@@ -243,6 +243,7 @@ def geopotential_thickness(
     top_level_value: int = 300,
     bottom_level_value: int = 500,
     geopotential: bool = False,
+    pressure_dimension_str: str = "level",
 ) -> xr.DataArray:
     """Generate the geopotential thickness from the geopotential heights.
 
@@ -254,12 +255,13 @@ def geopotential_thickness(
             geopotential thickness from.
         geopotential: Whether the input DataArray is geopotential height or
             geopotential (default is geopotential height).
+        pressure_dimension_str: The name of the pressure dimension (default is "level").
 
     Returns:
         The geopotential thickness as an xarray DataArray.
     """
-    geopotential_heights = da.sel({"level": top_level_value})
-    geopotential_height_bottom = da.sel({"level": bottom_level_value})
+    geopotential_heights = da.sel({pressure_dimension_str: top_level_value})
+    geopotential_height_bottom = da.sel({pressure_dimension_str: bottom_level_value})
     if geopotential:
         geopotential_thickness = (
             geopotential_heights - geopotential_height_bottom
