@@ -10,7 +10,7 @@ from extremeweatherbench import calc
 from extremeweatherbench.events import tropical_cyclone
 
 if TYPE_CHECKING:
-    from extremeweatherbench import cases
+    import extremeweatherbench.cases as cases
 
 logger = logging.getLogger(__name__)
 

@@ -17,7 +17,11 @@ import xarray as xr
 from dask.distributed import Client
 from matplotlib.patches import Rectangle
 
-from extremeweatherbench import cases, derived, inputs, regions, utils
+import extremeweatherbench.cases as cases
+import extremeweatherbench.derived as derived
+import extremeweatherbench.inputs as inputs
+import extremeweatherbench.regions as regions
+import extremeweatherbench.utils as utils
 from extremeweatherbench.events import atmospheric_river as ar
 
 logging.basicConfig()

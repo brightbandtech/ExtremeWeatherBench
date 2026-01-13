@@ -15,7 +15,9 @@ import yaml
 from matplotlib.patches import Rectangle
 
 import extremeweatherbench.data
-from extremeweatherbench import inputs, regions, utils
+import extremeweatherbench.inputs as inputs
+import extremeweatherbench.regions as regions
+import extremeweatherbench.utils as utils
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

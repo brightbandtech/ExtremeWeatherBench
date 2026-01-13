@@ -7,7 +7,9 @@ from typing import Optional
 import click
 import pandas as pd
 
-from extremeweatherbench import cases, defaults, evaluate
+import extremeweatherbench.cases as cases
+import extremeweatherbench.defaults as defaults
+import extremeweatherbench.evaluate as evaluate
 
 
 @click.command()

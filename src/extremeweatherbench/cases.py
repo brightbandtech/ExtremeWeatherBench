@@ -14,10 +14,11 @@ from typing import TYPE_CHECKING, Literal, Sequence, Union
 import dacite
 import yaml  # type: ignore[import]
 
-from extremeweatherbench import regions
+import extremeweatherbench.regions as regions
 
 if TYPE_CHECKING:
-    from extremeweatherbench import inputs, metrics
+    import extremeweatherbench.inputs as inputs
+    import extremeweatherbench.metrics as metrics
 
 logger = logging.getLogger(__name__)
 

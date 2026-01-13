@@ -7,32 +7,29 @@ Usage:
     ewb --config-file example_config.py
 """
 
-from extremeweatherbench import inputs, metrics
-from extremeweatherbench.cases import load_ewb_events_yaml_into_case_collection
+import extremeweatherbench as ewb
 
 # Define targets (observation data)
-era5_heatwave_target = inputs.ERA5(
+era5_heatwave_target = ewb.targets.ERA5(
     variables=["surface_air_temperature"],
     chunks=None,
 )
 
 # Define forecasts
-fcnv2_forecast = inputs.KerchunkForecast(
+fcnv2_forecast = ewb.forecasts.KerchunkForecast(
     name="fcnv2_forecast",
     source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
     variables=["surface_air_temperature"],
-    variable_mapping=inputs.CIRA_metadata_variable_mapping,
+    variable_mapping=ewb.CIRA_metadata_variable_mapping,
 )
 
 # Define evaluation objects
 evaluation_objects = [
-    inputs.EvaluationObject(
+    ewb.EvaluationObject(
         event_type="heat_wave",
         metric_list=[
-            metrics.MaximumMeanAbsoluteError(),
-            metrics.RootMeanSquaredError(),
-            metrics.OnsetMeanError(),
-            metrics.DurationMeanError(),
+            ewb.metrics.MaximumMeanAbsoluteError(),
+            ewb.metrics.RootMeanSquaredError(),
         ],
         target=era5_heatwave_target,
         forecast=fcnv2_forecast,
@@ -41,7 +38,7 @@ evaluation_objects = [
 
 # Load case data from the default events.yaml
 # Users can also define their own cases_dict structure
-cases_dict = load_ewb_events_yaml_into_case_collection()
+cases_dict = ewb.load_cases()
 
 # Alternatively, users could define custom cases like this:
 # cases_dict = {

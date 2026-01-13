@@ -16,7 +16,7 @@ import xarray as xr
 from extremeweatherbench import utils
 
 if TYPE_CHECKING:
-    from extremeweatherbench import cases
+    import extremeweatherbench.cases as cases
 
 logger = logging.getLogger(__name__)
 
@@ -527,7 +527,7 @@ class RegionSubsetter:
             A new IndividualCaseCollection with cases subset to the region
         """
         # Avoid circular import
-        from extremeweatherbench import cases
+        import extremeweatherbench.cases as cases
 
         filtered_cases = []
 
