@@ -72,7 +72,7 @@ class ExtremeWeatherBench:
             )
         self.evaluation_objects = evaluation_objects
         self.cache_dir = pathlib.Path(cache_dir) if cache_dir else None
-        
+
         # Instantiate cache dir if needed
         if self.cache_dir:
             if not self.cache_dir.exists():
@@ -890,6 +890,7 @@ def _safe_concat(
         return pd.concat(valid_dfs, ignore_index=ignore_index)
     else:
         return pd.DataFrame(columns=OUTPUT_COLUMNS)
+
 
 def _parallel_serial_config_check(
     n_jobs: Optional[int] = None,

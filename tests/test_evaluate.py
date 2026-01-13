@@ -2724,6 +2724,7 @@ class TestMetricWithOutputVariables:
         assert len(result) == 10
         assert all(result["target_variable"] == "MockDerivedVariableWithOutputs")
 
+
 class TestParallelSerialConfigCheck:
     def test_parallel_serial_config_check_serial(self):
         """Test that the parallel_serial_config_check returns None for serial mode.
