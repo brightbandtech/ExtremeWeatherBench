@@ -366,10 +366,11 @@ class TestExtremeWeatherBench:
 
             result = ewb.run(n_jobs=1)
 
-            # Serial mode should not pass parallel_config
+            # Serial mode passes parallel_config=None
             mock_run_case_operators.assert_called_once_with(
                 [sample_case_operator],
                 cache_dir=None,
+                parallel_config=None,
             )
             assert isinstance(result, pd.DataFrame)
             assert len(result) == 1
@@ -407,7 +408,7 @@ class TestExtremeWeatherBench:
             mock_run_case_operators.assert_called_once_with(
                 [sample_case_operator],
                 cache_dir=None,
-                parallel_config={"backend": "threading", "n_jobs": 2},
+                parallel_config={"backend": "loky", "n_jobs": 2},
             )
             assert isinstance(result, pd.DataFrame)
             assert len(result) == 1

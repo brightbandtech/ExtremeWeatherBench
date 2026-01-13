@@ -112,7 +112,7 @@ class ExtremeWeatherBench:
                 Ignored if parallel_config is provided.
             parallel_config: Optional dictionary of joblib parallel configuration.
                 If provided, this takes precedence over n_jobs. If not provided and
-                n_jobs is specified, a default config with threading backend is used.
+                n_jobs is specified, a default config with loky backend is used.
 
         Returns:
             A concatenated dataframe of the evaluation results.
@@ -122,7 +122,10 @@ class ExtremeWeatherBench:
         # Check for serial or parallel configuration
         parallel_config = _parallel_serial_config_check(n_jobs, parallel_config)
         run_results = _run_case_operators(
-            self.case_operators, cache_dir=self.cache_dir, **kwargs
+            self.case_operators,
+            cache_dir=self.cache_dir,
+            parallel_config=parallel_config,
+            **kwargs,
         )
 
         # If there are results, concatenate them and return, else return an empty
@@ -153,7 +156,12 @@ def _run_case_operators(
         # Run in parallel if parallel_config exists and n_jobs != 1
         if parallel_config is not None:
             logger.info("Running case operators in parallel...")
-            return _run_parallel(case_operators, cache_dir=cache_dir, **kwargs)
+            return _run_parallel(
+                case_operators,
+                cache_dir=cache_dir,
+                parallel_config=parallel_config,
+                **kwargs,
+            )
         else:
             logger.info("Running case operators in serial...")
             return _run_serial(case_operators, cache_dir=cache_dir, **kwargs)
