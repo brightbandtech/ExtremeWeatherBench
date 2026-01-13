@@ -2724,6 +2724,58 @@ class TestMetricWithOutputVariables:
         assert len(result) == 10
         assert all(result["target_variable"] == "MockDerivedVariableWithOutputs")
 
+class TestParallelSerialConfigCheck:
+    def test_parallel_serial_config_check_serial(self):
+        """Test that the parallel_serial_config_check returns None for serial mode.
+
+        If n_jobs == 1 in any of the arguments, parallel_config should always be
+        None."""
+        assert evaluate._parallel_serial_config_check(n_jobs=1) is None
+        assert (
+            evaluate._parallel_serial_config_check(parallel_config={"n_jobs": 1})
+            is None
+        )
+        assert (
+            evaluate._parallel_serial_config_check(
+                n_jobs=None, parallel_config={"n_jobs": 1}
+            )
+            is None
+        )
+        assert (
+            evaluate._parallel_serial_config_check(
+                n_jobs=None, parallel_config={"n_jobs": 1}
+            )
+            is None
+        )
+        assert (
+            evaluate._parallel_serial_config_check(
+                n_jobs=None, parallel_config={"backend": "threading", "n_jobs": 1}
+            )
+            is None
+        )
+
+    def test_parallel_serial_config_check_parallel(self):
+        """Test that the parallel_serial_config_check returns a dictionary for parallel mode."""
+        assert evaluate._parallel_serial_config_check(n_jobs=2) == {
+            "backend": "loky",
+            "n_jobs": 2,
+        }
+        assert evaluate._parallel_serial_config_check(
+            parallel_config={"backend": "threading", "n_jobs": 2}
+        ) == {"backend": "threading", "n_jobs": 2}
+        assert evaluate._parallel_serial_config_check(
+            n_jobs=2, parallel_config={"backend": "threading", "n_jobs": 2}
+        ) == {"backend": "threading", "n_jobs": 2}
+        assert evaluate._parallel_serial_config_check(
+            n_jobs=2, parallel_config={"backend": "threading", "n_jobs": 2}
+        ) == {"backend": "threading", "n_jobs": 2}
+        assert evaluate._parallel_serial_config_check(
+            n_jobs=2, parallel_config={"backend": "threading", "n_jobs": 2}
+        ) == {"backend": "threading", "n_jobs": 2}
+        assert evaluate._parallel_serial_config_check(
+            n_jobs=2, parallel_config={"backend": "threading", "n_jobs": 2}
+        ) == {"backend": "threading", "n_jobs": 2}
+
 
 if __name__ == "__main__":
     pytest.main([__file__])
