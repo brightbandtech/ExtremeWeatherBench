@@ -563,9 +563,7 @@ class TestRunCaseOperators:
         # Serial mode: don't pass parallel_config
         result = evaluate._run_evaluation([sample_case_operator], cache_dir=None)
 
-        mock_compute_case_operator.assert_called_once_with(
-            sample_case_operator, None
-        )
+        mock_compute_case_operator.assert_called_once_with(sample_case_operator, None)
         assert len(result) == 1
         assert result[0].equals(mock_results)
 
@@ -654,9 +652,7 @@ class TestRunSerial:
         mock_result = pd.DataFrame({"value": [1.0], "case_id_number": [1]})
         mock_compute_case_operator.return_value = mock_result
 
-        result = evaluate._run_evaluation(
-            [sample_case_operator], parallel_config=None
-        )
+        result = evaluate._run_evaluation([sample_case_operator], parallel_config=None)
 
         mock_compute_case_operator.assert_called_once_with(sample_case_operator, None)
         assert len(result) == 1
@@ -2081,9 +2077,7 @@ class TestIntegration:
         # Test serial execution timing - call _run_evaluation in serial mode
         mock_compute_case_operator.side_effect = mock_results
         start_time = time.time()
-        serial_result = evaluate._run_evaluation(
-            case_operators, parallel_config=None
-        )
+        serial_result = evaluate._run_evaluation(case_operators, parallel_config=None)
         serial_time = time.time() - start_time
 
         # Test parallel execution timing - call _run_parallel_evaluation directly with mocked
@@ -2117,9 +2111,7 @@ class TestIntegration:
 
     @mock.patch("extremeweatherbench.evaluate.compute_case_operator")
     @mock.patch("tqdm.auto.tqdm")
-    def test_mixed_execution_parameters(
-        self, mock_tqdm, mock_compute_case_operator
-    ):
+    def test_mixed_execution_parameters(self, mock_tqdm, mock_compute_case_operator):
         """Test various parameter combinations for execution methods."""
         case_operators = [mock.Mock(), mock.Mock()]
         mock_tqdm.return_value = case_operators
@@ -2145,9 +2137,7 @@ class TestIntegration:
             mock_compute_case_operator.side_effect = mock_results
 
             if config["method"] == "serial":
-                result = evaluate._run_evaluation(
-                    *config["args"], parallel_config=None
-                )
+                result = evaluate._run_evaluation(*config["args"], parallel_config=None)
                 # All configurations should produce valid results
                 assert isinstance(result, list)
                 assert len(result) == 2
@@ -2193,10 +2183,13 @@ class TestIntegration:
 
         mock_compute_with_kwargs.captured_kwargs = {}
 
-        with mock.patch(
-            "extremeweatherbench.evaluate.compute_case_operator",
-            side_effect=mock_compute_with_kwargs,
-        ), mock.patch("tqdm.auto.tqdm", return_value=[case_operator]):
+        with (
+            mock.patch(
+                "extremeweatherbench.evaluate.compute_case_operator",
+                side_effect=mock_compute_with_kwargs,
+            ),
+            mock.patch("tqdm.auto.tqdm", return_value=[case_operator]),
+        ):
             # Test serial kwargs propagation
             result = evaluate._run_evaluation(
                 [case_operator],
@@ -2285,9 +2278,7 @@ class TestIntegration:
 
         # Test serial execution
         mock_compute_case_operator.side_effect = mock_results
-        serial_results = evaluate._run_evaluation(
-            case_operators, parallel_config=None
-        )
+        serial_results = evaluate._run_evaluation(case_operators, parallel_config=None)
 
         assert len(serial_results) == num_cases
         assert mock_compute_case_operator.call_count == num_cases
@@ -2766,6 +2757,59 @@ class TestMetricWithOutputVariables:
         # Should use the derived variable name, 10 rows (10 lead_times)
         assert len(result) == 10
         assert all(result["target_variable"] == "MockDerivedVariableWithOutputs")
+
+
+class TestParallelSerialConfigCheck:
+    def test_parallel_serial_config_check_serial(self):
+        """Test that the parallel_serial_config_check returns None for serial mode.
+
+        If n_jobs == 1 in any of the arguments, parallel_config should always be
+        None."""
+        assert evaluate._parallel_serial_config_check(n_jobs=1) is None
+        assert (
+            evaluate._parallel_serial_config_check(parallel_config={"n_jobs": 1})
+            is None
+        )
+        assert (
+            evaluate._parallel_serial_config_check(
+                n_jobs=None, parallel_config={"n_jobs": 1}
+            )
+            is None
+        )
+        assert (
+            evaluate._parallel_serial_config_check(
+                n_jobs=None, parallel_config={"n_jobs": 1}
+            )
+            is None
+        )
+        assert (
+            evaluate._parallel_serial_config_check(
+                n_jobs=None, parallel_config={"backend": "threading", "n_jobs": 1}
+            )
+            is None
+        )
+
+    def test_parallel_serial_config_check_parallel(self):
+        """Test that the parallel_serial_config_check returns a dictionary for parallel mode."""
+        assert evaluate._parallel_serial_config_check(n_jobs=2) == {
+            "backend": "loky",
+            "n_jobs": 2,
+        }
+        assert evaluate._parallel_serial_config_check(
+            parallel_config={"backend": "threading", "n_jobs": 2}
+        ) == {"backend": "threading", "n_jobs": 2}
+        assert evaluate._parallel_serial_config_check(
+            n_jobs=2, parallel_config={"backend": "threading", "n_jobs": 2}
+        ) == {"backend": "threading", "n_jobs": 2}
+        assert evaluate._parallel_serial_config_check(
+            n_jobs=2, parallel_config={"backend": "threading", "n_jobs": 2}
+        ) == {"backend": "threading", "n_jobs": 2}
+        assert evaluate._parallel_serial_config_check(
+            n_jobs=2, parallel_config={"backend": "threading", "n_jobs": 2}
+        ) == {"backend": "threading", "n_jobs": 2}
+        assert evaluate._parallel_serial_config_check(
+            n_jobs=2, parallel_config={"backend": "threading", "n_jobs": 2}
+        ) == {"backend": "threading", "n_jobs": 2}
 
 
 if __name__ == "__main__":

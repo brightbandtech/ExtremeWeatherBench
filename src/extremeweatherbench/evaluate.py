@@ -214,7 +214,9 @@ def _parallel_serial_config_check(
                 n_jobs,
             )
             parallel_config = {"backend": "loky", "n_jobs": n_jobs}
-
+    # If running in serial mode, set parallel_config to None if not already
+    else:
+        parallel_config = None
     # Return the maybe updated kwargs
     return parallel_config
 
