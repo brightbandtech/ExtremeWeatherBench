@@ -366,10 +366,11 @@ class TestExtremeWeatherBench:
 
             result = ewb.run(n_jobs=1)
 
-            # Serial mode should not pass parallel_config
+            # Serial mode passes parallel_config=None
             mock_run_case_operators.assert_called_once_with(
                 [sample_case_operator],
                 cache_dir=None,
+                parallel_config=None,
             )
             assert isinstance(result, pd.DataFrame)
             assert len(result) == 1
@@ -407,7 +408,7 @@ class TestExtremeWeatherBench:
             mock_run_case_operators.assert_called_once_with(
                 [sample_case_operator],
                 cache_dir=None,
-                parallel_config={"backend": "threading", "n_jobs": 2},
+                parallel_config={"backend": "loky", "n_jobs": 2},
             )
             assert isinstance(result, pd.DataFrame)
             assert len(result) == 1
@@ -2723,6 +2724,59 @@ class TestMetricWithOutputVariables:
         # Should use the derived variable name, 10 rows (10 lead_times)
         assert len(result) == 10
         assert all(result["target_variable"] == "MockDerivedVariableWithOutputs")
+
+
+class TestParallelSerialConfigCheck:
+    def test_parallel_serial_config_check_serial(self):
+        """Test that the parallel_serial_config_check returns None for serial mode.
+
+        If n_jobs == 1 in any of the arguments, parallel_config should always be
+        None."""
+        assert evaluate._parallel_serial_config_check(n_jobs=1) is None
+        assert (
+            evaluate._parallel_serial_config_check(parallel_config={"n_jobs": 1})
+            is None
+        )
+        assert (
+            evaluate._parallel_serial_config_check(
+                n_jobs=None, parallel_config={"n_jobs": 1}
+            )
+            is None
+        )
+        assert (
+            evaluate._parallel_serial_config_check(
+                n_jobs=None, parallel_config={"n_jobs": 1}
+            )
+            is None
+        )
+        assert (
+            evaluate._parallel_serial_config_check(
+                n_jobs=None, parallel_config={"backend": "threading", "n_jobs": 1}
+            )
+            is None
+        )
+
+    def test_parallel_serial_config_check_parallel(self):
+        """Test that the parallel_serial_config_check returns a dictionary for parallel mode."""
+        assert evaluate._parallel_serial_config_check(n_jobs=2) == {
+            "backend": "loky",
+            "n_jobs": 2,
+        }
+        assert evaluate._parallel_serial_config_check(
+            parallel_config={"backend": "threading", "n_jobs": 2}
+        ) == {"backend": "threading", "n_jobs": 2}
+        assert evaluate._parallel_serial_config_check(
+            n_jobs=2, parallel_config={"backend": "threading", "n_jobs": 2}
+        ) == {"backend": "threading", "n_jobs": 2}
+        assert evaluate._parallel_serial_config_check(
+            n_jobs=2, parallel_config={"backend": "threading", "n_jobs": 2}
+        ) == {"backend": "threading", "n_jobs": 2}
+        assert evaluate._parallel_serial_config_check(
+            n_jobs=2, parallel_config={"backend": "threading", "n_jobs": 2}
+        ) == {"backend": "threading", "n_jobs": 2}
+        assert evaluate._parallel_serial_config_check(
+            n_jobs=2, parallel_config={"backend": "threading", "n_jobs": 2}
+        ) == {"backend": "threading", "n_jobs": 2}
 
 
 if __name__ == "__main__":
