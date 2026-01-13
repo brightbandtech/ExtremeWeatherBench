@@ -153,7 +153,7 @@ def cli_runner(
 
     # Run evaluation
     click.echo("Running evaluation...")
-    results = ewb.run(
+    results = ewb.run_evaluation(
         n_jobs=n_jobs,
         parallel_config=parallel_config,
     )

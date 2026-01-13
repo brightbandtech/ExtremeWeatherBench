@@ -133,7 +133,7 @@ if __name__ == "__main__":
     )
 
     # Run the workflow using 3 jobs
-    outputs = ar_ewb.run(parallel_config={"backend": "loky", "n_jobs": 3})
+    outputs = ar_ewb.run_evaluation(parallel_config={"backend": "loky", "n_jobs": 3})
 
     # Save the evaluation outputs to a csv file
     outputs.to_csv("ar_signal_outputs.csv")

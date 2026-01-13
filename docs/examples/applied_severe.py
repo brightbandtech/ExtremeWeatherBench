@@ -1,6 +1,5 @@
 import logging
 
-
 from extremeweatherbench import cases, derived, evaluate, inputs, metrics
 
 # Set the logger level to INFO
@@ -84,7 +83,7 @@ if __name__ == "__main__":
     logger.info("Starting EWB run")
 
     # Run the workflow with parllel_config backend set to dask
-    outputs = ewb.run(parallel_config={"backend": "loky", "n_jobs": 3})
+    outputs = ewb.run_evaluation(parallel_config={"backend": "loky", "n_jobs": 3})
 
     # Save the results to a CSV file
     outputs.to_csv("applied_severe_convection_results.csv")

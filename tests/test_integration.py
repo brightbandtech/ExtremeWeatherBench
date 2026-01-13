@@ -602,7 +602,7 @@ class TestExtremeWeatherBenchVariablePairing:
             evaluation_objects=[evaluation_obj],
         )
 
-        result = ewb.run()
+        result = ewb.run_evaluation()
 
         # Verify results
         assert isinstance(result, pd.DataFrame)
@@ -683,7 +683,7 @@ class TestExtremeWeatherBenchVariablePairing:
             evaluation_objects=[evaluation_obj],
         )
 
-        result = ewb.run()
+        result = ewb.run_evaluation()
 
         # Verify results
         assert isinstance(result, pd.DataFrame)

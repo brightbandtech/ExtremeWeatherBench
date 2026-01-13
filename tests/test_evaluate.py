@@ -364,7 +364,7 @@ class TestExtremeWeatherBench:
                 evaluation_objects=[sample_evaluation_object],
             )
 
-            result = ewb.run(n_jobs=1)
+            result = ewb.run_evaluation(n_jobs=1)
 
             # Serial mode should not pass parallel_config
             mock_run_evaluation.assert_called_once_with(
@@ -402,7 +402,7 @@ class TestExtremeWeatherBench:
                 evaluation_objects=[sample_evaluation_object],
             )
 
-            result = ewb.run(n_jobs=2)
+            result = ewb.run_evaluation(n_jobs=2)
 
             mock_run_evaluation.assert_called_once_with(
                 [sample_case_operator],
@@ -432,7 +432,7 @@ class TestExtremeWeatherBench:
                 evaluation_objects=[sample_evaluation_object],
             )
 
-            result = ewb.run(n_jobs=1, threshold=0.5)
+            result = ewb.run_evaluation(n_jobs=1, threshold=0.5)
 
             # Check that kwargs were passed through
             call_args = mock_run_evaluation.call_args
@@ -455,7 +455,7 @@ class TestExtremeWeatherBench:
                 evaluation_objects=[sample_evaluation_object],
             )
 
-            result = ewb.run()
+            result = ewb.run_evaluation()
 
             assert isinstance(result, pd.DataFrame)
             assert len(result) == 0
@@ -505,7 +505,7 @@ class TestExtremeWeatherBench:
                     cache_dir=cache_dir,
                 )
 
-                ewb.run(n_jobs=1)
+                ewb.run_evaluation(n_jobs=1)
 
                 # Check that cache directory was created
                 assert cache_dir.exists()
@@ -539,7 +539,7 @@ class TestExtremeWeatherBench:
                 evaluation_objects=[sample_evaluation_object],
             )
 
-            result = ewb.run()
+            result = ewb.run_evaluation()
 
             assert mock_compute_case_operator.call_count == 2
             assert len(result) == 2
@@ -1611,7 +1611,7 @@ class TestErrorHandling:
         with mock.patch("extremeweatherbench.cases.build_case_operators") as mock_build:
             mock_build.return_value = []
 
-            result = ewb.run()
+            result = ewb.run_evaluation()
 
             # Should return empty DataFrame when no cases
             assert isinstance(result, pd.DataFrame)
@@ -1757,7 +1757,7 @@ class TestErrorHandling:
         )
 
         with pytest.raises(Exception, match="Execution failed"):
-            ewb.run()
+            ewb.run_evaluation()
 
     @mock.patch("extremeweatherbench.evaluate.compute_case_operator")
     @mock.patch("tqdm.auto.tqdm")
@@ -1886,7 +1886,7 @@ class TestIntegration:
                 evaluation_objects=[sample_evaluation_object],
             )
 
-            result = ewb.run()
+            result = ewb.run_evaluation()
 
         # Verify the result structure
         assert isinstance(result, pd.DataFrame)
@@ -1990,7 +1990,7 @@ class TestIntegration:
                     evaluation_objects=[eval_obj],
                 )
 
-                result = ewb.run()
+                result = ewb.run_evaluation()
 
                 # Should have results for each metric combination
                 assert len(result) >= 2  # At least 2 metrics * 1 case
@@ -2033,12 +2033,12 @@ class TestIntegration:
 
             # Test serial execution
             mock_compute_case_operator.side_effect = [result_1, result_2]
-            serial_result = ewb.run(n_jobs=1)
+            serial_result = ewb.run_evaluation(n_jobs=1)
 
             # Reset mock and test parallel execution
             mock_compute_case_operator.reset_mock()
             mock_compute_case_operator.side_effect = [result_1, result_2]
-            parallel_result = ewb.run(n_jobs=2)
+            parallel_result = ewb.run_evaluation(n_jobs=2)
 
             # Both should produce valid DataFrames with same structure
             assert isinstance(serial_result, pd.DataFrame)

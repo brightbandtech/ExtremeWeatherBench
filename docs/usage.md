@@ -23,7 +23,7 @@ cases = cases.load_ewb_events_yaml_into_case_collection()
 ewb = ExtremeWeatherBench(cases=cases, 
 evaluation_objects=eval_objects)
 
-outputs = ewb.run()
+outputs = ewb.run_evaluation()
 
 outputs.to_csv('your_outputs.csv')
 ```

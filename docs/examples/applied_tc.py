@@ -153,7 +153,7 @@ if __name__ == "__main__":
     )
     logger.info("Starting EWB run")
     # Run the workflow with parallel_config backend set to dask
-    outputs = ewb.run(
+    outputs = ewb.run_evaluation(
         parallel_config={"backend": "loky", "n_jobs": 3},
     )
     outputs.to_csv("tc_metric_test_results.csv")
