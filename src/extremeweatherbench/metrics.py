@@ -658,6 +658,57 @@ class Accuracy(ThresholdMetric):
         return transformed.accuracy()
 
 
+class ReceiverOperatingCharacteristic(ThresholdMetric):
+    """Receiver Operating Characteristic metric."""
+
+    def __init__(self, name: str = "ReceiverOperatingCharacteristic", *args, **kwargs):
+        super().__init__(name, *args, **kwargs)
+
+    def _compute_metric(
+        self,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
+        **kwargs: Any,
+    ) -> Any:
+        preserve_dims = kwargs.get("preserve_dims", self.preserve_dims)
+        op_func = utils.maybe_get_operator(kwargs.get("op_func", operator.ge))
+
+        # Binarize forecast and target using thresholds
+        binary_forecast = utils.maybe_densify_dataarray(
+            op_func(forecast, kwargs.get("forecast_threshold", self.forecast_threshold))
+        ).astype(float)
+        binary_target = utils.maybe_densify_dataarray(
+            op_func(target, kwargs.get("target_threshold", self.target_threshold))
+        ).astype(float)
+
+        return scores.probability.roc_curve_data(
+            binary_forecast,
+            binary_target,
+            thresholds="auto",
+            preserve_dims=preserve_dims,
+            weights=None,
+        )
+
+
+class ReceiverOperatingCharacteristicSkillScore(ReceiverOperatingCharacteristic):
+    """Receiver Operating Characteristic Skill Score metric."""
+
+    def __init__(
+        self, name: str = "ReceiverOperatingCharacteristicSkillScore", *args, **kwargs
+    ):
+        super().__init__(name, *args, **kwargs)
+
+    def _compute_metric(
+        self,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
+        auc_reference: float = 0.5,
+        **kwargs: Any,
+    ) -> Any:
+        roc_curve_data = super()._compute_metric(forecast, target, **kwargs)
+        return (roc_curve_data["AUC"] - auc_reference) / (1 - auc_reference)
+
+
 class MeanSquaredError(BaseMetric):
     """Mean Squared Error metric.
 
