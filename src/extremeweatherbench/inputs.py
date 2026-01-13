@@ -427,7 +427,7 @@ class ZarrForecast(ForecastBase):
 class XarrayForecast(ForecastBase):
     """Forecast class for datasets that were previously constructed and opened using xarray.
 
-    This class is intended for situations where the user had to manually prepare a dataset to
+    This class is intended for situations where the user has to manually prepare a dataset to
     use in their evaluation. This can happen when the user is manually constructed such a
     dataset from a collection of NetCDF or Zarr archives which need to be assembled into a
     single, master dataset.
@@ -438,17 +438,18 @@ class XarrayForecast(ForecastBase):
         name: The name of the input data source, defaults to "in-memory dataset".
     """
 
-    #: The xarray dataset containing the forecast data.
-    ds: Optional[xr.Dataset] = None
+    #: The xarray dataset containing the forecast data. This is required for the class to be instantiated
+    #: because we inherit from ForecastBase, which has its own set of required attributes.
+    ds: Optional[xr.Dataset] = None  # type: ignore[assignment]
     source: str = "memory"
     name: str = "in-memory dataset"
 
     def __post_init__(self):
         """Validate that ds is provided and normalize None values to defaults.
 
-        This ensures backwards compatibility with the previous custom __init__ behavior
+        This ensures backwards compatibility with the ForecastBase's __init__ behavior
         where None values for variables and variable_mapping were converted to empty
-        containers.
+        containers. If the user does not provide a ds, we raise a ValueError.
         """
         if self.ds is None:
             raise ValueError(
