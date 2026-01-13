@@ -4,7 +4,7 @@ import copy
 import dataclasses
 import logging
 import pathlib
-from typing import TYPE_CHECKING, Optional, Sequence, Union
+from typing import TYPE_CHECKING, Any, Callable, Optional, Sequence, Union
 
 import dask.array as da
 import joblib
@@ -179,6 +179,182 @@ class ExtremeWeatherBench:
         else:
             return pd.DataFrame(columns=OUTPUT_COLUMNS)
 
+    def build_inputs(
+        self,
+        n_jobs: Optional[int] = None,
+        parallel_config: Optional[dict] = None,
+        **kwargs,
+    ) -> tuple[dict[int, xr.Dataset], dict[int, xr.Dataset]]:
+        """Convenience method to build both target and forecast datasets.
+
+        Builds targets first, then forecasts (passing targets to forecasts
+        if needed by derived variables).
+
+        Args:
+            n_jobs: Number of jobs for parallel execution (not yet implemented).
+            parallel_config: Optional parallel configuration dict.
+            **kwargs: Additional arguments to pass to pipeline steps.
+
+        Returns:
+            Tuple of (target_datasets, forecast_datasets) where each is a dict
+            mapping case_id_number to the corresponding xr.Dataset.
+        """
+        parallel_config = _parallel_serial_config_check(n_jobs, parallel_config)
+        targets = _build_target_datasets(
+            self.case_operators,
+            cache_dir=self.cache_dir,
+            parallel_config=parallel_config,
+            **kwargs,
+        )
+        forecasts = _build_forecast_datasets(
+            self.case_operators,
+            target_datasets=targets,
+            cache_dir=self.cache_dir,
+            parallel_config=parallel_config,
+            **kwargs,
+        )
+        return targets, forecasts
+
+    def build_targets(
+        self,
+        n_jobs: Optional[int] = None,
+        parallel_config: Optional[dict] = None,
+        **kwargs,
+    ) -> dict[int, xr.Dataset]:
+        """Builds target datasets for all case operators.
+
+        Args:
+            n_jobs: Number of jobs for parallel execution (not yet implemented).
+            parallel_config: Optional parallel configuration dict.
+            **kwargs: Additional arguments to pass to pipeline steps.
+
+        Returns:
+            Dictionary mapping case_id_number to target xr.Dataset.
+        """
+        parallel_config = _parallel_serial_config_check(n_jobs, parallel_config)
+        return _build_target_datasets(
+            self.case_operators,
+            cache_dir=self.cache_dir,
+            parallel_config=parallel_config,
+            **kwargs,
+        )
+
+    def build_forecasts(
+        self,
+        n_jobs: Optional[int] = None,
+        parallel_config: Optional[dict] = None,
+        target_datasets: Optional[dict[int, xr.Dataset]] = None,
+        **kwargs,
+    ) -> dict[int, xr.Dataset]:
+        """Builds forecast datasets for all case operators.
+
+        Args:
+            n_jobs: Number of jobs for parallel execution (not yet implemented).
+            parallel_config: Optional parallel configuration dict.
+            target_datasets: Optional pre-built target datasets. If not provided
+                and forecasts need target data, targets will be built first.
+            **kwargs: Additional arguments to pass to pipeline steps.
+
+        Returns:
+            Dictionary mapping case_id_number to forecast xr.Dataset.
+        """
+        parallel_config = _parallel_serial_config_check(n_jobs, parallel_config)
+        return _build_forecast_datasets(
+            self.case_operators,
+            target_datasets=target_datasets,
+            cache_dir=self.cache_dir,
+            parallel_config=parallel_config,
+            **kwargs,
+        )
+
+
+def _build_target_datasets(
+    case_operators: list["cases.CaseOperator"],
+    cache_dir: Optional[pathlib.Path] = None,
+    parallel_config: Optional[dict] = None,
+    **kwargs,
+) -> dict[int, xr.Dataset]:
+    """Build target datasets for multiple case operators.
+
+    Args:
+        case_operators: List of case operators to build datasets for.
+        cache_dir: Optional directory for caching.
+        parallel_config: Optional dictionary of joblib parallel configuration.
+            If None, runs serially. If provided, runs in parallel.
+        **kwargs: Additional arguments to pass to pipeline steps.
+
+    Returns:
+        Dictionary mapping case_id_number to target dataset.
+    """
+    results_list = _run_parallel_or_serial(
+        items=case_operators,
+        func=_process_single_target,
+        parallel_config=parallel_config,
+        desc="Building target datasets",
+        cache_dir=cache_dir,
+        **kwargs,
+    )
+    return dict(results_list)
+
+
+def _make_target_ds_extractor(
+    target_datasets: Optional[dict[int, xr.Dataset]],
+) -> Callable[["cases.CaseOperator"], dict]:
+    """Create a kwargs extractor for target dataset lookup.
+
+    Args:
+        target_datasets: Optional dict of pre-built target datasets keyed by
+            case_id_number.
+
+    Returns:
+        A callable that takes a CaseOperator and returns a dict with the
+        target_ds for that case.
+    """
+
+    def extractor(case_op: "cases.CaseOperator") -> dict:
+        case_id = case_op.case_metadata.case_id_number
+        return {
+            "target_ds": target_datasets.get(case_id)
+            if target_datasets is not None
+            else None
+        }
+
+    return extractor
+
+
+def _build_forecast_datasets(
+    case_operators: list["cases.CaseOperator"],
+    target_datasets: Optional[dict[int, xr.Dataset]] = None,
+    cache_dir: Optional[pathlib.Path] = None,
+    parallel_config: Optional[dict] = None,
+    **kwargs,
+) -> dict[int, xr.Dataset]:
+    """Build forecast datasets for multiple case operators.
+
+    Args:
+        case_operators: List of case operators to build datasets for.
+        target_datasets: Optional dict of pre-built target datasets keyed by
+            case_id_number. If provided and a forecast needs target data, it
+            will be passed automatically.
+        cache_dir: Optional directory for caching.
+        parallel_config: Optional dictionary of joblib parallel configuration.
+            If None, runs serially. If provided, runs in parallel.
+        **kwargs: Additional arguments to pass to pipeline steps.
+
+    Returns:
+        Dictionary mapping case_id_number to forecast dataset.
+    """
+    results_list = _run_parallel_or_serial(
+        items=case_operators,
+        func=_process_single_forecast,
+        parallel_config=parallel_config,
+        desc="Building forecast datasets",
+        kwargs_extractor=_make_target_ds_extractor(target_datasets),
+        cache_dir=cache_dir,
+        **kwargs,
+    )
+    return dict(results_list)
+
 
 def _parallel_serial_config_check(
     n_jobs: Optional[int] = None,
@@ -221,57 +397,48 @@ def _parallel_serial_config_check(
     return parallel_config
 
 
-def _run_evaluation(
-    case_operators: list["cases.CaseOperator"],
-    cache_dir: Optional[pathlib.Path] = None,
+def _run_parallel_or_serial(
+    items: Sequence,
+    func: Callable,
     parallel_config: Optional[dict] = None,
-    **kwargs,
-) -> list[pd.DataFrame]:
-    """Run the case operators in parallel or serial.
+    desc: str = "Processing",
+    kwargs_extractor: Optional[Callable[[Any], dict]] = None,
+    **common_kwargs,
+) -> list:
+    """Generic parallel/serial executor based on parallel_config.
+
+    This function provides a unified interface for running tasks either in
+    parallel (using joblib) or serially (using a simple loop), depending on
+    the provided parallel_config.
 
     Args:
-        case_operators: List of case operators to run.
-        cache_dir: Optional directory for caching (serial mode only).
-        **kwargs: Additional arguments, may include 'parallel_config' dict.
+        items: Sequence of items to process.
+        func: Function to apply to each item. Should accept an item as the
+            first argument plus any kwargs.
+        parallel_config: Optional dictionary of joblib parallel configuration.
+            If None, runs serially. If provided, runs in parallel using joblib.
+        desc: Description for the progress bar.
+        kwargs_extractor: Optional callable that takes an item and returns a
+            dict of additional kwargs specific to that item. Used when
+            different items need different arguments (e.g., forecast building
+            needs per-case target datasets).
+        **common_kwargs: Additional keyword arguments passed to func for all
+            items.
 
     Returns:
-        List of result DataFrames.
+        List of results from applying func to each item.
     """
-    if parallel_config is not None:
-        with logging_redirect_tqdm():
-            logger.info("Running case operators in parallel...")
-            run_results = _run_parallel_evaluation(
-                case_operators,
-                cache_dir=cache_dir,
-                parallel_config=parallel_config,
-                **kwargs,
-            )
-    else:
-        logger.info("Running case operators in serial...")
-        run_results = []
-        for case_operator in tqdm(case_operators):
-            run_results.append(
-                compute_case_operator(case_operator, cache_dir, **kwargs)
-            )
+    if parallel_config is None:
+        # Serial execution with tqdm progress bar
+        results = []
+        for item in tqdm(items, desc=desc):
+            item_kwargs = common_kwargs.copy()
+            if kwargs_extractor is not None:
+                item_kwargs.update(kwargs_extractor(item))
+            results.append(func(item, **item_kwargs))
+        return results
 
-    return run_results
-
-
-def _run_parallel_evaluation(
-    case_operators: list["cases.CaseOperator"],
-    parallel_config: dict,
-    cache_dir: Optional[pathlib.Path] = None,
-    **kwargs,
-) -> list[pd.DataFrame]:
-    """Run the case operators in parallel.
-
-    Args:
-        case_operators: List of case operators to run.
-        **kwargs: Additional arguments, must include 'parallel_config' dict.
-
-    Returns:
-        List of result DataFrames.
-    """
+    # Parallel execution
     if parallel_config.get("n_jobs") is None:
         logger.warning("No number of jobs provided, using joblib backend default.")
 
@@ -297,21 +464,118 @@ def _run_parallel_evaluation(
             )
 
     try:
-        # TODO(198): return a generator and compute at a higher level
-        with joblib.parallel_config(**parallel_config):
-            run_results = utils.ParallelTqdm(total_tasks=len(case_operators))(
-                # None is the cache_dir, we can't cache in parallel mode
-                joblib.delayed(compute_case_operator)(
-                    case_operator, cache_dir=cache_dir, **kwargs
-                )
-                for case_operator in case_operators
-            )
-        return run_results
+        with logging_redirect_tqdm():
+            with joblib.parallel_config(**parallel_config):
+                if kwargs_extractor is not None:
+                    # Build delayed calls with per-item kwargs
+                    delayed_calls = []
+                    for item in items:
+                        item_kwargs = common_kwargs.copy()
+                        item_kwargs.update(kwargs_extractor(item))
+                        delayed_calls.append(joblib.delayed(func)(item, **item_kwargs))
+                    results = utils.ParallelTqdm(
+                        total_tasks=len(items), desc=desc
+                    )(delayed_calls)
+                else:
+                    # Simple case: same kwargs for all items
+                    results = utils.ParallelTqdm(total_tasks=len(items), desc=desc)(
+                        joblib.delayed(func)(item, **common_kwargs) for item in items
+                    )
+        return results
     finally:
         # Clean up the dask client if we created it
         if dask_client is not None:
             logger.info("Closing dask client")
             dask_client.close()
+
+
+def _process_single_target(
+    case_operator: "cases.CaseOperator",
+    cache_dir: Optional[pathlib.Path] = None,
+    **kwargs,
+) -> tuple[int, Union[xr.Dataset, xr.DataArray]]:
+    """Process a single case operator to build and cache a target dataset.
+
+    This is a wrapper around _build_target_dataset that also handles caching
+    and returns a tuple suitable for dict construction.
+
+    Args:
+        case_operator: The case operator to process.
+        cache_dir: Optional directory for caching.
+        **kwargs: Additional arguments passed to _build_target_dataset.
+
+    Returns:
+        Tuple of (case_id_number, target_dataset).
+    """
+    case_id = case_operator.case_metadata.case_id_number
+    target_ds = _build_target_dataset(case_operator, **kwargs)
+    target_ds = utils.maybe_cache_and_compute(  # type: ignore[assignment]
+        target_ds,
+        cache_dir=cache_dir,
+        name=f"{case_id}_{case_operator.target.name}_target",
+    )
+    return (case_id, target_ds)
+
+
+def _process_single_forecast(
+    case_operator: "cases.CaseOperator",
+    target_ds: Optional[xr.Dataset] = None,
+    cache_dir: Optional[pathlib.Path] = None,
+    **kwargs,
+) -> tuple[int, Union[xr.Dataset, xr.DataArray]]:
+    """Process a single case operator to build and cache a forecast dataset.
+
+    This is a wrapper around _build_forecast_dataset that also handles caching
+    and returns a tuple suitable for dict construction.
+
+    Args:
+        case_operator: The case operator to process.
+        target_ds: Optional target dataset for derived variables that need it.
+        cache_dir: Optional directory for caching.
+        **kwargs: Additional arguments passed to _build_forecast_dataset.
+
+    Returns:
+        Tuple of (case_id_number, forecast_dataset).
+    """
+    case_id = case_operator.case_metadata.case_id_number
+    forecast_ds = _build_forecast_dataset(case_operator, target_ds, **kwargs)
+    forecast_ds = utils.maybe_cache_and_compute(  # type: ignore[assignment]
+        forecast_ds,
+        cache_dir=cache_dir,
+        name=f"{case_id}_{case_operator.forecast.name}_forecast",
+    )
+    return (case_id, forecast_ds)
+
+
+def _run_evaluation(
+    case_operators: list["cases.CaseOperator"],
+    cache_dir: Optional[pathlib.Path] = None,
+    parallel_config: Optional[dict] = None,
+    **kwargs,
+) -> list[pd.DataFrame]:
+    """Run the case operators in parallel or serial.
+
+    Args:
+        case_operators: List of case operators to run.
+        cache_dir: Optional directory for caching.
+        parallel_config: Optional dictionary of joblib parallel configuration.
+            If None, runs serially. If provided, runs in parallel.
+        **kwargs: Additional arguments passed to compute_case_operator.
+
+    Returns:
+        List of result DataFrames.
+    """
+    mode = "parallel" if parallel_config is not None else "serial"
+    logger.info("Running case operators in %s...", mode)
+
+    return _run_parallel_or_serial(
+        items=case_operators,
+        func=compute_case_operator,
+        parallel_config=parallel_config,
+        desc="Evaluating cases",
+        cache_dir=cache_dir,
+        **kwargs,
+    )
 
 
 def compute_case_operator(
@@ -367,12 +631,12 @@ def compute_case_operator(
     )
 
     # Compute and cache the datasets if cache_dir is set
-    aligned_forecast_ds = utils.maybe_cache_and_compute(
+    aligned_forecast_ds = utils.maybe_cache_and_compute(  # type: ignore[assignment]
         aligned_forecast_ds,
         cache_dir=cache_dir,
         name=f"{case_operator.case_metadata.case_id_number}_{case_operator.forecast.name}",
     )
-    aligned_target_ds = utils.maybe_cache_and_compute(
+    aligned_target_ds = utils.maybe_cache_and_compute(  # type: ignore[assignment]
         aligned_target_ds,
         cache_dir=cache_dir,
         name=f"{case_operator.case_metadata.case_id_number}_{case_operator.target.name}",
@@ -635,7 +899,8 @@ def _evaluate_metric_and_return_df(
     ):
         # Dask array with sparse.COO chunks - densify chunks
         metric_result.data = metric_result.data.map_blocks(
-            lambda x: x.maybe_densify(), dtype=metric_result.data.dtype
+            lambda x: x.maybe_densify(),  # type: ignore[call-arg, arg-type]
+            dtype=metric_result.data.dtype,
         )
     # Convert to DataFrame and add metadata, ensuring OUTPUT_COLUMNS compliance
 
@@ -722,64 +987,53 @@ def _collect_metric_variables(
     return forecast_vars, target_vars
 
 
-def _build_datasets(
+def _augment_input_variables(
+    input_data: "inputs.InputBase",
+    metric_vars: set[Union[str, "derived.DerivedVariable"]],
+) -> "inputs.InputBase":
+    """Create augmented copy of InputBase with combined variables.
+
+    Filters out string variables that are output_variables of existing
+    DerivedVariables to avoid duplication.
+
+    Args:
+        input_data: The InputBase object to augment.
+        metric_vars: Set of variables from metrics to add.
+
+    Returns:
+        A shallow copy of InputBase with augmented variables list.
+    """
+    derived_outputs = _get_all_derived_output_variables(input_data.variables)
+    filtered_vars = {
+        v for v in metric_vars if not (isinstance(v, str) and v in derived_outputs)
+    }
+
+    augmented = copy.copy(input_data)
+    augmented.variables = list(set(input_data.variables) | filtered_vars)
+    return augmented
+
+
+def _build_target_dataset(
     case_operator: "cases.CaseOperator",
     **kwargs,
-) -> tuple[xr.Dataset, xr.Dataset]:
-    """Build the target and forecast datasets for a case operator.
+) -> xr.Dataset:
+    """Build the target dataset for a case operator.
 
-    This method will process through all stages of the pipeline for the target and
-    forecast datasets, including preprocessing, variable renaming, and subsetting.
-    It augments the InputBase variables with any variables defined in metrics to
-    ensure all required variables are loaded and derived.
-
-    If any forecast variable has `requires_target_dataset=True`, the target dataset
-    will be passed to the forecast pipeline via `_target_dataset` in kwargs. This
-    allows derived variables to automatically access target/reference data when needed.
+    This method processes through all stages of the pipeline for the target
+    dataset, including preprocessing, variable renaming, and subsetting.
+    It augments the InputBase variables with any target variables defined
+    in metrics.
 
     Args:
         case_operator: The case operator containing metadata and input sources.
         **kwargs: Additional keyword arguments to pass to pipeline steps.
+
     Returns:
-        A tuple containing (forecast_dataset, target_dataset). If either dataset
-        has no dimensions, both will be empty datasets.
+        The processed target dataset. Returns empty dataset if no valid data.
     """
-    metric_forecast_vars, metric_target_vars = _collect_metric_variables(
-        case_operator.metric_list
-    )
-
-    # Get all output_variables from DerivedVariables in InputBase
-    # These should NOT be added separately as they'll be created by derivation
-    forecast_derived_outputs = _get_all_derived_output_variables(
-        case_operator.forecast.variables
-    )
-    target_derived_outputs = _get_all_derived_output_variables(
-        case_operator.target.variables
-    )
-
-    # Filter out string variables that are output_variables of existing DerivedVariables
-    # Only add metric variables that are not already covered by DerivedVariable outputs
-    filtered_forecast_vars = {
-        v
-        for v in metric_forecast_vars
-        if not (isinstance(v, str) and v in forecast_derived_outputs)
-    }
-    filtered_target_vars = {
-        v
-        for v in metric_target_vars
-        if not (isinstance(v, str) and v in target_derived_outputs)
-    }
-
-    # Create augmented copies of InputBase objects with combined variables
-    augmented_forecast = copy.copy(case_operator.forecast)
-    augmented_target = copy.copy(case_operator.target)
-
-    # Combine InputBase variables with metric-specific variables (filtered)
-    augmented_forecast.variables = list(
-        set(case_operator.forecast.variables) | filtered_forecast_vars
-    )
-    augmented_target.variables = list(
-        set(case_operator.target.variables) | filtered_target_vars
+    _, metric_target_vars = _collect_metric_variables(case_operator.metric_list)
+    augmented_target = _augment_input_variables(
+        case_operator.target, metric_target_vars
     )
 
     logger.info("Running target pipeline... ")
@@ -787,18 +1041,46 @@ def _build_datasets(
         desc=f"Running target pipeline for case "
         f"{case_operator.case_metadata.case_id_number}"
     ):
-        target_ds = run_pipeline(
-            case_operator.case_metadata, augmented_target, **kwargs
-        )
+        return run_pipeline(case_operator.case_metadata, augmented_target, **kwargs)
+
+
+def _build_forecast_dataset(
+    case_operator: "cases.CaseOperator",
+    target_ds: Optional[xr.Dataset] = None,
+    **kwargs,
+) -> xr.Dataset:
+    """Build the forecast dataset for a case operator.
+
+    This method processes through all stages of the pipeline for the forecast
+    dataset, including preprocessing, variable renaming, and subsetting.
+    It augments the InputBase variables with any forecast variables defined
+    in metrics.
+
+    If any forecast variable has `requires_target_dataset=True`, the target
+    dataset will be passed to the forecast pipeline via `_target_dataset`
+    in kwargs.
+
+    Args:
+        case_operator: The case operator containing metadata and input sources.
+        target_ds: Optional target dataset to pass to derived variables that
+            require it.
+        **kwargs: Additional keyword arguments to pass to pipeline steps.
+
+    Returns:
+        The processed forecast dataset. Returns empty dataset if no valid data.
+    """
+    metric_forecast_vars, _ = _collect_metric_variables(case_operator.metric_list)
+    augmented_forecast = _augment_input_variables(
+        case_operator.forecast, metric_forecast_vars
+    )
 
     # Pass target dataset to forecast pipeline only if needed
-    # Check if any forecast variable requires target dataset
     needs_target = any(
         getattr(var, "requires_target_dataset", False)
         for var in case_operator.forecast.variables
         if hasattr(var, "requires_target_dataset")
     )
-    if needs_target:
+    if needs_target and target_ds is not None:
         kwargs["_target_dataset"] = target_ds
         logger.debug(
             "Passing target dataset to forecast pipeline (required by derived variable)"
@@ -809,9 +1091,28 @@ def _build_datasets(
         desc=f"Running forecast pipeline for case "
         f"{case_operator.case_metadata.case_id_number}"
     ):
-        forecast_ds = run_pipeline(
-            case_operator.case_metadata, augmented_forecast, **kwargs
-        )
+        return run_pipeline(case_operator.case_metadata, augmented_forecast, **kwargs)
+
+
+def _build_datasets(
+    case_operator: "cases.CaseOperator",
+    **kwargs,
+) -> tuple[xr.Dataset, xr.Dataset]:
+    """Build the target and forecast datasets for a case operator.
+
+    This is an orchestrator that builds target first, then forecast,
+    passing target to forecast if needed by derived variables.
+
+    Args:
+        case_operator: The case operator containing metadata and input sources.
+        **kwargs: Additional keyword arguments to pass to pipeline steps.
+
+    Returns:
+        A tuple containing (forecast_dataset, target_dataset). If either dataset
+        has no dimensions, both will be empty datasets.
+    """
+    target_ds = _build_target_dataset(case_operator, **kwargs)
+    forecast_ds = _build_forecast_dataset(case_operator, target_ds, **kwargs)
 
     # Check if any dimension has zero length
     zero_length_dims = [dim for dim, size in forecast_ds.sizes.items() if size == 0]
@@ -970,44 +1271,3 @@ def _safe_concat(
         return pd.concat(valid_dfs, ignore_index=ignore_index)
     else:
         return pd.DataFrame(columns=OUTPUT_COLUMNS)
-
-
-def _parallel_serial_config_check(
-    n_jobs: Optional[int] = None,
-    parallel_config: Optional[dict] = None,
-) -> Optional[dict]:
-    """Check if running in serial or parallel mode.
-
-    Args:
-        n_jobs: The number of jobs to run in parallel. If None, defaults to the
-            joblib backend default value. If 1, the workflow will run serially.
-        parallel_config: Optional dictionary of joblib parallel configuration. If
-            provided, this takes precedence over n_jobs. If not provided and n_jobs is
-            specified, a default config with loky backend is used.
-    Returns:
-        None if running in serial mode, otherwise a dictionary of joblib parallel
-        configuration.
-    """
-    # Determine if running in serial or parallel mode
-    # Serial: n_jobs=1 or (parallel_config with n_jobs=1)
-    # Parallel: n_jobs>1 or (parallel_config with n_jobs>1)
-    is_serial = (
-        (n_jobs == 1)
-        or (parallel_config is not None and parallel_config.get("n_jobs") == 1)
-        or (n_jobs is None and parallel_config is None)
-    )
-    logger.debug("Running in %s mode.", "serial" if is_serial else "parallel")
-
-    if not is_serial:
-        # Build parallel_config if not provided
-        if parallel_config is None and n_jobs is not None:
-            logger.debug(
-                "No parallel_config provided, using loky backend and %s jobs.",
-                n_jobs,
-            )
-            parallel_config = {"backend": "loky", "n_jobs": n_jobs}
-    # If running in serial mode, set parallel_config to None if not already
-    else:
-        parallel_config = None
-    # Return the maybe updated kwargs
-    return parallel_config
