@@ -102,10 +102,7 @@ def _preprocess_cira_tc_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
 
     # Calculate the geopotential thickness required for tropical cyclone tracks
     ds["geopotential_thickness"] = (
-        calc.geopotential_thickness(
-            ds["z"], top_level=300, bottom_level=500
-        )
-        / 9.81
+        calc.geopotential_thickness(ds["z"], top_level=300, bottom_level=500) / 9.81
     )
     return ds
 
@@ -129,9 +126,7 @@ def _preprocess_hres_tc_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
 
     # Calculate the geopotential thickness required for tropical cyclone tracks
     ds["geopotential_thickness"] = (
-        calc.geopotential_thickness(
-            ds["geopotential"], top_level=300, bottom_level=500
-        )
+        calc.geopotential_thickness(ds["geopotential"], top_level=300, bottom_level=500)
         / 9.81
     )
     return ds
