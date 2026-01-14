@@ -573,7 +573,9 @@ class TestGeopotentialCalculations:
         assert "level" not in thickness_200_850.dims
         assert "level" not in thickness_300_700.dims
 
-    def test_geopotential_thickness_different_pressure_dim_name(self, sample_calc_dataset):
+    def test_geopotential_thickness_different_pressure_dim_name(
+        self, sample_calc_dataset
+    ):
         """Test geopotential thickness with different pressure dimension name."""
 
         sample_calc_dataset = sample_calc_dataset.rename({"level": "name"})
@@ -586,6 +588,7 @@ class TestGeopotentialCalculations:
 
         # Assert calculation is performed; would KeyError if not
         assert isinstance(thickness, xr.DataArray)
+
 
 class TestSpecificHumidityCalculations:
     """Test specific humidity calculations."""
