@@ -2040,9 +2040,7 @@ class TestROCSS:
         auc = roc_curve_data["AUC"]
 
         auc_reference = float(auc)
-        result = metric._compute_metric(
-            forecast, target, auc_reference=auc_reference
-        )
+        result = metric._compute_metric(forecast, target, auc_reference=auc_reference)
 
         xr.testing.assert_allclose(result, xr.zeros_like(auc))
 
