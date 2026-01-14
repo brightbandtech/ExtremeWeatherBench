@@ -58,7 +58,7 @@ DEFAULT_VARIABLE_NAMES = [
 ]
 
 
-def _preprocess_bb_cira_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
+def _preprocess_cira_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
     """A preprocess function for CIRA data that renames the time coordinate to
     lead_time, creates a valid_time coordinate, and sets the lead time range and
     resolution not present in the original dataset.
@@ -79,7 +79,7 @@ def _preprocess_bb_cira_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
 
 # Preprocessing function for CIRA data that includes geopotential thickness calculation
 # required for tropical cyclone tracks
-def _preprocess_bb_cira_tc_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
+def _preprocess_cira_tc_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
     """A preprocess function for CIRA data that includes geopotential thickness
     calculation required for tropical cyclone tracks.
 
@@ -103,13 +103,13 @@ def _preprocess_bb_cira_tc_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
     # Calculate the geopotential thickness required for tropical cyclone tracks
     ds["geopotential_thickness"] = calc.geopotential_thickness(
         ds["z"], top_level_value=300, bottom_level_value=500
-    )
+    ) / 9.81
     return ds
 
 
 # Preprocessing function for HRES data that includes geopotential thickness calculation
 # required for tropical cyclone tracks
-def _preprocess_bb_hres_tc_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
+def _preprocess_hres_tc_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
     """A preprocess function for CIRA data that includes geopotential thickness
     calculation required for tropical cyclone tracks.
 
@@ -127,12 +127,12 @@ def _preprocess_bb_hres_tc_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
     # Calculate the geopotential thickness required for tropical cyclone tracks
     ds["geopotential_thickness"] = calc.geopotential_thickness(
         ds["geopotential"], top_level_value=300, bottom_level_value=500
-    )
+    ) / 9.81
     return ds
 
 
 # Preprocess function for CIRA data using Brightband kerchunk parquets
-def _preprocess_bb_ar_cira_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
+def _preprocess_ar_cira_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
     """An example preprocess function that renames the time coordinate to lead_time,
     creates a valid_time coordinate, and sets the lead time range and resolution not
     present in the original dataset.
@@ -160,7 +160,7 @@ def _preprocess_bb_ar_cira_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
 
 
 # Preprocess function for CIRA data using Brightband kerchunk parquets
-def _preprocess_bb_severe_cira_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
+def _preprocess_severe_cira_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
     """An example preprocess function that renames the time coordinate to lead_time,
     creates a valid_time coordinate, and sets the lead time range and resolution not
     present in the original dataset.
@@ -248,7 +248,7 @@ cira_heatwave_forecast = inputs.KerchunkForecast(
     variables=["surface_air_temperature"],
     variable_mapping=inputs.CIRA_metadata_variable_mapping,
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
-    preprocess=_preprocess_bb_cira_forecast_dataset,
+    preprocess=_preprocess_cira_forecast_dataset,
 )
 
 cira_freeze_forecast = inputs.KerchunkForecast(
@@ -257,7 +257,7 @@ cira_freeze_forecast = inputs.KerchunkForecast(
     variables=["surface_air_temperature"],
     variable_mapping=inputs.CIRA_metadata_variable_mapping,
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
-    preprocess=_preprocess_bb_cira_forecast_dataset,
+    preprocess=_preprocess_cira_forecast_dataset,
 )
 
 cira_tropical_cyclone_forecast = inputs.KerchunkForecast(
@@ -266,7 +266,7 @@ cira_tropical_cyclone_forecast = inputs.KerchunkForecast(
     variables=[derived.TropicalCycloneTrackVariables()],
     variable_mapping=inputs.CIRA_metadata_variable_mapping,
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
-    preprocess=_preprocess_bb_cira_tc_forecast_dataset,
+    preprocess=_preprocess_cira_tc_forecast_dataset,
 )
 cira_atmospheric_river_forecast = inputs.KerchunkForecast(
     name="FourCastNetv2",
@@ -278,7 +278,7 @@ cira_atmospheric_river_forecast = inputs.KerchunkForecast(
     ],
     variable_mapping=inputs.CIRA_metadata_variable_mapping,
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
-    preprocess=_preprocess_bb_ar_cira_forecast_dataset,
+    preprocess=_preprocess_ar_cira_forecast_dataset,
 )
 
 cira_severe_convection_forecast = inputs.KerchunkForecast(
@@ -287,7 +287,7 @@ cira_severe_convection_forecast = inputs.KerchunkForecast(
     variables=[derived.CravenBrooksSignificantSevere()],
     variable_mapping=inputs.CIRA_metadata_variable_mapping,
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
-    preprocess=_preprocess_bb_severe_cira_forecast_dataset,
+    preprocess=_preprocess_severe_cira_forecast_dataset,
 )
 
 

@@ -10,8 +10,8 @@ from extremeweatherbench import defaults, inputs, metrics
 class TestDefaults:
     """Test the defaults module."""
 
-    def test_preprocess_bb_cira_forecast_dataset(self):
-        """Test the _preprocess_bb_cira_forecast_dataset function."""
+    def test_preprocess_cira_forecast_dataset(self):
+        """Test the _preprocess_cira_forecast_dataset function."""
 
         # Create a mock dataset with 'time' coordinate matching expected output size
         # The function creates lead_time with 41 values (0 to 240 by 6)
@@ -21,7 +21,7 @@ class TestDefaults:
             {"temperature": (["time"], temp_data)}, coords={"time": time_data}
         )
 
-        result = defaults._preprocess_bb_cira_forecast_dataset(mock_ds)
+        result = defaults._preprocess_cira_forecast_dataset(mock_ds)
 
         # Check that 'time' was renamed to 'lead_time'
         assert "lead_time" in result.coords
@@ -157,11 +157,11 @@ class TestDefaults:
         # Test that the preprocess function is the expected one
         assert (
             defaults.cira_heatwave_forecast.preprocess
-            == defaults._preprocess_bb_cira_forecast_dataset
+            == defaults._preprocess_cira_forecast_dataset
         )
         assert (
             defaults.cira_freeze_forecast.preprocess
-            == defaults._preprocess_bb_cira_forecast_dataset
+            == defaults._preprocess_cira_forecast_dataset
         )
 
     def test_get_brightband_evaluation_objects_no_exceptions(self):
