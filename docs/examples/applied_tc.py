@@ -37,7 +37,7 @@ fcnv2_forecast = inputs.KerchunkForecast(
     # Define metadata variable mapping for FCNv2 forecast
     variable_mapping=inputs.CIRA_metadata_variable_mapping,
     # Preprocess the FCNv2 forecast to include geopotential thickness calculation
-    preprocess=_preprocess_cira_tc_forecast_dataset,
+    preprocess=defaults._preprocess_cira_tc_forecast_dataset,
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
 )
 
@@ -50,7 +50,7 @@ pangu_forecast = inputs.KerchunkForecast(
     variable_mapping=inputs.CIRA_metadata_variable_mapping,
     # Preprocess the Pangu forecast to include geopotential thickness calculation
     # which uses the same preprocessing function as the FCNv2 forecast
-    preprocess=_preprocess_cira_tc_forecast_dataset,
+    preprocess=defaults._preprocess_cira_tc_forecast_dataset,
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
 )
 
