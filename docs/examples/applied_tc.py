@@ -29,7 +29,7 @@ def _preprocess_bb_cira_tc_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
         [i for i in range(0, 241, 6)], dtype="timedelta64[h]"
     ).astype("timedelta64[ns]")
     ds["geopotential_thickness"] = calc.geopotential_thickness(
-        ds["z"], top_level_value=300, bottom_level_value=500
+        ds["z"], top_level=300, bottom_level=500
     )
     return ds
 
@@ -46,8 +46,8 @@ def _preprocess_hres_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
     """
     ds["geopotential_thickness"] = calc.geopotential_thickness(
         ds["geopotential"],
-        top_level_value=300,
-        bottom_level_value=500,
+        top_level=300,
+        bottom_level=500,
         geopotential=True,
     )
     return ds
