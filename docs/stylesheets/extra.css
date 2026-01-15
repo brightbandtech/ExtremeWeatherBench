@@ -1,0 +1,241 @@
+[data-md-color-scheme="bb-light"] {
+    --md-primary-fg-color: #dfdfcb;
+    --md-primary-fg-color--light: #dfdfcb;
+    --md-primary-fg-color--dark: #262620;
+    --md-primary-bg-color: #262620;
+    --md-primary-bg-color--light: #262620;
+    --md-accent-fg-color: #262620;
+    --md-accent-fg-color--transparent: #262620;
+    --md-accent-bg-color: #262620;
+    --md-accent-bg-color--light: #262620;
+
+    --md-default-bg-color: #dfdfcb;
+    --md-default-fg-color: #262620;
+    --md-typeset-color: #262620;
+    --md-typeset-a-color: #434331;
+    --md-footer-bg-color: #dfdfcb;
+    --md-footer-fg-color: #262620;
+
+    --md-code-fg-color: #dfdfcb;
+    --md-code-bg-color: #262620;
+}
+
+[data-md-color-scheme="bb-light"] .md-typeset h1 {
+    color: #262620;
+}
+
+[data-md-color-scheme="bb-light"] .md-typeset h2 {
+    color: #262620;
+}
+
+[data-md-color-scheme="bb-light"] .md-typeset h3 {
+    color: #262620;
+}
+
+[data-md-color-scheme="bb-light"] .md-nav__title {
+    color: #262620;
+}
+
+[data-md-color-scheme="bb-light"] .md-typeset a {
+    font-weight: 600;
+}
+
+[data-md-color-scheme="bb-light"] .md-nav__link--active {
+    font-weight: 600;
+}
+
+/* Brighter Python syntax highlighting for light mode */
+[data-md-color-scheme="bb-light"] .highlight .kn,
+[data-md-color-scheme="bb-light"] .highlight .nn {
+    color: #7fb3d3 !important;
+    /* Bright blue for imports and modules */
+    font-weight: 600;
+}
+
+[data-md-color-scheme="bb-light"] .highlight .n,
+[data-md-color-scheme="bb-light"] .highlight .o,
+[data-md-color-scheme="bb-light"] .highlight .p {
+    color: #dfdfcb !important;
+    /* Light text on dark background in light mode */
+}
+
+/* Comments in light mode - bright green for visibility */
+[data-md-color-scheme="bb-light"] .highlight .c,
+[data-md-color-scheme="bb-light"] .highlight .c1,
+[data-md-color-scheme="bb-light"] .highlight .cm,
+[data-md-color-scheme="bb-light"] .highlight .cp,
+[data-md-color-scheme="bb-light"] .highlight .cs {
+    color: #7dd87d !important;
+    /* Bright green for comments */
+    font-style: italic;
+}
+
+/* Boolean values in light mode - lighter purple for visibility */
+[data-md-color-scheme="bb-light"] .highlight .kc,
+[data-md-color-scheme="bb-light"] .highlight .bp {
+    color: #b19cd9 !important;
+    /* Light purple for True/False/None */
+    font-weight: 600;
+}
+
+/* Add contrasting background to code blocks in light mode */
+[data-md-color-scheme="bb-light"] .highlight {
+    background-color: #262620 !important;
+    padding: 0.5rem;
+    border-radius: 0.25rem;
+}
+
+[data-md-color-scheme="bb-dark"] {
+    --md-primary-fg-color: #262620;
+    --md-primary-fg-color--light: #dfdfcb;
+    --md-primary-fg-color--dark: #262620;
+    --md-primary-bg-color: #dfdfcb;
+    --md-primary-bg-color--light: #dfdfcb;
+    --md-accent-fg-color: #dfdfcb;
+    --md-accent-fg-color--transparent: #dfdfcb;
+    --md-accent-bg-color: #dfdfcb;
+    --md-accent-bg-color--light: #dfdfcb;
+
+    --md-default-bg-color: #262620;
+    --md-default-fg-color: #dfdfcb;
+    --md-typeset-color: #dfdfcb;
+    --md-typeset-a-color: #c0c06d;
+    --md-footer-bg-color: #dfdfcb;
+    --md-footer-fg-color: #dfdfcb;
+
+    --md-typeset-del-color: #dfdfcb;
+    --md-typeset-ins-color: #dfdfcb;
+    --md-typeset-kbd-color: #dfdfcb;
+    --md-typeset-kbd-accent-color: #dfdfcb;
+    --md-typeset-kbd-border-color: #dfdfcb;
+    --md-typeset-mark-color: #dfdfcb;
+    --md-typeset-table-color: #dfdfcb;
+    --md-typeset-table-color--light: #dfdfcb;
+
+    --md-code-fg-color: #262620;
+    --md-code-bg-color: #dfdfcb;
+}
+
+[data-md-color-scheme="bb-dark"] .md-typeset h1 {
+    color: #dfdfcb;
+}
+
+[data-md-color-scheme="bb-dark"] .md-typeset h2 {
+    color: #dfdfcb;
+}
+
+[data-md-color-scheme="bb-dark"] .md-typeset h3 {
+    color: #dfdfcb;
+}
+
+[data-md-color-scheme="bb-dark"] .md-nav__title {
+    color: #dfdfcb;
+}
+
+[data-md-color-scheme="bb-dark"] .md-typeset a {
+    font-weight: 600;
+}
+
+[data-md-color-scheme="bb-dark"] .md-nav__link--active {
+    font-weight: 600;
+}
+
+/* Brighter Python syntax highlighting for dark mode */
+[data-md-color-scheme="bb-dark"] .highlight .kn,
+[data-md-color-scheme="bb-dark"] .highlight .nn {
+    color: #1a5490 !important;
+    /* Bright blue for imports and modules */
+    font-weight: 500;
+}
+
+[data-md-color-scheme="bb-dark"] .highlight .n,
+[data-md-color-scheme="bb-dark"] .highlight .o,
+[data-md-color-scheme="bb-dark"] .highlight .p {
+    color: #262620 !important;
+    /* Dark text on light background in dark mode */
+}
+
+/* Comments in dark mode - bright orange for visibility */
+[data-md-color-scheme="bb-dark"] .highlight .c,
+[data-md-color-scheme="bb-dark"] .highlight .c1,
+[data-md-color-scheme="bb-dark"] .highlight .cm,
+[data-md-color-scheme="bb-dark"] .highlight .cp,
+[data-md-color-scheme="bb-dark"] .highlight .cs {
+    color: #ff8c42 !important;
+    /* Bright orange for comments */
+    font-style: italic;
+}
+
+/* Add contrasting background to code blocks in dark mode */
+[data-md-color-scheme="bb-dark"] .highlight {
+    background-color: #dfdfcb !important;
+    padding: 0.5rem;
+    border-radius: 0.25rem;
+}
+
+/* Logo switching - CORRECTED: dark logo on light page, light logo on dark page */
+/* Default fallback - show dark logo (for light background) if no theme is active */
+#logo_dark_mode {
+    display: block;
+}
+
+#logo_light_mode {
+    display: none;
+}
+
+/* Light mode: show DARK logo (dark logo on light background) */
+[data-md-color-scheme="bb-light"] #logo_dark_mode {
+    display: block !important;
+}
+
+[data-md-color-scheme="bb-light"] #logo_light_mode {
+    display: none !important;
+}
+
+/* Dark mode: show LIGHT logo (light logo on dark background) */
+[data-md-color-scheme="bb-dark"] #logo_dark_mode {
+    display: none !important;
+}
+
+[data-md-color-scheme="bb-dark"] #logo_light_mode {
+    display: block !important;
+}
+
+/* Hide logo from sidebar/drawer navigation */
+.md-nav__button.md-logo {
+    display: none !important;
+}
+
+/* Main header logo styling - smaller and positioned correctly */
+.md-header__button.md-logo {
+    position: relative !important;
+    display: inline-block !important;
+    height: 1.5rem;
+    width: 1.5rem;
+    margin-right: 0.5rem;
+}
+
+/* Logo positioning - stack them in the same space */
+.md-header__button.md-logo #logo_light_mode,
+.md-header__button.md-logo #logo_dark_mode {
+    position: absolute;
+    top: 0;
+    left: 0;
+    max-height: 1.5rem;
+    max-width: 1.5rem;
+    height: 1.5rem;
+    width: auto;
+    object-fit: contain;
+}
+
+/* Ensure header title stays next to logo */
+.md-header__title {
+    margin-left: 0 !important;
+}
+
+/* Adjust header layout to keep logo and title together */
+.md-header__inner {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}

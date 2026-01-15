@@ -1,5 +1,7 @@
 # Extreme Weather Bench (EWB)
 
+[![Documentation Status](https://readthedocs.org/projects/extremeweatherbench/badge/?version=latest)](https://extremeweatherbench.readthedocs.io/en/latest/?badge=latest)
+
 **EWB is currently in limited pre-release. Bugs are likely to occur for now.**
 
 **v1.0 to be published alongside EWB preprint.**
@@ -17,10 +19,10 @@ EWB has cases broken down by multiple event types within `src/extremeweatherbenc
 | ---------- | --------------- | 
 | 🌇 Heat Waves | 46 |
 | 🧊 Freezes | 14 |
-| 🌀 Tropical Cyclones | 107 |
+| 🌀 Tropical Cyclones | 106 |
 | ☔️ Atmospheric Rivers | 56 |
-| 🌪️ Severe Convection | 117 | 
-| **Total Cases** | 340 |
+| 🌪️ Severe Convection | 115 | 
+| **Total Cases** | 337 |
 
 # EWB paper and talks
 
@@ -63,7 +65,7 @@ $ ewb --default
 ## Using Jupyter Notebook or a Script:
  
 ```python
-from extremeweatherbench import inputs, metrics, evaluate, utils
+from extremeweatherbench import cases, inputs, metrics, evaluate, utils
 
 # Select model
 model = 'FOUR_v200_GFS'
@@ -71,12 +73,34 @@ model = 'FOUR_v200_GFS'
 # Set up path to directory of file - zarr or kerchunk/virtualizarr json/parquet
 forecast_dir = f'gs://extremeweatherbench/{model}.parq'
 
+# Preprocessing function exclusive to handling the CIRA parquets
+def preprocess_bb_cira_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
+    """Preprocess CIRA kerchunk (parquet) data in the ExtremeWeatherBench bucket.
+    A preprocess function that renames the time coordinate to lead_time,
+    creates a valid_time coordinate, and sets the lead time range and resolution not
+    present in the original dataset.
+    Args:
+        ds: The forecast dataset to rename.
+    Returns:
+        The renamed forecast dataset.
+    """
+    ds = ds.rename({"time": "lead_time"})
+
+    # The evaluation configuration is used to set the lead time range and resolution.
+    ds["lead_time"] = np.array(
+        [i for i in range(0, 241, 6)], dtype="timedelta64[h]"
+    ).astype("timedelta64[ns]")
+
+    return ds
+
 # Define a forecast object; in this case, a KerchunkForecast
 fcnv2_forecast = inputs.KerchunkForecast(
+    name="fcnv2_forecast", # identifier for this forecast in results
     source=forecast_dir, # source path
     variables=["surface_air_temperature"], # variables to use in the evaluation
     variable_mapping=inputs.CIRA_metadata_variable_mapping, # mapping to use for variables in forecast dataset to EWB variable names
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}}, # storage options for access
+    preprocess=preprocess_bb_cira_forecast_dataset # required preprocessing function for CIRA references
 )
 
 # Load in ERA5; source defaults to the ARCO ERA5 dataset from Google and variable mapping is provided by default as well

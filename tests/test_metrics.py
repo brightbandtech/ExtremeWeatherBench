@@ -1009,7 +1009,7 @@ class TestDurationMeanError:
         climatology = self.create_climatology()
         metric = metrics.DurationMeanError(threshold_criteria=climatology)
         assert isinstance(metric, metrics.MeanError)
-        assert metric.name == "duration_me"
+        assert metric.name == "DurationMeanError"
 
     def test_base_metric_inheritance(self):
         """Test that DurationMeanError inherits from ME."""
@@ -1420,7 +1420,7 @@ class TestDurationMeanError:
         criteria."""
         metric = metrics.DurationMeanError(threshold_criteria=300.0)
         assert isinstance(metric, metrics.MeanError)
-        assert metric.name == "duration_me"
+        assert metric.name == "DurationMeanError"
         assert metric.threshold_criteria == 300.0
 
     def test_me_with_float_threshold_all_forecast_exceeds(self):
@@ -2274,13 +2274,24 @@ class TestLandfallMetrics:
             },
         )
 
-        # Mock landfall data
+        # Mock landfall data - both need init_time dimension
         mock_target_landfall = xr.DataArray(
-            50.0,
+            [50.0, 50.0],
+            dims=["init_time"],
             coords={
-                "latitude": 25.0,
-                "longitude": -80.0,
-                "valid_time": pd.Timestamp("2023-09-15 12:00"),
+                "init_time": [
+                    pd.Timestamp("2023-09-14 12:00"),
+                    pd.Timestamp("2023-09-14 12:00"),
+                ],
+                "latitude": (["init_time"], [25.0, 25.0]),
+                "longitude": (["init_time"], [-80.0, -80.0]),
+                "valid_time": (
+                    ["init_time"],
+                    [
+                        pd.Timestamp("2023-09-15 12:00"),
+                        pd.Timestamp("2023-09-15 12:00"),
+                    ],
+                ),
             },
             name="surface_wind_speed",
         )
@@ -2289,6 +2300,10 @@ class TestLandfallMetrics:
             [53.0, 48.0],
             dims=["init_time"],
             coords={
+                "init_time": [
+                    pd.Timestamp("2023-09-14 12:00"),
+                    pd.Timestamp("2023-09-14 12:00"),
+                ],
                 "latitude": (["init_time"], [25.1, 25.2]),
                 "longitude": (["init_time"], [-80.1, -80.2]),
                 "valid_time": (
@@ -2298,10 +2313,6 @@ class TestLandfallMetrics:
                         pd.Timestamp("2023-09-15 12:00"),
                     ],
                 ),
-                "init_time": [
-                    pd.Timestamp("2023-09-14 12:00"),
-                    pd.Timestamp("2023-09-14 12:00"),
-                ],
             },
             name="surface_wind_speed",
         )
@@ -2448,8 +2459,8 @@ class TestLandfallMetrics:
         assert metric.approach == "next"
 
         # Verify the metric calculation function exists
-        assert hasattr(metrics.LandfallDisplacement, "_calculate_distance")
-        assert callable(metrics.LandfallDisplacement._calculate_distance)
+        assert hasattr(metrics.LandfallDisplacement, "calculate_displacement")
+        assert callable(metrics.LandfallDisplacement.calculate_displacement)
 
     def test_landfall_displacement_integration(self):
         """Integration test: LandfallDisplacement with real landfall detection.
@@ -2601,29 +2612,6 @@ class TestLandfallMetrics:
             # Timing errors should be within reasonable bounds (±7 days)
             assert (np.abs(result) < 168).all()  # 168 hours = 7 days
 
-    def test_landfall_displacement_with_none_landfalls(self):
-        """Test LandfallDisplacement handles None landfalls."""
-        metric = metrics.LandfallDisplacement(approach="first")
-
-        # Test with None landfalls
-        result = metric._calculate_distance(None, None)
-        assert isinstance(result, xr.DataArray)
-        assert np.isnan(result.values)
-
-        # Test with one None
-        target_landfall = xr.DataArray(
-            40.0,
-            coords={
-                "latitude": 25.0,
-                "longitude": -80.0,
-                "valid_time": pd.Timestamp("2023-09-15"),
-                "init_time": pd.Timestamp("2023-09-14"),
-            },
-        )
-        result = metric._calculate_distance(None, target_landfall)
-        assert isinstance(result, xr.DataArray)
-        assert np.isnan(result.values)
-
     def test_landfall_displacement_no_common_init_times(self):
         """Test LandfallDisplacement with no common init_times."""
         metric = metrics.LandfallDisplacement(approach="first")
@@ -2648,7 +2636,7 @@ class TestLandfallMetrics:
             },
         )
 
-        result = metric._calculate_distance(forecast_landfall, target_landfall)
+        result = metric.calculate_displacement(forecast_landfall, target_landfall)
         assert isinstance(result, xr.DataArray)
         assert np.isnan(result.values)
 
@@ -2676,16 +2664,7 @@ class TestLandfallMetrics:
             },
         )
 
-        result = metric._calculate_distance(forecast_landfall, target_landfall)
-        assert isinstance(result, xr.DataArray)
-        assert np.isnan(result.values)
-
-    def test_landfall_time_me_with_none_landfalls(self):
-        """Test LandfallTimeMeanError handles None landfalls."""
-        metric = metrics.LandfallTimeMeanError(approach="first")
-
-        # Test with None landfalls
-        result = metric._calculate_time_difference(None, None)
+        result = metric.calculate_displacement(forecast_landfall, target_landfall)
         assert isinstance(result, xr.DataArray)
         assert np.isnan(result.values)
 
@@ -2711,12 +2690,12 @@ class TestLandfallMetrics:
             },
         )
 
-        result = metric._calculate_time_difference(forecast_landfall, target_landfall)
+        result = metric.calculate_time_difference(forecast_landfall, target_landfall)
         assert isinstance(result, xr.DataArray)
         assert np.isnan(result.values)
 
     def test_landfall_intensity_mae_basic(self):
-        """Test LandfallIntensityMeanAbsoluteError._compute_absolute_error."""
+        """Test LandfallIntensityMeanAbsoluteError with pre-computed landfalls."""
         metric = metrics.LandfallIntensityMeanAbsoluteError(approach="first")
 
         forecast_landfall = xr.DataArray(
@@ -2731,13 +2710,22 @@ class TestLandfallMetrics:
             coords={"init_time": [pd.Timestamp("2023-09-14")]},
         )
 
-        result = metric._compute_absolute_error(forecast_landfall, target_landfall)
+        # Create dummy forecast/target (won't be used since we pass landfalls)
+        forecast = xr.DataArray([1.0], dims=["valid_time"])
+        target = xr.DataArray([1.0], dims=["valid_time"])
+
+        result = metric._compute_metric(
+            forecast,
+            target,
+            forecast_landfall=forecast_landfall,
+            target_landfall=target_landfall,
+        )
         assert isinstance(result, xr.DataArray)
         # Should be absolute difference: |50 - 45| = 5
         assert abs(result.values[0] - 5.0) < 1e-10
 
-    def test_landfall_metric_compute_landfalls_with_none(self):
-        """Test LandfallMetric.compute_landfalls handles None results."""
+    def test_landfall_metric_returns_nan_when_no_landfalls(self):
+        """Test maybe_compute_landfalls returns NaN DataArrays when no landfalls."""
         metric = metrics.LandfallDisplacement(approach="first")
 
         # Create tracks that won't produce landfalls (ocean only)
@@ -2767,15 +2755,17 @@ class TestLandfallMetrics:
             name="surface_wind_speed",
         )
 
-        # This may return None if no landfalls detected
-        forecast_landfall, target_landfall = metric.compute_landfalls(forecast, target)
+        # Returns NaN DataArrays when no landfalls detected
+        forecast_landfall, target_landfall = metric.maybe_compute_landfalls(
+            forecast, target
+        )
 
-        # Should handle None gracefully
-        assert forecast_landfall is None or isinstance(forecast_landfall, xr.DataArray)
-        assert target_landfall is None or isinstance(target_landfall, xr.DataArray)
+        # Should return DataArrays (possibly NaN)
+        assert isinstance(forecast_landfall, xr.DataArray)
+        assert isinstance(target_landfall, xr.DataArray)
 
-    def test_landfall_metric_compute_landfalls_next_approach(self):
-        """Test LandfallMetric.compute_landfalls with 'next' approach."""
+    def test_landfall_metric_next_approach(self):
+        """Test maybe_compute_landfalls with 'next' approach."""
         metric = metrics.LandfallDisplacement(approach="next")
 
         # Create simple test data
@@ -2840,12 +2830,13 @@ class TestLandfallMetrics:
 
             mock_find.side_effect = mock_find_func
 
-            forecast_landfall, target_landfall = metric.compute_landfalls(
+            forecast_landfall, target_landfall = metric.maybe_compute_landfalls(
                 forecast, target
             )
 
-            # Should handle next approach
-            assert forecast_landfall is not None or target_landfall is not None
+            # Should return DataArrays
+            assert isinstance(forecast_landfall, xr.DataArray)
+            assert isinstance(target_landfall, xr.DataArray)
 
 
 class TestThresholdMetricComposite:
@@ -3090,6 +3081,247 @@ class TestThresholdMetricMethods:
 
         # Single metric composite shouldn't add transformed_manager
         assert "transformed_manager" not in kwargs
+
+
+class TestMaybeComputeLandfalls:
+    """Tests for LandfallMetric.maybe_compute_landfalls functionality."""
+
+    def test_returns_landfalls_from_kwargs_when_both_provided(self):
+        """Test that pre-computed landfalls from kwargs are returned directly."""
+        metric = metrics.LandfallDisplacement(approach="first")
+
+        # Create pre-computed landfall data
+        forecast_landfall = xr.DataArray(
+            [38.0],
+            dims=["init_time"],
+            coords={
+                "init_time": [pd.Timestamp("2023-09-14")],
+                "latitude": (["init_time"], [25.1]),
+                "longitude": (["init_time"], [-80.1]),
+                "valid_time": (["init_time"], [pd.Timestamp("2023-09-15")]),
+            },
+            name="surface_wind_speed",
+        )
+
+        target_landfall = xr.DataArray(
+            [40.0],
+            dims=["init_time"],
+            coords={
+                "init_time": [pd.Timestamp("2023-09-14")],
+                "latitude": (["init_time"], [25.0]),
+                "longitude": (["init_time"], [-80.0]),
+                "valid_time": (["init_time"], [pd.Timestamp("2023-09-15")]),
+            },
+            name="surface_wind_speed",
+        )
+
+        # Create dummy forecast/target (shouldn't be used)
+        forecast = xr.DataArray([1.0], dims=["valid_time"])
+        target = xr.DataArray([1.0], dims=["valid_time"])
+
+        # Call with pre-computed landfalls in kwargs
+        result_forecast, result_target = metric.maybe_compute_landfalls(
+            forecast,
+            target,
+            forecast_landfall=forecast_landfall,
+            target_landfall=target_landfall,
+        )
+
+        # Should return the same objects that were passed in
+        xr.testing.assert_identical(result_forecast, forecast_landfall)
+        xr.testing.assert_identical(result_target, target_landfall)
+
+    def test_computes_landfalls_when_not_in_kwargs(self):
+        """Test that landfalls are computed when not provided in kwargs."""
+        metric = metrics.LandfallDisplacement(approach="first")
+
+        # Create test data
+        forecast = xr.DataArray(
+            [[35.0]],
+            dims=["lead_time", "valid_time"],
+            coords={
+                "lead_time": [6],
+                "valid_time": [pd.Timestamp("2023-09-15")],
+                "latitude": (["lead_time", "valid_time"], [[25.0]]),
+                "longitude": (["lead_time", "valid_time"], [[-80.0]]),
+            },
+            name="surface_wind_speed",
+        )
+
+        target = xr.DataArray(
+            [35.0],
+            dims=["valid_time"],
+            coords={
+                "valid_time": [pd.Timestamp("2023-09-15")],
+                "latitude": (["valid_time"], [25.0]),
+                "longitude": (["valid_time"], [-80.0]),
+            },
+            name="surface_wind_speed",
+        )
+
+        # Mock calc.find_landfalls to verify it's called
+        with mock.patch.object(calc, "find_landfalls") as mock_find:
+            mock_forecast = xr.DataArray(
+                [1.0],
+                dims=["init_time"],
+                coords={
+                    "init_time": [pd.Timestamp("2023-09-14")],
+                    "valid_time": (["init_time"], [pd.Timestamp("2023-09-15")]),
+                    "latitude": (["init_time"], [25.0]),
+                    "longitude": (["init_time"], [-80.0]),
+                },
+            )
+            mock_target = xr.DataArray(
+                [2.0],
+                dims=["init_time"],
+                coords={
+                    "init_time": [pd.Timestamp("2023-09-14")],
+                    "valid_time": (["init_time"], [pd.Timestamp("2023-09-16")]),
+                    "latitude": (["init_time"], [25.0]),
+                    "longitude": (["init_time"], [-80.0]),
+                },
+            )
+
+            def mock_find_func(track_data, return_next_landfall=False):
+                if "lead_time" in track_data.dims:
+                    return mock_forecast
+                return mock_target
+
+            mock_find.side_effect = mock_find_func
+
+            result_forecast, result_target = metric.maybe_compute_landfalls(
+                forecast, target
+            )
+
+            # calc.find_landfalls should have been called
+            assert mock_find.call_count == 2
+
+    def test_returns_nan_dataarrays_when_no_landfalls_found(self):
+        """Test that NaN DataArrays are returned when no landfalls are found."""
+        metric = metrics.LandfallDisplacement(approach="first")
+
+        forecast = xr.DataArray([1.0], dims=["valid_time"])
+        target = xr.DataArray([1.0], dims=["valid_time"])
+
+        with mock.patch.object(calc, "find_landfalls") as mock_find:
+            mock_find.return_value = None
+
+            result_forecast, result_target = metric.maybe_compute_landfalls(
+                forecast, target
+            )
+
+            # Should return NaN DataArrays, not None
+            assert isinstance(result_forecast, xr.DataArray)
+            assert isinstance(result_target, xr.DataArray)
+            assert np.isnan(result_forecast.values)
+            assert np.isnan(result_target.values)
+
+    def test_computes_when_only_forecast_landfall_in_kwargs(self):
+        """Test that landfalls are computed if only one is in kwargs."""
+        metric = metrics.LandfallDisplacement(approach="first")
+
+        forecast_landfall = xr.DataArray([38.0], dims=["init_time"])
+        forecast = xr.DataArray([1.0], dims=["valid_time"])
+        target = xr.DataArray([1.0], dims=["valid_time"])
+
+        with mock.patch.object(calc, "find_landfalls") as mock_find:
+            mock_find.return_value = None
+
+            # Only provide forecast_landfall, not target_landfall
+            result_forecast, result_target = metric.maybe_compute_landfalls(
+                forecast, target, forecast_landfall=forecast_landfall
+            )
+
+            # Should compute since target_landfall is missing
+            assert mock_find.call_count >= 1
+
+    def test_computes_when_only_target_landfall_in_kwargs(self):
+        """Test that landfalls are computed if only target is in kwargs."""
+        metric = metrics.LandfallDisplacement(approach="first")
+
+        target_landfall = xr.DataArray([40.0], dims=["init_time"])
+        forecast = xr.DataArray([1.0], dims=["valid_time"])
+        target = xr.DataArray([1.0], dims=["valid_time"])
+
+        with mock.patch.object(calc, "find_landfalls") as mock_find:
+            mock_find.return_value = None
+
+            # Only provide target_landfall, not forecast_landfall
+            result_forecast, result_target = metric.maybe_compute_landfalls(
+                forecast, target, target_landfall=target_landfall
+            )
+
+            # Should compute since forecast_landfall is missing
+            assert mock_find.call_count >= 1
+
+    def test_returns_tuple_type(self):
+        """Test that maybe_compute_landfalls returns a tuple."""
+        metric = metrics.LandfallDisplacement(approach="first")
+
+        forecast = xr.DataArray([1.0], dims=["valid_time"])
+        target = xr.DataArray([1.0], dims=["valid_time"])
+
+        with mock.patch.object(calc, "find_landfalls") as mock_find:
+            mock_find.return_value = None
+
+            result = metric.maybe_compute_landfalls(forecast, target)
+
+            assert isinstance(result, tuple)
+            assert len(result) == 2
+
+    def test_works_with_all_landfall_metric_subclasses(self):
+        """Test maybe_compute_landfalls works with all LandfallMetric subclasses."""
+        metrics_to_test = [
+            metrics.LandfallDisplacement(approach="first"),
+            metrics.LandfallTimeMeanError(approach="first"),
+            metrics.LandfallIntensityMeanAbsoluteError(approach="first"),
+        ]
+
+        forecast_landfall = xr.DataArray(
+            [38.0],
+            dims=["init_time"],
+            coords={"init_time": [pd.Timestamp("2023-09-14")]},
+        )
+        target_landfall = xr.DataArray(
+            [40.0],
+            dims=["init_time"],
+            coords={"init_time": [pd.Timestamp("2023-09-14")]},
+        )
+
+        forecast = xr.DataArray([1.0], dims=["valid_time"])
+        target = xr.DataArray([1.0], dims=["valid_time"])
+
+        for metric in metrics_to_test:
+            result = metric.maybe_compute_landfalls(
+                forecast,
+                target,
+                forecast_landfall=forecast_landfall,
+                target_landfall=target_landfall,
+            )
+            assert isinstance(result, tuple)
+            assert len(result) == 2
+            xr.testing.assert_identical(result[0], forecast_landfall)
+            xr.testing.assert_identical(result[1], target_landfall)
+
+    def test_compute_metric_handles_no_landfalls(self):
+        """Test _compute_metric returns NaN DataArray when no landfalls found."""
+        metrics_to_test = [
+            metrics.LandfallDisplacement(approach="first"),
+            metrics.LandfallTimeMeanError(approach="first"),
+            metrics.LandfallIntensityMeanAbsoluteError(approach="first"),
+        ]
+
+        forecast = xr.DataArray([1.0], dims=["valid_time"])
+        target = xr.DataArray([1.0], dims=["valid_time"])
+
+        for metric in metrics_to_test:
+            with mock.patch.object(calc, "find_landfalls") as mock_find:
+                mock_find.return_value = None
+
+                result = metric._compute_metric(forecast, target)
+
+                assert isinstance(result, xr.DataArray)
+                assert np.isnan(result.values).all()
 
 
 class TestBaseMetricVariableValidation:

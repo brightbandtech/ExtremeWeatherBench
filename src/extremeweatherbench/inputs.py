@@ -76,7 +76,7 @@ CIRA_metadata_variable_mapping = {
     "u": "eastward_wind",
     "v": "northward_wind",
     "p": "air_pressure",
-    "z": "geopotential_height",
+    "z": "geopotential",
     "r": "relative_humidity",
     "u10": "surface_eastward_wind",
     "v10": "surface_northward_wind",
@@ -425,26 +425,52 @@ class ZarrForecast(ForecastBase):
 
 
 @dataclasses.dataclass
-class IcechunkDataTreeForecast(ForecastBase):
-    """Forecast class for datatree icechunk store forecast data.
+class XarrayForecast(ForecastBase):
+    """Forecast class for datasets that were previously constructed and opened using xarray.
 
-    This class is used to open the icechunk store and return a datatree object. To be
-    able to apply the data to EWB, the groups need to be known to select as a Dataset
-    for evaluation. Access for this class is hard-coded to be read-only."""
+    This class is intended for situations where the user has to manually prepare a dataset to
+    use in their evaluation. This can happen when the user is manually constructed such a
+    dataset from a collection of NetCDF or Zarr archives which need to be assembled into a
+    single, master dataset.
 
-    chunks: Optional[Union[dict, str]] = "auto"
-    icechunk_storage: icechunk.Storage
-    group: str
-    branch: str = "main"
+    Attributes:
+        ds: The xarray dataset containing the forecast data.
+        source: The source of the data, defaults to "memory" for in-memory datasets.
+        name: The name of the input data source, defaults to "in-memory dataset".
+    """
 
-    def _open_data_from_source(self) -> IncomingDataInput:
-        dataset = open_icechunk_dataset_from_datatree(
-            storage=self.icechunk_storage,
-            group=self.group,
-            branch=self.branch,
-            chunks=self.chunks,
-        )
-        return dataset
+    #: The xarray dataset containing the forecast data. This is required for the class to be instantiated
+    #: because we inherit from ForecastBase, which has its own set of required attributes.
+    ds: Optional[xr.Dataset] = None  # type: ignore[assignment]
+    source: str = "memory"
+    name: str = "in-memory dataset"
+
+    def __post_init__(self):
+        """Validate that ds is provided and normalize None values to defaults.
+
+        This ensures backwards compatibility with the ForecastBase's __init__ behavior
+        where None values for variables and variable_mapping were converted to empty
+        containers. If the user does not provide a ds, we raise a ValueError.
+        """
+        if self.ds is None:
+            raise ValueError(
+                "The 'ds' parameter is required for XarrayForecast. "
+                "Please provide an xarray.Dataset."
+            )
+
+        # Convert None to empty containers for backwards compatibility
+        if self.variables is None:
+            object.__setattr__(self, "variables", [])
+        if self.variable_mapping is None:
+            object.__setattr__(self, "variable_mapping", {})
+
+    def _open_data_from_source(self) -> xr.Dataset:
+        """Open the input data from the source.
+
+        Returns:
+            The xarray dataset that was provided during initialization.
+        """
+        return self.ds
 
 
 @dataclasses.dataclass
@@ -876,34 +902,21 @@ class IBTrACS(TargetBase):
         case_metadata: "cases.IndividualCase",
         **kwargs,
     ) -> IncomingDataInput:
-        # Note: drop parameter not applicable for polars LazyFrame data
         if not isinstance(data, pl.LazyFrame):
             raise ValueError(f"Expected polars LazyFrame, got {type(data)}")
 
-        # Get the season (year) from the case start date, cast as string as
-        # polars is interpreting the schema as strings
         season = case_metadata.start_date.year
         if case_metadata.start_date.month > 11:
             season += 1
 
-        # Create a subquery to find all storm numbers in the same season
-        matching_numbers = (
-            data.filter(pl.col("season").cast(pl.Int64) == season)
-            .select("number")
-            .unique()
-        )
-
         possible_names = utils.extract_tc_names(case_metadata.title)
 
-        # Apply the filter to get all data for storms with the same number in
-        # the same season, matching any of the possible names
-        # This maintains the lazy evaluation
-        name_filter = pl.col("tc_name").is_in(possible_names)
-        subset_target_data = data.join(
-            matching_numbers, on="number", how="inner"
-        ).filter(name_filter & (pl.col("season").cast(pl.Int64) == season))
+        # Direct filter - eliminates join, group-by, and second CSV scan
+        subset_target_data = data.filter(
+            (pl.col("season").cast(pl.Int64) == season)
+            & pl.col("tc_name").is_in(possible_names)
+        )
 
-        # Select only the columns to keep
         columns_to_keep = [
             "valid_time",
             "tc_name",
@@ -917,8 +930,6 @@ class IBTrACS(TargetBase):
 
         subset_target_data = subset_target_data.select(columns_to_keep)
 
-        # Drop rows where wind speed OR pressure are null (equivalent to pandas
-        # dropna with how="any")
         subset_target_data = subset_target_data.filter(
             pl.col("surface_wind_speed").is_not_null()
             & pl.col("air_pressure_at_mean_sea_level").is_not_null()

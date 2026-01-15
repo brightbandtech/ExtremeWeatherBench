@@ -240,26 +240,29 @@ def maybe_calculate_wind_speed(ds: xr.Dataset) -> xr.Dataset:
 
 def geopotential_thickness(
     da: xr.DataArray,
-    top_level_value: int = 300,
-    bottom_level_value: int = 500,
+    top_level: int = 300,
+    bottom_level: int = 500,
     geopotential: bool = False,
+    pressure_dim: str = "level",
 ) -> xr.DataArray:
-    """Generate the geopotential thickness from the geopotential heights.
+    """Generate the geopotential thickness from the geopotential heights. Defaults to
+    geopotential height in meters.
 
     Args:
         da: The xarray DataArray to generate the geopotential thickness from.
-        top_level_value: The value of the top level to generate the geopotential
-            thickness from.
-        bottom_level_value: The value of the bottom level to generate the
-            geopotential thickness from.
-        geopotential: Whether the input DataArray is geopotential height or
-        geopotential (default is geopotential height).
+        top_level: The pressure value of the top level to generate the
+            geopotential thickness from in hPa.
+        bottom_level: The pressure value of the bottom level to generate the
+            geopotential thickness from in hPa.
+        geopotential: Whether the input DataArray is geopotential height (in m) or
+            geopotential (in m^2/s^2). Default is geopotential height.
+        pressure_dim: The name of the pressure dimension. Default is "level".
 
     Returns:
-        The geopotential thickness as an xarray DataArray.
+        The geopotential thickness in metersas an xarray DataArray.
     """
-    geopotential_heights = da.sel({"level": top_level_value})
-    geopotential_height_bottom = da.sel({"level": bottom_level_value})
+    geopotential_heights = da.sel({pressure_dim: top_level})
+    geopotential_height_bottom = da.sel({pressure_dim: bottom_level})
     if geopotential:
         geopotential_thickness = (
             geopotential_heights - geopotential_height_bottom
@@ -267,7 +270,8 @@ def geopotential_thickness(
     else:
         geopotential_thickness = geopotential_heights - geopotential_height_bottom
     geopotential_thickness.attrs = dict(
-        description="Geopotential thickness of level and 500 hPa", units="m"
+        description=f"Geopotential thickness of {top_level} hPa and {bottom_level} hPa",
+        units="m",
     )
     return geopotential_thickness
 

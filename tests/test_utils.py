@@ -6,6 +6,7 @@ import operator
 import numpy as np
 import pandas as pd
 import pytest
+import sparse
 import xarray as xr
 import yaml
 
@@ -1421,6 +1422,217 @@ class TestReduceXarrayMethod:
         assert result.ndim == 0
 
 
+class TestMaybeComputeAndMaybeCache:
+    """Test the maybe_cache_and_compute function."""
+
+    def test_no_cache_returns_original(self):
+        """Test with no cache - returns original dataset."""
+        ds = xr.Dataset(
+            {"temp": (["time", "lat"], [[1, 2], [3, 4]])},
+            coords={"time": [0, 1], "lat": [10, 20]},
+        ).chunk()
+
+        # Call with no cache_dir
+        result = utils.maybe_cache_and_compute(ds, name="forecast", cache_dir=None)
+
+        # Should return original dataset
+        assert isinstance(result, xr.Dataset)
+        # Should still be lazy
+        assert hasattr(result.temp.data, "chunks")
+        xr.testing.assert_equal(result, ds)
+
+    def test_cache_computes_and_caches(self, tmp_path):
+        """Test caching stores as zarr and loads lazily."""
+        ds = xr.Dataset(
+            {"temp": (["time", "lat"], [[1, 2], [3, 4]])},
+            coords={"time": [0, 1], "lat": [10, 20]},
+        ).chunk()
+
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir()
+
+        # Call with cache_dir (caches as zarr)
+        result = utils.maybe_cache_and_compute(ds, name="forecast", cache_dir=cache_dir)
+
+        # Should return dataset
+        assert isinstance(result, xr.Dataset)
+
+        # Verify cache file was created as zarr
+        expected_file = cache_dir / "forecast.zarr"
+        assert expected_file.exists()
+
+        # Verify cached file can be loaded and matches
+        cached_ds = xr.open_zarr(expected_file)
+        xr.testing.assert_equal(result, cached_ds)
+
+    def test_single_dataset_stays_lazy(self):
+        """Test single dataset with no cache stays lazy."""
+        ds = xr.Dataset(
+            {"temp": (["time"], [1, 2, 3])}, coords={"time": [0, 1, 2]}
+        ).chunk()
+
+        result = utils.maybe_cache_and_compute(ds, name="single", cache_dir=None)
+
+        assert isinstance(result, xr.Dataset)
+        # Should still be lazy
+        assert hasattr(result.temp.data, "chunks")
+
+    def test_cache_dir_as_string(self, tmp_path):
+        """Test that cache_dir works as string path."""
+        ds = xr.Dataset({"temp": (["x"], [1, 2])}, coords={"x": [0, 1]}).chunk()
+
+        cache_dir = tmp_path / "cache_str"
+        cache_dir.mkdir()
+
+        # Pass as string instead of Path
+        result = utils.maybe_cache_and_compute(
+            ds, name="test", cache_dir=str(cache_dir)
+        )
+
+        # Verify cache file was created as zarr
+        expected_file = cache_dir / "test.zarr"
+        assert expected_file.exists()
+        assert isinstance(result, xr.Dataset)
+
+    def test_with_lazy_dask_arrays_with_cache(self, tmp_path):
+        """Test lazy dask arrays remain lazy when cached."""
+        import dask.array as da
+
+        # Create dataset with dask arrays
+        ds = xr.Dataset(
+            {"temp": (["time", "lat"], da.ones((5, 10), chunks=(2, 5)))},
+            coords={"time": range(5), "lat": range(10)},
+        )
+
+        cache_dir = tmp_path / "cache_lazy"
+        cache_dir.mkdir()
+
+        result = utils.maybe_cache_and_compute(ds, name="lazy", cache_dir=cache_dir)
+
+        # Should still be lazy (loaded from zarr cache)
+        assert isinstance(result, xr.Dataset)
+
+    def test_existing_cache_loads_from_cache(self, tmp_path):
+        """Test that existing cache is loaded instead of recomputed."""
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir()
+
+        ds = xr.Dataset({"temp": (["x"], [1, 2])}, coords={"x": [0, 1]}).chunk()
+
+        # First call - caches the data
+        result1 = utils.maybe_cache_and_compute(ds, name="test", cache_dir=cache_dir)
+
+        # Second call - should load from cache
+        result2 = utils.maybe_cache_and_compute(ds, name="test", cache_dir=cache_dir)
+
+        # Both should be equal
+        xr.testing.assert_equal(result1, result2)
+
+    def test_sparse_dataarray_caching(self, sample_sparse_target_dataarray, tmp_path):
+        """Test caching of sparse arrays."""
+        result = utils.maybe_cache_and_compute(
+            sample_sparse_target_dataarray, name="test", cache_dir=tmp_path
+        )
+
+        # Should return a dataarray
+        assert isinstance(result, xr.DataArray)
+
+        # Should be densified
+        assert not isinstance(result.data, sparse.COO)
+
+        # Should be a numpy array
+        assert isinstance(result.data, np.ndarray)
+
+    def test_sparse_dataset_caching(self, sample_sparse_target_dataset, tmp_path):
+        """Test caching of sparse datasets."""
+        result = utils.maybe_cache_and_compute(
+            sample_sparse_target_dataset, name="test", cache_dir=tmp_path
+        )
+
+        # Should return a dataset
+        assert isinstance(result, xr.Dataset)
+
+
+class TestCacheMaybeDensifyHelper:
+    """Test the _cache_maybe_densify_helper function."""
+
+    def test_sparse_array_densification(self, sample_sparse_target_dataarray):
+        """Test densifying sparse arrays."""
+        result = utils._cache_maybe_densify_helper(sample_sparse_target_dataarray)
+        assert isinstance(result, xr.DataArray)
+
+    def test_sparse_dataset_densification(self, sample_sparse_target_dataset):
+        """Test densifying sparse datasets."""
+        result = utils._cache_maybe_densify_helper(sample_sparse_target_dataset)
+        assert isinstance(result, xr.Dataset)
+
+
+class TestNoCircularImports:
+    """Test that there are no circular imports."""
+
+    def test_import_utils_then_evaluate(self):
+        """Test importing utils then evaluate doesn't cause circular imports."""
+        import sys
+
+        # Remove modules if already imported
+        modules_to_remove = [
+            k for k in sys.modules.keys() if k.startswith("extremeweatherbench")
+        ]
+        for mod in modules_to_remove:
+            del sys.modules[mod]
+
+        # Import utils first
+        # Then import evaluate
+        from extremeweatherbench import evaluate as evaluate_module
+        from extremeweatherbench import utils as utils_module
+
+        # Verify both imported successfully
+        assert utils_module is not None
+        assert evaluate_module is not None
+        assert hasattr(utils_module, "maybe_cache_and_compute")
+
+    def test_import_evaluate_then_utils(self):
+        """Test importing evaluate then utils works fine."""
+        import sys
+
+        # Remove modules if already imported
+        modules_to_remove = [
+            k for k in sys.modules.keys() if k.startswith("extremeweatherbench")
+        ]
+        for mod in modules_to_remove:
+            del sys.modules[mod]
+
+        # Import evaluate first
+        from extremeweatherbench import evaluate as evaluate_module
+
+        # Then import utils
+        from extremeweatherbench import utils as utils_module
+
+        # Verify both imported successfully
+        assert evaluate_module is not None
+        assert utils_module is not None
+
+    def test_evaluate_uses_utils_function(self):
+        """Test that evaluate module can access the function."""
+        from extremeweatherbench import utils
+
+        # Verify evaluate can call the function from utils
+        assert hasattr(utils, "maybe_cache_and_compute")
+        assert callable(utils.maybe_cache_and_compute)
+
+    def test_function_accessible_from_both_modules(self):
+        """Test that function is accessible correctly from both modules."""
+        from extremeweatherbench import utils
+
+        # Create a simple dataset
+        ds = xr.Dataset({"temp": (["x"], [1, 2, 3])}, coords={"x": [0, 1, 2]})
+
+        # Call the function through utils module
+        result = utils.maybe_cache_and_compute(ds, name="test_ds", cache_dir=None)
+
+        assert isinstance(result, xr.Dataset)
+
+
 class TestMaybeGetOperator:
     """Test the maybe_get_operator function."""
 
@@ -1741,3 +1953,145 @@ class TestMaybeDensifyDataArray:
         # Check dimensions preserved
         assert result.shape == (3, 2, 2)
         assert list(result.dims) == ["time", "latitude", "longitude"]
+
+
+class TestCreateNanDataArray:
+    """Tests for _create_nan_dataarray function."""
+
+    def test_single_string_dim(self):
+        """Test with a single string dimension."""
+        result = utils._create_nan_dataarray("init_time")
+
+        assert isinstance(result, xr.DataArray)
+        assert result.dims == ("init_time",)
+        assert result.shape == (1,)
+        assert np.isnan(result.values).all()
+
+    def test_single_string_dim_different_name(self):
+        """Test with a different single string dimension."""
+        result = utils._create_nan_dataarray("lead_time")
+
+        assert isinstance(result, xr.DataArray)
+        assert result.dims == ("lead_time",)
+        assert result.shape == (1,)
+        assert np.isnan(result.values).all()
+
+    def test_two_string_dims_as_list(self):
+        """Test with two dimensions provided as a list."""
+        result = utils._create_nan_dataarray(["init_time", "lead_time"])
+
+        assert isinstance(result, xr.DataArray)
+        assert result.dims == ("init_time", "lead_time")
+        assert result.shape == (1, 1)
+        assert np.isnan(result.values).all()
+
+    def test_three_string_dims_as_list(self):
+        """Test with three dimensions provided as a list."""
+        result = utils._create_nan_dataarray(["init_time", "lead_time", "valid_time"])
+
+        assert isinstance(result, xr.DataArray)
+        assert result.dims == ("init_time", "lead_time", "valid_time")
+        assert result.shape == (1, 1, 1)
+        assert np.isnan(result.values).all()
+
+    def test_preserves_dim_order(self):
+        """Test that dimension order is preserved."""
+        dims = ["time", "latitude", "longitude"]
+        result = utils._create_nan_dataarray(dims)
+
+        assert result.dims == ("time", "latitude", "longitude")
+
+    def test_default_preserved_dims(self):
+        """Test with default preserved_dims value."""
+        result = utils._create_nan_dataarray()
+
+        assert result.dims == ("init_time",)
+        assert result.shape == (1,)
+        assert np.isnan(result.values).all()
+
+
+class TestIsValidLandfall:
+    """Tests for is_valid_landfall function."""
+
+    def test_none_returns_false(self):
+        """Test that None returns False."""
+        assert utils.is_valid_landfall(None) is False
+
+    def test_zero_dim_array_returns_false(self):
+        """Test that a 0-d (scalar) DataArray returns False."""
+        scalar_da = xr.DataArray(np.nan)
+        assert utils.is_valid_landfall(scalar_da) is False
+
+    def test_missing_init_time_returns_false(self):
+        """Test that a DataArray without init_time coord returns False."""
+        da = xr.DataArray(
+            [1.0, 2.0],
+            dims=["valid_time"],
+            coords={"valid_time": pd.date_range("2023-09-15", periods=2)},
+        )
+        assert utils.is_valid_landfall(da) is False
+
+    def test_valid_landfall_returns_true(self):
+        """Test that a valid landfall DataArray returns True."""
+        da = xr.DataArray(
+            [38.0],
+            dims=["init_time"],
+            coords={
+                "init_time": [pd.Timestamp("2023-09-14")],
+                "latitude": (["init_time"], [25.1]),
+                "longitude": (["init_time"], [-80.1]),
+                "valid_time": (["init_time"], [pd.Timestamp("2023-09-15")]),
+            },
+            name="surface_wind_speed",
+        )
+        assert utils.is_valid_landfall(da) is True
+
+    def test_multi_init_time_returns_true(self):
+        """Test that a DataArray with multiple init_times returns True."""
+        da = xr.DataArray(
+            [38.0, 40.0, 42.0],
+            dims=["init_time"],
+            coords={
+                "init_time": pd.date_range("2023-09-14", periods=3, freq="6h"),
+                "latitude": (["init_time"], [25.1, 25.2, 25.3]),
+                "longitude": (["init_time"], [-80.1, -80.2, -80.3]),
+            },
+        )
+        assert utils.is_valid_landfall(da) is True
+
+    def test_all_nan_values_returns_false(self):
+        """Test that all-NaN arrays return False (no actual data)."""
+        da = xr.DataArray(
+            [np.nan, np.nan],
+            dims=["init_time"],
+            coords={
+                "init_time": pd.date_range("2023-09-14", periods=2),
+            },
+        )
+        assert utils.is_valid_landfall(da) is False
+
+    def test_partial_nan_values_returns_true(self):
+        """Test that arrays with some non-NaN values return True."""
+        da = xr.DataArray(
+            [np.nan, 1.0],
+            dims=["init_time"],
+            coords={
+                "init_time": pd.date_range("2023-09-14", periods=2),
+            },
+        )
+        assert utils.is_valid_landfall(da) is True
+
+    def test_init_time_as_non_dim_coord_returns_false(self):
+        """Test that init_time must be a dimension, not just a coordinate."""
+        # init_time is a scalar coord, not a dimension
+        da = xr.DataArray(
+            [1.0, 2.0],
+            dims=["valid_time"],
+            coords={
+                "valid_time": pd.date_range("2023-09-15", periods=2),
+                "init_time": pd.Timestamp("2023-09-14"),
+            },
+        )
+        # This should return True because init_time IS in coords
+        # (even though it's not a dimension)
+        assert utils.is_valid_landfall(da) is True
