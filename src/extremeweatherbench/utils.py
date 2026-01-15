@@ -2,7 +2,6 @@
 specialized package."""
 
 import datetime
-import importlib
 import inspect
 import logging
 import operator
@@ -151,24 +150,6 @@ def remove_ocean_gridpoints(dataset: xr.Dataset) -> xr.Dataset:
     land_mask = land_sea_mask == 0
     # Subset the dataset to only include land gridpoints
     return dataset.where(land_mask)
-
-
-def load_events_yaml():
-    """Load the events yaml file."""
-    logger.warning(
-        "This function is deprecated and will be removed in a future release. "
-        "Please use cases.load_ewb_events_yaml_into_case_collection instead."
-    )
-    import extremeweatherbench.data
-
-    events_yaml_file = importlib.resources.files(extremeweatherbench.data).joinpath(
-        "events.yaml"
-    )
-    with importlib.resources.as_file(events_yaml_file) as file:
-        yaml_event_case = read_event_yaml(file)
-
-    return yaml_event_case
-
 
 def read_event_yaml(input_pth: str | pathlib.Path) -> dict:
     """Read events yaml from data."""
