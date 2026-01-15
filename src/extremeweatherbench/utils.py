@@ -151,6 +151,7 @@ def remove_ocean_gridpoints(dataset: xr.Dataset) -> xr.Dataset:
     # Subset the dataset to only include land gridpoints
     return dataset.where(land_mask)
 
+
 def read_event_yaml(input_pth: str | pathlib.Path) -> dict:
     """Read events yaml from data."""
     logger.warning(

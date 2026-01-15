@@ -195,7 +195,9 @@ def build_case_operators(
     return case_operators
 
 
-def load_individual_cases(cases: Union[dict[str, list], list]) -> IndividualCaseCollection:
+def load_individual_cases(
+    cases: Union[dict[str, list], list],
+) -> IndividualCaseCollection:
     """Load IndividualCase metadata from a dictionary.
 
     Args:
@@ -204,8 +206,10 @@ def load_individual_cases(cases: Union[dict[str, list], list]) -> IndividualCase
     Returns:
         A collection of IndividualCase objects.
     """
-    assert isinstance(cases, dict) or isinstance(cases, list), "cases must be a dictionary or a list."
-    
+    assert isinstance(cases, dict) or isinstance(cases, list), (
+        "cases must be a dictionary or a list."
+    )
+
     # if cases is a list, convert to a dictionary for dacite.from_dict
     if isinstance(cases, list):
         cases = {"cases": cases}
