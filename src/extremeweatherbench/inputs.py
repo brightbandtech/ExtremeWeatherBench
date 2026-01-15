@@ -141,7 +141,10 @@ IBTrACS_metadata_variable_mapping = {
 
 IncomingDataInput: TypeAlias = xr.Dataset | xr.DataArray | pl.LazyFrame | pd.DataFrame
 
-CIRA_CREDENTIALS = icechunk.containers_credentials({"s3://noaa-oar-mlwp-data/": icechunk.s3_credentials(anonymous=True)})
+CIRA_CREDENTIALS = icechunk.containers_credentials(
+    {"s3://noaa-oar-mlwp-data/": icechunk.s3_credentials(anonymous=True)}
+)
+
 
 def _default_preprocess(input_data: IncomingDataInput) -> IncomingDataInput:
     """Default forecast preprocess function that does nothing."""
@@ -1047,6 +1050,7 @@ def open_kerchunk_reference(
         )
     return kerchunk_ds
 
+
 def list_groups_in_icechunk_datatree(
     storage: icechunk.Storage,
     branch: str = "main",
@@ -1064,6 +1068,7 @@ def list_groups_in_icechunk_datatree(
     session = repo.readonly_session(branch=branch)
     dt = xr.open_datatree(filename_or_obj=session.store, engine="zarr")
     return list(dt.groups)
+
 
 def open_icechunk_dataset_from_datatree(
     storage: icechunk.Storage,
