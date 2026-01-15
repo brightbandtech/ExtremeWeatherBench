@@ -48,7 +48,7 @@ warnings.filterwarnings(
 )
 
 
-def process_single_virual_dataset(
+def process_single_virtual_dataset(
     path: str,
     parser: virtualizarr.parsers.HDFParser,
     registry: virtualizarr.registry.ObjectStoreRegistry,
@@ -163,7 +163,7 @@ def generate_cira_icechunk_store():
         with joblib.parallel_config(**{"backend": "loky", "n_jobs": -1}):
             model_dict[model] = utils.ParallelTqdm(total=len(t))(
                 # None is the cache_dir, we can't cache in parallel mode
-                joblib.delayed(process_single_virual_dataset)(
+                joblib.delayed(process_single_virtual_dataset)(
                     "s3://noaa-oar-mlwp-data/" + i[0]["path"], parser, registry
                 )
                 for i in stream
