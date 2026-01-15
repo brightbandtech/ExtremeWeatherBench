@@ -476,6 +476,7 @@ class XarrayForecast(ForecastBase):
         """
         return self.ds
 
+
 @dataclasses.dataclass
 class TargetBase(InputBase):
     """An abstract base class for target data.
