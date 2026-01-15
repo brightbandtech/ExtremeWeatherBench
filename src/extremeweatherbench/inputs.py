@@ -476,30 +476,6 @@ class XarrayForecast(ForecastBase):
         """
         return self.ds
 
-
-@dataclasses.dataclass
-class IcechunkDataTreeForecast(ForecastBase):
-    """Forecast class for datatree icechunk store forecast data.
-
-    This class is used to open the icechunk store and return a datatree object. To be
-    able to apply the data to EWB, the groups need to be known to select as a Dataset
-    for evaluation. Access for this class is hard-coded to be read-only."""
-
-    chunks: Optional[Union[dict, str]] = "auto"
-    icechunk_storage: icechunk.Storage
-    group: str
-    branch: str = "main"
-
-    def _open_data_from_source(self) -> IncomingDataInput:
-        dataset = open_icechunk_dataset_from_datatree(
-            storage=self.icechunk_storage,
-            group=self.group,
-            branch=self.branch,
-            chunks=self.chunks,
-        )
-        return dataset
-
-
 @dataclasses.dataclass
 class TargetBase(InputBase):
     """An abstract base class for target data.
