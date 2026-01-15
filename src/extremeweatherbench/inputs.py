@@ -141,6 +141,7 @@ IBTrACS_metadata_variable_mapping = {
 
 IncomingDataInput: TypeAlias = xr.Dataset | xr.DataArray | pl.LazyFrame | pd.DataFrame
 
+CIRA_CREDENTIALS = icechunk.containers_credentials({"s3://noaa-oar-mlwp-data/": icechunk.s3_credentials(anonymous=True)})
 
 def _default_preprocess(input_data: IncomingDataInput) -> IncomingDataInput:
     """Default forecast preprocess function that does nothing."""
@@ -1023,12 +1024,30 @@ def open_kerchunk_reference(
         )
     return kerchunk_ds
 
+def list_groups_in_icechunk_datatree(
+    storage: icechunk.Storage,
+    branch: str = "main",
+) -> list[str]:
+    """List the groups in an icechunk datatree.
+
+    Args:
+        storage: The icechunk Storage object to open.
+        branch: The icechunk branch to open. Defaults to "main".
+
+    Returns:
+        A list of the groups in the icechunk datatree.
+    """
+    repo = icechunk.Repository.open(storage)
+    session = repo.readonly_session(branch=branch)
+    dt = xr.open_datatree(filename_or_obj=session.store, engine="zarr")
+    return list(dt.groups)
 
 def open_icechunk_dataset_from_datatree(
     storage: icechunk.Storage,
     group: str,
     branch: str = "main",
     chunks: Optional[Union[dict, str]] = "auto",
+    **repository_kwargs,
 ) -> xr.Dataset:
     """Open an icechunk datatree from a storage.
 
@@ -1040,7 +1059,7 @@ def open_icechunk_dataset_from_datatree(
     Returns:
         The dataset for the specified group.
     """
-    repo = icechunk.Repository.open(storage)
+    repo = icechunk.Repository.open(storage, **repository_kwargs)
     session = repo.readonly_session(branch=branch)
     dt = xr.open_datatree(
         filename_or_obj=session.store, engine="zarr", consolidated=False, chunks=chunks
