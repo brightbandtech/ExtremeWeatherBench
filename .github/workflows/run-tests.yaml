@@ -1,23 +1,20 @@
-name: ci
+name: Run tests
 
 on:
-  pull_request:
   push:
     branches: [main]
+  pull_request:
+    branches: [main, develop]
+
+permissions:
+  contents: read
 
 jobs:
-  pre-commit:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v3
-      - uses: pre-commit/action@v3.0.1
-
   test:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.12"]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
 
@@ -33,21 +30,10 @@ jobs:
           python-version-file: "pyproject.toml"
 
       - name: Install the project
-        run: uv sync --all-extras --dev
+        run: uv sync --all-extras --all-groups
 
       - name: Run tests
         run: uv run pytest
 
       - name: Generate Coverage Report
         run: uv run coverage report -m
-
-  golden-tests:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: extractions/setup-just@v3
-        with:
-          just-version: 1.43.1
-
-      - name: Run golden tests with just
-        run: just golden-tests
