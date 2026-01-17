@@ -48,6 +48,23 @@ IBTRACS_URI = (
     "climate-stewardship-ibtracs/v04r01/access/csv/ibtracs.ALL.list.v04r01.csv"
 )
 
+GHCNh_metadata_variable_mapping = {
+            "DATE": "valid_time",
+            "temperature": "surface_air_temperature",
+            "dew_point_temperature": "surface_dew_point",
+            "wind_speed": "surface_wind_speed",
+            "wind_direction": "surface_wind_from_direction",
+            "station_level_pressure": "surface_air_pressure",
+            "sea_level_pressure": "air_pressure_at_mean_sea_level",
+            "c": "cloud_area_fraction",
+            "relative_humidity": "surface_relative_humidity",
+            "precipitation": "accumulated_1_hour_precipitation",
+            "STATION": "station",
+            "Latitude": "latitude",
+            "Longitude": "longitude",
+            "Elevation": "elevation",
+            "Station_name": "name",
+        }
 
 # ERA5 metadata variable mapping
 ERA5_metadata_variable_mapping = {
@@ -511,6 +528,96 @@ class ERA5(TargetBase):
         )
         return aligned_forecast_data, aligned_target_data
 
+@dataclasses.dataclass
+class GHCNh(TargetBase):
+    """Target class for GHCN tabular data.
+
+    Data is processed using polars to maintain the lazy loading paradigm in
+    open_data_from_source and to separate the subsetting into subset_data_to_case.
+    """
+
+    name: str = "GHCN"
+    source: str = DEFAULT_GHCN_URI
+
+    def _open_data_from_source(self) -> IncomingDataInput:
+        target_data: pl.LazyFrame = pl.scan_parquet(
+            self.source, 
+            storage_options=self.storage_options, 
+            cast_options=pl.ScanCastOptions(float_cast='upcast')
+        )
+
+        return target_data
+
+    def subset_data_to_case(
+        self,
+        data: IncomingDataInput,
+        case_metadata: "cases.IndividualCase",
+        **kwargs,
+    ) -> IncomingDataInput:
+        if not isinstance(data, pl.LazyFrame):
+            raise ValueError(f"Expected polars LazyFrame, got {type(data)}")
+
+        # Create filter expressions for LazyFrame
+        time_min = case_metadata.start_date - pd.Timedelta(days=2)
+        time_max = case_metadata.end_date + pd.Timedelta(days=2)
+        case_location = case_metadata.location.as_geopandas()
+
+        # Cast strings to floats
+        # Apply filters using proper polars expressions
+        data = data.with_columns(
+            pl.col("latitude").cast(pl.Float64), 
+            pl.col("longitude").cast(pl.Float64),
+            pl.col("elevation").cast(pl.Float64,strict=False),
+            pl.col("surface_air_temperature").cast(pl.Float64),
+            pl.col("surface_air_pressure").cast(pl.Float64),
+            pl.col("air_pressure_at_mean_sea_level").cast(pl.Float64),
+            pl.col("accumulated_1_hour_precipitation").cast(pl.Float64),
+            pl.col("surface_wind_speed").cast(pl.Float64),
+            pl.col("surface_wind_from_direction").cast(pl.Float64),
+            pl.col("surface_dew_point").cast(pl.Float64),
+            pl.col("surface_relative_humidity").cast(pl.Float64),
+            pl.col("valid_time").str.to_datetime()
+        )
+        subset_target_data = data.filter(
+            (pl.col("valid_time") >= time_min)
+            & (pl.col("valid_time") <= time_max)
+            & (pl.col("latitude") >= case_location.total_bounds[1])
+            & (pl.col("latitude") <= case_location.total_bounds[3])
+            & (pl.col("longitude") >= case_location.total_bounds[0])
+            & (pl.col("longitude") <= case_location.total_bounds[2])
+        ).sort("valid_time")
+        return subset_target_data
+
+    def _custom_convert_to_dataset(self, data: IncomingDataInput) -> xr.Dataset:
+        if isinstance(data, pl.LazyFrame):
+            # convert to Kelvin, GHCN data is in Celsius by default
+            if "surface_air_temperature" in data.collect_schema().names():
+                data = data.with_columns(pl.col("surface_air_temperature").add(273.15))
+            data = data.collect(engine="streaming").to_pandas()
+            data["longitude"] = utils.convert_longitude_to_360(data["longitude"])
+
+            data = data.set_index(["valid_time", "latitude", "longitude"])
+            # GHCN data can have duplicate values right now, dropping here if it occurs
+            try:
+                data = xr.Dataset.from_dataframe(
+                    data[~data.index.duplicated(keep="first")], sparse=True
+                )
+            except Exception as e:
+                logger.warning(
+                    "Error converting GHCN data to xarray: %s, returning empty Dataset",
+                    e,
+                )
+                return xr.Dataset()
+            return data
+        else:
+            raise ValueError(f"Data is not a polars LazyFrame: {type(data)}")
+
+    def maybe_align_forecast_to_target(
+        self,
+        forecast_data: xr.Dataset,
+        target_data: xr.Dataset,
+    ) -> tuple[xr.Dataset, xr.Dataset]:
+        return align_forecast_to_target(forecast_data, target_data)
 
 @dataclasses.dataclass
 class GHCN(TargetBase):
