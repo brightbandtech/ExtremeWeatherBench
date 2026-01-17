@@ -81,6 +81,8 @@ dev = [
     "types-pytz>=2025.2.0.20250809",
     "types-pyyaml>=6.0.12.20241230",
     "types-tqdm>=4.67.0.20250809",
+    "python-semantic-release>=10.3.0",
+    "twine>=5.1.1",
 ]
 docs = [
     "mkdocs>=1.6.1",
