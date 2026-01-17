@@ -2,7 +2,25 @@
 name = "extremeweatherbench"
 version = "0.2.0"
 description = "Benchmarking weather and weather AI models using extreme events"
+keywords = [
+    "weather",
+    "extreme events",
+    "benchmarking",
+    "forecasting",
+    "climate",
+]
+license = { file = "LICENSE" }
 readme = "README.md"
+classifiers = [
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Atmospheric Science",
+]
 requires-python = ">=3.11,<3.14"
 dependencies = [
     "dacite>=1.8.1",
@@ -73,8 +91,8 @@ docs = [
 ]
 
 [build-system]
-requires = ["setuptools", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling >= 1.26"]
+build-backend = "hatchling.build"
 
 [tool.setuptools]
 packages = ["extremeweatherbench"]
