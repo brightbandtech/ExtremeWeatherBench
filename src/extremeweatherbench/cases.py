@@ -195,7 +195,9 @@ def build_case_operators(
     return case_operators
 
 
-def load_individual_cases(cases: dict[str, list]) -> IndividualCaseCollection:
+def load_individual_cases(
+    cases: Union[dict[str, list], list],
+) -> IndividualCaseCollection:
     """Load IndividualCase metadata from a dictionary.
 
     Args:
@@ -204,6 +206,13 @@ def load_individual_cases(cases: dict[str, list]) -> IndividualCaseCollection:
     Returns:
         A collection of IndividualCase objects.
     """
+    assert isinstance(cases, dict) or isinstance(cases, list), (
+        "cases must be a dictionary or a list."
+    )
+
+    # if cases is a list, convert to a dictionary for dacite.from_dict
+    if isinstance(cases, list):
+        cases = {"cases": cases}
     case_metadata_collection = dacite.from_dict(
         data_class=IndividualCaseCollection,
         data=cases,
@@ -267,7 +276,7 @@ def load_ewb_events_yaml_into_case_collection() -> IndividualCaseCollection:
     return load_individual_cases(yaml_event_case)
 
 
-def read_incoming_yaml(input_pth: Union[str, pathlib.Path]) -> dict:
+def read_incoming_yaml(input_pth: Union[str, pathlib.Path]):
     """Read events yaml from data into a dictionary.
 
     This function is a wrapper around yaml.safe_load that reads the yaml file directly.
