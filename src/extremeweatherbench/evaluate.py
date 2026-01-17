@@ -101,12 +101,8 @@ class ExtremeWeatherBench:
 
         # Check for serial or parallel configuration
         parallel_config = _parallel_serial_config_check(n_jobs, parallel_config)
-        run_results = run_case_operators(
-            self.case_operators,
-            cache_dir=self.cache_dir,
-            parallel_config=parallel_config,
-            **kwargs,
-        )
+        kwargs["parallel_config"] = parallel_config
+        run_results = run_case_operators(self.case_operators, cache_dir=self.cache_dir, **kwargs)
 
         if run_results:
             return safe_concat(run_results, ignore_index=True)
