@@ -30,6 +30,7 @@ dependencies = [
     "cartopy==0.24.1",
     "numba>=0.63.1",
     "sparse>=0.17.0",
+    "arraylake>=0.27.0",
 ]
 
 [project.optional-dependencies]
