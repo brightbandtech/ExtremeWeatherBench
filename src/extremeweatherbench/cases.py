@@ -24,18 +24,19 @@ logger = logging.getLogger(__name__)
 
 @dataclasses.dataclass
 class IndividualCase:
-    """Container for metadata defining a single or individual case.
+    """Container for metadata defining a single extreme weather case study.
 
-    An IndividualCase defines the relevant metadata for a single case study for a
-    given extreme weather event; it is designed to be easily instantiable through a
-    simple YAML-based configuration file.
+    Defines relevant metadata for a single case study of an extreme weather
+    event. Designed for easy instantiation through simple YAML configuration
+    files.
 
     Attributes:
-        case_id_number: A unique numerical identifier for the event.
-        start_date: The start date of the case, for use in subsetting data for analysis.
-        end_date: The end date of the case, for use in subsetting data for analysis.
-        location: A Location dataclass representing the location of a case.
-        event_type: A string representing the type of extreme weather event.
+        case_id_number: Unique numerical identifier for the event.
+        title: Title of the case study.
+        start_date: Start date for subsetting data for analysis.
+        end_date: End date for subsetting data for analysis.
+        location: Region object representing the case location.
+        event_type: String representing the type of extreme weather event.
     """
 
     case_id_number: int
@@ -48,7 +49,17 @@ class IndividualCase:
 
 @dataclasses.dataclass
 class IndividualCaseCollection:
-    """A collection of IndividualCases."""
+    """Collection of IndividualCase objects for batch processing.
+
+    Provides methods for filtering and selecting cases based on various
+    criteria such as event type, location, or case ID.
+
+    Attributes:
+        cases: List of IndividualCase objects in the collection.
+
+    Public methods:
+        select_cases: Filter cases based on specified criteria
+    """
 
     cases: list[IndividualCase]
 
@@ -126,18 +137,17 @@ class IndividualCaseCollection:
 
 @dataclasses.dataclass
 class CaseOperator:
-    """A class which stores the graph to process an individual case.
+    """Operator storing the processing graph for an individual case.
 
-    This class is used to store the graph to process an individual case. The purpose of
-    this class is to be a one-stop-shop for the evaluation of a single case. Multiple
-    CaseOperators can be run in parallel to evaluate multiple cases, or run through the
-    ExtremeWeatherBench.run() method to evaluate all cases in an evaluation in serial.
+    Serves as a one-stop-shop for evaluating a single case. Multiple
+    CaseOperators can run in parallel for multiple cases, or serially through
+    ExtremeWeatherBench.run().
 
     Attributes:
-        case_metadata: IndividualCase metadata
-        metric_list: A list of metrics that are to be evaluated for the case operator
-        target_config: A TargetConfig object
-        forecast_config: A ForecastConfig object
+        case_metadata: IndividualCase metadata for this operator.
+        metric_list: List of metrics to evaluate for this case.
+        target: TargetBase object for ground truth data.
+        forecast: ForecastBase object for forecast data.
     """
 
     case_metadata: IndividualCase

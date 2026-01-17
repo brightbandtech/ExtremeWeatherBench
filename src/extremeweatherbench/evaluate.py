@@ -37,21 +37,16 @@ OUTPUT_COLUMNS = [
 
 
 class ExtremeWeatherBench:
-    """A class to build and run the ExtremeWeatherBench workflow.
+    """Main class for building and running ExtremeWeatherBench workflows.
 
-    This class is used to run the ExtremeWeatherBench workflow. It is ultimately a
-    wrapper around case operators and evaluation objects to create a parallel or
-    serial run to evaluate cases and metrics, returning a concatenated dataframe of the
-    results.
+    Serves as a wrapper around case operators and evaluation objects to
+    create parallel or serial evaluation runs, returning concatenated results.
 
-    Attributes:
-        case_metadata: A dictionary of cases or an IndividualCaseCollection to run.
-        evaluation_objects: A list of evaluation objects to run.
-        cache_dir: An optional directory to cache the mid-flight outputs of the
-            workflow for serial runs.
-        region_subsetter: An optional region subsetter to subset the cases that are
-            part of the evaluation to a Region object or a dictionary of lat/lon
-            bounds.
+    Public methods:
+        run: Execute the ExtremeWeatherBench workflow
+
+    Properties:
+        case_operators: Build CaseOperator objects from metadata
     """
 
     def __init__(
@@ -61,6 +56,16 @@ class ExtremeWeatherBench:
         cache_dir: Optional[Union[str, pathlib.Path]] = None,
         region_subsetter: Optional["regions.RegionSubsetter"] = None,
     ):
+        """Initialize the ExtremeWeatherBench workflow.
+
+        Args:
+            case_metadata: Dictionary of cases or IndividualCaseCollection.
+            evaluation_objects: List of evaluation objects to run.
+            cache_dir: Optional directory for caching mid-flight outputs in
+                serial runs.
+            region_subsetter: Optional RegionSubsetter to filter cases by
+                spatial region.
+        """
         if isinstance(case_metadata, dict):
             self.case_metadata = cases.load_individual_cases(case_metadata)
         elif isinstance(case_metadata, cases.IndividualCaseCollection):
