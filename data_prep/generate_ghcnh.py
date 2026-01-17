@@ -4,6 +4,7 @@ to save disk space and skip already processed data.
 
 import asyncio
 from pathlib import Path
+from typing import Literal
 
 import aiohttp
 import nest_asyncio
@@ -77,11 +78,11 @@ def parse_station_list(content):
     return pd.DataFrame(stations)
 
 
-def construct_station_download_url(station_id, year):
+def construct_station_download_url(station_id, year, file_type: Literal["parquet", "psv"]="parquet"):
     """Construct download URL for a specific station and year."""
     base_url = "https://www.ncei.noaa.gov/oa/global-historical-climatology-network/hourly/access/by-year"  # noqa: E501
-    filename = f"GHCNh_{station_id}_{year}.psv"
-    return f"{base_url}/{year}/psv/{filename}"
+    filename = f"GHCNh_{station_id}_{year}.{file_type}"
+    return f"{base_url}/{year}/{file_type}/{filename}"
 
 
 # Cache for existing station-year combinations for O(1) lookup
@@ -132,6 +133,14 @@ def clear_existing_data_cache():
     global _existing_station_years, _cache_file_path
     _existing_station_years = None
     _cache_file_path = None
+
+async def get_url_exists(semaphore, session: aiohttp.ClientSession, url: str):
+    async with semaphore:
+        resp = await session.head(url, allow_redirects=True, ssl=False)
+        if resp.status == 200:
+            return url
+        else:
+            return None
 
 
 async def download_and_process_station_file(
@@ -379,9 +388,13 @@ async def download_and_process_station_file_with_semaphore(
 
 
 async def download_all_stations_streaming(
-    years, output_dir, overwrite=False, max_concurrent=100
+    years, output_dir, overwrite=False, max_concurrent=100, return_url=False, file_type: Literal["parquet", "psv"]="parquet"
 ):
     """Download and immediately process GHCNh stations to save disk space."""
+
+    # Create semaphore to limit concurrent downloads
+    semaphore = asyncio.Semaphore(max_concurrent)
+
     print("Downloading and processing GHCNh stations with streaming approach...")
     station_df = await download_station_list()
     print(f"Found {len(station_df)} stations in official list")
@@ -402,59 +415,100 @@ async def download_all_stations_streaming(
     # Calculate total combinations for progress bar
     total_combinations = len(station_df) * len(years)
 
-    with tqdm(
-        total=total_combinations, desc="Setting up tasks", unit="checks", ncols=80
-    ) as setup_pbar:
-        for year in years:
-            for _, station in station_df.iterrows():
-                station_id = station["station_id"]
-                filename = f"GHCNh_{station_id}_{year}.psv"
-
-                # Check if already processed before creating task
-                if not overwrite and check_station_already_processed(
-                    station_id, year, main_parquet_file
-                ):
-                    skipped_during_setup += 1
-                    setup_pbar.set_postfix(
-                        {"Skipped": skipped_during_setup, "Tasks": len(tasks)}
-                    )
-                else:
-                    url = construct_station_download_url(station_id, year)
-                    tasks.append(
-                        {
-                            "station_id": station_id,
-                            "year": year,
-                            "url": url,
-                            "filename": filename,
-                        }
-                    )
-                    total_tasks += 1
-                    setup_pbar.set_postfix(
-                        {"Skipped": skipped_during_setup, "Tasks": len(tasks)}
-                    )
-
-                setup_pbar.update(1)
-
-    print(f"Pre-filtered: {skipped_during_setup} already processed")
-    print(f"Will attempt to download: {len(tasks)} files")
-
-    if not tasks:
-        print("All data already exists! Nothing to download.")
-        return
-
-    # Create semaphore to limit concurrent downloads
-    semaphore = asyncio.Semaphore(max_concurrent)
-
-    # Counters for progress tracking
-    progress_counters = {
-        "processed": 0,
-        "skipped": 0,
-        "not_found": 0,
-        "failed": 0,
-        "errors": 0,
-    }
-
     async with aiohttp.ClientSession() as session:
+        with tqdm(
+            total=total_combinations, desc="Setting up tasks", unit="checks", ncols=80
+        ) as setup_pbar:
+            for year in years:
+                for _, station in station_df.iterrows():
+                    station_id = station["station_id"]
+                    filename = f"GHCNh_{station_id}_{year}.{file_type}"
+
+                    # Check if already processed before creating task
+                    if not overwrite and check_station_already_processed(
+                        station_id, year, main_parquet_file
+                    ):
+                        skipped_during_setup += 1
+                        setup_pbar.set_postfix(
+                            {"Skipped": skipped_during_setup, "Tasks": len(tasks)}
+                        )
+                    else:
+                        url = construct_station_download_url(station_id, year, file_type)
+                        if return_url:
+                            tasks.append(asyncio.create_task(get_url_exists(semaphore, session, url)))
+                        else:
+                            tasks.append(
+                                {
+                                    "station_id": station_id,
+                                    "year": year,
+                                    "url": url,
+                                    "filename": filename,
+                                }
+                            )
+                        total_tasks += 1
+                        setup_pbar.set_postfix(
+                            {"Skipped": skipped_during_setup, "Tasks": len(tasks)}
+                        )
+
+                    setup_pbar.update(1)
+        print(f"Pre-filtered: {skipped_during_setup} already processed")
+        print(f"Will attempt to download: {len(tasks)} files")
+
+        if not tasks:
+            print("All data already exists! Nothing to download.")
+            return
+
+        # Counters for progress tracking
+        progress_counters = {
+            "processed": 0,
+            "skipped": 0,
+            "not_found": 0,
+            "failed": 0,
+            "errors": 0,
+        }
+
+        if return_url:
+            # Run with async tqdm progress bar
+            with tqdm(
+                total=len(tasks),
+                desc="Downloading & Processing",
+                unit="files",
+                ncols=100,
+            ) as pbar:
+                async def process_with_progress(coro):
+                    """Wrapper to update progress bar after each completion."""
+                    try:
+                        result = await coro
+                        # Update counters
+                        if result in progress_counters:
+                            progress_counters[result] += 1
+
+                        # Update progress bar description with current stats
+                        pbar.set_postfix(
+                            {
+                                "Processed": progress_counters["processed"],
+                                "Skipped": progress_counters["skipped"],
+                                "Not Found": progress_counters["not_found"],
+                                "Failed": progress_counters["failed"],
+                            }
+                        )
+                        pbar.update(1)
+                        return result
+                    except Exception as e:
+                        progress_counters["errors"] += 1
+                        pbar.set_postfix(
+                            {
+                                "Processed": progress_counters["processed"],
+                                "Skipped": progress_counters["skipped"],
+                                "Not Found": progress_counters["not_found"],
+                                "Failed": progress_counters["failed"],
+                                "Errors": progress_counters["errors"],
+                            }
+                        )
+                        pbar.update(1)
+                        return e
+                results = await asyncio.gather(*[process_with_progress(coro) for coro in tasks])
+                return results
         print(
             f"Starting streaming download with max {max_concurrent} "
             f"concurrent downloads"
@@ -564,7 +618,7 @@ def main():
     print()
 
     # Define years to download
-    years = [2020, 2021, 2022, 2023, 2024]
+    years = [2020, 2021, 2022, 2023, 2024, 2025, 2026]
 
     # Set output directory for temporary files
     output_dir = "/tmp/ghcnh_temp/"
@@ -575,12 +629,12 @@ def main():
 
     # Download and process using streaming approach
     print(f"Streaming data for years: {years}")
-    asyncio.run(
+    urls = asyncio.run(
         download_all_stations_streaming(
-            years, output_dir, overwrite=False, max_concurrent=1000
+            years, output_dir, overwrite=False, max_concurrent=1000, return_url=True, file_type="parquet"
         )
     )
-
+    print(urls)
     # Clean up temp directory
     try:
         import shutil
@@ -592,6 +646,22 @@ def main():
 
     print("Streaming processing complete!")
 
+def download_url():
+    """Download a URL and return the content."""
+    # Define years to download
+    years = [2020, 2021, 2022, 2023, 2024]
 
+    # Set output directory for temporary files
+    output_dir = "/tmp/ghcnh_temp/"
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
+
+    urls = asyncio.run(
+        download_all_stations_streaming(
+            years, output_dir, overwrite=False, max_concurrent=10000, return_url=True, file_type="parquet"
+        )
+    )
+    import pickle
+    with open("/home/taylor/code/ExtremeWeatherBench/data_prep/urls.pkl", "wb") as f:
+        pickle.dump(urls, f)
 if __name__ == "__main__":
-    main()
+    download_url()
