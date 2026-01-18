@@ -28,7 +28,7 @@ fcnv2_forecast = inputs.KerchunkForecast(
     variables=["surface_air_temperature"],
     variable_mapping=inputs.CIRA_metadata_variable_mapping,
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
-    preprocess=defaults._preprocess_bb_cira_forecast_dataset,
+    preprocess=defaults._preprocess_cira_forecast_dataset,
 )
 
 # Load the climatology for DurationMeanError

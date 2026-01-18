@@ -63,16 +63,6 @@ def test_remove_ocean_gridpoints():
     assert result.sizes == ds.sizes
 
 
-def test_load_events_yaml():
-    """Test loading events yaml file."""
-    result = utils.load_events_yaml()
-
-    # Should return a dictionary
-    assert isinstance(result, dict)
-    # Should contain 'cases' key (based on the existing yaml structure)
-    assert "cases" in result
-
-
 def test_read_event_yaml(tmp_path):
     """Test reading events yaml from file."""
     # Create a temporary yaml file

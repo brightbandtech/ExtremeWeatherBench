@@ -15,7 +15,7 @@ import yaml
 from matplotlib.patches import Rectangle
 
 import extremeweatherbench.data
-from extremeweatherbench import inputs, regions, utils
+from extremeweatherbench import cases, inputs, regions, utils
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -537,9 +537,8 @@ def update_cases_with_storm_bounds(storm_bounds, all_storms_df):
     """
     logger.info("Updating cases with storm bounds...")
 
-    cases_all = utils.load_events_yaml()
-    cases_old = cases_all["cases"]
-    cases_new = cases_old.copy()
+    cases_all = cases.load_ewb_events_yaml_into_case_collection()
+    cases_new = cases_all.copy()
 
     # Update the yaml cases with storm bounds from IBTrACS data
     for single_case in cases_new:

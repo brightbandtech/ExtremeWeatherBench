@@ -14,7 +14,7 @@ logger.setLevel(logging.INFO)
 
 
 # Preprocess function for CIRA data using Brightband kerchunk parquets
-def _preprocess_bb_cira_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
+def _preprocess_cira_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
     """An example preprocess function that renames the time coordinate to lead_time,
     creates a valid_time coordinate, and sets the lead time range and resolution not
     present in the original dataset.
@@ -75,7 +75,7 @@ grap_forecast = inputs.KerchunkForecast(
     ],
     variable_mapping=inputs.CIRA_metadata_variable_mapping,
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
-    preprocess=_preprocess_bb_cira_forecast_dataset,
+    preprocess=_preprocess_cira_forecast_dataset,
 )
 
 pang_forecast = inputs.KerchunkForecast(
@@ -88,7 +88,7 @@ pang_forecast = inputs.KerchunkForecast(
     ],
     variable_mapping=inputs.CIRA_metadata_variable_mapping,
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
-    preprocess=_preprocess_bb_cira_forecast_dataset,
+    preprocess=_preprocess_cira_forecast_dataset,
 )
 # Create a list of evaluation objects for atmospheric river
 ar_evaluation_objects = [
