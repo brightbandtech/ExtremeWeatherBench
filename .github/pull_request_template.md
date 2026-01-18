@@ -13,11 +13,11 @@ Please include a summary of the change and which issue is fixed. Please also inc
 
 ### If this PR is a breaking change, please explain:
 
-What functionality is now broken?
+**What functionality is now broken?**
 
-What is the new approach?
+**What is the new approach?**
 
-Did you fix the documentation and up + downstream code accordingly?
+**Did you fix the documentation and up + downstream code accordingly?**
 ## How Has This Been Tested?
 
 Please describe the tests that you ran to verify your changes. Provide instructions so we can reproduce. Please also list any relevant details for your test configuration.
