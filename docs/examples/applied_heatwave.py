@@ -8,8 +8,8 @@ logger = logging.getLogger("extremeweatherbench")
 logger.setLevel(logging.INFO)
 
 # Load case data from the default events.yaml
-# Users can also define their own cases_dict structure
-case_yaml = cases.load_ewb_events_yaml_into_case_collection()
+# Users can also define their own cases
+case_yaml = cases.load_ewb_events_yaml_into_case_list()
 
 # Define targets
 # ERA5 target

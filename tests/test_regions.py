@@ -1418,9 +1418,7 @@ class TestRegionSubsetter:
             event_type="snow_storm",
         )
 
-        return cases.IndividualCaseCollection(
-            cases=[intersecting_case, contained_case, outside_case]
-        )
+        return [intersecting_case, contained_case, outside_case]
 
     def test_subsetter_initialization_with_region(self, target_region):
         """Test regions.RegionSubsetter initialization with Region object."""
@@ -1456,9 +1454,9 @@ class TestRegionSubsetter:
         subset_cases = subsetter.subset_case_collection(sample_cases)
 
         # Should include intersecting and contained cases, but not outside
-        assert len(subset_cases.cases) == 2
-        case_ids = {case.case_id_number for case in subset_cases.cases}
-        assert case_ids == {1, 2}  # intersecting and contained
+        assert len(subset_cases) == 2
+        case_ids = [case.case_id_number for case in subset_cases]
+        assert case_ids == [1, 2]  # intersecting and contained
 
     def test_subset_case_collection_all(self, target_region, sample_cases):
         """Test subsetting with all method."""
@@ -1467,8 +1465,8 @@ class TestRegionSubsetter:
         subset_cases = subsetter.subset_case_collection(sample_cases)
 
         # Should only include contained case
-        assert len(subset_cases.cases) == 1
-        assert subset_cases.cases[0].case_id_number == 2  # contained case
+        assert len(subset_cases) == 1
+        assert subset_cases[0].case_id_number == 2  # contained case
 
     def test_subset_case_collection_percent(self, target_region, sample_cases):
         """Test subsetting with percent method."""
@@ -1480,7 +1478,7 @@ class TestRegionSubsetter:
 
         # This depends on the actual overlap, but should include at least the contained
         # case
-        case_ids = {case.case_id_number for case in subset_cases.cases}
+        case_ids = [case.case_id_number for case in subset_cases]
         assert 2 in case_ids  # contained case should always be included
 
     def test_subset_case_collection_different_thresholds(
@@ -1506,7 +1504,7 @@ class TestRegionSubsetter:
         )
 
         # Low threshold should include at least as many as high threshold
-        assert len(low_threshold_cases.cases) >= len(high_threshold_cases.cases)
+        assert len(low_threshold_cases) >= len(high_threshold_cases)
 
     def test_subset_results_to_region(self, target_region, sample_cases):
         """Test subsetting results DataFrame."""
@@ -1589,7 +1587,7 @@ class TestConvenienceFunctions:
             event_type="cold_wave",
         )
 
-        return cases.IndividualCaseCollection(cases=[case1, case2])
+        return [case1, case2]
 
     def test_subset_cases_to_region_with_region_object(self, sample_case_collection):
         """Test regions.subset_cases_to_region with Region object."""
@@ -1605,8 +1603,8 @@ class TestConvenienceFunctions:
         )
 
         # Should include case 1 (intersects) but not case 2 (outside)
-        assert len(subset_cases.cases) == 1
-        assert subset_cases.cases[0].case_id_number == 1
+        assert len(subset_cases) == 1
+        assert subset_cases[0].case_id_number == 1
 
     def test_subset_cases_to_region_with_dict(self, sample_case_collection):
         """Test regions.subset_cases_to_region with dictionary."""
@@ -1621,8 +1619,8 @@ class TestConvenienceFunctions:
             sample_case_collection, region_dict, method="intersects"
         )
 
-        assert len(subset_cases.cases) == 1
-        assert subset_cases.cases[0].case_id_number == 1
+        assert len(subset_cases) == 1
+        assert subset_cases[0].case_id_number == 1
 
     def test_subset_cases_to_region_with_percent_method(self, sample_case_collection):
         """Test regions.subset_cases_to_region with percent method."""
@@ -1658,7 +1656,7 @@ class TestConvenienceFunctions:
         )
 
         # Should include case 1 which is completely within the large region
-        assert len(subset_cases.cases) >= 1
+        assert len(subset_cases) >= 1
 
     def test_subset_results_to_region_convenience(self, sample_case_collection):
         """Test regions.subset_results_to_region convenience function."""
@@ -1694,9 +1692,8 @@ class TestRegionSubsettingEdgeCases:
 
     def test_empty_case_collection(self):
         """Test subsetting with empty case collection."""
-        from extremeweatherbench import cases
 
-        empty_collection = cases.IndividualCaseCollection(cases=[])
+        empty_collection = []
         target_region = regions.BoundingBoxRegion.create_region(
             latitude_min=40.0,
             latitude_max=50.0,
@@ -1707,7 +1704,7 @@ class TestRegionSubsettingEdgeCases:
         subsetter = regions.RegionSubsetter(region=target_region, method="intersects")
 
         subset_cases = subsetter.subset_case_collection(empty_collection)
-        assert len(subset_cases.cases) == 0
+        assert len(subset_cases) == 0
 
     def test_very_small_regions(self):
         """Test subsetting with very small"""
@@ -1728,8 +1725,6 @@ class TestRegionSubsettingEdgeCases:
             event_type="test",
         )
 
-        case_collection = cases.IndividualCaseCollection(cases=[tiny_case])
-
         # Create a target region that should intersect
         target_region = regions.BoundingBoxRegion.create_region(
             latitude_min=44.9,
@@ -1740,8 +1735,8 @@ class TestRegionSubsettingEdgeCases:
 
         subsetter = regions.RegionSubsetter(region=target_region, method="intersects")
 
-        subset_cases = subsetter.subset_case_collection(case_collection)
-        assert len(subset_cases.cases) == 1
+        subset_cases = subsetter.subset_case_collection([tiny_case])
+        assert len(subset_cases) == 1
 
     def test_antimeridian_crossing_regions(self):
         """Test subsetting with regions that cross the antimeridian."""
@@ -1761,8 +1756,6 @@ class TestRegionSubsettingEdgeCases:
             event_type="test",
         )
 
-        case_collection = cases.IndividualCaseCollection(cases=[dateline_case])
-
         # Create a target region that might cross antimeridian
         target_region = regions.CenteredRegion.create_region(
             latitude=45.0,
@@ -1773,8 +1766,8 @@ class TestRegionSubsettingEdgeCases:
         subsetter = regions.RegionSubsetter(region=target_region, method="intersects")
 
         # Should handle antimeridian crossing gracefully
-        subset_cases = subsetter.subset_case_collection(case_collection)
-        assert isinstance(subset_cases, cases.IndividualCaseCollection)
+        subset_cases = subsetter.subset_case_collection([dateline_case])
+        assert len(subset_cases) == 1
 
     def test_polar_regions(self):
         """Test subsetting with polar"""
@@ -1792,8 +1785,6 @@ class TestRegionSubsettingEdgeCases:
             event_type="test",
         )
 
-        case_collection = cases.IndividualCaseCollection(cases=[polar_case])
-
         # Create a target region at high latitudes
         target_region = regions.BoundingBoxRegion.create_region(
             latitude_min=80.0,
@@ -1805,8 +1796,8 @@ class TestRegionSubsettingEdgeCases:
         subsetter = regions.RegionSubsetter(region=target_region, method="intersects")
 
         # Should handle polar coordinates gracefully
-        subset_cases = subsetter.subset_case_collection(case_collection)
-        assert isinstance(subset_cases, cases.IndividualCaseCollection)
+        subset_cases = subsetter.subset_case_collection([polar_case])
+        assert len(subset_cases) == 1
 
 
 class TestAdjustBoundsToDatasetConvention:
