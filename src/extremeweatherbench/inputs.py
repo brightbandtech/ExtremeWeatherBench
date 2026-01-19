@@ -271,6 +271,7 @@ class InputBase(abc.ABC):
         ds.attrs["source"] = self.name
         return ds
 
+    # TODO(314): move to sources module
     def maybe_map_variable_names(self, data: IncomingDataInput) -> IncomingDataInput:
         """Map the variable names to the data, if required.
 
