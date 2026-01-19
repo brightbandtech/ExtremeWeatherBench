@@ -1,16 +1,16 @@
 name: Run tests
 
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main, develop]
+  push:
+    branches: [main]
 
 permissions:
   contents: read
 
 jobs:
-  test:
+  build:
     runs-on: ubuntu-latest
     strategy:
       matrix:
