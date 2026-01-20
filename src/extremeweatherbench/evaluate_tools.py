@@ -12,7 +12,6 @@ Key design principles:
 import contextlib
 import copy
 import dataclasses
-import hashlib
 import logging
 import pathlib
 import tempfile
@@ -105,26 +104,6 @@ def dataset_cache(cache_dir: Optional[Union[str, pathlib.Path]] = None):
     else:
         with tempfile.TemporaryDirectory(prefix="ewb_cache_") as tmpdir:
             yield joblib.Memory(tmpdir, verbose=0)
-
-
-def make_cache_key(case_operator: "cases.CaseOperator") -> str:
-    """Create a unique hash key for caching based on case operator properties.
-
-    Args:
-        case_operator: The case operator to create a key for.
-
-    Returns:
-        MD5 hash string uniquely identifying this case operator.
-    """
-    key_parts = [
-        str(case_operator.case_metadata.case_id_number),
-        case_operator.forecast.name,
-        case_operator.target.name,
-        str(case_operator.case_metadata.start_date),
-        str(case_operator.case_metadata.end_date),
-    ]
-    key_str = "|".join(key_parts)
-    return hashlib.md5(key_str.encode()).hexdigest()
 
 
 def validate_case_operator_metrics(
@@ -745,8 +724,7 @@ def ensure_output_schema(df: pd.DataFrame, **metadata) -> pd.DataFrame:
 
 
 def evaluate_metric_and_return_df(
-    forecast_ds: xr.Dataset,
-    target_ds: xr.Dataset,
+    datasets: PreparedDatasets,
     forecast_variable: Union[str, "derived.DerivedVariable"],
     target_variable: Union[str, "derived.DerivedVariable"],
     metric: "metrics.BaseMetric",
@@ -756,8 +734,7 @@ def evaluate_metric_and_return_df(
     """Evaluate a metric and return a dataframe of the results.
 
     Args:
-        forecast_ds: The forecast dataset.
-        target_ds: The target dataset.
+        datasets: The prepared datasets.
         forecast_variable: The forecast variable to evaluate.
         target_variable: The target variable to evaluate.
         metric: The metric to evaluate.
@@ -774,20 +751,20 @@ def evaluate_metric_and_return_df(
     logger.info("Computing metric %s... ", metric.name)
 
     # Extract the appropriate data for the metric
-    if forecast_variable not in forecast_ds.data_vars:
+    if forecast_variable not in datasets.forecast.data_vars:
         raise ValueError(
             f"Variable '{forecast_variable}' not found in forecast dataset. "
-            f"Available variables: {list(forecast_ds.data_vars)}"
+            f"Available variables: {list(datasets.forecast.data_vars)}"
         )
 
-    if target_variable not in target_ds.data_vars:
+    if target_variable not in datasets.target.data_vars:
         raise ValueError(
             f"Variable '{target_variable}' not found in target dataset. "
-            f"Available variables: {list(target_ds.data_vars)}"
+            f"Available variables: {list(datasets.target.data_vars)}"
         )
 
-    forecast_data = forecast_ds[forecast_variable]
-    target_data = target_ds[target_variable]
+    forecast_data = datasets.forecast[forecast_variable]
+    target_data = datasets.target[target_variable]
 
     metric_result = metric.compute_metric(
         forecast_data,
@@ -1040,8 +1017,7 @@ def compute_case_operator(
         for job in jobs:
             results.append(
                 evaluate_metric_and_return_df(
-                    forecast_ds=datasets.forecast,
-                    target_ds=datasets.target,
+                    datasets=datasets,
                     forecast_variable=job.forecast_var,
                     target_variable=job.target_var,
                     metric=job.metric,

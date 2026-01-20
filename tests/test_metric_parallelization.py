@@ -137,7 +137,6 @@ class TestMetricParallelization:
     def test_cache_functions_exist_and_work(self):
         """Verify cache management functions are accessible."""
         assert hasattr(evaluate_tools, "dataset_cache")
-        assert hasattr(evaluate_tools, "make_cache_key")
 
         # dataset_cache context manager should work
         with evaluate_tools.dataset_cache() as memory:

@@ -14,10 +14,6 @@ import xarray as xr
 from extremeweatherbench import cases, metrics
 from extremeweatherbench import evaluate_tools as et
 
-# =============================================================================
-# Fixtures - Synthetic Data
-# =============================================================================
-
 
 @pytest.fixture
 def synthetic_forecast_ds():
@@ -139,11 +135,6 @@ def mock_case_operator(
     return case_op
 
 
-# =============================================================================
-# Test: dataset_cache context manager
-# =============================================================================
-
-
 class TestDatasetCache:
     """Tests for the dataset_cache context manager."""
 
@@ -181,43 +172,6 @@ class TestDatasetCache:
             assert call_count == 1  # Only called once due to caching
 
 
-# =============================================================================
-# Test: make_cache_key
-# =============================================================================
-
-
-class TestMakeCacheKey:
-    """Tests for the make_cache_key function."""
-
-    def test_returns_string(self, mock_case_operator):
-        """Test that make_cache_key returns a string."""
-        key = et.make_cache_key(mock_case_operator)
-        assert isinstance(key, str)
-        assert len(key) == 32  # MD5 hash length
-
-    def test_same_input_same_key(self, mock_case_operator):
-        """Test that the same input produces the same key."""
-        key1 = et.make_cache_key(mock_case_operator)
-        key2 = et.make_cache_key(mock_case_operator)
-        assert key1 == key2
-
-    def test_different_case_id_different_key(
-        self, mock_case_operator, mock_case_metadata
-    ):
-        """Test that different case IDs produce different keys."""
-        key1 = et.make_cache_key(mock_case_operator)
-
-        mock_case_metadata.case_id_number = 999
-        key2 = et.make_cache_key(mock_case_operator)
-
-        assert key1 != key2
-
-
-# =============================================================================
-# Test: validate_case_operator_metrics
-# =============================================================================
-
-
 class TestValidateCaseOperatorMetrics:
     """Tests for validate_case_operator_metrics function."""
 
@@ -234,7 +188,7 @@ class TestValidateCaseOperatorMetrics:
 
         with mock.patch("dataclasses.replace") as mock_replace:
             mock_replace.return_value = case_op
-            result = et.validate_case_operator_metrics(case_op)
+            _ = et.validate_case_operator_metrics(case_op)
 
             # Should have called replace to update metric_list
             mock_replace.assert_called_once()
@@ -248,11 +202,6 @@ class TestValidateCaseOperatorMetrics:
 
         with pytest.raises(TypeError, match="BaseMetric instance"):
             et.validate_case_operator_metrics(mock_case_operator)
-
-
-# =============================================================================
-# Test: collect_claimed_variables
-# =============================================================================
 
 
 class TestCollectClaimedVariables:
@@ -301,11 +250,6 @@ class TestCollectClaimedVariables:
         assert target_vars == {"temperature"}
 
 
-# =============================================================================
-# Test: get_variable_pairs_for_metric
-# =============================================================================
-
-
 class TestGetVariablePairsForMetric:
     """Tests for get_variable_pairs_for_metric function."""
 
@@ -341,11 +285,6 @@ class TestGetVariablePairsForMetric:
         )
 
         assert pairs == [("precipitation", "precipitation")]
-
-
-# =============================================================================
-# Test: create_jobs_for_case
-# =============================================================================
 
 
 class TestCreateJobsForCase:
@@ -408,11 +347,6 @@ class TestCreateJobsForCase:
         assert vars_in_jobs == {"temperature", "precipitation"}
 
 
-# =============================================================================
-# Test: PreparedDatasets dataclass
-# =============================================================================
-
-
 class TestPreparedDatasets:
     """Tests for PreparedDatasets dataclass."""
 
@@ -425,11 +359,6 @@ class TestPreparedDatasets:
 
         assert datasets.forecast is synthetic_forecast_ds
         assert datasets.target is synthetic_target_ds
-
-
-# =============================================================================
-# Test: MetricJob dataclass
-# =============================================================================
 
 
 class TestMetricJob:
@@ -450,11 +379,6 @@ class TestMetricJob:
         assert job.forecast_var == "temperature"
         assert job.target_var == "temperature"
         assert job.metric_kwargs == {"key": "value"}
-
-
-# =============================================================================
-# Test: build_metric_jobs (integration-ish)
-# =============================================================================
 
 
 class TestBuildMetricJobs:
@@ -501,11 +425,6 @@ class TestBuildMetricJobs:
                 mock_parallel.assert_called_once()
 
 
-# =============================================================================
-# Test: process_case_operator (integration)
-# =============================================================================
-
-
 class TestProcessCaseOperator:
     """Tests for process_case_operator function."""
 
@@ -540,11 +459,6 @@ class TestProcessCaseOperator:
                     # Should have 2 jobs (one per variable)
                     assert len(jobs) == 2
                     assert all(isinstance(j, et.MetricJob) for j in jobs)
-
-
-# =============================================================================
-# Integration test with real data flow
-# =============================================================================
 
 
 class TestIntegrationWithSyntheticData:
