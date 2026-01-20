@@ -115,7 +115,9 @@ def load_individual_cases(
     """
 
     case_list = [
-        case if isinstance(case, IndividualCase) else dacite.from_dict(
+        case
+        if isinstance(case, IndividualCase)
+        else dacite.from_dict(
             data_class=IndividualCase,
             data=case,
             config=dacite.Config(
