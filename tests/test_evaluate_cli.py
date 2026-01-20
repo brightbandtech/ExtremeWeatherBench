@@ -2,6 +2,7 @@
 
 import pickle
 import tempfile
+import textwrap
 from pathlib import Path
 from unittest import mock
 
@@ -42,11 +43,11 @@ def temp_config_dir():
 @pytest.fixture
 def sample_config_py(temp_config_dir):
     """Create a sample Python config file."""
-    config_content = """
+    config_content = textwrap.dedent("""
         # Simple test config that doesn't import complex modules
         evaluation_objects = []
-        cases_list = []
-        """
+        case_list = []
+        """)
     config_file = temp_config_dir / "test_config.py"
     config_file.write_text(config_content)
     return config_file
@@ -170,9 +171,9 @@ class TestConfigFileMode:
 
     def test_config_file_missing_evaluation_objects(self, runner, temp_config_dir):
         """Test config file missing required evaluation_objects."""
-        config_content = """
+        config_content = textwrap.dedent("""
         cases_list = []
-        """
+        """)
         config_file = temp_config_dir / "bad_config.py"
         config_file.write_text(config_content)
 
@@ -185,9 +186,9 @@ class TestConfigFileMode:
 
     def test_config_file_missing_case_list(self, runner, temp_config_dir):
         """Test config file missing required case_list."""
-        config_content = """
-evaluation_objects = []
-        """
+        config_content = textwrap.dedent("""
+        evaluation_objects = []
+        """)
         config_file = temp_config_dir / "bad_config.py"
         config_file.write_text(config_content)
 
