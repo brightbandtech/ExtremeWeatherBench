@@ -39,9 +39,7 @@ class PerformanceResult(NamedTuple):
     result_df: pd.DataFrame
 
 
-def _create_synthetic_dataset(
-    n_lead: int = 5, n_lat: int = 5, n_lon: int = 5
-):
+def _create_synthetic_dataset(n_lead: int = 5, n_lat: int = 5, n_lon: int = 5):
     """Create a small synthetic xarray dataset for testing.
 
     Uses lead_time dimension which is what metrics expect to preserve.
@@ -186,9 +184,7 @@ class TestMetricParallelization:
         )
 
         # Mock build_datasets to return our synthetic data
-        with mock.patch.object(
-            evaluate_tools, "build_datasets"
-        ) as mock_build:
+        with mock.patch.object(evaluate_tools, "build_datasets") as mock_build:
             mock_build.return_value = (synthetic_dataset, synthetic_dataset)
 
             with evaluate_tools.dataset_cache() as memory:
@@ -199,7 +195,9 @@ class TestMetricParallelization:
             assert all(isinstance(j, evaluate_tools.MetricJob) for j in jobs)
             assert jobs[0].metric.name != jobs[1].metric.name
 
-    def test_compute_single_metric_returns_dataframe(self, synthetic_dataset, mock_case):
+    def test_compute_single_metric_returns_dataframe(
+        self, synthetic_dataset, mock_case
+    ):
         """Test that _compute_single_metric returns a proper DataFrame."""
         mock_target = mock.Mock(spec=inputs.TargetBase)
         mock_target.name = "mock_target"
@@ -228,9 +226,7 @@ class TestMetricParallelization:
             metric_kwargs={},
         )
 
-        with mock.patch.object(
-            evaluate_tools, "build_datasets"
-        ) as mock_build:
+        with mock.patch.object(evaluate_tools, "build_datasets") as mock_build:
             mock_build.return_value = (synthetic_dataset, synthetic_dataset)
 
             with evaluate_tools.dataset_cache() as memory:
@@ -263,9 +259,7 @@ class TestMetricParallelization:
             forecast=mock_forecast,
         )
 
-        with mock.patch.object(
-            evaluate_tools, "build_datasets"
-        ) as mock_build:
+        with mock.patch.object(evaluate_tools, "build_datasets") as mock_build:
             mock_build.return_value = (synthetic_dataset, synthetic_dataset)
 
             ewb = evaluate.ExtremeWeatherBench(
@@ -300,9 +294,7 @@ class TestMetricParallelization:
             forecast=mock_forecast,
         )
 
-        with mock.patch.object(
-            evaluate_tools, "build_datasets"
-        ) as mock_build:
+        with mock.patch.object(evaluate_tools, "build_datasets") as mock_build:
             mock_build.return_value = (synthetic_dataset, synthetic_dataset)
 
             ewb = evaluate.ExtremeWeatherBench(
@@ -355,9 +347,7 @@ class TestPerformanceComparison:
             forecast=mock_forecast,
         )
 
-        with mock.patch.object(
-            evaluate_tools, "build_datasets"
-        ) as mock_build:
+        with mock.patch.object(evaluate_tools, "build_datasets") as mock_build:
             mock_build.return_value = (synthetic_dataset, synthetic_dataset)
 
             # Serial run

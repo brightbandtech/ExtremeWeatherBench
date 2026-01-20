@@ -841,4 +841,3 @@ def maybe_cache_and_compute(
 
     # Load the data from the cache
     return xr.open_dataset(cache_path / f"{name}.zarr")
-

@@ -351,9 +351,7 @@ class TestGetVariablePairsForMetric:
 class TestCreateJobsForCase:
     """Tests for create_jobs_for_case function."""
 
-    def test_creates_job_for_single_metric(
-        self, mock_case_operator, prepared_datasets
-    ):
+    def test_creates_job_for_single_metric(self, mock_case_operator, prepared_datasets):
         """Test that a job is created for a single metric."""
         jobs = et.create_jobs_for_case(mock_case_operator, prepared_datasets)
 
@@ -361,9 +359,7 @@ class TestCreateJobsForCase:
         assert len(jobs) == 2
         assert all(isinstance(job, et.MetricJob) for job in jobs)
 
-    def test_job_has_correct_attributes(
-        self, mock_case_operator, prepared_datasets
-    ):
+    def test_job_has_correct_attributes(self, mock_case_operator, prepared_datasets):
         """Test that jobs have correct attributes."""
         mock_case_operator.metric_list = [
             metrics.MeanAbsoluteError(
@@ -473,9 +469,7 @@ class TestBuildMetricJobs:
     def test_serial_path_with_mocked_datasets(self, mock_case_operator):
         """Test serial job building with mocked dataset preparation."""
         with et.dataset_cache() as memory:
-            with mock.patch.object(
-                et, "process_case_operator"
-            ) as mock_process:
+            with mock.patch.object(et, "process_case_operator") as mock_process:
                 mock_job = et.MetricJob(
                     case_operator=mock_case_operator,
                     metric=metrics.MeanAbsoluteError(),
@@ -495,9 +489,7 @@ class TestBuildMetricJobs:
     def test_parallel_path_called_when_config_provided(self, mock_case_operator):
         """Test that parallel path is used when parallel_config is provided."""
         with et.dataset_cache() as memory:
-            with mock.patch.object(
-                et, "_build_metric_jobs_parallel"
-            ) as mock_parallel:
+            with mock.patch.object(et, "_build_metric_jobs_parallel") as mock_parallel:
                 mock_parallel.return_value = []
 
                 et.build_metric_jobs(
@@ -524,9 +516,7 @@ class TestProcessCaseOperator:
                 et, "validate_case_operator_metrics"
             ) as mock_validate:
                 mock_validate.return_value = mock_case_operator
-                with mock.patch.object(
-                    et, "prepare_aligned_datasets"
-                ) as mock_prepare:
+                with mock.patch.object(et, "prepare_aligned_datasets") as mock_prepare:
                     mock_prepare.return_value = None
 
                     jobs = et.process_case_operator(mock_case_operator, memory)
@@ -542,9 +532,7 @@ class TestProcessCaseOperator:
                 et, "validate_case_operator_metrics"
             ) as mock_validate:
                 mock_validate.return_value = mock_case_operator
-                with mock.patch.object(
-                    et, "prepare_aligned_datasets"
-                ) as mock_prepare:
+                with mock.patch.object(et, "prepare_aligned_datasets") as mock_prepare:
                     mock_prepare.return_value = prepared_datasets
 
                     jobs = et.process_case_operator(mock_case_operator, memory)
@@ -573,9 +561,7 @@ class TestIntegrationWithSyntheticData:
                 et, "validate_case_operator_metrics"
             ) as mock_validate:
                 mock_validate.return_value = mock_case_operator
-                with mock.patch.object(
-                    et, "prepare_aligned_datasets"
-                ) as mock_prepare:
+                with mock.patch.object(et, "prepare_aligned_datasets") as mock_prepare:
                     mock_prepare.return_value = et.PreparedDatasets(
                         forecast=synthetic_forecast_ds,
                         target=synthetic_target_ds,
