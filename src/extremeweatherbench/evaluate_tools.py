@@ -328,7 +328,7 @@ def create_jobs_for_case(
     return jobs
 
 
-def run_pipeline(
+def run_input_data_pipeline(
     case_metadata: "cases.IndividualCase",
     input_data: "inputs.InputBase",
     **kwargs,
@@ -390,7 +390,7 @@ def run_pipeline(
         return xr.Dataset()
 
 
-def build_datasets(
+def build_case_operator_datasets(
     case_operator: "cases.CaseOperator",
     **kwargs,
 ) -> tuple[xr.Dataset, xr.Dataset]:
@@ -455,7 +455,7 @@ def build_datasets(
         desc=f"Running target pipeline for case "
         f"{case_operator.case_metadata.case_id_number}"
     ):
-        target_ds = run_pipeline(
+        target_ds = run_input_data_pipeline(
             case_operator.case_metadata, augmented_target, **kwargs
         )
 
@@ -476,7 +476,7 @@ def build_datasets(
         desc=f"Running forecast pipeline for case "
         f"{case_operator.case_metadata.case_id_number}"
     ):
-        forecast_ds = run_pipeline(
+        forecast_ds = run_input_data_pipeline(
             case_operator.case_metadata, augmented_forecast, **kwargs
         )
 
@@ -530,9 +530,9 @@ def prepare_aligned_datasets(
         PreparedDatasets with aligned forecast and target, or None if empty.
     """
 
-    # Cache the build_datasets function to avoid re-running the pipeline for the same
+    # Cache the build_case_operator_datasets function to avoid re-running the pipeline for the same
     # case operator
-    cached_build = memory.cache(build_datasets)
+    cached_build = memory.cache(build_case_operator_datasets)
     forecast_ds, target_ds = cached_build(case_operator, **kwargs)
 
     # Check for empty datasets
