@@ -105,6 +105,8 @@ def load_individual_cases(
 ) -> list[IndividualCase]:
     """Load IndividualCase metadata from a dictionary.
 
+    Will pass through existing IndividualCase objects and convert dictionaries to IndividualCase objects.
+
     Args:
         cases: A dictionary of cases based on the IndividualCase dataclass.
 
@@ -113,7 +115,7 @@ def load_individual_cases(
     """
 
     case_list = [
-        dacite.from_dict(
+        case if isinstance(case, IndividualCase) else dacite.from_dict(
             data_class=IndividualCase,
             data=case,
             config=dacite.Config(
