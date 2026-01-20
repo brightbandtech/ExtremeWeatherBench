@@ -114,7 +114,7 @@ def load_individual_cases(
         A collection of IndividualCase objects.
     """
 
-    # Iterate through the cases and convert dictionaries to IndividualCase objects if 
+    # Iterate through the cases and convert dictionaries to IndividualCase objects if
     # they are not already IndividualCase objects
     case_list = [
         case
