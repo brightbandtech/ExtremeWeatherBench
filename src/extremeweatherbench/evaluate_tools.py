@@ -529,6 +529,9 @@ def prepare_aligned_datasets(
     Returns:
         PreparedDatasets with aligned forecast and target, or None if empty.
     """
+
+    # Cache the build_datasets function to avoid re-running the pipeline for the same 
+    # case operator
     cached_build = memory.cache(build_datasets)
     forecast_ds, target_ds = cached_build(case_operator, **kwargs)
 
