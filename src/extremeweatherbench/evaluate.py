@@ -80,12 +80,12 @@ class ExtremeWeatherBench:
 
         # Subset the cases if a region subsetter was provided
         if self.region_subsetter:
-            subset_collection = self.region_subsetter.subset_case_collection(
+            subset_list = self.region_subsetter.subset_case_list(
                 self.case_metadata
             )
         else:
-            subset_collection = self.case_metadata
-        return cases.build_case_operators(subset_collection, self.evaluation_objects)
+            subset_list = self.case_metadata
+        return cases.build_case_operators(subset_list, self.evaluation_objects)
 
     def run(
         self,

@@ -174,20 +174,20 @@ class TestLoadIndividualCases:
     def test_load_individual_cases_basic(self, cases_list_of_dicts):
         """Test loading individual cases from dictionary."""
 
-        collection = cases.load_individual_cases(cases_list_of_dicts)
+        case_list = cases.load_individual_cases(cases_list_of_dicts)
 
-        assert all(isinstance(case, cases.IndividualCase) for case in collection)
-        assert len(collection) == 2
+        assert all(isinstance(case, cases.IndividualCase) for case in case_list)
+        assert len(case_list) == 2
 
         # Check first case
-        case1 = collection[0]
+        case1 = case_list[0]
         assert case1.case_id_number == 1
         assert case1.title == "Test Case 1"
         assert case1.event_type == "heat_wave"
         assert isinstance(case1.location, regions.CenteredRegion)
 
         # Check second case
-        case2 = collection[1]
+        case2 = case_list[1]
         assert case2.case_id_number == 2
         assert case2.title == "Test Case 2"
         assert case2.event_type == "drought"
@@ -259,9 +259,9 @@ class TestBuildCaseOperators:
         ):
             cases.build_case_operators(invalid_case_list, [mock_eval_obj])
 
-    def test_build_case_operators_empty_individual_case_collection(self):
+    def test_build_case_operators_empty_individual_case_list(self):
         """Test build_case_operators with empty list of IndividualCase objects."""
-        empty_collection = []
+        empty_list = []
 
         mock_eval_obj = mock.Mock()
         mock_eval_obj.event_type = ["heat_wave"]
@@ -269,12 +269,12 @@ class TestBuildCaseOperators:
         mock_eval_obj.target = mock.Mock()
         mock_eval_obj.forecast = mock.Mock()
 
-        operators = cases.build_case_operators(empty_collection, [mock_eval_obj])
+        operators = cases.build_case_operators(empty_list, [mock_eval_obj])
 
-        # Should create no operators from empty collection
+        # Should create no operators from empty list
         assert len(operators) == 0
 
-    def test_build_case_operators_collection_with_no_matching_events(self):
+    def test_build_case_operators_list_with_no_matching_events(self):
         """Test list of IndividualCase objects passthrough with no matching event types."""
         region = regions.CenteredRegion.create_region(
             latitude=40.0, longitude=-100.0, bounding_box_degrees=5.0
@@ -289,7 +289,7 @@ class TestBuildCaseOperators:
             event_type="flood",
         )
 
-        case_collection = [flood_case]
+        case_list = [flood_case]
 
         # Evaluation object that doesn't match flood
         mock_eval_obj = mock.Mock()
@@ -298,7 +298,7 @@ class TestBuildCaseOperators:
         mock_eval_obj.target = mock.Mock()
         mock_eval_obj.forecast = mock.Mock()
 
-        operators = cases.build_case_operators(case_collection, [mock_eval_obj])
+        operators = cases.build_case_operators(case_list, [mock_eval_obj])
 
         # Should create no operators since event types don't match
         assert len(operators) == 0
@@ -331,16 +331,16 @@ class TestLoadIndividualCasesFromYaml:
         with open(yaml_file, "w") as f:
             yaml.dump(yaml_content, f)
 
-        collection = cases.load_individual_cases_from_yaml(yaml_file)
+        case_list = cases.load_individual_cases_from_yaml(yaml_file)
 
-        assert all(isinstance(case, cases.IndividualCase) for case in collection)
-        assert len(collection) == 1
+        assert all(isinstance(case, cases.IndividualCase) for case in case_list)
+        assert len(case_list) == 1
 
-        case = collection[0]
-        assert case.case_id_number == 42
-        assert case.title == "YAML Test Case"
-        assert case.event_type == "severe_storm"
-        assert isinstance(case.location, regions.CenteredRegion)
+        single_case = case_list[0]
+        assert single_case.case_id_number == 42
+        assert single_case.title == "YAML Test Case"
+        assert single_case.event_type == "severe_storm"
+        assert isinstance(single_case.location, regions.CenteredRegion)
 
     def test_load_from_yaml_string_path(self, tmp_path):
         """Test loading with string path instead of Path object."""
@@ -368,11 +368,11 @@ class TestLoadIndividualCasesFromYaml:
             yaml.dump(yaml_content, f)
 
         # Pass as string, not Path object
-        collection = cases.load_individual_cases_from_yaml(str(yaml_file))
+        case_list = cases.load_individual_cases_from_yaml(str(yaml_file))
 
-        assert len(collection) == 1
-        assert collection[0].title == "String Path Test"
-        assert isinstance(collection[0].location, regions.BoundingBoxRegion)
+        assert len(case_list) == 1
+        assert case_list[0].title == "String Path Test"
+        assert isinstance(case_list[0].location, regions.BoundingBoxRegion)
 
     def test_load_from_yaml_malformed_file(self, tmp_path):
         """Test error handling with malformed YAML."""
@@ -611,8 +611,8 @@ class TestCasesIntegration:
         """Test the full workflow from dictionary to case operators."""
 
         # Load individual cases
-        collection = cases.load_individual_cases(cases_list_of_dicts)
-        assert len(collection) == 2
+        case_list = cases.load_individual_cases(cases_list_of_dicts)
+        assert len(case_list) == 2
 
         # Create mock evaluation objects
         heat_wave_eval = mock.Mock()
@@ -630,7 +630,7 @@ class TestCasesIntegration:
         evaluation_objects = [heat_wave_eval, multi_event_eval]
 
         # Build case operators
-        operators = cases.build_case_operators(collection, evaluation_objects)
+        operators = cases.build_case_operators(case_list, evaluation_objects)
 
         # Should create 3 operators:
         # - Heat wave case with heat_wave_eval

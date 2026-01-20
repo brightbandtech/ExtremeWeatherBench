@@ -111,7 +111,7 @@ def load_individual_cases(
         cases: A dictionary of cases based on the IndividualCase dataclass.
 
     Returns:
-        A collection of IndividualCase objects.
+        A list of IndividualCase objects.
     """
 
     # Iterate through the cases and convert dictionaries to IndividualCase objects if
@@ -165,7 +165,7 @@ def load_individual_cases_from_yaml(
         yaml_file: A path to a yaml file containing the case metadata.
 
     Returns:
-        A collection of IndividualCase objects.
+        A list of IndividualCase objects.
     """
     yaml_event_case = read_incoming_yaml(yaml_file)
     return load_individual_cases(yaml_event_case)

@@ -810,8 +810,8 @@ def process_ar_event(
         "\nProcessing: %s (Case %s)", single_case.title, single_case.case_id_number
     )
     # Create a case object for this event
-    case_collection = cases.load_individual_cases([single_case])
-    case = case_collection[0]
+    case_list = cases.load_individual_cases([single_case])
+    case = case_list[0]
     case.start_date = case.start_date - pd.Timedelta(days=3)
     case.end_date = case.end_date + pd.Timedelta(days=3)
 

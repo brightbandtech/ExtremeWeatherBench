@@ -1556,7 +1556,7 @@ class TestConvenienceFunctions:
 
     @pytest.fixture
     def sample_case_collection(self):
-        """Create a sample case collection."""
+        """Create a sample case list."""
         from extremeweatherbench import cases
 
         case1 = cases.IndividualCase(
@@ -1691,7 +1691,7 @@ class TestRegionSubsettingEdgeCases:
     """Test edge cases for region subsetting."""
 
     def test_empty_case_collection(self):
-        """Test subsetting with empty case collection."""
+        """Test subsetting with empty case list."""
 
         empty_collection = []
         target_region = regions.BoundingBoxRegion.create_region(

@@ -515,13 +515,13 @@ class RegionSubsetter:
         self.method = method
         self.percent_threshold = percent_threshold
 
-    def subset_case_collection(
-        self, case_collection: "list[cases.IndividualCase]"
+    def subset_case_list(
+        self, case_list: "list[cases.IndividualCase]"
     ) -> "list[cases.IndividualCase]":
         """Subset a list of IndividualCases by region.
 
         Args:
-            case_collection: The list of IndividualCases to subset
+            case_list: The list of IndividualCases to subset
 
         Returns:
             A new list of IndividualCases with cases subset to the region
@@ -530,7 +530,7 @@ class RegionSubsetter:
 
         filtered_cases = []
 
-        for case in case_collection:
+        for case in case_list:
             if self._should_include_case(case):
                 filtered_cases.append(case)
 
@@ -557,7 +557,7 @@ class RegionSubsetter:
 
 # Convenience functions for direct usage
 def subset_cases_to_region(
-    case_collection: "list[cases.IndividualCase]",
+    case_list: "list[cases.IndividualCase]",
     region: Union[Region, Mapping[str, float]],
     method: Literal["intersects", "percent", "all"] = "intersects",
     percent_threshold: float = 0.5,
@@ -568,7 +568,7 @@ def subset_cases_to_region(
     a list of IndividualCases.
 
     Args:
-        case_collection: The list of IndividualCases to subset
+        case_list: The list of IndividualCases to subset
         region: The region to subset to. Can be a Region object or a
             dictionary of bounds with keys "latitude_min", "latitude_max",
             "longitude_min", and "longitude_max".
@@ -579,13 +579,13 @@ def subset_cases_to_region(
         A new list of IndividualCases with cases subset to the region
     """
     subsetter = RegionSubsetter(region, method, percent_threshold)
-    return subsetter.subset_case_collection(case_collection)
+    return subsetter.subset_case_list(case_list)
 
 
 def subset_results_to_region(
     region: RegionSubsetter,
     results_df: pd.DataFrame,
-    case_collection: "list[cases.IndividualCase]",
+    case_list: "list[cases.IndividualCase]",
 ) -> pd.DataFrame:
     """Subset results DataFrame by region using case_id_number.
 
@@ -597,14 +597,14 @@ def subset_results_to_region(
             dictionary of bounds with keys "latitude_min", "latitude_max",
             "longitude_min", and "longitude_max".
         results_df: DataFrame with results from ExtremeWeatherBench.run()
-        case_collection: The original case collection to determine which
+        case_list: The original case list to determine which
             case_id_numbers correspond to cases in the region
 
     Returns:
         Subset DataFrame containing only results for cases in the region
     """
     # Get the case IDs that should be included
-    subset_cases = region.subset_case_collection(case_collection)
+    subset_cases = region.subset_case_list(case_list)
     included_case_ids = {case.case_id_number for case in subset_cases}
 
     # Filter the results DataFrame

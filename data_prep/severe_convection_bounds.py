@@ -344,7 +344,7 @@ def match_pph_times_to_events(
 
     Args:
         pph_data: xarray DataArray with PPH data
-        case_collection: list of IndividualCase objects of severe convection events
+        case_list: list of IndividualCase objects of severe convection events
 
     Returns:
         Dictionary mapping event case_id to list of valid times
