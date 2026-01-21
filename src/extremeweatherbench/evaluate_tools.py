@@ -98,17 +98,21 @@ def evaluate_case_operators(
         with _dataset_cache(cache_dir) as memory:
             kwargs["memory"] = memory
             metric_jobs = _run_parallel_or_serial(
-                case_operators,
-                _create_metric_jobs_for_case_operator,
+                items=case_operators,
+                func=_create_metric_jobs_for_case_operator,
                 cache_dir=cache_dir,
+                desc="Creating metric jobs",
                 return_as="list",
+                total_tasks=len(case_operators),
                 **kwargs,
             )
             return _run_parallel_or_serial(
-                metric_jobs,
-                _compute_single_metric,
+                items=metric_jobs,
+                func=_compute_single_metric,
                 cache_dir=cache_dir,
-                return_as="generator_unordered",
+                desc="Computing metrics",
+                return_as="list",
+                total_tasks=len(metric_jobs),
                 **kwargs,
             )
 
@@ -270,8 +274,7 @@ def _compute_single_metric(
         return pd.DataFrame(columns=OUTPUT_COLUMNS)
 
     return evaluate_metric_and_return_df(
-        forecast_ds=datasets.forecast,
-        target_ds=datasets.target,
+        datasets=datasets,
         forecast_variable=job.forecast_var,
         target_variable=job.target_var,
         metric=job.metric,
@@ -779,6 +782,7 @@ def _run_parallel_or_serial(
     desc: str = "Processing",
     kwargs_extractor: Optional[Callable[[Any], dict]] = None,
     return_as: Literal["list", "generator_ordered", "generator_unordered"] = "list",
+    total_tasks: Optional[int] = None,
     **common_kwargs,
 ) -> list:
     """Generic parallel/serial executor based on parallel_config.
@@ -804,6 +808,8 @@ def _run_parallel_or_serial(
     Returns:
         List of results from applying func to each item.
     """
+
+    # Serial execution, return before parallel execution
     if parallel_config is None:
         # Serial execution with tqdm progress bar
         results = []
@@ -814,7 +820,8 @@ def _run_parallel_or_serial(
             results.append(func(item, **item_kwargs))
         return results
 
-    # Parallel execution
+
+    # Parallel execution; warn if no number of jobs is provided
     if parallel_config.get("n_jobs") is None:
         logger.warning("No number of jobs provided, using joblib backend default.")
 
@@ -822,34 +829,37 @@ def _run_parallel_or_serial(
 
     # Use logging redirection to try to get progress bar working separate from
     # logging outputs
-    with logging_redirect_tqdm():
-        with joblib.parallel_config(**parallel_config):
-            # If we have a kwargs_extractor, build delayed calls with per-item kwargs
-            if kwargs_extractor is not None:
-                # Build delayed calls with per-item kwargs
-                delayed_calls = []
-                for item in items:
-                    item_kwargs = common_kwargs.copy()
-                    item_kwargs.update(kwargs_extractor(item))
-                    delayed_calls.append(joblib.delayed(func)(item, **item_kwargs))
-
-                # Use ParallelTqdm to run the delayed calls in parallel for tqdm and
-                # return an unordered generator of results to preserve memory
-                results = utils.ParallelTqdm(
-                    total_tasks=len(delayed_calls), desc=desc, return_as=return_as
-                )(delayed_calls)
-            else:
-                total_tasks = len(items) if isinstance(items, Sequence) else None
-                # Simple case: same kwargs for all items
-                results = utils.ParallelTqdm(
+    with joblib.parallel_config(**parallel_config):
+        # If we have a kwargs_extractor, build delayed calls with per-item kwargs
+        if kwargs_extractor is not None:
+            # Build delayed calls with per-item kwargs
+            delayed_calls = []
+            for item in items:
+                item_kwargs = common_kwargs.copy()
+                item_kwargs.update(kwargs_extractor(item))
+                delayed_calls.append(joblib.delayed(func)(item, **item_kwargs))
+        # Simple case: same kwargs for all items        
+        else:
+            delayed_calls = (joblib.delayed(func)(item, **common_kwargs) for item in items)
+        
+        # Run the delayed calls in parallel and return the results
+        results = utils.ParallelTqdm(
                     total_tasks=total_tasks, desc=desc, return_as=return_as
-                )(joblib.delayed(func)(item, **common_kwargs) for item in items)
+                )(delayed_calls)
 
     # If we created a dask client, close it
     if dask_client is not None:
         logger.info("Closing dask client")
         dask_client.close()
-    return results
+
+    # Flatten the results if it's a nested list. joblib should return a consistent
+    # structure, i.e. if the first item is a list, all items should be lists.
+    # If it's not a list, return the results as is. Generators are the primary
+    # alternative output when `return_as` is set to "generator_unordered" or "generator"
+    if isinstance(results, list) and results and isinstance(results[0], list):
+        return [result for results in results for result in results]
+    else:
+        return results
 
 
 def _maybe_create_dask_client(parallel_config: dict):
