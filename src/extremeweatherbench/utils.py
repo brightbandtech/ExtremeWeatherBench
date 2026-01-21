@@ -865,4 +865,4 @@ def apply_default_warning_filters() -> None:
     Call this at the start of evaluation or processing pipelines.
     """
     for action, category, module in get_default_warning_filters():
-        warnings.filterwarnings(action, category=category, module=module)
+        warnings.filterwarnings(action, category=category, module=module) # type: ignore[arg-type]
