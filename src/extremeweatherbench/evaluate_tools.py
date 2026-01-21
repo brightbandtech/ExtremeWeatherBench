@@ -820,7 +820,6 @@ def _run_parallel_or_serial(
             results.append(func(item, **item_kwargs))
         return results
 
-
     # Parallel execution; warn if no number of jobs is provided
     if parallel_config.get("n_jobs") is None:
         logger.warning("No number of jobs provided, using joblib backend default.")
@@ -831,21 +830,23 @@ def _run_parallel_or_serial(
     # logging outputs
     with joblib.parallel_config(**parallel_config):
         # If we have a kwargs_extractor, build delayed calls with per-item kwargs
+        delayed_calls = []
         if kwargs_extractor is not None:
             # Build delayed calls with per-item kwargs
-            delayed_calls = []
+
             for item in items:
                 item_kwargs = common_kwargs.copy()
                 item_kwargs.update(kwargs_extractor(item))
                 delayed_calls.append(joblib.delayed(func)(item, **item_kwargs))
-        # Simple case: same kwargs for all items        
+        # Simple case: same kwargs for all items
         else:
-            delayed_calls = (joblib.delayed(func)(item, **common_kwargs) for item in items)
-        
+            for item in items:
+                delayed_calls.append(joblib.delayed(func)(item, **common_kwargs))
+
         # Run the delayed calls in parallel and return the results
         results = utils.ParallelTqdm(
-                    total_tasks=total_tasks, desc=desc, return_as=return_as
-                )(delayed_calls)
+            total_tasks=total_tasks, desc=desc, return_as=return_as
+        )(delayed_calls)
 
     # If we created a dask client, close it
     if dask_client is not None:

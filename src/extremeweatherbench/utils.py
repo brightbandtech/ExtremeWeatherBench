@@ -843,6 +843,7 @@ def maybe_cache_and_compute(
     # Load the data from the cache
     return xr.open_dataset(cache_path / f"{name}.zarr")
 
+
 def get_default_warning_filters() -> Sequence[tuple[str, type[Warning], str]]:
     """Return a default set of warning filter configurations.
 
