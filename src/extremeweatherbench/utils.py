@@ -6,6 +6,7 @@ import inspect
 import logging
 import operator
 import pathlib
+import warnings
 from typing import Any, Callable, Literal, Optional, Sequence, Union
 
 import cartopy.io.shapereader as shpreader
@@ -841,3 +842,26 @@ def maybe_cache_and_compute(
 
     # Load the data from the cache
     return xr.open_dataset(cache_path / f"{name}.zarr")
+
+def get_default_warning_filters() -> Sequence[tuple[str, type[Warning], str]]:
+    """Return a default set of warning filter configurations.
+
+    Returns a sequence of tuples that can be used with warnings.filterwarnings().
+    Each tuple contains (action, category, module_pattern).
+
+    Returns:
+        Sequence of (action, category, module) tuples for warning suppression.
+    """
+    return [
+        ("ignore", UserWarning, "joblib"),
+    ]
+
+
+def apply_default_warning_filters() -> None:
+    """Apply the default set of warning filters.
+
+    This suppresses common noisy warnings from dependencies like joblib.
+    Call this at the start of evaluation or processing pipelines.
+    """
+    for action, category, module in get_default_warning_filters():
+        warnings.filterwarnings(action, category=category, module=module)
