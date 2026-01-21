@@ -6,12 +6,7 @@ from typing import TYPE_CHECKING, Optional, Union
 
 import pandas as pd
 
-from extremeweatherbench import cases
-from extremeweatherbench.evaluate_tools import (
-    OUTPUT_COLUMNS,
-    run_case_operators,
-    safe_concat,
-)
+from extremeweatherbench import cases, evaluate_tools
 
 if TYPE_CHECKING:
     from extremeweatherbench import inputs, regions
@@ -102,14 +97,14 @@ class ExtremeWeatherBench:
         # Check for serial or parallel configuration
         parallel_config = _parallel_serial_config_check(n_jobs, parallel_config)
         kwargs["parallel_config"] = parallel_config
-        run_results = run_case_operators(
+        run_results = evaluate_tools.evaluate_case_operators(
             self.case_operators, cache_dir=self.cache_dir, **kwargs
         )
 
         if run_results:
-            return safe_concat(run_results, ignore_index=True)
+            return evaluate_tools.safe_concat(run_results, ignore_index=True)
         else:
-            return pd.DataFrame(columns=OUTPUT_COLUMNS)
+            return pd.DataFrame(columns=evaluate_tools.OUTPUT_COLUMNS)
 
 
 def _parallel_serial_config_check(

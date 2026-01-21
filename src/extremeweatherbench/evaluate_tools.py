@@ -15,9 +15,9 @@ import dataclasses
 import logging
 import pathlib
 import tempfile
-from typing import TYPE_CHECKING, Optional, Sequence, Union
+from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, Sequence, Union
 
-import dask.array as da
+import dask.array
 import joblib
 import pandas as pd
 import sparse
@@ -79,221 +79,80 @@ class PreparedDatasets:
     target: xr.Dataset
 
 
-@contextlib.contextmanager
-def dataset_cache(cache_dir: Optional[Union[str, pathlib.Path]] = None):
-    """Context manager that provides a joblib.Memory cache.
-
-    If cache_dir is provided, uses that directory for caching.
-    Otherwise, creates a temporary directory that is cleaned up on exit.
-
-    Args:
-        cache_dir: Optional directory for caching. If None, uses a temp dir.
-
-    Yields:
-        joblib.Memory instance for caching.
-
-    Example:
-        with dataset_cache() as memory:
-            cached_func = memory.cache(expensive_function)
-            result = cached_func(args)
-    """
-    if cache_dir is not None:
-        cache_path = pathlib.Path(cache_dir)
-        cache_path.mkdir(parents=True, exist_ok=True)
-        yield joblib.Memory(str(cache_path), verbose=0)
-    else:
-        with tempfile.TemporaryDirectory(prefix="ewb_cache_") as tmpdir:
-            yield joblib.Memory(tmpdir, verbose=0)
-
-
-def validate_case_operator_metrics(
-    case_operator: "cases.CaseOperator",
-) -> "cases.CaseOperator":
-    """Validate and normalize metrics in a case operator.
-
-    Instantiates any metric classes that weren't instantiated, and validates
-    that all metrics are BaseMetric instances.
+def evaluate_case_operators(
+    case_operators: list["cases.CaseOperator"],
+    cache_dir: Optional[pathlib.Path] = None,
+    **kwargs,
+) -> list[pd.DataFrame]:
+    """Run the case operators in parallel or serial.
 
     Args:
-        case_operator: The case operator to validate.
+        case_operators: List of case operators to run.
+        cache_dir: Optional directory for caching.
+        **kwargs: Additional arguments, may include 'parallel_config' dict.
 
     Returns:
-        CaseOperator with validated metric_list.
-
-    Raises:
-        TypeError: If any metric is not a BaseMetric instance.
+        List of result DataFrames.
     """
-    metric_list = list(case_operator.metric_list)
-
-    for i, metric in enumerate(metric_list):
-        if isinstance(metric, type):
-            metric_list[i] = metric()
-            logger.warning(
-                "Metric %s instantiated with default parameters",
-                metric_list[i].name,
+    with logging_redirect_tqdm():
+        with _dataset_cache(cache_dir) as memory:
+            kwargs["memory"] = memory
+            metric_jobs = _run_parallel_or_serial(
+                case_operators,
+                _create_metric_jobs_for_case_operator,
+                cache_dir=cache_dir,
+                return_as="list",
+                **kwargs,
             )
-        if not isinstance(metric_list[i], metrics.BaseMetric):
-            raise TypeError(f"Metric must be a BaseMetric instance, got {type(metric)}")
-
-    return dataclasses.replace(case_operator, metric_list=metric_list)
-
-
-def collect_claimed_variables(
-    metric_list: Sequence["metrics.BaseMetric"],
-) -> tuple[set[str], set[str]]:
-    """Collect explicitly claimed variables from metrics.
-
-    Variables are "claimed" when a metric explicitly specifies forecast_variable
-    and target_variable. These should not be used by metrics without explicit
-    variable specifications.
-
-    Args:
-        metric_list: List of metrics to collect claimed variables from.
-
-    Returns:
-        Tuple of (claimed_forecast_vars, claimed_target_vars) as sets of strings.
-    """
-    claimed_forecast = set()
-    claimed_target = set()
-
-    for metric in metric_list:
-        if metric.forecast_variable is not None and metric.target_variable is not None:
-            claimed_forecast.update(
-                expand_variable_to_strings(metric.forecast_variable)
+            return _run_parallel_or_serial(
+                metric_jobs,
+                _compute_single_metric,
+                cache_dir=cache_dir,
+                return_as="generator_unordered",
+                **kwargs,
             )
-            claimed_target.update(expand_variable_to_strings(metric.target_variable))
-
-    return claimed_forecast, claimed_target
 
 
-def get_variable_pairs_for_metric(
-    metric: "metrics.BaseMetric",
+def _create_metric_jobs_for_case_operator(
     case_operator: "cases.CaseOperator",
-    claimed_forecast_vars: set[str],
-    claimed_target_vars: set[str],
-) -> list[tuple[str, str]]:
-    """Get variable pairs for a single metric.
-
-    If the metric has explicit variables, uses those. Otherwise, uses all
-    available variables from the InputBase objects, excluding claimed ones.
-
-    Args:
-        metric: The metric to get variable pairs for.
-        case_operator: The case operator with input sources.
-        claimed_forecast_vars: Variables claimed by other metrics.
-        claimed_target_vars: Variables claimed by other metrics.
-
-    Returns:
-        List of (forecast_var, target_var) string tuples.
-    """
-    if metric.forecast_variable is not None and metric.target_variable is not None:
-        forecast_vars = expand_variable_to_strings(metric.forecast_variable)
-        target_vars = expand_variable_to_strings(metric.target_variable)
-        return list(zip(forecast_vars, target_vars))
-
-    # Use all InputBase variable pairs, excluding claimed variables
-    forecast_vars = []
-    for var in case_operator.forecast.variables:
-        forecast_vars.extend(expand_variable_to_strings(var))
-
-    target_vars = []
-    for var in case_operator.target.variables:
-        target_vars.extend(expand_variable_to_strings(var))
-
-    forecast_available = [v for v in forecast_vars if v not in claimed_forecast_vars]
-    target_available = [v for v in target_vars if v not in claimed_target_vars]
-
-    return list(zip(forecast_available, target_available))
-
-
-def expand_variable_to_strings(
-    variable: Union[str, "derived.DerivedVariable"],
-) -> list[str]:
-    """Expand a variable to its string names.
-
-    Args:
-        variable: Either a string variable name or a DerivedVariable.
-
-    Returns:
-        List of string variable names.
-    """
-    if isinstance(variable, str):
-        return [variable]
-    elif isinstance(variable, derived.DerivedVariable):
-        if hasattr(variable, "output_variables") and variable.output_variables:
-            return variable.output_variables
-        else:
-            return [str(variable.name)]
-    else:
-        return [str(variable)]
-
-
-def get_all_derived_output_variables(
-    variables: Sequence[Union[str, "derived.DerivedVariable"]],
-) -> set[str]:
-    """Get all output_variables from DerivedVariables in a list.
-
-    Args:
-        variables: Sequence that may contain DerivedVariable instances.
-
-    Returns:
-        Set of all output_variable names from DerivedVariables.
-    """
-    output_vars = set()
-    for var in variables:
-        if isinstance(var, derived.DerivedVariable):
-            if hasattr(var, "output_variables") and var.output_variables:
-                output_vars.update(var.output_variables)
-    return output_vars
-
-
-def collect_metric_variables(
-    metric_list: Sequence["metrics.BaseMetric"],
-) -> tuple[
-    set[Union[str, "derived.DerivedVariable"]],
-    set[Union[str, "derived.DerivedVariable"]],
-]:
-    """Collect unique variables from metrics that have them defined.
-
-    When a metric has a DerivedVariable with output_variables defined,
-    the DerivedVariable instance is added to ensure it gets computed
-    during pipeline execution.
-
-    Args:
-        metric_list: Sequence of metrics to extract variables from.
-
-    Returns:
-        Tuple of (forecast_variables, target_variables) as sets.
-    """
-    forecast_vars = set()
-    target_vars = set()
-
-    for metric in metric_list:
-        if metric.forecast_variable is not None:
-            forecast_vars.add(metric.forecast_variable)
-        if metric.target_variable is not None:
-            target_vars.add(metric.target_variable)
-
-    return forecast_vars, target_vars
-
-
-def create_jobs_for_case(
-    case_operator: "cases.CaseOperator",
-    datasets: PreparedDatasets,
+    memory: joblib.Memory,
+    cache_dir: Optional[pathlib.Path] = None,
+    **kwargs,
 ) -> list[MetricJob]:
     """Create MetricJob objects for all metrics in a case operator.
 
+    This is the unit of work for parallel processing across case operators.
+
     Args:
-        case_operator: The case operator with metrics to create jobs for.
-        datasets: The prepared (aligned) datasets.
+        case_operator: The case operator to process.
+        memory: joblib.Memory instance for caching.
+        cache_dir: Optional directory for zarr caching.
+        **kwargs: Additional kwargs passed to pipeline.
 
     Returns:
         List of MetricJob objects, one per metric/variable combination.
     """
-    jobs = []
+    case_operator = _validate_case_operator_metrics(case_operator)
+
+    datasets = _prepare_aligned_datasets(
+        case_operator, memory, cache_dir=cache_dir, **kwargs
+    )
+
+    if datasets is None:
+        logger.info(
+            "Skipping case %s: empty datasets",
+            case_operator.case_metadata.case_id_number,
+        )
+        return []
+
+    logger.info(
+        "Datasets built for case %s", case_operator.case_metadata.case_id_number
+    )
+
+    metric_jobs = []
 
     # Collect claimed variables
-    claimed_forecast, claimed_target = collect_claimed_variables(
+    claimed_forecast, claimed_target = _collect_claimed_variables(
         case_operator.metric_list
     )
 
@@ -302,7 +161,7 @@ def create_jobs_for_case(
         metrics_to_evaluate = metric.maybe_expand_composite()
 
         # Get variable pairs for this metric
-        variable_pairs = get_variable_pairs_for_metric(
+        variable_pairs = _get_variable_pairs_for_metric(
             metric, case_operator, claimed_forecast, claimed_target
         )
 
@@ -315,7 +174,7 @@ def create_jobs_for_case(
 
             # Create job for each expanded metric
             for single_metric in metrics_to_evaluate:
-                jobs.append(
+                metric_jobs.append(
                     MetricJob(
                         case_operator=case_operator,
                         metric=single_metric,
@@ -325,69 +184,100 @@ def create_jobs_for_case(
                     )
                 )
 
-    return jobs
+    return metric_jobs
 
 
-def run_input_data_pipeline(
-    case_metadata: "cases.IndividualCase",
-    input_data: "inputs.InputBase",
+def _prepare_aligned_datasets(
+    case_operator: "cases.CaseOperator",
+    memory: joblib.Memory,
+    cache_dir: Optional[pathlib.Path] = None,
     **kwargs,
-) -> xr.Dataset:
-    """Shared method for running an input pipeline.
+) -> Optional[PreparedDatasets]:
+    """Build and align datasets for a case operator with caching.
+
+    Uses joblib.Memory for caching the dataset building step.
 
     Args:
-        case_metadata: The case metadata to run the pipeline on.
-        input_data: The input data to run the pipeline on.
+        case_operator: The case operator to build datasets for.
+        memory: joblib.Memory instance for caching.
+        cache_dir: Optional directory for zarr caching of aligned datasets.
+        **kwargs: Additional kwargs passed to pipeline.
 
     Returns:
-        The processed input data as an xarray dataset.
+        PreparedDatasets with aligned forecast and target, or None if empty.
     """
-    # Open data and process through pipeline steps
-    data = input_data.open_and_maybe_preprocess_data_from_source().pipe(
-        lambda ds: input_data.maybe_map_variable_names(ds)
+
+    # Cache the build_case_operator_datasets function to avoid re-running the pipeline for the same
+    # case operator
+    cached_build = memory.cache(build_case_operator_datasets)
+    forecast_ds, target_ds = cached_build(case_operator, **kwargs)
+
+    # Check for empty datasets
+    if 0 in forecast_ds.sizes.values() or 0 in target_ds.sizes.values():
+        return None
+    if len(forecast_ds.sizes) == 0 or len(target_ds.sizes) == 0:
+        return None
+
+    # Align datasets
+    aligned_forecast, aligned_target = (
+        case_operator.target.maybe_align_forecast_to_target(forecast_ds, target_ds)
     )
 
-    # Get the appropriate source module for the data type
-    source_module = sources.get_backend_module(type(data))
+    # Optionally cache to zarr
+    if cache_dir is not None:
+        aligned_forecast = utils.maybe_cache_and_compute(
+            aligned_forecast,
+            cache_dir=cache_dir,
+            name=f"{case_operator.case_metadata.case_id_number}_"
+            f"{case_operator.forecast.name}",
+        )
+        aligned_target = utils.maybe_cache_and_compute(
+            aligned_target,
+            cache_dir=cache_dir,
+            name=f"{case_operator.case_metadata.case_id_number}_"
+            f"{case_operator.target.name}",
+        )
 
-    # Checks if the data has valid times and spatial overlap
-    if inputs.check_for_missing_data(
-        data,
-        case_metadata,
-        source_module=source_module,
-    ):
-        valid_data = (
-            inputs.maybe_subset_variables(
-                data,
-                variables=input_data.variables,
-                source_module=source_module,
-            )
-            .pipe(
-                lambda ds: input_data.subset_data_to_case(ds, case_metadata, **kwargs)
-            )
-            .pipe(input_data.maybe_convert_to_dataset)
-            .pipe(input_data.add_source_to_dataset_attrs)
-            .pipe(
-                lambda ds: derived.maybe_derive_variables(
-                    ds,
-                    variables=input_data.variables,
-                    case_metadata=case_metadata,
-                    **kwargs,
-                )
-            )
-        )
-        return valid_data
-    else:
-        logger.warning(
-            "Data input %s for case %s has no data for case time range %s to %s."
-            % (
-                input_data.name,
-                case_metadata.case_id_number,
-                case_metadata.start_date.strftime("%Y-%m-%d %H:%M:%S"),
-                case_metadata.end_date.strftime("%Y-%m-%d %H:%M:%S"),
-            )
-        )
-        return xr.Dataset()
+    return PreparedDatasets(forecast=aligned_forecast, target=aligned_target)
+
+
+def _compute_single_metric(
+    job: MetricJob,
+    memory: joblib.Memory,
+    cache_dir: Optional[pathlib.Path] = None,
+    **kwargs,
+) -> pd.DataFrame:
+    """Compute a single metric from a MetricJob.
+
+    This function reloads cached datasets and computes one metric.
+
+    Args:
+        job: The MetricJob containing computation details.
+        memory: joblib.Memory instance for caching.
+        cache_dir: Optional directory for zarr caching.
+        **kwargs: Additional kwargs passed to pipeline.
+
+    Returns:
+        DataFrame with metric results.
+    """
+
+    # Use cache to call this function again and get datasets
+    datasets = _prepare_aligned_datasets(
+        job.case_operator, memory, cache_dir=cache_dir, **kwargs
+    )
+
+    if datasets is None:
+        return pd.DataFrame(columns=OUTPUT_COLUMNS)
+
+    return evaluate_metric_and_return_df(
+        forecast_ds=datasets.forecast,
+        target_ds=datasets.target,
+        forecast_variable=job.forecast_var,
+        target_variable=job.target_var,
+        metric=job.metric,
+        case_operator=job.case_operator,
+        **job.metric_kwargs,
+    )
 
 
 def build_case_operator_datasets(
@@ -413,15 +303,15 @@ def build_case_operator_datasets(
         A tuple containing (forecast_dataset, target_dataset). If either dataset
         has no dimensions, both will be empty datasets.
     """
-    metric_forecast_vars, metric_target_vars = collect_metric_variables(
+    metric_forecast_vars, metric_target_vars = _collect_metric_variables(
         case_operator.metric_list
     )
 
     # Get all output_variables from DerivedVariables in InputBase
-    forecast_derived_outputs = get_all_derived_output_variables(
+    forecast_derived_outputs = _get_all_derived_output_variables(
         case_operator.forecast.variables
     )
-    target_derived_outputs = get_all_derived_output_variables(
+    target_derived_outputs = _get_all_derived_output_variables(
         case_operator.target.variables
     )
 
@@ -510,163 +400,266 @@ def build_case_operator_datasets(
     return (forecast_ds, target_ds)
 
 
-def prepare_aligned_datasets(
-    case_operator: "cases.CaseOperator",
-    memory: joblib.Memory,
-    cache_dir: Optional[pathlib.Path] = None,
-    **kwargs,
-) -> Optional[PreparedDatasets]:
-    """Build and align datasets for a case operator with caching.
+@contextlib.contextmanager
+def _dataset_cache(cache_dir: Optional[Union[str, pathlib.Path]] = None):
+    """Context manager that provides a joblib.Memory cache.
 
-    Uses joblib.Memory for caching the dataset building step.
+    If cache_dir is provided, uses that directory for caching.
+    Otherwise, creates a temporary directory that is cleaned up on exit.
 
     Args:
-        case_operator: The case operator to build datasets for.
-        memory: joblib.Memory instance for caching.
-        cache_dir: Optional directory for zarr caching of aligned datasets.
-        **kwargs: Additional kwargs passed to pipeline.
+        cache_dir: Optional directory for caching. If None, uses a temp dir.
 
-    Returns:
-        PreparedDatasets with aligned forecast and target, or None if empty.
+    Yields:
+        joblib.Memory instance for caching.
+
+    Example:
+        with _dataset_cache() as memory:
+            cached_func = memory.cache(expensive_function)
+            result = cached_func(args)
     """
-
-    # Cache the build_case_operator_datasets function to avoid re-running the pipeline for the same
-    # case operator
-    cached_build = memory.cache(build_case_operator_datasets)
-    forecast_ds, target_ds = cached_build(case_operator, **kwargs)
-
-    # Check for empty datasets
-    if 0 in forecast_ds.sizes.values() or 0 in target_ds.sizes.values():
-        return None
-    if len(forecast_ds.sizes) == 0 or len(target_ds.sizes) == 0:
-        return None
-
-    # Align datasets
-    aligned_forecast, aligned_target = (
-        case_operator.target.maybe_align_forecast_to_target(forecast_ds, target_ds)
-    )
-
-    # Optionally cache to zarr
     if cache_dir is not None:
-        aligned_forecast = utils.maybe_cache_and_compute(
-            aligned_forecast,
-            cache_dir=cache_dir,
-            name=f"{case_operator.case_metadata.case_id_number}_"
-            f"{case_operator.forecast.name}",
-        )
-        aligned_target = utils.maybe_cache_and_compute(
-            aligned_target,
-            cache_dir=cache_dir,
-            name=f"{case_operator.case_metadata.case_id_number}_"
-            f"{case_operator.target.name}",
-        )
-
-    return PreparedDatasets(forecast=aligned_forecast, target=aligned_target)
-
-
-def process_case_operator(
-    case_operator: "cases.CaseOperator",
-    memory: joblib.Memory,
-    cache_dir: Optional[pathlib.Path] = None,
-    **kwargs,
-) -> list[MetricJob]:
-    """Process a single case operator: validate, build datasets, create jobs.
-
-    This is the unit of work for parallel processing across case operators.
-
-    Args:
-        case_operator: The case operator to process.
-        memory: joblib.Memory instance for caching.
-        cache_dir: Optional directory for zarr caching.
-        **kwargs: Additional kwargs passed to pipeline.
-
-    Returns:
-        List of MetricJob objects for this case operator.
-    """
-    case_operator = validate_case_operator_metrics(case_operator)
-
-    datasets = prepare_aligned_datasets(
-        case_operator, memory, cache_dir=cache_dir, **kwargs
-    )
-
-    if datasets is None:
-        logger.info(
-            "Skipping case %s: empty datasets",
-            case_operator.case_metadata.case_id_number,
-        )
-        return []
-
-    logger.info(
-        "Datasets built for case %s", case_operator.case_metadata.case_id_number
-    )
-
-    return create_jobs_for_case(case_operator, datasets)
-
-
-def build_metric_jobs(
-    case_operators: list["cases.CaseOperator"],
-    memory: joblib.Memory,
-    cache_dir: Optional[pathlib.Path] = None,
-    parallel_config: Optional[dict] = None,
-    **kwargs,
-) -> list[MetricJob]:
-    """Build all metric jobs, optionally in parallel.
-
-    Args:
-        case_operators: List of case operators to process.
-        memory: joblib.Memory instance for caching.
-        cache_dir: Optional directory for zarr caching.
-        parallel_config: Optional joblib parallel config. If None, runs serial.
-        **kwargs: Additional kwargs passed to pipeline.
-
-    Returns:
-        Flattened list of all MetricJob objects.
-    """
-    if not case_operators:
-        return []
-
-    if parallel_config is not None:
-        return _build_metric_jobs_parallel(
-            case_operators, memory, cache_dir, parallel_config, **kwargs
-        )
+        cache_path = pathlib.Path(cache_dir)
+        cache_path.mkdir(parents=True, exist_ok=True)
+        yield joblib.Memory(str(cache_path), verbose=0)
     else:
-        return _build_metric_jobs_serial(case_operators, memory, cache_dir, **kwargs)
+        with tempfile.TemporaryDirectory(prefix="ewb_cache_") as tmpdir:
+            yield joblib.Memory(tmpdir, verbose=0)
 
 
-def _build_metric_jobs_serial(
-    case_operators: list["cases.CaseOperator"],
-    memory: joblib.Memory,
-    cache_dir: Optional[pathlib.Path] = None,
-    **kwargs,
-) -> list[MetricJob]:
-    """Build metric jobs serially."""
-    all_jobs = []
-    for case_operator in tqdm(case_operators, desc="Building jobs"):
-        jobs = process_case_operator(
-            case_operator, memory, cache_dir=cache_dir, **kwargs
-        )
-        all_jobs.extend(jobs)
-    return all_jobs
+def _validate_case_operator_metrics(
+    case_operator: "cases.CaseOperator",
+) -> "cases.CaseOperator":
+    """Validate and normalize metrics in a case operator.
 
+    Instantiates any metric classes that weren't instantiated, and validates
+    that all metrics are BaseMetric instances.
 
-def _build_metric_jobs_parallel(
-    case_operators: list["cases.CaseOperator"],
-    memory: joblib.Memory,
-    cache_dir: Optional[pathlib.Path] = None,
-    parallel_config: Optional[dict] = None,
-    **kwargs,
-) -> list[MetricJob]:
-    """Build metric jobs in parallel across case operators."""
-    with joblib.parallel_config(**(parallel_config or {})):
-        nested_jobs = utils.ParallelTqdm(total_tasks=len(case_operators))(
-            joblib.delayed(process_case_operator)(
-                co, memory, cache_dir=cache_dir, **kwargs
+    Args:
+        case_operator: The case operator to validate.
+
+    Returns:
+        CaseOperator with validated metric_list.
+
+    Raises:
+        TypeError: If any metric is not a BaseMetric instance.
+    """
+    metric_list = list(case_operator.metric_list)
+
+    for i, metric in enumerate(metric_list):
+        if isinstance(metric, type):
+            metric_list[i] = metric()
+            logger.warning(
+                "Metric %s instantiated with default parameters",
+                metric_list[i].name,
             )
-            for co in case_operators
-        )
+        if not isinstance(metric_list[i], metrics.BaseMetric):
+            raise TypeError(f"Metric must be a BaseMetric instance, got {type(metric)}")
 
-    # Flatten list of lists
-    return [job for jobs in nested_jobs for job in jobs]
+    return dataclasses.replace(case_operator, metric_list=metric_list)
+
+
+def _collect_claimed_variables(
+    metric_list: Sequence["metrics.BaseMetric"],
+) -> tuple[set[str], set[str]]:
+    """Collect explicitly claimed variables from metrics.
+
+    Variables are "claimed" when a metric explicitly specifies forecast_variable
+    and target_variable. These should not be used by metrics without explicit
+    variable specifications.
+
+    Args:
+        metric_list: List of metrics to collect claimed variables from.
+
+    Returns:
+        Tuple of (claimed_forecast_vars, claimed_target_vars) as sets of strings.
+    """
+    claimed_forecast = set()
+    claimed_target = set()
+
+    for metric in metric_list:
+        if metric.forecast_variable is not None and metric.target_variable is not None:
+            claimed_forecast.update(
+                _maybe_expand_variable_to_string(metric.forecast_variable)
+            )
+            claimed_target.update(
+                _maybe_expand_variable_to_string(metric.target_variable)
+            )
+
+    return claimed_forecast, claimed_target
+
+
+def _get_variable_pairs_for_metric(
+    metric: "metrics.BaseMetric",
+    case_operator: "cases.CaseOperator",
+    claimed_forecast_vars: set[str],
+    claimed_target_vars: set[str],
+) -> list[tuple[str, str]]:
+    """Get variable pairs for a single metric.
+
+    If the metric has explicit variables, uses those. Otherwise, uses all
+    available variables from the InputBase objects, excluding claimed ones.
+
+    Args:
+        metric: The metric to get variable pairs for.
+        case_operator: The case operator with input sources.
+        claimed_forecast_vars: Variables claimed by other metrics.
+        claimed_target_vars: Variables claimed by other metrics.
+
+    Returns:
+        List of (forecast_var, target_var) string tuples.
+    """
+    if metric.forecast_variable is not None and metric.target_variable is not None:
+        forecast_vars = _maybe_expand_variable_to_string(metric.forecast_variable)
+        target_vars = _maybe_expand_variable_to_string(metric.target_variable)
+        return list(zip(forecast_vars, target_vars))
+
+    # Use all InputBase variable pairs, excluding claimed variables
+    forecast_vars = []
+    for var in case_operator.forecast.variables:
+        forecast_vars.extend(_maybe_expand_variable_to_string(var))
+
+    target_vars = []
+    for var in case_operator.target.variables:
+        target_vars.extend(_maybe_expand_variable_to_string(var))
+
+    forecast_available = [v for v in forecast_vars if v not in claimed_forecast_vars]
+    target_available = [v for v in target_vars if v not in claimed_target_vars]
+
+    return list(zip(forecast_available, target_available))
+
+
+def _maybe_expand_variable_to_string(
+    variable: Union[str, "derived.DerivedVariable"],
+) -> list[str]:
+    """Expand a variable to its string names.
+
+    Args:
+        variable: Either a string variable name or a DerivedVariable.
+
+    Returns:
+        List of string variable names.
+    """
+    if isinstance(variable, str):
+        return [variable]
+    elif isinstance(variable, derived.DerivedVariable):
+        if hasattr(variable, "output_variables") and variable.output_variables:
+            return variable.output_variables
+        else:
+            return [str(variable.name)]
+    else:
+        return [str(variable)]
+
+
+def _get_all_derived_output_variables(
+    variables: Sequence[Union[str, "derived.DerivedVariable"]],
+) -> set[str]:
+    """Get all output_variables from DerivedVariables in a list.
+
+    Args:
+        variables: Sequence that may contain DerivedVariable instances.
+
+    Returns:
+        Set of all output_variable names from DerivedVariables.
+    """
+    output_vars = set()
+    for var in variables:
+        if isinstance(var, derived.DerivedVariable):
+            if hasattr(var, "output_variables") and var.output_variables:
+                output_vars.update(var.output_variables)
+    return output_vars
+
+
+def _collect_metric_variables(
+    metric_list: Sequence["metrics.BaseMetric"],
+) -> tuple[
+    set[Union[str, "derived.DerivedVariable"]],
+    set[Union[str, "derived.DerivedVariable"]],
+]:
+    """Collect unique variables from metrics that have them defined.
+
+    When a metric has a DerivedVariable with output_variables defined,
+    the DerivedVariable instance is added to ensure it gets computed
+    during pipeline execution.
+
+    Args:
+        metric_list: Sequence of metrics to extract variables from.
+
+    Returns:
+        Tuple of (forecast_variables, target_variables) as sets.
+    """
+    forecast_vars = set()
+    target_vars = set()
+
+    for metric in metric_list:
+        if metric.forecast_variable is not None:
+            forecast_vars.add(metric.forecast_variable)
+        if metric.target_variable is not None:
+            target_vars.add(metric.target_variable)
+
+    return forecast_vars, target_vars
+
+
+def run_input_data_pipeline(
+    case_metadata: "cases.IndividualCase",
+    input_data: "inputs.InputBase",
+    **kwargs,
+) -> xr.Dataset:
+    """Shared method for running an input pipeline.
+
+    Args:
+        case_metadata: The case metadata to run the pipeline on.
+        input_data: The input data to run the pipeline on.
+
+    Returns:
+        The processed input data as an xarray dataset.
+    """
+    # Open data and process through pipeline steps
+    data = input_data.open_and_maybe_preprocess_data_from_source().pipe(
+        lambda ds: input_data.maybe_map_variable_names(ds)
+    )
+
+    # Get the appropriate source module for the data type
+    source_module = sources.get_backend_module(type(data))
+
+    # Checks if the data has valid times and spatial overlap
+    if inputs.check_for_missing_data(
+        data,
+        case_metadata,
+        source_module=source_module,
+    ):
+        valid_data = (
+            inputs.maybe_subset_variables(
+                data,
+                variables=input_data.variables,
+                source_module=source_module,
+            )
+            .pipe(
+                lambda ds: input_data.subset_data_to_case(ds, case_metadata, **kwargs)
+            )
+            .pipe(input_data.maybe_convert_to_dataset)
+            .pipe(input_data.add_source_to_dataset_attrs)
+            .pipe(
+                lambda ds: derived.maybe_derive_variables(
+                    ds,
+                    variables=input_data.variables,
+                    case_metadata=case_metadata,
+                    **kwargs,
+                )
+            )
+        )
+        return valid_data
+    else:
+        logger.warning(
+            "Data input %s for case %s has no data for case time range %s to %s."
+            % (
+                input_data.name,
+                case_metadata.case_id_number,
+                case_metadata.start_date.strftime("%Y-%m-%d %H:%M:%S"),
+                case_metadata.end_date.strftime("%Y-%m-%d %H:%M:%S"),
+            )
+        )
+        return xr.Dataset()
 
 
 def extract_standard_metadata(
@@ -694,7 +687,7 @@ def extract_standard_metadata(
     }
 
 
-def ensure_output_schema(df: pd.DataFrame, **metadata) -> pd.DataFrame:
+def _ensure_output_schema(df: pd.DataFrame, **metadata) -> pd.DataFrame:
     """Ensure dataframe conforms to OUTPUT_COLUMNS schema.
 
     This function adds any provided metadata columns to the dataframe and
@@ -724,211 +717,6 @@ def ensure_output_schema(df: pd.DataFrame, **metadata) -> pd.DataFrame:
         logger.warning("Missing expected columns: %s.", missing_cols)
 
     return df.reindex(columns=OUTPUT_COLUMNS)
-
-
-def evaluate_metric_and_return_df(
-    datasets: PreparedDatasets,
-    forecast_variable: Union[str, "derived.DerivedVariable"],
-    target_variable: Union[str, "derived.DerivedVariable"],
-    metric: "metrics.BaseMetric",
-    case_operator: "cases.CaseOperator",
-    **kwargs,
-) -> pd.DataFrame:
-    """Evaluate a metric and return a dataframe of the results.
-
-    Args:
-        datasets: The prepared datasets.
-        forecast_variable: The forecast variable to evaluate.
-        target_variable: The target variable to evaluate.
-        metric: The metric to evaluate.
-        case_operator: The case operator with metadata for evaluation.
-        **kwargs: Additional keyword arguments to pass to metric computation.
-
-    Returns:
-        A dataframe of the results with standard output schema columns.
-    """
-    # Normalize variables to their string names if needed
-    forecast_variable = derived._maybe_convert_variable_to_string(forecast_variable)
-    target_variable = derived._maybe_convert_variable_to_string(target_variable)
-
-    logger.info("Computing metric %s... ", metric.name)
-
-    # Extract the appropriate data for the metric
-    if forecast_variable not in datasets.forecast.data_vars:
-        raise ValueError(
-            f"Variable '{forecast_variable}' not found in forecast dataset. "
-            f"Available variables: {list(datasets.forecast.data_vars)}"
-        )
-
-    if target_variable not in datasets.target.data_vars:
-        raise ValueError(
-            f"Variable '{target_variable}' not found in target dataset. "
-            f"Available variables: {list(datasets.target.data_vars)}"
-        )
-
-    forecast_data = datasets.forecast[forecast_variable]
-    target_data = datasets.target[target_variable]
-
-    metric_result = metric.compute_metric(
-        forecast_data,
-        target_data,
-        **kwargs,
-    )
-
-    # If data is sparse, densify it
-    if isinstance(metric_result.data, sparse.COO):
-        metric_result.data = metric_result.data.maybe_densify()
-    elif isinstance(metric_result.data, da.Array) and isinstance(
-        metric_result.data._meta, sparse.COO
-    ):
-        metric_result.data = metric_result.data.map_blocks(
-            lambda x: x.maybe_densify(), dtype=metric_result.data.dtype
-        )
-
-    df = metric_result.to_dataframe(name="value").reset_index()
-    metadata = extract_standard_metadata(target_variable, metric, case_operator)
-    return ensure_output_schema(df, **metadata)
-
-
-def compute_single_metric(
-    job: MetricJob,
-    memory: joblib.Memory,
-    cache_dir: Optional[pathlib.Path] = None,
-    **kwargs,
-) -> pd.DataFrame:
-    """Compute a single metric from a MetricJob.
-
-    This function reloads cached datasets and computes one metric.
-
-    Args:
-        job: The MetricJob containing computation details.
-        memory: joblib.Memory instance for caching.
-        cache_dir: Optional directory for zarr caching.
-        **kwargs: Additional kwargs passed to pipeline.
-
-    Returns:
-        DataFrame with metric results.
-    """
-    datasets = prepare_aligned_datasets(
-        job.case_operator, memory, cache_dir=cache_dir, **kwargs
-    )
-
-    if datasets is None:
-        return pd.DataFrame(columns=OUTPUT_COLUMNS)
-
-    return evaluate_metric_and_return_df(
-        forecast_ds=datasets.forecast,
-        target_ds=datasets.target,
-        forecast_variable=job.forecast_var,
-        target_variable=job.target_var,
-        metric=job.metric,
-        case_operator=job.case_operator,
-        **job.metric_kwargs,
-    )
-
-
-def run_case_operators(
-    case_operators: list["cases.CaseOperator"],
-    cache_dir: Optional[pathlib.Path] = None,
-    **kwargs,
-) -> list[pd.DataFrame]:
-    """Run the case operators in parallel or serial.
-
-    Args:
-        case_operators: List of case operators to run.
-        cache_dir: Optional directory for caching.
-        **kwargs: Additional arguments, may include 'parallel_config' dict.
-
-    Returns:
-        List of result DataFrames.
-    """
-    with logging_redirect_tqdm():
-        parallel_config = kwargs.get("parallel_config", None)
-
-        if parallel_config is not None:
-            logger.info("Running case operators in parallel...")
-            return _run_parallel(case_operators, cache_dir=cache_dir, **kwargs)
-        else:
-            logger.info("Running case operators in serial...")
-            return _run_serial(case_operators, cache_dir=cache_dir, **kwargs)
-
-
-def _run_serial(
-    case_operators: list["cases.CaseOperator"],
-    cache_dir: Optional[pathlib.Path] = None,
-    **kwargs,
-) -> list[pd.DataFrame]:
-    """Run the case operators in serial using metric-level jobs."""
-    with dataset_cache(cache_dir) as memory:
-        metric_jobs = build_metric_jobs(
-            case_operators, memory, cache_dir=cache_dir, **kwargs
-        )
-        run_results = []
-        for job in tqdm(metric_jobs, desc="Computing metrics"):
-            run_results.append(
-                compute_single_metric(job, memory, cache_dir=cache_dir, **kwargs)
-            )
-        return run_results
-
-
-def _maybe_create_dask_client(
-    parallel_config: dict,
-):
-    # Handle dask backend - create client if needed
-    dask_client = None
-    if parallel_config.get("backend") == "dask":
-        try:
-            from dask.distributed import Client, LocalCluster
-
-            try:
-                Client.current()
-                logger.info("Using existing dask client")
-            except ValueError:
-                logger.info("Creating local dask client for parallel execution")
-                dask_client = Client(LocalCluster(processes=True, silence_logs=False))
-                logger.info("Dask client created: %s", dask_client)
-        except ImportError:
-            raise ImportError("Dask is required for dask backend.")
-    return dask_client
-
-
-def _run_parallel(
-    case_operators: list["cases.CaseOperator"],
-    cache_dir: Optional[pathlib.Path] = None,
-    **kwargs,
-) -> list[pd.DataFrame]:
-    """Run the case operators in parallel."""
-    parallel_config = kwargs.pop("parallel_config", None)
-
-    if parallel_config is None:
-        raise ValueError("parallel_config must be provided to _run_parallel")
-
-    if parallel_config.get("n_jobs") is None:
-        logger.warning("No number of jobs provided, using joblib backend default.")
-
-    dask_client = _maybe_create_dask_client(parallel_config)
-
-    try:
-        with dataset_cache(cache_dir) as memory:
-            metric_jobs = build_metric_jobs(
-                case_operators,
-                memory,
-                cache_dir=cache_dir,
-                parallel_config=parallel_config,
-                **kwargs,
-            )
-            with joblib.parallel_config(**parallel_config):
-                run_results = utils.ParallelTqdm(total_tasks=len(metric_jobs))(
-                    joblib.delayed(compute_single_metric)(
-                        job, memory, cache_dir=cache_dir, **kwargs
-                    )
-                    for job in metric_jobs
-                )
-            return run_results
-    finally:
-        if dask_client is not None:
-            logger.info("Closing dask client")
-            dask_client.close()
 
 
 def safe_concat(
@@ -984,60 +772,170 @@ def safe_concat(
         return pd.DataFrame(columns=OUTPUT_COLUMNS)
 
 
-def compute_case_operator(
-    case_operator: "cases.CaseOperator",
-    cache_dir: Optional[pathlib.Path] = None,
-    **kwargs,
-) -> pd.DataFrame:
-    """Compute the resulting evaluation of a case operator.
+def _run_parallel_or_serial(
+    items: Sequence,
+    func: Callable,
+    parallel_config: Optional[dict] = None,
+    desc: str = "Processing",
+    kwargs_extractor: Optional[Callable[[Any], dict]] = None,
+    return_as: Literal["list", "generator_ordered", "generator_unordered"] = "list",
+    **common_kwargs,
+) -> list:
+    """Generic parallel/serial executor based on parallel_config.
 
-    This is a convenience function that processes a single case operator
-    and returns the concatenated results of all metrics.
+    This function provides a unified interface for running tasks either in
+    parallel (using joblib) or serially (using a simple loop), depending on
+    the provided parallel_config.
 
     Args:
-        case_operator: The case operator to compute the results of.
-        cache_dir: The directory to cache mid-flight outputs.
+        items: Sequence of items to process.
+        func: Function to apply to each item. Should accept an item as the
+            first argument plus any kwargs.
+        parallel_config: Optional dictionary of joblib parallel configuration.
+            If None, runs serially. If provided, runs in parallel using joblib.
+        desc: Description for the progress bar.
+        kwargs_extractor: Optional callable that takes an item and returns a
+            dict of additional kwargs specific to that item. Used when
+            different items need different arguments (e.g., forecast building
+            needs per-case target datasets).
+        **common_kwargs: Additional keyword arguments passed to func for all
+            items.
 
     Returns:
-        A pd.DataFrame of results from the case operator.
-
-    Raises:
-        TypeError: If any metric is not properly instantiated.
+        List of results from applying func to each item.
     """
-    with dataset_cache(cache_dir) as memory:
-        case_operator = validate_case_operator_metrics(case_operator)
+    if parallel_config is None:
+        # Serial execution with tqdm progress bar
+        results = []
+        for item in tqdm(items, desc=desc):
+            item_kwargs = common_kwargs.copy()
+            if kwargs_extractor is not None:
+                item_kwargs.update(kwargs_extractor(item))
+            results.append(func(item, **item_kwargs))
+        return results
 
-        datasets = prepare_aligned_datasets(
-            case_operator, memory, cache_dir=cache_dir, **kwargs
+    # Parallel execution
+    if parallel_config.get("n_jobs") is None:
+        logger.warning("No number of jobs provided, using joblib backend default.")
+
+    dask_client = _maybe_create_dask_client(parallel_config)
+
+    # Use logging redirection to try to get progress bar working separate from
+    # logging outputs
+    with logging_redirect_tqdm():
+        with joblib.parallel_config(**parallel_config):
+            # If we have a kwargs_extractor, build delayed calls with per-item kwargs
+            if kwargs_extractor is not None:
+                # Build delayed calls with per-item kwargs
+                delayed_calls = []
+                for item in items:
+                    item_kwargs = common_kwargs.copy()
+                    item_kwargs.update(kwargs_extractor(item))
+                    delayed_calls.append(joblib.delayed(func)(item, **item_kwargs))
+
+                # Use ParallelTqdm to run the delayed calls in parallel for tqdm and
+                # return an unordered generator of results to preserve memory
+                results = utils.ParallelTqdm(
+                    total_tasks=len(delayed_calls), desc=desc, return_as=return_as
+                )(delayed_calls)
+            else:
+                total_tasks = len(items) if isinstance(items, Sequence) else None
+                # Simple case: same kwargs for all items
+                results = utils.ParallelTqdm(
+                    total_tasks=total_tasks, desc=desc, return_as=return_as
+                )(joblib.delayed(func)(item, **common_kwargs) for item in items)
+
+    # If we created a dask client, close it
+    if dask_client is not None:
+        logger.info("Closing dask client")
+        dask_client.close()
+    return results
+
+
+def _maybe_create_dask_client(parallel_config: dict):
+    """Create a dask client if the parallel_config is set to dask."""
+    if parallel_config.get("backend") == "dask":
+        try:
+            from dask.distributed import Client, LocalCluster
+
+            # Check if a client already exists
+            try:
+                Client.current()
+                logger.info("Using existing dask client")
+            except ValueError:
+                # No client exists, create a local one
+                logger.info("Creating local dask client for parallel execution")
+                dask_client = Client(LocalCluster(processes=True, silence_logs=False))
+                logger.info("Dask client created: %s", dask_client)
+        except ImportError:
+            raise ImportError(
+                "Dask is required for dask backend. "
+                "Install with: pip install dask[distributed]"
+            )
+        return dask_client
+    else:
+        return None
+
+
+def evaluate_metric_and_return_df(
+    datasets: PreparedDatasets,
+    forecast_variable: Union[str, "derived.DerivedVariable"],
+    target_variable: Union[str, "derived.DerivedVariable"],
+    metric: "metrics.BaseMetric",
+    case_operator: "cases.CaseOperator",
+    **kwargs,
+) -> pd.DataFrame:
+    """Evaluate a metric and return a dataframe of the results.
+
+    Args:
+        datasets: The prepared datasets.
+        forecast_variable: The forecast variable to evaluate.
+        target_variable: The target variable to evaluate.
+        metric: The metric to evaluate.
+        case_operator: The case operator with metadata for evaluation.
+        **kwargs: Additional keyword arguments to pass to metric computation.
+
+    Returns:
+        A dataframe of the results with standard output schema columns.
+    """
+    # Normalize variables to their string names if needed
+    forecast_variable = derived._maybe_convert_variable_to_string(forecast_variable)
+    target_variable = derived._maybe_convert_variable_to_string(target_variable)
+
+    logger.info("Computing metric %s... ", metric.name)
+
+    # Extract the appropriate data for the metric
+    if forecast_variable not in datasets.forecast.data_vars:
+        raise ValueError(
+            f"Variable '{forecast_variable}' not found in forecast dataset. "
+            f"Available variables: {list(datasets.forecast.data_vars)}"
         )
 
-        if datasets is None:
-            return pd.DataFrame(columns=OUTPUT_COLUMNS)
+    if target_variable not in datasets.target.data_vars:
+        raise ValueError(
+            f"Variable '{target_variable}' not found in target dataset. "
+            f"Available variables: {list(datasets.target.data_vars)}"
+        )
 
-        jobs = create_jobs_for_case(case_operator, datasets)
+    forecast_data = datasets.forecast[forecast_variable]
+    target_data = datasets.target[target_variable]
 
-        results = []
-        for job in jobs:
-            results.append(
-                evaluate_metric_and_return_df(
-                    datasets=datasets,
-                    forecast_variable=job.forecast_var,
-                    target_variable=job.target_var,
-                    metric=job.metric,
-                    case_operator=job.case_operator,
-                    **job.metric_kwargs,
-                )
-            )
+    metric_result = metric.compute_metric(
+        forecast_data,
+        target_data,
+        **kwargs,
+    )
 
-        if cache_dir:
-            cache_path = (
-                pathlib.Path(cache_dir) if isinstance(cache_dir, str) else cache_dir
-            )
-            concatenated = safe_concat(results, ignore_index=True)
-            if not concatenated.empty:
-                concatenated.to_pickle(
-                    cache_path
-                    / f"case_{case_operator.case_metadata.case_id_number}_results.pkl"
-                )
+    # If data is sparse, densify it
+    if isinstance(metric_result.data, sparse.COO):
+        metric_result.data = metric_result.data.maybe_densify()
+    elif isinstance(metric_result.data, dask.array.Array) and isinstance(
+        metric_result.data._meta, sparse.COO
+    ):
+        metric_result.data = metric_result.data.map_blocks(
+            lambda x: x.maybe_densify(), dtype=metric_result.data.dtype
+        )
 
-        return safe_concat(results, ignore_index=True)
+    df = metric_result.to_dataframe(name="value").reset_index()
+    metadata = extract_standard_metadata(target_variable, metric, case_operator)
+    return _ensure_output_schema(df, **metadata)
