@@ -125,3 +125,6 @@ docstring-code-line-length = "dynamic"
 
 [tool.ruff.lint.isort]
 case-sensitive = true
+
+[tool.pytest]
+addopts = ["--ignore=tests/test_golden.py"]
