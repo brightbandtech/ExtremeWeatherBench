@@ -321,9 +321,9 @@ class TestExtremeWeatherBench:
         call_args = mock_build_case_operators.call_args[0]
 
         # Check that the first argument (case list) has the right structure
-        passed_case_collection = call_args[0]
+        passed_case_list = call_args[0]
         self.assert_cases_equal(
-            passed_case_collection, cases.load_individual_cases(sample_cases_list)
+            passed_case_list, cases.load_individual_cases(sample_cases_list)
         )
 
         # Check that the second argument (evaluation objects) is correct
