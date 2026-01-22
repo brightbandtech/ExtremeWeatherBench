@@ -1,0 +1,60 @@
+- case_id_number: 1
+  title: NYC Heat Wave
+  start_date: 2022-06-19 12:00:00
+  end_date: 2022-06-24 00:00:00
+  location:
+    type: bounded_region
+    parameters:
+      latitude_min: 40.5
+      latitude_max: 41.5
+      longitude_min: -75
+      longitude_max: -73.5
+  event_type: heat_wave
+- case_id_number: 2
+  title: Europe Freeze
+  start_date: 2022-12-14 06:00:00
+  end_date: 2022-12-18 00:00:00
+  location:
+    type: bounded_region
+    parameters:
+      latitude_min: 50
+      latitude_max: 55
+      longitude_min: -5
+      longitude_max: 5
+  event_type: freeze
+- case_id_number: 3
+  title: Australia Severe Convection
+  start_date: 2022-01-14 12:00:00
+  end_date: 2022-01-15 12:00:00
+  location:
+    type: bounded_region
+    parameters:
+      latitude_min: -35
+      latitude_max: -30
+      longitude_min: 145
+      longitude_max: 155
+  event_type: severe_convection
+- case_id_number: 4
+  title: Atmospheric River Alaska
+  start_date: 2021-06-24 00:00:00
+  end_date: 2021-06-27 00:00:00
+  location:
+    type: bounded_region
+    parameters:
+      latitude_min: 50
+      latitude_max: 55
+      longitude_min: 185
+      longitude_max: 200
+  event_type: atmospheric_river
+- case_id_number: 5
+  title: Tropical Cyclone Max
+  start_date: 2023-10-06 00:00:00
+  end_date: 2023-10-12 00:00:00
+  location:
+    type: bounded_region
+    parameters:
+      latitude_min: 11.6
+      latitude_max: 20.1
+      longitude_min: 256.1
+      longitude_max: 262.4
+  event_type: tropical_cyclone
