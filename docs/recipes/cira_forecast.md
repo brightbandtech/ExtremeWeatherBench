@@ -87,8 +87,8 @@ ghcn_target = inputs.GHCN()
 ```python
 
 # Use EWB's cases and subset to the first two heat waves
-case_vals = cases.load_ewb_events_yaml_into_case_collection()
-case_vals.select_cases('case_id_number', [1,2],inplace=True)
+case_vals = cases.load_ewb_events_yaml_into_case_list()
+case_vals = [case for case in case_vals if case.case_id_number.isin([1,2])]
 ```
 
 From here, all we need to do is plug in the event type, metric list, target, and forecast

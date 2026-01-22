@@ -4,7 +4,7 @@ import copy
 import dataclasses
 import logging
 import pathlib
-from typing import TYPE_CHECKING, Optional, Sequence, Union
+from typing import TYPE_CHECKING, Any, Optional, Sequence, Union
 
 import dask.array as da
 import joblib
@@ -37,21 +37,26 @@ OUTPUT_COLUMNS = [
 
 
 class ExtremeWeatherBench:
-    """Main class for building and running ExtremeWeatherBench workflows.
+    """A class to build and run the ExtremeWeatherBench workflow.
 
-    Serves as a wrapper around case operators and evaluation objects to
-    create parallel or serial evaluation runs, returning concatenated results.
+    This class is used to run the ExtremeWeatherBench workflow. It is ultimately a
+    wrapper around case operators and evaluation objects to create a parallel or
+    serial run to evaluate cases and metrics, returning a concatenated dataframe of the
+    results.
 
-    Public methods:
-        run: Execute the ExtremeWeatherBench workflow
-
-    Properties:
-        case_operators: Build CaseOperator objects from metadata
+    Attributes:
+        case_metadata: A dictionary of cases or a list of IndividualCase objects to run.
+        evaluation_objects: A list of evaluation objects to run.
+        cache_dir: An optional directory to cache the mid-flight outputs of the
+            workflow for serial runs.
+        region_subsetter: An optional region subsetter to subset the cases that are
+            part of the evaluation to a Region object or a dictionary of lat/lon
+            bounds.
     """
 
     def __init__(
         self,
-        case_metadata: Union[dict[str, list], "cases.IndividualCaseCollection"],
+        case_metadata: Union[list[dict[str, Any]], "list[cases.IndividualCase]"],
         evaluation_objects: list["inputs.EvaluationObject"],
         cache_dir: Optional[Union[str, pathlib.Path]] = None,
         region_subsetter: Optional["regions.RegionSubsetter"] = None,
@@ -66,15 +71,8 @@ class ExtremeWeatherBench:
             region_subsetter: Optional RegionSubsetter to filter cases by
                 spatial region.
         """
-        if isinstance(case_metadata, dict):
-            self.case_metadata = cases.load_individual_cases(case_metadata)
-        elif isinstance(case_metadata, cases.IndividualCaseCollection):
-            self.case_metadata = case_metadata
-        else:
-            raise TypeError(
-                "case_metadata must be a dictionary of cases or an "
-                "IndividualCaseCollection"
-            )
+        # Load the case metadata from the input
+        self.case_metadata = cases.load_individual_cases(case_metadata)
         self.evaluation_objects = evaluation_objects
         self.cache_dir = pathlib.Path(cache_dir) if cache_dir else None
 
@@ -92,12 +90,10 @@ class ExtremeWeatherBench:
 
         # Subset the cases if a region subsetter was provided
         if self.region_subsetter:
-            subset_collection = self.region_subsetter.subset_case_collection(
-                self.case_metadata
-            )
+            subset_list = self.region_subsetter.subset_case_list(self.case_metadata)
         else:
-            subset_collection = self.case_metadata
-        return cases.build_case_operators(subset_collection, self.evaluation_objects)
+            subset_list = self.case_metadata
+        return cases.build_case_operators(subset_list, self.evaluation_objects)
 
     def run(
         self,

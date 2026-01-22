@@ -2,6 +2,7 @@
 
 import pickle
 import tempfile
+import textwrap
 from pathlib import Path
 from unittest import mock
 
@@ -42,11 +43,11 @@ def temp_config_dir():
 @pytest.fixture
 def sample_config_py(temp_config_dir):
     """Create a sample Python config file."""
-    config_content = """
-# Simple test config that doesn't import complex modules
-evaluation_objects = []
-cases_dict = {"cases": []}
-"""
+    config_content = textwrap.dedent("""
+        # Simple test config that doesn't import complex modules
+        evaluation_objects = []
+        case_list = []
+        """)
     config_file = temp_config_dir / "test_config.py"
     config_file.write_text(config_content)
     return config_file
@@ -91,7 +92,7 @@ class TestDefaultMode:
         mock_ewb_class.return_value = mock_ewb
 
         # Mock loading default cases
-        mock_load_cases.return_value = {"cases": []}
+        mock_load_cases.return_value = []
 
         result = runner.invoke(
             evaluate_cli.cli_runner, ["--default", "--output-dir", str(temp_config_dir)]
@@ -120,7 +121,7 @@ class TestDefaultMode:
         mock_ewb.case_operators = []
         mock_ewb.run.return_value = pd.DataFrame()
         mock_ewb_class.return_value = mock_ewb
-        mock_load_cases.return_value = {"cases": []}
+        mock_load_cases.return_value = []
 
         cache_dir = temp_config_dir / "cache"
 
@@ -170,9 +171,9 @@ class TestConfigFileMode:
 
     def test_config_file_missing_evaluation_objects(self, runner, temp_config_dir):
         """Test config file missing required evaluation_objects."""
-        config_content = """
-cases_dict = {"cases": []}
-        """
+        config_content = textwrap.dedent("""
+        cases_list = []
+        """)
         config_file = temp_config_dir / "bad_config.py"
         config_file.write_text(config_content)
 
@@ -183,11 +184,11 @@ cases_dict = {"cases": []}
         assert result.exit_code != 0
         # Output suppressed - only check exit code
 
-    def test_config_file_missing_cases_dict(self, runner, temp_config_dir):
-        """Test config file missing required cases_dict."""
-        config_content = """
-evaluation_objects = []
-        """
+    def test_config_file_missing_case_list(self, runner, temp_config_dir):
+        """Test config file missing required case_list."""
+        config_content = textwrap.dedent("""
+        evaluation_objects = []
+        """)
         config_file = temp_config_dir / "bad_config.py"
         config_file.write_text(config_content)
 
@@ -220,7 +221,7 @@ class TestParallelExecution:
         mock_ewb.case_operators = [mock.Mock(), mock.Mock(), mock.Mock()]
         mock_ewb.run.return_value = pd.DataFrame({"test": [1, 2, 3]})
         mock_ewb_class.return_value = mock_ewb
-        mock_load_cases.return_value = {"cases": []}
+        mock_load_cases.return_value = []
 
         result = runner.invoke(evaluate_cli.cli_runner, ["--default", "--n-jobs", "3"])
 
@@ -245,7 +246,7 @@ class TestParallelExecution:
         mock_ewb.case_operators = []
         mock_ewb.run.return_value = pd.DataFrame()
         mock_ewb_class.return_value = mock_ewb
-        mock_load_cases.return_value = {"cases": []}
+        mock_load_cases.return_value = []
 
         result = runner.invoke(evaluate_cli.cli_runner, ["--default"])
 
@@ -279,7 +280,7 @@ class TestCaseOperatorSaving:
         mock_ewb.case_operators = [mock_case_op1, mock_case_op2]
         mock_ewb.run.return_value = pd.DataFrame()
         mock_ewb_class.return_value = mock_ewb
-        mock_load_cases.return_value = {"cases": []}
+        mock_load_cases.return_value = []
 
         # Use temp directory for pickle file to ensure cleanup
         save_path = temp_config_dir / "case_ops.pkl"
@@ -318,7 +319,7 @@ class TestCaseOperatorSaving:
         mock_ewb.case_operators = []
         mock_ewb.run.return_value = pd.DataFrame()
         mock_ewb_class.return_value = mock_ewb
-        mock_load_cases.return_value = {"cases": []}
+        mock_load_cases.return_value = []
 
         # Use nested path within temp directory for auto-cleanup
         nested_path = temp_config_dir / "nested" / "dirs" / "case_ops.pkl"
@@ -370,7 +371,7 @@ class TestValidationAndErrorHandling:
         mock_ewb.case_operators = []
         mock_ewb.run.return_value = pd.DataFrame()
         mock_ewb_class.return_value = mock_ewb
-        mock_load_cases.return_value = {"cases": []}
+        mock_load_cases.return_value = []
 
         output_dir = temp_config_dir / "new_output_dir"
         assert not output_dir.exists()
@@ -396,7 +397,7 @@ class TestValidationAndErrorHandling:
         mock_ewb.case_operators = []
         mock_ewb.run.return_value = pd.DataFrame()
         mock_ewb_class.return_value = mock_ewb
-        mock_load_cases.return_value = {"cases": []}
+        mock_load_cases.return_value = []
 
         # Use isolated filesystem to avoid creating files in actual directories
         with runner.isolated_filesystem():
@@ -436,7 +437,7 @@ class TestResultsSaving:
         mock_ewb.case_operators = []
         mock_ewb.run.return_value = mock_results
         mock_ewb_class.return_value = mock_ewb
-        mock_load_cases.return_value = {"cases": []}
+        mock_load_cases.return_value = []
 
         # Use temp directory for output to ensure cleanup
         result = runner.invoke(
@@ -457,7 +458,7 @@ class TestResultsSaving:
         mock_ewb.case_operators = []
         mock_ewb.run.return_value = pd.DataFrame()  # Empty results
         mock_ewb_class.return_value = mock_ewb
-        mock_load_cases.return_value = {"cases": []}
+        mock_load_cases.return_value = []
 
         result = runner.invoke(evaluate_cli.cli_runner, ["--default"])
 
@@ -468,10 +469,10 @@ class TestResultsSaving:
 class TestHelperFunctions:
     """Test helper function functionality."""
 
-    @mock.patch("extremeweatherbench.cases.load_ewb_events_yaml_into_case_collection")
+    @mock.patch("extremeweatherbench.cases.load_ewb_events_yaml_into_case_list")
     def test_load_default_cases(self, mock_load_yaml):
         """Test _load_default_cases function."""
-        mock_cases = {"cases": [{"id": 1}]}
+        mock_cases = [{"id": 1}]
         mock_load_yaml.return_value = mock_cases
 
         result = evaluate_cli._load_default_cases()

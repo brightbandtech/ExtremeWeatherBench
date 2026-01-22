@@ -7,8 +7,7 @@ Usage:
     ewb --config-file example_config.py
 """
 
-from extremeweatherbench import inputs, metrics
-from extremeweatherbench.cases import load_ewb_events_yaml_into_case_collection
+from extremeweatherbench import cases, inputs, metrics
 
 # Define targets (observation data)
 era5_heatwave_target = inputs.ERA5(
@@ -40,12 +39,10 @@ evaluation_objects = [
 ]
 
 # Load case data from the default events.yaml
-# Users can also define their own cases_dict structure
-cases_dict = load_ewb_events_yaml_into_case_collection()
-
+# Users can also define their own cases
+cases_list = cases.load_ewb_events_yaml_into_case_list()
 # Alternatively, users could define custom cases like this:
-# cases_dict = {
-#     "cases": [
+# cases_list = [
 #         {
 #             "case_id_number": 1,
 #             "title": "Custom Heat Wave Case",
@@ -62,4 +59,3 @@ cases_dict = load_ewb_events_yaml_into_case_collection()
 #             "event_type": "heat_wave",
 #         },
 #     ]
-# }

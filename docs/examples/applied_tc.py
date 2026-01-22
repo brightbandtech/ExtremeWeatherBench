@@ -7,11 +7,11 @@ logger = logging.getLogger("extremeweatherbench")
 logger.setLevel(logging.INFO)
 
 
-# Load the case collection from the YAML file
-case_yaml = cases.load_ewb_events_yaml_into_case_collection()
+# Load the case list from the YAML file
+case_yaml = cases.load_ewb_events_yaml_into_case_list()
 
 # Select single case (TC Ida)
-case_yaml.select_cases(by="case_id_number", value=220, inplace=True)
+case_yaml = [n for n in case_yaml if n.case_id_number == 220]
 
 # Define IBTrACS target, no arguments needed as defaults are sufficient
 ibtracs_target = inputs.IBTrACS()
