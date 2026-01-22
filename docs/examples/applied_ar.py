@@ -38,12 +38,11 @@ def _preprocess_cira_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
 
 
 # Load case data from the default events.yaml
-# Users can also define their own cases_dict structure
-case_yaml = cases.load_ewb_events_yaml_into_case_collection()
-case_yaml = case_yaml.select_cases(by="case_id_number", value=114)
-
-case_yaml.cases[0].start_date = datetime.datetime(2022, 12, 27, 11, 0, 0)
-case_yaml.cases[0].end_date = datetime.datetime(2022, 12, 27, 13, 0, 0)
+# Users can also define their own cases
+case_yaml = cases.load_ewb_events_yaml_into_case_list()
+case_yaml = [n for n in case_yaml if n.case_id_number == 114]
+case_yaml[0].start_date = datetime.datetime(2022, 12, 27, 11, 0, 0)
+case_yaml[0].end_date = datetime.datetime(2022, 12, 27, 13, 0, 0)
 # Define ERA5 target
 era5_target = inputs.ERA5(
     variables=[
