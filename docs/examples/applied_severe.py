@@ -1,6 +1,5 @@
 import logging
 
-
 from extremeweatherbench import cases, derived, evaluate, inputs, metrics
 
 # Set the logger level to INFO
@@ -9,8 +8,8 @@ logger.setLevel(logging.INFO)
 
 
 # Load case data from the default events.yaml
-case_yaml = cases.load_ewb_events_yaml_into_case_collection()
-case_yaml.select_cases("case_id_number", 305, inplace=True)
+case_yaml = cases.load_ewb_events_yaml_into_case_list()
+case_yaml = [n for n in case_yaml if n.case_id_number == 305]
 
 # Define PPH target
 pph_target = inputs.PPH(
