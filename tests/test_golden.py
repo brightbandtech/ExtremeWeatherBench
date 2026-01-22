@@ -129,7 +129,7 @@ class TestGoldenTests:
         hres_severe_convection_forecast = inputs.ZarrForecast(
             name="hres_severe_convection_forecast",
             source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
-            variables=["surface_air_temperature"],
+            variables=[derived.CravenBrooksSignificantSevere()],
             variable_mapping=inputs.HRES_metadata_variable_mapping,
         )
         severe_convection_metrics = [

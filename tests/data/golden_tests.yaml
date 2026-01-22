@@ -23,16 +23,13 @@
       longitude_max: 5
   event_type: freeze
 - case_id_number: 3
-  title: Australia Severe Convection
-  start_date: 2022-01-14 12:00:00
-  end_date: 2022-01-15 12:00:00
+  title: April 2022 South Carolina
+  start_date: 2022-04-05 12:00:00
+  end_date: 2022-04-06 12:00:00
   location:
-    type: bounded_region
+    type: shapefile_region
     parameters:
-      latitude_min: -35
-      latitude_max: -30
-      longitude_min: 145
-      longitude_max: 155
+      shapefile_path: tests/data/south_carolina_110m.shp
   event_type: severe_convection
 - case_id_number: 4
   title: Atmospheric River Alaska

@@ -338,8 +338,14 @@ class ShapefileRegion(Region):
 
         # Note: ShapefileRegion.mask uses slice which doesn't support
         # prime/antimeridian crossing with OR logic, but regionmask handles it
+        # Check if latitude is ascending or descending to handle slice correctly
+        lat_ascending = dataset.latitude[0] < dataset.latitude[-1]
+        if lat_ascending:
+            lat_slice = slice(latitude_min, latitude_max)
+        else:
+            lat_slice = slice(latitude_max, latitude_min)
         dataset = dataset.sel(
-            latitude=slice(latitude_max, latitude_min),
+            latitude=lat_slice,
             longitude=slice(longitude_min, longitude_max),
             drop=drop,
         )
