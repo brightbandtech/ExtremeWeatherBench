@@ -1481,27 +1481,21 @@ class TestRegionSubsetter:
         case_ids = [case.case_id_number for case in subset_cases]
         assert 2 in case_ids  # contained case should always be included
 
-    def test_subset_case_list_different_thresholds(
-        self, target_region, sample_cases
-    ):
+    def test_subset_case_list_different_thresholds(self, target_region, sample_cases):
         """Test subsetting with different percent thresholds."""
         # Low threshold - should include more cases
         low_threshold_subsetter = regions.RegionSubsetter(
             region=target_region, method="percent", percent_threshold=0.1
         )
 
-        low_threshold_cases = low_threshold_subsetter.subset_case_list(
-            sample_cases
-        )
+        low_threshold_cases = low_threshold_subsetter.subset_case_list(sample_cases)
 
         # High threshold - should include fewer cases
         high_threshold_subsetter = regions.RegionSubsetter(
             region=target_region, method="percent", percent_threshold=0.9
         )
 
-        high_threshold_cases = high_threshold_subsetter.subset_case_list(
-            sample_cases
-        )
+        high_threshold_cases = high_threshold_subsetter.subset_case_list(sample_cases)
 
         # Low threshold should include at least as many as high threshold
         assert len(low_threshold_cases) >= len(high_threshold_cases)
