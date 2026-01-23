@@ -20,12 +20,24 @@ the package and access all key functionality:
 
 from types import SimpleNamespace
 
+from extremeweatherbench.calc import (
+    convert_from_cartesian_to_latlon,
+    geopotential_thickness,
+    great_circle_mask,
+    haversine_distance,
+    maybe_calculate_wind_speed,
+    mixing_ratio,
+    orography,
+    pressure_at_surface,
+    saturation_mixing_ratio,
+    saturation_vapor_pressure,
+    specific_humidity_from_relative_humidity,
+)
 from extremeweatherbench.cases import (
     CaseOperator,
     IndividualCase,
-    IndividualCaseCollection,
     build_case_operators,
-    load_ewb_events_yaml_into_case_collection,
+    load_ewb_events_yaml_into_case_list,
     load_individual_cases,
     load_individual_cases_from_yaml,
     read_incoming_yaml,
@@ -33,11 +45,6 @@ from extremeweatherbench.cases import (
 from extremeweatherbench.defaults import (
     DEFAULT_COORDINATE_VARIABLES,
     DEFAULT_VARIABLE_NAMES,
-    _preprocess_bb_ar_cira_forecast_dataset,
-    _preprocess_bb_cira_forecast_dataset,
-    _preprocess_bb_cira_tc_forecast_dataset,
-    _preprocess_bb_hres_tc_forecast_dataset,
-    _preprocess_bb_severe_cira_forecast_dataset,
     cira_atmospheric_river_forecast,
     cira_freeze_forecast,
     cira_heatwave_forecast,
@@ -128,10 +135,50 @@ from extremeweatherbench.regions import (
     subset_cases_to_region,
     subset_results_to_region,
 )
+from extremeweatherbench.utils import (
+    check_for_vars,
+    convert_day_yearofday_to_time,
+    convert_init_time_to_valid_time,
+    convert_longitude_to_180,
+    convert_longitude_to_360,
+    convert_valid_time_to_init_time,
+    derive_indices_from_init_time_and_lead_time,
+    determine_temporal_resolution,
+    extract_tc_names,
+    filter_kwargs_for_callable,
+    find_common_init_times,
+    idx_to_coords,
+    interp_climatology_to_target,
+    is_valid_landfall,
+    load_land_geometry,
+    maybe_cache_and_compute,
+    maybe_densify_dataarray,
+    maybe_get_closest_timestamp_to_center_of_valid_times,
+    maybe_get_operator,
+    min_if_all_timesteps_present,
+    min_if_all_timesteps_present_forecast,
+    read_event_yaml,
+    remove_ocean_gridpoints,
+    stack_dataarray_from_dims,
+)
+
+calc = SimpleNamespace(
+    geopotential_thickness=geopotential_thickness,
+    specific_humidity_from_relative_humidity=specific_humidity_from_relative_humidity,
+    convert_from_cartesian_to_latlon=convert_from_cartesian_to_latlon,
+    great_circle_mask=great_circle_mask,
+    maybe_calculate_wind_speed=maybe_calculate_wind_speed,
+    mixing_ratio=mixing_ratio,
+    orography=orography,
+    pressure_at_surface=pressure_at_surface,
+    saturation_mixing_ratio=saturation_mixing_ratio,
+    saturation_vapor_pressure=saturation_vapor_pressure,
+    haversine_distance=haversine_distance,
+)
 
 # Aliases
 evaluation = ExtremeWeatherBench
-load_cases = load_ewb_events_yaml_into_case_collection
+load_cases = load_ewb_events_yaml_into_case_list
 
 # Namespace submodules
 targets = SimpleNamespace(
@@ -179,12 +226,11 @@ metrics = SimpleNamespace(
 
 cases = SimpleNamespace(
     IndividualCase=IndividualCase,
-    IndividualCaseCollection=IndividualCaseCollection,
     CaseOperator=CaseOperator,
     build_case_operators=build_case_operators,
     load_individual_cases=load_individual_cases,
     load_individual_cases_from_yaml=load_individual_cases_from_yaml,
-    load_ewb_events_yaml_into_case_collection=load_ewb_events_yaml_into_case_collection,
+    load_ewb_events_yaml_into_case_list=load_ewb_events_yaml_into_case_list,
     read_incoming_yaml=read_incoming_yaml,
 )
 
@@ -214,11 +260,6 @@ defaults = SimpleNamespace(
     DEFAULT_VARIABLE_NAMES=DEFAULT_VARIABLE_NAMES,
     get_climatology=get_climatology,
     get_brightband_evaluation_objects=get_brightband_evaluation_objects,
-    _preprocess_bb_cira_forecast_dataset=_preprocess_bb_cira_forecast_dataset,
-    _preprocess_bb_cira_tc_forecast_dataset=_preprocess_bb_cira_tc_forecast_dataset,
-    _preprocess_bb_hres_tc_forecast_dataset=_preprocess_bb_hres_tc_forecast_dataset,
-    _preprocess_bb_ar_cira_forecast_dataset=_preprocess_bb_ar_cira_forecast_dataset,
-    _preprocess_bb_severe_cira_forecast_dataset=_preprocess_bb_severe_cira_forecast_dataset,
     era5_heatwave_target=era5_heatwave_target,
     era5_freeze_target=era5_freeze_target,
     era5_atmospheric_river_target=era5_atmospheric_river_target,
@@ -234,6 +275,32 @@ defaults = SimpleNamespace(
     cira_severe_convection_forecast=cira_severe_convection_forecast,
 )
 
+utils = SimpleNamespace(
+    maybe_get_operator=maybe_get_operator,
+    find_common_init_times=find_common_init_times,
+    is_valid_landfall=is_valid_landfall,
+    load_land_geometry=load_land_geometry,
+    maybe_cache_and_compute=maybe_cache_and_compute,
+    maybe_densify_dataarray=maybe_densify_dataarray,
+    maybe_get_closest_timestamp_to_center_of_valid_times=maybe_get_closest_timestamp_to_center_of_valid_times,
+    min_if_all_timesteps_present=min_if_all_timesteps_present,
+    min_if_all_timesteps_present_forecast=min_if_all_timesteps_present_forecast,
+    determine_temporal_resolution=determine_temporal_resolution,
+    convert_init_time_to_valid_time=convert_init_time_to_valid_time,
+    convert_valid_time_to_init_time=convert_valid_time_to_init_time,
+    convert_day_yearofday_to_time=convert_day_yearofday_to_time,
+    interp_climatology_to_target=interp_climatology_to_target,
+    check_for_vars=check_for_vars,
+    idx_to_coords=idx_to_coords,
+    extract_tc_names=extract_tc_names,
+    stack_dataarray_from_dims=stack_dataarray_from_dims,
+    convert_longitude_to_360=convert_longitude_to_360,
+    convert_longitude_to_180=convert_longitude_to_180,
+    derive_indices_from_init_time_and_lead_time=derive_indices_from_init_time_and_lead_time,
+    filter_kwargs_for_callable=filter_kwargs_for_callable,
+    remove_ocean_gridpoints=remove_ocean_gridpoints,
+    read_event_yaml=read_event_yaml,
+)
 __all__ = [
     "evaluation",
     "ExtremeWeatherBench",
@@ -245,12 +312,11 @@ __all__ = [
     "regions",
     "load_cases",
     "IndividualCase",
-    "IndividualCaseCollection",
     "CaseOperator",
     "build_case_operators",
     "load_individual_cases",
     "load_individual_cases_from_yaml",
-    "load_ewb_events_yaml_into_case_collection",
+    "load_ewb_events_yaml_into_case_list",
     "read_incoming_yaml",
     "InputBase",
     "ForecastBase",
@@ -322,11 +388,6 @@ __all__ = [
     "DEFAULT_VARIABLE_NAMES",
     "get_climatology",
     "get_brightband_evaluation_objects",
-    "_preprocess_bb_cira_forecast_dataset",
-    "_preprocess_bb_cira_tc_forecast_dataset",
-    "_preprocess_bb_hres_tc_forecast_dataset",
-    "_preprocess_bb_ar_cira_forecast_dataset",
-    "_preprocess_bb_severe_cira_forecast_dataset",
     "era5_heatwave_target",
     "era5_freeze_target",
     "era5_atmospheric_river_target",

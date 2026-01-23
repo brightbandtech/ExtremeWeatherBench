@@ -1394,7 +1394,7 @@ class TestPipelineFunctions:
     def test_run_pipeline_invalid_source(self, sample_case_operator):
         """Test run_pipeline function with invalid input source."""
         with pytest.raises(AttributeError, match="'str' object has no attribute"):
-            evaluate.run_pipeline(sample_case_operator.case_metadata, "invalid") # type: ignore
+            evaluate.run_pipeline(sample_case_operator.case_metadata, "invalid")  # type: ignore
 
     def test_maybe_cache_and_compute_with_cache_dir(
         self, sample_forecast_dataset, sample_target_dataset, sample_individual_case

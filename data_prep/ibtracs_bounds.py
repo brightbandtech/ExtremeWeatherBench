@@ -4,6 +4,7 @@ import datetime
 import logging
 import re
 from importlib import resources
+from typing import TYPE_CHECKING
 
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
@@ -16,6 +17,9 @@ from matplotlib.patches import Rectangle
 
 import extremeweatherbench as ewb
 import extremeweatherbench.data
+
+if TYPE_CHECKING:
+    from extremeweatherbench.regions import Region
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -67,7 +71,7 @@ def calculate_extent_bounds(
     bottom_lat: float,
     top_lat: float,
     extent_buffer: float = 250,
-) -> ewb.regions.Region:
+) -> Region:
     """Calculate extent bounds with buffer.
 
     Args:
@@ -177,7 +181,7 @@ def load_and_process_ibtracs_data():
     # Get all storms from 2020 - 2025 seasons
     all_storms_2020_2025_lf = IBTRACS_lf.filter(
         (pl.col("SEASON").cast(pl.Int32) >= 2020)
-    ).select(inputs.IBTrACS_metadata_variable_mapping.values())
+    ).select(ewb.inputs.IBTrACS_metadata_variable_mapping.values())
 
     schema = all_storms_2020_2025_lf.collect_schema()
     # Convert pressure and surface wind columns to float, replacing " " with null
