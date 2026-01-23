@@ -24,11 +24,7 @@ logger = logging.getLogger(__name__)
 
 @dataclasses.dataclass
 class IndividualCase:
-    """Container for metadata defining a single extreme weather case study.
-
-    Defines relevant metadata for a single case study of an extreme weather
-    event. Designed for easy instantiation through simple YAML configuration
-    files.
+    """Container for metadata defining a single case study.
 
     Attributes:
         case_id_number: Unique numerical identifier for the event.
