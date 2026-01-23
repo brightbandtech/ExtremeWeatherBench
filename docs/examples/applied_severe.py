@@ -9,7 +9,7 @@ logger.setLevel(logging.INFO)
 
 # Load case data from the default events.yaml
 case_yaml = ewb.load_cases()
-case_yaml.select_cases("case_id_number", 305, inplace=True)
+case_list = [n for n in case_yaml if n.case_id_number == 305]
 
 # Define PPH target
 pph_target = ewb.targets.PPH(
@@ -77,7 +77,7 @@ lsr_evaluation_objects = [
 if __name__ == "__main__":
     # Initialize ExtremeWeatherBench with both evaluation objects
     severe_ewb = ewb.evaluation(
-        case_metadata=case_yaml,
+        case_metadata=case_list,
         evaluation_objects=lsr_evaluation_objects + pph_evaluation_objects,
     )
     logger.info("Starting EWB run")

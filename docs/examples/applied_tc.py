@@ -4,7 +4,6 @@ import numpy as np
 import xarray as xr
 
 import extremeweatherbench as ewb
-from extremeweatherbench import calc
 
 # Set the logger level to INFO
 logger = logging.getLogger("extremeweatherbench")
@@ -29,7 +28,7 @@ def _preprocess_bb_cira_tc_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
     ds["lead_time"] = np.array(
         [i for i in range(0, 241, 6)], dtype="timedelta64[h]"
     ).astype("timedelta64[ns]")
-    ds["geopotential_thickness"] = calc.geopotential_thickness(
+    ds["geopotential_thickness"] = ewb.calc.geopotential_thickness(
         ds["z"], top_level_value=300, bottom_level_value=500
     )
     return ds
@@ -45,7 +44,7 @@ def _preprocess_hres_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
     Args:
         ds: The forecast dataset to rename.
     """
-    ds["geopotential_thickness"] = calc.geopotential_thickness(
+    ds["geopotential_thickness"] = ewb.calc.geopotential_thickness(
         ds["geopotential"],
         top_level_value=300,
         bottom_level_value=500,
@@ -58,7 +57,7 @@ def _preprocess_hres_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
 case_yaml = ewb.load_cases()
 
 # Select single case (TC Ida)
-case_yaml.select_cases(by="case_id_number", value=220, inplace=True)
+case_list = [n for n in case_yaml if n.case_id_number == 220]
 
 # Define IBTrACS target, no arguments needed as defaults are sufficient
 ibtracs_target = ewb.targets.IBTrACS()
@@ -73,10 +72,10 @@ hres_forecast = ewb.forecasts.ZarrForecast(
     variable_mapping=ewb.HRES_metadata_variable_mapping,
     storage_options={"remote_options": {"anon": True}},
     # Preprocess the HRES forecast to include geopotential thickness calculation
-    preprocess=_preprocess_hres_forecast_dataset,
+    preprocess=ewb.defaults._preprocess_hres_tc_forecast_dataset,
 )
 
-# Define FCNv2 forecast
+# Define FCNv2 forecast, this is the old version for reference only
 fcnv2_forecast = ewb.forecasts.KerchunkForecast(
     name="fcn_forecast",
     source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
@@ -84,7 +83,7 @@ fcnv2_forecast = ewb.forecasts.KerchunkForecast(
     # Define metadata variable mapping for FCNv2 forecast
     variable_mapping=ewb.CIRA_metadata_variable_mapping,
     # Preprocess the FCNv2 forecast to include geopotential thickness calculation
-    preprocess=_preprocess_bb_cira_tc_forecast_dataset,
+    preprocess=ewb.defaults._preprocess_cira_tc_forecast_dataset,
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
 )
 
@@ -97,7 +96,7 @@ pangu_forecast = ewb.forecasts.KerchunkForecast(
     variable_mapping=ewb.CIRA_metadata_variable_mapping,
     # Preprocess the Pangu forecast to include geopotential thickness calculation
     # which uses the same preprocessing function as the FCNv2 forecast
-    preprocess=_preprocess_bb_cira_tc_forecast_dataset,
+    preprocess=ewb.defaults._preprocess_cira_tc_forecast_dataset,
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
 )
 
@@ -149,7 +148,7 @@ tc_evaluation_object = [
 if __name__ == "__main__":
     # Initialize ExtremeWeatherBench
     tc_ewb = ewb.evaluation(
-        case_metadata=case_yaml,
+        case_metadata=case_list,
         evaluation_objects=tc_evaluation_object,
     )
     logger.info("Starting EWB run")

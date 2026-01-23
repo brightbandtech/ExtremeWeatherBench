@@ -576,29 +576,27 @@ class TestExtremeWeatherBenchVariablePairing:
         )
 
         # Create cases dict
-        cases_dict = {
-            "cases": [
-                {
-                    "case_id_number": 1,
-                    "title": "Test Case",
-                    "start_date": datetime.datetime(2021, 6, 20),
-                    "end_date": datetime.datetime(2021, 6, 25),
-                    "location": {
-                        "type": "centered_region",
-                        "parameters": {
-                            "latitude": 45.0,
-                            "longitude": -120.0,
-                            "bounding_box_degrees": 5.0,
-                        },
+        cases_list = [
+            {
+                "case_id_number": 1,
+                "title": "Test Case",
+                "start_date": datetime.datetime(2021, 6, 20),
+                "end_date": datetime.datetime(2021, 6, 25),
+                "location": {
+                    "type": "centered_region",
+                    "parameters": {
+                        "latitude": 45.0,
+                        "longitude": -120.0,
+                        "bounding_box_degrees": 5.0,
                     },
-                    "event_type": "test_event",
-                }
-            ]
-        }
+                },
+                "event_type": "test_event",
+            }
+        ]
 
         # Create and run ExtremeWeatherBench
         ewb = evaluate.ExtremeWeatherBench(
-            case_metadata=cases_dict,
+            case_metadata=cases_list,
             evaluation_objects=[evaluation_obj],
         )
 
@@ -657,29 +655,27 @@ class TestExtremeWeatherBenchVariablePairing:
         )
 
         # Create cases dict
-        cases_dict = {
-            "cases": [
-                {
-                    "case_id_number": 1,
-                    "title": "Test Case",
-                    "start_date": datetime.datetime(2021, 6, 20),
-                    "end_date": datetime.datetime(2021, 6, 25),
-                    "location": {
-                        "type": "centered_region",
-                        "parameters": {
-                            "latitude": 45.0,
-                            "longitude": -120.0,
-                            "bounding_box_degrees": 5.0,
-                        },
+        cases_list = [
+            {
+                "case_id_number": 1,
+                "title": "Test Case",
+                "start_date": datetime.datetime(2021, 6, 20),
+                "end_date": datetime.datetime(2021, 6, 25),
+                "location": {
+                    "type": "centered_region",
+                    "parameters": {
+                        "latitude": 45.0,
+                        "longitude": -120.0,
+                        "bounding_box_degrees": 5.0,
                     },
-                    "event_type": "test_event",
-                }
-            ]
-        }
+                },
+                "event_type": "test_event",
+            }
+        ]
 
         # Create and run ExtremeWeatherBench
         ewb = evaluate.ExtremeWeatherBench(
-            case_metadata=cases_dict,
+            case_metadata=cases_list,
             evaluation_objects=[evaluation_obj],
         )
 

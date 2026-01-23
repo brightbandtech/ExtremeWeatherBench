@@ -45,27 +45,25 @@ def sample_individual_case():
 
 
 @pytest.fixture
-def sample_cases_dict(sample_individual_case):
+def sample_cases_list(sample_individual_case):
     """Create a sample cases dictionary."""
-    return {
-        "cases": [
-            {
-                "case_id_number": 1,
-                "title": "Test Heat Wave",
-                "start_date": datetime.datetime(2021, 6, 20),
-                "end_date": datetime.datetime(2021, 6, 25),
-                "location": {
-                    "type": "centered_region",
-                    "parameters": {
-                        "latitude": 45.0,
-                        "longitude": -120.0,
-                        "bounding_box_degrees": 5.0,
-                    },
+    return [
+        {
+            "case_id_number": 1,
+            "title": "Test Heat Wave",
+            "start_date": datetime.datetime(2021, 6, 20),
+            "end_date": datetime.datetime(2021, 6, 25),
+            "location": {
+                "type": "centered_region",
+                "parameters": {
+                    "latitude": 45.0,
+                    "longitude": -120.0,
+                    "bounding_box_degrees": 5.0,
                 },
-                "event_type": "heat_wave",
-            }
-        ]
-    }
+            },
+            "event_type": "heat_wave",
+        }
+    ]
 
 
 @pytest.fixture
@@ -238,10 +236,10 @@ class TestExtremeWeatherBench:
     """Test the ExtremeWeatherBench class."""
 
     def assert_cases_equal(self, actual, expected):
-        """Assert that two IndividualCaseCollection instances are equal."""
-        assert len(actual.cases) == len(expected.cases)
+        """Assert that two list of IndividualCase objects are equal."""
+        assert len(actual) == len(expected)
 
-        for actual_case, expected_case in zip(actual.cases, expected.cases):
+        for actual_case, expected_case in zip(actual, expected):
             assert actual_case.case_id_number == expected_case.case_id_number
             assert actual_case.title == expected_case.title
             assert actual_case.start_date == expected_case.start_date
@@ -260,26 +258,26 @@ class TestExtremeWeatherBench:
                     == expected_case.location.bounding_box_degrees
                 )
 
-    def test_initialization(self, sample_cases_dict, sample_evaluation_object):
+    def test_initialization(self, sample_cases_list, sample_evaluation_object):
         """Test ExtremeWeatherBench initialization."""
         ewb = evaluate.ExtremeWeatherBench(
-            case_metadata=sample_cases_dict,
+            case_metadata=sample_cases_list,
             evaluation_objects=[sample_evaluation_object],
         )
 
         self.assert_cases_equal(
-            ewb.case_metadata, cases.load_individual_cases(sample_cases_dict)
+            ewb.case_metadata, cases.load_individual_cases(sample_cases_list)
         )
         assert ewb.evaluation_objects == [sample_evaluation_object]
         assert ewb.cache_dir is None
 
     def test_initialization_with_cache_dir(
-        self, sample_cases_dict, sample_evaluation_object
+        self, sample_cases_list, sample_evaluation_object
     ):
         """Test ExtremeWeatherBench initialization with cache directory."""
         cache_dir = "/tmp/test_cache"
         ewb = evaluate.ExtremeWeatherBench(
-            case_metadata=sample_cases_dict,
+            case_metadata=sample_cases_list,
             evaluation_objects=[sample_evaluation_object],
             cache_dir=cache_dir,
         )
@@ -288,12 +286,12 @@ class TestExtremeWeatherBench:
         assert ewb.cache_dir == pathlib.Path(cache_dir)
 
     def test_initialization_with_path_cache_dir(
-        self, sample_cases_dict, sample_evaluation_object
+        self, sample_cases_list, sample_evaluation_object
     ):
         """Test ExtremeWeatherBench initialization with Path cache directory."""
         cache_dir = pathlib.Path("/tmp/test_cache")
         ewb = evaluate.ExtremeWeatherBench(
-            case_metadata=sample_cases_dict,
+            case_metadata=sample_cases_list,
             evaluation_objects=[sample_evaluation_object],
             cache_dir=cache_dir,
         )
@@ -304,7 +302,7 @@ class TestExtremeWeatherBench:
     def test_case_operators_property(
         self,
         mock_build_case_operators,
-        sample_cases_dict,
+        sample_cases_list,
         sample_evaluation_object,
         sample_case_operator,
     ):
@@ -312,7 +310,7 @@ class TestExtremeWeatherBench:
         mock_build_case_operators.return_value = [sample_case_operator]
 
         ewb = evaluate.ExtremeWeatherBench(
-            case_metadata=sample_cases_dict,
+            case_metadata=sample_cases_list,
             evaluation_objects=[sample_evaluation_object],
         )
 
@@ -322,10 +320,10 @@ class TestExtremeWeatherBench:
         mock_build_case_operators.assert_called_once()
         call_args = mock_build_case_operators.call_args[0]
 
-        # Check that the first argument (case collection) has the right structure
-        passed_case_collection = call_args[0]
+        # Check that the first argument (case list) has the right structure
+        passed_case_list = call_args[0]
         self.assert_cases_equal(
-            passed_case_collection, cases.load_individual_cases(sample_cases_dict)
+            passed_case_list, cases.load_individual_cases(sample_cases_list)
         )
 
         # Check that the second argument (evaluation objects) is correct
@@ -338,7 +336,7 @@ class TestExtremeWeatherBench:
     def test_run_serial_evaluation(
         self,
         mock_run_evaluation,
-        sample_cases_dict,
+        sample_cases_list,
         sample_evaluation_object,
         sample_case_operator,
     ):
@@ -360,7 +358,7 @@ class TestExtremeWeatherBench:
             mock_run_evaluation.return_value = mock_result
 
             ewb = evaluate.ExtremeWeatherBench(
-                case_metadata=sample_cases_dict,
+                case_metadata=sample_cases_list,
                 evaluation_objects=[sample_evaluation_object],
             )
 
@@ -379,7 +377,7 @@ class TestExtremeWeatherBench:
     def test_run_parallel_evaluation(
         self,
         mock_run_evaluation,
-        sample_cases_dict,
+        sample_cases_list,
         sample_evaluation_object,
         sample_case_operator,
     ):
@@ -399,7 +397,7 @@ class TestExtremeWeatherBench:
             mock_run_evaluation.return_value = mock_result
 
             ewb = evaluate.ExtremeWeatherBench(
-                case_metadata=sample_cases_dict,
+                case_metadata=sample_cases_list,
                 evaluation_objects=[sample_evaluation_object],
             )
 
@@ -417,7 +415,7 @@ class TestExtremeWeatherBench:
     def test_run_with_kwargs(
         self,
         mock_run_evaluation,
-        sample_cases_dict,
+        sample_cases_list,
         sample_evaluation_object,
         sample_case_operator,
     ):
@@ -429,7 +427,7 @@ class TestExtremeWeatherBench:
             mock_run_evaluation.return_value = mock_result
 
             ewb = evaluate.ExtremeWeatherBench(
-                case_metadata=sample_cases_dict,
+                case_metadata=sample_cases_list,
                 evaluation_objects=[sample_evaluation_object],
             )
 
@@ -444,7 +442,7 @@ class TestExtremeWeatherBench:
     def test_run_empty_results(
         self,
         mock_run_evaluation,
-        sample_cases_dict,
+        sample_cases_list,
         sample_evaluation_object,
     ):
         """Test the run method handles empty results."""
@@ -452,7 +450,7 @@ class TestExtremeWeatherBench:
             mock_run_evaluation.return_value = []
 
             ewb = evaluate.ExtremeWeatherBench(
-                case_metadata=sample_cases_dict,
+                case_metadata=sample_cases_list,
                 evaluation_objects=[sample_evaluation_object],
             )
 
@@ -466,7 +464,7 @@ class TestExtremeWeatherBench:
     def test_run_with_caching(
         self,
         mock_compute_case_operator,
-        sample_cases_dict,
+        sample_cases_list,
         sample_evaluation_object,
         sample_case_operator,
     ):
@@ -501,7 +499,7 @@ class TestExtremeWeatherBench:
                 mock_compute_case_operator.side_effect = mock_compute_with_caching
 
                 ewb = evaluate.ExtremeWeatherBench(
-                    case_metadata=sample_cases_dict,
+                    case_metadata=sample_cases_list,
                     evaluation_objects=[sample_evaluation_object],
                     cache_dir=cache_dir,
                 )
@@ -517,7 +515,7 @@ class TestExtremeWeatherBench:
 
     @mock.patch("extremeweatherbench.evaluate.compute_case_operator")
     def test_run_multiple_cases(
-        self, mock_compute_case_operator, sample_cases_dict, sample_evaluation_object
+        self, mock_compute_case_operator, sample_cases_list, sample_evaluation_object
     ):
         """Test the run method with multiple case operators."""
         # Create multiple case operators
@@ -536,7 +534,7 @@ class TestExtremeWeatherBench:
             ]
 
             ewb = evaluate.ExtremeWeatherBench(
-                case_metadata=sample_cases_dict,
+                case_metadata=sample_cases_list,
                 evaluation_objects=[sample_evaluation_object],
             )
 
@@ -1396,7 +1394,7 @@ class TestPipelineFunctions:
     def test_run_pipeline_invalid_source(self, sample_case_operator):
         """Test run_pipeline function with invalid input source."""
         with pytest.raises(AttributeError, match="'str' object has no attribute"):
-            evaluate.run_pipeline(sample_case_operator.case_metadata, "invalid")
+            evaluate.run_pipeline(sample_case_operator.case_metadata, "invalid") # type: ignore
 
     def test_maybe_cache_and_compute_with_cache_dir(
         self, sample_forecast_dataset, sample_target_dataset, sample_individual_case
@@ -1600,8 +1598,11 @@ class TestErrorHandling:
     """Test error handling and edge cases."""
 
     def test_extremeweatherbench_empty_cases(self, sample_evaluation_object):
-        """Test ExtremeWeatherBench with empty cases."""
-        empty_cases = {"cases": []}
+        """Test ExtremeWeatherBench with empty cases.
+
+        Should return an empty DataFrame when no cases are provided.
+        """
+        empty_cases = []
 
         ewb = evaluate.ExtremeWeatherBench(
             case_metadata=empty_cases,
@@ -1748,13 +1749,13 @@ class TestErrorHandling:
 
     @mock.patch("extremeweatherbench.evaluate._run_evaluation")
     def test_run_method_exception_propagation(
-        self, mock_run_evaluation, sample_cases_dict, sample_evaluation_object
+        self, mock_run_case_operators, sample_cases_list, sample_evaluation_object
     ):
         """Test that ExtremeWeatherBench.run() propagates exceptions correctly."""
-        mock_run_evaluation.side_effect = Exception("Execution failed")
+        mock_run_case_operators.side_effect = Exception("Execution failed")
 
         ewb = evaluate.ExtremeWeatherBench(
-            case_metadata=sample_cases_dict,
+            case_metadata=sample_cases_list,
             evaluation_objects=[sample_evaluation_object],
         )
 
@@ -1818,7 +1819,7 @@ class TestIntegration:
         self,
         mock_maybe_subset_variables,
         mock_derive_variables,
-        sample_cases_dict,
+        sample_cases_list,
         sample_evaluation_object,
         sample_forecast_dataset,
         sample_target_dataset,
@@ -1884,7 +1885,7 @@ class TestIntegration:
 
             # Create and run the workflow
             ewb = evaluate.ExtremeWeatherBench(
-                case_metadata=sample_cases_dict,
+                case_metadata=sample_cases_list,
                 evaluation_objects=[sample_evaluation_object],
             )
 
@@ -1902,7 +1903,7 @@ class TestIntegration:
     def test_multiple_variables_and_metrics(
         self,
         mock_maybe_subset_variables,
-        sample_cases_dict,
+        sample_cases_list,
         sample_forecast_dataset,
         sample_target_dataset,
     ):
@@ -1988,7 +1989,7 @@ class TestIntegration:
                 mock_eval.return_value = mock_result_df
 
                 ewb = evaluate.ExtremeWeatherBench(
-                    case_metadata=sample_cases_dict,
+                    case_metadata=sample_cases_list,
                     evaluation_objects=[eval_obj],
                 )
 
@@ -1999,7 +2000,7 @@ class TestIntegration:
 
     @mock.patch("extremeweatherbench.evaluate.compute_case_operator")
     def test_serial_vs_parallel_results_consistency(
-        self, mock_compute_case_operator, sample_cases_dict, sample_evaluation_object
+        self, mock_compute_case_operator, sample_cases_list, sample_evaluation_object
     ):
         """Test that serial and parallel execution produce identical results."""
         # Setup mock case operators
@@ -2026,7 +2027,7 @@ class TestIntegration:
         )
 
         ewb = evaluate.ExtremeWeatherBench(
-            case_metadata=sample_cases_dict,
+            case_metadata=sample_cases_list,
             evaluation_objects=[sample_evaluation_object],
         )
 

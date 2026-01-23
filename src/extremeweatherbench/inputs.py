@@ -13,6 +13,7 @@ from typing import (
     cast,
 )
 
+import icechunk
 import numpy as np
 import pandas as pd
 import polars as pl
@@ -143,6 +144,10 @@ IBTrACS_metadata_variable_mapping = {
 
 IncomingDataInput: TypeAlias = xr.Dataset | xr.DataArray | pl.LazyFrame | pd.DataFrame
 
+CIRA_CREDENTIALS = icechunk.containers_credentials(
+    {"s3://noaa-oar-mlwp-data/": icechunk.s3_credentials(anonymous=True)}
+)
+
 
 def _default_preprocess(input_data: IncomingDataInput) -> IncomingDataInput:
     """Default forecast preprocess function that does nothing."""
@@ -255,6 +260,7 @@ class InputBase(abc.ABC):
         ds.attrs["source"] = self.name
         return ds
 
+    # TODO(314): move to sources module
     def maybe_map_variable_names(self, data: IncomingDataInput) -> IncomingDataInput:
         """Map the variable names to the data, if required.
 
@@ -904,34 +910,21 @@ class IBTrACS(TargetBase):
         case_metadata: "cases.IndividualCase",
         **kwargs,
     ) -> IncomingDataInput:
-        # Note: drop parameter not applicable for polars LazyFrame data
         if not isinstance(data, pl.LazyFrame):
             raise ValueError(f"Expected polars LazyFrame, got {type(data)}")
 
-        # Get the season (year) from the case start date, cast as string as
-        # polars is interpreting the schema as strings
         season = case_metadata.start_date.year
         if case_metadata.start_date.month > 11:
             season += 1
 
-        # Create a subquery to find all storm numbers in the same season
-        matching_numbers = (
-            data.filter(pl.col("season").cast(pl.Int64) == season)
-            .select("number")
-            .unique()
-        )
-
         possible_names = utils.extract_tc_names(case_metadata.title)
 
-        # Apply the filter to get all data for storms with the same number in
-        # the same season, matching any of the possible names
-        # This maintains the lazy evaluation
-        name_filter = pl.col("tc_name").is_in(possible_names)
-        subset_target_data = data.join(
-            matching_numbers, on="number", how="inner"
-        ).filter(name_filter & (pl.col("season").cast(pl.Int64) == season))
+        # Direct filter - eliminates join, group-by, and second CSV scan
+        subset_target_data = data.filter(
+            (pl.col("season").cast(pl.Int64) == season)
+            & pl.col("tc_name").is_in(possible_names)
+        )
 
-        # Select only the columns to keep
         columns_to_keep = [
             "valid_time",
             "tc_name",
@@ -945,8 +938,6 @@ class IBTrACS(TargetBase):
 
         subset_target_data = subset_target_data.select(columns_to_keep)
 
-        # Drop rows where wind speed OR pressure are null (equivalent to pandas
-        # dropna with how="any")
         subset_target_data = subset_target_data.filter(
             pl.col("surface_wind_speed").is_not_null()
             & pl.col("air_pressure_at_mean_sea_level").is_not_null()
@@ -1039,6 +1030,51 @@ def open_kerchunk_reference(
             "parquet are supported."
         )
     return kerchunk_ds
+
+
+def list_groups_in_icechunk_datatree(
+    storage: icechunk.Storage,
+    branch: str = "main",
+) -> list[str]:
+    """List the groups in an icechunk datatree.
+
+    Args:
+        storage: The icechunk Storage object to open.
+        branch: The icechunk branch to open. Defaults to "main".
+
+    Returns:
+        A list of the groups in the icechunk datatree.
+    """
+    repo = icechunk.Repository.open(storage)
+    session = repo.readonly_session(branch=branch)
+    dt = xr.open_datatree(filename_or_obj=session.store, engine="zarr")
+    return list(dt.groups)
+
+
+def open_icechunk_dataset_from_datatree(
+    storage: icechunk.Storage,
+    group: str,
+    branch: str = "main",
+    chunks: Optional[Union[dict, str]] = "auto",
+    **repository_kwargs,
+) -> xr.Dataset:
+    """Open an icechunk datatree from a storage.
+
+    Args:
+        storage: The icechunk Storage object to open.
+        group: The group within the datatree to open.
+        branch: The icechunk branch to open. Defaults to "main".
+        chunks: The chunk pattern for the datatree. defaults to "auto".
+    Returns:
+        The dataset for the specified group.
+    """
+    repo = icechunk.Repository.open(storage, **repository_kwargs)
+    session = repo.readonly_session(branch=branch)
+    dt = xr.open_datatree(
+        filename_or_obj=session.store, engine="zarr", consolidated=False, chunks=chunks
+    )
+    # Return the dataset for the group
+    return dt[group].to_dataset()
 
 
 def zarr_target_subsetter(
