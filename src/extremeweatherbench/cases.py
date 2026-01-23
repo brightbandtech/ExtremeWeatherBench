@@ -45,11 +45,7 @@ class IndividualCase:
 
 @dataclasses.dataclass
 class CaseOperator:
-    """Operator storing the processing graph for an individual case.
-
-    Serves as a one-stop-shop for evaluating a single case. Multiple
-    CaseOperators can run in parallel for multiple cases, or serially through
-    ExtremeWeatherBench.run().
+    """Operator dataclass for an evaluation of a single evaluation object.
 
     Attributes:
         case_metadata: IndividualCase metadata for this operator.
@@ -104,7 +100,7 @@ def load_individual_cases(
     Will pass through existing IndividualCase objects and convert dictionaries to IndividualCase objects.
 
     Args:
-        cases: A dictionary of cases based on the IndividualCase dataclass.
+        cases: A list of cases as either dicts or IndividualCase objects.
 
     Returns:
         A list of IndividualCase objects.
@@ -142,19 +138,18 @@ def load_individual_cases_from_yaml(
     Example of a yaml file:
 
     ```yaml
-    cases:
-      - case_id_number: 1
-        title: Event 1
-        start_date: 2021-01-01 00:00:00
-        end_date: 2021-01-03 00:00:00
-        location:
-            type: bounded_region
-            parameters:
-                latitude_min: 10.0
-                latitude_max: 55.6
-                longitude_min: 265.0
-                longitude_max: 283.3
-        event_type: tropical_cyclone
+    - case_id_number: 1
+    title: Event 1
+    start_date: 2021-01-01 00:00:00
+    end_date: 2021-01-03 00:00:00
+    location:
+        type: bounded_region
+        parameters:
+            latitude_min: 10.0
+            latitude_max: 55.6
+            longitude_min: 265.0
+            longitude_max: 283.3
+    event_type: tropical_cyclone
     ```
 
     Args:
