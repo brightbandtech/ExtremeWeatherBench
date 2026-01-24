@@ -2384,8 +2384,8 @@ class TestGetCIRAIcechunk:
         assert "FOUR_v200_GFS" in error_msg or "CIRA_MODEL_NAMES" in error_msg
 
     @mock.patch("extremeweatherbench.inputs.icechunk.gcs_storage")
-    @mock.patch("extremeweatherbench.inputs.inputs.open_icechunk_dataset_from_datatree")
-    @mock.patch("extremeweatherbench.inputs.inputs.XarrayForecast")
+    @mock.patch("extremeweatherbench.inputs.open_icechunk_dataset_from_datatree")
+    @mock.patch("extremeweatherbench.inputs.XarrayForecast")
     def test_valid_model_name_four_v200_gfs(
         self, mock_forecast, mock_open, mock_storage
     ):
@@ -2401,8 +2401,8 @@ class TestGetCIRAIcechunk:
         mock_open.assert_called_once()
 
     @mock.patch("extremeweatherbench.inputs.icechunk.gcs_storage")
-    @mock.patch("extremeweatherbench.inputs.inputs.open_icechunk_dataset_from_datatree")
-    @mock.patch("extremeweatherbench.inputs.inputs.XarrayForecast")
+    @mock.patch("extremeweatherbench.inputs.open_icechunk_dataset_from_datatree")
+    @mock.patch("extremeweatherbench.inputs.XarrayForecast")
     def test_valid_model_name_auro_v100_gfs(
         self, mock_forecast, mock_open, mock_storage
     ):
@@ -2416,8 +2416,8 @@ class TestGetCIRAIcechunk:
         assert result is not None
 
     @mock.patch("extremeweatherbench.inputs.icechunk.gcs_storage")
-    @mock.patch("extremeweatherbench.inputs.inputs.open_icechunk_dataset_from_datatree")
-    @mock.patch("extremeweatherbench.inputs.inputs.XarrayForecast")
+    @mock.patch("extremeweatherbench.inputs.open_icechunk_dataset_from_datatree")
+    @mock.patch("extremeweatherbench.inputs.XarrayForecast")
     def test_all_cira_model_names_are_valid(
         self, mock_forecast, mock_open, mock_storage
     ):
@@ -2431,8 +2431,8 @@ class TestGetCIRAIcechunk:
             assert result is not None, f"Model {model_name} should be valid"
 
     @mock.patch("extremeweatherbench.inputs.icechunk.gcs_storage")
-    @mock.patch("extremeweatherbench.inputs.inputs.open_icechunk_dataset_from_datatree")
-    @mock.patch("extremeweatherbench.inputs.inputs.XarrayForecast")
+    @mock.patch("extremeweatherbench.inputs.open_icechunk_dataset_from_datatree")
+    @mock.patch("extremeweatherbench.inputs.XarrayForecast")
     def test_custom_name_parameter(self, mock_forecast, mock_open, mock_storage):
         """Test that a custom name parameter is passed to XarrayForecast."""
         mock_storage.return_value = mock.MagicMock()
@@ -2446,8 +2446,8 @@ class TestGetCIRAIcechunk:
         assert call_kwargs["name"] == "CustomName"
 
     @mock.patch("extremeweatherbench.inputs.icechunk.gcs_storage")
-    @mock.patch("extremeweatherbench.inputs.inputs.open_icechunk_dataset_from_datatree")
-    @mock.patch("extremeweatherbench.inputs.inputs.XarrayForecast")
+    @mock.patch("extremeweatherbench.inputs.open_icechunk_dataset_from_datatree")
+    @mock.patch("extremeweatherbench.inputs.XarrayForecast")
     def test_default_name_uses_model_name(self, mock_forecast, mock_open, mock_storage):
         """Test that name inputs to model_name when not provided."""
         mock_storage.return_value = mock.MagicMock()
@@ -2460,8 +2460,8 @@ class TestGetCIRAIcechunk:
         assert call_kwargs["name"] == "FOUR_v200_GFS"
 
     @mock.patch("extremeweatherbench.inputs.icechunk.gcs_storage")
-    @mock.patch("extremeweatherbench.inputs.inputs.open_icechunk_dataset_from_datatree")
-    @mock.patch("extremeweatherbench.inputs.inputs.XarrayForecast")
+    @mock.patch("extremeweatherbench.inputs.open_icechunk_dataset_from_datatree")
+    @mock.patch("extremeweatherbench.inputs.XarrayForecast")
     def test_empty_variables_list(self, mock_forecast, mock_open, mock_storage):
         """Test that empty variables list is valid."""
         mock_storage.return_value = mock.MagicMock()
@@ -2475,8 +2475,8 @@ class TestGetCIRAIcechunk:
         assert call_kwargs["variables"] == []
 
     @mock.patch("extremeweatherbench.inputs.icechunk.gcs_storage")
-    @mock.patch("extremeweatherbench.inputs.inputs.open_icechunk_dataset_from_datatree")
-    @mock.patch("extremeweatherbench.inputs.inputs.XarrayForecast")
+    @mock.patch("extremeweatherbench.inputs.open_icechunk_dataset_from_datatree")
+    @mock.patch("extremeweatherbench.inputs.XarrayForecast")
     def test_custom_variables_list(self, mock_forecast, mock_open, mock_storage):
         """Test that a custom variables list is passed through."""
         mock_storage.return_value = mock.MagicMock()
@@ -2490,8 +2490,8 @@ class TestGetCIRAIcechunk:
         assert call_kwargs["variables"] == variables
 
     @mock.patch("extremeweatherbench.inputs.icechunk.gcs_storage")
-    @mock.patch("extremeweatherbench.inputs.inputs.open_icechunk_dataset_from_datatree")
-    @mock.patch("extremeweatherbench.inputs.inputs.XarrayForecast")
+    @mock.patch("extremeweatherbench.inputs.open_icechunk_dataset_from_datatree")
+    @mock.patch("extremeweatherbench.inputs.XarrayForecast")
     def test_custom_preprocess_function(self, mock_forecast, mock_open, mock_storage):
         """Test that a custom preprocess function is passed through."""
         mock_storage.return_value = mock.MagicMock()
@@ -2509,8 +2509,8 @@ class TestGetCIRAIcechunk:
         assert call_kwargs["preprocess"] == custom_preprocess
 
     @mock.patch("extremeweatherbench.inputs.icechunk.gcs_storage")
-    @mock.patch("extremeweatherbench.inputs.inputs.open_icechunk_dataset_from_datatree")
-    @mock.patch("extremeweatherbench.inputs.inputs.XarrayForecast")
+    @mock.patch("extremeweatherbench.inputs.open_icechunk_dataset_from_datatree")
+    @mock.patch("extremeweatherbench.inputs.XarrayForecast")
     def test_returns_xarray_forecast_object(
         self, mock_forecast, mock_open, mock_storage
     ):
@@ -2525,8 +2525,8 @@ class TestGetCIRAIcechunk:
         assert result is expected_forecast
 
     @mock.patch("extremeweatherbench.inputs.icechunk.gcs_storage")
-    @mock.patch("extremeweatherbench.inputs.inputs.open_icechunk_dataset_from_datatree")
-    @mock.patch("extremeweatherbench.inputs.inputs.XarrayForecast")
+    @mock.patch("extremeweatherbench.inputs.open_icechunk_dataset_from_datatree")
+    @mock.patch("extremeweatherbench.inputs.XarrayForecast")
     def test_gcs_storage_configuration(self, mock_forecast, mock_open, mock_storage):
         """Test that GCS storage is configured with correct parameters."""
         mock_storage.return_value = mock.MagicMock()
@@ -2540,8 +2540,8 @@ class TestGetCIRAIcechunk:
         )
 
     @mock.patch("extremeweatherbench.inputs.icechunk.gcs_storage")
-    @mock.patch("extremeweatherbench.inputs.inputs.open_icechunk_dataset_from_datatree")
-    @mock.patch("extremeweatherbench.inputs.inputs.XarrayForecast")
+    @mock.patch("extremeweatherbench.inputs.open_icechunk_dataset_from_datatree")
+    @mock.patch("extremeweatherbench.inputs.XarrayForecast")
     def test_uses_cira_variable_mapping(self, mock_forecast, mock_open, mock_storage):
         """Test that CIRA metadata variable mapping is used."""
         mock_storage.return_value = mock.MagicMock()
