@@ -2,8 +2,6 @@
 
 import types
 
-import pytest
-
 
 class TestModuleImports:
     """Test that submodules are importable and are actual modules."""
