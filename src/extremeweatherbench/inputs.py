@@ -153,15 +153,29 @@ def _default_preprocess(input_data: IncomingDataInput) -> IncomingDataInput:
 
 @dataclasses.dataclass
 class InputBase(abc.ABC):
-    """An abstract base dataclass for target and forecast data.
+    """Abstract base dataclass for target and forecast data.
+
+    This class provides the foundational interface for loading and processing
+    forecast and target datasets in ExtremeWeatherBench.
 
     Attributes:
-        source: The source of the data, which can be a local path or a remote URL/URI.
+        source: The source of the data, which can be a local path or a
+            remote URL/URI.
         name: The name of the input data source.
         variables: A list of variables to select from the data.
         variable_mapping: A dictionary of variable names to map to the data.
         storage_options: Storage/access options for the data.
         preprocess: A function to preprocess the data.
+
+    Public methods:
+        open_and_maybe_preprocess_data_from_source: Open and preprocess data
+        maybe_convert_to_dataset: Convert input data to xarray Dataset
+        add_source_to_dataset_attrs: Add source name to dataset attributes
+        maybe_map_variable_names: Map variable names if mapping provided
+
+    Abstract methods:
+        _open_data_from_source: Open the input data from source
+        subset_data_to_case: Subset data to case metadata
     """
 
     source: str
@@ -304,7 +318,17 @@ class InputBase(abc.ABC):
 
 @dataclasses.dataclass
 class ForecastBase(InputBase):
-    """A class defining the interface for ExtremeWeatherBench forecast data."""
+    """Forecast data interface for ExtremeWeatherBench.
+
+    Extends InputBase to provide functionality for forecast datasets with
+    init_time and lead_time dimensions.
+
+    Attributes:
+        chunks: Chunking strategy for dask arrays. Defaults to "auto".
+
+    Public methods:
+        subset_data_to_case: Subset forecast data to case (overrides parent)
+    """
 
     chunks: Optional[Union[dict, str]] = "auto"
 
@@ -401,7 +425,11 @@ class EvaluationObject:
 
 @dataclasses.dataclass
 class KerchunkForecast(ForecastBase):
-    """Forecast class for kerchunked forecast data."""
+    """Forecast class for kerchunk-referenced forecast data.
+
+    Extends ForecastBase for forecast data accessed via kerchunk references,
+    enabling efficient access to cloud-optimized datasets.
+    """
 
     chunks: Optional[Union[dict, str]] = "auto"
     storage_options: dict = dataclasses.field(default_factory=dict)
@@ -416,7 +444,10 @@ class KerchunkForecast(ForecastBase):
 
 @dataclasses.dataclass
 class ZarrForecast(ForecastBase):
-    """Forecast class for zarr forecast data."""
+    """Forecast class for zarr-format forecast data.
+
+    Extends ForecastBase for forecast data stored in zarr format.
+    """
 
     chunks: Optional[Union[dict, str]] = "auto"
 
@@ -431,11 +462,11 @@ class ZarrForecast(ForecastBase):
 
 @dataclasses.dataclass
 class XarrayForecast(ForecastBase):
-    """Forecast class for datasets that were previously constructed and opened using xarray.
+    """Forecast class for pre-opened xarray datasets.
 
-    This class is intended for situations where the user has to manually prepare a dataset to
-    use in their evaluation. This can happen when the user is manually constructed such a
-    dataset from a collection of NetCDF or Zarr archives which need to be assembled into a
+    Extends ForecastBase for datasets previously constructed and opened using
+    xarray. Intended for situations where users manually prepare datasets from
+    collections of NetCDF or Zarr archives that need assembly into a
     single, master dataset.
 
     Attributes:
@@ -480,12 +511,15 @@ class XarrayForecast(ForecastBase):
 
 @dataclasses.dataclass
 class TargetBase(InputBase):
-    """An abstract base class for target data.
+    """Target (truth) data interface for ExtremeWeatherBench.
 
-    A TargetBase is data that acts as the "truth" for a case. It can be a gridded
-    dataset, a point observation dataset, or any other reference dataset. Targets in EWB
-    are not required to be the same variable as the forecast dataset, but they must be
-    in the same coordinate system for evaluation.
+    Extends InputBase to provide functionality for target datasets that serve
+    as ground truth for evaluation. Target data can be gridded datasets, point
+    observations, or any reference dataset. Targets need not match forecast
+    variables but must share a compatible coordinate system for evaluation.
+
+    Public methods:
+        maybe_align_forecast_to_target: Align forecast to target coordinates
     """
 
     def maybe_align_forecast_to_target(
@@ -513,8 +547,10 @@ class TargetBase(InputBase):
 
 @dataclasses.dataclass
 class ERA5(TargetBase):
-    """Target class for ERA5 gridded data, ideally using the ARCO ERA5 dataset provided
-    by Google. Otherwise, either a different zarr source for ERA5.
+    """Target class for ERA5 gridded reanalysis data.
+
+    Extends TargetBase for ERA5 data, optimized for the ARCO ERA5 dataset
+    provided by Google or other zarr-based ERA5 sources.
     """
 
     name: str = "ERA5"
@@ -569,10 +605,10 @@ class ERA5(TargetBase):
 
 @dataclasses.dataclass
 class GHCN(TargetBase):
-    """Target class for GHCN tabular data.
+    """Target class for GHCN (Global Historical Climatology Network) data.
 
-    Data is processed using polars to maintain the lazy loading paradigm in
-    open_data_from_source and to separate the subsetting into subset_data_to_case.
+    Extends TargetBase for tabular GHCN station observation data. Uses polars
+    for lazy loading and efficient subsetting of large tabular datasets.
     """
 
     name: str = "GHCN"
@@ -643,10 +679,11 @@ class GHCN(TargetBase):
 
 @dataclasses.dataclass
 class LSR(TargetBase):
-    """Target class for local storm report (LSR) tabular data.
+    """Target class for Local Storm Report (LSR) tabular data.
 
-    run_pipeline() returns a dataset with LSRs as mapped to numeric values (1=wind, 2=hail, 3=tor). IndividualCase date ranges for LSRs should be 12 UTC to
-    the next day at 12 UTC (exclusive) to match SPC's reporting window.
+    Extends TargetBase for SPC local storm reports. Returns dataset with LSRs
+    mapped to numeric values (1=wind, 2=hail, 3=tornado). IndividualCase date
+    ranges should be 12 UTC to next day 12 UTC to match SPC reporting window.
     """
 
     name: str = "local_storm_reports"
@@ -745,7 +782,10 @@ class LSR(TargetBase):
 # TODO: get PPH connector working properly
 @dataclasses.dataclass
 class PPH(TargetBase):
-    """Target class for practically perfect hindcast data."""
+    """Target class for Practically Perfect Hindcast (PPH) data.
+
+    Extends TargetBase for practically perfect hindcast datasets.
+    """
 
     name: str = "practically_perfect_hindcast"
     source: str = PPH_URI
@@ -877,7 +917,11 @@ def _ibtracs_preprocess(data: IncomingDataInput) -> IncomingDataInput:
 
 @dataclasses.dataclass
 class IBTrACS(TargetBase):
-    """Target class for IBTrACS data."""
+    """Target class for IBTrACS tropical cyclone best track data.
+
+    Extends TargetBase for International Best Track Archive for Climate
+    Stewardship (IBTrACS) tropical cyclone track and intensity data.
+    """
 
     name: str = "IBTrACS"
     preprocess: Callable = _ibtracs_preprocess
@@ -1062,6 +1106,7 @@ def open_icechunk_dataset_from_datatree(
         group: The group within the datatree to open.
         branch: The icechunk branch to open. Defaults to "main".
         chunks: The chunk pattern for the datatree. defaults to "auto".
+
     Returns:
         The dataset for the specified group.
     """
@@ -1086,6 +1131,7 @@ def zarr_target_subsetter(
         data: The dataset to subset.
         case_metadata: The case metadata to subset the dataset to.
         time_variable: The time variable to use; defaults to "valid_time".
+        drop: Whether to drop masked values. Defaults to False.
 
     Returns:
         The subset dataset.
