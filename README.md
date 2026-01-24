@@ -67,48 +67,11 @@ $ ewb --default
 ```python
 from extremeweatherbench import cases, inputs, metrics, evaluate, utils
 
-# Select model
-model = 'FOUR_v200_GFS'
+# Load in a forecast; here, we load in GFS initialized FCNv2 from the CIRA MLWP archive with a default variable built-in for convenience
+fcnv2_heatwave_forecast = defaults.cira_fcnv2_heatwave_forecast
 
-# Set up path to directory of file - zarr or kerchunk/virtualizarr json/parquet
-forecast_dir = f'gs://extremeweatherbench/{model}.parq'
-
-# Preprocessing function exclusive to handling the CIRA parquets
-def preprocess_bb_cira_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
-    """Preprocess CIRA kerchunk (parquet) data in the ExtremeWeatherBench bucket.
-    A preprocess function that renames the time coordinate to lead_time,
-    creates a valid_time coordinate, and sets the lead time range and resolution not
-    present in the original dataset.
-    Args:
-        ds: The forecast dataset to rename.
-    Returns:
-        The renamed forecast dataset.
-    """
-    ds = ds.rename({"time": "lead_time"})
-
-    # The evaluation configuration is used to set the lead time range and resolution.
-    ds["lead_time"] = np.array(
-        [i for i in range(0, 241, 6)], dtype="timedelta64[h]"
-    ).astype("timedelta64[ns]")
-
-    return ds
-
-# Define a forecast object; in this case, a KerchunkForecast
-fcnv2_forecast = inputs.KerchunkForecast(
-    name="fcnv2_forecast", # identifier for this forecast in results
-    source=forecast_dir, # source path
-    variables=["surface_air_temperature"], # variables to use in the evaluation
-    variable_mapping=inputs.CIRA_metadata_variable_mapping, # mapping to use for variables in forecast dataset to EWB variable names
-    storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}}, # storage options for access
-    preprocess=preprocess_bb_cira_forecast_dataset # required preprocessing function for CIRA references
-)
-
-# Load in ERA5; source defaults to the ARCO ERA5 dataset from Google and variable mapping is provided by default as well
-era5_heatwave_target = inputs.ERA5(
-    variables=["surface_air_temperature"], # variable to use in the evaluation
-    storage_options={"remote_options": {"anon": True}}, # storage options for access
-    chunks=None, # define chunks for the ERA5 data
-)
+# Load in ERA5 with another default convenience variable 
+era5_heatwave_target = defaults.era5_heatwave_target
 
 # EvaluationObjects are used to evaluate a single forecast source against a single target source with a defined event type. Event types are declared with each case. One or more metrics can be evaluated with each EvaluationObject.
 heatwave_evaluation_list = [
@@ -120,7 +83,7 @@ heatwave_evaluation_list = [
             metrics.MaximumLowestMeanAbsoluteError(),
         ],
         target=era5_heatwave_target,
-        forecast=fcnv2_forecast,
+        forecast=fcnv2_heatwave_forecast,
     ),
 ]
 # Load in the EWB default list of event cases
@@ -134,7 +97,7 @@ ewb_instance = evaluate.ExtremeWeatherBench(
 
 # Execute a parallel run and return the evaluation results as a pandas DataFrame
 heatwave_outputs = ewb_instance.run(
-    parallel_config={'backend':'loky','n_jobs':16} # Uses 16 jobs with the loky backend
+    parallel_config={'n_jobs':16} # Uses 16 jobs with the loky backend as default
 )
 
 # Save the results

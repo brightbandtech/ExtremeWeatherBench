@@ -2233,7 +2233,9 @@ class TestXarrayForecast:
         """Test that None values are properly converted to empty defaults."""
         # Explicitly pass None to test the None handling in __init__
         forecast = inputs.XarrayForecast(
-            ds=sample_forecast_with_valid_time, variables=None, variable_mapping=None
+            ds=sample_forecast_with_valid_time,
+            variables=None,
+            variable_mapping=None,  # type: ignore
         )
 
         # Should be converted to empty containers
@@ -2323,3 +2325,266 @@ def test_default_preprocess():
     df = pd.DataFrame({"a": [1, 2, 3]})
     result_df = inputs._default_preprocess(df)
     assert result_df is df
+
+
+class TestGetCIRAIcechunk:
+    """Tests for get_cira_icechunk function."""
+
+    def test_invalid_model_name_raises_value_error(self):
+        """Test that an invalid model name raises ValueError."""
+        with pytest.raises(ValueError) as exc_info:
+            inputs.get_cira_icechunk(model_name="INVALID_MODEL")
+
+        assert "INVALID_MODEL" in str(exc_info.value)
+        assert "CIRA_MODEL_NAMES" in str(exc_info.value)
+
+    def test_empty_model_name_raises_value_error(self):
+        """Test that an empty model name raises ValueError."""
+        with pytest.raises(ValueError):
+            inputs.get_cira_icechunk(model_name="")
+
+    def test_none_model_name_raises_error(self):
+        """Test that None as model name raises appropriate error."""
+        with pytest.raises((ValueError, TypeError)):
+            inputs.get_cira_icechunk(model_name=None)  # type: ignore
+
+    def test_case_sensitive_model_name(self):
+        """Test that model name matching is case-sensitive."""
+        # Lowercase version of a valid model name should fail
+        with pytest.raises(ValueError):
+            inputs.get_cira_icechunk(model_name="four_v200_gfs")
+
+        # Mixed case should fail
+        with pytest.raises(ValueError):
+            inputs.get_cira_icechunk(model_name="Four_V200_GFS")
+
+    def test_partial_model_name_raises_value_error(self):
+        """Test that partial model names are rejected."""
+        with pytest.raises(ValueError):
+            inputs.get_cira_icechunk(model_name="FOUR")
+
+        with pytest.raises(ValueError):
+            inputs.get_cira_icechunk(model_name="GFS")
+
+    def test_model_name_with_extra_chars_raises_value_error(self):
+        """Test that model names with extra characters are rejected."""
+        with pytest.raises(ValueError):
+            inputs.get_cira_icechunk(model_name="FOUR_v200_GFS_extra")
+
+        with pytest.raises(ValueError):
+            inputs.get_cira_icechunk(model_name=" FOUR_v200_GFS")
+
+    def test_error_message_lists_valid_model_names(self):
+        """Test that the error message includes the list of valid model names."""
+        with pytest.raises(ValueError) as exc_info:
+            inputs.get_cira_icechunk(model_name="BAD_MODEL")
+
+        error_msg = str(exc_info.value)
+        # Check that at least some valid model names are shown in the error
+        assert "FOUR_v200_GFS" in error_msg or "CIRA_MODEL_NAMES" in error_msg
+
+    @mock.patch("extremeweatherbench.inputs.icechunk.gcs_storage")
+    @mock.patch("extremeweatherbench.inputs.open_icechunk_dataset_from_datatree")
+    @mock.patch("extremeweatherbench.inputs.XarrayForecast")
+    def test_valid_model_name_four_v200_gfs(
+        self, mock_forecast, mock_open, mock_storage
+    ):
+        """Test that FOUR_v200_GFS is a valid model name."""
+        mock_storage.return_value = mock.MagicMock()
+        mock_open.return_value = mock.MagicMock()
+        mock_forecast.return_value = mock.MagicMock()
+
+        result = inputs.get_cira_icechunk(model_name="FOUR_v200_GFS")
+
+        assert result is not None
+        mock_storage.assert_called_once()
+        mock_open.assert_called_once()
+
+    @mock.patch("extremeweatherbench.inputs.icechunk.gcs_storage")
+    @mock.patch("extremeweatherbench.inputs.open_icechunk_dataset_from_datatree")
+    @mock.patch("extremeweatherbench.inputs.XarrayForecast")
+    def test_valid_model_name_auro_v100_gfs(
+        self, mock_forecast, mock_open, mock_storage
+    ):
+        """Test that AURO_v100_GFS is a valid model name."""
+        mock_storage.return_value = mock.MagicMock()
+        mock_open.return_value = mock.MagicMock()
+        mock_forecast.return_value = mock.MagicMock()
+
+        result = inputs.get_cira_icechunk(model_name="AURO_v100_GFS")
+
+        assert result is not None
+
+    @mock.patch("extremeweatherbench.inputs.icechunk.gcs_storage")
+    @mock.patch("extremeweatherbench.inputs.open_icechunk_dataset_from_datatree")
+    @mock.patch("extremeweatherbench.inputs.XarrayForecast")
+    def test_all_cira_model_names_are_valid(
+        self, mock_forecast, mock_open, mock_storage
+    ):
+        """Test that all model names in CIRA_MODEL_NAMES are accepted."""
+        mock_storage.return_value = mock.MagicMock()
+        mock_open.return_value = mock.MagicMock()
+        mock_forecast.return_value = mock.MagicMock()
+
+        for model_name in inputs.CIRA_MODEL_NAMES:
+            result = inputs.get_cira_icechunk(model_name=model_name)
+            assert result is not None, f"Model {model_name} should be valid"
+
+    @mock.patch("extremeweatherbench.inputs.icechunk.gcs_storage")
+    @mock.patch("extremeweatherbench.inputs.open_icechunk_dataset_from_datatree")
+    @mock.patch("extremeweatherbench.inputs.XarrayForecast")
+    def test_custom_name_parameter(self, mock_forecast, mock_open, mock_storage):
+        """Test that a custom name parameter is passed to XarrayForecast."""
+        mock_storage.return_value = mock.MagicMock()
+        mock_open.return_value = mock.MagicMock()
+        mock_forecast.return_value = mock.MagicMock()
+
+        inputs.get_cira_icechunk(model_name="FOUR_v200_GFS", name="CustomName")
+
+        # Check that XarrayForecast was called with the custom name
+        call_kwargs = mock_forecast.call_args[1]
+        assert call_kwargs["name"] == "CustomName"
+
+    @mock.patch("extremeweatherbench.inputs.icechunk.gcs_storage")
+    @mock.patch("extremeweatherbench.inputs.open_icechunk_dataset_from_datatree")
+    @mock.patch("extremeweatherbench.inputs.XarrayForecast")
+    def test_default_name_uses_model_name(self, mock_forecast, mock_open, mock_storage):
+        """Test that name inputs to model_name when not provided."""
+        mock_storage.return_value = mock.MagicMock()
+        mock_open.return_value = mock.MagicMock()
+        mock_forecast.return_value = mock.MagicMock()
+
+        inputs.get_cira_icechunk(model_name="FOUR_v200_GFS")
+
+        call_kwargs = mock_forecast.call_args[1]
+        assert call_kwargs["name"] == "FOUR_v200_GFS"
+
+    @mock.patch("extremeweatherbench.inputs.icechunk.gcs_storage")
+    @mock.patch("extremeweatherbench.inputs.open_icechunk_dataset_from_datatree")
+    @mock.patch("extremeweatherbench.inputs.XarrayForecast")
+    def test_empty_variables_list(self, mock_forecast, mock_open, mock_storage):
+        """Test that empty variables list is valid."""
+        mock_storage.return_value = mock.MagicMock()
+        mock_open.return_value = mock.MagicMock()
+        mock_forecast.return_value = mock.MagicMock()
+
+        result = inputs.get_cira_icechunk(model_name="FOUR_v200_GFS", variables=[])
+
+        assert result is not None
+        call_kwargs = mock_forecast.call_args[1]
+        assert call_kwargs["variables"] == []
+
+    @mock.patch("extremeweatherbench.inputs.icechunk.gcs_storage")
+    @mock.patch("extremeweatherbench.inputs.open_icechunk_dataset_from_datatree")
+    @mock.patch("extremeweatherbench.inputs.XarrayForecast")
+    def test_custom_variables_list(self, mock_forecast, mock_open, mock_storage):
+        """Test that a custom variables list is passed through."""
+        mock_storage.return_value = mock.MagicMock()
+        mock_open.return_value = mock.MagicMock()
+        mock_forecast.return_value = mock.MagicMock()
+
+        variables = ["surface_air_temperature", "air_pressure"]
+        inputs.get_cira_icechunk(model_name="FOUR_v200_GFS", variables=variables)
+
+        call_kwargs = mock_forecast.call_args[1]
+        assert call_kwargs["variables"] == variables
+
+    @mock.patch("extremeweatherbench.inputs.icechunk.gcs_storage")
+    @mock.patch("extremeweatherbench.inputs.open_icechunk_dataset_from_datatree")
+    @mock.patch("extremeweatherbench.inputs.XarrayForecast")
+    def test_custom_preprocess_function(self, mock_forecast, mock_open, mock_storage):
+        """Test that a custom preprocess function is passed through."""
+        mock_storage.return_value = mock.MagicMock()
+        mock_open.return_value = mock.MagicMock()
+        mock_forecast.return_value = mock.MagicMock()
+
+        def custom_preprocess(ds: xr.Dataset) -> xr.Dataset:
+            return ds
+
+        inputs.get_cira_icechunk(
+            model_name="FOUR_v200_GFS", preprocess=custom_preprocess
+        )
+
+        call_kwargs = mock_forecast.call_args[1]
+        assert call_kwargs["preprocess"] == custom_preprocess
+
+    @mock.patch("extremeweatherbench.inputs.icechunk.gcs_storage")
+    @mock.patch("extremeweatherbench.inputs.open_icechunk_dataset_from_datatree")
+    @mock.patch("extremeweatherbench.inputs.XarrayForecast")
+    def test_returns_xarray_forecast_object(
+        self, mock_forecast, mock_open, mock_storage
+    ):
+        """Test that the function returns an XarrayForecast object."""
+        mock_storage.return_value = mock.MagicMock()
+        mock_open.return_value = mock.MagicMock()
+        expected_forecast = mock.MagicMock()
+        mock_forecast.return_value = expected_forecast
+
+        result = inputs.get_cira_icechunk(model_name="FOUR_v200_GFS")
+
+        assert result is expected_forecast
+
+    @mock.patch("extremeweatherbench.inputs.icechunk.gcs_storage")
+    @mock.patch("extremeweatherbench.inputs.open_icechunk_dataset_from_datatree")
+    @mock.patch("extremeweatherbench.inputs.XarrayForecast")
+    def test_gcs_storage_configuration(self, mock_forecast, mock_open, mock_storage):
+        """Test that GCS storage is configured with correct parameters."""
+        mock_storage.return_value = mock.MagicMock()
+        mock_open.return_value = mock.MagicMock()
+        mock_forecast.return_value = mock.MagicMock()
+
+        inputs.get_cira_icechunk(model_name="FOUR_v200_GFS")
+
+        mock_storage.assert_called_once_with(
+            bucket="extremeweatherbench", prefix="cira-icechunk", anonymous=True
+        )
+
+    @mock.patch("extremeweatherbench.inputs.icechunk.gcs_storage")
+    @mock.patch("extremeweatherbench.inputs.open_icechunk_dataset_from_datatree")
+    @mock.patch("extremeweatherbench.inputs.XarrayForecast")
+    def test_uses_cira_variable_mapping(self, mock_forecast, mock_open, mock_storage):
+        """Test that CIRA metadata variable mapping is used."""
+        mock_storage.return_value = mock.MagicMock()
+        mock_open.return_value = mock.MagicMock()
+        mock_forecast.return_value = mock.MagicMock()
+
+        inputs.get_cira_icechunk(model_name="FOUR_v200_GFS")
+
+        call_kwargs = mock_forecast.call_args[1]
+        assert call_kwargs["variable_mapping"] == inputs.CIRA_metadata_variable_mapping
+
+
+class TestCiraModelNames:
+    """Tests for CIRA_MODEL_NAMES constant."""
+
+    def test_cira_model_names_is_list(self):
+        """Test that CIRA_MODEL_NAMES is a list."""
+        assert isinstance(inputs.CIRA_MODEL_NAMES, list)
+
+    def test_cira_model_names_not_empty(self):
+        """Test that CIRA_MODEL_NAMES is not empty."""
+        assert len(inputs.CIRA_MODEL_NAMES) > 0
+
+    def test_cira_model_names_contains_expected_models(self):
+        """Test that CIRA_MODEL_NAMES contains expected model names."""
+        expected_models = [
+            "FOUR_v200_GFS",
+            "FOUR_v200_IFS",
+            "AURO_v100_GFS",
+            "AURO_v100_IFS",
+            "PANG_v100_GFS",
+            "PANG_v100_IFS",
+            "GRAP_v100_GFS",
+            "GRAP_v100_IFS",
+        ]
+        for model in expected_models:
+            assert model in inputs.CIRA_MODEL_NAMES
+
+    def test_cira_model_names_all_strings(self):
+        """Test that all entries in CIRA_MODEL_NAMES are strings."""
+        for model in inputs.CIRA_MODEL_NAMES:
+            assert isinstance(model, str)
+
+    def test_cira_model_names_no_duplicates(self):
+        """Test that CIRA_MODEL_NAMES has no duplicate entries."""
+        assert len(inputs.CIRA_MODEL_NAMES) == len(set(inputs.CIRA_MODEL_NAMES))
