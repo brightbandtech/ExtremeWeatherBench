@@ -810,8 +810,8 @@ def process_ar_event(
         "\nProcessing: %s (Case %s)", single_case.title, single_case.case_id_number
     )
     # Create a case object for this event
-    case_collection = cases.load_individual_cases({"cases": [single_case]})
-    case = case_collection.cases[0]
+    case_list = cases.load_individual_cases([single_case])
+    case = case_list[0]
     case.start_date = case.start_date - pd.Timedelta(days=3)
     case.end_date = case.end_date + pd.Timedelta(days=3)
 
@@ -1034,8 +1034,8 @@ def main():
     parallel = True
 
     # Load atmospheric river events from the events.yaml file
-    events_yaml = cases.load_ewb_events_yaml_into_case_collection()
-    ar_events = events_yaml.select_cases(by="event_type", value="atmospheric_river")
+    events_yaml = cases.load_ewb_events_yaml_into_case_list()
+    ar_events = [n for n in events_yaml if n.event_type == "atmospheric_river"]
     logger.info("Found %s atmospheric river events in events.yaml", len(ar_events))
 
     # Process each atmospheric river event with enhanced object-based bounds calculation

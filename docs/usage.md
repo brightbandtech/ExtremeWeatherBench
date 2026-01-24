@@ -14,7 +14,7 @@ from extremeweatherbench import evaluate, defaults, cases
 
 eval_objects = defaults.get_brightband_evaluation_objects()
 
-cases = cases.load_ewb_events_yaml_into_case_collection()
+cases = cases.load_ewb_events_yaml_into_case_list()
 ewb = ExtremeWeatherBench(cases=cases, 
 evaluation_objects=eval_objects)
 
@@ -102,7 +102,7 @@ Plugging these all in:
 
 ```python
 from extremeweatherbench import cases, evaluate
-case_yaml = cases.load_ewb_events_yaml_into_case_collection()
+case_yaml = cases.load_ewb_events_yaml_into_case_list()
 
 
 ewb_instance = evaluate.ExtremeWeatherBench(
