@@ -2233,8 +2233,10 @@ class TestXarrayForecast:
         """Test that None values are properly converted to empty defaults."""
         # Explicitly pass None to test the None handling in __init__
         forecast = inputs.XarrayForecast(
-            ds=sample_forecast_with_valid_time, variables=None, variable_mapping=None # type: ignore
-        ) 
+            ds=sample_forecast_with_valid_time,
+            variables=None,
+            variable_mapping=None,  # type: ignore
+        )
 
         # Should be converted to empty containers
         assert forecast.variables == []
