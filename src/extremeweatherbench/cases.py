@@ -24,18 +24,15 @@ logger = logging.getLogger(__name__)
 
 @dataclasses.dataclass
 class IndividualCase:
-    """Container for metadata defining a single or individual case.
-
-    An IndividualCase defines the relevant metadata for a single case study for a
-    given extreme weather event; it is designed to be easily instantiable through a
-    simple YAML-based configuration file.
+    """Container for metadata defining a single case study.
 
     Attributes:
-        case_id_number: A unique numerical identifier for the event.
-        start_date: The start date of the case, for use in subsetting data for analysis.
-        end_date: The end date of the case, for use in subsetting data for analysis.
-        location: A Location dataclass representing the location of a case.
-        event_type: A string representing the type of extreme weather event.
+        case_id_number: Unique numerical identifier for the event.
+        title: Title of the case study.
+        start_date: Start date for subsetting data for analysis.
+        end_date: End date for subsetting data for analysis.
+        location: Region object representing the case location.
+        event_type: String representing the type of extreme weather event.
     """
 
     case_id_number: int
@@ -48,18 +45,13 @@ class IndividualCase:
 
 @dataclasses.dataclass
 class CaseOperator:
-    """A class which stores the graph to process an individual case.
-
-    This class is used to store the graph to process an individual case. The purpose of
-    this class is to be a one-stop-shop for the evaluation of a single case. Multiple
-    CaseOperators can be run in parallel to evaluate multiple cases, or run through the
-    ExtremeWeatherBench.run() method to evaluate all cases in an evaluation in serial.
+    """Operator dataclass for an evaluation of a single evaluation object.
 
     Attributes:
-        case_metadata: IndividualCase metadata
-        metric_list: A list of metrics that are to be evaluated for the case operator
-        target_config: A TargetConfig object
-        forecast_config: A ForecastConfig object
+        case_metadata: IndividualCase metadata for this operator.
+        metric_list: List of metrics to evaluate for this case.
+        target: TargetBase object for ground truth data.
+        forecast: ForecastBase object for forecast data.
     """
 
     case_metadata: IndividualCase
@@ -75,8 +67,7 @@ def build_case_operators(
     """Build a CaseOperator from the case metadata and metric evaluation objects.
 
     Args:
-        cases: The case metadata to use for the case operators as a dictionary of cases
-            or a list of IndividualCases.
+        case_list: List of IndividualCase objects defining cases to process.
         evaluation_objects: The evaluation objects to apply to the case operators.
 
     Returns:
@@ -108,7 +99,7 @@ def load_individual_cases(
     Will pass through existing IndividualCase objects and convert dictionaries to IndividualCase objects.
 
     Args:
-        cases: A dictionary of cases based on the IndividualCase dataclass.
+        cases: A list of cases as either dicts or IndividualCase objects.
 
     Returns:
         A list of IndividualCase objects.
@@ -146,19 +137,18 @@ def load_individual_cases_from_yaml(
     Example of a yaml file:
 
     ```yaml
-    cases:
-      - case_id_number: 1
-        title: Event 1
-        start_date: 2021-01-01 00:00:00
-        end_date: 2021-01-03 00:00:00
-        location:
-            type: bounded_region
-            parameters:
-                latitude_min: 10.0
-                latitude_max: 55.6
-                longitude_min: 265.0
-                longitude_max: 283.3
-        event_type: tropical_cyclone
+    - case_id_number: 1
+    title: Event 1
+    start_date: 2021-01-01 00:00:00
+    end_date: 2021-01-03 00:00:00
+    location:
+        type: bounded_region
+        parameters:
+            latitude_min: 10.0
+            latitude_max: 55.6
+            longitude_min: 265.0
+            longitude_max: 283.3
+    event_type: tropical_cyclone
     ```
 
     Args:
