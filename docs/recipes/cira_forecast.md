@@ -2,22 +2,10 @@
 
 We have a dedicated virtual reference icechunk store for CIRA data **up to May 26th, 2025** available at `gs://extremeweatherbench/cira-icechunk`. Compared to using parquet virtual references, we have seen a speed improvements of around 2x with ~25% more memory usage.
 
-## Loading the store
-
-```python
-
-from extremeweatherbench import cases, inputs, metrics, evaluate, defaults
-import datetime
-import icechunk
-
-storage = icechunk.gcs_storage(
-    bucket="extremeweatherbench", prefix="cira-icechunk", anonymous=True
-)
-```
-
 ## Accessing a CIRA Model from the store
 
 ```python
+from extremeweatherbench import inputs
 
 group_list = inputs.list_groups_in_icechunk_datatree(storage)
 ```
@@ -39,22 +27,33 @@ group_list = inputs.list_groups_in_icechunk_datatree(storage)
 
 ```python
 
-# Find FCNv2's name in the group list
-fcnv2_group = [n for n in group_list if 'FOUR_v200_GFS' in n][0]
-
 # Helper function to access the virtual dataset
-fcnv2 = inputs.open_icechunk_dataset_from_datatree(
+fcnv2 = inputs.get_cira_icechunk(model_name='FOUR_v200_IFS')
+```
+
+`fcnv2` is a `ForecastBase` object ready to be used within EWB's evaluation framework. 
+
+> **Detailed Explanation**: `inputs.get_cira_icechunk` is syntactic sugar for this: 
+```python
+import icechunk
+
+storage = icechunk.gcs_storage(
+    bucket="extremeweatherbench", prefix="cira-icechunk", anonymous=True
+)
+
+fcnv2_icechunk_ds = inputs.open_icechunk_dataset_from_datatree(
     storage=storage, 
-    group=fcnv2_group, 
+    group="FOUR_v200_IFS", 
     authorize_virtual_chunk_access=inputs.CIRA_CREDENTIALS
     )
-fcnv2_icechunk_forecast_object = inputs.XarrayForecast(
+
+fcnv2 = inputs.XarrayForecast(
     ds=fcnv2,
     variable_mapping=inputs.CIRA_metadata_variable_mapping
     )
 ```
 
-`fcnv2_icechunk_forecast_object` is a `ForecastBase` object ready to be used within EWB's evaluation framework.
+Which is a three step process of accessing the icechunk storage, loading the dataset from the datatree/zarr group format, and finally applying that `Dataset` in a `ForecastBase` object.
 
 ## Set up metrics and target for evaluation
 

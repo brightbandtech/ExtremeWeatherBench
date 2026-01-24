@@ -120,10 +120,22 @@ class TestDefaults:
 
     def test_forecast_objects_exist(self):
         """Test that forecast objects are properly defined."""
-        assert hasattr(defaults, "cira_heatwave_forecast")
-        assert hasattr(defaults, "cira_freeze_forecast")
-        assert isinstance(defaults.cira_heatwave_forecast, inputs.KerchunkForecast)
-        assert isinstance(defaults.cira_freeze_forecast, inputs.KerchunkForecast)
+        assert hasattr(defaults, "cira_fcnv2_heatwave_forecast")
+        assert hasattr(defaults, "cira_fcnv2_freeze_forecast")
+        assert hasattr(defaults, "cira_fcnv2_tropical_cyclone_forecast")
+        assert hasattr(defaults, "cira_fcnv2_atmospheric_river_forecast")
+        assert hasattr(defaults, "cira_fcnv2_severe_convection_forecast")
+        assert isinstance(defaults.cira_fcnv2_heatwave_forecast, inputs.XarrayForecast)
+        assert isinstance(defaults.cira_fcnv2_freeze_forecast, inputs.XarrayForecast)
+        assert isinstance(
+            defaults.cira_fcnv2_tropical_cyclone_forecast, inputs.XarrayForecast
+        )
+        assert isinstance(
+            defaults.cira_fcnv2_atmospheric_river_forecast, inputs.XarrayForecast
+        )
+        assert isinstance(
+            defaults.cira_fcnv2_severe_convection_forecast, inputs.XarrayForecast
+        )
 
     def test_era5_heatwave_target_configuration(self):
         """Test ERA5 heatwave target configuration."""
@@ -149,21 +161,6 @@ class TestDefaults:
         for key, value in expected_mapping.items():
             assert target.variable_mapping[key] == value
 
-    def test_cira_forecasts_have_preprocess_function(self):
-        """Test that CIRA forecasts have the preprocess function set."""
-        assert defaults.cira_heatwave_forecast.preprocess is not None
-        assert defaults.cira_freeze_forecast.preprocess is not None
-
-        # Test that the preprocess function is the expected one
-        assert (
-            defaults.cira_heatwave_forecast.preprocess
-            == defaults._preprocess_cira_forecast_dataset
-        )
-        assert (
-            defaults.cira_freeze_forecast.preprocess
-            == defaults._preprocess_cira_forecast_dataset
-        )
-
     def test_get_brightband_evaluation_objects_no_exceptions(self):
         """Test that get_brightband_evaluation_objects runs without exceptions."""
         try:
@@ -173,3 +170,63 @@ class TestDefaults:
             assert len(result) > 0
         except Exception as e:
             pytest.fail(f"get_brightband_evaluation_objects raised an exception: {e}")
+
+
+class TestCiraFcnv2PreprocessFunctions:
+    """Tests that each cira_fcnv2 forecast has the correct preprocessing function."""
+
+    def test_heatwave_forecast_has_default_preprocess(self):
+        """Test that cira_fcnv2_heatwave_forecast uses default preprocess."""
+        forecast = defaults.cira_fcnv2_heatwave_forecast
+        assert forecast.preprocess == inputs._default_preprocess
+
+    def test_freeze_forecast_has_default_preprocess(self):
+        """Test that cira_fcnv2_freeze_forecast uses default preprocess."""
+        forecast = defaults.cira_fcnv2_freeze_forecast
+        assert forecast.preprocess == inputs._default_preprocess
+
+    def test_tropical_cyclone_forecast_has_tc_preprocess(self):
+        """Test that cira_fcnv2_tropical_cyclone_forecast uses TC preprocess."""
+        forecast = defaults.cira_fcnv2_tropical_cyclone_forecast
+        assert forecast.preprocess == defaults._preprocess_cira_tc_forecast_dataset
+
+    def test_atmospheric_river_forecast_has_ar_preprocess(self):
+        """Test that cira_fcnv2_atmospheric_river_forecast uses AR preprocess."""
+        forecast = defaults.cira_fcnv2_atmospheric_river_forecast
+        assert forecast.preprocess == defaults._preprocess_cira_ar_forecast_dataset
+
+    def test_severe_convection_forecast_has_severe_preprocess(self):
+        """Test that cira_fcnv2_severe_convection_forecast uses severe preprocess."""
+        forecast = defaults.cira_fcnv2_severe_convection_forecast
+        assert forecast.preprocess == defaults._preprocess_severe_cira_forecast_dataset
+
+    def test_all_forecasts_have_preprocess_attribute(self):
+        """Test that all cira_fcnv2 forecasts have a preprocess attribute set."""
+        forecasts = [
+            defaults.cira_fcnv2_heatwave_forecast,
+            defaults.cira_fcnv2_freeze_forecast,
+            defaults.cira_fcnv2_tropical_cyclone_forecast,
+            defaults.cira_fcnv2_atmospheric_river_forecast,
+            defaults.cira_fcnv2_severe_convection_forecast,
+        ]
+        for forecast in forecasts:
+            assert hasattr(forecast, "preprocess")
+            assert forecast.preprocess is not None
+            assert callable(forecast.preprocess)
+
+    def test_preprocess_functions_are_distinct_where_expected(self):
+        """Test that different event types use different preprocess functions."""
+        # TC, AR, and severe should have distinct preprocess functions
+        tc_preprocess = defaults.cira_fcnv2_tropical_cyclone_forecast.preprocess
+        ar_preprocess = defaults.cira_fcnv2_atmospheric_river_forecast.preprocess
+        severe_preprocess = defaults.cira_fcnv2_severe_convection_forecast.preprocess
+
+        assert tc_preprocess != ar_preprocess
+        assert tc_preprocess != severe_preprocess
+        # Note: AR and severe could be the same or different depending on impl
+
+    def test_heatwave_and_freeze_use_same_preprocess(self):
+        """Test that heatwave and freeze forecasts use the same preprocess."""
+        heatwave_preprocess = defaults.cira_fcnv2_heatwave_forecast.preprocess
+        freeze_preprocess = defaults.cira_fcnv2_freeze_forecast.preprocess
+        assert heatwave_preprocess == freeze_preprocess
