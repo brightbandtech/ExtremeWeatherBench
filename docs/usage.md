@@ -66,8 +66,7 @@ Targets require at least a `valid_time` with at least one spatial dimension. Exa
 ```python
 import extremeweatherbench as ewb
 ```
-
-There are two built-in `ForecastBase` classes to set up a forecast: `ZarrForecast` and `KerchunkForecast`. Here is an example of a `ZarrForecast`, using Weatherbench2's HRES zarr store:
+There are three built-in `ForecastBase` classes to set up a forecast: `ZarrForecast`, `XarrayForecast`, and `KerchunkForecast`. Here is an example of a `ZarrForecast`, using Weatherbench2's HRES zarr store:
 
 ```python
 hres_forecast = ewb.forecasts.ZarrForecast(
@@ -86,9 +85,9 @@ There are required arguments, namely:
 - `variables`*
 - `variable_mapping`
 
-* `variables` can be defined within one or more metrics instead of in a `ForecastBase` object.
+* `variables` can alternatively be defined within one or more metrics, instead of in a `ForecastBase` object.
 
-A forecast needs a `source`, which is a link to the zarr store in this case. A `name` is required to identify the outputs. It also needs `variables` defined, which are based on CF Conventions. A list of variable namings exists in `ewb.DEFAULT_VARIABLE_NAMES`. Each forecast will likely have different names for their variables, so a `variable_mapping` dictionary is also essential to process the variables, as well as the coordinates and dimensions. EWB uses `lead_time`, `init_time`, and `valid_time` as time coordinates. The HRES data is mapped from `prediction_timedelta` to `lead_time`, as an example. `storage_options` define access patterns for the data if needed. These are passed to the opening function, e.g. `xarray.open_zarr`.
+> **Detailed Explanation**: A forecast needs a `source`, which is a link to the zarr store in this case. A `name` is required to identify the outputs. It also needs `variables` defined, which are based on CF Conventions. A list of variable namings exists in `defaults.py` as `DEFAULT_VARIABLE_NAMES`. Each forecast will likely have different names for their variables, so a `variable_mapping` dictionary is also essential to process the variables, as well as the coordinates and dimensions. EWB uses `lead_time`, `init_time`, and `valid_time` as time coordinates. The HRES data is mapped from `prediction_timedelta` to `lead_time`, as an example. `storage_options` define access patterns for the data if needed. These are passed to the opening function, e.g. `xarray.open_zarr`.
 
 Next, a target dataset must be defined as well to evaluate against. For this evaluation, we'll use ERA5:
 
@@ -101,7 +100,19 @@ era5_heatwave_target = ewb.targets.ERA5(
 )
 ```
 
-Similarly to forecasts, we need to define the `source`, which here is the ARCO ERA5 provided by Google. `variables` are again required to be set for the `ewb.targets.ERA5` class; `variable_mapping` defaults to `ewb.ERA5_metadata_variable_mapping` for many existing variables and likely is not required to be set unless your use case is for less common variables. Both forecasts and targets, if relevant, have an optional `chunks` parameter which defaults to what should be the most efficient value - usually `None` or `'auto'`, but can be changed as seen above.
+Note that EWB provides defaults for arguments, so most users will be able to instead write this (if defining variables with the intent of it applying to all metrics):
+
+```python
+era5_heatwave_target = inputs.ERA5(variables=['surface_air_temperature'])
+```
+
+Or (if defining variables as arguments to the metrics):
+
+```python
+era5_heatwave_target = inputs.ERA5()
+```
+
+> **Detailed Explanation**: Similarly to forecasts, we need to define the `source`, which here is the ARCO ERA5 provided by Google. `variables` are used to subset `ewb.inputs.ERA5` in an evaluation; `variable_mapping` defaults to `ewb.inputs.ERA5_metadata_variable_mapping` for many existing variables and likely is not required to be set unless your use case is for less common variables. Both forecasts and targets, if relevant, have an optional `chunks` parameter which defaults to what should be the most efficient value - usually `None` or `'auto'`, but can be changed as seen above. *If using the ARCO ERA5 and setting `chunks=None`, it is critical to order your subsetting by variables -> time -> `.sel` or `.isel` latitude & longitude -> rechunk. [See this Github comment](https://github.com/pydata/xarray/issues/8902#issuecomment-2036435045).
 
 We then set up an `EvaluationObject` list:
 
@@ -139,7 +150,9 @@ outputs.to_csv('your_file_name.csv')
 
 Where the EWB default events YAML file is loaded in using `ewb.load_cases()`, then applied to an instance of `ewb.evaluation` along with the `EvaluationObject` list. Finally, we run the evaluation with the `.run()` method, where defaults are typically sufficient to run with a small to moderate-sized virtual machine.
 
-The outputs are returned as a pandas DataFrame and can be manipulated in the script, a notebook, or post-hoc after saving it.
+Running locally is feasible but is typically bottlenecked heavily by IO and network bandwidth. Even on a gigabit connection, the rate of data access is significantly slower compared to within a cloud provider VM.
+
+The outputs are returned as a pandas DataFrame and can be manipulated in the script, a notebook, etc.
 
 ## Backward Compatibility
 
