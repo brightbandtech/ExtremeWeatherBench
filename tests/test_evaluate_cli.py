@@ -469,7 +469,9 @@ class TestResultsSaving:
 class TestHelperFunctions:
     """Test helper function functionality."""
 
-    @mock.patch("extremeweatherbench.cases.load_ewb_events_yaml_into_case_list")
+    @mock.patch(
+        "extremeweatherbench.evaluate_cli.cases.load_ewb_events_yaml_into_case_list"
+    )
     def test_load_default_cases(self, mock_load_yaml):
         """Test _load_default_cases function."""
         mock_cases = [{"id": 1}]
