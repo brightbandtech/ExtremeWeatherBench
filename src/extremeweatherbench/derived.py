@@ -16,21 +16,26 @@ logger = logging.getLogger(__name__)
 
 
 class DerivedVariable(abc.ABC):
-    """An abstract base class defining the interface for ExtremeWeatherBench
-    derived variables.
+    """Abstract base class for ExtremeWeatherBench derived variables.
 
-    A DerivedVariable is any variable or transform that requires extra computation than
-    what is provided in analysis or forecast data. Some examples include the
-    practically perfect hindcast, MLCAPE, IVT, or atmospheric river masks.
+    A DerivedVariable is any variable or transform that requires extra
+    computation beyond what is provided in analysis or forecast data. Examples
+    include the practically perfect hindcast, MLCAPE, IVT, or atmospheric
+    river masks.
 
-    Attributes:
-        variables: A list of variables that are used to build the
-            derived variable.
-        output_variables: Optional list of variable names that specify
-            which outputs to use from the derived computation.
-        compute: A method that generates the derived variable from the variables.
-        derive_variable: An abstract method that defines the computation to
-            derive the derived_variable from variables.
+    Class attributes:
+        variables: List of variables used to build the derived variable
+
+    Instance attributes:
+        name: The name of the derived variable
+        output_variables: Optional list of variable names specifying which
+            outputs to use from the derived computation
+
+    Public methods:
+        compute: Build the derived variable from input variables
+
+    Abstract methods:
+        derive_variable: Define the computation to derive the variable
     """
 
     variables: List[str]
@@ -81,33 +86,28 @@ class DerivedVariable(abc.ABC):
 
 
 class TropicalCycloneTrackVariables(DerivedVariable):
-    """A derived variable abstract class for tropical cyclone (TC) variables.
+    """Derived variable class for tropical cyclone track-based variables.
 
-    This class serves as a parent for TC-related derived variables and provides
-    shared track computation with caching to avoid reprocessing the same data
-    multiple times across different child classes.
+    Extends DerivedVariable to provide shared track computation with caching
+    for TC-related derived variables, avoiding reprocessing across child
+    classes. Track data is computed once and cached, then child classes can
+    extract specific variables (sea level pressure, wind speed, etc.).
 
-    The track data is computed once and cached, then child classes can extract
-    specific variables (like sea level pressure, wind speed) from the cached
-    track dataset.
-
-    Deriving the track locations using default TempestExtremes criteria:
+    Uses default TempestExtremes criteria for track identification:
     https://doi.org/10.5194/gmd-14-5023-2021
 
-    For forecast data, when track data is provided, the valid candidates
-    approach is filtered to only include candidates within 5 great circle
-    degrees of track data points and within 48 hours of the valid_time.
+    For forecasts with track data, valid candidates are filtered to include
+    only those within 5 great circle degrees and 48 hours of track points.
 
-    Track data is automatically obtained from the target dataset when using
-    the evaluation pipeline (via `requires_target_dataset=True` flag).
+    Track data is automatically obtained from target dataset via
+    `requires_target_dataset=True` flag in evaluation pipeline.
 
-    Attributes:
-        output_variables: Optional list of variable names that specify
-            which outputs to use from the derived computation.
-        name: The name of the derived variable. Defaults to class-level
-            name attribute if present, otherwise the class name.
-        requires_target_dataset: If True, target dataset will be passed to
-            this derived variable via kwargs.
+    Class attributes:
+        requires_target_dataset: If True, target dataset passed via kwargs
+
+    Instance attributes:
+        output_variables: Optional list specifying which outputs to use
+        name: Name of the derived variable
     """
 
     # required variables for TC track identification
@@ -287,8 +287,10 @@ class TropicalCycloneTrackVariables(DerivedVariable):
 
 
 class CravenBrooksSignificantSevere(DerivedVariable):
-    """A derived variable that computes the Craven-Brooks significant severe
-    convection index.
+    """Derived variable for Craven-Brooks significant severe convection index.
+
+    Extends DerivedVariable to compute the Craven-Brooks index for assessing
+    significant severe convection potential.
     """
 
     variables = [
@@ -391,18 +393,18 @@ class CravenBrooksSignificantSevere(DerivedVariable):
 
 
 class AtmosphericRiverVariables(DerivedVariable):
-    """A derived variable that computes atmospheric river related variables.
+    """Derived variable for atmospheric river detection and characterization.
 
-    Calculates the IVT (Integrated Vapor Transport), atmospheric river mask, and land
-    intersection. IVT is calculated using the method described in Newell et al. 1992 and
-    elsewhere (e.g. Mo 2024).
+    Extends DerivedVariable to compute IVT (Integrated Vapor Transport),
+    atmospheric river mask, and land intersection. IVT calculation follows
+    Newell et al. 1992 and elsewhere (e.g. Mo 2024).
 
-    Output variables are: integrated_vapor_transport, atmospheric_river_mask, and
-    atmospheric_river_land_intersection. Users must declare at least one of the output
-    variables they want when calling the derived variable.
+    Output variables: integrated_vapor_transport, atmospheric_river_mask,
+    atmospheric_river_land_intersection. Users must declare at least one
+    output variable when calling the derived variable.
 
-    The Laplacian of IVT is calculated using a Gaussian blurring kernel with a
-    sigma of 3 grid points, meant to smooth out 0.25 degree grid scale features.
+    The Laplacian of IVT uses a Gaussian blurring kernel with sigma of 3
+    grid points to smooth 0.25 degree grid scale features.
     """
 
     variables = [
