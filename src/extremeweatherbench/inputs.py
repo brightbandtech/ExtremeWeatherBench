@@ -1131,6 +1131,7 @@ def zarr_target_subsetter(
         data: The dataset to subset.
         case_metadata: The case metadata to subset the dataset to.
         time_variable: The time variable to use; defaults to "valid_time".
+        drop: Whether to drop masked values. Defaults to False.
 
     Returns:
         The subset dataset.

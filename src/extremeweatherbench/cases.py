@@ -67,8 +67,7 @@ def build_case_operators(
     """Build a CaseOperator from the case metadata and metric evaluation objects.
 
     Args:
-        cases: The case metadata to use for the case operators as a dictionary of cases
-            or a list of IndividualCases.
+        case_list: List of IndividualCase objects defining cases to process.
         evaluation_objects: The evaluation objects to apply to the case operators.
 
     Returns:

@@ -45,7 +45,7 @@ class ExtremeWeatherBench:
     results.
 
     Attributes:
-        case_metadata: A dictionary of cases or a list of IndividualCase objects to run.
+        case_metadata: A list of case dicts or IndividualCase objects to run.
         evaluation_objects: A list of evaluation objects to run.
         cache_dir: An optional directory to cache the mid-flight outputs of the
             workflow for serial runs.
@@ -64,7 +64,7 @@ class ExtremeWeatherBench:
         """Initialize the ExtremeWeatherBench workflow.
 
         Args:
-            case_metadata: Dictionary of cases or IndividualCaseCollection.
+            case_metadata: List of case dicts or IndividualCase objects.
             evaluation_objects: List of evaluation objects to run.
             cache_dir: Optional directory for caching mid-flight outputs in
                 serial runs.
@@ -148,7 +148,8 @@ def _run_case_operators(
     Args:
         case_operators: List of case operators to run.
         cache_dir: Optional directory for caching (serial mode only).
-        **kwargs: Additional arguments, may include 'parallel_config' dict.
+        parallel_config: Optional dict of joblib parallel configuration.
+        **kwargs: Additional keyword arguments passed to case operators.
 
     Returns:
         List of result DataFrames.
