@@ -145,6 +145,16 @@ CIRA_CREDENTIALS = icechunk.containers_credentials(
     {"s3://noaa-oar-mlwp-data/": icechunk.s3_credentials(anonymous=True)}
 )
 
+CIRA_MODEL_NAMES = [
+    "AURO_v100_GFS",
+    "FOUR_v200_IFS",
+    "PANG_v100_IFS",
+    "FOUR_v200_GFS",
+    "GRAP_v100_GFS",
+    "AURO_v100_IFS",
+    "PANG_v100_GFS",
+    "GRAP_v100_IFS",
+]
 
 def _default_preprocess(input_data: IncomingDataInput) -> IncomingDataInput:
     """Default forecast preprocess function that does nothing."""
@@ -1268,3 +1278,50 @@ def check_for_missing_data(
         return False
     else:
         return True
+
+def get_cira_icechunk(
+    model_name: str,
+    variables: list[Union[str, derived.DerivedVariable]] = [],
+    preprocess: Callable = _default_preprocess,
+    name: Optional[str] = None,
+) -> XarrayForecast:
+    """Get a CIRA icechunk forecast object for a given model name.
+
+    Args:
+        model_name: The name of the model from CIRA to get the forecast object for. For
+            example, "FOUR_v200_GFS". For a list of available models, see
+            `extremeweatherbench.defaults.CIRA_MODEL_NAMES`.
+        variables: The variables to select from the model. Defaults to all variables.
+        preprocess: The preprocessing function to apply to the model. Defaults to the
+            default passthrough preprocess function.
+        name: The name of the forecast object. Defaults to model_name by default unless
+            `name` is provided.
+    Returns:
+        An XarrayForecast object for the given model.
+    """
+    # Check if the model name is valid
+    if model_name not in CIRA_MODEL_NAMES:
+        raise ValueError(
+            f"Model name {model_name} not found in CIRA_MODEL_NAMES. Model names must be one of: {CIRA_MODEL_NAMES}"
+        )
+
+    # Get the CIRA icechunkstorage
+    cira_storage = icechunk.gcs_storage(
+        bucket="extremeweatherbench", prefix="cira-icechunk", anonymous=True
+    )
+
+    # The models are distinct groups within the icechunk store; open the group
+    # corresponding to the model name
+    cira_model_ds = open_icechunk_dataset_from_datatree(
+        cira_storage, model_name, authorize_virtual_chunk_access=CIRA_CREDENTIALS
+    )
+
+    # Create the XarrayForecast object for the given model
+    cira_model_forecast = XarrayForecast(
+        ds=cira_model_ds,
+        variables=variables,
+        variable_mapping=CIRA_metadata_variable_mapping,
+        name=name if name else model_name,
+        preprocess=preprocess,
+    )
+    return cira_model_forecast
