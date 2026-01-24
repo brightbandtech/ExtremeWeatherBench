@@ -259,7 +259,7 @@ def geopotential_thickness(
         pressure_dim: The name of the pressure dimension. Default is "level".
 
     Returns:
-        The geopotential thickness in metersas an xarray DataArray.
+        The geopotential thickness in meters as an xarray DataArray.
     """
     geopotential_heights = da.sel({pressure_dim: top_level})
     geopotential_height_bottom = da.sel({pressure_dim: bottom_level})
