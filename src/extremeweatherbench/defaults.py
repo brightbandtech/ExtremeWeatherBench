@@ -261,25 +261,25 @@ pph_target = inputs.PPH(
 ibtracs_target = inputs.IBTrACS()
 
 # Forecasts
-cira_fcnv2_heatwave_forecast = get_cira_icechunk(
+cira_fcnv2_heatwave_forecast = inputs.get_cira_icechunk(
     model_name="FOUR_v200_GFS",
     variables=["surface_air_temperature"],
     name="FourCastNetv2",
 )
 
-cira_fcnv2_freeze_forecast = get_cira_icechunk(
+cira_fcnv2_freeze_forecast = inputs.get_cira_icechunk(
     model_name="FOUR_v200_GFS",
     variables=["surface_air_temperature"],
     name="FourCastNetv2",
 )
 
-cira_fcnv2_tropical_cyclone_forecast = get_cira_icechunk(
+cira_fcnv2_tropical_cyclone_forecast = inputs.get_cira_icechunk(
     model_name="FOUR_v200_GFS",
     variables=[derived.TropicalCycloneTrackVariables()],
     name="FourCastNetv2",
     preprocess=_preprocess_cira_tc_forecast_dataset,
 )
-cira_fcnv2_atmospheric_river_forecast = get_cira_icechunk(
+cira_fcnv2_atmospheric_river_forecast = inputs.get_cira_icechunk(
     model_name="FOUR_v200_GFS",
     variables=[
         derived.AtmosphericRiverVariables(
@@ -290,7 +290,7 @@ cira_fcnv2_atmospheric_river_forecast = get_cira_icechunk(
     preprocess=_preprocess_cira_ar_forecast_dataset,
 )
 
-cira_fcnv2_severe_convection_forecast = get_cira_icechunk(
+cira_fcnv2_severe_convection_forecast = inputs.get_cira_icechunk(
     model_name="FOUR_v200_GFS",
     variables=[derived.CravenBrooksSignificantSevere()],
     name="FourCastNetv2",

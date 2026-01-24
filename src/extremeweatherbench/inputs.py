@@ -156,6 +156,7 @@ CIRA_MODEL_NAMES = [
     "GRAP_v100_IFS",
 ]
 
+
 def _default_preprocess(input_data: IncomingDataInput) -> IncomingDataInput:
     """Default forecast preprocess function that does nothing."""
     return input_data
@@ -1278,6 +1279,7 @@ def check_for_missing_data(
         return False
     else:
         return True
+
 
 def get_cira_icechunk(
     model_name: str,
