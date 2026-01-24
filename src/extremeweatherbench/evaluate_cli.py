@@ -79,18 +79,17 @@ def cli_runner(
     save CaseOperator objects for later use or inspection.
 
     Args:
-        default: Use default Brightband evaluation objects with current directory as
-            output
-        config_file: Path to a config.py file containing evaluation objects
-        output_dir: Directory for analysis outputs (default: current directory)
+        default: Use default Brightband evaluation objects with current directory
+            as output.
+        config_file: Path to a config.py file containing evaluation objects.
+        output_dir: Directory for analysis outputs (default: current directory).
         cache_dir: Optional directory for caching intermediate data. When set,
             datasets or dataarrays are computed and cached as zarrs.
-        parallel_config: Parallel configuration using joblib (default: {'backend':
-            'threading', 'n_jobs': 8})
-        save_case_operators: Save CaseOperator objects to a pickle file at this path
-        n_jobs: Number of parallel jobs to run (default: 1 for serial execution)
-        parallel_config: Advanced parallel configuration using joblib. Takes precedence
-            over --n-jobs if provided.
+        n_jobs: Number of parallel jobs to run (default: 1 for serial execution).
+        parallel_config: Advanced parallel configuration using joblib. Takes
+            precedence over n_jobs if provided.
+        save_case_operators: Save CaseOperator objects to a pickle file at this
+            path.
     Examples:
         # Use default evaluation objects
         $ ewb --default
