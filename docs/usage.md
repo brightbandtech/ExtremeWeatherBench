@@ -8,11 +8,6 @@ To run the Brightband-based evaluation on an existing AIWP model (FCN v2), which
 includes the default 337 cases for heat waves, freezes, severe convective days, 
 tropical cyclones, and atmospheric rivers:
 
-```bash
-ewb --default
-```
-
-or:
 
 ```python
 import extremeweatherbench as ewb
@@ -27,6 +22,12 @@ runner = ewb.evaluation(
 
 outputs = runner.run()
 outputs.to_csv('your_outputs.csv')
+```
+
+or:
+
+```bash
+ewb --default
 ```
 
 ## API Overview
@@ -52,12 +53,15 @@ ewb.ERA5(...)
 ewb.ZarrForecast(...)
 ewb.load_cases()
 ```
-
 ## Running an Evaluation for a Single Event Type
 
 ExtremeWeatherBench has default event types and cases for heat waves, freezes, severe convection, tropical cyclones, and atmospheric rivers.
 
 To run an evaluation, there are three components required: a forecast, a target, and an evaluation object.
+
+ExtremeWeatherBench requires forecasts to have `init_time`, `lead_time`, `latitude`, and `longitude` dimensions at minimum. If not already in that naming convention, initializing a `ForecastBase` object with a `variable_mapping` to map to those names is required. Other dimensions such as pressure level (`level`) can be included.
+
+Targets require at least a `valid_time` with at least one spatial dimension. Examples include `location`, `station`, or (`latitude`, `longitude`). Forecasts are aligned to targets during the steps immediately prior to evaluating a metric.
 
 ```python
 import extremeweatherbench as ewb
