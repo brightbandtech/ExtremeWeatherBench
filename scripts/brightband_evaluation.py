@@ -39,5 +39,5 @@ if __name__ == "__main__":
 
     # Set up parallel configuration
     parallel_config = {"backend": "loky", "n_jobs": n_processes}
-    results = ewb.run(parallel_config=parallel_config)
+    results = ewb.run_evaluation(parallel_config=parallel_config)
     results.to_csv("brightband_evaluation_results.csv", index=False)

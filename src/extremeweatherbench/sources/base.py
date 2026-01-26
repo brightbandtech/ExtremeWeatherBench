@@ -1,7 +1,7 @@
 import datetime
 from typing import Any, Protocol, runtime_checkable
 
-from extremeweatherbench import regions
+import extremeweatherbench.regions as regions
 
 
 @runtime_checkable

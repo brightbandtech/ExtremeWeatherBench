@@ -15,10 +15,15 @@ from tqdm.auto import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 from tqdm.dask import TqdmCallback
 
-from extremeweatherbench import cases, derived, inputs, metrics, sources, utils
+import extremeweatherbench.cases as cases
+import extremeweatherbench.derived as derived
+import extremeweatherbench.inputs as inputs
+import extremeweatherbench.metrics as metrics
+import extremeweatherbench.sources as sources
+import extremeweatherbench.utils as utils
 
 if TYPE_CHECKING:
-    from extremeweatherbench import regions
+    import extremeweatherbench.regions as regions
 
 logger = logging.getLogger(__name__)
 
@@ -101,11 +106,11 @@ class ExtremeWeatherBench:
         parallel_config: Optional[dict] = None,
         **kwargs,
     ) -> pd.DataFrame:
-        """Runs the ExtremeWeatherBench workflow.
+        """Runs the ExtremeWeatherBench evaluation workflow.
 
-        This method will run the workflow in the order of the case operators, optionally
-        caching the mid-flight outputs of the workflow if cache_dir was provided for
-        serial runs.
+        This method will run the evaluation workflow in the order of the case operators,
+        optionally caching the mid-flight outputs of the workflow if cache_dir was
+        provided for serial runs.
 
         Args:
             n_jobs: The number of jobs to run in parallel. If None, defaults to the
@@ -113,16 +118,60 @@ class ExtremeWeatherBench:
                 Ignored if parallel_config is provided.
             parallel_config: Optional dictionary of joblib parallel configuration.
                 If provided, this takes precedence over n_jobs. If not provided and
-                n_jobs is specified, a default config with loky backend is used.
-
+                n_jobs is specified, a default config with the loky backend is used.
+            **kwargs: Additional arguments to pass to compute_case_operator.
         Returns:
             A concatenated dataframe of the evaluation results.
         """
-        logger.info("Running ExtremeWeatherBench workflow...")
+        logger.warning("The run method is deprecated. Use run_evaluation instead.")
+        logger.info("Running ExtremeWeatherBench evaluations...")
 
         # Check for serial or parallel configuration
         parallel_config = _parallel_serial_config_check(n_jobs, parallel_config)
-        run_results = _run_case_operators(
+
+        run_results = _run_evaluation(
+            self.case_operators,
+            cache_dir=self.cache_dir,
+            parallel_config=parallel_config,
+            **kwargs,
+        )
+
+        # If there are results, concatenate them and return, else return an empty
+        # DataFrame with the expected columns
+        if run_results:
+            return _safe_concat(run_results, ignore_index=True)
+        else:
+            return pd.DataFrame(columns=OUTPUT_COLUMNS)
+
+    def run_evaluation(
+        self,
+        n_jobs: Optional[int] = None,
+        parallel_config: Optional[dict] = None,
+        **kwargs,
+    ) -> pd.DataFrame:
+        """Runs the ExtremeWeatherBench evaluation workflow.
+
+        This method will run the evaluation workflow in the order of the case operators,
+        optionally caching the mid-flight outputs of the workflow if cache_dir was
+        provided for serial runs.
+
+        Args:
+            n_jobs: The number of jobs to run in parallel. If None, defaults to the
+                joblib backend default value. If 1, the workflow will run serially.
+                Ignored if parallel_config is provided.
+            parallel_config: Optional dictionary of joblib parallel configuration.
+                If provided, this takes precedence over n_jobs. If not provided and
+                n_jobs is specified, a default config with the loky backend is used.
+            **kwargs: Additional arguments to pass to compute_case_operator.
+        Returns:
+            A concatenated dataframe of the evaluation results.
+        """
+        logger.info("Running ExtremeWeatherBench evaluations...")
+
+        # Check for serial or parallel configuration
+        parallel_config = _parallel_serial_config_check(n_jobs, parallel_config)
+
+        run_results = _run_evaluation(
             self.case_operators,
             cache_dir=self.cache_dir,
             parallel_config=parallel_config,
@@ -137,7 +186,48 @@ class ExtremeWeatherBench:
             return pd.DataFrame(columns=OUTPUT_COLUMNS)
 
 
-def _run_case_operators(
+def _parallel_serial_config_check(
+    n_jobs: Optional[int] = None,
+    parallel_config: Optional[dict] = None,
+) -> Optional[dict]:
+    """Check if running in serial or parallel mode.
+
+    Args:
+        n_jobs: The number of jobs to run in parallel. If None, defaults to the
+            joblib backend default value. If 1, the workflow will run serially.
+        parallel_config: Optional dictionary of joblib parallel configuration. If
+            provided, this takes precedence over n_jobs. If not provided and n_jobs is
+            specified, a default config with loky backend is used.
+    Returns:
+        None if running in serial mode, otherwise a dictionary of joblib parallel
+        configuration.
+    """
+    # Determine if running in serial or parallel mode
+    # Serial: n_jobs=1 or (parallel_config with n_jobs=1)
+    # Parallel: n_jobs>1 or (parallel_config with n_jobs>1)
+    is_serial = (
+        (n_jobs == 1)
+        or (parallel_config is not None and parallel_config.get("n_jobs") == 1)
+        or (n_jobs is None and parallel_config is None)
+    )
+    logger.debug("Running in %s mode.", "serial" if is_serial else "parallel")
+
+    if not is_serial:
+        # Build parallel_config if not provided
+        if parallel_config is None and n_jobs is not None:
+            logger.debug(
+                "No parallel_config provided, using loky backend and %s jobs.",
+                n_jobs,
+            )
+            parallel_config = {"backend": "loky", "n_jobs": n_jobs}
+    # If running in serial mode, set parallel_config to None if not already
+    else:
+        parallel_config = None
+    # Return the maybe updated kwargs
+    return parallel_config
+
+
+def _run_evaluation(
     case_operators: list["cases.CaseOperator"],
     cache_dir: Optional[pathlib.Path] = None,
     parallel_config: Optional[dict] = None,
@@ -154,37 +244,29 @@ def _run_case_operators(
     Returns:
         List of result DataFrames.
     """
-    with logging_redirect_tqdm():
-        # Run in parallel if parallel_config exists and n_jobs != 1
-        if parallel_config is not None:
+    if parallel_config is not None:
+        with logging_redirect_tqdm():
             logger.info("Running case operators in parallel...")
-            return _run_parallel(
+            run_results = _run_parallel_evaluation(
                 case_operators,
                 cache_dir=cache_dir,
                 parallel_config=parallel_config,
                 **kwargs,
             )
-        else:
-            logger.info("Running case operators in serial...")
-            return _run_serial(case_operators, cache_dir=cache_dir, **kwargs)
+    else:
+        logger.info("Running case operators in serial...")
+        run_results = []
+        for case_operator in tqdm(case_operators):
+            run_results.append(
+                compute_case_operator(case_operator, cache_dir, **kwargs)
+            )
 
-
-def _run_serial(
-    case_operators: list["cases.CaseOperator"],
-    cache_dir: Optional[pathlib.Path] = None,
-    **kwargs,
-) -> list[pd.DataFrame]:
-    """Run the case operators in serial."""
-    run_results = []
-
-    # Loop over the case operators
-    for case_operator in tqdm(case_operators):
-        run_results.append(compute_case_operator(case_operator, cache_dir, **kwargs))
     return run_results
 
 
-def _run_parallel(
+def _run_parallel_evaluation(
     case_operators: list["cases.CaseOperator"],
+    parallel_config: dict,
     cache_dir: Optional[pathlib.Path] = None,
     **kwargs,
 ) -> list[pd.DataFrame]:
@@ -197,11 +279,6 @@ def _run_parallel(
     Returns:
         List of result DataFrames.
     """
-    parallel_config = kwargs.pop("parallel_config", None)
-
-    if parallel_config is None:
-        raise ValueError("parallel_config must be provided to _run_parallel")
-
     if parallel_config.get("n_jobs") is None:
         logger.warning("No number of jobs provided, using joblib backend default.")
 
@@ -900,44 +977,3 @@ def _safe_concat(
         return pd.concat(valid_dfs, ignore_index=ignore_index)
     else:
         return pd.DataFrame(columns=OUTPUT_COLUMNS)
-
-
-def _parallel_serial_config_check(
-    n_jobs: Optional[int] = None,
-    parallel_config: Optional[dict] = None,
-) -> Optional[dict]:
-    """Check if running in serial or parallel mode.
-
-    Args:
-        n_jobs: The number of jobs to run in parallel. If None, defaults to the
-            joblib backend default value. If 1, the workflow will run serially.
-        parallel_config: Optional dictionary of joblib parallel configuration. If
-            provided, this takes precedence over n_jobs. If not provided and n_jobs is
-            specified, a default config with loky backend is used.
-    Returns:
-        None if running in serial mode, otherwise a dictionary of joblib parallel
-        configuration.
-    """
-    # Determine if running in serial or parallel mode
-    # Serial: n_jobs=1 or (parallel_config with n_jobs=1)
-    # Parallel: n_jobs>1 or (parallel_config with n_jobs>1)
-    is_serial = (
-        (n_jobs == 1)
-        or (parallel_config is not None and parallel_config.get("n_jobs") == 1)
-        or (n_jobs is None and parallel_config is None)
-    )
-    logger.debug("Running in %s mode.", "serial" if is_serial else "parallel")
-
-    if not is_serial:
-        # Build parallel_config if not provided
-        if parallel_config is None and n_jobs is not None:
-            logger.debug(
-                "No parallel_config provided, using loky backend and %s jobs.",
-                n_jobs,
-            )
-            parallel_config = {"backend": "loky", "n_jobs": n_jobs}
-    # If running in serial mode, set parallel_config to None if not already
-    else:
-        parallel_config = None
-    # Return the maybe updated kwargs
-    return parallel_config

@@ -309,7 +309,7 @@ def get_brightband_evaluation_objects() -> list[inputs.EvaluationObject]:
         routine.
     """
     # Import metrics here to avoid circular import
-    from extremeweatherbench import metrics
+    import extremeweatherbench.metrics as metrics
 
     heatwave_metric_list: list[metrics.BaseMetric] = [
         metrics.MaximumMeanAbsoluteError(),

@@ -1,56 +1,102 @@
 import logging
 
-from extremeweatherbench import cases, defaults, derived, evaluate, inputs, metrics
+import numpy as np
+import xarray as xr
+
+import extremeweatherbench as ewb
 
 # Set the logger level to INFO
 logger = logging.getLogger("extremeweatherbench")
 logger.setLevel(logging.INFO)
 
 
-# Load the case list from the YAML file
-case_yaml = cases.load_ewb_events_yaml_into_case_list()
+# Preprocessing function for CIRA data that includes geopotential thickness calculation
+# required for tropical cyclone tracks
+def _preprocess_bb_cira_tc_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
+    """An example preprocess function that renames the time coordinate to lead_time,
+    creates a valid_time coordinate, and sets the lead time range and resolution not
+    present in the original dataset.
+
+    Args:
+        ds: The forecast dataset to rename.
+
+    Returns:
+        The renamed forecast dataset.
+    """
+    ds = ds.rename({"time": "lead_time"})
+    # The evaluation configuration is used to set the lead time range and resolution.
+    ds["lead_time"] = np.array(
+        [i for i in range(0, 241, 6)], dtype="timedelta64[h]"
+    ).astype("timedelta64[ns]")
+    ds["geopotential_thickness"] = ewb.calc.geopotential_thickness(
+        ds["z"], top_level_value=300, bottom_level_value=500
+    )
+    return ds
+
+
+# Preprocessing function for HRES data that includes geopotential thickness calculation
+# required for tropical cyclone tracks
+def _preprocess_hres_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
+    """An example preprocess function that renames the time coordinate to lead_time,
+    creates a valid_time coordinate, and sets the lead time range and resolution not
+    present in the original dataset.
+
+    Args:
+        ds: The forecast dataset to rename.
+    """
+    ds["geopotential_thickness"] = ewb.calc.geopotential_thickness(
+        ds["geopotential"],
+        top_level_value=300,
+        bottom_level_value=500,
+        geopotential=True,
+    )
+    return ds
+
+
+# Load the case collection from the YAML file
+case_yaml = ewb.load_cases()
 
 # Select single case (TC Ida)
-case_yaml = [n for n in case_yaml if n.case_id_number == 220]
+case_list = [n for n in case_yaml if n.case_id_number == 220]
 
 # Define IBTrACS target, no arguments needed as defaults are sufficient
-ibtracs_target = inputs.IBTrACS()
+ibtracs_target = ewb.targets.IBTrACS()
 
 # Define HRES forecast
-hres_forecast = inputs.ZarrForecast(
+hres_forecast = ewb.forecasts.ZarrForecast(
     name="hres_forecast",
     source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
     # Define tropical cyclone track derivedvariable to include in the forecast
-    variables=[derived.TropicalCycloneTrackVariables()],
+    variables=[ewb.derived.TropicalCycloneTrackVariables()],
     # Define metadata variable mapping for HRES forecast
-    variable_mapping=inputs.HRES_metadata_variable_mapping,
+    variable_mapping=ewb.HRES_metadata_variable_mapping,
     storage_options={"remote_options": {"anon": True}},
     # Preprocess the HRES forecast to include geopotential thickness calculation
-    preprocess=defaults._preprocess_hres_tc_forecast_dataset,
+    preprocess=ewb.defaults._preprocess_hres_tc_forecast_dataset,
 )
 
-# Define FCNv2 forecast
-fcnv2_forecast = inputs.KerchunkForecast(
+# Define FCNv2 forecast, this is the old version for reference only
+fcnv2_forecast = ewb.forecasts.KerchunkForecast(
     name="fcn_forecast",
     source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
-    variables=[derived.TropicalCycloneTrackVariables()],
+    variables=[ewb.derived.TropicalCycloneTrackVariables()],
     # Define metadata variable mapping for FCNv2 forecast
-    variable_mapping=inputs.CIRA_metadata_variable_mapping,
+    variable_mapping=ewb.CIRA_metadata_variable_mapping,
     # Preprocess the FCNv2 forecast to include geopotential thickness calculation
-    preprocess=defaults._preprocess_cira_tc_forecast_dataset,
+    preprocess=ewb.defaults._preprocess_cira_tc_forecast_dataset,
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
 )
 
 # Define Pangu forecast
-pangu_forecast = inputs.KerchunkForecast(
+pangu_forecast = ewb.forecasts.KerchunkForecast(
     name="pangu_forecast",
     source="gs://extremeweatherbench/PANG_v100_GFS.parq",
-    variables=[derived.TropicalCycloneTrackVariables()],
+    variables=[ewb.derived.TropicalCycloneTrackVariables()],
     # Define metadata variable mapping for Pangu forecast
-    variable_mapping=inputs.CIRA_metadata_variable_mapping,
+    variable_mapping=ewb.CIRA_metadata_variable_mapping,
     # Preprocess the Pangu forecast to include geopotential thickness calculation
     # which uses the same preprocessing function as the FCNv2 forecast
-    preprocess=defaults._preprocess_cira_tc_forecast_dataset,
+    preprocess=ewb.defaults._preprocess_cira_tc_forecast_dataset,
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
 )
 
@@ -60,11 +106,11 @@ pangu_forecast = inputs.KerchunkForecast(
 # the evaluation to occur, in the case of multiple landfalls, for the next landfall in
 # time to be evaluated against
 composite_landfall_metrics = [
-    metrics.LandfallMetric(
+    ewb.metrics.LandfallMetric(
         metrics=[
-            metrics.LandfallIntensityMeanAbsoluteError,
-            metrics.LandfallTimeMeanError,
-            metrics.LandfallDisplacement,
+            ewb.metrics.LandfallIntensityMeanAbsoluteError,
+            ewb.metrics.LandfallTimeMeanError,
+            ewb.metrics.LandfallDisplacement,
         ],
         approach="next",
         # Set the intensity variable to use for the metric
@@ -77,21 +123,21 @@ composite_landfall_metrics = [
 # the relevant cases inside the events YAML file
 tc_evaluation_object = [
     # HRES forecast
-    inputs.EvaluationObject(
+    ewb.EvaluationObject(
         event_type="tropical_cyclone",
         metric_list=composite_landfall_metrics,
         target=ibtracs_target,
         forecast=hres_forecast,
     ),
     # Pangu forecast
-    inputs.EvaluationObject(
+    ewb.EvaluationObject(
         event_type="tropical_cyclone",
         metric_list=composite_landfall_metrics,
         target=ibtracs_target,
         forecast=pangu_forecast,
     ),
     # FCNv2 forecast
-    inputs.EvaluationObject(
+    ewb.EvaluationObject(
         event_type="tropical_cyclone",
         metric_list=composite_landfall_metrics,
         target=ibtracs_target,
@@ -101,13 +147,13 @@ tc_evaluation_object = [
 
 if __name__ == "__main__":
     # Initialize ExtremeWeatherBench
-    ewb = evaluate.ExtremeWeatherBench(
-        case_metadata=case_yaml,
+    tc_ewb = ewb.evaluation(
+        case_metadata=case_list,
         evaluation_objects=tc_evaluation_object,
     )
     logger.info("Starting EWB run")
     # Run the workflow with parallel_config backend set to dask
-    outputs = ewb.run(
+    outputs = tc_ewb.run(
         parallel_config={"backend": "loky", "n_jobs": 3},
     )
     outputs.to_csv("tc_metric_test_results.csv")
