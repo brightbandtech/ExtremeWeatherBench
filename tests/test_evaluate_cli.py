@@ -2,10 +2,8 @@
 
 import pickle
 import textwrap
-from pathlib import Path
 from unittest import mock
 
-import click.testing
 import pandas as pd
 import pytest
 
