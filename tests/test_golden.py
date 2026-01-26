@@ -91,13 +91,12 @@ class TestGoldenTests:
             evaluation_objects=heatwave_evaluation_objects,
         )
 
-        outputs = ewb.run(
+        ewb.run(
             parallel_config={
                 "backend": "loky",
                 "n_jobs": len(heatwave_evaluation_objects) * len(heatwave_metrics),
             },
         )
-        outputs.to_csv("golden_tests_heatwave_results.csv")
 
     def test_freezes(self, golden_tests_event_data):
         """Freeze tests."""
@@ -141,13 +140,12 @@ class TestGoldenTests:
             case_metadata=golden_tests_event_data,
             evaluation_objects=freeze_evaluation_objects,
         )
-        outputs = ewb.run(
+        ewb.run(
             parallel_config={
                 "backend": "loky",
                 "n_jobs": len(freeze_evaluation_objects) * len(freeze_metrics),
             },
         )
-        outputs.to_csv("golden_tests_freeze_results.csv")
 
     def test_severe_convection(self, golden_tests_event_data):
         """Severe convection tests."""
@@ -186,14 +184,13 @@ class TestGoldenTests:
             case_metadata=golden_tests_event_data,
             evaluation_objects=severe_convection_evaluation_objects,
         )
-        outputs = ewb.run(
+        ewb.run(
             parallel_config={
                 "backend": "loky",
                 "n_jobs": len(severe_convection_evaluation_objects)
                 * len(severe_convection_metrics),
             },
         )
-        outputs.to_csv("golden_tests_severe_convection_results.csv")
 
     def test_atmospheric_river(self, golden_tests_event_data):
         """Atmospheric river tests."""
@@ -230,14 +227,13 @@ class TestGoldenTests:
             case_metadata=golden_tests_event_data,
             evaluation_objects=atmospheric_river_evaluation_objects,
         )
-        outputs = ewb.run(
+        ewb.run(
             parallel_config={
                 "backend": "loky",
                 "n_jobs": len(atmospheric_river_evaluation_objects)
                 * len(atmospheric_river_metrics),
             },
         )
-        outputs.to_csv("golden_tests_atmospheric_river_results.csv")
 
     def test_tropical_cyclone(self, golden_tests_event_data):
         """Tropical cyclone tests."""
@@ -273,14 +269,13 @@ class TestGoldenTests:
             case_metadata=golden_tests_event_data,
             evaluation_objects=tropical_cyclone_evaluation_objects,
         )
-        outputs = ewb.run(
+        ewb.run(
             parallel_config={
                 "backend": "loky",
                 "n_jobs": len(tropical_cyclone_evaluation_objects)
                 * len(tropical_cyclone_metrics),
             },
         )
-        outputs.to_csv("golden_tests_tropical_cyclone_results.csv")
 
 
 if __name__ == "__main__":
