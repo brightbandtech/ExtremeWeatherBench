@@ -2,7 +2,25 @@
 name = "extremeweatherbench"
 version = "0.3.0"
 description = "Benchmarking weather and weather AI models using extreme events"
+keywords = [
+    "weather",
+    "extreme events",
+    "benchmarking",
+    "forecasting",
+    "climate",
+]
+license = { file = "LICENSE" }
 readme = "README.md"
+classifiers = [
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Atmospheric Science",
+]
 requires-python = ">=3.11,<3.14"
 dependencies = [
     "dacite>=1.8.1",
@@ -63,6 +81,8 @@ dev = [
     "types-pytz>=2025.2.0.20250809",
     "types-pyyaml>=6.0.12.20241230",
     "types-tqdm>=4.67.0.20250809",
+    "python-semantic-release>=10.3.0",
+    "twine>=5.1.1",
 ]
 docs = [
     "mkdocs>=1.6.1",
@@ -72,17 +92,22 @@ docs = [
     "pymdown-extensions>=10.19.1",
 ]
 
+complete = ["extremeweatherbench[data-prep,multiprocessing]"]
+
 [build-system]
-requires = ["setuptools", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling >= 1.26"]
+build-backend = "hatchling.build"
 
-[tool.setuptools]
-packages = ["extremeweatherbench"]
-package-dir = { "" = "src" }
-include-package-data = true
+[tool.hatch.build.targets.wheel]
+packages = ["src/extremeweatherbench"]
 
-[tool.setuptools.package-data]
-extremeweatherbench = ["data/**/*", "data/**/.*"]
+[tool.hatch.build.targets.sdist]
+include = ["src/extremeweatherbench/**/*"]
+
+[project.urls]
+Documentation = "https://extremeweatherbench.readthedocs.io/"
+Repository = "https://github.com/brightbandtech/extremeweatherbench"
+
 
 [project.scripts]
 ewb = "extremeweatherbench.evaluate_cli:cli_runner"
@@ -125,6 +150,28 @@ docstring-code-line-length = "dynamic"
 
 [tool.ruff.lint.isort]
 case-sensitive = true
+
+[tool.semantic_release]
+version_toml = ["pyproject.toml:project.version"]
+branch = "main"
+dist_path = "dist/"
+upload_to_pypi = false
+remote = { type = "github" }
+commit_author = "semantic-release <semantic-release@python>"
+commit_parser = "conventional"
+commit_parser_options = { parse_squash_commits = "false", parse_merge_commits = "true" }
+minor_tag = "[minor]"
+patch_tag = "[patch]"
+major_tag = "[major]"
+build_command = """
+  uv lock --offline
+  git add uv.lock
+  uv build
+"""
+# Only create GitHub releases for the current version, not historical ones
+github_release_mode = "latest"
+# Ensure assets are only uploaded for the current release, not past ones
+upload_assets_for_all_releases = false
 
 [tool.pytest]
 addopts = ["--ignore=tests/test_golden.py", "--cov=extremeweatherbench"]
