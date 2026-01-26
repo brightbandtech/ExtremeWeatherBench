@@ -16,7 +16,7 @@ import xarray as xr
 from extremeweatherbench import utils
 
 if TYPE_CHECKING:
-    from extremeweatherbench import cases
+    import extremeweatherbench.cases as cases
 
 logger = logging.getLogger(__name__)
 

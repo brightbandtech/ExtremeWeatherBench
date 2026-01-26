@@ -4,6 +4,7 @@ import datetime
 import logging
 import re
 from importlib import resources
+from typing import TYPE_CHECKING
 
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
@@ -14,8 +15,11 @@ import polars as pl
 import yaml
 from matplotlib.patches import Rectangle
 
+import extremeweatherbench as ewb
 import extremeweatherbench.data
-from extremeweatherbench import cases, inputs, regions, utils
+
+if TYPE_CHECKING:
+    from extremeweatherbench.regions import Region
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -67,7 +71,7 @@ def calculate_extent_bounds(
     bottom_lat: float,
     top_lat: float,
     extent_buffer: float = 250,
-) -> regions.Region:
+) -> Region:
     """Calculate extent bounds with buffer.
 
     Args:
@@ -94,9 +98,9 @@ def calculate_extent_bounds(
         calculate_end_point(bottom_lat, right_lon, 90, extent_buffer), 1
     )
 
-    new_left_lon = np.round(utils.convert_longitude_to_360(new_left_lon), 1)
-    new_right_lon = np.round(utils.convert_longitude_to_360(new_right_lon), 1)
-    new_box = regions.BoundingBoxRegion(
+    new_left_lon = np.round(ewb.utils.convert_longitude_to_360(new_left_lon), 1)
+    new_right_lon = np.round(ewb.utils.convert_longitude_to_360(new_right_lon), 1)
+    new_box = ewb.regions.BoundingBoxRegion(
         new_bottom_lat, new_top_lat, new_left_lon, new_right_lon
     )
     return new_box
@@ -164,10 +168,10 @@ def load_and_process_ibtracs_data():
     """
     logger.info("Loading IBTrACS data...")
 
-    IBTRACS = inputs.IBTrACS(
-        source=inputs.IBTRACS_URI,
+    IBTRACS = ewb.inputs.IBTrACS(
+        source=ewb.inputs.IBTRACS_URI,
         variables=["vmax", "slp"],
-        variable_mapping=inputs.IBTrACS_metadata_variable_mapping,
+        variable_mapping=ewb.inputs.IBTrACS_metadata_variable_mapping,
         storage_options={},
     )
 
@@ -177,7 +181,7 @@ def load_and_process_ibtracs_data():
     # Get all storms from 2020 - 2025 seasons
     all_storms_2020_2025_lf = IBTRACS_lf.filter(
         (pl.col("SEASON").cast(pl.Int32) >= 2020)
-    ).select(inputs.IBTrACS_metadata_variable_mapping.values())
+    ).select(ewb.inputs.IBTrACS_metadata_variable_mapping.values())
 
     schema = all_storms_2020_2025_lf.collect_schema()
     # Convert pressure and surface wind columns to float, replacing " " with null
@@ -464,7 +468,7 @@ def find_storm_bounds_for_case(storm_name, storm_bounds, all_storms_df):
             # If we found both, merge them by taking the bounding box that
             # encompasses both
             if bounds1 is not None and bounds2 is not None:
-                merged_bbox = regions.BoundingBoxRegion(
+                merged_bbox = ewb.regions.BoundingBoxRegion(
                     latitude_min=min(
                         bounds1.iloc[0].latitude_min, bounds2.iloc[0].latitude_min
                     ),
@@ -537,7 +541,7 @@ def update_cases_with_storm_bounds(storm_bounds, all_storms_df):
     """
     logger.info("Updating cases with storm bounds...")
 
-    cases_all = cases.load_ewb_events_yaml_into_case_list()
+    cases_all = ewb.cases.load_ewb_events_yaml_into_case_list()
     cases_new = cases_all.copy()
 
     # Update the yaml cases with storm bounds from IBTrACS data

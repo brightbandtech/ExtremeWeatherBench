@@ -13,7 +13,8 @@ from cartopy.mpl.gridliner import LatitudeFormatter, LongitudeFormatter
 from matplotlib import dates as mdates
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-from extremeweatherbench import cases, utils
+import extremeweatherbench.cases as cases
+import extremeweatherbench.utils as utils
 
 sns.set_theme(style="whitegrid", context="talk")
 

@@ -11,7 +11,8 @@ import xarray as xr
 from scipy.ndimage import gaussian_filter
 from tqdm.auto import tqdm
 
-from extremeweatherbench import inputs, utils
+import extremeweatherbench.inputs as inputs
+import extremeweatherbench.utils as utils
 
 
 def sparse_practically_perfect_hindcast(
