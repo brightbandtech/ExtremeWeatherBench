@@ -19,10 +19,13 @@ import pandas as pd
 import polars as pl
 import xarray as xr
 
-from extremeweatherbench import cases, derived, sources, utils
+import extremeweatherbench.cases as cases
+import extremeweatherbench.derived as derived
+import extremeweatherbench.sources as sources
+import extremeweatherbench.utils as utils
 
 if TYPE_CHECKING:
-    from extremeweatherbench import metrics
+    import extremeweatherbench.metrics as metrics
 
 logger = logging.getLogger(__name__)
 

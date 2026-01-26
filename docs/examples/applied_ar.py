@@ -4,7 +4,7 @@ import logging
 import numpy as np
 import xarray as xr
 
-from extremeweatherbench import cases, derived, evaluate, inputs, metrics
+import extremeweatherbench as ewb
 
 # %%
 
@@ -38,85 +38,86 @@ def _preprocess_cira_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
 
 
 # Load case data from the default events.yaml
-# Users can also define their own cases
-case_yaml = cases.load_ewb_events_yaml_into_case_list()
-case_yaml = [n for n in case_yaml if n.case_id_number == 114]
-case_yaml[0].start_date = datetime.datetime(2022, 12, 27, 11, 0, 0)
-case_yaml[0].end_date = datetime.datetime(2022, 12, 27, 13, 0, 0)
+# Users can also define their own cases_dict structure
+case_yaml = ewb.load_cases()
+case_list = [n for n in case_yaml if n.case_id_number == 114]
+
+case_list[0].start_date = datetime.datetime(2022, 12, 27, 11, 0, 0)
+case_list[0].end_date = datetime.datetime(2022, 12, 27, 13, 0, 0)
 # Define ERA5 target
-era5_target = inputs.ERA5(
+era5_target = ewb.targets.ERA5(
     variables=[
-        derived.AtmosphericRiverVariables(
+        ewb.derived.AtmosphericRiverVariables(
             output_variables=["atmospheric_river_land_intersection"]
         )
     ],
 )
 
 # Define forecast (HRES)
-hres_forecast = inputs.ZarrForecast(
+hres_forecast = ewb.forecasts.ZarrForecast(
     source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
     name="HRES",
     variables=[
-        derived.AtmosphericRiverVariables(
+        ewb.derived.AtmosphericRiverVariables(
             output_variables=["atmospheric_river_land_intersection"]
         )
     ],
-    variable_mapping=inputs.HRES_metadata_variable_mapping,
+    variable_mapping=ewb.HRES_metadata_variable_mapping,
 )
 
-grap_forecast = inputs.KerchunkForecast(
+grap_forecast = ewb.forecasts.KerchunkForecast(
     name="Graphcast",
     source="gs://extremeweatherbench/GRAP_v100_IFS.parq",
     variables=[
-        derived.AtmosphericRiverVariables(
+        ewb.derived.AtmosphericRiverVariables(
             output_variables=["atmospheric_river_land_intersection"]
         )
     ],
-    variable_mapping=inputs.CIRA_metadata_variable_mapping,
+    variable_mapping=ewb.CIRA_metadata_variable_mapping,
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
     preprocess=_preprocess_cira_forecast_dataset,
 )
 
-pang_forecast = inputs.KerchunkForecast(
+pang_forecast = ewb.forecasts.KerchunkForecast(
     name="Pangu",
     source="gs://extremeweatherbench/PANG_v100_IFS.parq",
     variables=[
-        derived.AtmosphericRiverVariables(
+        ewb.derived.AtmosphericRiverVariables(
             output_variables=["atmospheric_river_land_intersection"]
         )
     ],
-    variable_mapping=inputs.CIRA_metadata_variable_mapping,
+    variable_mapping=ewb.CIRA_metadata_variable_mapping,
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
     preprocess=_preprocess_cira_forecast_dataset,
 )
 # Create a list of evaluation objects for atmospheric river
 ar_evaluation_objects = [
-    inputs.EvaluationObject(
+    ewb.EvaluationObject(
         event_type="atmospheric_river",
         metric_list=[
-            metrics.CriticalSuccessIndex(),
-            metrics.EarlySignal(),
-            metrics.SpatialDisplacement(),
+            ewb.metrics.CriticalSuccessIndex(),
+            ewb.metrics.EarlySignal(),
+            ewb.metrics.SpatialDisplacement(),
         ],
         target=era5_target,
         forecast=hres_forecast,
     ),
-    inputs.EvaluationObject(
+    ewb.EvaluationObject(
         event_type="atmospheric_river",
         metric_list=[
-            metrics.CriticalSuccessIndex(),
-            metrics.EarlySignal(),
-            metrics.SpatialDisplacement(),
+            ewb.metrics.CriticalSuccessIndex(),
+            ewb.metrics.EarlySignal(),
+            ewb.metrics.SpatialDisplacement(),
         ],
         target=era5_target,
         forecast=grap_forecast,
     ),
-    inputs.EvaluationObject(
+    ewb.EvaluationObject(
         event_type="atmospheric_river",
         metric_list=[
-            metrics.CriticalSuccessIndex(),
-            metrics.EarlySignal(),
-            metrics.SpatialDisplacement(),
+            ewb.metrics.CriticalSuccessIndex(),
+            ewb.metrics.EarlySignal(),
+            ewb.metrics.SpatialDisplacement(),
         ],
         target=era5_target,
         forecast=pang_forecast,
@@ -126,7 +127,7 @@ ar_evaluation_objects = [
 if __name__ == "__main__":
     # Initialize ExtremeWeatherBench; will only run on cases with event_type
     # atmospheric_river
-    ar_ewb = evaluate.ExtremeWeatherBench(
+    ar_ewb = ewb.evaluation(
         case_metadata=case_yaml,
         evaluation_objects=ar_evaluation_objects,
     )
