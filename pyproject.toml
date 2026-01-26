@@ -125,3 +125,10 @@ docstring-code-line-length = "dynamic"
 
 [tool.ruff.lint.isort]
 case-sensitive = true
+
+[tool.pytest]
+addopts = ["--ignore=tests/test_golden.py", "--cov=extremeweatherbench"]
+markers = [
+    "integration: marks tests as integration tests (may be slow)",
+    "slow: marks tests as slow (may take longer to complete)",
+]
