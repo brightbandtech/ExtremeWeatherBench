@@ -174,3 +174,10 @@ build_command = """
 github_release_mode = "latest"
 # Ensure assets are only uploaded for the current release, not past ones
 upload_assets_for_all_releases = false
+
+[tool.pytest]
+addopts = ["--ignore=tests/test_golden.py", "--cov=extremeweatherbench"]
+markers = [
+    "integration: marks tests as integration tests (may be slow)",
+    "slow: marks tests as slow (may take longer to complete)",
+]
