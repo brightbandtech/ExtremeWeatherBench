@@ -98,13 +98,11 @@ complete = ["extremeweatherbench[data-prep,multiprocessing]"]
 requires = ["hatchling >= 1.26"]
 build-backend = "hatchling.build"
 
-[tool.setuptools]
-packages = ["extremeweatherbench"]
-package-dir = { "" = "src" }
-include-package-data = true
+[tool.hatch.build.targets.wheel]
+packages = ["src/extremeweatherbench"]
 
-[tool.setuptools.package-data]
-extremeweatherbench = ["data/**/*", "data/**/.*"]
+[tool.hatch.build.targets.sdist]
+include = ["src/extremeweatherbench/**/*"]
 
 [project.urls]
 Documentation = "https://extremeweatherbench.readthedocs.io/"
