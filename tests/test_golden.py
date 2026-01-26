@@ -2,7 +2,7 @@
 
 These tests are likely incompatible with Github Actions and will be used on a VM
 or other virtual environment. These are intended to be fairly lightweight marquee
-examples of each event type and core metrics. If the values deviate from expected 
+examples of each event type and core metrics. If the values deviate from expected
 for a release, it will be flagged as a failure."""
 
 
@@ -25,6 +25,7 @@ def reference_data_dir():
         )
     return path
 
+
 @pytest.fixture(scope="module")
 def golden_tests_event_data(reference_data_dir):
     """Load golden tests event data."""
@@ -33,6 +34,7 @@ def golden_tests_event_data(reference_data_dir):
         pytest.skip(f"Golden tests event data not found: {ref_file}")
 
     return cases.load_individual_cases_from_yaml(ref_file)
+
 
 @pytest.mark.integration
 class TestGoldenTests:
@@ -45,10 +47,21 @@ class TestGoldenTests:
         ghcn_heatwave_target = inputs.GHCN()
 
         heatwave_metrics = [
-            metrics.MaximumMeanAbsoluteError(forecast_variable="surface_air_temperature", target_variable="surface_air_temperature"),
-            metrics.RootMeanSquaredError(forecast_variable="surface_air_temperature", target_variable="surface_air_temperature"),
-            metrics.DurationMeanError(threshold_criteria=defaults.get_climatology(quantile=0.85)),
-            metrics.MaximumLowestMeanAbsoluteError(forecast_variable="surface_air_temperature", target_variable="surface_air_temperature"),
+            metrics.MaximumMeanAbsoluteError(
+                forecast_variable="surface_air_temperature",
+                target_variable="surface_air_temperature",
+            ),
+            metrics.RootMeanSquaredError(
+                forecast_variable="surface_air_temperature",
+                target_variable="surface_air_temperature",
+            ),
+            metrics.DurationMeanError(
+                threshold_criteria=defaults.get_climatology(quantile=0.85)
+            ),
+            metrics.MaximumLowestMeanAbsoluteError(
+                forecast_variable="surface_air_temperature",
+                target_variable="surface_air_temperature",
+            ),
         ]
 
         hres_heatwave_forecast = inputs.ZarrForecast(
@@ -79,7 +92,10 @@ class TestGoldenTests:
         )
 
         outputs = ewb.run(
-            parallel_config={"backend": "loky", "n_jobs": len(heatwave_evaluation_objects)*len(heatwave_metrics)},
+            parallel_config={
+                "backend": "loky",
+                "n_jobs": len(heatwave_evaluation_objects) * len(heatwave_metrics),
+            },
         )
         outputs.to_csv("golden_tests_heatwave_results.csv")
 
@@ -94,9 +110,17 @@ class TestGoldenTests:
             variable_mapping=inputs.HRES_metadata_variable_mapping,
         )
         freeze_metrics = [
-            metrics.MinimumMeanAbsoluteError(forecast_variable="surface_air_temperature", target_variable="surface_air_temperature"),
-            metrics.RootMeanSquaredError(forecast_variable="surface_air_temperature", target_variable="surface_air_temperature"),
-            metrics.DurationMeanError(threshold_criteria=defaults.get_climatology(quantile=0.15)),
+            metrics.MinimumMeanAbsoluteError(
+                forecast_variable="surface_air_temperature",
+                target_variable="surface_air_temperature",
+            ),
+            metrics.RootMeanSquaredError(
+                forecast_variable="surface_air_temperature",
+                target_variable="surface_air_temperature",
+            ),
+            metrics.DurationMeanError(
+                threshold_criteria=defaults.get_climatology(quantile=0.15)
+            ),
         ]
         freeze_evaluation_objects = [
             inputs.EvaluationObject(
@@ -118,10 +142,13 @@ class TestGoldenTests:
             evaluation_objects=freeze_evaluation_objects,
         )
         outputs = ewb.run(
-            parallel_config={"backend": "loky", "n_jobs": len(freeze_evaluation_objects)*len(freeze_metrics)},
+            parallel_config={
+                "backend": "loky",
+                "n_jobs": len(freeze_evaluation_objects) * len(freeze_metrics),
+            },
         )
         outputs.to_csv("golden_tests_freeze_results.csv")
-    
+
     def test_severe_convection(self, golden_tests_event_data):
         """Severe convection tests."""
         lsr_severe_convection_target = inputs.LSR()
@@ -133,7 +160,11 @@ class TestGoldenTests:
             variable_mapping=inputs.HRES_metadata_variable_mapping,
         )
         severe_convection_metrics = [
-            metrics.ThresholdMetric(metrics=[metrics.CriticalSuccessIndex, metrics.FalseAlarmRatio], forecast_threshold=15000, target_threshold=0.3),
+            metrics.ThresholdMetric(
+                metrics=[metrics.CriticalSuccessIndex, metrics.FalseAlarmRatio],
+                forecast_threshold=15000,
+                target_threshold=0.3,
+            ),
             metrics.EarlySignal(threshold=15000),
         ]
         severe_convection_evaluation_objects = [
@@ -156,7 +187,11 @@ class TestGoldenTests:
             evaluation_objects=severe_convection_evaluation_objects,
         )
         outputs = ewb.run(
-            parallel_config={"backend": "loky", "n_jobs": len(severe_convection_evaluation_objects)*len(severe_convection_metrics)},
+            parallel_config={
+                "backend": "loky",
+                "n_jobs": len(severe_convection_evaluation_objects)
+                * len(severe_convection_metrics),
+            },
         )
         outputs.to_csv("golden_tests_severe_convection_results.csv")
 
@@ -166,7 +201,15 @@ class TestGoldenTests:
         hres_atmospheric_river_forecast = inputs.ZarrForecast(
             name="hres_atmospheric_river_forecast",
             source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
-            variables=[derived.AtmosphericRiverVariables(output_variables=["atmospheric_river_mask", "integrated_vapor_transport", "atmospheric_river_land_intersection"])],
+            variables=[
+                derived.AtmosphericRiverVariables(
+                    output_variables=[
+                        "atmospheric_river_mask",
+                        "integrated_vapor_transport",
+                        "atmospheric_river_land_intersection",
+                    ]
+                )
+            ],
             variable_mapping=inputs.HRES_metadata_variable_mapping,
         )
         atmospheric_river_metrics = [
@@ -188,7 +231,11 @@ class TestGoldenTests:
             evaluation_objects=atmospheric_river_evaluation_objects,
         )
         outputs = ewb.run(
-            parallel_config={"backend": "loky", "n_jobs": len(atmospheric_river_evaluation_objects)*len(atmospheric_river_metrics)},
+            parallel_config={
+                "backend": "loky",
+                "n_jobs": len(atmospheric_river_evaluation_objects)
+                * len(atmospheric_river_metrics),
+            },
         )
         outputs.to_csv("golden_tests_atmospheric_river_results.csv")
 
@@ -202,7 +249,16 @@ class TestGoldenTests:
             variable_mapping=inputs.HRES_metadata_variable_mapping,
         )
         tropical_cyclone_metrics = [
-            metrics.LandfallMetric(metrics=[metrics.LandfallIntensityMeanAbsoluteError, metrics.LandfallTimeMeanError, metrics.LandfallDisplacement], approach="next", forecast_variable="air_pressure_at_mean_sea_level", target_variable="air_pressure_at_mean_sea_level"),
+            metrics.LandfallMetric(
+                metrics=[
+                    metrics.LandfallIntensityMeanAbsoluteError,
+                    metrics.LandfallTimeMeanError,
+                    metrics.LandfallDisplacement,
+                ],
+                approach="next",
+                forecast_variable="air_pressure_at_mean_sea_level",
+                target_variable="air_pressure_at_mean_sea_level",
+            ),
         ]
         tropical_cyclone_evaluation_objects = [
             inputs.EvaluationObject(
@@ -218,9 +274,14 @@ class TestGoldenTests:
             evaluation_objects=tropical_cyclone_evaluation_objects,
         )
         outputs = ewb.run(
-            parallel_config={"backend": "loky", "n_jobs": len(tropical_cyclone_evaluation_objects)*len(tropical_cyclone_metrics)},
+            parallel_config={
+                "backend": "loky",
+                "n_jobs": len(tropical_cyclone_evaluation_objects)
+                * len(tropical_cyclone_metrics),
+            },
         )
         outputs.to_csv("golden_tests_tropical_cyclone_results.csv")
+
 
 if __name__ == "__main__":
     pytest.main([__file__])
