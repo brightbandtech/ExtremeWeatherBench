@@ -1,6 +1,6 @@
 [project]
 name = "extremeweatherbench"
-version = "0.3.0"
+version = "1.0.0"
 description = "Benchmarking weather and weather AI models using extreme events"
 keywords = [
     "weather",
