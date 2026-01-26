@@ -6,7 +6,17 @@ from extremeweatherbench import regions
 
 @runtime_checkable
 class Source(Protocol):
-    """A protocol for input sources."""
+    """Protocol defining the interface for input data sources.
+
+    This protocol specifies the methods that input source implementations must
+    provide for variable extraction, temporal validation, and spatial data
+    checking.
+
+    Required methods:
+        safely_pull_variables: Extract specified variables from data
+        check_for_valid_times: Check if data has valid times in date range
+        check_for_spatial_data: Check if data has spatial coverage for region
+    """
 
     def safely_pull_variables(
         self,

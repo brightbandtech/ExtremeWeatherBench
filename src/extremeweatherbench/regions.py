@@ -22,7 +22,21 @@ logger = logging.getLogger(__name__)
 
 
 class Region(abc.ABC):
-    """Base class for different region representations."""
+    """Base class for different region representations.
+
+    This abstract class defines the interface for geographic regions used in
+    ExtremeWeatherBench. Regions can be centered, bounding boxes, or defined
+    by shapefiles.
+
+    Public methods:
+        create_region: Abstract factory method to create a region
+        as_geopandas: Convert region to GeoDataFrame representation
+        get_adjusted_bounds: Get region bounds adjusted to dataset convention
+        mask: Mask a dataset to this region
+        intersects: Check if this region intersects another region
+        contains: Check if this region contains another region
+        area_overlap_fraction: Calculate area overlap with another region
+    """
 
     @classmethod
     @abc.abstractmethod
@@ -159,17 +173,11 @@ class Region(abc.ABC):
 
 
 class CenteredRegion(Region):
-    """A region defined by a center point and a bounding box.
+    """Region defined by center point and bounding box.
 
-    bounding_box_degrees is the width (length) of one or all sides, not half size;
-    e.g., bounding_box_degrees=10.0 means a 10 degree by 10 degree box around
-    the center point.
-
-    Attributes:
-        latitude: Center latitude
-        longitude: Center longitude
-        bounding_box_degrees: Size of bounding box in degrees or tuple of
-            (lat_degrees, lon_degrees)
+    Extends Region to define a region using a center point and bounding box
+    dimensions. The bounding_box_degrees is the full width/height (not half
+    size); e.g., 10.0 means a 10x10 degree box around the center.
     """
 
     def __repr__(self):
@@ -182,6 +190,15 @@ class CenteredRegion(Region):
     def __init__(
         self, latitude: float, longitude: float, bounding_box_degrees: float | tuple
     ):
+        """Initialize the CenteredRegion.
+
+        Args:
+            latitude: Center latitude in degrees.
+            longitude: Center longitude in degrees.
+            bounding_box_degrees: Size of bounding box in degrees. Either a
+                single float (square box) or tuple of (lat_degrees,
+                lon_degrees).
+        """
         self.latitude = latitude
         self.longitude = longitude
         self.bounding_box_degrees = bounding_box_degrees
@@ -229,13 +246,9 @@ class CenteredRegion(Region):
 
 
 class BoundingBoxRegion(Region):
-    """A region defined by explicit latitude and longitude bounds.
+    """Region defined by explicit latitude and longitude bounds.
 
-    Attributes:
-        latitude_min: Minimum latitude bound
-        latitude_max: Maximum latitude bound
-        longitude_min: Minimum longitude bound
-        longitude_max: Maximum longitude bound
+    Extends Region to define a region using explicit bounding box coordinates.
     """
 
     def __repr__(self):
@@ -253,6 +266,14 @@ class BoundingBoxRegion(Region):
         longitude_min: float,
         longitude_max: float,
     ):
+        """Initialize the BoundingBoxRegion.
+
+        Args:
+            latitude_min: Minimum latitude bound in degrees.
+            latitude_max: Maximum latitude bound in degrees.
+            longitude_min: Minimum longitude bound in degrees.
+            longitude_max: Maximum longitude bound in degrees.
+        """
         self.latitude_min = latitude_min
         self.latitude_max = latitude_max
         self.longitude_min = longitude_min
@@ -286,19 +307,21 @@ class BoundingBoxRegion(Region):
 
 
 class ShapefileRegion(Region):
-    """A region defined by a shapefile.
+    """Region defined by a shapefile.
 
-    A geopandas object shapefile is read in and stored as an attribute
-    on instantiation.
-
-    Attributes:
-        shapefile_path: Local or remote path to the .shp shapefile
+    Extends Region to define a region using a shapefile. The shapefile is read
+    using geopandas on instantiation.
     """
 
     def __repr__(self):
         return f"{self.__class__.__name__}(shapefile_path={self.shapefile_path})"
 
     def __init__(self, shapefile_path: str | pathlib.Path):
+        """Initialize the ShapefileRegion.
+
+        Args:
+            shapefile_path: Local or remote path to the .shp shapefile.
+        """
         self.shapefile_path = pathlib.Path(shapefile_path)
 
     @classmethod
@@ -465,16 +488,17 @@ def _create_geopandas_from_bounds(
 
 
 class RegionSubsetter:
-    """A utility class for subsetting ExtremeWeatherBench objects by region.
+    """Utility class for subsetting ExtremeWeatherBench objects by region.
 
-    Attributes:
-        region: The region to subset to. Can be a Region object or a
-            dictionary of bounds with keys "latitude_min", "latitude_max",
-            "longitude_min", and "longitude_max".
-        method: The method to use for subsetting. Options:
-            - "intersects": Include cases where ANY part of a case intersects region
-            - "percent": Include cases where percent of case area overlaps with region.
-            - "all": Only include cases where entirety of a case is within region
+    Provides methods for filtering case collections based on spatial overlap
+    with a specified region using various inclusion criteria.
+
+    Public methods:
+        subset: Subset a case collection based on region overlap
+
+    Instance attributes:
+        region: The region to subset to
+        method: The subsetting method used
         percent_threshold: Threshold for percent overlap (0.0 to 1.0)
     """
 
@@ -491,10 +515,10 @@ class RegionSubsetter:
         """Initialize the RegionSubsetter.
 
         Args:
-            region: The region to subset to. Can be a Region object or a
-                dictionary of bounds with keys "latitude_min", "latitude_max",
-                "longitude_min", and "longitude_max".
-            method: The method to use for subsetting. Options:
+            region: The region to subset to. Can be a Region object or
+                dictionary with keys "latitude_min", "latitude_max",
+                "longitude_min", "longitude_max".
+            method: The subsetting method. Options:
                 - "intersects": Include cases where ANY part of a case intersects region
                 - "percent": Include cases where percent of case area overlaps with
                 region
@@ -515,27 +539,26 @@ class RegionSubsetter:
         self.method = method
         self.percent_threshold = percent_threshold
 
-    def subset_case_collection(
-        self, case_collection: "cases.IndividualCaseCollection"
-    ) -> "cases.IndividualCaseCollection":
-        """Subset an IndividualCaseCollection by region.
+    def subset_case_list(
+        self, case_list: "list[cases.IndividualCase]"
+    ) -> "list[cases.IndividualCase]":
+        """Subset a list of IndividualCases by region.
 
         Args:
-            case_collection: The case collection to subset
+            case_list: The list of IndividualCases to subset
 
         Returns:
-            A new IndividualCaseCollection with cases subset to the region
+            A new list of IndividualCases with cases subset to the region
         """
         # Avoid circular import
-        from extremeweatherbench import cases
 
         filtered_cases = []
 
-        for case in case_collection.cases:
+        for case in case_list:
             if self._should_include_case(case):
                 filtered_cases.append(case)
 
-        return cases.IndividualCaseCollection(cases=filtered_cases)
+        return filtered_cases
 
     def _should_include_case(self, case: "cases.IndividualCase") -> bool:
         """Determine if a case should be included based on the subsetting criteria."""
@@ -558,18 +581,18 @@ class RegionSubsetter:
 
 # Convenience functions for direct usage
 def subset_cases_to_region(
-    case_collection: "cases.IndividualCaseCollection",
+    case_list: "list[cases.IndividualCase]",
     region: Union[Region, Mapping[str, float]],
     method: Literal["intersects", "percent", "all"] = "intersects",
     percent_threshold: float = 0.5,
-) -> "cases.IndividualCaseCollection":
-    """Subset an IndividualCaseCollection to a region.
+) -> "list[cases.IndividualCase]":
+    """Subset a list of IndividualCases to a region.
 
     This is a convenience function that creates a RegionSubsetter and applies it to
-    a case collection.
+    a list of IndividualCases.
 
     Args:
-        case_collection: The case collection to subset
+        case_list: The list of IndividualCases to subset
         region: The region to subset to. Can be a Region object or a
             dictionary of bounds with keys "latitude_min", "latitude_max",
             "longitude_min", and "longitude_max".
@@ -577,16 +600,16 @@ def subset_cases_to_region(
         percent_threshold: Threshold for percent overlap
 
     Returns:
-        A new IndividualCaseCollection with cases subset to the region
+        A new list of IndividualCases with cases subset to the region
     """
     subsetter = RegionSubsetter(region, method, percent_threshold)
-    return subsetter.subset_case_collection(case_collection)
+    return subsetter.subset_case_list(case_list)
 
 
 def subset_results_to_region(
     region: RegionSubsetter,
     results_df: pd.DataFrame,
-    case_collection: "cases.IndividualCaseCollection",
+    case_list: "list[cases.IndividualCase]",
 ) -> pd.DataFrame:
     """Subset results DataFrame by region using case_id_number.
 
@@ -598,15 +621,15 @@ def subset_results_to_region(
             dictionary of bounds with keys "latitude_min", "latitude_max",
             "longitude_min", and "longitude_max".
         results_df: DataFrame with results from ExtremeWeatherBench.run()
-        case_collection: The original case collection to determine which
+        case_list: The original case list to determine which
             case_id_numbers correspond to cases in the region
 
     Returns:
         Subset DataFrame containing only results for cases in the region
     """
     # Get the case IDs that should be included
-    subset_cases = region.subset_case_collection(case_collection)
-    included_case_ids = {case.case_id_number for case in subset_cases.cases}
+    subset_cases = region.subset_case_list(case_list)
+    included_case_ids = {case.case_id_number for case in subset_cases}
 
     # Filter the results DataFrame
     return results_df[results_df["case_id_number"].isin(included_case_ids)]

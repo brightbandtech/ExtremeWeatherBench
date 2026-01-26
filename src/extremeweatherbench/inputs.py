@@ -13,6 +13,7 @@ from typing import (
     cast,
 )
 
+import icechunk
 import numpy as np
 import pandas as pd
 import polars as pl
@@ -140,6 +141,21 @@ IBTrACS_metadata_variable_mapping = {
 
 IncomingDataInput: TypeAlias = xr.Dataset | xr.DataArray | pl.LazyFrame | pd.DataFrame
 
+CIRA_CREDENTIALS = icechunk.containers_credentials(
+    {"s3://noaa-oar-mlwp-data/": icechunk.s3_credentials(anonymous=True)}
+)
+
+CIRA_MODEL_NAMES = [
+    "AURO_v100_GFS",
+    "FOUR_v200_IFS",
+    "PANG_v100_IFS",
+    "FOUR_v200_GFS",
+    "GRAP_v100_GFS",
+    "AURO_v100_IFS",
+    "PANG_v100_GFS",
+    "GRAP_v100_IFS",
+]
+
 
 def _default_preprocess(input_data: IncomingDataInput) -> IncomingDataInput:
     """Default forecast preprocess function that does nothing."""
@@ -148,15 +164,29 @@ def _default_preprocess(input_data: IncomingDataInput) -> IncomingDataInput:
 
 @dataclasses.dataclass
 class InputBase(abc.ABC):
-    """An abstract base dataclass for target and forecast data.
+    """Abstract base dataclass for target and forecast data.
+
+    This class provides the foundational interface for loading and processing
+    forecast and target datasets in ExtremeWeatherBench.
 
     Attributes:
-        source: The source of the data, which can be a local path or a remote URL/URI.
+        source: The source of the data, which can be a local path or a
+            remote URL/URI.
         name: The name of the input data source.
         variables: A list of variables to select from the data.
         variable_mapping: A dictionary of variable names to map to the data.
         storage_options: Storage/access options for the data.
         preprocess: A function to preprocess the data.
+
+    Public methods:
+        open_and_maybe_preprocess_data_from_source: Open and preprocess data
+        maybe_convert_to_dataset: Convert input data to xarray Dataset
+        add_source_to_dataset_attrs: Add source name to dataset attributes
+        maybe_map_variable_names: Map variable names if mapping provided
+
+    Abstract methods:
+        _open_data_from_source: Open the input data from source
+        subset_data_to_case: Subset data to case metadata
     """
 
     source: str
@@ -252,6 +282,7 @@ class InputBase(abc.ABC):
         ds.attrs["source"] = self.name
         return ds
 
+    # TODO(314): move to sources module
     def maybe_map_variable_names(self, data: IncomingDataInput) -> IncomingDataInput:
         """Map the variable names to the data, if required.
 
@@ -298,7 +329,17 @@ class InputBase(abc.ABC):
 
 @dataclasses.dataclass
 class ForecastBase(InputBase):
-    """A class defining the interface for ExtremeWeatherBench forecast data."""
+    """Forecast data interface for ExtremeWeatherBench.
+
+    Extends InputBase to provide functionality for forecast datasets with
+    init_time and lead_time dimensions.
+
+    Attributes:
+        chunks: Chunking strategy for dask arrays. Defaults to "auto".
+
+    Public methods:
+        subset_data_to_case: Subset forecast data to case (overrides parent)
+    """
 
     chunks: Optional[Union[dict, str]] = "auto"
 
@@ -395,7 +436,11 @@ class EvaluationObject:
 
 @dataclasses.dataclass
 class KerchunkForecast(ForecastBase):
-    """Forecast class for kerchunked forecast data."""
+    """Forecast class for kerchunk-referenced forecast data.
+
+    Extends ForecastBase for forecast data accessed via kerchunk references,
+    enabling efficient access to cloud-optimized datasets.
+    """
 
     chunks: Optional[Union[dict, str]] = "auto"
     storage_options: dict = dataclasses.field(default_factory=dict)
@@ -410,7 +455,10 @@ class KerchunkForecast(ForecastBase):
 
 @dataclasses.dataclass
 class ZarrForecast(ForecastBase):
-    """Forecast class for zarr forecast data."""
+    """Forecast class for zarr-format forecast data.
+
+    Extends ForecastBase for forecast data stored in zarr format.
+    """
 
     chunks: Optional[Union[dict, str]] = "auto"
 
@@ -424,13 +472,65 @@ class ZarrForecast(ForecastBase):
 
 
 @dataclasses.dataclass
-class TargetBase(InputBase):
-    """An abstract base class for target data.
+class XarrayForecast(ForecastBase):
+    """Forecast class for pre-opened xarray datasets.
 
-    A TargetBase is data that acts as the "truth" for a case. It can be a gridded
-    dataset, a point observation dataset, or any other reference dataset. Targets in EWB
-    are not required to be the same variable as the forecast dataset, but they must be
-    in the same coordinate system for evaluation.
+    Extends ForecastBase for datasets previously constructed and opened using
+    xarray. Intended for situations where users manually prepare datasets from
+    collections of NetCDF or Zarr archives that need assembly into a
+    single, master dataset.
+
+    Attributes:
+        ds: The xarray dataset containing the forecast data.
+        source: The source of the data, defaults to "memory" for in-memory datasets.
+        name: The name of the input data source, defaults to "in-memory dataset".
+    """
+
+    #: The xarray dataset containing the forecast data. This is required for the class to be instantiated
+    #: because we inherit from ForecastBase, which has its own set of required attributes.
+    ds: Optional[xr.Dataset] = None  # type: ignore[assignment]
+    source: str = "memory"
+    name: str = "in-memory dataset"
+
+    def __post_init__(self):
+        """Validate that ds is provided and normalize None values to defaults.
+
+        This ensures backwards compatibility with the ForecastBase's __init__ behavior
+        where None values for variables and variable_mapping were converted to empty
+        containers. If the user does not provide a ds, we raise a ValueError.
+        """
+        if self.ds is None:
+            raise ValueError(
+                "The 'ds' parameter is required for XarrayForecast. "
+                "Please provide an xarray.Dataset."
+            )
+
+        # Convert None to empty containers for backwards compatibility
+        if self.variables is None:
+            object.__setattr__(self, "variables", [])
+        if self.variable_mapping is None:
+            object.__setattr__(self, "variable_mapping", {})
+
+    def _open_data_from_source(self) -> xr.Dataset:
+        """Open the input data from the source.
+
+        Returns:
+            The xarray dataset that was provided during initialization.
+        """
+        return self.ds
+
+
+@dataclasses.dataclass
+class TargetBase(InputBase):
+    """Target (truth) data interface for ExtremeWeatherBench.
+
+    Extends InputBase to provide functionality for target datasets that serve
+    as ground truth for evaluation. Target data can be gridded datasets, point
+    observations, or any reference dataset. Targets need not match forecast
+    variables but must share a compatible coordinate system for evaluation.
+
+    Public methods:
+        maybe_align_forecast_to_target: Align forecast to target coordinates
     """
 
     def maybe_align_forecast_to_target(
@@ -458,8 +558,10 @@ class TargetBase(InputBase):
 
 @dataclasses.dataclass
 class ERA5(TargetBase):
-    """Target class for ERA5 gridded data, ideally using the ARCO ERA5 dataset provided
-    by Google. Otherwise, either a different zarr source for ERA5.
+    """Target class for ERA5 gridded reanalysis data.
+
+    Extends TargetBase for ERA5 data, optimized for the ARCO ERA5 dataset
+    provided by Google or other zarr-based ERA5 sources.
     """
 
     name: str = "ERA5"
@@ -514,10 +616,10 @@ class ERA5(TargetBase):
 
 @dataclasses.dataclass
 class GHCN(TargetBase):
-    """Target class for GHCN tabular data.
+    """Target class for GHCN (Global Historical Climatology Network) data.
 
-    Data is processed using polars to maintain the lazy loading paradigm in
-    open_data_from_source and to separate the subsetting into subset_data_to_case.
+    Extends TargetBase for tabular GHCN station observation data. Uses polars
+    for lazy loading and efficient subsetting of large tabular datasets.
     """
 
     name: str = "GHCN"
@@ -588,10 +690,11 @@ class GHCN(TargetBase):
 
 @dataclasses.dataclass
 class LSR(TargetBase):
-    """Target class for local storm report (LSR) tabular data.
+    """Target class for Local Storm Report (LSR) tabular data.
 
-    run_pipeline() returns a dataset with LSRs as mapped to numeric values (1=wind, 2=hail, 3=tor). IndividualCase date ranges for LSRs should be 12 UTC to
-    the next day at 12 UTC (exclusive) to match SPC's reporting window.
+    Extends TargetBase for SPC local storm reports. Returns dataset with LSRs
+    mapped to numeric values (1=wind, 2=hail, 3=tornado). IndividualCase date
+    ranges should be 12 UTC to next day 12 UTC to match SPC reporting window.
     """
 
     name: str = "local_storm_reports"
@@ -690,7 +793,10 @@ class LSR(TargetBase):
 # TODO: get PPH connector working properly
 @dataclasses.dataclass
 class PPH(TargetBase):
-    """Target class for practically perfect hindcast data."""
+    """Target class for Practically Perfect Hindcast (PPH) data.
+
+    Extends TargetBase for practically perfect hindcast datasets.
+    """
 
     name: str = "practically_perfect_hindcast"
     source: str = PPH_URI
@@ -822,7 +928,11 @@ def _ibtracs_preprocess(data: IncomingDataInput) -> IncomingDataInput:
 
 @dataclasses.dataclass
 class IBTrACS(TargetBase):
-    """Target class for IBTrACS data."""
+    """Target class for IBTrACS tropical cyclone best track data.
+
+    Extends TargetBase for International Best Track Archive for Climate
+    Stewardship (IBTrACS) tropical cyclone track and intensity data.
+    """
 
     name: str = "IBTrACS"
     preprocess: Callable = _ibtracs_preprocess
@@ -852,34 +962,21 @@ class IBTrACS(TargetBase):
         case_metadata: "cases.IndividualCase",
         **kwargs,
     ) -> IncomingDataInput:
-        # Note: drop parameter not applicable for polars LazyFrame data
         if not isinstance(data, pl.LazyFrame):
             raise ValueError(f"Expected polars LazyFrame, got {type(data)}")
 
-        # Get the season (year) from the case start date, cast as string as
-        # polars is interpreting the schema as strings
         season = case_metadata.start_date.year
         if case_metadata.start_date.month > 11:
             season += 1
 
-        # Create a subquery to find all storm numbers in the same season
-        matching_numbers = (
-            data.filter(pl.col("season").cast(pl.Int64) == season)
-            .select("number")
-            .unique()
-        )
-
         possible_names = utils.extract_tc_names(case_metadata.title)
 
-        # Apply the filter to get all data for storms with the same number in
-        # the same season, matching any of the possible names
-        # This maintains the lazy evaluation
-        name_filter = pl.col("tc_name").is_in(possible_names)
-        subset_target_data = data.join(
-            matching_numbers, on="number", how="inner"
-        ).filter(name_filter & (pl.col("season").cast(pl.Int64) == season))
+        # Direct filter - eliminates join, group-by, and second CSV scan
+        subset_target_data = data.filter(
+            (pl.col("season").cast(pl.Int64) == season)
+            & pl.col("tc_name").is_in(possible_names)
+        )
 
-        # Select only the columns to keep
         columns_to_keep = [
             "valid_time",
             "tc_name",
@@ -893,8 +990,6 @@ class IBTrACS(TargetBase):
 
         subset_target_data = subset_target_data.select(columns_to_keep)
 
-        # Drop rows where wind speed OR pressure are null (equivalent to pandas
-        # dropna with how="any")
         subset_target_data = subset_target_data.filter(
             pl.col("surface_wind_speed").is_not_null()
             & pl.col("air_pressure_at_mean_sea_level").is_not_null()
@@ -989,6 +1084,52 @@ def open_kerchunk_reference(
     return kerchunk_ds
 
 
+def list_groups_in_icechunk_datatree(
+    storage: icechunk.Storage,
+    branch: str = "main",
+) -> list[str]:
+    """List the groups in an icechunk datatree.
+
+    Args:
+        storage: The icechunk Storage object to open.
+        branch: The icechunk branch to open. Defaults to "main".
+
+    Returns:
+        A list of the groups in the icechunk datatree.
+    """
+    repo = icechunk.Repository.open(storage)
+    session = repo.readonly_session(branch=branch)
+    dt = xr.open_datatree(filename_or_obj=session.store, engine="zarr")
+    return list(dt.groups)
+
+
+def open_icechunk_dataset_from_datatree(
+    storage: icechunk.Storage,
+    group: str,
+    branch: str = "main",
+    chunks: Optional[Union[dict, str]] = "auto",
+    **repository_kwargs,
+) -> xr.Dataset:
+    """Open an icechunk datatree from a storage.
+
+    Args:
+        storage: The icechunk Storage object to open.
+        group: The group within the datatree to open.
+        branch: The icechunk branch to open. Defaults to "main".
+        chunks: The chunk pattern for the datatree. defaults to "auto".
+
+    Returns:
+        The dataset for the specified group.
+    """
+    repo = icechunk.Repository.open(storage, **repository_kwargs)
+    session = repo.readonly_session(branch=branch)
+    dt = xr.open_datatree(
+        filename_or_obj=session.store, engine="zarr", consolidated=False, chunks=chunks
+    )
+    # Return the dataset for the group
+    return dt[group].to_dataset()
+
+
 def zarr_target_subsetter(
     data: xr.Dataset,
     case_metadata: "cases.IndividualCase",
@@ -1001,6 +1142,7 @@ def zarr_target_subsetter(
         data: The dataset to subset.
         case_metadata: The case metadata to subset the dataset to.
         time_variable: The time variable to use; defaults to "valid_time".
+        drop: Whether to drop masked values. Defaults to False.
 
     Returns:
         The subset dataset.
@@ -1137,3 +1279,51 @@ def check_for_missing_data(
         return False
     else:
         return True
+
+
+def get_cira_icechunk(
+    model_name: str,
+    variables: list[Union[str, derived.DerivedVariable]] = [],
+    preprocess: Callable = _default_preprocess,
+    name: Optional[str] = None,
+) -> XarrayForecast:
+    """Get a CIRA icechunk forecast object for a given model name.
+
+    Args:
+        model_name: The name of the model from CIRA to get the forecast object for. For
+            example, "FOUR_v200_GFS". For a list of available models, see
+            `extremeweatherbench.defaults.CIRA_MODEL_NAMES`.
+        variables: The variables to select from the model. Defaults to all variables.
+        preprocess: The preprocessing function to apply to the model. Defaults to the
+            default passthrough preprocess function.
+        name: The name of the forecast object. Defaults to model_name by default unless
+            `name` is provided.
+    Returns:
+        An XarrayForecast object for the given model.
+    """
+    # Check if the model name is valid
+    if model_name not in CIRA_MODEL_NAMES:
+        raise ValueError(
+            f"Model name {model_name} not found in CIRA_MODEL_NAMES. Model names must be one of: {CIRA_MODEL_NAMES}"
+        )
+
+    # Get the CIRA icechunkstorage
+    cira_storage = icechunk.gcs_storage(
+        bucket="extremeweatherbench", prefix="cira-icechunk", anonymous=True
+    )
+
+    # The models are distinct groups within the icechunk store; open the group
+    # corresponding to the model name
+    cira_model_ds = open_icechunk_dataset_from_datatree(
+        cira_storage, model_name, authorize_virtual_chunk_access=CIRA_CREDENTIALS
+    )
+
+    # Create the XarrayForecast object for the given model
+    cira_model_forecast = XarrayForecast(
+        ds=cira_model_ds,
+        variables=variables,
+        variable_mapping=CIRA_metadata_variable_mapping,
+        name=name if name else model_name,
+        preprocess=preprocess,
+    )
+    return cira_model_forecast

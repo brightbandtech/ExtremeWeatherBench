@@ -58,28 +58,36 @@ DEFAULT_VARIABLE_NAMES = [
 ]
 
 
-def _preprocess_bb_cira_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
+def _preprocess_cira_forecast_dataset(
+    ds: xr.Dataset, kerchunk: bool = True
+) -> xr.Dataset:
     """A preprocess function for CIRA data that renames the time coordinate to
     lead_time, creates a valid_time coordinate, and sets the lead time range and
     resolution not present in the original dataset.
 
     Args:
         ds: The forecast dataset to preprocess.
-
+        kerchunk: Whether the dataset is a kerchunk reference. Defaults to True.
     Returns:
         The preprocessed forecast dataset.
     """
-    ds = ds.rename({"time": "lead_time"})
-    # The evaluation configuration is used to set the lead time range and resolution.
-    ds["lead_time"] = np.array(
-        [i for i in range(0, 241, 6)], dtype="timedelta64[h]"
-    ).astype("timedelta64[ns]")
+
+    # If the dataset is a kerchunk, we need to rename the time coordinate to lead_time
+    # and set the lead time range and resolution. Otherwise, pass through the dataset.
+    if kerchunk:
+        ds = ds.rename({"time": "lead_time"})
+        # The evaluation configuration is used to set the lead time range and resolution.
+        ds["lead_time"] = np.array(
+            [i for i in range(0, 241, 6)], dtype="timedelta64[h]"
+        ).astype("timedelta64[ns]")
     return ds
 
 
 # Preprocessing function for CIRA data that includes geopotential thickness calculation
 # required for tropical cyclone tracks
-def _preprocess_bb_cira_tc_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
+def _preprocess_cira_tc_forecast_dataset(
+    ds: xr.Dataset, kerchunk: bool = True
+) -> xr.Dataset:
     """A preprocess function for CIRA data that includes geopotential thickness
     calculation required for tropical cyclone tracks.
 
@@ -89,27 +97,29 @@ def _preprocess_bb_cira_tc_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
 
     Args:
         ds: The forecast dataset to rename.
-
+        kerchunk: Whether the dataset is a kerchunk reference. Defaults to True.
     Returns:
         The renamed forecast dataset.
     """
-    ds = ds.rename({"time": "lead_time"})
-
-    # The evaluation configuration is used to set the lead time range and resolution.
-    ds["lead_time"] = np.array(
-        [i for i in range(0, 241, 6)], dtype="timedelta64[h]"
-    ).astype("timedelta64[ns]")
+    # If the dataset is a kerchunk, we need to rename the time coordinate to lead_time
+    # and set the lead time range and resolution. Otherwise, pass through the dataset.
+    if kerchunk:
+        ds = ds.rename({"time": "lead_time"})
+        # The evaluation configuration is used to set the lead time range and resolution.
+        ds["lead_time"] = np.array(
+            [i for i in range(0, 241, 6)], dtype="timedelta64[h]"
+        ).astype("timedelta64[ns]")
 
     # Calculate the geopotential thickness required for tropical cyclone tracks
-    ds["geopotential_thickness"] = calc.geopotential_thickness(
-        ds["z"], top_level_value=300, bottom_level_value=500
+    ds["geopotential_thickness"] = (
+        calc.geopotential_thickness(ds["z"], top_level=300, bottom_level=500) / 9.81
     )
     return ds
 
 
 # Preprocessing function for HRES data that includes geopotential thickness calculation
 # required for tropical cyclone tracks
-def _preprocess_bb_hres_tc_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
+def _preprocess_hres_tc_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
     """A preprocess function for CIRA data that includes geopotential thickness
     calculation required for tropical cyclone tracks.
 
@@ -125,30 +135,35 @@ def _preprocess_bb_hres_tc_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
     """
 
     # Calculate the geopotential thickness required for tropical cyclone tracks
-    ds["geopotential_thickness"] = calc.geopotential_thickness(
-        ds["geopotential"], top_level_value=300, bottom_level_value=500
+    ds["geopotential_thickness"] = (
+        calc.geopotential_thickness(ds["geopotential"], top_level=300, bottom_level=500)
+        / 9.81
     )
     return ds
 
 
 # Preprocess function for CIRA data using Brightband kerchunk parquets
-def _preprocess_bb_ar_cira_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
+def _preprocess_cira_ar_forecast_dataset(
+    ds: xr.Dataset, kerchunk: bool = True
+) -> xr.Dataset:
     """An example preprocess function that renames the time coordinate to lead_time,
     creates a valid_time coordinate, and sets the lead time range and resolution not
     present in the original dataset.
 
     Args:
         ds: The forecast dataset to rename.
-
+        kerchunk: Whether the dataset is a kerchunk reference. Defaults to True.
     Returns:
         The renamed forecast dataset.
     """
-    ds = ds.rename({"time": "lead_time"})
-
-    # The evaluation configuration is used to set the lead time range and resolution.
-    ds["lead_time"] = np.array(
-        [i for i in range(0, 241, 6)], dtype="timedelta64[h]"
-    ).astype("timedelta64[ns]")
+    # If the dataset is a kerchunk, we need to rename the time coordinate to lead_time
+    # and set the lead time range and resolution. Otherwise, pass through the dataset.
+    if kerchunk:
+        ds = ds.rename({"time": "lead_time"})
+        # The evaluation configuration is used to set the lead time range and resolution.
+        ds["lead_time"] = np.array(
+            [i for i in range(0, 241, 6)], dtype="timedelta64[h]"
+        ).astype("timedelta64[ns]")
     if "q" not in ds.variables:
         # Calculate specific humidity from relative humidity and air temperature
         ds["specific_humidity"] = calc.specific_humidity_from_relative_humidity(
@@ -160,23 +175,27 @@ def _preprocess_bb_ar_cira_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
 
 
 # Preprocess function for CIRA data using Brightband kerchunk parquets
-def _preprocess_bb_severe_cira_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
+def _preprocess_severe_cira_forecast_dataset(
+    ds: xr.Dataset, kerchunk: bool = True
+) -> xr.Dataset:
     """An example preprocess function that renames the time coordinate to lead_time,
     creates a valid_time coordinate, and sets the lead time range and resolution not
     present in the original dataset.
 
     Args:
         ds: The forecast dataset to rename.
-
+        kerchunk: Whether the dataset is a kerchunk reference. Defaults to True.
     Returns:
         The renamed forecast dataset.
     """
-    ds = ds.rename({"time": "lead_time"})
-
-    # The evaluation configuration is used to set the lead time range and resolution.
-    ds["lead_time"] = np.array(
-        [i for i in range(0, 241, 6)], dtype="timedelta64[h]"
-    ).astype("timedelta64[ns]")
+    # If the dataset is a kerchunk, we need to rename the time coordinate to lead_time
+    # and set the lead time range and resolution. Otherwise, pass through the dataset.
+    if kerchunk:
+        ds = ds.rename({"time": "lead_time"})
+        # The evaluation configuration is used to set the lead time range and resolution.
+        ds["lead_time"] = np.array(
+            [i for i in range(0, 241, 6)], dtype="timedelta64[h]"
+        ).astype("timedelta64[ns]")
     if "q" not in ds.variables:
         # Calculate specific humidity from relative humidity and air temperature
         ds["specific_humidity"] = calc.specific_humidity_from_relative_humidity(
@@ -242,52 +261,40 @@ pph_target = inputs.PPH(
 ibtracs_target = inputs.IBTrACS()
 
 # Forecasts
-cira_heatwave_forecast = inputs.KerchunkForecast(
-    name="FourCastNetv2",
-    source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
+cira_fcnv2_heatwave_forecast = inputs.get_cira_icechunk(
+    model_name="FOUR_v200_GFS",
     variables=["surface_air_temperature"],
-    variable_mapping=inputs.CIRA_metadata_variable_mapping,
-    storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
-    preprocess=_preprocess_bb_cira_forecast_dataset,
+    name="FourCastNetv2",
 )
 
-cira_freeze_forecast = inputs.KerchunkForecast(
-    name="FourCastNetv2",
-    source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
+cira_fcnv2_freeze_forecast = inputs.get_cira_icechunk(
+    model_name="FOUR_v200_GFS",
     variables=["surface_air_temperature"],
-    variable_mapping=inputs.CIRA_metadata_variable_mapping,
-    storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
-    preprocess=_preprocess_bb_cira_forecast_dataset,
+    name="FourCastNetv2",
 )
 
-cira_tropical_cyclone_forecast = inputs.KerchunkForecast(
-    name="FourCastNetv2",
-    source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
+cira_fcnv2_tropical_cyclone_forecast = inputs.get_cira_icechunk(
+    model_name="FOUR_v200_GFS",
     variables=[derived.TropicalCycloneTrackVariables()],
-    variable_mapping=inputs.CIRA_metadata_variable_mapping,
-    storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
-    preprocess=_preprocess_bb_cira_tc_forecast_dataset,
-)
-cira_atmospheric_river_forecast = inputs.KerchunkForecast(
     name="FourCastNetv2",
-    source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
+    preprocess=_preprocess_cira_tc_forecast_dataset,
+)
+cira_fcnv2_atmospheric_river_forecast = inputs.get_cira_icechunk(
+    model_name="FOUR_v200_GFS",
     variables=[
         derived.AtmosphericRiverVariables(
             output_variables=["atmospheric_river_land_intersection"]
         )
     ],
-    variable_mapping=inputs.CIRA_metadata_variable_mapping,
-    storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
-    preprocess=_preprocess_bb_ar_cira_forecast_dataset,
+    name="FourCastNetv2",
+    preprocess=_preprocess_cira_ar_forecast_dataset,
 )
 
-cira_severe_convection_forecast = inputs.KerchunkForecast(
-    name="FourCastNetv2",
-    source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
+cira_fcnv2_severe_convection_forecast = inputs.get_cira_icechunk(
+    model_name="FOUR_v200_GFS",
     variables=[derived.CravenBrooksSignificantSevere()],
-    variable_mapping=inputs.CIRA_metadata_variable_mapping,
-    storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
-    preprocess=_preprocess_bb_severe_cira_forecast_dataset,
+    name="FourCastNetv2",
+    preprocess=_preprocess_severe_cira_forecast_dataset,
 )
 
 
@@ -362,37 +369,37 @@ def get_brightband_evaluation_objects() -> list[inputs.EvaluationObject]:
             event_type="heat_wave",
             metric_list=heatwave_metric_list,
             target=era5_heatwave_target,
-            forecast=cira_heatwave_forecast,
+            forecast=cira_fcnv2_heatwave_forecast,
         ),
         inputs.EvaluationObject(
             event_type="heat_wave",
             metric_list=heatwave_metric_list,
             target=ghcn_heatwave_target,
-            forecast=cira_heatwave_forecast,
+            forecast=cira_fcnv2_heatwave_forecast,
         ),
         inputs.EvaluationObject(
             event_type="freeze",
             metric_list=freeze_metric_list,
             target=era5_freeze_target,
-            forecast=cira_freeze_forecast,
+            forecast=cira_fcnv2_freeze_forecast,
         ),
         inputs.EvaluationObject(
             event_type="freeze",
             metric_list=freeze_metric_list,
             target=ghcn_freeze_target,
-            forecast=cira_freeze_forecast,
+            forecast=cira_fcnv2_freeze_forecast,
         ),
         inputs.EvaluationObject(
             event_type="severe_convection",
             metric_list=pph_metric_list,
             target=pph_target,
-            forecast=cira_severe_convection_forecast,
+            forecast=cira_fcnv2_severe_convection_forecast,
         ),
         inputs.EvaluationObject(
             event_type="severe_convection",
             metric_list=lsr_metric_list,
             target=lsr_target,
-            forecast=cira_severe_convection_forecast,
+            forecast=cira_fcnv2_severe_convection_forecast,
         ),
         inputs.EvaluationObject(
             event_type="atmospheric_river",
@@ -402,12 +409,12 @@ def get_brightband_evaluation_objects() -> list[inputs.EvaluationObject]:
                 metrics.EarlySignal(),
             ],
             target=era5_atmospheric_river_target,
-            forecast=cira_atmospheric_river_forecast,
+            forecast=cira_fcnv2_atmospheric_river_forecast,
         ),
         inputs.EvaluationObject(
             event_type="tropical_cyclone",
             metric_list=composite_landfall_metrics,
             target=ibtracs_target,
-            forecast=cira_tropical_cyclone_forecast,
+            forecast=cira_fcnv2_tropical_cyclone_forecast,
         ),
     ]

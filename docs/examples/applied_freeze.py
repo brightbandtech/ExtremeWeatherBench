@@ -1,15 +1,15 @@
 import logging
 import operator
 
-from extremeweatherbench import cases, evaluate, inputs, metrics, defaults
+from extremeweatherbench import cases, defaults, evaluate, inputs, metrics
 
 # Set the logger level to INFO
 logger = logging.getLogger("extremeweatherbench")
 logger.setLevel(logging.INFO)
 
 # Load case data from the default events.yaml
-# Users can also define their own cases_dict structure
-case_yaml = cases.load_ewb_events_yaml_into_case_collection()
+# Users can also define their own cases
+case_yaml = cases.load_ewb_events_yaml_into_case_list()
 
 # Define targets
 # ERA5 target
@@ -28,7 +28,7 @@ fcnv2_forecast = inputs.KerchunkForecast(
     variables=["surface_air_temperature"],
     variable_mapping=inputs.CIRA_metadata_variable_mapping,
     storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
-    preprocess=defaults._preprocess_bb_cira_forecast_dataset,
+    preprocess=defaults._preprocess_cira_forecast_dataset,
 )
 
 # Load the climatology for DurationMeanError

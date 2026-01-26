@@ -15,7 +15,7 @@ import yaml
 from matplotlib.patches import Rectangle
 
 import extremeweatherbench.data
-from extremeweatherbench import inputs, regions, utils
+from extremeweatherbench import cases, inputs, regions, utils
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -537,14 +537,13 @@ def update_cases_with_storm_bounds(storm_bounds, all_storms_df):
     """
     logger.info("Updating cases with storm bounds...")
 
-    cases_all = utils.load_events_yaml()
-    cases_old = cases_all["cases"]
-    cases_new = cases_old.copy()
+    cases_all = cases.load_ewb_events_yaml_into_case_list()
+    cases_new = cases_all.copy()
 
     # Update the yaml cases with storm bounds from IBTrACS data
     for single_case in cases_new:
-        if single_case["event_type"] == "tropical_cyclone":
-            storm_name = single_case["title"].upper()
+        if single_case.event_type == "tropical_cyclone":
+            storm_name = single_case.title.upper()
 
             found_bounds, storm_data, storm_names = find_storm_bounds_for_case(
                 storm_name, storm_bounds, all_storms_df
@@ -560,21 +559,21 @@ def update_cases_with_storm_bounds(storm_bounds, all_storms_df):
                     storm_name,
                 )
                 storm_data = find_best_storm_by_geography(
-                    storm_names, all_storms_df, single_case["location"]["parameters"]
+                    storm_names, all_storms_df, single_case.location.parameters
                 )
 
             if found_bounds is not None:
                 # Update the case with IBTrACS bounding box coordinates
-                single_case["location"]["parameters"]["latitude_min"] = float(
+                single_case.location.parameters.latitude_min = float(
                     found_bounds.iloc[0].latitude_min
                 )
-                single_case["location"]["parameters"]["latitude_max"] = float(
+                single_case.location.parameters.latitude_max = float(
                     found_bounds.iloc[0].latitude_max
                 )
-                single_case["location"]["parameters"]["longitude_min"] = float(
+                single_case.location.parameters.longitude_min = float(
                     found_bounds.iloc[0].longitude_min
                 )
-                single_case["location"]["parameters"]["longitude_max"] = float(
+                single_case.location.parameters.longitude_max = float(
                     found_bounds.iloc[0].longitude_max
                 )
 
@@ -587,8 +586,8 @@ def update_cases_with_storm_bounds(storm_bounds, all_storms_df):
                     start_date = pd.to_datetime(first_time) - pd.Timedelta(hours=48)
                     end_date = pd.to_datetime(last_time) + pd.Timedelta(hours=48)
 
-                    single_case["start_date"] = start_date
-                    single_case["end_date"] = end_date
+                    single_case.start_date = start_date
+                    single_case.end_date = end_date
 
                     logger.info("Updated %s with bounds", storm_names)
                     logger.info("  Start date: %s, End date: %s", start_date, end_date)
@@ -633,7 +632,7 @@ def write_updated_yaml(cases_all, cases_new):
     logger.info("Writing updated YAML file...")
 
     # Find changes between old and new cases
-    cases_old = cases_all["cases"]
+    cases_old = cases_all.copy()
     updated_cases = []
     for i, case_new in enumerate(cases_new):
         case_old = cases_old[i] if i < len(cases_old) else None
@@ -642,8 +641,8 @@ def write_updated_yaml(cases_all, cases_new):
             updated_cases.append((i, case_new))
             logger.info(
                 "Case %s (%s) has been updated",
-                case_new["case_id_number"],
-                case_new["title"],
+                case_new.case_id_number,
+                case_new.title,
             )
 
     # Replace only the updated cases in the original data

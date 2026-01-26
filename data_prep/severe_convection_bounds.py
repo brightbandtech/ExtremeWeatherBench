@@ -24,7 +24,7 @@ EARTH_RADIUS_KM = 6371.0
 
 
 def has_case_for_dates(
-    case_collection: cases.IndividualCaseCollection,
+    case_list: list[cases.IndividualCase],
     start_date: pd.Timestamp,
     end_date: pd.Timestamp,
     is_australia: bool,
@@ -32,7 +32,7 @@ def has_case_for_dates(
     """Check if there's a case covering the date range for the region.
 
     Args:
-        case_collection: IndividualCaseCollection of all events
+        case_list: list of all cases
         start_date: Start of date range to check
         end_date: End of date range to check
         is_australia: If True, look for Australia case; else US case
@@ -40,7 +40,7 @@ def has_case_for_dates(
     Returns:
         True if matching case exists
     """
-    for event in case_collection.cases:
+    for event in case_list:
         # Check date overlap (event end is exclusive)
         event_start = event.start_date
         event_end = event.end_date
@@ -95,7 +95,7 @@ def get_pph_bounding_box(
     max_distance_km: float = 2000,
     max_blob_size_km: Optional[float] = None,
     case_title: str = "",
-    all_cases: Optional[cases.IndividualCaseCollection] = None,
+    all_cases: Optional[list[cases.IndividualCase]] = None,
 ) -> Optional[Dict[str, Any]]:
     """Calculate bounding box around PPH peak with distance constraint.
 
@@ -115,7 +115,7 @@ def get_pph_bounding_box(
         max_blob_size_km: Max blob diagonal for extension (default
                          0.75*max_distance_km)
         case_title: Case title to determine hemisphere
-        all_cases: IndividualCaseCollection of all events (for
+        all_cases: list of all cases (for
                    hemisphere checking)
 
     Returns:
@@ -338,13 +338,13 @@ def _create_single_bbox(
 
 
 def match_pph_times_to_events(
-    pph_data: xr.DataArray, case_collection: cases.IndividualCaseCollection
+    pph_data: xr.DataArray, case_list: list[cases.IndividualCase]
 ) -> Dict[int, Dict[str, Any]]:
     """Match PPH valid times to severe convection events.
 
     Args:
         pph_data: xarray DataArray with PPH data
-        case_collection: IndividualCaseCollection of severe convection events
+        case_list: list of IndividualCase objects of severe convection events
 
     Returns:
         Dictionary mapping event case_id to list of valid times
@@ -353,7 +353,7 @@ def match_pph_times_to_events(
 
     event_time_map = {}
 
-    for event in case_collection.cases:
+    for event in case_list:
         case_id = event.case_id_number
         start = event.start_date
         end = event.end_date
@@ -373,7 +373,7 @@ def match_pph_times_to_events(
 def create_bounding_boxes(
     pph_data: xr.DataArray,
     event_time_map: Dict[int, Dict[str, Any]],
-    all_cases: cases.IndividualCaseCollection,
+    all_cases: list[cases.IndividualCase],
     buffer_km: float = 250,
     threshold: float = 0.01,
     max_distance_km: float = 2000,
@@ -390,8 +390,7 @@ def create_bounding_boxes(
     Args:
         pph_data: xarray DataArray with PPH data
         event_time_map: Dictionary from match_pph_times_to_events
-        all_cases: IndividualCaseCollection of all events (for
-                   hemisphere checking)
+        all_cases: list of all cases (for hemisphere checking)
         buffer_km: Buffer distance in kilometers
         threshold: Minimum PPH value to consider
         max_distance_km: Maximum distance from peak (default 2000)
@@ -518,9 +517,9 @@ def main(
 
     # Load all events and filter to severe convection
     all_cases = cases.load_individual_cases_from_yaml(events_yaml_path)
-    severe_convection_cases = all_cases.select_cases(
-        by="event_type", value="severe_convection"
-    )
+    severe_convection_cases = [
+        n for n in all_cases if n.event_type == "severe_convection"
+    ]
 
     # Match PPH times to events
     event_time_map = match_pph_times_to_events(pph_data, severe_convection_cases)
