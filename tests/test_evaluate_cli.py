@@ -1,12 +1,9 @@
 """Tests for the evaluate_cli interface."""
 
 import pickle
-import tempfile
 import textwrap
-from pathlib import Path
 from unittest import mock
 
-import click.testing
 import pandas as pd
 import pytest
 
@@ -21,23 +18,6 @@ def suppress_cli_output():
         mock.patch("pandas.DataFrame.to_csv"),
     ):
         yield
-
-
-@pytest.fixture
-def runner():
-    """Create a Click test runner with output suppression."""
-    return click.testing.CliRunner()
-
-
-@pytest.fixture
-def temp_config_dir():
-    """Create a temporary directory for config files and test outputs.
-
-    This ensures all test files are created in temporary directories and automatically
-    cleaned up after each test.
-    """
-    with tempfile.TemporaryDirectory() as temp_dir:
-        yield Path(temp_dir)
 
 
 @pytest.fixture
