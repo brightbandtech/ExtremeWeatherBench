@@ -22,8 +22,8 @@ EWB has cases broken down by multiple event types within `src/extremeweatherbenc
 
 # EWB paper and talks
 
-* AMS 2025 talk: [Amy](https://ams.confex.com/ams/105ANNUAL/meetingapp.cgi/Paper/451220)
-* AMS 2026 talks: [Amy](https://ams.confex.com/ams/106ANNUAL/meetingapp.cgi/Paper/477140), [Taylor](https://ams.confex.com/ams/106ANNUAL/meetingapp.cgi/Paper/477141)
+* AMS 2025 talk: [1](https://ams.confex.com/ams/105ANNUAL/meetingapp.cgi/Paper/451220)
+* AMS 2026 talks: [1](https://ams.confex.com/ams/106ANNUAL/meetingapp.cgi/Paper/477140), [2](https://ams.confex.com/ams/106ANNUAL/meetingapp.cgi/Paper/477141)
 * EWB paper is in preparation and will be submitted in late 2025
 
 # How do I suggest new data, metrics, or otherwise get involved?
