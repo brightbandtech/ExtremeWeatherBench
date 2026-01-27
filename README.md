@@ -39,19 +39,34 @@ We welcome your involvement!  The success of a benchmark suite rests on communit
 
 # Installing EWB
 
-Currently, the easiest way to install EWB is using the ```pip``` command:
+Currently, the easiest way to install EWB is using the ```pip``` command or ```uv```:
 
 ```shell
-$ pip install git+https://github.com/brightbandtech/ExtremeWeatherBench.git
+$ pip install extremeweatherbench
+
+# Add to an existing uv virtual environment
+$ uv add extremeweatherbench
 ```
 
-It is highly recommend to use [uv](https://docs.astral.sh/uv/) if possible:
+If you'd like to install the most recent updates to EWB:
 
 ```shell
-$ git clone https://github.com/brightbandtech/ExtremeWeatherBench.git
-$ cd ExtremeWeatherBench
-$ uv sync
+$ pip install git+https://github.com/brightbandtech/ExtremeWeatherBench.git 
 ```
+
+For extra installation options:
+
+```shell
+# For running the data_prep modules:
+$ pip install "extremeweatherbench[data-prep]"
+
+# To include dask:
+$ pip install "extremeweatherbench[multiprocessing]"
+
+# For both:
+$ pip install "extremeweatherbench[complete]"
+```
+
 # How to Run EWB
 
 Running EWB on sample data (included) is straightforward. 
