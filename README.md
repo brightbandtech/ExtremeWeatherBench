@@ -55,12 +55,6 @@ For extra installation options:
 ```shell
 # For running the data_prep modules:
 $ pip install "extremeweatherbench[data-prep]"
-
-# To include dask:
-$ pip install "extremeweatherbench[multiprocessing]"
-
-# For both:
-$ pip install "extremeweatherbench[complete]"
 ```
 
 # How to Run EWB
