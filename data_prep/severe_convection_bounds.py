@@ -17,7 +17,8 @@ import xarray as xr
 import yaml
 from scipy.ndimage import label
 
-from extremeweatherbench import calc, cases
+import extremeweatherbench.calc as calc
+import extremeweatherbench.cases as cases
 
 # Radius of Earth in km (mean radius)
 EARTH_RADIUS_KM = 6371.0
