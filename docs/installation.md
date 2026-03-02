@@ -5,20 +5,18 @@
 You can install ExtremeWeatherBench using: 
 
 ```
-uv pip install git+https://github.com/brightband/ExtremeWeatherBench.git
-uv sync --all-extras
+uv add extremeweatherbench
 ```
 
 ## Using pip
 Alternatively, you can use pip in the same fashion (using a virtual environment is recommended):
 ```
-pip install git+https://github.com/brightband/ExtremeWeatherBench.git
+pip install extremeweatherbench
 ```
 
-Alternatively, for developers, you can install the package in development mode:
-
+For development, an easy approach is clone the repository and use `uv` to sync all required and optional dependencies:
 
 ``` 
-git clone https://github.com/brightband/ExtremeWeatherBench.git
+git clone https://github.com/brightbandtech/ExtremeWeatherBench.git
 uv sync --all-extras
 ```
