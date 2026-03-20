@@ -1,13 +1,9 @@
-import logging
-
 import dask
 import numpy as np
 import xarray as xr
 from scipy import ndimage
 
 from extremeweatherbench import calc
-
-log = logging.getLogger("atmospheric_river")
 
 
 def atmospheric_river_mask(
@@ -17,6 +13,7 @@ def atmospheric_river_mask(
     ivt_threshold: float = 400,
     dilation_radius: int = 8,
     min_size_gridpoints: int = 500,
+    time_dimension: str = "valid_time",
 ) -> xr.DataArray:
     """Calculate atmospheric river mask using IVT and Laplacian thresholds.
 
@@ -36,6 +33,8 @@ def atmospheric_river_mask(
             gridpoints
         min_size_gridpoints: the minimum size of the atmospheric river in
             gridpoints
+        time_dimension: name of time dimension. Defaults to the EWB standard
+            'valid_time'.
 
     Returns:
         The atmospheric river mask as a DataArray
@@ -54,7 +53,7 @@ def atmospheric_river_mask(
     # This keeps dilation in the Dask graph alongside ivt/laplacian tasks
     dilated_laplacian = xr.apply_ufunc(
         calc._binary_dilation_ufunc,
-        has_high_laplacian.chunk({"time": 1, "latitude": -1, "longitude": -1}),
+        has_high_laplacian.chunk({time_dimension: 1, "latitude": -1, "longitude": -1}),
         dilation_radius,
         input_core_dims=[["latitude", "longitude"], []],
         output_core_dims=[["latitude", "longitude"]],
@@ -108,7 +107,6 @@ def integrated_vapor_transport(
         Integrated vapor transport as a DataArray
     """
 
-    log.warning("setting up ufuncs")
     # Compute IVT components using nantrapezoid_pressure_levels
     eastward_ivt = (
         calc.nantrapezoid_pressure_levels(
@@ -124,11 +122,9 @@ def integrated_vapor_transport(
         / calc.g0
     )
 
-    log.warning("ufuncs computed")
     # Compute IVT using components
     ivt_magnitude = xr.ufuncs.hypot(eastward_ivt, northward_ivt)
     ivt_magnitude.name = "integrated_vapor_transport"
-    log.info("ivt graph computed")
     return ivt_magnitude
 
 

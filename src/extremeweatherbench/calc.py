@@ -1,4 +1,3 @@
-import logging
 from typing import Literal, Optional, Sequence, Union
 
 import numpy as np
@@ -13,7 +12,6 @@ from skimage import filters
 
 from extremeweatherbench import utils
 
-log = logging.getLogger("calc")
 epsilon: float = 0.6219569100577033  # Ratio of molecular weights (H2O/dry air)
 sat_press_0c: float = 6.112  # Saturation vapor pressure at 0°C (hPa)
 g0: float = 9.80665  # Standard gravity (m/s^2)

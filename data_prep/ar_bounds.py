@@ -835,7 +835,9 @@ def process_ar_event(
     era5_data = era5_data.sel(
         valid_time=era5_data.valid_time.dt.hour.isin([0, 6, 12, 18])
     )
-    era5_data = inputs.maybe_subset_variables(era5_data, variables=era5_ar.variables)
+    era5_data = inputs.maybe_subset_variables(
+        era5_data, variables=era5_ar.variables[0].variables
+    )
     era5_subset = era5_ar.subset_data_to_case(era5_data, case)
     era5_subset = era5_subset.chunk()
     # Generate IVT
@@ -1051,11 +1053,11 @@ def main():
         # shapes
     }
     if parallel:
-        with joblib.parallel_backend("dask"):
-            ar_bounds_results_enhanced = joblib.Parallel(n_jobs=len(ar_events))(
-                joblib.delayed(process_ar_event)(single_case, era5_ar, AR_OBJECT_CONFIG)
-                for single_case in ar_events
-            )
+        # Fixing the n_jobs arbitrarily; change as desired
+        ar_bounds_results_enhanced = joblib.Parallel(n_jobs=4)(
+            joblib.delayed(process_ar_event)(single_case, era5_ar, AR_OBJECT_CONFIG)
+            for single_case in ar_events
+        )
     else:
         # Run in serial using a list comprehension
         ar_bounds_results_enhanced = [
