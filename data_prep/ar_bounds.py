@@ -808,16 +808,19 @@ def process_ar_event(
     )
 
     # Rough check, if you're adding variables beyond AtmosphericRiverVariables or
-    # specific_humidity, u_component, v_component, this will fail
-    if isinstance(era5_ar.variables[0], derived.DerivedVariable):
-        era5_ar_vars = era5_ar.variables[0].variables
-    elif isinstance(era5_ar.variables[0], str):
-        era5_ar_vars = era5_ar.variables[0]
-    else:
-        raise ValueError(
-            "Only accepted variables are derived.AtmosphericRiverVariables"
-            " or [specific_humidity, u_component_of_wind, v_component_of_wind]."
-        )
+    # specific_humidity, u_component..., v_component..., this will fail
+    if isinstance(era5_ar.variables, list):
+        if len(era5_ar.variables) > 1 and isinstance(
+            era5_ar.variables[0], derived.DerivedVariable
+        ):
+            raise ValueError(
+                "Only accepted variables are derived.AtmosphericRiverVariables"
+                " or [specific_humidity, u_component_of_wind, v_component_of_wind]."
+            )
+        elif isinstance(era5_ar.variables[0], derived.DerivedVariable):
+            era5_ar_vars = era5_ar.variables[0].variables
+        else:
+            era5_ar_vars = era5_ar.variables
 
     era5_data = inputs.maybe_subset_variables(era5_data, variables=era5_ar_vars)
     era5_subset = era5_ar.subset_data_to_case(era5_data, case)
