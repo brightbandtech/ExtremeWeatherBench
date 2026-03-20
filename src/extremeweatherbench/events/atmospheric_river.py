@@ -7,7 +7,8 @@ from scipy import ndimage
 
 from extremeweatherbench import calc
 
-log = logging.getLogger('atmospheric_river')
+log = logging.getLogger("atmospheric_river")
+
 
 def atmospheric_river_mask(
     ivt: xr.DataArray,
@@ -53,7 +54,7 @@ def atmospheric_river_mask(
     # This keeps dilation in the Dask graph alongside ivt/laplacian tasks
     dilated_laplacian = xr.apply_ufunc(
         calc._binary_dilation_ufunc,
-        has_high_laplacian.chunk({'time':1, 'latitude':-1,'longitude': -1}),
+        has_high_laplacian.chunk({"time": 1, "latitude": -1, "longitude": -1}),
         dilation_radius,
         input_core_dims=[["latitude", "longitude"], []],
         output_core_dims=[["latitude", "longitude"]],
@@ -131,7 +132,6 @@ def integrated_vapor_transport(
     return ivt_magnitude
 
 
-
 def integrated_vapor_transport_laplacian(
     ivt: xr.DataArray, sigma: float = 3
 ) -> xr.DataArray:
@@ -148,7 +148,7 @@ def integrated_vapor_transport_laplacian(
         calc._compute_blurred_laplacian_ufunc,
         ivt,
         sigma,
-        input_core_dims=[["latitude", "longitude"], []], 
+        input_core_dims=[["latitude", "longitude"], []],
         output_core_dims=[["latitude", "longitude"]],
         dask="parallelized",
         keep_attrs=True,

@@ -13,10 +13,11 @@ from skimage import filters
 
 from extremeweatherbench import utils
 
-log = logging.getLogger('calc')
+log = logging.getLogger("calc")
 epsilon: float = 0.6219569100577033  # Ratio of molecular weights (H2O/dry air)
 sat_press_0c: float = 6.112  # Saturation vapor pressure at 0°C (hPa)
 g0: float = 9.80665  # Standard gravity (m/s^2)
+
 
 def convert_from_cartesian_to_latlon(
     input_point: Union[np.ndarray, tuple[float, float]],
@@ -279,6 +280,7 @@ def geopotential_thickness(
     )
     return geopotential_thickness
 
+
 @guvectorize(
     [(float64[:], float64[:], float64[:])],
     "(n),(n)->()",
@@ -312,28 +314,27 @@ def nantrapezoid_4d(y, x):
 
 def nantrapezoid_pressure_levels(da: xr.DataArray):
     """Calculates the integral using the trapezoid rule for arrays with nans.
-    
+
     Args:
         da: a DataArray with dimensions (time, latitude, longitude, level). Level units
             are in hPa.
-    
+
     Returns a DataArray of the computed quantity integrated over the entire column.
     """
 
     # Convert levels to Pascals
-    levels_pa = (da['level'] * 100)
+    levels_pa = da["level"] * 100
 
     output = xr.apply_ufunc(
-            nantrapezoid_4d,
-            da,
-            levels_pa,
-            input_core_dims=[["level"],["level"]],
-            output_core_dims=[[]],  
-            dask="parallelized",
-            output_dtypes=[float],
-        )
+        nantrapezoid_4d,
+        da,
+        levels_pa,
+        input_core_dims=[["level"], ["level"]],
+        output_core_dims=[[]],
+        dask="parallelized",
+        output_dtypes=[float],
+    )
     return output
-
 
 
 def specific_humidity_from_relative_humidity(
@@ -886,6 +887,7 @@ def _is_true_landfall(
         # - ValueError/TypeError: invalid coordinate values
         return False
 
+
 def _binary_dilation_ufunc(data: xr.DataArray, dilation_radius: int) -> xr.DataArray:
     """Apply binary dilation to a single 2D (lat, lon) slice.
 
@@ -898,8 +900,10 @@ def _binary_dilation_ufunc(data: xr.DataArray, dilation_radius: int) -> xr.DataA
     """
     size = dilation_radius * 2 + 1
     struct = np.ones((size, size))
-    return np.expand_dims(ndimage.binary_dilation(data.squeeze(), structure=struct).astype(np.int8),axis=0)
-
+    return np.expand_dims(
+        ndimage.binary_dilation(data.squeeze(), structure=struct).astype(np.int8),
+        axis=0,
+    )
 
 
 def _compute_blurred_laplacian_ufunc(data: xr.DataArray, sigma: float) -> xr.DataArray:

@@ -1035,7 +1035,9 @@ class TestNantrapezoidPressureLevels:
         # Kernel skips interval if y0 OR y1 is NaN
         # intervals: (0,1), (1,nan)=skip, (nan,9)=skip, (9,16)
         # result: 0.5*(0+1)*1 + 0.5*(9+16)*1 = 0.5 + 12.5 = 13.0
-        levels_hpa = np.array([0, 1, 2, 3, 4]) / 100  # convert to hPa so *100 = original
+        levels_hpa = (
+            np.array([0, 1, 2, 3, 4]) / 100
+        )  # convert to hPa so *100 = original
         y = np.array([0.0, 1.0, np.nan, 9.0, 16.0])
         da = self._make_da(y, levels_hpa)
         result = calc.nantrapezoid_pressure_levels(da)
@@ -1051,7 +1053,7 @@ class TestNantrapezoidPressureLevels:
 
     def test_mixed_nan_and_finite(self):
         """Test nantrapezoid with NaN at beginning.
-        
+
         Kernel skips intervals where either endpoint is NaN.
         intervals: (nan,1)=skip, (1,4), (4,9), (9,16)
         result: 0.5*(1+4)*1 + 0.5*(4+9)*1 + 0.5*(9+16)*1 = 2.5 + 6.5 + 12.5 = 21.5
@@ -1065,11 +1067,13 @@ class TestNantrapezoidPressureLevels:
     def test_multidimensional_with_nans(self):
         """Test nantrapezoid with multidimensional DataArray containing NaNs."""
         levels_hpa = np.array([0, 1, 2, 3]) / 100
-        y = np.array([
-            [0.0,  1.0,     np.nan, 9.0],
-            [1.0,  np.nan,  4.0,    16.0],
-            [np.nan, 2.0,   8.0,    25.0],
-        ])
+        y = np.array(
+            [
+                [0.0, 1.0, np.nan, 9.0],
+                [1.0, np.nan, 4.0, 16.0],
+                [np.nan, 2.0, 8.0, 25.0],
+            ]
+        )
         da = self._make_da_nd(
             y,
             levels_hpa,
@@ -1091,7 +1095,7 @@ class TestNantrapezoidPressureLevels:
 
     def test_level_conversion_to_pascals(self):
         """Test that level coordinates are correctly converted from hPa to Pascals.
-        
+
         The kernel receives levels in Pascals (hPa * 100), so dx values
         are 100x larger than the hPa spacing.
         """
