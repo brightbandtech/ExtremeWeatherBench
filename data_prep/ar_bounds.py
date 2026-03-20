@@ -844,7 +844,6 @@ def process_ar_event(
         specific_humidity=era5_subset["specific_humidity"],
         eastward_wind=era5_subset["eastward_wind"],
         northward_wind=era5_subset["northward_wind"],
-        levels=era5_subset["adjusted_level"],
     )
     ivt_da.name = "integrated_vapor_transport"
     # Compute IVT Laplacian

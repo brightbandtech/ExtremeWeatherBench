@@ -1,10 +1,13 @@
+import logging
+
+import dask
 import numpy as np
 import xarray as xr
 from scipy import ndimage
-from skimage import filters
 
 from extremeweatherbench import calc
 
+log = logging.getLogger('atmospheric_river')
 
 def atmospheric_river_mask(
     ivt: xr.DataArray,
@@ -39,31 +42,40 @@ def atmospheric_river_mask(
 
     # Get all coordinates except level for the intersection DataArray
     coords_dict = {dim: ivt.coords[dim] for dim in ivt.dims if dim != "level"}
-
     # Create boolean masks for each condition
-    has_high_laplacian = np.abs(ivt_laplacian) >= laplacian_threshold
-    has_high_ivt = ivt >= ivt_threshold
-
-    # For the Laplacian condition, we want to check if there's a value >=
-    # laplacian_threshold within 8 gridpoints (0.25 degrees)
-    dilation_radius = dilation_radius * 2 + 1
-    struct = np.ones((dilation_radius, dilation_radius))
-    dilated_laplacian = ndimage.binary_dilation(
-        has_high_laplacian, structure=struct, axes=(-2, -1)
+    has_high_laplacian, has_high_ivt = dask.compute(
+        np.abs(ivt_laplacian) >= laplacian_threshold,
+        ivt >= ivt_threshold,
     )
+    # For the Laplacian condition, we want to check if there's a value >=
+    # laplacian_threshold within 8 gridpoints (0.25 degrees).
+    # Apply binary dilation lazily via apply_ufunc before computing
+    # This keeps dilation in the Dask graph alongside ivt/laplacian tasks
+    dilated_laplacian = xr.apply_ufunc(
+        calc._binary_dilation_ufunc,
+        has_high_laplacian.chunk({'time':1, 'latitude':-1,'longitude': -1}),
+        dilation_radius,
+        input_core_dims=[["latitude", "longitude"], []],
+        output_core_dims=[["latitude", "longitude"]],
+        dask="parallelized",
+        keep_attrs=True,
+        output_dtypes=[np.int8],
+    ).compute()
+    # dilation_radius = dilation_radius * 2 + 1
+    # struct = np.ones((dilation_radius, dilation_radius))
+    # dilated_laplacian = ndimage.binary_dilation(
+    #     has_high_laplacian, structure=struct, axes=(-2, -1)
+    # )
 
     # Combine conditions without tropical restriction initially
     initial_intersection = xr.where(dilated_laplacian & has_high_ivt, 1, 0)
-
     # Label connected components and get their sizes
     labeled_array, _ = ndimage.label(initial_intersection)
     unique_labels, label_counts = np.unique(labeled_array, return_counts=True)
-
     # Filter by size first (excluding background label 0)
     size_valid_labels = unique_labels[
         np.where((label_counts >= min_size_gridpoints) & (unique_labels != 0))
     ]
-
     # Collect all size-valid feature labels
     valid_features = []
     for label_num in size_valid_labels:
@@ -71,7 +83,6 @@ def atmospheric_river_mask(
 
     # Create final mask using valid features
     feature_mask = np.isin(labeled_array, valid_features)
-
     # Final result with size threshold applied
     ar_mask = xr.DataArray(
         xr.where(feature_mask, 1, 0), coords=coords_dict, dims=coords_dict.keys()
@@ -84,7 +95,6 @@ def integrated_vapor_transport(
     specific_humidity: xr.DataArray,
     eastward_wind: xr.DataArray,
     northward_wind: xr.DataArray,
-    levels: xr.DataArray,
 ) -> xr.DataArray:
     """Compute integrated vapor transport from humidity and winds.
 
@@ -92,63 +102,34 @@ def integrated_vapor_transport(
         specific_humidity: a DataArray containing specific humidity
         eastward_wind: a DataArray containing eastward wind (u-component)
         northward_wind: a DataArray containing northward wind (v-component)
-        levels: a DataArray containing pressure levels
 
     Returns:
         Integrated vapor transport as a DataArray
     """
 
-    # Get required coordinates excluding level dimension
-    coords_dict = {
-        dim: specific_humidity.coords[dim]
-        for dim in specific_humidity.dims
-        if dim != "level"
-    }
-    level_axis = list(specific_humidity.dims).index("level")
-
-    # Compute IVT components using nantrapezoid
-    eastward_ivt_arr = (
-        calc.nantrapezoid(
-            eastward_wind * specific_humidity,
-            x=levels * 100,  # convert to Pa
-            axis=level_axis,
+    log.warning("setting up ufuncs")
+    # Compute IVT components using nantrapezoid_pressure_levels
+    eastward_ivt = (
+        calc.nantrapezoid_pressure_levels(
+            da=eastward_wind * specific_humidity,
         )
         / calc.g0
     )
-    eastward_ivt = xr.DataArray(
-        eastward_ivt_arr, coords=coords_dict, dims=coords_dict.keys()
-    )
 
-    northward_ivt_arr = (
-        calc.nantrapezoid(
-            northward_wind * specific_humidity,
-            x=levels * 100,  # convert to Pa
-            axis=level_axis,
+    northward_ivt = (
+        calc.nantrapezoid_pressure_levels(
+            da=northward_wind * specific_humidity,
         )
         / calc.g0
     )
-    northward_ivt = xr.DataArray(
-        northward_ivt_arr, coords=coords_dict, dims=coords_dict.keys()
-    )
 
+    log.warning("ufuncs computed")
     # Compute IVT using components
     ivt_magnitude = xr.ufuncs.hypot(eastward_ivt, northward_ivt)
     ivt_magnitude.name = "integrated_vapor_transport"
+    log.info("ivt graph computed")
     return ivt_magnitude
 
-
-def _compute_blurred_laplacian_ufunc(data: xr.DataArray, sigma: float) -> xr.DataArray:
-    """Compute blurred Laplacian using scipy filters.
-
-    Args:
-        data: IVT data to compute the blurred Laplacian of; data must be 2D
-        sigma: the standard deviation for the Gaussian filter
-
-    Returns:
-        The blurred Laplacian of IVT
-    """
-    laplace_data = filters.laplace(data)
-    return ndimage.gaussian_filter(laplace_data, sigma=sigma)
 
 
 def integrated_vapor_transport_laplacian(
@@ -163,19 +144,16 @@ def integrated_vapor_transport_laplacian(
     Returns:
         The blurred Laplacian of IVT
     """
-    # TODO(189): determine if numba can be used to speed up this computation
     laplacian = xr.apply_ufunc(
-        _compute_blurred_laplacian_ufunc,
+        calc._compute_blurred_laplacian_ufunc,
         ivt,
         sigma,
-        input_core_dims=[["latitude", "longitude"], []],
+        input_core_dims=[["latitude", "longitude"], []], 
         output_core_dims=[["latitude", "longitude"]],
-        dask="allowed",
+        dask="parallelized",
         keep_attrs=True,
         output_dtypes=[float],
     )
-
-    # Add name to the dataarray
     laplacian.name = "integrated_vapor_transport_blurred_laplacian"
     return laplacian
 
@@ -195,7 +173,6 @@ def build_atmospheric_river_mask_and_land_intersection(data: xr.Dataset) -> xr.D
         specific_humidity=data["specific_humidity"],
         eastward_wind=data["eastward_wind"],
         northward_wind=data["northward_wind"],
-        levels=data["level"],
     )
 
     # Compute IVT Laplacian

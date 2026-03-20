@@ -306,7 +306,6 @@ class TestComputeIVT:
             specific_humidity=sample_ivt_dataset["specific_humidity"],
             eastward_wind=sample_ivt_dataset["eastward_wind"],
             northward_wind=sample_ivt_dataset["northward_wind"],
-            levels=sample_ivt_dataset["adjusted_level"],
         )
 
         # Should return a DataArray
@@ -321,6 +320,9 @@ class TestComputeIVT:
 
         # Values should be positive (IVT magnitude)
         assert (result >= 0).all()
+
+        # There needs to be many > 0
+        assert (result > 0).any()
 
         # Values should be reasonable for IVT (typically 0-3000 kg/m/s)
         # Some extreme values may exceed 1000 but should be under 3000
@@ -408,7 +410,6 @@ class TestComputeIVT:
             specific_humidity=dataset["specific_humidity"],
             eastward_wind=dataset["eastward_wind"],
             northward_wind=dataset["northward_wind"],
-            levels=dataset["adjusted_level"],
         )
 
         # Should return a DataArray
@@ -437,15 +438,12 @@ class TestComputeIVT:
             },
         )
 
-        levels = xr.DataArray(level, dims=["level"], coords={"level": level})
-
         # Should raise an error when required variables are missing (None values)
         with pytest.raises((TypeError, AttributeError)):
             atmospheric_river.integrated_vapor_transport(
                 specific_humidity=None,
                 eastward_wind=eastward_wind,
                 northward_wind=eastward_wind,
-                levels=levels,
             )
 
     def test_integrated_vapor_transport_low_pressure_levels(self):
@@ -533,7 +531,6 @@ class TestComputeIVT:
             specific_humidity=dataset_filtered["specific_humidity"],
             eastward_wind=dataset_filtered["eastward_wind"],
             northward_wind=dataset_filtered["northward_wind"],
-            levels=dataset_filtered["adjusted_level"],
         )
 
         # Should return a DataArray
@@ -548,6 +545,9 @@ class TestComputeIVT:
 
         # Values should be positive (IVT magnitude)
         assert (result >= 0).all()
+
+        # There needs to be many > 0
+        assert (result > 0).any()
 
         # Values should be reasonable for IVT
         assert (result < 3000).all()

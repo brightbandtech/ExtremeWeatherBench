@@ -1,3 +1,4 @@
+import logging
 from typing import Literal, Optional, Sequence, Union
 
 import numpy as np
@@ -6,13 +7,16 @@ import regionmask
 import scores.categorical as categorical
 import shapely
 import xarray as xr
+from numba import float64, guvectorize
+from scipy import ndimage
+from skimage import filters
 
 from extremeweatherbench import utils
 
+log = logging.getLogger('calc')
 epsilon: float = 0.6219569100577033  # Ratio of molecular weights (H2O/dry air)
 sat_press_0c: float = 6.112  # Saturation vapor pressure at 0°C (hPa)
 g0: float = 9.80665  # Standard gravity (m/s^2)
-
 
 def convert_from_cartesian_to_latlon(
     input_point: Union[np.ndarray, tuple[float, float]],
@@ -275,51 +279,61 @@ def geopotential_thickness(
     )
     return geopotential_thickness
 
+@guvectorize(
+    [(float64[:], float64[:], float64[:])],
+    "(n),(n)->()",
+    nopython=True,
+    target="parallel",
+)
+def _nantrapezoid_kernel(y, x, out):
+    """1D nan-aware trapezoid integration kernel."""
+    total = 0.0
+    for i in range(len(y) - 1):
+        y0 = y[i]
+        y1 = y[i + 1]
+        dx = x[i + 1] - x[i]
+        # skip intervals where either endpoint is nan
+        if not (np.isnan(y0) or np.isnan(y1)):
+            total += dx * (y0 + y1) / 2.0
+    out[()] = total
 
-def nantrapezoid(
-    y: np.ndarray,
-    x: np.ndarray | None = None,
-    dx: float = 1.0,
-    axis: int = -1,
-):
-    """Trapezoid rule for arrays with nans.
 
-    Identical to np.trapezoid but with nans handled correctly in the summation.
+def nantrapezoid_4d(y, x):
     """
-    y = np.asanyarray(y)
-    if x is None:
-        # Create an array of the step size
-        d = np.full(y.shape[axis] - 1, dx) if y.shape[axis] > 1 else np.array([dx])
-        # reshape to correct shape
-        shape = [1] * y.ndim
-        shape[axis] = d.shape[0]
-        d = d.reshape(shape)
-    else:
-        x = np.asanyarray(x)
-        if x.ndim == 1:
-            d = np.diff(x)
-            # reshape to correct shape
-            shape = [1] * y.ndim
-            shape[axis] = d.shape[0]
-            d = d.reshape(shape)
-        else:
-            d = np.diff(x, axis=axis)
-    if y.ndim != d.ndim:
-        d = np.expand_dims(d, axis=1)
-    nd = y.ndim
-    slice1 = [slice(None)] * nd
-    slice2 = [slice(None)] * nd
-    slice1[axis] = slice(1, None)
-    slice2[axis] = slice(None, -1)
-    try:
-        # This is the only location different from np.trapezoid
-        ret = np.nansum(d * (y[tuple(slice1)] + y[tuple(slice2)]) / 2.0, axis=axis)
-    except ValueError:
-        # Operations didn't work, cast to ndarray
-        d = np.asarray(d)
-        y = np.asarray(y)
-        ret = np.add.reduce(d * (y[tuple(slice1)] + y[tuple(slice2)]) / 2.0, axis)
-    return ret
+    Wrapper that moves the integration axis to last position,
+    calls the guvectorize kernel, then returns result.
+
+    y: (time, level, lat, lon)
+    x: (level,) or same shape as y
+    """
+
+    return _nantrapezoid_kernel(y, x)
+
+
+def nantrapezoid_pressure_levels(da: xr.DataArray):
+    """Calculates the integral using the trapezoid rule for arrays with nans.
+    
+    Args:
+        da: a DataArray with dimensions (time, latitude, longitude, level). Level units
+            are in hPa.
+    
+    Returns a DataArray of the computed quantity integrated over the entire column.
+    """
+
+    # Convert levels to Pascals
+    levels_pa = (da['level'] * 100)
+
+    output = xr.apply_ufunc(
+            nantrapezoid_4d,
+            da,
+            levels_pa,
+            input_core_dims=[["level"],["level"]],
+            output_core_dims=[[]],  
+            dask="parallelized",
+            output_dtypes=[float],
+        )
+    return output
+
 
 
 def specific_humidity_from_relative_humidity(
@@ -871,3 +885,32 @@ def _is_true_landfall(
         # - AttributeError: invalid/None geometry
         # - ValueError/TypeError: invalid coordinate values
         return False
+
+def _binary_dilation_ufunc(data: xr.DataArray, dilation_radius: int) -> xr.DataArray:
+    """Apply binary dilation to a single 2D (lat, lon) slice.
+
+    Args:
+        data: 2D boolean array of shape (lat, lon)
+        dilation_radius: radius for the dilation in gridpoints
+
+    Returns:
+        Dilated boolean array of shape (lat, lon)
+    """
+    size = dilation_radius * 2 + 1
+    struct = np.ones((size, size))
+    return np.expand_dims(ndimage.binary_dilation(data.squeeze(), structure=struct).astype(np.int8),axis=0)
+
+
+
+def _compute_blurred_laplacian_ufunc(data: xr.DataArray, sigma: float) -> xr.DataArray:
+    """Compute blurred Laplacian using scipy filters.
+
+    Args:
+        data: IVT data to compute the blurred Laplacian of; data must be 2D
+        sigma: the standard deviation for the Gaussian filter
+
+    Returns:
+        The blurred Laplacian of IVT
+    """
+    laplace_data = filters.laplace(data)
+    return ndimage.gaussian_filter(laplace_data, sigma=sigma)
