@@ -46,9 +46,9 @@ class TestAtmosphericRiverVariables:
         specific_hum = calc.specific_humidity_from_relative_humidity(
             air_temperature=xr.DataArray(
                 air_temp,
-                dims=["time", "level", "latitude", "longitude"],
+                dims=["valid_time", "level", "latitude", "longitude"],
                 coords={
-                    "time": time,
+                    "valid_time": time,
                     "level": level,
                     "latitude": lat,
                     "longitude": lon,
@@ -56,9 +56,9 @@ class TestAtmosphericRiverVariables:
             ),
             relative_humidity=xr.DataArray(
                 rel_humidity,
-                dims=["time", "level", "latitude", "longitude"],
+                dims=["valid_time", "level", "latitude", "longitude"],
                 coords={
-                    "time": time,
+                    "valid_time": time,
                     "level": level,
                     "latitude": lat,
                     "longitude": lon,
@@ -70,37 +70,37 @@ class TestAtmosphericRiverVariables:
         dataset = xr.Dataset(
             {
                 "integrated_vapor_transport": (
-                    ["time", "latitude", "longitude"],
+                    ["valid_time", "latitude", "longitude"],
                     ivt_data,
                 ),
                 "integrated_vapor_transport_laplacian": (
-                    ["time", "latitude", "longitude"],
+                    ["valid_time", "latitude", "longitude"],
                     ivt_laplacian,
                 ),
                 "eastward_wind": (
-                    ["time", "level", "latitude", "longitude"],
+                    ["valid_time", "level", "latitude", "longitude"],
                     rng.uniform(-20, 20, data_shape_4d),
                 ),
                 "northward_wind": (
-                    ["time", "level", "latitude", "longitude"],
+                    ["valid_time", "level", "latitude", "longitude"],
                     rng.uniform(-20, 20, data_shape_4d),
                 ),
                 "air_temperature": (
-                    ["time", "level", "latitude", "longitude"],
+                    ["valid_time", "level", "latitude", "longitude"],
                     air_temp,
                 ),
                 "relative_humidity": (
-                    ["time", "level", "latitude", "longitude"],
+                    ["valid_time", "level", "latitude", "longitude"],
                     rel_humidity,
                 ),
                 "specific_humidity": specific_hum,
                 "geopotential_at_surface": (
-                    ["time", "latitude", "longitude"],
+                    ["valid_time", "latitude", "longitude"],
                     rng.uniform(0, 1000, data_shape_3d),
                 ),
             },
             coords={
-                "time": time,
+                "valid_time": time,
                 "latitude": lat,
                 "longitude": lon,
                 "level": level,
@@ -121,7 +121,7 @@ class TestAtmosphericRiverVariables:
         assert isinstance(result, xr.DataArray)
 
         # Should have correct dimensions (no level dimension)
-        expected_dims = ["time", "latitude", "longitude"]
+        expected_dims = ["valid_time", "latitude", "longitude"]
         assert list(result.dims) == expected_dims
 
         # Should have correct shape
@@ -192,16 +192,16 @@ class TestAtmosphericRiverVariables:
         dataset = xr.Dataset(
             {
                 "integrated_vapor_transport": (
-                    ["time", "latitude", "longitude"],
+                    ["valid_time", "latitude", "longitude"],
                     ivt_data,
                 ),
                 "integrated_vapor_transport_laplacian": (
-                    ["time", "latitude", "longitude"],
+                    ["valid_time", "latitude", "longitude"],
                     ivt_laplacian,
                 ),
             },
             coords={
-                "time": time,
+                "valid_time": time,
                 "latitude": lat,
                 "longitude": lon,
             },
@@ -244,9 +244,9 @@ class TestComputeIVT:
         specific_hum = calc.specific_humidity_from_relative_humidity(
             air_temperature=xr.DataArray(
                 air_temp,
-                dims=["time", "level", "latitude", "longitude"],
+                dims=["valid_time", "level", "latitude", "longitude"],
                 coords={
-                    "time": time,
+                    "valid_time": time,
                     "level": level,
                     "latitude": lat,
                     "longitude": lon,
@@ -254,9 +254,9 @@ class TestComputeIVT:
             ),
             relative_humidity=xr.DataArray(
                 rel_humidity,
-                dims=["time", "level", "latitude", "longitude"],
+                dims=["valid_time", "level", "latitude", "longitude"],
                 coords={
-                    "time": time,
+                    "valid_time": time,
                     "level": level,
                     "latitude": lat,
                     "longitude": lon,
@@ -268,29 +268,29 @@ class TestComputeIVT:
         dataset = xr.Dataset(
             {
                 "eastward_wind": (
-                    ["time", "level", "latitude", "longitude"],
+                    ["valid_time", "level", "latitude", "longitude"],
                     rng.uniform(-20, 20, data_shape_4d),
                 ),
                 "northward_wind": (
-                    ["time", "level", "latitude", "longitude"],
+                    ["valid_time", "level", "latitude", "longitude"],
                     rng.uniform(-20, 20, data_shape_4d),
                 ),
                 "air_temperature": (
-                    ["time", "level", "latitude", "longitude"],
+                    ["valid_time", "level", "latitude", "longitude"],
                     air_temp,
                 ),
                 "relative_humidity": (
-                    ["time", "level", "latitude", "longitude"],
+                    ["valid_time", "level", "latitude", "longitude"],
                     rel_humidity,
                 ),
                 "specific_humidity": specific_hum,
                 "geopotential_at_surface": (
-                    ["time", "latitude", "longitude"],
+                    ["valid_time", "latitude", "longitude"],
                     rng.uniform(0, 1000, data_shape_3d),
                 ),
             },
             coords={
-                "time": time,
+                "valid_time": time,
                 "latitude": lat,
                 "longitude": lon,
                 "level": level,
@@ -306,14 +306,13 @@ class TestComputeIVT:
             specific_humidity=sample_ivt_dataset["specific_humidity"],
             eastward_wind=sample_ivt_dataset["eastward_wind"],
             northward_wind=sample_ivt_dataset["northward_wind"],
-            levels=sample_ivt_dataset["adjusted_level"],
         )
 
         # Should return a DataArray
         assert isinstance(result, xr.DataArray)
 
         # Should have correct dimensions (no level dimension)
-        expected_dims = ["time", "latitude", "longitude"]
+        expected_dims = ["valid_time", "latitude", "longitude"]
         assert list(result.dims) == expected_dims
 
         # Should have correct shape
@@ -321,6 +320,9 @@ class TestComputeIVT:
 
         # Values should be positive (IVT magnitude)
         assert (result >= 0).all()
+
+        # There needs to be many > 0
+        assert (result > 0).any()
 
         # Values should be reasonable for IVT (typically 0-3000 kg/m/s)
         # Some extreme values may exceed 1000 but should be under 3000
@@ -351,9 +353,9 @@ class TestComputeIVT:
         specific_hum = calc.specific_humidity_from_relative_humidity(
             air_temperature=xr.DataArray(
                 air_temp,
-                dims=["time", "level", "latitude", "longitude"],
+                dims=["valid_time", "level", "latitude", "longitude"],
                 coords={
-                    "time": time,
+                    "valid_time": time,
                     "level": level,
                     "latitude": lat,
                     "longitude": lon,
@@ -361,9 +363,9 @@ class TestComputeIVT:
             ),
             relative_humidity=xr.DataArray(
                 rel_humidity,
-                dims=["time", "level", "latitude", "longitude"],
+                dims=["valid_time", "level", "latitude", "longitude"],
                 coords={
-                    "time": time,
+                    "valid_time": time,
                     "level": level,
                     "latitude": lat,
                     "longitude": lon,
@@ -375,29 +377,29 @@ class TestComputeIVT:
         dataset = xr.Dataset(
             {
                 "eastward_wind": (
-                    ["time", "level", "latitude", "longitude"],
+                    ["valid_time", "level", "latitude", "longitude"],
                     eastward_wind,
                 ),
                 "northward_wind": (
-                    ["time", "level", "latitude", "longitude"],
+                    ["valid_time", "level", "latitude", "longitude"],
                     northward_wind,
                 ),
                 "air_temperature": (
-                    ["time", "level", "latitude", "longitude"],
+                    ["valid_time", "level", "latitude", "longitude"],
                     air_temp,
                 ),
                 "relative_humidity": (
-                    ["time", "level", "latitude", "longitude"],
+                    ["valid_time", "level", "latitude", "longitude"],
                     rel_humidity,
                 ),
                 "specific_humidity": specific_hum,
                 "geopotential_at_surface": (
-                    ["time", "latitude", "longitude"],
+                    ["valid_time", "latitude", "longitude"],
                     rng.uniform(0, 1000, data_shape_3d),
                 ),
             },
             coords={
-                "time": time,
+                "valid_time": time,
                 "latitude": lat,
                 "longitude": lon,
                 "level": level,
@@ -408,7 +410,6 @@ class TestComputeIVT:
             specific_humidity=dataset["specific_humidity"],
             eastward_wind=dataset["eastward_wind"],
             northward_wind=dataset["northward_wind"],
-            levels=dataset["adjusted_level"],
         )
 
         # Should return a DataArray
@@ -428,16 +429,14 @@ class TestComputeIVT:
         # Create some valid DataArrays
         eastward_wind = xr.DataArray(
             rng.uniform(-20, 20, (1, 6, 5, 5)),
-            dims=["time", "level", "latitude", "longitude"],
+            dims=["valid_time", "level", "latitude", "longitude"],
             coords={
-                "time": time,
+                "valid_time": time,
                 "latitude": lat,
                 "longitude": lon,
                 "level": level,
             },
         )
-
-        levels = xr.DataArray(level, dims=["level"], coords={"level": level})
 
         # Should raise an error when required variables are missing (None values)
         with pytest.raises((TypeError, AttributeError)):
@@ -445,7 +444,6 @@ class TestComputeIVT:
                 specific_humidity=None,
                 eastward_wind=eastward_wind,
                 northward_wind=eastward_wind,
-                levels=levels,
             )
 
     def test_integrated_vapor_transport_low_pressure_levels(self):
@@ -468,9 +466,9 @@ class TestComputeIVT:
         specific_hum = calc.specific_humidity_from_relative_humidity(
             air_temperature=xr.DataArray(
                 air_temp,
-                dims=["time", "level", "latitude", "longitude"],
+                dims=["valid_time", "level", "latitude", "longitude"],
                 coords={
-                    "time": time,
+                    "valid_time": time,
                     "level": level,
                     "latitude": lat,
                     "longitude": lon,
@@ -478,9 +476,9 @@ class TestComputeIVT:
             ),
             relative_humidity=xr.DataArray(
                 rel_humidity,
-                dims=["time", "level", "latitude", "longitude"],
+                dims=["valid_time", "level", "latitude", "longitude"],
                 coords={
-                    "time": time,
+                    "valid_time": time,
                     "level": level,
                     "latitude": lat,
                     "longitude": lon,
@@ -496,29 +494,29 @@ class TestComputeIVT:
         dataset = xr.Dataset(
             {
                 "eastward_wind": (
-                    ["time", "level", "latitude", "longitude"],
+                    ["valid_time", "level", "latitude", "longitude"],
                     rng.uniform(-20, 20, data_shape_4d),
                 ),
                 "northward_wind": (
-                    ["time", "level", "latitude", "longitude"],
+                    ["valid_time", "level", "latitude", "longitude"],
                     rng.uniform(-20, 20, data_shape_4d),
                 ),
                 "air_temperature": (
-                    ["time", "level", "latitude", "longitude"],
+                    ["valid_time", "level", "latitude", "longitude"],
                     air_temp,
                 ),
                 "relative_humidity": (
-                    ["time", "level", "latitude", "longitude"],
+                    ["valid_time", "level", "latitude", "longitude"],
                     rel_humidity,
                 ),
                 "specific_humidity": specific_hum,
                 "geopotential_at_surface": (
-                    ["time", "latitude", "longitude"],
+                    ["valid_time", "latitude", "longitude"],
                     rng.uniform(0, 1000, data_shape_3d),
                 ),
             },
             coords={
-                "time": time,
+                "valid_time": time,
                 "latitude": lat,
                 "longitude": lon,
                 "level": level,
@@ -533,14 +531,13 @@ class TestComputeIVT:
             specific_humidity=dataset_filtered["specific_humidity"],
             eastward_wind=dataset_filtered["eastward_wind"],
             northward_wind=dataset_filtered["northward_wind"],
-            levels=dataset_filtered["adjusted_level"],
         )
 
         # Should return a DataArray
         assert isinstance(result, xr.DataArray)
 
         # Should have correct dimensions (no level dimension)
-        expected_dims = ["time", "latitude", "longitude"]
+        expected_dims = ["valid_time", "latitude", "longitude"]
         assert list(result.dims) == expected_dims
 
         # Should have correct shape (no level dimension)
@@ -548,6 +545,9 @@ class TestComputeIVT:
 
         # Values should be positive (IVT magnitude)
         assert (result >= 0).all()
+
+        # There needs to be many > 0
+        assert (result > 0).any()
 
         # Values should be reasonable for IVT
         assert (result < 3000).all()
@@ -570,9 +570,9 @@ class TestComputeIVTLaplacian:
 
         ivt = xr.DataArray(
             ivt_data,
-            dims=["time", "latitude", "longitude"],
+            dims=["valid_time", "latitude", "longitude"],
             coords={
-                "time": time,
+                "valid_time": time,
                 "latitude": lat,
                 "longitude": lon,
             },
@@ -591,7 +591,7 @@ class TestComputeIVTLaplacian:
         assert isinstance(result, xr.DataArray)
 
         # Should have correct dimensions
-        assert list(result.dims) == ["time", "latitude", "longitude"]
+        assert list(result.dims) == ["valid_time", "latitude", "longitude"]
 
         # Should have correct shape
         assert result.shape == (2, 10, 10)
@@ -632,9 +632,9 @@ class TestComputeIVTLaplacian:
 
         ivt = xr.DataArray(
             ivt_data,
-            dims=["time", "latitude", "longitude"],
+            dims=["valid_time", "latitude", "longitude"],
             coords={
-                "time": time,
+                "valid_time": time,
                 "latitude": lat,
                 "longitude": lon,
             },
@@ -666,9 +666,9 @@ class TestFindLandIntersection:
 
         ar_mask = xr.DataArray(
             ar_mask_data,
-            dims=["time", "latitude", "longitude"],
+            dims=["valid_time", "latitude", "longitude"],
             coords={
-                "time": time,
+                "valid_time": time,
                 "latitude": lat,
                 "longitude": lon,
             },
@@ -684,7 +684,7 @@ class TestFindLandIntersection:
         assert isinstance(result, xr.DataArray)
 
         # Should have correct dimensions
-        expected_dims = ["time", "latitude", "longitude"]
+        expected_dims = ["valid_time", "latitude", "longitude"]
         assert list(result.dims) == expected_dims
 
         # Should have correct shape
@@ -704,9 +704,9 @@ class TestFindLandIntersection:
         # Create empty AR mask
         ar_mask = xr.DataArray(
             np.zeros((1, 5, 5), dtype=int),
-            dims=["time", "latitude", "longitude"],
+            dims=["valid_time", "latitude", "longitude"],
             coords={
-                "time": time,
+                "valid_time": time,
                 "latitude": lat,
                 "longitude": lon,
             },
@@ -718,7 +718,7 @@ class TestFindLandIntersection:
         assert isinstance(result, xr.DataArray)
 
         # Should have correct dimensions
-        expected_dims = ["time", "latitude", "longitude"]
+        expected_dims = ["valid_time", "latitude", "longitude"]
         assert list(result.dims) == expected_dims
 
         # Should have correct shape
@@ -752,9 +752,9 @@ class TestBuildMaskAndLandIntersection:
         specific_hum = calc.specific_humidity_from_relative_humidity(
             air_temperature=xr.DataArray(
                 air_temp,
-                dims=["time", "level", "latitude", "longitude"],
+                dims=["valid_time", "level", "latitude", "longitude"],
                 coords={
-                    "time": time,
+                    "valid_time": time,
                     "level": level,
                     "latitude": lat,
                     "longitude": lon,
@@ -762,9 +762,9 @@ class TestBuildMaskAndLandIntersection:
             ),
             relative_humidity=xr.DataArray(
                 rel_humidity,
-                dims=["time", "level", "latitude", "longitude"],
+                dims=["valid_time", "level", "latitude", "longitude"],
                 coords={
-                    "time": time,
+                    "valid_time": time,
                     "level": level,
                     "latitude": lat,
                     "longitude": lon,
@@ -776,29 +776,29 @@ class TestBuildMaskAndLandIntersection:
         dataset = xr.Dataset(
             {
                 "eastward_wind": (
-                    ["time", "level", "latitude", "longitude"],
+                    ["valid_time", "level", "latitude", "longitude"],
                     rng.uniform(-20, 20, data_shape_4d),
                 ),
                 "northward_wind": (
-                    ["time", "level", "latitude", "longitude"],
+                    ["valid_time", "level", "latitude", "longitude"],
                     rng.uniform(-20, 20, data_shape_4d),
                 ),
                 "air_temperature": (
-                    ["time", "level", "latitude", "longitude"],
+                    ["valid_time", "level", "latitude", "longitude"],
                     air_temp,
                 ),
                 "relative_humidity": (
-                    ["time", "level", "latitude", "longitude"],
+                    ["valid_time", "level", "latitude", "longitude"],
                     rel_humidity,
                 ),
                 "specific_humidity": specific_hum,
                 "geopotential_at_surface": (
-                    ["time", "latitude", "longitude"],
+                    ["valid_time", "latitude", "longitude"],
                     rng.uniform(0, 1000, data_shape_3d),
                 ),
             },
             coords={
-                "time": time,
+                "valid_time": time,
                 "latitude": lat,
                 "longitude": lon,
                 "level": level,
@@ -824,14 +824,14 @@ class TestBuildMaskAndLandIntersection:
         # Atmospheric river mask should be a DataArray
         ar_mask = result["atmospheric_river_mask"]
         assert isinstance(ar_mask, xr.DataArray)
-        assert list(ar_mask.dims) == ["time", "latitude", "longitude"]
+        assert list(ar_mask.dims) == ["valid_time", "latitude", "longitude"]
 
         # Land intersection should be a DataArray with binary values
         land_intersection = result["atmospheric_river_land_intersection"]
 
         # The land intersection is stored as a DataArray with binary values
         assert isinstance(land_intersection, xr.DataArray)
-        assert list(land_intersection.dims) == ["time", "latitude", "longitude"]
+        assert list(land_intersection.dims) == ["valid_time", "latitude", "longitude"]
         # Values should be 0 or 1 (binary mask)
         assert set(land_intersection.values.flatten()).issubset({0, 1})
 
@@ -849,16 +849,16 @@ class TestBuildMaskAndLandIntersection:
         dataset = xr.Dataset(
             {
                 "air_temperature": (
-                    ["time", "level", "latitude", "longitude"],
+                    ["valid_time", "level", "latitude", "longitude"],
                     rng.uniform(250, 300, (1, 6, 5, 5)),
                 ),
                 "geopotential_at_surface": (
-                    ["time", "latitude", "longitude"],
+                    ["valid_time", "latitude", "longitude"],
                     rng.uniform(0, 1000, data_shape_3d),
                 ),
             },
             coords={
-                "time": time,
+                "valid_time": time,
                 "latitude": lat,
                 "longitude": lon,
                 "level": level,
@@ -896,9 +896,9 @@ class TestBuildMaskAndLandIntersection:
         specific_hum = calc.specific_humidity_from_relative_humidity(
             air_temperature=xr.DataArray(
                 air_temp,
-                dims=["time", "level", "latitude", "longitude"],
+                dims=["valid_time", "level", "latitude", "longitude"],
                 coords={
-                    "time": time,
+                    "valid_time": time,
                     "level": level,
                     "latitude": lat,
                     "longitude": lon,
@@ -906,9 +906,9 @@ class TestBuildMaskAndLandIntersection:
             ),
             relative_humidity=xr.DataArray(
                 rel_humidity,
-                dims=["time", "level", "latitude", "longitude"],
+                dims=["valid_time", "level", "latitude", "longitude"],
                 coords={
-                    "time": time,
+                    "valid_time": time,
                     "level": level,
                     "latitude": lat,
                     "longitude": lon,
@@ -920,29 +920,29 @@ class TestBuildMaskAndLandIntersection:
         dataset = xr.Dataset(
             {
                 "eastward_wind": (
-                    ["time", "level", "latitude", "longitude"],
+                    ["valid_time", "level", "latitude", "longitude"],
                     eastward_wind,
                 ),
                 "northward_wind": (
-                    ["time", "level", "latitude", "longitude"],
+                    ["valid_time", "level", "latitude", "longitude"],
                     northward_wind,
                 ),
                 "air_temperature": (
-                    ["time", "level", "latitude", "longitude"],
+                    ["valid_time", "level", "latitude", "longitude"],
                     air_temp,
                 ),
                 "relative_humidity": (
-                    ["time", "level", "latitude", "longitude"],
+                    ["valid_time", "level", "latitude", "longitude"],
                     rel_humidity,
                 ),
                 "specific_humidity": specific_hum,
                 "geopotential_at_surface": (
-                    ["time", "latitude", "longitude"],
+                    ["valid_time", "latitude", "longitude"],
                     rng.uniform(0, 1000, data_shape_3d),
                 ),
             },
             coords={
-                "time": time,
+                "valid_time": time,
                 "latitude": lat,
                 "longitude": lon,
                 "level": level,

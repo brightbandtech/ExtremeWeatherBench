@@ -1002,141 +1002,109 @@ class TestFindLandIntersection:
         assert result.shape == mask.shape
 
 
-class TestNantrapezoid:
-    """Taken from numpy testing code, with modification to include handling nans."""
+class TestNantrapezoidPressureLevels:
+    """Tests for nantrapezoid using guvectorize kernel over xarray DataArrays."""
+
+    def _make_da(self, y_values, levels_hpa):
+        """Helper to wrap a numpy array in an xarray DataArray with level coord."""
+        return xr.DataArray(
+            y_values,
+            dims=["level"],
+            coords={"level": levels_hpa},
+        )
+
+    def _make_da_nd(self, y_values, levels_hpa, extra_dims, extra_coords):
+        """Helper for multi-dimensional DataArrays with level coord."""
+        dims = list(extra_dims) + ["level"]
+        coords = {**extra_coords, "level": levels_hpa}
+        return xr.DataArray(y_values, dims=dims, coords=coords)
 
     def test_simple(self):
+        """Test integral of normal distribution equals 1."""
         x = np.arange(-10, 10, 0.1)
-        r = calc.nantrapezoid(np.exp(-0.5 * x**2) / np.sqrt(2 * np.pi), dx=0.1)
-        # check integral of normal equals 1
-        testing.assert_almost_equal(r, 1, 7)
-
-    def test_ndim(self):
-        x = np.linspace(0, 1, 3)
-        y = np.linspace(0, 2, 8)
-        z = np.linspace(0, 3, 13)
-
-        wx = np.ones_like(x) * (x[1] - x[0])
-        wx[0] /= 2
-        wx[-1] /= 2
-        wy = np.ones_like(y) * (y[1] - y[0])
-        wy[0] /= 2
-        wy[-1] /= 2
-        wz = np.ones_like(z) * (z[1] - z[0])
-        wz[0] /= 2
-        wz[-1] /= 2
-
-        q = x[:, None, None] + y[None, :, None] + z[None, None, :]
-
-        qx = (q * wx[:, None, None]).sum(axis=0)
-        qy = (q * wy[None, :, None]).sum(axis=1)
-        qz = (q * wz[None, None, :]).sum(axis=2)
-
-        # n-d `x`
-        r = calc.nantrapezoid(q, x=x[:, None, None], axis=0)
-        testing.assert_almost_equal(r, qx)
-        r = calc.nantrapezoid(q, x=y[None, :, None], axis=1)
-        testing.assert_almost_equal(r, qy)
-        r = calc.nantrapezoid(q, x=z[None, None, :], axis=2)
-        testing.assert_almost_equal(r, qz)
-
-        # 1-d `x`
-        r = calc.nantrapezoid(q, x=x, axis=0)
-        testing.assert_almost_equal(r, qx)
-        r = calc.nantrapezoid(q, x=y, axis=1)
-        testing.assert_almost_equal(r, qy)
-        r = calc.nantrapezoid(q, x=z, axis=2)
-        testing.assert_almost_equal(r, qz)
-
-    def test_masked(self):
-        # Testing that masked arrays behave as if the function is 0 where
-        # masked
-        x = np.arange(5)
-        y = x * x
-        mask = x == 2
-        ym = np.ma.array(y, mask=mask)
-        r = 13.0  # sum(0.5 * (0 + 1) * 1.0 + 0.5 * (9 + 16))
-        testing.assert_almost_equal(calc.nantrapezoid(ym, x), r)
-
-        xm = np.ma.array(x, mask=mask)
-        testing.assert_almost_equal(calc.nantrapezoid(ym, xm), r)
-
-        xm = np.ma.array(x, mask=mask)
-        testing.assert_almost_equal(calc.nantrapezoid(y, xm), r)
+        y = np.exp(-0.5 * x**2) / np.sqrt(2 * np.pi)
+        # Use x values as levels in hPa — kernel receives x*100 as Pascals
+        # so we divide by 100 to get back the original x spacing
+        levels_hpa = x / 100
+        da = self._make_da(y, levels_hpa)
+        result = calc.nantrapezoid_pressure_levels(da)
+        testing.assert_almost_equal(float(result), 1, 7)
 
     def test_nan_handling(self):
-        """Test that nantrapezoid properly handles NaN values."""
-        # Test with NaN values in y
-        x = np.array([0, 1, 2, 3, 4])
-        y = np.array([0, 1, np.nan, 9, 16])
-
-        # Should ignore NaN values in the integration
-        result = calc.nantrapezoid(y, x)
-
-        # Compare with manual calculation ignoring NaN
-        # Integration should be: 0.5*(0+1)*1 + 0.5*(9+16)*1 = 0.5 + 12.5 = 13.0
-        expected = 13.0
-        testing.assert_almost_equal(result, expected)
+        """Test that nantrapezoid properly skips intervals where either endpoint is NaN."""
+        # Kernel skips interval if y0 OR y1 is NaN
+        # intervals: (0,1), (1,nan)=skip, (nan,9)=skip, (9,16)
+        # result: 0.5*(0+1)*1 + 0.5*(9+16)*1 = 0.5 + 12.5 = 13.0
+        levels_hpa = (
+            np.array([0, 1, 2, 3, 4]) / 100
+        )  # convert to hPa so *100 = original
+        y = np.array([0.0, 1.0, np.nan, 9.0, 16.0])
+        da = self._make_da(y, levels_hpa)
+        result = calc.nantrapezoid_pressure_levels(da)
+        testing.assert_almost_equal(float(result), 13.0)
 
     def test_all_nan_values(self):
-        """Test nantrapezoid with all NaN values."""
-        x = np.array([0, 1, 2, 3])
+        """Test nantrapezoid with all NaN values returns 0."""
+        levels_hpa = np.array([0, 1, 2, 3]) / 100
         y = np.array([np.nan, np.nan, np.nan, np.nan])
-
-        result = calc.nantrapezoid(y, x)
-
-        # Should return 0 when all values are NaN (nansum behavior)
-        assert result == 0.0
+        da = self._make_da(y, levels_hpa)
+        result = calc.nantrapezoid_pressure_levels(da)
+        assert float(result) == 0.0
 
     def test_mixed_nan_and_finite(self):
-        """Test nantrapezoid with mixed NaN and finite values."""
-        # Test case with NaN at beginning
-        x = np.array([0, 1, 2, 3, 4])
-        y = np.array([np.nan, 1, 4, 9, 16])
+        """Test nantrapezoid with NaN at beginning.
 
-        result = calc.nantrapezoid(y, x)
-
-        # Should integrate only the finite portions
-        # Integration: 0.5*(1+4)*1 + 0.5*(4+9)*1 + 0.5*(9+16)*1 = 21.5
-        expected = 21.5
-        testing.assert_almost_equal(result, expected)
-
-    def test_nan_in_x_coordinates(self):
-        """Test nantrapezoid with NaN values in x coordinates."""
-        x = np.array([0, 1, np.nan, 3, 4])
-        y = np.array([0, 1, 4, 9, 16])
-
-        # Should handle NaN in x coordinates properly
-        result = calc.nantrapezoid(y, x)
-
-        # The function should still work, handling NaN appropriately
-        assert not np.isnan(result) or np.isnan(result)  # Either valid result or NaN
+        Kernel skips intervals where either endpoint is NaN.
+        intervals: (nan,1)=skip, (1,4), (4,9), (9,16)
+        result: 0.5*(1+4)*1 + 0.5*(4+9)*1 + 0.5*(9+16)*1 = 2.5 + 6.5 + 12.5 = 21.5
+        """
+        levels_hpa = np.array([0, 1, 2, 3, 4]) / 100
+        y = np.array([np.nan, 1.0, 4.0, 9.0, 16.0])
+        da = self._make_da(y, levels_hpa)
+        result = calc.nantrapezoid_pressure_levels(da)
+        testing.assert_almost_equal(float(result), 21.5)
 
     def test_multidimensional_with_nans(self):
-        """Test nantrapezoid with multidimensional arrays containing NaNs."""
-        x = np.array([0, 1, 2, 3])
-        y = np.array([[0, 1, np.nan, 9], [1, np.nan, 4, 16], [np.nan, 2, 8, 25]])
-
-        # Test integration along axis 1 (columns)
-        result = calc.nantrapezoid(y, x, axis=1)
-
-        # Should return array with proper NaN handling for each row
+        """Test nantrapezoid with multidimensional DataArray containing NaNs."""
+        levels_hpa = np.array([0, 1, 2, 3]) / 100
+        y = np.array(
+            [
+                [0.0, 1.0, np.nan, 9.0],
+                [1.0, np.nan, 4.0, 16.0],
+                [np.nan, 2.0, 8.0, 25.0],
+            ]
+        )
+        da = self._make_da_nd(
+            y,
+            levels_hpa,
+            extra_dims=["time"],
+            extra_coords={"time": [0, 1, 2]},
+        )
+        result = calc.nantrapezoid_pressure_levels(da)
         assert result.shape == (3,)
-        # At least some results should be finite (not all NaN)
-        assert not np.isnan(result).all()
+        assert not np.isnan(result.values).all()
 
-    def test_nantrapezoid_dimension_expansion(self):
-        """Test nantrapezoid with dimension mismatch (line 228 coverage)."""
-        # Create a case where y.ndim != d.ndim to trigger dimension expansion
-        x = np.array([0, 1, 2])
-        y = np.array([[1, 2, 3]])  # 2D array
+    def test_no_nans(self):
+        """Test nantrapezoid matches expected trapezoid result with no NaNs."""
+        levels_hpa = np.array([0, 1, 2, 3, 4]) / 100
+        y = np.array([0.0, 1.0, 4.0, 9.0, 16.0])
+        da = self._make_da(y, levels_hpa)
+        result = calc.nantrapezoid_pressure_levels(da)
+        # manual: 0.5*(0+1) + 0.5*(1+4) + 0.5*(4+9) + 0.5*(9+16) = 0.5+2.5+6.5+12.5 = 22.0
+        testing.assert_almost_equal(float(result), 22.0)
 
-        # This should trigger the dimension expansion on line 228
-        result = calc.nantrapezoid(y, x, axis=1)
+    def test_level_conversion_to_pascals(self):
+        """Test that level coordinates are correctly converted from hPa to Pascals.
 
-        # Should still work and return proper result
-        assert result.shape == (1,)
-        assert not np.isnan(result)
+        The kernel receives levels in Pascals (hPa * 100), so dx values
+        are 100x larger than the hPa spacing.
+        """
+        # Two levels: 900 and 1000 hPa → 90000 and 100000 Pa → dx = 10000 Pa
+        levels_hpa = np.array([900.0, 1000.0])
+        y = np.array([1.0, 1.0])  # constant 1, integral = 1 * dx = 10000
+        da = self._make_da(y, levels_hpa)
+        result = calc.nantrapezoid_pressure_levels(da)
+        testing.assert_almost_equal(float(result), 10000.0)
 
 
 class TestDewpointFromSpecificHumidity:
