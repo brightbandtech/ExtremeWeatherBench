@@ -138,7 +138,7 @@ class TestPublicFunctionAccess:
         from extremeweatherbench import calc
 
         assert hasattr(calc, "find_landfalls")
-        assert hasattr(calc, "nantrapezoid")
+        assert hasattr(calc, "nantrapezoid_pressure_levels")
         assert hasattr(calc, "dewpoint_from_specific_humidity")
         assert hasattr(calc, "find_land_intersection")
         assert hasattr(calc, "haversine_distance")

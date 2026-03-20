@@ -1,6 +1,7 @@
 import abc
 import dataclasses
 import logging
+import warnings
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -26,6 +27,12 @@ import extremeweatherbench.utils as utils
 
 if TYPE_CHECKING:
     import extremeweatherbench.metrics as metrics
+
+warnings.filterwarnings(
+    "ignore",
+    message="Numcodecs codecs are not in the Zarr version 3 specification*",
+    category=UserWarning,
+)
 
 logger = logging.getLogger(__name__)
 
