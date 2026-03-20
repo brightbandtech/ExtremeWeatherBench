@@ -806,9 +806,20 @@ def process_ar_event(
     era5_data = era5_data.sel(
         valid_time=era5_data.valid_time.dt.hour.isin([0, 6, 12, 18])
     )
-    era5_data = inputs.maybe_subset_variables(
-        era5_data, variables=era5_ar.variables[0].variables
-    )
+
+    # Rough check, if you're adding variables beyond AtmosphericRiverVariables or
+    # specific_humidity, u_component, v_component, this will fail
+    if isinstance(era5_ar.variables[0], derived.DerivedVariable):
+        era5_ar_vars = era5_ar.variables[0].variables
+    elif isinstance(era5_ar.variables[0], str):
+        era5_ar_vars = era5_ar.variables[0]
+    else:
+        raise ValueError(
+            "Only accepted variables are derived.AtmosphericRiverVariables"
+            " or [specific_humidity, u_component_of_wind, v_component_of_wind]."
+        )
+
+    era5_data = inputs.maybe_subset_variables(era5_data, variables=era5_ar_vars)
     era5_subset = era5_ar.subset_data_to_case(era5_data, case)
     era5_subset = era5_subset.chunk()
     # Generate IVT
@@ -1000,7 +1011,7 @@ def main():
 
     # Setup ERA5 data source for atmospheric river detection
     era5_ar = inputs.ERA5(variables=[derived.AtmosphericRiverVariables])
-    parallel = False
+    parallel = True
 
     # Load atmospheric river events from the events.yaml file
     events_yaml = cases.load_ewb_events_yaml_into_case_list()
@@ -1018,7 +1029,7 @@ def main():
     }
     if parallel:
         # Fixing the n_jobs arbitrarily; change as desired
-        ar_bounds_results_enhanced = joblib.Parallel(n_jobs=4)(
+        ar_bounds_results_enhanced = joblib.Parallel(n_jobs=8)(
             joblib.delayed(process_ar_event)(single_case, era5_ar, AR_OBJECT_CONFIG)
             for single_case in ar_events
         )
