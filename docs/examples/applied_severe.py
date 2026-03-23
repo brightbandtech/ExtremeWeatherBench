@@ -9,6 +9,8 @@ logger.setLevel(logging.INFO)
 
 # Load case data from the default events.yaml
 case_yaml = ewb.load_cases()
+
+# Subset to one severe convection case for example
 case_list = [n for n in case_yaml if n.case_id_number == 305]
 
 # Define PPH target
