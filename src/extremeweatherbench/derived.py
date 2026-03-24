@@ -135,7 +135,7 @@ class TropicalCycloneTrackVariables(DerivedVariable):
         use_contour_validation: bool = True,
         timestep_count_wind_minimum: int = 10,
         latitude_max_degrees: float = 50.0,
-        surface_pressure_threshold: float = 100500.0,
+        surface_pressure_threshold: float = 101325.0,
         orography: Optional[xr.DataArray] = None,
         max_gc_distance_slp_contour_degrees: float = 5.5,
         max_gc_distance_dz_contour_degrees: float = 6.5,
@@ -167,8 +167,10 @@ class TropicalCycloneTrackVariables(DerivedVariable):
                 is >= 10 m/s for a track to be retained. Defaults to 10.
             latitude_max_degrees: Maximum latitude in degrees for TC detection.
                 Defaults to 50.0.
-            surface_pressure_threshold: Surface pressure threshold in Pa.
-                Defaults to 100500.0.
+            surface_pressure_threshold: Maximum SLP (Pa) a candidate grid
+                point may have to be considered for peak detection. Defaults
+                to 101325.0 Pa (standard atmosphere), so only below-average
+                pressure cells are examined.
             orography: Optional orography DataArray for terrain filtering.
                 Defaults to None.
             max_gc_distance_slp_contour_degrees: Maximum great circle distance for
@@ -491,8 +493,6 @@ def maybe_derive_variables(
 
     # Take the first derived variable and process it
     derived_variable = maybe_derived_variables[0]
-    from datetime import datetime
-    data.to_netcdf(f'test_{datetime.now().strftime("%H:%M:%S")}.nc')
     output = derived_variable.compute(data=data, **kwargs)
 
     # Ensure the DataArray has the correct name and is a DataArray.
