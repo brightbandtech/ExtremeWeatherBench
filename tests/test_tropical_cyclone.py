@@ -624,6 +624,7 @@ class TestTCIntegration:
 # Shared fixture for end-to-end filter tests
 # ---------------------------------------------------------------------------
 
+
 def _make_single_init_tc_dataset(n_lead: int = 12, n_wind_strong: int = 10):
     """Build a minimal synthetic TC dataset with one clear init_time.
 
@@ -639,7 +640,7 @@ def _make_single_init_tc_dataset(n_lead: int = 12, n_wind_strong: int = 10):
 
     Expected: n_wind_strong detections have neighbourhood wind ≥ 10 m/s.
     """
-    lat = np.arange(10.0, 31.0, 1.0)   # 21 pts, 1 ° spacing
+    lat = np.arange(10.0, 31.0, 1.0)  # 21 pts, 1 ° spacing
     lon = np.arange(-80.0, -59.0, 1.0)  # 21 pts, 1 ° spacing
     n_lat, n_lon = len(lat), len(lon)
     c_lat, c_lon = 10, 10  # centre indices → lat=20°, lon=-70°
@@ -712,6 +713,7 @@ def _make_ibt_for_dataset(ds: xr.Dataset) -> xr.Dataset:
 # Tests for _degrees_to_gridpoints
 # ---------------------------------------------------------------------------
 
+
 class TestDegreesToGridpoints:
     """Unit tests for the _degrees_to_gridpoints helper.
 
@@ -752,8 +754,8 @@ class TestDegreesToGridpoints:
 
     def test_non_square_grid(self):
         """Non-square grid (0.25° lat, 0.5° lon): mean=0.375; 1.5°→ceil(4)=4."""
-        lat = np.arange(0.0, 20.0, 0.25)   # 0.25° spacing
-        lon = np.arange(0.0, 20.0, 0.5)    # 0.5° spacing
+        lat = np.arange(0.0, 20.0, 0.25)  # 0.25° spacing
+        lon = np.arange(0.0, 20.0, 0.5)  # 0.5° spacing
         # mean_spacing = (0.25 + 0.5) / 2 = 0.375
         # ceil(1.5 / 0.375) = ceil(4.0) = 4
         assert tropical_cyclone._degrees_to_gridpoints(1.5, lat, lon) == 4
@@ -801,6 +803,7 @@ class TestDegreesToGridpoints:
 # Tests for TropicalCycloneTrackVariables parameter defaults
 # ---------------------------------------------------------------------------
 
+
 class TestTropicalCycloneTrackVariablesDefaults:
     """Verify new parameter names and default values."""
 
@@ -841,6 +844,7 @@ class TestTropicalCycloneTrackVariablesDefaults:
 # ---------------------------------------------------------------------------
 # End-to-end tests for neighbourhood wind sampling and the wind-count filter
 # ---------------------------------------------------------------------------
+
 
 class TestNeighbourhoodWindSampling:
     """Verify that peak_winds uses max in the ±wind_search_radius neighbourhood.

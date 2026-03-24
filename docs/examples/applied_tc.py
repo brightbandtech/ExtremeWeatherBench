@@ -76,16 +76,7 @@ hres_forecast = ewb.forecasts.ZarrForecast(
 )
 
 # Define FCNv2 forecast, this is the old version for reference only
-fcnv2_forecast = ewb.forecasts.KerchunkForecast(
-    name="fcn_forecast",
-    source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
-    variables=[ewb.derived.TropicalCycloneTrackVariables()],
-    # Define metadata variable mapping for FCNv2 forecast
-    variable_mapping=ewb.CIRA_metadata_variable_mapping,
-    # Preprocess the FCNv2 forecast to include geopotential thickness calculation
-    preprocess=ewb.defaults._preprocess_cira_tc_forecast_dataset,
-    storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
-)
+fcnv2_forecast = ewb.defaults.cira_fcnv2_tropical_cyclone_forecast
 
 # Define Pangu forecast
 pangu_forecast = ewb.forecasts.KerchunkForecast(
@@ -112,7 +103,7 @@ composite_landfall_metrics = [
             ewb.metrics.LandfallTimeMeanError,
             ewb.metrics.LandfallDisplacement,
         ],
-        approach="next",
+        approach="first",
         # Set the intensity variable to use for the metric
         forecast_variable="air_pressure_at_mean_sea_level",
         target_variable="air_pressure_at_mean_sea_level",
