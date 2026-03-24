@@ -41,9 +41,6 @@ pangu_forecast = ewb.inputs.get_cira_icechunk(
     preprocess=ewb.defaults.preprocess_cira_icechunk_tc_forecast_dataset,
 )
 
-print(fcnv2_forecast)
-print(pangu_forecast)
-
 # Define composite metric for tropical cyclone track metrics. Using a composite metric
 # prevents recomputation of landfalls, saving significant time. approach="next" sets
 # the evaluation to occur, in the case of multiple landfalls, for the next landfall in
