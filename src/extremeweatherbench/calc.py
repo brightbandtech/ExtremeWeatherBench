@@ -1,3 +1,4 @@
+import logging
 from typing import Literal, Optional, Sequence, Union
 
 import numpy as np
@@ -15,6 +16,9 @@ from extremeweatherbench import utils
 epsilon: float = 0.6219569100577033  # Ratio of molecular weights (H2O/dry air)
 sat_press_0c: float = 6.112  # Saturation vapor pressure at 0°C (hPa)
 g0: float = 9.80665  # Standard gravity (m/s^2)
+
+logger = logging.getLogger("extremeweatherbench.calc")
+logger.setLevel(logging.INFO)
 
 
 def convert_from_cartesian_to_latlon(
@@ -746,7 +750,14 @@ def _interpolate_and_format_landfalls(
 
             landfall_data.append(landfall_point)
 
-        except (IndexError, AttributeError, ValueError, TypeError, ZeroDivisionError):
+        except (
+            IndexError,
+            AttributeError,
+            ValueError,
+            TypeError,
+            ZeroDivisionError,
+        ) as e:
+            logger.warning(f"Error processing landfall at index {i}: {e}")
             continue
 
     if not landfall_data:
@@ -818,17 +829,20 @@ def _interpolate_and_format_landfalls(
                 name=track_data.name or "landfall_value",
             )
         else:
-            # Return first landfall as scalar
+            # Return first landfall as 1-element (landfall,) DataArray,
+            # consistent with the return_all_landfalls=True schema above.
             d = landfall_data[0]
             coords = {
-                "latitude": d["latitude"],
-                "longitude": d["longitude"],
-                "valid_time": d["valid_time"],
+                "latitude": (["landfall"], [d["latitude"]]),
+                "longitude": (["landfall"], [d["longitude"]]),
+                "valid_time": (["landfall"], [d["valid_time"]]),
+                "landfall": ("landfall", [0]),
             }
             if "init_time" in d:
                 coords["init_time"] = d["init_time"]
             return xr.DataArray(
-                d["value"],
+                [d["value"]],
+                dims=["landfall"],
                 coords=coords,
                 name=track_data.name or "landfall_value",
             )
