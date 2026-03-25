@@ -61,11 +61,6 @@ def atmospheric_river_mask(
         keep_attrs=True,
         output_dtypes=[np.int8],
     ).compute()
-    # dilation_radius = dilation_radius * 2 + 1
-    # struct = np.ones((dilation_radius, dilation_radius))
-    # dilated_laplacian = ndimage.binary_dilation(
-    #     has_high_laplacian, structure=struct, axes=(-2, -1)
-    # )
 
     # Combine conditions without tropical restriction initially
     initial_intersection = xr.where(dilated_laplacian & has_high_ivt, 1, 0)

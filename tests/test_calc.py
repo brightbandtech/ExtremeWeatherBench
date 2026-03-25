@@ -1107,6 +1107,92 @@ class TestNantrapezoidPressureLevels:
         testing.assert_almost_equal(float(result), 10000.0)
 
 
+class TestBinaryDilationUfunc:
+    """Tests for _binary_dilation_ufunc."""
+
+    def test_binary_dilation_ufunc_2d(self):
+        """Test that 2D (lat, lon) input is handled correctly."""
+        data = np.zeros((10, 10), dtype=bool)
+        data[5, 5] = True
+        result = calc._binary_dilation_ufunc(data, dilation_radius=1)
+        assert result.shape == (10, 10)
+        assert result.dtype == np.int8
+        assert result[5, 5] == 1
+        assert result[4, 5] == 1
+
+    def test_binary_dilation_ufunc_3d(self):
+        """Test that 3D (valid_time, lat, lon) input is handled correctly."""
+        data = np.zeros((3, 10, 10), dtype=bool)
+        data[0, 5, 5] = True
+        result = calc._binary_dilation_ufunc(data, dilation_radius=1)
+        assert result.shape == (3, 10, 10)
+        assert result.dtype == np.int8
+        assert result[0, 5, 5] == 1
+        assert result[0, 4, 5] == 1
+        # Other time steps should be zero
+        assert result[1].sum() == 0
+
+    def test_binary_dilation_ufunc_4d(self):
+        """Regression test: 4D (lead_time, valid_time, lat, lon) input must not
+        raise IndexError due to structure/ndim mismatch."""
+        data = np.zeros((4, 2, 10, 10), dtype=bool)
+        data[0, 0, 5, 5] = True
+        # Before the fix this raised IndexError: tuple index out of range
+        result = calc._binary_dilation_ufunc(data, dilation_radius=1)
+        assert result.shape == (4, 2, 10, 10)
+        assert result.dtype == np.int8
+        assert result[0, 0, 5, 5] == 1
+        assert result[0, 0, 4, 5] == 1
+        # Other lead/time slices untouched
+        assert result[1].sum() == 0
+
+    def test_binary_dilation_ufunc_dilates_correctly(self):
+        """Verify dilation expands a True region by the correct radius."""
+        radius = 2
+        data = np.zeros((20, 20), dtype=bool)
+        data[10, 10] = True
+        result = calc._binary_dilation_ufunc(data, dilation_radius=radius)
+        # The dilation structure covers a (2r+1) x (2r+1) square
+        size = radius * 2 + 1
+        assert result[10 - radius : 10 + radius + 1, 10 - radius : 10 + radius + 1].sum() == size * size
+
+    def test_binary_dilation_ufunc_via_apply_ufunc_4d(self):
+        """Regression test: apply_ufunc path with 4D dask array must not crash."""
+        import xarray as xr
+
+        lead = [0, 6, 12]
+        time = pd.date_range("2023-01-01", periods=2, freq="6h")
+        lat = np.linspace(20, 50, 10)
+        lon = np.linspace(-130, -100, 10)
+
+        data = np.zeros((len(lead), len(time), len(lat), len(lon)), dtype=bool)
+        data[0, 0, 5, 5] = True
+
+        da = xr.DataArray(
+            data,
+            dims=["lead_time", "valid_time", "latitude", "longitude"],
+            coords={
+                "lead_time": lead,
+                "valid_time": time,
+                "latitude": lat,
+                "longitude": lon,
+            },
+        )
+
+        result = xr.apply_ufunc(
+            calc._binary_dilation_ufunc,
+            da.chunk({"valid_time": 1, "latitude": -1, "longitude": -1}),
+            1,
+            input_core_dims=[["latitude", "longitude"], []],
+            output_core_dims=[["latitude", "longitude"]],
+            dask="parallelized",
+            output_dtypes=[np.int8],
+        ).compute()
+
+        assert result.shape == da.shape
+        assert result.sel(lead_time=0, valid_time=time[0]).values[5, 5] == 1
+
+
 class TestDewpointFromSpecificHumidity:
     """Test the dewpoint_from_specific_humidity function."""
 
