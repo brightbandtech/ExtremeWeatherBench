@@ -25,7 +25,7 @@ ghcn_freeze_target = ewb.targets.GHCN(variables=["surface_air_temperature"])
 fcnv2_forecast = ewb.defaults.cira_fcnv2_freeze_forecast
 
 # Load the climatology for DurationMeanError
-climatology = ewb.get_climatology(quantile=0.85)
+climatology = ewb.get_climatology(quantile=0.15)
 
 # Define the metrics
 metrics_list = [
