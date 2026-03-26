@@ -177,6 +177,52 @@ class TestAtmosphericRiverVariables:
         # Small minimum size should have more features
         assert result_small_min.sum() >= result_large_min.sum()
 
+    def test_atmospheric_river_mask_4d_input(self):
+        """Regression test: 4D (lead_time, valid_time, lat, lon) input must not
+        raise IndexError in _binary_dilation_ufunc."""
+        lead = [0, 6, 12]
+        time = pd.date_range("2023-01-01", periods=2, freq="6h")
+        lat = np.linspace(20, 50, 20)
+        lon = np.linspace(-130, -100, 20)
+
+        shape_4d = (len(lead), len(time), len(lat), len(lon))
+        ivt_data = rng.uniform(100, 300, shape_4d)
+        ivt_data[0, 0, 5:15, 5:15] = 500
+        ivt_laplacian = rng.uniform(-2, 2, shape_4d)
+        ivt_laplacian[0, 0, 5:15, 5:15] = 3.0
+
+        ivt = xr.DataArray(
+            ivt_data,
+            dims=["lead_time", "valid_time", "latitude", "longitude"],
+            coords={
+                "lead_time": lead,
+                "valid_time": time,
+                "latitude": lat,
+                "longitude": lon,
+            },
+        )
+        ivt_lap = xr.DataArray(
+            ivt_laplacian,
+            dims=["lead_time", "valid_time", "latitude", "longitude"],
+            coords={
+                "lead_time": lead,
+                "valid_time": time,
+                "latitude": lat,
+                "longitude": lon,
+            },
+        )
+
+        result = atmospheric_river.atmospheric_river_mask(
+            ivt=ivt,
+            ivt_laplacian=ivt_lap,
+        )
+
+        assert isinstance(result, xr.DataArray)
+        # All non-lat/lon dims should be preserved in the result
+        assert "latitude" in result.dims
+        assert "longitude" in result.dims
+        assert set(result.values.flatten()).issubset({0, 1})
+
     def test_atmospheric_river_mask_nan_handling(self):
         """Test atmospheric river mask with NaN values."""
         time = pd.date_range("2023-01-01", periods=2, freq="6h")

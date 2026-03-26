@@ -62,6 +62,8 @@ data-prep = [
     "seaborn>=0.13.2",
     "ujson>=5.10.0",
     "virtualizarr==2.1.2",
+    "dask[complete]>=2025.1.0",
+    "distributed>=2025.1.0",
 ]
 
 [dependency-groups]
