@@ -283,7 +283,7 @@ def geopotential_thickness(
     [(float64[:], float64[:], float64[:])],
     "(n),(n)->()",
     nopython=True,
-    target="parallel",
+    target="cpu",
 )
 def _nantrapezoid_kernel(y, x, out):
     """1D nan-aware trapezoid integration kernel."""
@@ -298,12 +298,12 @@ def _nantrapezoid_kernel(y, x, out):
     out[()] = total
 
 
-def nantrapezoid_4d(y, x):
+def nantrapezoid_nd(y, x):
     """
     Wrapper that moves the integration axis to last position,
     calls the guvectorize kernel, then returns result.
 
-    y: (time, level, lat, lon)
+    y: (..., level, lat, lon)
     x: (level,) or same shape as y
     """
 
@@ -324,7 +324,7 @@ def nantrapezoid_pressure_levels(da: xr.DataArray):
     levels_pa = da["level"] * 100
 
     output = xr.apply_ufunc(
-        nantrapezoid_4d,
+        nantrapezoid_nd,
         da,
         levels_pa,
         input_core_dims=[["level"], ["level"]],
