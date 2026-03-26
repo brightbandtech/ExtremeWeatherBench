@@ -49,6 +49,8 @@ dependencies = [
     "numba>=0.63.1",
     "sparse>=0.17.0",
     "icechunk>=1.1.14",
+    "dask[complete]>=2025.1.0",
+    "distributed>=2025.1.0",
 ]
 
 [project.optional-dependencies]
@@ -61,7 +63,6 @@ data-prep = [
     "ujson>=5.10.0",
     "virtualizarr==2.1.2",
 ]
-multiprocessing = ["dask[complete]>=2025.1.0", "distributed>=2025.1.0"]
 
 [dependency-groups]
 dev = [
@@ -92,7 +93,7 @@ docs = [
     "pymdown-extensions>=10.19.1",
 ]
 
-complete = ["extremeweatherbench[data-prep,multiprocessing]"]
+complete = ["extremeweatherbench[data-prep]"]
 
 [build-system]
 requires = ["hatchling >= 1.26"]
