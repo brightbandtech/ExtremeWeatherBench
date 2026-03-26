@@ -1,4 +1,3 @@
-import dask
 import numpy as np
 import xarray as xr
 from scipy import ndimage
@@ -42,14 +41,16 @@ def atmospheric_river_mask(
 
     # Get all coordinates except level for the intersection DataArray
     coords_dict = {dim: ivt.coords[dim] for dim in ivt.dims if dim != "level"}
+
     # Create boolean masks for each condition
-    has_high_laplacian, has_high_ivt = dask.compute(
+    has_high_laplacian, has_high_ivt = (
         np.abs(ivt_laplacian) >= laplacian_threshold,
         ivt >= ivt_threshold,
     )
+
     # For the Laplacian condition, we want to check if there's a value >=
     # laplacian_threshold within 8 gridpoints (0.25 degrees).
-    # Apply binary dilation lazily via apply_ufunc; this keeps dilation in the Dask 
+    # Apply binary dilation lazily via apply_ufunc; this keeps dilation in the Dask
     # graph after ivt/laplacian tasks
     dilated_laplacian = xr.apply_ufunc(
         calc._binary_dilation_ufunc,
@@ -60,24 +61,23 @@ def atmospheric_river_mask(
         dask="parallelized",
         keep_attrs=True,
         output_dtypes=[np.int8],
-    ).compute()
+    )
 
     # Combine conditions without tropical restriction initially
     initial_intersection = xr.where(dilated_laplacian & has_high_ivt, 1, 0)
+
     # Label connected components and get their sizes
     labeled_array, _ = ndimage.label(initial_intersection)
     unique_labels, label_counts = np.unique(labeled_array, return_counts=True)
+
     # Filter by size first (excluding background label 0)
     size_valid_labels = unique_labels[
         np.where((label_counts >= min_size_gridpoints) & (unique_labels != 0))
     ]
-    # Collect all size-valid feature labels
-    valid_features = []
-    for label_num in size_valid_labels:
-        valid_features.append(label_num)
 
     # Create final mask using valid features
-    feature_mask = np.isin(labeled_array, valid_features)
+    feature_mask = np.isin(labeled_array, size_valid_labels)
+
     # Final result with size threshold applied
     ar_mask = xr.DataArray(
         xr.where(feature_mask, 1, 0), coords=coords_dict, dims=coords_dict.keys()

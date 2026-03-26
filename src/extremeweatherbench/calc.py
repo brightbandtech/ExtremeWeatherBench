@@ -901,9 +901,9 @@ def _binary_dilation_ufunc(data: xr.DataArray, dilation_radius: int) -> xr.DataA
     """
     size = dilation_radius * 2 + 1
     struct = np.ones((size, size))
-    return ndimage.binary_dilation(
-        data, structure=struct, axes=(-2, -1)
-    ).astype(np.int8)
+    return ndimage.binary_dilation(data, structure=struct, axes=(-2, -1)).astype(
+        np.int8
+    )
 
 
 def _compute_blurred_laplacian_ufunc(data: xr.DataArray, sigma: float) -> xr.DataArray:

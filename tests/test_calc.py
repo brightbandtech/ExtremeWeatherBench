@@ -1154,7 +1154,10 @@ class TestBinaryDilationUfunc:
         result = calc._binary_dilation_ufunc(data, dilation_radius=radius)
         # The dilation structure covers a (2r+1) x (2r+1) square
         size = radius * 2 + 1
-        assert result[10 - radius : 10 + radius + 1, 10 - radius : 10 + radius + 1].sum() == size * size
+        assert (
+            result[10 - radius : 10 + radius + 1, 10 - radius : 10 + radius + 1].sum()
+            == size * size
+        )
 
     def test_binary_dilation_ufunc_via_apply_ufunc_4d(self):
         """Regression test: apply_ufunc path with 4D dask array must not crash."""
