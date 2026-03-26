@@ -58,7 +58,9 @@ if __name__ == "__main__":
     )
 
     # Run the workflow
-    outputs = freeze_ewb.run_evaluation(parallel_config={"backend": "loky", "n_jobs": 1})
+    outputs = freeze_ewb.run_evaluation(
+        parallel_config={"backend": "loky", "n_jobs": 1}
+    )
 
     # Print the outputs; can be saved if desired
     outputs.to_csv("freeze_outputs.csv")

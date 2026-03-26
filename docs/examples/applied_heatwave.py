@@ -65,5 +65,7 @@ if __name__ == "__main__":
     )
 
     # Run the workflow
-    outputs = heatwave_ewb.run_evaluation(parallel_config={"backend": "loky", "n_jobs": 2})
+    outputs = heatwave_ewb.run_evaluation(
+        parallel_config={"backend": "loky", "n_jobs": 2}
+    )
     outputs.to_csv("applied_heatwave_outputs.csv")
