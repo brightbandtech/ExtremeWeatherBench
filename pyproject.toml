@@ -48,12 +48,12 @@ dependencies = [
     "cartopy==0.24.1",
     "numba>=0.63.1",
     "sparse>=0.17.0",
+    "icechunk>=1.1.14",
 ]
 
 [project.optional-dependencies]
 data-prep = [
     "fsspec>=2024.12.0",
-    "icechunk>=1.1.14",
     "matplotlib>=3.10.0",
     "obstore>=0.8.2",
     "scipy>=1.13",
