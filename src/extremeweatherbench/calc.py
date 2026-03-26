@@ -887,20 +887,22 @@ def _is_true_landfall(
 
 
 def _binary_dilation_ufunc(data: xr.DataArray, dilation_radius: int) -> xr.DataArray:
-    """Apply binary dilation to a single 2D (lat, lon) slice.
+    """Apply binary dilation along the last two (lat, lon) axes.
+
+    Uses axes=(-2, -1) so the function works correctly for any number of
+    leading broadcast dimensions (e.g. valid_time, lead_time).
 
     Args:
-        data: 2D boolean array of shape (lat, lon)
+        data: Array of shape (..., lat, lon)
         dilation_radius: radius for the dilation in gridpoints
 
     Returns:
-        Dilated boolean array of shape (lat, lon)
+        Dilated array of the same shape as data
     """
     size = dilation_radius * 2 + 1
     struct = np.ones((size, size))
-    return np.expand_dims(
-        ndimage.binary_dilation(data.squeeze(), structure=struct).astype(np.int8),
-        axis=0,
+    return ndimage.binary_dilation(data, structure=struct, axes=(-2, -1)).astype(
+        np.int8
     )
 
 

@@ -1149,6 +1149,8 @@ dependencies = [
 
 [package.optional-dependencies]
 data-prep = [
+    { name = "dask", extra = ["complete"] },
+    { name = "distributed" },
     { name = "fsspec" },
     { name = "matplotlib" },
     { name = "obstore" },
