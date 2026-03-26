@@ -49,8 +49,8 @@ def atmospheric_river_mask(
     )
     # For the Laplacian condition, we want to check if there's a value >=
     # laplacian_threshold within 8 gridpoints (0.25 degrees).
-    # Apply binary dilation lazily via apply_ufunc before computing
-    # This keeps dilation in the Dask graph alongside ivt/laplacian tasks
+    # Apply binary dilation lazily via apply_ufunc; this keeps dilation in the Dask 
+    # graph after ivt/laplacian tasks
     dilated_laplacian = xr.apply_ufunc(
         calc._binary_dilation_ufunc,
         has_high_laplacian.chunk({time_dimension: 1, "latitude": -1, "longitude": -1}),
