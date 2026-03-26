@@ -1120,6 +1120,8 @@ dependencies = [
     { name = "cartopy" },
     { name = "click" },
     { name = "dacite" },
+    { name = "dask", extra = ["complete"] },
+    { name = "distributed" },
     { name = "eccodes" },
     { name = "flox" },
     { name = "frozenlist" },
@@ -1155,14 +1157,10 @@ data-prep = [
     { name = "ujson" },
     { name = "virtualizarr" },
 ]
-multiprocessing = [
-    { name = "dask", extra = ["complete"] },
-    { name = "distributed" },
-]
 
 [package.dev-dependencies]
 complete = [
-    { name = "extremeweatherbench", extra = ["data-prep", "multiprocessing"] },
+    { name = "extremeweatherbench", extra = ["data-prep"] },
 ]
 dev = [
     { name = "deptry" },
@@ -1197,8 +1195,8 @@ requires-dist = [
     { name = "cartopy", specifier = "==0.24.1" },
     { name = "click", specifier = ">=8.1.8" },
     { name = "dacite", specifier = ">=1.8.1" },
-    { name = "dask", extras = ["complete"], marker = "extra == 'multiprocessing'", specifier = ">=2025.1.0" },
-    { name = "distributed", marker = "extra == 'multiprocessing'", specifier = ">=2025.1.0" },
+    { name = "dask", extras = ["complete"], specifier = ">=2025.1.0" },
+    { name = "distributed", specifier = ">=2025.1.0" },
     { name = "eccodes", specifier = "==2.42.0" },
     { name = "flox", specifier = ">=0.10.0" },
     { name = "frozenlist", specifier = "==1.5.0" },
@@ -1230,10 +1228,10 @@ requires-dist = [
     { name = "xarray", extras = ["io"], specifier = ">=2025.7.1" },
     { name = "zarr", specifier = ">=3.0.9,<4" },
 ]
-provides-extras = ["data-prep", "multiprocessing"]
+provides-extras = ["data-prep"]
 
 [package.metadata.requires-dev]
-complete = [{ name = "extremeweatherbench", extras = ["data-prep", "multiprocessing"], editable = "." }]
+complete = [{ name = "extremeweatherbench", extras = ["data-prep"], editable = "." }]
 dev = [
     { name = "deptry", specifier = ">=0.23.0" },
     { name = "ipykernel", specifier = ">=6.29.5" },
