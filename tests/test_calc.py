@@ -1196,6 +1196,164 @@ class TestBinaryDilationUfunc:
         assert result.sel(lead_time=0, valid_time=time[0]).values[5, 5] == 1
 
 
+class TestThreadSafety:
+    """Confirm target='cpu' kernel and binary dilation ufunc are thread-safe.
+
+    _nantrapezoid_kernel previously used target='parallel', which spawns
+    numba-internal threads. When multiple Dask workers called it
+    simultaneously, nested parallelism caused race conditions and incorrect
+    results. target='cpu' makes each invocation single-threaded so that
+    external thread pools (e.g. Dask's threaded scheduler) can call it
+    concurrently without corruption.
+    """
+
+    def test_nantrapezoid_kernel_concurrent_threads(self):
+        """_nantrapezoid_kernel must return the correct value from every
+        thread when invoked concurrently from many threads at once."""
+        import concurrent.futures
+
+        rng = np.random.default_rng(42)
+        n_levels = 200
+        x = np.sort(rng.uniform(10_000, 100_000, n_levels)).astype(np.float64)
+        y = rng.uniform(0.0, 1.0, n_levels).astype(np.float64)
+
+        ref = float(calc._nantrapezoid_kernel(y, x))
+
+        def call_kernel():
+            return float(calc._nantrapezoid_kernel(y, x))
+
+        n_workers = 16
+        n_calls = n_workers * 8
+        with concurrent.futures.ThreadPoolExecutor(max_workers=n_workers) as ex:
+            futures = [ex.submit(call_kernel) for _ in range(n_calls)]
+            results = [f.result() for f in concurrent.futures.as_completed(futures)]
+
+        assert all(abs(r - ref) < 1e-6 for r in results), (
+            f"Thread-unsafe results detected; expected {ref}, got: {results}"
+        )
+
+    def test_nantrapezoid_pressure_levels_dask_threaded_matches_serial(self):
+        """nantrapezoid_pressure_levels computed with Dask's threaded
+        scheduler must match synchronous (single-threaded) computation.
+
+        This directly exercises the scenario where many Dask workers call
+        the cpu-target kernel concurrently across chunks.
+        """
+        rng = np.random.default_rng(0)
+        levels_hpa = np.array([1000, 925, 850, 700, 500, 300, 200], dtype=float)
+        n_time, n_lat, n_lon = 20, 8, 8
+
+        y = rng.uniform(0.0, 1e-3, (n_time, n_lat, n_lon, len(levels_hpa)))
+        y[::3, ::2, ::2, 0] = np.nan  # sprinkle NaNs to exercise nan path
+
+        da = xr.DataArray(
+            y,
+            dims=["time", "latitude", "longitude", "level"],
+            coords={"level": levels_hpa},
+        ).chunk({"time": 1})
+
+        serial = calc.nantrapezoid_pressure_levels(da).compute(
+            scheduler="synchronous"
+        )
+        threaded = calc.nantrapezoid_pressure_levels(da).compute(
+            scheduler="threads", num_workers=8
+        )
+
+        xr.testing.assert_allclose(serial, threaded)
+
+    def test_nantrapezoid_nd_concurrent_threads(self):
+        """nantrapezoid_nd must produce identical results when called from
+        many threads at the same time (no shared mutable state)."""
+        import concurrent.futures
+
+        rng = np.random.default_rng(99)
+        levels = np.array([1000.0, 925, 850, 700, 500, 300, 200]) * 100  # Pa
+        n_lat, n_lon = 10, 10
+        y = rng.uniform(0.0, 1.0, (n_lat, n_lon, len(levels)))
+        x = levels.copy()
+
+        ref = calc.nantrapezoid_nd(y, x)
+
+        def call_nd():
+            return calc.nantrapezoid_nd(y, x)
+
+        n_workers = 12
+        n_calls = n_workers * 6
+        with concurrent.futures.ThreadPoolExecutor(max_workers=n_workers) as ex:
+            futures = [ex.submit(call_nd) for _ in range(n_calls)]
+            results = [f.result() for f in concurrent.futures.as_completed(futures)]
+
+        for result in results:
+            np.testing.assert_allclose(result, ref, rtol=1e-6)
+
+    def test_binary_dilation_ufunc_concurrent_threads(self):
+        """_binary_dilation_ufunc must return correct results for every
+        thread when called concurrently from many threads at once."""
+        import concurrent.futures
+
+        rng = np.random.default_rng(7)
+        data = (rng.random((30, 30)) > 0.85).astype(bool)
+        radius = 2
+
+        ref = calc._binary_dilation_ufunc(data, radius)
+
+        def call_dilation():
+            return calc._binary_dilation_ufunc(data, radius)
+
+        n_workers = 16
+        n_calls = n_workers * 6
+        with concurrent.futures.ThreadPoolExecutor(max_workers=n_workers) as ex:
+            futures = [ex.submit(call_dilation) for _ in range(n_calls)]
+            results = [f.result() for f in concurrent.futures.as_completed(futures)]
+
+        for result in results:
+            np.testing.assert_array_equal(result, ref)
+
+    def test_binary_dilation_via_apply_ufunc_threaded_dask(self):
+        """_binary_dilation_ufunc via apply_ufunc with dask='parallelized'
+        and a threaded scheduler must match the synchronous result.
+
+        This mirrors how atmospheric_river_mask calls the function in
+        production and validates that axes=(-2, -1) is safe under
+        concurrent execution across chunks.
+        """
+        rng = np.random.default_rng(13)
+        lead = [0, 6, 12, 18]
+        time = pd.date_range("2023-01-01", periods=6, freq="6h")
+        lat = np.linspace(20, 50, 16)
+        lon = np.linspace(-130, -100, 16)
+
+        data = (rng.random((len(lead), len(time), len(lat), len(lon))) > 0.9).astype(
+            bool
+        )
+        da = xr.DataArray(
+            data,
+            dims=["lead_time", "valid_time", "latitude", "longitude"],
+            coords={
+                "lead_time": lead,
+                "valid_time": time,
+                "latitude": lat,
+                "longitude": lon,
+            },
+        ).chunk({"lead_time": 1, "valid_time": 1, "latitude": -1, "longitude": -1})
+
+        def _apply(arr):
+            return xr.apply_ufunc(
+                calc._binary_dilation_ufunc,
+                arr,
+                1,
+                input_core_dims=[["latitude", "longitude"], []],
+                output_core_dims=[["latitude", "longitude"]],
+                dask="parallelized",
+                output_dtypes=[np.int8],
+            )
+
+        serial = _apply(da).compute(scheduler="synchronous")
+        threaded = _apply(da).compute(scheduler="threads", num_workers=8)
+
+        xr.testing.assert_equal(serial, threaded)
+
+
 class TestDewpointFromSpecificHumidity:
     """Test the dewpoint_from_specific_humidity function."""
 
