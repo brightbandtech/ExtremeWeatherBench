@@ -1252,9 +1252,7 @@ class TestThreadSafety:
             coords={"level": levels_hpa},
         ).chunk({"time": 1})
 
-        serial = calc.nantrapezoid_pressure_levels(da).compute(
-            scheduler="synchronous"
-        )
+        serial = calc.nantrapezoid_pressure_levels(da).compute(scheduler="synchronous")
         threaded = calc.nantrapezoid_pressure_levels(da).compute(
             scheduler="threads", num_workers=8
         )
