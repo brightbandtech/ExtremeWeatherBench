@@ -1596,32 +1596,24 @@ class LandfallMetric(CompositeMetric):
         return_next_landfall = self.approach == "next"
 
         # Get first forecast landfall per init_time
-        forecast_landfalls = calc.find_landfalls(
-            forecast, return_next_landfall=return_next_landfall
-        )
+        forecast_landfalls = calc.find_landfalls(forecast)
 
         # find_landfalls never returns None; an empty array means no landfalls.
         if len(forecast_landfalls) == 0:
             nan_landfalls = utils._create_nan_dataarray(self.preserve_dims)
             return (nan_landfalls, nan_landfalls.copy())
 
-        # Squeeze the per-init_time landfall dimension to (init_time,).
-        if "landfall" in forecast_landfalls.dims:
-            forecast_landfalls = forecast_landfalls.isel(landfall=0)
-
         # Get all target landfalls
-        target_landfalls_pre_init = calc.find_landfalls(
-            target, return_next_landfall=return_next_landfall
-        )
+        target_landfalls = calc.find_landfalls(target)
 
-        if len(target_landfalls_pre_init) == 0:
+        if len(target_landfalls) == 0:
             nan_landfalls = utils._create_nan_dataarray(self.preserve_dims)
             return (nan_landfalls, nan_landfalls.copy())
 
         if return_next_landfall:
             # Find next target landfall for each init_time
             target_landfalls = calc.find_next_landfall_for_init_time(
-                forecast_landfalls, target_landfalls_pre_init
+                forecast_landfalls, target_landfalls
             )
         else:
             # First approach: target is (landfall,) with one observed event.
@@ -1629,16 +1621,14 @@ class LandfallMetric(CompositeMetric):
             # data leakage, then broadcast the single target to (init_time,)
             # so sub-metrics receive consistent arrays.
             first_valid_time = (
-                target_landfalls_pre_init.coords["valid_time"]
-                .isel(landfall=0)
-                .values
+                target_landfalls.coords["valid_time"].isel(landfall_number=0).values
             )
             forecast_landfalls = forecast_landfalls.where(
                 forecast_landfalls.init_time < first_valid_time,
                 drop=True,
             )
             target_landfalls = calc.broadcast_first_target_to_init_times(
-                target_landfalls_pre_init, forecast_landfalls
+                forecast_landfalls.init_time, target_landfalls
             )
         return forecast_landfalls, target_landfalls
 
