@@ -764,8 +764,9 @@ def _interpolate_and_format_landfalls(
 
             # Add init_time if forecast data
             if is_forecast:
+                landfall_point = landfall_point.expand_dims("init_time", axis=0)
                 landfall_point = landfall_point.assign_coords(
-                    init_time=("landfall_number", [init_times[i]])
+                    init_time=("init_time", [init_times[i]])
                 )
 
             landfall_data.append(landfall_point)

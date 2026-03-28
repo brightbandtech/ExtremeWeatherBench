@@ -1835,41 +1835,17 @@ class LandfallDisplacement(LandfallMetric):
         Returns:
             Distance in the specified units as xarray DataArray
         """
-        common_init_times = utils.find_common_init_times(
-            forecast_landfall, target_landfall
-        )
-        if not common_init_times:
-            return utils._create_nan_dataarray(self.preserve_dims)
-
-        distances = []
-        for init_time in common_init_times:
-            f_lat = forecast_landfall.sel(init_time=init_time).coords["latitude"].values
-            f_lon = (
-                forecast_landfall.sel(init_time=init_time).coords["longitude"].values
+        distances = (
+            calc.haversine_distance(
+                [forecast_landfall.latitude, forecast_landfall.longitude],
+                [target_landfall.latitude, target_landfall.longitude],
+                units=units,
             )
-            t_lat = target_landfall.sel(init_time=init_time).coords["latitude"].values
-            t_lon = target_landfall.sel(init_time=init_time).coords["longitude"].values
-
-            if (
-                np.any(np.isnan(f_lat))
-                or np.any(np.isnan(f_lon))
-                or np.any(np.isnan(t_lat))
-                or np.any(np.isnan(t_lon))
-            ):
-                distances.append(np.nan)
-            else:
-                dist = calc.haversine_distance(
-                    [f_lat, f_lon], [t_lat, t_lon], units=units
-                )
-                distances.append(
-                    float(dist.item()) if hasattr(dist, "item") else float(dist)
-                )
-
-        return xr.DataArray(
-            distances,
-            dims=["init_time"],
-            coords={"init_time": common_init_times},
+            .where(forecast_landfall.notnull())
+            .mean(dim="landfall_number")
         )
+
+        return distances
 
     def _compute_metric(
         self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
@@ -1932,24 +1908,16 @@ class LandfallTimeMeanError(LandfallMetric):
             Time difference in hours (forecast_landfall - target_landfall)
             as xarray DataArray with init_time dimension.
         """
-        common_init_times = utils.find_common_init_times(
-            forecast_landfall, target_landfall
-        )
-        if not common_init_times:
-            return utils._create_nan_dataarray(self.preserve_dims)
 
-        time_diffs = []
-        for init_time in common_init_times:
-            time1 = forecast_landfall.sel(init_time=init_time).coords["valid_time"]
-            time2 = target_landfall.sel(init_time=init_time).coords["valid_time"]
-            time_diff = (time1 - time2) / np.timedelta64(1, "h")
-            time_diffs.append(float(time_diff.values))
+        time_diffs = (
+            forecast_landfall.valid_time - target_landfall.valid_time
+        ) / np.timedelta64(1, "h")
 
-        return xr.DataArray(
-            time_diffs,
-            dims=self.preserve_dims,
-            coords={self.preserve_dims: common_init_times},
+        time_diffs = time_diffs.where(forecast_landfall.notnull()).mean(
+            dim="landfall_number"
         )
+
+        return time_diffs
 
     def _compute_metric(
         self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
