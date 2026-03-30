@@ -1977,4 +1977,8 @@ class LandfallIntensityMeanAbsoluteError(LandfallMetric, MeanAbsoluteError):
         ) or not utils.is_valid_landfall(target_landfall):
             return utils._create_nan_dataarray(self.preserve_dims)
 
-        return np.abs(forecast_landfall - target_landfall)
+        return (
+            np.abs(forecast_landfall - target_landfall)
+            .where(forecast_landfall.notnull())
+            .mean(dim="landfall")
+        )
