@@ -1847,8 +1847,10 @@ class LandfallDisplacement(LandfallMetric):
             [forecast_landfall.latitude, forecast_landfall.longitude],
             [target_landfall.latitude, target_landfall.longitude],
             units=units,
-        ).where(forecast_landfall.notnull())
-        return distances
+        )
+        if not isinstance(distances, xr.DataArray):
+            raise TypeError("haversine_distance returned a scalar; expected DataArray")
+        return distances.where(forecast_landfall.notnull())
 
     def _compute_metric(
         self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
