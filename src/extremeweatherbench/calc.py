@@ -1,3 +1,4 @@
+import logging
 from typing import Literal, Optional, Sequence, Union
 
 import numpy as np
@@ -15,6 +16,9 @@ from extremeweatherbench import utils
 epsilon: float = 0.6219569100577033  # Ratio of molecular weights (H2O/dry air)
 sat_press_0c: float = 6.112  # Saturation vapor pressure at 0°C (hPa)
 g0: float = 9.80665  # Standard gravity (m/s^2)
+
+logger = logging.getLogger("extremeweatherbench.calc")
+logger.setLevel(logging.INFO)
 
 
 def convert_from_cartesian_to_latlon(
@@ -420,23 +424,24 @@ def dewpoint_from_specific_humidity(pressure: float, specific_humidity: float) -
 def find_landfalls(
     track_data: xr.DataArray,
     land_geom: Optional[shapely.geometry.Polygon] = None,
-    return_next_landfall: bool = False,
 ) -> xr.DataArray:
-    """Find landfall point(s) where tracked object intersects land.
+    """Find landfall point(s) where a tracked object intersects land.
 
-    Generalized landfall detection for any object (TC, AR, etc).
-    Expects DataArray with latitude, longitude, valid_time as coords.
+    Generalized landfall detection for any object (TC, AR, etc.).
 
     Args:
-        track_data: Track DataArray with latitude, longitude,
-            valid_time coords. Data values are interpolated at landfall.
-            Shape: (valid_time,) or (lead_time, valid_time)
-        return_next_landfall: If True, return next landfall; else only first landfall
-        land_geom: Shapely geometry for land intersection testing
+        track_data: Track DataArray with latitude, longitude, valid_time
+            coords. Data values are interpolated at the landfall point.
+            Shape: ``(valid_time,)`` for observations or
+            ``(lead_time, valid_time)`` for forecasts.
+        return_next_landfall: If True return all landfalls (used by the
+            "next" approach); if False return only the first landfall.
+        land_geom: Shapely geometry for land-intersection testing. Uses
+            the default NaturalEarth 10 m land polygon when None.
 
     Returns:
-        DataArray with landfall values and lat/lon/time as coords,
-        or None if no landfall found
+        DataArray with interpolated landfall values or empty if no landfalls are
+        detected.
     """
     # If no land geometry is provided, use default
     if land_geom is None:
@@ -453,42 +458,28 @@ def find_landfalls(
         # Convert to init_time coords for boundary detection
         track_data = utils.convert_valid_time_to_init_time(track_data)
 
-        # Flatten to single time dimension for vectorized processing
-        track_data_flat = track_data.stack(time=("init_time", "lead_time"))
+        # Flatten to single time dimension
+        track_data = track_data.stack(time=("init_time", "lead_time"))
 
         # Vectorized landfall detection
-        landfall_mask = _detect_landfalls_wrapper(track_data_flat, land_geom)
+        landfall_mask = _detect_landfalls_wrapper(track_data, land_geom)
 
         # Mask init_time boundaries
-        landfall_mask = _mask_init_time_boundaries(landfall_mask, track_data_flat)
+        landfall_mask = _mask_init_time_boundaries(landfall_mask, track_data)
 
-        # Interpolate at landfall points
-        result = _interpolate_and_format_landfalls(
-            track_data_flat,
-            landfall_mask,
-            land_geom,
-            return_next_landfall,
-            group_by="init_time",
-        )
-
-        return result
     else:
         # Process single track data
         landfall_mask = _detect_landfalls_wrapper(track_data, land_geom)
 
-        return _interpolate_and_format_landfalls(
-            track_data,
-            landfall_mask,
-            land_geom,
-            return_next_landfall,
-            group_by=None,
-        )
+    return _interpolate_and_format_landfalls(
+        track_data, landfall_mask, land_geom, is_forecast
+    )
 
 
 def find_next_landfall_for_init_time(
     forecast_landfalls: xr.DataArray,
     target_landfalls: xr.DataArray,
-) -> Optional[xr.DataArray]:
+) -> xr.DataArray:
     """Find unique next upcoming landfalls from target data.
 
     For each forecast initialization time, finds the next landfall
@@ -504,8 +495,8 @@ def find_next_landfall_for_init_time(
             with return_all=True (has landfall dimension)
 
     Returns:
-        DataArray with unique next landfalls indexed by init_time, or
-        None if no future landfalls exist
+        DataArray with unique next landfalls indexed by init_time. Returns
+        a zero-length DataArray if no future landfalls exist.
     """
     # Extract init_times from forecast landfalls
     if "init_time" in forecast_landfalls.dims:
@@ -528,22 +519,25 @@ def find_next_landfall_for_init_time(
     # Build result for all init_times, keeping only unique landfalls
     results = []
 
-    for i, init_t in enumerate(init_times):
+    for i, init_time in enumerate(init_times):
         if valid_mask[i]:
             # There is a future landfall for this init_time
             landfall_idx = next_indices[i]
             landfall = target_landfalls.isel(landfall=landfall_idx)
-            landfall = landfall.assign_coords(init_time=init_t)
+            landfall = landfall.expand_dims("init_time", axis=0)
+            landfall = landfall.assign_coords(init_time=("init_time", [init_time]))
 
             results.append(landfall)
 
-    # Combine landfalls indexed by init_time or return None if no results
-    return (
-        xr.concat(
-            results, dim="init_time", coords="different", compat="equals", join="outer"
+    # Combine landfalls indexed by init_time or return empty if no results
+    if not results:
+        return xr.DataArray(
+            np.array([], dtype=float),
+            dims=["init_time"],
+            coords={"init_time": np.array([], dtype="datetime64[ns]")},
         )
-        if results
-        else None
+    return xr.concat(
+        results, dim="init_time", coords="different", compat="equals", join="outer"
     )
 
 
@@ -596,7 +590,7 @@ def _detect_landfalls_wrapper(
         lats,
         lons_180_next,
         lats_next,
-        vectorize=True,  # We already vectorized with np.vectorize
+        vectorize=True,
         dask="parallelized",
         output_dtypes=[bool],
     )
@@ -646,31 +640,43 @@ def _interpolate_and_format_landfalls(
     track_data: xr.DataArray,
     landfall_mask: xr.DataArray,
     land_geom: shapely.geometry.Polygon,
-    return_all_landfalls: bool,
-    group_by: Optional[str] = None,
-) -> Optional[xr.DataArray]:
+    is_forecast: bool,
+) -> xr.DataArray:
     """Interpolate landfall points and format output.
+
+    When no landfalls are detected the returned array is zero-length, but carries the
+    same dim and coordinate names as a populated result for the same arguments.
 
     Args:
         track_data: Original track data
         landfall_mask: Boolean mask of landfall locations
         land_geom: Land geometry for intersection
-        return_all_landfalls: Whether to return all or just first
         group_by: If not None, group by this coord (e.g., "init_time")
 
     Returns:
-        Formatted landfall DataArray or None if no landfalls
+        Formatted landfall DataArray
     """
+
+    landfall_da = xr.DataArray(
+        np.array([], dtype=float),
+        dims=["landfall"],
+        coords={
+            "landfall": np.array([], dtype=int),
+            "latitude": ("landfall", np.array([], dtype=float)),
+            "longitude": ("landfall", np.array([], dtype=float)),
+            "valid_time": ("landfall", np.array([], dtype="datetime64[ns]")),
+        },
+        name="value",
+    )
     # Determine time dimension
     time_dims = [d for d in track_data.dims if "time" in d.lower()]
-    if not time_dims:
-        return None
 
     # Get indices where landfalls occur
     landfall_indices = np.where(landfall_mask.values)[0]
 
-    if len(landfall_indices) == 0:
-        return None
+    # Return empty if no landfalls or no time dimension
+    if len(landfall_indices) == 0 or not time_dims:
+        return landfall_da
 
     # Extract coordinate arrays
     lats_vals = track_data.coords["latitude"].values
@@ -682,7 +688,6 @@ def _interpolate_and_format_landfalls(
     lons_180 = (lons_vals + 180) % 360 - 180
 
     # Get init_time if available
-    init_times = None
     if "init_time" in track_data.coords:
         init_times = track_data.coords["init_time"].values
 
@@ -729,109 +734,117 @@ def _interpolate_and_format_landfalls(
                 [(lons_180[i], lats_vals[i]), (landfall_lon, landfall_lat)]
             ).length
             frac = landfall_dist / full_dist
+            value = track_vals[i] + frac * (track_vals[i + 1] - track_vals[i])
+            if not np.isnan(track_vals[i]):
+                value = track_vals[i] + frac * (track_vals[i + 1] - track_vals[i])
+            else:
+                continue
 
-            landfall_point = {
-                "latitude": landfall_lat,
-                "longitude": utils.convert_longitude_to_360(landfall_lon),
-                "valid_time": times_vals[i]
-                + frac * (times_vals[i + 1] - times_vals[i]),
-                "value": track_vals[i] + frac * (track_vals[i + 1] - track_vals[i])
-                if not np.isnan(track_vals[i])
-                else np.nan,
-            }
+            # Create DataArray with landfall coordinate and value
+            landfall_point = xr.DataArray(
+                [value],
+                dims=["landfall"],
+                coords={
+                    "landfall": np.array([i], dtype=int),
+                    "latitude": (
+                        "landfall",
+                        np.array([landfall_lat], dtype=float),
+                    ),
+                    "longitude": (
+                        "landfall",
+                        np.array([landfall_lon], dtype=float),
+                    ),
+                    "valid_time": (
+                        "landfall",
+                        np.array(
+                            [
+                                times_vals[i]
+                                + frac * (times_vals[i + 1] - times_vals[i])
+                            ],
+                            dtype="datetime64[ns]",
+                        ),
+                    ),
+                },
+                name="value",
+            )
 
-            # Add init_time if available
-            if init_times is not None:
-                landfall_point["init_time"] = init_times[i]
+            # Add init_time if forecast data
+            if is_forecast:
+                landfall_point = landfall_point.expand_dims("init_time", axis=0)
+                landfall_point = landfall_point.assign_coords(
+                    init_time=("init_time", [init_times[i]])
+                )
 
             landfall_data.append(landfall_point)
 
-        except (IndexError, AttributeError, ValueError, TypeError, ZeroDivisionError):
+        except (
+            IndexError,
+            AttributeError,
+            ValueError,
+            TypeError,
+            ZeroDivisionError,
+        ) as e:
+            logger.warning(f"Error processing landfall at index {i}: {e}")
             continue
 
-    if not landfall_data:
-        return None
-
-    # Check if all landfall values are NaN
-    all_nan = all(np.isnan(d.get("value", np.nan)) for d in landfall_data)
-    if all_nan:
-        return None
-
     # Format output based on grouping
-    if group_by == "init_time" and init_times is not None:
-        # Group by init_time and optionally keep first per group
-        results = []
-        unique_inits = np.unique([d["init_time"] for d in landfall_data])
-
-        for init_t in unique_inits:
-            init_landfalls = [d for d in landfall_data if d["init_time"] == init_t]
-
-            if not return_all_landfalls:
-                # Keep only first landfall for this init_time
-                init_landfalls = sorted(init_landfalls, key=lambda x: x["valid_time"])
-                init_landfalls = [init_landfalls[0]]
-
-            # Create DataArray with consistent landfall dimension
-            values = [d["value"] for d in init_landfalls]
-            coords = {
-                "latitude": (["landfall"], [d["latitude"] for d in init_landfalls]),
-                "longitude": (["landfall"], [d["longitude"] for d in init_landfalls]),
-                "valid_time": (["landfall"], [d["valid_time"] for d in init_landfalls]),
-                "landfall": np.arange(len(init_landfalls)),
-                "init_time": init_t,
-            }
-            da = xr.DataArray(
-                values,
-                dims=["landfall"],
-                coords=coords,
-                name=track_data.name or "landfall_value",
-            )
-            results.append(da)
-
-        return (
-            xr.concat(
-                results,
-                dim="init_time",
-                coords="different",
-                compat="equals",
-                join="outer",
-            )
-            if results
-            else None
+    if landfall_data:
+        landfall_da = xr.concat(
+            landfall_data,
+            dim="landfall",
+            coords="different",
+            compat="equals",
+            join="outer",
         )
 
-    else:
-        # No grouping - format as single or multiple landfalls
-        if return_all_landfalls:
-            # Return with landfall dimension
-            values = [d["value"] for d in landfall_data]
-            coords = {
-                "latitude": (["landfall"], [d["latitude"] for d in landfall_data]),
-                "longitude": (["landfall"], [d["longitude"] for d in landfall_data]),
-                "valid_time": (["landfall"], [d["valid_time"] for d in landfall_data]),
-                "landfall": np.arange(len(landfall_data)),
-            }
-            return xr.DataArray(
-                values,
-                dims=["landfall"],
-                coords=coords,
-                name=track_data.name or "landfall_value",
-            )
-        else:
-            # Return first landfall as scalar
-            d = landfall_data[0]
-            coords = {
-                "latitude": d["latitude"],
-                "longitude": d["longitude"],
-                "valid_time": d["valid_time"],
-            }
-            if "init_time" in d:
-                coords["init_time"] = d["init_time"]
-            return xr.DataArray(
-                d["value"],
-                coords=coords,
-                name=track_data.name or "landfall_value",
-            )
+    return landfall_da
+
+
+def broadcast_first_target_to_init_times(
+    init_times: xr.DataArray,
+    target: xr.DataArray,
+) -> xr.DataArray:
+    """Broadcast a single first-approach observation to ``(init_time,)`` shape.
+
+    For the "first" landfall approach, ``find_landfalls`` returns the
+    observed target as ``(landfall,)`` with one element and no ``init_time``
+    dimension. This function converts it to ``(init_time,)`` so sub-metrics
+    always receive arrays with a consistent schema.
+
+    The caller is responsible for filtering ``forecast`` to only the
+    init_times that should be evaluated (e.g. those before the observed
+    landfall) before passing it here.
+
+    Args:
+        target: ``(landfall,)`` DataArray from ``find_landfalls`` for
+            observations. Must contain exactly one element.
+        forecast: ``(init_time,)`` DataArray from ``find_landfalls`` for
+            the forecast, used to determine which init_times the broadcast
+            target should span.
+
+    Returns:
+        ``(init_time,)`` DataArray with the target value, latitude,
+        longitude, and valid_time repeated across all forecast init_times.
+    """
+    t = target.isel(landfall=0)
+    n = len(init_times)
+    return xr.DataArray(
+        np.full(n, float(t.values)),
+        dims=["init_time"],
+        coords={
+            "init_time": init_times.values,
+            "latitude": ("init_time", np.full(n, float(t.coords["latitude"]))),
+            "longitude": (
+                "init_time",
+                np.full(n, float(t.coords["longitude"])),
+            ),
+            "valid_time": (
+                "init_time",
+                np.full(n, t.coords["valid_time"].values, dtype="datetime64[ns]"),
+            ),
+        },
+        name=target.name,
+    )
 
 
 # Keep existing _process_single_track_landfall for backward compatibility

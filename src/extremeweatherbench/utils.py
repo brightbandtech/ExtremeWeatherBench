@@ -61,7 +61,6 @@ def find_common_init_times(
     Returns:
         Sorted list of init_times present in both forecast and target.
     """
-    # Find common init_times between forecast and target
     forecast_init_times = set(forecast_landfall.coords["init_time"].values)
     target_init_times = set(target_landfall.coords["init_time"].values)
     common_init_times = sorted(forecast_init_times.intersection(target_init_times))
@@ -85,7 +84,6 @@ def is_valid_landfall(landfall: xr.DataArray | None) -> bool:
         return False
     if "init_time" not in landfall.coords:
         return False
-    # Check that we have actual data (not all NaN)
     if np.isnan(landfall.values).all():
         return False
     return True
