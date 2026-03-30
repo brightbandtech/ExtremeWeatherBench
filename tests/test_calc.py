@@ -1539,9 +1539,7 @@ class TestLandfallDetection:
         # Create land geometry with multiple potential crossings
         land_geom = shapely.geometry.box(-82, 24, -80, 28)
 
-        result = calc.find_landfalls(
-            track, land_geom=land_geom, return_next_landfall=True
-        )
+        result = calc.find_landfalls(track, land_geom=land_geom)
 
         # Should return DataArray with landfall dimension if found
         if result is not None:
@@ -1655,8 +1653,9 @@ class TestLandfallDetection:
 
         result = calc.find_next_landfall_for_init_time(forecast, target_landfalls)
 
-        # Should return None when no future landfalls
-        assert result is None
+        # Should return empty DataArray when no future landfalls
+        assert isinstance(result, xr.DataArray)
+        assert len(result) == 0
 
     def test_find_next_landfall_without_init_time(self):
         """Test find_next_landfall with forecast without init_time."""
@@ -1901,9 +1900,9 @@ class TestLandfallDetection:
 
         land_geom = shapely.geometry.box(-82, 24, -80, 26)
 
-        # Test with return_all_landfalls=False (first only)
+        # Test with is_forecast=False (non-forecast track)
         result = calc._interpolate_and_format_landfalls(
-            track, landfall_mask, land_geom, return_all_landfalls=False
+            track, landfall_mask, land_geom, is_forecast=False
         )
 
         # Should return DataArray or None
@@ -1913,7 +1912,7 @@ class TestLandfallDetection:
             assert "longitude" in result.coords
             assert "valid_time" in result.coords
 
-        # Test with return_all_landfalls=True
+        # Test with multiple landfalls
         landfall_mask_all = xr.DataArray(
             [False, True, True, False],
             dims=["valid_time"],
@@ -1921,7 +1920,7 @@ class TestLandfallDetection:
         )
 
         result_all = calc._interpolate_and_format_landfalls(
-            track, landfall_mask_all, land_geom, return_all_landfalls=True
+            track, landfall_mask_all, land_geom, is_forecast=False
         )
 
         if result_all is not None:
@@ -1959,30 +1958,21 @@ class TestLandfallDeduplication:
 
         land_geom = shapely.geometry.box(-82, 24, -80, 26)
 
-        result = calc.find_landfalls(
-            track, land_geom=land_geom, return_next_landfall=True
-        )
+        result = calc.find_landfalls(track, land_geom=land_geom)
 
-        if result is not None:
-            # Check that each init_time has no duplicate landfalls
-            for init_t in result.init_time.values:
-                init_result = result.sel(init_time=init_t)
-                if "landfall" in init_result.dims:
-                    # Get valid_times for this init_time
-                    times = init_result.coords["valid_time"].values
-                    lats = init_result.coords["latitude"].values
-                    lons = init_result.coords["longitude"].values
-
-                    # Check for exact duplicates
-                    for i in range(len(times)):
-                        for j in range(i + 1, len(times)):
-                            # No two landfalls should be identical
-                            same_time = times[i] == times[j]
-                            same_lat = np.isclose(lats[i], lats[j], atol=0.01)
-                            same_lon = np.isclose(lons[i], lons[j], atol=0.01)
-                            assert not (same_time and same_lat and same_lon), (
-                                f"Duplicate landfalls at init_time={init_t}"
-                            )
+        if result is not None and len(result) > 0:
+            # Check that there are no duplicate landfalls (same time+location)
+            times = result.coords["valid_time"].values
+            lats_vals = result.coords["latitude"].values
+            lons_vals = result.coords["longitude"].values
+            for i in range(len(times)):
+                for j in range(i + 1, len(times)):
+                    same_time = times[i] == times[j]
+                    same_lat = np.isclose(lats_vals[i], lats_vals[j], atol=0.01)
+                    same_lon = np.isclose(lons_vals[i], lons_vals[j], atol=0.01)
+                    assert not (same_time and same_lat and same_lon), (
+                        "Duplicate landfalls found in result"
+                    )
 
     def test_consistent_landfall_dimension(self):
         """Test that all init_times have landfall dimension (no scalars)."""
@@ -2015,9 +2005,7 @@ class TestLandfallDeduplication:
 
         land_geom = shapely.geometry.box(-82, 24, -80, 28)
 
-        result = calc.find_landfalls(
-            track, land_geom=land_geom, return_next_landfall=True
-        )
+        result = calc.find_landfalls(track, land_geom=land_geom)
 
         if result is not None and "init_time" in result.dims:
             # Check that all init_times have consistent structure
@@ -2149,7 +2137,10 @@ class TestLandfallNextApproach:
         result = calc.find_next_landfall_for_init_time(
             forecast_landfalls, target_landfalls
         )
-        assert result is None
+
+        # Should return empty DataArray when no future landfalls
+        assert isinstance(result, xr.DataArray)
+        assert len(result) == 0
 
 
 class TestLandfallMetricAlignment:

@@ -1615,13 +1615,16 @@ class LandfallMetric(CompositeMetric):
             target_landfalls = calc.find_next_landfall_for_init_time(
                 forecast_landfalls, target_landfalls
             )
+            if len(target_landfalls) == 0:
+                nan_landfalls = utils._create_nan_dataarray(self.preserve_dims)
+                return (nan_landfalls, nan_landfalls.copy())
         else:
             # First approach: target is (landfall,) with one observed event.
             # Drop forecast init_times at or after the landfall to prevent
             # data leakage, then broadcast the single target to (init_time,)
             # so sub-metrics receive consistent arrays.
             first_valid_time = (
-                target_landfalls.coords["valid_time"].isel(landfall_number=0).values
+                target_landfalls.coords["valid_time"].isel(landfall=0).values
             )
             forecast_landfalls = forecast_landfalls.where(
                 forecast_landfalls.init_time < first_valid_time,
@@ -1835,16 +1838,16 @@ class LandfallDisplacement(LandfallMetric):
         Returns:
             Distance in the specified units as xarray DataArray
         """
-        distances = (
-            calc.haversine_distance(
-                [forecast_landfall.latitude, forecast_landfall.longitude],
-                [target_landfall.latitude, target_landfall.longitude],
-                units=units,
-            )
-            .where(forecast_landfall.notnull())
-            .mean(dim="landfall_number")
+        forecast_landfall, target_landfall = xr.align(
+            forecast_landfall, target_landfall, join="inner"
         )
-
+        if len(forecast_landfall) == 0:
+            return xr.DataArray(np.nan)
+        distances = calc.haversine_distance(
+            [forecast_landfall.latitude, forecast_landfall.longitude],
+            [target_landfall.latitude, target_landfall.longitude],
+            units=units,
+        ).where(forecast_landfall.notnull())
         return distances
 
     def _compute_metric(
@@ -1909,15 +1912,15 @@ class LandfallTimeMeanError(LandfallMetric):
             as xarray DataArray with init_time dimension.
         """
 
+        forecast_landfall, target_landfall = xr.align(
+            forecast_landfall, target_landfall, join="inner"
+        )
+        if len(forecast_landfall) == 0:
+            return xr.DataArray(np.nan)
         time_diffs = (
             forecast_landfall.valid_time - target_landfall.valid_time
         ) / np.timedelta64(1, "h")
-
-        time_diffs = time_diffs.where(forecast_landfall.notnull()).mean(
-            dim="landfall_number"
-        )
-
-        return time_diffs
+        return time_diffs.where(forecast_landfall.notnull())
 
     def _compute_metric(
         self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any

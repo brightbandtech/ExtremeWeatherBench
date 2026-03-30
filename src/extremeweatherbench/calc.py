@@ -495,8 +495,8 @@ def find_next_landfall_for_init_time(
             with return_all=True (has landfall dimension)
 
     Returns:
-        DataArray with unique next landfalls indexed by init_time, or
-        None if no future landfalls exist
+        DataArray with unique next landfalls indexed by init_time. Returns
+        a zero-length DataArray if no future landfalls exist.
     """
     # Extract init_times from forecast landfalls
     if "init_time" in forecast_landfalls.dims:
@@ -523,13 +523,19 @@ def find_next_landfall_for_init_time(
         if valid_mask[i]:
             # There is a future landfall for this init_time
             landfall_idx = next_indices[i]
-            landfall = target_landfalls.isel(landfall_number=landfall_idx)
+            landfall = target_landfalls.isel(landfall=landfall_idx)
             landfall = landfall.expand_dims("init_time", axis=0)
-            landfall = landfall.assign_coords(init_time=("init_time", init_time))
+            landfall = landfall.assign_coords(init_time=("init_time", [init_time]))
 
             results.append(landfall)
 
-    # Combine landfalls indexed by init_time or return None if no results
+    # Combine landfalls indexed by init_time or return empty if no results
+    if not results:
+        return xr.DataArray(
+            np.array([], dtype=float),
+            dims=["init_time"],
+            coords={"init_time": np.array([], dtype="datetime64[ns]")},
+        )
     return xr.concat(
         results, dim="init_time", coords="different", compat="equals", join="outer"
     )
@@ -653,12 +659,12 @@ def _interpolate_and_format_landfalls(
 
     landfall_da = xr.DataArray(
         np.array([], dtype=float),
-        dims=["landfall_number"],
+        dims=["landfall"],
         coords={
-            "landfall_number": np.array([], dtype=int),
-            "latitude": ("landfall_number", np.array([], dtype=float)),
-            "longitude": ("landfall_number", np.array([], dtype=float)),
-            "valid_time": ("landfall_number", np.array([], dtype="datetime64[ns]")),
+            "landfall": np.array([], dtype=int),
+            "latitude": ("landfall", np.array([], dtype=float)),
+            "longitude": ("landfall", np.array([], dtype=float)),
+            "valid_time": ("landfall", np.array([], dtype="datetime64[ns]")),
         },
         name="value",
     )
@@ -732,24 +738,24 @@ def _interpolate_and_format_landfalls(
             if not np.isnan(track_vals[i]):
                 value = track_vals[i] + frac * (track_vals[i + 1] - track_vals[i])
             else:
-                value = np.nan
+                continue
 
-            # Create DataArray with landfall number coordinate and value
+            # Create DataArray with landfall coordinate and value
             landfall_point = xr.DataArray(
                 [value],
-                dims=["landfall_number"],
+                dims=["landfall"],
                 coords={
-                    "landfall_number": np.array([i], dtype=int),
+                    "landfall": np.array([i], dtype=int),
                     "latitude": (
-                        "landfall_number",
+                        "landfall",
                         np.array([landfall_lat], dtype=float),
                     ),
                     "longitude": (
-                        "landfall_number",
+                        "landfall",
                         np.array([landfall_lon], dtype=float),
                     ),
                     "valid_time": (
-                        "landfall_number",
+                        "landfall",
                         np.array(
                             [
                                 times_vals[i]
@@ -785,7 +791,7 @@ def _interpolate_and_format_landfalls(
     if landfall_data:
         landfall_da = xr.concat(
             landfall_data,
-            dim="landfall_number",
+            dim="landfall",
             coords="different",
             compat="equals",
             join="outer",
@@ -820,7 +826,7 @@ def broadcast_first_target_to_init_times(
         ``(init_time,)`` DataArray with the target value, latitude,
         longitude, and valid_time repeated across all forecast init_times.
     """
-    t = target.isel(landfall_number=0)
+    t = target.isel(landfall=0)
     n = len(init_times)
     return xr.DataArray(
         np.full(n, float(t.values)),
