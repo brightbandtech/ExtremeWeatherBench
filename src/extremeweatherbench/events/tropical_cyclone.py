@@ -133,7 +133,7 @@ def generate_tc_tracks_by_init_time(
     logger.debug("tc_track_analysis_data %s", tc_track_analysis_data)
     tc_track_data_df = tc_track_analysis_data.to_dataframe().reset_index()
     tc_track_data_df["valid_time"] = pd.to_datetime(tc_track_data_df["valid_time"])
-    
+
     time_coord = sea_level_pressure.valid_time
     init_time_coord = sea_level_pressure.init_time
     latitude = sea_level_pressure.latitude
