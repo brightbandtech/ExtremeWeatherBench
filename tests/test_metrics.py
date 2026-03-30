@@ -2183,15 +2183,17 @@ class TestLandfallMetrics:
             },
         )
 
-        # Mock landfall data (now DataArrays instead of Datasets)
+        # Mock find_landfalls for the observation target. It returns (landfall,)
+        # as find_landfalls does for observation data; maybe_compute_landfalls
+        # calls broadcast_first_target_to_init_times to convert to (init_time,).
         mock_target_landfall = xr.DataArray(
             [40.0],
-            dims=["init_time"],
+            dims=["landfall"],
             coords={
-                "init_time": [pd.Timestamp("2023-09-15")],
-                "latitude": (["init_time"], [25.0]),
-                "longitude": (["init_time"], [-80.0]),
-                "valid_time": (["init_time"], [pd.Timestamp("2023-09-15 06:00")]),
+                "landfall": [0],
+                "latitude": (["landfall"], [25.0]),
+                "longitude": (["landfall"], [-80.0]),
+                "valid_time": (["landfall"], [pd.Timestamp("2023-09-15 06:00")]),
             },
             name="surface_wind_speed",
         )
@@ -2286,15 +2288,17 @@ class TestLandfallMetrics:
             },
         )
 
-        # Mock landfall data
+        # Mock find_landfalls for the observation target — (landfall,) schema.
+        # broadcast_first_target_to_init_times converts it to (init_time,)
+        # inside maybe_compute_landfalls before the sub-metric sees it.
         mock_target_landfall = xr.DataArray(
             [45.0],
-            dims=["init_time"],
+            dims=["landfall"],
             coords={
-                "init_time": [pd.Timestamp("2023-09-15")],
-                "latitude": (["init_time"], [25.7617]),
-                "longitude": (["init_time"], [-80.1918]),
-                "valid_time": (["init_time"], [pd.Timestamp("2023-09-15 12:00")]),
+                "landfall": [0],
+                "latitude": (["landfall"], [25.7617]),
+                "longitude": (["landfall"], [-80.1918]),
+                "valid_time": (["landfall"], [pd.Timestamp("2023-09-15 12:00")]),
             },
             name="surface_wind_speed",
         )
@@ -2367,24 +2371,17 @@ class TestLandfallMetrics:
             },
         )
 
-        # Mock landfall data - both need init_time dimension
+        # Mock find_landfalls for the observation target — (landfall,) schema.
+        # broadcast_first_target_to_init_times converts it to (init_time,)
+        # inside maybe_compute_landfalls before the sub-metric sees it.
         mock_target_landfall = xr.DataArray(
-            [50.0, 50.0],
-            dims=["init_time"],
+            [50.0],
+            dims=["landfall"],
             coords={
-                "init_time": [
-                    pd.Timestamp("2023-09-14 12:00"),
-                    pd.Timestamp("2023-09-14 12:00"),
-                ],
-                "latitude": (["init_time"], [25.0, 25.0]),
-                "longitude": (["init_time"], [-80.0, -80.0]),
-                "valid_time": (
-                    ["init_time"],
-                    [
-                        pd.Timestamp("2023-09-15 12:00"),
-                        pd.Timestamp("2023-09-15 12:00"),
-                    ],
-                ),
+                "landfall": [0],
+                "latitude": (["landfall"], [25.0]),
+                "longitude": (["landfall"], [-80.0]),
+                "valid_time": (["landfall"], [pd.Timestamp("2023-09-15 12:00")]),
             },
             name="surface_wind_speed",
         )
@@ -2471,28 +2468,22 @@ class TestLandfallMetrics:
             },
         )
 
-        # Mock landfall data with different timing
-        # Use matching init_times so they can be compared
+        # Mock find_landfalls for the observation target — (landfall,) schema.
+        # broadcast_first_target_to_init_times converts it to (init_time,)
+        # inside maybe_compute_landfalls before calculate_time_difference runs.
         common_init_times = [
             pd.Timestamp("2023-09-14 09:00"),
             pd.Timestamp("2023-09-14 14:00"),
             pd.Timestamp("2023-09-14 12:00"),
         ]
         mock_target_landfall = xr.DataArray(
-            [50.0, 50.0, 50.0],
-            dims=["init_time"],
+            [50.0],
+            dims=["landfall"],
             coords={
-                "init_time": common_init_times,
-                "latitude": (["init_time"], [25.0, 25.0, 25.0]),
-                "longitude": (["init_time"], [-80.0, -80.0, -80.0]),
-                "valid_time": (
-                    ["init_time"],
-                    [
-                        pd.Timestamp("2023-09-15 12:00"),
-                        pd.Timestamp("2023-09-15 12:00"),
-                        pd.Timestamp("2023-09-15 12:00"),
-                    ],
-                ),
+                "landfall": [0],
+                "latitude": (["landfall"], [25.0]),
+                "longitude": (["landfall"], [-80.0]),
+                "valid_time": (["landfall"], [pd.Timestamp("2023-09-15 12:00")]),
             },
             name="surface_wind_speed",
         )
@@ -3264,14 +3255,15 @@ class TestMaybeComputeLandfalls:
                     "longitude": (["init_time"], [-80.0]),
                 },
             )
+            # Target uses (landfall,) dim, matching _interpolate_and_format_landfalls
             mock_target = xr.DataArray(
                 [2.0],
-                dims=["init_time"],
+                dims=["landfall"],
                 coords={
-                    "init_time": [pd.Timestamp("2023-09-14")],
-                    "valid_time": (["init_time"], [pd.Timestamp("2023-09-16")]),
-                    "latitude": (["init_time"], [25.0]),
-                    "longitude": (["init_time"], [-80.0]),
+                    "landfall": [0],
+                    "valid_time": (["landfall"], [pd.Timestamp("2023-09-16")]),
+                    "latitude": (["landfall"], [25.0]),
+                    "longitude": (["landfall"], [-80.0]),
                 },
             )
 
@@ -3296,8 +3288,15 @@ class TestMaybeComputeLandfalls:
         forecast = xr.DataArray([1.0], dims=["valid_time"])
         target = xr.DataArray([1.0], dims=["valid_time"])
 
+        # find_landfalls now returns an empty DataArray (never None).
+        _empty = xr.DataArray(
+            np.array([], dtype=float),
+            dims=["init_time"],
+            coords={"init_time": np.array([], dtype="datetime64[ns]")},
+        )
+
         with mock.patch.object(calc, "find_landfalls") as mock_find:
-            mock_find.return_value = None
+            mock_find.return_value = _empty
 
             result_forecast, result_target = metric.maybe_compute_landfalls(
                 forecast, target
@@ -3317,8 +3316,14 @@ class TestMaybeComputeLandfalls:
         forecast = xr.DataArray([1.0], dims=["valid_time"])
         target = xr.DataArray([1.0], dims=["valid_time"])
 
+        _empty = xr.DataArray(
+            np.array([], dtype=float),
+            dims=["init_time"],
+            coords={"init_time": np.array([], dtype="datetime64[ns]")},
+        )
+
         with mock.patch.object(calc, "find_landfalls") as mock_find:
-            mock_find.return_value = None
+            mock_find.return_value = _empty
 
             # Only provide forecast_landfall, not target_landfall
             result_forecast, result_target = metric.maybe_compute_landfalls(
@@ -3336,8 +3341,14 @@ class TestMaybeComputeLandfalls:
         forecast = xr.DataArray([1.0], dims=["valid_time"])
         target = xr.DataArray([1.0], dims=["valid_time"])
 
+        _empty = xr.DataArray(
+            np.array([], dtype=float),
+            dims=["init_time"],
+            coords={"init_time": np.array([], dtype="datetime64[ns]")},
+        )
+
         with mock.patch.object(calc, "find_landfalls") as mock_find:
-            mock_find.return_value = None
+            mock_find.return_value = _empty
 
             # Only provide target_landfall, not forecast_landfall
             result_forecast, result_target = metric.maybe_compute_landfalls(
@@ -3354,8 +3365,14 @@ class TestMaybeComputeLandfalls:
         forecast = xr.DataArray([1.0], dims=["valid_time"])
         target = xr.DataArray([1.0], dims=["valid_time"])
 
+        _empty = xr.DataArray(
+            np.array([], dtype=float),
+            dims=["init_time"],
+            coords={"init_time": np.array([], dtype="datetime64[ns]")},
+        )
+
         with mock.patch.object(calc, "find_landfalls") as mock_find:
-            mock_find.return_value = None
+            mock_find.return_value = _empty
 
             result = metric.maybe_compute_landfalls(forecast, target)
 
@@ -3407,9 +3424,15 @@ class TestMaybeComputeLandfalls:
         forecast = xr.DataArray([1.0], dims=["valid_time"])
         target = xr.DataArray([1.0], dims=["valid_time"])
 
+        _empty = xr.DataArray(
+            np.array([], dtype=float),
+            dims=["init_time"],
+            coords={"init_time": np.array([], dtype="datetime64[ns]")},
+        )
+
         for metric in metrics_to_test:
             with mock.patch.object(calc, "find_landfalls") as mock_find:
-                mock_find.return_value = None
+                mock_find.return_value = _empty
 
                 result = metric._compute_metric(forecast, target)
 

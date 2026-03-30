@@ -1568,8 +1568,9 @@ class TestLandfallDetection:
 
         result = calc.find_landfalls(track, land_geom=land_geom)
 
-        # Should return None for insufficient points
-        assert result is None
+        # Should return an empty DataArray (no landfalls detectable)
+        assert isinstance(result, xr.DataArray)
+        assert len(result) == 0
 
     def test_find_landfalls_with_track_dimension(self):
         """Test find_landfalls with singleton track dimension."""
@@ -1593,7 +1594,7 @@ class TestLandfallDetection:
         # Should squeeze track dimension and process
         result = calc.find_landfalls(track, land_geom=land_geom)
 
-        assert result is None or isinstance(result, xr.DataArray)
+        assert isinstance(result, xr.DataArray)
 
     def test_find_next_landfall_for_init_time(self):
         """Test find_next_landfall_for_init_time function."""
@@ -1780,7 +1781,7 @@ class TestLandfallDetection:
         result = calc.find_landfalls(track, land_geom=land_geom)
 
         # Should handle unnamed DataArray
-        assert result is None or isinstance(result, xr.DataArray)
+        assert isinstance(result, xr.DataArray)
 
     def test_find_landfalls_all_nan_track(self):
         """Test find_landfalls with all NaN values in track."""
@@ -1802,8 +1803,9 @@ class TestLandfallDetection:
 
         result = calc.find_landfalls(track, land_geom=land_geom)
 
-        # Should return None for all NaN track
-        assert result is None
+        # Should return an empty DataArray when all track values are NaN
+        assert isinstance(result, xr.DataArray)
+        assert len(result) == 0
 
     def test_detect_landfalls_wrapper(self):
         """Test _detect_landfalls_wrapper function."""
