@@ -1850,7 +1850,7 @@ class LandfallDisplacement(LandfallMetric):
         )
         if not isinstance(distances, xr.DataArray):
             raise TypeError("haversine_distance returned a scalar; expected DataArray")
-        return distances.where(forecast_landfall.notnull())
+        return distances.where(forecast_landfall.notnull()).mean(dim="landfall")
 
     def _compute_metric(
         self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
@@ -1922,7 +1922,7 @@ class LandfallTimeMeanError(LandfallMetric):
         time_diffs = (
             forecast_landfall.valid_time - target_landfall.valid_time
         ) / np.timedelta64(1, "h")
-        return time_diffs.where(forecast_landfall.notnull())
+        return time_diffs.where(forecast_landfall.notnull()).mean(dim="landfall")
 
     def _compute_metric(
         self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
