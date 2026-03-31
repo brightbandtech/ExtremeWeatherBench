@@ -3468,3 +3468,197 @@ class TestBaseMetricVariableValidation:
         metric = metrics.MeanAbsoluteError()
         assert metric.forecast_variable is None
         assert metric.target_variable is None
+
+
+class TestEarlySignal:
+    """Tests for EarlySignal metric and its aggregation helpers."""
+
+    def _make_metric(self, **kwargs):
+        return metrics.EarlySignal(**kwargs)
+
+    def test_default_init(self):
+        """Default EarlySignal has expected attribute values."""
+        m = self._make_metric()
+        assert m.threshold == 0.5
+        assert m.spatial_aggregation == "any"
+        assert m.temporal_aggregation == "any"
+        assert m.aggregation_order == ("spatial", "temporal")
+
+    def test_custom_init(self):
+        """Custom params are stored correctly."""
+        m = self._make_metric(
+            threshold=1.0,
+            spatial_aggregation="all",
+            temporal_aggregation="half",
+            aggregation_order=("temporal", "spatial"),
+        )
+        assert m.threshold == 1.0
+        assert m.spatial_aggregation == "all"
+        assert m.temporal_aggregation == "half"
+        assert m.aggregation_order == ("temporal", "spatial")
+
+    def test_apply_aggregation_any_all_nan_returns_false(self):
+        """any over all-NaN slice should return False (not True)."""
+        m = self._make_metric()
+        da = xr.DataArray([np.nan, np.nan, np.nan], dims=["space"])
+        result = m._apply_aggregation(da, "any", ["space"])
+        assert bool(result.values) is False
+
+    def test_apply_aggregation_any_nan_and_zero_returns_false(self):
+        """any over NaN+False values must return False, not True."""
+        m = self._make_metric()
+        da = xr.DataArray([np.nan, np.nan, 0.0], dims=["space"])
+        result = m._apply_aggregation(da, "any", ["space"])
+        assert bool(result.values) is False
+
+    def test_apply_aggregation_any_nan_and_one_returns_true(self):
+        """any returns True when at least one non-NaN value is True."""
+        m = self._make_metric()
+        da = xr.DataArray([np.nan, 0.0, 1.0], dims=["space"])
+        result = m._apply_aggregation(da, "any", ["space"])
+        assert bool(result.values) is True
+
+    def test_apply_aggregation_all_all_nan_returns_true(self):
+        """all over all-NaN: no data means nothing fails the condition."""
+        m = self._make_metric()
+        da = xr.DataArray([np.nan, np.nan], dims=["space"])
+        result = m._apply_aggregation(da, "all", ["space"])
+        assert bool(result.values) is True
+
+    def test_apply_aggregation_all_nan_and_zero_returns_false(self):
+        """all returns False when a non-NaN False is present."""
+        m = self._make_metric()
+        da = xr.DataArray([np.nan, 1.0, 0.0], dims=["space"])
+        result = m._apply_aggregation(da, "all", ["space"])
+        assert bool(result.values) is False
+
+    def test_apply_aggregation_half_nan_excluded_from_denominator(self):
+        """half uses skipna mean, so NaN positions don't dilute fraction."""
+        m = self._make_metric()
+        # 2 True, 2 NaN means mean of valid = 1.0 >= 0.5 is True
+        # (with fillna(0) first it would be 2/4=0.5; still True, but with
+        # uneven splits it matters)
+        da = xr.DataArray([1.0, 1.0, np.nan, np.nan], dims=["space"])
+        result = m._apply_aggregation(da, "half", ["space"])
+        assert bool(result.values) is True
+
+    def test_apply_aggregation_half_nan_excluded_unequal_groups(self):
+        """NaN exclusion changes result vs fillna(0) when groups are uneven."""
+        m = self._make_metric()
+        # 1 True, 3 NaN → skipna mean = 1/1 = 1.0 >= 0.5 → True
+        # fillna(0) mean = 1/4 = 0.25 → False
+        da = xr.DataArray([1.0, np.nan, np.nan, np.nan], dims=["space"])
+        result = m._apply_aggregation(da, "half", ["space"])
+        assert bool(result.values) is True
+
+    def test_apply_aggregation_half_all_nan_returns_false(self):
+        """half over all-NaN returns False (NaN >= 0.5 is False)."""
+        m = self._make_metric()
+        da = xr.DataArray([np.nan, np.nan], dims=["space"])
+        result = m._apply_aggregation(da, "half", ["space"])
+        assert bool(result.values) is False
+
+    def test_apply_aggregation_invalid_raises(self):
+        """Unsupported aggregation raises ValueError."""
+        m = self._make_metric()
+        da = xr.DataArray([1.0], dims=["space"])
+        with pytest.raises(ValueError, match="not supported"):
+            m._apply_aggregation(da, "median", ["space"])
+
+    def _make_forecast_target(self, forecast_vals, target_vals, spatial_size=3):
+        """Build minimal forecast/target DataArrays with space+valid_time dims.
+
+        spatial_size ignored when vals are already 2-D arrays.
+        """
+        vtime = pd.to_timedelta(np.arange(len(forecast_vals)), unit="h")
+        forecast = xr.DataArray(
+            np.array(forecast_vals, dtype=float),
+            dims=["valid_time", "space"],
+            coords={"valid_time": vtime},
+        )
+        target = xr.DataArray(
+            np.array(target_vals, dtype=float),
+            dims=["valid_time", "space"],
+            coords={"valid_time": vtime},
+        )
+        return forecast, target
+
+    def test_compute_metric_target_zero_excluded(self):
+        """Forecast not evaluated at locations where target is 0."""
+        m = self._make_metric(threshold=0.5, spatial_aggregation="any")
+        # target row 0: all 0 → excluded; row 1: all 1 → included
+        # forecast row 1: all above threshold → should detect
+        forecast, target = self._make_forecast_target(
+            forecast_vals=[[0.9, 0.9], [0.9, 0.9]],
+            target_vals=[[0.0, 0.0], [1.0, 1.0]],
+        )
+        result = m._compute_metric(forecast, target)
+        # spatial any→ True because row1 forecast > 0.5 at target==1 locs
+        assert bool(result.any().values)
+
+    def test_compute_metric_target_nan_excluded(self):
+        """Forecast not evaluated where target is NaN."""
+        m = self._make_metric(threshold=0.5, spatial_aggregation="any")
+        # Only target==1 at space=1, t=0; forecast is below threshold there
+        forecast, target = self._make_forecast_target(
+            forecast_vals=[[0.9, 0.1]],
+            target_vals=[[np.nan, 1.0]],
+        )
+        result = m._compute_metric(forecast, target)
+        # space=0 excluded (target NaN); space=1 forecast=0.1 < 0.5 → False
+        assert not bool(result.any().values)
+
+    def test_compute_metric_only_target_one_locations_matter(self):
+        """High forecast values at target==0 locations don't trigger True."""
+        m = self._make_metric(threshold=0.5, spatial_aggregation="any")
+        # target: space=0 → 0 (excluded), space=1 → 1 (included)
+        # forecast: space=0 → 0.9 (would fire if not masked), space=1 → 0.1
+        forecast, target = self._make_forecast_target(
+            forecast_vals=[[0.9, 0.1]],
+            target_vals=[[0.0, 1.0]],
+        )
+        result = m._compute_metric(forecast, target)
+        assert not bool(result.any().values)
+
+    def test_aggregation_order_spatial_then_temporal(self):
+        """spatial to temporal order produces a scalar result."""
+        m = self._make_metric(
+            spatial_aggregation="any",
+            temporal_aggregation="any",
+            aggregation_order=("spatial", "temporal"),
+        )
+        forecast, target = self._make_forecast_target(
+            forecast_vals=[[0.9, 0.9], [0.9, 0.9]],
+            target_vals=[[1.0, 1.0], [1.0, 1.0]],
+        )
+        result = m._compute_metric(forecast, target)
+        assert result.ndim == 0
+
+    def test_aggregation_order_temporal_then_spatial(self):
+        """temporal to spatial order produces a scalar result."""
+        m = self._make_metric(
+            spatial_aggregation="any",
+            temporal_aggregation="any",
+            aggregation_order=("temporal", "spatial"),
+        )
+        forecast, target = self._make_forecast_target(
+            forecast_vals=[[0.9, 0.9], [0.9, 0.9]],
+            target_vals=[[1.0, 1.0], [1.0, 1.0]],
+        )
+        result = m._compute_metric(forecast, target)
+        assert result.ndim == 0
+
+    def test_aggregation_order_both_detect(self):
+        """Both orders give the same True result when forecast validates."""
+        forecast, target = self._make_forecast_target(
+            forecast_vals=[[0.9, 0.9], [0.9, 0.9]],
+            target_vals=[[1.0, 1.0], [1.0, 1.0]],
+        )
+        for order in [("spatial", "temporal"), ("temporal", "spatial")]:
+            m = self._make_metric(
+                spatial_aggregation="any",
+                temporal_aggregation="any",
+                aggregation_order=order,
+            )
+            result = m._compute_metric(forecast, target)
+            assert bool(result.values), f"Expected True for order={order}"
