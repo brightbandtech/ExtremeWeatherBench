@@ -2199,13 +2199,17 @@ class TestLandfallMetrics:
         )
 
         mock_forecast_landfall = xr.DataArray(
-            [38.0],
-            dims=["init_time"],
+            [[38.0]],
+            dims=["init_time", "landfall"],
             coords={
-                "latitude": (["init_time"], [25.1]),
-                "longitude": (["init_time"], [-80.1]),
-                "valid_time": (["init_time"], [pd.Timestamp("2023-09-15 06:00")]),
                 "init_time": [pd.Timestamp("2023-09-15")],
+                "landfall": [0],
+                "latitude": (["init_time", "landfall"], [[25.1]]),
+                "longitude": (["init_time", "landfall"], [[-80.1]]),
+                "valid_time": (
+                    ["init_time", "landfall"],
+                    [[pd.Timestamp("2023-09-15 06:00")]],
+                ),
             },
             name="surface_wind_speed",
         )
@@ -2304,13 +2308,17 @@ class TestLandfallMetrics:
         )
 
         mock_forecast_landfall = xr.DataArray(
-            [42.0],
-            dims=["init_time"],
+            [[42.0]],
+            dims=["init_time", "landfall"],
             coords={
-                "latitude": (["init_time"], [26.1224]),
-                "longitude": (["init_time"], [-80.1373]),
-                "valid_time": (["init_time"], [pd.Timestamp("2023-09-15 12:00")]),
                 "init_time": [pd.Timestamp("2023-09-15")],
+                "landfall": [0],
+                "latitude": (["init_time", "landfall"], [[26.1224]]),
+                "longitude": (["init_time", "landfall"], [[-80.1373]]),
+                "valid_time": (
+                    ["init_time", "landfall"],
+                    [[pd.Timestamp("2023-09-15 12:00")]],
+                ),
             },
             name="surface_wind_speed",
         )
@@ -2387,20 +2395,21 @@ class TestLandfallMetrics:
         )
 
         mock_forecast_landfall = xr.DataArray(
-            [53.0, 48.0],
-            dims=["init_time"],
+            [[53.0], [48.0]],
+            dims=["init_time", "landfall"],
             coords={
                 "init_time": [
                     pd.Timestamp("2023-09-14 12:00"),
-                    pd.Timestamp("2023-09-14 12:00"),
+                    pd.Timestamp("2023-09-14 14:00"),
                 ],
-                "latitude": (["init_time"], [25.1, 25.2]),
-                "longitude": (["init_time"], [-80.1, -80.2]),
+                "landfall": [0],
+                "latitude": (["init_time", "landfall"], [[25.1], [25.2]]),
+                "longitude": (["init_time", "landfall"], [[-80.1], [-80.2]]),
                 "valid_time": (
-                    ["init_time"],
+                    ["init_time", "landfall"],
                     [
-                        pd.Timestamp("2023-09-15 12:00"),
-                        pd.Timestamp("2023-09-15 12:00"),
+                        [pd.Timestamp("2023-09-15 12:00")],
+                        [pd.Timestamp("2023-09-15 12:00")],
                     ],
                 ),
             },
@@ -2490,20 +2499,21 @@ class TestLandfallMetrics:
 
         # Forecasts with early, late, and correct timing
         mock_forecast_landfall = xr.DataArray(
-            [50.0, 50.0, 50.0],
-            dims=["init_time"],
+            [[50.0], [50.0], [50.0]],
+            dims=["init_time", "landfall"],
             coords={
-                "latitude": (["init_time"], [25.0, 25.0, 25.0]),
-                "longitude": (["init_time"], [-80.0, -80.0, -80.0]),
+                "init_time": common_init_times,
+                "landfall": [0],
+                "latitude": (["init_time", "landfall"], [[25.0], [25.0], [25.0]]),
+                "longitude": (["init_time", "landfall"], [[-80.0], [-80.0], [-80.0]]),
                 "valid_time": (
-                    ["init_time"],
+                    ["init_time", "landfall"],
                     [
-                        pd.Timestamp("2023-09-15 09:00"),  # 3 hours early
-                        pd.Timestamp("2023-09-15 14:00"),  # 2 hours late
-                        pd.Timestamp("2023-09-15 12:00"),  # Perfect
+                        [pd.Timestamp("2023-09-15 09:00")],  # 3 hours early
+                        [pd.Timestamp("2023-09-15 14:00")],  # 2 hours late
+                        [pd.Timestamp("2023-09-15 12:00")],  # Perfect
                     ],
                 ),
-                "init_time": common_init_times,
             },
             name="surface_wind_speed",
         )
@@ -2701,22 +2711,24 @@ class TestLandfallMetrics:
         metric = metrics.LandfallDisplacement(approach="first")
 
         forecast_landfall = xr.DataArray(
-            [35.0],
-            dims=["init_time"],
+            [[35.0]],
+            dims=["init_time", "landfall"],
             coords={
                 "init_time": [pd.Timestamp("2023-09-14")],
-                "latitude": (["init_time"], [25.0]),
-                "longitude": (["init_time"], [-80.0]),
+                "landfall": [0],
+                "latitude": (["init_time", "landfall"], [[25.0]]),
+                "longitude": (["init_time", "landfall"], [[-80.0]]),
             },
         )
 
         target_landfall = xr.DataArray(
-            [40.0],
-            dims=["init_time"],
+            [[40.0]],
+            dims=["init_time", "landfall"],
             coords={
                 "init_time": [pd.Timestamp("2023-09-15")],
-                "latitude": (["init_time"], [25.5]),
-                "longitude": (["init_time"], [-80.5]),
+                "landfall": [0],
+                "latitude": (["init_time", "landfall"], [[25.5]]),
+                "longitude": (["init_time", "landfall"], [[-80.5]]),
             },
         )
 
@@ -2729,22 +2741,24 @@ class TestLandfallMetrics:
         metric = metrics.LandfallDisplacement(approach="first")
 
         forecast_landfall = xr.DataArray(
-            [35.0],
-            dims=["init_time"],
+            [[35.0]],
+            dims=["init_time", "landfall"],
             coords={
                 "init_time": [pd.Timestamp("2023-09-14")],
-                "latitude": (["init_time"], [np.nan]),
-                "longitude": (["init_time"], [-80.0]),
+                "landfall": [0],
+                "latitude": (["init_time", "landfall"], [[np.nan]]),
+                "longitude": (["init_time", "landfall"], [[-80.0]]),
             },
         )
 
         target_landfall = xr.DataArray(
-            [40.0],
-            dims=["init_time"],
+            [[40.0]],
+            dims=["init_time", "landfall"],
             coords={
                 "init_time": [pd.Timestamp("2023-09-14")],
-                "latitude": (["init_time"], [25.5]),
-                "longitude": (["init_time"], [-80.5]),
+                "landfall": [0],
+                "latitude": (["init_time", "landfall"], [[25.5]]),
+                "longitude": (["init_time", "landfall"], [[-80.5]]),
             },
         )
 
@@ -2783,9 +2797,12 @@ class TestLandfallMetrics:
         metric = metrics.LandfallIntensityMeanAbsoluteError(approach="first")
 
         forecast_landfall = xr.DataArray(
-            [50.0],
-            dims=["init_time"],
-            coords={"init_time": [pd.Timestamp("2023-09-14")]},
+            [[50.0]],
+            dims=["init_time", "landfall"],
+            coords={
+                "init_time": [pd.Timestamp("2023-09-14")],
+                "landfall": [0],
+            },
         )
 
         target_landfall = xr.DataArray(
