@@ -994,6 +994,7 @@ class EarlySignal(BaseMetric):
         ] = ">=",
         threshold: float = 0.5,
         spatial_aggregation: Literal["any", "all", "half"] = "any",
+        preserve_dims: str = "init_time",
         **kwargs,
     ):
         """Initialize the Early Signal detection metric.
@@ -1005,13 +1006,15 @@ class EarlySignal(BaseMetric):
             spatial_aggregation: Spatial aggregation method. Options: "any"
                 (any gridpoint meets criteria), "all" (all gridpoints meet
                 criteria), or "half" (at least half meet criteria).
+            preserve_dims: Dimensions to preserve during aggregation.
+                Defaults to "init_time".
             **kwargs: Additional keyword arguments passed to BaseMetric.
         """
-        # Extract threshold params before passing to super
+        super().__init__(name=name, preserve_dims=preserve_dims, **kwargs)
         self.comparison_operator = utils.maybe_get_operator(comparison_operator)
         self.threshold = threshold
         self.spatial_aggregation = spatial_aggregation
-        super().__init__(name, **kwargs)
+
 
     def _compute_metric(
         self,
@@ -1029,44 +1032,27 @@ class EarlySignal(BaseMetric):
             Boolean DataArray with dims [init_time, lead_time] indicating
             whether criteria are met for each init_time and lead_time pair.
         """
-        if self.threshold is None:
-            # Return False for all when no detection criteria specified
-            dims = ["init_time", "lead_time"]
-            coords = {
-                "init_time": forecast.valid_time - forecast.lead_time,
-                "lead_time": forecast.lead_time,
-            }
-            if "valid_time" in forecast.dims:
-                dims.append("valid_time")
-                coords["valid_time"] = forecast.valid_time
-            return xr.DataArray(
-                False,
-                dims=dims,
-                coords=coords,
-                name=self.name,
-            )
+        # Convert valid_time to init_time if preserve_dims is init_time
+        if self.preserve_dims == "init_time" and "init_time" not in forecast.dims:
+            forecast = utils.convert_valid_time_to_init_time(forecast)
         # Create detection mask
         detection_mask = self.comparison_operator(forecast, self.threshold)
 
         # Apply spatial aggregation
-        spatial_dims = [
-            dim
-            for dim in detection_mask.dims
-            if dim not in ["init_time", "lead_time", "valid_time"]
+        dims_to_reduce = [
+            dim for dim in detection_mask.dims if dim not in self.preserve_dims
         ]
-
-        if spatial_dims:
+        if dims_to_reduce:
             if self.spatial_aggregation == "any":
-                detection_mask = detection_mask.any(spatial_dims)
+                detection_mask = detection_mask.any(dims_to_reduce)
             elif self.spatial_aggregation == "all":
-                detection_mask = detection_mask.all(spatial_dims)
+                detection_mask = detection_mask.all(dims_to_reduce)
             elif self.spatial_aggregation == "half":
-                detection_mask = operator.ge(detection_mask.mean(spatial_dims), 0.5)
+                detection_mask = detection_mask.astype(bool).mean(dim=dims_to_reduce) >= 0.5
             else:
                 raise ValueError(
                     f"Spatial aggregation '{self.spatial_aggregation}' not supported"
                 )
-
         detection_mask.name = self.name
         return detection_mask
 
