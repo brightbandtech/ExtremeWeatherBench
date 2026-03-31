@@ -817,7 +817,7 @@ class TestTropicalCycloneTrackVariablesDefaults:
 
     def test_timestep_count_wind_minimum_default(self):
         tc = derived.TropicalCycloneTrackVariables()
-        assert tc.timestep_count_wind_minimum == 10
+        assert tc.timestep_count_wind_minimum == 2
 
     def test_custom_min_distance_between_peaks_degrees(self):
         tc = derived.TropicalCycloneTrackVariables(
