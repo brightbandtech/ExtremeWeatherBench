@@ -133,7 +133,7 @@ class TropicalCycloneTrackVariables(DerivedVariable):
         max_spatial_distance_degrees: float = 5.0,
         max_temporal_hours: float = 48.0,
         use_contour_validation: bool = True,
-        timestep_count_wind_minimum: int = 2,
+        timestep_count_wind_minimum: int = 10,
         latitude_max_degrees: float = 50.0,
         surface_pressure_threshold: float = 102000.0,
         orography: Optional[xr.DataArray] = None,

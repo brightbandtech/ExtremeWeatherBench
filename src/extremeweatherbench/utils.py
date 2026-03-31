@@ -747,10 +747,11 @@ def reduce_dataarray(
 
 
 def load_land_geometry(resolution: str = "10m") -> shapely.geometry.Polygon:
-    """Load the land geometry, excluding lakes.
+    """Load the land geometry, excluding lakes and ocean-connected water.
 
     Returns:
-        The land geometry as a shapely Polygon with lakes excluded.
+        The land geometry as a shapely Polygon with lakes and
+        ocean-connected water bodies (bays, estuaries, seas) excluded.
     """
     land = shpreader.natural_earth(
         category="physical", name="land", resolution=resolution
@@ -758,7 +759,7 @@ def load_land_geometry(resolution: str = "10m") -> shapely.geometry.Polygon:
     land_geoms = list(shpreader.Reader(land).geometries())
     land_union = shapely.ops.unary_union(land_geoms)
 
-    # Exclude lakes to avoid false landfall detections in lakes/bays
+    # Exclude lakes to avoid false landfall detections in lakes
     try:
         lakes = shpreader.natural_earth(
             category="physical", name="lakes", resolution=resolution
@@ -768,11 +769,36 @@ def load_land_geometry(resolution: str = "10m") -> shapely.geometry.Polygon:
             lakes_union = shapely.ops.unary_union(lake_geoms)
             land_union = land_union.difference(lakes_union)
     except (OSError, ValueError):
-        # If lakes dataset is not available, return land without lakes
-        # This can happen if the dataset doesn't exist for the resolution
+        pass
+
+    # Exclude ocean-connected water bodies (bays, estuaries, coastal seas)
+    # that may be enclosed inside the land polygon at coarser resolutions
+    try:
+        ocean_union = load_ocean_geometry(resolution=resolution)
+        land_union = land_union.difference(ocean_union)
+    except (OSError, ValueError):
         pass
 
     return land_union
+
+
+def load_ocean_geometry(resolution: str = "10m") -> shapely.geometry.Polygon:
+    """Load the ocean geometry from Natural Earth.
+
+    Includes all ocean-connected water: open ocean, bays, estuaries,
+    and seas. Does not include landlocked lakes or ponds.
+
+    Args:
+        resolution: Natural Earth resolution ('10m', '50m', or '110m').
+
+    Returns:
+        The ocean geometry as a unified shapely Polygon.
+    """
+    ocean = shpreader.natural_earth(
+        category="physical", name="ocean", resolution=resolution
+    )
+    ocean_geoms = list(shpreader.Reader(ocean).geometries())
+    return shapely.ops.unary_union(ocean_geoms)
 
 
 def _cache_maybe_densify_helper(
