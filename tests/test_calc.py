@@ -2152,32 +2152,41 @@ class TestLandfallMetricAlignment:
 
         # Create forecast landfalls (3 init_times)
         forecast_landfalls = xr.DataArray(
-            [35.0, 36.0, 37.0],
-            dims=["init_time"],
+            [[35.0], [36.0], [37.0]],
+            dims=["init_time", "landfall"],
             coords={
                 "init_time": pd.to_datetime(["2023-09-14", "2023-09-15", "2023-09-16"]),
+                "landfall": [0],
                 "valid_time": (
-                    ["init_time"],
-                    pd.to_datetime(["2023-09-15", "2023-09-16", "2023-09-17"]),
+                    ["init_time", "landfall"],
+                    [
+                        [pd.Timestamp("2023-09-15")],
+                        [pd.Timestamp("2023-09-16")],
+                        [pd.Timestamp("2023-09-17")],
+                    ],
                 ),
-                "latitude": (["init_time"], [24.0, 25.0, 26.0]),
-                "longitude": (["init_time"], [280.0, 279.0, 278.0]),
+                "latitude": (["init_time", "landfall"], [[24.0], [25.0], [26.0]]),
+                "longitude": (["init_time", "landfall"], [[280.0], [279.0], [278.0]]),
             },
             name="surface_wind_speed",
         )
 
         # Create target landfalls (only 2 matching init_times)
         target_landfalls = xr.DataArray(
-            [40.0, 45.0],
-            dims=["init_time"],
+            [[40.0], [45.0]],
+            dims=["init_time", "landfall"],
             coords={
                 "init_time": pd.to_datetime(["2023-09-14", "2023-09-15"]),
+                "landfall": [0],
                 "valid_time": (
-                    ["init_time"],
-                    pd.to_datetime(["2023-09-15 06:00", "2023-09-16 06:00"]),
+                    ["init_time", "landfall"],
+                    [
+                        [pd.Timestamp("2023-09-15 06:00")],
+                        [pd.Timestamp("2023-09-16 06:00")],
+                    ],
                 ),
-                "latitude": (["init_time"], [24.5, 25.5]),
-                "longitude": (["init_time"], [279.5, 278.5]),
+                "latitude": (["init_time", "landfall"], [[24.5], [25.5]]),
+                "longitude": (["init_time", "landfall"], [[279.5], [278.5]]),
             },
             name="surface_wind_speed",
         )
@@ -2199,35 +2208,42 @@ class TestLandfallMetricAlignment:
 
         # Create forecast and target with different init_times
         forecast_landfalls = xr.DataArray(
-            [35.0, 36.0, 37.0],
-            dims=["init_time"],
+            [[35.0], [36.0], [37.0]],
+            dims=["init_time", "landfall"],
             coords={
                 "init_time": pd.to_datetime(
                     ["2023-09-14 00:00", "2023-09-14 12:00", "2023-09-15 00:00"]
                 ),
+                "landfall": [0],
                 "valid_time": (
-                    ["init_time"],
-                    pd.to_datetime(
-                        ["2023-09-15 00:00", "2023-09-15 12:00", "2023-09-16 00:00"]
-                    ),
+                    ["init_time", "landfall"],
+                    [
+                        [pd.Timestamp("2023-09-15 00:00")],
+                        [pd.Timestamp("2023-09-15 12:00")],
+                        [pd.Timestamp("2023-09-16 00:00")],
+                    ],
                 ),
-                "latitude": (["init_time"], [24.0, 25.0, 26.0]),
-                "longitude": (["init_time"], [280.0, 279.0, 278.0]),
+                "latitude": (["init_time", "landfall"], [[24.0], [25.0], [26.0]]),
+                "longitude": (["init_time", "landfall"], [[280.0], [279.0], [278.0]]),
             },
             name="surface_wind_speed",
         )
 
         target_landfalls = xr.DataArray(
-            [40.0, 45.0],
-            dims=["init_time"],
+            [[40.0], [45.0]],
+            dims=["init_time", "landfall"],
             coords={
                 "init_time": pd.to_datetime(["2023-09-14 00:00", "2023-09-14 12:00"]),
+                "landfall": [0],
                 "valid_time": (
-                    ["init_time"],
-                    pd.to_datetime(["2023-09-15 06:00", "2023-09-15 18:00"]),
+                    ["init_time", "landfall"],
+                    [
+                        [pd.Timestamp("2023-09-15 06:00")],
+                        [pd.Timestamp("2023-09-15 18:00")],
+                    ],
                 ),
-                "latitude": (["init_time"], [24.5, 25.5]),
-                "longitude": (["init_time"], [279.5, 278.5]),
+                "latitude": (["init_time", "landfall"], [[24.5], [25.5]]),
+                "longitude": (["init_time", "landfall"], [[279.5], [278.5]]),
             },
             name="surface_wind_speed",
         )
