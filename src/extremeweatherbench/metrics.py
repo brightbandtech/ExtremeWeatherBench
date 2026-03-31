@@ -984,6 +984,11 @@ class EarlySignal(BaseMetric):
     Extends BaseMetric to find the earliest time when a signal is detected
     based on threshold criteria, returning init_time, lead_time, and
     valid_time information. Flexible for different signal detection criteria.
+
+    For any case, the default behavior is to confirm any valid signal in space, then
+    time. This behavior can be changed by setting spatial_aggregation and
+    temporal_aggregation to "any", "all", or "half". Further, the order of aggregation
+    can be changed by setting order to ["temporal", "spatial"] if desired.
     """
 
     def __init__(
@@ -994,7 +999,10 @@ class EarlySignal(BaseMetric):
         ] = ">=",
         threshold: float = 0.5,
         spatial_aggregation: Literal["any", "all", "half"] = "any",
-        preserve_dims: str = "init_time",
+        temporal_aggregation: Literal["any", "all", "half"] = "any",
+        aggregation_order: tuple[
+            Literal["spatial", "temporal"], Literal["temporal", "spatial"]
+        ] = ("spatial", "temporal"),
         **kwargs,
     ):
         """Initialize the Early Signal detection metric.
@@ -1006,15 +1014,48 @@ class EarlySignal(BaseMetric):
             spatial_aggregation: Spatial aggregation method. Options: "any"
                 (any gridpoint meets criteria), "all" (all gridpoints meet
                 criteria), or "half" (at least half meet criteria).
-            preserve_dims: Dimensions to preserve during aggregation.
-                Defaults to "init_time".
+            temporal_aggregation: Temporal aggregation method. Options: "any"
+                (any valid time meets criteria), "all" (all valid times meet
+                criteria), or "half" (at least half valid times meet criteria).
+            aggregation_order: The order of spatial and temporal aggregation. Defaults
+                to ("spatial", "temporal").
             **kwargs: Additional keyword arguments passed to BaseMetric.
         """
-        super().__init__(name=name, preserve_dims=preserve_dims, **kwargs)
+        super().__init__(name=name, **kwargs)
         self.comparison_operator = utils.maybe_get_operator(comparison_operator)
         self.threshold = threshold
         self.spatial_aggregation = spatial_aggregation
+        self.temporal_aggregation = temporal_aggregation
+        self.aggregation_order = aggregation_order
 
+    def _apply_aggregation(
+        self,
+        detection_mask: xr.DataArray,
+        aggregation: Literal["any", "all", "half"],
+        dims_to_reduce: list[str],
+    ) -> xr.DataArray:
+        """Apply aggregation to the detection mask.
+
+        Args:
+            detection_mask: The detection mask DataArray.
+            aggregation: The aggregation method. Options: "any"
+                (any gridpoint meets criteria), "all" (all gridpoints meet
+                criteria), or "half" (at least half meet criteria).
+            dims_to_reduce: The dimensions to reduce.
+        Returns:
+            The aggregated detection mask DataArray.
+        """
+        if aggregation == "any":
+            # fillna(False): NaN means no data, not a True detection
+            result = detection_mask.fillna(False).any(dims_to_reduce)
+        elif aggregation == "all":
+            # fillna(True): NaN means no data, don't penalize "all" condition
+            result = detection_mask.fillna(True).all(dims_to_reduce)
+        elif aggregation == "half":
+            result = detection_mask.mean(dim=dims_to_reduce) >= 0.5
+        else:
+            raise ValueError(f"Aggregation '{aggregation}' not supported")
+        return result
 
     def _compute_metric(
         self,
@@ -1032,29 +1073,57 @@ class EarlySignal(BaseMetric):
             Boolean DataArray with dims [init_time, lead_time] indicating
             whether criteria are met for each init_time and lead_time pair.
         """
-        # Convert valid_time to init_time if preserve_dims is init_time
-        if self.preserve_dims == "init_time" and "init_time" not in forecast.dims:
-            forecast = utils.convert_valid_time_to_init_time(forecast)
-        # Create detection mask
-        detection_mask = self.comparison_operator(forecast, self.threshold)
 
-        # Apply spatial aggregation
-        dims_to_reduce = [
-            dim for dim in detection_mask.dims if dim not in self.preserve_dims
+        # Create detection masks with nans preserved
+        forecast_detection_mask = self.comparison_operator(
+            forecast, self.threshold
+        ).where(~forecast.isnull())
+        target_detection_mask = self.comparison_operator(target, self.threshold).where(
+            ~target.isnull()
+        )
+
+        # Only assess forecast where target detects the event (value == 1);
+        # locations where target is 0 or NaN are excluded
+        forecast_detection_mask = forecast_detection_mask.where(
+            target_detection_mask == 1, drop=True
+        )
+
+        # Create lists of dimensions to reduce
+        spatial_dims = [
+            dim
+            for dim in forecast_detection_mask.dims
+            if dim not in ["init_time", "lead_time", "valid_time"]
+            and dim not in self.preserve_dims
         ]
-        if dims_to_reduce:
-            if self.spatial_aggregation == "any":
-                detection_mask = detection_mask.any(dims_to_reduce)
-            elif self.spatial_aggregation == "all":
-                detection_mask = detection_mask.all(dims_to_reduce)
-            elif self.spatial_aggregation == "half":
-                detection_mask = detection_mask.astype(bool).mean(dim=dims_to_reduce) >= 0.5
-            else:
-                raise ValueError(
-                    f"Spatial aggregation '{self.spatial_aggregation}' not supported"
-                )
-        detection_mask.name = self.name
-        return detection_mask
+        temporal_dims = [
+            dim
+            for dim in forecast_detection_mask.dims
+            if dim in ["init_time", "lead_time", "valid_time"]
+            and dim not in self.preserve_dims
+        ]
+
+        # Apply aggregation in the order specified
+        if self.aggregation_order[0] == "spatial":
+            forecast_detection_mask = self._apply_aggregation(
+                forecast_detection_mask, self.spatial_aggregation, spatial_dims
+            )
+            forecast_detection_mask = self._apply_aggregation(
+                forecast_detection_mask,
+                self.temporal_aggregation,
+                temporal_dims,
+            )
+        elif self.aggregation_order[0] == "temporal":
+            forecast_detection_mask = self._apply_aggregation(
+                forecast_detection_mask,
+                self.temporal_aggregation,
+                temporal_dims,
+            )
+            forecast_detection_mask = self._apply_aggregation(
+                forecast_detection_mask, self.spatial_aggregation, spatial_dims
+            )
+
+        forecast_detection_mask.name = self.name
+        return forecast_detection_mask
 
 
 class MaximumMeanAbsoluteError(MeanAbsoluteError):
