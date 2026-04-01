@@ -4,7 +4,7 @@ import copy
 import dataclasses
 import logging
 import pathlib
-from typing import TYPE_CHECKING, Optional, Sequence, Union
+from typing import TYPE_CHECKING, Any, Optional, Sequence, Union
 
 import dask.array as da
 import joblib
@@ -15,10 +15,15 @@ from tqdm.auto import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 from tqdm.dask import TqdmCallback
 
-from extremeweatherbench import cases, derived, inputs, metrics, sources, utils
+import extremeweatherbench.cases as cases
+import extremeweatherbench.derived as derived
+import extremeweatherbench.inputs as inputs
+import extremeweatherbench.metrics as metrics
+import extremeweatherbench.sources as sources
+import extremeweatherbench.utils as utils
 
 if TYPE_CHECKING:
-    from extremeweatherbench import regions
+    import extremeweatherbench.regions as regions
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +50,7 @@ class ExtremeWeatherBench:
     results.
 
     Attributes:
-        case_metadata: A dictionary of cases or an IndividualCaseCollection to run.
+        case_metadata: A list of case dicts or IndividualCase objects to run.
         evaluation_objects: A list of evaluation objects to run.
         cache_dir: An optional directory to cache the mid-flight outputs of the
             workflow for serial runs.
@@ -56,22 +61,30 @@ class ExtremeWeatherBench:
 
     def __init__(
         self,
-        case_metadata: Union[dict[str, list], "cases.IndividualCaseCollection"],
+        case_metadata: Union[list[dict[str, Any]], "list[cases.IndividualCase]"],
         evaluation_objects: list["inputs.EvaluationObject"],
         cache_dir: Optional[Union[str, pathlib.Path]] = None,
         region_subsetter: Optional["regions.RegionSubsetter"] = None,
     ):
-        if isinstance(case_metadata, dict):
-            self.case_metadata = cases.load_individual_cases(case_metadata)
-        elif isinstance(case_metadata, cases.IndividualCaseCollection):
-            self.case_metadata = case_metadata
-        else:
-            raise TypeError(
-                "case_metadata must be a dictionary of cases or an "
-                "IndividualCaseCollection"
-            )
+        """Initialize the ExtremeWeatherBench workflow.
+
+        Args:
+            case_metadata: List of case dicts or IndividualCase objects.
+            evaluation_objects: List of evaluation objects to run.
+            cache_dir: Optional directory for caching mid-flight outputs in
+                serial runs.
+            region_subsetter: Optional RegionSubsetter to filter cases by
+                spatial region.
+        """
+        # Load the case metadata from the input
+        self.case_metadata = cases.load_individual_cases(case_metadata)
         self.evaluation_objects = evaluation_objects
         self.cache_dir = pathlib.Path(cache_dir) if cache_dir else None
+
+        # Instantiate cache dir if needed
+        if self.cache_dir:
+            if not self.cache_dir.exists():
+                self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.region_subsetter = region_subsetter
 
     # Case operators as a property can be used as a convenience method for a workflow
@@ -82,12 +95,10 @@ class ExtremeWeatherBench:
 
         # Subset the cases if a region subsetter was provided
         if self.region_subsetter:
-            subset_collection = self.region_subsetter.subset_case_collection(
-                self.case_metadata
-            )
+            subset_list = self.region_subsetter.subset_case_list(self.case_metadata)
         else:
-            subset_collection = self.case_metadata
-        return cases.build_case_operators(subset_collection, self.evaluation_objects)
+            subset_list = self.case_metadata
+        return cases.build_case_operators(subset_list, self.evaluation_objects)
 
     def run(
         self,
@@ -95,11 +106,11 @@ class ExtremeWeatherBench:
         parallel_config: Optional[dict] = None,
         **kwargs,
     ) -> pd.DataFrame:
-        """Runs the ExtremeWeatherBench workflow.
+        """Runs the ExtremeWeatherBench evaluation workflow.
 
-        This method will run the workflow in the order of the case operators, optionally
-        caching the mid-flight outputs of the workflow if cache_dir was provided for
-        serial runs.
+        This method will run the evaluation workflow in the order of the case operators,
+        optionally caching the mid-flight outputs of the workflow if cache_dir was
+        provided for serial runs.
 
         Args:
             n_jobs: The number of jobs to run in parallel. If None, defaults to the
@@ -107,40 +118,64 @@ class ExtremeWeatherBench:
                 Ignored if parallel_config is provided.
             parallel_config: Optional dictionary of joblib parallel configuration.
                 If provided, this takes precedence over n_jobs. If not provided and
-                n_jobs is specified, a default config with threading backend is used.
-
+                n_jobs is specified, a default config with the loky backend is used.
+            **kwargs: Additional arguments to pass to compute_case_operator.
         Returns:
             A concatenated dataframe of the evaluation results.
         """
-        logger.info("Running ExtremeWeatherBench workflow...")
+        logger.warning("The run method is deprecated. Use run_evaluation instead.")
+        logger.info("Running ExtremeWeatherBench evaluations...")
 
-        # Determine if running in serial or parallel mode
-        # Serial: n_jobs=1 or (parallel_config with n_jobs=1)
-        # Parallel: n_jobs>1 or (parallel_config with n_jobs>1)
-        is_serial = (
-            (n_jobs == 1)
-            or (parallel_config is not None and parallel_config.get("n_jobs") == 1)
-            or (n_jobs is None and parallel_config is None)
+        # Check for serial or parallel configuration
+        parallel_config = _parallel_serial_config_check(n_jobs, parallel_config)
+
+        run_results = _run_evaluation(
+            self.case_operators,
+            cache_dir=self.cache_dir,
+            parallel_config=parallel_config,
+            **kwargs,
         )
-        logger.debug("Running in %s mode.", "serial" if is_serial else "parallel")
 
-        if not is_serial:
-            # Build parallel_config if not provided
-            if parallel_config is None and n_jobs is not None:
-                logger.debug(
-                    "No parallel_config provided, using threading backend and %s jobs.",
-                    n_jobs,
-                )
-                parallel_config = {"backend": "threading", "n_jobs": n_jobs}
-            kwargs["parallel_config"] = parallel_config
+        # If there are results, concatenate them and return, else return an empty
+        # DataFrame with the expected columns
+        if run_results:
+            return _safe_concat(run_results, ignore_index=True)
         else:
-            # Running in serial mode - instantiate cache dir if needed
-            if self.cache_dir:
-                if not self.cache_dir.exists():
-                    self.cache_dir.mkdir(parents=True, exist_ok=True)
+            return pd.DataFrame(columns=OUTPUT_COLUMNS)
 
-        run_results = _run_case_operators(
-            self.case_operators, cache_dir=self.cache_dir, **kwargs
+    def run_evaluation(
+        self,
+        n_jobs: Optional[int] = None,
+        parallel_config: Optional[dict] = None,
+        **kwargs,
+    ) -> pd.DataFrame:
+        """Runs the ExtremeWeatherBench evaluation workflow.
+
+        This method will run the evaluation workflow in the order of the case operators,
+        optionally caching the mid-flight outputs of the workflow if cache_dir was
+        provided for serial runs.
+
+        Args:
+            n_jobs: The number of jobs to run in parallel. If None, defaults to the
+                joblib backend default value. If 1, the workflow will run serially.
+                Ignored if parallel_config is provided.
+            parallel_config: Optional dictionary of joblib parallel configuration.
+                If provided, this takes precedence over n_jobs. If not provided and
+                n_jobs is specified, a default config with the loky backend is used.
+            **kwargs: Additional arguments to pass to compute_case_operator.
+        Returns:
+            A concatenated dataframe of the evaluation results.
+        """
+        logger.info("Running ExtremeWeatherBench evaluations...")
+
+        # Check for serial or parallel configuration
+        parallel_config = _parallel_serial_config_check(n_jobs, parallel_config)
+
+        run_results = _run_evaluation(
+            self.case_operators,
+            cache_dir=self.cache_dir,
+            parallel_config=parallel_config,
+            **kwargs,
         )
 
         # If there are results, concatenate them and return, else return an empty
@@ -151,9 +186,51 @@ class ExtremeWeatherBench:
             return pd.DataFrame(columns=OUTPUT_COLUMNS)
 
 
-def _run_case_operators(
+def _parallel_serial_config_check(
+    n_jobs: Optional[int] = None,
+    parallel_config: Optional[dict] = None,
+) -> Optional[dict]:
+    """Check if running in serial or parallel mode.
+
+    Args:
+        n_jobs: The number of jobs to run in parallel. If None, defaults to the
+            joblib backend default value. If 1, the workflow will run serially.
+        parallel_config: Optional dictionary of joblib parallel configuration. If
+            provided, this takes precedence over n_jobs. If not provided and n_jobs is
+            specified, a default config with loky backend is used.
+    Returns:
+        None if running in serial mode, otherwise a dictionary of joblib parallel
+        configuration.
+    """
+    # Determine if running in serial or parallel mode
+    # Serial: n_jobs=1 or (parallel_config with n_jobs=1)
+    # Parallel: n_jobs>1 or (parallel_config with n_jobs>1)
+    is_serial = (
+        (n_jobs == 1)
+        or (parallel_config is not None and parallel_config.get("n_jobs") == 1)
+        or (n_jobs is None and parallel_config is None)
+    )
+    logger.debug("Running in %s mode.", "serial" if is_serial else "parallel")
+
+    if not is_serial:
+        # Build parallel_config if not provided
+        if parallel_config is None and n_jobs is not None:
+            logger.debug(
+                "No parallel_config provided, using loky backend and %s jobs.",
+                n_jobs,
+            )
+            parallel_config = {"backend": "loky", "n_jobs": n_jobs}
+    # If running in serial mode, set parallel_config to None if not already
+    else:
+        parallel_config = None
+    # Return the maybe updated kwargs
+    return parallel_config
+
+
+def _run_evaluation(
     case_operators: list["cases.CaseOperator"],
     cache_dir: Optional[pathlib.Path] = None,
+    parallel_config: Optional[dict] = None,
     **kwargs,
 ) -> list[pd.DataFrame]:
     """Run the case operators in parallel or serial.
@@ -161,40 +238,35 @@ def _run_case_operators(
     Args:
         case_operators: List of case operators to run.
         cache_dir: Optional directory for caching (serial mode only).
-        **kwargs: Additional arguments, may include 'parallel_config' dict.
+        parallel_config: Optional dict of joblib parallel configuration.
+        **kwargs: Additional keyword arguments passed to case operators.
 
     Returns:
         List of result DataFrames.
     """
-    with logging_redirect_tqdm():
-        # Check if parallel_config is provided
-        parallel_config = kwargs.get("parallel_config", None)
-
-        # Run in parallel if parallel_config exists and n_jobs != 1
-        if parallel_config is not None:
+    if parallel_config is not None:
+        with logging_redirect_tqdm():
             logger.info("Running case operators in parallel...")
-            return _run_parallel(case_operators, cache_dir=cache_dir, **kwargs)
-        else:
-            logger.info("Running case operators in serial...")
-            return _run_serial(case_operators, cache_dir=cache_dir, **kwargs)
+            run_results = _run_parallel_evaluation(
+                case_operators,
+                cache_dir=cache_dir,
+                parallel_config=parallel_config,
+                **kwargs,
+            )
+    else:
+        logger.info("Running case operators in serial...")
+        run_results = []
+        for case_operator in tqdm(case_operators):
+            run_results.append(
+                compute_case_operator(case_operator, cache_dir, **kwargs)
+            )
 
-
-def _run_serial(
-    case_operators: list["cases.CaseOperator"],
-    cache_dir: Optional[pathlib.Path] = None,
-    **kwargs,
-) -> list[pd.DataFrame]:
-    """Run the case operators in serial."""
-    run_results = []
-
-    # Loop over the case operators
-    for case_operator in tqdm(case_operators):
-        run_results.append(compute_case_operator(case_operator, cache_dir, **kwargs))
     return run_results
 
 
-def _run_parallel(
+def _run_parallel_evaluation(
     case_operators: list["cases.CaseOperator"],
+    parallel_config: dict,
     cache_dir: Optional[pathlib.Path] = None,
     **kwargs,
 ) -> list[pd.DataFrame]:
@@ -207,11 +279,6 @@ def _run_parallel(
     Returns:
         List of result DataFrames.
     """
-    parallel_config = kwargs.pop("parallel_config", None)
-
-    if parallel_config is None:
-        raise ValueError("parallel_config must be provided to _run_parallel")
-
     if parallel_config.get("n_jobs") is None:
         logger.warning("No number of jobs provided, using joblib backend default.")
 

@@ -2,16 +2,12 @@
 
 [![Documentation Status](https://readthedocs.org/projects/extremeweatherbench/badge/?version=latest)](https://extremeweatherbench.readthedocs.io/en/latest/?badge=latest)
 
-**EWB is currently in limited pre-release. Bugs are likely to occur for now.**
-
-**v1.0 to be published alongside EWB preprint.**
-
-[Read our blog post here](https://www.brightband.com/blog/extreme-weather-bench)
+[Read our blog post here](https://www.brightband.com/blog/extreme-weather-bench) | [Documentation](https://extremeweatherbench.readthedocs.io/)
 
 As AI weather models are growing in popularity, we need a standardized set of community driven tests that evaluate the models across a wide variety of high-impact hazards. Extreme Weather Bench (EWB) builds on the successful work of WeatherBench and introduces a set of high-impact weather events, spanning across multiple spatial and temporal scales and different parts of the weather spectrum. We provide data to use for testing, standard metrics for evaluation by forecasters worldwide for each of the phenomena, as well as impact-based metrics. EWB is a community system and will be adding additional phenomena, test cases and metrics in collaboration with the worldwide weather and forecast verification community.
 
 # Events
-EWB has cases broken down by multiple event types within `src/extremeweatherbench/data/events.yaml` between 2020 and 2024. EWB case studies are documented [here](docs/events/AllCaseStudies.md).  
+EWB has cases broken down by multiple event types within `src/extremeweatherbench/data/events.yaml` between 2020 and 2024. EWB case studies are documented [here](docs/events/AllCaseStudies.md).
 
 ## Available: 
 
@@ -26,8 +22,9 @@ EWB has cases broken down by multiple event types within `src/extremeweatherbenc
 
 # EWB paper and talks
 
-* AMS 2025 talk: https://ams.confex.com/ams/105ANNUAL/meetingapp.cgi/Paper/451220
-* EWB paper is in preparation and will be submitted in late 2025
+* AMS 2025 talk: [1](https://ams.confex.com/ams/105ANNUAL/meetingapp.cgi/Paper/451220)
+* AMS 2026 talks: [1](https://ams.confex.com/ams/106ANNUAL/meetingapp.cgi/Paper/477140), [2](https://ams.confex.com/ams/106ANNUAL/meetingapp.cgi/Paper/477141)
+* EWB paper is in preparation to be released soon
 
 # How do I suggest new data, metrics, or otherwise get involved?
 
@@ -39,22 +36,74 @@ We welcome your involvement!  The success of a benchmark suite rests on communit
 
 # Installing EWB
 
-Currently, the easiest way to install EWB is using the ```pip``` command:
+Currently, the easiest way to install EWB is using ```pip``` or ```uv```:
 
 ```shell
-$ pip install git+https://github.com/brightbandtech/ExtremeWeatherBench.git
+$ pip install extremeweatherbench
+
+# Or, add to an existing uv virtual environment
+$ uv add extremeweatherbench
 ```
 
-It is highly recommend to use [uv](https://docs.astral.sh/uv/) if possible:
+If you'd like to install the most recent updates to EWB:
 
 ```shell
-$ git clone https://github.com/brightbandtech/ExtremeWeatherBench.git
-$ cd ExtremeWeatherBench
-$ uv sync
+$ pip install git+https://github.com/brightbandtech/ExtremeWeatherBench.git 
 ```
+
+For extra installation options:
+
+```shell
+# For running the data prep modules:
+$ pip install "extremeweatherbench[data-prep]"
+$ uv add "extremeweatherbench[data-prep]"
+```
+
 # How to Run EWB
 
 Running EWB on sample data (included) is straightforward. 
+
+## Using Jupyter Notebook or a Script:
+ 
+```python
+import extremeweatherbench as ewb
+
+# Load in a forecast; here, we load in GFS initialized FCNv2 from the CIRA MLWP archive with a default variable built-in for convenience
+fcnv2_heatwave_forecast = ewb.defaults.cira_fcnv2_heatwave_forecast
+
+# Load in ERA5 with another default convenience variable 
+era5_heatwave_target = ewb.defaults.era5_heatwave_target
+
+# EvaluationObjects are used to evaluate a single forecast source against a single target source with a defined event type. Event types are declared with each case. One or more metrics can be evaluated with each EvaluationObject.
+heatwave_evaluation_list = [
+    ewb.inputs.EvaluationObject(
+        event_type="heat_wave",
+        metric_list=[
+            ewb.metrics.MaximumMeanAbsoluteError(),
+            ewb.metrics.RootMeanSquaredError(),
+            ewb.metrics.MaximumLowestMeanAbsoluteError(),
+        ],
+        target=era5_heatwave_target,
+        forecast=fcnv2_heatwave_forecast,
+    ),
+]
+# Load in the EWB default list of event cases
+case_metadata = ewb.cases.load_ewb_events_yaml_into_case_list()
+
+# Create the evaluation class, with cases and evaluation objects declared
+ewb_instance = ewb.evaluation(
+    case_metadata=case_metadata,
+    evaluation_objects=heatwave_evaluation_list,
+)
+
+# Execute a parallel run and return the evaluation results as a pandas DataFrame
+heatwave_outputs = ewb_instance.run_evaluation(
+    parallel_config={'n_jobs':16} # Uses 16 jobs with the loky backend as default
+)
+
+# Save the results
+heatwave_outputs.to_csv('heatwave_evaluation_results.csv')
+```
 
 ## Using command line initialization:
 
@@ -62,81 +111,3 @@ Running EWB on sample data (included) is straightforward.
 $ ewb --default
 ```
 **Note**: this will run every event type, case, target source, and metric for the individual event type as they become available for GFS initialized FourCastNetv2. It is expected a full evaluation will take some time, even on a large VM.
-## Using Jupyter Notebook or a Script:
- 
-```python
-from extremeweatherbench import cases, inputs, metrics, evaluate, utils
-
-# Select model
-model = 'FOUR_v200_GFS'
-
-# Set up path to directory of file - zarr or kerchunk/virtualizarr json/parquet
-forecast_dir = f'gs://extremeweatherbench/{model}.parq'
-
-# Preprocessing function exclusive to handling the CIRA parquets
-def preprocess_bb_cira_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
-    """Preprocess CIRA kerchunk (parquet) data in the ExtremeWeatherBench bucket.
-    A preprocess function that renames the time coordinate to lead_time,
-    creates a valid_time coordinate, and sets the lead time range and resolution not
-    present in the original dataset.
-    Args:
-        ds: The forecast dataset to rename.
-    Returns:
-        The renamed forecast dataset.
-    """
-    ds = ds.rename({"time": "lead_time"})
-
-    # The evaluation configuration is used to set the lead time range and resolution.
-    ds["lead_time"] = np.array(
-        [i for i in range(0, 241, 6)], dtype="timedelta64[h]"
-    ).astype("timedelta64[ns]")
-
-    return ds
-
-# Define a forecast object; in this case, a KerchunkForecast
-fcnv2_forecast = inputs.KerchunkForecast(
-    name="fcnv2_forecast", # identifier for this forecast in results
-    source=forecast_dir, # source path
-    variables=["surface_air_temperature"], # variables to use in the evaluation
-    variable_mapping=inputs.CIRA_metadata_variable_mapping, # mapping to use for variables in forecast dataset to EWB variable names
-    storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}}, # storage options for access
-    preprocess=preprocess_bb_cira_forecast_dataset # required preprocessing function for CIRA references
-)
-
-# Load in ERA5; source defaults to the ARCO ERA5 dataset from Google and variable mapping is provided by default as well
-era5_heatwave_target = inputs.ERA5(
-    variables=["surface_air_temperature"], # variable to use in the evaluation
-    storage_options={"remote_options": {"anon": True}}, # storage options for access
-    chunks=None, # define chunks for the ERA5 data
-)
-
-# EvaluationObjects are used to evaluate a single forecast source against a single target source with a defined event type. Event types are declared with each case. One or more metrics can be evaluated with each EvaluationObject.
-heatwave_evaluation_list = [
-    inputs.EvaluationObject(
-        event_type="heat_wave",
-        metric_list=[
-            metrics.MaximumMeanAbsoluteError(),
-            metrics.RootMeanSquaredError(),
-            metrics.MaximumLowestMeanAbsoluteError(),
-        ],
-        target=era5_heatwave_target,
-        forecast=fcnv2_forecast,
-    ),
-]
-# Load in the EWB default list of event cases
-case_metadata = cases.load_ewb_events_yaml_into_case_collection()
-
-# Create the evaluation class, with cases and evaluation objects declared
-ewb_instance = evaluate.ExtremeWeatherBench(
-    case_metadata=case_metadata,
-    evaluation_objects=heatwave_evaluation_list,
-)
-
-# Execute a parallel run and return the evaluation results as a pandas DataFrame
-heatwave_outputs = ewb_instance.run(
-    parallel_config={'backend':'loky','n_jobs':16} # Uses 16 jobs with the loky backend
-)
-
-# Save the results
-heatwave_outputs.to_csv('heatwave_evaluation_results.csv')
-```

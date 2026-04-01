@@ -2,7 +2,6 @@
 specialized package."""
 
 import datetime
-import importlib
 import inspect
 import logging
 import operator
@@ -62,7 +61,6 @@ def find_common_init_times(
     Returns:
         Sorted list of init_times present in both forecast and target.
     """
-    # Find common init_times between forecast and target
     forecast_init_times = set(forecast_landfall.coords["init_time"].values)
     target_init_times = set(target_landfall.coords["init_time"].values)
     common_init_times = sorted(forecast_init_times.intersection(target_init_times))
@@ -86,7 +84,6 @@ def is_valid_landfall(landfall: xr.DataArray | None) -> bool:
         return False
     if "init_time" not in landfall.coords:
         return False
-    # Check that we have actual data (not all NaN)
     if np.isnan(landfall.values).all():
         return False
     return True
@@ -151,23 +148,6 @@ def remove_ocean_gridpoints(dataset: xr.Dataset) -> xr.Dataset:
     land_mask = land_sea_mask == 0
     # Subset the dataset to only include land gridpoints
     return dataset.where(land_mask)
-
-
-def load_events_yaml():
-    """Load the events yaml file."""
-    logger.warning(
-        "This function is deprecated and will be removed in a future release. "
-        "Please use cases.load_ewb_events_yaml_into_case_collection instead."
-    )
-    import extremeweatherbench.data
-
-    events_yaml_file = importlib.resources.files(extremeweatherbench.data).joinpath(
-        "events.yaml"
-    )
-    with importlib.resources.as_file(events_yaml_file) as file:
-        yaml_event_case = read_event_yaml(file)
-
-    return yaml_event_case
 
 
 def read_event_yaml(input_pth: str | pathlib.Path) -> dict:
@@ -766,11 +746,18 @@ def reduce_dataarray(
         raise TypeError(f"method must be str or callable, got {type(method)}")
 
 
-def load_land_geometry(resolution: str = "10m") -> shapely.geometry.Polygon:
-    """Load the land geometry, excluding lakes.
+def load_land_geometry(
+    resolution: Literal["10m", "50m", "110m"] = "50m",
+) -> shapely.geometry.Polygon:
+    """Load the land geometry, excluding lakes and non-ocean bodies of water.
+
+    Args:
+        resolution: Natural Earth resolution ('10m', '50m', or '110m').
+            Defaults to '50m'.
 
     Returns:
-        The land geometry as a shapely Polygon with lakes excluded.
+        The land geometry as a shapely Polygon with lakes and
+        ocean-connected water bodies (bays, estuaries, seas) excluded.
     """
     land = shpreader.natural_earth(
         category="physical", name="land", resolution=resolution
@@ -778,7 +765,7 @@ def load_land_geometry(resolution: str = "10m") -> shapely.geometry.Polygon:
     land_geoms = list(shpreader.Reader(land).geometries())
     land_union = shapely.ops.unary_union(land_geoms)
 
-    # Exclude lakes to avoid false landfall detections in lakes/bays
+    # Exclude lakes to avoid false landfall detections
     try:
         lakes = shpreader.natural_earth(
             category="physical", name="lakes", resolution=resolution
@@ -788,11 +775,35 @@ def load_land_geometry(resolution: str = "10m") -> shapely.geometry.Polygon:
             lakes_union = shapely.ops.unary_union(lake_geoms)
             land_union = land_union.difference(lakes_union)
     except (OSError, ValueError):
-        # If lakes dataset is not available, return land without lakes
-        # This can happen if the dataset doesn't exist for the resolution
+        pass
+
+    # Exclude ocean-connected water bodies (bays, estuaries, coastal seas)
+    try:
+        ocean_union = load_ocean_geometry(resolution=resolution)
+        land_union = land_union.difference(ocean_union)
+    except (OSError, ValueError):
         pass
 
     return land_union
+
+
+def load_ocean_geometry(
+    resolution: Literal["10m", "50m", "110m"] = "50m",
+) -> shapely.geometry.Polygon:
+    """Load the ocean geometry from Natural Earth.
+
+    Args:
+        resolution: Natural Earth resolution ('10m', '50m', or '110m').
+            Defaults to '50m'.
+
+    Returns:
+        The ocean geometry as a unified shapely Polygon.
+    """
+    ocean = shpreader.natural_earth(
+        category="physical", name="ocean", resolution=resolution
+    )
+    ocean_geoms = list(shpreader.Reader(ocean).geometries())
+    return shapely.ops.unary_union(ocean_geoms)
 
 
 def _cache_maybe_densify_helper(

@@ -209,24 +209,14 @@ def validate_events_yaml(file_path: Path) -> List[str]:
     except yaml.YAMLError as e:
         return [f"Invalid YAML syntax: {e}"]
 
-    if not isinstance(data, dict):
-        return ["Root element must be a dictionary"]
-
-    if "cases" not in data:
-        return ["Missing 'cases' key in root"]
-
-    cases = data["cases"]
-    if not isinstance(cases, list):
-        return ["'cases' must be a list"]
-
-    if len(cases) == 0:
-        return ["'cases' list is empty"]
+    if not isinstance(data, dict) and not isinstance(data, list):
+        return ["Root element must be a dictionary or a list"]
 
     # Validate each case
     previous_case_id = None
-    for i, case in enumerate(cases):
+    for i, case in enumerate(data):
         if not isinstance(case, dict):
-            errors.append(f"Case {i + 1}: must be a dictionary")
+            errors.append(f"Case {i + 1}: must be a dictionary: {data} {file_path}")
             continue
 
         # Check required fields

@@ -20,7 +20,7 @@ In experimentation with varying configurations, it was found `loky` was the most
 ```python
 ...
 # Load events yaml
-case_yaml = cases.load_ewb_events_yaml_into_case_collection()
+case_yaml = cases.load_ewb_events_yaml_into_case_list()
 
 # Get default EvaluationObjects
 evaluation_objects = defaults.get_brightband_evaluation_objects()
@@ -35,7 +35,7 @@ ewb = evaluate.ExtremeWeatherBench(
 # The larger the machine, the larger n_jobs can be (a bit of an oversimplification)
 parallel_config = {"backend":"loky","n_jobs":len(evaluation_objects)}
 
-outputs = ewb.run(parallel_config=parallel_config)
+outputs = ewb.run_evaluation(parallel_config=parallel_config)
 ```
 
 The _safest_ approach is to run EWB in serial, with `n_jobs` set to 1. `Dask` will still be invoked during each `CaseOperator` when the case executes and computes the directed acyclic graph, only one at a time. That said, for evaluations with more cases this approach would likely be too time-consuming. 

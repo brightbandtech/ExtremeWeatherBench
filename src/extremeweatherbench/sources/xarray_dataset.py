@@ -9,7 +9,7 @@ import xarray as xr
 from extremeweatherbench import utils
 
 if TYPE_CHECKING:
-    from extremeweatherbench import regions
+    import extremeweatherbench.regions as regions
 
 
 def safely_pull_variables(

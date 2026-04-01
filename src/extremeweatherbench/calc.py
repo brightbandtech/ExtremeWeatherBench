@@ -1,3 +1,4 @@
+import logging
 from typing import Literal, Optional, Sequence, Union
 
 import numpy as np
@@ -6,12 +7,18 @@ import regionmask
 import scores.categorical as categorical
 import shapely
 import xarray as xr
+from numba import float64, guvectorize
+from scipy import ndimage
+from skimage import filters
 
 from extremeweatherbench import utils
 
 epsilon: float = 0.6219569100577033  # Ratio of molecular weights (H2O/dry air)
 sat_press_0c: float = 6.112  # Saturation vapor pressure at 0°C (hPa)
 g0: float = 9.80665  # Standard gravity (m/s^2)
+
+logger = logging.getLogger("extremeweatherbench.calc")
+logger.setLevel(logging.INFO)
 
 
 def convert_from_cartesian_to_latlon(
@@ -240,28 +247,29 @@ def maybe_calculate_wind_speed(ds: xr.Dataset) -> xr.Dataset:
 
 def geopotential_thickness(
     da: xr.DataArray,
-    top_level_value: int = 300,
-    bottom_level_value: int = 500,
+    top_level: int = 300,
+    bottom_level: int = 500,
     geopotential: bool = False,
-    pressure_dimension_str: str = "level",
+    pressure_dim: str = "level",
 ) -> xr.DataArray:
-    """Generate the geopotential thickness from the geopotential heights.
+    """Generate the geopotential thickness from the geopotential heights. Defaults to
+    geopotential height in meters.
 
     Args:
         da: The xarray DataArray to generate the geopotential thickness from.
-        top_level_value: The value of the top level to generate the geopotential
-            thickness from.
-        bottom_level_value: The value of the bottom level to generate the
-            geopotential thickness from.
-        geopotential: Whether the input DataArray is geopotential height or
-            geopotential (default is geopotential height).
-        pressure_dimension_str: The name of the pressure dimension (default is "level").
+        top_level: The pressure value of the top level to generate the
+            geopotential thickness from in hPa.
+        bottom_level: The pressure value of the bottom level to generate the
+            geopotential thickness from in hPa.
+        geopotential: Whether the input DataArray is geopotential height (in m) or
+            geopotential (in m^2/s^2). Default is geopotential height.
+        pressure_dim: The name of the pressure dimension. Default is "level".
 
     Returns:
-        The geopotential thickness as an xarray DataArray.
+        The geopotential thickness in meters as an xarray DataArray.
     """
-    geopotential_heights = da.sel({pressure_dimension_str: top_level_value})
-    geopotential_height_bottom = da.sel({pressure_dimension_str: bottom_level_value})
+    geopotential_heights = da.sel({pressure_dim: top_level})
+    geopotential_height_bottom = da.sel({pressure_dim: bottom_level})
     if geopotential:
         geopotential_thickness = (
             geopotential_heights - geopotential_height_bottom
@@ -269,55 +277,68 @@ def geopotential_thickness(
     else:
         geopotential_thickness = geopotential_heights - geopotential_height_bottom
     geopotential_thickness.attrs = dict(
-        description="Geopotential thickness of level and 500 hPa", units="m"
+        description=f"Geopotential thickness of {top_level} hPa and {bottom_level} hPa",
+        units="m",
     )
     return geopotential_thickness
 
 
-def nantrapezoid(
-    y: np.ndarray,
-    x: np.ndarray | None = None,
-    dx: float = 1.0,
-    axis: int = -1,
-):
-    """Trapezoid rule for arrays with nans.
+@guvectorize(
+    [(float64[:], float64[:], float64[:])],
+    "(n),(n)->()",
+    nopython=True,
+    target="cpu",
+)
+def _nantrapezoid_kernel(y, x, out):
+    """1D nan-aware trapezoid integration kernel."""
+    total = 0.0
+    for i in range(len(y) - 1):
+        y0 = y[i]
+        y1 = y[i + 1]
+        dx = x[i + 1] - x[i]
+        # skip intervals where either endpoint is nan
+        if not (np.isnan(y0) or np.isnan(y1)):
+            total += dx * (y0 + y1) / 2.0
+    out[()] = total
 
-    Identical to np.trapezoid but with nans handled correctly in the summation.
+
+def nantrapezoid_nd(y, x):
     """
-    y = np.asanyarray(y)
-    if x is None:
-        # Create an array of the step size
-        d = np.full(y.shape[axis] - 1, dx) if y.shape[axis] > 1 else np.array([dx])
-        # reshape to correct shape
-        shape = [1] * y.ndim
-        shape[axis] = d.shape[0]
-        d = d.reshape(shape)
-    else:
-        x = np.asanyarray(x)
-        if x.ndim == 1:
-            d = np.diff(x)
-            # reshape to correct shape
-            shape = [1] * y.ndim
-            shape[axis] = d.shape[0]
-            d = d.reshape(shape)
-        else:
-            d = np.diff(x, axis=axis)
-    if y.ndim != d.ndim:
-        d = np.expand_dims(d, axis=1)
-    nd = y.ndim
-    slice1 = [slice(None)] * nd
-    slice2 = [slice(None)] * nd
-    slice1[axis] = slice(1, None)
-    slice2[axis] = slice(None, -1)
-    try:
-        # This is the only location different from np.trapezoid
-        ret = np.nansum(d * (y[tuple(slice1)] + y[tuple(slice2)]) / 2.0, axis=axis)
-    except ValueError:
-        # Operations didn't work, cast to ndarray
-        d = np.asarray(d)
-        y = np.asarray(y)
-        ret = np.add.reduce(d * (y[tuple(slice1)] + y[tuple(slice2)]) / 2.0, axis)
-    return ret
+    Wrapper that moves the integration axis to last position,
+    calls the guvectorize kernel, then returns result.
+
+    y: (..., level, lat, lon)
+    x: (level,) or same shape as y
+    """
+
+    return _nantrapezoid_kernel(y, x)
+
+
+def nantrapezoid_pressure_levels(da: xr.DataArray):
+    """Calculates the integral using the trapezoid rule for arrays with nans.
+
+    Args:
+        da: a DataArray with dimensions (time, latitude, longitude, level). Level units
+            are in hPa.
+
+    Returns a DataArray of the computed quantity integrated over the entire column.
+    """
+
+    # Chunk the level dimension to ensure successful dask parallelization
+    da = da.chunk({"level": -1})
+    # Convert levels to Pascals
+    levels_pa = da["level"] * 100
+
+    output = xr.apply_ufunc(
+        nantrapezoid_nd,
+        da,
+        levels_pa,
+        input_core_dims=[["level"], ["level"]],
+        output_core_dims=[[]],
+        dask="parallelized",
+        output_dtypes=[float],
+    )
+    return output
 
 
 def specific_humidity_from_relative_humidity(
@@ -405,27 +426,37 @@ def dewpoint_from_specific_humidity(pressure: float, specific_humidity: float) -
 def find_landfalls(
     track_data: xr.DataArray,
     land_geom: Optional[shapely.geometry.Polygon] = None,
-    return_next_landfall: bool = False,
+    ocean_geom: Optional[shapely.geometry.Polygon] = None,
 ) -> xr.DataArray:
-    """Find landfall point(s) where tracked object intersects land.
+    """Find landfall point(s) where a tracked object intersects land.
 
-    Generalized landfall detection for any object (TC, AR, etc).
-    Expects DataArray with latitude, longitude, valid_time as coords.
+    Generalized landfall detection for any object (TC, AR, etc.).
+    Only crossings that originate from the open ocean are counted;
+    transitions out of inland lakes, ponds, or isolated bays are
+    excluded via the explicit ocean geometry check.
 
     Args:
-        track_data: Track DataArray with latitude, longitude,
-            valid_time coords. Data values are interpolated at landfall.
-            Shape: (valid_time,) or (lead_time, valid_time)
-        return_next_landfall: If True, return next landfall; else only first landfall
-        land_geom: Shapely geometry for land intersection testing
+        track_data: Track DataArray with latitude, longitude, valid_time
+            coords. Data values are interpolated at the landfall point.
+            Shape: ``(valid_time,)`` for observations or
+            ``(lead_time, valid_time)`` for forecasts.
+        land_geom: Shapely geometry for land-intersection testing. Uses
+            the default NaturalEarth 10 m land polygon when None.
+        ocean_geom: Shapely geometry representing the open ocean. Used
+            to confirm the starting position is truly oceanic before
+            counting a crossing as a landfall. Defaults to the
+            NaturalEarth 10 m ocean polygon when None.
 
     Returns:
-        DataArray with landfall values and lat/lon/time as coords,
-        or None if no landfall found
+        DataArray with interpolated landfall values or empty if no
+        landfalls are detected.
     """
     # If no land geometry is provided, use default
     if land_geom is None:
         land_geom = utils.load_land_geometry()
+
+    if ocean_geom is None:
+        ocean_geom = utils.load_ocean_geometry()
 
     # Squeeze track dimension if needed
     if "track" in track_data.dims and track_data.sizes["track"] == 1:
@@ -438,42 +469,29 @@ def find_landfalls(
         # Convert to init_time coords for boundary detection
         track_data = utils.convert_valid_time_to_init_time(track_data)
 
-        # Flatten to single time dimension for vectorized processing
-        track_data_flat = track_data.stack(time=("init_time", "lead_time"))
+        # Flatten to single time dimension
+        track_data = track_data.stack(time=("init_time", "lead_time"))
 
         # Vectorized landfall detection
-        landfall_mask = _detect_landfalls_wrapper(track_data_flat, land_geom)
+        landfall_mask = _detect_landfalls_wrapper(track_data, land_geom, ocean_geom)
 
         # Mask init_time boundaries
-        landfall_mask = _mask_init_time_boundaries(landfall_mask, track_data_flat)
+        landfall_mask = _mask_init_time_boundaries(landfall_mask, track_data)
 
-        # Interpolate at landfall points
-        result = _interpolate_and_format_landfalls(
-            track_data_flat,
-            landfall_mask,
-            land_geom,
-            return_next_landfall,
-            group_by="init_time",
-        )
-
-        return result
     else:
         # Process single track data
-        landfall_mask = _detect_landfalls_wrapper(track_data, land_geom)
+        landfall_mask = _detect_landfalls_wrapper(track_data, land_geom, ocean_geom)
 
-        return _interpolate_and_format_landfalls(
-            track_data,
-            landfall_mask,
-            land_geom,
-            return_next_landfall,
-            group_by=None,
-        )
+    landfalls = _interpolate_and_format_landfalls(
+        track_data, landfall_mask, land_geom, is_forecast
+    )
+    return _deduplicate_landfalls(landfalls)
 
 
 def find_next_landfall_for_init_time(
     forecast_landfalls: xr.DataArray,
     target_landfalls: xr.DataArray,
-) -> Optional[xr.DataArray]:
+) -> xr.DataArray:
     """Find unique next upcoming landfalls from target data.
 
     For each forecast initialization time, finds the next landfall
@@ -489,8 +507,8 @@ def find_next_landfall_for_init_time(
             with return_all=True (has landfall dimension)
 
     Returns:
-        DataArray with unique next landfalls indexed by init_time, or
-        None if no future landfalls exist
+        DataArray with unique next landfalls indexed by init_time. Returns
+        a zero-length DataArray if no future landfalls exist.
     """
     # Extract init_times from forecast landfalls
     if "init_time" in forecast_landfalls.dims:
@@ -513,34 +531,40 @@ def find_next_landfall_for_init_time(
     # Build result for all init_times, keeping only unique landfalls
     results = []
 
-    for i, init_t in enumerate(init_times):
+    for i, init_time in enumerate(init_times):
         if valid_mask[i]:
             # There is a future landfall for this init_time
             landfall_idx = next_indices[i]
             landfall = target_landfalls.isel(landfall=landfall_idx)
-            landfall = landfall.assign_coords(init_time=init_t)
+            landfall = landfall.expand_dims("init_time", axis=0)
+            landfall = landfall.assign_coords(init_time=("init_time", [init_time]))
 
             results.append(landfall)
 
-    # Combine landfalls indexed by init_time or return None if no results
-    return (
-        xr.concat(
-            results, dim="init_time", coords="different", compat="equals", join="outer"
+    # Combine landfalls indexed by init_time or return empty if no results
+    if not results:
+        return xr.DataArray(
+            np.array([], dtype=float),
+            dims=["init_time"],
+            coords={"init_time": np.array([], dtype="datetime64[ns]")},
         )
-        if results
-        else None
+    return xr.concat(
+        results, dim="init_time", coords="different", compat="equals", join="outer"
     )
 
 
 def _detect_landfalls_wrapper(
     track_data: xr.DataArray,
     land_geom: shapely.geometry.Polygon,
+    ocean_geom: shapely.geometry.Polygon,
 ) -> xr.DataArray:
     """Landfall detection across consecutive point pairs.
 
     Args:
         track_data: Track data with latitude, longitude coords
         land_geom: Land geometry for intersection testing
+        ocean_geom: Ocean geometry used to require the start point is
+            in the open ocean before counting a crossing as a landfall
 
     Returns:
         Boolean DataArray where True indicates a landfall between
@@ -572,7 +596,7 @@ def _detect_landfalls_wrapper(
         # Handle NaN values (from shift at boundaries)
         if np.isnan(lon1) or np.isnan(lat1) or np.isnan(lon2) or np.isnan(lat2):
             return False
-        return _is_true_landfall(lon1, lat1, lon2, lat2, land_geom)
+        return _is_true_landfall(lon1, lat1, lon2, lat2, land_geom, ocean_geom)
 
     # Apply to get landfall mask
     landfall_mask = xr.apply_ufunc(
@@ -581,7 +605,7 @@ def _detect_landfalls_wrapper(
         lats,
         lons_180_next,
         lats_next,
-        vectorize=True,  # We already vectorized with np.vectorize
+        vectorize=True,
         dask="parallelized",
         output_dtypes=[bool],
     )
@@ -631,31 +655,43 @@ def _interpolate_and_format_landfalls(
     track_data: xr.DataArray,
     landfall_mask: xr.DataArray,
     land_geom: shapely.geometry.Polygon,
-    return_all_landfalls: bool,
-    group_by: Optional[str] = None,
-) -> Optional[xr.DataArray]:
+    is_forecast: bool,
+) -> xr.DataArray:
     """Interpolate landfall points and format output.
+
+    When no landfalls are detected the returned array is zero-length, but carries the
+    same dim and coordinate names as a populated result for the same arguments.
 
     Args:
         track_data: Original track data
         landfall_mask: Boolean mask of landfall locations
         land_geom: Land geometry for intersection
-        return_all_landfalls: Whether to return all or just first
         group_by: If not None, group by this coord (e.g., "init_time")
 
     Returns:
-        Formatted landfall DataArray or None if no landfalls
+        Formatted landfall DataArray
     """
+
+    landfall_da = xr.DataArray(
+        np.array([], dtype=float),
+        dims=["landfall"],
+        coords={
+            "landfall": np.array([], dtype=int),
+            "latitude": ("landfall", np.array([], dtype=float)),
+            "longitude": ("landfall", np.array([], dtype=float)),
+            "valid_time": ("landfall", np.array([], dtype="datetime64[ns]")),
+        },
+        name="value",
+    )
     # Determine time dimension
     time_dims = [d for d in track_data.dims if "time" in d.lower()]
-    if not time_dims:
-        return None
 
     # Get indices where landfalls occur
     landfall_indices = np.where(landfall_mask.values)[0]
 
-    if len(landfall_indices) == 0:
-        return None
+    # Return empty if no landfalls or no time dimension
+    if len(landfall_indices) == 0 or not time_dims:
+        return landfall_da
 
     # Extract coordinate arrays
     lats_vals = track_data.coords["latitude"].values
@@ -667,7 +703,6 @@ def _interpolate_and_format_landfalls(
     lons_180 = (lons_vals + 180) % 360 - 180
 
     # Get init_time if available
-    init_times = None
     if "init_time" in track_data.coords:
         init_times = track_data.coords["init_time"].values
 
@@ -714,109 +749,165 @@ def _interpolate_and_format_landfalls(
                 [(lons_180[i], lats_vals[i]), (landfall_lon, landfall_lat)]
             ).length
             frac = landfall_dist / full_dist
+            value = track_vals[i] + frac * (track_vals[i + 1] - track_vals[i])
+            if not np.isnan(track_vals[i]):
+                value = track_vals[i] + frac * (track_vals[i + 1] - track_vals[i])
+            else:
+                continue
 
-            landfall_point = {
-                "latitude": landfall_lat,
-                "longitude": utils.convert_longitude_to_360(landfall_lon),
-                "valid_time": times_vals[i]
-                + frac * (times_vals[i + 1] - times_vals[i]),
-                "value": track_vals[i] + frac * (track_vals[i + 1] - track_vals[i])
-                if not np.isnan(track_vals[i])
-                else np.nan,
-            }
+            # Create DataArray with landfall coordinate and value
+            landfall_point = xr.DataArray(
+                [value],
+                dims=["landfall"],
+                coords={
+                    "landfall": np.array([i], dtype=int),
+                    "latitude": (
+                        "landfall",
+                        np.array([landfall_lat], dtype=float),
+                    ),
+                    "longitude": (
+                        "landfall",
+                        np.array([landfall_lon], dtype=float),
+                    ),
+                    "valid_time": (
+                        "landfall",
+                        np.array(
+                            [
+                                times_vals[i]
+                                + frac * (times_vals[i + 1] - times_vals[i])
+                            ],
+                            dtype="datetime64[ns]",
+                        ),
+                    ),
+                },
+                name="value",
+            )
 
-            # Add init_time if available
-            if init_times is not None:
-                landfall_point["init_time"] = init_times[i]
+            # Add init_time if forecast data
+            if is_forecast:
+                landfall_point = landfall_point.expand_dims("init_time", axis=0)
+                landfall_point = landfall_point.assign_coords(
+                    init_time=("init_time", [init_times[i]])
+                )
 
             landfall_data.append(landfall_point)
 
-        except (IndexError, AttributeError, ValueError, TypeError, ZeroDivisionError):
+        except (
+            IndexError,
+            AttributeError,
+            ValueError,
+            TypeError,
+            ZeroDivisionError,
+        ) as e:
+            logger.warning(f"Error processing landfall at index {i}: {e}")
             continue
 
-    if not landfall_data:
-        return None
-
-    # Check if all landfall values are NaN
-    all_nan = all(np.isnan(d.get("value", np.nan)) for d in landfall_data)
-    if all_nan:
-        return None
-
     # Format output based on grouping
-    if group_by == "init_time" and init_times is not None:
-        # Group by init_time and optionally keep first per group
-        results = []
-        unique_inits = np.unique([d["init_time"] for d in landfall_data])
-
-        for init_t in unique_inits:
-            init_landfalls = [d for d in landfall_data if d["init_time"] == init_t]
-
-            if not return_all_landfalls:
-                # Keep only first landfall for this init_time
-                init_landfalls = sorted(init_landfalls, key=lambda x: x["valid_time"])
-                init_landfalls = [init_landfalls[0]]
-
-            # Create DataArray with consistent landfall dimension
-            values = [d["value"] for d in init_landfalls]
-            coords = {
-                "latitude": (["landfall"], [d["latitude"] for d in init_landfalls]),
-                "longitude": (["landfall"], [d["longitude"] for d in init_landfalls]),
-                "valid_time": (["landfall"], [d["valid_time"] for d in init_landfalls]),
-                "landfall": np.arange(len(init_landfalls)),
-                "init_time": init_t,
-            }
-            da = xr.DataArray(
-                values,
-                dims=["landfall"],
-                coords=coords,
-                name=track_data.name or "landfall_value",
-            )
-            results.append(da)
-
-        return (
-            xr.concat(
-                results,
-                dim="init_time",
-                coords="different",
-                compat="equals",
-                join="outer",
-            )
-            if results
-            else None
+    if landfall_data:
+        landfall_da = xr.concat(
+            landfall_data,
+            dim="landfall",
+            coords="different",
+            compat="equals",
+            join="outer",
         )
 
-    else:
-        # No grouping - format as single or multiple landfalls
-        if return_all_landfalls:
-            # Return with landfall dimension
-            values = [d["value"] for d in landfall_data]
-            coords = {
-                "latitude": (["landfall"], [d["latitude"] for d in landfall_data]),
-                "longitude": (["landfall"], [d["longitude"] for d in landfall_data]),
-                "valid_time": (["landfall"], [d["valid_time"] for d in landfall_data]),
-                "landfall": np.arange(len(landfall_data)),
-            }
-            return xr.DataArray(
-                values,
-                dims=["landfall"],
-                coords=coords,
-                name=track_data.name or "landfall_value",
-            )
+    return landfall_da
+
+
+def _deduplicate_landfalls(
+    landfalls: xr.DataArray,
+    min_distance_km: float = 50.0,
+) -> xr.DataArray:
+    """Remove landfalls within ``min_distance_km`` of a prior landfall.
+
+    Iterates through the landfall dimension in order, keeping the first
+    occurrence and dropping any subsequent landfall whose great-circle
+    distance to the most recent kept landfall is less than
+    ``min_distance_km``. This eliminates spurious detections that arise
+    when a storm crosses a barrier island, enters a coastal bay, and then
+    crosses onto the mainland — all part of the same physical event.
+
+    Args:
+        landfalls: DataArray with a ``landfall`` dimension and
+            ``latitude``/``longitude`` coordinates, as returned by
+            ``find_landfalls``.
+        min_distance_km: Minimum great-circle distance (km) between two
+            consecutive kept landfalls. Defaults to 50 km.
+
+    Returns:
+        Deduplicated DataArray with the same structure as the input.
+    """
+    if len(landfalls) <= 1:
+        return landfalls
+
+    lats = landfalls.coords["latitude"].values
+    lons = landfalls.coords["longitude"].values
+
+    keep = np.ones(len(landfalls), dtype=bool)
+    last_idx = 0
+
+    for i in range(1, len(landfalls)):
+        lat1, lon1 = np.radians(lats[last_idx]), np.radians(lons[last_idx])
+        lat2, lon2 = np.radians(lats[i]), np.radians(lons[i])
+        dlat = lat2 - lat1
+        dlon = lon2 - lon1
+        a = np.sin(dlat / 2) ** 2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2) ** 2
+        dist_km = 2 * 6371.0 * np.arcsin(np.sqrt(a))
+        if dist_km < min_distance_km:
+            keep[i] = False
         else:
-            # Return first landfall as scalar
-            d = landfall_data[0]
-            coords = {
-                "latitude": d["latitude"],
-                "longitude": d["longitude"],
-                "valid_time": d["valid_time"],
-            }
-            if "init_time" in d:
-                coords["init_time"] = d["init_time"]
-            return xr.DataArray(
-                d["value"],
-                coords=coords,
-                name=track_data.name or "landfall_value",
-            )
+            last_idx = i
+
+    kept_indices = np.where(keep)[0]
+    return landfalls.isel(landfall=kept_indices)
+
+
+def broadcast_first_target_to_init_times(
+    init_times: xr.DataArray,
+    target: xr.DataArray,
+) -> xr.DataArray:
+    """Broadcast a single first-approach observation to ``(init_time,)`` shape.
+
+    For the "first" landfall approach, ``find_landfalls`` returns the
+    observed target as ``(landfall,)`` with one element and no ``init_time``
+    dimension. This function converts it to ``(init_time,)`` so sub-metrics
+    always receive arrays with a consistent schema.
+
+    The caller is responsible for filtering ``forecast`` to only the
+    init_times that should be evaluated (e.g. those before the observed
+    landfall) before passing it here.
+
+    Args:
+        target: ``(landfall,)`` DataArray from ``find_landfalls`` for
+            observations. Must contain exactly one element.
+        forecast: ``(init_time,)`` DataArray from ``find_landfalls`` for
+            the forecast, used to determine which init_times the broadcast
+            target should span.
+
+    Returns:
+        ``(init_time,)`` DataArray with the target value, latitude,
+        longitude, and valid_time repeated across all forecast init_times.
+    """
+    t = target.isel(landfall=0)
+    n = len(init_times)
+    return xr.DataArray(
+        np.full(n, float(t.values)),
+        dims=["init_time"],
+        coords={
+            "init_time": init_times.values,
+            "latitude": ("init_time", np.full(n, float(t.coords["latitude"]))),
+            "longitude": (
+                "init_time",
+                np.full(n, float(t.coords["longitude"])),
+            ),
+            "valid_time": (
+                "init_time",
+                np.full(n, t.coords["valid_time"].values, dtype="datetime64[ns]"),
+            ),
+        },
+        name=target.name,
+    )
 
 
 # Keep existing _process_single_track_landfall for backward compatibility
@@ -829,17 +920,21 @@ def _is_true_landfall(
     lon2: float,
     lat2: float,
     land_geom: shapely.geometry.Polygon,
+    ocean_geom: shapely.geometry.Polygon,
 ) -> bool:
     """Detect true landfall (ocean to land movement).
 
-    This function is a way to detect if a track crosses land. There are a few scenarios,
-    being ocean to land, ocean to ocean, and land to ocean. Ocean to ocean can have a
-    landfall if there is land between the two points.
+    Only segments that originate from the open ocean (as defined by the
+    Natural Earth ocean polygon) are considered potential landfalls. This
+    prevents false detections from inland lakes, ponds, or enclosed bays
+    that are not connected to the open ocean.
 
     Args:
         lon1, lat1: Starting point coordinates
         lon2, lat2: Ending point coordinates
         land_geom: Land geometry for intersection testing
+        ocean_geom: Ocean geometry used to verify the start point is in
+            the open ocean (not a lake, pond, or isolated bay)
 
     Returns:
         True if this represents a landfall, False otherwise
@@ -848,20 +943,20 @@ def _is_true_landfall(
         start_point = shapely.geometry.Point(lon1, lat1)
         end_point = shapely.geometry.Point(lon2, lat2)
 
-        start_over_land = land_geom.contains(start_point)
+        start_in_ocean = ocean_geom.contains(start_point)
         end_over_land = land_geom.contains(end_point)
 
-        # Ocean -> Land = LANDFALL
-        if not start_over_land and end_over_land:
+        # True ocean -> Land = LANDFALL
+        if start_in_ocean and end_over_land:
             return True
 
-        # Ocean -> Ocean, check if land is between
-        if not start_over_land and not end_over_land:
+        # True ocean -> ocean, check if land is between
+        if start_in_ocean and not end_over_land:
             segment = shapely.geometry.LineString([(lon1, lat1), (lon2, lat2)])
             if segment.intersects(land_geom):
                 return True
 
-        # Land -> Ocean or Ocean -> Ocean (no intersection) = NOT LANDFALL
+        # Lake/pond/bay -> Land, or Land -> Ocean = NOT LANDFALL
         return False
 
     except (AttributeError, ValueError, TypeError):
@@ -869,3 +964,37 @@ def _is_true_landfall(
         # - AttributeError: invalid/None geometry
         # - ValueError/TypeError: invalid coordinate values
         return False
+
+
+def _binary_dilation_ufunc(data: xr.DataArray, dilation_radius: int) -> xr.DataArray:
+    """Apply binary dilation along the last two (lat, lon) axes.
+
+    Uses axes=(-2, -1) so the function works correctly for any number of
+    leading broadcast dimensions (e.g. valid_time, lead_time).
+
+    Args:
+        data: Array of shape (..., lat, lon)
+        dilation_radius: radius for the dilation in gridpoints
+
+    Returns:
+        Dilated array of the same shape as data
+    """
+    size = dilation_radius * 2 + 1
+    struct = np.ones((size, size))
+    return ndimage.binary_dilation(data, structure=struct, axes=(-2, -1)).astype(
+        np.int8
+    )
+
+
+def _compute_blurred_laplacian_ufunc(data: xr.DataArray, sigma: float) -> xr.DataArray:
+    """Compute blurred Laplacian using scipy filters.
+
+    Args:
+        data: IVT data to compute the blurred Laplacian of; data must be 2D
+        sigma: the standard deviation for the Gaussian filter
+
+    Returns:
+        The blurred Laplacian of IVT
+    """
+    laplace_data = filters.laplace(data)
+    return ndimage.gaussian_filter(laplace_data, sigma=sigma)

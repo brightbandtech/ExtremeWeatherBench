@@ -10,27 +10,32 @@ from extremeweatherbench import calc
 from extremeweatherbench.events import tropical_cyclone
 
 if TYPE_CHECKING:
-    from extremeweatherbench import cases
+    import extremeweatherbench.cases as cases
 
 logger = logging.getLogger(__name__)
 
 
 class DerivedVariable(abc.ABC):
-    """An abstract base class defining the interface for ExtremeWeatherBench
-    derived variables.
+    """Abstract base class for ExtremeWeatherBench derived variables.
 
-    A DerivedVariable is any variable or transform that requires extra computation than
-    what is provided in analysis or forecast data. Some examples include the
-    practically perfect hindcast, MLCAPE, IVT, or atmospheric river masks.
+    A DerivedVariable is any variable or transform that requires extra
+    computation beyond what is provided in analysis or forecast data. Examples
+    include the practically perfect hindcast, MLCAPE, IVT, or atmospheric
+    river masks.
 
-    Attributes:
-        variables: A list of variables that are used to build the
-            derived variable.
-        output_variables: Optional list of variable names that specify
-            which outputs to use from the derived computation.
-        compute: A method that generates the derived variable from the variables.
-        derive_variable: An abstract method that defines the computation to
-            derive the derived_variable from variables.
+    Class attributes:
+        variables: List of variables used to build the derived variable
+
+    Instance attributes:
+        name: The name of the derived variable
+        output_variables: Optional list of variable names specifying which
+            outputs to use from the derived computation
+
+    Public methods:
+        compute: Build the derived variable from input variables
+
+    Abstract methods:
+        derive_variable: Define the computation to derive the variable
     """
 
     variables: List[str]
@@ -81,33 +86,28 @@ class DerivedVariable(abc.ABC):
 
 
 class TropicalCycloneTrackVariables(DerivedVariable):
-    """A derived variable abstract class for tropical cyclone (TC) variables.
+    """Derived variable class for tropical cyclone track-based variables.
 
-    This class serves as a parent for TC-related derived variables and provides
-    shared track computation with caching to avoid reprocessing the same data
-    multiple times across different child classes.
+    Extends DerivedVariable to provide shared track computation with caching
+    for TC-related derived variables, avoiding reprocessing across child
+    classes. Track data is computed once and cached, then child classes can
+    extract specific variables (sea level pressure, wind speed, etc.).
 
-    The track data is computed once and cached, then child classes can extract
-    specific variables (like sea level pressure, wind speed) from the cached
-    track dataset.
-
-    Deriving the track locations using default TempestExtremes criteria:
+    Uses default TempestExtremes criteria for track identification:
     https://doi.org/10.5194/gmd-14-5023-2021
 
-    For forecast data, when track data is provided, the valid candidates
-    approach is filtered to only include candidates within 5 great circle
-    degrees of track data points and within 48 hours of the valid_time.
+    For forecasts with track data, valid candidates are filtered to include
+    only those within 5 great circle degrees and 48 hours of track points.
 
-    Track data is automatically obtained from the target dataset when using
-    the evaluation pipeline (via `requires_target_dataset=True` flag).
+    Track data is automatically obtained from target dataset via
+    `requires_target_dataset=True` flag in evaluation pipeline.
 
-    Attributes:
-        output_variables: Optional list of variable names that specify
-            which outputs to use from the derived computation.
-        name: The name of the derived variable. Defaults to class-level
-            name attribute if present, otherwise the class name.
-        requires_target_dataset: If True, target dataset will be passed to
-            this derived variable via kwargs.
+    Class attributes:
+        requires_target_dataset: If True, target dataset passed via kwargs
+
+    Instance attributes:
+        output_variables: Optional list specifying which outputs to use
+        name: Name of the derived variable
     """
 
     # required variables for TC track identification
@@ -129,17 +129,18 @@ class TropicalCycloneTrackVariables(DerivedVariable):
         name: Optional[str] = None,
         slp_contour_magnitude: float = 200.0,
         dz_contour_magnitude: float = -6.0,
-        min_distance_between_peaks: int = 5,
+        min_distance_between_peaks_degrees: float = 1.0,
         max_spatial_distance_degrees: float = 5.0,
         max_temporal_hours: float = 48.0,
         use_contour_validation: bool = True,
-        min_track_timesteps: int = 10,
+        timestep_count_wind_minimum: int = 10,
         latitude_max_degrees: float = 50.0,
-        surface_pressure_threshold: float = 100500.0,
+        surface_pressure_threshold: float = 102000.0,
         orography: Optional[xr.DataArray] = None,
         max_gc_distance_slp_contour_degrees: float = 5.5,
         max_gc_distance_dz_contour_degrees: float = 6.5,
         orography_filter_threshold: float = 150.0,
+        wind_search_radius_degrees: float = 2.0,
     ):
         """Initialize the TropicalCycloneTrackVariables variable.
 
@@ -152,20 +153,24 @@ class TropicalCycloneTrackVariables(DerivedVariable):
                 Defaults to 200.0.
             dz_contour_magnitude: Geopotential thickness contour threshold in m.
                 Defaults to -6.0.
-            min_distance_between_peaks: Minimum grid points between detected peaks.
-                Defaults to 5.
+            min_distance_between_peaks_degrees: Minimum GCD distance between
+                detected peaks in degrees. Converted to grid points at runtime
+                using the actual model resolution. Defaults to 1.0 degree.
             max_spatial_distance_degrees: Maximum distance in degrees for track matching.
                 Defaults to 5.0.
             max_temporal_hours: Maximum hours between detections for track continuity.
                 Defaults to 48.0.
             use_contour_validation: Whether to apply closed contour validation.
                 Defaults to True.
-            min_track_timesteps: Minimum number of timesteps required for a valid track.
-                Defaults to 10.
+            timestep_count_wind_minimum: Minimum number of lead times where the
+                neighbourhood peak wind (max within wind_search_radius_degrees)
+                is >= 10 m/s for a track to be retained. Defaults to 10.
             latitude_max_degrees: Maximum latitude in degrees for TC detection.
                 Defaults to 50.0.
-            surface_pressure_threshold: Surface pressure threshold in Pa.
-                Defaults to 100500.0.
+            surface_pressure_threshold: Maximum SLP (Pa) a candidate grid
+                point may have to be considered for peak detection. Defaults
+                to 101325.0 Pa (standard atmosphere), so only below-average
+                pressure cells are examined.
             orography: Optional orography DataArray for terrain filtering.
                 Defaults to None.
             max_gc_distance_slp_contour_degrees: Maximum great circle distance for
@@ -175,21 +180,25 @@ class TropicalCycloneTrackVariables(DerivedVariable):
                 degrees.
             orography_filter_threshold: Orography filter threshold in meters.
                 Defaults to 150.0.
+            wind_search_radius_degrees: GCD radius in degrees for neighbourhood
+                wind sampling, per TempestExtremes 2.1. Converted to grid
+                points at runtime. Defaults to 2.0 degrees.
         """
         super().__init__(output_variables=output_variables, name=name)
         self.slp_contour_magnitude = slp_contour_magnitude
         self.dz_contour_magnitude = dz_contour_magnitude
-        self.min_distance_between_peaks = min_distance_between_peaks
+        self.min_distance_between_peaks_degrees = min_distance_between_peaks_degrees
         self.max_spatial_distance_degrees = max_spatial_distance_degrees
         self.max_temporal_hours = max_temporal_hours
         self.use_contour_validation = use_contour_validation
-        self.min_track_timesteps = min_track_timesteps
+        self.timestep_count_wind_minimum = timestep_count_wind_minimum
         self.latitude_max_degrees = latitude_max_degrees
         self.surface_pressure_threshold = surface_pressure_threshold
         self.orography = orography
         self.max_gc_distance_slp_contour_degrees = max_gc_distance_slp_contour_degrees
         self.max_gc_distance_dz_contour_degrees = max_gc_distance_dz_contour_degrees
         self.orography_filter_threshold = orography_filter_threshold
+        self.wind_search_radius_degrees = wind_search_radius_degrees
 
     def get_or_compute_tracks(self, data: xr.Dataset, *args, **kwargs) -> xr.Dataset:
         """Get cached track data or compute if not already cached.
@@ -253,17 +262,18 @@ class TropicalCycloneTrackVariables(DerivedVariable):
             geopotential_thickness=prepared_data.get("geopotential_thickness", None),
             slp_contour_magnitude=self.slp_contour_magnitude,
             dz_contour_magnitude=self.dz_contour_magnitude,
-            min_distance_between_peaks=self.min_distance_between_peaks,
+            min_distance_between_peaks_degrees=self.min_distance_between_peaks_degrees,
             max_spatial_distance_degrees=self.max_spatial_distance_degrees,
             max_temporal_hours=self.max_temporal_hours,
             use_contour_validation=self.use_contour_validation,
-            min_track_timesteps=self.min_track_timesteps,
+            timestep_count_wind_minimum=self.timestep_count_wind_minimum,
             latitude_max_degrees=self.latitude_max_degrees,
             surface_pressure_threshold=self.surface_pressure_threshold,
             orography=self.orography,
             max_gc_distance_slp_contour_degrees=self.max_gc_distance_slp_contour_degrees,
             max_gc_distance_dz_contour_degrees=self.max_gc_distance_dz_contour_degrees,
             orography_filter_threshold=self.orography_filter_threshold,
+            wind_search_radius_degrees=self.wind_search_radius_degrees,
         )
         return tctracks_ds
 
@@ -287,8 +297,10 @@ class TropicalCycloneTrackVariables(DerivedVariable):
 
 
 class CravenBrooksSignificantSevere(DerivedVariable):
-    """A derived variable that computes the Craven-Brooks significant severe
-    convection index.
+    """Derived variable for Craven-Brooks significant severe convection index.
+
+    Extends DerivedVariable to compute the Craven-Brooks index for assessing
+    significant severe convection potential.
     """
 
     variables = [
@@ -391,18 +403,18 @@ class CravenBrooksSignificantSevere(DerivedVariable):
 
 
 class AtmosphericRiverVariables(DerivedVariable):
-    """A derived variable that computes atmospheric river related variables.
+    """Derived variable for atmospheric river detection and characterization.
 
-    Calculates the IVT (Integrated Vapor Transport), atmospheric river mask, and land
-    intersection. IVT is calculated using the method described in Newell et al. 1992 and
-    elsewhere (e.g. Mo 2024).
+    Extends DerivedVariable to compute IVT (Integrated Vapor Transport),
+    atmospheric river mask, and land intersection. IVT calculation follows
+    Newell et al. 1992 and elsewhere (e.g. Mo 2024).
 
-    Output variables are: integrated_vapor_transport, atmospheric_river_mask, and
-    atmospheric_river_land_intersection. Users must declare at least one of the output
-    variables they want when calling the derived variable.
+    Output variables: integrated_vapor_transport, atmospheric_river_mask,
+    atmospheric_river_land_intersection. Users must declare at least one
+    output variable when calling the derived variable.
 
-    The Laplacian of IVT is calculated using a Gaussian blurring kernel with a
-    sigma of 3 grid points, meant to smooth out 0.25 degree grid scale features.
+    The Laplacian of IVT uses a Gaussian blurring kernel with sigma of 3
+    grid points to smooth 0.25 degree grid scale features.
     """
 
     variables = [
