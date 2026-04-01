@@ -324,6 +324,8 @@ def nantrapezoid_pressure_levels(da: xr.DataArray):
     Returns a DataArray of the computed quantity integrated over the entire column.
     """
 
+    # Chunk the level dimension to ensure successful dask parallelization
+    da = da.chunk({"level": -1})
     # Convert levels to Pascals
     levels_pa = da["level"] * 100
 
