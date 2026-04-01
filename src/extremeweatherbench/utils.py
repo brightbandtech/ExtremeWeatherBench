@@ -746,8 +746,17 @@ def reduce_dataarray(
         raise TypeError(f"method must be str or callable, got {type(method)}")
 
 
-def load_land_geometry(resolution: str = "10m") -> shapely.geometry.Polygon:
+def load_land_geometry(resolution: str = "50m") -> shapely.geometry.Polygon:
     """Load the land geometry, excluding lakes and ocean-connected water.
+
+    The default resolution is '50m'. The 10m dataset includes tiny
+    coral reefs and atolls (e.g. the Alacrán Reef in the Gulf of
+    Mexico) that are not meaningful TC landfall targets; 50m omits
+    them naturally while still providing accurate coastlines for the
+    6-hourly track resolution used by TC benchmarks.
+
+    Args:
+        resolution: Natural Earth resolution ('10m', '50m', or '110m').
 
     Returns:
         The land geometry as a shapely Polygon with lakes and
@@ -782,7 +791,7 @@ def load_land_geometry(resolution: str = "10m") -> shapely.geometry.Polygon:
     return land_union
 
 
-def load_ocean_geometry(resolution: str = "10m") -> shapely.geometry.Polygon:
+def load_ocean_geometry(resolution: str = "50m") -> shapely.geometry.Polygon:
     """Load the ocean geometry from Natural Earth.
 
     Includes all ocean-connected water: open ocean, bays, estuaries,
