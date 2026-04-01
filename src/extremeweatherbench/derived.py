@@ -432,12 +432,11 @@ class AtmosphericRiverVariables(DerivedVariable):
             "integrated_vapor_transport",
             "atmospheric_river_land_intersection",
         ],
-        
     ):
         """Initialize the AtmosphericRiverVariables variable.
 
         Args:
-            top_pressure_level: The top pressure level to compute integrated variables 
+            top_pressure_level: The top pressure level to compute integrated variables
                 for. Defaults to 300 hPa.
             output_variables: Optional list of variable names that specify
                 which outputs to use from the derived computation.
@@ -451,9 +450,7 @@ class AtmosphericRiverVariables(DerivedVariable):
         """Derive the atmospheric river mask and land intersection."""
 
         # Subset the data to the top pressure level
-        data = data.sel(
-            level=data.level[data.level >= self.top_pressure_level]
-        )
+        data = data.sel(level=data.level[data.level >= self.top_pressure_level])
 
         # Generate IVT
         ivt_data = ar.integrated_vapor_transport(
@@ -466,7 +463,9 @@ class AtmosphericRiverVariables(DerivedVariable):
         ivt_laplacian = ar.integrated_vapor_transport_laplacian(ivt=ivt_data, sigma=3)
 
         # Compute AR mask with default parameters
-        ar_mask_result = ar.atmospheric_river_mask(ivt=ivt_data, ivt_laplacian=ivt_laplacian)
+        ar_mask_result = ar.atmospheric_river_mask(
+            ivt=ivt_data, ivt_laplacian=ivt_laplacian
+        )
 
         # Compute land intersection
         land_intersection = calc.find_land_intersection(ar_mask_result)
