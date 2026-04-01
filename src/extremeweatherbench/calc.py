@@ -480,9 +480,10 @@ def find_landfalls(
         # Process single track data
         landfall_mask = _detect_landfalls_wrapper(track_data, land_geom, ocean_geom)
 
-    return _interpolate_and_format_landfalls(
+    landfalls = _interpolate_and_format_landfalls(
         track_data, landfall_mask, land_geom, is_forecast
     )
+    return _deduplicate_landfalls(landfalls)
 
 
 def find_next_landfall_for_init_time(
@@ -810,6 +811,54 @@ def _interpolate_and_format_landfalls(
         )
 
     return landfall_da
+
+
+def _deduplicate_landfalls(
+    landfalls: xr.DataArray,
+    min_distance_km: float = 50.0,
+) -> xr.DataArray:
+    """Remove landfalls within ``min_distance_km`` of a prior landfall.
+
+    Iterates through the landfall dimension in order, keeping the first
+    occurrence and dropping any subsequent landfall whose great-circle
+    distance to the most recent kept landfall is less than
+    ``min_distance_km``. This eliminates spurious detections that arise
+    when a storm crosses a barrier island, enters a coastal bay, and then
+    crosses onto the mainland — all part of the same physical event.
+
+    Args:
+        landfalls: DataArray with a ``landfall`` dimension and
+            ``latitude``/``longitude`` coordinates, as returned by
+            ``find_landfalls``.
+        min_distance_km: Minimum great-circle distance (km) between two
+            consecutive kept landfalls. Defaults to 50 km.
+
+    Returns:
+        Deduplicated DataArray with the same structure as the input.
+    """
+    if len(landfalls) <= 1:
+        return landfalls
+
+    lats = landfalls.coords["latitude"].values
+    lons = landfalls.coords["longitude"].values
+
+    keep = np.ones(len(landfalls), dtype=bool)
+    last_idx = 0
+
+    for i in range(1, len(landfalls)):
+        lat1, lon1 = np.radians(lats[last_idx]), np.radians(lons[last_idx])
+        lat2, lon2 = np.radians(lats[i]), np.radians(lons[i])
+        dlat = lat2 - lat1
+        dlon = lon2 - lon1
+        a = np.sin(dlat / 2) ** 2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2) ** 2
+        dist_km = 2 * 6371.0 * np.arcsin(np.sqrt(a))
+        if dist_km < min_distance_km:
+            keep[i] = False
+        else:
+            last_idx = i
+
+    kept_indices = np.where(keep)[0]
+    return landfalls.isel(landfall=kept_indices)
 
 
 def broadcast_first_target_to_init_times(

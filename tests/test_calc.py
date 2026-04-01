@@ -1933,6 +1933,57 @@ class TestLandfallDetection:
             # Should have landfall dimension
             assert "landfall" in result_all.dims
 
+    def test_deduplicate_landfalls_suppresses_nearby(self):
+        """Landfalls within 50 km of each other keep only the first."""
+        lats = np.array([25.0, 25.1, 26.0])
+        lons = np.array([-81.5, -81.4, -81.5])
+
+        landfalls = xr.DataArray(
+            [95000.0, 94500.0, 94000.0],
+            dims=["landfall"],
+            coords={
+                "landfall": [0, 1, 2],
+                "latitude": ("landfall", lats),
+                "longitude": ("landfall", lons),
+                "valid_time": (
+                    "landfall",
+                    pd.date_range("2024-10-09 20:00", periods=3, freq="3h"),
+                ),
+            },
+        )
+
+        result = calc._deduplicate_landfalls(landfalls, min_distance_km=50.0)
+
+        # First two are ~12 km apart; only the first should survive.
+        # Third is ~111 km from the first and must be kept.
+        assert len(result) == 2
+        assert np.isclose(result.coords["latitude"].values[0], 25.0)
+        assert np.isclose(result.coords["latitude"].values[1], 26.0)
+
+    def test_deduplicate_landfalls_preserves_distant(self):
+        """Landfalls more than 50 km apart are both preserved."""
+        lats = np.array([25.0, 26.0])
+        lons = np.array([-81.5, -81.5])
+
+        landfalls = xr.DataArray(
+            [95000.0, 94000.0],
+            dims=["landfall"],
+            coords={
+                "landfall": [0, 1],
+                "latitude": ("landfall", lats),
+                "longitude": ("landfall", lons),
+                "valid_time": (
+                    "landfall",
+                    pd.date_range("2024-10-09 20:00", periods=2, freq="6h"),
+                ),
+            },
+        )
+
+        result = calc._deduplicate_landfalls(landfalls, min_distance_km=50.0)
+
+        # ~111 km apart — both must be kept.
+        assert len(result) == 2
+
 
 class TestLandfallDeduplication:
     """Test landfall deduplication functionality."""
