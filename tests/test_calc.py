@@ -1693,12 +1693,13 @@ class TestLandfallDetection:
 
         # Create simple land geometry (box)
         land_geom = shapely.geometry.box(-81, 24, -80, 26)
+        ocean_geom = shapely.geometry.box(-85, 23, -81.5, 27)
 
         # Ocean point to land point (landfall)
         lon1, lat1 = -82.0, 25.0  # Ocean
         lon2, lat2 = -80.5, 25.0  # Land
 
-        result = calc._is_true_landfall(lon1, lat1, lon2, lat2, land_geom)
+        result = calc._is_true_landfall(lon1, lat1, lon2, lat2, land_geom, ocean_geom)
 
         # Should detect landfall
         assert result is True
@@ -1709,12 +1710,13 @@ class TestLandfallDetection:
 
         # Create land geometry
         land_geom = shapely.geometry.box(-81, 24, -80, 26)
+        ocean_geom = shapely.geometry.box(-85, 23, -81.5, 27)
 
         # Ocean to ocean but crossing land
         lon1, lat1 = -82.0, 25.0  # Ocean
         lon2, lat2 = -79.0, 25.0  # Ocean (other side)
 
-        result = calc._is_true_landfall(lon1, lat1, lon2, lat2, land_geom)
+        result = calc._is_true_landfall(lon1, lat1, lon2, lat2, land_geom, ocean_geom)
 
         # Should detect landfall (crossing)
         assert result is True
@@ -1725,12 +1727,13 @@ class TestLandfallDetection:
 
         # Create land geometry
         land_geom = shapely.geometry.box(-81, 24, -80, 26)
+        ocean_geom = shapely.geometry.box(-85, 23, -81.5, 27)
 
         # Land to ocean (not landfall)
         lon1, lat1 = -80.5, 25.0  # Land
         lon2, lat2 = -82.0, 25.0  # Ocean
 
-        result = calc._is_true_landfall(lon1, lat1, lon2, lat2, land_geom)
+        result = calc._is_true_landfall(lon1, lat1, lon2, lat2, land_geom, ocean_geom)
 
         # Should not detect landfall (exit, not entry)
         assert result is False
@@ -1741,12 +1744,13 @@ class TestLandfallDetection:
 
         # Create land geometry
         land_geom = shapely.geometry.box(-81, 24, -80, 26)
+        ocean_geom = shapely.geometry.box(-87, 23, -81.5, 27)
 
         # Ocean to ocean without crossing land
         lon1, lat1 = -85.0, 25.0  # Ocean (far away)
         lon2, lat2 = -84.0, 25.0  # Ocean (still far)
 
-        result = calc._is_true_landfall(lon1, lat1, lon2, lat2, land_geom)
+        result = calc._is_true_landfall(lon1, lat1, lon2, lat2, land_geom, ocean_geom)
 
         # Should not detect landfall
         assert result is False
@@ -1754,7 +1758,7 @@ class TestLandfallDetection:
     def test_is_true_landfall_error_handling(self):
         """Test _is_true_landfall handles errors gracefully."""
         # Invalid geometry should return False
-        result = calc._is_true_landfall(0, 0, 1, 1, None)
+        result = calc._is_true_landfall(0, 0, 1, 1, None, None)
 
         # Should return False on error
         assert result is False
@@ -1823,8 +1827,9 @@ class TestLandfallDetection:
         )
 
         land_geom = shapely.geometry.box(-82, 24, -80, 26)
+        ocean_geom = shapely.geometry.box(-87, 23, -82.5, 27)
 
-        result = calc._detect_landfalls_wrapper(track, land_geom)
+        result = calc._detect_landfalls_wrapper(track, land_geom, ocean_geom)
 
         # Should return boolean DataArray
         assert isinstance(result, xr.DataArray)
@@ -1927,6 +1932,57 @@ class TestLandfallDetection:
             assert isinstance(result_all, xr.DataArray)
             # Should have landfall dimension
             assert "landfall" in result_all.dims
+
+    def test_deduplicate_landfalls_suppresses_nearby(self):
+        """Landfalls within 50 km of each other keep only the first."""
+        lats = np.array([25.0, 25.1, 26.0])
+        lons = np.array([-81.5, -81.4, -81.5])
+
+        landfalls = xr.DataArray(
+            [95000.0, 94500.0, 94000.0],
+            dims=["landfall"],
+            coords={
+                "landfall": [0, 1, 2],
+                "latitude": ("landfall", lats),
+                "longitude": ("landfall", lons),
+                "valid_time": (
+                    "landfall",
+                    pd.date_range("2024-10-09 20:00", periods=3, freq="3h"),
+                ),
+            },
+        )
+
+        result = calc._deduplicate_landfalls(landfalls, min_distance_km=50.0)
+
+        # First two are ~12 km apart; only the first should survive.
+        # Third is ~111 km from the first and must be kept.
+        assert len(result) == 2
+        assert np.isclose(result.coords["latitude"].values[0], 25.0)
+        assert np.isclose(result.coords["latitude"].values[1], 26.0)
+
+    def test_deduplicate_landfalls_preserves_distant(self):
+        """Landfalls more than 50 km apart are both preserved."""
+        lats = np.array([25.0, 26.0])
+        lons = np.array([-81.5, -81.5])
+
+        landfalls = xr.DataArray(
+            [95000.0, 94000.0],
+            dims=["landfall"],
+            coords={
+                "landfall": [0, 1],
+                "latitude": ("landfall", lats),
+                "longitude": ("landfall", lons),
+                "valid_time": (
+                    "landfall",
+                    pd.date_range("2024-10-09 20:00", periods=2, freq="6h"),
+                ),
+            },
+        )
+
+        result = calc._deduplicate_landfalls(landfalls, min_distance_km=50.0)
+
+        # ~111 km apart — both must be kept.
+        assert len(result) == 2
 
 
 class TestLandfallDeduplication:

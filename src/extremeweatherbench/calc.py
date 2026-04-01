@@ -424,28 +424,37 @@ def dewpoint_from_specific_humidity(pressure: float, specific_humidity: float) -
 def find_landfalls(
     track_data: xr.DataArray,
     land_geom: Optional[shapely.geometry.Polygon] = None,
+    ocean_geom: Optional[shapely.geometry.Polygon] = None,
 ) -> xr.DataArray:
     """Find landfall point(s) where a tracked object intersects land.
 
     Generalized landfall detection for any object (TC, AR, etc.).
+    Only crossings that originate from the open ocean are counted;
+    transitions out of inland lakes, ponds, or isolated bays are
+    excluded via the explicit ocean geometry check.
 
     Args:
         track_data: Track DataArray with latitude, longitude, valid_time
             coords. Data values are interpolated at the landfall point.
             Shape: ``(valid_time,)`` for observations or
             ``(lead_time, valid_time)`` for forecasts.
-        return_next_landfall: If True return all landfalls (used by the
-            "next" approach); if False return only the first landfall.
         land_geom: Shapely geometry for land-intersection testing. Uses
             the default NaturalEarth 10 m land polygon when None.
+        ocean_geom: Shapely geometry representing the open ocean. Used
+            to confirm the starting position is truly oceanic before
+            counting a crossing as a landfall. Defaults to the
+            NaturalEarth 10 m ocean polygon when None.
 
     Returns:
-        DataArray with interpolated landfall values or empty if no landfalls are
-        detected.
+        DataArray with interpolated landfall values or empty if no
+        landfalls are detected.
     """
     # If no land geometry is provided, use default
     if land_geom is None:
         land_geom = utils.load_land_geometry()
+
+    if ocean_geom is None:
+        ocean_geom = utils.load_ocean_geometry()
 
     # Squeeze track dimension if needed
     if "track" in track_data.dims and track_data.sizes["track"] == 1:
@@ -462,18 +471,19 @@ def find_landfalls(
         track_data = track_data.stack(time=("init_time", "lead_time"))
 
         # Vectorized landfall detection
-        landfall_mask = _detect_landfalls_wrapper(track_data, land_geom)
+        landfall_mask = _detect_landfalls_wrapper(track_data, land_geom, ocean_geom)
 
         # Mask init_time boundaries
         landfall_mask = _mask_init_time_boundaries(landfall_mask, track_data)
 
     else:
         # Process single track data
-        landfall_mask = _detect_landfalls_wrapper(track_data, land_geom)
+        landfall_mask = _detect_landfalls_wrapper(track_data, land_geom, ocean_geom)
 
-    return _interpolate_and_format_landfalls(
+    landfalls = _interpolate_and_format_landfalls(
         track_data, landfall_mask, land_geom, is_forecast
     )
+    return _deduplicate_landfalls(landfalls)
 
 
 def find_next_landfall_for_init_time(
@@ -544,12 +554,15 @@ def find_next_landfall_for_init_time(
 def _detect_landfalls_wrapper(
     track_data: xr.DataArray,
     land_geom: shapely.geometry.Polygon,
+    ocean_geom: shapely.geometry.Polygon,
 ) -> xr.DataArray:
     """Landfall detection across consecutive point pairs.
 
     Args:
         track_data: Track data with latitude, longitude coords
         land_geom: Land geometry for intersection testing
+        ocean_geom: Ocean geometry used to require the start point is
+            in the open ocean before counting a crossing as a landfall
 
     Returns:
         Boolean DataArray where True indicates a landfall between
@@ -581,7 +594,7 @@ def _detect_landfalls_wrapper(
         # Handle NaN values (from shift at boundaries)
         if np.isnan(lon1) or np.isnan(lat1) or np.isnan(lon2) or np.isnan(lat2):
             return False
-        return _is_true_landfall(lon1, lat1, lon2, lat2, land_geom)
+        return _is_true_landfall(lon1, lat1, lon2, lat2, land_geom, ocean_geom)
 
     # Apply to get landfall mask
     landfall_mask = xr.apply_ufunc(
@@ -800,6 +813,54 @@ def _interpolate_and_format_landfalls(
     return landfall_da
 
 
+def _deduplicate_landfalls(
+    landfalls: xr.DataArray,
+    min_distance_km: float = 50.0,
+) -> xr.DataArray:
+    """Remove landfalls within ``min_distance_km`` of a prior landfall.
+
+    Iterates through the landfall dimension in order, keeping the first
+    occurrence and dropping any subsequent landfall whose great-circle
+    distance to the most recent kept landfall is less than
+    ``min_distance_km``. This eliminates spurious detections that arise
+    when a storm crosses a barrier island, enters a coastal bay, and then
+    crosses onto the mainland — all part of the same physical event.
+
+    Args:
+        landfalls: DataArray with a ``landfall`` dimension and
+            ``latitude``/``longitude`` coordinates, as returned by
+            ``find_landfalls``.
+        min_distance_km: Minimum great-circle distance (km) between two
+            consecutive kept landfalls. Defaults to 50 km.
+
+    Returns:
+        Deduplicated DataArray with the same structure as the input.
+    """
+    if len(landfalls) <= 1:
+        return landfalls
+
+    lats = landfalls.coords["latitude"].values
+    lons = landfalls.coords["longitude"].values
+
+    keep = np.ones(len(landfalls), dtype=bool)
+    last_idx = 0
+
+    for i in range(1, len(landfalls)):
+        lat1, lon1 = np.radians(lats[last_idx]), np.radians(lons[last_idx])
+        lat2, lon2 = np.radians(lats[i]), np.radians(lons[i])
+        dlat = lat2 - lat1
+        dlon = lon2 - lon1
+        a = np.sin(dlat / 2) ** 2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2) ** 2
+        dist_km = 2 * 6371.0 * np.arcsin(np.sqrt(a))
+        if dist_km < min_distance_km:
+            keep[i] = False
+        else:
+            last_idx = i
+
+    kept_indices = np.where(keep)[0]
+    return landfalls.isel(landfall=kept_indices)
+
+
 def broadcast_first_target_to_init_times(
     init_times: xr.DataArray,
     target: xr.DataArray,
@@ -857,17 +918,21 @@ def _is_true_landfall(
     lon2: float,
     lat2: float,
     land_geom: shapely.geometry.Polygon,
+    ocean_geom: shapely.geometry.Polygon,
 ) -> bool:
     """Detect true landfall (ocean to land movement).
 
-    This function is a way to detect if a track crosses land. There are a few scenarios,
-    being ocean to land, ocean to ocean, and land to ocean. Ocean to ocean can have a
-    landfall if there is land between the two points.
+    Only segments that originate from the open ocean (as defined by the
+    Natural Earth ocean polygon) are considered potential landfalls. This
+    prevents false detections from inland lakes, ponds, or enclosed bays
+    that are not connected to the open ocean.
 
     Args:
         lon1, lat1: Starting point coordinates
         lon2, lat2: Ending point coordinates
         land_geom: Land geometry for intersection testing
+        ocean_geom: Ocean geometry used to verify the start point is in
+            the open ocean (not a lake, pond, or isolated bay)
 
     Returns:
         True if this represents a landfall, False otherwise
@@ -876,20 +941,20 @@ def _is_true_landfall(
         start_point = shapely.geometry.Point(lon1, lat1)
         end_point = shapely.geometry.Point(lon2, lat2)
 
-        start_over_land = land_geom.contains(start_point)
+        start_in_ocean = ocean_geom.contains(start_point)
         end_over_land = land_geom.contains(end_point)
 
-        # Ocean -> Land = LANDFALL
-        if not start_over_land and end_over_land:
+        # True ocean -> Land = LANDFALL
+        if start_in_ocean and end_over_land:
             return True
 
-        # Ocean -> Ocean, check if land is between
-        if not start_over_land and not end_over_land:
+        # True ocean -> ocean, check if land is between
+        if start_in_ocean and not end_over_land:
             segment = shapely.geometry.LineString([(lon1, lat1), (lon2, lat2)])
             if segment.intersects(land_geom):
                 return True
 
-        # Land -> Ocean or Ocean -> Ocean (no intersection) = NOT LANDFALL
+        # Lake/pond/bay -> Land, or Land -> Ocean = NOT LANDFALL
         return False
 
     except (AttributeError, ValueError, TypeError):
