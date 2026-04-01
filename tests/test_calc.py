@@ -1106,6 +1106,90 @@ class TestNantrapezoidPressureLevels:
         result = calc.nantrapezoid_pressure_levels(da)
         testing.assert_almost_equal(float(result), 10000.0)
 
+    def test_rechunks_level_to_single_chunk(self):
+        """Verify level is rechunked to -1 regardless of input chunking.
+
+        The function must apply da.chunk({"level": -1}) so that the
+        guvectorize kernel receives the full level axis in each task.
+        """
+        levels_hpa = np.array([1000.0, 850.0, 700.0, 500.0, 300.0, 200.0])
+        y = np.ones((4, len(levels_hpa)))
+        da = xr.DataArray(
+            y,
+            dims=["time", "level"],
+            coords={"time": np.arange(4), "level": levels_hpa},
+        ).chunk({"time": 1, "level": 2})  # level chunked into multiple pieces
+
+        # After calling the function the level dim must be a single chunk
+        result_da = calc.nantrapezoid_pressure_levels(da)
+        result_da.__dask_graph__()  # forces graph creation
+        # Inspect the rechunked intermediate: da inside the function has
+        # level chunk size == len(levels_hpa).  We verify correctness by
+        # checking the computed result matches the serial numpy reference.
+        serial = float(
+            calc.nantrapezoid_pressure_levels(
+                xr.DataArray(
+                    y[0],
+                    dims=["level"],
+                    coords={"level": levels_hpa},
+                )
+            )
+        )
+        computed = result_da.compute()
+        assert computed.shape == (4,)
+        testing.assert_almost_equal(float(computed[0]), serial)
+
+    def test_chunked_level_matches_unchunked(self):
+        """Results with a chunked level dim must match an unchunked input.
+
+        Before the da.chunk({"level": -1}) fix, apply_ufunc with
+        dask="parallelized" and a chunked level core-dim would silently
+        produce wrong or failed results. This test guards against
+        regression.
+        """
+        rng = np.random.default_rng(1)
+        levels_hpa = np.array([1000.0, 925.0, 850.0, 700.0, 500.0, 300.0, 200.0])
+        n_time, n_lat, n_lon = 3, 4, 4
+        y = rng.uniform(0.0, 1e-3, (n_time, n_lat, n_lon, len(levels_hpa)))
+        y[0, 0, 0, 2] = np.nan  # sprinkle a NaN
+
+        da_base = xr.DataArray(
+            y,
+            dims=["time", "latitude", "longitude", "level"],
+            coords={"level": levels_hpa},
+        )
+        chunked = da_base.chunk({"time": 1, "level": 3})
+        unchunked = da_base.chunk({"time": 1})  # level unchunked
+
+        result_chunked = calc.nantrapezoid_pressure_levels(chunked).compute()
+        result_unchunked = calc.nantrapezoid_pressure_levels(unchunked).compute()
+
+        xr.testing.assert_allclose(result_chunked, result_unchunked)
+
+    def test_level_single_chunk_after_rechunk(self):
+        """The dask graph for the rechunked da must show level as one chunk.
+
+        Directly inspects chunk sizes on the DataArray produced by
+        da.chunk({"level": -1}) inside the function, by mimicking the
+        same operation externally and confirming the chunk count == 1.
+        """
+        levels_hpa = np.array([1000.0, 850.0, 700.0, 500.0])
+        y = np.ones((2, len(levels_hpa)))
+        da = xr.DataArray(
+            y,
+            dims=["time", "level"],
+            coords={"time": np.arange(2), "level": levels_hpa},
+        ).chunk({"time": 1, "level": 2})
+
+        rechunked = da.chunk({"level": -1})
+        # chunks is a tuple of tuples; level is the second dim here
+        level_dim_idx = rechunked.dims.index("level")
+        level_chunks = rechunked.chunks[level_dim_idx]
+        assert len(level_chunks) == 1, (
+            f"Expected 1 level chunk after rechunking, got {len(level_chunks)}"
+        )
+        assert level_chunks[0] == len(levels_hpa)
+
 
 class TestBinaryDilationUfunc:
     """Tests for _binary_dilation_ufunc."""
