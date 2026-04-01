@@ -17,17 +17,26 @@ Usage:
 
 import argparse
 import logging
+import pathlib
 import time as time_module
 from typing import Dict, List, Optional, Tuple
 
+import numba as nb
 import numpy as np
 import pandas as pd
 import regionmask
 import scipy.ndimage as ndimage
 import xarray as xr
 from dask.distributed import Client, LocalCluster
+from plot_temperature_events import (
+    _align_climatology,
+    detect_time_dim,
+    max_consecutive_days,
+    open_era5_t2m,
+    plot_consecutive_map,
+)
 
-from extremeweatherbench import defaults, inputs
+from extremeweatherbench import defaults
 
 logging.basicConfig(
     level=logging.INFO,
@@ -37,35 +46,7 @@ logger = logging.getLogger(__name__)
 
 MIN_CONSECUTIVE_DAYS = 3
 AREA_DECLINE_FRACTION = 0.5
-
-
-def detect_time_dim(obj: xr.Dataset | xr.DataArray) -> str:
-    """Return the name of the time dimension."""
-    for name in ("valid_time", "time"):
-        if name in obj.dims:
-            return name
-    raise ValueError(f"No time dimension found. Available: {list(obj.dims)}")
-
-
-def open_era5_t2m(
-    start_date: str,
-    end_date: str,
-) -> xr.DataArray:
-    """Open ERA5 2m temperature lazily for a date range.
-
-    Selects 6-hourly timesteps (0/6/12/18 UTC) to match the
-    climatology base and sorts latitude to ascending order.
-    """
-    ds = xr.open_zarr(
-        inputs.ARCO_ERA5_FULL_URI,
-        storage_options={"token": "anon"},
-        chunks={},
-    )
-    tdim = detect_time_dim(ds)
-    t2m = ds["2m_temperature"].sel({tdim: slice(start_date, end_date)})
-    six_hourly = t2m[tdim].dt.hour.isin([0, 6, 12, 18])
-    t2m = t2m.sel({tdim: six_hourly})
-    return t2m.sortby("latitude")
+MIN_GRIDPOINTS = 500
 
 
 def get_daily_climatology_thresholds() -> Tuple[xr.DataArray, xr.DataArray]:
@@ -91,47 +72,6 @@ def build_land_mask(
     land = regionmask.defined_regions.natural_earth_v5_0_0.land_110
     mask = land.mask(lons, lats)
     return mask == 0
-
-
-def _align_climatology(
-    clim: xr.DataArray,
-    daily: xr.DataArray,
-    tdim: str,
-) -> xr.DataArray:
-    """Align a dayofyear-indexed climatology to daily data.
-
-    Computes the climatology into memory first (it is small:
-    366 x lat x lon) to avoid dask chunk multiplication, then
-    indexes by dayofyear via numpy for clean dimension handling.
-    """
-    clim_vals = clim.compute().values
-    clim_doy = clim.dayofyear.values
-    doy = daily[tdim].dt.dayofyear.values
-    max_doy = int(clim_doy.max())
-    doy_idx = np.clip(doy, 1, max_doy) - int(clim_doy.min())
-
-    clim_lats = clim.latitude.values
-    clim_lons = clim.longitude.values
-    daily_lats = daily.latitude.values
-    daily_lons = daily.longitude.values
-
-    if (
-        clim_lats.shape == daily_lats.shape
-        and np.allclose(clim_lats, daily_lats)
-        and clim_lons.shape == daily_lons.shape
-        and np.allclose(clim_lons, daily_lons)
-    ):
-        selected = clim_vals[doy_idx]
-    else:
-        lat_idx = np.array([np.argmin(np.abs(clim_lats - dl)) for dl in daily_lats])
-        lon_idx = np.array([np.argmin(np.abs(clim_lons - dl)) for dl in daily_lons])
-        selected = clim_vals[np.ix_(doy_idx, lat_idx, lon_idx)]
-
-    return xr.DataArray(
-        selected,
-        dims=daily.dims,
-        coords=daily.coords,
-    )
 
 
 def build_exceedance_masks(
@@ -193,19 +133,47 @@ def apply_consecutive_filter(
     return dilated & mask
 
 
-def _match_to_previous(
-    obj_mask: np.ndarray,
-    prev_labels: Optional[np.ndarray],
+@nb.njit(cache=True)
+def _count_overlaps_nb(
+    labels_a: np.ndarray,
+    labels_b: np.ndarray,
+    n_a: int,
+    n_b: int,
+) -> np.ndarray:
+    """Pixel-count overlap matrix between two consecutive-day label grids.
+
+    Returns int32 (n_a, n_b) where result[i, j] is the number of
+    pixels where labels_a == i+1 and labels_b == j+1. Single-pass
+    JIT loop avoids the per-blob numpy scan in the Python tracker.
+    """
+    mat = np.zeros((n_a, n_b), dtype=np.int32)
+    rows, cols = labels_a.shape
+    for r in range(rows):
+        for c in range(cols):
+            a = labels_a[r, c]
+            b = labels_b[r, c]
+            if a > 0 and b > 0:
+                mat[a - 1, b - 1] += 1
+    return mat
+
+
+def _resolve_event(
+    oid: int,
+    overlap_mat: Optional[np.ndarray],
     prev_map: Dict[int, int],
     events: Dict[int, Dict],
     cur_map: Dict[int, int],
 ) -> Optional[int]:
-    """Find the event id from the previous day that overlaps."""
-    if prev_labels is None:
+    """Find and merge events from the previous day for blob oid.
+
+    Uses a precomputed overlap matrix row instead of scanning the
+    full prev_labels array per blob.
+    """
+    if overlap_mat is None:
         return None
-    overlap = prev_labels[obj_mask]
-    prev_ids = set(overlap[overlap > 0])
-    eids = {prev_map[p] for p in prev_ids if p in prev_map}
+    col = overlap_mat[:, oid - 1]
+    prev_blob_ids = np.where(col > 0)[0] + 1
+    eids = {prev_map[p] for p in prev_blob_ids if p in prev_map}
     alive = {e for e in eids if e in events and not events[e]["done"]}
     if not alive:
         return None
@@ -250,15 +218,19 @@ def detect_events(
 ) -> List[Dict]:
     """Track spatiotemporal events from a filtered boolean mask.
 
-    Per-day 2-D connected component labelling with overlap-based
-    tracking across consecutive days. An event's bounding box is
-    the union of all its daily extents. Events terminate when
-    their active area drops below 50% of the peak.
+    Labels one day at a time (low peak memory) but uses a numba-JIT
+    overlap matrix to match blobs across days. A single O(nlat*nlon)
+    pass replaces one O(nlat*nlon) scan per blob, which dominates
+    when many blobs are active simultaneously.
+
+    An event's bounding box is the union of all its daily extents.
+    Events terminate when their active area drops below 50% of peak.
     """
     n_days = filtered_mask.shape[0]
     events: Dict[int, Dict] = {}
     next_id = 1
     prev_labels: Optional[np.ndarray] = None
+    prev_n_obj: int = 0
     prev_map: Dict[int, int] = {}
 
     for di in range(n_days):
@@ -269,23 +241,27 @@ def detect_events(
                 if not ev["done"]:
                     ev["done"] = True
             prev_labels = None
+            prev_n_obj = 0
             prev_map = {}
             continue
 
         labels, n_obj = ndimage.label(day)
+        labels = labels.astype(np.int32)
         cur_map: Dict[int, int] = {}
+
+        overlap_mat: Optional[np.ndarray] = None
+        if prev_labels is not None and n_obj > 0 and prev_n_obj > 0:
+            overlap_mat = _count_overlaps_nb(
+                prev_labels, labels, prev_n_obj, n_obj,
+            )
 
         for oid in range(1, n_obj + 1):
             om = labels == oid
             area = int(om.sum())
             li, lo = np.where(om)
 
-            eid = _match_to_previous(
-                om,
-                prev_labels,
-                prev_map,
-                events,
-                cur_map,
+            eid = _resolve_event(
+                oid, overlap_mat, prev_map, events, cur_map,
             )
 
             if eid is None:
@@ -307,20 +283,16 @@ def detect_events(
                 ev = events[eid]
                 ev["end"] = dates[di]
                 ev["lat_min"] = min(
-                    ev["lat_min"],
-                    float(lats[li].min()),
+                    ev["lat_min"], float(lats[li].min()),
                 )
                 ev["lat_max"] = max(
-                    ev["lat_max"],
-                    float(lats[li].max()),
+                    ev["lat_max"], float(lats[li].max()),
                 )
                 ev["lon_min"] = min(
-                    ev["lon_min"],
-                    float(lons[lo].min()),
+                    ev["lon_min"], float(lons[lo].min()),
                 )
                 ev["lon_max"] = max(
-                    ev["lon_max"],
-                    float(lons[lo].max()),
+                    ev["lon_max"], float(lons[lo].max()),
                 )
                 ev["peak"] = max(ev["peak"], area)
                 ev["area"] = area
@@ -329,6 +301,7 @@ def detect_events(
 
         _terminate_declined_events(events, cur_map)
         prev_labels = labels
+        prev_n_obj = n_obj
         prev_map = cur_map
 
     for ev in events.values():
@@ -351,6 +324,15 @@ def events_to_dataframe(events: List[Dict]) -> pd.DataFrame:
     ]
     if not events:
         return pd.DataFrame(columns=columns)
+
+    n_before = len(events)
+    events = [e for e in events if e["peak"] >= MIN_GRIDPOINTS]
+    logger.info(
+        "  Filtered %d events below %d gridpoints; %d remain",
+        n_before - len(events),
+        MIN_GRIDPOINTS,
+        len(events),
+    )
 
     rows = [
         {
@@ -401,6 +383,13 @@ def main():
         LocalCluster(n_workers=args.n_workers),
     )
     logger.info("Dask dashboard: %s", client.dashboard_link)
+
+    logger.info("Pre-warming numba JIT...")
+    _tiny = np.zeros((2, 2), dtype=np.int32)
+    _tiny[0, 0] = 1
+    _tiny[1, 1] = 1
+    _count_overlaps_nb(_tiny, _tiny, 1, 1)
+    logger.info("  numba ready")
 
     logger.info("Opening ERA5 data...")
     t2m = open_era5_t2m(args.start_date, args.end_date)
@@ -459,24 +448,45 @@ def main():
 
     logger.info("Detecting heat wave events...")
     hw_ev = detect_events(
-        hw_filt,
-        dates,
-        lats,
-        lons,
-        "heat_wave",
+        hw_filt, dates, lats, lons, "heat_wave",
     )
     logger.info("  %d events", len(hw_ev))
 
     logger.info("Detecting freeze events...")
     fz_ev = detect_events(
-        fz_filt,
-        dates,
+        fz_filt, dates, lats, lons, "freeze",
+    )
+    logger.info("  %d events", len(fz_ev))
+
+    logger.info("Computing max-consecutive-days fields for plots...")
+    stem = str(pathlib.Path(args.output).with_suffix(""))
+    hw_consec = max_consecutive_days(hw_filt)
+    plot_consecutive_map(
+        hw_consec,
+        lats,
+        lons,
+        "heat_wave",
+        title=(
+            f"Consecutive Heatwave Days"
+            f"\n{args.start_date} to {args.end_date}"
+        ),
+        output_path=f"{stem}_heatwave.png",
+    )
+    del hw_consec, hw_filt
+
+    fz_consec = max_consecutive_days(fz_filt)
+    plot_consecutive_map(
+        fz_consec,
         lats,
         lons,
         "freeze",
+        title=(
+            f"Consecutive Freeze Days"
+            f"\n{args.start_date} to {args.end_date}"
+        ),
+        output_path=f"{stem}_freeze.png",
     )
-    logger.info("  %d events", len(fz_ev))
-    del hw_filt, fz_filt
+    del fz_consec, fz_filt
 
     df = events_to_dataframe(hw_ev + fz_ev)
     df.to_csv(args.output, index=False)

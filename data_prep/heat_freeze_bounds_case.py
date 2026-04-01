@@ -7,12 +7,13 @@ than 50% of grid points on an edge exceed the climatological
 threshold (or 10 iterations).
 
 Usage:
-    python heat_freeze_bounds_yaml.py \\
+    python heat_freeze_bounds_case.py \\
         --output heat_freeze_yaml.csv --n-workers 4
 """
 
 import argparse
 import logging
+import pathlib
 import time as time_module
 from typing import Dict, List
 
@@ -25,6 +26,11 @@ import xarray as xr
 from dask.distributed import Client, LocalCluster
 
 from extremeweatherbench import cases, defaults, inputs
+from plot_temperature_events import (
+    detect_time_dim,
+    max_consecutive_days,
+    plot_consecutive_map,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -36,13 +42,7 @@ MIN_CONSECUTIVE_DAYS = 3
 EXPANSION_DEGREES = 2.0
 MAX_ITERATIONS = 10
 EDGE_VALIDITY_THRESHOLD = 0.5
-
-
-def _detect_time_dim(obj: xr.Dataset | xr.DataArray) -> str:
-    for name in ("valid_time", "time"):
-        if name in obj.dims:
-            return name
-    raise ValueError(f"No time dim found. Available: {list(obj.dims)}")
+MIN_GRIDPOINTS = 500
 
 
 def _apply_consecutive_filter(
@@ -126,7 +126,7 @@ def process_event(
         storage_options={"token": "anon"},
         chunks={},
     )
-    tdim = _detect_time_dim(ds)
+    tdim = detect_time_dim(ds)
     t2m = ds["2m_temperature"].sel(
         {tdim: slice(str(start_date), str(end_date))},
     )
@@ -245,6 +245,12 @@ def process_event(
             MAX_ITERATIONS,
         )
 
+    fin_lats = all_lats[idx_s : idx_n + 1]
+    fin_lons = all_lons[idx_w : idx_e + 1]
+    fin_filtered = filtered[:, idx_s : idx_n + 1, idx_w : idx_e + 1]
+    consec = max_consecutive_days(fin_filtered)
+    peak_gridpoints = int(fin_filtered.any(axis=0).sum())
+
     result = {
         "case_id": single_case.case_id_number,
         "title": single_case.title,
@@ -256,6 +262,10 @@ def process_event(
         "longitude_min": float(all_lons[idx_w]),
         "longitude_max": float(all_lons[idx_e]),
         "n_iterations": n_iter,
+        "_consec": consec,
+        "_lats": fin_lats,
+        "_lons": fin_lons,
+        "_peak_gridpoints": peak_gridpoints,
     }
     logger.info(
         "  Final bounds: lat [%.2f, %.2f], lon [%.2f, %.2f]",
@@ -282,6 +292,16 @@ def results_to_dataframe(results: List[Dict]) -> pd.DataFrame:
     if not results:
         return pd.DataFrame(columns=columns)
 
+    valid = [r for r in results if r is not None]
+    n_before = len(valid)
+    valid = [r for r in valid if r["_peak_gridpoints"] >= MIN_GRIDPOINTS]
+    logger.info(
+        "  Filtered %d events below %d gridpoints; %d remain",
+        n_before - len(valid),
+        MIN_GRIDPOINTS,
+        len(valid),
+    )
+
     rows = [
         {
             "event_type": r["event_type"],
@@ -292,7 +312,7 @@ def results_to_dataframe(results: List[Dict]) -> pd.DataFrame:
             "longitude_min": r["longitude_min"],
             "longitude_max": r["longitude_max"],
         }
-        for r in results
+        for r in valid
     ]
     df = pd.DataFrame(rows).sort_values("start_date").reset_index(drop=True)
     df.insert(0, "label", range(1, len(df) + 1))
@@ -334,6 +354,33 @@ def main():
 
     df = results_to_dataframe(results)
     df.to_csv(args.output, index=False)
+
+    out_dir = pathlib.Path(args.output).parent
+    for r in results:
+        if r is None:
+            continue
+        consec = r["_consec"]
+        lats = r["_lats"]
+        lons = r["_lons"]
+        case_id = r["case_id"]
+        event_type = r["event_type"]
+        kind = "heatwave" if event_type == "heat_wave" else "freeze"
+        start = r["start_date"][:10]
+        end = r["end_date"][:10]
+        out_png = str(
+            out_dir / f"case_{case_id}_consecutive_{kind}_days.png"
+        )
+        plot_consecutive_map(
+            consec,
+            lats,
+            lons,
+            event_type,
+            title=(
+                f"Consecutive {kind.capitalize()} Days"
+                f" — {r['title']}\n{start} to {end}"
+            ),
+            output_path=out_png,
+        )
 
     elapsed = time_module.time() - wall_start
     logger.info(
