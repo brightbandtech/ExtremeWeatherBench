@@ -746,17 +746,14 @@ def reduce_dataarray(
         raise TypeError(f"method must be str or callable, got {type(method)}")
 
 
-def load_land_geometry(resolution: str = "50m") -> shapely.geometry.Polygon:
-    """Load the land geometry, excluding lakes and ocean-connected water.
-
-    The default resolution is '50m'. The 10m dataset includes tiny
-    coral reefs and atolls (e.g. the Alacrán Reef in the Gulf of
-    Mexico) that are not meaningful TC landfall targets; 50m omits
-    them naturally while still providing accurate coastlines for the
-    6-hourly track resolution used by TC benchmarks.
+def load_land_geometry(
+    resolution: Literal["10m", "50m", "110m"] = "50m",
+) -> shapely.geometry.Polygon:
+    """Load the land geometry, excluding lakes and non-ocean bodies of water.
 
     Args:
         resolution: Natural Earth resolution ('10m', '50m', or '110m').
+            Defaults to '50m'.
 
     Returns:
         The land geometry as a shapely Polygon with lakes and
@@ -768,7 +765,7 @@ def load_land_geometry(resolution: str = "50m") -> shapely.geometry.Polygon:
     land_geoms = list(shpreader.Reader(land).geometries())
     land_union = shapely.ops.unary_union(land_geoms)
 
-    # Exclude lakes to avoid false landfall detections in lakes
+    # Exclude lakes to avoid false landfall detections
     try:
         lakes = shpreader.natural_earth(
             category="physical", name="lakes", resolution=resolution
@@ -781,7 +778,6 @@ def load_land_geometry(resolution: str = "50m") -> shapely.geometry.Polygon:
         pass
 
     # Exclude ocean-connected water bodies (bays, estuaries, coastal seas)
-    # that may be enclosed inside the land polygon at coarser resolutions
     try:
         ocean_union = load_ocean_geometry(resolution=resolution)
         land_union = land_union.difference(ocean_union)
@@ -791,14 +787,14 @@ def load_land_geometry(resolution: str = "50m") -> shapely.geometry.Polygon:
     return land_union
 
 
-def load_ocean_geometry(resolution: str = "50m") -> shapely.geometry.Polygon:
+def load_ocean_geometry(
+    resolution: Literal["10m", "50m", "110m"] = "50m",
+) -> shapely.geometry.Polygon:
     """Load the ocean geometry from Natural Earth.
-
-    Includes all ocean-connected water: open ocean, bays, estuaries,
-    and seas. Does not include landlocked lakes or ponds.
 
     Args:
         resolution: Natural Earth resolution ('10m', '50m', or '110m').
+            Defaults to '50m'.
 
     Returns:
         The ocean geometry as a unified shapely Polygon.
