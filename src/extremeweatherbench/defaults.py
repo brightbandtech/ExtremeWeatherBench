@@ -58,28 +58,13 @@ DEFAULT_VARIABLE_NAMES = [
 ]
 
 
-def preprocess_cira_icechunk_heatwave_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
-    """A preprocess function for CIRA icechunk data that removes ocean gridpoints for
-    heatwave events.
-
+def preprocess_heatwave_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
+    """Preprocess forecast data that removes ocean gridpoints for heatwave events.
     Args:
         ds: The forecast dataset.
 
     Returns:
-        The forecast dataset with ocean gridpoints removed.
-    """
-    ds = utils.remove_ocean_gridpoints(ds)
-    return ds
-
-
-def preprocess_hres_heatwave_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
-    """Preprocess HRES data from the WeatherBench store that removes ocean gridpoints
-    for heatwave events.
-    Args:
-        ds: The forecast dataset to rename.
-
-    Returns:
-        The forecast dataset with ocean gridpoints removed.
+        The forecast dataset with ocean gridpoints removed for heatwave events.
     """
 
     ds = utils.remove_ocean_gridpoints(ds)
