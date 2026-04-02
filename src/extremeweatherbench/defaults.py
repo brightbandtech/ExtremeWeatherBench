@@ -4,7 +4,7 @@ import operator
 import numpy as np
 import xarray as xr
 
-from extremeweatherbench import calc, derived, inputs
+from extremeweatherbench import calc, derived, inputs, utils
 
 # Suppress noisy log messages
 logging.getLogger("urllib3.connectionpool").setLevel(logging.CRITICAL)
@@ -56,6 +56,19 @@ DEFAULT_VARIABLE_NAMES = [
     "wind_from_direction",  # degrees (from, not to)
     "wind_speed",  # m/s
 ]
+
+
+def preprocess_heatwave_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
+    """Preprocess forecast data that removes ocean gridpoints for heatwave events.
+    Args:
+        ds: The forecast dataset.
+
+    Returns:
+        The forecast dataset with ocean gridpoints removed for heatwave events.
+    """
+
+    ds = utils.remove_ocean_gridpoints(ds)
+    return ds
 
 
 def preprocess_cira_icechunk_tc_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:

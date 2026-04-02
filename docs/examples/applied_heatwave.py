@@ -29,6 +29,7 @@ hres_forecast = ewb.forecasts.ZarrForecast(
     source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
     variables=["surface_air_temperature"],
     variable_mapping=ewb.HRES_metadata_variable_mapping,
+    preprocess=ewb.defaults.preprocess_heatwave_forecast_dataset,
 )
 
 # Load the climatology for DurationMeanError
