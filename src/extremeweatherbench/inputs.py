@@ -60,22 +60,22 @@ IBTRACS_URI = (
 )
 
 GHCNh_metadata_variable_mapping = {
-            "DATE": "valid_time",
-            "temperature": "surface_air_temperature",
-            "dew_point_temperature": "surface_dew_point",
-            "wind_speed": "surface_wind_speed",
-            "wind_direction": "surface_wind_from_direction",
-            "station_level_pressure": "surface_air_pressure",
-            "sea_level_pressure": "air_pressure_at_mean_sea_level",
-            "c": "cloud_area_fraction",
-            "relative_humidity": "surface_relative_humidity",
-            "precipitation": "accumulated_1_hour_precipitation",
-            "STATION": "station",
-            "Latitude": "latitude",
-            "Longitude": "longitude",
-            "Elevation": "elevation",
-            "Station_name": "name",
-        }
+    "DATE": "valid_time",
+    "temperature": "surface_air_temperature",
+    "dew_point_temperature": "surface_dew_point",
+    "wind_speed": "surface_wind_speed",
+    "wind_direction": "surface_wind_from_direction",
+    "station_level_pressure": "surface_air_pressure",
+    "sea_level_pressure": "air_pressure_at_mean_sea_level",
+    "c": "cloud_area_fraction",
+    "relative_humidity": "surface_relative_humidity",
+    "precipitation": "accumulated_1_hour_precipitation",
+    "STATION": "station",
+    "Latitude": "latitude",
+    "Longitude": "longitude",
+    "Elevation": "elevation",
+    "Station_name": "name",
+}
 
 # ERA5 metadata variable mapping
 ERA5_metadata_variable_mapping = {
@@ -640,9 +640,10 @@ class ERA5(TargetBase):
         )
         return aligned_forecast_data, aligned_target_data
 
+
 @dataclasses.dataclass
 class GHCNh(TargetBase):
-    """Target class for GHCN tabular data.
+    """Target class for GHCN hourlytabular data.
 
     Data is processed using polars to maintain the lazy loading paradigm in
     open_data_from_source and to separate the subsetting into subset_data_to_case.
@@ -653,9 +654,9 @@ class GHCNh(TargetBase):
 
     def _open_data_from_source(self) -> IncomingDataInput:
         target_data: pl.LazyFrame = pl.scan_parquet(
-            self.source, 
-            storage_options=self.storage_options, 
-            cast_options=pl.ScanCastOptions(float_cast='upcast')
+            self.source,
+            storage_options=self.storage_options,
+            cast_options=pl.ScanCastOptions(float_cast="upcast"),
         )
 
         return target_data
@@ -677,9 +678,9 @@ class GHCNh(TargetBase):
         # Cast strings to floats
         # Apply filters using proper polars expressions
         data = data.with_columns(
-            pl.col("latitude").cast(pl.Float64), 
+            pl.col("latitude").cast(pl.Float64),
             pl.col("longitude").cast(pl.Float64),
-            pl.col("elevation").cast(pl.Float64,strict=False),
+            pl.col("elevation").cast(pl.Float64, strict=False),
             pl.col("surface_air_temperature").cast(pl.Float64),
             pl.col("surface_air_pressure").cast(pl.Float64),
             pl.col("air_pressure_at_mean_sea_level").cast(pl.Float64),
@@ -688,7 +689,7 @@ class GHCNh(TargetBase):
             pl.col("surface_wind_from_direction").cast(pl.Float64),
             pl.col("surface_dew_point").cast(pl.Float64),
             pl.col("surface_relative_humidity").cast(pl.Float64),
-            pl.col("valid_time").str.to_datetime()
+            pl.col("valid_time").str.to_datetime(),
         )
         subset_target_data = data.filter(
             (pl.col("valid_time") >= time_min)
@@ -730,6 +731,7 @@ class GHCNh(TargetBase):
         target_data: xr.Dataset,
     ) -> tuple[xr.Dataset, xr.Dataset]:
         return align_forecast_to_target(forecast_data, target_data)
+
 
 @dataclasses.dataclass
 class GHCN(TargetBase):
