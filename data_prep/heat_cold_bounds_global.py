@@ -321,8 +321,18 @@ def detect_events(
     return list(events.values())
 
 
-def events_to_dataframe(events: List[Dict]) -> pd.DataFrame:
-    """Convert event dicts to a labelled DataFrame."""
+def events_to_dataframe(
+    events: List[Dict],
+    min_gridpoints: int = MIN_GRIDPOINTS,
+) -> pd.DataFrame:
+    """Convert event dicts to a labelled DataFrame.
+
+    Args:
+        events: Raw event dicts from ``detect_events``.
+        min_gridpoints: Drop events whose peak spatial extent
+            (in grid points) is below this threshold. Defaults
+            to the module-level ``MIN_GRIDPOINTS`` constant.
+    """
     columns = [
         "label",
         "event_type",
@@ -337,13 +347,16 @@ def events_to_dataframe(events: List[Dict]) -> pd.DataFrame:
         return pd.DataFrame(columns=columns)
 
     n_before = len(events)
-    events = [e for e in events if e["peak"] >= MIN_GRIDPOINTS]
+    events = [e for e in events if e["peak"] >= min_gridpoints]
     logger.info(
         "  Filtered %d events below %d gridpoints; %d remain",
         n_before - len(events),
-        MIN_GRIDPOINTS,
+        min_gridpoints,
         len(events),
     )
+
+    if not events:
+        return pd.DataFrame(columns=columns)
 
     rows = [
         {

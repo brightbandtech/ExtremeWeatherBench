@@ -434,7 +434,7 @@ class TestEventsToDataframe:
                 "lat_max": 20,
                 "lon_min": 30,
                 "lon_max": 40,
-                "peak": 100,
+                "peak": 600,
                 "area": 50,
                 "done": True,
             },
@@ -446,7 +446,7 @@ class TestEventsToDataframe:
                 "lat_max": 0,
                 "lon_min": 50,
                 "lon_max": 60,
-                "peak": 80,
+                "peak": 500,
                 "area": 40,
                 "done": True,
             },
@@ -466,7 +466,7 @@ class TestEventsToDataframe:
                 "lat_max": 15.0,
                 "lon_min": 100.0,
                 "lon_max": 110.0,
-                "peak": 200,
+                "peak": 500,
                 "area": 100,
                 "done": True,
             },
@@ -677,7 +677,7 @@ class TestEndToEnd:
         )
         assert len(evs) == 2
 
-        df = events_to_dataframe(evs)
+        df = events_to_dataframe(evs, min_gridpoints=10)
         assert len(df) == 2
         assert list(df["label"]) == [1, 2]
         assert all(df["latitude_min"] < df["latitude_max"])
@@ -742,7 +742,7 @@ class TestEndToEnd:
             "freeze",
         )
 
-        df = events_to_dataframe(hw_evs + fz_evs)
+        df = events_to_dataframe(hw_evs + fz_evs, min_gridpoints=10)
         types = set(df["event_type"])
         assert "heat_wave" in types
         assert "freeze" in types
