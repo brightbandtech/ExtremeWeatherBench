@@ -15,7 +15,7 @@ import argparse
 import logging
 import pathlib
 import time as time_module
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 import joblib
 import numpy as np
@@ -90,7 +90,7 @@ def _edge_valid_fraction(
 
 def process_event(
     single_case: cases.IndividualCase,
-) -> Dict:
+) -> Optional[Dict]:
     """Process one event: compute mask and iteratively expand.
 
     Opens ERA5 and climatology inside the worker to avoid
@@ -133,10 +133,30 @@ def process_event(
     six_hourly = t2m[tdim].dt.hour.isin([0, 6, 12, 18])
     t2m = t2m.sel({tdim: six_hourly}).sortby("latitude")
 
+    # Normalise ERA5 longitudes from 0-360 to -180/180 so that the
+    # case bounding boxes (always in -180/180 from geopandas) can be
+    # used directly for slicing without wrap-around issues.
+    if float(t2m.longitude.max()) > 180:
+        t2m = t2m.assign_coords(
+            longitude=(t2m.longitude.values + 180) % 360 - 180,
+        ).sortby("longitude")
+
     t2m = t2m.sel(
         latitude=slice(pot_lat_min, pot_lat_max),
         longitude=slice(pot_lon_min, pot_lon_max),
     )
+
+    if t2m.latitude.size == 0 or t2m.longitude.size == 0:
+        logger.warning(
+            "  Case %d: empty spatial selection"
+            " (lon=[%.2f, %.2f], lat=[%.2f, %.2f]) — skipping",
+            single_case.case_id_number,
+            pot_lon_min,
+            pot_lon_max,
+            pot_lat_min,
+            pot_lat_max,
+        )
+        return None
 
     if is_heatwave:
         daily = t2m.resample({tdim: "1D"}).max()
