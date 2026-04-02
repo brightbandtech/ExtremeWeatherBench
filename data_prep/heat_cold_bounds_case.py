@@ -177,6 +177,13 @@ def process_event(
             .sortby("latitude")
         )
 
+    # Match climatology longitude convention to the (possibly
+    # remapped) ERA5 data so reindex_like aligns correctly.
+    if float(clim.longitude.max()) > 180:
+        clim = clim.assign_coords(
+            longitude=(clim.longitude.values + 180) % 360 - 180,
+        ).sortby("longitude")
+
     doy = daily[tdim].dt.dayofyear
     max_clim_doy = int(clim.dayofyear.max())
     doy_capped = doy.clip(max=max_clim_doy)
