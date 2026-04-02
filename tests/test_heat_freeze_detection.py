@@ -19,13 +19,13 @@ sys.path.insert(
     str(Path(__file__).resolve().parents[1] / "data_prep"),
 )
 
-from heat_freeze_bounds_global import (
+from heat_cold_bounds_global import (
     apply_consecutive_filter,
     build_exceedance_masks,
     detect_events,
     events_to_dataframe,
 )
-from heat_freeze_bounds_case import (
+from heat_cold_bounds_case import (
     _apply_consecutive_filter as yaml_consecutive_filter,
     _edge_valid_fraction,
 )

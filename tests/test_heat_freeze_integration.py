@@ -16,7 +16,7 @@ sys.path.insert(
     str(Path(__file__).resolve().parents[1] / "data_prep"),
 )
 
-from heat_freeze_bounds_global import (  # type: ignore[import-not-found]
+from heat_cold_bounds_global import (  # type: ignore[import-not-found]
     apply_consecutive_filter,
     build_exceedance_masks,
     build_land_mask,
