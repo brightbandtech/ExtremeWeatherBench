@@ -10,9 +10,9 @@ Bounding boxes represent the maximum spatial extent of each event.
 Events terminate when area drops below 50% of their peak area.
 
 Usage:
-    python heat_freeze_bounds_global.py \\
+    python heat_cold_bounds_global.py \\
         --start-date 2023-06-01 --end-date 2023-09-01 \\
-        --output heat_freeze_global.csv --n-workers 4
+        --output heat_cold_global.csv --n-workers 4
 """
 
 import argparse
@@ -391,7 +391,7 @@ def main():
     )
     parser.add_argument(
         "--output",
-        default="heat_freeze_global.csv",
+        default="heat_cold_global.csv",
         help="Output CSV path",
     )
     parser.add_argument(

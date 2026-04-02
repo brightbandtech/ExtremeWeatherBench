@@ -7,8 +7,8 @@ than 50% of grid points on an edge exceed the climatological
 threshold (or 10 iterations).
 
 Usage:
-    python heat_freeze_bounds_case.py \\
-        --output heat_freeze_yaml.csv --n-workers 4
+    python heat_cold_bounds_case.py \\
+        --output heat_cold_yaml.csv --n-workers 4
 """
 
 import argparse
@@ -24,13 +24,13 @@ import regionmask
 import scipy.ndimage as ndimage
 import xarray as xr
 from dask.distributed import Client, LocalCluster
-
-from extremeweatherbench import cases, defaults, inputs
 from plot_temperature_events import (
     detect_time_dim,
     max_consecutive_days,
     plot_consecutive_map,
 )
+
+from extremeweatherbench import cases, defaults, inputs
 
 logging.basicConfig(
     level=logging.INFO,
@@ -327,7 +327,7 @@ def main():
     )
     parser.add_argument(
         "--output",
-        default="heat_freeze_yaml.csv",
+        default="heat_cold_yaml.csv",
         help="Output CSV path",
     )
     parser.add_argument(
