@@ -425,26 +425,58 @@ class AtmosphericRiverVariables(DerivedVariable):
 
     def __init__(
         self,
+        name: str = "atmospheric_river",
+        top_pressure_level: int = 300,
         output_variables: Optional[List[str]] = [
             "atmospheric_river_mask",
             "integrated_vapor_transport",
             "atmospheric_river_land_intersection",
         ],
-        name: Optional[str] = "atmospheric_river",
     ):
         """Initialize the AtmosphericRiverVariables variable.
 
         Args:
+            top_pressure_level: The top pressure level to compute integrated variables
+                for. Defaults to 300 hPa.
             output_variables: Optional list of variable names that specify
                 which outputs to use from the derived computation.
             name: The name of the derived variable. Defaults to class-level
                 name attribute if present, otherwise the class name.
         """
         super().__init__(output_variables=output_variables, name=name)
+        self.top_pressure_level = top_pressure_level
 
     def derive_variable(self, data: xr.Dataset, *args, **kwargs) -> xr.Dataset:
         """Derive the atmospheric river mask and land intersection."""
-        return ar.build_atmospheric_river_mask_and_land_intersection(data)
+
+        # Subset the data to the top pressure level
+        data = data.sel(level=data.level[data.level >= self.top_pressure_level])
+
+        # Generate IVT
+        ivt_data = ar.integrated_vapor_transport(
+            specific_humidity=data["specific_humidity"],
+            eastward_wind=data["eastward_wind"],
+            northward_wind=data["northward_wind"],
+        )
+
+        # Compute IVT Laplacian
+        ivt_laplacian = ar.integrated_vapor_transport_laplacian(ivt=ivt_data, sigma=3)
+
+        # Compute AR mask with default parameters
+        ar_mask_result = ar.atmospheric_river_mask(
+            ivt=ivt_data, ivt_laplacian=ivt_laplacian
+        )
+
+        # Compute land intersection
+        land_intersection = calc.find_land_intersection(ar_mask_result)
+
+        return xr.Dataset(
+            {
+                "atmospheric_river_mask": ar_mask_result,
+                "atmospheric_river_land_intersection": land_intersection,
+                "integrated_vapor_transport": ivt_data,
+            }
+        )
 
 
 def maybe_derive_variables(
