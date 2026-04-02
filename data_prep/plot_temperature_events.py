@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Plotting utilities and CLI for heat wave and freeze events.
+"""Plotting utilities and CLI for heat wave and cold snap events.
 
 Handles both event types from a single entry point. The event type
 is auto-detected from events.yaml; no flag required.
 
-Exported functions used by heat_freeze_bounds_global.py and
-heat_freeze_bounds_case.py:
+Exported functions used by heat_cold_bounds_global.py and
+heat_cold_bounds_case.py:
     max_consecutive_days  -- compute field from boolean mask
     plot_consecutive_map  -- pcolormesh map (Reds/Blues, discrete)
 
@@ -18,6 +18,7 @@ import argparse
 import logging
 import pathlib
 import time as time_module
+from typing import Literal, cast
 
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
@@ -48,9 +49,7 @@ def detect_time_dim(obj: xr.Dataset | xr.DataArray) -> str:
     for name in ("valid_time", "time"):
         if name in obj.dims:
             return name
-    raise ValueError(
-        f"No time dimension found. Available: {list(obj.dims)}"
-    )
+    raise ValueError(f"No time dimension found. Available: {list(obj.dims)}")
 
 
 def open_era5_t2m(start_date: str, end_date: str) -> xr.DataArray:
@@ -101,12 +100,8 @@ def _align_climatology(
     ):
         selected = clim_vals[doy_idx]
     else:
-        lat_idx = np.array(
-            [np.argmin(np.abs(clim_lats - dl)) for dl in daily_lats]
-        )
-        lon_idx = np.array(
-            [np.argmin(np.abs(clim_lons - dl)) for dl in daily_lons]
-        )
+        lat_idx = np.array([np.argmin(np.abs(clim_lats - dl)) for dl in daily_lats])
+        lon_idx = np.array([np.argmin(np.abs(clim_lons - dl)) for dl in daily_lons])
         selected = clim_vals[np.ix_(doy_idx, lat_idx, lon_idx)]
 
     return xr.DataArray(selected, dims=daily.dims, coords=daily.coords)
@@ -148,10 +143,14 @@ def _add_map_features(ax) -> None:
     """Add standard cartopy features to an axis."""
     ax.coastlines(linewidth=0.5, zorder=10)
     ax.add_feature(
-        cfeature.BORDERS, linewidth=0.6, edgecolor="grey",
+        cfeature.BORDERS,
+        linewidth=0.6,
+        edgecolor="grey",
     )
     ax.add_feature(
-        cfeature.STATES, linewidth=0.4, edgecolor="lightgrey",
+        cfeature.STATES,
+        linewidth=0.4,
+        edgecolor="lightgrey",
     )
     ax.add_feature(
         cfeature.LAKES,
@@ -160,7 +159,9 @@ def _add_map_features(ax) -> None:
         facecolor="none",
     )
     ax.add_feature(
-        cfeature.RIVERS, linewidth=0.2, edgecolor="none",
+        cfeature.RIVERS,
+        linewidth=0.2,
+        edgecolor="none",
     )
 
 
@@ -171,7 +172,7 @@ def plot_consecutive_map(
     consec: np.ndarray,
     lats: np.ndarray,
     lons: np.ndarray,
-    event_type: str,
+    event_type: Literal["heat_wave", "cold_snap"],
     title: str,
     output_path: str,
     extent: tuple[float, float, float, float] | None = None,
@@ -182,7 +183,7 @@ def plot_consecutive_map(
         consec: int32 2-D array (nlat, nlon) of max consecutive days.
         lats: 1-D latitude array matching consec rows.
         lons: 1-D longitude array (0-360) matching consec columns.
-        event_type: ``'heat_wave'`` or ``'freeze'``.
+        event_type: ``'heat_wave'`` or ``'cold_snap'``.
         title: Two-line figure title (left-aligned).
         output_path: Destination PNG file path.
         extent: (lon_min, lon_max, lat_min, lat_max) in -180..180.
@@ -213,7 +214,8 @@ def plot_consecutive_map(
         figsize=(10, 8),
     )
     ax.set_extent(
-        [lon_min, lon_max, lat_min, lat_max], crs=ccrs.PlateCarree(),
+        [lon_min, lon_max, lat_min, lat_max],
+        crs=ccrs.PlateCarree(),
     )
     ax.add_feature(cfeature.OCEAN, facecolor="lightblue", zorder=0)
 
@@ -230,7 +232,10 @@ def plot_consecutive_map(
 
     divider = make_axes_locatable(ax)
     cax = divider.append_axes(
-        "right", size="5%", pad=0.1, axes_class=plt.Axes,
+        "right",
+        size="5%",
+        pad=0.1,
+        axes_class=plt.Axes,
     )
     cbar = fig.colorbar(im, cax=cax)
     cbar.set_ticks(range(MIN_CONSECUTIVE_DAYS, vmax + 1))
@@ -248,7 +253,7 @@ def plot_consecutive_map(
 def plot_event_bounds(
     df: pd.DataFrame,
     csv_path: str,
-    title: str = "Detected Heat Wave and Freeze Events",
+    title: str = "Detected Heat Wave and Cold Snap Events",
 ) -> None:
     """Draw bounding boxes for all events on a global Robinson map.
 
@@ -260,7 +265,7 @@ def plot_event_bounds(
 
     out_path = str(pathlib.Path(csv_path).with_suffix(".png"))
     hw_count = int((df["event_type"] == "heat_wave").sum())
-    fz_count = int((df["event_type"] == "freeze").sum())
+    fz_count = int((df["event_type"] == "cold_snap").sum())
 
     fig, ax = plt.subplots(
         subplot_kw={"projection": ccrs.Robinson()},
@@ -271,7 +276,10 @@ def plot_event_bounds(
     ax.add_feature(cfeature.LAND, facecolor="whitesmoke", zorder=0)
     ax.coastlines(linewidth=0.5, zorder=2)
     ax.add_feature(
-        cfeature.BORDERS, linewidth=0.3, edgecolor="grey", zorder=2,
+        cfeature.BORDERS,
+        linewidth=0.3,
+        edgecolor="grey",
+        zorder=2,
     )
 
     for _, row in df.iterrows():
@@ -280,40 +288,58 @@ def plot_event_bounds(
         lat0, lat1 = float(row["latitude_min"]), float(row["latitude_max"])
         if lon1 < lon0:
             lon1 += 360.0
-        color = (
-            _HW_COLOR if row["event_type"] == "heat_wave" else _FZ_COLOR
-        )
+        color = _HW_COLOR if row["event_type"] == "heat_wave" else _FZ_COLOR
         kw = dict(
             width=lon1 - lon0,
             height=lat1 - lat0,
             transform=ccrs.PlateCarree(),
         )
-        ax.add_patch(mpatches.Rectangle(
-            xy=(lon0, lat0), facecolor=color,
-            edgecolor=color, alpha=_BOX_ALPHA, linewidth=1.0,
-            zorder=3, **kw,
-        ))
-        ax.add_patch(mpatches.Rectangle(
-            xy=(lon0, lat0), facecolor="none",
-            edgecolor=color, alpha=_BOX_EDGE_ALPHA, linewidth=1.0,
-            zorder=4, **kw,
-        ))
+        ax.add_patch(
+            mpatches.Rectangle(
+                xy=(lon0, lat0),
+                facecolor=color,
+                edgecolor=color,
+                alpha=_BOX_ALPHA,
+                linewidth=1.0,
+                zorder=3,
+                **kw,
+            )
+        )
+        ax.add_patch(
+            mpatches.Rectangle(
+                xy=(lon0, lat0),
+                facecolor="none",
+                edgecolor=color,
+                alpha=_BOX_EDGE_ALPHA,
+                linewidth=1.0,
+                zorder=4,
+                **kw,
+            )
+        )
 
     legend_handles = []
     if hw_count:
-        legend_handles.append(mpatches.Patch(
-            facecolor=_HW_COLOR, alpha=0.7,
-            label=f"Heat wave ({hw_count})",
-        ))
+        legend_handles.append(
+            mpatches.Patch(
+                facecolor=_HW_COLOR,
+                alpha=0.7,
+                label=f"Heat wave ({hw_count})",
+            )
+        )
     if fz_count:
-        legend_handles.append(mpatches.Patch(
-            facecolor=_FZ_COLOR, alpha=0.7,
-            label=f"Freeze ({fz_count})",
-        ))
+        legend_handles.append(
+            mpatches.Patch(
+                facecolor=_FZ_COLOR,
+                alpha=0.7,
+                label=f"Cold Snap ({fz_count})",
+            )
+        )
     if legend_handles:
         ax.legend(
-            handles=legend_handles, loc="lower left",
-            fontsize=10, framealpha=0.85,
+            handles=legend_handles,
+            loc="lower left",
+            fontsize=10,
+            framealpha=0.85,
         )
 
     ax.set_title(title, loc="left", fontsize=13)
@@ -332,19 +358,15 @@ def load_case(case_id_number: int) -> cases.IndividualCase:
         if c.case_id_number == case_id_number:
             return c
     hw_ids = ", ".join(
-        str(c.case_id_number)
-        for c in all_cases
-        if c.event_type == "heat_wave"
+        str(c.case_id_number) for c in all_cases if c.event_type == "heat_wave"
     )
-    fz_ids = ", ".join(
-        str(c.case_id_number)
-        for c in all_cases
-        if c.event_type == "freeze"
+    cs_ids = ", ".join(
+        str(c.case_id_number) for c in all_cases if c.event_type == "cold_snap"
     )
     raise ValueError(
         f"Case {case_id_number} not found.\n"
         f"  heat_wave ids: {hw_ids}\n"
-        f"  freeze ids:    {fz_ids}"
+        f"  cold_snap ids:    {cs_ids}"
     )
 
 
@@ -354,7 +376,7 @@ def compute_consecutive_field(
     """Return (consecutive_days, lats, lons) for a case.
 
     Works for both heat_wave (daily max > 85th pct) and
-    freeze (daily min < 15th pct) event types.
+    cold_snap (daily min < 15th pct) event types.
     """
     is_heatwave = single_case.event_type == "heat_wave"
     start = str(single_case.start_date.date())
@@ -380,19 +402,11 @@ def compute_consecutive_field(
     if is_heatwave:
         logger.info("Loading 85th-percentile climatology...")
         daily = t2m.resample({tdim: "1D"}).max()
-        clim = (
-            defaults.get_climatology(0.85)
-            .max(dim="hour")
-            .sortby("latitude")
-        )
+        clim = defaults.get_climatology(0.85).max(dim="hour").sortby("latitude")
     else:
         logger.info("Loading 15th-percentile climatology...")
         daily = t2m.resample({tdim: "1D"}).min()
-        clim = (
-            defaults.get_climatology(0.15)
-            .min(dim="hour")
-            .sortby("latitude")
-        )
+        clim = defaults.get_climatology(0.15).min(dim="hour").sortby("latitude")
 
     clim = clim.sel(
         latitude=daily.latitude,
@@ -421,26 +435,28 @@ def compute_consecutive_field(
 
 
 def _default_output(case_id_number: int, event_type: str) -> str:
-    kind = "heatwave" if event_type == "heat_wave" else "freeze"
+    kind = "heatwave" if event_type == "heat_wave" else "cold_snap"
     return f"case_{case_id_number}_consecutive_{kind}_days.png"
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
         description=(
-            "Plot consecutive heatwave or freeze days for a"
-            " case from events.yaml."
+            "Plot consecutive heatwave or cold_snap days for a case from events.yaml."
         ),
     )
     parser.add_argument(
-        "--case-id-number", type=int, required=True,
+        "--case-id-number",
+        type=int,
+        required=True,
         help="case_id_number from events.yaml",
     )
     parser.add_argument(
-        "--output", default=None,
+        "--output",
+        default=None,
         help=(
             "Output PNG path "
-            "(default: case_N_consecutive_{heatwave|freeze}_days.png)"
+            "(default: case_N_consecutive_{heatwave|cold_snap}_days.png)"
         ),
     )
     args = parser.parse_args()
@@ -456,12 +472,13 @@ def main() -> None:
 
     if args.output is None:
         args.output = _default_output(
-            args.case_id_number, single_case.event_type,
+            args.case_id_number,
+            single_case.event_type,
         )
 
     consec, lats, lons = compute_consecutive_field(single_case)
 
-    kind = "Heatwave" if single_case.event_type == "heat_wave" else "Freeze"
+    kind = "Heat Wave" if single_case.event_type == "heat_wave" else "Cold Snap"
     start_str = str(single_case.start_date.date())
     end_str = str(single_case.end_date.date())
 
@@ -469,7 +486,7 @@ def main() -> None:
         consec,
         lats,
         lons,
-        single_case.event_type,
+        cast(Literal["heat_wave", "cold_snap"], single_case.event_type),
         title=f"Consecutive {kind} Days\n{start_str} to {end_str}",
         output_path=args.output,
     )

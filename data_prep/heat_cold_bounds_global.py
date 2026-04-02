@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Detect heat waves and freezes globally from ERA5 reanalysis.
+"""Detect heat waves and cold snaps globally from ERA5 reanalysis.
 
 Scans ERA5 2m temperature over an input date range and identifies
 heat wave (daily max > 85th percentile for 3+ consecutive days)
-and freeze (daily min < 15th percentile for 3+ consecutive days)
+and cold snap (daily min < 15th percentile for 3+ consecutive days)
 events globally over land.
 
 Bounding boxes represent the maximum spatial extent of each event.
@@ -53,7 +53,7 @@ def get_daily_climatology_thresholds() -> Tuple[xr.DataArray, xr.DataArray]:
     """Derive daily thresholds from 6-hourly percentile climatology.
 
     Returns the max-over-hours of the 85th percentile (heat wave
-    threshold) and min-over-hours of the 15th percentile (freeze
+    threshold) and min-over-hours of the 15th percentile (cold snap
     threshold), each indexed by dayofyear.
     """
     clim_85 = defaults.get_climatology(0.85)
@@ -80,7 +80,7 @@ def build_exceedance_masks(
     clim_daily_min: xr.DataArray,
     land_mask: xr.DataArray,
 ) -> Tuple[xr.DataArray, xr.DataArray]:
-    """Build lazy boolean masks for heat wave / freeze exceedance.
+    """Build lazy boolean masks for heat wave / cold snap exceedance.
 
     Daily max/min aggregation stays in the dask graph. The
     climatology is loaded into memory once (small) and then
@@ -252,7 +252,10 @@ def detect_events(
         overlap_mat: Optional[np.ndarray] = None
         if prev_labels is not None and n_obj > 0 and prev_n_obj > 0:
             overlap_mat = _count_overlaps_nb(
-                prev_labels, labels, prev_n_obj, n_obj,
+                prev_labels,
+                labels,
+                prev_n_obj,
+                n_obj,
             )
 
         for oid in range(1, n_obj + 1):
@@ -261,7 +264,11 @@ def detect_events(
             li, lo = np.where(om)
 
             eid = _resolve_event(
-                oid, overlap_mat, prev_map, events, cur_map,
+                oid,
+                overlap_mat,
+                prev_map,
+                events,
+                cur_map,
             )
 
             if eid is None:
@@ -283,16 +290,20 @@ def detect_events(
                 ev = events[eid]
                 ev["end"] = dates[di]
                 ev["lat_min"] = min(
-                    ev["lat_min"], float(lats[li].min()),
+                    ev["lat_min"],
+                    float(lats[li].min()),
                 )
                 ev["lat_max"] = max(
-                    ev["lat_max"], float(lats[li].max()),
+                    ev["lat_max"],
+                    float(lats[li].max()),
                 )
                 ev["lon_min"] = min(
-                    ev["lon_min"], float(lons[lo].min()),
+                    ev["lon_min"],
+                    float(lons[lo].min()),
                 )
                 ev["lon_max"] = max(
-                    ev["lon_max"], float(lons[lo].max()),
+                    ev["lon_max"],
+                    float(lons[lo].max()),
                 )
                 ev["peak"] = max(ev["peak"], area)
                 ev["area"] = area
@@ -353,7 +364,7 @@ def events_to_dataframe(events: List[Dict]) -> pd.DataFrame:
 
 def main():
     parser = argparse.ArgumentParser(
-        description=("Detect heat waves and freezes globally from ERA5."),
+        description=("Detect heat waves and cold snaps globally from ERA5."),
     )
     parser.add_argument(
         "--start-date",
@@ -416,7 +427,7 @@ def main():
     hw_da = hw_lazy.compute()
     logger.info("  done in %.1f s", time_module.time() - t0)
 
-    logger.info("Computing freeze mask...")
+    logger.info("Computing cold snap mask...")
     t0 = time_module.time()
     fz_da = fz_lazy.compute()
     logger.info("  done in %.1f s", time_module.time() - t0)
@@ -448,13 +459,21 @@ def main():
 
     logger.info("Detecting heat wave events...")
     hw_ev = detect_events(
-        hw_filt, dates, lats, lons, "heat_wave",
+        hw_filt,
+        dates,
+        lats,
+        lons,
+        "heat_wave",
     )
     logger.info("  %d events", len(hw_ev))
 
-    logger.info("Detecting freeze events...")
+    logger.info("Detecting cold snap events...")
     fz_ev = detect_events(
-        fz_filt, dates, lats, lons, "freeze",
+        fz_filt,
+        dates,
+        lats,
+        lons,
+        "cold_snap",
     )
     logger.info("  %d events", len(fz_ev))
 
@@ -466,10 +485,7 @@ def main():
         lats,
         lons,
         "heat_wave",
-        title=(
-            f"Consecutive Heatwave Days"
-            f"\n{args.start_date} to {args.end_date}"
-        ),
+        title=(f"Consecutive Heatwave Days\n{args.start_date} to {args.end_date}"),
         output_path=f"{stem}_heatwave.png",
     )
     del hw_consec, hw_filt
@@ -479,12 +495,9 @@ def main():
         fz_consec,
         lats,
         lons,
-        "freeze",
-        title=(
-            f"Consecutive Freeze Days"
-            f"\n{args.start_date} to {args.end_date}"
-        ),
-        output_path=f"{stem}_freeze.png",
+        "cold_snap",
+        title=(f"Consecutive Cold Snap Days\n{args.start_date} to {args.end_date}"),
+        output_path=f"{stem}_cold_snap.png",
     )
     del fz_consec, fz_filt
 

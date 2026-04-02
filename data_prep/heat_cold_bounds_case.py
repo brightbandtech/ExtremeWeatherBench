@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Validate and expand heat wave / freeze bounding boxes from events.yaml.
+"""Validate and expand heat wave / cold snap bounding boxes from events.yaml.
 
-For each heat_wave or freeze event in events.yaml, iteratively
+For each heat_wave or cold snap event in events.yaml, iteratively
 grows the bounding box by 2 degrees in each direction until fewer
 than 50% of grid points on an edge exceed the climatological
 threshold (or 10 iterations).
@@ -321,7 +321,9 @@ def results_to_dataframe(results: List[Dict]) -> pd.DataFrame:
 
 def main():
     parser = argparse.ArgumentParser(
-        description=("Validate / expand heat wave and freeze bounds from events.yaml."),
+        description=(
+            "Validate / expand heat wave and cold snap bounds from events.yaml."
+        ),
     )
     parser.add_argument(
         "--output",
@@ -342,9 +344,9 @@ def main():
     logger.info("Dask dashboard: %s", client.dashboard_link)
 
     events_yaml = cases.load_ewb_events_yaml_into_case_list()
-    hw_fz = [e for e in events_yaml if e.event_type in ("heat_wave", "freeze")]
+    hw_fz = [e for e in events_yaml if e.event_type in ("heat_wave", "cold_snap")]
     logger.info(
-        "Found %d heat_wave / freeze events",
+        "Found %d heat_wave / cold snap events",
         len(hw_fz),
     )
 
@@ -364,20 +366,17 @@ def main():
         lons = r["_lons"]
         case_id = r["case_id"]
         event_type = r["event_type"]
-        kind = "heatwave" if event_type == "heat_wave" else "freeze"
+        kind = "heatwave" if event_type == "heat_wave" else "cold_snap"
         start = r["start_date"][:10]
         end = r["end_date"][:10]
-        out_png = str(
-            out_dir / f"case_{case_id}_consecutive_{kind}_days.png"
-        )
+        out_png = str(out_dir / f"case_{case_id}_consecutive_{kind}_days.png")
         plot_consecutive_map(
             consec,
             lats,
             lons,
             event_type,
             title=(
-                f"Consecutive {kind.capitalize()} Days"
-                f" — {r['title']}\n{start} to {end}"
+                f"Consecutive {kind.capitalize()} Days — {r['title']}\n{start} to {end}"
             ),
             output_path=out_png,
         )
