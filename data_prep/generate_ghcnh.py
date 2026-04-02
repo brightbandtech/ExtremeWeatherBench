@@ -4,7 +4,6 @@ to save disk space and skip already processed data.
 
 import asyncio
 from pathlib import Path
-from typing import Literal
 
 import aiohttp
 import nest_asyncio
@@ -12,22 +11,7 @@ import pandas as pd
 import polars as pl
 from tqdm.asyncio import tqdm
 
-QC_CODE_MAPPING = {
-    220: ["1"],
-    221: ["1"],
-    222: ["1"],
-    223: ["1"],
-    313: ["0", "1", "4", "5", "9", "A", "P", "I", "C", "R"],
-    314: ["0", "1", "4", "5", "9", "A", "P", "I", "C", "R"],
-    315: ["0", "1", "4", "5", "9", "A", "P", "I", "C", "R"],
-    322: ["0", "1", "4", "5", "9", "A", "P", "I", "C", "R"],
-    335: ["0", "1", "4", "5", "9", "A", "P", "I", "C", "R"],
-    343: ["0", "1", "4", "5", "9", "A", "P", "I", "C", "R"],
-    344: ["0", "1", "4", "5", "9", "A", "P", "I", "C", "R"],
-    346: ["0", "1", "4", "5", "9", "A", "P", "I", "C", "R"],
-    347: ["1"],
-    348: ["1"],
-}
+REJECTED_QC_CODES = {"2", "3", "6", "7"}
 
 
 async def download_station_list():
@@ -78,11 +62,11 @@ def parse_station_list(content):
     return pd.DataFrame(stations)
 
 
-def construct_station_download_url(station_id, year, file_type: Literal["parquet", "psv"]="parquet"):
+def construct_station_download_url(station_id, year):
     """Construct download URL for a specific station and year."""
     base_url = "https://www.ncei.noaa.gov/oa/global-historical-climatology-network/hourly/access/by-year"  # noqa: E501
-    filename = f"GHCNh_{station_id}_{year}.{file_type}"
-    return f"{base_url}/{year}/{file_type}/{filename}"
+    filename = f"GHCNh_{station_id}_{year}.psv"
+    return f"{base_url}/{year}/psv/{filename}"
 
 
 # Cache for existing station-year combinations for O(1) lookup
@@ -101,11 +85,11 @@ def check_station_already_processed(station_id, year, main_parquet_file):
         # Only read the parquet file once and build station-year set
         if _existing_station_years is None or _cache_file_path != main_parquet_file:
             print("Loading existing data for duplicate checking with Polars...")
-            df = pl.read_parquet(main_parquet_file, columns=["station", "time"])
+            df = pl.read_parquet(main_parquet_file, columns=["station", "valid_time"])
 
-            # Extract year from time and create station-year combinations
+            # Extract year from valid_time and create station-year combinations
             station_years = (
-                df.with_columns(pl.col("time").dt.year().alias("year"))
+                df.with_columns(pl.col("valid_time").dt.year().alias("year"))
                 .select(["station", "year"])
                 .unique()
                 .to_pandas()  # Convert to pandas for set creation
@@ -133,14 +117,6 @@ def clear_existing_data_cache():
     global _existing_station_years, _cache_file_path
     _existing_station_years = None
     _cache_file_path = None
-
-async def get_url_exists(semaphore, session: aiohttp.ClientSession, url: str):
-    async with semaphore:
-        resp = await session.head(url, allow_redirects=True, ssl=False)
-        if resp.status == 200:
-            return url
-        else:
-            return None
 
 
 async def download_and_process_station_file(
@@ -258,7 +234,7 @@ def flush_batch_to_parquet(main_parquet_file):
         # Append to main parquet file
         if Path(main_parquet_file).exists():
             existing_df = pl.read_parquet(main_parquet_file)
-            combined_df = pl.concat([existing_df, batch_polars])
+            combined_df = pl.concat([existing_df, batch_polars], how="diagonal")
             combined_df.write_parquet(main_parquet_file)
         else:
             batch_polars.write_parquet(main_parquet_file)
@@ -279,19 +255,14 @@ def process_psv_file(file_path):
     """Process a single PSV file and return DataFrame or None."""
     try:
         df = pd.read_csv(file_path, sep="|", low_memory=False)
-        source_code_cols = [col for col in df.columns if "Source_Code" in col]
-        quality_code_cols = [
-            col.split("_")[0] + "_Quality_Code" for col in source_code_cols
-        ]
-        for source_code_col, quality_code_col in zip(
-            source_code_cols, quality_code_cols
+
+        for qc_col in (
+            "temperature_Quality_Code",
+            "wind_speed_Quality_Code",
         ):
-            quality_code_str = df[quality_code_col].astype(str)
-            df = df[
-                quality_code_str.isin(
-                    QC_CODE_MAPPING.get(df[source_code_col].unique()[0])
-                )
-            ]
+            if qc_col in df.columns:
+                codes = df[qc_col].astype(str)
+                df = df[~codes.isin(REJECTED_QC_CODES)]
 
         # Select required columns
         required_cols = [
@@ -335,7 +306,7 @@ def aggregate_to_hourly(data):
             lambda df: df.bfill().iloc[0], include_groups=False
         )
     data = data.reset_index(drop=True)
-    data["time"] = data["DATE"].dt.round("h")
+    data["valid_time"] = data["DATE"].dt.round("h")
     return data
 
 
@@ -369,7 +340,7 @@ def apply_data_transformations(df):
     )
 
     # Drop unnecessary columns if they exist
-    columns_to_drop = ["DATE", "hour"]
+    columns_to_drop = ["DATE", "hour", "hour_dist"]
     columns_to_drop = [col for col in columns_to_drop if col in df.columns]
     if columns_to_drop:
         df = df.drop(columns_to_drop, axis=1)
@@ -388,13 +359,9 @@ async def download_and_process_station_file_with_semaphore(
 
 
 async def download_all_stations_streaming(
-    years, output_dir, overwrite=False, max_concurrent=100, return_url=False, file_type: Literal["parquet", "psv"]="parquet"
+    years, output_dir, overwrite=False, max_concurrent=100
 ):
-    """Download and immediately process GHCNh stations to save disk space."""
-
-    # Create semaphore to limit concurrent downloads
-    semaphore = asyncio.Semaphore(max_concurrent)
-
+    """Download and immediately process GHCNh stations."""
     print("Downloading and processing GHCNh stations with streaming approach...")
     station_df = await download_station_list()
     print(f"Found {len(station_df)} stations in official list")
@@ -415,100 +382,59 @@ async def download_all_stations_streaming(
     # Calculate total combinations for progress bar
     total_combinations = len(station_df) * len(years)
 
+    with tqdm(
+        total=total_combinations, desc="Setting up tasks", unit="checks", ncols=80
+    ) as setup_pbar:
+        for year in years:
+            for _, station in station_df.iterrows():
+                station_id = station["station_id"]
+                filename = f"GHCNh_{station_id}_{year}.psv"
+
+                # Check if already processed before creating task
+                if not overwrite and check_station_already_processed(
+                    station_id, year, main_parquet_file
+                ):
+                    skipped_during_setup += 1
+                    setup_pbar.set_postfix(
+                        {"Skipped": skipped_during_setup, "Tasks": len(tasks)}
+                    )
+                else:
+                    url = construct_station_download_url(station_id, year)
+                    tasks.append(
+                        {
+                            "station_id": station_id,
+                            "year": year,
+                            "url": url,
+                            "filename": filename,
+                        }
+                    )
+                    total_tasks += 1
+                    setup_pbar.set_postfix(
+                        {"Skipped": skipped_during_setup, "Tasks": len(tasks)}
+                    )
+
+                setup_pbar.update(1)
+
+    print(f"Pre-filtered: {skipped_during_setup} already processed")
+    print(f"Will attempt to download: {len(tasks)} files")
+
+    if not tasks:
+        print("All data already exists! Nothing to download.")
+        return
+
+    # Create semaphore to limit concurrent downloads
+    semaphore = asyncio.Semaphore(max_concurrent)
+
+    # Counters for progress tracking
+    progress_counters = {
+        "processed": 0,
+        "skipped": 0,
+        "not_found": 0,
+        "failed": 0,
+        "errors": 0,
+    }
+
     async with aiohttp.ClientSession() as session:
-        with tqdm(
-            total=total_combinations, desc="Setting up tasks", unit="checks", ncols=80
-        ) as setup_pbar:
-            for year in years:
-                for _, station in station_df.iterrows():
-                    station_id = station["station_id"]
-                    filename = f"GHCNh_{station_id}_{year}.{file_type}"
-
-                    # Check if already processed before creating task
-                    if not overwrite and check_station_already_processed(
-                        station_id, year, main_parquet_file
-                    ):
-                        skipped_during_setup += 1
-                        setup_pbar.set_postfix(
-                            {"Skipped": skipped_during_setup, "Tasks": len(tasks)}
-                        )
-                    else:
-                        url = construct_station_download_url(station_id, year, file_type)
-                        if return_url:
-                            tasks.append(asyncio.create_task(get_url_exists(semaphore, session, url)))
-                        else:
-                            tasks.append(
-                                {
-                                    "station_id": station_id,
-                                    "year": year,
-                                    "url": url,
-                                    "filename": filename,
-                                }
-                            )
-                        total_tasks += 1
-                        setup_pbar.set_postfix(
-                            {"Skipped": skipped_during_setup, "Tasks": len(tasks)}
-                        )
-
-                    setup_pbar.update(1)
-        print(f"Pre-filtered: {skipped_during_setup} already processed")
-        print(f"Will attempt to download: {len(tasks)} files")
-
-        if not tasks:
-            print("All data already exists! Nothing to download.")
-            return
-
-        # Counters for progress tracking
-        progress_counters = {
-            "processed": 0,
-            "skipped": 0,
-            "not_found": 0,
-            "failed": 0,
-            "errors": 0,
-        }
-
-        if return_url:
-            # Run with async tqdm progress bar
-            with tqdm(
-                total=len(tasks),
-                desc="Downloading & Processing",
-                unit="files",
-                ncols=100,
-            ) as pbar:
-                async def process_with_progress(coro):
-                    """Wrapper to update progress bar after each completion."""
-                    try:
-                        result = await coro
-                        # Update counters
-                        if result in progress_counters:
-                            progress_counters[result] += 1
-
-                        # Update progress bar description with current stats
-                        pbar.set_postfix(
-                            {
-                                "Processed": progress_counters["processed"],
-                                "Skipped": progress_counters["skipped"],
-                                "Not Found": progress_counters["not_found"],
-                                "Failed": progress_counters["failed"],
-                            }
-                        )
-                        pbar.update(1)
-                        return result
-                    except Exception as e:
-                        progress_counters["errors"] += 1
-                        pbar.set_postfix(
-                            {
-                                "Processed": progress_counters["processed"],
-                                "Skipped": progress_counters["skipped"],
-                                "Not Found": progress_counters["not_found"],
-                                "Failed": progress_counters["failed"],
-                                "Errors": progress_counters["errors"],
-                            }
-                        )
-                        pbar.update(1)
-                        return e
-                results = await asyncio.gather(*[process_with_progress(coro) for coro in tasks])
-                return results
         print(
             f"Starting streaming download with max {max_concurrent} "
             f"concurrent downloads"
@@ -600,10 +526,10 @@ async def download_all_stations_streaming(
                 print("\nFinal dataset summary:")
                 print(f"  Total rows: {len(final_df)}")
                 print(f"  Unique stations: {final_df['station'].nunique()}")
-                if "time" in final_df.columns:
+                if "valid_time" in final_df.columns:
                     print(
-                        f"  Date range: {final_df['time'].min()} to "
-                        f"{final_df['time'].max()}"
+                        f"  Date range: {final_df['valid_time'].min()} to "
+                        f"{final_df['valid_time'].max()}"
                     )
             except Exception as e:
                 print(f"Error reading final dataset: {e}")
@@ -618,7 +544,7 @@ def main():
     print()
 
     # Define years to download
-    years = [2020, 2021, 2022, 2023, 2024, 2025, 2026]
+    years = [2020, 2021, 2022, 2023, 2024]
 
     # Set output directory for temporary files
     output_dir = "/tmp/ghcnh_temp/"
@@ -629,12 +555,12 @@ def main():
 
     # Download and process using streaming approach
     print(f"Streaming data for years: {years}")
-    urls = asyncio.run(
+    asyncio.run(
         download_all_stations_streaming(
-            years, output_dir, overwrite=False, max_concurrent=1000, return_url=True, file_type="parquet"
+            years, output_dir, overwrite=False, max_concurrent=1000
         )
     )
-    print(urls)
+
     # Clean up temp directory
     try:
         import shutil
@@ -646,22 +572,6 @@ def main():
 
     print("Streaming processing complete!")
 
-def download_url():
-    """Download a URL and return the content."""
-    # Define years to download
-    years = [2020, 2021, 2022, 2023, 2024]
 
-    # Set output directory for temporary files
-    output_dir = "/tmp/ghcnh_temp/"
-    Path(output_dir).mkdir(parents=True, exist_ok=True)
-
-    urls = asyncio.run(
-        download_all_stations_streaming(
-            years, output_dir, overwrite=False, max_concurrent=10000, return_url=True, file_type="parquet"
-        )
-    )
-    import pickle
-    with open("/home/taylor/code/ExtremeWeatherBench/data_prep/urls.pkl", "wb") as f:
-        pickle.dump(urls, f)
 if __name__ == "__main__":
-    download_url()
+    main()
