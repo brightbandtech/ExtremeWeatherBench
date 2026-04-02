@@ -3679,3 +3679,24 @@ class TestEarlySignal:
             )
             result = m._compute_metric(forecast, target)
             assert bool(result.values), f"Expected True for order={order}"
+
+    def test_compute_metric_works_with_dask_backed_arrays(self):
+        """_compute_metric must not raise on dask-backed inputs.
+
+        drop=True in xr.DataArray.where() uses boolean indexing which
+        is unsupported for dask arrays; drop=False avoids this.
+        """
+        pytest.importorskip("dask.array")
+
+        m = self._make_metric(threshold=0.5, spatial_aggregation="any")
+        forecast, target = self._make_forecast_target(
+            forecast_vals=[[0.9, 0.1]],
+            target_vals=[[0.0, 1.0]],
+        )
+        forecast_dask = forecast.chunk({"valid_time": 1, "space": 1})
+        target_dask = target.chunk({"valid_time": 1, "space": 1})
+
+        result = m._compute_metric(forecast_dask, target_dask)
+        result_computed = result.compute()
+        # space=0 excluded (target=0); space=1: forecast=0.1 < 0.5 → False
+        assert not bool(result_computed.any().values)

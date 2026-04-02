@@ -1083,9 +1083,11 @@ class EarlySignal(BaseMetric):
         )
 
         # Only assess forecast where target detects the event (value == 1);
-        # locations where target is 0 or NaN are excluded
+        # locations where target is 0 or NaN are set to NaN (not dropped).
+        # drop=True uses boolean dask indexing which is unsupported; NaN
+        # values are handled correctly by _apply_aggregation downstream.
         forecast_detection_mask = forecast_detection_mask.where(
-            target_detection_mask == 1, drop=True
+            target_detection_mask == 1
         )
 
         # Create lists of dimensions to reduce
