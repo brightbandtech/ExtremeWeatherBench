@@ -3496,7 +3496,8 @@ class TestEarlySignal:
     def test_default_init(self):
         """Default EarlySignal has expected attribute values."""
         m = self._make_metric()
-        assert m.threshold == 0.5
+        assert m.forecast_threshold == 0.5
+        assert m.overlap_target_threshold is None
         assert m.spatial_aggregation == "any"
         assert m.temporal_aggregation == "any"
         assert m.aggregation_order == ("spatial", "temporal")
@@ -3504,12 +3505,14 @@ class TestEarlySignal:
     def test_custom_init(self):
         """Custom params are stored correctly."""
         m = self._make_metric(
-            threshold=1.0,
+            forecast_threshold=1.0,
+            overlap_target_threshold=0.8,
             spatial_aggregation="all",
             temporal_aggregation="half",
             aggregation_order=("temporal", "spatial"),
         )
-        assert m.threshold == 1.0
+        assert m.forecast_threshold == 1.0
+        assert m.overlap_target_threshold == 0.8
         assert m.spatial_aggregation == "all"
         assert m.temporal_aggregation == "half"
         assert m.aggregation_order == ("temporal", "spatial")
@@ -3602,7 +3605,11 @@ class TestEarlySignal:
 
     def test_compute_metric_target_zero_excluded(self):
         """Forecast not evaluated at locations where target is 0."""
-        m = self._make_metric(threshold=0.5, spatial_aggregation="any")
+        m = self._make_metric(
+            forecast_threshold=0.5,
+            overlap_target_threshold=0.5,
+            spatial_aggregation="any",
+        )
         # target row 0: all 0 → excluded; row 1: all 1 → included
         # forecast row 1: all above threshold → should detect
         forecast, target = self._make_forecast_target(
@@ -3615,7 +3622,11 @@ class TestEarlySignal:
 
     def test_compute_metric_target_nan_excluded(self):
         """Forecast not evaluated where target is NaN."""
-        m = self._make_metric(threshold=0.5, spatial_aggregation="any")
+        m = self._make_metric(
+            forecast_threshold=0.5,
+            overlap_target_threshold=0.5,
+            spatial_aggregation="any",
+        )
         # Only target==1 at space=1, t=0; forecast is below threshold there
         forecast, target = self._make_forecast_target(
             forecast_vals=[[0.9, 0.1]],
@@ -3627,7 +3638,11 @@ class TestEarlySignal:
 
     def test_compute_metric_only_target_one_locations_matter(self):
         """High forecast values at target==0 locations don't trigger True."""
-        m = self._make_metric(threshold=0.5, spatial_aggregation="any")
+        m = self._make_metric(
+            forecast_threshold=0.5,
+            overlap_target_threshold=0.5,
+            spatial_aggregation="any",
+        )
         # target: space=0 → 0 (excluded), space=1 → 1 (included)
         # forecast: space=0 → 0.9 (would fire if not masked), space=1 → 0.1
         forecast, target = self._make_forecast_target(
@@ -3676,27 +3691,216 @@ class TestEarlySignal:
                 spatial_aggregation="any",
                 temporal_aggregation="any",
                 aggregation_order=order,
+                overlap_target_threshold=0.5,
             )
             result = m._compute_metric(forecast, target)
             assert bool(result.values), f"Expected True for order={order}"
 
-    def test_compute_metric_works_with_dask_backed_arrays(self):
-        """_compute_metric must not raise on dask-backed inputs.
+    def test_no_target_masking_when_overlap_target_threshold_is_none(self):
+        """Without overlap_target_threshold, all forecast locations count."""
+        m = self._make_metric(
+            forecast_threshold=0.5,
+            overlap_target_threshold=None,
+            spatial_aggregation="any",
+        )
+        # target is all 0, but with no overlap threshold
+        # the target is ignored and forecast is evaluated everywhere
+        forecast, target = self._make_forecast_target(
+            forecast_vals=[[0.9, 0.9]],
+            target_vals=[[0.0, 0.0]],
+        )
+        result = m._compute_metric(forecast, target)
+        assert bool(result.any().values)
 
-        drop=True in xr.DataArray.where() uses boolean indexing which
-        is unsupported for dask arrays; drop=False avoids this.
-        """
-        pytest.importorskip("dask.array")
+    def test_target_masking_applied_when_overlap_target_threshold_set(self):
+        """With overlap_target_threshold, target==0 locations are excluded."""
+        m = self._make_metric(
+            forecast_threshold=0.5,
+            overlap_target_threshold=0.5,
+            spatial_aggregation="any",
+        )
+        # Same data as above but now overlap is enforced;
+        # target is all 0 so all forecast locations are masked → False
+        forecast, target = self._make_forecast_target(
+            forecast_vals=[[0.9, 0.9]],
+            target_vals=[[0.0, 0.0]],
+        )
+        result = m._compute_metric(forecast, target)
+        assert not bool(result.any().values)
 
-        m = self._make_metric(threshold=0.5, spatial_aggregation="any")
+    def test_overlap_target_threshold_differs_from_forecast_threshold(self):
+        """overlap_target_threshold can be different from forecast_threshold."""
+        m = self._make_metric(
+            forecast_threshold=0.3,
+            overlap_target_threshold=0.8,
+            spatial_aggregation="any",
+        )
+        # target value 0.7 is below overlap_target_threshold 0.8 → masked
+        # target value 0.9 is above → included; forecast 0.5 >= 0.3 → True
+        forecast, target = self._make_forecast_target(
+            forecast_vals=[[0.5, 0.5]],
+            target_vals=[[0.7, 0.9]],
+        )
+        result = m._compute_metric(forecast, target)
+        assert bool(result.any().values)
+
+    def test_overlap_target_threshold_high_excludes_low_target(self):
+        """High overlap_target_threshold excludes moderate target values."""
+        m = self._make_metric(
+            forecast_threshold=0.3,
+            overlap_target_threshold=0.8,
+            spatial_aggregation="all",
+        )
+        # target 0.7 fails overlap threshold (0.8) → masked to NaN
+        # target 0.9 passes → included; forecast 0.5 >= 0.3 → True
+        # With "all" aggregation, NaN is filled True so result is True
+        forecast, target = self._make_forecast_target(
+            forecast_vals=[[0.5, 0.5]],
+            target_vals=[[0.7, 0.9]],
+        )
+        result = m._compute_metric(forecast, target)
+        assert bool(result.any().values)
+
+        # Now both targets below overlap threshold → all masked, no signal
+        # "all" over all-NaN fillna(True) → True (vacuous truth)
+        forecast2, target2 = self._make_forecast_target(
+            forecast_vals=[[0.5, 0.5]],
+            target_vals=[[0.1, 0.2]],
+        )
+        result2 = m._compute_metric(forecast2, target2)
+        assert bool(result2.any().values)
+
+    def test_no_overlap_ignores_target_values_entirely(self):
+        """With no overlap, forecast detection is independent of target."""
+        m_no_overlap = self._make_metric(
+            forecast_threshold=0.5,
+            overlap_target_threshold=None,
+            spatial_aggregation="any",
+        )
+        m_overlap = self._make_metric(
+            forecast_threshold=0.5,
+            overlap_target_threshold=0.5,
+            spatial_aggregation="any",
+        )
+        # forecast high at space=0, low at space=1
+        # target 0 at space=0, 1 at space=1
         forecast, target = self._make_forecast_target(
             forecast_vals=[[0.9, 0.1]],
             target_vals=[[0.0, 1.0]],
         )
-        forecast_dask = forecast.chunk({"valid_time": 1, "space": 1})
-        target_dask = target.chunk({"valid_time": 1, "space": 1})
+        # No overlap: forecast=0.9 at space=0 fires → True
+        result_no = m_no_overlap._compute_metric(forecast, target)
+        assert bool(result_no.any().values)
 
-        result = m._compute_metric(forecast_dask, target_dask)
-        result_computed = result.compute()
-        # space=0 excluded (target=0); space=1: forecast=0.1 < 0.5 → False
-        assert not bool(result_computed.any().values)
+        # With overlap: space=0 masked (target=0), space=1 forecast=0.1 → False
+        result_yes = m_overlap._compute_metric(forecast, target)
+        assert not bool(result_yes.any().values)
+
+    @staticmethod
+    def _to_backend(forecast, target, backend):
+        """Convert numpy-backed DataArrays to the requested backend."""
+        if backend == "numpy":
+            return forecast, target
+        elif backend == "dask":
+            return (
+                forecast.chunk({"valid_time": 1, "space": 1}),
+                target.chunk({"valid_time": 1, "space": 1}),
+            )
+        elif backend == "sparse":
+            return (
+                forecast.copy(data=sparse.COO.from_numpy(forecast.values)),
+                target.copy(data=sparse.COO.from_numpy(target.values)),
+            )
+        raise ValueError(f"Unknown backend: {backend}")
+
+    @staticmethod
+    def _resolve(result):
+        """Compute dask results; pass through numpy/sparse."""
+        if hasattr(result, "compute"):
+            return result.compute()
+        return result
+
+    @pytest.mark.parametrize("backend", ["numpy", "dask", "sparse"])
+    def test_no_overlap_across_backends(self, backend):
+        """Without overlap, forecast fires at all locations."""
+        m = self._make_metric(
+            forecast_threshold=0.5,
+            overlap_target_threshold=None,
+            spatial_aggregation="any",
+        )
+        forecast, target = self._make_forecast_target(
+            forecast_vals=[[0.9, 0.1]],
+            target_vals=[[0.0, 1.0]],
+        )
+        f, t = self._to_backend(forecast, target, backend)
+        result = self._resolve(m._compute_metric(f, t))
+        # No overlap: space=0 forecast=0.9 >= 0.5 → True
+        assert bool(result.any().values)
+
+    @pytest.mark.parametrize("backend", ["numpy", "dask", "sparse"])
+    def test_overlap_masking_across_backends(self, backend):
+        """With overlap, target==0 locations are excluded."""
+        m = self._make_metric(
+            forecast_threshold=0.5,
+            overlap_target_threshold=0.5,
+            spatial_aggregation="any",
+        )
+        forecast, target = self._make_forecast_target(
+            forecast_vals=[[0.9, 0.1]],
+            target_vals=[[0.0, 1.0]],
+        )
+        f, t = self._to_backend(forecast, target, backend)
+        result = self._resolve(m._compute_metric(f, t))
+        # space=0 excluded (target=0); space=1: f=0.1 < 0.5 → False
+        assert not bool(result.any().values)
+
+    @pytest.mark.parametrize("backend", ["numpy", "dask", "sparse"])
+    def test_overlap_detection_across_backends(self, backend):
+        """With overlap enabled, high forecast at target==1 fires."""
+        m = self._make_metric(
+            forecast_threshold=0.5,
+            overlap_target_threshold=0.5,
+            spatial_aggregation="any",
+        )
+        forecast, target = self._make_forecast_target(
+            forecast_vals=[[0.9, 0.9]],
+            target_vals=[[1.0, 1.0]],
+        )
+        f, t = self._to_backend(forecast, target, backend)
+        result = self._resolve(m._compute_metric(f, t))
+        assert bool(result.any().values)
+
+    @pytest.mark.parametrize("backend", ["numpy", "dask", "sparse"])
+    def test_different_thresholds_across_backends(self, backend):
+        """Separate forecast and target thresholds work on all backends."""
+        m = self._make_metric(
+            forecast_threshold=0.3,
+            overlap_target_threshold=0.8,
+            spatial_aggregation="any",
+        )
+        # target 0.7 < 0.8 → masked; target 0.9 >= 0.8 → kept
+        # forecast 0.5 >= 0.3 at kept location → True
+        forecast, target = self._make_forecast_target(
+            forecast_vals=[[0.5, 0.5]],
+            target_vals=[[0.7, 0.9]],
+        )
+        f, t = self._to_backend(forecast, target, backend)
+        result = self._resolve(m._compute_metric(f, t))
+        assert bool(result.any().values)
+
+    @pytest.mark.parametrize("backend", ["numpy", "dask", "sparse"])
+    def test_nan_target_across_backends(self, backend):
+        """NaN in target is handled correctly on all backends."""
+        m = self._make_metric(
+            forecast_threshold=0.5,
+            overlap_target_threshold=0.5,
+            spatial_aggregation="any",
+        )
+        forecast, target = self._make_forecast_target(
+            forecast_vals=[[0.9, 0.1]],
+            target_vals=[[np.nan, 1.0]],
+        )
+        f, t = self._to_backend(forecast, target, backend)
+        result = self._resolve(m._compute_metric(f, t))
+        # space=0 excluded (NaN); space=1: f=0.1 < 0.5 → False
+        assert not bool(result.any().values)
