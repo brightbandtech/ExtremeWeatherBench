@@ -139,9 +139,7 @@ def _open_or_create_repo(
         logger.info("Opened existing icechunk repository.")
     except Exception:
         logger.info("No existing repository found – creating a new one.")
-        repo = icechunk.Repository.create(
-            storage, icechunk.RepositoryConfig.default()
-        )
+        repo = icechunk.Repository.create(storage, icechunk.RepositoryConfig.default())
 
     if branch != "main" and branch not in repo.list_branches():
         snapshot_id = repo.lookup_branch("main")
@@ -207,8 +205,7 @@ def write_climatology_to_icechunk(
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Write a percentile climatology netCDF into a "
-            "GCS-backed icechunk store."
+            "Write a percentile climatology netCDF into a GCS-backed icechunk store."
         ),
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )

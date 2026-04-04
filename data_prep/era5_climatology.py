@@ -66,9 +66,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-ERA5_ARCO_URL = (
-    "gs://gcp-public-data-arco-era5/ar/full_37-1h-0p25deg-chunk-1.zarr-v3"
-)
+ERA5_ARCO_URL = "gs://gcp-public-data-arco-era5/ar/full_37-1h-0p25deg-chunk-1.zarr-v3"
 GCS_CLIMATOLOGY_URL = (
     "gs://extremeweatherbench/datasets/"
     "surface_air_temperature_1990_2019_climatology.zarr"
@@ -87,6 +85,7 @@ COMBINED_ZARR_CHUNKS = {
     "latitude": 91,
     "longitude": 180,
 }
+
 
 def _setup_worker_cleanup() -> None:
     """Kill the process group on SIGINT/SIGTERM.
@@ -157,14 +156,14 @@ def _process_single_year(
     end_date = f"{year + 1}-01-{half_window_days}"
 
     era5_window = era5.sel(time=slice(start_date, end_date))
-    era5_window = era5_window.sel(
-        time=era5_window.time.dt.hour.isin(SYNOPTIC_HOURS)
-    )
+    era5_window = era5_window.sel(time=era5_window.time.dt.hour.isin(SYNOPTIC_HOURS))
 
     year_data: xr.DataArray = era5_window[variable].compute()
     logger.info(
         "  %d: downloaded, shape=%s  RAM=%.1f GB",
-        year, year_data.shape, _rss_gb(),
+        year,
+        year_data.shape,
+        _rss_gb(),
     )
 
     hour_arrays = []
@@ -185,7 +184,9 @@ def _process_single_year(
     combined = combined.rename(variable)
     logger.info(
         "  %d: rolling done, shape=%s  RAM=%.1f GB",
-        year, combined.shape, _rss_gb(),
+        year,
+        combined.shape,
+        _rss_gb(),
     )
     return combined
 
@@ -205,9 +206,10 @@ def compute_year_rolling_means(
     """
     years = list(range(start_year, end_year + 1))
     logger.info(
-        "Per-year rolling means: fetching %d years with %d threads..."
-        "  RAM=%.1f GB",
-        len(years), n_workers, _rss_gb(),
+        "Per-year rolling means: fetching %d years with %d threads...  RAM=%.1f GB",
+        len(years),
+        n_workers,
+        _rss_gb(),
     )
 
     year_arrays: list[xr.DataArray] = joblib.Parallel(
@@ -219,9 +221,9 @@ def compute_year_rolling_means(
     gc.collect()
 
     logger.info(
-        "Per-year rolling means complete: %d year arrays in memory."
-        "  RAM=%.1f GB",
-        len(year_arrays), _rss_gb(),
+        "Per-year rolling means complete: %d year arrays in memory.  RAM=%.1f GB",
+        len(year_arrays),
+        _rss_gb(),
     )
     return year_arrays
 
@@ -247,7 +249,9 @@ def _compute_dayofyear_quantile(
         return None
 
     dayofyear_data = xr.concat(year_slices, dim="time")
-    dayofyear_data = dayofyear_data.sel(time=dayofyear_data.time.dt.hour.isin(SYNOPTIC_HOURS))
+    dayofyear_data = dayofyear_data.sel(
+        time=dayofyear_data.time.dt.hour.isin(SYNOPTIC_HOURS)
+    )
 
     return (
         dayofyear_data.groupby("time.hour")
@@ -272,9 +276,10 @@ def compute_dayofyear_quantile_climatology(
     Peak memory per worker: ~500 MB.
     """
     logger.info(
-        "Per-dayofyear quantile: computing %.0f%% climatology for %s"
-        "  RAM=%.1f GB",
-        percentile * 100, variable, _rss_gb(),
+        "Per-dayofyear quantile: computing %.0f%% climatology for %s  RAM=%.1f GB",
+        percentile * 100,
+        variable,
+        _rss_gb(),
     )
 
     dayofyear_results: list[xr.DataArray | None] = joblib.Parallel(
@@ -316,7 +321,9 @@ def _load_local_store(zarr_path: pathlib.Path, variable: str) -> xr.DataArray:
     da = ds[variable].expand_dims({"quantile": [quantile_val]})
     logger.info(
         "  Loaded local q=%.2f from %s  shape=%s",
-        quantile_val, zarr_path.name, dict(da.sizes),
+        quantile_val,
+        zarr_path.name,
+        dict(da.sizes),
     )
     return da
 
@@ -352,9 +359,7 @@ def combine_stores(
         slices.append(_load_gcs_store(q, variable))
 
     if not slices:
-        raise RuntimeError(
-            "No data found — check --input-dir and --gcs-quantiles."
-        )
+        raise RuntimeError("No data found — check --input-dir and --gcs-quantiles.")
 
     output_variable = "surface_air_temperature"
 
@@ -364,20 +369,26 @@ def combine_stores(
     )
     combined_da = xr.concat(slices, dim="quantile").sortby("quantile")
     ds_out = combined_da.to_dataset(name=output_variable)
-    ds_out.attrs.update({
-        "source": "ERA5 ARCO",
-        "quantiles": sorted(combined_da.coords["quantile"].values.tolist()),
-    })
+    ds_out.attrs.update(
+        {
+            "source": "ERA5 ARCO",
+            "quantiles": sorted(combined_da.coords["quantile"].values.tolist()),
+        }
+    )
     logger.info("Combined shape: %s", dict(ds_out.sizes))
 
     n_quantiles = ds_out.sizes["quantile"]
-    encoding = {output_variable: {"chunks": [
-        n_quantiles,  # keep all quantiles in one chunk
-        COMBINED_ZARR_CHUNKS["dayofyear"],
-        COMBINED_ZARR_CHUNKS["hour"],
-        COMBINED_ZARR_CHUNKS["latitude"],
-        COMBINED_ZARR_CHUNKS["longitude"],
-    ]}}
+    encoding = {
+        output_variable: {
+            "chunks": [
+                n_quantiles,  # keep all quantiles in one chunk
+                COMBINED_ZARR_CHUNKS["dayofyear"],
+                COMBINED_ZARR_CHUNKS["hour"],
+                COMBINED_ZARR_CHUNKS["latitude"],
+                COMBINED_ZARR_CHUNKS["longitude"],
+            ]
+        }
+    }
 
     output.parent.mkdir(parents=True, exist_ok=True)
     logger.info("Writing combined zarr to %s...", output)
@@ -434,7 +445,8 @@ def cmd_all_quantiles(args: argparse.Namespace) -> None:
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
     remaining = [
-        q for q in args.quantiles
+        q
+        for q in args.quantiles
         if not _zarr_complete(_zarr_store_path(args.output_dir, args.variable, q))
     ]
     if not remaining:
@@ -444,7 +456,8 @@ def cmd_all_quantiles(args: argparse.Namespace) -> None:
     logger.info(
         "Per-year rolling means: computing for %d-%d"
         " (~180 GB of year arrays stored in RAM)...",
-        args.start_year, args.end_year,
+        args.start_year,
+        args.end_year,
     )
     year_arrays = compute_year_rolling_means(
         variable=args.variable,
@@ -484,6 +497,7 @@ def cmd_combine(args: argparse.Namespace) -> None:
         variable=args.variable,
         gcs_quantiles=args.gcs_quantiles,
     )
+
 
 _DEFAULT_OUTPUT_DIR = pathlib.Path("/home/taylor/data/climatology_zarr")
 _DEFAULT_COMBINED = _DEFAULT_OUTPUT_DIR / "2m_temperature_combined.zarr"
@@ -617,9 +631,7 @@ def main() -> None:
 
     if args.command == "generate":
         if not 0.0 < args.percentile < 1.0:
-            raise ValueError(
-                f"--percentile must be in (0, 1), got {args.percentile}"
-            )
+            raise ValueError(f"--percentile must be in (0, 1), got {args.percentile}")
         cmd_generate(args)
 
     elif args.command == "all-quantiles":
