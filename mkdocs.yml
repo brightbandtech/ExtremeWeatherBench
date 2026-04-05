@@ -8,6 +8,7 @@ nav:
   - Home: index.md
   - Installation: installation.md
   - Usage: usage.md
+  - Data: data.md
   - A Note on Parallelism: parallelism.md
   - Event Categories:
       - All Case Studies: events/AllCaseStudies.md
@@ -51,6 +52,11 @@ extra_css:
 markdown_extensions:
   - pymdownx.arithmatex:
       generic: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
 
 extra_javascript:
   - javascripts/katex.js
