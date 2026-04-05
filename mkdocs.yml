@@ -14,16 +14,10 @@ nav:
       - All Case Studies: events/AllCaseStudies.md
       - Atmospheric Rivers: events/AtmosphericRivers.md
       - Severe Convection: events/ConvectiveWx.md
-      - Derechos: events/Derechos.md
-      - Flooding: events/Flooding.md
       - Freezes: events/FreezeEvents.md
       - Heatwaves: events/Heatwaves.md
-      - Other Floods: events/OtherFloods.md
       - Tropical Cyclones: events/TropicalCyclones.md
-      - Tropical Cyclone Flooding: events/TCFloods.md
-      - Tropical Cyclone Tornadic Outbreaks: events/TCTornadoOutbreaks.md
-      - Wind Events: events/WindEvents.md
-      - Winter Weather: events/WinterWeather.md
+      - Planned Event Types: events/PlannedEventTypes.md
   - Cookbook:
       - CIRA Forecast: recipes/cira_forecast.md
       - BYOF (Bring Your Own Forecast): recipes/your_own_forecast.md
