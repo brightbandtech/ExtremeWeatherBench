@@ -66,7 +66,7 @@ eval_objects = [
 
 cases = ewb.load_cases()
 runner = ewb.evaluation(case_metadata=cases, evaluation_objects=eval_objects)
-outputs = runner.run()
+outputs = runner.run_evaluation()
 ```
 
 The output `DataFrame` has a `target_source` column that distinguishes
@@ -130,7 +130,7 @@ eval_objects = [
 
 cases = ewb.load_cases()
 runner = ewb.evaluation(case_metadata=cases, evaluation_objects=eval_objects)
-outputs = runner.run()
+outputs = runner.run_evaluation()
 ```
 
 EWB matches each case's `event_type` field against the
@@ -225,7 +225,7 @@ runner = ewb.evaluation(
     case_metadata=heatwave_cases,
     evaluation_objects=eval_objects,
 )
-outputs = runner.run()
+outputs = runner.run_evaluation()
 
 # Compare mean MAE by target source
 mae = outputs[outputs["metric"] == "MeanAbsoluteError"]

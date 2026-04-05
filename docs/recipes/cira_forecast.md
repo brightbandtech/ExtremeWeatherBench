@@ -5,8 +5,12 @@ We have a dedicated virtual reference [icechunk](https://icechunk.io/) store for
 ## Accessing a CIRA Model from the store
 
 ```python
+import icechunk
 from extremeweatherbench import inputs
 
+storage = icechunk.gcs_storage(
+    bucket="extremeweatherbench", prefix="cira-icechunk", anonymous=True
+)
 group_list = inputs.list_groups_in_icechunk_datatree(storage)
 ```
 
@@ -48,7 +52,7 @@ fcnv2_icechunk_ds = inputs.open_icechunk_dataset_from_datatree(
     )
 
 fcnv2 = inputs.XarrayForecast(
-    ds=fcnv2,
+    ds=fcnv2_icechunk_ds,
     variable_mapping=inputs.CIRA_metadata_variable_mapping
     )
 ```
@@ -87,7 +91,7 @@ ghcn_target = inputs.GHCN()
 
 # Use EWB's cases and subset to the first two heat waves
 case_vals = cases.load_ewb_events_yaml_into_case_list()
-case_vals = [case for case in case_vals if case.case_id_number.isin([1,2])]
+case_vals = [case for case in case_vals if case.case_id_number in [1, 2]]
 ```
 
 From here, all we need to do is plug in the event type, metric list, target, and forecast
@@ -100,7 +104,7 @@ evaluation_object = [
         event_type="heat_wave",
         metric_list=metrics_list,
         target=ghcn_target,
-        forecast=fcnv2_icechunk_forecast_object,
+        forecast=fcnv2,
     ),
 ]
 
@@ -111,12 +115,11 @@ ewb = evaluate.ExtremeWeatherBench(
 
 # Set up parallel configuration for the run to pass into joblib
 parallel_config = {
-    'backend':'loky',
-    'n_jobs':4,
-    'backend_params':{'timeout':1}
+    'backend': 'loky',
+    'n_jobs': 4,
     }
 
-output = ewb.run(parallel_config=parallel_config)
+output = ewb.run_evaluation(parallel_config=parallel_config)
 ```
 ## Complete Example
 
@@ -165,6 +168,6 @@ ewb_runner = evaluate.ExtremeWeatherBench(
     evaluation_objects=evaluation_object,
 )
 
-output = ewb_runner.run(parallel_config={"backend": "loky", "n_jobs": 2})
+output = ewb_runner.run_evaluation(parallel_config={"backend": "loky", "n_jobs": 2})
 print(output)
 ```

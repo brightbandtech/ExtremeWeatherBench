@@ -73,7 +73,7 @@ runner = ewb.evaluation(
     case_metadata=heatwave_cases,
     evaluation_objects=eval_objects,
 )
-outputs = runner.run()
+outputs = runner.run_evaluation()
 outputs.to_csv("ghcn_heatwave_eval.csv", index=False)
 ```
 
@@ -122,7 +122,7 @@ runner = ewb.evaluation(
     case_metadata=ewb.load_cases(),
     evaluation_objects=eval_objects,
 )
-outputs = runner.run()
+outputs = runner.run_evaluation()
 
 # Compare by target
 for source in ["ERA5", "GHCN"]:
@@ -237,7 +237,7 @@ runner = ewb.evaluation(
     case_metadata=heatwave_cases,
     evaluation_objects=eval_objects,
 )
-outputs = runner.run()
+outputs = runner.run_evaluation()
 outputs.to_csv("ghcn_heatwave_eval.csv", index=False)
 
 # Summarise mean MAE per lead time

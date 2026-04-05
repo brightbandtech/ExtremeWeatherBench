@@ -98,7 +98,7 @@ eval_objects = [
 
 cases = ewb.load_cases()
 runner = ewb.evaluation(case_metadata=cases, evaluation_objects=eval_objects)
-outputs = runner.run()
+outputs = runner.run_evaluation()
 ```
 
 > **Detailed Explanation**: When EWB encounters a `DerivedVariable` in
@@ -269,6 +269,6 @@ runner = ewb.evaluation(
     case_metadata=heatwave_cases,
     evaluation_objects=eval_objects,
 )
-outputs = runner.run()
+outputs = runner.run_evaluation()
 print(outputs)
 ```

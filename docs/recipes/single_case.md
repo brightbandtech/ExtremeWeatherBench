@@ -50,7 +50,7 @@ runner = ewb.evaluation(
     case_metadata=single_case,
     evaluation_objects=eval_objects,
 )
-outputs = runner.run()
+outputs = runner.run_evaluation()
 print(outputs)
 ```
 
@@ -117,7 +117,7 @@ runner = ewb.evaluation(
     case_metadata=[pnw_heat_dome],
     evaluation_objects=eval_objects,
 )
-outputs = runner.run()
+outputs = runner.run_evaluation()
 ```
 
 > **Detailed Explanation**: `BoundingBoxRegion.create_region` accepts
@@ -219,6 +219,6 @@ runner = ewb.evaluation(
     case_metadata=[pnw_heat_dome],
     evaluation_objects=eval_objects,
 )
-outputs = runner.run()
+outputs = runner.run_evaluation()
 print(outputs)
 ```

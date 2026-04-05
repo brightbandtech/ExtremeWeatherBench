@@ -83,7 +83,7 @@ runner = ewb.evaluation(
     case_metadata=tc_cases,
     evaluation_objects=eval_objects,
 )
-outputs = runner.run()
+outputs = runner.run_evaluation()
 outputs.to_csv("tc_evaluation.csv", index=False)
 ```
 
@@ -215,7 +215,7 @@ runner = ewb.evaluation(
     case_metadata=tc_cases,
     evaluation_objects=eval_objects,
 )
-outputs = runner.run()
+outputs = runner.run_evaluation()
 outputs.to_csv("tc_evaluation.csv", index=False)
 print(outputs[["metric", "value", "init_time", "case_id_number"]].head(20))
 ```

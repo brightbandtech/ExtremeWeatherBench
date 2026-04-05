@@ -11,12 +11,12 @@ nav:
   - Data: data.md
   - Data Preparation: data_prep.md
   - A Note on Parallelism: parallelism.md
-  - Event Categories:
-      - All Case Studies: events/AllCaseStudies.md
+  - Case Studies:
+      - Overview: events/case_studies.md
       - Atmospheric Rivers: events/AtmosphericRivers.md
       - Severe Convection: events/ConvectiveWx.md
       - Freezes: events/FreezeEvents.md
-      - Heatwaves: events/Heatwaves.md
+      - Heat Waves: events/Heatwaves.md
       - Tropical Cyclones: events/TropicalCyclones.md
       - Planned Event Types: events/PlannedEventTypes.md
   - Cookbook:

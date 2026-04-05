@@ -20,7 +20,7 @@ runner = ewb.evaluation(
     evaluation_objects=eval_objects
 )
 
-outputs = runner.run()
+outputs = runner.run_evaluation()
 outputs.to_csv('your_outputs.csv')
 ```
 
@@ -103,13 +103,13 @@ era5_heatwave_target = ewb.targets.ERA5(
 Note that EWB provides defaults for arguments, so most users will be able to instead write this (if defining variables with the intent of it applying to all metrics):
 
 ```python
-era5_heatwave_target = inputs.ERA5(variables=['surface_air_temperature'])
+era5_heatwave_target = ewb.ERA5(variables=['surface_air_temperature'])
 ```
 
 Or (if defining variables as arguments to the metrics):
 
 ```python
-era5_heatwave_target = inputs.ERA5()
+era5_heatwave_target = ewb.ERA5()
 ```
 
 > **Detailed Explanation**: Similarly to forecasts, we need to define the `source`, which here is the ARCO ERA5 provided by Google. `variables` are used to subset `ewb.inputs.ERA5` in an evaluation; `variable_mapping` defaults to `ewb.inputs.ERA5_metadata_variable_mapping` for many existing variables and likely is not required to be set unless your use case is for less common variables. Both forecasts and targets, if relevant, have an optional `chunks` parameter which defaults to what should be the most efficient value - usually `None` or `'auto'`, but can be changed as seen above. *If using the ARCO ERA5 and setting `chunks=None`, it is critical to order your subsetting by variables -> time -> `.sel` or `.isel` latitude & longitude -> rechunk. [See this Github comment](https://github.com/pydata/xarray/issues/8902#issuecomment-2036435045).
@@ -121,9 +121,18 @@ heatwave_evaluation_list = [
     ewb.EvaluationObject(
         event_type="heat_wave",
         metric_list=[
-            ewb.metrics.MaximumMeanAbsoluteError(),
-            ewb.metrics.RootMeanSquaredError(),
-            ewb.metrics.MaximumLowestMeanAbsoluteError()
+            ewb.metrics.MaximumMeanAbsoluteError(
+                forecast_variable="surface_air_temperature",
+                target_variable="surface_air_temperature",
+            ),
+            ewb.metrics.RootMeanSquaredError(
+                forecast_variable="surface_air_temperature",
+                target_variable="surface_air_temperature",
+            ),
+            ewb.metrics.MaximumLowestMeanAbsoluteError(
+                forecast_variable="surface_air_temperature",
+                target_variable="surface_air_temperature",
+            ),
         ],
         target=era5_heatwave_target,
         forecast=hres_forecast,
@@ -144,11 +153,11 @@ ewb_instance = ewb.evaluation(
     evaluation_objects=heatwave_evaluation_list,
 )
 
-outputs = ewb_instance.run()
+outputs = ewb_instance.run_evaluation()
 outputs.to_csv('your_file_name.csv')
 ```
 
-Where the EWB default events YAML file is loaded in using `ewb.load_cases()`, then applied to an instance of `ewb.evaluation` along with the `EvaluationObject` list. Finally, we run the evaluation with the `.run()` method, where defaults are typically sufficient to run with a small to moderate-sized virtual machine.
+Where the EWB default events YAML file is loaded in using `ewb.load_cases()`, then applied to an instance of `ewb.evaluation` along with the `EvaluationObject` list. Finally, we run the evaluation with the `.run_evaluation()` method, where defaults are typically sufficient to run with a small to moderate-sized virtual machine.
 
 Running locally is feasible but is typically bottlenecked heavily by IO and network bandwidth. Even on a gigabit connection, the rate of data access is significantly slower compared to within a cloud provider VM.
 

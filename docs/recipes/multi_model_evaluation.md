@@ -55,7 +55,7 @@ eval_objects = [
 
 cases = ewb.load_cases()
 runner = ewb.evaluation(case_metadata=cases, evaluation_objects=eval_objects)
-outputs = runner.run()
+outputs = runner.run_evaluation()
 outputs.to_csv("multi_model_heatwave.csv", index=False)
 ```
 
@@ -102,7 +102,7 @@ eval_objects = [
 
 cases = ewb.load_cases()
 runner = ewb.evaluation(case_metadata=cases, evaluation_objects=eval_objects)
-outputs = runner.run()
+outputs = runner.run_evaluation()
 ```
 
 ## Filtering and plotting results
@@ -128,7 +128,7 @@ print(pivot)
 ## Parallel execution
 
 For large model comparisons, enable parallel execution by passing a
-`parallel_config` dictionary to `runner.run()`. The configuration is
+`parallel_config` dictionary to `runner.run_evaluation()`. The configuration is
 forwarded to `joblib.Parallel`:
 
 ```python
@@ -136,7 +136,7 @@ parallel_config = {
     "backend": "loky",
     "n_jobs": 4,
 }
-outputs = runner.run(parallel_config=parallel_config)
+outputs = runner.run_evaluation(parallel_config=parallel_config)
 ```
 
 > **Detailed Explanation**: Each `(case, EvaluationObject)` pair becomes
@@ -168,7 +168,7 @@ runner = ewb.evaluation(
     evaluation_objects=eval_objects,
     region_subsetter=subsetter,
 )
-outputs = runner.run()
+outputs = runner.run_evaluation()
 ```
 
 ## Complete Example
@@ -221,7 +221,7 @@ runner = ewb.evaluation(
     case_metadata=heatwave_cases,
     evaluation_objects=eval_objects,
 )
-outputs = runner.run(parallel_config={"backend": "loky", "n_jobs": 4})
+outputs = runner.run_evaluation(parallel_config={"backend": "loky", "n_jobs": 4})
 outputs.to_csv("multi_model_heatwave.csv", index=False)
 
 # Mean MAE per model across all heat wave cases, pivoted by lead time
