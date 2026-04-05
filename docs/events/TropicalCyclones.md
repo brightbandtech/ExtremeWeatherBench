@@ -1,4 +1,140 @@
 # Tropical Cyclones
+## Cases
+
+Storm tracks were identified from IBTrACS and the basin-specific season summaries listed above, and bounding boxes enclose the full track from genesis to dissipation with lateral margins sized to include the gale-force wind radius at peak intensity. Only landfalling systems are included, a requirement imposed by the landfall-displacement and intensity metrics in EWB; the TC PRIMED dataset provides co-located radar and ERA5 fields for verification within each box. For storms with complex tracks or dual landfalls (e.g., Eta, Freddy), the box spans the entire track including any re-intensification segment.
+
+<details open>
+<summary><strong>Cases — 106 events</strong></summary>
+<input id="case-filter-tropical-cyclone" type="text" placeholder="Filter cases…"
+       oninput="filterTable(this, 'tropical-cyclone')" style="margin:8px 0;padding:4px 8px;width:100%;box-sizing:border-box;">
+<table id="case-table-tropical-cyclone">
+<thead>
+<tr><th>Name</th><th>Time range</th><th>Location</th><th>Sources</th></tr>
+</thead>
+<tbody>
+<tr><td>Milton</td><td>2024-10-02 – 2024-10-13</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Milton">Hurricane Milton — Wikipedia</a></td></tr>
+<tr><td>Helene</td><td>2024-09-21 – 2024-09-30</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Helene">Hurricane Helene — Wikipedia</a></td></tr>
+<tr><td>Francine</td><td>2024-09-06 – 2024-09-16</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Francine">Hurricane Francine — Wikipedia</a></td></tr>
+<tr><td>Debby</td><td>2024-07-31 – 2024-08-12</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Debby_(2024)">Hurricane Debby (2024) — Wikipedia</a></td></tr>
+<tr><td>Beryl</td><td>2024-06-26 – 2024-07-13</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Beryl">Hurricane Beryl — Wikipedia</a></td></tr>
+<tr><td>John</td><td>2024-09-20 – 2024-09-29</td><td>Eastern North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_John_(2024)">Hurricane John (2024) — Wikipedia</a></td></tr>
+<tr><td>Hone</td><td>2024-08-17 – 2024-09-03</td><td>Central North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Hone">Hurricane Hone — Wikipedia</a></td></tr>
+<tr><td>Trami</td><td>2024-10-18 – 2024-10-31</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Tropical_Storm_Trami_(2024)">Tropical Storm Trami (2024) — Wikipedia</a></td></tr>
+<tr><td>Prapiroon (Butchoy)</td><td>2024-07-17 – 2024-07-27</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Tropical_Storm_Prapiroon_(2024)">Tropical Storm Prapiroon (2024) — Wikipedia</a></td></tr>
+<tr><td>Gaemi (Carina)</td><td>2024-07-17 – 2024-07-30</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Typhoon_Gaemi">Typhoon Gaemi — Wikipedia</a></td></tr>
+<tr><td>Shanshan</td><td>2024-08-19 – 2024-09-03</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Typhoon_Shanshan_(2024)">Typhoon Shanshan (2024) — Wikipedia</a></td></tr>
+<tr><td>Yagi (Enteng)</td><td>2024-08-30 – 2024-09-10</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Typhoon_Yagi">Typhoon Yagi — Wikipedia</a></td></tr>
+<tr><td>Bebinca (Ferdie)</td><td>2024-09-07 – 2024-09-20</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Typhoon_Bebinca_(2024)">Typhoon Bebinca (2024) — Wikipedia</a></td></tr>
+<tr><td>Soulik (Gener)</td><td>2024-09-13 – 2024-09-22</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Tropical_Storm_Soulik_(2024)">Tropical Storm Soulik (2024) — Wikipedia</a></td></tr>
+<tr><td>Krathon</td><td>2024-09-24 – 2024-10-05</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Typhoon_Krathon">Typhoon Krathon — Wikipedia</a></td></tr>
+<tr><td>Asna</td><td>2024-08-28 – 2024-09-04</td><td>North Indian Ocean</td><td><a href="https://en.wikipedia.org/wiki/Cyclone_Asna">Cyclone Asna — Wikipedia</a></td></tr>
+<tr><td>Kirrily</td><td>2024-01-15 – 2024-02-07</td><td>Australian Region</td><td><a href="https://en.wikipedia.org/wiki/Cyclone_Kirrily">Cyclone Kirrily — Wikipedia</a></td></tr>
+<tr><td>Belal</td><td>2024-01-10 – 2024-01-21</td><td>South-West Indian Ocean</td><td><a href="https://confluence.ecmwf.int/display/FCST/202401+-+Tropical+Cyclone+-+Belal">ECMWF: TC Belal Jan 2024</a></td></tr>
+<tr><td>Alvaro</td><td>2023-12-30 – 2024-01-06</td><td>South-West Indian Ocean</td><td><a href="https://en.wikipedia.org/wiki/Cyclone_Alvaro">Cyclone Alvaro — Wikipedia</a></td></tr>
+<tr><td>Franklin</td><td>2023-08-17 – 2023-09-11</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Franklin_(2023)">Hurricane Franklin (2023) — Wikipedia</a></td></tr>
+<tr><td>Harold</td><td>2020-03-30 – 2020-04-13</td><td>South Pacific</td><td><a href="https://en.wikipedia.org/wiki/Cyclone_Harold">Cyclone Harold — Wikipedia</a></td></tr>
+<tr><td>Idalia</td><td>2023-08-24 – 2023-09-10</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Idalia">Hurricane Idalia — Wikipedia</a></td></tr>
+<tr><td>Lee</td><td>2023-09-03 – 2023-09-20</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Lee_(2023)">Hurricane Lee (2023) — Wikipedia</a></td></tr>
+<tr><td>Ophelia</td><td>2023-09-19 – 2023-09-26</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Tropical_Storm_Ophelia_(2023)">Tropical Storm Ophelia (2023) — Wikipedia</a></td></tr>
+<tr><td>Tammy</td><td>2023-10-16 – 2023-11-02</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Tammy">Hurricane Tammy — Wikipedia</a></td></tr>
+<tr><td>Hilary</td><td>2023-08-14 – 2023-08-22</td><td>Eastern North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Hilary">Hurricane Hilary — Wikipedia</a></td></tr>
+<tr><td>Lidia</td><td>2023-10-01 – 2023-10-13</td><td>Eastern North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Lidia_(2023)">Hurricane Lidia (2023) — Wikipedia</a></td></tr>
+<tr><td>Max</td><td>2023-10-06 – 2023-10-12</td><td>Eastern North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Tropical_Storm_Max_(2023)">Tropical Storm Max (2023) — Wikipedia</a></td></tr>
+<tr><td>Norma</td><td>2023-10-15 – 2023-10-25</td><td>Eastern North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Norma_(2023)">Hurricane Norma (2023) — Wikipedia</a></td></tr>
+<tr><td>Otis</td><td>2023-10-19 – 2023-10-27</td><td>Eastern North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Otis">Hurricane Otis — Wikipedia</a></td></tr>
+<tr><td>Mawar (Betty)</td><td>2023-05-16 – 2023-06-05</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Typhoon_Mawar">Typhoon Mawar — Wikipedia</a></td></tr>
+<tr><td>Talim (Dodong)</td><td>2023-07-11 – 2023-07-21</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Tropical_Storm_Talim_(2023)">Tropical Storm Talim (2023) — Wikipedia</a></td></tr>
+<tr><td>Doksuri (Egay)</td><td>2023-07-18 – 2023-08-02</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Typhoon_Doksuri">Typhoon Doksuri — Wikipedia</a></td></tr>
+<tr><td>Khanun (Falcon)</td><td>2023-07-24 – 2023-08-13</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Typhoon_Khanun_(2023)">Typhoon Khanun (2023) — Wikipedia</a></td></tr>
+<tr><td>Lan</td><td>2023-08-04 – 2023-08-20</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Typhoon_Lan_(2023)">Typhoon Lan (2023) — Wikipedia</a></td></tr>
+<tr><td>Saola (Goring)</td><td>2023-08-20 – 2023-09-06</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Typhoon_Saola_(2023)">Typhoon Saola (2023) — Wikipedia</a></td></tr>
+<tr><td>Haikui</td><td>2023-08-25 – 2023-09-12</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Typhoon_Haikui_(2023)">Typhoon Haikui (2023) — Wikipedia</a></td></tr>
+<tr><td>Koinu (Jenny)</td><td>2023-09-25 – 2023-10-12</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Typhoon_Koinu">Typhoon Koinu — Wikipedia</a></td></tr>
+<tr><td>Mocha</td><td>2023-05-06 – 2023-05-17</td><td>North Indian Ocean</td><td><a href="https://en.wikipedia.org/wiki/Cyclone_Mocha">Cyclone Mocha — Wikipedia</a></td></tr>
+<tr><td>Biparjoy</td><td>2023-06-03 – 2023-06-21</td><td>North Indian Ocean</td><td><a href="https://en.wikipedia.org/wiki/Cyclone_Biparjoy">Cyclone Biparjoy — Wikipedia</a></td></tr>
+<tr><td>Hamoon</td><td>2023-10-18 – 2023-10-27</td><td>North Indian Ocean</td><td><a href="https://en.wikipedia.org/wiki/Cyclone_Hamoon">Cyclone Hamoon — Wikipedia</a></td></tr>
+<tr><td>Freddy</td><td>2023-02-02 – 2023-03-15</td><td>South-West Indian Ocean</td><td><a href="https://en.wikipedia.org/wiki/Cyclone_Freddy">Cyclone Freddy — Wikipedia</a></td></tr>
+<tr><td>Jasper</td><td>2023-11-30 – 2023-12-19</td><td>Australian Region</td><td><a href="https://en.wikipedia.org/wiki/Cyclone_Jasper">Cyclone Jasper — Wikipedia</a></td></tr>
+<tr><td>Alex</td><td>2022-05-31 – 2022-06-08</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Tropical_Storm_Alex_(2022)">Tropical Storm Alex (2022) — Wikipedia</a></td></tr>
+<tr><td>Fiona</td><td>2022-09-12 – 2022-09-29</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Fiona">Hurricane Fiona — Wikipedia</a></td></tr>
+<tr><td>Ian</td><td>2022-09-20 – 2022-10-03</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Ian">Hurricane Ian — Wikipedia</a></td></tr>
+<tr><td>Julia</td><td>2022-10-04 – 2022-10-12</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Julia_(2022)">Hurricane Julia (2022) — Wikipedia</a></td></tr>
+<tr><td>Nicole</td><td>2022-11-04 – 2022-11-13</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Nicole_(2022)">Hurricane Nicole (2022) — Wikipedia</a></td></tr>
+<tr><td>Agatha</td><td>2022-05-25 – 2022-06-03</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Agatha">Hurricane Agatha — Wikipedia</a></td></tr>
+<tr><td>Kay</td><td>2022-09-02 – 2022-09-15</td><td>Eastern North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Kay_(2022)">Hurricane Kay (2022) — Wikipedia</a></td></tr>
+<tr><td>Roslyn</td><td>2022-10-18 – 2022-10-26</td><td>Eastern North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Roslyn_(2022)">Hurricane Roslyn (2022) — Wikipedia</a></td></tr>
+<tr><td>Megi (Agaton)</td><td>2022-04-06 – 2022-04-15</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Tropical_Storm_Megi">Tropical Storm Megi — Wikipedia</a></td></tr>
+<tr><td>Hinnamnor (Henry)</td><td>2022-08-25 – 2022-09-10</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Typhoon_Hinnamnor">Typhoon Hinnamnor — Wikipedia</a></td></tr>
+<tr><td>Muifa (Inday)</td><td>2022-09-02 – 2022-09-18</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Typhoon_Muifa_(2022)">Typhoon Muifa (2022) — Wikipedia</a></td></tr>
+<tr><td>Nanmadol (Josie)</td><td>2022-09-09 – 2022-09-22</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Typhoon_Nanmadol_(2022)">Typhoon Nanmadol (2022) — Wikipedia</a></td></tr>
+<tr><td>Noru (Karding)</td><td>2022-09-19 – 2022-10-01</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Typhoon_Noru">Typhoon Noru — Wikipedia</a></td></tr>
+<tr><td>Nalgae (Paeng)</td><td>2022-10-24 – 2022-11-05</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Tropical_Storm_Nalgae">Tropical Storm Nalgae — Wikipedia</a></td></tr>
+<tr><td>Sitrang</td><td>2022-10-19 – 2022-10-27</td><td>North Indian Ocean</td><td><a href="https://en.wikipedia.org/wiki/Cyclone_Sitrang">Cyclone Sitrang — Wikipedia</a></td></tr>
+<tr><td>Ana</td><td>2021-01-26 – 2021-02-05</td><td>South Pacific</td><td><a href="https://en.wikipedia.org/wiki/Tropical_Storm_Ana_(2022)">Tropical Storm Ana (2022) — Wikipedia</a></td></tr>
+<tr><td>Batsirai</td><td>2022-01-22 – 2022-02-12</td><td>South-West Indian Ocean</td><td><a href="https://en.wikipedia.org/wiki/Cyclone_Batsirai">Cyclone Batsirai — Wikipedia</a></td></tr>
+<tr><td>Gombe</td><td>2022-03-04 – 2022-03-19</td><td>South-West Indian Ocean</td><td><a href="https://en.wikipedia.org/wiki/Cyclone_Gombe">Cyclone Gombe — Wikipedia</a></td></tr>
+<tr><td>Seth</td><td>2021-12-21 – 2022-01-09</td><td>Australian Region</td><td><a href="https://en.wikipedia.org/wiki/Cyclone_Seth">Cyclone Seth — Wikipedia</a></td></tr>
+<tr><td>Blas</td><td>2022-06-12 – 2022-06-24</td><td>Eastern North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Blas_(2022)">Hurricane Blas (2022) — Wikipedia</a></td></tr>
+<tr><td>Elsa</td><td>2021-06-28 – 2021-07-12</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Elsa">Hurricane Elsa — Wikipedia</a></td></tr>
+<tr><td>Fred</td><td>2021-08-07 – 2021-08-22</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Tropical_Storm_Fred_(2021)">Tropical Storm Fred (2021) — Wikipedia</a></td></tr>
+<tr><td>Grace</td><td>2021-08-11 – 2021-08-23</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Grace">Hurricane Grace — Wikipedia</a></td></tr>
+<tr><td>Henri</td><td>2021-08-13 – 2021-08-26</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Henri">Hurricane Henri — Wikipedia</a></td></tr>
+<tr><td>Ida</td><td>2021-08-24 – 2021-09-06</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Ida">Hurricane Ida — Wikipedia</a></td></tr>
+<tr><td>Larry</td><td>2021-08-29 – 2021-09-13</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Larry">Hurricane Larry — Wikipedia</a></td></tr>
+<tr><td>Nicholas</td><td>2021-09-10 – 2021-09-19</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Nicholas">Hurricane Nicholas — Wikipedia</a></td></tr>
+<tr><td>Claudette</td><td>2021-06-15 – 2021-06-25</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Tropical_Storm_Claudette_(2021)">Tropical Storm Claudette (2021) — Wikipedia</a></td></tr>
+<tr><td>Nora</td><td>2021-08-22 – 2021-09-01</td><td>Eastern North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Nora_(2021)">Hurricane Nora (2021) — Wikipedia</a></td></tr>
+<tr><td>Olaf</td><td>2021-09-04 – 2021-09-14</td><td>Eastern North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Olaf_(2021)">Hurricane Olaf (2021) — Wikipedia</a></td></tr>
+<tr><td>Pamela</td><td>2021-10-08 – 2021-10-15</td><td>Eastern North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Pamela">Hurricane Pamela — Wikipedia</a></td></tr>
+<tr><td>Surigae (Bising)</td><td>2021-04-09 – 2021-05-02</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Typhoon_Surigae">Typhoon Surigae — Wikipedia</a></td></tr>
+<tr><td>In-fa (Fabian)</td><td>2021-07-14 – 2021-08-02</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Typhoon_In-fa">Typhoon In-fa — Wikipedia</a></td></tr>
+<tr><td>Kompasu (Maring)</td><td>2021-10-05 – 2021-10-16</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Tropical_Storm_Kompasu">Tropical Storm Kompasu — Wikipedia</a></td></tr>
+<tr><td>Rai</td><td>2021-12-09 – 2021-12-23</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Typhoon_Rai">Typhoon Rai — Wikipedia</a></td></tr>
+<tr><td>Tauktae</td><td>2021-05-11 – 2021-05-21</td><td>North Indian Ocean</td><td><a href="https://en.wikipedia.org/wiki/Cyclone_Tauktae">Cyclone Tauktae — Wikipedia</a></td></tr>
+<tr><td>Yaas</td><td>2021-05-21 – 2021-05-29</td><td>North Indian Ocean</td><td><a href="https://en.wikipedia.org/wiki/Cyclone_Yaas">Cyclone Yaas — Wikipedia</a></td></tr>
+<tr><td>Gulab and Shaheen</td><td>2021-09-21 – 2021-10-06</td><td>North Indian Ocean</td><td><a href="https://en.wikipedia.org/wiki/Cyclones_Gulab_and_Shaheen">Cyclones Gulab and Shaheen — Wikipedia</a></td></tr>
+<tr><td>Eloise</td><td>2021-01-09 – 2021-01-26</td><td>South-West Indian Ocean</td><td><a href="https://en.wikipedia.org/wiki/Cyclone_Eloise">Cyclone Eloise — Wikipedia</a></td></tr>
+<tr><td>Amanda and Cristobal</td><td>2020-05-28 – 2020-06-02</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Tropical_storms_Amanda_and_Cristobal">Tropical storms Amanda and Cristobal — Wikipedia</a></td></tr>
+<tr><td>Hanna</td><td>2020-07-21 – 2020-07-28</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Hanna_(2020)">Hurricane Hanna (2020) — Wikipedia</a></td></tr>
+<tr><td>Isaias</td><td>2020-07-26 – 2020-08-07</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Isaias">Hurricane Isaias — Wikipedia</a></td></tr>
+<tr><td>Laura</td><td>2020-08-18 – 2020-08-31</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Laura">Hurricane Laura — Wikipedia</a></td></tr>
+<tr><td>Nana</td><td>2020-08-30 – 2020-09-06</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Nana_(2020)">Hurricane Nana (2020) — Wikipedia</a></td></tr>
+<tr><td>Paulette</td><td>2020-09-05 – 2020-09-30</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Paulette">Hurricane Paulette — Wikipedia</a></td></tr>
+<tr><td>Sally</td><td>2020-09-09 – 2020-09-20</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Sally">Hurricane Sally — Wikipedia</a></td></tr>
+<tr><td>Teddy</td><td>2020-09-10 – 2020-09-26</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Teddy">Hurricane Teddy — Wikipedia</a></td></tr>
+<tr><td>Delta</td><td>2020-10-02 – 2020-10-13</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Delta">Hurricane Delta — Wikipedia</a></td></tr>
+<tr><td>Zeta</td><td>2020-10-22 – 2020-11-01</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Zeta">Hurricane Zeta — Wikipedia</a></td></tr>
+<tr><td>Eta</td><td>2020-10-29 – 2020-11-16</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Eta">Hurricane Eta — Wikipedia</a></td></tr>
+<tr><td>Iota</td><td>2020-11-10 – 2020-11-20</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Iota">Hurricane Iota — Wikipedia</a></td></tr>
+<tr><td>Genevieve</td><td>2020-08-14 – 2020-08-24</td><td>Eastern North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Genevieve_(2020)">Hurricane Genevieve (2020) — Wikipedia</a></td></tr>
+<tr><td>Hagupit (Dindo)</td><td>2020-07-29 – 2020-08-14</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Typhoon_Hagupit_(2020)">Typhoon Hagupit (2020) — Wikipedia</a></td></tr>
+<tr><td>Maysak</td><td>2020-08-24 – 2020-09-08</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Typhoon_Maysak_(2020)">Typhoon Maysak (2020) — Wikipedia</a></td></tr>
+<tr><td>Noul (Leon)</td><td>2020-09-12 – 2020-09-21</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Tropical_Storm_Noul_(2020)">Tropical Storm Noul (2020) — Wikipedia</a></td></tr>
+<tr><td>Linfa</td><td>2020-10-05 – 2020-10-14</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Tropical_Storm_Linfa">Tropical Storm Linfa — Wikipedia</a></td></tr>
+<tr><td>Molave (Quinta)</td><td>2020-10-19 – 2020-10-31</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Typhoon_Molave">Typhoon Molave — Wikipedia</a></td></tr>
+<tr><td>Goni (Rolly)</td><td>2020-10-23 – 2020-11-08</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Typhoon_Goni">Typhoon Goni — Wikipedia</a></td></tr>
+<tr><td>Vamco (Ulysse)</td><td>2020-11-06 – 2020-11-18</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Typhoon_Vamco">Typhoon Vamco — Wikipedia</a></td></tr>
+<tr><td>Remal</td><td>2024-05-23 – 2024-05-29</td><td>North Indian Ocean</td><td><a href="https://en.wikipedia.org/wiki/Cyclone_Remal">Cyclone Remal — Wikipedia</a></td></tr>
+<tr><td>Amphan</td><td>2020-05-13 – 2020-05-23</td><td>North Indian Ocean</td><td><a href="https://en.wikipedia.org/wiki/Cyclone_Amphan">Cyclone Amphan — Wikipedia</a></td></tr>
+<tr><td>Nisarga</td><td>2020-05-29 – 2020-06-06</td><td>North Indian Ocean</td><td><a href="https://en.wikipedia.org/wiki/Cyclone_Nisarga">Cyclone Nisarga — Wikipedia</a></td></tr>
+<tr><td>Damien</td><td>2020-02-01 – 2020-02-12</td><td>Australian Region</td><td><a href="https://en.wikipedia.org/wiki/Cyclone_Damien">Cyclone Damien — Wikipedia</a></td></tr>
+</tbody>
+</table>
+</details>
+
+<script>
+function filterTable(input, slug) {
+  const filter = input.value.toLowerCase();
+  const rows = document.querySelectorAll(
+    '#case-table-' + slug + ' tbody tr'
+  );
+  rows.forEach(r => {
+    r.style.display =
+      r.textContent.toLowerCase().includes(filter) ? '' : 'none';
+  });
+}
+</script>
+
 
 We chose a wide selection of tropical cyclones and organized them by basin. It is not possible to choose every TC in every basin as that would be overwhelming. The TCs are chosen to represent a variety of cases across the magnitude of TCs. We did require that they made landfall, as some of the metrics require landfall.
 
@@ -370,139 +506,3 @@ Verification data is drawn from:
    1. [https://confluence.ecmwf.int/display/FCST/202009+-+Windstorm+-+Ianos](https://confluence.ecmwf.int/display/FCST/202009+-+Windstorm+-+Ianos)   
    2. [https://user.eumetsat.int/resources/case-studies/mediterranean-cyclones-medicanes-2007-2021](https://user.eumetsat.int/resources/case-studies/mediterranean-cyclones-medicanes-2007-2021)   
    3. [Cyclone Ianos \- Wikipedia](https://en.wikipedia.org/wiki/Cyclone_Ianos) 
-
-## Cases
-
-Storm tracks were identified from IBTrACS and the basin-specific season summaries listed above, and bounding boxes enclose the full track from genesis to dissipation with lateral margins sized to include the gale-force wind radius at peak intensity. Only landfalling systems are included, a requirement imposed by the landfall-displacement and intensity metrics in EWB; the TC PRIMED dataset provides co-located radar and ERA-5 fields for verification within each box. For storms with complex tracks or dual landfalls (e.g., Eta, Freddy), the box spans the entire track including any re-intensification segment.
-
-<details open>
-<summary><strong>Cases — 106 events</strong></summary>
-<input id="case-filter-tropical-cyclone" type="text" placeholder="Filter cases…"
-       oninput="filterTable(this, 'tropical-cyclone')" style="margin:8px 0;padding:4px 8px;width:100%;box-sizing:border-box;">
-<table id="case-table-tropical-cyclone">
-<thead>
-<tr><th>Name</th><th>Time range</th><th>Location</th><th>Sources</th></tr>
-</thead>
-<tbody>
-<tr><td>Milton</td><td>2024-10-02 – 2024-10-13</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Milton">Hurricane Milton — Wikipedia</a></td></tr>
-<tr><td>Helene</td><td>2024-09-21 – 2024-09-30</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Helene">Hurricane Helene — Wikipedia</a></td></tr>
-<tr><td>Francine</td><td>2024-09-06 – 2024-09-16</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Francine">Hurricane Francine — Wikipedia</a></td></tr>
-<tr><td>Debby</td><td>2024-07-31 – 2024-08-12</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Debby_(2024)">Hurricane Debby (2024) — Wikipedia</a></td></tr>
-<tr><td>Beryl</td><td>2024-06-26 – 2024-07-13</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Beryl">Hurricane Beryl — Wikipedia</a></td></tr>
-<tr><td>John</td><td>2024-09-20 – 2024-09-29</td><td>Eastern North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_John_(2024)">Hurricane John (2024) — Wikipedia</a></td></tr>
-<tr><td>Hone</td><td>2024-08-17 – 2024-09-03</td><td>Central North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Hone">Hurricane Hone — Wikipedia</a></td></tr>
-<tr><td>Trami</td><td>2024-10-18 – 2024-10-31</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Tropical_Storm_Trami_(2024)">Tropical Storm Trami (2024) — Wikipedia</a></td></tr>
-<tr><td>Prapiroon (Butchoy)</td><td>2024-07-17 – 2024-07-27</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Tropical_Storm_Prapiroon_(2024)">Tropical Storm Prapiroon (2024) — Wikipedia</a></td></tr>
-<tr><td>Gaemi (Carina)</td><td>2024-07-17 – 2024-07-30</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Typhoon_Gaemi">Typhoon Gaemi — Wikipedia</a></td></tr>
-<tr><td>Shanshan</td><td>2024-08-19 – 2024-09-03</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Typhoon_Shanshan_(2024)">Typhoon Shanshan (2024) — Wikipedia</a></td></tr>
-<tr><td>Yagi (Enteng)</td><td>2024-08-30 – 2024-09-10</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Typhoon_Yagi">Typhoon Yagi — Wikipedia</a></td></tr>
-<tr><td>Bebinca (Ferdie)</td><td>2024-09-07 – 2024-09-20</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Typhoon_Bebinca_(2024)">Typhoon Bebinca (2024) — Wikipedia</a></td></tr>
-<tr><td>Soulik (Gener)</td><td>2024-09-13 – 2024-09-22</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Tropical_Storm_Soulik_(2024)">Tropical Storm Soulik (2024) — Wikipedia</a></td></tr>
-<tr><td>Krathon</td><td>2024-09-24 – 2024-10-05</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Typhoon_Krathon">Typhoon Krathon — Wikipedia</a></td></tr>
-<tr><td>Asna</td><td>2024-08-28 – 2024-09-04</td><td>North Indian Ocean</td><td><a href="https://en.wikipedia.org/wiki/Cyclone_Asna">Cyclone Asna — Wikipedia</a></td></tr>
-<tr><td>Kirrily</td><td>2024-01-15 – 2024-02-07</td><td>Australian Region</td><td><a href="https://en.wikipedia.org/wiki/Cyclone_Kirrily">Cyclone Kirrily — Wikipedia</a></td></tr>
-<tr><td>Belal</td><td>2024-01-10 – 2024-01-21</td><td>South-West Indian Ocean</td><td><a href="https://confluence.ecmwf.int/display/FCST/202401+-+Tropical+Cyclone+-+Belal">ECMWF: TC Belal Jan 2024</a></td></tr>
-<tr><td>Alvaro</td><td>2023-12-30 – 2024-01-06</td><td>South-West Indian Ocean</td><td><a href="https://en.wikipedia.org/wiki/Cyclone_Alvaro">Cyclone Alvaro — Wikipedia</a></td></tr>
-<tr><td>Franklin</td><td>2023-08-17 – 2023-09-11</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Franklin_(2023)">Hurricane Franklin (2023) — Wikipedia</a></td></tr>
-<tr><td>Harold</td><td>2020-03-30 – 2020-04-13</td><td>South Pacific</td><td><a href="https://en.wikipedia.org/wiki/Cyclone_Harold">Cyclone Harold — Wikipedia</a></td></tr>
-<tr><td>Idalia</td><td>2023-08-24 – 2023-09-10</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Idalia">Hurricane Idalia — Wikipedia</a></td></tr>
-<tr><td>Lee</td><td>2023-09-03 – 2023-09-20</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Lee_(2023)">Hurricane Lee (2023) — Wikipedia</a></td></tr>
-<tr><td>Ophelia</td><td>2023-09-19 – 2023-09-26</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Tropical_Storm_Ophelia_(2023)">Tropical Storm Ophelia (2023) — Wikipedia</a></td></tr>
-<tr><td>Tammy</td><td>2023-10-16 – 2023-11-02</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Tammy">Hurricane Tammy — Wikipedia</a></td></tr>
-<tr><td>Hilary</td><td>2023-08-14 – 2023-08-22</td><td>Eastern North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Hilary">Hurricane Hilary — Wikipedia</a></td></tr>
-<tr><td>Lidia</td><td>2023-10-01 – 2023-10-13</td><td>Eastern North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Lidia_(2023)">Hurricane Lidia (2023) — Wikipedia</a></td></tr>
-<tr><td>Max</td><td>2023-10-06 – 2023-10-12</td><td>Eastern North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Tropical_Storm_Max_(2023)">Tropical Storm Max (2023) — Wikipedia</a></td></tr>
-<tr><td>Norma</td><td>2023-10-15 – 2023-10-25</td><td>Eastern North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Norma_(2023)">Hurricane Norma (2023) — Wikipedia</a></td></tr>
-<tr><td>Otis</td><td>2023-10-19 – 2023-10-27</td><td>Eastern North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Otis">Hurricane Otis — Wikipedia</a></td></tr>
-<tr><td>Mawar (Betty)</td><td>2023-05-16 – 2023-06-05</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Typhoon_Mawar">Typhoon Mawar — Wikipedia</a></td></tr>
-<tr><td>Talim (Dodong)</td><td>2023-07-11 – 2023-07-21</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Tropical_Storm_Talim_(2023)">Tropical Storm Talim (2023) — Wikipedia</a></td></tr>
-<tr><td>Doksuri (Egay)</td><td>2023-07-18 – 2023-08-02</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Typhoon_Doksuri">Typhoon Doksuri — Wikipedia</a></td></tr>
-<tr><td>Khanun (Falcon)</td><td>2023-07-24 – 2023-08-13</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Typhoon_Khanun_(2023)">Typhoon Khanun (2023) — Wikipedia</a></td></tr>
-<tr><td>Lan</td><td>2023-08-04 – 2023-08-20</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Typhoon_Lan_(2023)">Typhoon Lan (2023) — Wikipedia</a></td></tr>
-<tr><td>Saola (Goring)</td><td>2023-08-20 – 2023-09-06</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Typhoon_Saola_(2023)">Typhoon Saola (2023) — Wikipedia</a></td></tr>
-<tr><td>Haikui</td><td>2023-08-25 – 2023-09-12</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Typhoon_Haikui_(2023)">Typhoon Haikui (2023) — Wikipedia</a></td></tr>
-<tr><td>Koinu (Jenny)</td><td>2023-09-25 – 2023-10-12</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Typhoon_Koinu">Typhoon Koinu — Wikipedia</a></td></tr>
-<tr><td>Mocha</td><td>2023-05-06 – 2023-05-17</td><td>North Indian Ocean</td><td><a href="https://en.wikipedia.org/wiki/Cyclone_Mocha">Cyclone Mocha — Wikipedia</a></td></tr>
-<tr><td>Biparjoy</td><td>2023-06-03 – 2023-06-21</td><td>North Indian Ocean</td><td><a href="https://en.wikipedia.org/wiki/Cyclone_Biparjoy">Cyclone Biparjoy — Wikipedia</a></td></tr>
-<tr><td>Hamoon</td><td>2023-10-18 – 2023-10-27</td><td>North Indian Ocean</td><td><a href="https://en.wikipedia.org/wiki/Cyclone_Hamoon">Cyclone Hamoon — Wikipedia</a></td></tr>
-<tr><td>Freddy</td><td>2023-02-02 – 2023-03-15</td><td>South-West Indian Ocean</td><td><a href="https://en.wikipedia.org/wiki/Cyclone_Freddy">Cyclone Freddy — Wikipedia</a></td></tr>
-<tr><td>Jasper</td><td>2023-11-30 – 2023-12-19</td><td>Australian Region</td><td><a href="https://en.wikipedia.org/wiki/Cyclone_Jasper">Cyclone Jasper — Wikipedia</a></td></tr>
-<tr><td>Alex</td><td>2022-05-31 – 2022-06-08</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Tropical_Storm_Alex_(2022)">Tropical Storm Alex (2022) — Wikipedia</a></td></tr>
-<tr><td>Fiona</td><td>2022-09-12 – 2022-09-29</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Fiona">Hurricane Fiona — Wikipedia</a></td></tr>
-<tr><td>Ian</td><td>2022-09-20 – 2022-10-03</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Ian">Hurricane Ian — Wikipedia</a></td></tr>
-<tr><td>Julia</td><td>2022-10-04 – 2022-10-12</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Julia_(2022)">Hurricane Julia (2022) — Wikipedia</a></td></tr>
-<tr><td>Nicole</td><td>2022-11-04 – 2022-11-13</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Nicole_(2022)">Hurricane Nicole (2022) — Wikipedia</a></td></tr>
-<tr><td>Agatha</td><td>2022-05-25 – 2022-06-03</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Agatha">Hurricane Agatha — Wikipedia</a></td></tr>
-<tr><td>Kay</td><td>2022-09-02 – 2022-09-15</td><td>Eastern North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Kay_(2022)">Hurricane Kay (2022) — Wikipedia</a></td></tr>
-<tr><td>Roslyn</td><td>2022-10-18 – 2022-10-26</td><td>Eastern North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Roslyn_(2022)">Hurricane Roslyn (2022) — Wikipedia</a></td></tr>
-<tr><td>Megi (Agaton)</td><td>2022-04-06 – 2022-04-15</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Tropical_Storm_Megi">Tropical Storm Megi — Wikipedia</a></td></tr>
-<tr><td>Hinnamnor (Henry)</td><td>2022-08-25 – 2022-09-10</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Typhoon_Hinnamnor">Typhoon Hinnamnor — Wikipedia</a></td></tr>
-<tr><td>Muifa (Inday)</td><td>2022-09-02 – 2022-09-18</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Typhoon_Muifa_(2022)">Typhoon Muifa (2022) — Wikipedia</a></td></tr>
-<tr><td>Nanmadol (Josie)</td><td>2022-09-09 – 2022-09-22</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Typhoon_Nanmadol_(2022)">Typhoon Nanmadol (2022) — Wikipedia</a></td></tr>
-<tr><td>Noru (Karding)</td><td>2022-09-19 – 2022-10-01</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Typhoon_Noru">Typhoon Noru — Wikipedia</a></td></tr>
-<tr><td>Nalgae (Paeng)</td><td>2022-10-24 – 2022-11-05</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Tropical_Storm_Nalgae">Tropical Storm Nalgae — Wikipedia</a></td></tr>
-<tr><td>Sitrang</td><td>2022-10-19 – 2022-10-27</td><td>North Indian Ocean</td><td><a href="https://en.wikipedia.org/wiki/Cyclone_Sitrang">Cyclone Sitrang — Wikipedia</a></td></tr>
-<tr><td>Ana</td><td>2021-01-26 – 2021-02-05</td><td>South Pacific</td><td><a href="https://en.wikipedia.org/wiki/Tropical_Storm_Ana_(2022)">Tropical Storm Ana (2022) — Wikipedia</a></td></tr>
-<tr><td>Batsirai</td><td>2022-01-22 – 2022-02-12</td><td>South-West Indian Ocean</td><td><a href="https://en.wikipedia.org/wiki/Cyclone_Batsirai">Cyclone Batsirai — Wikipedia</a></td></tr>
-<tr><td>Gombe</td><td>2022-03-04 – 2022-03-19</td><td>South-West Indian Ocean</td><td><a href="https://en.wikipedia.org/wiki/Cyclone_Gombe">Cyclone Gombe — Wikipedia</a></td></tr>
-<tr><td>Seth</td><td>2021-12-21 – 2022-01-09</td><td>Australian Region</td><td><a href="https://en.wikipedia.org/wiki/Cyclone_Seth">Cyclone Seth — Wikipedia</a></td></tr>
-<tr><td>Blas</td><td>2022-06-12 – 2022-06-24</td><td>Eastern North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Blas_(2022)">Hurricane Blas (2022) — Wikipedia</a></td></tr>
-<tr><td>Elsa</td><td>2021-06-28 – 2021-07-12</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Elsa">Hurricane Elsa — Wikipedia</a></td></tr>
-<tr><td>Fred</td><td>2021-08-07 – 2021-08-22</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Tropical_Storm_Fred_(2021)">Tropical Storm Fred (2021) — Wikipedia</a></td></tr>
-<tr><td>Grace</td><td>2021-08-11 – 2021-08-23</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Grace">Hurricane Grace — Wikipedia</a></td></tr>
-<tr><td>Henri</td><td>2021-08-13 – 2021-08-26</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Henri">Hurricane Henri — Wikipedia</a></td></tr>
-<tr><td>Ida</td><td>2021-08-24 – 2021-09-06</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Ida">Hurricane Ida — Wikipedia</a></td></tr>
-<tr><td>Larry</td><td>2021-08-29 – 2021-09-13</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Larry">Hurricane Larry — Wikipedia</a></td></tr>
-<tr><td>Nicholas</td><td>2021-09-10 – 2021-09-19</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Nicholas">Hurricane Nicholas — Wikipedia</a></td></tr>
-<tr><td>Claudette</td><td>2021-06-15 – 2021-06-25</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Tropical_Storm_Claudette_(2021)">Tropical Storm Claudette (2021) — Wikipedia</a></td></tr>
-<tr><td>Nora</td><td>2021-08-22 – 2021-09-01</td><td>Eastern North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Nora_(2021)">Hurricane Nora (2021) — Wikipedia</a></td></tr>
-<tr><td>Olaf</td><td>2021-09-04 – 2021-09-14</td><td>Eastern North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Olaf_(2021)">Hurricane Olaf (2021) — Wikipedia</a></td></tr>
-<tr><td>Pamela</td><td>2021-10-08 – 2021-10-15</td><td>Eastern North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Pamela">Hurricane Pamela — Wikipedia</a></td></tr>
-<tr><td>Surigae (Bising)</td><td>2021-04-09 – 2021-05-02</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Typhoon_Surigae">Typhoon Surigae — Wikipedia</a></td></tr>
-<tr><td>In-fa (Fabian)</td><td>2021-07-14 – 2021-08-02</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Typhoon_In-fa">Typhoon In-fa — Wikipedia</a></td></tr>
-<tr><td>Kompasu (Maring)</td><td>2021-10-05 – 2021-10-16</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Tropical_Storm_Kompasu">Tropical Storm Kompasu — Wikipedia</a></td></tr>
-<tr><td>Rai</td><td>2021-12-09 – 2021-12-23</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Typhoon_Rai">Typhoon Rai — Wikipedia</a></td></tr>
-<tr><td>Tauktae</td><td>2021-05-11 – 2021-05-21</td><td>North Indian Ocean</td><td><a href="https://en.wikipedia.org/wiki/Cyclone_Tauktae">Cyclone Tauktae — Wikipedia</a></td></tr>
-<tr><td>Yaas</td><td>2021-05-21 – 2021-05-29</td><td>North Indian Ocean</td><td><a href="https://en.wikipedia.org/wiki/Cyclone_Yaas">Cyclone Yaas — Wikipedia</a></td></tr>
-<tr><td>Gulab and Shaheen</td><td>2021-09-21 – 2021-10-06</td><td>North Indian Ocean</td><td><a href="https://en.wikipedia.org/wiki/Cyclones_Gulab_and_Shaheen">Cyclones Gulab and Shaheen — Wikipedia</a></td></tr>
-<tr><td>Eloise</td><td>2021-01-09 – 2021-01-26</td><td>South-West Indian Ocean</td><td><a href="https://en.wikipedia.org/wiki/Cyclone_Eloise">Cyclone Eloise — Wikipedia</a></td></tr>
-<tr><td>Amanda and Cristobal</td><td>2020-05-28 – 2020-06-02</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Tropical_storms_Amanda_and_Cristobal">Tropical storms Amanda and Cristobal — Wikipedia</a></td></tr>
-<tr><td>Hanna</td><td>2020-07-21 – 2020-07-28</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Hanna_(2020)">Hurricane Hanna (2020) — Wikipedia</a></td></tr>
-<tr><td>Isaias</td><td>2020-07-26 – 2020-08-07</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Isaias">Hurricane Isaias — Wikipedia</a></td></tr>
-<tr><td>Laura</td><td>2020-08-18 – 2020-08-31</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Laura">Hurricane Laura — Wikipedia</a></td></tr>
-<tr><td>Nana</td><td>2020-08-30 – 2020-09-06</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Nana_(2020)">Hurricane Nana (2020) — Wikipedia</a></td></tr>
-<tr><td>Paulette</td><td>2020-09-05 – 2020-09-30</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Paulette">Hurricane Paulette — Wikipedia</a></td></tr>
-<tr><td>Sally</td><td>2020-09-09 – 2020-09-20</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Sally">Hurricane Sally — Wikipedia</a></td></tr>
-<tr><td>Teddy</td><td>2020-09-10 – 2020-09-26</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Teddy">Hurricane Teddy — Wikipedia</a></td></tr>
-<tr><td>Delta</td><td>2020-10-02 – 2020-10-13</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Delta">Hurricane Delta — Wikipedia</a></td></tr>
-<tr><td>Zeta</td><td>2020-10-22 – 2020-11-01</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Zeta">Hurricane Zeta — Wikipedia</a></td></tr>
-<tr><td>Eta</td><td>2020-10-29 – 2020-11-16</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Eta">Hurricane Eta — Wikipedia</a></td></tr>
-<tr><td>Iota</td><td>2020-11-10 – 2020-11-20</td><td>Atlantic / Gulf of Mexico</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Iota">Hurricane Iota — Wikipedia</a></td></tr>
-<tr><td>Genevieve</td><td>2020-08-14 – 2020-08-24</td><td>Eastern North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Hurricane_Genevieve_(2020)">Hurricane Genevieve (2020) — Wikipedia</a></td></tr>
-<tr><td>Hagupit (Dindo)</td><td>2020-07-29 – 2020-08-14</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Typhoon_Hagupit_(2020)">Typhoon Hagupit (2020) — Wikipedia</a></td></tr>
-<tr><td>Maysak</td><td>2020-08-24 – 2020-09-08</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Typhoon_Maysak_(2020)">Typhoon Maysak (2020) — Wikipedia</a></td></tr>
-<tr><td>Noul (Leon)</td><td>2020-09-12 – 2020-09-21</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Tropical_Storm_Noul_(2020)">Tropical Storm Noul (2020) — Wikipedia</a></td></tr>
-<tr><td>Linfa</td><td>2020-10-05 – 2020-10-14</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Tropical_Storm_Linfa">Tropical Storm Linfa — Wikipedia</a></td></tr>
-<tr><td>Molave (Quinta)</td><td>2020-10-19 – 2020-10-31</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Typhoon_Molave">Typhoon Molave — Wikipedia</a></td></tr>
-<tr><td>Goni (Rolly)</td><td>2020-10-23 – 2020-11-08</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Typhoon_Goni">Typhoon Goni — Wikipedia</a></td></tr>
-<tr><td>Vamco (Ulysse)</td><td>2020-11-06 – 2020-11-18</td><td>Western North Pacific</td><td><a href="https://en.wikipedia.org/wiki/Typhoon_Vamco">Typhoon Vamco — Wikipedia</a></td></tr>
-<tr><td>Remal</td><td>2024-05-23 – 2024-05-29</td><td>North Indian Ocean</td><td><a href="https://en.wikipedia.org/wiki/Cyclone_Remal">Cyclone Remal — Wikipedia</a></td></tr>
-<tr><td>Amphan</td><td>2020-05-13 – 2020-05-23</td><td>North Indian Ocean</td><td><a href="https://en.wikipedia.org/wiki/Cyclone_Amphan">Cyclone Amphan — Wikipedia</a></td></tr>
-<tr><td>Nisarga</td><td>2020-05-29 – 2020-06-06</td><td>North Indian Ocean</td><td><a href="https://en.wikipedia.org/wiki/Cyclone_Nisarga">Cyclone Nisarga — Wikipedia</a></td></tr>
-<tr><td>Damien</td><td>2020-02-01 – 2020-02-12</td><td>Australian Region</td><td><a href="https://en.wikipedia.org/wiki/Cyclone_Damien">Cyclone Damien — Wikipedia</a></td></tr>
-</tbody>
-</table>
-</details>
-
-<script>
-function filterTable(input, slug) {
-  const filter = input.value.toLowerCase();
-  const rows = document.querySelectorAll(
-    '#case-table-' + slug + ' tbody tr'
-  );
-  rows.forEach(r => {
-    r.style.display =
-      r.textContent.toLowerCase().includes(filter) ? '' : 'none';
-  });
-}
-</script>

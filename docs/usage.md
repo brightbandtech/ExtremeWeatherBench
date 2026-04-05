@@ -5,7 +5,7 @@
 There are two main ways to use ExtremeWeatherBench, by script or by command line.
 
 To run the Brightband-based evaluation on an existing AIWP model (FCN v2), which 
-includes the default 337 cases for heat waves, freezes, severe convective days, 
+includes the default 337 cases for heat waves, freezes, severe convection, 
 tropical cyclones, and atmospheric rivers:
 
 

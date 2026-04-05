@@ -1,4 +1,80 @@
 # Land-based heatwaves
+## Cases
+
+Case bounds were derived from the sources listed above (Wikipedia heat wave lists, ECMWF Severe Event Catalogue, and regional BOM/NIWA reports) and sized to enclose the full synoptic-scale hot air mass at 0.25° grid resolution, typically extending 5–15° beyond the primary affected area to capture the upstream blocking ridge. Each candidate case was retained only if the ERA5 2 m temperature anomaly within the box exceeded the 85th percentile of the 1991–2020 climatology for at least three consecutive days. Boxes targeting coastal or island locations were widened to include the relevant maritime boundary-layer source region.
+
+<details open>
+<summary><strong>Cases — 46 events</strong></summary>
+<input id="case-filter-heat-wave" type="text" placeholder="Filter cases…"
+       oninput="filterTable(this, 'heat-wave')" style="margin:8px 0;padding:4px 8px;width:100%;box-sizing:border-box;">
+<table id="case-table-heat-wave">
+<thead>
+<tr><th>Name</th><th>Time range</th><th>Location</th><th>Sources</th></tr>
+</thead>
+<tbody>
+<tr><td>2021 Pacific Northwest</td><td>2021-06-20 – 2021-07-03</td><td>Pacific Northwest</td><td><a href="https://en.wikipedia.org/wiki/2021_Western_North_America_heat_wave">2021 Western NA heat wave — Wikipedia</a></td></tr>
+<tr><td>2022 Upper Midwest</td><td>2022-05-07 – 2022-05-17</td><td>Upper Midwest</td><td><a href="https://en.wikipedia.org/wiki/2022_North_American_heat_waves">2022 North American heat waves — Wikipedia</a></td></tr>
+<tr><td>2022 California</td><td>2022-06-07 – 2022-06-15</td><td>California</td><td><a href="https://en.wikipedia.org/wiki/2022_North_American_heat_waves">2022 North American heat waves — Wikipedia</a></td></tr>
+<tr><td>2022 Texas</td><td>2022-06-30 – 2022-07-18</td><td>Texas</td><td><a href="https://en.wikipedia.org/wiki/2022_North_American_heat_waves">2022 North American heat waves — Wikipedia</a></td></tr>
+<tr><td>2023 Pacific Northwest</td><td>2023-05-10 – 2023-05-23</td><td>Pacific Northwest</td><td><a href="https://en.wikipedia.org/wiki/2023_Western_North_America_heat_wave">2023 Western NA heat wave — Wikipedia</a></td></tr>
+<tr><td>2022 Mid-Atlantic</td><td>2022-05-17 – 2022-05-24</td><td>Mid-Atlantic</td><td><a href="https://en.wikipedia.org/wiki/2022_North_American_heat_waves">2022 North American heat waves — Wikipedia</a></td></tr>
+<tr><td>2023 Australia</td><td>2023-11-18 – 2023-11-28</td><td>Australia</td><td><a href="http://www.bom.gov.au/climate/current/statements/scs78.pdf">BOM Special Climate Statement 78</a></td></tr>
+<tr><td>2023 Ireland</td><td>2023-09-02 – 2023-09-13</td><td>Ireland</td><td><a href="https://en.wikipedia.org/wiki/2023_heat_waves">2023 heat waves — Wikipedia</a></td></tr>
+<tr><td>2023 Italy</td><td>2023-07-07 – 2023-07-27</td><td>Italy</td><td><a href="https://confluence.ecmwf.int/display/FCST/202307-+Heatwave+-+Southern+Europe">ECMWF: 202307 Heatwave S. Europe</a></td></tr>
+<tr><td>2023 SW Europe</td><td>2023-08-17 – 2023-08-28</td><td>SW Europe</td><td><a href="https://confluence.ecmwf.int/display/FCST/202308+-+Heatwave+-+South-Western+Europe">ECMWF: 202308 Heatwave SW Europe</a></td></tr>
+<tr><td>2023 South America</td><td>2023-07-29 – 2023-08-04</td><td>South America</td><td><a href="https://en.wikipedia.org/wiki/2023_South_America_heat_wave">2023 South America heat wave — Wikipedia</a></td></tr>
+<tr><td>2023 China (Shanghai)</td><td>2023-05-24 – 2023-06-01</td><td>China (Shanghai)</td><td><a href="https://en.wikipedia.org/wiki/2023_Asia_heat_wave">2023 Asia heat wave — Wikipedia</a></td></tr>
+<tr><td>2023 China (Yunnan Province)</td><td>2023-04-14 – 2023-04-23</td><td>China (Yunnan Province)</td><td><a href="https://en.wikipedia.org/wiki/2023_Asia_heat_wave">2023 Asia heat wave — Wikipedia</a></td></tr>
+<tr><td>2023 Algeria</td><td>2023-07-05 – 2023-07-27</td><td>Algeria</td><td><a href="https://en.wikipedia.org/wiki/2023_heat_waves">2023 heat waves — Wikipedia</a></td></tr>
+<tr><td>2023 Iberian Peninsula</td><td>2023-04-22 – 2023-05-01</td><td>Iberian Peninsula</td><td><a href="https://confluence.ecmwf.int/display/FCST/202304+-+Heatwave+-+Spain+and+Portugal">ECMWF: 202304 Heatwave Spain/Portugal</a><br><a href="https://en.wikipedia.org/wiki/2023_European_heatwaves">2023 European heatwaves — Wikipedia</a></td></tr>
+<tr><td>2023 Southeast Asia</td><td>2023-04-16 – 2023-04-22</td><td>Southeast Asia</td><td><a href="https://en.wikipedia.org/wiki/2023_heat_waves">2023 heat waves — Wikipedia</a></td></tr>
+<tr><td>2023 India</td><td>2023-02-15 – 2023-03-01</td><td>India</td><td><a href="https://en.wikipedia.org/wiki/2023_Asia_heat_wave">2023 Asia heat wave — Wikipedia</a></td></tr>
+<tr><td>2021 Western Russia</td><td>2021-06-18 – 2021-06-30</td><td>Western Russia</td><td><a href="https://en.wikipedia.org/wiki/2021_heat_waves#Eurasia">2021 heat waves (Eurasia) — Wikipedia</a></td></tr>
+<tr><td>2022 Germany</td><td>2022-12-23 – 2022-12-31</td><td>Germany</td><td><a href="https://confluence.ecmwf.int/display/FCST/202212+-+Heatwave+-+Europe">ECMWF: 202212 Heatwave Europe</a></td></tr>
+<tr><td>2022 UK (August)</td><td>2022-08-08 – 2022-08-16</td><td>UK (August)</td><td><a href="https://confluence.ecmwf.int/display/FCST/202208+-+Heatwave+-+UK">ECMWF: 202208 Heatwave UK</a></td></tr>
+<tr><td>2022 UK (July)</td><td>2022-07-15 – 2022-07-23</td><td>UK (July)</td><td><a href="https://confluence.ecmwf.int/display/FCST/202207+-+Heatwave++-+W+Europe">ECMWF: 202207 Heatwave W. Europe</a><br><a href="https://en.wikipedia.org/wiki/2022_United_Kingdom_heatwaves">2022 UK heatwaves — Wikipedia</a></td></tr>
+<tr><td>2022 France</td><td>2022-06-09 – 2022-06-21</td><td>France</td><td><a href="https://confluence.ecmwf.int/display/FCST/202206+-+Heatwave+-+Western+Europe">ECMWF: 202206 Heatwave W. Europe</a></td></tr>
+<tr><td>2022 Japan</td><td>2022-06-20 – 2022-07-05</td><td>Japan</td><td><a href="https://en.wikipedia.org/wiki/2022_Japan_heat_wave">2022 Japan heat wave — Wikipedia</a></td></tr>
+<tr><td>2022 India</td><td>2022-04-24 – 2022-05-04</td><td>India</td><td><a href="https://confluence.ecmwf.int/display/FCST/202205+-+Heatwave+-+India%2C+Pakistan">ECMWF: 202205 Heatwave India/Pakistan</a></td></tr>
+<tr><td>2022 East Antarctica</td><td>2022-03-12 – 2022-03-26</td><td>East Antarctica</td><td><a href="https://journals.ametsoc.org/view/journals/clim/37/3/JCLI-D-23-0175.1.xml">AMS: East Antarctica Heat Wave 2022</a></td></tr>
+<tr><td>2022 West Australia</td><td>2022-01-15 – 2022-01-25</td><td>West Australia</td><td><a href="https://en.wikipedia.org/wiki/2022_heat_waves">2022 heat waves — Wikipedia</a></td></tr>
+<tr><td>2021 Canada Plains</td><td>2021-05-30 – 2021-06-09</td><td>Canada Plains</td><td><a href="https://en.wikipedia.org/wiki/List_of_heat_waves">List of heat waves — Wikipedia</a></td></tr>
+<tr><td>2021 New Zealand</td><td>2021-01-12 – 2021-01-18</td><td>New Zealand</td><td><a href="https://niwa.co.nz/climate-and-weather/annual/annual-climate-summary-2021">2021 Annual Climate Summary (NIWA)</a></td></tr>
+<tr><td>2020 Australia</td><td>2020-11-25 – 2020-12-01</td><td>Australia</td><td><a href="https://www.abc.net.au/news/2020-12-01/bom-says-hottest-november-and-spring-nights-on-record/12937620">ABC News: Australia heatwave Nov–Dec 2020</a></td></tr>
+<tr><td>May 2024 Texas</td><td>2024-05-25 – 2024-05-31</td><td>Texas</td><td><a href="https://en.wikipedia.org/wiki/2024_North_America_heat_waves">2024 North America heat waves — Wikipedia</a></td></tr>
+<tr><td>June 2024 Northeast US</td><td>2024-06-17 – 2024-06-23</td><td>Northeast US</td><td><a href="https://en.wikipedia.org/wiki/2024_North_America_heat_waves">2024 North America heat waves — Wikipedia</a></td></tr>
+<tr><td>July 2024 Southwest US</td><td>2024-07-04 – 2024-07-10</td><td>Southwest US</td><td><a href="https://en.wikipedia.org/wiki/2024_North_America_heat_waves">2024 North America heat waves — Wikipedia</a></td></tr>
+<tr><td>July 2024 Northeast US</td><td>2024-07-07 – 2024-07-13</td><td>Northeast US</td><td><a href="https://en.wikipedia.org/wiki/2024_North_America_heat_waves">2024 North America heat waves — Wikipedia</a></td></tr>
+<tr><td>July 2024 Mid-Atlantic US</td><td>2024-07-15 – 2024-07-21</td><td>Mid-Atlantic US</td><td><a href="https://en.wikipedia.org/wiki/2024_North_America_heat_waves">2024 North America heat waves — Wikipedia</a></td></tr>
+<tr><td>August 2024 Midwest US</td><td>2024-08-25 – 2024-08-31</td><td>Midwest US</td><td><a href="https://en.wikipedia.org/wiki/2024_North_America_heat_waves">2024 North America heat waves — Wikipedia</a><br><a href="https://www.newsweek.com/map-states-breaking-heat-records-1945513">Newsweek: States break heat records</a></td></tr>
+<tr><td>July 2024 Antarctica</td><td>2024-07-01 – 2024-07-31</td><td>Antarctica</td><td><a href="https://en.wikipedia.org/wiki/2024_Antarctica_heat_wave">2024 Antarctica heat wave — Wikipedia</a></td></tr>
+<tr><td>August 2024 Canada</td><td>2024-08-09 – 2024-08-15</td><td>Canada</td><td><a href="https://confluence.ecmwf.int/display/FCST/202408+-+Heatwave+-+Canada">ECMWF: 202408 Heatwave Canada</a></td></tr>
+<tr><td>August 2024 Australia</td><td>2024-08-22 – 2024-08-30</td><td>Australia</td><td><a href="https://www.abc.net.au/news/2024-08-29/winter-ends-with-heatwave-as-climate-change-upends-seasons/104279250">ABC News: Australia winter heatwave Aug 2024</a></td></tr>
+<tr><td>July/August 2024 Japan</td><td>2024-07-25 – 2024-08-05</td><td>Japan</td><td><a href="https://en.wikipedia.org/wiki/2024_Japan_heatwaves">2024 Japan heatwaves — Wikipedia</a></td></tr>
+<tr><td>June 2024 Saudi Arabia</td><td>2024-06-16 – 2024-06-22</td><td>Saudi Arabia</td><td><a href="https://www.climameter.org/20240616-18-saudi-arabia-heatwave">ClimaMeter: Saudi Arabia Heatwave Jun 2024</a></td></tr>
+<tr><td>August 2024 Europe</td><td>2024-08-10 – 2024-08-16</td><td>Europe</td><td><a href="https://en.wikipedia.org/wiki/2024_European_heatwaves">2024 European heatwaves — Wikipedia</a></td></tr>
+<tr><td>July 2024 Ukraine</td><td>2024-07-12 – 2024-07-18</td><td>Ukraine</td><td><a href="https://en.wikipedia.org/wiki/2024_European_heatwaves">2024 European heatwaves — Wikipedia</a></td></tr>
+<tr><td>June 2024 Europe</td><td>2024-06-20 – 2024-06-30</td><td>Europe</td><td><a href="https://en.wikipedia.org/wiki/2024_European_heatwaves">2024 European heatwaves — Wikipedia</a></td></tr>
+<tr><td>May 2024 Central Mexico</td><td>2024-05-23 – 2024-05-31</td><td>Central Mexico</td><td><a href="https://en.wikipedia.org/wiki/2024_North_America_heat_waves">2024 North America heat waves — Wikipedia</a></td></tr>
+<tr><td>May 2024 Pakistan/India</td><td>2024-05-23 – 2024-05-31</td><td>Pakistan/India</td><td><a href="https://en.wikipedia.org/wiki/2024_Indian_heat_wave">2024 Indian heat wave — Wikipedia</a><br><a href="https://en.wikipedia.org/wiki/2024_Pakistan_heat_wave">2024 Pakistan heat wave — Wikipedia</a></td></tr>
+<tr><td>August 2023 Chile</td><td>2023-08-01 – 2023-08-07</td><td>Chile</td><td><a href="https://en.wikipedia.org/wiki/2023_South_America_heat_wave">2023 South America heat wave — Wikipedia</a></td></tr>
+</tbody>
+</table>
+</details>
+
+<script>
+function filterTable(input, slug) {
+  const filter = input.value.toLowerCase();
+  const rows = document.querySelectorAll(
+    '#case-table-' + slug + ' tbody tr'
+  );
+  rows.forEach(r => {
+    r.style.display =
+      r.textContent.toLowerCase().includes(filter) ? '' : 'none';
+  });
+}
+</script>
+
 
 We identified the heatwaves from the following sources:
 
@@ -10,7 +86,7 @@ We identified the heatwaves from the following sources:
 * [2023 European heatwaves \- Wikipedia](https://en.wikipedia.org/wiki/2023_European_heatwaves)   
 * [2023 Asia heat wave \- Wikipedia](https://en.wikipedia.org/wiki/2023_Asia_heat_wave) 
 
-Each heat wave was then validated by verifying that the 2m temperature of the event exceeds the 85th percentile of 2m temperature climatology as computed from ERA-5 data.
+Each heat wave was then validated by verifying that the 2m temperature of the event exceeds the 85th percentile of 2m temperature climatology as computed from ERA5 data.
 
 
 ## US-based events
@@ -177,79 +253,3 @@ Note 3 of the US-based events also cross into international events
     1. [https://confluence.ecmwf.int/display/FCST/202004+-+Heatwave+-+Arctic](https://confluence.ecmwf.int/display/FCST/202004+-+Heatwave+-+Arctic)   
 39. January 2023 South Africa  
     1. [https://link.springer.com/article/10.1007/s42865-024-00068-9](https://link.springer.com/article/10.1007/s42865-024-00068-9)
-
-## Cases
-
-Case bounds were derived from the sources listed above (Wikipedia heat wave lists, ECMWF Severe Event Catalogue, and regional BOM/NIWA reports) and sized to enclose the full synoptic-scale hot air mass at 0.25° grid resolution, typically extending 5–15° beyond the primary affected area to capture the upstream blocking ridge. Each candidate case was retained only if the ERA-5 2 m temperature anomaly within the box exceeded the 85th percentile of the 1991–2020 climatology for at least three consecutive days. Boxes targeting coastal or island locations were widened to include the relevant maritime boundary-layer source region.
-
-<details open>
-<summary><strong>Cases — 46 events</strong></summary>
-<input id="case-filter-heat-wave" type="text" placeholder="Filter cases…"
-       oninput="filterTable(this, 'heat-wave')" style="margin:8px 0;padding:4px 8px;width:100%;box-sizing:border-box;">
-<table id="case-table-heat-wave">
-<thead>
-<tr><th>Name</th><th>Time range</th><th>Location</th><th>Sources</th></tr>
-</thead>
-<tbody>
-<tr><td>2021 Pacific Northwest</td><td>2021-06-20 – 2021-07-03</td><td>Pacific Northwest</td><td><a href="https://en.wikipedia.org/wiki/2021_Western_North_America_heat_wave">2021 Western NA heat wave — Wikipedia</a></td></tr>
-<tr><td>2022 Upper Midwest</td><td>2022-05-07 – 2022-05-17</td><td>Upper Midwest</td><td><a href="https://en.wikipedia.org/wiki/2022_North_American_heat_waves">2022 North American heat waves — Wikipedia</a></td></tr>
-<tr><td>2022 California</td><td>2022-06-07 – 2022-06-15</td><td>California</td><td><a href="https://en.wikipedia.org/wiki/2022_North_American_heat_waves">2022 North American heat waves — Wikipedia</a></td></tr>
-<tr><td>2022 Texas</td><td>2022-06-30 – 2022-07-18</td><td>Texas</td><td><a href="https://en.wikipedia.org/wiki/2022_North_American_heat_waves">2022 North American heat waves — Wikipedia</a></td></tr>
-<tr><td>2023 Pacific Northwest</td><td>2023-05-10 – 2023-05-23</td><td>Pacific Northwest</td><td><a href="https://en.wikipedia.org/wiki/2023_Western_North_America_heat_wave">2023 Western NA heat wave — Wikipedia</a></td></tr>
-<tr><td>2022 Mid-Atlantic</td><td>2022-05-17 – 2022-05-24</td><td>Mid-Atlantic</td><td><a href="https://en.wikipedia.org/wiki/2022_North_American_heat_waves">2022 North American heat waves — Wikipedia</a></td></tr>
-<tr><td>2023 Australia</td><td>2023-11-18 – 2023-11-28</td><td>Australia</td><td><a href="http://www.bom.gov.au/climate/current/statements/scs78.pdf">BOM Special Climate Statement 78</a></td></tr>
-<tr><td>2023 Ireland</td><td>2023-09-02 – 2023-09-13</td><td>Ireland</td><td><a href="https://en.wikipedia.org/wiki/2023_heat_waves">2023 heat waves — Wikipedia</a></td></tr>
-<tr><td>2023 Italy</td><td>2023-07-07 – 2023-07-27</td><td>Italy</td><td><a href="https://confluence.ecmwf.int/display/FCST/202307-+Heatwave+-+Southern+Europe">ECMWF: 202307 Heatwave S. Europe</a></td></tr>
-<tr><td>2023 SW Europe</td><td>2023-08-17 – 2023-08-28</td><td>SW Europe</td><td><a href="https://confluence.ecmwf.int/display/FCST/202308+-+Heatwave+-+South-Western+Europe">ECMWF: 202308 Heatwave SW Europe</a></td></tr>
-<tr><td>2023 South America</td><td>2023-07-29 – 2023-08-04</td><td>South America</td><td><a href="https://en.wikipedia.org/wiki/2023_South_America_heat_wave">2023 South America heat wave — Wikipedia</a></td></tr>
-<tr><td>2023 China (Shanghai)</td><td>2023-05-24 – 2023-06-01</td><td>China (Shanghai)</td><td><a href="https://en.wikipedia.org/wiki/2023_Asia_heat_wave">2023 Asia heat wave — Wikipedia</a></td></tr>
-<tr><td>2023 China (Yunnan Province)</td><td>2023-04-14 – 2023-04-23</td><td>China (Yunnan Province)</td><td><a href="https://en.wikipedia.org/wiki/2023_Asia_heat_wave">2023 Asia heat wave — Wikipedia</a></td></tr>
-<tr><td>2023 Algeria</td><td>2023-07-05 – 2023-07-27</td><td>Algeria</td><td><a href="https://en.wikipedia.org/wiki/2023_heat_waves">2023 heat waves — Wikipedia</a></td></tr>
-<tr><td>2023 Iberian Peninsula</td><td>2023-04-22 – 2023-05-01</td><td>Iberian Peninsula</td><td><a href="https://confluence.ecmwf.int/display/FCST/202304+-+Heatwave+-+Spain+and+Portugal">ECMWF: 202304 Heatwave Spain/Portugal</a><br><a href="https://en.wikipedia.org/wiki/2023_European_heatwaves">2023 European heatwaves — Wikipedia</a></td></tr>
-<tr><td>2023 Southeast Asia</td><td>2023-04-16 – 2023-04-22</td><td>Southeast Asia</td><td><a href="https://en.wikipedia.org/wiki/2023_heat_waves">2023 heat waves — Wikipedia</a></td></tr>
-<tr><td>2023 India</td><td>2023-02-15 – 2023-03-01</td><td>India</td><td><a href="https://en.wikipedia.org/wiki/2023_Asia_heat_wave">2023 Asia heat wave — Wikipedia</a></td></tr>
-<tr><td>2021 Western Russia</td><td>2021-06-18 – 2021-06-30</td><td>Western Russia</td><td><a href="https://en.wikipedia.org/wiki/2021_heat_waves#Eurasia">2021 heat waves (Eurasia) — Wikipedia</a></td></tr>
-<tr><td>2022 Germany</td><td>2022-12-23 – 2022-12-31</td><td>Germany</td><td><a href="https://confluence.ecmwf.int/display/FCST/202212+-+Heatwave+-+Europe">ECMWF: 202212 Heatwave Europe</a></td></tr>
-<tr><td>2022 UK (August)</td><td>2022-08-08 – 2022-08-16</td><td>UK (August)</td><td><a href="https://confluence.ecmwf.int/display/FCST/202208+-+Heatwave+-+UK">ECMWF: 202208 Heatwave UK</a></td></tr>
-<tr><td>2022 UK (July)</td><td>2022-07-15 – 2022-07-23</td><td>UK (July)</td><td><a href="https://confluence.ecmwf.int/display/FCST/202207+-+Heatwave++-+W+Europe">ECMWF: 202207 Heatwave W. Europe</a><br><a href="https://en.wikipedia.org/wiki/2022_United_Kingdom_heatwaves">2022 UK heatwaves — Wikipedia</a></td></tr>
-<tr><td>2022 France</td><td>2022-06-09 – 2022-06-21</td><td>France</td><td><a href="https://confluence.ecmwf.int/display/FCST/202206+-+Heatwave+-+Western+Europe">ECMWF: 202206 Heatwave W. Europe</a></td></tr>
-<tr><td>2022 Japan</td><td>2022-06-20 – 2022-07-05</td><td>Japan</td><td><a href="https://en.wikipedia.org/wiki/2022_Japan_heat_wave">2022 Japan heat wave — Wikipedia</a></td></tr>
-<tr><td>2022 India</td><td>2022-04-24 – 2022-05-04</td><td>India</td><td><a href="https://confluence.ecmwf.int/display/FCST/202205+-+Heatwave+-+India%2C+Pakistan">ECMWF: 202205 Heatwave India/Pakistan</a></td></tr>
-<tr><td>2022 East Antarctica</td><td>2022-03-12 – 2022-03-26</td><td>East Antarctica</td><td><a href="https://journals.ametsoc.org/view/journals/clim/37/3/JCLI-D-23-0175.1.xml">AMS: East Antarctica Heat Wave 2022</a></td></tr>
-<tr><td>2022 West Australia</td><td>2022-01-15 – 2022-01-25</td><td>West Australia</td><td><a href="https://en.wikipedia.org/wiki/2022_heat_waves">2022 heat waves — Wikipedia</a></td></tr>
-<tr><td>2021 Canada Plains</td><td>2021-05-30 – 2021-06-09</td><td>Canada Plains</td><td><a href="https://en.wikipedia.org/wiki/List_of_heat_waves">List of heat waves — Wikipedia</a></td></tr>
-<tr><td>2021 New Zealand</td><td>2021-01-12 – 2021-01-18</td><td>New Zealand</td><td><a href="https://niwa.co.nz/climate-and-weather/annual/annual-climate-summary-2021">2021 Annual Climate Summary (NIWA)</a></td></tr>
-<tr><td>2020 Australia</td><td>2020-11-25 – 2020-12-01</td><td>Australia</td><td><a href="https://www.abc.net.au/news/2020-12-01/bom-says-hottest-november-and-spring-nights-on-record/12937620">ABC News: Australia heatwave Nov–Dec 2020</a></td></tr>
-<tr><td>May 2024 Texas</td><td>2024-05-25 – 2024-05-31</td><td>Texas</td><td><a href="https://en.wikipedia.org/wiki/2024_North_America_heat_waves">2024 North America heat waves — Wikipedia</a></td></tr>
-<tr><td>June 2024 Northeast US</td><td>2024-06-17 – 2024-06-23</td><td>Northeast US</td><td><a href="https://en.wikipedia.org/wiki/2024_North_America_heat_waves">2024 North America heat waves — Wikipedia</a></td></tr>
-<tr><td>July 2024 Southwest US</td><td>2024-07-04 – 2024-07-10</td><td>Southwest US</td><td><a href="https://en.wikipedia.org/wiki/2024_North_America_heat_waves">2024 North America heat waves — Wikipedia</a></td></tr>
-<tr><td>July 2024 Northeast US</td><td>2024-07-07 – 2024-07-13</td><td>Northeast US</td><td><a href="https://en.wikipedia.org/wiki/2024_North_America_heat_waves">2024 North America heat waves — Wikipedia</a></td></tr>
-<tr><td>July 2024 Mid-Atlantic US</td><td>2024-07-15 – 2024-07-21</td><td>Mid-Atlantic US</td><td><a href="https://en.wikipedia.org/wiki/2024_North_America_heat_waves">2024 North America heat waves — Wikipedia</a></td></tr>
-<tr><td>August 2024 Midwest US</td><td>2024-08-25 – 2024-08-31</td><td>Midwest US</td><td><a href="https://en.wikipedia.org/wiki/2024_North_America_heat_waves">2024 North America heat waves — Wikipedia</a><br><a href="https://www.newsweek.com/map-states-breaking-heat-records-1945513">Newsweek: States break heat records</a></td></tr>
-<tr><td>July 2024 Antarctica</td><td>2024-07-01 – 2024-07-31</td><td>Antarctica</td><td><a href="https://en.wikipedia.org/wiki/2024_Antarctica_heat_wave">2024 Antarctica heat wave — Wikipedia</a></td></tr>
-<tr><td>August 2024 Canada</td><td>2024-08-09 – 2024-08-15</td><td>Canada</td><td><a href="https://confluence.ecmwf.int/display/FCST/202408+-+Heatwave+-+Canada">ECMWF: 202408 Heatwave Canada</a></td></tr>
-<tr><td>August 2024 Australia</td><td>2024-08-22 – 2024-08-30</td><td>Australia</td><td><a href="https://www.abc.net.au/news/2024-08-29/winter-ends-with-heatwave-as-climate-change-upends-seasons/104279250">ABC News: Australia winter heatwave Aug 2024</a></td></tr>
-<tr><td>July/August 2024 Japan</td><td>2024-07-25 – 2024-08-05</td><td>Japan</td><td><a href="https://en.wikipedia.org/wiki/2024_Japan_heatwaves">2024 Japan heatwaves — Wikipedia</a></td></tr>
-<tr><td>June 2024 Saudi Arabia</td><td>2024-06-16 – 2024-06-22</td><td>Saudi Arabia</td><td><a href="https://www.climameter.org/20240616-18-saudi-arabia-heatwave">ClimaMeter: Saudi Arabia Heatwave Jun 2024</a></td></tr>
-<tr><td>August 2024 Europe</td><td>2024-08-10 – 2024-08-16</td><td>Europe</td><td><a href="https://en.wikipedia.org/wiki/2024_European_heatwaves">2024 European heatwaves — Wikipedia</a></td></tr>
-<tr><td>July 2024 Ukraine</td><td>2024-07-12 – 2024-07-18</td><td>Ukraine</td><td><a href="https://en.wikipedia.org/wiki/2024_European_heatwaves">2024 European heatwaves — Wikipedia</a></td></tr>
-<tr><td>June 2024 Europe</td><td>2024-06-20 – 2024-06-30</td><td>Europe</td><td><a href="https://en.wikipedia.org/wiki/2024_European_heatwaves">2024 European heatwaves — Wikipedia</a></td></tr>
-<tr><td>May 2024 Central Mexico</td><td>2024-05-23 – 2024-05-31</td><td>Central Mexico</td><td><a href="https://en.wikipedia.org/wiki/2024_North_America_heat_waves">2024 North America heat waves — Wikipedia</a></td></tr>
-<tr><td>May 2024 Pakistan/India</td><td>2024-05-23 – 2024-05-31</td><td>Pakistan/India</td><td><a href="https://en.wikipedia.org/wiki/2024_Indian_heat_wave">2024 Indian heat wave — Wikipedia</a><br><a href="https://en.wikipedia.org/wiki/2024_Pakistan_heat_wave">2024 Pakistan heat wave — Wikipedia</a></td></tr>
-<tr><td>August 2023 Chile</td><td>2023-08-01 – 2023-08-07</td><td>Chile</td><td><a href="https://en.wikipedia.org/wiki/2023_South_America_heat_wave">2023 South America heat wave — Wikipedia</a></td></tr>
-</tbody>
-</table>
-</details>
-
-<script>
-function filterTable(input, slug) {
-  const filter = input.value.toLowerCase();
-  const rows = document.querySelectorAll(
-    '#case-table-' + slug + ' tbody tr'
-  );
-  rows.forEach(r => {
-    r.style.display =
-      r.textContent.toLowerCase().includes(filter) ? '' : 'none';
-  });
-}
-</script>

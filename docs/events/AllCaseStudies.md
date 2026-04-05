@@ -10,12 +10,12 @@ EWB is a community benchmark!  If you want to submit new categories or new case 
 
 ## Severe Convective Weather
 
-Severe convective weather includes tornado outbreaks, major hail storms, and major wind storms. Most of these are not able to be resolved at the current resolution of global models. We have collected case studies for multiple high-impact convective weather phenomena and provide each of these below. For the initial release, we provide data only for overall severe convective days and high-risk bust days.
+Severe convective weather includes tornado outbreaks, major hail storms, and major wind storms. Most of these are not able to be resolved at the current resolution of global models. We have collected case studies for multiple high-impact convective weather phenomena and provide each of these below. For the initial release, we provide data only for overall severe convection and high-risk bust cases.
 
 The overall description of what data sources we used as well as how we chose the different cases is [here](ConvectiveWx.md).
 
 ### Case studies and data available
-* [Overall severe convection](PlannedEventTypes.md#overall-severe-days) 
+* [Overall severe convection](PlannedEventTypes.md#overall-severe-convection) 
 * [High-risk severe convection busts](PlannedEventTypes.md#high-risk-bust-days) 
 
 ### Cases studies available now, data in future release
