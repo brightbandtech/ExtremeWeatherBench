@@ -1,6 +1,6 @@
 # Accessing a CIRA Forecast
 
-We have a dedicated virtual reference icechunk store for CIRA data **up to May 26th, 2025** available at `gs://extremeweatherbench/cira-icechunk`. Compared to using parquet virtual references, we have seen a speed improvements of around 2x with ~25% more memory usage.
+We have a dedicated virtual reference [icechunk](https://icechunk.io/) store for CIRA data **up to May 26th, 2025** available at `gs://extremeweatherbench/cira-icechunk`. Compared to using parquet virtual references, we have seen a speed improvements of around 2x with ~25% more memory usage.
 
 ## Accessing a CIRA Model from the store
 
@@ -117,4 +117,54 @@ parallel_config = {
     }
 
 output = ewb.run(parallel_config=parallel_config)
+```
+## Complete Example
+
+```python
+import extremeweatherbench as ewb
+from extremeweatherbench import inputs, metrics, cases, evaluate
+
+# FCNv2 with IFS initialisation from the CIRA icechunk store
+fcnv2 = inputs.get_cira_icechunk(model_name="FOUR_v200_IFS")
+
+# GHCNh point-observation target (no credentials required)
+ghcn_target = inputs.GHCN()
+
+metrics_list = [
+    metrics.MeanAbsoluteError(
+        forecast_variable="surface_air_temperature",
+        target_variable="surface_air_temperature",
+    ),
+    metrics.MaximumMeanAbsoluteError(
+        forecast_variable="surface_air_temperature",
+        target_variable="surface_air_temperature",
+    ),
+    metrics.CriticalSuccessIndex(
+        forecast_variable="surface_air_temperature",
+        target_variable="surface_air_temperature",
+        forecast_threshold=310,
+        target_threshold=310,
+    ),
+]
+
+# Subset to the first two heat wave cases for a quick run
+case_vals = cases.load_ewb_events_yaml_into_case_list()
+heatwave_cases = [c for c in case_vals if c.event_type == "heat_wave"][:2]
+
+evaluation_object = [
+    inputs.EvaluationObject(
+        event_type="heat_wave",
+        metric_list=metrics_list,
+        target=ghcn_target,
+        forecast=fcnv2,
+    ),
+]
+
+ewb_runner = evaluate.ExtremeWeatherBench(
+    case_metadata=heatwave_cases,
+    evaluation_objects=evaluation_object,
+)
+
+output = ewb_runner.run(parallel_config={"backend": "loky", "n_jobs": 2})
+print(output)
 ```

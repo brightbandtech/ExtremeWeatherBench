@@ -27,10 +27,10 @@ The overall description of what data sources we used as well as how we chose the
 
 ## Heatwaves 
 
-Heatwaves are growing in frequency and intensity. We provide case studies and data on land-based heatwaves. If there is interest in the future, we could expand this to include ocean-based heatwaves.
+Heat waves are growing in frequency and intensity. We provide case studies and data on land-based heat waves. If there is interest in the future, we could expand this to include ocean-based heat waves.
 
 ### Case studies and data available
-* [Land-based heatwaves](Heatwaves.md) 
+* [Land-based heat waves](Heatwaves.md) 
 
 ## Tropical cyclones
 

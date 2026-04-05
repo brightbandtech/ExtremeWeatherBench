@@ -77,7 +77,7 @@ there (e.g. `token`, `anon`) is valid here.
 
 ### KerchunkForecast
 
-Use `KerchunkForecast` when your forecast is referenced via a kerchunk `.parq` or
+Use `KerchunkForecast` when your forecast is referenced via a [kerchunk](https://fsspec.github.io/kerchunk/) `.parq` or
 `.json` sidecar file. This is the access pattern used by the CIRA AIWP registry on
 AWS Open Data.
 
@@ -97,7 +97,7 @@ cira_kerchunk_forecast = ewb.forecasts.KerchunkForecast(
 ```
 
 Both parquet and JSON kerchunk formats are supported. The underlying engine is
-`xarray-kerchunk`. For CIRA models stored in icechunk format, use
+`xarray-kerchunk`. For CIRA models stored in [icechunk](https://icechunk.io/) format, use
 `ewb.inputs.get_cira_icechunk()` as a convenience wrapper instead.
 
 ### XarrayForecast
@@ -294,13 +294,13 @@ gs://extremeweatherbench/datasets/
 
 It accepts a `quantile` argument (either `0.15` or `0.85`) and returns the
 corresponding percentile field as an `xr.DataArray`. This climatology is used
-internally by `DurationMeanError` for heatwave and freeze evaluations — you do not
+internally by `DurationMeanError` for heat wave and freeze evaluations — you do not
 need to load it manually unless you are writing a custom threshold metric.
 
 ```python
 from extremeweatherbench.defaults import get_climatology
 
-# 85th-percentile threshold used for heatwave duration metrics
+# 85th-percentile threshold used for heat wave duration metrics
 heat_threshold = get_climatology(quantile=0.85)
 ```
 

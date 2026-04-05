@@ -16,7 +16,7 @@ observations onto a regular grid. Station data from GHCN is available
 much sooner after an event, is not gridded (so it does not smooth
 spatial extremes), and reflects what a person actually experienced at
 a specific location. Point observations are therefore especially
-valuable for heatwave and freeze evaluation, where peak temperatures
+valuable for heat wave and freeze evaluation, where peak temperatures
 at individual stations are operationally important.
 
 > **Detailed Explanation**: GHCN is stored as a polars-compatible parquet
@@ -190,4 +190,57 @@ pnw_stations = (
     .collect()
 )
 print(f"Stations in bounding box: {len(pnw_stations)}")
+```
+
+## Complete Example
+
+```python
+import pandas as pd
+import extremeweatherbench as ewb
+
+# HRES forecast from WeatherBench2 — public, no credentials required
+forecast = ewb.ZarrForecast(
+    source=(
+        "gs://weatherbench2/datasets/hres/"
+        "2016-2022-0012-1440x721.zarr"
+    ),
+    name="HRES",
+    variable_mapping=ewb.HRES_metadata_variable_mapping,
+    storage_options={"remote_options": {"anon": True}},
+)
+
+# GHCNh point observations — fetched from the EWB GCS bucket
+ghcn_target = ewb.GHCN()
+
+eval_objects = [
+    ewb.EvaluationObject(
+        event_type="heat_wave",
+        metric_list=[
+            ewb.metrics.MeanAbsoluteError(
+                forecast_variable="surface_air_temperature",
+                target_variable="surface_air_temperature",
+            ),
+            ewb.metrics.MaximumMeanAbsoluteError(
+                forecast_variable="surface_air_temperature",
+                target_variable="surface_air_temperature",
+            ),
+        ],
+        target=ghcn_target,
+        forecast=forecast,
+    ),
+]
+
+all_cases = ewb.load_cases()
+heatwave_cases = [c for c in all_cases if c.event_type == "heat_wave"]
+
+runner = ewb.evaluation(
+    case_metadata=heatwave_cases,
+    evaluation_objects=eval_objects,
+)
+outputs = runner.run()
+outputs.to_csv("ghcn_heatwave_eval.csv", index=False)
+
+# Summarise mean MAE per lead time
+mae = outputs[outputs["metric"] == "MeanAbsoluteError"]
+print(mae.groupby("lead_time")["value"].mean())
 ```

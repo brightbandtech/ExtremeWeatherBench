@@ -201,3 +201,74 @@ hi_metric = ewb.metrics.MaximumMeanAbsoluteError(
     target_variable=hi_variable,
 )
 ```
+
+## Complete Example
+
+The `DewpointDepression` derived variable from Example 1, wired into a full
+heat wave evaluation.
+
+```python
+import xarray as xr
+import extremeweatherbench as ewb
+from extremeweatherbench.derived import DerivedVariable
+
+
+class DewpointDepression(DerivedVariable):
+    """2 m dewpoint depression (T2m - Td2m) in Kelvin."""
+
+    variables = [
+        "surface_air_temperature",
+        "surface_dewpoint_temperature",
+    ]
+
+    def __init__(self, name: str = "dewpoint_depression"):
+        super().__init__(name=name)
+
+    def derive_variable(
+        self, data: xr.Dataset, *args, **kwargs
+    ) -> xr.DataArray:
+        depression = (
+            data["surface_air_temperature"]
+            - data["surface_dewpoint_temperature"]
+        )
+        depression.name = self.name
+        return depression
+
+
+dd = DewpointDepression()
+
+forecast = ewb.ZarrForecast(
+    source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
+    name="HRES",
+    variable_mapping=ewb.HRES_metadata_variable_mapping,
+    storage_options={"remote_options": {"anon": True}},
+)
+
+target = ewb.ERA5(
+    variables=["surface_air_temperature", "surface_dewpoint_temperature"]
+)
+
+eval_objects = [
+    ewb.EvaluationObject(
+        event_type="heat_wave",
+        metric_list=[
+            ewb.metrics.MeanAbsoluteError(
+                forecast_variable=dd,
+                target_variable=dd,
+            ),
+        ],
+        target=target,
+        forecast=forecast,
+    ),
+]
+
+all_cases = ewb.load_cases()
+heatwave_cases = [c for c in all_cases if c.event_type == "heat_wave"][:5]
+
+runner = ewb.evaluation(
+    case_metadata=heatwave_cases,
+    evaluation_objects=eval_objects,
+)
+outputs = runner.run()
+print(outputs)
+```

@@ -165,3 +165,57 @@ df = pd.read_csv("tc_evaluation.csv")
 displacement = df[df["metric"] == "landfall_displacement"]
 print(displacement.groupby("forecast_source")["value"].describe())
 ```
+
+## Complete Example
+
+```python
+import extremeweatherbench as ewb
+from extremeweatherbench import inputs, derived, metrics
+
+# FCNv2 with IFS initialisation; TropicalCycloneTrackVariables specifies
+# the four raw fields needed for track detection.
+forecast = inputs.get_cira_icechunk(
+    model_name="FOUR_v200_IFS",
+    variables=[derived.TropicalCycloneTrackVariables()],
+)
+
+ibtracs_target = ewb.IBTrACS()
+
+tc_metrics = [
+    metrics.LandfallDisplacement(
+        approach="first",
+        forecast_variable="surface_wind_speed",
+        target_variable="surface_wind_speed",
+    ),
+    metrics.LandfallTimeMeanError(
+        approach="first",
+        forecast_variable="surface_wind_speed",
+        target_variable="surface_wind_speed",
+    ),
+    metrics.LandfallIntensityMeanAbsoluteError(
+        approach="first",
+        forecast_variable="surface_wind_speed",
+        target_variable="surface_wind_speed",
+    ),
+]
+
+eval_objects = [
+    ewb.EvaluationObject(
+        event_type="tropical_cyclone",
+        metric_list=tc_metrics,
+        target=ibtracs_target,
+        forecast=forecast,
+    ),
+]
+
+all_cases = ewb.load_cases()
+tc_cases = [c for c in all_cases if c.event_type == "tropical_cyclone"]
+
+runner = ewb.evaluation(
+    case_metadata=tc_cases,
+    evaluation_objects=eval_objects,
+)
+outputs = runner.run()
+outputs.to_csv("tc_evaluation.csv", index=False)
+print(outputs[["metric", "value", "init_time", "case_id_number"]].head(20))
+```

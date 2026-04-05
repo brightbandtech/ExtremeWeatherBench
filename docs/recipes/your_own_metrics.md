@@ -178,3 +178,100 @@ case_level_mae = ewb.metrics.MeanAbsoluteError(
     preserve_dims="init_time",
 )
 ```
+
+## Complete Example
+
+Both custom metrics from this page combined in a single heat wave evaluation.
+
+```python
+import xarray as xr
+import extremeweatherbench as ewb
+
+
+class MeanAbsolutePercentageError(ewb.BaseMetric):
+    """Mean Absolute Percentage Error between forecast and target."""
+
+    def __init__(self, name: str = "MAPE", **kwargs):
+        super().__init__(name=name, **kwargs)
+
+    def _compute_metric(
+        self,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
+        **kwargs,
+    ) -> xr.DataArray:
+        percentage_error = (
+            (forecast - target).abs() / target.where(target != 0)
+        ) * 100
+        return percentage_error.mean(
+            dim=[d for d in percentage_error.dims if d != self.preserve_dims]
+        )
+
+
+class ProbabilityOfDetection(ewb.ThresholdMetric):
+    """Probability of Detection (Hit Rate) from binary classifications."""
+
+    def __init__(self, name: str = "ProbabilityOfDetection", **kwargs):
+        super().__init__(name=name, **kwargs)
+
+    def _compute_metric(
+        self,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
+        **kwargs,
+    ):
+        transformed = kwargs.get("transformed_manager")
+        if transformed is None:
+            transformed = self.transformed_contingency_manager(
+                forecast=forecast,
+                target=target,
+                forecast_threshold=self.forecast_threshold,
+                target_threshold=self.target_threshold,
+                preserve_dims=self.preserve_dims,
+            )
+        counts = transformed.get_counts()
+        tp = counts["tp_count"]
+        fn = counts["fn_count"]
+        return tp / (tp + fn)
+
+
+mape = MeanAbsolutePercentageError(
+    forecast_variable="surface_air_temperature",
+    target_variable="surface_air_temperature",
+)
+
+pod = ProbabilityOfDetection(
+    forecast_variable="surface_air_temperature",
+    target_variable="surface_air_temperature",
+    forecast_threshold=308.15,  # 35 °C in Kelvin
+    target_threshold=308.15,
+)
+
+forecast = ewb.ZarrForecast(
+    source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
+    name="HRES",
+    variable_mapping=ewb.HRES_metadata_variable_mapping,
+    storage_options={"remote_options": {"anon": True}},
+)
+
+target = ewb.ERA5(variables=["surface_air_temperature"])
+
+eval_objects = [
+    ewb.EvaluationObject(
+        event_type="heat_wave",
+        metric_list=[mape, pod],
+        target=target,
+        forecast=forecast,
+    ),
+]
+
+all_cases = ewb.load_cases()
+heatwave_cases = [c for c in all_cases if c.event_type == "heat_wave"][:5]
+
+runner = ewb.evaluation(
+    case_metadata=heatwave_cases,
+    evaluation_objects=eval_objects,
+)
+outputs = runner.run()
+print(outputs)
+```

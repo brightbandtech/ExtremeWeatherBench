@@ -3,7 +3,7 @@
 ExtremeWeatherBench supports any gridded forecast that can be expressed
 as an xarray `Dataset`. This page shows you how to wrap your forecast
 in one of the three built-in `ForecastBase` subclasses and plug it into
-an evaluation. If your data lives in a zarr store, a kerchunk reference,
+an evaluation. If your data lives in a zarr store, a [kerchunk](https://fsspec.github.io/kerchunk/) reference,
 or is already loaded in memory, a corresponding class exists for each
 case. Where to go next: the [Usage](../usage.md) page shows the full
 evaluation loop once your forecast object is ready.
@@ -126,16 +126,16 @@ If you need to transform the dataset before evaluation (unit conversion,
 coordinate adjustments, etc.), pass a callable to `preprocess`:
 
 ```python
-def kelvin_to_celsius(ds: xr.Dataset) -> xr.Dataset:
+def celsius_to_kelvin(ds: xr.Dataset) -> xr.Dataset:
     if "t2m" in ds:
-        ds["t2m"] = ds["t2m"] - 273.15
+        ds["t2m"] = ds["t2m"] + 273.15
     return ds
 
 preprocessed_forecast = ewb.XarrayForecast(
     ds=ds,
-    name="MyModel_C",
+    name="MyModel_K",
     variable_mapping=my_mapping,
-    preprocess=kelvin_to_celsius,
+    preprocess=celsius_to_kelvin,
 )
 ```
 
@@ -158,12 +158,12 @@ cira_kerchunk = ewb.KerchunkForecast(
 )
 ```
 
-> **Detailed Explanation**: Kerchunk creates lightweight virtual
+> **Detailed Explanation**: [Kerchunk](https://fsspec.github.io/kerchunk/) creates lightweight virtual
 > reference files that point to byte ranges in existing NetCDF or HDF5
 > archives. This avoids copying data while still allowing zarr-style
 > chunked access. The `storage_options` dict is split into a
 > `remote_protocol` key (the storage backend, e.g. `"s3"` or `"gcs"`)
-> and a `remote_options` dict passed to `fsspec` for credentials.
+> and a `remote_options` dict passed to `fsspec` for credentials. It is recommended to use [VirtualiZarr](https://virtualizarr.readthedocs.io/en/latest/) with an [icechunk](https://icechunk.io/) store over kerchunk in most situations, though this comes at a risk of needing to manage concurrent HTML requests when running many parallel jobs.
 
 ## Running an evaluation with your forecast
 
@@ -202,3 +202,50 @@ outputs.to_csv("results.csv")
 The output is a pandas `DataFrame` with one row per
 `(case, metric, lead_time, init_time)` combination. See
 [Usage](../usage.md) for a full walkthrough of the output columns.
+
+## Complete Example
+
+```python
+import extremeweatherbench as ewb
+
+# ZarrForecast wrapping the public WeatherBench2 HRES store
+forecast = ewb.ZarrForecast(
+    source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
+    name="HRES",
+    variables=["surface_air_temperature"],
+    variable_mapping=ewb.HRES_metadata_variable_mapping,
+    storage_options={"remote_options": {"anon": True}},
+)
+
+target = ewb.ERA5(variables=["surface_air_temperature"])
+
+eval_objects = [
+    ewb.EvaluationObject(
+        event_type="heat_wave",
+        metric_list=[
+            ewb.metrics.MeanAbsoluteError(
+                forecast_variable="surface_air_temperature",
+                target_variable="surface_air_temperature",
+            ),
+            ewb.metrics.MaximumMeanAbsoluteError(
+                forecast_variable="surface_air_temperature",
+                target_variable="surface_air_temperature",
+            ),
+        ],
+        target=target,
+        forecast=forecast,
+    ),
+]
+
+# Limit to five heat wave cases for a quick demonstration
+all_cases = ewb.load_cases()
+heatwave_cases = [c for c in all_cases if c.event_type == "heat_wave"][:5]
+
+runner = ewb.evaluation(
+    case_metadata=heatwave_cases,
+    evaluation_objects=eval_objects,
+)
+outputs = runner.run()
+outputs.to_csv("byof_results.csv", index=False)
+print(outputs)
+```

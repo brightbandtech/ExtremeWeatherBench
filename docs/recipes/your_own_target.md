@@ -164,3 +164,90 @@ class MyStationObs(inputs.TargetBase):
   filtering; these are `datetime.datetime` objects.
 - Longitude convention: EWB uses 0–360 internally. Convert from
   −180–180 using `ewb.convert_longitude_to_360`.
+
+## Complete Example
+
+A custom point-observation target wrapping EWB's public GHCNh parquet file,
+following the `MyStationObs` pattern from Example 2 above.
+
+```python
+import dataclasses
+import pandas as pd
+import polars as pl
+import xarray as xr
+import extremeweatherbench as ewb
+from extremeweatherbench import inputs, utils
+
+
+@dataclasses.dataclass
+class CustomGHCN(inputs.TargetBase):
+    """GHCNh parquet accessed via TargetBase, with explicit unit handling."""
+
+    name: str = "CustomGHCN"
+    source: str = ewb.DEFAULT_GHCN_URI
+
+    def _open_data_from_source(self):
+        return pl.scan_parquet(
+            self.source,
+            storage_options={"anon": True},
+        )
+
+    def subset_data_to_case(self, data, case_metadata, **kwargs):
+        bounds = case_metadata.location.as_geopandas().total_bounds
+        time_min = case_metadata.start_date - pd.Timedelta(days=1)
+        time_max = case_metadata.end_date + pd.Timedelta(days=1)
+        return data.filter(
+            (pl.col("valid_time") >= time_min)
+            & (pl.col("valid_time") <= time_max)
+            & (pl.col("latitude")  >= bounds[1])
+            & (pl.col("latitude")  <= bounds[3])
+            & (pl.col("longitude") >= bounds[0])
+            & (pl.col("longitude") <= bounds[2])
+        )
+
+    def _custom_convert_to_dataset(self, data):
+        df = data.collect().to_pandas()
+        df["surface_air_temperature"] += 273.15  # °C → K
+        df["longitude"] = utils.convert_longitude_to_360(df["longitude"])
+        df = df.set_index(["valid_time", "latitude", "longitude"])
+        return xr.Dataset.from_dataframe(
+            df[~df.index.duplicated(keep="first")], sparse=True
+        )
+
+    def maybe_align_forecast_to_target(self, forecast_data, target_data):
+        return inputs.align_forecast_to_target(forecast_data, target_data)
+
+
+custom_target = CustomGHCN()
+
+forecast = ewb.ZarrForecast(
+    source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
+    name="HRES",
+    variable_mapping=ewb.HRES_metadata_variable_mapping,
+    storage_options={"remote_options": {"anon": True}},
+)
+
+eval_objects = [
+    ewb.EvaluationObject(
+        event_type="heat_wave",
+        metric_list=[
+            ewb.metrics.MeanAbsoluteError(
+                forecast_variable="surface_air_temperature",
+                target_variable="surface_air_temperature",
+            ),
+        ],
+        target=custom_target,
+        forecast=forecast,
+    ),
+]
+
+all_cases = ewb.load_cases()
+heatwave_cases = [c for c in all_cases if c.event_type == "heat_wave"][:3]
+
+runner = ewb.evaluation(
+    case_metadata=heatwave_cases,
+    evaluation_objects=eval_objects,
+)
+outputs = runner.run()
+print(outputs)
+```

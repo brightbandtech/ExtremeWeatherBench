@@ -1,8 +1,8 @@
-# Land-based heatwaves
+# Land-Based Heat Waves
 ## Cases
 
 Case bounds were derived from the sources listed above (Wikipedia heat wave lists, ECMWF Severe Event Catalogue, and regional BOM/NIWA reports) and sized to enclose the full synoptic-scale hot air mass at 0.25° grid resolution, typically extending 5–15° beyond the primary affected area to capture the upstream blocking ridge. Each candidate case was retained only if the ERA5 2 m temperature anomaly within the box exceeded the 85th percentile of the 1991–2020 climatology for at least three consecutive days. Boxes targeting coastal or island locations were widened to include the relevant maritime boundary-layer source region.
-
+ 
 <details open>
 <summary><strong>Cases — 46 events</strong></summary>
 <input id="case-filter-heat-wave" type="text" placeholder="Filter cases…"
@@ -76,7 +76,7 @@ function filterTable(input, slug) {
 </script>
 
 
-We identified the heatwaves from the following sources:
+We identified the heat waves from the following sources:
 
 * [Heat waves in the United States](https://en.wikipedia.org/wiki/Category:Heat_waves_in_the_United_States)  
 * [Severe Event Catalogue](https://confluence.ecmwf.int/display/FCST/Severe+Event+Catalogue)   
@@ -175,7 +175,7 @@ Note 3 of the US-based events also cross into international events
 11. Aug 19 \- 25 2023 \- South western Europe  
     1. [202308 \- Heatwave \- South-Western Europe](https://confluence.ecmwf.int/display/FCST/202308+-+Heatwave+-+South-Western+Europe)   
     2. Id: 10  
-12. South America \- July- Sep 2023 winter/spring heatwave  
+12. South America \- July- Sep 2023 winter/spring heat wave  
     1. [2023 South America heat wave \- Wikipedia](https://en.wikipedia.org/wiki/2023_South_America_heat_wave)  
     2. Id: 11  
 13. July 16 2023 \- China (x2)   
@@ -231,7 +231,7 @@ Note 3 of the US-based events also cross into international events
     1. [https://confluence.ecmwf.int/display/FCST/202108+-+Heatwave+-+Mediterranean](https://confluence.ecmwf.int/display/FCST/202108+-+Heatwave+-+Mediterranean)   
 29. Western Europe \- Aug 2020  
     1. [https://confluence.ecmwf.int/display/FCST/202008+-+Heatwave+-+Western+Europe](https://confluence.ecmwf.int/display/FCST/202008+-+Heatwave+-+Western+Europe)   
-30. Eurasia winter heatwave \- Feb 2021  
+30. Eurasia winter heat wave \- Feb 2021  
     1. [2021 Eurasia winter heat wave \- Wikipedia](https://en.wikipedia.org/wiki/2021_Eurasia_winter_heat_wave)   
 31. South Eastern Europe \- May 2020  
     1. ​​[https://confluence.ecmwf.int/display/FCST/202005+-+Heatwave+-+SE+Europe](https://confluence.ecmwf.int/display/FCST/202005+-+Heatwave+-+SE+Europe)   

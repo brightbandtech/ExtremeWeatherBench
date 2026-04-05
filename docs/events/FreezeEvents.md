@@ -1,4 +1,4 @@
-# Large-scale major freeze events 
+# Major Freeze/Cold-Snap Events 
 ## Cases
 
 Case bounds were drawn from the sources listed above (Wikipedia winter storm and cold wave articles, ECMWF Severe Event Catalogue, and WMO regional climate reports) and sized to contain the full cold-air outbreak or synoptic trough, generally extending 10–15° of latitude beyond the primary freeze area to capture the polar air mass and its source region. Each case was validated against ERA5 2 m temperature fields to confirm that minimum temperatures fell at or below the climatological 15th percentile for the affected region. Boxes for mixed rain/ice events were extended to include the warm-sector air mass that drives the freezing-precipitation signature.
@@ -98,7 +98,7 @@ function filterTable(input, slug) {
 
 ## Worldwide events
 
-1. There is a hint of large-scale cold event over Europe just before this heatwave  
+1. There is a hint of large-scale cold event over Europe just before this heat wave  
    1. [https://confluence.ecmwf.int/display/FCST/202212+-+Heatwave+-+Europe](https://confluence.ecmwf.int/display/FCST/202212+-+Heatwave+-+Europe)   
 2. January 2-5 2024 Northern Europe  
    1. [202401 \- Cold \- Northern Europe](https://confluence.ecmwf.int/display/FCST/202401+-+Cold+-+Northern+Europe)   

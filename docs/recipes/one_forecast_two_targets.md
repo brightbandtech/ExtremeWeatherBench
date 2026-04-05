@@ -20,7 +20,7 @@ Running both in a single pass is more efficient than separate runs
 because EWB opens the forecast data once and caches it across case
 operators.
 
-## Example — Heatwave skill against ERA5 and GHCN
+## Example — Heat wave skill against ERA5 and GHCN
 
 ```python
 import extremeweatherbench as ewb
@@ -90,7 +90,7 @@ ghcn_results  = outputs[outputs["target_source"] == "GHCN"]
 ## Example — Mixed event types with distinct targets
 
 You can combine different event types and different targets in a single
-run. Here, heatwave skill is evaluated against ERA5, while freeze skill
+run. Here, heat wave skill is evaluated against ERA5, while freeze skill
 is evaluated against GHCN:
 
 ```python
@@ -134,7 +134,7 @@ outputs = runner.run()
 ```
 
 EWB matches each case's `event_type` field against the
-`event_type` on each `EvaluationObject`, so heatwave cases run only
+`event_type` on each `EvaluationObject`, so heat wave cases run only
 against the ERA5 target, and freeze cases run only against GHCN.
 
 ## Metrics that differ by target
@@ -173,4 +173,63 @@ eval_objects = [
         forecast=forecast,
     ),
 ]
+```
+
+## Complete Example
+
+HRES evaluated against ERA5 and GHCN simultaneously for all heat wave cases.
+
+```python
+import extremeweatherbench as ewb
+
+forecast = ewb.ZarrForecast(
+    source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
+    name="HRES",
+    variable_mapping=ewb.HRES_metadata_variable_mapping,
+    storage_options={"remote_options": {"anon": True}},
+)
+
+era5_target = ewb.ERA5(variables=["surface_air_temperature"])
+ghcn_target = ewb.GHCN()
+
+shared_metrics = [
+    ewb.metrics.MeanAbsoluteError(
+        forecast_variable="surface_air_temperature",
+        target_variable="surface_air_temperature",
+    ),
+    ewb.metrics.MaximumMeanAbsoluteError(
+        forecast_variable="surface_air_temperature",
+        target_variable="surface_air_temperature",
+    ),
+]
+
+eval_objects = [
+    ewb.EvaluationObject(
+        event_type="heat_wave",
+        metric_list=shared_metrics,
+        target=era5_target,
+        forecast=forecast,
+    ),
+    ewb.EvaluationObject(
+        event_type="heat_wave",
+        metric_list=shared_metrics,
+        target=ghcn_target,
+        forecast=forecast,
+    ),
+]
+
+all_cases = ewb.load_cases()
+heatwave_cases = [c for c in all_cases if c.event_type == "heat_wave"]
+
+runner = ewb.evaluation(
+    case_metadata=heatwave_cases,
+    evaluation_objects=eval_objects,
+)
+outputs = runner.run()
+
+# Compare mean MAE by target source
+mae = outputs[outputs["metric"] == "MeanAbsoluteError"]
+for source in ["ERA5", "GHCN"]:
+    mean_mae = mae[mae["target_source"] == source]["value"].mean()
+    print(f"{source:6s} mean MAE: {mean_mae:.4f} K")
 ```

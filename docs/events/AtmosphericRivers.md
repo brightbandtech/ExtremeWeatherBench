@@ -1,4 +1,4 @@
-# Atmospheric rivers
+# Atmospheric Rivers
 ## Cases
 
 Cases were identified from the CW3E Atmospheric River event archive, the Global Atmospheric Rivers Dataverse (UCLA), and the peer-reviewed papers listed above. Bounding boxes are oriented along the AR axis and sized to contain the integrated vapour transport (IVT) corridor from its offshore origin to the landfall or moisture-source region, with approximately 10° margins on each side of the IVT axis. For non-western-US cases (Middle East, Australia, Antarctica, Europe), boxes were drawn to enclose the full moisture band as identified in the supporting literature and validated against ERA5 IVT fields.
@@ -228,7 +228,7 @@ Data used to select the ARs comes from:
 13. June 18-19 2021 Bloomington Indiana USA  
     1. [Atmospheric Rivers in the Eastern and Midwestern United States Associated With Baroclinic Waves](https://agupubs.onlinelibrary.wiley.com/doi/10.1029/2023GL107236)   
 14. June 24-26  2021 \- Alaska   
-    1. [An anomalous warm-season trans-Pacific atmospheric river linked to the 2021 western North America heatwave | Communications Earth & Environment](https://www.nature.com/articles/s43247-022-00459-w)   
+    1. [An anomalous warm-season trans-Pacific atmospheric river linked to the 2021 western North America heat wave | Communications Earth & Environment](https://www.nature.com/articles/s43247-022-00459-w)   
 15. March 17-24 2021 Sydney heavy rainfall,  Australia  
     1. [https://www.smh.com.au/politics/nsw/la-nina-s-final-fury-20210427-p57mvj.html](https://www.smh.com.au/politics/nsw/la-nina-s-final-fury-20210427-p57mvj.html)  
 16. Dec 1 \- 4 2020 Alaska  

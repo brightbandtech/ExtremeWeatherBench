@@ -161,3 +161,64 @@ The YAML schema for a single case entry:
       longitude_max: 280.0
   event_type: heat_wave
 ```
+
+## Complete Example
+
+A custom case (2021 Pacific Northwest heat dome) evaluated against ERA5 with
+no filtering of the default case list required.
+
+```python
+import datetime
+import extremeweatherbench as ewb
+from extremeweatherbench.cases import IndividualCase
+from extremeweatherbench.regions import BoundingBoxRegion
+
+# June 2021 Pacific Northwest heat dome
+pnw_heat_dome = IndividualCase(
+    case_id_number=9999,
+    title="2021 Pacific Northwest Heat Dome",
+    start_date=datetime.datetime(2021, 6, 26),
+    end_date=datetime.datetime(2021, 7, 2),
+    location=BoundingBoxRegion.create_region(
+        latitude_min=42.0,
+        latitude_max=52.0,
+        longitude_min=234.0,  # 126 °W in 0–360
+        longitude_max=247.0,  # 113 °W in 0–360
+    ),
+    event_type="heat_wave",
+)
+
+forecast = ewb.ZarrForecast(
+    source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
+    name="HRES",
+    variable_mapping=ewb.HRES_metadata_variable_mapping,
+    storage_options={"remote_options": {"anon": True}},
+)
+
+target = ewb.ERA5(variables=["surface_air_temperature"])
+
+eval_objects = [
+    ewb.EvaluationObject(
+        event_type="heat_wave",
+        metric_list=[
+            ewb.metrics.MeanAbsoluteError(
+                forecast_variable="surface_air_temperature",
+                target_variable="surface_air_temperature",
+            ),
+            ewb.metrics.MaximumMeanAbsoluteError(
+                forecast_variable="surface_air_temperature",
+                target_variable="surface_air_temperature",
+            ),
+        ],
+        target=target,
+        forecast=forecast,
+    ),
+]
+
+runner = ewb.evaluation(
+    case_metadata=[pnw_heat_dome],
+    evaluation_objects=eval_objects,
+)
+outputs = runner.run()
+print(outputs)
+```
