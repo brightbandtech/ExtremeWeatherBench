@@ -9,6 +9,7 @@ nav:
   - Installation: installation.md
   - Usage: usage.md
   - Data: data.md
+  - Data Preparation: data_prep.md
   - A Note on Parallelism: parallelism.md
   - Event Categories:
       - All Case Studies: events/AllCaseStudies.md
