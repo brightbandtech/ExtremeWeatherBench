@@ -997,7 +997,8 @@ class EarlySignal(BaseMetric):
         comparison_operator: Union[
             Callable, Literal[">", ">=", "<", "<=", "==", "!="]
         ] = ">=",
-        threshold: float = 0.5,
+        forecast_threshold: float = 0.5,
+        overlap_target_threshold: float | None = None,
         spatial_aggregation: Literal["any", "all", "half"] = "any",
         temporal_aggregation: Literal["any", "all", "half"] = "any",
         aggregation_order: tuple[
@@ -1010,7 +1011,9 @@ class EarlySignal(BaseMetric):
         Args:
             name: The name of the metric. Defaults to "EarlySignal".
             comparison_operator: The comparison operator for signal detection.
-            threshold: The threshold value for signal detection.
+            forecast_threshold: The threshold value for signal detection.
+            overlap_target_threshold: The target threshold for signal detection if
+                target is meant to overlap. Defaults to None for no overlap applied.
             spatial_aggregation: Spatial aggregation method. Options: "any"
                 (any gridpoint meets criteria), "all" (all gridpoints meet
                 criteria), or "half" (at least half meet criteria).
@@ -1023,7 +1026,8 @@ class EarlySignal(BaseMetric):
         """
         super().__init__(name=name, **kwargs)
         self.comparison_operator = utils.maybe_get_operator(comparison_operator)
-        self.threshold = threshold
+        self.forecast_threshold = forecast_threshold
+        self.overlap_target_threshold = overlap_target_threshold
         self.spatial_aggregation = spatial_aggregation
         self.temporal_aggregation = temporal_aggregation
         self.aggregation_order = aggregation_order
@@ -1076,19 +1080,20 @@ class EarlySignal(BaseMetric):
 
         # Create detection masks with nans preserved
         forecast_detection_mask = self.comparison_operator(
-            forecast, self.threshold
+            forecast, self.forecast_threshold
         ).where(~forecast.isnull())
-        target_detection_mask = self.comparison_operator(target, self.threshold).where(
-            ~target.isnull()
-        )
+        if self.overlap_target_threshold:
+            target_detection_mask = self.comparison_operator(
+                target, self.overlap_target_threshold
+            ).where(~target.isnull())
 
-        # Only assess forecast where target detects the event (value == 1);
-        # locations where target is 0 or NaN are set to NaN (not dropped).
-        # drop=True uses boolean dask indexing which is unsupported; NaN
-        # values are handled correctly by _apply_aggregation downstream.
-        forecast_detection_mask = forecast_detection_mask.where(
-            target_detection_mask == 1
-        )
+            # Only assess forecast where target detects the event (value == 1);
+            # locations where target is 0 or NaN are set to NaN (not dropped).
+            # drop=True uses boolean dask indexing which is unsupported; NaN
+            # values are handled correctly by _apply_aggregation downstream.
+            forecast_detection_mask = forecast_detection_mask.where(
+                target_detection_mask == 1
+            )
 
         # Create lists of dimensions to reduce
         spatial_dims = [

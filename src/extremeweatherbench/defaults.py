@@ -373,7 +373,7 @@ def get_brightband_evaluation_objects() -> list[inputs.EvaluationObject]:
             forecast_threshold=15000,
             target_threshold=0.3,
         ),
-        metrics.EarlySignal(threshold=15000),
+        metrics.EarlySignal(forecast_threshold=15000),
     ]
 
     # Define LSR metrics as thresholdmetric to share scores contingency table
