@@ -150,3 +150,64 @@ Data used to select the ARs comes from:
     2. [Atmospheric River Impacts Southeast Alaska](https://storymaps.arcgis.com/stories/8d7a98b9dd514ff199f1e8c5b4d20a8b)   
 17. Oct 2-3 2020 Western Alps  
     1. [The influence of an atmospheric river on a heavy precipitation event over the western Alps \- ScienceDirect](https://www.sciencedirect.com/science/article/pii/S2212094722001219) 
+
+## Cases
+
+| ID | Title | Start | End | Lat range | Lon range | Sources |
+|----|-------|-------|-----|-----------|-----------|---------|
+| 95 | November 2024 West Coast US | 2024-11-20 | 2024-11-22 | 27.8–54.2 | 222.4–245.3 | [AccuWeather](https://www.accuweather.com/en/weather-forecasts/bomb-cyclone-with-atmospheric-river-to-blast-northwest-part-of-california/1715099)<br>[CW3E AR Update 18 Nov 2024](https://cw3e.ucsd.edu/cw3e-ar-update-18-november-2024-outlook/) |
+| 96 | October 2024 British Columbia | 2024-10-18 | 2024-10-20 | 32.8–56.0 | 217.3–247.0 | [CW3E Event Summary 18-20 Oct 2024](https://cw3e.ucsd.edu/cw3e-event-summary-18-20-october-2024/)<br>[2024 BC floods - Wikipedia](https://en.wikipedia.org/wiki/2024_British_Columbia_floods) |
+| 97 | September 2024 SW Alaska and British Columbia | 2024-09-22 | 2024-09-24 | 37.8–62.2 | 212.1–247.9 | [CW3E Event Summary 22-24 Sep 2024](https://cw3e.ucsd.edu/cw3e-event-summary-22-24-september-2024/) |
+| 98 | October 2024 Bosnia | 2024-10-03 | 2024-10-05 | 34.8–50.5 | 8.2–27.8 | [2024 Bosnia floods - Wikipedia](https://en.wikipedia.org/wiki/2024_Bosnia_and_Herzegovina_floods) |
+| 99 | April 2024 Eastern Australia | 2024-04-05 | 2024-04-06 | -45.2–-17.8 | 139.7–163.1 | [The Conversation](https://theconversation.com/why-is-australias-east-coast-copping-all-this-rain-right-now-an-atmospheric-scientist-explains-227158) |
+| 100 | April 2024 Persian Gulf | 2024-04-14 | 2024-04-18 | 16.8–31.2 | 45.6–65.4 | [2024 Persian Gulf floods - Wikipedia](https://en.wikipedia.org/wiki/2024_Persian_Gulf_floods) |
+| 101 | February 2024 Pacific Northwest | 2024-02-28 | 2024-03-04 | 35.8–51.2 | 227.1–240.9 | [CW3E Event Summary 28 Feb-3 Mar 2024](https://cw3e.ucsd.edu/cw3e-event-summary-28-february-3-march-2024/) |
+| 102 | February 2024 California | 2024-02-18 | 2024-02-21 | 24.8–49.2 | 227.5–243.3 | [CW3E Event Summary 18-20 Feb 2024](https://cw3e.ucsd.edu/cw3e-event-summary-18-20-february-2024/) |
+| 103 | February 2024 California | 2024-02-03 | 2024-02-06 | 24.8–49.2 | 227.5–252.5 | [Atmospheric River impacts California](https://www.weather.gov/mtr/AtmosphericRiver-February_3-5_2024)<br>[February 2024 California ARs - Wikipedia](https://en.wikipedia.org/wiki/February_2024_California_atmospheric_rivers) |
+| 104 | January 2024 Alaska to California | 2024-01-26 | 2024-02-03 | 24.8–62.5 | 202.5–249.3 | [CW3E Event Summary 26 Jan-2 Feb 2024](https://cw3e.ucsd.edu/cw3e-event-summary-26-january-2-february-2024/) |
+| 105 | January 2024 California and Arizona | 2024-01-22 | 2024-01-23 | 24.8–45.2 | 232.5–249.5 | [CW3E Event Summary 22 Jan 2024](https://cw3e.ucsd.edu/cw3e-event-summary-22-january-2024/) |
+| 106 | December 2023 East Coast Cyclone | 2023-12-17 | 2023-12-19 | 17.8–52.2 | 267.6–302.4 | [CW3E East Coast Cyclone Summary](https://cw3e.ucsd.edu/wp-content/uploads/2023/12/20Dec2023_Summary/20231218EastCoast.pdf) |
+| 107 | June 2023 Northwest Cloudband | 2023-06-25 | 2023-06-28 | -35.2–-7.8 | 113.6–147.7 | [ABC Australia](https://www.abc.net.au/news/2023-06-27/tropical-rain-drenches-central-north-australia/102341464) |
+| 108 | April 2023 Middle East | 2023-04-01 | 2023-05-01 | 17.5–40.2 | 22.6–55.1 | [AGU Paper](https://agupubs.onlinelibrary.wiley.com/doi/10.1029/2024GL109446) |
+| 109 | March 2023 California and Arizona | 2023-03-09 | 2023-03-15 | 24.8–45.2 | 232.5–252.5 | [CW3E Event Summary 20-22 Mar 2023](https://cw3e.ucsd.edu/cw3e-event-summary-20-22-march-2023/) |
+| 110 | March 2023 California | 2023-03-09 | 2023-03-16 | 24.8–46.2 | 227.5–252.5 | [CW3E Event Summary 9-15 Mar 2023](https://cw3e.ucsd.edu/cw3e-event-summary-9-15-march-2023/)<br>[March 2023 NA winter storm - Wikipedia](https://en.wikipedia.org/wiki/March_2023_North_American_winter_storm) |
+| 111 | February 2023 Pacific Northwest | 2023-02-17 | 2023-02-20 | 41.3–55.7 | 226.9–240.8 | [CW3E Event Summary 19-26 Feb 2023](https://cw3e.ucsd.edu/cw3e-event-summary-19-26-february-2023/) |
+| 112 | January 2023 California | 2023-01-04 | 2023-01-10 | 24.8–49.2 | 227.5–252.5 | [2022-2023 California floods - Wikipedia](https://en.wikipedia.org/wiki/2022%E2%80%932023_California_floods)<br>[CW3E Summary](https://cw3e.ucsd.edu/cw3e-event-summary-29-december-2022-1-january-2023/) |
+| 113 | December 2022 California | 2022-12-26 | 2023-01-02 | 25.0–56.2 | 220.0–252.8 | [CW3E Event Summary 26-27 Dec 2022](https://cw3e.ucsd.edu/cw3e-event-summary-26-27-december-2022/) |
+| 114 | December 2022 Oregon and California | 2022-12-09 | 2022-12-13 | 29.3–50.0 | 227.4–243.6 | [CW3E Event Summary 9-12 Dec 2022](https://cw3e.ucsd.edu/cw3e-event-summary-9-12-december-2022/) |
+| 115 | November 2022 - December 2022 California | 2022-11-29 | 2022-12-06 | 27.3–42.2 | 227.4–243.3 | [CW3E Event Summary 29 Nov-5 Dec 2022](https://cw3e.ucsd.edu/cw3e-event-summary-29-november-5-december-2022/) |
+| 116 | October 2022 Victoria | 2022-10-13 | 2022-10-14 | -53.2–-20.0 | 116.4–166.6 | [ABC Australia](https://www.abc.net.au/news/2022-10-13/victoria-flooding-rain-road-closures-safety-warnings-melbourne/101527960) |
+| 117 | October 2022 Victoria | 2022-10-30 | 2022-10-31 | -53.2–-13.8 | 116.4–166.6 | [Vic gov flood recovery](https://www.vic.gov.au/2022-flood-recovery) |
+| 118 | November 2022 California | 2022-11-07 | 2022-11-09 | 33.0–49.2 | 227.2–247.8 | [CW3E Event Summary 7-8 Nov 2022](https://cw3e.ucsd.edu/cw3e-event-summary-7-8-november-2022/) |
+| 119 | November 2022 Pacific Northwest | 2022-11-03 | 2022-11-06 | 33.0–54.5 | 227.2–247.8 | [CW3E Event Summary 3-5 Nov 2022](https://cw3e.ucsd.edu/cw3e-event-summary-3-5-november-2022/) |
+| 120 | August 2022 Japan | 2022-08-01 | 2022-09-01 | 27.8–52.2 | 122.4–152.6 | [AGU Paper - Moisture Sources Tohoku](https://agupubs.onlinelibrary.wiley.com/doi/10.1029/2023GL104166) |
+| 121 | June 2022 Pacific Northwest, Wyoming, and Montana | 2022-06-09 | 2022-06-13 | 32.8–57.2 | 227.3–262.7 | [CW3E Event Summary 9-12 Jun 2022](https://cw3e.ucsd.edu/cw3e-event-summary-9-12-june-2022/) |
+| 122 | March 2022 East Antarctica | 2022-03-15 | 2022-03-20 | -71.0–-62.8 | 101.3–146.9 | [AMS Journal](https://journals.ametsoc.org/view/journals/clim/37/3/JCLI-D-23-0175.1.xml) |
+| 123 | February 2022 Southeast QLD / Northern NSW | 2022-02-26 | 2022-03-01 | -37.2–-17.8 | 142.3–162.7 | [2022 eastern Australia floods - Wikipedia](https://en.wikipedia.org/wiki/2022_eastern_Australia_floods) |
+| 124 | February 2022 Pacific Northwest | 2022-02-26 | 2022-03-03 | 34.8–55.7 | 227.2–247.3 | [CW3E Event Summary 26 Feb-2 Mar 2022](https://cw3e.ucsd.edu/cw3e-event-summary-26-february-2-march-2022/) |
+| 125 | January 2022 Norway and Sweden | 2022-01-14 | 2022-01-15 | 50.8–72.2 | 356.3–28.7 | [ECMWF](https://confluence.ecmwf.int/display/FCST/202201+-+Rainfall+-+Norway%2CSweden) |
+| 126 | January 2022 Colorado | 2022-01-04 | 2022-01-08 | 29.8–39.2 | 251.3–265.7 | [CW3E Extreme SWE Summary 4-7 Jan 2022](https://cw3e.ucsd.edu/cw3e-extreme-swe-snow-event-summary-4-7-january-2022/) |
+| 127 | January 2022 Pacific Northwest | 2022-01-02 | 2022-01-09 | 32.8–57.2 | 227.3–245.7 | [CW3E Event Summary 2-8 Jan 2022](https://cw3e.ucsd.edu/cw3e-event-summary-2-8-january-2022/) |
+| 128 | December 2021 - January 2022 Western US | 2021-12-22 | 2022-01-02 | 24.8–50.0 | 227.5–262.5 | [CW3E Event Summary 22 Dec 2021-1 Jan 2022](https://cw3e.ucsd.edu/cw3e-event-summary-22-december-2021-1-january-2022/) |
+| 129 | December 2021 Pacific NW | 2021-12-10 | 2021-12-15 | 32.8–53.5 | 227.3–243.7 | [CW3E Event Summary 10-14 Dec 2021](https://cw3e.ucsd.edu/cw3e-event-summary-10-14-december-2021/)<br>[2021 Pacific NW floods - Wikipedia](https://en.wikipedia.org/wiki/2021_Pacific_Northwest_floods) |
+| 130 | November 2021 Pacific Northwest | 2021-11-10 | 2021-11-17 | 32.8–56.2 | 227.3–257.7 | [CW3E Event Summary 10-16 Nov 2021](https://cw3e.ucsd.edu/cw3e-event-summary-10-16-november-2021/)<br>[2021 Pacific NW floods - Wikipedia](https://en.wikipedia.org/wiki/2021_Pacific_Northwest_floods) |
+| 131 | October 2021 California | 2021-10-19 | 2021-10-27 | 26.3–49.2 | 227.4–251.1 | [CW3E Event Summary 19-26 Oct 2021](https://cw3e.ucsd.edu/cw3e-event-summary-19-26-october-2021/) |
+| 132 | September 2021 Pacific Northwest | 2021-09-16 | 2021-09-20 | 33.5–57.2 | 227.2–257.8 | [CW3E Event Summary 16-19 Sep 2021](https://cw3e.ucsd.edu/cw3e-event-summary-16-19-september-2021/) |
+| 133 | June 2021 Bloomington Indiana | 2021-06-18 | 2021-06-20 | 31.8–47.2 | 265.3–281.7 | [AGU Baroclinic Waves Paper](https://agupubs.onlinelibrary.wiley.com/doi/10.1029/2023GL107236) |
+| 134 | June 2021 Alaska Trans-Pacific | 2021-06-24 | 2021-06-27 | 47.8–63.7 | 181.5–238.5 | [Nature - Trans-Pacific AR](https://www.nature.com/articles/s43247-022-00459-w) |
+| 135 | March 2021 Sydney | 2021-03-17 | 2021-03-25 | -41.2–-25.8 | 142.1–159.9 | [SMH](https://www.smh.com.au/politics/nsw/la-nina-s-final-fury-20210427-p57mvj.html) |
+| 136 | February 2021 Pacific Northwest | 2021-02-21 | 2021-02-24 | 34.5–56.2 | 227.2–241.3 | [CW3E Event Summary 21-23 Feb 2021](https://cw3e.ucsd.edu/cw3e-event-summary-21-23-february-2021/) |
+| 137 | January 2021 Pacific NW | 2021-01-11 | 2021-01-14 | 32.8–56.2 | 227.3–252.0 | [CW3E Event Summary 11-13 Jan 2021](https://cw3e.ucsd.edu/cw3e-event-summary-11-13-january-2021/) |
+| 138 | January 2021 Pacific Northwest | 2021-01-01 | 2021-01-08 | 32.8–56.2 | 227.3–241.7 | [CW3E Event Summary 1-7 Jan 2021](https://cw3e.ucsd.edu/cw3e-event-summary-1-7-january-2021/) |
+| 139 | December 2020 Pacific Northwest | 2020-12-17 | 2020-12-23 | 32.8–55.5 | 227.3–247.0 | [CW3E Event Summary 17-22 Dec 2020](https://cw3e.ucsd.edu/cw3e-event-summary-17-22-december-2020/) |
+| 140 | December 2020 Western US | 2020-12-11 | 2020-12-18 | 30.0–55.5 | 227.3–246.9 | [CW3E Event Summary 11-17 Dec 2020](https://cw3e.ucsd.edu/cw3e-event-summary-11-17-december-2020/) |
+| 141 | December 2020 Alaska | 2020-12-01 | 2020-12-05 | 47.8–63.2 | 191.5–238.5 | [CW3E Event Summary 1-4 Dec 2020](https://cw3e.ucsd.edu/cw3e-event-summary-01-04-december-2020/) |
+| 142 | November 2020 Western US | 2020-11-16 | 2020-11-19 | 28.8–54.7 | 227.4–243.9 | [CW3E Event Summary 16-18 Nov 2020](https://cw3e.ucsd.edu/cw3e-event-summary-16-18-november-2020/) |
+| 143 | October 2020 Western Alps | 2020-10-02 | 2020-10-04 | 36.8–54.2 | 357.1–16.9 | [ScienceDirect](https://www.sciencedirect.com/science/article/pii/S2212094722001219) |
+| 144 | September 2020 Pacific Northwest | 2020-09-23 | 2020-09-28 | 34.8–57.2 | 227.2–257.8 | [CW3E Event Summary 23-27 Sep 2020](https://cw3e.ucsd.edu/cw3e-event-summary-23-27-september-2020/) |
+| 145 | September 2020 Pacific Northwest | 2020-09-14 | 2020-09-19 | 32.8–53.5 | 227.3–240.5 | [CW3E Event Summary 14-18 Sep 2020](https://cw3e.ucsd.edu/cw3e-event-summary-14-18-september-2020/) |
+| 146 | May 2020 Western US | 2020-05-16 | 2020-05-20 | 28.0–54.0 | 227.4–241.6 | [CW3E Event Summary 16-19 May 2020](https://cw3e.ucsd.edu/cw3e-event-summary-16-19-may-2020/) |
+| 147 | March 2020 Southwestern US | 2020-03-09 | 2020-03-14 | 22.8–39.2 | 232.5–262.5 | [CW3E Event Summary 9-13 Mar 2020](https://cw3e.ucsd.edu/cw3e-event-summary-9-13-march-2020/) |
+| 148 | February 2020 Southwestern US | 2020-02-21 | 2020-02-24 | 22.8–36.0 | 235.8–262.5 | [CW3E Event Summary 21-23 Feb 2020](https://cw3e.ucsd.edu/cw3e-event-summary-21-23-february-2020/) |
+| 149 | February 2020 Western US | 2020-02-04 | 2020-02-09 | 38.8–55.2 | 227.0–250.7 | [CW3E Event Summary 4-8 Feb 2020](https://cw3e.ucsd.edu/cw3e-event-summary-4-8-february-2020/) |
+| 150 | January 2020 Pacific Northwest | 2020-01-26 | 2020-02-03 | 32.8–56.7 | 227.3–250.5 | [CW3E Event Summary 26 Jan-2 Feb 2020](https://cw3e.ucsd.edu/cw3e-event-summary-26-january-2-february-2020/) |

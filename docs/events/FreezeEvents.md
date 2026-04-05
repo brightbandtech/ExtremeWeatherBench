@@ -82,3 +82,22 @@
    3. [2023 Afghanistan cold snap \- Wikipedia](https://en.wikipedia.org/wiki/2023_Afghanistan_cold_snap)   
 10. April 3 \- 8 2021 Europe  
     1. [202104 \- Cold \- W Europe](https://confluence.ecmwf.int/display/FCST/202104+-+Cold+-+W+Europe) 
+
+## Cases
+
+| ID | Title | Start | End | Lat range | Lon range | Sources |
+|----|-------|-------|-----|-----------|-----------|---------|
+| 30 | 2021 Texas | 2021-02-10 | 2021-02-22 | 24.0–54.8 | 250.0–278.8 | [February 2021 North American cold wave - Wikipedia](https://en.wikipedia.org/wiki/February_2021_North_American_cold_wave)<br>[ECMWF](https://confluence.ecmwf.int/display/FCST/202102+-+Cold+spell+-+US) |
+| 31 | 2022 Arkansas | 2022-02-17 | 2022-03-01 | 24.2–59.0 | 243.2–272.0 | [2021-22 NA winter - Wikipedia](https://en.wikipedia.org/wiki/2021%E2%80%9322_North_American_winter#Late_February_winter_storm) |
+| 32 | 2023 Germany | 2023-12-02 | 2023-12-08 | 44.2–68.5 | 7.2–22.0 | [2023 EU cold - ECMWF](https://confluence.ecmwf.int/display/FCST/202311+-+Cold+-+Europe) |
+| 33 | 2023 China | 2023-12-15 | 2023-12-26 | 14.8–55.5 | 101.0–141.8 | [Reuters](https://www.reuters.com/world/china/chinas-cold-snap-reaches-shanghai-with-chilliest-year-end-40-years-2023-12-21/) |
+| 34 | 2023 Afghanistan | 2023-01-11 | 2023-01-28 | 22.2–49.0 | 50.8–85.5 | [2023 Afghanistan cold snap - Wikipedia](https://en.wikipedia.org/wiki/2023_Afghanistan_cold_snap) |
+| 35 | 2022 Colorado | 2022-04-06 | 2022-04-16 | 35.2–64.0 | 236.8–261.5 | [2021-22 NA winter - Wikipedia](https://en.wikipedia.org/wiki/2021%E2%80%9322_North_American_winter#Late_May_winter_storm) |
+| 87 | January 2024 Pacific Northwest | 2024-01-11 | 2024-01-20 | 41.2–66.0 | 221.2–262.0 | [January 10-13, 2024 NA storm - Wikipedia](https://en.wikipedia.org/wiki/January_10%E2%80%9313,_2024_North_American_storm_complex) |
+| 88 | April 2022 Nevada | 2022-04-11 | 2022-04-17 | 36.5–65.2 | 225.8–268.5 | [April 2022 NA storm - Wikipedia](https://en.wikipedia.org/wiki/April_2022_North_American_storm_complex) |
+| 89 | February/March 2021 New England | 2021-03-04 | 2021-03-10 | 38.5–47.0 | 283.2–291.5 | [2020-21 NA winter - Wikipedia](https://en.wikipedia.org/wiki/2020%E2%80%9321_North_American_winter) |
+| 90 | January 2024 Northern Europe | 2024-01-01 | 2024-01-09 | 51.2–70.5 | 5.2–42.5 | [ECMWF Cold Northern Europe](https://confluence.ecmwf.int/display/FCST/202401+-+Cold+-+Northern+Europe) |
+| 91 | December 2022 Europe | 2022-12-10 | 2022-12-20 | 46.2–70.8 | -9.8–25.8 | [ECMWF Cold Europe Dec 2022](https://confluence.ecmwf.int/display/FCST/202212+-+Heatwave+-+Europe) |
+| 92 | April 2024 Europe | 2024-04-16 | 2024-04-27 | 40.5–71.0 | -4.0–26.8 | [ECMWF Cold Europe Apr 2024](https://confluence.ecmwf.int/display/FCST/202404+-+Cold+-Europe) |
+| 93 | January 2023 North China | 2024-01-20 | 2024-02-04 | 38.2–47.0 | 118.0–130.8 | [CNN](https://www.cnn.com/2023/01/25/asia/east-asia-cold-snap-climate-japan-korea-china-climate-intl-hnk/index.html) |
+| 94 | April 2024 Sweden | 2024-04-02 | 2024-04-08 | 58.2–71.0 | 8.2–31.0 | [ECMWF Snowfall/Cold Sweden](https://confluence.ecmwf.int/pages/viewpage.action?pageId=402638917) |

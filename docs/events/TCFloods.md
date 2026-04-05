@@ -163,3 +163,10 @@ Some of the data used to identify TC floods came from
     1. Cross-list with floods  
     2. [https://confluence.ecmwf.int/display/FCST/202005+-+Tropical+Cyclone+-+Amphan](https://confluence.ecmwf.int/display/FCST/202005+-+Tropical+Cyclone+-+Amphan)   
     3. [Cyclone Amphan \- Wikipedia](https://en.wikipedia.org/wiki/Cyclone_Amphan)
+
+## Cases
+
+| ID | Title | Start | End | Lat range | Lon range | Sources |
+|----|-------|-------|-----|-----------|-----------|---------|
+
+*No cases are currently included in the EWB dataset for this event type.*

@@ -21,3 +21,10 @@ The data used to select the storms come from the following:
 
 * [Major freeze events](FreezeEvents.md)
 * [Large-scale snow events](SnowEvents.md)
+
+## Cases
+
+| ID | Title | Start | End | Lat range | Lon range | Sources |
+|----|-------|-------|-----|-----------|-----------|---------|
+
+*No cases are currently included in the EWB dataset for this event type.*

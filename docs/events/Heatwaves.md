@@ -177,3 +177,54 @@ Note 3 of the US-based events also cross into international events
     1. [https://confluence.ecmwf.int/display/FCST/202004+-+Heatwave+-+Arctic](https://confluence.ecmwf.int/display/FCST/202004+-+Heatwave+-+Arctic)   
 39. January 2023 South Africa  
     1. [https://link.springer.com/article/10.1007/s42865-024-00068-9](https://link.springer.com/article/10.1007/s42865-024-00068-9)
+
+## Cases
+
+| ID | Title | Start | End | Lat range | Lon range | Sources |
+|----|-------|-------|-----|-----------|-----------|---------|
+| 1 | 2021 Pacific Northwest | 2021-06-20 | 2021-07-03 | 33.2–68.0 | 215.2–256.0 | [2021 W. North America heat wave - Wikipedia](https://en.wikipedia.org/wiki/2021_Western_North_America_heat_wave)<br>[ECMWF](https://confluence.ecmwf.int/display/FCST/202106+-+Heatwave+-+N.America) |
+| 2 | 2022 Upper Midwest | 2022-05-07 | 2022-05-17 | 19.5–48.2 | 252.0–276.8 | [2022 North American heat waves - Wikipedia](https://en.wikipedia.org/wiki/2022_North_American_heat_waves) |
+| 3 | 2022 California | 2022-06-07 | 2022-06-15 | 23.8–44.5 | 235.8–266.2 | [2022 North American heat waves - Wikipedia](https://en.wikipedia.org/wiki/2022_North_American_heat_waves) |
+| 4 | 2022 Texas | 2022-06-30 | 2022-07-18 | 20.5–43.2 | 254.8–275.5 | [2022 North American heat waves - Wikipedia](https://en.wikipedia.org/wiki/2022_North_American_heat_waves) |
+| 5 | 2023 Pacific Northwest | 2023-05-10 | 2023-05-23 | 35.2–72.0 | 219.2–262.0 | [2023 W. North America heat wave - Wikipedia](https://en.wikipedia.org/wiki/2023_Western_North_America_heat_wave) |
+| 6 | 2022 Mid-Atlantic | 2022-05-17 | 2022-05-24 | 31.0–42.2 | 277.0–287.8 | [2022 North American heat waves - Wikipedia](https://en.wikipedia.org/wiki/2022_North_American_heat_waves) |
+| 7 | 2023 Australia | 2023-11-18 | 2023-11-28 | -35.0–-20.0 | 113.5–120.2 | [BOM Statement](http://www.bom.gov.au/climate/current/statements/scs78.pdf?20240202) |
+| 8 | 2023 Ireland | 2023-09-02 | 2023-09-13 | 40.8–67.5 | -9.8–16.8 | [2023 heat waves - Wikipedia](https://en.wikipedia.org/wiki/2023_heat_waves) |
+| 9 | 2023 Italy | 2023-07-07 | 2023-07-27 | 17.5–52.2 | -12.0–32.8 | [ECMWF](https://confluence.ecmwf.int/display/FCST/202307-+Heatwave+-+Southern+Europe) |
+| 10 | 2023 SW Europe | 2023-08-17 | 2023-08-28 | 36.0–56.8 | -9.2–20.8 | [ECMWF](https://confluence.ecmwf.int/display/FCST/202308+-+Heatwave+-+South-Western+Europe) |
+| 11 | 2023 South America | 2023-07-29 | 2023-08-04 | -44.2–-20.2 | 285.8–308.0 | [2023 South America heat wave - Wikipedia](https://en.wikipedia.org/wiki/2023_South_America_heat_wave) |
+| 12 | 2023 China (Shanghai) | 2023-05-24 | 2023-06-01 | 16.8–35.2 | 99.0–122.0 | [2023 Asia heat wave - Wikipedia](https://en.wikipedia.org/wiki/2023_Asia_heat_wave) |
+| 13 | 2023 China (Yunnan Province) | 2023-04-14 | 2023-04-23 | 12.8–43.5 | 92.2–121.0 | [2023 Asia heat wave - Wikipedia](https://en.wikipedia.org/wiki/2023_Asia_heat_wave) |
+| 14 | 2023 Algeria | 2023-07-05 | 2023-07-27 | 16.2–51.0 | -17.0–27.5 | [2023 heat waves - Wikipedia](https://en.wikipedia.org/wiki/2023_heat_waves) |
+| 15 | 2023 Iberian Peninsula | 2023-04-22 | 2023-05-01 | 22.8–46.8 | -15.8–8.8 | [ECMWF](https://confluence.ecmwf.int/display/FCST/202304+-+Heatwave+-+Spain+and+Portugal)<br>[2023 European heatwaves - Wikipedia](https://en.wikipedia.org/wiki/2023_European_heatwaves) |
+| 16 | 2023 Southeast Asia | 2023-04-16 | 2023-04-22 | 6.0–41.0 | 84.0–123.8 | [2023 heat waves - Wikipedia](https://en.wikipedia.org/wiki/2023_heat_waves) |
+| 17 | 2023 India | 2023-02-15 | 2023-03-01 | 22.2–53.0 | 56.8–101.5 | [2023 Asia heat wave - Wikipedia](https://en.wikipedia.org/wiki/2023_Asia_heat_wave) |
+| 18 | 2021 Western Russia | 2021-06-18 | 2021-06-30 | 35.5–65.8 | 13.2–60.0 | [2021 heat waves - Wikipedia](https://en.wikipedia.org/wiki/2021_heat_waves#Eurasia) |
+| 19 | 2022 Germany | 2022-12-23 | 2022-12-31 | 36.2–56.2 | -3.0–21.8 | [ECMWF](https://confluence.ecmwf.int/display/FCST/202212+-+Heatwave+-+Europe) |
+| 20 | 2022 UK (August) | 2022-08-08 | 2022-08-16 | 39.2–56.0 | -9.8–8.2 | [ECMWF](https://confluence.ecmwf.int/display/FCST/202208+-+Heatwave+-+UK) |
+| 21 | 2022 UK (July) | 2022-07-15 | 2022-07-23 | 37.2–58.0 | -9.8–8.2 | [ECMWF](https://confluence.ecmwf.int/display/FCST/202207+-+Heatwave++-+W+Europe)<br>[2022 UK heatwaves - Wikipedia](https://en.wikipedia.org/wiki/2022_United_Kingdom_heatwaves) |
+| 22 | 2022 France | 2022-06-09 | 2022-06-21 | 29.0–51.8 | -9.8–12.8 | [ECMWF](https://confluence.ecmwf.int/display/FCST/202206+-+Heatwave+-+Western+Europe) |
+| 23 | 2022 Japan | 2022-06-20 | 2022-07-05 | 31.2–46.0 | 125.2–145.2 | [2022 Japan heat wave - Wikipedia](https://en.wikipedia.org/wiki/2022_Japan_heat_wave) |
+| 24 | 2022 India | 2022-04-24 | 2022-05-04 | 18.0–52.8 | 58.0–78.8 | [ECMWF](https://confluence.ecmwf.int/display/FCST/202205+-+Heatwave+-+India%2C+Pakistan) |
+| 25 | 2022 East Antarctica | 2022-03-12 | 2022-03-26 | -85.5–-65.5 | 99.0–147.8 | [AMS Journal](https://journals.ametsoc.org/view/journals/clim/37/3/JCLI-D-23-0175.1.xml) |
+| 26 | 2022 West Australia | 2022-01-15 | 2022-01-25 | -35.0–-27.5 | 114.2–119.8 | [2022 heat waves - Wikipedia](https://en.wikipedia.org/wiki/2022_heat_waves) |
+| 27 | 2021 Canada Plains | 2021-05-30 | 2021-06-09 | 38.5–59.5 | 238.0–272.8 | [List of heat waves - Wikipedia](https://en.wikipedia.org/wiki/List_of_heat_waves#2021) |
+| 28 | 2021 New Zealand | 2021-01-12 | 2021-01-18 | -46.5–-40.8 | 167.5–175.2 | [NIWA Annual Summary 2021](https://niwa.co.nz/climate-and-weather/annual/annual-climate-summary-2021) |
+| 29 | 2020 Australia | 2020-11-25 | 2020-12-01 | -36.8–-17.5 | 126.5–152.5 | [BOM Statement](http://www.bom.gov.au/climate/current/statements/scs73.pdf) |
+| 70 | May 2024 Texas | 2024-05-25 | 2024-05-31 | 9.8–32.2 | 254.2–277.0 | [2024 North America heat waves - Wikipedia](https://en.wikipedia.org/wiki/2024_North_America_heat_waves) |
+| 71 | June 2024 Northeast US | 2024-06-17 | 2024-06-23 | 37.0–50.8 | 272.0–307.2 | [2024 North America heat waves - Wikipedia](https://en.wikipedia.org/wiki/2024_North_America_heat_waves) |
+| 72 | July 2024 Southwest US | 2024-07-04 | 2024-07-10 | 30.0–42.8 | 235.5–248.8 | [2024 North America heat waves - Wikipedia](https://en.wikipedia.org/wiki/2024_North_America_heat_waves) |
+| 73 | July 2024 Northeast US | 2024-07-07 | 2024-07-13 | 35.8–47.5 | 281.0–300.0 | [2024 North America heat waves - Wikipedia](https://en.wikipedia.org/wiki/2024_North_America_heat_waves) |
+| 74 | July 2024 Mid-Atlantic US | 2024-07-15 | 2024-07-21 | 35.2–44.8 | 280.0–292.8 | [2024 North America heat waves - Wikipedia](https://en.wikipedia.org/wiki/2024_North_America_heat_waves) |
+| 75 | August 2024 Midwest US | 2024-08-25 | 2024-08-31 | 36.0–46.2 | 265.5–278.2 | [2024 North America heat waves - Wikipedia](https://en.wikipedia.org/wiki/2024_North_America_heat_waves)<br>[Newsweek](https://www.newsweek.com/map-states-breaking-heat-records-1945513) |
+| 76 | July 2024 Antarctica | 2024-07-01 | 2024-07-31 | -90.0–-68.8 | -9.5–39.5 | [2024 Antarctica heat wave - Wikipedia](https://en.wikipedia.org/wiki/2024_Antarctica_heat_wave) |
+| 77 | August 2024 Canada | 2024-08-09 | 2024-08-15 | 54.5–73.5 | 231.5–272.5 | [ECMWF](https://confluence.ecmwf.int/display/FCST/202408+-+Heatwave+-+Canada) |
+| 78 | August 2024 Australia | 2024-08-22 | 2024-08-30 | -32.5–-9.5 | 116.2–144.5 | [ABC Australia](https://www.abc.net.au/news/2024-08-29/winter-ends-with-heatwave-as-climate-change-upends-seasons/104279250) |
+| 79 | July/August 2024 Japan | 2024-07-25 | 2024-08-05 | 31.2–43.0 | 123.0–142.8 | [2024 Japan heatwaves - Wikipedia](https://en.wikipedia.org/wiki/2024_Japan_heatwaves) |
+| 80 | June 2024 Saudi Arabia | 2024-06-16 | 2024-06-22 | 19.0–35.0 | 30.0–54.0 | [ClimaMeter](https://www.climameter.org/20240616-18-saudi-arabia-heatwave) |
+| 81 | August 2024 Europe | 2024-08-10 | 2024-08-16 | 35.5–55.2 | 0.0–25.8 | [2024 European heatwaves - Wikipedia](https://en.wikipedia.org/wiki/2024_European_heatwaves) |
+| 82 | July 2024 Ukraine | 2024-07-12 | 2024-07-18 | 40.0–56.8 | 14.2–45.0 | [2024 European heatwaves - Wikipedia](https://en.wikipedia.org/wiki/2024_European_heatwaves) |
+| 83 | June 2024 Europe | 2024-06-20 | 2024-06-30 | 45.5–63.2 | -4.0–25.8 | [2024 European heatwaves - Wikipedia](https://en.wikipedia.org/wiki/2024_European_heatwaves) |
+| 84 | May 2024 Central Mexico | 2024-05-23 | 2024-05-31 | 7.2–29.8 | 252.5–283.2 | [2024 North America heat waves - Wikipedia](https://en.wikipedia.org/wiki/2024_North_America_heat_waves) |
+| 85 | May 2024 Pakistan/India | 2024-05-23 | 2024-05-31 | 23.5–42.5 | 71.5–98.5 | [2024 Indian heat wave - Wikipedia](https://en.wikipedia.org/wiki/2024_Indian_heat_wave)<br>[2024 Pakistan heat wave - Wikipedia](https://en.wikipedia.org/wiki/2024_Pakistan_heat_wave) |
+| 86 | August 2023 Chile | 2023-08-01 | 2023-08-07 | -37.2–-19.0 | 288.5–305.8 | [2023 South America heat wave - Wikipedia](https://en.wikipedia.org/wiki/2023_South_America_heat_wave) |

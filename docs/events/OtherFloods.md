@@ -224,3 +224,10 @@ The data used to identify these cases comes from:
     1. [https://confluence.ecmwf.int/display/FCST/202001+-+Windstorm+-+Gloria](https://confluence.ecmwf.int/display/FCST/202001+-+Windstorm+-+Gloria)   
     2. Cross-listed with winds and flooding  
     3. [Storm Gloria \- Wikipedia](https://en.wikipedia.org/wiki/Storm_Gloria) 
+
+## Cases
+
+| ID | Title | Start | End | Lat range | Lon range | Sources |
+|----|-------|-------|-----|-----------|-----------|---------|
+
+*No cases are currently included in the EWB dataset for this event type.*

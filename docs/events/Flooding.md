@@ -18,3 +18,10 @@ We broke flooding into three main causes and provide case-studies for each of th
 * [Atmospheric Rivers](AtmosphericRivers.md)
 * [Tropical Cyclone related floods](TCFloods.md)
 * [Other large-scale flooding](OtherFloods.md)
+
+## Cases
+
+| ID | Title | Start | End | Lat range | Lon range | Sources |
+|----|-------|-------|-----|-----------|-----------|---------|
+
+*No cases are currently included in the EWB dataset for this event type.*

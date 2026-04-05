@@ -16,3 +16,10 @@ These tornado outbreaks are associated with a landfalling tropical cyclone. As w
    2. [Hurricane Isaias \- Wikipedia](https://en.wikipedia.org/wiki/Hurricane_Isaias)  
    3. [https://confluence.ecmwf.int/display/FCST/202008+-+Tropical+Cyclone+-+Isaias](https://confluence.ecmwf.int/display/FCST/202008+-+Tropical+Cyclone+-+Isaias)   
    4. Cross-listed with hurricanes/TCs
+
+## Cases
+
+| ID | Title | Start | End | Lat range | Lon range | Sources |
+|----|-------|-------|-----|-----------|-----------|---------|
+
+*No cases are currently included in the EWB dataset for this event type.*

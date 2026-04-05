@@ -95,3 +95,10 @@ Many of these are cross-listed with outbreaks. If they don’t generate enough t
    1. [May 2022 Canadian derecho \- Wikipedia](https://en.wikipedia.org/wiki/May_2022_Canadian_derecho)   
 2. June 30 2020, Brazil, Argentina, Paraguay  
    1. [https://journals.ametsoc.org/view/journals/bams/105/7/BAMS-D-23-0063.1.xml](https://journals.ametsoc.org/view/journals/bams/105/7/BAMS-D-23-0063.1.xml) 
+
+## Cases
+
+| ID | Title | Start | End | Lat range | Lon range | Sources |
+|----|-------|-------|-----|-----------|-----------|---------|
+
+*No cases are currently included in the EWB dataset for this event type.*

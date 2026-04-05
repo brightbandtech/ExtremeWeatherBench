@@ -12,9 +12,7 @@ nav:
   - A Note on Parallelism: parallelism.md
   - Event Categories:
       - All Case Studies: events/AllCaseStudies.md
-      - Atmospheric Rivers:
-          - Overview: events/AtmosphericRivers.md
-          - November 2024 West Coast US: events/atmospheric_rivers/november_2024_west_coast_us.md
+      - Atmospheric Rivers: events/AtmosphericRivers.md
       - Severe Convection: events/ConvectiveWx.md
       - Derechos: events/Derechos.md
       - Flooding: events/Flooding.md
@@ -41,7 +39,7 @@ nav:
 theme:
   name: material
   logo: _static/bb_dark.svg
-  favicon: _static/bb.svg
+  favicon: _static/bb_dark.svg
   palette:
     scheme: "brightband"
 

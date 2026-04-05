@@ -381,3 +381,11 @@ Major large-scale wind events including bomb cyclones and others (Note that dere
     * [https://confluence.ecmwf.int/display/FCST/202001+-+Windstorm++-+Brendan](https://confluence.ecmwf.int/display/FCST/202001+-+Windstorm++-+Brendan)   
 24. Jan 6 \- 7 2020 Greece  
     * [https://confluence.ecmwf.int/display/FCST/202001+-+Windstorm+-+Greece](https://confluence.ecmwf.int/display/FCST/202001+-+Windstorm+-+Greece) 
+
+
+## Cases
+
+| ID | Title | Start | End | Lat range | Lon range | Sources |
+|----|-------|-------|-----|-----------|-----------|---------|
+
+*No cases are currently included in the EWB dataset for this event type.*
