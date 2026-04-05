@@ -13,3 +13,4 @@ wheels/
 .mypy_cache
 .vscode/
 docs/source/_build/
+site/
