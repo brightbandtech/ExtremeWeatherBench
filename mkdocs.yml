@@ -13,12 +13,12 @@ nav:
   - A Note on Parallelism: parallelism.md
   - Case Studies:
       - Overview: events/case_studies.md
-      - Atmospheric Rivers: events/AtmosphericRivers.md
-      - Severe Convection: events/ConvectiveWx.md
-      - Freezes: events/FreezeEvents.md
-      - Heat Waves: events/Heatwaves.md
-      - Tropical Cyclones: events/TropicalCyclones.md
-      - Planned Event Types: events/PlannedEventTypes.md
+      - Atmospheric Rivers: events/atmospheric_rivers.md
+      - Severe Convection: events/severe_convection.md
+      - Freezes: events/cold_snaps.md
+      - Heat Waves: events/heat_waves.md
+      - Tropical Cyclones: events/tropical_cyclones.md
+      - Planned Event Types: events/planned_events.md
   - Cookbook:
       - CIRA Forecast: recipes/cira_forecast.md
       - BYOF (Bring Your Own Forecast): recipes/your_own_forecast.md

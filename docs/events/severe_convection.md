@@ -170,13 +170,13 @@ Non-US data
 ## Severe Convective Weather categories
 
 These categories are available in the initial release.
-* [Overall severe convection](PlannedEventTypes.md#overall-severe-convection) 
-* [High-risk severe convection busts](PlannedEventTypes.md#high-risk-bust-days)
+* [Overall severe convection](planned_events.md#overall-severe-convection) 
+* [High-risk severe convection busts](planned_events.md#high-risk-bust-days)
 
 The case studies for these are provided below and they will be incorporated into future EWB releases with additional metrics. The primary factor holding them back from the initial release is the coarse grid spacing of the global models and the small scale-of these events.
 
-* [Derechos](PlannedEventTypes.md#derechos)
-* [Major wind events](PlannedEventTypes.md#wind-events)
-* [Tornado outbreaks](PlannedEventTypes.md#tornado-outbreaks)
-* [Tornado outbreaks associated with Tropical Cyclones](PlannedEventTypes.md#tropical-cyclone-tornado-outbreaks)
-* [Hailstorms](PlannedEventTypes.md#hailstorms)
+* [Derechos](planned_events.md#derechos)
+* [Major wind events](planned_events.md#wind-events)
+* [Tornado outbreaks](planned_events.md#tornado-outbreaks)
+* [Tornado outbreaks associated with Tropical Cyclones](planned_events.md#tropical-cyclone-tornado-outbreaks)
+* [Hailstorms](planned_events.md#hailstorms)

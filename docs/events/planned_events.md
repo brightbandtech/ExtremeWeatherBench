@@ -117,9 +117,9 @@ We broke flooding into three main causes and provide case-studies for each of th
 
 # Flooding categories
 
-* [Atmospheric Rivers](AtmosphericRivers.md)
-* [Tropical Cyclone related floods](PlannedEventTypes.md#tropical-cyclone-flooding)
-* [Other large-scale flooding](PlannedEventTypes.md#other-floods)
+* [Atmospheric Rivers](atmospheric_rivers.md)
+* [Tropical Cyclone related floods](planned_events.md#tropical-cyclone-flooding)
+* [Other large-scale flooding](planned_events.md#other-floods)
 
 ## Other Floods
 
@@ -938,8 +938,8 @@ The data used to select the storms come from the following:
 
 ## Winter categories
 
-* [Major freeze events](FreezeEvents.md)
-* [Large-scale snow events](PlannedEventTypes.md#snow-events)
+* [Major freeze events](cold_snaps.md)
+* [Large-scale snow events](planned_events.md#snow-events)
 
 ## Snow Events
 

@@ -5,7 +5,7 @@ TC evaluation uses IBTrACS best-track data as the target and a suite of
 landfall metrics to assess position, timing, and intensity errors. This
 recipe shows you how to run the full TC evaluation, customise the metrics
 and models, and interpret the results. See the
-[Tropical Cyclones](../events/TropicalCyclones.md) event page for the
+[Tropical Cyclones](../events/tropical_cyclones.md) event page for the
 full case list.
 
 ## Background: TC evaluation in EWB
