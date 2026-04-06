@@ -144,11 +144,6 @@ function filterTable(input, slug) {
 }
 </script>
 
-
-Severe convective weather was initially defined separately for each type of convective hazard (tornado, hail, wind, etc). Due to the grid spacing of the current global models, our initial release will combine these into a single category of severe convection. These days were chosen from our initial list broken out by category with the additional requirement that they had to be days that generated multiple hazards (e.g. tornadoes and hail).
-
-Severe storm data is primarily focused on the US for the initial release. Not only is the US the climatological maximum of severe convective weather (especially tornadoes) but we have the largest public archive of storms available.  We would welcome case studies from additional locations. 
-
 ## Choosing case study dates
 To decide on the dates, we used the following online archives of storms.
 

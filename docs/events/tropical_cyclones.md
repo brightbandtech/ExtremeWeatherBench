@@ -135,9 +135,6 @@ function filterTable(input, slug) {
 }
 </script>
 
-
-We chose a wide selection of tropical cyclones and organized them by basin. It is not possible to choose every TC in every basin as that would be overwhelming. The TCs are chosen to represent a variety of cases across the magnitude of TCs. We did require that they made landfall, as some of the metrics require landfall.
-
 The list of data and cases are drawn from:
 
 * [Facts \+ Statistics: Hurricanes | III](https://www.iii.org/fact-statistic/facts-statistics-hurricanes)   
