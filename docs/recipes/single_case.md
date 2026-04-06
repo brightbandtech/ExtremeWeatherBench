@@ -162,6 +162,8 @@ The YAML schema for a single case entry:
   event_type: heat_wave
 ```
 
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/brightbandtech/extremeweatherbench/blob/main/notebooks/single_case.ipynb)
+
 ## Complete Example
 
 A custom case (2021 Pacific Northwest heat dome) evaluated against ERA5 with
@@ -173,20 +175,21 @@ import extremeweatherbench as ewb
 from extremeweatherbench.cases import IndividualCase
 from extremeweatherbench.regions import BoundingBoxRegion
 
-# June 2021 Pacific Northwest heat dome
-pnw_heat_dome = IndividualCase(
-    case_id_number=9999,
-    title="2021 Pacific Northwest Heat Dome",
-    start_date=datetime.datetime(2021, 6, 26),
-    end_date=datetime.datetime(2021, 7, 2),
+# Mini-case: 2021 Pacific NW Heat Dome — Colab-optimized
+demo_case = IndividualCase(
+    case_id_number=9008,
+    title="2021 Pacific NW Heat Dome (demo)",
+    start_date=datetime.datetime(2021, 6, 27),
+    end_date=datetime.datetime(2021, 6, 30),
     location=BoundingBoxRegion.create_region(
-        latitude_min=42.0,
-        latitude_max=52.0,
-        longitude_min=234.0,  # 126 °W in 0–360
-        longitude_max=247.0,  # 113 °W in 0–360
+        latitude_min=44.0,
+        latitude_max=50.0,
+        longitude_min=235.0,
+        longitude_max=241.0,
     ),
     event_type="heat_wave",
 )
+cases = [demo_case]
 
 forecast = ewb.ZarrForecast(
     source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
@@ -216,7 +219,7 @@ eval_objects = [
 ]
 
 runner = ewb.evaluation(
-    case_metadata=[pnw_heat_dome],
+    case_metadata=cases,
     evaluation_objects=eval_objects,
 )
 outputs = runner.run_evaluation()

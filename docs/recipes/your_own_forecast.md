@@ -203,12 +203,32 @@ The output is a pandas `DataFrame` with one row per
 `(case, metric, lead_time, init_time)` combination. See
 [Usage](../usage.md) for a full walkthrough of the output columns.
 
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/brightbandtech/extremeweatherbench/blob/main/notebooks/your_own_forecast.ipynb)
+
 ## Complete Example
 
 ```python
+import datetime
 import extremeweatherbench as ewb
+from extremeweatherbench.cases import IndividualCase
+from extremeweatherbench.regions import BoundingBoxRegion
 
-# ZarrForecast wrapping the public WeatherBench2 HRES store
+# Mini-case: 2019 W European Heat Wave — Colab-optimized
+demo_case = IndividualCase(
+    case_id_number=9002,
+    title="2019 W European Heat Wave (demo)",
+    start_date=datetime.datetime(2019, 6, 27),
+    end_date=datetime.datetime(2019, 6, 30),
+    location=BoundingBoxRegion.create_region(
+        latitude_min=45.0,
+        latitude_max=51.0,
+        longitude_min=0.0,
+        longitude_max=6.0,
+    ),
+    event_type="heat_wave",
+)
+cases = [demo_case]
+
 forecast = ewb.ZarrForecast(
     source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
     name="HRES",
@@ -237,15 +257,10 @@ eval_objects = [
     ),
 ]
 
-# Limit to five heat wave cases for a quick demonstration
-all_cases = ewb.load_cases()
-heatwave_cases = [c for c in all_cases if c.event_type == "heat_wave"][:5]
-
 runner = ewb.evaluation(
-    case_metadata=heatwave_cases,
+    case_metadata=cases,
     evaluation_objects=eval_objects,
 )
 outputs = runner.run_evaluation()
-outputs.to_csv("byof_results.csv", index=False)
 print(outputs)
 ```

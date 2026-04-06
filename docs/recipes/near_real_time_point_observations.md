@@ -192,13 +192,32 @@ pnw_stations = (
 print(f"Stations in bounding box: {len(pnw_stations)}")
 ```
 
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/brightbandtech/extremeweatherbench/blob/main/notebooks/near_real_time_point_observations.ipynb)
+
 ## Complete Example
 
 ```python
-import pandas as pd
+import datetime
 import extremeweatherbench as ewb
+from extremeweatherbench.cases import IndividualCase
+from extremeweatherbench.regions import BoundingBoxRegion
 
-# HRES forecast from WeatherBench2 — public, no credentials required
+# Mini-case: 2020 SW US Heat Wave — Colab-optimized
+demo_case = IndividualCase(
+    case_id_number=9007,
+    title="2020 SW US Heat Wave (demo)",
+    start_date=datetime.datetime(2020, 9, 5),
+    end_date=datetime.datetime(2020, 9, 8),
+    location=BoundingBoxRegion.create_region(
+        latitude_min=32.0,
+        latitude_max=38.0,
+        longitude_min=243.0,
+        longitude_max=249.0,
+    ),
+    event_type="heat_wave",
+)
+cases = [demo_case]
+
 forecast = ewb.ZarrForecast(
     source=(
         "gs://weatherbench2/datasets/hres/"
@@ -209,7 +228,6 @@ forecast = ewb.ZarrForecast(
     storage_options={"remote_options": {"anon": True}},
 )
 
-# GHCNh point observations — fetched from the EWB GCS bucket
 ghcn_target = ewb.GHCN()
 
 eval_objects = [
@@ -230,17 +248,12 @@ eval_objects = [
     ),
 ]
 
-all_cases = ewb.load_cases()
-heatwave_cases = [c for c in all_cases if c.event_type == "heat_wave"]
-
 runner = ewb.evaluation(
-    case_metadata=heatwave_cases,
+    case_metadata=cases,
     evaluation_objects=eval_objects,
 )
 outputs = runner.run_evaluation()
-outputs.to_csv("ghcn_heatwave_eval.csv", index=False)
 
-# Summarise mean MAE per lead time
 mae = outputs[outputs["metric"] == "MeanAbsoluteError"]
 print(mae.groupby("lead_time")["value"].mean())
 ```

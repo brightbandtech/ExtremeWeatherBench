@@ -165,23 +165,44 @@ class MyStationObs(inputs.TargetBase):
 - Longitude convention: EWB uses 0–360 internally. Convert from
   −180–180 using `ewb.convert_longitude_to_360`.
 
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/brightbandtech/extremeweatherbench/blob/main/notebooks/your_own_target.ipynb)
+
 ## Complete Example
 
 A custom point-observation target wrapping EWB's public GHCNh parquet file,
 following the `MyStationObs` pattern from Example 2 above.
 
 ```python
+import datetime
 import dataclasses
 import pandas as pd
 import polars as pl
 import xarray as xr
 import extremeweatherbench as ewb
 from extremeweatherbench import inputs, utils
+from extremeweatherbench.cases import IndividualCase
+from extremeweatherbench.regions import BoundingBoxRegion
+
+# Mini-case: 2018 Japan Heat Wave — Colab-optimized
+demo_case = IndividualCase(
+    case_id_number=9003,
+    title="2018 Japan Heat Wave (demo)",
+    start_date=datetime.datetime(2018, 7, 21),
+    end_date=datetime.datetime(2018, 7, 24),
+    location=BoundingBoxRegion.create_region(
+        latitude_min=33.0,
+        latitude_max=39.0,
+        longitude_min=133.0,
+        longitude_max=139.0,
+    ),
+    event_type="heat_wave",
+)
+cases = [demo_case]
 
 
 @dataclasses.dataclass
 class CustomGHCN(inputs.TargetBase):
-    """GHCNh parquet accessed via TargetBase, with explicit unit handling."""
+    """GHCNh parquet via TargetBase, with explicit unit handling."""
 
     name: str = "CustomGHCN"
     source: str = ewb.DEFAULT_GHCN_URI
@@ -199,23 +220,31 @@ class CustomGHCN(inputs.TargetBase):
         return data.filter(
             (pl.col("valid_time") >= time_min)
             & (pl.col("valid_time") <= time_max)
-            & (pl.col("latitude")  >= bounds[1])
-            & (pl.col("latitude")  <= bounds[3])
+            & (pl.col("latitude") >= bounds[1])
+            & (pl.col("latitude") <= bounds[3])
             & (pl.col("longitude") >= bounds[0])
             & (pl.col("longitude") <= bounds[2])
         )
 
     def _custom_convert_to_dataset(self, data):
         df = data.collect().to_pandas()
-        df["surface_air_temperature"] += 273.15  # °C → K
-        df["longitude"] = utils.convert_longitude_to_360(df["longitude"])
-        df = df.set_index(["valid_time", "latitude", "longitude"])
+        df["surface_air_temperature"] += 273.15
+        df["longitude"] = utils.convert_longitude_to_360(
+            df["longitude"]
+        )
+        df = df.set_index(
+            ["valid_time", "latitude", "longitude"]
+        )
         return xr.Dataset.from_dataframe(
             df[~df.index.duplicated(keep="first")], sparse=True
         )
 
-    def maybe_align_forecast_to_target(self, forecast_data, target_data):
-        return inputs.align_forecast_to_target(forecast_data, target_data)
+    def maybe_align_forecast_to_target(
+        self, forecast_data, target_data
+    ):
+        return inputs.align_forecast_to_target(
+            forecast_data, target_data
+        )
 
 
 custom_target = CustomGHCN()
@@ -241,11 +270,8 @@ eval_objects = [
     ),
 ]
 
-all_cases = ewb.load_cases()
-heatwave_cases = [c for c in all_cases if c.event_type == "heat_wave"][:3]
-
 runner = ewb.evaluation(
-    case_metadata=heatwave_cases,
+    case_metadata=cases,
     evaluation_objects=eval_objects,
 )
 outputs = runner.run_evaluation()

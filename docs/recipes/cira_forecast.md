@@ -121,16 +121,34 @@ parallel_config = {
 
 output = ewb.run_evaluation(parallel_config=parallel_config)
 ```
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/brightbandtech/extremeweatherbench/blob/main/notebooks/cira_forecast.ipynb)
+
 ## Complete Example
 
 ```python
+import datetime
 import extremeweatherbench as ewb
-from extremeweatherbench import inputs, metrics, cases, evaluate
+from extremeweatherbench import inputs, metrics, evaluate
+from extremeweatherbench.cases import IndividualCase
+from extremeweatherbench.regions import BoundingBoxRegion
 
-# FCNv2 with IFS initialisation from the CIRA icechunk store
+# Mini-case: 2021 Pacific NW Heat Dome — Colab-optimized
+demo_case = IndividualCase(
+    case_id_number=9001,
+    title="2021 Pacific NW Heat Dome (demo)",
+    start_date=datetime.datetime(2021, 6, 27),
+    end_date=datetime.datetime(2021, 6, 30),
+    location=BoundingBoxRegion.create_region(
+        latitude_min=46.0,
+        latitude_max=52.0,
+        longitude_min=236.0,
+        longitude_max=242.0,
+    ),
+    event_type="heat_wave",
+)
+cases = [demo_case]
+
 fcnv2 = inputs.get_cira_icechunk(model_name="FOUR_v200_IFS")
-
-# GHCNh point-observation target (no credentials required)
 ghcn_target = inputs.GHCN()
 
 metrics_list = [
@@ -150,10 +168,6 @@ metrics_list = [
     ),
 ]
 
-# Subset to the first two heat wave cases for a quick run
-case_vals = cases.load_ewb_events_yaml_into_case_list()
-heatwave_cases = [c for c in case_vals if c.event_type == "heat_wave"][:2]
-
 evaluation_object = [
     inputs.EvaluationObject(
         event_type="heat_wave",
@@ -164,10 +178,10 @@ evaluation_object = [
 ]
 
 ewb_runner = evaluate.ExtremeWeatherBench(
-    case_metadata=heatwave_cases,
+    case_metadata=cases,
     evaluation_objects=evaluation_object,
 )
 
-output = ewb_runner.run_evaluation(parallel_config={"backend": "loky", "n_jobs": 2})
+output = ewb_runner.run_evaluation()
 print(output)
 ```

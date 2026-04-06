@@ -202,15 +202,36 @@ hi_metric = ewb.metrics.MaximumMeanAbsoluteError(
 )
 ```
 
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/brightbandtech/extremeweatherbench/blob/main/notebooks/your_own_variable.ipynb)
+
 ## Complete Example
 
 The `DewpointDepression` derived variable from Example 1, wired into a full
 heat wave evaluation.
 
 ```python
+import datetime
 import xarray as xr
 import extremeweatherbench as ewb
 from extremeweatherbench.derived import DerivedVariable
+from extremeweatherbench.cases import IndividualCase
+from extremeweatherbench.regions import BoundingBoxRegion
+
+# Mini-case: 2017 Lucifer European Heat Wave — Colab-optimized
+demo_case = IndividualCase(
+    case_id_number=9005,
+    title="2017 Lucifer European Heat Wave (demo)",
+    start_date=datetime.datetime(2017, 8, 2),
+    end_date=datetime.datetime(2017, 8, 5),
+    location=BoundingBoxRegion.create_region(
+        latitude_min=39.0,
+        latitude_max=45.0,
+        longitude_min=12.0,
+        longitude_max=18.0,
+    ),
+    event_type="heat_wave",
+)
+cases = [demo_case]
 
 
 class DewpointDepression(DerivedVariable):
@@ -245,7 +266,10 @@ forecast = ewb.ZarrForecast(
 )
 
 target = ewb.ERA5(
-    variables=["surface_air_temperature", "surface_dewpoint_temperature"]
+    variables=[
+        "surface_air_temperature",
+        "surface_dewpoint_temperature",
+    ]
 )
 
 eval_objects = [
@@ -262,11 +286,8 @@ eval_objects = [
     ),
 ]
 
-all_cases = ewb.load_cases()
-heatwave_cases = [c for c in all_cases if c.event_type == "heat_wave"][:5]
-
 runner = ewb.evaluation(
-    case_metadata=heatwave_cases,
+    case_metadata=cases,
     evaluation_objects=eval_objects,
 )
 outputs = runner.run_evaluation()

@@ -179,17 +179,38 @@ case_level_mae = ewb.metrics.MeanAbsoluteError(
 )
 ```
 
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/brightbandtech/extremeweatherbench/blob/main/notebooks/your_own_metrics.ipynb)
+
 ## Complete Example
 
 Both custom metrics from this page combined in a single heat wave evaluation.
 
 ```python
+import datetime
 import xarray as xr
 import extremeweatherbench as ewb
+from extremeweatherbench.cases import IndividualCase
+from extremeweatherbench.regions import BoundingBoxRegion
+
+# Mini-case: 2022 Southern Plains Heat Wave — Colab-optimized
+demo_case = IndividualCase(
+    case_id_number=9004,
+    title="2022 Southern Plains Heat Wave (demo)",
+    start_date=datetime.datetime(2022, 7, 19),
+    end_date=datetime.datetime(2022, 7, 22),
+    location=BoundingBoxRegion.create_region(
+        latitude_min=31.0,
+        latitude_max=37.0,
+        longitude_min=260.0,
+        longitude_max=266.0,
+    ),
+    event_type="heat_wave",
+)
+cases = [demo_case]
 
 
 class MeanAbsolutePercentageError(ewb.BaseMetric):
-    """Mean Absolute Percentage Error between forecast and target."""
+    """Mean Absolute Percentage Error."""
 
     def __init__(self, name: str = "MAPE", **kwargs):
         super().__init__(name=name, **kwargs)
@@ -201,17 +222,24 @@ class MeanAbsolutePercentageError(ewb.BaseMetric):
         **kwargs,
     ) -> xr.DataArray:
         percentage_error = (
-            (forecast - target).abs() / target.where(target != 0)
+            (forecast - target).abs()
+            / target.where(target != 0)
         ) * 100
         return percentage_error.mean(
-            dim=[d for d in percentage_error.dims if d != self.preserve_dims]
+            dim=[
+                d
+                for d in percentage_error.dims
+                if d != self.preserve_dims
+            ]
         )
 
 
 class ProbabilityOfDetection(ewb.ThresholdMetric):
-    """Probability of Detection (Hit Rate) from binary classifications."""
+    """Probability of Detection (Hit Rate)."""
 
-    def __init__(self, name: str = "ProbabilityOfDetection", **kwargs):
+    def __init__(
+        self, name: str = "ProbabilityOfDetection", **kwargs
+    ):
         super().__init__(name=name, **kwargs)
 
     def _compute_metric(
@@ -243,7 +271,7 @@ mape = MeanAbsolutePercentageError(
 pod = ProbabilityOfDetection(
     forecast_variable="surface_air_temperature",
     target_variable="surface_air_temperature",
-    forecast_threshold=308.15,  # 35 °C in Kelvin
+    forecast_threshold=308.15,
     target_threshold=308.15,
 )
 
@@ -265,11 +293,8 @@ eval_objects = [
     ),
 ]
 
-all_cases = ewb.load_cases()
-heatwave_cases = [c for c in all_cases if c.event_type == "heat_wave"][:5]
-
 runner = ewb.evaluation(
-    case_metadata=heatwave_cases,
+    case_metadata=cases,
     evaluation_objects=eval_objects,
 )
 outputs = runner.run_evaluation()

@@ -171,14 +171,35 @@ runner = ewb.evaluation(
 outputs = runner.run_evaluation()
 ```
 
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/brightbandtech/extremeweatherbench/blob/main/notebooks/multi_model_evaluation.ipynb)
+
 ## Complete Example
 
 Four CIRA MLWP models compared on heat wave cases with parallel execution
 and a lead-time pivot table printed to stdout.
 
 ```python
+import datetime
 import extremeweatherbench as ewb
 from extremeweatherbench import inputs
+from extremeweatherbench.cases import IndividualCase
+from extremeweatherbench.regions import BoundingBoxRegion
+
+# Mini-case: 2020 SW US Heat Wave — Colab-optimized
+demo_case = IndividualCase(
+    case_id_number=9010,
+    title="2020 SW US Heat Wave (demo)",
+    start_date=datetime.datetime(2020, 8, 15),
+    end_date=datetime.datetime(2020, 8, 18),
+    location=BoundingBoxRegion.create_region(
+        latitude_min=34.0,
+        latitude_max=40.0,
+        longitude_min=242.0,
+        longitude_max=248.0,
+    ),
+    event_type="heat_wave",
+)
+cases = [demo_case]
 
 model_names = [
     "FOUR_v200_IFS",
@@ -187,7 +208,9 @@ model_names = [
     "AURO_v100_IFS",
 ]
 
-target = ewb.ERA5(variables=["surface_air_temperature"])
+target = ewb.ERA5(
+    variables=["surface_air_temperature"]
+)
 
 metrics_list = [
     ewb.metrics.MeanAbsoluteError(
@@ -209,22 +232,19 @@ eval_objects = [
         event_type="heat_wave",
         metric_list=metrics_list,
         target=target,
-        forecast=inputs.get_cira_icechunk(model_name=name),
+        forecast=inputs.get_cira_icechunk(
+            model_name=name
+        ),
     )
     for name in model_names
 ]
 
-all_cases = ewb.load_cases()
-heatwave_cases = [c for c in all_cases if c.event_type == "heat_wave"]
-
 runner = ewb.evaluation(
-    case_metadata=heatwave_cases,
+    case_metadata=cases,
     evaluation_objects=eval_objects,
 )
-outputs = runner.run_evaluation(parallel_config={"backend": "loky", "n_jobs": 4})
-outputs.to_csv("multi_model_heatwave.csv", index=False)
+outputs = runner.run_evaluation()
 
-# Mean MAE per model across all heat wave cases, pivoted by lead time
 mae = outputs[outputs["metric"] == "MeanAbsoluteError"]
 pivot = (
     mae.groupby(["forecast_source", "lead_time"])["value"]

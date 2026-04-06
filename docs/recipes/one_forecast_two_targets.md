@@ -175,12 +175,33 @@ eval_objects = [
 ]
 ```
 
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/brightbandtech/extremeweatherbench/blob/main/notebooks/one_forecast_two_targets.ipynb)
+
 ## Complete Example
 
 HRES evaluated against ERA5 and GHCN simultaneously for all heat wave cases.
 
 ```python
+import datetime
 import extremeweatherbench as ewb
+from extremeweatherbench.cases import IndividualCase
+from extremeweatherbench.regions import BoundingBoxRegion
+
+# Mini-case: 2022 India Heat Wave — Colab-optimized
+demo_case = IndividualCase(
+    case_id_number=9009,
+    title="2022 India Heat Wave (demo)",
+    start_date=datetime.datetime(2022, 4, 28),
+    end_date=datetime.datetime(2022, 5, 1),
+    location=BoundingBoxRegion.create_region(
+        latitude_min=24.0,
+        latitude_max=30.0,
+        longitude_min=76.0,
+        longitude_max=82.0,
+    ),
+    event_type="heat_wave",
+)
+cases = [demo_case]
 
 forecast = ewb.ZarrForecast(
     source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
@@ -189,7 +210,9 @@ forecast = ewb.ZarrForecast(
     storage_options={"remote_options": {"anon": True}},
 )
 
-era5_target = ewb.ERA5(variables=["surface_air_temperature"])
+era5_target = ewb.ERA5(
+    variables=["surface_air_temperature"]
+)
 ghcn_target = ewb.GHCN()
 
 shared_metrics = [
@@ -218,18 +241,16 @@ eval_objects = [
     ),
 ]
 
-all_cases = ewb.load_cases()
-heatwave_cases = [c for c in all_cases if c.event_type == "heat_wave"]
-
 runner = ewb.evaluation(
-    case_metadata=heatwave_cases,
+    case_metadata=cases,
     evaluation_objects=eval_objects,
 )
 outputs = runner.run_evaluation()
 
-# Compare mean MAE by target source
 mae = outputs[outputs["metric"] == "MeanAbsoluteError"]
 for source in ["ERA5", "GHCN"]:
-    mean_mae = mae[mae["target_source"] == source]["value"].mean()
+    mean_mae = mae[
+        mae["target_source"] == source
+    ]["value"].mean()
     print(f"{source:6s} mean MAE: {mean_mae:.4f} K")
 ```

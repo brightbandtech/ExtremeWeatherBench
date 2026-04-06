@@ -166,14 +166,33 @@ displacement = df[df["metric"] == "landfall_displacement"]
 print(displacement.groupby("forecast_source")["value"].describe())
 ```
 
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/brightbandtech/extremeweatherbench/blob/main/notebooks/evaluate_recent_tropical_cyclones.ipynb)
+
 ## Complete Example
 
 ```python
+import datetime
 import extremeweatherbench as ewb
 from extremeweatherbench import inputs, derived, metrics
+from extremeweatherbench.cases import IndividualCase
+from extremeweatherbench.regions import BoundingBoxRegion
 
-# FCNv2 with IFS initialisation; TropicalCycloneTrackVariables specifies
-# the four raw fields needed for track detection.
+# Mini-case: Hurricane Ida 2021 — Colab-optimized
+demo_case = IndividualCase(
+    case_id_number=9006,
+    title="Hurricane Ida 2021 (demo)",
+    start_date=datetime.datetime(2021, 8, 28),
+    end_date=datetime.datetime(2021, 8, 31),
+    location=BoundingBoxRegion.create_region(
+        latitude_min=27.0,
+        latitude_max=33.0,
+        longitude_min=268.0,
+        longitude_max=274.0,
+    ),
+    event_type="tropical_cyclone",
+)
+cases = [demo_case]
+
 forecast = inputs.get_cira_icechunk(
     model_name="FOUR_v200_IFS",
     variables=[derived.TropicalCycloneTrackVariables()],
@@ -208,14 +227,14 @@ eval_objects = [
     ),
 ]
 
-all_cases = ewb.load_cases()
-tc_cases = [c for c in all_cases if c.event_type == "tropical_cyclone"]
-
 runner = ewb.evaluation(
-    case_metadata=tc_cases,
+    case_metadata=cases,
     evaluation_objects=eval_objects,
 )
 outputs = runner.run_evaluation()
-outputs.to_csv("tc_evaluation.csv", index=False)
-print(outputs[["metric", "value", "init_time", "case_id_number"]].head(20))
+print(
+    outputs[
+        ["metric", "value", "init_time", "case_id_number"]
+    ].head(20)
+)
 ```
