@@ -179,7 +179,7 @@ case_level_mae = ewb.metrics.MeanAbsoluteError(
 )
 ```
 
-[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/brightbandtech/extremeweatherbench/blob/main/notebooks/your_own_metrics.ipynb)
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://drive.google.com/file/d/1k-LLNZw8BCKnEM0hWak-GB3chPMcLL01/view?usp=sharing)
 
 ## Complete Example
 

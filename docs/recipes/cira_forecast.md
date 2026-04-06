@@ -121,7 +121,7 @@ parallel_config = {
 
 output = ewb.run_evaluation(parallel_config=parallel_config)
 ```
-[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/brightbandtech/extremeweatherbench/blob/main/notebooks/cira_forecast.ipynb)
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://drive.google.com/file/d/1w6poub9_6kYAX5UhDxwDD1FT4XPoTGS0/view?usp=sharing)
 
 ## Complete Example
 

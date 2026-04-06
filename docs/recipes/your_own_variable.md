@@ -202,7 +202,7 @@ hi_metric = ewb.metrics.MaximumMeanAbsoluteError(
 )
 ```
 
-[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/brightbandtech/extremeweatherbench/blob/main/notebooks/your_own_variable.ipynb)
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://drive.google.com/file/d/1PsnEC0jRBUNIJmiE9ekTBu1V7FZx0Emn/view?usp=sharing)
 
 ## Complete Example
 

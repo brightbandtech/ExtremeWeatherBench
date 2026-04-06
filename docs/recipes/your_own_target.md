@@ -165,7 +165,7 @@ class MyStationObs(inputs.TargetBase):
 - Longitude convention: EWB uses 0–360 internally. Convert from
   −180–180 using `ewb.convert_longitude_to_360`.
 
-[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/brightbandtech/extremeweatherbench/blob/main/notebooks/your_own_target.ipynb)
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://drive.google.com/file/d/1-4TVQINyd65FxZdnZLmBFYDCW20BfTCf/view?usp=sharing)
 
 ## Complete Example
 

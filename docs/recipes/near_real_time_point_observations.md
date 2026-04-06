@@ -192,7 +192,7 @@ pnw_stations = (
 print(f"Stations in bounding box: {len(pnw_stations)}")
 ```
 
-[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/brightbandtech/extremeweatherbench/blob/main/notebooks/near_real_time_point_observations.ipynb)
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://drive.google.com/file/d/1J3I1ITWVup-FGFhZz0MkC6QR2bwlO3nt/view?usp=sharing)
 
 ## Complete Example
 

@@ -203,7 +203,7 @@ The output is a pandas `DataFrame` with one row per
 `(case, metric, lead_time, init_time)` combination. See
 [Usage](../usage.md) for a full walkthrough of the output columns.
 
-[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/brightbandtech/extremeweatherbench/blob/main/notebooks/your_own_forecast.ipynb)
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1wSQ2Spznf7_V4tdvrb-WlzdXBcdCQ6Rs?usp=sharing)
 
 ## Complete Example
 

@@ -175,7 +175,7 @@ eval_objects = [
 ]
 ```
 
-[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/brightbandtech/extremeweatherbench/blob/main/notebooks/one_forecast_two_targets.ipynb)
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://drive.google.com/file/d/11oL_tQVzK6KLimmRFlvZzrtwc74N_1Ot/view?usp=sharing)
 
 ## Complete Example
 

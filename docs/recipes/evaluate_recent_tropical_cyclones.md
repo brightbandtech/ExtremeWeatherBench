@@ -166,7 +166,7 @@ displacement = df[df["metric"] == "landfall_displacement"]
 print(displacement.groupby("forecast_source")["value"].describe())
 ```
 
-[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/brightbandtech/extremeweatherbench/blob/main/notebooks/evaluate_recent_tropical_cyclones.ipynb)
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://drive.google.com/file/d/1LLX8G73uLzy9Grsqi9yHjlRX60i8enlJ/view?usp=sharing)
 
 ## Complete Example
 

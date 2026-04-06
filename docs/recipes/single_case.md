@@ -162,7 +162,7 @@ The YAML schema for a single case entry:
   event_type: heat_wave
 ```
 
-[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/brightbandtech/extremeweatherbench/blob/main/notebooks/single_case.ipynb)
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://drive.google.com/file/d/1u3llkqcFrcg_bAYwOEZN7qSAH15joCYf/view?usp=sharing)
 
 ## Complete Example
 
