@@ -8,7 +8,11 @@
     ewb.metrics.MeanAbsoluteError(...)
 """
 
+from importlib.metadata import version
+
 import lazy_loader as lazy
+
+__version__ = version("extremeweatherbench")
 
 __getattr__, __dir__, __all__ = lazy.attach(
     __name__,
