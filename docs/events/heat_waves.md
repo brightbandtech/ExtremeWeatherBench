@@ -1,7 +1,7 @@
 # Land-Based Heat Waves
 ## Cases
 
-Case bounds were derived from the sources listed above (Wikipedia heat wave lists, ECMWF Severe Event Catalogue, and regional BOM/NIWA reports) and sized to enclose the full synoptic-scale hot air mass at 0.25° grid resolution, typically extending 5–15° beyond the primary affected area to capture the upstream blocking ridge. Each candidate case was retained only if the ERA5 2 m temperature anomaly within the box exceeded the 85th percentile of the 1991–2020 climatology for at least three consecutive days. Boxes targeting coastal or island locations were widened to include the relevant maritime boundary-layer source region.
+Case bounds were derived from the Wikipedia heat wave lists, ECMWF Severe Event Catalogue, and regional BOM/NIWA reports and sized to enclose the area of >= 3 consecutive heat wave days. Each candidate case was retained only if the ERA5 2-meter temperature anomaly within the box exceeded the 85th percentile of the 1990–2019 climatology.
  
 <details open>
 <summary><strong>Cases — 46 events</strong></summary>
@@ -85,9 +85,6 @@ We identified the heat waves from the following sources:
 * [2023 heat waves \- Wikipedia](https://en.wikipedia.org/wiki/2023_heat_waves)   
 * [2023 European heatwaves \- Wikipedia](https://en.wikipedia.org/wiki/2023_European_heatwaves)   
 * [2023 Asia heat wave \- Wikipedia](https://en.wikipedia.org/wiki/2023_Asia_heat_wave) 
-
-Each heat wave was then validated by verifying that the 2m temperature of the event exceeds the 85th percentile of 2m temperature climatology as computed from ERA5 data.
-
 
 ## US-based events
 

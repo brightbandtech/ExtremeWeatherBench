@@ -1,7 +1,7 @@
 # Severe Convective Weather
 ## Cases
 
-Case dates were selected from the [SPC's storm reports archive](https://www.spc.noaa.gov/climo/reports/today.html), SPC's high-risk day lists, NCEI Billion-Dollar Disasters records, and the European Severe Weather Database. Bounding boxes are centred on the primary risk area identified in the SPC Day-1 convective outlook (or equivalent for non-US events) and extended to ±10° latitude/longitude to capture the synoptic environment driving convection. Cases are required to generate multiple concurrent hazard types (e.g., tornadoes and damaging winds) to distinguish multi-modal convective events from single-hazard outbreaks.
+Case dates were selected from the [SPC's storm reports archive](https://www.spc.noaa.gov/climo/reports/today.html), SPC's high-risk day lists, NCEI Billion-Dollar Disasters (now maintained by Climate Central) records, and the European Severe Weather Database. Bounding boxes are centered on the primary risk area's practically perfect hindcast and extended in each direction by 250 kilometers. Cases are required to have hail and tornado reports to be considered valid.
 
 <details open>
 <summary><strong>Cases — 115 events</strong></summary>

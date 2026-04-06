@@ -1,7 +1,7 @@
 # Major Freeze/Cold-Snap Events 
 ## Cases
 
-Case bounds were drawn from the sources listed above (Wikipedia winter storm and cold wave articles, ECMWF Severe Event Catalogue, and WMO regional climate reports) and sized to contain the full cold-air outbreak or synoptic trough, generally extending 10–15° of latitude beyond the primary freeze area to capture the polar air mass and its source region. Each case was validated against ERA5 2 m temperature fields to confirm that minimum temperatures fell at or below the climatological 15th percentile for the affected region. Boxes for mixed rain/ice events were extended to include the warm-sector air mass that drives the freezing-precipitation signature.
+Case bounds were drawn from the sources listed (Wikipedia winter storm and cold wave articles, ECMWF Severe Event Catalogue, and WMO regional climate reports) and sized to contain the full cold-air outbreak or synoptic trough, generally extending 10–15° of latitude beyond the primary freeze area to capture the polar air mass and its source region. Each case was validated against ERA5 2-meter temperature fields to confirm that minimum temperatures fell at or below the climatological 15th percentile for the affected region.
 
 <details open>
 <summary><strong>Cases — 14 events</strong></summary>

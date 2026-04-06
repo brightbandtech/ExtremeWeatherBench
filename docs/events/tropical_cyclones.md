@@ -1,7 +1,7 @@
 # Tropical Cyclones
 ## Cases
 
-Storm tracks were identified from IBTrACS and the basin-specific season summaries listed above, and bounding boxes enclose the full track from genesis to dissipation with lateral margins sized to include the gale-force wind radius at peak intensity. Only landfalling systems are included, a requirement imposed by the landfall-displacement and intensity metrics in EWB; the TC PRIMED dataset provides co-located radar and ERA5 fields for verification within each box. For storms with complex tracks or dual landfalls (e.g., Eta, Freddy), the box spans the entire track including any re-intensification segment.
+Storm tracks were identified from IBTrACS and bounding boxes enclose the full track from genesis to dissipation with lateral margins sized to include 250 kilometers beyond each edge coordinate. Only landfalling systems are calculated at this time, a requirement imposed by the landfall-displacement and intensity metrics in EWB. Future opportunities exist for along and cross-track error among other metrics. For storms with complex tracks or dual landfalls (e.g., Eta, Freddy), the box spans the entire track including any re-intensification segment.
 
 <details open>
 <summary><strong>Cases — 106 events</strong></summary>

@@ -1,7 +1,7 @@
 # Atmospheric Rivers
 ## Cases
 
-Cases were identified from the CW3E Atmospheric River event archive, the Global Atmospheric Rivers Dataverse (UCLA), and the peer-reviewed papers listed above. Bounding boxes are oriented along the AR axis and sized to contain the integrated vapour transport (IVT) corridor from its offshore origin to the landfall or moisture-source region, with approximately 10° margins on each side of the IVT axis. For non-western-US cases (Middle East, Australia, Antarctica, Europe), boxes were drawn to enclose the full moisture band as identified in the supporting literature and validated against ERA5 IVT fields.
+Cases were identified from the CW3E Atmospheric River event archive, the Global Atmospheric Rivers Dataverse (UCLA), and the peer-reviewed papers listed. Bounding boxes are oriented along the AR axis and sized to contain the integrated vapour transport (IVT) corridor from offshore to the landfall region, with approximately 10° margins on each side of the IVT axis. For non-western-US cases (Middle East, Australia, Antarctica, Europe), boxes were drawn to enclose the full moisture band, validated via ERA5 IVT fields.
 
 <details open>
 <summary><strong>Cases — 56 events</strong></summary>
