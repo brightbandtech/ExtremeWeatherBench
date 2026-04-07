@@ -370,7 +370,7 @@ def main():
     client = Client(LocalCluster(n_workers=args.n_workers))
     logger.info("Dask dashboard: %s", client.dashboard_link)
 
-    events_yaml = cases.load_ewb_events_yaml_into_case_list()
+    events_yaml = cases.load_ewb_cases()
     hw_fz = [e for e in events_yaml if e.event_type in ("heat_wave", "cold_snap")]
     logger.info(
         "Found %d heat_wave / cold snap events",

@@ -9,23 +9,23 @@ logger.setLevel(logging.INFO)
 
 # Load case data from the default events.yaml
 # Users can also define their own cases_dict structure
-case_yaml = ewb.load_cases()
+case_yaml = ewb.cases.load_ewb_cases()
 
 
 # ERA5 target
-era5_freeze_target = ewb.targets.ERA5(
+era5_freeze_target = ewb.inputs.ERA5(
     variables=["surface_air_temperature"],
     chunks=None,
 )
 
 # GHCN target
-ghcn_freeze_target = ewb.targets.GHCN(variables=["surface_air_temperature"])
+ghcn_freeze_target = ewb.inputs.GHCN(variables=["surface_air_temperature"])
 
 # Forecast (FCNv2) using helper in defaults
 fcnv2_forecast = ewb.defaults.cira_fcnv2_freeze_forecast
 
 # Load the climatology for DurationMeanError
-climatology = ewb.get_climatology(quantile=0.15)
+climatology = ewb.defaults.get_climatology(quantile=0.15)
 
 # Define the metrics
 metrics_list = [
@@ -36,13 +36,13 @@ metrics_list = [
 
 # Create a list of evaluation objects for freeze
 freeze_evaluation_object = [
-    ewb.EvaluationObject(
+    ewb.inputs.EvaluationObject(
         event_type="freeze",
         metric_list=metrics_list,
         target=ghcn_freeze_target,
         forecast=fcnv2_forecast,
     ),
-    ewb.EvaluationObject(
+    ewb.inputs.EvaluationObject(
         event_type="freeze",
         metric_list=metrics_list,
         target=era5_freeze_target,
@@ -52,7 +52,7 @@ freeze_evaluation_object = [
 
 if __name__ == "__main__":
     # Initialize ExtremeWeatherBench runner instance
-    freeze_ewb = ewb.evaluation(
+    freeze_ewb = ewb.evaluate.ExtremeWeatherBench(
         case_metadata=case_yaml,
         evaluation_objects=freeze_evaluation_object,
     )

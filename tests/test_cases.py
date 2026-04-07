@@ -392,10 +392,10 @@ class TestLoadIndividualCasesFromYaml:
 
 
 class TestLoadEventsYaml:
-    """Test the load_ewb_events_yaml_into_case_list function."""
+    """Test the load_ewb_cases function."""
 
     @mock.patch("importlib.resources")
-    def test_load_ewb_events_yaml_into_case_list_success(self, mock_resources):
+    def test_load_ewb_cases_success(self, mock_resources):
         """Test successful loading of events YAML."""
         # Mock the resource access
         mock_files = mock.Mock()
@@ -428,7 +428,7 @@ class TestLoadEventsYaml:
                 mock_read.return_value = mock_yaml_content
                 mock_as_file.return_value.__enter__.return_value = "/mock/file"
 
-                result = cases.load_ewb_events_yaml_into_case_list()
+                result = cases.load_ewb_cases()
 
                 # Should return a list of IndividualCase objects, not the raw dict
                 assert isinstance(result, list)

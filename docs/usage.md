@@ -12,10 +12,10 @@ tropical cyclones, and atmospheric rivers:
 ```python
 import extremeweatherbench as ewb
 
-eval_objects = ewb.get_brightband_evaluation_objects()
-cases = ewb.load_cases()
+eval_objects = ewb.defaults.get_brightband_evaluation_objects()
+cases = ewb.cases.load_ewb_cases()
 
-runner = ewb.evaluation(
+runner = ewb.evaluate.ExtremeWeatherBench(
     case_metadata=cases, 
     evaluation_objects=eval_objects
 )
@@ -32,26 +32,41 @@ ewb --default
 
 ## API Overview
 
-ExtremeWeatherBench provides a hierarchical API for accessing its components:
+ExtremeWeatherBench provides a submodule-based API. All classes and functions
+are accessed through their submodule:
 
 ```python
 import extremeweatherbench as ewb
 
 # Main evaluation entry point
-ewb.evaluation(...)  # Alias for ExtremeWeatherBench class
+ewb.evaluate.ExtremeWeatherBench(...)
 
-# Hierarchical access via namespaces
-ewb.targets.ERA5(...)           # Target classes
-ewb.forecasts.ZarrForecast(...) # Forecast classes
-ewb.metrics.MeanAbsoluteError() # Metric classes
-ewb.derived.AtmosphericRiverVariables() # Derived variables
-ewb.regions.BoundingBoxRegion(...) # Region classes
-ewb.cases.IndividualCase       # Case metadata classes
+# Inputs: targets and forecasts
+ewb.inputs.ERA5(...)
+ewb.inputs.GHCN(...)
+ewb.inputs.IBTrACS()
+ewb.inputs.ZarrForecast(...)
+ewb.inputs.KerchunkForecast(...)
+ewb.inputs.EvaluationObject(...)
 
-# Also available at top level for convenience
-ewb.ERA5(...)
-ewb.ZarrForecast(...)
-ewb.load_cases()
+# Metrics
+ewb.metrics.MeanAbsoluteError()
+ewb.metrics.MaximumMeanAbsoluteError()
+
+# Derived variables
+ewb.derived.AtmosphericRiverVariables()
+ewb.derived.TropicalCycloneTrackVariables()
+
+# Regions
+ewb.regions.BoundingBoxRegion(...)
+
+# Cases
+ewb.cases.IndividualCase
+ewb.cases.load_ewb_cases()
+
+# Defaults (pre-built targets, forecasts, and helpers)
+ewb.defaults.era5_heatwave_target
+ewb.defaults.get_climatology(quantile=0.85)
 ```
 ## Running an Evaluation for a Single Event Type
 
@@ -69,11 +84,11 @@ import extremeweatherbench as ewb
 There are three built-in `ForecastBase` classes to set up a forecast: `ZarrForecast`, `XarrayForecast`, and `KerchunkForecast`. Here is an example of a `ZarrForecast`, using Weatherbench2's HRES zarr store:
 
 ```python
-hres_forecast = ewb.forecasts.ZarrForecast(
+hres_forecast = ewb.inputs.ZarrForecast(
     source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
     name="HRES",
     variables=["surface_air_temperature"],
-    variable_mapping=ewb.HRES_metadata_variable_mapping, # built-in mapping available
+    variable_mapping=ewb.inputs.HRES_metadata_variable_mapping, # built-in mapping
     storage_options={"remote_options": {"anon": True}},
 )
 ```
@@ -92,8 +107,8 @@ There are required arguments, namely:
 Next, a target dataset must be defined as well to evaluate against. For this evaluation, we'll use ERA5:
 
 ```python
-era5_heatwave_target = ewb.targets.ERA5(
-    source=ewb.ARCO_ERA5_FULL_URI,
+era5_heatwave_target = ewb.inputs.ERA5(
+    source=ewb.inputs.ARCO_ERA5_FULL_URI,
     variables=["surface_air_temperature"],
     storage_options={"remote_options": {"anon": True}},
     chunks=None,
@@ -118,7 +133,7 @@ We then set up an `EvaluationObject` list:
 
 ```python
 heatwave_evaluation_list = [
-    ewb.EvaluationObject(
+    ewb.inputs.EvaluationObject(
         event_type="heat_wave",
         metric_list=[
             ewb.metrics.MaximumMeanAbsoluteError(),
@@ -137,9 +152,9 @@ There can be multiple `EvaluationObjects` which are used for an evaluation run.
 Plugging these all in:
 
 ```python
-case_yaml = ewb.load_cases()
+case_yaml = ewb.cases.load_ewb_cases()
 
-ewb_instance = ewb.evaluation(
+ewb_instance = ewb.evaluate.ExtremeWeatherBench(
     case_metadata=case_yaml,
     evaluation_objects=heatwave_evaluation_list,
 )
@@ -148,17 +163,25 @@ outputs = ewb_instance.run()
 outputs.to_csv('your_file_name.csv')
 ```
 
-Where the EWB default events YAML file is loaded in using `ewb.load_cases()`, then applied to an instance of `ewb.evaluation` along with the `EvaluationObject` list. Finally, we run the evaluation with the `.run()` method, where defaults are typically sufficient to run with a small to moderate-sized virtual machine.
+Where the EWB default events YAML file is loaded in using
+`ewb.cases.load_ewb_cases()`, then applied to an instance
+of `ewb.evaluate.ExtremeWeatherBench` along with the `EvaluationObject` list.
+Finally, we run the evaluation with the `.run()` method, where defaults are
+typically sufficient to run with a small to moderate-sized virtual machine.
 
 Running locally is feasible but is typically bottlenecked heavily by IO and network bandwidth. Even on a gigabit connection, the rate of data access is significantly slower compared to within a cloud provider VM.
 
 The outputs are returned as a pandas DataFrame and can be manipulated in the script, a notebook, etc.
 
-## Backward Compatibility
+## Import Patterns
 
-All existing import patterns remain functional:
+All of the following import styles work:
 
 ```python
-from extremeweatherbench import evaluate, inputs, cases, metrics  # Still works
-from extremeweatherbench.evaluate import ExtremeWeatherBench  # Still works
+import extremeweatherbench as ewb
+ewb.inputs.ERA5(...)
+
+from extremeweatherbench import inputs, metrics, cases, evaluate
+from extremeweatherbench.inputs import ERA5
+from extremeweatherbench.evaluate import ExtremeWeatherBench
 ```
